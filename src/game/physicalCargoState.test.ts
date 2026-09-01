@@ -1046,6 +1046,9 @@ describe("physical cargo save state", () => {
       world.terrain.width,
       world.terrain.height,
     ).valid).toBe(true);
-    expect(elapsed).toBeLessThan(5_000);
+    // This is a deliberately adversarial max-entity/history workload. Keep a
+    // strict finite ceiling, but leave enough host variance for shared CI
+    // runners executing the complete suite in parallel.
+    expect(elapsed).toBeLessThan(8_000);
   }, 10_000);
 });

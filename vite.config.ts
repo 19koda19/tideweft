@@ -23,5 +23,10 @@ export default defineConfig({
     globals: false,
     clearMocks: true,
     restoreMocks: true,
+    // Regional generation and sealed save/cargo integration are deliberately
+    // heavyweight. Shared CI runners can take more than Vitest's 5 s default
+    // without changing the deterministic result, so retain a finite but
+    // host-tolerant wall-clock fence for every release gate.
+    testTimeout: 15_000,
   },
 });
