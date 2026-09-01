@@ -187,10 +187,39 @@ describe("information as physical, sourced progress", () => {
     expect(before.actionDisabled).toBe(true);
     expect(before.actionHint).toContain("Travel from");
     expect(before.actionHint).toContain("Surveying proves which physical path");
-    expect(before.reportActionLabel).toMatch(/^Carry stock report to /);
+    expect(before.reportActionLabel).toMatch(/^Sign info report → /);
     expect(before.reportActionHint).toContain("current");
-    expect(before.reportActionHint).toContain("uses 1 pack slot");
+    expect(before.reportActionHint).toContain("uses 1 document slot");
+    expect(before.reportActionHint).toContain("moves no cargo or supplies");
     expect(before.reportActionHint).toContain("arrive and press E");
+
+    const remoteHarbor = view.settlements.find((settlement) => String(settlement.id) === before.id);
+    const sourceTile = view.terrain.tiles[harbor.tileIndex];
+    const remoteTile = remoteHarbor ? view.terrain.tiles[remoteHarbor.tileIndex] : undefined;
+    if (!sourceTile || !remoteTile) throw new Error("missing report guidance tiles");
+    player.x = remoteTile.x * 1_000 + 500;
+    player.y = remoteTile.y * 1_000 + 500;
+    const remoteReport = projectUIView(view, player, session).selectedSettlement?.connections[0];
+    expect(remoteReport?.reportActionDisabled).toBe(true);
+    expect(remoteReport?.reportActionLabel).toBe(`Reach ${harbor.name} to sign`);
+    expect(remoteReport?.reportActionHint).toContain(`Travel onto ${harbor.name}'s harbor mark first`);
+    expect(remoteReport?.reportActionHint).toContain("remote inspection cannot create one");
+
+    player.x = sourceTile.x * 1_000 + 500;
+    player.y = sourceTile.y * 1_000 + 500;
+    player.cargo = [{
+      contractId: -1,
+      resource: "reed",
+      quantity: player.cargoCapacity,
+      condition: FIXED_POINT,
+      property: "ordinary",
+    }];
+    const fullReport = projectUIView(view, player, session).selectedSettlement?.connections[0];
+    expect(fullReport?.reportActionDisabled).toBe(true);
+    expect(fullReport?.reportActionLabel).toBe("Need 1 document slot");
+    expect(fullReport?.reportActionHint).toContain("Free 1 load slot");
+    expect(fullReport?.reportActionHint).toContain("document case must be carried physically");
+    player.cargo = [];
 
     player.surveyedRouteIds.push(Number(before.routeId));
     const after = projectUIView(view, player, session).selectedSettlement?.connections

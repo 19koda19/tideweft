@@ -13,6 +13,24 @@ export { assertWorldInvariants } from "./invariants";
 export { deserializeWorld, hashWorld, serializeWorld } from "./persistence";
 export { keyedChance, keyedRandomInt, keyedRandomU32, mixUint32, seedFromText } from "./rng";
 export type { RootSeed } from "./rng";
+export {
+  BIOME_IDS,
+  applyWeatherToBiomeClimate,
+  biomeInteractionAt,
+  classifyBiome,
+  deriveBaselineBiomeClimate,
+  deriveBiomeProfile,
+  deriveMagicalWaterInfluence,
+} from "./biomes";
+export type {
+  BiomeClimate,
+  BiomeId,
+  BiomeInteraction,
+  BiomeProfile,
+  BiomeProfileInput,
+  BiomeTerrainInput,
+  BiomeWeatherInput,
+} from "./biomes";
 export { createWorldView } from "./view";
 export { calculateNetworkMetrics, findAutonomousRoutePlan, routeCapacity, routeIsActive } from "./network";
 export type { AutonomousRoutePlan, NetworkMetrics } from "./network";

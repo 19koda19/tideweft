@@ -27,14 +27,17 @@ const SMOKE_TIDE_HARP = Object.freeze({
 const SMOKE_MINIMUM_VIEWPORT = Object.freeze({ width: 960, height: 640 });
 const SMOKE_RESPONSIVE_VIEWPORT = Object.freeze({ width: 927, height: 640 });
 const SMOKE_PHONE_VIEWPORT = Object.freeze({ width: 700, height: 640 });
+const SMOKE_COMPACT_PHONE_VIEWPORT = Object.freeze({ width: 360, height: 640 });
 const SMOKE_NARROW_PHONE_VIEWPORT = Object.freeze({ width: 390, height: 700 });
 const SMOKE_LANDSCAPE_PHONE_VIEWPORT = Object.freeze({ width: 844, height: 390 });
 const SMOKE_SCREENSHOT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
+const SMOKE_REQUESTED =
+  process.env.TIDEWEFT_SMOKE === '1' ||
+  process.argv.includes('--tideweft-smoke');
+const SMOKE_USER_DATA = process.env.TIDEWEFT_SMOKE_USER_DATA?.trim() || '';
 
 const SMOKE_TEST = Object.freeze({
-  enabled:
-    process.env.TIDEWEFT_SMOKE === '1' ||
-    process.argv.includes('--tideweft-smoke'),
+  enabled: SMOKE_REQUESTED,
   screenshotPath: process.env.TIDEWEFT_SMOKE_SCREENSHOT || '',
   titleScreenshotPath: process.env.TIDEWEFT_SMOKE_TITLE_SCREENSHOT || '',
   mobileScreenshotPath: process.env.TIDEWEFT_SMOKE_MOBILE_SCREENSHOT || '',
@@ -65,8 +68,15 @@ const windows = new Set();
 let smokeTestSettled = false;
 
 if (SMOKE_TEST.enabled) {
-  const isolatedUserData = process.env.TIDEWEFT_SMOKE_USER_DATA;
-  if (isolatedUserData) app.setPath('userData', path.resolve(isolatedUserData));
+  if (!SMOKE_USER_DATA) {
+    throw new Error('Refusing smoke mode without an isolated TIDEWEFT_SMOKE_USER_DATA profile.');
+  }
+  const defaultUserData = path.resolve(app.getPath('userData'));
+  const isolatedUserData = path.resolve(SMOKE_USER_DATA);
+  if (isolatedUserData === defaultUserData) {
+    throw new Error('Refusing smoke mode against the normal Tideweft user-data profile.');
+  }
+  app.setPath('userData', isolatedUserData);
   app.commandLine.appendSwitch('disable-background-timer-throttling');
 }
 
@@ -412,10 +422,35 @@ function rendererProbeScript() {
     const mobileSafety = document.querySelector('.mobile-field-strip__safety');
     const mobileTerrain = document.querySelector('.mobile-field-strip__terrain');
     const mobileActions = document.querySelector('.mobile-field-strip__actions');
+    const mobileVitals = Array.from(document.querySelectorAll('.mobile-vital')).map((vital) => {
+      const progress = vital.querySelector('progress');
+      return {
+        label: vital.querySelector('.mobile-vital__label')?.textContent?.trim() || null,
+        value: vital.querySelector('.mobile-vital__value')?.textContent?.trim() || null,
+        visible: visiblyIntersectsViewport(vital),
+        insideViewport: whollyInsideViewport(vital),
+        progress: progress instanceof HTMLProgressElement
+          ? { value: progress.value, max: progress.max, ariaLabel: progress.getAttribute('aria-label') }
+          : null,
+      };
+    });
+    const tutorialButton = document.querySelector('.tutorial-button');
+    const titleMenuButton = document.querySelector('.title-menu-button');
+    const quietHourButton = document.querySelector('.quiet-button');
+    const tutorialDialog = document.querySelector('.tutorial-dialog');
+    const tutorialContent = document.querySelector('.tutorial-dialog__content');
+    const tutorialTopics = document.querySelector('.tutorial-dialog__topics');
+    const tutorialPage = document.querySelector('.tutorial-page');
+    const tutorialHeading = document.querySelector('.tutorial-page__title');
+    const tutorialPrevious = document.querySelector('[data-tutorial-action="previous"]');
+    const tutorialNext = document.querySelector('[data-tutorial-action="next"]');
+    const tutorialClose = document.querySelector('[data-tutorial-action="close"]');
     const contractRail = document.querySelector('.contract-rail');
     const contractSummary = contractRail?.querySelector('.panel-summary') || null;
     const contractList = document.querySelector('.contract-list');
+    const contractActionControls = Array.from(document.querySelectorAll('.contract-card__action'));
     const settlementInspector = document.querySelector('.settlement-inspector');
+    const reportActionControls = Array.from(document.querySelectorAll('.report-item__action'));
     const contractStyle = contractList ? getComputedStyle(contractList) : null;
     const contractClientHeight = contractList ? contractList.clientHeight : null;
     const contractScrollHeight = contractList ? contractList.scrollHeight : null;
@@ -661,6 +696,11 @@ function rendererProbeScript() {
           contractClientHeight !== null &&
           contractScrollHeight !== null &&
           contractScrollHeight > contractClientHeight + 1,
+        actionTargetCount: contractActionControls.length,
+        actionTargetsAtLeast44: contractActionControls.every((control) => {
+          const rect = control.getBoundingClientRect();
+          return rect.width >= 44 && rect.height >= 44;
+        }),
       },
       mobileHud: {
         breakpointActive: window.matchMedia(
@@ -681,6 +721,7 @@ function rendererProbeScript() {
           visible: visiblyIntersectsViewport(mobileFieldStrip),
           insideViewport: whollyInsideViewport(mobileFieldStrip),
           rect: rectOf(mobileFieldStrip),
+          pointerEvents: mobileFieldStrip ? getComputedStyle(mobileFieldStrip).pointerEvents : null,
           overflowX: mobileFieldStrip instanceof HTMLElement
             ? mobileFieldStrip.scrollWidth > mobileFieldStrip.clientWidth + 1
             : null,
@@ -695,6 +736,7 @@ function rendererProbeScript() {
               ariaLabel: mobileHudToggle.getAttribute('aria-label'),
               text: mobileHudToggle.textContent?.trim() || null,
               disabled: mobileHudToggle instanceof HTMLButtonElement ? mobileHudToggle.disabled : null,
+              pointerEvents: getComputedStyle(mobileHudToggle).pointerEvents,
             }
           : null,
         compactCopy: {
@@ -703,6 +745,18 @@ function rendererProbeScript() {
           safety: mobileSafety?.textContent?.trim() || null,
           terrain: mobileTerrain?.textContent?.trim() || null,
           actions: mobileActions?.textContent?.trim() || null,
+          vitals: mobileVitals,
+        },
+        titleMenuButton: {
+          visible: visiblyIntersectsViewport(titleMenuButton),
+          display: titleMenuButton ? getComputedStyle(titleMenuButton).display : null,
+        },
+        quietHourButton: {
+          visible: visiblyIntersectsViewport(quietHourButton),
+          insideViewport: whollyInsideViewport(quietHourButton),
+          rect: rectOf(quietHourButton),
+          visibleText: quietHourButton instanceof HTMLElement ? quietHourButton.innerText.trim() : null,
+          ariaLabel: quietHourButton?.getAttribute('aria-label') || null,
         },
         objective: {
           visible: visiblyIntersectsViewport(objectivePanel),
@@ -734,6 +788,11 @@ function rendererProbeScript() {
           hidden: settlementInspector instanceof HTMLElement ? settlementInspector.hidden : null,
           overlapsStrip: elementsOverlap(settlementInspector, mobileFieldStrip),
           overlapsActionDock: elementsOverlap(settlementInspector, actionDock),
+          reportTargetCount: reportActionControls.length,
+          reportTargetsAtLeast44: reportActionControls.every((control) => {
+            const rect = control.getBoundingClientRect();
+            return rect.width >= 44 && rect.height >= 44;
+          }),
         },
         actionDock: {
           visible: visiblyIntersectsViewport(actionDock),
@@ -758,6 +817,53 @@ function rendererProbeScript() {
             ? actionDock.scrollWidth > actionDock.clientWidth + 1
             : null,
         },
+      },
+      tutorial: {
+        button: tutorialButton
+          ? {
+              visible: visiblyIntersectsViewport(tutorialButton),
+              insideViewport: whollyInsideViewport(tutorialButton),
+              rect: rectOf(tutorialButton),
+              text: tutorialButton.textContent?.trim() || null,
+              visibleText: tutorialButton.innerText?.trim() || null,
+              ariaLabel: tutorialButton.getAttribute('aria-label'),
+              ariaKeyShortcuts: tutorialButton.getAttribute('aria-keyshortcuts'),
+            }
+          : null,
+        open: tutorialDialog instanceof HTMLDialogElement ? tutorialDialog.open : null,
+        audience: tutorialDialog?.getAttribute('data-tutorial-audience') || null,
+        pageId: tutorialDialog?.getAttribute('data-tutorial-page') || null,
+        dialog: {
+          visible: visiblyIntersectsViewport(tutorialDialog),
+          insideViewport: whollyInsideViewport(tutorialDialog),
+          rect: rectOf(tutorialDialog),
+        },
+        content: {
+          visible: visiblyIntersectsViewport(tutorialContent),
+          insideViewport: whollyInsideViewport(tutorialContent),
+          rect: rectOf(tutorialContent),
+        },
+        topics: {
+          visible: visiblyIntersectsViewport(tutorialTopics),
+          insideViewport: whollyInsideViewport(tutorialTopics),
+          rect: rectOf(tutorialTopics),
+          overflowX: tutorialTopics ? getComputedStyle(tutorialTopics).overflowX : null,
+        },
+        page: {
+          visible: visiblyIntersectsViewport(tutorialPage),
+          insideViewport: whollyInsideViewport(tutorialPage),
+          rect: rectOf(tutorialPage),
+          clientHeight: tutorialPage instanceof HTMLElement ? tutorialPage.clientHeight : null,
+          scrollHeight: tutorialPage instanceof HTMLElement ? tutorialPage.scrollHeight : null,
+          overflowY: tutorialPage ? getComputedStyle(tutorialPage).overflowY : null,
+          heading: tutorialHeading?.textContent?.trim() || null,
+        },
+        controls: [tutorialPrevious, tutorialNext, tutorialClose].map((control) => ({
+          visible: visiblyIntersectsViewport(control),
+          insideViewport: whollyInsideViewport(control),
+          rect: rectOf(control),
+          disabled: control instanceof HTMLButtonElement ? control.disabled : null,
+        })),
       },
       leftPaneGap: objectivePanel && contractRail
         ? contractRail.getBoundingClientRect().top - objectivePanel.getBoundingClientRect().bottom
@@ -1264,27 +1370,60 @@ function probeHasPointerTransparentObjective(probe) {
 function probeHasMobileHudFrame(probe) {
   const mobile = probe?.mobileHud;
   const toggle = mobile?.toggle;
+  const vitals = mobile?.compactCopy?.vitals;
+  const tutorial = probe?.tutorial?.button;
   return Boolean(
     mobile?.breakpointActive === true &&
     mobile.strip?.visible === true &&
     mobile.strip?.insideViewport === true &&
     mobile.strip?.overflowX === false &&
+    mobile.strip?.pointerEvents === 'none' &&
     mobile.compactCopy?.visible === true &&
     mobile.compactCopy.objective?.includes('DELIVER') &&
     mobile.compactCopy.safety?.includes('STAM') &&
     mobile.compactCopy.safety?.includes('STAB') &&
-    mobile.compactCopy.safety?.startsWith('DEEP: STAM/STAB 0 → SWEPT') &&
+    mobile.compactCopy.safety?.includes('DEEP: STAM/STAB 0 → SWEPT') &&
     /^(?:WATER|GROUND) · /u.test(mobile.compactCopy.terrain || '') &&
     mobile.compactCopy.terrain.split(' · ').length >= 4 &&
-    mobile.compactCopy.actions?.startsWith('E ') &&
-    mobile.compactCopy.actions?.includes('SPACE') &&
-    mobile.compactCopy.actions?.includes('F ') &&
+    Array.isArray(vitals) &&
+    vitals.length === 4 &&
+    vitals.map((vital) => vital.label).join(',') === 'STAM,STAB,LOOM,CARGO' &&
+    vitals.every((vital) =>
+      vital.visible === true &&
+      vital.insideViewport === true &&
+      typeof vital.value === 'string' &&
+      vital.value.length > 0 &&
+      vital.progress &&
+      Number.isFinite(vital.progress.value) &&
+      Number.isFinite(vital.progress.max) &&
+      vital.progress.max > 0 &&
+      vital.progress.value >= 0 &&
+      vital.progress.value <= vital.progress.max &&
+      typeof vital.progress.ariaLabel === 'string' &&
+      vital.progress.ariaLabel.length > 0
+    ) &&
+    tutorial?.visible === true &&
+    tutorial.insideViewport === true &&
+    tutorial.rect?.width >= 44 &&
+    tutorial.rect?.height >= 44 &&
+    tutorial.visibleText === '?' &&
+    tutorial.ariaLabel?.toLowerCase().includes('tutorial') &&
+    tutorial.ariaKeyShortcuts === 'T' &&
+    mobile.titleMenuButton?.visible === false &&
+    mobile.titleMenuButton?.display === 'none' &&
+    mobile.quietHourButton?.visible === true &&
+    mobile.quietHourButton.insideViewport === true &&
+    mobile.quietHourButton.rect?.width >= 44 &&
+    mobile.quietHourButton.rect?.height >= 44 &&
+    mobile.quietHourButton.visibleText === '☾' &&
+    mobile.quietHourButton.ariaLabel?.includes('Quiet Hour') &&
     toggle?.visible === true &&
     toggle.insideViewport === true &&
     toggle.rect?.width >= 44 &&
     toggle.rect?.height >= 44 &&
     (toggle.ariaControls === 'promises-panel' || toggle.ariaControls === 'settlement-inspector') &&
     toggle.disabled === false &&
+    toggle.pointerEvents === 'auto' &&
     mobile.actionDock?.visible === true &&
     mobile.actionDock.insideViewport === true &&
     mobile.actionDock.controlsInsideViewport === true &&
@@ -1292,6 +1431,38 @@ function probeHasMobileHudFrame(probe) {
     mobile.actionDock.labelsInsideControls === true &&
     mobile.actionDock.overflowX === false &&
     probeHasSurfaceCurrent(probe),
+  );
+}
+
+function probeHasOpenMobileTutorial(probe) {
+  const tutorial = probe?.tutorial;
+  return Boolean(
+    probeHasMobileHudFrame(probe) &&
+    probe?.paused === false &&
+    tutorial?.open === true &&
+    tutorial.audience === 'mobile' &&
+    typeof tutorial.pageId === 'string' &&
+    tutorial.pageId.length > 0 &&
+    tutorial.dialog?.visible === true &&
+    tutorial.dialog.insideViewport === true &&
+    tutorial.content?.visible === true &&
+    tutorial.content.insideViewport === true &&
+    tutorial.topics?.visible === true &&
+    tutorial.topics.insideViewport === true &&
+    (tutorial.topics.overflowX === 'auto' || tutorial.topics.overflowX === 'scroll') &&
+    tutorial.page?.visible === true &&
+    tutorial.page.insideViewport === true &&
+    tutorial.page.clientHeight >= 96 &&
+    tutorial.page.scrollHeight >= tutorial.page.clientHeight &&
+    (tutorial.page.overflowY === 'auto' || tutorial.page.overflowY === 'scroll') &&
+    Array.isArray(tutorial.controls) &&
+    tutorial.controls.length === 3 &&
+    tutorial.controls.every((control) =>
+      control.visible === true &&
+      control.insideViewport === true &&
+      control.rect?.width >= 44 &&
+      control.rect?.height >= 44
+    )
   );
 }
 
@@ -1351,6 +1522,8 @@ function probeHasExpandedMobileHud(probe) {
     probe.promises.listVisible === true &&
     probe.promises.listInsideViewport === true &&
     probe.promises.listTabIndex === 0 &&
+    probe.promises.actionTargetCount > 0 &&
+    probe.promises.actionTargetsAtLeast44 === true &&
     probe.promises.clientHeight >= 96 &&
     probe.promises.hasVerticalOverflow === true &&
     (probe.promises.overflowY === 'auto' || probe.promises.overflowY === 'scroll'),
@@ -1379,6 +1552,8 @@ function probeHasExpandedMobileInspector(probe) {
     mobile.inspector.rect?.bottom <= mobile.actionDock.rect?.top + 1 &&
     mobile.inspector.clientHeight >= 96 &&
     mobile.inspector.scrollHeight >= mobile.inspector.clientHeight &&
+    mobile.inspector.reportTargetCount > 0 &&
+    mobile.inspector.reportTargetsAtLeast44 === true &&
     (mobile.inspector.overflowY === 'auto' || mobile.inspector.overflowY === 'scroll') &&
     probeHasPointerTransparentObjective(probe)
   );
@@ -1413,6 +1588,50 @@ async function openSmokeMobileInspector(contents) {
   })()`, true);
   if (!opened) throw new Error('a settlement could not be opened through the public mobile UI command path');
   return waitForRenderer(contents, probeHasExpandedMobileInspector, SMOKE_TEST.timeoutMs);
+}
+
+async function openSmokeTutorial(contents) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.tutorial-button');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error('the complete tutorial button was unavailable on mobile');
+  return waitForRenderer(contents, probeHasOpenMobileTutorial, SMOKE_TEST.timeoutMs);
+}
+
+async function advanceSmokeTutorial(contents, previousPageId) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('[data-tutorial-action="next"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error('the mobile tutorial next control was unavailable');
+  return waitForRenderer(
+    contents,
+    (probe) => probeHasOpenMobileTutorial(probe) && probe.tutorial.pageId !== previousPageId,
+    SMOKE_TEST.timeoutMs,
+  );
+}
+
+async function closeSmokeTutorialWithKeyboard(contents) {
+  const dispatched = await contents.executeJavaScript(`(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 't',
+      code: 'KeyT',
+      bubbles: true,
+      cancelable: true,
+    }));
+    return true;
+  })()`, true);
+  if (!dispatched) throw new Error('the tutorial keyboard shortcut could not be dispatched');
+  return waitForRenderer(
+    contents,
+    (probe) => probe?.tutorial?.open === false && probe?.paused === false,
+    SMOKE_TEST.timeoutMs,
+  );
 }
 
 async function toggleSmokeView(contents, expectedMode) {
@@ -1647,6 +1866,27 @@ async function runProductionSmoke(window) {
   const phoneViewportExpandedProbe = await toggleSmokeMobileHud(contents, true);
   const phoneViewportRecollapsedProbe = await toggleSmokeMobileHud(contents, false);
 
+  // Exercise the <=384px compact branch directly. A 390px probe can validate
+  // phone layout while still missing the smallest-screen action/label rules.
+  const compactPhoneCollapsedProbe = await resizeSmokeViewport(
+    window,
+    SMOKE_COMPACT_PHONE_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasCollapsedMobileHud(probe) &&
+      probe.layout?.leftRailDisplay === 'contents' &&
+      probe.layout?.hud?.height <= 64,
+  );
+  const compactPhoneExpandedProbe = await toggleSmokeMobileHud(contents, true);
+  const compactPhoneRecollapsedProbe = await toggleSmokeMobileHud(contents, false);
+  const compactTutorialOpenedProbe = await openSmokeTutorial(contents);
+  const compactTutorialAdvancedProbe = await advanceSmokeTutorial(
+    contents,
+    compactTutorialOpenedProbe.tutorial.pageId,
+  );
+  const compactTutorialClosedProbe = await closeSmokeTutorialWithKeyboard(contents);
+
   const narrowPhoneCollapsedProbe = await resizeSmokeViewport(
     window,
     SMOKE_NARROW_PHONE_VIEWPORT,
@@ -1745,6 +1985,16 @@ async function runProductionSmoke(window) {
       collapsed: phoneViewportCollapsedProbe,
       expanded: phoneViewportExpandedProbe,
       recollapsed: phoneViewportRecollapsedProbe,
+    },
+    compactPhoneViewport: {
+      collapsed: compactPhoneCollapsedProbe,
+      expanded: compactPhoneExpandedProbe,
+      recollapsed: compactPhoneRecollapsedProbe,
+      tutorial: {
+        opened: compactTutorialOpenedProbe,
+        advanced: compactTutorialAdvancedProbe,
+        closed: compactTutorialClosedProbe,
+      },
     },
     narrowPhoneViewport: {
       collapsed: narrowPhoneCollapsedProbe,

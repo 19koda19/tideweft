@@ -5,11 +5,14 @@ import {
   createWorld,
   createWorldView,
 } from "../sim/public";
+import { PERPETUAL_SESSION_SHAPE, type SessionShape } from "../ui/types";
+import { createPlayer } from "./player";
 import {
   captureSessionBaseline,
   createSessionState,
   sessionOutcomeDelta,
 } from "./sessionTypes";
+import { projectUIView } from "./uiProjection";
 
 describe("session outcome accounting", () => {
   it("separates compounding world follow-through from the player's own deliveries", () => {
@@ -47,4 +50,39 @@ describe("session outcome accounting", () => {
     const world = createWorldView(createWorld("no false recap"));
     expect(sessionOutcomeDelta(createSessionState(world.seedText), world)).toBeNull();
   });
+});
+
+describe("perpetual-world session compatibility", () => {
+  it("defaults every newly created session to the perpetual Wander value", () => {
+    const session = createSessionState("open horizon");
+
+    expect(PERPETUAL_SESSION_SHAPE).toBe("wander");
+    expect(session.sessionShape).toBe(PERPETUAL_SESSION_SHAPE);
+    expect(session.closureOffered).toBe(false);
+  });
+
+  it.each<SessionShape>(["drift", "weave", "wander"])(
+    "loads the legacy %s value while projecting the same open-ended objective",
+    (legacyShape) => {
+      const world = createWorldView(createWorld(`legacy ${legacyShape} session`));
+      const player = createPlayer(world);
+      const session = createSessionState(world.seedText, "journey", legacyShape);
+      session.tutorial.dismissed = true;
+      session.closureOffered = legacyShape !== "wander";
+      session.sessionDeliveries = 12;
+      session.sessionStrandsWoven = 4;
+
+      const view = projectUIView(world, player, session);
+
+      expect(view.sessionShape).toBe(legacyShape);
+      expect(view.objective).toMatchObject({
+        id: "perpetual-estuary",
+        eyebrow: "Perpetual estuary",
+        title: "Choose the next useful thread",
+      });
+      expect(view.objective?.description).toContain("no session timer or quota");
+      expect(view.objective?.description).toContain("Quiet Hour whenever you choose");
+      expect(view.objective?.completed).not.toBe(true);
+    },
+  );
 });

@@ -8,6 +8,7 @@ export function createWorldView(world: WorldState): WorldView {
   return {
     completedTick: world.meta.completedTick,
     seedText: world.meta.seedText,
+    rootSeed: [...world.meta.rootSeed],
     pressureMode: world.meta.pressureMode,
     terrain: {
       width: world.terrain.width,

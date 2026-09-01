@@ -5,10 +5,13 @@ const fsConstants = require('node:fs').constants;
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { listPackage } = require('@electron/asar');
 
 const projectRoot = path.resolve(__dirname, '..');
 const releaseRoot = path.join(projectRoot, 'release');
 const resultPrefix = 'TIDEWEFT_SMOKE_RESULT ';
+const ALLOWED_ASAR_ENTRY = /^\/(?:package\.json|electron|electron\/main\.cjs|dist(?:\/.*)?)$/u;
+const SECRET_LIKE_ASAR_ENTRY = /(?:^|\/)(?:\.env(?:\.|$)|\.npmrc$|artifacts(?:\/|$)|.*(?:secret|credential|private[-_.]?key).*)/iu;
 
 function parseArguments(argv) {
   let executable = process.env.TIDEWEFT_PACKAGED_EXECUTABLE || '';
@@ -127,6 +130,32 @@ async function packagedExecutable() {
   );
 }
 
+function packagedAsarPath(executable) {
+  return process.platform === 'darwin'
+    ? path.resolve(path.dirname(executable), '..', 'Resources', 'app.asar')
+    : path.join(path.dirname(executable), 'resources', 'app.asar');
+}
+
+async function verifyPackagedManifest(executable) {
+  const asarPath = packagedAsarPath(executable);
+  const entries = listPackage(asarPath);
+  const unexpected = entries.filter((entry) => !ALLOWED_ASAR_ENTRY.test(entry));
+  const secretLike = entries.filter((entry) => SECRET_LIKE_ASAR_ENTRY.test(entry));
+  const required = ['/package.json', '/electron/main.cjs', '/dist/index.html'];
+  const missing = required.filter((entry) => !entries.includes(entry));
+  if (unexpected.length > 0 || secretLike.length > 0 || missing.length > 0) {
+    throw new Error(
+      `Unsafe packaged ASAR manifest: ${JSON.stringify({
+        missing,
+        unexpected: unexpected.slice(0, 20),
+        secretLike: secretLike.slice(0, 20),
+      })}`,
+    );
+  }
+  const archive = await fs.stat(asarPath);
+  return { asarPath, entries: entries.length, bytes: archive.size };
+}
+
 function parseSmokeResult(output) {
   const lines = output.split(/\r?\n/u);
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -223,6 +252,7 @@ async function main() {
   const options = parseArguments(process.argv.slice(2));
   const executable = options.executable || (await packagedExecutable());
   await fs.access(executable, fsConstants.X_OK);
+  const manifest = await verifyPackagedManifest(executable);
   const userDataDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'tideweft-electron-smoke-'));
 
   try {
@@ -230,7 +260,10 @@ async function main() {
     if (options.screenshot) await fs.rm(options.screenshot, { force: true });
     if (options.titleScreenshot) await fs.rm(options.titleScreenshot, { force: true });
     if (options.mobileScreenshot) await fs.rm(options.mobileScreenshot, { force: true });
-    process.stdout.write(`Verifying packaged desktop app: ${executable}\n`);
+    process.stdout.write(
+      `Verifying packaged desktop app: ${executable}\n` +
+      `Verified runtime-only ASAR: ${manifest.entries} entries, ${manifest.bytes} bytes\n`,
+    );
     const result = await runPackagedApp(
       executable,
       options.screenshot,

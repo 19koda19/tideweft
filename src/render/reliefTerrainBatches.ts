@@ -1,9 +1,16 @@
 import type { TerrainMeshChunk } from "./terrainMesh";
+import {
+  biomeEnvironmentalEmphasis,
+  visibleBiomePresentation,
+} from "./biomePresentation";
 import { reliefDiscoveryVisibility } from "./reliefTerrain";
-import type { TerrainGridView, TerrainKind } from "./types";
+import type { BiomeId, TerrainGridView, TerrainKind } from "./types";
 
 export interface ReliefMaterialBatch {
   readonly kind: TerrainKind;
+  readonly biome?: BiomeId;
+  /** Quantized current climate emphasis for bounded material variation. */
+  readonly environment: number;
   /** Quantized discovery confidence. Zero-confidence tiles are never submitted. */
   readonly visibility: number;
   /** Chunk-local vertex indices, grouped as complete pairs of triangles. */
@@ -19,7 +26,13 @@ export function buildReliefMaterialBatches(
   chunk: TerrainMeshChunk,
   grid: TerrainGridView,
 ): readonly ReliefMaterialBatch[] {
-  const groups = new Map<string, { kind: TerrainKind; visibility: number; indices: number[] }>();
+  const groups = new Map<string, {
+    kind: TerrainKind;
+    biome?: BiomeId;
+    environment: number;
+    visibility: number;
+    indices: number[];
+  }>();
 
   for (const tile of chunk.tiles) {
     const source = grid.tiles[tile.row * grid.columns + tile.column];
@@ -36,12 +49,24 @@ export function buildReliefMaterialBatches(
       continue;
     }
 
-    const groupKey = `${tile.kind}:${visibility}`;
-    const group = groups.get(groupKey) ?? { kind: tile.kind, visibility, indices: [] };
+    const biome = visibleBiomePresentation(source)?.id;
+    const environment = Math.round(biomeEnvironmentalEmphasis(source) * 4) / 4;
+    const groupKey = `${tile.kind}:${biome ?? "legacy"}:${environment}:${visibility}`;
+    const group = groups.get(groupKey) ?? {
+      kind: tile.kind,
+      ...(biome ? { biome } : {}),
+      environment,
+      visibility,
+      indices: [],
+    };
     group.indices.push(...tileIndices);
     groups.set(groupKey, group);
   }
 
   return [...groups.values()]
-    .sort((left, right) => left.kind.localeCompare(right.kind) || left.visibility - right.visibility);
+    .sort((left, right) =>
+      (left.biome ?? left.kind).localeCompare(right.biome ?? right.kind)
+        || left.environment - right.environment
+        || left.visibility - right.visibility
+    );
 }

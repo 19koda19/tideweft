@@ -469,12 +469,35 @@ describe("effort, stability, and discovery", () => {
     expect(washedAshore).toBe(true);
     expect(player.mode).toBe("camp");
     expect(player.stamina).toBeGreaterThan(0);
+    expect(player.pace).toBe("steady");
     expect(world.terrain.tiles[playerTileIndex(player)]?.waterDepth).toBeLessThanOrEqual(55_000);
     expect(player.cargo).toHaveLength(1);
     expect(player.cargo[0]?.quantity).toBe(4);
     expect(player.cargo[0]?.condition).toBe(weatheredCondition);
     expect(player.surveyTrace).toEqual([playerTileIndex(player)]);
     expect(player.harborTrail).toEqual([]);
+
+    // Touch routing has no pace selector. The first intended step after a
+    // sweep must therefore move at steady pace and spend the restored stamina,
+    // including when the player immediately turns back into the same channel.
+    const bankTile = world.terrain.tiles[playerTileIndex(player)];
+    const channelTile = world.terrain.tiles[startIndex];
+    if (!bankTile || !channelTile) throw new Error("sweep fixture lost its bank or channel");
+    const returnControl = {
+      moveX: Math.sign(channelTile.x - bankTile.x) as -1 | 0 | 1,
+      moveY: Math.sign(channelTile.y - bankTile.y) as -1 | 0 | 1,
+      brace: false,
+    };
+    const shoreStamina = player.stamina;
+    const firstReturnStep = stepPlayer(player, world, returnControl);
+    expect(firstReturnStep.moved).toBe(true);
+    expect(player.stamina).toBeLessThan(shoreStamina);
+
+    for (let tick = 0; tick < 12 && playerTileIndex(player) !== startIndex; tick += 1) {
+      stepPlayer(player, world, returnControl);
+    }
+    expect(playerTileIndex(player)).toBe(startIndex);
+    expect(player.stamina).toBeLessThan(shoreStamina);
   });
 
   it("turns zero stability in deep water into the same deterministic sweep while stamina remains", () => {

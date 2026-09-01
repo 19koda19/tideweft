@@ -1,10 +1,20 @@
 import type {
+  TerrainClimateView,
   TideHarpView,
   TideweftView,
   TerrainKind as RenderTerrainKind,
   TidePhase,
   WeatherKind as RenderWeatherKind,
 } from "../render/types";
+import {
+  applyWeatherToBiomeClimate,
+  classifyBiome,
+  deriveBaselineBiomeClimate,
+  deriveMagicalWaterInfluence,
+  seedFromText,
+  type BiomeClimate,
+  type BiomeId,
+} from "../sim/public";
 import { FIXED_POINT, STRAND_AUTOMATION_THRESHOLD, type TerrainTileView, type WorldView } from "../sim/types";
 import {
   TILE_UNITS,
@@ -18,6 +28,42 @@ import { surfaceCurrentDirection } from "./currentDirection";
 import { WAYKNOT_LABELS, WAYKNOT_RADII } from "./wayknots";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
+const MAX_BIOME_CACHE_ENTRIES = 4;
+const TERRAIN_IDENTITY_FIELDS = 6;
+
+interface CachedBiomeTile {
+  readonly id: BiomeId;
+  readonly baseline: BiomeClimate;
+}
+
+interface ProjectedBiomeTile {
+  readonly id: BiomeId;
+  readonly climate: TerrainClimateView;
+}
+
+interface BiomeTerrainCache {
+  readonly seedText: string;
+  readonly seedKey: string;
+  readonly width: number;
+  readonly height: number;
+  readonly numericIdentity: Int32Array;
+  readonly terrainIdentity: Uint8Array;
+  readonly tiles: readonly CachedBiomeTile[];
+}
+
+const biomeTerrainCaches: BiomeTerrainCache[] = [];
+const biomeCacheByTerrainArray = new WeakMap<readonly TerrainTileView[], BiomeTerrainCache>();
+const liveBiomeCache = new WeakMap<readonly CachedBiomeTile[], {
+  readonly weatherKey: string;
+  readonly tiles: readonly ProjectedBiomeTile[];
+}>();
+const terrainKindCode: Readonly<Record<TerrainTileView["terrain"], number>> = {
+  "deep-water": 1,
+  "tidal-flat": 2,
+  marsh: 3,
+  meadow: 4,
+  ridge: 5,
+};
 
 export interface ProjectionOptions {
   selectedSettlementId?: number | null;
@@ -54,6 +100,8 @@ export function projectGameView(
       harp.id === activeTideHarpId,
     ));
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+  const biomeCache = stableBiomeTerrain(world);
+  const projectedBiomes = weatherAdjustedBiomeTiles(biomeCache.tiles, world.weather);
   const traces = player.currentTrace.length > 1
     ? [
         {
@@ -123,18 +171,29 @@ export function projectGameView(
       rows: world.terrain.height,
       tileSize,
       origin: { x: 0, y: 0 },
-      revision: `${world.seedText}:${world.completedTick >> 7}`,
-      tiles: world.terrain.tiles.map((tile, index) => ({
+      revision: [
+        world.seedText,
+        world.completedTick >> 7,
+        world.weather.kind,
+        world.weather.intensity,
+        world.weather.windX,
+        world.weather.windY,
+      ].join(":"),
+      tiles: world.terrain.tiles.map((tile, index) => {
+        const biome = projectedBiomes[index];
+        return {
           kind: renderTerrain(tile, settlementTiles.has(index)),
-        elevation: tile.elevation / FIXED_POINT,
-        moisture: tile.moisture / FIXED_POINT,
-        waterDepth: tile.waterDepth / FIXED_POINT,
-        depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
-        discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
-        trace: tile.traceStrength / FIXED_POINT,
-        shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
-        blocked: false,
-      })),
+          ...(biome ? { biome: biome.id, climate: biome.climate } : {}),
+          elevation: tile.elevation / FIXED_POINT,
+          moisture: tile.moisture / FIXED_POINT,
+          waterDepth: tile.waterDepth / FIXED_POINT,
+          depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
+          discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
+          trace: tile.traceStrength / FIXED_POINT,
+          shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
+          blocked: false,
+        };
+      }),
     },
     tide: {
       phase: tidePhase(world.tide.phase),
@@ -330,6 +389,132 @@ export function projectGameView(
     },
     ...(options.paused === undefined ? {} : { paused: options.paused }),
   };
+}
+
+function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {
+  const seed = world.rootSeed ?? seedFromText(world.seedText);
+  const seedKey = seed.join(",");
+  const identityCached = biomeCacheByTerrainArray.get(world.terrain.tiles);
+  if (
+    identityCached
+    && identityCached.seedKey === seedKey
+    && identityCached.width === world.terrain.width
+    && identityCached.height === world.terrain.height
+  ) return identityCached;
+
+  const cachedIndex = biomeTerrainCaches.findIndex((candidate) =>
+    candidate.seedText === world.seedText
+      && candidate.seedKey === seedKey
+      && candidate.width === world.terrain.width
+      && candidate.height === world.terrain.height
+      && terrainIdentityMatches(candidate, world.terrain.tiles)
+  );
+  if (cachedIndex >= 0) {
+    const cached = biomeTerrainCaches[cachedIndex];
+    if (!cached) throw new Error("Biome terrain cache index became unavailable");
+    biomeTerrainCaches.splice(cachedIndex, 1);
+    biomeTerrainCaches.push(cached);
+    biomeCacheByTerrainArray.set(world.terrain.tiles, cached);
+    return cached;
+  }
+
+  const numericIdentity = new Int32Array(world.terrain.tiles.length * TERRAIN_IDENTITY_FIELDS);
+  const terrainIdentity = new Uint8Array(world.terrain.tiles.length);
+  const tiles = world.terrain.tiles.map((tile, index): CachedBiomeTile => {
+    writeTerrainIdentity(numericIdentity, terrainIdentity, tile, index);
+    const magicalWater = deriveMagicalWaterInfluence(seed, tile);
+    const baseline = deriveBaselineBiomeClimate(
+      seed,
+      tile,
+      world.terrain.height,
+      magicalWater,
+    );
+    return {
+      id: classifyBiome(tile.terrain, baseline),
+      baseline,
+    };
+  });
+  const created: BiomeTerrainCache = {
+    seedText: world.seedText,
+    seedKey,
+    width: world.terrain.width,
+    height: world.terrain.height,
+    numericIdentity,
+    terrainIdentity,
+    tiles,
+  };
+  biomeTerrainCaches.push(created);
+  if (biomeTerrainCaches.length > MAX_BIOME_CACHE_ENTRIES) biomeTerrainCaches.shift();
+  biomeCacheByTerrainArray.set(world.terrain.tiles, created);
+  return created;
+}
+
+function weatherAdjustedBiomeTiles(
+  baselineTiles: readonly CachedBiomeTile[],
+  weather: WorldView["weather"],
+): readonly ProjectedBiomeTile[] {
+  const weatherKey = [
+    weather.kind,
+    weather.intensity,
+    weather.windX,
+    weather.windY,
+  ].join(":");
+  const cached = liveBiomeCache.get(baselineTiles);
+  if (cached?.weatherKey === weatherKey) return cached.tiles;
+
+  const tiles = baselineTiles.map((tile): ProjectedBiomeTile => {
+    const climate = applyWeatherToBiomeClimate(tile.baseline, weather);
+    return {
+      id: tile.id,
+      climate: {
+        rainfall: climate.rainfall / FIXED_POINT,
+        heat: climate.heat / FIXED_POINT,
+        salinity: climate.salinity / FIXED_POINT,
+        exposure: climate.exposure / FIXED_POINT,
+        magicalWater: climate.magicalWater / FIXED_POINT,
+      },
+    };
+  });
+  liveBiomeCache.set(baselineTiles, { weatherKey, tiles });
+  return tiles;
+}
+
+function terrainIdentityMatches(
+  cached: BiomeTerrainCache,
+  tiles: readonly TerrainTileView[],
+): boolean {
+  if (tiles.length !== cached.terrainIdentity.length) return false;
+  for (let index = 0; index < tiles.length; index += 1) {
+    const tile = tiles[index];
+    if (!tile) return false;
+    const offset = index * TERRAIN_IDENTITY_FIELDS;
+    if (
+      cached.numericIdentity[offset] !== tile.index
+      || cached.numericIdentity[offset + 1] !== tile.x
+      || cached.numericIdentity[offset + 2] !== tile.y
+      || cached.numericIdentity[offset + 3] !== tile.elevation
+      || cached.numericIdentity[offset + 4] !== tile.moisture
+      || cached.numericIdentity[offset + 5] !== tile.roughness
+      || cached.terrainIdentity[index] !== terrainKindCode[tile.terrain]
+    ) return false;
+  }
+  return true;
+}
+
+function writeTerrainIdentity(
+  numericIdentity: Int32Array,
+  terrainIdentity: Uint8Array,
+  tile: TerrainTileView,
+  index: number,
+): void {
+  const offset = index * TERRAIN_IDENTITY_FIELDS;
+  numericIdentity[offset] = tile.index;
+  numericIdentity[offset + 1] = tile.x;
+  numericIdentity[offset + 2] = tile.y;
+  numericIdentity[offset + 3] = tile.elevation;
+  numericIdentity[offset + 4] = tile.moisture;
+  numericIdentity[offset + 5] = tile.roughness;
+  terrainIdentity[index] = terrainKindCode[tile.terrain];
 }
 
 function projectTideHarp(

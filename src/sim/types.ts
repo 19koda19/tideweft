@@ -387,6 +387,8 @@ export interface SettlementView
 export interface WorldView {
   completedTick: Tick;
   seedText: string;
+  /** Authoritative persisted seed; optional only for legacy in-memory consumers. */
+  rootSeed?: readonly [number, number, number, number];
   pressureMode: PressureMode;
   terrain: {
     width: number;

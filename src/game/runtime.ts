@@ -13,7 +13,11 @@ import {
   type WorldView,
 } from "../sim/public";
 import { findTilePath, MAX_TIDE_LEVEL } from "../sim/terrain";
-import type { TideweftUICommand, TideweftUIView } from "../ui/types";
+import {
+  PERPETUAL_SESSION_SHAPE,
+  type TideweftUICommand,
+  type TideweftUIView,
+} from "../ui/types";
 import { TideweftSoundscape } from "../audio/soundscape";
 import { createSaveRepository, type SaveRecord, type SaveRepository } from "../platform/persistence";
 import {
@@ -477,10 +481,9 @@ export async function createTideweftRuntime(
           session.sessionChanges.push(`${destination}'s completed project entrusted you with ${FIELD_TOOL_LABELS[unlockedTool].toLocaleLowerCase()}.`);
         }
         if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
-        const closureReady = updateClosureMilestone();
         announce(
           session,
-          `${requester ?? destination} received the promise${cargo ? ` at ${Math.round(cargo.condition / 10_000)}% condition` : ""}. The route and relationship both changed${newlyAutomated ? ", and autonomous porters can now inherit this corridor" : ""}.${unlockedTool ? ` ${destination} adds ${FIELD_TOOL_LABELS[unlockedTool]} to your field kit: ${fieldToolEffect(unlockedTool)}` : ""}${closureReady ? " Tonight's chosen shape is complete; continue freely or choose Quiet Hour whenever the feeling is right." : ""}`,
+          `${requester ?? destination} received the promise${cargo ? ` at ${Math.round(cargo.condition / 10_000)}% condition` : ""}. The route and relationship both changed${newlyAutomated ? ", and autonomous porters can now inherit this corridor" : ""}.${unlockedTool ? ` ${destination} adds ${FIELD_TOOL_LABELS[unlockedTool]} to your field kit: ${fieldToolEffect(unlockedTool)}` : ""}`,
           true,
         );
         soundscape.play("deliver", 1);
@@ -544,12 +547,11 @@ export async function createTideweftRuntime(
             ? `${origin} ↔ ${destination} became a self-carrying strand.`
             : `${origin} ↔ ${destination} was tended for future travelers.`,
         );
-        const closureReady = updateClosureMilestone();
         announce(
           session,
           newlyAutomated
-            ? `The route between ${origin} and ${destination} can now carry autonomous porters. Your path became shared capacity.${closureReady ? " Tonight's chosen shape is complete; Quiet Hour is ready when you are." : ""}`
-            : `${origin} and ${destination} now share a stronger, more weatherworthy strand.${closureReady ? " Tonight's chosen shape is complete; Quiet Hour is ready when you are." : ""}`,
+            ? `The route between ${origin} and ${destination} can now carry autonomous porters. Your path became shared capacity.`
+            : `${origin} and ${destination} now share a stronger, more weatherworthy strand.`,
           true,
         );
         pendingReinforcement = null;
@@ -597,11 +599,10 @@ export async function createTideweftRuntime(
         session.sessionChanges.push(
           `The ${harborNames.join("–")} loop awakened a Tide Choir; its shared routes became more weatherworthy.`,
         );
-        const closureReady = updateClosureMilestone();
         pendingChoir = null;
         announce(
           session,
-          `The loop closes: ${harborNames.join(" → ")} → ${harborNames[0] ?? "home"}. Lantern-moths answer in harmony, and every route in this unique Tide Choir gains condition and reliability.${closureReady ? " Tonight's Weave is complete; Quiet Hour is ready whenever you are." : ""}`,
+          `The loop closes: ${harborNames.join(" → ")} → ${harborNames[0] ?? "home"}. Lantern-moths answer in harmony, and every route in this unique Tide Choir gains condition and reliability.`,
           true,
         );
         soundscape.play("choir", 1);
@@ -639,9 +640,6 @@ export async function createTideweftRuntime(
       case "wayknot":
         toggleWayknot();
         break;
-      case "toggle-pause":
-        togglePause();
-        break;
       case "pace-step":
         if (player.mode === "swept") {
           announce(session, "The current has the helm until you reach a safe bank; pace returns ashore.", true);
@@ -677,10 +675,7 @@ export async function createTideweftRuntime(
         announce(session, `Welcome back to ${renderView.worldName ?? "the estuary"}. Nothing changed while you were away.`);
         break;
       case "new-world":
-        newWorld(command.seed, command.posture, command.sessionShape);
-        break;
-      case "toggle-pause":
-        togglePause();
+        newWorld(command.seed, command.posture);
         break;
       case "scan":
         scan();
@@ -765,21 +760,6 @@ export async function createTideweftRuntime(
     lastCargoDamageNoticeMs = Number.NEGATIVE_INFINITY;
   }
 
-  function updateClosureMilestone(): boolean {
-    if (session.closureOffered || session.sessionShape === "wander") return false;
-    const complete = session.sessionShape === "drift"
-      ? session.sessionDeliveries >= 1
-      : session.sessionStrandsWoven >= 1 || session.sessionChoirsAwakened >= 1 || session.sessionDeliveries >= 2;
-    if (!complete) return false;
-    session.closureOffered = true;
-    session.sessionChanges.push(
-      session.sessionShape === "drift"
-        ? "The chosen Drift reached one complete, useful promise."
-        : "The chosen Weave reached a corridor milestone.",
-    );
-    return true;
-  }
-
   function checkCampaignResolution(): void {
     if (!worldView.network.resolved || session.campaignCelebrated) return;
     session.campaignCelebrated = true;
@@ -814,9 +794,9 @@ export async function createTideweftRuntime(
     if (player.activeContractId === contractId) player.activeContractId = null;
   }
 
-  function newWorld(seed: string, posture: GameSessionState["posture"], sessionShape: GameSessionState["sessionShape"]): void {
+  function newWorld(seed: string, posture: GameSessionState["posture"]): void {
     const normalizedSeed = seed.trim().slice(0, 128) || "quiet-delta";
-    session = createSessionState(normalizedSeed, posture, sessionShape);
+    session = createSessionState(normalizedSeed, posture, PERPETUAL_SESSION_SHAPE);
     world = createWorld(normalizedSeed, session.pressureMode);
     worldView = createWorldView(world);
     const promise = worldView.contracts.find((contract) => contract.status === "offered");
@@ -969,14 +949,6 @@ export async function createTideweftRuntime(
     refreshViews();
   }
 
-  function togglePause(): void {
-    if (session.titleVisible || session.quietHourVisible) return;
-    session.paused = !session.paused;
-    announce(session, session.paused ? "The estuary is paused." : "The estuary resumes.");
-    soundscape.play("ui");
-    refreshViews();
-  }
-
   function interact(): void {
     if (session.paused || session.titleVisible) return;
     const settlementId = settlementAtPlayer(player, worldView);
@@ -1008,7 +980,7 @@ export async function createTideweftRuntime(
         session.selectedSettlementId = settlementId;
         announce(
           session,
-          `${localOffers.length} physical cargo promises are waiting here. Choose one in the scrollable Promises list; “Carry stock report” is a separate one-slot information journey.`,
+          `${localOffers.length} physical cargo promises are waiting here. Choose one in the scrollable Promises list; “Sign info report” is a separate one-document information journey that moves no goods.`,
         );
         soundscape.play("ui");
         refreshViews();

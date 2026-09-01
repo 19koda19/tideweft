@@ -66,4 +66,29 @@ describe("Relief terrain material batches", () => {
     const batches = buildReliefMaterialBatches(islandChunk, island);
     expect(batches.reduce((count, batch) => count + batch.indices.length, 0)).toBe(81 * 6);
   });
+
+  it("keeps discovered biome materials distinct without exposing hidden biome IDs", () => {
+    const source = grid(3, 1, [1, 1, 0]);
+    const tiles = source.tiles.map((tile, index): TerrainTileView => ({
+      ...tile,
+      biome: index === 0 ? "rain-meadow" : index === 1 ? "sun-meadow" : "glimmerfen",
+      climate: {
+        rainfall: 0.8,
+        heat: 0.7,
+        salinity: 0.2,
+        exposure: 0.3,
+        magicalWater: 0.9,
+      },
+    }));
+    const withBiomes = { ...source, tiles };
+    const chunk = buildTerrainMesh(withBiomes, { chunkSize: 3 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+    const batches = buildReliefMaterialBatches(chunk, withBiomes);
+
+    expect(new Set(batches.map((batch) => batch.biome))).toEqual(
+      new Set(["rain-meadow", "sun-meadow"]),
+    );
+    expect(batches.reduce((count, batch) => count + batch.indices.length, 0)).toBe(2 * 6);
+    expect(batches.every((batch) => batch.environment >= 0 && batch.environment <= 1)).toBe(true);
+  });
 });

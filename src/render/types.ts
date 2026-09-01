@@ -24,9 +24,31 @@ export type TerrainKind =
   | "ridge"
   | "built";
 
+export type BiomeId =
+  | "tide-channel"
+  | "brine-flat"
+  | "reed-marsh"
+  | "rain-meadow"
+  | "sun-meadow"
+  | "wind-ridge"
+  | "glimmerfen";
+
+/** Live, normalized environmental signals. Biome identity itself stays stable. */
+export interface TerrainClimateView {
+  readonly rainfall: number;
+  readonly heat: number;
+  readonly salinity: number;
+  readonly exposure: number;
+  readonly magicalWater: number;
+}
+
 export interface TerrainTileView {
   /** Stable base terrain category. */
   readonly kind: TerrainKind;
+  /** Stable place identity derived from the world seed and immutable terrain. */
+  readonly biome?: BiomeId;
+  /** Current weather-adjusted signals, each bounded to 0..1. */
+  readonly climate?: TerrainClimateView;
   /** Normalized height, where 0 is the estuary floor and 1 is high ground. */
   readonly elevation: number;
   readonly moisture?: number;
@@ -301,7 +323,6 @@ export type RendererCommand =
   | { readonly type: "scan" }
   | { readonly type: "interact" }
   | { readonly type: "wayknot" }
-  | { readonly type: "toggle-pause" }
   | { readonly type: "pace-step"; readonly delta: -1 | 1 }
   | {
       readonly type: "select";

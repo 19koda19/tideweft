@@ -16,13 +16,13 @@ Alpha 0.2 is built in three connected slices:
 
 - **Tide Choir:** routes must be physically surveyed before shared parts can improve them. Closing a unique loop of three or more surveyed harbor legs awakens a one-time communal harmony and permanently strengthens that circuit.
 - **Wild Reaches:** new worlds now span 96 × 72 tiles, keep every harbor at least 14 Manhattan tiles apart, and use seeded multi-octave gradient Perlin noise. Water is traversable, sounded depth scales stamina cost, civic field tools change difficult crossings, and deep-water exhaustion becomes a recoverable swept-away state.
-- **Relief estuary:** the same authoritative terrain now drives a playable p5/WebGL height field with lit chunked land, translucent water, depth fog, 3D routes, harbors, porters, cargo, soundings, pointer picking, zoom, and an orbiting camera. **Relief 3D** is the default where WebGL is available; **Chart 2D** is a persisted, reduced-motion-friendly fallback.
+- **Relief estuary:** the same authoritative terrain now drives a playable p5/WebGL height field with lit chunked land, translucent water, depth fog, 3D routes, harbors, porters, cargo, soundings, pointer picking, zoom, and an orbiting camera. Relief water shares Chart's shallow/channel/deep palette, with only discovery-safe tide and biome conditioning instead of one uniform cyan sheet. **Relief 3D** is the default where WebGL is available; **Chart 2D** is a persisted, reduced-motion-friendly fallback.
 
 Playtest fixes also make the HUD lighter, keep the Promises list genuinely scrollable even in shallow windows, stop live contract-card updates from swallowing clicks, state why stability is changing, and put explicit **PICK UP** / **DELIVER** instructions on each physical cargo promise.
 
-The locally verified mobile/current hotfix replaces the desktop HUD on portrait phones and short landscape phones with one compact LED-style field strip. **PROMISES + / PROMISES −** opens a full safe-area Promises sheet; settlement interaction opens a mutually exclusive full-size inspector, so the two cannot stack over each other. The strip keeps the active pickup/delivery route, stamina/stability safety, truthful ground/water terrain, and contextual actions visible. Discovered wet surface in both Chart and Relief views carries sparse direction arrows before entry without exposing unsounded depth. In water at or above **120,000** depth, either empty stamina or empty stability now yields control to the same recoverable deterministic sweep path.
+The published mobile/current hotfix replaces the desktop HUD on portrait phones and short landscape phones with one compact LED-style field strip. **PROMISES + / PROMISES −** opens a full safe-area Promises sheet; settlement interaction opens a mutually exclusive full-size inspector, so the two cannot stack over each other. Discovered wet surface in both Chart and Relief views carries sparse direction arrows before entry without exposing unsounded depth. In water at or above **120,000** depth, either empty stamina or empty stability yields control to the same recoverable deterministic sweep path.
 
-The latest published post-alpha checkpoint is **Phase 10: Tide Harps** at commit `6f74fe9`. It remains an untagged preview: the Alpha 0.2 tag has not moved. Phase 9 introduced the six fixed, reusable Wayknots at `eb12db0` and hardened them at `1bc136e`; those Reed mats, Tide anchors, and Wind knots can be bound or reclaimed with **F**, change authoritative movement and pointer-route costs, appear physically in both views, and form a small **Waychord** where unlike fields overlap.
+The latest published checkpoint is the **mobile/current hotfix** at commit `f8dc848`. It remains an untagged preview: the Alpha 0.2 tag has not moved. Phase 9 introduced the six fixed, reusable Wayknots at `eb12db0` and hardened them at `1bc136e`; those Reed mats, Tide anchors, and Wind knots can be bound or reclaimed with **F**, change authoritative movement and pointer-route costs, appear physically in both views, and form a small **Waychord** where unlike fields overlap.
 
 The published **Phase 10: Tide Harps** preview lets one Reed mat, one Tide anchor, and one Wind knot tune a compact, non-collinear triangle. The game derives every valid triangle, selects an exact maximum knot-disjoint set, then breaks equal solutions by smaller total perimeter and canonical component IDs. The eight deterministic instrument names are **Glass-Ebb**, **Gullweather**, **Moon-Reed**, **Lantern Shoal**, **Mothcurrent**, **Brine Lullaby**, **Quiet Rigging**, and **Estuary Chime**.
 
@@ -49,14 +49,17 @@ The campaign resolves when every settlement belongs to a sufficiently redundant 
 - Phase 10 untagged preview: the selected one-of-each Wayknot triangles become Tide Harps without minting currency or adding a save field. Standing inside or on one adds a single bounded **+900 Loom charge per 100 ms player tick**, on top of normal and Waychord recharge. A successful Space pulse keeps its radius-8 player sounding and adds three radius-6 discovery-and-depth soundings—one from each knot—so the instrument has four truthful origins in all.
 - An active route graph with stable multi-hop porter planning, weather closures, congestion, capacity, bridge detection, cycle rank, coverage, and resilience.
 - Five permanent civic consequences: beacons support signals in storms, caches improve recovery, crossings shorten and harden routes, clinics enable connected rescue, and ferries increase capacity.
-- Information as physical cargo: one signed count records its source, subject, resource, observation tick, quantity, and confidence. Its age remains visible when another settlement receives it.
-- Three pressure postures—Hearth, Journey, and Gale—and three reward-neutral session shapes:
-  - **Drift:** one complete promise.
-  - **Weave:** one corridor milestone or two promises.
-  - **Wander:** no quota.
+- Information as a separate carried document: one signed count records its source, subject, resource, observation tick, quantity, and confidence without moving the source's supplies. Its age remains visible when another settlement receives it.
+- Three pressure postures—Hearth, Journey, and Gale—inside one perpetual world with no session timer or delivery quota. **Quiet Hour** remains a voluntary save-and-recap stop.
 - A responsive p5 map, accessible DOM panels, color-independent labels and patterns, reduced-motion support, live announcements, procedural sound, and contextual onboarding.
 
-Drift and Weave remain part of this candidate's current title flow. The next compatibility-preserving pass will remove the 10/25-minute framing and make every new world perpetual by default; this is planned, not yet shipped. Following slices are planned for ladder-gated rock formations, physical dropped cargo that can tumble or drift and lose condition, and a safely available upgrade surface. Those are roadmap items, not claims about the current build.
+The current working candidate removes the old Drift/Weave 10/25-minute title choice and creates every new world with perpetual semantics. Earlier saves may still contain `drift`, `weave`, or `wander`; all three values load and round-trip safely, but none restores a quota or timed objective. The manual in-play pause command is also gone: opening Quiet Hour or the title safely stops the simulation and saves, while ordinary play keeps the world moving. Its title and field chrome use a restrained near-monochrome, hairline treatment instead of stacked glass panes.
+
+On phones, that candidate exposes four translucent, labeled vitals—**Stamina, Stability, Loom, and Cargo**—plus a touch action dock, while keeping keyboard hints out of the travel HUD. Harbor taps chart a route to the exact harbor center so arrival does not race a menu. Promises and settlement details remain independent safe-area sheets. The redundant mobile Title button is gone to reserve that scarce slot for the forthcoming **KIT** inventory; a 44-pixel **☾ Quiet Hour** control retains the saved recap and return-to-title path. Desktop **T** and the mobile **?** open the same versioned, independently scrollable field manual; its live/planned boundary is updated whenever a mechanic changes. Physical cargo remains in Promises, while inspector controls say **Sign info report → [harbor]** and identify reports as information-only, one-document-slot journeys. Those stable, touch-sized controls are not rebuilt under the pointer as their facts refresh.
+
+Seven derived biomes—Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen—are now projected from the seeded terrain and presented with restrained color-and-motif language in both Chart and Relief. Their bounded rainfall, heat, salinity, exposure, and magical-water signals are visible derived context, not saved resources. They do **not** yet change the courier, ecology, cargo, infrastructure, or settlement rules.
+
+Two other deterministic modules remain foundation-only. The cargo-environment evaluator calculates bounded material traits, condition/contamination/decay pressures, readable causes, and future loose-cargo current/lift forces. The rock/ladder kernel derives coherent outcrops, crossing risk/cost, and a finite reusable ladder kit. Neither is connected to live runtime movement, rendering, UI, cargo entities, or saves. Actual ladder-gated traversal, falls, dropped/tumbling/drifting cargo, upgrades, and cargo/weather/magic-water consequences remain planned rather than playable. The complete candidate is not yet deployed; the live checkpoint remains `f8dc848`.
 
 ## Controls
 
@@ -66,32 +69,33 @@ The world canvas must have focus for travel keys. Buttons and contract cards rem
 | --- | --- |
 | WASD / arrow keys | Travel |
 | Hold Shift while moving | Brace: trade speed for stability and fragile-cargo protection |
-| Pointer click | Chart a destination |
+| Pointer click / tap | Chart a destination; on touch, a harbor tap routes to its exact center |
 | Space | Pulse the Loom to reveal nearby terrain and sound water depth; an active Tide Harp echoes from all three knots |
 | E / Enter | Interact, deliver, or inspect the harbor underfoot |
 | F | Bind the terrain-appropriate Wayknot, or reclaim the one underfoot |
 | [ / ] | Move between Rest, Steady, and Swift pace |
-| P | Pause or resume world time |
 | V / Header View control | Switch between playable Chart 2D and Relief 3D |
 | Right-drag / Alt-drag | Orbit the Relief 3D camera |
 | Mouse wheel | Zoom either world view |
 | Escape / right click | Cancel the current pointer destination |
-| ? | Open controls and help |
-| PROMISES + / PROMISES − (portrait or short landscape phones) | Open or fold the full-size Promises sheet; route, safety, and actions remain visible |
+| T on desktop / ? button on mobile | Open the complete field manual |
+| PROMISES + / PROMISES − (portrait or short landscape phones) | Open or fold the full-size Promises sheet; the four vitals and touch controls remain available |
 
 Holding Shift braces the load without stopping; standing still or using Rest pace also restores stability. Completed caches shelter perishable food from freshness loss while you are there. The HUD names the live cause whenever stability falls.
+
+There is no manual in-play pause. Open **Quiet Hour** for a saved causal recap, or open the title to save and step away; either safely halts world and player ticks until you continue.
 
 Relief 3D travel is camera-relative: after orbiting, WASD/arrows continue to mean screen-left, screen-right, forward, and back. Hidden terrain remains flat possibility for rendering, labels, and pointer picking until it is genuinely discovered; the discovery mesh signature is cached per immutable projection instead of rehashed every animation frame.
 
 Water never becomes an arbitrary invisible wall. Sparse arrows show the direction of moving water on already discovered wet surface, but their fixed shape and spacing reveal no unsounded depth. A sounding pulse marks nearby bathymetry; deeper water spends more stamina, while a Tide sail lowers that cost. Empty stamina on dry ground makes camp. In deep/current water at or above 120,000 depth, either stamina or stability reaching zero yields steering to a deterministic adjacent current path toward the nearest safe bank; cargo quantity is preserved, condition weathers once, and a connected clinic can prevent the sweep while a ferry or Storm kite shortens it.
 
-Physical cargo promises and signed reports are different jobs. A promise moves actual supplies from its **PICK UP** harbor to its **DELIVER** harbor. A signed stock report uses one pack slot but moves information only: it records a named harbor's current stock count and becomes useful after you carry it to the named recipient. The contextual E button says which action it will perform.
+Physical cargo promises and signed reports are different jobs. A promise moves actual supplies from its **PICK UP** harbor to its **DELIVER** harbor. A signed stock report uses one document slot but moves information only: it records a named harbor's current stock count and becomes useful after you carry it to the named recipient. Cargo choices live in Promises; reports live under the harbor inspector's separately labeled **Signed reports · information only** section. Its stable button says **Sign info report → [harbor]**, while the contextual action names the handoff it will perform.
 
 ## Saves
 
 The current game exposes one local autosave and a Continue card. It saves periodically, when the page is hidden or closed, when the title is opened, and when Quiet Hour begins. The simulation never advances while the game is closed.
 
-Saves are local-first and remain on the player's device. IndexedDB is the primary store; localStorage is a sticky runtime fallback if opening or a later transaction fails. Reads choose the newest available copy, overlapping lifecycle/autosave requests coalesce behind an in-flight write, and a durable deletion marker prevents a stale primary copy from resurrecting after failover. The authoritative world has its own version and checksum, while the outer session save also preserves the player, chart, cargo/report, Wayknots, tutorial, session shape, and recap history. Corrupt or incompatible autosaves are ignored safely. The planned perpetual-world default will continue using this safe browser-local foundation rather than require a server.
+Saves are local-first and remain on the player's device. IndexedDB is the primary store; localStorage is a sticky runtime fallback if opening or a later transaction fails. Reads choose the newest available copy, overlapping lifecycle/autosave requests coalesce behind an in-flight write, and a durable deletion marker prevents a stale primary copy from resurrecting after failover. The authoritative world has its own version and checksum, while the outer session save also preserves the player, chart, cargo/report, Wayknots, tutorial, the legacy-compatible session-shape field, and recap history. Corrupt or incompatible autosaves are ignored safely. New worlds in the working candidate use perpetual `wander`; valid older `drift` and `weave` fields remain readable without regaining timed semantics or requiring a migration.
 
 Tide Harps are recomputed from the existing fixed-ID Wayknot placements and terrain dimensions. They add no currency, inventory, timer, authoritative world member, player member, save-format version, or migration burden; an older save that resumes with its Wayknots derives the same selected instruments.
 
@@ -141,7 +145,7 @@ npm run make:desktop
 
 The Phase 10 source also gives Chart 2D persistent bowed strings and a labeled center mark, while Relief 3D suspends an actual faceted bell on three cords above the discovery-safe surface. Active-state marks remain legible without color; reduced motion freezes decorative bob and sway. The candidate passed TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, a scoped source secret scan, and the extended packaged smoke with no renderer warnings or resource failures. Fresh 2,880 × 1,678 title and 2,880 × 1,800 Relief captures show the start controls, actual bell/cords, active Harp copy, explicit delivery guidance, and unobstructed Promises rail. GitHub CI run `33494152504` and Pages run `33494152310` then succeeded for exact commit `6f74fe9e016ba566116e2085b05ecf2988213754`; the live page serves `index-CKlzWR1L.css` and `index-D30XtHH3.js`, both returning HTTP 200. This remains an untagged preview, not a new Alpha tag.
 
-The focused mobile/current hotfix passes TypeScript, **31 Vitest files / 221 checks**, the production and nested `/tideweft/` web smoke, the scoped public-source secret scan, and the expanded packaged-device gate with no renderer warnings or resource failures. The inspected local web build emits `index-DTJENodE.css` and `index-CGVn5Ai9.js`; commit, Pages publication, and live verification remain pending.
+The focused mobile/current hotfix passes TypeScript, **31 Vitest files / 221 checks**, the production and nested `/tideweft/` web smoke, the scoped public-source secret scan, and the expanded packaged-device gate with no renderer warnings or resource failures. Exact commit `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2` is published: CI run `33503039473` and Pages run `33503039480` succeeded, and the live origin serves the inspected `index-DTJENodE.css` and `index-CGVn5Ai9.js` assets with HTTP 200.
 
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 
@@ -149,7 +153,7 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 [The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The live origin is verified at Phase 10 commit `6f74fe9e016ba566116e2085b05ecf2988213754`; successful CI run `33494152504` and Pages run `33494152310` produced the exact inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets.
+The live origin is verified at hotfix commit `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2`; successful CI run `33503039473` and Pages run `33503039480` produced the exact inspected `index-DTJENodE.css` and `index-CGVn5Ai9.js` assets.
 
 To publish:
 

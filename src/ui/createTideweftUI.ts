@@ -1,16 +1,17 @@
-import type { PaceView, SettlementStatus, TidePhase, WeatherKind } from "../render/types";
-import type {
-  ChronicleEntryUIView,
-  ContractStatus,
-  ContractUIView,
-  JourneyPosture,
-  SessionShape,
-  SettlementInspectorUIView,
-  TideweftUIController,
-  TideweftUIOptions,
-  TideweftUICommand,
-  TideweftUIView,
+import type { SettlementStatus, TidePhase, WeatherKind } from "../render/types";
+import {
+  PERPETUAL_SESSION_SHAPE,
+  type ChronicleEntryUIView,
+  type ContractStatus,
+  type ContractUIView,
+  type JourneyPosture,
+  type SettlementInspectorUIView,
+  type TideweftUIController,
+  type TideweftUIOptions,
+  type TideweftUICommand,
+  type TideweftUIView,
 } from "./types";
+import { createTutorialDialog, type TutorialDialogController } from "./tutorialDialog";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
 export const MOBILE_PROMISES_PANEL_ID = "promises-panel";
@@ -92,17 +93,18 @@ export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
   const stabilityCause = input.stabilityHint
     .replace(/^Falling(?::|\s*·)?\s*/u, "↓ ")
     .replace(/^Recovering(?: while)?\s*/u, "↑ ")
-    .replace(/^Stable\s*·.*$/u, "steady · Shift braces")
-    .replace(/\s*·\s*hold Shift to brace.*$/iu, " · Shift braces");
+    .replace(/^Stable\s*·.*$/u, "STABLE")
+    .replace(/\s*·\s*hold Shift to brace.*$/iu, "")
+    .trim() || "STABLE";
   const sweepRule = "DEEP: STAM/STAB 0 → SWEPT";
   const safety = input.swept
     ? `SWEPT · ${input.fieldHint} · STAM ${stamina}% · STAB ${stability}%`
-    : `${sweepRule} · STAM ${stamina}% · STAB ${stability}% · ${stabilityCause}`;
+    : `${stabilityCause} · ${sweepRule}`;
   const terrain = `${input.isWater ? "WATER" : "GROUND"} · ${input.terrain} · ${input.depth} · ${input.effort}`;
   const actions = [
-    `E ${input.interactLabel?.trim() || "Interact"}`,
-    input.canScan === false ? "SPACE SCAN LOCKED" : "SPACE SCAN",
-    `F ${input.wayknotLabel?.trim() || "Place Wayknot"}`,
+    input.interactLabel?.trim() || "Interact",
+    input.canScan === false ? "Scan recharging" : "Sound / Scan",
+    input.wayknotLabel?.trim() || "Place Wayknot",
   ].join(" · ");
   return { objective, safety, terrain, actions };
 }
@@ -184,7 +186,11 @@ export function handleTideweftUIShortcut(
   if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
     return false;
   }
-  if (event.key === "?" || (event.key === "/" && event.code === "Slash" && event.shiftKey)) {
+  if (
+    event.code === "KeyT"
+    || event.key === "?"
+    || (event.key === "/" && event.code === "Slash" && event.shiftKey)
+  ) {
     event.preventDefault();
     openHelp();
     return true;
@@ -200,6 +206,14 @@ interface UIRefs {
   mobileFieldStrip: HTMLElement;
   mobileHudToggle: HTMLButtonElement;
   mobileObjective: HTMLSpanElement;
+  mobileStamina: HTMLProgressElement;
+  mobileStaminaValue: HTMLSpanElement;
+  mobileStability: HTMLProgressElement;
+  mobileStabilityValue: HTMLSpanElement;
+  mobileLoom: HTMLProgressElement;
+  mobileLoomValue: HTMLSpanElement;
+  mobileCargo: HTMLProgressElement;
+  mobileCargoValue: HTMLSpanElement;
   mobileSafety: HTMLSpanElement;
   mobileTerrain: HTMLSpanElement;
   mobileActions: HTMLSpanElement;
@@ -261,13 +275,13 @@ interface UIRefs {
   inspectorStocks: HTMLUListElement;
   inspectorResidents: HTMLUListElement;
   inspectorConnections: HTMLUListElement;
+  inspectorReports: HTMLUListElement;
   inspectorFocus: HTMLButtonElement;
   inspectorClose: HTMLButtonElement;
   chronicleDetails: HTMLDetailsElement;
   chronicleSummary: HTMLElement;
   chronicleCount: HTMLSpanElement;
   chronicleList: HTMLOListElement;
-  pauseButton: HTMLButtonElement;
   scanButton: HTMLButtonElement;
   interactButton: HTMLButtonElement;
   wayknotButton: HTMLButtonElement;
@@ -275,7 +289,6 @@ interface UIRefs {
   quietButton: HTMLButtonElement;
   titleButton: HTMLButtonElement;
   helpButton: HTMLButtonElement;
-  paceButtons: Readonly<Record<PaceView, HTMLButtonElement>>;
   titleDialog: HTMLDialogElement;
   titleSubtitle: HTMLParagraphElement;
   continueButton: HTMLButtonElement;
@@ -284,7 +297,6 @@ interface UIRefs {
   newWorldForm: HTMLFormElement;
   seedInput: HTMLInputElement;
   postureInputs: readonly HTMLInputElement[];
-  sessionInputs: readonly HTMLInputElement[];
   quietDialog: HTMLDialogElement;
   quietTitle: HTMLHeadingElement;
   quietSummary: HTMLParagraphElement;
@@ -296,8 +308,7 @@ interface UIRefs {
   quietQuote: HTMLQuoteElement;
   quietFinish: HTMLButtonElement;
   quietContinue: HTMLButtonElement;
-  helpDialog: HTMLDialogElement;
-  helpClose: HTMLButtonElement;
+  tutorial: TutorialDialogController;
 }
 
 const createElement = <K extends keyof HTMLElementTagNameMap>(
@@ -345,7 +356,13 @@ const makeProgress = (label: string): HTMLProgressElement => {
 const clampUnit = (value: number): number =>
   Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 
-const setProgress = (
+/**
+ * Synchronizes the native progress property rather than only its HTML
+ * attribute. This is shared by desktop and compact meters and intentionally
+ * exported so zero/recovery/re-entry transitions can be regression tested
+ * without a browser-specific rendering harness.
+ */
+export const setProgress = (
   progress: HTMLProgressElement,
   value: number,
   valueText?: string,
@@ -467,6 +484,35 @@ const contractSignature = (contracts: readonly ContractUIView[]): string =>
     )
     .join("|");
 
+/**
+ * Only report-specific state belongs in this signature. Route reliability,
+ * stock counters, and the clock can all change while a player is aiming at a
+ * report button; none of those updates should replace the hovered control.
+ */
+export const signedReportActionsSignature = (
+  settlement: Pick<SettlementInspectorUIView, "id" | "name" | "connections">,
+): string => JSON.stringify([
+  settlement.id,
+  settlement.name,
+  ...settlement.connections
+    .filter((connection) => connection.settlementId && connection.reportActionLabel)
+    .map((connection) => [
+      connection.id,
+      connection.settlementId,
+      connection.settlementName,
+      connection.reportActionLabel,
+      connection.reportActionHint ?? "",
+      connection.reportActionDisabled ? 1 : 0,
+    ]),
+]);
+
+/** Keep the pointer-down target alive until the browser has emitted click. */
+export const shouldRefreshSignedReportActions = (
+  previousSignature: string,
+  nextSignature: string,
+  pointerActive: boolean,
+): boolean => nextSignature !== previousSignature && (previousSignature === "" || !pointerActive);
+
 const chronicleSignature = (entries: readonly ChronicleEntryUIView[]): string =>
   entries
     .map((entry) =>
@@ -549,22 +595,53 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     "mobile-field-strip__line mobile-field-strip__objective",
     "PICKUP cargo → DELIVER cargo · Listen for a promise",
   );
+  const mobileVitals = createElement("div", "mobile-field-strip__vitals");
+  const makeMobileVital = (
+    label: string,
+    modifier: string,
+  ): [HTMLDivElement, HTMLProgressElement, HTMLSpanElement] => {
+    const wrapper = createElement("div", `mobile-vital mobile-vital--${modifier}`);
+    const copy = createElement("span", "mobile-vital__copy");
+    copy.append(createElement("span", "mobile-vital__label", label));
+    const value = createElement("span", "mobile-vital__value", "100%");
+    copy.append(value);
+    const progress = makeProgress(`${label} status`);
+    wrapper.append(copy, progress);
+    return [wrapper, progress, value];
+  };
+  const [mobileStaminaWrapper, mobileStamina, mobileStaminaValue] = makeMobileVital(
+    "STAM",
+    "stamina",
+  );
+  const [mobileStabilityWrapper, mobileStability, mobileStabilityValue] = makeMobileVital(
+    "STAB",
+    "stability",
+  );
+  const [mobileLoomWrapper, mobileLoom, mobileLoomValue] = makeMobileVital("LOOM", "loom");
+  const [mobileCargoWrapper, mobileCargo, mobileCargoValue] = makeMobileVital("CARGO", "cargo");
+  mobileCargoValue.textContent = "0/16";
+  mobileVitals.append(
+    mobileStaminaWrapper,
+    mobileStabilityWrapper,
+    mobileLoomWrapper,
+    mobileCargoWrapper,
+  );
   const mobileSafety = createElement(
     "span",
     "mobile-field-strip__line mobile-field-strip__safety",
-    "STABILITY 100% · WATER depth unsounded",
+    "Stable · deep water at zero stamina or stability sweeps",
   );
   const mobileTerrain = createElement(
     "span",
     "mobile-field-strip__line mobile-field-strip__terrain",
-    "WATER · depth unsounded · pulse Space",
+    "WATER · depth unsounded · use Sound / Scan",
   );
   const mobileActions = createElement(
     "span",
     "mobile-field-strip__line mobile-field-strip__actions",
-    "SPACE SCAN · E Interact · F Place Wayknot",
+    "Sound / Scan · Interact · Place Wayknot",
   );
-  mobileFieldCopy.append(mobileObjective, mobileSafety, mobileTerrain, mobileActions);
+  mobileFieldCopy.append(mobileObjective, mobileVitals, mobileSafety, mobileTerrain, mobileActions);
   mobileFieldStrip.append(mobileHudToggle, mobileFieldCopy);
 
   const objectivePanel = createElement("aside", "objective-panel glass-panel");
@@ -698,6 +775,18 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const inspectorResidents = createElement("ul", "resident-list");
   const inspectorConnectionHeading = createElement("h3", "inspector-section-title", "Connections");
   const inspectorConnections = createElement("ul", "connection-list");
+  const inspectorReportHeading = createElement(
+    "h3",
+    "inspector-section-title inspector-section-title--reports",
+    "Signed reports · information only",
+  );
+  const inspectorReportGuide = createElement(
+    "p",
+    "inspector-section-note",
+    "Reports carry a witnessed stock count in one document slot. They do not pick up or move cargo; physical deliveries are listed in Promises.",
+  );
+  const inspectorReports = createElement("ul", "report-list");
+  inspectorReports.setAttribute("aria-label", "Signed information report destinations");
   const inspectorFocus = createButton("text-button text-button--primary", "Focus on map");
   inspector.append(
     inspectorHeader,
@@ -710,6 +799,9 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     inspectorResidents,
     inspectorConnectionHeading,
     inspectorConnections,
+    inspectorReportHeading,
+    inspectorReportGuide,
+    inspectorReports,
     inspectorFocus,
   );
 
@@ -739,25 +831,26 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     wayknotButtonLabel,
     createElement("kbd", "keycap", WAYKNOT_KEY_SHORTCUT),
   );
-  const pauseButton = createButton("action-button pause-button", "Hold tide");
-  pauseButton.append(createElement("kbd", "keycap", "P"));
-
-  const paceGroup = createElement("div", "pace-control");
-  paceGroup.setAttribute("role", "group");
-  paceGroup.setAttribute("aria-label", "Travel pace");
-  const paceRest = createButton("pace-button", "Rest");
-  const paceSteady = createButton("pace-button", "Steady");
-  const paceSwift = createButton("pace-button", "Swift");
-  paceGroup.append(paceRest, paceSteady, paceSwift);
-  const quietButton = createButton("icon-button icon-button--labeled quiet-button", "Quiet Hour");
-  const titleButton = createButton("icon-button", "⌂", "Open title and world menu");
-  const helpButton = createButton("icon-button", "?", "Open controls and help");
+  const quietButton = createButton(
+    "icon-button icon-button--labeled quiet-button",
+    "",
+    "Open Quiet Hour to save, review, or return to the title",
+  );
+  const quietDesktopLabel = createElement("span", "quiet-button__desktop", "Quiet Hour");
+  const quietMobileLabel = createElement("span", "quiet-button__mobile", "☾");
+  quietMobileLabel.setAttribute("aria-hidden", "true");
+  quietButton.append(quietDesktopLabel, quietMobileLabel);
+  const titleButton = createButton("icon-button title-menu-button", "⌂", "Open title and world menu");
+  const helpButton = createButton("icon-button tutorial-button", "", "Open the complete tutorial");
+  helpButton.setAttribute("aria-keyshortcuts", "T");
+  const tutorialDesktopGlyph = createElement("span", "tutorial-button__desktop", "T");
+  const tutorialMobileGlyph = createElement("span", "tutorial-button__mobile", "?");
+  tutorialMobileGlyph.setAttribute("aria-hidden", "true");
+  helpButton.append(tutorialDesktopGlyph, tutorialMobileGlyph);
   actionDock.append(
     scanButton,
     interactButton,
     wayknotButton,
-    pauseButton,
-    paceGroup,
     quietButton,
     titleButton,
     helpButton,
@@ -776,7 +869,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const titleSubtitle = createElement(
     "p",
     "title-dialog__subtitle",
-    "Carry promises across a living estuary. Leave routes that learn to care for themselves.",
+    "A perpetual, locally saved estuary of promises and paths that learn.",
   );
   const continueButton = createButton("continue-card", "");
   const continueKicker = createElement("span", "continue-card__kicker", "Return to");
@@ -821,33 +914,9 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     postureFieldset.append(optionLabel);
   }
 
-  const sessionFieldset = createElement("fieldset", "choice-fieldset choice-fieldset--compact");
-  sessionFieldset.append(createElement("legend", "choice-fieldset__legend", "Tonight's shape"));
-  const sessionInputs: HTMLInputElement[] = [];
-  const sessionOptions: ReadonlyArray<[SessionShape, string, string]> = [
-    ["drift", "Drift", "≈ 10 min"],
-    ["weave", "Weave", "≈ 25 min"],
-    ["wander", "Wander", "Open"],
-  ];
-  const sessionRow = createElement("div", "segmented-choice");
-  for (const [value, label, duration] of sessionOptions) {
-    const optionLabel = createElement("label", "segmented-choice__option");
-    const input = createElement("input");
-    input.type = "radio";
-    input.name = "session-shape";
-    input.value = value;
-    if (value === "weave") input.checked = true;
-    sessionInputs.push(input);
-    const copy = createElement("span", "segmented-choice__copy");
-    copy.append(createElement("strong", "segmented-choice__label", label));
-    copy.append(createElement("small", "segmented-choice__detail", duration));
-    optionLabel.append(input, copy);
-    sessionRow.append(optionLabel);
-  }
-  sessionFieldset.append(sessionRow);
   const beginButton = createButton("text-button text-button--primary text-button--wide", "Enter the estuary");
   beginButton.type = "submit";
-  newWorldForm.append(newWorldHeading, seedLabel, seedInput, postureFieldset, sessionFieldset, beginButton);
+  newWorldForm.append(newWorldHeading, seedLabel, seedInput, postureFieldset, beginButton);
   titleContent.append(
     titleKnot,
     titleEyebrow,
@@ -902,58 +971,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   );
   quietDialog.append(quietContent);
 
-  const helpDialog = createElement("dialog", "help-dialog estuary-dialog");
-  helpDialog.setAttribute("aria-labelledby", "help-dialog-heading");
-  const helpContent = createElement("div", "help-dialog__content");
-  const helpHeader = createElement("header", "help-dialog__header");
-  const helpHeading = createElement("h2", "help-dialog__title", "Travel gently, travel clearly");
-  helpHeading.id = "help-dialog-heading";
-  const helpClose = createButton("icon-button", "×", "Close help");
-  helpHeader.append(helpHeading, helpClose);
-  const helpIntro = createElement(
-    "p",
-    "help-dialog__intro",
-    "TIDEWEFT saves locally and never advances the world while it is closed. Nearly every setback creates a repair or rescue thread.",
-  );
-  const helpGrid = createElement("dl", "control-grid");
-  const controlPairs: ReadonlyArray<[string, string]> = [
-    ["WASD / Arrows", "Travel"],
-    ["Hold Shift", "Brace while moving"],
-    ["Pointer", "Choose a world destination"],
-    ["Space", "Sound nearby water; an active Tide Harp echoes from all three knots"],
-    ["E / Enter", "Interact"],
-    ["F", "Place or reclaim the terrain-appropriate Wayknot"],
-    ["[ / ]", "Change pace"],
-    ["P", "Hold or release the tide"],
-    ["V", "Switch Chart 2D / Relief 3D"],
-    ["Right / Alt drag", "Orbit the Relief 3D camera"],
-    ["Escape / right click", "Cancel destination"],
-    ["?", "Open this help"],
-  ];
-  for (const [key, action] of controlPairs) {
-    const wrapper = createElement("div", "control-grid__row");
-    const term = createElement("dt");
-    term.append(createElement("kbd", "keycap", key));
-    wrapper.append(term, createElement("dd", "control-grid__action", action));
-    helpGrid.append(wrapper);
-  }
-  const accessibilityNote = createElement(
-    "p",
-    "help-dialog__note",
-    "Important states—including Wayknot capacity, the active knot, Waychord or Tide Harp, and whether an action is available—use words, counts, native disabled controls, symbols, and line patterns in addition to color. Reduced-motion preferences are honored automatically.",
-  );
-  const journeyNote = createElement(
-    "p",
-    "help-dialog__note",
-    "Cargo promises move physical goods from the named PICK UP harbor to the named DELIVER harbor. Signed stock reports are separate one-slot information jobs. Deep water drains stamina and can erode stability; if either reaches zero there, the current gives you a recoverable sweep toward a safe bank while cargo stays with you. Visit completed civic projects to inherit field tools.",
-  );
-  const wayknotNote = createElement(
-    "p",
-    "help-dialog__note help-dialog__note--wayknots",
-    `Wayknots are reusable field aids, not spent cargo: press F to bind the terrain-appropriate piece or reclaim the piece underfoot. Reed mats ease mudflats and marshes; tide anchors steady wet crossings and weaken nearby currents; wind knots shelter exposed ridges and scrub. Where their areas overlap, that shared shelter is a Waychord; only the strongest help for each hazard applies, so overlaps stay bounded. ${TIDE_HARP_HELP_COPY}`,
-  );
-  helpContent.append(helpHeader, helpIntro, helpGrid, journeyNote, wayknotNote, accessibilityNote);
-  helpDialog.append(helpContent);
+  const tutorial = createTutorialDialog();
 
   const leftRail = createElement("div", "left-rail");
   leftRail.id = "field-hud-panels";
@@ -968,7 +986,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     actionDock,
     titleDialog,
     quietDialog,
-    helpDialog,
+    tutorial.element,
   );
   options.root.replaceChildren(shell);
 
@@ -977,6 +995,14 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     mobileFieldStrip,
     mobileHudToggle,
     mobileObjective,
+    mobileStamina,
+    mobileStaminaValue,
+    mobileStability,
+    mobileStabilityValue,
+    mobileLoom,
+    mobileLoomValue,
+    mobileCargo,
+    mobileCargoValue,
     mobileSafety,
     mobileTerrain,
     mobileActions,
@@ -1038,13 +1064,13 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     inspectorStocks,
     inspectorResidents,
     inspectorConnections,
+    inspectorReports,
     inspectorFocus,
     inspectorClose,
     chronicleDetails,
     chronicleSummary,
     chronicleCount,
     chronicleList,
-    pauseButton,
     scanButton,
     interactButton,
     wayknotButton,
@@ -1052,7 +1078,6 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     quietButton,
     titleButton,
     helpButton,
-    paceButtons: { rest: paceRest, steady: paceSteady, swift: paceSwift },
     titleDialog,
     titleSubtitle,
     continueButton,
@@ -1061,7 +1086,6 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     newWorldForm,
     seedInput,
     postureInputs,
-    sessionInputs,
     quietDialog,
     quietTitle,
     quietSummary,
@@ -1073,8 +1097,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     quietQuote,
     quietFinish,
     quietContinue,
-    helpDialog,
-    helpClose,
+    tutorial,
   };
 };
 
@@ -1090,12 +1113,14 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let latestView: TideweftUIView | null = null;
   let lastRevision = "";
   let lastContracts = "";
+  let lastSignedReportActions = "";
   let lastChronicle = "";
   let lastAnnouncement = "";
   let forcedTitle: boolean | null = null;
   let forcedQuietHour: boolean | null = null;
   let titleFormDirty = false;
   let contractPointerActive = false;
+  let signedReportPointerActive = false;
   let selectedInspectorId: string | null = null;
   let running = false;
   let frameHandle: number | null = null;
@@ -1108,6 +1133,16 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
   const cancelContractPointer = (): void => {
     contractPointerActive = false;
+  };
+
+  const releaseSignedReportPointer = (): void => {
+    window.setTimeout(() => {
+      signedReportPointerActive = false;
+    }, 0);
+  };
+
+  const cancelSignedReportPointer = (): void => {
+    signedReportPointerActive = false;
   };
 
   const announce = (message: string, assertive = false): void => {
@@ -1318,11 +1353,26 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       if (connection.actionHint) {
         actions.append(createElement("span", "connection-item__action-hint", connection.actionHint));
       }
-      if (connection.settlementId && connection.reportActionLabel) {
+      if (actions.childElementCount > 0) item.append(actions);
+      refs.inspectorConnections.append(item);
+    }
+
+    const reportSignature = signedReportActionsSignature(settlement);
+    if (shouldRefreshSignedReportActions(lastSignedReportActions, reportSignature, signedReportPointerActive)) {
+      lastSignedReportActions = reportSignature;
+      refs.inspectorReports.replaceChildren();
+      for (const connection of settlement.connections) {
+        if (!connection.settlementId || !connection.reportActionLabel) continue;
+        const reportItem = createElement("li", "report-item");
+        const reportCopy = createElement("span", "report-item__copy");
+        reportCopy.append(
+          createElement("strong", "report-item__route", `${settlement.name} → ${connection.settlementName}`),
+          createElement("span", "report-item__kind", "SIGNED INFORMATION · 1 DOCUMENT SLOT · NO GOODS MOVED"),
+        );
         const reportAction = createButton(
-          "connection-item__action text-button",
+          "report-item__action text-button",
           connection.reportActionLabel,
-          `${connection.reportActionLabel} for ${connection.settlementName}`,
+          `${connection.reportActionLabel}. This is information, not cargo.`,
         );
         reportAction.disabled = Boolean(connection.reportActionDisabled);
         reportAction.addEventListener("click", () => {
@@ -1333,13 +1383,12 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
             targetSettlementId: connection.id,
           });
         });
-        actions.append(reportAction);
+        reportItem.append(reportCopy, reportAction);
+        if (connection.reportActionHint) {
+          reportItem.append(createElement("span", "report-item__hint", connection.reportActionHint));
+        }
+        refs.inspectorReports.append(reportItem);
       }
-      if (connection.reportActionHint) {
-        actions.append(createElement("span", "connection-item__action-hint", connection.reportActionHint));
-      }
-      if (actions.childElementCount > 0) item.append(actions);
-      refs.inspectorConnections.append(item);
     }
   };
 
@@ -1412,7 +1461,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     lastRevision = revision;
 
     refs.worldName.textContent = view.worldName;
-    refs.location.textContent = view.player.locationLabel ?? `${view.posture} posture · ${view.sessionShape} session`;
+    refs.location.textContent = view.player.locationLabel ?? `${view.posture} posture · perpetual estuary`;
     refs.clockDay.textContent = view.clock.dayLabel ?? `Day ${view.clock.day}`;
     refs.clockTime.textContent = view.clock.timeLabel;
     refs.tideReadout.dataset.phase = view.tide.phase;
@@ -1513,10 +1562,6 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
     renderChronicle(view.chronicle);
 
-    refs.pauseButton.textContent = view.clock.paused ? "Release tide" : "Hold tide";
-    refs.pauseButton.append(createElement("kbd", "keycap", "P"));
-    refs.pauseButton.setAttribute("aria-pressed", view.clock.paused ? "true" : "false");
-    refs.pauseButton.disabled = view.controls?.canPause === false;
     refs.scanButton.disabled = view.controls?.canScan === false;
     refs.interactButton.disabled = view.controls?.canInteract === false;
     refs.interactButton.textContent = view.controls?.interactLabel ?? "Interact";
@@ -1553,26 +1598,35 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.mobileTerrain.title = compactHud.terrain;
     refs.mobileActions.textContent = compactHud.actions;
     refs.mobileActions.title = compactHud.actions;
+    setProgress(refs.mobileStamina, view.player.stamina, `Stamina ${Math.round(view.player.stamina * 100)} percent`);
+    refs.mobileStaminaValue.textContent = `${Math.round(view.player.stamina * 100)}%`;
+    setProgress(refs.mobileStability, view.player.stability, `Stability ${Math.round(view.player.stability * 100)} percent. ${view.player.stabilityHint}`);
+    refs.mobileStabilityValue.textContent = `${Math.round(view.player.stability * 100)}%`;
+    setProgress(refs.mobileLoom, view.player.scanCharge, `Loom charge ${Math.round(view.player.scanCharge * 100)} percent`);
+    refs.mobileLoomValue.textContent = `${Math.round(view.player.scanCharge * 100)}%`;
+    const mobileCargoRatio = view.player.cargoLoad / Math.max(1, view.player.cargoCapacity);
+    const mobileCargoCondition = view.player.cargoCondition === undefined
+      ? "No physical cargo carried"
+      : `Lowest cargo condition ${Math.round(view.player.cargoCondition * 100)} percent`;
+    setProgress(
+      refs.mobileCargo,
+      mobileCargoRatio,
+      `Cargo load ${view.player.cargoLoad} of ${view.player.cargoCapacity}. ${mobileCargoCondition}`,
+    );
+    refs.mobileCargoValue.textContent = `${view.player.cargoLoad}/${view.player.cargoCapacity}`;
     refs.mobileFieldStrip.dataset.swept = view.field.swept ? "true" : "false";
     refs.mobileFieldStrip.dataset.stabilityTrend = view.player.stabilityTrend;
     refs.quietButton.disabled = view.controls?.canEndSession === false;
-    for (const [pace, button] of Object.entries(refs.paceButtons) as Array<[PaceView, HTMLButtonElement]>) {
-      button.setAttribute("aria-pressed", pace === view.player.pace ? "true" : "false");
-      button.disabled = view.controls?.canChangePace === false;
-    }
-
     if (!titleFormDirty) {
       const postureInput = refs.postureInputs.find((input) => input.value === view.posture);
-      const sessionInput = refs.sessionInputs.find((input) => input.value === view.sessionShape);
       if (postureInput) postureInput.checked = true;
-      if (sessionInput) sessionInput.checked = true;
       if (view.title.suggestedSeed && document.activeElement !== refs.seedInput) {
         refs.seedInput.placeholder = view.title.suggestedSeed;
       }
     }
     refs.titleSubtitle.textContent =
       view.title.subtitle ??
-      "Carry promises across a living estuary. Leave routes that learn to care for themselves.";
+      "A perpetual, locally saved estuary of promises and paths that learn.";
     refs.continueButton.hidden = !view.title.hasSave;
     refs.continueName.textContent = view.title.worldName ?? view.worldName;
     refs.continueSummary.textContent =
@@ -1583,7 +1637,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     const mastheadStatus = document.getElementById("connection-status");
     if (mastheadStatus) {
       mastheadStatus.textContent = view.clock.paused
-        ? `${view.worldName} · tide held`
+        ? `${view.worldName} · waiting safely`
         : `${view.worldName} · ${view.tide.label.toLocaleLowerCase()}`;
     }
     if (view.announcement && view.announcement.id !== lastAnnouncement) {
@@ -1592,12 +1646,16 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
   };
 
-  refs.pauseButton.addEventListener("click", () => options.dispatch({ type: "toggle-pause" }));
   refs.contractList.addEventListener("pointerdown", () => {
     contractPointerActive = true;
   });
+  refs.inspectorReports.addEventListener("pointerdown", () => {
+    signedReportPointerActive = true;
+  });
   window.addEventListener("pointerup", releaseContractPointer);
   window.addEventListener("pointercancel", cancelContractPointer);
+  window.addEventListener("pointerup", releaseSignedReportPointer);
+  window.addEventListener("pointercancel", cancelSignedReportPointer);
   refs.scanButton.addEventListener("click", () => options.dispatch({ type: "scan" }));
   refs.interactButton.addEventListener("click", () => options.dispatch({ type: "interact" }));
   refs.wayknotButton.addEventListener("click", () => options.dispatch({ type: "wayknot" }));
@@ -1626,8 +1684,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   });
   refs.quietButton.addEventListener("click", () => options.dispatch({ type: "quiet-hour", action: "open" }));
   refs.titleButton.addEventListener("click", () => options.dispatch({ type: "open-title" }));
-  refs.helpButton.addEventListener("click", () => syncDialog(refs.helpDialog, true));
-  refs.helpClose.addEventListener("click", () => syncDialog(refs.helpDialog, false));
+  refs.helpButton.addEventListener("click", () => refs.tutorial.toggle(refs.helpButton));
   refs.inspectorClose.addEventListener("click", () => {
     refs.shell.dataset.mobileSheet = "promises";
     setMobileHudExpanded(false);
@@ -1642,9 +1699,6 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     if (!settlementId) return;
     options.dispatch({ type: "settlement", action: "focus", settlementId });
   });
-  for (const [pace, button] of Object.entries(refs.paceButtons) as Array<[PaceView, HTMLButtonElement]>) {
-    button.addEventListener("click", () => options.dispatch({ type: "set-pace", pace }));
-  }
   refs.continueButton.addEventListener("click", () => options.dispatch({ type: "resume-world" }));
   refs.newWorldForm.addEventListener("change", () => {
     titleFormDirty = true;
@@ -1652,12 +1706,11 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   refs.newWorldForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const posture = refs.postureInputs.find((input) => input.checked)?.value as JourneyPosture | undefined;
-    const sessionShape = refs.sessionInputs.find((input) => input.checked)?.value as SessionShape | undefined;
     options.dispatch({
       type: "new-world",
       seed: refs.seedInput.value.trim(),
       posture: posture ?? "journey",
-      sessionShape: sessionShape ?? "weave",
+      sessionShape: PERPETUAL_SESSION_SHAPE,
     });
   });
   refs.titleDialog.addEventListener("cancel", (event) => {
@@ -1693,7 +1746,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       event,
       latestView?.controls?.canWayknot === true,
       options.dispatch,
-      () => syncDialog(refs.helpDialog, true),
+      () => refs.tutorial.toggle(),
     );
   };
   document.addEventListener("keydown", onGlobalKeyDown);
@@ -1732,14 +1785,16 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       forcedQuietHour = visible;
       syncDialog(refs.quietDialog, visible);
     },
-    openHelp: () => syncDialog(refs.helpDialog, true),
-    closeHelp: () => syncDialog(refs.helpDialog, false),
+    openHelp: () => refs.tutorial.open(),
+    closeHelp: () => refs.tutorial.close(),
     destroy: () => {
       stop();
       document.removeEventListener("keydown", onGlobalKeyDown);
       window.removeEventListener("pointerup", releaseContractPointer);
       window.removeEventListener("pointercancel", cancelContractPointer);
-      syncDialog(refs.helpDialog, false);
+      window.removeEventListener("pointerup", releaseSignedReportPointer);
+      window.removeEventListener("pointercancel", cancelSignedReportPointer);
+      refs.tutorial.destroy();
       syncDialog(refs.quietDialog, false);
       syncDialog(refs.titleDialog, false);
       options.root.replaceChildren();

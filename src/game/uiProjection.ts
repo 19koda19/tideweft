@@ -5,6 +5,8 @@ import {
   type SimEvent,
   type WorldView,
 } from "../sim/types";
+import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
+import { seedFromText } from "../sim/rng";
 import type {
   ChronicleEntryUIView,
   ContractMood,
@@ -111,6 +113,9 @@ export function projectUIView(
       scanCharge: player.scanCharge / FIXED_POINT,
       cargoLoad: cargoWeight(player),
       cargoCapacity: player.cargoCapacity,
+      ...(player.cargo.length > 0
+        ? { cargoCondition: Math.min(...player.cargo.map((cargo) => cargo.condition)) / FIXED_POINT }
+        : {}),
       pace: player.pace,
       ...(playerSettlementId === null
         ? { locationLabel: player.mode === "skiff" ? "On the tide" : "Between harbors" }
@@ -126,7 +131,7 @@ export function projectUIView(
           ? { objective: pickupObjective(trackedContract, world, player) }
           : tutorial
             ? { objective: tutorial }
-            : { objective: sessionShapeObjective(session, player, world) }),
+            : { objective: perpetualWorldObjective(session, world) }),
     contracts: world.contracts
       .filter((contract) => contract.status === "offered" || contract.id === player.activeContractId)
       .sort((left, right) => contractPriority(left, playerSettlementId) - contractPriority(right, playerSettlementId))
@@ -140,7 +145,7 @@ export function projectUIView(
       worldName,
       ...(session.continueSummary ? { continueSummary: session.continueSummary } : {}),
       suggestedSeed: session.seed,
-      subtitle: "Carry what matters. Verify what is true. Leave a path that can carry kindness without you.",
+      subtitle: "A perpetual, locally saved estuary of promises and paths that learn.",
     },
     ...(session.quietHourVisible
       ? {
@@ -168,7 +173,6 @@ export function projectUIView(
         }
       : {}),
     controls: {
-      canPause: !session.titleVisible,
       canScan: player.mode !== "swept" && player.scanCharge >= 280_000,
       canInteract: player.mode !== "swept" && playerSettlementId !== null,
       interactLabel: player.mode === "swept"
@@ -217,10 +221,12 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
   const tideHarps = tunedTideHarps(player, world);
   const activeTideHarp = activeTideHarpAtPlayer(player, world, tideHarps);
   const sweptProgress = sweepProgress(player);
+  const biome = tile ? biomeAtPlayer(world, tile) : undefined;
+  const biomeLabel = biome ? biomeFieldLabel(biome) : undefined;
   const terrainLabel = settlement
-    ? `${settlement.name} harbor decking`
+    ? `${settlement.name} harbor · ${biomeLabel ?? "built shore"}`
     : tile
-      ? fieldTerrainLabel(tile)
+      ? `${biomeLabel ?? "Unclassified"} · ${fieldTerrainLabel(tile)}`
       : "Uncharted ground";
   const depthLabel = depth <= 20_000
     ? "Dry footing"
@@ -277,6 +283,32 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
     swept: player.mode === "swept",
     sweptProgress,
   };
+}
+
+function biomeAtPlayer(
+  world: WorldView,
+  tile: WorldView["terrain"]["tiles"][number],
+): BiomeId {
+  const seed = world.rootSeed ?? seedFromText(world.seedText);
+  return deriveBiomeProfile({
+    seed,
+    tile,
+    gridHeight: world.terrain.height,
+    weather: world.weather,
+    magicalWaterInfluence: deriveMagicalWaterInfluence(seed, tile),
+  }).id;
+}
+
+function biomeFieldLabel(biome: BiomeId): string {
+  switch (biome) {
+    case "tide-channel": return "Tide channel";
+    case "brine-flat": return "Brine flat";
+    case "reed-marsh": return "Reed marsh";
+    case "rain-meadow": return "Rain meadow";
+    case "sun-meadow": return "Sun meadow";
+    case "wind-ridge": return "Wind ridge";
+    case "glimmerfen": return "Glimmerfen";
+  }
 }
 
 function projectWayknotControl(world: WorldView, player: PlayerState) {
@@ -569,6 +601,7 @@ function projectSettlement(
       ).length;
       const isHere = playerSettlementId === settlement.id;
       const partsAvailable = settlement.inventory.parts > 0;
+      const reportPackFull = cargoWeight(player) >= player.cargoCapacity;
       const automated = (route?.traceStrength ?? 0) >= STRAND_AUTOMATION_THRESHOLD;
       const surveyed = route !== undefined && player.surveyedRouteIds.includes(route.id);
       const choirMember = route !== undefined && world.choirs.some((choir) => choir.routeIds.includes(route.id));
@@ -599,12 +632,20 @@ function projectSettlement(
                   : `Uses 1 part from ${settlement.name}'s shared stores. Permanently raises strand strength and condition; at 100% woven, resident porters can carry promises here automatically.`,
               actionDisabled: !isHere || !partsAvailable || !surveyed,
               reportActionLabel: player.report === null
-                ? `Carry stock report to ${settlementName(world, trust.settlementId)}`
+                ? !isHere
+                  ? `Reach ${settlement.name} to sign`
+                  : reportPackFull
+                    ? "Need 1 document slot"
+                    : `Sign info report → ${settlementName(world, trust.settlementId)}`
                 : "Document case already occupied",
-              reportActionHint: player.report === null
-                ? `Records ${settlement.name}'s current ${titleCase(settlement.specialization)} count, uses 1 pack slot, and gives ${settlementName(world, trust.settlementId)} a sourced fact after you arrive and press E.`
-                : "Deliver the report already in your document case before collecting another.",
-              reportActionDisabled: !isHere || player.report !== null || cargoWeight(player) >= player.cargoCapacity,
+              reportActionHint: player.report !== null
+                ? "Deliver the report already in your document case before collecting another."
+                : !isHere
+                  ? `Travel onto ${settlement.name}'s harbor mark first. A report must be witnessed and signed at its source; remote inspection cannot create one.`
+                  : reportPackFull
+                    ? "Free 1 load slot before signing. The report moves no cargo or supplies, but its document case must be carried physically."
+                    : `Records ${settlement.name}'s current ${titleCase(settlement.specialization)} count. This uses 1 document slot and moves no cargo or supplies; carry the signed fact to ${settlementName(world, trust.settlementId)}, arrive and press E / Enter or Deliver report.`,
+              reportActionDisabled: !isHere || player.report !== null || reportPackFull,
             }
           : {}),
       };
@@ -814,7 +855,7 @@ function quietSummary(session: GameSessionState): string {
   return "You checked on the estuary. It will wait without penalty until you want another journey.";
 }
 
-function sessionShapeObjective(session: GameSessionState, player: PlayerState, world: WorldView) {
+function perpetualWorldObjective(session: GameSessionState, world: WorldView) {
   if (session.campaignCelebrated || world.network.resolved) {
     return {
       id: "campaign-resilient-weave",
@@ -828,44 +869,14 @@ function sessionShapeObjective(session: GameSessionState, player: PlayerState, w
     };
   }
   const regionalStatus = `${world.network.activeRouteCount} strands · ${world.network.cycleRank}/2 loops · ${Math.round(world.network.resilience * 100)}% resilience`;
-  if (session.sessionShape === "drift") {
-    return {
-      id: "session-drift",
-      eyebrow: "Tonight's Drift",
-      title: session.closureOffered ? "A complete evening" : "Keep one useful promise",
-      description: session.closureOffered
-        ? "You reached the shape you chose. Continue without penalty, or take Quiet Hour for a causal recap."
-        : "One arrival is enough for a satisfying short session; no extra task will be sprung on you.",
-      progress: Math.min(1, session.sessionDeliveries),
-      progressLabel: `${Math.min(1, session.sessionDeliveries)} / 1 promise · ${regionalStatus}`,
-      why: "A chosen stopping point supports control and restoration.",
-      completed: session.closureOffered,
-    };
-  }
-  if (session.sessionShape === "weave") {
-    const progress = Math.max(session.sessionStrandsWoven, session.sessionChoirsAwakened, session.sessionDeliveries / 2);
-    return {
-      id: "session-weave",
-      eyebrow: "Tonight's Weave",
-      title: session.closureOffered ? "A corridor can carry care" : "Leave one shared corridor stronger",
-      description: session.closureOffered
-        ? "A route crossed a shared-capacity milestone. Quiet Hour is ready, and continuing is entirely optional."
-        : "Establish or tend one self-carrying strand, or complete two useful promises along the network.",
-      progress: Math.min(1, progress),
-      progressLabel: `${session.sessionStrandsWoven} tended · ${session.sessionChoirsAwakened} choirs · ${session.sessionDeliveries} promises · ${regionalStatus}`,
-      why: "The reward compounds when autonomous porters inherit work you genuinely solved.",
-      completed: session.closureOffered,
-    };
-  }
-  const discoveries = Math.max(0, discoveredTileCount(player) - session.sessionDiscoveredAtStart);
   return {
-    id: "session-wander",
-    eyebrow: "Open Wander",
-    title: "Follow whatever seems worth knowing",
-    description: "There is no session quota. Chart land, listen to people, tend routes, or leave now; the estuary waits.",
-    progress: Math.min(1, discoveries / 32),
-    progressLabel: `${discoveries} new terrain marks · ${regionalStatus}`,
-    why: "Unstructured curiosity is a supported play style, not a failure to optimize.",
+    id: "perpetual-estuary",
+    eyebrow: "Perpetual estuary",
+    title: "Choose the next useful thread",
+    description: "There is no session timer or quota. Chart land, carry promises, share reports, tend routes, or take Quiet Hour whenever you choose; the estuary waits.",
+    progress: world.network.resilience,
+    progressLabel: regionalStatus,
+    why: "The world continues through consequences and relationships, not a countdown or compulsory checklist.",
   };
 }
 

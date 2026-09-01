@@ -7,6 +7,12 @@ import type {
 } from "../render/types";
 
 export type SessionShape = "drift" | "weave" | "wander";
+/**
+ * New worlds are perpetual. The broader SessionShape union remains in the
+ * save/view contract so Drift and Weave snapshots from earlier alphas load
+ * without a format migration.
+ */
+export const PERPETUAL_SESSION_SHAPE: SessionShape = "wander";
 export type JourneyPosture = "hearth" | "journey" | "gale";
 
 export interface ClockUIView {
@@ -38,6 +44,8 @@ export interface PlayerUIView {
   readonly scanCharge: number;
   readonly cargoLoad: number;
   readonly cargoCapacity: number;
+  /** Lowest carried cargo condition, or absent when the pack has no physical cargo. */
+  readonly cargoCondition?: number;
   readonly pace: PaceView;
   readonly locationLabel?: string;
 }
@@ -203,7 +211,6 @@ export interface AnnouncementUIView {
 }
 
 export interface ControlAvailabilityUIView {
-  readonly canPause?: boolean;
   readonly canScan?: boolean;
   readonly canInteract?: boolean;
   readonly interactLabel?: string;
@@ -242,9 +249,9 @@ export type TideweftUICommand =
       readonly type: "new-world";
       readonly seed: string;
       readonly posture: JourneyPosture;
+      /** Retained on the command wire for older hosts; current runtimes use Wander. */
       readonly sessionShape: SessionShape;
     }
-  | { readonly type: "toggle-pause" }
   | { readonly type: "scan" }
   | { readonly type: "interact" }
   | { readonly type: "wayknot" }

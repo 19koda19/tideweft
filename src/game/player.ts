@@ -847,13 +847,19 @@ function stepSweptPlayer(
   if (reachedBank) {
     const rescued = support !== null;
     player.mode = rescued ? "rescued" : "camp";
-    player.pace = "rest";
+    // A sweep temporarily forces the internal rest pace while the current has
+    // control. Returning the player to steady here is essential now that pace
+    // is contextual rather than a required HUD choice: otherwise a touch path
+    // accepted immediately after recovery has zero velocity and quietly
+    // rebuilds stamina instead of moving (which makes the stamina meter appear
+    // stale on re-entry).
+    player.pace = "steady";
     player.stamina = rescued ? 240_000 : 150_000;
     player.stability = Math.max(player.stability, rescued ? 460_000 : 320_000);
     player.stabilityTrend = "recovering";
     player.stabilityHint = rescued
       ? `Recovered by ${support} response · cargo remained with you`
-      : "Washed onto a safe bank · rest before moving again";
+      : "Washed onto a safe bank · steady footing has returned";
     player.sweepTicksRemaining = 0;
     player.sweepTotalTicks = 0;
     player.sweepPath = [];

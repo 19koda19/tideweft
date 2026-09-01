@@ -286,7 +286,133 @@ function alphaWorldSaveText(world: WorldState): string {
   });
 }
 
+describe("perpetual new worlds", () => {
+  it("creates and persists Wander even when an older caller requests a timed shape", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "perpetual runtime",
+      posture: "journey",
+      sessionShape: "drift",
+    });
+
+    expect(runtime.getUIView().sessionShape).toBe("wander");
+    expect(runtime.getUIView().title.visible).toBe(false);
+    await runtime.save();
+    expect(decodeGameSave(repository.snapshot()).session.sessionShape).toBe("wander");
+    runtime.destroy();
+  });
+
+  it("loads and re-saves legacy shape values without restoring their quota objective", async () => {
+    const world = createWorld("legacy shape runtime", "calm");
+    const view = createWorldView(world);
+    const player = createPlayer(view);
+    const legacySession = createSessionState(world.meta.seedText, "journey", "weave");
+    legacySession.tutorial.dismissed = true;
+    legacySession.closureOffered = true;
+    legacySession.sessionDeliveries = 9;
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      player,
+      legacySession,
+      "Legacy Weave",
+    ));
+
+    const runtime = await createTideweftRuntime(repository);
+
+    expect(runtime.getUIView().sessionShape).toBe("weave");
+    expect(runtime.getUIView().objective?.id).toBe("perpetual-estuary");
+    expect(runtime.getUIView().objective?.description).toContain("no session timer or quota");
+    await runtime.save();
+    expect(decodeGameSave(repository.snapshot()).session.sessionShape).toBe("weave");
+    runtime.destroy();
+  });
+});
+
 describe("runtime clarity guards", () => {
+  it("projects every stamina change through sweep recovery and immediate water re-entry", async () => {
+    const world = createWorld("runtime stamina reentry", "calm");
+    const occupied = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+    const channel = world.terrain.tiles.find(
+      (tile) => tile.x > 2
+        && tile.y > 2
+        && tile.x + 3 < world.terrain.width
+        && tile.y + 3 < world.terrain.height
+        && !occupied.has(tile.index),
+    );
+    if (!channel) throw new Error("fixture could not reserve a channel tile");
+
+    // One deep mark in an otherwise safe local estuary makes the recovery and
+    // return path short, deterministic, and independent of generated relief.
+    for (const tile of world.terrain.tiles) {
+      tile.elevation = world.tide.level;
+      tile.terrain = "meadow";
+      tile.roughness = 0;
+      tile.baseTravelCost = 100;
+    }
+    channel.elevation = 0;
+    channel.terrain = "deep-water";
+    channel.baseTravelCost = 520;
+
+    const view = createWorldView(world);
+    const player = createPlayer(view);
+    const channelView = view.terrain.tiles[channel.index];
+    if (!channelView) throw new Error("fixture channel disappeared from the world view");
+    placePlayerOnTile(player, channelView);
+    player.pace = "swift";
+    player.stamina = 16_000;
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      player,
+      createSessionState(world.meta.seedText),
+      "Stamina re-entry",
+    ));
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+
+    expect(runtime.getRenderView().player.mode).toBe("swept");
+    expect(runtime.getRenderView().player.stamina).toBe(0);
+    expect(runtime.getUIView().player.stamina).toBe(0);
+
+    for (let step = 0; step < 20 && runtime.getRenderView().player.mode === "swept"; step += 1) {
+      advancePlayerSteps(runtime, 1);
+      expect(runtime.getUIView().player.stamina).toBe(runtime.getRenderView().player.stamina);
+    }
+
+    expect(runtime.getRenderView().player.mode).toBe("camp");
+    expect(runtime.getUIView().player.pace).toBe("steady");
+    const shoreStamina = runtime.getUIView().player.stamina;
+    expect(shoreStamina).toBeCloseTo(0.15, 6);
+    expect(runtime.getRenderView().player.stamina).toBe(shoreStamina);
+
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: { x: (channel.x + 0.5) * 24, y: (channel.y + 0.5) * 24 },
+      additive: false,
+    });
+    advancePlayerSteps(runtime, 1);
+
+    // The first touch-routed step after reaching shore is real travel, not a
+    // hidden rest tick, and both projections expose its drain immediately.
+    expect(runtime.getUIView().player.stamina).toBeLessThan(shoreStamina);
+    expect(runtime.getRenderView().player.stamina).toBe(runtime.getUIView().player.stamina);
+
+    for (let step = 0; step < 16 && !runtime.getUIView().field.isWater; step += 1) {
+      const before = runtime.getUIView().player.stamina;
+      advancePlayerSteps(runtime, 1);
+      expect(runtime.getUIView().player.stamina).toBeLessThan(before);
+      expect(runtime.getRenderView().player.stamina).toBe(runtime.getUIView().player.stamina);
+    }
+    expect(runtime.getUIView().field.isWater).toBe(true);
+    expect(runtime.getUIView().player.stamina).toBeLessThan(shoreStamina);
+    runtime.destroy();
+  });
+
   it("announces stability loss, rather than stamina loss, when deep water takes control", async () => {
     const world = createWorld("runtime stability sweep", "calm");
     const view = createWorldView(world);

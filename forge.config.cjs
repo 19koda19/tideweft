@@ -4,6 +4,12 @@ const { spawn } = require('node:child_process');
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
+// Packaging is a security boundary, not a second copy of the repository.
+// The renderer is already bundled into dist/, and main uses Electron/Node
+// built-ins only, so no source, tests, screenshots, caches, or local config
+// belong in the distributable ASAR.
+const PACKAGED_RUNTIME_PATH = /^(?:$|\/package\.json$|\/electron$|\/electron\/main\.cjs$|\/dist(?:\/|$))/u;
+
 function runNpmScript(scriptName) {
   return new Promise((resolve, reject) => {
     const npmCliPath = process.env.npm_execpath;
@@ -37,6 +43,7 @@ module.exports = {
   outDir: 'release',
   packagerConfig: {
     asar: true,
+    ignore: (candidatePath) => !PACKAGED_RUNTIME_PATH.test(candidatePath),
   },
   rebuildConfig: {},
   makers: [

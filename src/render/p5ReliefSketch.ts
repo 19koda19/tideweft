@@ -1,5 +1,10 @@
 import p5 from "p5";
 
+import {
+  BIOME_PRESENTATION,
+  biomeEnvironmentalEmphasis,
+  visibleBiomePresentation,
+} from "./biomePresentation";
 import { buildSurfaceCurrentCues } from "./currentCues";
 import {
   buildTerrainMesh,
@@ -10,6 +15,7 @@ import {
   buildReliefMaterialBatches,
   type ReliefMaterialBatch,
 } from "./reliefTerrainBatches";
+import { buildReliefWaterMaterialBatches } from "./reliefWaterBatches";
 import {
   MAX_RELIEF_PITCH,
   MIN_RELIEF_PITCH,
@@ -36,6 +42,7 @@ import {
   tideHarpRootLift,
 } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
+import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
 import type {
   PorterView,
   RendererCommand,
@@ -150,6 +157,7 @@ interface ClickCandidate {
   readonly startX: number;
   readonly startY: number;
   readonly shiftKey: boolean;
+  readonly coarsePointer: boolean;
 }
 
 interface AttachedListeners {
@@ -554,9 +562,6 @@ export function createTideweftReliefRenderer(
         event.preventDefault();
         emit({ type: "wayknot" });
         break;
-      case "KeyP":
-        emit({ type: "toggle-pause" });
-        break;
       case "Equal":
       case "NumpadAdd":
       case "BracketRight":
@@ -623,6 +628,10 @@ export function createTideweftReliefRenderer(
           startX: event.clientX,
           startY: event.clientY,
           shiftKey: event.shiftKey,
+          coarsePointer: usesCoarseWorldPointer(
+            event.pointerType,
+            window.matchMedia?.("(pointer: coarse)").matches ?? false,
+          ),
         };
       }
       event.preventDefault();
@@ -662,11 +671,14 @@ export function createTideweftReliefRenderer(
       const point = pickWorld(localPointer(event));
       if (!point) return;
       const target = findSelection(point);
-      if (target) {
-        emit({ type: "select", entity: target.entity, id: target.id, point });
-      } else {
-        emit({ type: "move-target", point, additive: candidate.shiftKey || event.shiftKey });
-      }
+      const view = latestView;
+      if (view) emit(commandForWorldTap(
+        view,
+        target,
+        point,
+        candidate.coarsePointer,
+        candidate.shiftKey || event.shiftKey,
+      ));
       event.preventDefault();
     };
     const pointerCancel = (event: PointerEvent): void => {
@@ -801,9 +813,18 @@ export function createTideweftReliefRenderer(
     };
 
     const materialColor = (material: ReliefMaterialBatch, fog: number): p5.Color => {
+      const biome = material.kind === "built" || material.biome === undefined
+        ? undefined
+        : BIOME_PRESENTATION[material.biome];
+      const base = p.color(biome?.reliefColor ?? TERRAIN_COLORS[material.kind]);
+      const conditioned = p.lerpColor(
+        base,
+        p.color(biome?.accentColor ?? RELIEF_PALETTE.foam),
+        clamp(material.environment * 0.08, 0, 0.08),
+      );
       const revealed = p.lerpColor(
         p.color(RELIEF_PALETTE.ink),
-        p.color(TERRAIN_COLORS[material.kind]),
+        conditioned,
         Math.pow(unit(material.visibility), 0.72),
       );
       return p.lerpColor(revealed, p.color(RELIEF_PALETTE.horizon), clamp(fog * 0.72, 0, 0.78));
@@ -841,6 +862,90 @@ export function createTideweftReliefRenderer(
       }
     };
 
+    const drawBiomeDetails = (view: TideweftView, cache: CachedReliefMesh): void => {
+      const grid = view.terrain;
+      const tileSize = grid.tileSize;
+      const reach = orbit.distance * 1.15;
+      const startColumn = clampInteger(Math.floor((orbit.x - reach - grid.origin.x) / tileSize), 0, grid.columns - 1);
+      const endColumn = clampInteger(Math.ceil((orbit.x + reach - grid.origin.x) / tileSize), 0, grid.columns - 1);
+      const startRow = clampInteger(Math.floor((orbit.y - reach - grid.origin.y) / tileSize), 0, grid.rows - 1);
+      const endRow = clampInteger(Math.ceil((orbit.y + reach - grid.origin.y) / tileSize), 0, grid.rows - 1);
+      let shown = 0;
+      const maximumDetails = 420;
+      const candidateCells = Math.max(1, (endColumn - startColumn + 1) * (endRow - startRow + 1));
+      const detailThreshold = 1 - Math.min(0.43, maximumDetails / candidateCells);
+
+      p.noFill();
+      for (let row = startRow; row <= endRow && shown < maximumDetails; row += 1) {
+        for (let column = startColumn; column <= endColumn && shown < maximumDetails; column += 1) {
+          const tile = grid.tiles[row * grid.columns + column];
+          const visibility = reliefDiscoveryVisibility(tile);
+          const presentation = visibleBiomePresentation(tile);
+          if (!tile || tile.kind === "built" || !presentation || visibility < 0.3) continue;
+          const variant = reliefTileHash01(column, row, 0x6269_6f6d);
+          if (variant < detailThreshold) continue;
+
+          const emphasis = biomeEnvironmentalEmphasis(tile);
+          const center = {
+            x: grid.origin.x + (column + 0.5) * tileSize,
+            y: grid.origin.y + (row + 0.5) * tileSize,
+          };
+          const surface = discoveredReliefSurfaceHeightAt(
+            grid,
+            center,
+            cache.mesh.verticalScale,
+            presentation.motif === "ripple" || presentation.motif === "glimmer",
+          ) + 0.8;
+          const baseY = -surface;
+          const lift = tileSize * (0.19 + emphasis * 0.12);
+          const half = tileSize * 0.13;
+          const skew = (variant - 0.5) * tileSize * 0.18;
+          p.stroke(withAlpha(presentation.accentColor, (70 + emphasis * 90) * visibility));
+          p.strokeWeight(0.85 + visibility * 0.65);
+
+          switch (presentation.motif) {
+            case "ripple":
+              p.line(center.x - half * 1.4, baseY, center.y, center.x + half * 1.4, baseY, center.y + skew * 0.3);
+              p.line(center.x - half * 0.8, baseY - 0.5, center.y + half, center.x + half * 0.8, baseY - 0.5, center.y + half + skew * 0.2);
+              break;
+            case "salt-crystal":
+              p.line(center.x, baseY, center.y - half, center.x + half, baseY - lift * 0.45, center.y);
+              p.line(center.x + half, baseY - lift * 0.45, center.y, center.x, baseY, center.y + half);
+              p.line(center.x, baseY, center.y + half, center.x - half, baseY - lift * 0.45, center.y);
+              p.line(center.x - half, baseY - lift * 0.45, center.y, center.x, baseY, center.y - half);
+              break;
+            case "reeds":
+              for (let reed = -1; reed <= 1; reed += 1) {
+                const reedX = center.x + reed * half * 0.72;
+                p.line(reedX, baseY, center.y, reedX + skew * 0.1, baseY - lift * (reed === 0 ? 1 : 0.72), center.y);
+              }
+              break;
+            case "rain-stem":
+              p.line(center.x, baseY, center.y, center.x, baseY - lift, center.y);
+              p.line(center.x, baseY - lift * 0.56, center.y, center.x - half, baseY - lift * 0.77, center.y + half * 0.35);
+              p.line(center.x, baseY - lift * 0.45, center.y, center.x + half, baseY - lift * 0.66, center.y - half * 0.35);
+              break;
+            case "sunburst":
+              p.line(center.x, baseY, center.y, center.x, baseY - lift * 0.7, center.y);
+              p.line(center.x - half, baseY - lift * 0.7, center.y, center.x + half, baseY - lift * 0.7, center.y);
+              p.line(center.x, baseY - lift * 0.7, center.y - half, center.x, baseY - lift * 0.7, center.y + half);
+              break;
+            case "wind-stroke":
+              p.line(center.x - half * 1.5, baseY - lift * 0.25, center.y + half, center.x + half * 1.4, baseY - lift * 0.55, center.y - half);
+              p.line(center.x - half, baseY - lift * 0.58, center.y - half, center.x + half * 0.9, baseY - lift * 0.78, center.y - half * 1.35);
+              break;
+            case "glimmer":
+              p.line(center.x, baseY, center.y, center.x, baseY - lift, center.y);
+              p.line(center.x - half, baseY - lift * 0.62, center.y, center.x + half, baseY - lift * 0.62, center.y);
+              p.line(center.x, baseY - lift * 0.62, center.y - half, center.x, baseY - lift * 0.62, center.y + half);
+              break;
+          }
+          shown += 1;
+        }
+      }
+      p.noStroke();
+    };
+
     const drawWater = (view: TideweftView, cache: CachedReliefMesh): void => {
       if (!cache.mesh.waterPlane) return;
       const grid = view.terrain;
@@ -853,14 +958,17 @@ export function createTideweftReliefRenderer(
       const gl = p.drawingContext as WebGLRenderingContext | WebGL2RenderingContext;
       gl.depthMask(false);
       p.noStroke();
-      p.ambientMaterial(withAlpha(RELIEF_PALETTE.water, 112));
-      p.beginShape(p.TRIANGLES);
-      for (let row = startRow; row <= endRow; row += 1) {
-        for (let column = startColumn; column <= endColumn; column += 1) {
-          const tile = grid.tiles[row * grid.columns + column];
-          const visibility = reliefDiscoveryVisibility(tile);
-          const depth = unit(tile?.waterDepth) * visibility;
-          if (!tile || depth <= 0.002 || visibility <= 0.08) continue;
+      const waterBatches = buildReliefWaterMaterialBatches(grid, view.tide.level, {
+        firstColumn: startColumn,
+        lastColumn: endColumn,
+        firstRow: startRow,
+        lastRow: endRow,
+      });
+      for (const batch of waterBatches) {
+        p.ambientMaterial(withAlpha(batch.material.color, batch.material.opacity));
+        p.beginShape(p.TRIANGLES);
+        for (const cell of batch.cells) {
+          const { column, row } = cell;
           const x0 = grid.origin.x + column * tileSize;
           const x1 = x0 + tileSize;
           const z0 = grid.origin.y + row * tileSize;
@@ -879,8 +987,8 @@ export function createTideweftReliefRenderer(
           p.vertex(x1, -surface, z1);
           p.vertex(x0, -surface, z1);
         }
+        p.endShape();
       }
-      p.endShape();
       gl.depthMask(true);
     };
 
@@ -1676,6 +1784,7 @@ export function createTideweftReliefRenderer(
       p.directionalLight(76, 128, 146, 0.65, 0.2, 0.7);
       drawTerrain(view, cache, camera);
       drawWater(view, cache);
+      drawBiomeDetails(view, cache);
       drawSurfaceCurrents(view, cache, now);
       drawRoutes(view, cache);
       drawSoundings(view, cache);
@@ -1698,11 +1807,11 @@ export function createTideweftReliefRenderer(
         canvasElement.setAttribute("role", "application");
         canvasElement.setAttribute(
           "aria-label",
-          "TIDEWEFT relief view. Travel with WASD or arrows. Space sounds the water, E interacts, F ties or tends a Wayknot, Shift braces, P pauses, wheel zooms, and right-drag orbits the estuary.",
+          "TIDEWEFT relief view. Travel with WASD or arrows. Space sounds the water, E interacts, F ties or tends a Wayknot, T opens the tutorial, Shift braces, wheel zooms, and right-drag orbits the estuary.",
         );
         canvasElement.setAttribute(
           "aria-keyshortcuts",
-          "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D Shift Space E F P Escape",
+          "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D Shift Space E F T Escape",
         );
         labelLayer = document.createElement("div");
         labelLayer.className = "relief-label-layer";
@@ -1869,6 +1978,13 @@ function reliefStringHash(value: string): number {
     hash = Math.imul(hash, 16_777_619);
   }
   return hash >>> 0;
+}
+
+function reliefTileHash01(column: number, row: number, salt: number): number {
+  let value = Math.imul((column | 0) ^ salt, 0x45d9_f3b);
+  value ^= Math.imul((row | 0) ^ 0x27d4_eb2d, 0x119d_e1f3);
+  value ^= value >>> 15;
+  return (value >>> 0) / 4_294_967_295;
 }
 
 function unit(value: number | undefined, fallback = 0): number {

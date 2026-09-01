@@ -39,10 +39,10 @@
 
 ## 2026-08-31 — Information and restorative-session pass
 
-- Implemented one-slot signed report cargo with source, target, subject, resource, observed count/tick, age, and confidence.
+- Implemented one-slot carried signed information with source, target, subject, resource, observed count/tick, age, and confidence; it moves no goods.
 - Kept remote inventories epistemically honest: inspectors distinguish locally verified state from sourced, aging reports.
 - Added Hearth/Journey/Gale pressure postures without changing reward value.
-- Added Drift/Weave/Wander session shapes with explicit closure thresholds and no continue bonus.
+- Added Drift/Weave/Wander session shapes with explicit closure thresholds and no continue bonus; the later perpetual-world pass retires their player-facing timer/quota semantics while preserving their save values.
 - Added Quiet Hour save-and-pause recaps for duration, distance, deliveries, reports, strands, discoveries, and causal changes.
 
 ## 2026-08-31 — Presentation, persistence, and release pass
@@ -58,12 +58,13 @@
 
 ## Current checkpoint
 
-Phase 10: Tide Harps are verified and published as an untagged post-alpha preview. A focused mobile/current hotfix is implemented in the working candidate and is now the release gate before the next gameplay slice.
+Phase 10: Tide Harps and the focused mobile/current hotfix are verified and published as untagged post-alpha previews. Perpetual-world semantics, manual pause removal, the near-monochrome interface, mobile travel redesign, complete field manual, report/cargo separation, visible derived biomes, and pure cargo-environment plus rock/ladder foundations are in the uncommitted working candidate, not yet deployed.
 
-- The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; the tag has not moved. Pages now serves the untagged Phase 10 commit `6f74fe9e016ba566116e2085b05ecf2988213754`.
+- The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; the tag has not moved. Pages currently serves the published mobile/current checkpoint `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2`.
 - The published Phase 10 source derives exact maximum knot-disjoint Tide Harps from compact one-Reed/one-Anchor/one-Wind triangles, adds bounded recharge and four-origin sounding, and projects clear HUD/help plus Chart strings and a Relief bell/cord structure.
 - The complete local web gate passes 28 test files / 205 checks, and the extended packaged Electron smoke passes deterministic Harp placement/pulse, title paint, dual-view, and 1,440/960/927/700-pixel layout probes. Fresh title and Relief screenshots have been inspected.
-- The working hotfix candidate folds large panels by default at or below 44rem while retaining an always-visible route/safety/action strip, makes stability-zero and stamina-zero share recoverable deterministic sweep behavior in water at or above 120,000 depth, and shows current direction only on discovered wet surface without revealing bathymetry.
+- The published hotfix folds large panels by default on portrait and short-landscape phones while retaining an always-visible route/safety/action strip, makes stability-zero and stamina-zero share recoverable deterministic sweep behavior in water at or above 120,000 depth, and shows current direction only on discovered wet surface without revealing bathymetry.
+- The candidate replaces that phone strip with four explicit translucent vitals plus touch controls, routes a touch harbor selection to the exact center, supplies independently scrollable safe-area sheets, and exposes the complete manual through T or a mobile ?. It also separates stable signed-report controls from physical Promises and projects seven named biomes into Chart and Relief.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
 ## 2026-09-01 — Alpha 0.1 verification recovered
@@ -162,4 +163,25 @@ Phase 10: Tide Harps are verified and published as an untagged post-alpha previe
 - Extended the packaged release probe through 700 × 640, 390 × 700 portrait, and 844 × 390 landscape states. It verifies default collapse, 44-pixel input, full-width Promises scrolling, mutually exclusive inspector state, safe gaps around the strip/action dock, pointer-transparent objective copy, and zero renderer warnings or resource failures.
 - Passed TypeScript, 31 Vitest files / 221 checks, the production build (`index-DTJENodE.css` / `index-CGVn5Ai9.js`), and the nested `/tideweft/` web smoke. A fresh 780 × 1,400 mobile capture confirms the minimalist collapsed HUD visually.
 - Set the next direction without claiming it as current behavior: remove Drift/Weave's 10/25-minute framing, make new worlds perpetual on the same local save foundation, then add ladder-gated rock, physical dropped/tumbling/drifting cargo, condition-sensitive trust/compensation, and safely available upgrades.
-- `git diff --check` and the scoped public-source secret scan are clean. Commit, CI, Pages publication, and live-asset verification are pending.
+- `git diff --check` and the scoped public-source secret scan are clean. Exact commit `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2` is published; CI run `33503039473` and Pages run `33503039480` succeeded, and the live `index-DTJENodE.css` / `index-CGVn5Ai9.js` assets return HTTP 200.
+- Began the next parallel phase: a restrained near-monochrome title/HUD, perpetual-by-default new worlds with legacy-save compatibility, and a pure deterministic biome/climate foundation for later rain, heat, exposure, magical-water, cargo-material, ecology, infrastructure, and settlement interactions.
+
+## 2026-09-01 — Perpetual field-interface and biome working candidate
+
+- Removed the player-facing Drift/Weave 10/25-minute choice. Every new world now uses perpetual `wander` semantics and the same open-ended objective with no timer or quota.
+- Kept the `drift | weave | wander` union and serialized field for compatibility: older values load and re-save unchanged, but no longer restore quota objectives or milestone-completion prompts.
+- Removed the manual P pause command and pause button. Quiet Hour and the title remain voluntary, saved stopping surfaces that halt both player and world ticks until continued; ordinary in-play time is continuous.
+- Replaced the ornate title/HUD chrome with a restrained near-monochrome, hairline treatment and removed the visible Rest/Steady/Swift control cluster.
+- Rebuilt the compact phone overlay around labeled Stamina, Stability, Loom, and Cargo values/meters plus route and immediate safety cause. Large touch actions remain available without keyboard-hint clutter; Promises and settlement details use mutually exclusive safe-area sheets.
+- Removed the redundant mobile Title action to reserve its slot for the planned KIT inventory, while restoring a compact 44-pixel ☾ Quiet Hour control as the truthful saved recap/return-to-title path. Promise and report actions also meet the 44-pixel compact target.
+- Changed coarse-pointer harbor taps to chart a path to the exact harbor center instead of opening the inspector immediately, removing the short pickup/delivery timing window.
+- Added one data-driven, versioned field manual shared by desktop T and the mobile ?. Its full desktop and safe-area mobile layouts scroll independently, explain all current controls and mechanics, and explicitly distinguish planned systems. Tutorial maintenance is now part of each feature phase.
+- Separated signed reports from physical supply jobs in the harbor inspector. The report section says information-only, explains the one document slot and no-goods behavior, uses **Sign info report → [harbor]** labels, and preserves stable clickable controls while live settlement facts refresh.
+- Fixed immediate river re-entry after a sweep: recovery now restores the hidden travel pace to Steady, and stamina fills update synchronously instead of visually chasing an obsolete Chromium progress animation.
+- Added a pure deterministic biome/climate kernel over existing seeded Perlin terrain. It derives bounded rainfall, heat, salinity, exposure, magical-water influence, seven stable biome identities, live-weather overlays, and four bounded interaction signals without adding authoritative or persisted world members.
+- Integrated those seven biome identities and local climate signals into projection and into restrained, discovery-safe Chart 2D and Relief 3D color/motif presentation. This is visible regional identity only: rain accumulation, heat/exposure stress, ecology, material-specific cargo reactions, infrastructure effects, and settlement consequences remain unimplemented.
+- Unified Chart and Relief water presentation: Relief now batches the same shallow/channel/deep palette used in Chart, with bounded public-tide and discovered-biome conditioning while partial/hidden discovery cannot leak raw bathymetry.
+- Added a separate pure cargo-environment kernel for the five existing cargo properties. Bounded material traits now deterministically evaluate condition loss, contamination, decay, readable cause codes, and signed current/lift force from rain, heat, cold, impact, immersion, and magical-water flux without mutation or hidden world reads.
+- Added a separate pure rock/ladder kernel with stable seeded formations, outcrop severity, blocked/high-risk crossings, deterministic fall-risk/travel-cost signals, and a finite reusable ladder kit with placement/reclaim validation.
+- Kept the cargo-environment and rock/ladder kernels foundation-only: neither enters runtime/player/world state, pointer routing, rendering, UI, or saves. Physical dropping, rock walls and ladders, tumbling/current drift, fall consequences, upgrades, live material-specific weather damage, ecology, infrastructure reactions, and settlement reactions remain planned.
+- The live GitHub Pages checkpoint remains `f8dc848`; this working candidate has no deployment, workflow, commit, or live-asset claim yet.

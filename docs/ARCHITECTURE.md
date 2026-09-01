@@ -5,7 +5,7 @@
 TIDEWEFT has one browser-pure game and two launch targets. Vite builds the same HTML, TypeScript, CSS, static manifest, SVG icon, and p5.js renderer for GitHub Pages and for a thin Electron shell. Electron does not host a second rules engine.
 
 ```text
-keyboard / pointer / DOM commands
+keyboard / pointer / touch / DOM commands
               │
               ▼
 100 ms player host ── every 10 steps ──> deterministic world tick
@@ -25,7 +25,7 @@ local-first IndexedDB (sticky localStorage fallback)
 - `src/sim`: authoritative deterministic world, active graph, rules, invariants, views, and serialization. It imports no DOM, p5, Electron, Node, wall clock, or browser persistence.
 - `src/game`: fixed-step host, player travel, command scheduling, session flow, save orchestration, onboarding, and presentation projections.
 - `src/render`: two swappable p5 instance-mode presentations, cameras, world hit-testing, a pure chunked height-mesh builder, and shared renderer commands. Only the active Chart 2D or Relief 3D canvas loops or accepts input.
-- `src/ui`: accessible DOM panels and controls. It reads a view and emits typed commands; its small-screen disclosure state is local presentation state rather than authoritative or saved state.
+- `src/ui`: accessible DOM panels, controls, and a data-driven versioned field manual. It reads a view and emits typed commands; tutorial position and small-screen disclosure/sheet state are local presentation state rather than authoritative or saved state.
 - `src/audio`: procedural Web Audio feedback. It unlocks only after player interaction.
 - `src/platform`: browser save repositories plus export/import validation.
 - `electron`: hardened local protocol, desktop lifecycle, Forge packaging, and production smoke mode. There is no preload or renderer Node API.
@@ -44,7 +44,7 @@ Authoritative simulation state uses integers:
 
 Random decisions use a keyed generator derived from the root seed plus domain, tick, entity, purpose, and ordinal. An unrelated new draw therefore does not scramble every later result.
 
-The interactive host advances player motion at 100 ms fixed steps and advances the authoritative world once per ten player steps. Pausing, the title screen, and Quiet Hour halt both. A capped accumulator prevents a hidden or stalled tab from applying an unbounded catch-up burst.
+The interactive host advances player motion at 100 ms fixed steps and advances the authoritative world once per ten player steps. There is no manual in-play pause command: ordinary field play advances continuously. Opening the title or Quiet Hour sets the internal paused state, saves, and halts both clocks until the player continues. A capped accumulator prevents a hidden or stalled tab from applying an unbounded catch-up burst.
 
 ## Authoritative tick
 
@@ -74,6 +74,26 @@ The playable slice uses:
 - A complete set of potential inter-settlement corridors. Only routes above the strand-strength and condition threshold participate in autonomous service.
 
 Presented prose is derived from structured facts. UI copy may explain a cause, but it cannot invent stock, a person, a project contribution, or a route event that the simulation did not record.
+
+## Derived biome/climate projection
+
+The working candidate adds a pure `src/sim/biomes.ts` kernel without adding fields to `WorldState` or the fixed authoritative tick. Given the root seed, an existing terrain tile, grid height, optional live weather, and optional magical-water influence, it derives integer fixed-point rainfall, heat, salinity, exposure, and magical-water channels. Smooth keyed regional value noise is call-order independent and combines with the existing Perlin terrain channels; input bounds fail closed without mutation.
+
+Long-lived baseline climate classifies one of seven stable IDs: tide-channel, brine-flat, reed-marsh, rain-meadow, sun-meadow, wind-ridge, or glimmerfen. A passing clear/mist/rain/storm front changes the current climate without renaming that baseline place. Biome coefficients expose bounded rain-retention, heat-load, salt-stress, and magical-resonance signals.
+
+The immutable game projection derives and caches stable biome profiles from seed plus terrain, applies live weather only to the current climate layer, and attaches biome/climate views to projected tiles. `src/render/biomePresentation.ts` maps each discovered biome to one restrained color triplet and a redundant motif shared by Chart and Relief; fully undiscovered cells return no biome presentation. The local field readout names the derived biome. These remain presentation signals, not resources or saved state: courier exposure, cargo condition, ecology, infrastructure, and settlement rules do not consume them yet.
+
+## Derived cargo-environment foundation
+
+The working candidate also adds a pure `src/sim/cargoEnvironment.ts` evaluator, still disconnected from `WorldState` and `PlayerState`. It keeps a structural copy of the five existing cargo properties—ordinary, heavy, fragile, perishable, and confidential—and resolves bounded resistance, spoilage, impact, current-coupling, and buoyancy traits. One normalized environmental sample can contain rain, heat, cold, immersion, signed current, magical-water flux, and impact.
+
+Evaluation is deterministic, non-mutating, fixed-point, and conservative. It returns the next condition/contamination/decay values, their bounded changes, signed horizontal force plus lift for future loose cargo, and canonically ordered readable causes such as rain soak, impact shock, water immersion, magic-water flux, and current drift. This is a calculation contract only: no runtime currently creates a dropped cargo entity, supplies biome samples to carried cargo, moves cargo through water, persists environmental cargo state, or changes delivery trust/compensation from these outputs.
+
+## Derived rock/ladder foundation
+
+`src/sim/rockTraversal.ts` is another pure, deterministic calculation contract. It derives bounded coherent outcrops and stable connected formation IDs from the root seed plus existing terrain, then classifies obstacle severity, walking blockage, fall-risk signal, and travel-cost signal. Its finite reusable ladder kit validates supported cardinal spans, formation continuity, occupancy, overlap, condition, placement, reclaim, and future damage without mutating caller state.
+
+Nothing in the runtime, player/session state, pointer router, Chart/Relief projection, UI, or save envelope consumes this kernel yet. Therefore the candidate has no visible solid rock obstacles, no carried or deployed ladder, and no new fall outcome. Integrating the kernel will require one shared authoritative crossing query for manual and pointer travel plus explicit presentation and save migration; its existence alone is not a playable feature.
 
 ## Current recovery and discovery-safe cues
 
@@ -124,7 +144,7 @@ Projects consume their named resource during scheduled simulation updates. Compl
 
 Deliveries can contribute directly to a building project when the cargo matches its required resource. The contract UI explains this before acceptance, and the chronicle records completion and effect afterward.
 
-## Information cargo
+## Carried information
 
 Knowledge is scoped to settlements. Each record names the subject settlement and resource, reported quantity, age, confidence, and whether it is locally verified.
 
@@ -132,30 +152,42 @@ The player can witness one signed count at its source harbor and carry it in a o
 
 Remote inspector values therefore distinguish direct knowledge from unverified reports. The player can move information without pretending to own an omniscient dashboard.
 
+The candidate presents these jobs separately from physical Promises. Report controls live in an inspector section labeled information-only and say **Sign info report → [harbor]**; the action signature intentionally excludes live route reliability, stock counters, and clock data. The report subtree refreshes only when report-action structure changes, and a pointer-down guard keeps the exact button alive until click or cancellation. This prevents live simulation refreshes from producing hover flicker or swallowing the click.
+
 ## Save contract
 
 There are two nested versions:
 
 1. `tideweft-world` contains the save-format version, rules version, checksum, and canonical `WorldState`. Deserialization checks shape, version, checksum, and every invariant.
-2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart/Wayknot state, tutorial state, chosen posture/session shape, and recap history. It does not serialize derived Tide Harps.
+2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart/Wayknot state, tutorial state, chosen posture, a legacy-compatible session-shape field, and recap history. It does not serialize derived Tide Harps or biome profiles.
 
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
 
 The browser repository is local-first: it prefers IndexedDB and switches to a sticky localStorage fallback if opening or a later transaction fails. Cross-store reads reconcile the newest usable copy, record writes are monotonic, and overlapping runtime save requests coalesce to the newest complete snapshot behind the in-flight write. A separate versioned localStorage deletion journal is written before best-effort backend cleanup, so an inaccessible stale IndexedDB copy cannot reappear in a later repository instance; only a strictly newer save clears that marker. Repository operations clone records, sort summaries deterministically, and isolate malformed data. The platform export/import envelope has a version, 20 MB limit, slot/metadata validation, future-format rejection, and object-URL cleanup. The current UI does not expose those import/export helpers yet.
 
-The next session-flow pass will make new worlds perpetual and remove the 10/25-minute Drift/Weave framing while preserving existing saves and voluntary Quiet Hour recaps. That is planned rather than implemented. It will reuse this repository contract and will not introduce a server or cloud dependency.
+The working candidate makes every new world perpetual and removes the 10/25-minute Drift/Weave title choice. `SessionShape` deliberately remains `drift | weave | wander` in the save/view contract: valid older values load and round-trip unchanged, while runtime objectives and milestone handling ignore them and remain open-ended. New saves use `wander`. Quiet Hour remains a voluntary save/recap boundary, and no server or cloud dependency is introduced.
 
 Unsupported simulation versions fail rather than being guessed into a current world. Explicit checksum-first migrations preserve the prior 64 × 48 world under current Tide Choir rules; no migration silently regenerates terrain from its seed.
 
 ## Dual p5 presentation
 
-Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean, plus the shared surface-current direction. Chart 2D retains dense labels, color-independent terrain motifs, low-motion readability, and sparse current arrows over discovered wet tiles; its Harps use three persistent bowed strings per edge—nine in all—a labeled center plate, and six fixed active marks rather than color alone. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and material references, draws live per-tile water and discovery-safe surface arrows, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active.
+Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean, the shared surface-current direction, and derived per-tile biome/climate views. Chart 2D retains dense labels, color-independent terrain/biome motifs, low-motion readability, and sparse current arrows over discovered wet tiles; its Harps use three persistent bowed strings per edge—nine in all—a labeled center plate, and six fixed active marks rather than color alone. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and biome-aware material references, draws live per-tile water and discovery-safe surface arrows, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active.
 
 Relief cord roots and bell/label placement sample the discovery-masked surface rather than authoritative hidden elevation. Reduced-motion mode sets decorative bell bob and sway to zero but leaves cords, bell, labels, crown, and active words intact. Geometry memoization keys immutable projected Harp data, keeping these derived strings/cords out of the fixed-step rules.
 
 The composed controller stops and hides the inactive p5 instance, releases held movement/brace input during a switch, and falls back to Chart 2D if WebGL setup fails or its context is lost. The explicit view preference is local presentation state and is deliberately outside the authoritative save/checksum.
 
-At widths at or below 44rem—or at short landscape sizes no wider than 64rem—CSS removes the duplicate desktop HUD and folds the detailed objective, Promises, and inspector surfaces when the UI shell's disclosure flag is false. The shell starts compact and exposes a native 44-pixel `PROMISES + / PROMISES −` button whose `aria-expanded` state controls only the identified Promises surface. A separate projected strip keeps route, stamina/stability safety, authoritative ground/water terrain, and contextual E/Space/F copy visible while the action dock remains reachable. The shell also carries an explicit ephemeral sheet mode: the disclosure opens the existing scrollable Promises DOM as one full safe-area sheet, while settlement interaction opens the existing inspector as a mutually exclusive sheet. Neither disclosure nor sheet mode enters game saves.
+The shared world-tap router distinguishes fine from coarse pointers. Fine-pointer harbor input retains selection/inspection. Coarse-pointer harbor input emits an exact-center movement target in both Chart and Relief, so a touch player arrives on the interaction tile before the contextual action can open the inspector. Ordinary terrain taps keep their existing route behavior.
+
+At widths at or below 44rem—or at short landscape sizes no wider than 64rem—CSS removes the duplicate desktop HUD and folds the detailed objective, Promises, and inspector surfaces when the UI shell's disclosure flag is false. The shell starts compact and exposes a native 44-pixel `PROMISES + / PROMISES −` button whose `aria-expanded` state controls only the identified Promises surface. The candidate strip is a translucent four-column projection of Stamina, Stability, Loom, and Cargo, with values and native progress semantics, followed by route and immediate safety/terrain cause. It deliberately hides keyboard-instruction copy; the large touch action dock remains reachable. The disclosure opens the existing scrollable Promises DOM as one full safe-area sheet, while settlement interaction opens the inspector as a mutually exclusive sheet. Neither disclosure nor sheet mode enters game saves.
+
+The candidate's final CSS layer intentionally narrows the title and field palette to black/charcoal/off-white with small seafoam and gold semantic accents, hairline borders, and minimal blur. This is presentation-only; it does not fork DOM structure or gameplay between web and Electron.
+
+## Versioned field manual
+
+`src/ui/tutorialGuide.ts` is platform-neutral data with a guide version, stable section/control IDs, audience filters, and explicit live/planned status. Its thirteen topics cover premise, movement, Promises, carried reports, water/meters, cargo care, terrain/tools, Wayknots/Harps, routes/settlements, views/HUD, saves/Quiet Hour, accessibility, and build boundaries. Every completed feature phase must update this source and its focused tests before the mechanic can be considered explained.
+
+`src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 
 ## Electron security
 
@@ -187,9 +219,12 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 6. Active-graph pathfinding, storms, congestion, topology metrics, and project effects.
 7. Player traversal, stamina/stability sweep causes, deterministic recovery, tutorial, signed reports, and platform persistence.
 8. Tide Harp candidate/selection/containment determinism, active/inactive recharge and four-origin sounding, cargo/inventory non-mutation, legacy save shape, UI copy, and discovery-safe/reduced-motion render geometry.
-9. Vite production build under relative paths.
-10. Packaged Electron launch, visible title controls, `app://` resource load, exact 96 × 72 world probe, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, 1,440 × 900 / 960 × 640 / 927 × 640 / 700 × 640 desktop layouts plus 390 × 700 portrait and 844 × 390 landscape mobile-sheet probes, Node-global absence, zero renderer warnings/resource failures, and separate title/game/mobile screenshots.
+9. Derived biome stability/weather transforms/projection/presentation, coarse-pointer harbor routing, field-manual audiences/content, report-action refresh guards, four-vital mobile HUD copy, pure cargo-environment evaluation, and pure rock/ladder derivation/validation.
+10. Vite production build under relative paths.
+11. Packaged Electron launch, visible title controls, `app://` resource load, exact 96 × 72 world probe, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, 1,440 × 900 / 960 × 640 / 927 × 640 / 700 × 640 desktop layouts plus 390 × 700 portrait and 844 × 390 landscape mobile-sheet probes, Node-global absence, zero renderer warnings/resource failures, and separate title/game/mobile screenshots.
 
 The Phase 10 gate passes TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, that extended packaged smoke, `git diff --check`, and a scoped source secret scan. Exact commit `6f74fe9e016ba566116e2085b05ecf2988213754` is published: CI run `33494152504` and Pages run `33494152310` succeeded, and the live HTML serves the inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets with HTTP 200 responses. The deployment is an untagged preview; `v0.2.0-alpha.1` remains unchanged.
 
-The focused mobile/current hotfix adds unit coverage for both sweep causes, discovery-safe current geometry, shared direction projection, and compact HUD disclosure/copy. Its local gate passes TypeScript, 31 test files / 221 checks, production and nested-path web builds, the scoped public-source secret scan, and packaged desktop/mobile smoke with no renderer warnings or resource failures. Commit, CI, Pages, and live assets remain pending. Perpetual defaults, ladder-gated rock traversal, physical dropped-cargo simulation, and global upgrades belong to later authoritative phases and are not implemented in this architecture yet.
+The focused mobile/current hotfix adds unit coverage for both sweep causes, discovery-safe current geometry, shared direction projection, and compact HUD disclosure/copy. Its gate passes TypeScript, 31 test files / 221 checks, production and nested-path web builds, the scoped public-source secret scan, and packaged desktop/mobile smoke with no renderer warnings or resource failures. Exact commit `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2` is live after CI `33503039473` and Pages `33503039480`; the exact inspected assets return HTTP 200.
+
+The perpetual/manual-pause, interface/manual/report, visible-biome, and pure cargo-environment/rock-ladder work exists only in the uncommitted working candidate. Focused coverage exercises perpetual defaults plus legacy-value round trips, bounded/call-order-independent climate derivation, projection and discovery-safe biome presentation, touch harbor routing, manual audience/content completeness, report refresh guards, mobile HUD copy, inert calm cargo exposure, bounded material responses, canonical causes, deterministic forces, outcrop stability, and ladder validation. A new integrated final gate or deployment is not claimed here. Live ladder/fall traversal, physical dropped-cargo simulation, upgrades, and weather/magic-water effects on cargo, ecology, infrastructure, or settlements remain future architecture.

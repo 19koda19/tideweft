@@ -16,7 +16,7 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 
 1. Inspect nearby facts, named requesters, shortages, project needs, route reliability, weather, and tide.
 2. Choose a promise by consequence and journey mood rather than abstract reward value.
-3. Reach the origin and collect a physical load, or witness one signed report into the document case.
+3. Reach the origin and collect a physical load from Promises, or separately witness one information-only signed report into the document case.
 4. Travel manually or chart a pointer path in the overhead chart or angled relief view.
 5. Scan, reroute, slow down, hold Shift to brace while moving, stand still to recover, or accept a weathered load.
 6. Bind a reusable terrain-appropriate Wayknot, or reclaim one underfoot to move the care elsewhere.
@@ -34,6 +34,8 @@ The estuary sits beneath the Aurora, a weather phenomenon used as poetic languag
 The quantum framing is thematic, not a claim about real-world physics. Current play does not branch or rewind timelines. Its meaningful possibility space comes from seeded worlds, tide-dependent traversal, changing weather, route choice, cargo condition, shortage timing, project order, and network topology.
 
 The tide changes water depth across the map. Water is always physically enterable, but sounded depth, stamina, stability, field tools, and the risk of being swept to a safe bank make route choice legible. Sparse arrows on discovered wet surface show the shared tide/wind current direction before entry; fixed arrow geometry does not encode unsounded bathymetry. Weather changes stamina/load pressure, stability, and whether marginal autonomous corridors remain usable.
+
+The working candidate gives each discovered place one stable derived biome identity and current rainfall, heat, salinity, exposure, and magical-water context. Those signals currently change the map/readout language only. They do not yet accumulate exposure, alter cargo materials, grow ecology, or modify settlement and infrastructure rules; every such consequence must become forecastable and tutorial-visible before activation.
 
 ## Nested reward loops
 
@@ -74,7 +76,7 @@ Tide Harps are spatial understanding, not crafting inventory. The pure selector 
 
 Each seed creates:
 
-- A 96 × 72 seeded multi-octave gradient Perlin elevation/moisture/roughness field with five authoritative terrain families, readable presentation variants, and tidal water depth. Stored Alpha 0.1 worlds retain their original 64 × 48 serialized field.
+- A 96 × 72 seeded multi-octave gradient Perlin elevation/moisture/roughness field with five authoritative terrain families, tidal water depth, and seven derived regional identities: Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen. Stored Alpha 0.1 worlds retain their original 64 × 48 serialized field.
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
 - 42 named residents with a role, resolve/empathy/curiosity traits, food/rest/belonging needs, local relationships, an intention, and a world location.
 - Recipes that produce and consume conserved resources.
@@ -123,11 +125,14 @@ At a source harbor, the player can witness its specialization count into a singl
 - observed quantity and world tick;
 - confidence.
 
-“Signed” denotes accountable provenance inside the fiction, not cryptographic identity. Carrying the report occupies capacity, blocks collecting a second report, and gives the journey a destination. At delivery, the simulation validates its source and age, reduces confidence for transport, updates the recipient’s knowledge, and records who learned what. This makes truth useful without making the player omniscient.
+“Signed” denotes accountable provenance inside the fiction, not cryptographic identity. Carrying the report occupies one document slot, blocks collecting a second report, and gives the journey a destination; it does not remove or transport any goods. At delivery, the simulation validates its source and age, reduces confidence for transport, updates the recipient’s knowledge, and records who learned what. This makes truth useful without making the player omniscient.
+
+Physical jobs appear only in Promises. Reports appear in a separately headed **Signed reports · information only** inspector section whose **Sign info report → [harbor]** control remains stable under live settlement refresh. The distinction must be clear before a click, not explained only after the player has filled the document case.
 
 ## Journey play
 
 - WASD/arrows and pointer-directed routes share the same continuous travel rules in Chart 2D and Relief 3D.
+- On coarse pointers, tapping a harbor charts to its exact center; after arrival, the contextual touch action performs pickup, delivery, report handoff, or inspection. The tap itself does not open a sheet while the courier is still passing through the interaction tile.
 - Relief 3D rotates held movement with the orbit camera so travel remains screen-relative; Chart 2D retains world-up controls.
 - Rest, Steady, and Swift paces trade recovery, control, and speed.
 - Holding Shift while moving actively braces: travel continues more slowly, stability rises, and fragile loads avoid handling shock.
@@ -139,6 +144,7 @@ At a source harbor, the player can witness its specialization count into a singl
 - An active Tide Harp adds its three knot-centered echoes without changing cargo, settlement stock, route history, or the simulation ledger. Overlapping selected triangles still grant only one Harp recharge benefit at the courier's tile.
 - The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
 - The objective always identifies the active pickup, material destination, or report destination.
+- The local field readout names the derived biome. Chart and Relief share restrained color plus motif cues, while undiscovered cells expose no biome presentation.
 
 The activity must remain pleasant before progression numbers: readable motion, surface response, luminous traces, weather, terrain sound, and immediate stability feedback form the lowest loop.
 
@@ -153,17 +159,11 @@ The activity must remain pleasant before progression numbers: readable motion, s
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
-## Session shapes, pressure, and perpetual direction
+## Perpetual play and pressure
 
-Session shape is a commitment from the game about when it will offer closure, not a difficulty or payout multiplier:
+Every new world in the working candidate is perpetual. The title asks only for seed and pressure posture; it does not prescribe a 10/25-minute shape, delivery count, corridor quota, or forced ending. The regional resilient-weave resolution remains a meaningful systemic achievement, but the estuary stays open afterward.
 
-- **Drift (about 10 minutes):** one useful delivery is a complete evening.
-- **Weave (about 25 minutes):** activate/tend one self-carrying corridor, awaken one Tide Choir, or finish two useful deliveries.
-- **Wander (open):** explore, inspect, report, deliver, tend, or stop without a quota.
-
-When Drift or Weave reaches its threshold, the UI explicitly says the chosen shape is complete. Continuing has no bonus and leaving has no penalty.
-
-Those timed labels remain current behavior only while the focused mobile/current hotfix is being published. The next compatibility-preserving design pass removes the 10/25-minute framing from new-world setup and makes every new world perpetual by default. Quiet Hour remains a voluntary pause, save, and causal recap rather than a forced ending. Existing saves continue on the local-first IndexedDB repository with its sticky localStorage fallback; this direction does not require cloud or server state.
+Earlier saves may contain `drift`, `weave`, or `wander`. Those values remain valid compatibility data and round-trip safely, but all project the same open-ended objective and none reactivates a timer or milestone-completion prompt.
 
 World posture adjusts pressure without changing reward value:
 
@@ -171,13 +171,17 @@ World posture adjusts pressure without changing reward value:
 - **Journey:** intended balance.
 - **Gale:** tighter stores and stronger weather.
 
-Quiet Hour pauses immediately, saves, and summarizes duration, distance, deliveries, reports, strands, discoveries, and up to five causal changes. The player may continue or finish; neither choice creates an expiring task.
+There is no manual in-play pause. Quiet Hour immediately saves, halts the simulation, and summarizes duration, distance, deliveries, reports, strands, discoveries, and up to five causal changes. The title also saves and halts safely. The player may continue or finish from either stopping surface; neither choice creates an expiring task.
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. The Tide Harp HUD teaches `Reed + Anchor + Wind in a compact triangle` when none exist, distinguishes tuned-but-inactive from active, and names the +900/three-origin benefit; Help repeats the model, while unsounded local water keeps the first explanatory priority. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears and detailed surfaces begin folded behind an accessible 44-pixel HUD disclosure. A compact route/safety/terrain/action strip and the action dock remain available; opening Promises or a settlement inspector gives that one surface the full safe sheet rather than stacking both. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same thirteen-topic source covering every current control, physical Promises, information-only reports, meters and sweep recovery, cargo care, biomes/tools, Wayknots/Harps, routes/projects, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
 
-Chart 2D represents each instrument with three persistent bowed strings along each edge—nine in all—a written label, and fixed activity marks. Relief 3D uses three surface-rooted cords and a suspended faceted bell rather than a flat icon. Hidden terrain height is never consulted for visible placement, and reduced motion freezes bob/sway while keeping every structural and textual cue. Packaged inspection verifies the deterministic Harp, its remote sounding echo, both presentations, visible title controls, and fresh title/game captures. Exact-commit CI and Pages deployment also pass, so Phase 10 is now a published untagged preview; Alpha 0.2 remains the latest tag.
+The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
+
+The title and field chrome use a restrained near-monochrome palette, hairline structure, and only small seafoam/gold semantic accents. The visible Rest/Steady/Swift button row is absent; any later automatic contextual pace behavior must be introduced as a truthful simulation rule and reflected in this manual rather than as another permanent HUD cluster.
+
+Chart 2D represents each instrument with three persistent bowed strings along each edge—nine in all—a written label, and fixed activity marks. Relief 3D uses three surface-rooted cords and a suspended faceted bell rather than a flat icon. Relief water uses the same shallow/channel/deep semantic palette as Chart, conditioned only by public tide and discovered biome state; partially known terrain is banded before presentation so raw hidden depth cannot leak. Hidden terrain height is never consulted for visible placement, and reduced motion freezes bob/sway while keeping every structural and textual cue. Packaged inspection verifies the deterministic Harp, its remote sounding echo, both presentations, visible title controls, and fresh title/game captures. Exact-commit CI and Pages deployment also pass, so Phase 10 is now a published untagged preview; Alpha 0.2 remains the latest tag.
 
 The current build has procedural sound but does not yet expose separate volume controls or key remapping.
 
@@ -192,15 +196,20 @@ Implemented now:
 - all five rule-changing civic projects;
 - route reinforcement, topology campaign resolution, and endless continuation;
 - surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, six reusable terrain-bound Wayknots and their Waychords, derived Tide Harps in the published untagged Phase 10 preview, and dual Chart 2D/Relief 3D play;
-- Drift/Weave/Wander plus Quiet Hour;
+- perpetual-by-default new worlds, legacy Drift/Weave/Wander save compatibility, and voluntary Quiet Hour/title stopping without a manual field pause;
+- a near-monochrome title/HUD, four-vital mobile overlay and touch dock, exact-center mobile harbor routing, mutually exclusive safe-area sheets, and a versioned T/? field manual;
+- separately labeled, refresh-stable information-report controls that cannot be mistaken for physical Promises;
+- seven deterministic biome identities plus bounded local climate signals projected and rendered through shared Chart/Relief color-and-motif language without persisted biome state;
+- a deterministic, bounded cargo-environment evaluator for material traits, condition/contamination/decay pressure, readable causes, and future loose-cargo force; it is not yet connected to carried or dropped cargo;
+- a deterministic rock/ladder rules kernel for coherent outcrops, crossing risk/cost, and finite reusable ladder validation; it is not yet connected to movement, rendering, UI, or saves;
 - local resume, secure desktop packaging, and static Pages output.
 
 Expansion runway, not current behavior:
 
-- perpetual-by-default new-world setup with the 10/25-minute Drift/Weave framing removed while voluntary Quiet Hour recaps remain;
-- procedural rock formations that block ordinary traversal and a carried, recoverable ladder that changes the same manual-movement and pointer-routing rule;
+- runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
 - physical dropped cargo that can tumble on rock, drift in currents, take condition damage, and affect trust/compensation without becoming an unrecoverable deletion trap;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;
+- gameplay integration of the already-visible biome signals and the cargo-environment kernel so spatial rain, heat, exposure, salinity, and magical estuary water react with live cargo, ecology, tools, infrastructure, and settlement needs through visible causal rules;
 - letters, passengers, personal narrative promise families, migration, and richer rumor disputes;
 - manually placed beacons/caches/crossings outside civic projects;
 - localized moving weather fronts and more tide-specific tools;

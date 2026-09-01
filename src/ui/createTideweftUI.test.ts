@@ -8,6 +8,9 @@ import {
   handleTideweftUIShortcut,
   mobileHudCopy,
   mobileHudDisclosureState,
+  setProgress,
+  shouldRefreshSignedReportActions,
+  signedReportActionsSignature,
   tideHarpFieldStatus,
   wayknotActionButtonState,
 } from "./createTideweftUI";
@@ -104,6 +107,20 @@ describe("Wayknot UI accessibility", () => {
     expect(openHelp).not.toHaveBeenCalled();
   });
 
+  it("opens the tutorial from T or the legacy question-mark shortcut", () => {
+    const dispatch = vi.fn();
+    const openTutorial = vi.fn();
+    const t = keyEvent({ code: "KeyT", key: "t" });
+    const question = keyEvent({ code: "Slash", key: "?", shiftKey: true });
+
+    expect(handleTideweftUIShortcut(t, false, dispatch, openTutorial)).toBe(true);
+    expect(handleTideweftUIShortcut(question, false, dispatch, openTutorial)).toBe(true);
+    expect(t.preventDefault).toHaveBeenCalledOnce();
+    expect(question.preventDefault).toHaveBeenCalledOnce();
+    expect(openTutorial).toHaveBeenCalledTimes(2);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("explains Tide Harp formation, activation, recharge, and three-origin sounding in words", () => {
     expect(TIDE_HARP_HELP_COPY).toContain("one Reed mat, one Tide anchor, and one Wind knot");
     expect(TIDE_HARP_HELP_COPY).toContain("compact triangle");
@@ -148,6 +165,25 @@ describe("Wayknot UI accessibility", () => {
 });
 
 describe("mobile field HUD accessibility", () => {
+  it("synchronously replaces a stale zero value after recovery and immediate re-entry", () => {
+    const attributes = new Map<string, string>();
+    const progress = {
+      value: 1,
+      setAttribute: (name: string, value: string) => attributes.set(name, value),
+    } as unknown as HTMLProgressElement;
+
+    setProgress(progress, 0, "Stamina 0 percent");
+    expect(progress.value).toBe(0);
+    expect(attributes.get("aria-valuetext")).toBe("Stamina 0 percent");
+
+    setProgress(progress, 0.15, "Stamina 15 percent");
+    expect(progress.value).toBe(0.15);
+
+    setProgress(progress, 0.14345, "Stamina 14 percent");
+    expect(progress.value).toBe(0.14345);
+    expect(attributes.get("aria-valuetext")).toBe("Stamina 14 percent");
+  });
+
   it("uses a native disclosure contract for both controlled panel surfaces", () => {
     expect(MOBILE_PROMISES_PANEL_ID).toBe("promises-panel");
     expect(mobileHudDisclosureState(false)).toEqual({
@@ -192,10 +228,9 @@ describe("mobile field HUD accessibility", () => {
 
     expect(copy.objective).toContain("PICKUP: Reedwake · DELIVERY: Latchmere");
     expect(copy.objective).toContain("then deliver to Latchmere");
-    expect(copy.safety).toContain("STAM 78% · STAB 63% · ↓ exposed to cross-current");
-    expect(copy.safety).toMatch(/^DEEP: STAM\/STAB 0 → SWEPT/u);
+    expect(copy.safety).toBe("↓ exposed to cross-current · DEEP: STAM/STAB 0 → SWEPT");
     expect(copy.terrain).toBe("WATER · Tidal channel · Deep water · Heavy stamina use");
-    expect(copy.actions).toBe("E Pick up cargo here · SPACE SCAN · F Lay Tide anchor");
+    expect(copy.actions).toBe("Pick up cargo here · Sound / Scan · Lay Tide anchor");
   });
 
   it("states the recoverable sweep trigger when either deep-water resource reaches zero", () => {
@@ -221,7 +256,7 @@ describe("mobile field HUD accessibility", () => {
     expect(copy.safety).toContain("SWEPT · Brace toward the lit bank.");
     expect(copy.safety).toContain("STAM 0% · STAB 0%");
     expect(copy.terrain).toContain("Chest deep");
-    expect(copy.actions).toContain("SPACE SCAN LOCKED");
+    expect(copy.actions).toContain("Scan recharging");
   });
 
   it("labels dry terrain as ground instead of implying water everywhere", () => {
@@ -244,5 +279,63 @@ describe("mobile field HUD accessibility", () => {
     });
 
     expect(copy.terrain).toBe("GROUND · Bellwake harbor decking · Dry footing · Normal stamina use");
+    expect(copy.safety).toBe("STABLE · DEEP: STAM/STAB 0 → SWEPT");
+    expect(copy.safety).not.toMatch(/Shift|WASD|keyboard/iu);
+  });
+});
+
+describe("signed information report controls", () => {
+  const source = {
+    id: "11",
+    name: "Bellwake",
+    connections: [
+      {
+        id: "17",
+        routeId: "5",
+        settlementId: "11",
+        settlementName: "Reedwake",
+        conditionLabel: "Surveyed · faint trace · 31% woven",
+        reliability: 0.42,
+        actionLabel: "Spend 1 part to strengthen route",
+        actionHint: "Live route guidance",
+        actionDisabled: false,
+        reportActionLabel: "Sign info report → Reedwake",
+        reportActionHint: "Uses 1 document slot and moves no cargo or supplies.",
+        reportActionDisabled: false,
+      },
+    ],
+  } as const;
+
+  it("keeps the same report button mounted while unrelated live route telemetry changes", () => {
+    const before = signedReportActionsSignature(source);
+    const after = signedReportActionsSignature({
+      ...source,
+      connections: [{
+        ...source.connections[0],
+        conditionLabel: "Surveyed · faint trace · 49% woven",
+        reliability: 0.61,
+        actionHint: "A newly updated route hint",
+      }],
+    });
+
+    expect(after).toBe(before);
+    expect(shouldRefreshSignedReportActions(before, after, false)).toBe(false);
+  });
+
+  it("refreshes actual report state, but never between pointer-down and click", () => {
+    const before = signedReportActionsSignature(source);
+    const occupied = signedReportActionsSignature({
+      ...source,
+      connections: [{
+        ...source.connections[0],
+        reportActionLabel: "Document case already occupied",
+        reportActionHint: "Deliver the report already carried before collecting another.",
+        reportActionDisabled: true,
+      }],
+    });
+
+    expect(occupied).not.toBe(before);
+    expect(shouldRefreshSignedReportActions(before, occupied, true)).toBe(false);
+    expect(shouldRefreshSignedReportActions(before, occupied, false)).toBe(true);
   });
 });

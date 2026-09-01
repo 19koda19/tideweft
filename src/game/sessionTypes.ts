@@ -1,5 +1,9 @@
 import type { PressureMode, WorldView } from "../sim/types";
-import type { JourneyPosture, SessionShape } from "../ui/types";
+import {
+  PERPETUAL_SESSION_SHAPE,
+  type JourneyPosture,
+  type SessionShape,
+} from "../ui/types";
 import { createTutorialState, type TutorialState } from "./tutorial";
 
 export interface SessionBaseline {
@@ -68,7 +72,7 @@ export function pressureForPosture(posture: JourneyPosture): PressureMode {
 export function createSessionState(
   seed: string,
   posture: JourneyPosture = "journey",
-  sessionShape: SessionShape = "weave",
+  sessionShape: SessionShape = PERPETUAL_SESSION_SHAPE,
 ): GameSessionState {
   return {
     seed,
