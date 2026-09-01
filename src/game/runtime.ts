@@ -439,6 +439,7 @@ export async function createTideweftRuntime(
       fieldResourceEcology,
       traversalFeedback,
       looseCargoWorld: physicalCargo.looseWorld,
+      bracing: manualControl.brace,
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
     uiView = projectUIView(worldView, player, session, {
@@ -446,6 +447,7 @@ export async function createTideweftRuntime(
       fieldResourceEcology,
       looseCargoCarrier: physicalCargo.carrier,
       looseCargoWorld: physicalCargo.looseWorld,
+      bracing: manualControl.brace,
       requiresSeed: replacementSeedRequired,
       worldCreationBlocked: saveRecoveryBlocked,
       ...(runtimeIntegrityFailure
@@ -1006,6 +1008,9 @@ export async function createTideweftRuntime(
         break;
       case "brace":
         manualControl = { ...manualControl, brace: command.active };
+        // Brace is a momentary safety control. Project it immediately so the
+        // player sees a planted pose before the next fixed movement beat.
+        refreshViews();
         break;
       case "move-target":
         pendingGatherNodeId = null;

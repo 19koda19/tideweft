@@ -143,7 +143,7 @@ export const TUTORIAL_CONTROLS = [
     audience: "desktop",
     input: "Hold Shift while moving",
     action: "Brace the load",
-    detail: "Bracing trades speed for stability and protects fragile cargo.",
+    detail: "Works from the field or HUD; BRACING and a planted mark confirm the held safety state.",
   },
   {
     id: "brace-button",
@@ -599,7 +599,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-brace-desktop",
         audience: "desktop",
         title: "Brace through a difficult patch",
-        body: "Hold Shift while moving to trade speed for stability and fragile-cargo protection. Release it after the hazard. BRACE cannot erase an unsupported edge, but it can turn a prepared crossing into a controlled one.",
+        body: "Hold either Shift key while moving to trade speed for stability and fragile-cargo protection. It works when the world, document body, or a HUD control owns focus, except while typing in a field or using a modal. The safety readout says BRACING immediately and both views draw an amber planted-foot marker. Release it after the hazard. BRACE cannot erase an unsupported edge, but it can turn a prepared crossing into a controlled one.",
         controlId: "brace-key",
       },
       {
@@ -663,7 +663,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "cargo-drop-recover",
         audience: "all",
         title: "Dropped cargo remains in the world",
-        body: "Open KIT → PACK to DROP an exact stack quantity or a whole Promise or gear lot. The parcel keeps a stable identity, condition, wetness, contamination, and provenance while currents move it, grades tumble it, impacts weather it, and local magic water applies its material reaction. A dropped active Promise changes the objective to RECOVER CARGO and cannot be delivered or renegotiated until its exact quantity is back in custody.",
+        body: "Open KIT → PACK to DROP an exact stack quantity or a whole Promise or gear lot. The parcel keeps a stable identity, condition, wetness, contamination, and provenance while currents move it, grades tumble it, impacts weather it, and local magic water applies its material reaction. Ordinary far-away parcel bodies leave the renderer's interest radius to protect mobile frame time, but they are not despawned: their exact state stays in the save and they reappear when approached. A dropped active Promise stays recovery-focused, changes the objective to RECOVER CARGO with its direction, distance, and motion, and cannot be delivered or renegotiated until its exact quantity is back in custody.",
       },
       {
         id: "cargo-recover-desktop",
@@ -1171,7 +1171,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 8 as const;
+export const TUTORIAL_CONTENT_VERSION = 9 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

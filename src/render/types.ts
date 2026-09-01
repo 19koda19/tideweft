@@ -179,6 +179,8 @@ export interface PlayerView {
   readonly cargoCapacity: number;
   readonly cargo: readonly CargoStackView[];
   readonly pace: PaceView;
+  /** True only while the authoritative Shift/touch hold bit is active. */
+  readonly bracing?: boolean;
   /** Explicit physical pose; renderers must not communicate this by color alone. */
   readonly balanceState?: PlayerBalanceView;
   readonly incident?: PlayerIncidentView;

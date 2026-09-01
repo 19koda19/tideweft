@@ -82,6 +82,8 @@ export interface UIProjectionOptions {
   readonly looseCargoCarrier?: LooseCargoCarrierState;
   /** Authoritative loaded parcels used for RECOVER objectives and interaction. */
   readonly looseCargoWorld?: LooseCargoWorldState;
+  /** Authoritative momentary hold state shared by Shift and touch. */
+  readonly bracing?: boolean;
 }
 
 export function projectUIView(
@@ -132,6 +134,7 @@ export function projectUIView(
       craftingRevision(player),
       player.cargo[0]?.condition ?? FIXED_POINT,
       player.pace,
+      options.bracing === true,
       session.selectedSettlementId ?? "none",
       session.trackedContractId ?? "none",
       session.nextAnnouncementId,
@@ -175,6 +178,7 @@ export function projectUIView(
         ? { cargoCondition: Math.min(...player.cargo.map((cargo) => cargo.condition)) / FIXED_POINT }
         : {}),
       pace: player.pace,
+      bracing: options.bracing === true,
       ...(playerSettlementId === null
         ? { locationLabel: player.mode === "skiff" ? "On the tide" : "Between harbors" }
         : { locationLabel: settlementName(world, playerSettlementId) }),
@@ -861,7 +865,7 @@ function contractObjective(
       ? `snagged by ${custody.nearestLoose.snaggedBy ?? "vegetation"}`
       : custody.nearestLoose?.motion ?? "moving";
     const range = custody.nearestLoose
-      ? `${custody.nearestLoose.distance.toFixed(1)} tiles away · ${motion}`
+      ? `${custody.nearestLoose.distance.toFixed(1)} tiles ${custody.nearestLoose.direction} · ${motion}`
       : "marked in the loaded landscape";
     return {
       id: `recover-${contract.id}`,
@@ -870,7 +874,7 @@ function contractObjective(
       description: `${custody.carriedQuantity} of ${contract.quantity} promised units are secured. The nearest exact parcel is ${range}; press E within reach on desktop or tap its parcel marker on mobile. Water and grade may keep moving it.`,
       progress: Math.max(0, Math.min(1, custody.carriedQuantity / Math.max(1, contract.quantity))),
       progressLabel: `${custody.carriedQuantity} carried · ${custody.looseQuantity} loose · harbor handoff blocked`,
-      why: `RECOVERY FIRST: every physical unit must be back in the PACK before ${destination} can sign the receipt.`,
+      why: `RECOVER · ${range} · repack every physical unit before ${destination} can sign the receipt.`,
     };
   }
   return {
@@ -894,6 +898,7 @@ interface PromiseCustodyProjection {
   readonly nearestLoose?: {
     readonly id: string;
     readonly distance: number;
+    readonly direction: string;
     readonly motion: LooseCargoWorldState["entities"][number]["motion"];
     readonly snaggedBy: LooseCargoWorldState["entities"][number]["snaggedBy"];
   };
@@ -918,6 +923,7 @@ function promiseCustody(
     .map((entity) => ({
       id: entity.id,
       distance: looseParcelDistance(player, entity.x, entity.y),
+      direction: looseParcelDirection(player, entity.x, entity.y),
       motion: entity.motion,
       snaggedBy: entity.snaggedBy,
     }))
@@ -945,6 +951,29 @@ function nearestLooseParcel(
 function looseParcelDistance(player: PlayerState, x: number, y: number): number {
   return Math.abs(x / FIXED_POINT - player.x / 1_000)
     + Math.abs(y / FIXED_POINT - player.y / 1_000);
+}
+
+/**
+ * Chart coordinates increase east on x and south on y. Classify the parcel
+ * into a true eight-way compass sector, while naming an overlapping parcel
+ * explicitly so RECOVER guidance never loses its direction word.
+ */
+function looseParcelDirection(player: PlayerState, x: number, y: number): string {
+  const dx = x / FIXED_POINT - player.x / 1_000;
+  const dy = y / FIXED_POINT - player.y / 1_000;
+  if (dx === 0 && dy === 0) return "here";
+  const angle = Math.atan2(dy, dx);
+  const sector = ((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8;
+  return [
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west",
+    "north",
+    "north-east",
+  ][sector] ?? "here";
 }
 
 function pickupObjective(contract: ContractState, world: WorldView, player: PlayerState) {

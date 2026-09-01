@@ -21,6 +21,7 @@ import type {
 export const LOOSE_CARGO_MOBILE_HIT_DIAMETER_PX = 44;
 export const LOOSE_CARGO_MOBILE_HIT_RADIUS_PX = LOOSE_CARGO_MOBILE_HIT_DIAMETER_PX / 2;
 export const LOOSE_CARGO_FINE_HIT_RADIUS_PX = 11;
+export const LOOSE_CARGO_RENDER_RADIUS_TILES = 32;
 
 const CONDITION_MAX = 1_000_000;
 const MAX_VIEW_ID_LENGTH = 240;
@@ -39,6 +40,10 @@ export interface LooseCargoProjectionOptions {
   /** Renderer world units represented by one fixed-point parcel tile. */
   readonly worldUnitsPerTile: number;
   readonly viewerOwner: LooseCargoOwner;
+  /** Optional player-centered visual interest radius. Simulation/save state is never culled. */
+  readonly renderDistance?: number;
+  /** Active Promise parcels remain projected beyond ordinary visual culling for recovery. */
+  readonly focusedPromiseContractId?: number | null;
   readonly player?: {
     readonly region: { readonly x: number; readonly y: number };
     readonly position: WorldPoint;
@@ -125,6 +130,15 @@ export function projectLooseCargoWorld(
       y: entity.velocityY * scale,
     };
     if (!finitePoint(position) || !finitePoint(velocity)) return [];
+    const isFocusedPromise = entity.payload.kind === "promise"
+      && entity.payload.contractId === options.focusedPromiseContractId;
+    if (
+      player
+      && options.renderDistance !== undefined
+      && sameRegion(state.region, player.region)
+      && squaredDistance(position, player.position) > options.renderDistance ** 2
+      && !isFocusedPromise
+    ) continue;
     const recoverable = entity.owner.kind === "unclaimed"
       || sameOwner(entity.owner, options.viewerOwner);
     const reachable = Boolean(
@@ -548,6 +562,12 @@ function validProjectionOptions(options: LooseCargoProjectionOptions): boolean {
   return finitePoint(options.worldOrigin)
     && Number.isFinite(options.worldUnitsPerTile)
     && options.worldUnitsPerTile > 0
+    && (options.renderDistance === undefined
+      || (Number.isFinite(options.renderDistance) && options.renderDistance > 0))
+    && (options.focusedPromiseContractId === undefined
+      || options.focusedPromiseContractId === null
+      || (Number.isSafeInteger(options.focusedPromiseContractId)
+        && options.focusedPromiseContractId > 0))
     && validOwner(options.viewerOwner)
     && (options.player === undefined || (
       validRegion(options.player.region)

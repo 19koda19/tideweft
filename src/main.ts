@@ -8,6 +8,7 @@ import {
 import { LATEST_PATCH_NOTE } from "./content/patchNotes";
 import { createTideweftRuntime } from "./game/runtime";
 import { createTideweftRenderer } from "./render/renderer";
+import type { RendererCommand } from "./render/types";
 import {
   resolveInitialViewMode,
   saveViewMode,
@@ -15,6 +16,8 @@ import {
   type ViewMode,
 } from "./render/viewMode";
 import { createTideweftUI } from "./ui";
+import { createBraceSourceController } from "./ui/braceSources";
+import { bindDesktopBraceHold } from "./ui/desktopBrace";
 
 async function boot(): Promise<void> {
   const canvasMount = document.querySelector<HTMLElement>("#p5-mount");
@@ -46,10 +49,20 @@ async function boot(): Promise<void> {
     if (next) next.textContent = state.nextAction;
   };
 
+  const braceSources = createBraceSourceController((active) => {
+    runtime.dispatchRenderer({ type: "brace", active });
+  });
+  const dispatchRenderer = (command: RendererCommand): void => {
+    if (command.type === "brace") {
+      braceSources.set("renderer", command.active);
+      return;
+    }
+    runtime.dispatchRenderer(command);
+  };
   const renderer = createTideweftRenderer({
     mount: canvasMount,
     getView: runtime.getRenderView,
-    dispatch: runtime.dispatchRenderer,
+    dispatch: dispatchRenderer,
     onModeChange: syncViewToggle,
     onReliefUnavailable: (reason) => {
       console.warn(`Relief view unavailable: ${reason}`);
@@ -79,10 +92,21 @@ async function boot(): Promise<void> {
   };
   viewToggle?.addEventListener("click", onViewToggle);
   window.addEventListener("keydown", onViewShortcut);
+  const desktopBrace = bindDesktopBraceHold({
+    windowTarget: window,
+    documentTarget: document,
+    onBraceChange: (active) => braceSources.set("desktop-global", active),
+    canActivate: () => {
+      const view = runtime.getUIView();
+      return !view.title.visible
+        && view.quietHour?.visible !== true
+        && document.querySelector("dialog[open]") === null;
+    },
+  });
   const ui = createTideweftUI({
     root: uiRoot,
     getView: runtime.getUIView,
-    setBrace: (active) => runtime.dispatchRenderer({ type: "brace", active }),
+    setBrace: (active) => braceSources.set("touch", active),
     dispatch: (command) => {
       runtime.dispatchUI(command);
       const returnsToPlay = command.type === "resume-world"
@@ -106,7 +130,9 @@ async function boot(): Promise<void> {
     // Tear them down before closing audio so that release cannot reopen an
     // AudioContext during pagehide.
     renderer.destroy();
+    desktopBrace.destroy();
     ui.destroy();
+    braceSources.destroy();
     runtime.destroy();
     viewToggle?.removeEventListener("click", onViewToggle);
     window.removeEventListener("keydown", onViewShortcut);

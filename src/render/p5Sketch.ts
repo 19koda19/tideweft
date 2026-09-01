@@ -2481,6 +2481,23 @@ export function createTideweftRenderer(
       }
 
       drawPlayerSilhouette(presentation, player, radius);
+      if (player.bracing === true && player.mode !== "swept") {
+        // A held brace is a planted physical pose, not merely a recolor. The
+        // four feet remain legible against every biome and at low contrast.
+        p.noFill();
+        p.stroke(withAlpha(PALETTE.amber, 248));
+        p.strokeWeight(1.45 / camera.zoom);
+        const inner = radius * 1.55;
+        const outer = radius * 2.1;
+        for (const angle of [0, p.HALF_PI, p.PI, p.PI + p.HALF_PI]) {
+          p.line(
+            Math.cos(angle) * inner,
+            Math.sin(angle) * inner,
+            Math.cos(angle) * outer,
+            Math.sin(angle) * outer,
+          );
+        }
+      }
       if (player.mode === "wading") {
         p.noFill();
         p.stroke(withAlpha(PALETTE.sky, 238));

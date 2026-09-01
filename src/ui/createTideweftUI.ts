@@ -61,6 +61,7 @@ export interface MobileHudCopyInput {
   readonly stamina: number;
   readonly stability: number;
   readonly stabilityHint: string;
+  readonly bracing?: boolean;
   readonly isWater: boolean;
   readonly terrain: string;
   readonly depth: string;
@@ -127,7 +128,7 @@ export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
   const sweepRule = "DEEP: STAM/STAB 0 → SWEPT";
   const safety = input.swept
     ? `SWEPT · ${input.fieldHint} · STAM ${stamina}% · STAB ${stability}%`
-    : `${stabilityCause} · ${sweepRule}`;
+    : `${input.bracing ? "BRACING · " : ""}${stabilityCause} · ${sweepRule}`;
   const terrain = `${input.isWater ? "WATER" : "GROUND"} · ${input.terrain} · ${input.depth} · ${input.effort}`;
   const actions = [
     input.interactLabel?.trim() || "Interact",
@@ -1822,8 +1823,11 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     );
     setProgress(refs.stamina, view.player.stamina);
     setProgress(refs.stability, view.player.stability);
-    refs.stabilityDetail.textContent = view.player.stabilityHint;
+    refs.stabilityDetail.textContent = view.player.bracing
+      ? `BRACING · ${view.player.stabilityHint}`
+      : view.player.stabilityHint;
     refs.stabilityDetail.dataset.trend = view.player.stabilityTrend;
+    refs.stabilityDetail.dataset.bracing = view.player.bracing ? "true" : "false";
     setProgress(refs.scanCharge, view.player.scanCharge);
     const cargoRatio = view.player.cargoLoad / Math.max(1, view.player.cargoCapacity);
     setProgress(refs.cargo, cargoRatio, `${view.player.cargoLoad} of ${view.player.cargoCapacity}`);
@@ -1923,6 +1927,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       stamina: view.player.stamina,
       stability: view.player.stability,
       stabilityHint: view.player.stabilityHint,
+      bracing: view.player.bracing === true,
       isWater: view.field.isWater,
       terrain: view.field.terrainLabel,
       depth: view.field.depthLabel,
@@ -1958,6 +1963,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     );
     refs.mobileCargoValue.textContent = `${view.player.cargoLoad}/${view.player.cargoCapacity}`;
     refs.mobileFieldStrip.dataset.swept = view.field.swept ? "true" : "false";
+    refs.mobileFieldStrip.dataset.bracing = view.player.bracing ? "true" : "false";
     refs.mobileFieldStrip.dataset.stabilityTrend = view.player.stabilityTrend;
     refs.quietButton.disabled = view.controls?.canEndSession === false;
     if (!titleFormDirty && view.title.suggestedSeed && document.activeElement !== refs.seedInput) {

@@ -6,7 +6,10 @@ import type {
   TidePhase,
   WeatherKind as RenderWeatherKind,
 } from "../render/types";
-import { projectLooseCargoWorld } from "../render/looseCargoPresentation";
+import {
+  LOOSE_CARGO_RENDER_RADIUS_TILES,
+  projectLooseCargoWorld,
+} from "../render/looseCargoPresentation";
 import {
   applyWeatherToBiomeClimate,
   classifyBiome,
@@ -93,6 +96,8 @@ export interface ProjectionOptions {
   traversalFeedback?: TraversalFeedbackState;
   /** Validated loaded-region parcels. Production always supplies this sidecar. */
   looseCargoWorld?: LooseCargoWorldState;
+  /** Authoritative momentary hold state, independent from derived pace. */
+  bracing?: boolean;
 }
 
 export function projectGameView(
@@ -107,6 +112,8 @@ export function projectGameView(
     ? projectLooseCargoWorld(options.looseCargoWorld, {
         worldOrigin: { x: 0, y: 0 },
         worldUnitsPerTile: tileSize,
+        renderDistance: tileSize * LOOSE_CARGO_RENDER_RADIUS_TILES,
+        focusedPromiseContractId: player.activeContractId,
         viewerOwner: { kind: "player", id: "local-porter" },
         player: {
           region: { x: 0, y: 0 },
@@ -320,6 +327,7 @@ export function projectGameView(
           : []),
       ],
       pace: player.pace,
+      bracing: options.bracing === true,
       mode: player.mode,
       active: !options.paused,
       ...(options.traversalFeedback

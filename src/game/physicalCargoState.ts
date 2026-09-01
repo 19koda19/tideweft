@@ -22,6 +22,7 @@ import { projectLooseCargoCarrierToPlayer } from "./looseCargoRuntime";
 export const PHYSICAL_CARGO_STATE_VERSION = 1 as const;
 export const LOCAL_PORTER_ID = "local-porter" as const;
 const MAX_SOURCE_LABEL_LENGTH = 96;
+const TRUSTED_PHYSICAL_CARGO_STATES = new WeakSet<object>();
 
 export interface PhysicalCargoState {
   readonly version: typeof PHYSICAL_CARGO_STATE_VERSION;
@@ -536,14 +537,7 @@ export function validatePhysicalCargoState(
   return {
     valid: true,
     reason: "valid",
-    state: {
-      version: PHYSICAL_CARGO_STATE_VERSION,
-      lastSourceOrdinal: internal.lastSourceOrdinal,
-      looseWorld,
-      carrier,
-      expectedManifest,
-      integrity: internal.integrity,
-    },
+    state: internal,
   };
 }
 
@@ -556,7 +550,7 @@ export function gameSaveEnvelopeIntegrity(value: Readonly<Record<string, unknown
 function sealPhysicalCargoState(
   value: Omit<PhysicalCargoState, "integrity">,
 ): PhysicalCargoState {
-  return { ...value, integrity: physicalCargoIntegrity(value) };
+  return trustPhysicalCargoState({ ...value, integrity: physicalCargoIntegrity(value) });
 }
 
 function physicalCargoIntegrity(value: unknown): string {
@@ -569,6 +563,9 @@ function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | nu
     || !Number.isSafeInteger(value.lastSourceOrdinal)
     || (value.lastSourceOrdinal as number) < 0
     || typeof value.integrity !== "string") return null;
+  if (TRUSTED_PHYSICAL_CARGO_STATES.has(value)) {
+    return value as unknown as PhysicalCargoState;
+  }
   const unsealed = unsealPhysicalCargo(value);
   if (value.integrity !== physicalCargoIntegrity(unsealed)) return null;
   const worldValidation = validateLooseCargoWorld(value.looseWorld);
@@ -581,14 +578,26 @@ function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | nu
     carrierValidation.carrier,
   );
   if (!manifest.valid || !manifest.actual) return null;
-  return {
+  return trustPhysicalCargoState({
     version: PHYSICAL_CARGO_STATE_VERSION,
     lastSourceOrdinal: value.lastSourceOrdinal as number,
     looseWorld: worldValidation.state,
     carrier: carrierValidation.carrier,
     expectedManifest: manifest.actual,
     integrity: value.integrity,
-  };
+  });
+}
+
+function trustPhysicalCargoState(state: PhysicalCargoState): PhysicalCargoState {
+  deepFreezePhysicalCargo(state);
+  TRUSTED_PHYSICAL_CARGO_STATES.add(state as object);
+  return state;
+}
+
+function deepFreezePhysicalCargo(value: unknown): void {
+  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return;
+  for (const child of Object.values(value)) deepFreezePhysicalCargo(child);
+  Object.freeze(value);
 }
 
 function unsealPhysicalCargo(value: Record<string, unknown>): Record<string, unknown> {

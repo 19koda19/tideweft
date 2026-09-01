@@ -15,9 +15,15 @@ import {
   type PhysicalCargoState,
 } from "./physicalCargoState";
 import {
+  LOOSE_CARGO_MAX_ENTITIES,
+  LOOSE_CARGO_MAX_HISTORY,
+  LOOSE_CARGO_RETAINED_HISTORY,
   addLooseCargoStack,
   dropLooseCargo,
+  looseCargoEntityId,
+  looseCargoEventId,
   pickupLooseCargo,
+  scatterLooseCargo,
   setLooseCargoLotMaterialState,
   stepLooseCargo,
 } from "./looseCargo";
@@ -87,6 +93,72 @@ describe("physical cargo save state", () => {
       world.terrain.width,
       world.terrain.height,
     )).toMatchObject({ valid: true, reason: "valid" });
+  });
+
+  it("deep-freezes every sidecar admitted to the trusted commit fast path", () => {
+    const { world, player } = fixture();
+    const state = createPhysicalCargoStateFromPlayer(
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    expect(Object.isFrozen(state)).toBe(true);
+    expect(Object.isFrozen(state.carrier)).toBe(true);
+    expect(Object.isFrozen(state.carrier.lots)).toBe(true);
+    expect(Object.isFrozen(state.expectedManifest)).toBe(true);
+    expect(() => {
+      (state.carrier.lots as unknown[]).push({});
+    }).toThrow(TypeError);
+    expect(() => commitPhysicalCargoState(state, {
+      looseWorld: state.looseWorld,
+      carrier: state.carrier,
+    }, { kind: "conserved" })).not.toThrow();
+  });
+
+  it("adopts a legacy maximum history tail and archives it on the next step", () => {
+    const { world, player } = fixture();
+    const initial = createPhysicalCargoStateFromPlayer(
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    const legacyHistory = Array.from({ length: LOOSE_CARGO_MAX_HISTORY }, (_, index) => {
+      const ordinal = index + 1;
+      return {
+        id: looseCargoEventId({ x: 0, y: 0 }, ordinal),
+        ordinal,
+        step: ordinal,
+        kind: "environment" as const,
+        entityIds: [looseCargoEntityId({ x: 0, y: 0 }, 1)],
+        payloadKey: "legacy-physical-evidence",
+        quantity: 1,
+        from: null,
+        to: null,
+        causes: ["parcel-settled" as const],
+        conditionLoss: 0,
+        contaminationGain: 0,
+        decayGain: 0,
+      };
+    });
+    const legacy = resealPhysicalCargoState(initial, {
+      looseWorld: {
+        ...initial.looseWorld,
+        lastEventOrdinal: legacyHistory.length,
+        history: legacyHistory,
+      },
+    });
+    const advanced = stepLooseCargo(legacy.looseWorld, []);
+    if (!advanced.ok) throw new Error(`legacy-tail step failed: ${advanced.reason}`);
+    const compacted = commitPhysicalCargoState(legacy, {
+      looseWorld: advanced.state,
+      carrier: legacy.carrier,
+    }, { kind: "conserved" });
+
+    expect(compacted.looseWorld.history).toHaveLength(LOOSE_CARGO_RETAINED_HISTORY);
+    expect(compacted.looseWorld.historyBaseOrdinal)
+      .toBe(LOOSE_CARGO_MAX_HISTORY - LOOSE_CARGO_RETAINED_HISTORY);
+    expect(compacted.looseWorld.historyArchiveHash).not.toBe("0000000000000000");
+    expect(compacted.looseWorld.lastEventOrdinal).toBe(LOOSE_CARGO_MAX_HISTORY);
   });
 
   it("rejects integrity, manifest, deletion, owner, and legacy-mirror tampering", () => {
@@ -574,4 +646,83 @@ describe("physical cargo save state", () => {
       expect.objectContaining({ lotId: "gear:7", canDrop: true }),
     ]));
   });
+
+  it("keeps the sealed production path responsive at the 64-parcel cap", () => {
+    const { world, player } = fixture();
+    player.cargoCapacity = LOOSE_CARGO_MAX_ENTITIES;
+    player.craftingInventory = createCraftingInventory(
+      LOOSE_CARGO_MAX_ENTITIES * PACK_LOAD_MILLI_PER_UNIT,
+      { cordreed: LOOSE_CARGO_MAX_ENTITIES },
+    );
+    player.cargo = [];
+    player.report = null;
+    let physical = createPhysicalCargoStateFromPlayer(
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    for (let batch = 0; batch < 4; batch += 1) {
+      const scattered = scatterLooseCargo(physical.looseWorld, physical.carrier, {
+        lotId: "crafting-stack:cordreed",
+        x: 1_000_000,
+        y: 1_000_000 + batch,
+        cause: "forced-release",
+        parts: Array.from({ length: 16 }, () => ({
+          quantity: 1,
+          velocityX: 0,
+          velocityY: 0,
+        })),
+      });
+      if (!scattered.ok) throw new Error(`sealed stress scatter failed: ${scattered.reason}`);
+      physical = commitPhysicalCargoState(physical, {
+        looseWorld: scattered.world,
+        carrier: scattered.carrier,
+      }, { kind: "conserved" });
+    }
+    const samples = physical.looseWorld.entities.map((entity) => ({
+      entityId: entity.id,
+      environment: {
+        rain: 300_000,
+        heat: 0,
+        cold: 0,
+        immersion: 800_000,
+        currentX: 500_000,
+        currentY: 0,
+        magicalWaterFlux: 100_000,
+        impact: 0,
+      },
+      waterDepth: 800_000,
+      downhillX: 0,
+      downhillY: 0,
+      tumbleImpact: 0,
+      mangroveSnag: 0,
+      brambleSnag: 0,
+    }));
+
+    const started = performance.now();
+    for (let step = 0; step < 160; step += 1) {
+      const advanced = stepLooseCargo(physical.looseWorld, samples);
+      if (!advanced.ok) throw new Error(`sealed stress step ${step} failed: ${advanced.reason}`);
+      physical = commitPhysicalCargoState(physical, {
+        looseWorld: advanced.state,
+        carrier: physical.carrier,
+      }, { kind: "conserved" });
+    }
+    const elapsed = performance.now() - started;
+    // Mirror the now-empty physical pack as production does before validating
+    // a save envelope; every parcel itself remains present and recoverable.
+    player.craftingInventory = createCraftingInventory(
+      LOOSE_CARGO_MAX_ENTITIES * PACK_LOAD_MILLI_PER_UNIT,
+    );
+    expect(physical.looseWorld.entities).toHaveLength(LOOSE_CARGO_MAX_ENTITIES);
+    expect(physical.looseWorld.history).toHaveLength(LOOSE_CARGO_RETAINED_HISTORY);
+    expect(physical.looseWorld.historyBaseOrdinal).toBeGreaterThan(0);
+    expect(validatePhysicalCargoState(
+      physical,
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    ).valid).toBe(true);
+    expect(elapsed).toBeLessThan(5_000);
+  }, 10_000);
 });

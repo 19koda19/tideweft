@@ -149,6 +149,8 @@ export interface PlayerUIView {
   /** Lowest carried cargo condition, or absent when the pack has no physical cargo. */
   readonly cargoCondition?: number;
   readonly pace: PaceView;
+  /** Live hold state shared by desktop Shift and the touch BRACE control. */
+  readonly bracing?: boolean;
   readonly locationLabel?: string;
 }
 

@@ -4,6 +4,46 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.2-alpha.1 — 2026-09-01
+
+Build: `0.3.2-alpha.1` · Gameplay contract: 8 · Tutorial: 9
+
+Brace now answers wherever active play has focus, while a bounded cargo-evidence and rendering path keeps recoverable river parcels from dragging the field to a crawl.
+
+### Gameplay
+
+- Desktop Shift and mobile BRACE still use one authoritative rule: held bracing trades speed for stability recovery and fragile-cargo protection without guaranteeing safety on unsupported terrain.
+- Ordinary far-away parcel bodies now leave a 32-tile player-centered render interest radius, but physical parcels are never despawned, deleted, or rerolled; an active Promise stays recovery-focused and its objective names direction, distance, and motion.
+
+### Fixes
+
+- Desktop Shift now reaches the brace rule after the document body or a HUD control receives focus; text editors and open dialogs retain keyboard ownership.
+- Both Shift keys share one hold safely, and blur, hidden-page, teardown, and final-key release paths clear bracing instead of leaving a stuck safety state.
+- Canvas Shift, document-level Shift, and touch BRACE now retain independent hold ownership, so releasing one input on a hybrid device cannot cancel another that is still held.
+- Physical-cargo commits no longer revalidate a freshly sealed immutable prior sidecar or repeatedly hash a multi-thousand-record detailed event tail on every 100 ms movement beat.
+- A production-path regression now advances the full 64-parcel cap through sealed simulation while proving exact identities, archive evidence, save validation, and a bounded completion budget.
+
+### Balancing
+
+- No hazard probability, cargo damage, stamina cost, reward, or difficulty value changed; A CHALLENGING HARD remains the only ruleset.
+- The recent physical-cargo evidence tail retains 256 exact records while older records fold into the existing irreversible archive hash; this changes storage work, not simulation outcomes or recovery rights.
+
+### Interface
+
+- Holding Shift or touch BRACE immediately adds BRACING to the safety readout and draws a structural amber planted-foot mark around the courier in both Chart 2D and Relief 3D.
+- The version-9 T/? field manual explains global desktop brace focus, the visible held-state confirmation, bounded ordinary-parcel rendering, and active-Promise recovery guidance.
+
+### Save changes
+
+- Save format remains version 3. Existing sealed physical-cargo saves remain valid; their larger legacy history tail compacts safely into hash-chained archive evidence on a later authoritative parcel step.
+- Distant render culling never mutates the physical-cargo sidecar, expected manifest, quantities, material condition, custody, source tombstones, or stable parcel identities.
+
+### Known limitations
+
+- The playable world remains compatibility region (0,0); true cross-region parcel transfer, unloaded low-fidelity simulation, negative-coordinate travel, and floating origin are not live.
+- Parcels outside the render interest radius continue authoritative loaded-region simulation rather than a completed distant-simulation summary; bounded regional streaming is still in progress.
+- Procedural ladder-gated rocks and ravines, survival meters, wildlife, human actors and speech, living mangrove or bramble catches, and regional weather fronts are not live in this hotfix.
+
 ## 0.3.2-alpha.0 — 2026-09-01
 
 Build: `0.3.2-alpha.0` · Gameplay contract: 7 · Tutorial: 8

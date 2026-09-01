@@ -691,6 +691,11 @@ button:disabled {
   color: var(--good);
 }
 
+.vital__detail[data-bracing="true"] {
+  color: var(--gold);
+  text-shadow: 0 0 0.65rem color-mix(in srgb, var(--gold) 48%, transparent);
+}
+
 .vital__value {
   color: var(--foam);
   font-variant-numeric: tabular-nums;
@@ -2717,6 +2722,11 @@ button:focus-visible .keycap {
 
   .mobile-field-strip[data-stability-trend="falling"] .mobile-field-strip__safety {
     color: var(--gold);
+  }
+
+  .mobile-field-strip[data-bracing="true"] .mobile-field-strip__safety {
+    color: var(--gold);
+    text-shadow: 0 0 0.65rem color-mix(in srgb, var(--gold) 45%, transparent);
   }
 
   .mobile-field-strip[data-swept="true"] {

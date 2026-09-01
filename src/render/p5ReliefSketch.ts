@@ -2516,6 +2516,19 @@ export function createTideweftReliefRenderer(
         225,
         unit(player.stamina),
       );
+      if (player.bracing === true && player.mode !== "swept") {
+        // Full amber footing ring confirms Shift/BRACE independently of the
+        // stamina arc and balance-state body color.
+        drawGroundRing(
+          view,
+          cache,
+          player.position,
+          size * 0.54,
+          RELIEF_PALETTE.amber,
+          248,
+          1,
+        );
+      }
       const facing = {
         x: player.position.x + Math.cos(player.facing) * size * 0.7,
         y: player.position.y + Math.sin(player.facing) * size * 0.7,

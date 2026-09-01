@@ -15,6 +15,7 @@ import {
 import {
   EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE,
   LOOSE_CARGO_MOBILE_HIT_DIAMETER_PX,
+  LOOSE_CARGO_RENDER_RADIUS_TILES,
   beginLooseCargoPointerPress,
   beginLooseCargoTouch,
   cancelLooseCargoPointerPress,
@@ -309,6 +310,111 @@ describe("loose cargo production projection", () => {
     expect(parcels).toHaveLength(LOOSE_CARGO_MAX_ENTITIES);
     expect(safeLooseCargoViews(parcels)).toHaveLength(LOOSE_CARGO_MAX_ENTITIES);
     expect(safeLooseCargoViews([...parcels, view("overflow", 0)])).toEqual([]);
+  });
+
+  it("culls only distant presentation while preserving exact persistent parcels", () => {
+    let world = createLooseCargoWorld(64, 8);
+    let carrier = createLooseCargoCarrier(
+      PLAYER,
+      createCraftingInventory(100_000, { cordreed: 2 }),
+    );
+    for (const tileX of [1, 50]) {
+      const result = dropLooseCargo(world, carrier, {
+        lotId: "crafting-stack:cordreed",
+        quantity: 1,
+        x: tileX * LOOSE_CARGO_TILE_UNITS,
+        y: LOOSE_CARGO_TILE_UNITS,
+      });
+      expect(result.ok).toBe(true);
+      world = result.world;
+      carrier = result.carrier;
+    }
+    const persistentIds = world.entities.map(({ id }) => id);
+    const near = projectLooseCargoWorld(world, {
+      worldOrigin: { x: 0, y: 0 },
+      worldUnitsPerTile: 24,
+      renderDistance: 24 * LOOSE_CARGO_RENDER_RADIUS_TILES,
+      viewerOwner: PLAYER,
+      player: {
+        region: { x: 0, y: 0 },
+        position: { x: 24, y: 24 },
+        recoveryReach: 48,
+      },
+    });
+    expect(near.map(({ id }) => id)).toEqual([persistentIds[0]]);
+    expect(world.entities.map(({ id }) => id)).toEqual(persistentIds);
+
+    const downstream = projectLooseCargoWorld(
+      deserializeLooseCargoWorld(serializeLooseCargoWorld(world)),
+      {
+        worldOrigin: { x: 0, y: 0 },
+        worldUnitsPerTile: 24,
+        renderDistance: 24 * LOOSE_CARGO_RENDER_RADIUS_TILES,
+        viewerOwner: PLAYER,
+        player: {
+          region: { x: 0, y: 0 },
+          position: { x: 50 * 24, y: 24 },
+          recoveryReach: 48,
+        },
+      },
+    );
+    expect(downstream.map(({ id }) => id)).toEqual([persistentIds[1]]);
+  });
+
+  it("keeps only the matching active Promise projected beyond ordinary culling", () => {
+    const contractId = 47;
+    const carrier = createLooseCargoCarrier(
+      PLAYER,
+      createCraftingInventory(100_000),
+      [{
+        contractId,
+        resource: "medicine",
+        quantity: 2,
+        property: "fragile",
+        condition: 810_000,
+      }],
+    );
+    const dropped = dropLooseCargo(createLooseCargoWorld(64, 8), carrier, {
+      lotId: `promise:${contractId}`,
+      x: 50 * LOOSE_CARGO_TILE_UNITS,
+      y: LOOSE_CARGO_TILE_UNITS,
+    });
+    expect(dropped.ok).toBe(true);
+    const parcelId = dropped.entity?.id;
+    expect(parcelId).toBeTruthy();
+    const options = {
+      worldOrigin: { x: 0, y: 0 },
+      worldUnitsPerTile: 24,
+      renderDistance: 24 * LOOSE_CARGO_RENDER_RADIUS_TILES,
+      viewerOwner: PLAYER,
+      player: {
+        region: { x: 0, y: 0 },
+        position: { x: 24, y: 24 },
+        recoveryReach: 48,
+      },
+    } as const;
+
+    expect(projectLooseCargoWorld(dropped.world, options)).toEqual([]);
+    expect(projectLooseCargoWorld(dropped.world, {
+      ...options,
+      focusedPromiseContractId: null,
+    })).toEqual([]);
+    expect(projectLooseCargoWorld(dropped.world, {
+      ...options,
+      focusedPromiseContractId: contractId + 1,
+    })).toEqual([]);
+    expect(projectLooseCargoWorld(dropped.world, {
+      ...options,
+      focusedPromiseContractId: contractId,
+    }).map(({ id }) => id)).toEqual([parcelId]);
+    expect(dropped.world.entities.map(({ id }) => id)).toEqual([parcelId]);
+
+    for (const malformed of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(projectLooseCargoWorld(dropped.world, {
+        ...options,
+        focusedPromiseContractId: malformed,
+      })).toEqual([]);
+    }
   });
 
   it("projects two fall fragments as two exact IDs without quantity loss", () => {

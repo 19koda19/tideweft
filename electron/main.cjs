@@ -14,8 +14,8 @@ const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
 const SMOKE_WORLD_TILE_COUNT = 96 * 72;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.2-alpha.0';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 7;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.2-alpha.1';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 8;
 const SMOKE_TIDE_HARP = Object.freeze({
   id: 'tide-harp:r1-a3-w5',
   label: 'Glass-Ebb Tide Harp · R1 · A3 · W5',
@@ -533,6 +533,7 @@ function rendererProbeScript() {
     const interactButton = document.querySelector('.action-button--interact');
     const wayknotButton = document.querySelector('.action-button--wayknot');
     const braceButton = document.querySelector('.brace-button');
+    const stabilityDetail = document.querySelector('.vital__detail[data-bracing]');
     const wayknotCount = document.querySelector('.field-readout__wayknot-count');
     const wayknotActive = document.querySelector('.field-readout__wayknot-active');
     const scanButton = document.querySelector('.action-button--scan');
@@ -720,6 +721,13 @@ function rendererProbeScript() {
       contractCount: uiView && Array.isArray(uiView.contracts) ? uiView.contracts.length : null,
       activeContractCount: activeContracts.length,
       playerCargoLoad: renderView && renderView.player ? renderView.player.cargoLoad : null,
+      playerBracing: renderView?.player?.bracing === true,
+      stabilityBraceFeedback: stabilityDetail
+        ? {
+            text: stabilityDetail.textContent?.trim() || null,
+            active: stabilityDetail.getAttribute('data-bracing'),
+          }
+        : null,
       playerDestinationLabel: renderView && renderView.player
         ? renderView.player.destinationLabel || null
         : null,
@@ -2373,6 +2381,297 @@ async function rotateSmokeReliefWithKey(contents) {
   );
 }
 
+async function verifySmokeDesktopGlobalBrace(contents) {
+  const pressed = await contents.executeJavaScript(`(() => {
+    const hudControl = document.querySelector('#view-mode-toggle');
+    if (!(hudControl instanceof HTMLButtonElement) || hudControl.disabled) return false;
+    hudControl.focus();
+    return hudControl.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Shift',
+      code: 'ShiftLeft',
+      bubbles: true,
+      cancelable: true,
+    })) === false;
+  })()`, true);
+  if (!pressed) throw new Error('desktop Shift was not consumed from HUD focus');
+  const held = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.playerBracing === true &&
+      probe.stabilityBraceFeedback?.active === 'true' &&
+      probe.stabilityBraceFeedback?.text?.startsWith('BRACING'),
+    SMOKE_TEST.timeoutMs,
+  );
+  const released = await contents.executeJavaScript(`(() => {
+    const hudControl = document.querySelector('#view-mode-toggle');
+    if (!(hudControl instanceof HTMLButtonElement)) return false;
+    return hudControl.dispatchEvent(new KeyboardEvent('keyup', {
+      key: 'Shift',
+      code: 'ShiftLeft',
+      bubbles: true,
+      cancelable: true,
+    })) === false;
+  })()`, true);
+  if (!released) throw new Error('desktop Shift release was not consumed from HUD focus');
+  const clear = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.playerBracing === false &&
+      probe.stabilityBraceFeedback?.active === 'false' &&
+      !probe.stabilityBraceFeedback?.text?.startsWith('BRACING'),
+    SMOKE_TEST.timeoutMs,
+  );
+  return { held, clear };
+}
+
+function probeHasSmokeBraceState(probe, active, touchHeld) {
+  const brace = probe?.mobileHud?.actionDock?.brace;
+  const feedback = probe?.stabilityBraceFeedback;
+  return Boolean(
+    probe?.playerBracing === active &&
+    feedback?.active === String(active) &&
+    (active
+      ? feedback?.text?.startsWith('BRACING')
+      : !feedback?.text?.startsWith('BRACING')) &&
+    brace?.ariaPressed === String(touchHeld) &&
+    brace?.text === (touchHeld ? 'BRACING' : 'BRACE')
+  );
+}
+
+function smokeBraceEvidence(probe) {
+  return {
+    tick: probe?.tick ?? null,
+    playerBracing: probe?.playerBracing ?? null,
+    feedback: probe?.stabilityBraceFeedback ?? null,
+    touchControl: probe?.mobileHud?.actionDock?.brace ?? null,
+  };
+}
+
+async function dispatchSmokeBracePointer(contents, type, pointerId) {
+  return contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.brace-button');
+    if (!(button instanceof HTMLButtonElement) || button.disabled ||
+        typeof PointerEvent !== 'function') return null;
+    const target = ${JSON.stringify(type)} === 'pointerdown' ? button : window;
+    const event = new PointerEvent(${JSON.stringify(type)}, {
+      pointerId: ${pointerId},
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      buttons: ${type === 'pointerdown' ? 1 : 0},
+      bubbles: true,
+      cancelable: true,
+    });
+    return {
+      consumed: target.dispatchEvent(event) === false,
+      buttonVisible: (() => {
+        const style = getComputedStyle(button);
+        const rect = button.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' &&
+          Number.parseFloat(style.opacity || '1') > 0 && rect.width > 0 && rect.height > 0;
+      })(),
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      type: event.type,
+    };
+  })()`, true);
+}
+
+async function dispatchSmokeHudShift(contents, type, targetKind = 'hud') {
+  return contents.executeJavaScript(`(() => {
+    const hudControl = document.querySelector('#view-mode-toggle');
+    const activeCanvas = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'))
+      .find((canvas) => !canvas.hidden && getComputedStyle(canvas).display !== 'none');
+    const target = ${JSON.stringify(targetKind)} === 'canvas' ? activeCanvas : hudControl;
+    if (!(target instanceof HTMLElement)) return null;
+    target.focus({ preventScroll: true });
+    const event = new KeyboardEvent(${JSON.stringify(type)}, {
+      key: 'Shift',
+      code: 'ShiftLeft',
+      bubbles: true,
+      cancelable: true,
+    });
+    return {
+      consumed: target.dispatchEvent(event) === false,
+      focused: document.activeElement === target,
+      target: target instanceof HTMLCanvasElement ? target.dataset.renderer || 'canvas' : 'hud',
+      type: event.type,
+    };
+  })()`, true);
+}
+
+/**
+ * Exercises aggregate BRACE ownership through the real mobile button and
+ * global/canvas keyboard listeners. A source releasing must never clear a
+ * still-held source on hybrid touch laptops.
+ */
+async function verifySmokeHybridBrace(contents) {
+  const ready = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasSmokeBraceState(probe, false, false) &&
+      probe.mobileHud?.actionDock?.brace?.visible === true &&
+      probe.mobileHud.actionDock.brace.insideViewport === true,
+    SMOKE_TEST.timeoutMs,
+  );
+
+  const touchFirstDown = await dispatchSmokeBracePointer(contents, 'pointerdown', 701);
+  if (!touchFirstDown?.consumed || touchFirstDown.buttonVisible !== true) {
+    throw new Error(`mobile BRACE pointerdown was not consumed while visible: ${JSON.stringify(touchFirstDown)}`);
+  }
+  const touchFirstHeld = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, true),
+    SMOKE_TEST.timeoutMs,
+  );
+  const touchFirstShiftDown = await dispatchSmokeHudShift(contents, 'keydown');
+  if (!touchFirstShiftDown?.consumed || touchFirstShiftDown.focused !== true) {
+    throw new Error(`hybrid Shift keydown was not consumed from HUD focus: ${JSON.stringify(touchFirstShiftDown)}`);
+  }
+  const touchFirstBothHeld = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, true),
+    SMOKE_TEST.timeoutMs,
+  );
+  const touchFirstShiftUp = await dispatchSmokeHudShift(contents, 'keyup');
+  if (!touchFirstShiftUp?.consumed) {
+    throw new Error(`hybrid Shift release was not consumed from HUD focus: ${JSON.stringify(touchFirstShiftUp)}`);
+  }
+  const touchSurvivedShiftRelease = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, true),
+    SMOKE_TEST.timeoutMs,
+  );
+  const touchFirstUp = await dispatchSmokeBracePointer(contents, 'pointerup', 701);
+  if (!touchFirstUp?.consumed) {
+    throw new Error(`mobile BRACE pointerup was not consumed: ${JSON.stringify(touchFirstUp)}`);
+  }
+  const touchFirstClear = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, false, false),
+    SMOKE_TEST.timeoutMs,
+  );
+
+  const shiftFirstDown = await dispatchSmokeHudShift(contents, 'keydown');
+  if (!shiftFirstDown?.consumed || shiftFirstDown.focused !== true) {
+    throw new Error(`inverse hybrid Shift keydown was not consumed from HUD focus: ${JSON.stringify(shiftFirstDown)}`);
+  }
+  const shiftFirstHeld = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, false),
+    SMOKE_TEST.timeoutMs,
+  );
+  const shiftFirstTouchDown = await dispatchSmokeBracePointer(contents, 'pointerdown', 702);
+  if (!shiftFirstTouchDown?.consumed || shiftFirstTouchDown.buttonVisible !== true) {
+    throw new Error(`inverse mobile BRACE pointerdown failed: ${JSON.stringify(shiftFirstTouchDown)}`);
+  }
+  const shiftFirstBothHeld = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, true),
+    SMOKE_TEST.timeoutMs,
+  );
+  const shiftFirstTouchUp = await dispatchSmokeBracePointer(contents, 'pointerup', 702);
+  if (!shiftFirstTouchUp?.consumed) {
+    throw new Error(`inverse mobile BRACE pointerup failed: ${JSON.stringify(shiftFirstTouchUp)}`);
+  }
+  const shiftSurvivedTouchRelease = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, false),
+    SMOKE_TEST.timeoutMs,
+  );
+  // The key went down over the HUD and comes up over the active renderer. The
+  // renderer may consume the event first; the global owner must still release.
+  const shiftFirstUp = await dispatchSmokeHudShift(contents, 'keyup', 'canvas');
+  if (!shiftFirstUp?.consumed || shiftFirstUp.focused !== true || shiftFirstUp.target === 'hud') {
+    throw new Error(`focus-transfer Shift release did not reach the active canvas: ${JSON.stringify(shiftFirstUp)}`);
+  }
+  const shiftFirstClear = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, false, false),
+    SMOKE_TEST.timeoutMs,
+  );
+
+  const cancelTouchDown = await dispatchSmokeBracePointer(contents, 'pointerdown', 703);
+  if (!cancelTouchDown?.consumed) {
+    throw new Error(`cancellation BRACE pointerdown failed: ${JSON.stringify(cancelTouchDown)}`);
+  }
+  await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, true),
+    SMOKE_TEST.timeoutMs,
+  );
+  const cancelShiftDown = await dispatchSmokeHudShift(contents, 'keydown');
+  if (!cancelShiftDown?.consumed) {
+    throw new Error(`cancellation overlap Shift keydown failed: ${JSON.stringify(cancelShiftDown)}`);
+  }
+  const pointerCancel = await dispatchSmokeBracePointer(contents, 'pointercancel', 703);
+  if (!pointerCancel?.consumed) {
+    throw new Error(`mobile BRACE pointercancel was not consumed: ${JSON.stringify(pointerCancel)}`);
+  }
+  const shiftSurvivedPointerCancel = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, true, false),
+    SMOKE_TEST.timeoutMs,
+  );
+  const cancelShiftUp = await dispatchSmokeHudShift(contents, 'keyup');
+  if (!cancelShiftUp?.consumed) {
+    throw new Error(`cancellation overlap Shift release failed: ${JSON.stringify(cancelShiftUp)}`);
+  }
+  const cancellationClear = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, false, false),
+    SMOKE_TEST.timeoutMs,
+  );
+
+  // Releasing already-clear sources is intentionally harmless. The mobile
+  // listener does not consume an unrelated stale pointer, while the aggregate
+  // state must remain clear after both repeated release paths.
+  const repeatedPointerUp = await dispatchSmokeBracePointer(contents, 'pointerup', 703);
+  const repeatedShiftUp = await dispatchSmokeHudShift(contents, 'keyup');
+  const finalClear = await waitForRenderer(
+    contents,
+    (probe) => probeHasSmokeBraceState(probe, false, false),
+    SMOKE_TEST.timeoutMs,
+  );
+
+  return {
+    ready: smokeBraceEvidence(ready),
+    touchThenShift: {
+      touchDown: touchFirstDown,
+      touchHeld: smokeBraceEvidence(touchFirstHeld),
+      shiftDown: touchFirstShiftDown,
+      bothHeld: smokeBraceEvidence(touchFirstBothHeld),
+      shiftUp: touchFirstShiftUp,
+      touchSurvivedShiftRelease: smokeBraceEvidence(touchSurvivedShiftRelease),
+      touchUp: touchFirstUp,
+      clear: smokeBraceEvidence(touchFirstClear),
+    },
+    shiftThenTouch: {
+      shiftDown: shiftFirstDown,
+      shiftHeld: smokeBraceEvidence(shiftFirstHeld),
+      touchDown: shiftFirstTouchDown,
+      bothHeld: smokeBraceEvidence(shiftFirstBothHeld),
+      touchUp: shiftFirstTouchUp,
+      shiftSurvivedTouchRelease: smokeBraceEvidence(shiftSurvivedTouchRelease),
+      focusTransferShiftUp: shiftFirstUp,
+      clear: smokeBraceEvidence(shiftFirstClear),
+    },
+    pointerCancellation: {
+      touchDown: cancelTouchDown,
+      shiftDown: cancelShiftDown,
+      pointerCancel,
+      shiftSurvivedPointerCancel: smokeBraceEvidence(shiftSurvivedPointerCancel),
+      shiftUp: cancelShiftUp,
+      clear: smokeBraceEvidence(cancellationClear),
+    },
+    repeatedRelease: {
+      pointerUp: repeatedPointerUp,
+      shiftUp: repeatedShiftUp,
+      clear: smokeBraceEvidence(finalClear),
+    },
+  };
+}
+
 async function verifySmokeMobileQuietHourTitlePath(contents) {
   const opened = await contents.executeJavaScript(`(() => {
     const button = document.querySelector('.quiet-button');
@@ -2640,6 +2939,7 @@ async function runProductionSmoke(window) {
       probeHasViewButtonMode(probe, 'relief-3d'),
     SMOKE_TEST.timeoutMs,
   );
+  const desktopBraceProbe = await verifySmokeDesktopGlobalBrace(contents);
 
   // Exercise the exact UI path that previously lost clicks during live card
   // refreshes. The deterministic smoke seed begins beside an offered cargo
@@ -2751,6 +3051,7 @@ async function runProductionSmoke(window) {
   const compactKitMakeProbe = await switchSmokeMobileKitToMake(contents);
   const compactKitMakeScrolledProbe = await scrollSmokeMobileMakeKit(contents);
   const compactKitClosedProbe = await closeSmokeMobileKit(contents);
+  const hybridBraceProbe = await verifySmokeHybridBrace(contents);
 
   const narrowPhoneCollapsedProbe = await resizeSmokeViewport(
     window,
@@ -2834,6 +3135,8 @@ async function runProductionSmoke(window) {
     boot: paintedTitleProbe,
     titlePatchNotes: titlePatchNotesProbe,
     world: worldProbe,
+    desktopBrace: desktopBraceProbe,
+    hybridBrace: hybridBraceProbe,
     promisePickup: promisePickupProbe,
     promiseCommit: promiseCommitProbe,
     wayknot: wayknotProbe,

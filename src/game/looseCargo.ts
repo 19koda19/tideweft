@@ -37,6 +37,14 @@ export const LOOSE_CARGO_MAX_VELOCITY = 250_000;
 /** Loaded-region mobile budget; distant parcels belong in region summaries. */
 export const LOOSE_CARGO_MAX_ENTITIES = 64;
 export const LOOSE_CARGO_MAX_HISTORY = 4_096;
+/**
+ * Runtime states retain a compact recent evidence window. Older records are
+ * folded into the chained archive hash, so identity/conservation evidence is
+ * preserved without re-hashing thousands of JSON records every 100 ms.
+ * Deserialization still accepts the larger legacy maximum above and compacts
+ * it on the next authoritative step.
+ */
+export const LOOSE_CARGO_RETAINED_HISTORY = 256;
 export const LOOSE_CARGO_MAX_ORDINAL = Number.MAX_SAFE_INTEGER;
 export const LOOSE_CARGO_MAX_RETIRED_LOTS = 32_768;
 
@@ -244,7 +252,7 @@ export interface LooseCargoWorldState {
   readonly historyBaseOrdinal: number;
   /** Deterministic hash chain for compacted causal evidence. */
   readonly historyArchiveHash: string;
-  /** Canonical recent append-only tail, bounded by LOOSE_CARGO_MAX_HISTORY. */
+  /** Canonical recent append-only tail; legacy saves may contain up to the accepted maximum. */
   readonly history: readonly LooseCargoHistoryRecord[];
 }
 
@@ -2856,7 +2864,7 @@ function appendLooseCargoHistory(
   world: LooseCargoWorldState,
   records: readonly LooseCargoHistoryRecord[],
 ): Pick<LooseCargoWorldState, "historyBaseOrdinal" | "historyArchiveHash" | "history"> {
-  if (records.length === 0) {
+  if (records.length === 0 && world.history.length <= LOOSE_CARGO_RETAINED_HISTORY) {
     return {
       historyBaseOrdinal: world.historyBaseOrdinal,
       historyArchiveHash: world.historyArchiveHash,
@@ -2864,7 +2872,7 @@ function appendLooseCargoHistory(
     };
   }
   const combined = [...world.history, ...records];
-  const overflow = Math.max(0, combined.length - LOOSE_CARGO_MAX_HISTORY);
+  const overflow = Math.max(0, combined.length - LOOSE_CARGO_RETAINED_HISTORY);
   if (overflow === 0) {
     return {
       historyBaseOrdinal: world.historyBaseOrdinal,

@@ -1234,6 +1234,26 @@ describe("perpetual new worlds", () => {
 });
 
 describe("runtime clarity guards", () => {
+  it("projects the held brace bit immediately into both player views", async () => {
+    const runtime = await createTideweftRuntime(new MemoryRepository());
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "visible global brace",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+
+    expect(runtime.getRenderView().player.bracing).toBe(false);
+    expect(runtime.getUIView().player.bracing).toBe(false);
+    runtime.dispatchRenderer({ type: "brace", active: true });
+    expect(runtime.getRenderView().player.bracing).toBe(true);
+    expect(runtime.getUIView().player.bracing).toBe(true);
+    runtime.dispatchRenderer({ type: "brace", active: false });
+    expect(runtime.getRenderView().player.bracing).toBe(false);
+    expect(runtime.getUIView().player.bracing).toBe(false);
+    runtime.destroy();
+  });
+
   it("projects every stamina change through sweep recovery and immediate water re-entry", async () => {
     const world = createWorld("runtime stamina reentry", "calm");
     const occupied = new Set(world.settlements.map((settlement) => settlement.tileIndex));

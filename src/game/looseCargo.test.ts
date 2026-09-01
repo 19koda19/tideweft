@@ -6,7 +6,7 @@ import { createCraftingInventory } from "./crafting";
 import {
   LOOSE_CARGO_MAX_VELOCITY,
   LOOSE_CARGO_MAX_ENTITIES,
-  LOOSE_CARGO_MAX_HISTORY,
+  LOOSE_CARGO_RETAINED_HISTORY,
   LOOSE_CARGO_MAX_ORDINAL,
   LOOSE_CARGO_TILE_UNITS,
   addLooseCargoStack,
@@ -1134,7 +1134,7 @@ describe("save authority, global addresses, and bounded soak", () => {
     const elapsed = Date.now() - started;
     const serialized = serializeLooseCargoWorld(world);
     expect(world.entities).toHaveLength(LOOSE_CARGO_MAX_ENTITIES);
-    expect(world.history.length).toBeLessThanOrEqual(LOOSE_CARGO_MAX_HISTORY);
+    expect(world.history.length).toBeLessThanOrEqual(LOOSE_CARGO_RETAINED_HISTORY);
     expect(world.historyBaseOrdinal).toBeGreaterThan(0);
     expect(world.historyArchiveHash).not.toBe("0000000000000000");
     expect(serialized.length).toBeLessThan(3_000_000);
