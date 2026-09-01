@@ -24,7 +24,7 @@ active graph and autonomous multi-hop porters
 redundant regional weave and campaign resolution
 ```
 
-Alpha 0.1 and Alpha 0.2 are verified and published. Alpha 0.2 was built additively from the frozen first-alpha baseline:
+Alpha 0.1 through Alpha 0.3 are verified and published. Alpha 0.3 grows additively from the frozen earlier baselines:
 
 - **The Tide Choir** makes route memory truthful, surveying playable, and completed harbor loops capable of awakening one-time communal harmonies.
 - **Wild Reaches** expands new seeds to a 96 × 72 Perlin estuary with meaningful terrain, sounded water, recoverable currents, and civic field tools.
@@ -32,7 +32,7 @@ Alpha 0.1 and Alpha 0.2 are verified and published. Alpha 0.2 was built additive
 - **Wayknots** entered the published, untagged Phase 9 preview at `eb12db0` and its hardened checkpoint was `1bc136e`. The untagged Phase 10 Tide Harps preview is now published at `6f74fe9`; its exact-commit CI, Pages deployment, and live assets are verified. Alpha 0.2 remains tagged separately and unchanged.
 - The focused post-Phase-10 mobile/current hotfix is published at `f8dc848`: compact-by-default HUD behavior on portrait and short-landscape phones, discovery-safe surface-current arrows, and deterministic deep-water sweep recovery triggered by either empty stamina or empty stability.
 - The perpetual/mobile/biome checkpoint is published at `29ea8dc`: new worlds are perpetual, manual in-play pause is gone, the title/HUD is near-monochrome, the mobile travel interface carries four vitals and touch actions, T/? opens a complete field manual, reports are separate from cargo controls, and seven derived biomes plus shared 2D/3D water colors are visible. Pure cargo-environment and rock/ladder foundations remain deliberately unwired.
-- The next field ecology / KIT checkpoint is an **unpublished source candidate**: nine visible deterministic raw materials can be gathered into one exact 16,000-milli-load pack, the anywhere KIT exposes PACK / MAKE / MEND, six components feed eleven durable gear recipes, inherited Wayknots have persistent placement/reclaim wear and setting time, and four crafted wearables already affect authoritative travel. Publication identifiers remain intentionally absent until the release gate and Pages push complete.
+- The field ecology / KIT checkpoint is published as the **Alpha 0.3 feature baseline** at `d22668b`: nine visible deterministic raw materials can be gathered into one exact 16,000-milli-load pack, the anywhere KIT exposes PACK / MAKE / MEND, six components feed eleven durable gear recipes, inherited Wayknots have persistent placement/reclaim wear and setting time, and four crafted wearables affect authoritative travel.
 - Tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls remain later subphases unless release playtesting promotes them.
 
 ## Phase 0 — Evidence and contract
@@ -280,9 +280,9 @@ Implemented in the published checkpoint:
 4. **Phone-first travel HUD:** the compact translucent overlay exposes labeled Stamina, Stability, Loom, and Cargo values/meters plus the route and immediate safety cause. A large touch dock supplies contextual interaction, Sound/Scan, and Wayknot actions without WASD or keyboard-hint clutter. Promises and settlement details occupy mutually exclusive safe-area sheets, and a harbor tap charts to its exact center instead of opening the inspector before arrival.
 5. **Complete field manual:** desktop T and the mobile ? control open the same data-driven, versioned manual. Its desktop and safe-area mobile layouts scroll independently and cover every live mechanic, control, failure/recovery rule, save boundary, and explicit planned-versus-live distinction. Updating the manual is now part of completing each feature phase.
 6. **Reports are not cargo promises:** physical supply work remains in Promises. The harbor inspector gives signed reports a separate information-only section, one-document-slot explanation, and stable **Sign info report → [harbor]** controls that remain clickable while live facts refresh.
-7. **Visible derived biomes:** a pure fixed-point kernel derives smooth seed-addressed rainfall, heat, salinity, exposure, and magical-water influence, classifies Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen, and applies bounded weather overlays. Projection and both Chart/Relief renderers expose the local biome and restrained color/motif language without adding persisted state. At this published checkpoint the signals had no rule consequences; the later field ecology / KIT candidate now uses biome and active weather for natural-material identity and regrowth, while courier exposure, cargo, infrastructure, and settlement consequences remain staged.
+7. **Visible derived biomes:** a pure fixed-point kernel derives smooth seed-addressed rainfall, heat, salinity, exposure, and magical-water influence, classifies Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen, and applies bounded weather overlays. Projection and both Chart/Relief renderers expose the local biome and restrained color/motif language without adding persisted state. At this published checkpoint the signals had no rule consequences; the subsequent Alpha 0.3 field ecology / KIT checkpoint uses biome and active weather for natural-material identity and regrowth, while courier exposure, cargo, infrastructure, and settlement consequences remain staged.
 8. **Deterministic cargo-environment foundation only:** a pure fixed-point evaluator defines material traits for ordinary, heavy, fragile, perishable, and confidential cargo; evaluates bounded condition loss, contamination, decay, and signed current/lift force from rain, heat, cold, immersion, impact, and magical-water flux; and returns canonically ordered readable causes. It does not yet create loose cargo entities or affect live cargo/save state.
-9. **Deterministic rock/ladder foundation only:** a pure rules kernel derives coherent seeded outcrops, stable formations, crossing passability/risk/cost, and a finite reusable ladder kit with placement and reclaim validation. Runtime movement, pointer routing, rendering, UI, and saves do not consume it yet, so there are no live rock walls or ladders in this candidate.
+9. **Deterministic rock/ladder foundation only:** a pure rules kernel derives coherent seeded outcrops, stable formations, crossing passability/risk/cost, and a finite reusable ladder kit with placement and reclaim validation. Runtime movement, pointer routing, rendering, UI, and saves do not consume it yet, so there are no live rock walls or ladders at this checkpoint.
 
 Planned follow-ons, not current behavior:
 
@@ -292,11 +292,11 @@ Planned follow-ons, not current behavior:
 
 ## Field ecology / KIT checkpoint
 
-Status: **implemented and test-verified in the current source candidate; publication gate pending**
+Status: **implemented, verified, and published as the Alpha 0.3 feature baseline at `d22668b`**
 
 Purpose: turn the visible biomes into a legible material commons and close the mobile gathering/crafting loop without inventing a separate station, currency, or remote warehouse.
 
-Implemented in the current source candidate:
+Implemented in Alpha 0.3:
 
 1. **Seeded material commons:** the same root seed, terrain, and biome projection derive discovery-safe nodes for Bladderkelp, Driftwood, Glimmer spore, Shellstone, Sunfiber, Hookstone, Cordreed, Pitchmoss, and Stormlichen. Settlement tiles are excluded, the catalog has stable coordinate-addressed IDs, and only sparse depletion needs persistence.
 2. **One-unit, input-honest gathering:** desktop requires the discovered node underfoot plus E. A touch selection routes to the exact visible node and gathers automatically on arrival, avoiding the harbor-inspector race. Harvest is atomic against capacity and stock, always leaves one living unit, spends material-specific stamina, and can immediately trigger the existing next-beat deep-water sweep when stamina reaches zero.
@@ -315,10 +315,10 @@ Staged after this checkpoint, not current behavior:
 - The Field ladder does not bridge rock, the Trail pannier does not increase capacity, the Cargo rain shroud and Glimmer liner do not protect cargo, and harbor lockers do not exist yet.
 - Procedural blocking rocks, ladder traversal, falls, dropped/tumbling/drifting cargo, live weather/exposure or magical-water cargo reactions, trust-money upgrades, and broader ecology/settlement consequences remain later authoritative integrations.
 
-Candidate evidence captured 2026-09-01:
+Alpha 0.3 feature evidence captured 2026-09-01:
 
 - TypeScript and **49 Vitest files / 386 checks** are green, including deterministic resource generation/regrowth, desktop and touch gathering, exact capacity, v1 migration/v2 persistence, crafting atomicity, Wayknot wear/setting, four live wearable movement effects, KIT interaction, tutorial truthfulness, and malformed-save quarantine.
-- The production and nested `/tideweft/` web gates, responsive visual review, scoped source-secret scan, and packaged Electron smoke are green. The 360 × 640 device probe opens PACK, switches to MAKE, verifies 44-pixel actions and explicit blockers, scrolls the panel, confirms world-tick advance, and restores focus on close. Publication commit, CI/Pages run IDs, and live asset verification remain intentionally unclaimed until push.
+- The production and nested `/tideweft/` web gates, responsive visual review, scoped source-secret scan, and packaged Electron smoke are green. The 360 × 640 device probe opens PACK, switches to MAKE, verifies 44-pixel actions and explicit blockers, scrolls the panel, confirms world-tick advance, and restores focus on close. Exact feature commit `d22668b3b481ea937e08ece5c7a26b6eb8c18870` passed CI run `33514087307` and Pages run `33514087320`; live assets `index-CHONaHrC.js` and `index-cSiSqast.css` return HTTP 200.
 
 ## Reward-loop acceptance audit
 
@@ -335,12 +335,13 @@ Candidate evidence captured 2026-09-01:
 
 ## Next replan gate
 
-The first external Pages playtest promoted mobile obstruction and unreadable current failure above expansion work. The material/KIT slice is now implemented as the current source candidate; the immediate replan order is:
+The first external Pages playtest promoted mobile obstruction and unreadable current failure above expansion work. Those fixes and the material/KIT slice now form Alpha 0.3; the immediate replan order is:
 
-1. complete the web/mobile/secret/package gate, publish the field ecology / KIT checkpoint to Pages, and record exact release evidence;
-2. integrate the pure rock/ladder kernel as procedural traversal and fall rules through shared movement/pathfinding;
-3. add physical cargo, current drift, impact damage, and condition-sensitive trust/compensation;
-4. integrate spatial weather, magical water, exposure, broader ecology, upgrades, infrastructure, and settlement interactions.
+1. integrate the pure rock/ladder kernel as procedural traversal and fall rules through shared movement/pathfinding;
+2. add physical cargo, current drift, impact damage, and condition-sensitive trust/compensation;
+3. extend the finite seed-generated region into a safely persisted procedural world with dynamic settlement networks;
+4. integrate spatial weather, magical water, exposure, broader ecology, upgrades, infrastructure, and settlement interactions;
+5. build later alpine and glacier regions on the shared elevation/fall kernel, with visible ravines and crevasses, ladder spans, anchors, and rope-based descent and ascent.
 
 Continue classifying later feedback into:
 
