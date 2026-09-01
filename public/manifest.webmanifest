@@ -1,0 +1,19 @@
+{
+  "name": "TIDEWEFT: An Estuary of Promises",
+  "short_name": "TIDEWEFT",
+  "description": "Carry promises across a living estuary and weave routes that learn to care for themselves.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#071719",
+  "theme_color": "#071719",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

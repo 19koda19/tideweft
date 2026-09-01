@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="TIDEWEFT — carry promises across a living estuary and weave routes that learn to care for themselves."
+    />
+    <meta name="theme-color" content="#071719" />
+    <meta name="application-name" content="TIDEWEFT" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
+    <title>TIDEWEFT — An Estuary of Promises</title>
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#game-ui">Skip to game controls</a>
+
+    <div id="app" class="app-shell">
+      <header class="app-masthead" aria-label="TIDEWEFT">
+        <div class="wordmark" aria-label="TIDEWEFT, An Estuary of Promises">
+          <span class="wordmark__knot" aria-hidden="true"></span>
+          <span class="wordmark__title">TIDEWEFT</span>
+          <span class="wordmark__subtitle">An Estuary of Promises</span>
+        </div>
+        <p class="app-masthead__status" id="connection-status">
+          The estuary is listening
+        </p>
+      </header>
+
+      <main id="game-shell" class="game-shell">
+        <section
+          id="game-viewport"
+          class="game-viewport"
+          aria-label="Estuary world view"
+          aria-describedby="canvas-instructions"
+        >
+          <div id="p5-mount" class="canvas-mount"></div>
+          <p id="canvas-instructions" class="visually-hidden">
+            Focus the world view, then use WASD or arrow keys to travel. Press
+            and hold Shift while moving to brace the load. Press Space to scan,
+            E to interact, and Escape to cancel a destination.
+          </p>
+          <div class="viewport-grain" aria-hidden="true"></div>
+          <div class="viewport-vignette" aria-hidden="true"></div>
+        </section>
+
+        <section id="game-ui" class="game-ui" aria-label="Journey interface"></section>
+      </main>
+    </div>
+
+    <div
+      id="announcer"
+      class="visually-hidden"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+
+    <noscript>
+      <section class="noscript-card">
+        <h1>TIDEWEFT needs JavaScript</h1>
+        <p>
+          This deterministic simulation runs locally in your browser. Enable
+          JavaScript to enter the estuary.
+        </p>
+      </section>
+    </noscript>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

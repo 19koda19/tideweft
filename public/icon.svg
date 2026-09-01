@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">TIDEWEFT</title>
+  <desc id="description">Three luminous tidal strands woven around a harbor light.</desc>
+  <rect width="512" height="512" rx="112" fill="#071719"/>
+  <circle cx="256" cy="256" r="174" fill="none" stroke="#153a3d" stroke-width="10"/>
+  <path d="M96 190c73-82 134-73 160 0s87 82 160 0" fill="none" stroke="#75c6bd" stroke-width="28" stroke-linecap="round"/>
+  <path d="M96 322c73 82 134 73 160 0s87-82 160 0" fill="none" stroke="#4a918b" stroke-width="28" stroke-linecap="round"/>
+  <path d="M144 256c37-42 74-42 112 0s75 42 112 0" fill="none" stroke="#d9b873" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="31" fill="#f3dda6" stroke="#071719" stroke-width="12"/>
+  <circle cx="256" cy="256" r="9" fill="#071719"/>
+</svg>

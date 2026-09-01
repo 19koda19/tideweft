@@ -1,0 +1,55 @@
+import { waterDepthAt } from "./terrain";
+import { FIXED_POINT, type WorldState, type WorldView } from "./types";
+import { copyInventory } from "./util";
+import { currentInventoryTotals } from "./world";
+import { calculateNetworkMetrics } from "./network";
+
+export function createWorldView(world: WorldState): WorldView {
+  return {
+    completedTick: world.meta.completedTick,
+    seedText: world.meta.seedText,
+    pressureMode: world.meta.pressureMode,
+    terrain: {
+      width: world.terrain.width,
+      height: world.terrain.height,
+      tiles: world.terrain.tiles.map((tile) => ({
+        ...tile,
+        waterDepth: waterDepthAt(tile, world.tide),
+      })),
+    },
+    tide: { ...world.tide },
+    weather: { ...world.weather },
+    settlements: world.settlements.map((settlement) => ({
+      ...settlement,
+      residentIds: [...settlement.residentIds],
+      inventory: copyInventory(settlement.inventory),
+      recipes: settlement.recipes.map((recipe) => ({
+        ...recipe,
+        inputs: recipe.inputs.map((input) => ({ ...input })),
+        outputs: recipe.outputs.map((output) => ({ ...output })),
+      })),
+      project: { ...settlement.project },
+      trust: settlement.trust.map((trust) => ({ ...trust })),
+      knowledge: settlement.knowledge.map((knowledge) => ({
+        ...knowledge,
+        freshness: Math.max(0, Math.min(FIXED_POINT, knowledge.confidence - knowledge.ageTicks * 200)),
+      })),
+    })),
+    residents: world.residents.map((resident) => ({
+      ...resident,
+      traits: { ...resident.traits },
+      needs: { ...resident.needs },
+      relationships: resident.relationships.map((relationship) => ({ ...relationship })),
+      location: { ...resident.location },
+    })),
+    routes: world.routes.map((route) => ({ ...route, path: [...route.path] })),
+    contracts: world.contracts.map((contract) => ({
+      ...contract,
+      porterRouteIds: [...contract.porterRouteIds],
+      porterSettlementIds: [...contract.porterSettlementIds],
+    })),
+    events: world.events.map((event) => ({ ...event, data: { ...event.data } })),
+    totals: currentInventoryTotals(world),
+    network: calculateNetworkMetrics(world),
+  };
+}
