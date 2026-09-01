@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { REGION_COORD_LIMIT } from "../sim/regions";
 
 import {
   DEFAULT_WAYKNOT_CAPACITY,
@@ -32,6 +33,7 @@ import {
   placeWayknot,
   queryWayknotEffects,
   reclaimWayknot,
+  reclaimWayknotAtTile,
   redeployWayknot,
   supportsWayknot,
   tideHarpEffectStrength,
@@ -79,6 +81,7 @@ function fullKnot(
   return {
     id,
     kind,
+    region: tileIndex === null ? null : { x: 0, y: 0 },
     tileIndex,
     condition: WAYKNOT_CONDITION_MAX,
     readyTick: 0,
@@ -418,7 +421,7 @@ describe("wayknot field kit", () => {
       fullKnot(3, "tide-anchor", 14, { condition: 0, readyTick: 91 }),
       fullKnot(5, "wind-knot", null, { serviceWearRemainder: 42 }),
     ]);
-    expect(normalized.version).toBe(2);
+    expect(normalized.version).toBe(3);
   });
 
   it("charges every placement/reclaim cycle and keeps broken aids reclaimable", () => {
@@ -457,6 +460,198 @@ describe("wayknot field kit", () => {
     const reclaimed = reclaimWayknot(broken, 1);
     expect(reclaimed).toMatchObject({ ok: true, reason: "reclaimed" });
     expect(reclaimed.wayknot).toEqual(fullKnot(1, "reed-mat", null, { condition: 0 }));
+  });
+});
+
+describe("region-addressed wayknot persistence", () => {
+  it("migrates v2 deployments to region 0,0 without changing finite identity or wear", () => {
+    const migrated = normalizeWayknotState({
+      version: 2,
+      capacity: 6,
+      wayknots: [
+        {
+          id: 1,
+          kind: "wind-knot",
+          tileIndex: 11,
+          condition: 713_245,
+          readyTick: 87,
+          serviceWearRemainder: 456_789,
+        },
+        {
+          id: 3,
+          kind: "reed-mat",
+          tileIndex: null,
+          condition: 654_321,
+          readyTick: 999,
+          serviceWearRemainder: 123,
+        },
+      ],
+    }, { tileCount: 100 });
+
+    expect(migrated.version).toBe(3);
+    expect(migrated.wayknots).toEqual([
+      fullKnot(1, "reed-mat", 11, {
+        condition: 713_245,
+        readyTick: 87,
+        serviceWearRemainder: 456_789,
+      }),
+      fullKnot(3, "tide-anchor", null, {
+        condition: 654_321,
+        serviceWearRemainder: 123,
+      }),
+    ]);
+  });
+
+  it("keeps a distant signed deployment local to its region through query and exact reclaim", () => {
+    const remote = { x: -1_000_000, y: REGION_COORD_LIMIT } as const;
+    const context = tile(44, { terrain: "deep-water", waterDepth: 420_000 });
+    const placed = placeWayknot(createWayknotState(), "tide-anchor", context, 20, remote);
+    expect(placed.wayknot).toMatchObject({
+      id: 3,
+      region: remote,
+      tileIndex: 44,
+      readyTick: 23,
+    });
+    expect(wayknotAtTile(placed.state, 44)).toBeNull();
+    expect(wayknotAtTile(placed.state, 44, remote)?.id).toBe(3);
+    expect(queryWayknotEffects(placed.state, context, GRID, 23).influences).toEqual([]);
+    expect(queryWayknotEffects(placed.state, context, GRID, 23, remote).influences)
+      .toEqual([expect.objectContaining({ id: 3 })]);
+
+    expect(reclaimWayknot(placed.state, 3)).toMatchObject({ ok: false, reason: "not-found" });
+    expect(reclaimWayknotAtTile(placed.state, 45, remote)).toMatchObject({
+      ok: false,
+      reason: "not-found",
+    });
+    const reclaimed = reclaimWayknotAtTile(placed.state, 44, remote);
+    expect(reclaimed).toMatchObject({
+      ok: true,
+      reason: "reclaimed",
+      wayknot: { id: 3, region: null, tileIndex: null },
+    });
+    expect(reclaimed.state.wayknots).toHaveLength(6);
+  });
+
+  it("allows the same local tile in two regions while blocking one-region collisions and teleporting", () => {
+    const west = { x: -8, y: 3 } as const;
+    const east = { x: 8, y: -3 } as const;
+    const marsh = tile(11, { terrain: "marsh" });
+    const first = placeWayknot(createWayknotState(), "reed-mat", marsh, 0, west);
+    const second = placeWayknot(first.state, "reed-mat", marsh, 0, east);
+    expect(second.ok).toBe(true);
+    expect(wayknotAtTile(second.state, 11, west)?.id).toBe(1);
+    expect(wayknotAtTile(second.state, 11, east)?.id).toBe(2);
+    expect(deployedWayknotCount(second.state)).toBe(2);
+
+    const occupied = placeWayknot(
+      second.state,
+      "tide-anchor",
+      tile(11, { terrain: "deep-water", waterDepth: 400_000 }),
+      0,
+      west,
+    );
+    expect(occupied).toMatchObject({ ok: false, reason: "occupied" });
+    expect(redeployWayknot(second.state, 1, marsh, 0, east)).toMatchObject({
+      ok: false,
+      reason: "not-found",
+      state: second.state,
+    });
+    expect(placeWayknot(second.state, "reed-mat", tile(12, { terrain: "marsh" })))
+      .toMatchObject({ ok: false, reason: "capacity-reached" });
+  });
+
+  it("round-trips remote v3 placements without local terrain callbacks reclaiming them", () => {
+    const remote = { x: -77, y: 91 } as const;
+    const source = normalizeWayknotState({
+      version: 3,
+      capacity: 6,
+      wayknots: [{
+        id: 5,
+        kind: "wind-knot",
+        region: remote,
+        tileIndex: 55,
+        condition: 765_432,
+        readyTick: 321,
+        serviceWearRemainder: 98_765,
+      }],
+    }, {
+      tileCount: 100,
+      contextRegion: { x: 0, y: 0 },
+      contextAt: () => undefined,
+    });
+    const restored = normalizeWayknotState(JSON.parse(JSON.stringify(source)), {
+      tileCount: 100,
+      contextRegion: { x: 0, y: 0 },
+      contextAt: () => undefined,
+    });
+    expect(restored).toEqual(source);
+    expect(restored.wayknots[0]).toEqual({
+      id: 5,
+      kind: "wind-knot",
+      region: remote,
+      tileIndex: 55,
+      condition: 765_432,
+      readyTick: 321,
+      serviceWearRemainder: 98_765,
+    });
+  });
+
+  it("drops malformed or colliding v3 evidence instead of minting carried gear", () => {
+    const remote = { x: -4, y: 6 } as const;
+    const normalized = normalizeWayknotState({
+      version: 3,
+      capacity: 6,
+      wayknots: [
+        { id: 1, kind: "reed-mat", region: remote, tileIndex: null },
+        { id: 2, kind: "reed-mat", region: null, tileIndex: 12 },
+        { id: 3, kind: "tide-anchor", region: { ...remote, alias: true }, tileIndex: 13 },
+        { id: 4, kind: "tide-anchor", region: remote, tileIndex: 14 },
+        { id: 5, kind: "wind-knot", region: remote, tileIndex: 14 },
+        { id: 6, kind: "wind-knot", region: null, tileIndex: null },
+      ],
+    }, { tileCount: 100 });
+
+    expect(normalized.wayknots).toEqual([
+      fullKnot(4, "tide-anchor", 14),
+      fullKnot(6, "wind-knot", null),
+    ].map((wayknot) => wayknot.id === 4 ? { ...wayknot, region: remote } : wayknot));
+    expect(normalized.wayknots.some((wayknot) => [1, 2, 3, 5].includes(wayknot.id)))
+      .toBe(false);
+    expect(normalizeWayknotState({
+      version: 3,
+      capacity: 6,
+      wayknots: [{ id: 2, kind: "reed-mat", tileIndex: null }],
+    }).wayknots).toEqual([]);
+  });
+
+  it("prefers deployed evidence over a duplicate carried ID and rejects noncanonical regions", () => {
+    const remote = { x: 9, y: -12 } as const;
+    const normalized = normalizeWayknotState({
+      version: 3,
+      capacity: 6,
+      wayknots: [
+        { id: 1, kind: "reed-mat", region: null, tileIndex: null, condition: 900_000 },
+        { id: 1, kind: "reed-mat", region: remote, tileIndex: 11, condition: 700_000 },
+      ],
+    }, { tileCount: 100 });
+    expect(normalized.wayknots).toEqual([
+      { ...fullKnot(1, "reed-mat", 11, { condition: 700_000 }), region: remote },
+    ]);
+
+    const malformedRegions = [
+      { x: -0, y: 0 },
+      { x: 0, y: 0, alias: true },
+      { x: Number.MAX_SAFE_INTEGER, y: 0 },
+    ];
+    for (const region of malformedRegions) {
+      expect(placeWayknot(
+        createWayknotState(),
+        "reed-mat",
+        tile(11, { terrain: "marsh" }),
+        0,
+        region,
+      )).toMatchObject({ ok: false, reason: "invalid-context" });
+    }
   });
 });
 

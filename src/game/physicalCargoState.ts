@@ -7,28 +7,53 @@ import {
 import {
   createLooseCargoCarrier,
   createLooseCargoExpectedManifest,
+  createLooseCargoMultiWorldExpectedManifest,
   createLooseCargoWorld,
+  inspectLooseCargoMultiWorldConservation,
+  looseCargoRegionKey,
   validateLooseCargoCarrier,
   validateLooseCargoExpectedManifest,
+  validateLooseCargoMultiWorldExpectedManifest,
   validateLooseCargoWorld,
   looseCargoCarrierLoadMilli,
   type LooseCargoCarrierState,
   type LooseCargoExpectedManifest,
   type LooseCargoPayload,
+  type LooseCargoRegionAddress,
   type LooseCargoWorldState,
 } from "./looseCargo";
 import { projectLooseCargoCarrierToPlayer } from "./looseCargoRuntime";
 
-export const PHYSICAL_CARGO_STATE_VERSION = 1 as const;
+export const PHYSICAL_CARGO_STATE_VERSION = 2 as const;
+export const PHYSICAL_CARGO_LEGACY_STATE_VERSION = 1 as const;
 export const LOCAL_PORTER_ID = "local-porter" as const;
+/** Physical cargo is a sparse subset of the durable 131,072-region manifest. */
+export const PHYSICAL_CARGO_MAX_INACTIVE_WORLDS = 131_071;
+/** Matches the region-manifest save budget; empty generated worlds are never retained. */
+export const PHYSICAL_CARGO_MAX_SERIALIZED_BYTES = 32 * 1_024 * 1_024;
 const MAX_SOURCE_LABEL_LENGTH = 96;
+const MAX_SOURCE_LOT_ID_LENGTH = 160;
 const TRUSTED_PHYSICAL_CARGO_STATES = new WeakSet<object>();
+const TRUSTED_INACTIVE_WORLDS = new WeakSet<object>();
+const INACTIVE_COLLECTION_BYTES = new WeakMap<object, number>();
+const UTF8_ENCODER = new TextEncoder();
+
+export interface PhysicalCargoInactiveWorld {
+  readonly regionKey: string;
+  readonly world: LooseCargoWorldState;
+  /** Inner seal lets active commits hash bounded metadata instead of every unloaded history. */
+  readonly integrity: string;
+}
 
 export interface PhysicalCargoState {
   readonly version: typeof PHYSICAL_CARGO_STATE_VERSION;
   /** Monotonic source identity cursor. It advances only with a committed mutation. */
   readonly lastSourceOrdinal: number;
+  readonly activeRegion: LooseCargoRegionAddress;
+  readonly activeRegionKey: string;
   readonly looseWorld: LooseCargoWorldState;
+  /** Strictly sorted, touched-only worlds. Generated empty worlds are reproducible and omitted. */
+  readonly inactiveWorlds: readonly PhysicalCargoInactiveWorld[];
   readonly carrier: LooseCargoCarrierState;
   readonly expectedManifest: LooseCargoExpectedManifest;
   /** Canonical integrity for this sidecar; the save envelope adds a second outer seal. */
@@ -63,15 +88,20 @@ export interface PhysicalCargoValidation {
     | "invalid-world"
     | "invalid-carrier"
     | "invalid-owner"
+    | "invalid-region"
+    | "invalid-inactive-worlds"
+    | "noncanonical-order"
+    | "duplicate-identity"
     | "invalid-dimensions"
     | "invalid-capacity"
     | "invalid-reserved-load"
+    | "oversized"
     | "manifest-mismatch"
     | "player-mirror-mismatch";
   readonly state: PhysicalCargoState | null;
 }
 
-/** Build the one-time v1/v2 migration without inventing or deleting inventory. */
+/** Build a new v2 custody sidecar without inventing or deleting inventory. */
 export function createPhysicalCargoStateFromPlayer(
   player: PlayerState,
   width: number,
@@ -87,9 +117,12 @@ export function createPhysicalCargoStateFromPlayer(
   return sealPhysicalCargoState({
     version: PHYSICAL_CARGO_STATE_VERSION,
     lastSourceOrdinal: 0,
+    activeRegion: looseWorld.region,
+    activeRegionKey: looseCargoRegionKey(looseWorld.region),
     looseWorld,
+    inactiveWorlds: canonicalInactiveCollection([]),
     carrier,
-    expectedManifest: createLooseCargoExpectedManifest(looseWorld, carrier),
+    expectedManifest: createLooseCargoMultiWorldExpectedManifest([looseWorld], carrier),
   });
 }
 
@@ -165,12 +198,90 @@ export function commitPhysicalCargoState(
   ) {
     throw new RangeError("Physical cargo source ordinal cannot advance without a physical mutation");
   }
+  const regionalWorlds = [
+    looseWorld,
+    ...canonicalPrior.inactiveWorlds.map(({ world }) => world),
+  ];
+  const expectedManifest = createLooseCargoMultiWorldExpectedManifest(regionalWorlds, carrier);
+  if (
+    authorization.kind === "conserved"
+    && stableStringify(expectedManifest) !== stableStringify(canonicalPrior.expectedManifest)
+  ) {
+    throw new RangeError("A conserved physical cargo commit changed the global expected manifest");
+  }
   return sealPhysicalCargoState({
     version: PHYSICAL_CARGO_STATE_VERSION,
     lastSourceOrdinal: ordinal,
+    activeRegion: canonicalPrior.activeRegion,
+    activeRegionKey: canonicalPrior.activeRegionKey,
     looseWorld,
+    inactiveWorlds: canonicalPrior.inactiveWorlds,
     carrier,
-    expectedManifest: createLooseCargoExpectedManifest(looseWorld, carrier),
+    expectedManifest,
+  });
+}
+
+/**
+ * Atomically exchange the active regional world. Touched worlds receive one
+ * sealed inactive slot; pristine empty worlds are deterministic and are
+ * regenerated instead of consuming memory or save budget.
+ */
+export function transitionPhysicalCargoRegion(
+  prior: PhysicalCargoState,
+  targetRegion: LooseCargoRegionAddress,
+  width: number,
+  height: number,
+): PhysicalCargoState {
+  const canonicalPrior = validatePhysicalCargoInternals(prior);
+  if (!canonicalPrior) {
+    throw new RangeError("Cannot transition an invalid physical cargo sidecar");
+  }
+  const emptyTarget = createLooseCargoWorld(width, height, targetRegion);
+  if (
+    canonicalPrior.looseWorld.width !== width
+    || canonicalPrior.looseWorld.height !== height
+  ) throw new RangeError("Physical cargo regions must share canonical dimensions");
+  const targetKey = looseCargoRegionKey(emptyTarget.region);
+  if (targetKey === canonicalPrior.activeRegionKey) {
+    return canonicalPrior;
+  }
+
+  const targetIndex = findInactiveWorldIndex(canonicalPrior.inactiveWorlds, targetKey);
+  const storedTarget = targetIndex < 0
+    ? null
+    : canonicalPrior.inactiveWorlds[targetIndex]!;
+  const looseWorld = storedTarget?.world ?? emptyTarget;
+  if (looseWorld.width !== width || looseWorld.height !== height) {
+    throw new RangeError("Stored physical cargo region dimensions do not match the generated target");
+  }
+
+  const inactiveWorlds = canonicalPrior.inactiveWorlds.filter((_, index) => index !== targetIndex);
+  if (isTouchedLooseCargoWorld(canonicalPrior.looseWorld)) {
+    inactiveWorlds.push(sealInactiveWorld(canonicalPrior.looseWorld));
+  }
+  if (inactiveWorlds.length > PHYSICAL_CARGO_MAX_INACTIVE_WORLDS) {
+    throw new RangeError("Physical cargo inactive-region capacity exhausted");
+  }
+  inactiveWorlds.sort(compareInactiveWorlds);
+  const canonicalInactive = canonicalInactiveCollection(inactiveWorlds);
+  const regionalWorlds = [looseWorld, ...canonicalInactive.map(({ world }) => world)];
+  const expectedManifest = createLooseCargoMultiWorldExpectedManifest(
+    regionalWorlds,
+    canonicalPrior.carrier,
+  );
+  if (stableStringify(expectedManifest) !== stableStringify(canonicalPrior.expectedManifest)) {
+    throw new RangeError("A region transition cannot alter the global physical cargo manifest");
+  }
+
+  return sealPhysicalCargoState({
+    version: PHYSICAL_CARGO_STATE_VERSION,
+    lastSourceOrdinal: canonicalPrior.lastSourceOrdinal,
+    activeRegion: looseWorld.region,
+    activeRegionKey: targetKey,
+    looseWorld,
+    inactiveWorlds: canonicalInactive,
+    carrier: canonicalPrior.carrier,
+    expectedManifest: canonicalPrior.expectedManifest,
   });
 }
 
@@ -484,13 +595,19 @@ export function quotePhysicalCargoSource(
   const canonicalCause = canonicalSourceLabel(cause);
   const canonicalIdentity = canonicalSourceIdentity(identity);
   const ordinal = state.lastSourceOrdinal + 1;
+  const prefix = `pc:${state.looseWorld.region.x}:${state.looseWorld.region.y}:source:${ordinal}:`;
+  const identityHash = hashCanonical(canonicalIdentity);
+  const readable = `${prefix}${canonicalCause}:${identityHash}`;
+  const lotId = readable.length <= MAX_SOURCE_LOT_ID_LENGTH
+    ? readable
+    : `${prefix}cause-${hashCanonical(canonicalCause)}:${identityHash}`;
   return {
     ordinal,
-    lotId: `pc:0:0:source:${ordinal}:${canonicalCause}:${hashCanonical(canonicalIdentity)}`,
+    lotId,
   };
 }
 
-/** Strict v3 adoption. Missing or inconsistent sidecars are corruption, not migration. */
+/** Strict v2 sidecar validation. Legacy adoption is deliberately separate. */
 export function validatePhysicalCargoState(
   value: unknown,
   player: PlayerState,
@@ -498,29 +615,51 @@ export function validatePhysicalCargoState(
   height: number,
 ): PhysicalCargoValidation {
   const internal = validatePhysicalCargoInternals(value);
-  if (!internal) {
-    if (!isRecord(value)
-      || value.version !== PHYSICAL_CARGO_STATE_VERSION
-      || !Number.isSafeInteger(value.lastSourceOrdinal)
-      || (value.lastSourceOrdinal as number) < 0
-      || typeof value.integrity !== "string") return invalid("invalid-state");
-    const unsealed = unsealPhysicalCargo(value);
-    if (value.integrity !== physicalCargoIntegrity(unsealed)) return invalid("invalid-integrity");
-    const worldValidation = validateLooseCargoWorld(value.looseWorld);
-    if (!worldValidation.valid) return invalid("invalid-world");
-    const carrierValidation = validateLooseCargoCarrier(value.carrier);
-    if (!carrierValidation.valid) return invalid("invalid-carrier");
-    return invalid("manifest-mismatch");
-  }
-  const { looseWorld, carrier, expectedManifest } = internal;
+  if (!internal) return invalid(diagnosePhysicalCargoState(value));
+  return validatePhysicalCargoPlayerMirror(internal, player, width, height);
+}
+
+/**
+ * Explicit game-save v3 -> v4 adoption. Strict validation never silently
+ * treats malformed v1 data as a fresh state or repairs its substance ledger.
+ */
+export function adoptPhysicalCargoStateV1(
+  value: unknown,
+  player: PlayerState,
+  width: number,
+  height: number,
+): PhysicalCargoValidation {
+  const legacy = validateLegacyPhysicalCargoInternals(value);
+  if (!legacy) return invalid(diagnoseLegacyPhysicalCargoState(value));
+  const migrated = sealPhysicalCargoState({
+    version: PHYSICAL_CARGO_STATE_VERSION,
+    lastSourceOrdinal: legacy.lastSourceOrdinal,
+    activeRegion: legacy.looseWorld.region,
+    activeRegionKey: looseCargoRegionKey(legacy.looseWorld.region),
+    looseWorld: legacy.looseWorld,
+    inactiveWorlds: canonicalInactiveCollection([]),
+    carrier: legacy.carrier,
+    expectedManifest: createLooseCargoMultiWorldExpectedManifest(
+      [legacy.looseWorld],
+      legacy.carrier,
+    ),
+  });
+  return validatePhysicalCargoPlayerMirror(migrated, player, width, height);
+}
+
+function validatePhysicalCargoPlayerMirror(
+  internal: PhysicalCargoState,
+  player: PlayerState,
+  width: number,
+  height: number,
+): PhysicalCargoValidation {
+  const { looseWorld, carrier } = internal;
   if (carrier.owner.kind !== "player" || carrier.owner.id !== LOCAL_PORTER_ID) {
     return invalid("invalid-owner");
   }
   if (
     looseWorld.width !== width
     || looseWorld.height !== height
-    || looseWorld.region.x !== 0
-    || looseWorld.region.y !== 0
   ) return invalid("invalid-dimensions");
   if (carrier.capacityMilliLoad !== player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT) {
     return invalid("invalid-capacity");
@@ -550,19 +689,60 @@ export function gameSaveEnvelopeIntegrity(value: Readonly<Record<string, unknown
 function sealPhysicalCargoState(
   value: Omit<PhysicalCargoState, "integrity">,
 ): PhysicalCargoState {
-  return trustPhysicalCargoState({ ...value, integrity: physicalCargoIntegrity(value) });
+  const state: PhysicalCargoState = {
+    ...value,
+    integrity: physicalCargoIntegrity(value),
+  };
+  if (physicalCargoSerializedBytes(state) > PHYSICAL_CARGO_MAX_SERIALIZED_BYTES) {
+    throw new RangeError("Physical cargo sidecar exceeds its serialized save budget");
+  }
+  return trustPhysicalCargoState(state);
 }
 
-function physicalCargoIntegrity(value: unknown): string {
-  return hashCanonical(value);
+/**
+ * The active world and carrier are covered directly. Inactive worlds are
+ * covered through their canonical inner seals so a live environment step has
+ * bounded hashing work even after a long expedition.
+ */
+function physicalCargoIntegrity(value: Readonly<Record<string, unknown>> | Omit<PhysicalCargoState, "integrity">): string {
+  const inactive = Array.isArray(value.inactiveWorlds)
+    ? value.inactiveWorlds.map((entry) => isRecord(entry)
+      ? { regionKey: entry.regionKey, integrity: entry.integrity }
+      : entry)
+    : value.inactiveWorlds;
+  return hashCanonical({
+    version: value.version,
+    lastSourceOrdinal: value.lastSourceOrdinal,
+    activeRegion: value.activeRegion,
+    activeRegionKey: value.activeRegionKey,
+    looseWorld: value.looseWorld,
+    inactiveWorlds: inactive,
+    carrier: value.carrier,
+    expectedManifest: value.expectedManifest,
+  });
 }
 
 function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | null {
   if (!isRecord(value)
+    || !hasExactKeys(value, [
+      "version",
+      "lastSourceOrdinal",
+      "activeRegion",
+      "activeRegionKey",
+      "looseWorld",
+      "inactiveWorlds",
+      "carrier",
+      "expectedManifest",
+      "integrity",
+    ])
     || value.version !== PHYSICAL_CARGO_STATE_VERSION
     || !Number.isSafeInteger(value.lastSourceOrdinal)
     || (value.lastSourceOrdinal as number) < 0
-    || typeof value.integrity !== "string") return null;
+    || typeof value.activeRegionKey !== "string"
+    || !Array.isArray(value.inactiveWorlds)
+    || value.inactiveWorlds.length > PHYSICAL_CARGO_MAX_INACTIVE_WORLDS
+    || typeof value.integrity !== "string"
+    || !/^[0-9a-f]{16}$/u.test(value.integrity)) return null;
   if (TRUSTED_PHYSICAL_CARGO_STATES.has(value)) {
     return value as unknown as PhysicalCargoState;
   }
@@ -572,20 +752,59 @@ function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | nu
   const carrierValidation = validateLooseCargoCarrier(value.carrier);
   if (!worldValidation.valid || !worldValidation.state
     || !carrierValidation.valid || !carrierValidation.carrier) return null;
-  const manifest = validateLooseCargoExpectedManifest(
-    value.expectedManifest,
+  if (
+    stableStringify(worldValidation.state) !== stableStringify(value.looseWorld)
+    || stableStringify(carrierValidation.carrier) !== stableStringify(value.carrier)
+    || !isExactRegionAddress(value.activeRegion)
+  ) return null;
+  const activeRegionKey = canonicalRegionKey(value.activeRegion);
+  const worldRegionKey = looseCargoRegionKey(worldValidation.state.region);
+  if (
+    activeRegionKey === null
+    || activeRegionKey !== value.activeRegionKey
+    || activeRegionKey !== worldRegionKey
+    || stableStringify(value.activeRegion) !== stableStringify(worldValidation.state.region)
+  ) return null;
+
+  const inactiveWorlds: PhysicalCargoInactiveWorld[] = [];
+  let previousKey = "";
+  for (const rawInactive of value.inactiveWorlds) {
+    const inactive = validateInactiveWorld(rawInactive);
+    if (
+      inactive === null
+      || inactive.regionKey === activeRegionKey
+      || inactive.world.width !== worldValidation.state.width
+      || inactive.world.height !== worldValidation.state.height
+      || inactive.regionKey <= previousKey
+    ) return null;
+    previousKey = inactive.regionKey;
+    inactiveWorlds.push(inactive);
+  }
+  const canonicalInactive = canonicalInactiveCollection(inactiveWorlds);
+  const regionalWorlds = [
     worldValidation.state,
+    ...canonicalInactive.map(({ world }) => world),
+  ];
+  const manifest = validateLooseCargoMultiWorldExpectedManifest(
+    value.expectedManifest,
+    regionalWorlds,
     carrierValidation.carrier,
   );
   if (!manifest.valid || !manifest.actual) return null;
-  return trustPhysicalCargoState({
+  if (stableStringify(manifest.actual) !== stableStringify(value.expectedManifest)) return null;
+  const state: PhysicalCargoState = {
     version: PHYSICAL_CARGO_STATE_VERSION,
     lastSourceOrdinal: value.lastSourceOrdinal as number,
+    activeRegion: worldValidation.state.region,
+    activeRegionKey,
     looseWorld: worldValidation.state,
+    inactiveWorlds: canonicalInactive,
     carrier: carrierValidation.carrier,
     expectedManifest: manifest.actual,
     integrity: value.integrity,
-  });
+  };
+  if (physicalCargoSerializedBytes(state) > PHYSICAL_CARGO_MAX_SERIALIZED_BYTES) return null;
+  return trustPhysicalCargoState(state);
 }
 
 function trustPhysicalCargoState(state: PhysicalCargoState): PhysicalCargoState {
@@ -604,10 +823,323 @@ function unsealPhysicalCargo(value: Record<string, unknown>): Record<string, unk
   return {
     version: value.version,
     lastSourceOrdinal: value.lastSourceOrdinal,
+    activeRegion: value.activeRegion,
+    activeRegionKey: value.activeRegionKey,
+    looseWorld: value.looseWorld,
+    inactiveWorlds: value.inactiveWorlds,
+    carrier: value.carrier,
+    expectedManifest: value.expectedManifest,
+  };
+}
+
+interface LegacyPhysicalCargoStateV1 {
+  readonly version: typeof PHYSICAL_CARGO_LEGACY_STATE_VERSION;
+  readonly lastSourceOrdinal: number;
+  readonly looseWorld: LooseCargoWorldState;
+  readonly carrier: LooseCargoCarrierState;
+  readonly expectedManifest: LooseCargoExpectedManifest;
+  readonly integrity: string;
+}
+
+function validateLegacyPhysicalCargoInternals(value: unknown): LegacyPhysicalCargoStateV1 | null {
+  if (
+    !isRecord(value)
+    || !hasExactKeys(value, [
+      "version",
+      "lastSourceOrdinal",
+      "looseWorld",
+      "carrier",
+      "expectedManifest",
+      "integrity",
+    ])
+    || value.version !== PHYSICAL_CARGO_LEGACY_STATE_VERSION
+    || !Number.isSafeInteger(value.lastSourceOrdinal)
+    || (value.lastSourceOrdinal as number) < 0
+    || typeof value.integrity !== "string"
+    || !/^[0-9a-f]{16}$/u.test(value.integrity)
+  ) return null;
+  const unsealed = unsealLegacyPhysicalCargo(value);
+  if (value.integrity !== hashCanonical(unsealed)) return null;
+  const worldValidation = validateLooseCargoWorld(value.looseWorld);
+  const carrierValidation = validateLooseCargoCarrier(value.carrier);
+  if (
+    !worldValidation.valid
+    || !worldValidation.state
+    || !carrierValidation.valid
+    || !carrierValidation.carrier
+    || stableStringify(worldValidation.state) !== stableStringify(value.looseWorld)
+    || stableStringify(carrierValidation.carrier) !== stableStringify(value.carrier)
+    || worldValidation.state.region.x !== 0
+    || worldValidation.state.region.y !== 0
+  ) return null;
+  const manifest = validateLooseCargoExpectedManifest(
+    value.expectedManifest,
+    worldValidation.state,
+    carrierValidation.carrier,
+  );
+  if (
+    !manifest.valid
+    || !manifest.actual
+    || stableStringify(manifest.actual) !== stableStringify(value.expectedManifest)
+  ) return null;
+  if (serializedBytes(value) > PHYSICAL_CARGO_MAX_SERIALIZED_BYTES) return null;
+  const legacy: LegacyPhysicalCargoStateV1 = {
+    version: PHYSICAL_CARGO_LEGACY_STATE_VERSION,
+    lastSourceOrdinal: value.lastSourceOrdinal as number,
+    looseWorld: worldValidation.state,
+    carrier: carrierValidation.carrier,
+    expectedManifest: manifest.actual,
+    integrity: value.integrity,
+  };
+  deepFreezePhysicalCargo(legacy);
+  return legacy;
+}
+
+function unsealLegacyPhysicalCargo(value: Record<string, unknown>): Record<string, unknown> {
+  return {
+    version: value.version,
+    lastSourceOrdinal: value.lastSourceOrdinal,
     looseWorld: value.looseWorld,
     carrier: value.carrier,
     expectedManifest: value.expectedManifest,
   };
+}
+
+function sealInactiveWorld(world: LooseCargoWorldState): PhysicalCargoInactiveWorld {
+  const validation = validateLooseCargoWorld(world);
+  if (!validation.valid || !validation.state || !isTouchedLooseCargoWorld(validation.state)) {
+    throw new RangeError("Only valid touched loose-cargo worlds may be retained inactive");
+  }
+  const regionKey = looseCargoRegionKey(validation.state.region);
+  return trustInactiveWorld({
+    regionKey,
+    world: validation.state,
+    integrity: hashCanonical({ regionKey, world: validation.state }),
+  });
+}
+
+function validateInactiveWorld(value: unknown): PhysicalCargoInactiveWorld | null {
+  if (typeof value === "object" && value !== null && TRUSTED_INACTIVE_WORLDS.has(value)) {
+    return value as PhysicalCargoInactiveWorld;
+  }
+  if (
+    !isRecord(value)
+    || !hasExactKeys(value, ["regionKey", "world", "integrity"])
+    || typeof value.regionKey !== "string"
+    || typeof value.integrity !== "string"
+    || !/^[0-9a-f]{16}$/u.test(value.integrity)
+    || value.integrity !== hashCanonical({ regionKey: value.regionKey, world: value.world })
+  ) return null;
+  const validation = validateLooseCargoWorld(value.world);
+  if (
+    !validation.valid
+    || !validation.state
+    || stableStringify(validation.state) !== stableStringify(value.world)
+    || looseCargoRegionKey(validation.state.region) !== value.regionKey
+    || !isTouchedLooseCargoWorld(validation.state)
+  ) return null;
+  return trustInactiveWorld({
+    regionKey: value.regionKey,
+    world: validation.state,
+    integrity: value.integrity,
+  });
+}
+
+function trustInactiveWorld(value: PhysicalCargoInactiveWorld): PhysicalCargoInactiveWorld {
+  deepFreezePhysicalCargo(value);
+  TRUSTED_INACTIVE_WORLDS.add(value as object);
+  return value;
+}
+
+function canonicalInactiveCollection(
+  values: readonly PhysicalCargoInactiveWorld[],
+): readonly PhysicalCargoInactiveWorld[] {
+  const collection = Object.freeze([...values]);
+  INACTIVE_COLLECTION_BYTES.set(collection, serializedBytes(collection));
+  return collection;
+}
+
+function isTouchedLooseCargoWorld(world: LooseCargoWorldState): boolean {
+  return world.revision !== 0
+    || world.completedSteps !== 0
+    || world.lastEntityOrdinal !== 0
+    || world.lastEventOrdinal !== 0
+    || world.historyBaseOrdinal !== 0
+    || world.historyArchiveHash !== "0000000000000000"
+    || world.entities.length !== 0
+    || world.history.length !== 0;
+}
+
+function compareInactiveWorlds(
+  left: PhysicalCargoInactiveWorld,
+  right: PhysicalCargoInactiveWorld,
+): number {
+  return left.regionKey < right.regionKey ? -1 : left.regionKey > right.regionKey ? 1 : 0;
+}
+
+function findInactiveWorldIndex(
+  worlds: readonly PhysicalCargoInactiveWorld[],
+  targetKey: string,
+): number {
+  let low = 0;
+  let high = worlds.length - 1;
+  while (low <= high) {
+    const middle = low + Math.floor((high - low) / 2);
+    const key = worlds[middle]!.regionKey;
+    if (key === targetKey) return middle;
+    if (key < targetKey) low = middle + 1;
+    else high = middle - 1;
+  }
+  return -1;
+}
+
+function physicalCargoSerializedBytes(state: PhysicalCargoState): number {
+  let inactiveBytes = INACTIVE_COLLECTION_BYTES.get(state.inactiveWorlds as object);
+  if (inactiveBytes === undefined) {
+    inactiveBytes = serializedBytes(state.inactiveWorlds);
+    INACTIVE_COLLECTION_BYTES.set(state.inactiveWorlds as object, inactiveBytes);
+  }
+  const shellBytes = serializedBytes({ ...state, inactiveWorlds: [] });
+  // The canonical JSON shell already contains the two bytes for `[]`.
+  return shellBytes - 2 + inactiveBytes;
+}
+
+function serializedBytes(value: unknown): number {
+  return UTF8_ENCODER.encode(stableStringify(value)).byteLength;
+}
+
+function canonicalRegionKey(value: unknown): string | null {
+  if (!isExactRegionAddress(value)) return null;
+  try {
+    return looseCargoRegionKey(value);
+  } catch {
+    return null;
+  }
+}
+
+function isExactRegionAddress(value: unknown): value is LooseCargoRegionAddress {
+  return isRecord(value) && hasExactKeys(value, ["x", "y"]);
+}
+
+function diagnosePhysicalCargoState(
+  value: unknown,
+): Exclude<PhysicalCargoValidation["reason"], "valid"> {
+  if (
+    !isRecord(value)
+    || !hasExactKeys(value, [
+      "version",
+      "lastSourceOrdinal",
+      "activeRegion",
+      "activeRegionKey",
+      "looseWorld",
+      "inactiveWorlds",
+      "carrier",
+      "expectedManifest",
+      "integrity",
+    ])
+    || value.version !== PHYSICAL_CARGO_STATE_VERSION
+    || !Number.isSafeInteger(value.lastSourceOrdinal)
+    || (value.lastSourceOrdinal as number) < 0
+    || typeof value.activeRegionKey !== "string"
+    || !Array.isArray(value.inactiveWorlds)
+    || typeof value.integrity !== "string"
+  ) return "invalid-state";
+  if (value.inactiveWorlds.length > PHYSICAL_CARGO_MAX_INACTIVE_WORLDS) {
+    return "invalid-inactive-worlds";
+  }
+  if (value.integrity !== physicalCargoIntegrity(unsealPhysicalCargo(value))) {
+    return "invalid-integrity";
+  }
+  const worldValidation = validateLooseCargoWorld(value.looseWorld);
+  if (
+    !worldValidation.valid
+    || !worldValidation.state
+    || stableStringify(worldValidation.state) !== stableStringify(value.looseWorld)
+  ) return "invalid-world";
+  const carrierValidation = validateLooseCargoCarrier(value.carrier);
+  if (
+    !carrierValidation.valid
+    || !carrierValidation.carrier
+    || stableStringify(carrierValidation.carrier) !== stableStringify(value.carrier)
+  ) return "invalid-carrier";
+  const activeKey = canonicalRegionKey(value.activeRegion);
+  if (
+    activeKey === null
+    || activeKey !== value.activeRegionKey
+    || activeKey !== looseCargoRegionKey(worldValidation.state.region)
+  ) return "invalid-region";
+  const inactiveWorlds: PhysicalCargoInactiveWorld[] = [];
+  let previousKey = "";
+  for (const raw of value.inactiveWorlds) {
+    const inactive = validateInactiveWorld(raw);
+    if (!inactive) return "invalid-inactive-worlds";
+    if (inactive.regionKey === activeKey) return "invalid-region";
+    if (
+      inactive.world.width !== worldValidation.state.width
+      || inactive.world.height !== worldValidation.state.height
+    ) return "invalid-dimensions";
+    if (inactive.regionKey <= previousKey) return "noncanonical-order";
+    previousKey = inactive.regionKey;
+    inactiveWorlds.push(inactive);
+  }
+  const worlds = [worldValidation.state, ...inactiveWorlds.map(({ world }) => world)];
+  const snapshot = inspectLooseCargoMultiWorldConservation(worlds, carrierValidation.carrier);
+  if (!snapshot.valid) return snapshot.reason === "invalid-world"
+    ? "invalid-world"
+    : "duplicate-identity";
+  const manifest = validateLooseCargoMultiWorldExpectedManifest(
+    value.expectedManifest,
+    worlds,
+    carrierValidation.carrier,
+  );
+  if (!manifest.valid || !manifest.actual) return "manifest-mismatch";
+  const candidate: PhysicalCargoState = {
+    version: PHYSICAL_CARGO_STATE_VERSION,
+    lastSourceOrdinal: value.lastSourceOrdinal as number,
+    activeRegion: worldValidation.state.region,
+    activeRegionKey: activeKey,
+    looseWorld: worldValidation.state,
+    inactiveWorlds: canonicalInactiveCollection(inactiveWorlds),
+    carrier: carrierValidation.carrier,
+    expectedManifest: manifest.actual,
+    integrity: value.integrity,
+  };
+  if (physicalCargoSerializedBytes(candidate) > PHYSICAL_CARGO_MAX_SERIALIZED_BYTES) {
+    return "oversized";
+  }
+  return "invalid-state";
+}
+
+function diagnoseLegacyPhysicalCargoState(
+  value: unknown,
+): Exclude<PhysicalCargoValidation["reason"], "valid"> {
+  if (
+    !isRecord(value)
+    || value.version !== PHYSICAL_CARGO_LEGACY_STATE_VERSION
+    || !Number.isSafeInteger(value.lastSourceOrdinal)
+    || (value.lastSourceOrdinal as number) < 0
+    || typeof value.integrity !== "string"
+  ) return "invalid-state";
+  if (value.integrity !== hashCanonical(unsealLegacyPhysicalCargo(value))) {
+    return "invalid-integrity";
+  }
+  const world = validateLooseCargoWorld(value.looseWorld);
+  if (!world.valid || !world.state) return "invalid-world";
+  const carrier = validateLooseCargoCarrier(value.carrier);
+  if (!carrier.valid || !carrier.carrier) return "invalid-carrier";
+  const manifest = validateLooseCargoExpectedManifest(
+    value.expectedManifest,
+    world.state,
+    carrier.carrier,
+  );
+  if (!manifest.valid) return "manifest-mismatch";
+  return "invalid-state";
+}
+
+function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const canonicalExpected = [...expected].sort();
+  return stableStringify(actual) === stableStringify(canonicalExpected);
 }
 
 function substanceLedger(

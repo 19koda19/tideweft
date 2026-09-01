@@ -280,6 +280,8 @@ export function createTideweftRenderer(
   let clickCandidate: ClickCandidate | null = null;
   let parcelPress: LooseCargoPointerPress | null = null;
   let touchSequence: LooseCargoTouchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
+  let hasObservedSpatialEpoch = false;
+  let observedSpatialEpoch: number | string | undefined;
   let lastMovement = "0,0";
   const heldDirections = new Set<string>();
   const heldBraceKeys = new Set<string>();
@@ -363,6 +365,65 @@ export function createTideweftRenderer(
     releaseLooseCargoPointerCaptures(canvasElement, touchSequence.activePointerIds);
   };
 
+  const invalidateSpatialInteraction = (): void => {
+    const capturedPointerIds = [...touchSequence.activePointerIds];
+    if (clickCandidate) capturedPointerIds.push(clickCandidate.pointerId);
+    if (parcelPress) capturedPointerIds.push(parcelPress.pointerId);
+    releaseLooseCargoPointerCaptures(canvasElement, capturedPointerIds);
+    hoverTarget = null;
+    pointerWorld = null;
+    clickCandidate = null;
+    parcelPress = null;
+    touchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
+    ripples.length = 0;
+    camera.focusPoint = undefined;
+    camera.focusUntil = 0;
+    if (canvasElement) delete canvasElement.dataset.hoverEntity;
+  };
+
+  const snapCameraToSpatialView = (view: TideweftView): void => {
+    const target = view.camera.followPlayer ? view.player.position : view.camera.center;
+    camera.x = target.x;
+    camera.y = target.y;
+    camera.zoom = clamp(view.camera.zoom * camera.manualZoom, 0.12, 8);
+    camera.initialized = true;
+    camera.focusPoint = undefined;
+    camera.focusUntil = 0;
+    const bounds = view.camera.bounds;
+    if (bounds) {
+      camera.x = clamp(camera.x, bounds.minX, bounds.maxX);
+      camera.y = clamp(camera.y, bounds.minY, bounds.maxY);
+    }
+  };
+
+  /**
+   * Epochs are opaque projection identities. An absent epoch is a compatible
+   * legacy view, while the first defined identity establishes the baseline
+   * without disturbing an in-flight interaction.
+   */
+  const observeSpatialEpoch = (view: TideweftView): boolean => {
+    const nextEpoch = view.spatialEpoch;
+    if (nextEpoch === undefined) return false;
+    if (!hasObservedSpatialEpoch) {
+      hasObservedSpatialEpoch = true;
+      observedSpatialEpoch = nextEpoch;
+      return false;
+    }
+    if (Object.is(observedSpatialEpoch, nextEpoch)) return false;
+    observedSpatialEpoch = nextEpoch;
+    latestView = view;
+    invalidateSpatialInteraction();
+    snapCameraToSpatialView(view);
+    return true;
+  };
+
+  const observeCurrentSpatialEpoch = (): boolean => {
+    const currentView = options.getView();
+    if (!currentView) return false;
+    latestView = currentView;
+    return observeSpatialEpoch(currentView);
+  };
+
   const parcelHitAt = (
     screen: WorldPoint,
     coarsePointer: boolean,
@@ -425,6 +486,10 @@ export function createTideweftRenderer(
 
   const pulseScan = (point?: WorldPoint): void => {
     const view = options.getView();
+    if (view) {
+      latestView = view;
+      observeSpatialEpoch(view);
+    }
     const origin = point ?? view?.player.position;
     if (!origin) return;
     ripples.push({ point: origin, startedAt: performance.now() });
@@ -433,6 +498,7 @@ export function createTideweftRenderer(
 
   const onKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    observeCurrentSpatialEpoch();
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
       event.preventDefault();
       const wasBracing = heldBraceKeys.size > 0;
@@ -492,6 +558,7 @@ export function createTideweftRenderer(
   };
 
   const onKeyUp = (event: KeyboardEvent): void => {
+    observeCurrentSpatialEpoch();
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
       event.preventDefault();
       heldBraceKeys.delete(event.code);
@@ -543,6 +610,7 @@ export function createTideweftRenderer(
 
     const pointerDown = (event: PointerEvent): void => {
       if (event.button !== 0) return;
+      observeCurrentSpatialEpoch();
       element.focus({ preventScroll: true });
       if (event.pointerType === "touch") {
         touchSequence = beginLooseCargoTouch(touchSequence, event.pointerId);
@@ -586,6 +654,10 @@ export function createTideweftRenderer(
     };
 
     const pointerMove = (event: PointerEvent): void => {
+      if (observeCurrentSpatialEpoch()) {
+        event.preventDefault();
+        return;
+      }
       pointerWorld = clientToWorld(event.clientX, event.clientY);
       const coarsePointer = usesCoarseWorldPointer(
         event.pointerType,
@@ -613,6 +685,10 @@ export function createTideweftRenderer(
     };
 
     const pointerUp = (event: PointerEvent): void => {
+      if (observeCurrentSpatialEpoch()) {
+        event.preventDefault();
+        return;
+      }
       const trackedTouch = event.pointerType === "touch"
         && touchSequence.activePointerIds.includes(event.pointerId);
       if (trackedTouch && !looseCargoTouchCanDispatch(touchSequence, event.pointerId)) {
@@ -666,11 +742,13 @@ export function createTideweftRenderer(
     };
 
     const pointerCancel = (event: PointerEvent): void => {
+      observeCurrentSpatialEpoch();
       clearPointer(event.pointerId);
       if (touchSequence.activePointerIds.includes(event.pointerId)) endTouch(event.pointerId);
     };
 
     const lostPointerCapture = (event: PointerEvent): void => {
+      observeCurrentSpatialEpoch();
       clearPointer(event.pointerId);
       if (touchSequence.activePointerIds.includes(event.pointerId)) {
         touchSequence = endLooseCargoTouch(touchSequence, event.pointerId);
@@ -685,11 +763,13 @@ export function createTideweftRenderer(
 
     const contextMenu = (event: MouseEvent): void => {
       event.preventDefault();
+      if (observeCurrentSpatialEpoch()) return;
       clearPointer();
       emit({ type: "cancel" });
     };
 
     const blur = (): void => {
+      observeCurrentSpatialEpoch();
       heldDirections.clear();
       if (heldBraceKeys.size > 0) emit({ type: "brace", active: false });
       heldBraceKeys.clear();
@@ -706,6 +786,7 @@ export function createTideweftRenderer(
 
     const wheel = (event: WheelEvent): void => {
       event.preventDefault();
+      observeCurrentSpatialEpoch();
       const before = clientToWorld(event.clientX, event.clientY);
       const factor = Math.exp(-event.deltaY * 0.001);
       camera.manualZoom = clamp(camera.manualZoom * factor, 0.58, 2.4);
@@ -2767,7 +2848,8 @@ export function createTideweftRenderer(
         return;
       }
 
-      updateCamera(latestView, now);
+      const spatialEpochChanged = observeSpatialEpoch(latestView);
+      if (!spatialEpochChanged) updateCamera(latestView, now);
       p.background(PALETTE.ink);
       p.push();
       const shake = reducedMotion ? 0 : unit(latestView.camera.shake) * 3;
@@ -2823,6 +2905,7 @@ export function createTideweftRenderer(
     canvas: () => canvasElement,
     isActive: () => active,
     setActive: (nextActive) => {
+      if (nextActive) observeCurrentSpatialEpoch();
       if (active === nextActive) {
         syncActivePresentation();
         return;
@@ -2851,6 +2934,7 @@ export function createTideweftRenderer(
       instance.resizeCanvas(size.width, size.height, true);
     },
     focusWorld: (point, zoom) => {
+      observeCurrentSpatialEpoch();
       camera.focusPoint = { ...point };
       camera.focusUntil = performance.now() + (reducedMotion ? 1 : 1_800);
       if (zoom !== undefined) camera.manualZoom = clamp(zoom, 0.58, 2.4);

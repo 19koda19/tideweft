@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(9);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(10);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -248,29 +248,41 @@ describe("TIDEWEFT field-manual content", () => {
     expect(tutorialControlById("make-key")).toMatchObject({ input: "C", audience: "desktop" });
   });
 
-  it("describes finite seeded generation without hard-coding a settlement count", () => {
+  it("describes signed seeded terrain without hard-coding a settlement count or faking regional economies", () => {
     const tutorialCopy = JSON.stringify(TIDEWEFT_TUTORIAL_GUIDE);
     const welcome = tutorialSectionById("welcome");
     const welcomeCopy = welcome === undefined
       ? ""
       : [welcome.summary, ...welcome.steps.map((step) => step.body)].join(" ");
     const expansion = TUTORIAL_PLANNED_MECHANICS.find(
-      (mechanic) => mechanic.id === "planned-world-expansion",
+      (mechanic) => mechanic.id === "planned-regional-settlements",
     );
+    const horizons = tutorialSectionById("signed-regions");
+    const horizonCopy = horizons === undefined
+      ? ""
+      : [
+          horizons.summary,
+          ...horizons.steps.map((step) => step.body),
+          ...horizons.callouts.map((callout) => callout.body),
+        ].join(" ");
 
     expect(tutorialCopy).not.toMatch(/\b(?:seven|7)\s+settlements?\b/iu);
-    expect(welcomeCopy).toContain("Each finite estuary is procedurally generated from its world seed");
-    expect(welcomeCopy).toContain("terrain, biome pattern, and harbor sites");
-    expect(expansion?.clarification).toContain("one finite seed-generated map");
-    expect(expansion?.clarification).toContain("starting a new game with another seed regenerates");
-    expect(expansion?.clarification).toContain("dynamically extending a running settlement network");
-    expect(expansion?.clarification).toContain("not live in this build");
+    expect(welcomeCopy).toContain("continuous signed terrain in every direction");
+    expect(welcomeCopy).toContain("Compatibility region 0,0");
+    expect(horizonCopy).toContain("there is no authored outer wall");
+    expect(horizonCopy).toContain("R +1,0");
+    expect(horizonCopy).toContain("regional detour");
+    expect(horizonCopy).toContain("do not yet drift across a seam");
+    expect(expansion?.clarification).toContain("Signed terrain now generates and streams continuously");
+    expect(expansion?.clarification).toContain("compatibility region 0,0");
+    expect(expansion?.clarification).toContain("extension of the running settlement network");
+    expect(expansion?.clarification).toContain("planned rather than cloned");
   });
 
   it("marks requested future systems as planned instead of claiming that they affect play", () => {
     expect(TUTORIAL_PLANNED_MECHANICS.every((mechanic) => mechanic.status === "planned")).toBe(true);
     expect(TUTORIAL_PLANNED_MECHANICS.map((mechanic) => mechanic.id)).toEqual([
-      "planned-world-expansion",
+      "planned-regional-settlements",
       "planned-regional-biomes",
       "planned-magic-water-cargo",
       "planned-rocks-and-ladders",

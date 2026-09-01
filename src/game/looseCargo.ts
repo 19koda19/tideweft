@@ -47,6 +47,10 @@ export const LOOSE_CARGO_MAX_HISTORY = 4_096;
 export const LOOSE_CARGO_RETAINED_HISTORY = 256;
 export const LOOSE_CARGO_MAX_ORDINAL = Number.MAX_SAFE_INTEGER;
 export const LOOSE_CARGO_MAX_RETIRED_LOTS = 32_768;
+/** Matches the durable region-manifest ceiling without retaining generated empty regions. */
+export const LOOSE_CARGO_MAX_REGIONAL_WORLDS = 131_072;
+/** A 32 MiB physical-custody envelope reaches this guard before pathological allocation. */
+export const LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES = 262_144;
 
 const MAX_WORLD_DIMENSION = 4_096;
 const MAX_CARRIER_LOTS = 4_096;
@@ -494,7 +498,14 @@ export interface LooseCargoManifestEntry {
 
 export interface LooseCargoConservationSnapshot {
   readonly valid: boolean;
-  readonly reason: "valid" | "invalid-world" | "invalid-carrier" | "duplicate-durable-identity";
+  readonly reason:
+    | "valid"
+    | "invalid-world"
+    | "invalid-world-set"
+    | "invalid-carrier"
+    | "duplicate-region"
+    | "duplicate-parcel-identity"
+    | "duplicate-durable-identity";
   readonly entries: readonly LooseCargoManifestEntry[];
   readonly totalQuantity: number;
   readonly totalLoadMilli: number;
@@ -1064,6 +1075,15 @@ export function looseCargoCarrierLoadMilli(carrier: LooseCargoCarrierState): num
   return validation.valid ? validation.loadMilli : 0;
 }
 
+/** Canonical persistent lookup key for signed regional cargo worlds. */
+export function looseCargoRegionKey(region: LooseCargoRegionAddress): string {
+  const canonical = canonicalRegionAddress(region);
+  if (canonical === null) {
+    throw new RangeError("Loose-cargo region keys require canonical safe-integer coordinates");
+  }
+  return `r:${canonical.x}:${canonical.y}`;
+}
+
 export function validateLooseCargoWorld(value: unknown): LooseCargoWorldValidation {
   if (!isRecord(value)) return invalidWorld("not-an-object");
   if (TRUSTED_WORLD_STATES.has(value)) {
@@ -1343,24 +1363,72 @@ export function inspectLooseCargoConservation(
   world: LooseCargoWorldState,
   carrier: LooseCargoCarrierState,
 ): LooseCargoConservationSnapshot {
-  const worldValidation = validateLooseCargoWorld(world);
-  if (!worldValidation.valid || worldValidation.state === null) {
-    return invalidConservationSnapshot("invalid-world");
-  }
+  return inspectLooseCargoMultiWorldConservation([world], carrier);
+}
+
+/**
+ * One deterministic custody ledger across every touched regional world and
+ * the single global carrier. Input order never affects the fingerprint, while
+ * duplicate regions, parcel IDs, or durable identities fail closed.
+ */
+export function inspectLooseCargoMultiWorldConservation(
+  worlds: readonly LooseCargoWorldState[],
+  carrier: LooseCargoCarrierState,
+): LooseCargoConservationSnapshot {
+  if (
+    !Array.isArray(worlds)
+    || worlds.length < 1
+    || worlds.length > LOOSE_CARGO_MAX_REGIONAL_WORLDS
+  ) return invalidConservationSnapshot("invalid-world-set");
   const carrierValidation = validateLooseCargoCarrier(carrier);
   if (!carrierValidation.valid || carrierValidation.carrier === null) {
     return invalidConservationSnapshot("invalid-carrier");
+  }
+  const canonicalWorlds: LooseCargoWorldState[] = [];
+  const regionKeys = new Set<string>();
+  const parcelIds = new Set<string>();
+  for (const world of worlds) {
+    const validation = validateLooseCargoWorld(world);
+    if (!validation.valid || validation.state === null) {
+      return invalidConservationSnapshot("invalid-world");
+    }
+    const key = looseCargoRegionKey(validation.state.region);
+    if (regionKeys.has(key)) return invalidConservationSnapshot("duplicate-region");
+    regionKeys.add(key);
+    if (
+      parcelIds.size + validation.state.entities.length
+      > LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES
+    ) return invalidConservationSnapshot("invalid-world-set");
+    for (const entity of validation.state.entities) {
+      if (parcelIds.has(entity.id)) {
+        return invalidConservationSnapshot("duplicate-parcel-identity");
+      }
+      parcelIds.add(entity.id);
+    }
+    canonicalWorlds.push(validation.state);
+  }
+  canonicalWorlds.sort((left, right) => {
+    const leftKey = looseCargoRegionKey(left.region);
+    const rightKey = looseCargoRegionKey(right.region);
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+  });
+
+  const carrierIdentities = [
+    ...carrierValidation.carrier.lots.map(({ id }) => id),
+    ...carrierValidation.carrier.retiredLotIds,
+  ];
+  if (carrierIdentities.some((id) => parcelIds.has(id))) {
+    return invalidConservationSnapshot("duplicate-parcel-identity");
   }
   const entries = new Map<string, LooseCargoManifestEntry>();
   const gearIds = new Set<number>();
   const promiseDefinitions = new Map<number, string>();
   const promiseQuantities = new Map<number, number>();
   const stackQuantities = new Map<CraftingStackId, number>();
-  const values: readonly { readonly payload: LooseCargoPayload; readonly materialState: CargoEnvironmentState }[] = [
-    ...worldValidation.state.entities,
-    ...carrierValidation.carrier.lots,
-  ];
-  for (const value of values) {
+  const addValue = (value: {
+    readonly payload: LooseCargoPayload;
+    readonly materialState: CargoEnvironmentState;
+  }): LooseCargoConservationSnapshot | null => {
     if (value.payload.kind === "stack") {
       const quantity = (stackQuantities.get(value.payload.item) ?? 0) + value.payload.quantity;
       if (!Number.isSafeInteger(quantity) || quantity > MAX_QUANTITY) {
@@ -1395,10 +1463,31 @@ export function inspectLooseCargoConservation(
       return invalidConservationSnapshot("duplicate-durable-identity");
     }
     entries.set(payloadKey, { payloadKey, quantity: combinedQuantity, loadMilli: combinedLoad });
+    if (entries.size > LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES) {
+      return invalidConservationSnapshot("invalid-world-set");
+    }
+    return null;
+  };
+  for (const { entities } of canonicalWorlds) {
+    for (const entity of entities) {
+      const failure = addValue(entity);
+      if (failure) return failure;
+    }
+  }
+  for (const lot of carrierValidation.carrier.lots) {
+    const failure = addValue(lot);
+    if (failure) return failure;
   }
   const canonicalEntries = [...entries.values()].sort((left, right) => left.payloadKey < right.payloadKey ? -1 : 1);
-  const totalQuantity = canonicalEntries.reduce((total, entry) => total + entry.quantity, 0);
-  const totalLoadMilli = canonicalEntries.reduce((total, entry) => total + entry.loadMilli, 0);
+  let totalQuantity = 0;
+  let totalLoadMilli = 0;
+  for (const entry of canonicalEntries) {
+    totalQuantity += entry.quantity;
+    totalLoadMilli += entry.loadMilli;
+    if (!Number.isSafeInteger(totalQuantity) || !Number.isSafeInteger(totalLoadMilli)) {
+      return invalidConservationSnapshot("invalid-world-set");
+    }
+  }
   return {
     valid: true,
     reason: "valid",
@@ -1417,6 +1506,25 @@ export function proveLooseCargoConservation(
 ): LooseCargoConservationProof {
   const before = inspectLooseCargoConservation(beforeWorld, beforeCarrier);
   const after = inspectLooseCargoConservation(afterWorld, afterCarrier);
+  return {
+    conserved: before.valid
+      && after.valid
+      && before.totalQuantity === after.totalQuantity
+      && before.totalLoadMilli === after.totalLoadMilli
+      && before.fingerprint === after.fingerprint,
+    before,
+    after,
+  };
+}
+
+export function proveLooseCargoMultiWorldConservation(
+  beforeWorlds: readonly LooseCargoWorldState[],
+  beforeCarrier: LooseCargoCarrierState,
+  afterWorlds: readonly LooseCargoWorldState[],
+  afterCarrier: LooseCargoCarrierState,
+): LooseCargoConservationProof {
+  const before = inspectLooseCargoMultiWorldConservation(beforeWorlds, beforeCarrier);
+  const after = inspectLooseCargoMultiWorldConservation(afterWorlds, afterCarrier);
   return {
     conserved: before.valid
       && after.valid
@@ -1449,6 +1557,40 @@ export function validateLooseCargoExpectedManifest(
     return { valid: false, reason: "invalid-expected", actual: null };
   }
   const snapshot = inspectLooseCargoConservation(world, carrier);
+  if (!snapshot.valid) {
+    return { valid: false, reason: "invalid-system", actual: null };
+  }
+  const actual = structuralManifest(snapshot);
+  const valid = actual.fingerprint === canonicalExpected.fingerprint
+    && actual.totalQuantity === canonicalExpected.totalQuantity
+    && actual.totalLoadMilli === canonicalExpected.totalLoadMilli;
+  return { valid, reason: valid ? "valid" : "manifest-mismatch", actual };
+}
+
+export function createLooseCargoMultiWorldExpectedManifest(
+  worlds: readonly LooseCargoWorldState[],
+  carrier: LooseCargoCarrierState,
+): LooseCargoExpectedManifest {
+  const snapshot = inspectLooseCargoMultiWorldConservation(worlds, carrier);
+  if (!snapshot.valid) {
+    throw new RangeError(`Cannot create regional expected parcel manifest: ${snapshot.reason}`);
+  }
+  return structuralManifest(snapshot);
+}
+
+export function validateLooseCargoMultiWorldExpectedManifest(
+  expected: unknown,
+  worlds: readonly LooseCargoWorldState[],
+  carrier: LooseCargoCarrierState,
+): LooseCargoExpectedManifestValidation {
+  const canonicalExpected = canonicalExpectedManifest(
+    expected,
+    LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES,
+  );
+  if (canonicalExpected === null) {
+    return { valid: false, reason: "invalid-expected", actual: null };
+  }
+  const snapshot = inspectLooseCargoMultiWorldConservation(worlds, carrier);
   if (!snapshot.valid) {
     return { valid: false, reason: "invalid-system", actual: null };
   }
@@ -2215,7 +2357,13 @@ function canonicalOwner(value: unknown): LooseCargoOwner | null {
 }
 
 function canonicalRegionAddress(value: unknown): LooseCargoRegionAddress | null {
-  if (!isRecord(value) || !Number.isSafeInteger(value.x) || !Number.isSafeInteger(value.y)) return null;
+  if (
+    !isRecord(value)
+    || !Number.isSafeInteger(value.x)
+    || !Number.isSafeInteger(value.y)
+    || Object.is(value.x, -0)
+    || Object.is(value.y, -0)
+  ) return null;
   return { x: value.x, y: value.y };
 }
 
@@ -2939,12 +3087,17 @@ function structuralManifest(snapshot: LooseCargoConservationSnapshot): LooseCarg
   };
 }
 
-function canonicalExpectedManifest(value: unknown): LooseCargoExpectedManifest | null {
+function canonicalExpectedManifest(
+  value: unknown,
+  maximumEntries = MAX_CARRIER_LOTS + LOOSE_CARGO_MAX_ENTITIES,
+): LooseCargoExpectedManifest | null {
   if (
     !isRecord(value)
     || value.version !== LOOSE_CARGO_EXPECTED_MANIFEST_VERSION
     || !Array.isArray(value.entries)
-    || value.entries.length > MAX_CARRIER_LOTS + LOOSE_CARGO_MAX_ENTITIES
+    || !Number.isSafeInteger(maximumEntries)
+    || maximumEntries < 0
+    || value.entries.length > maximumEntries
   ) return null;
   const entries: LooseCargoManifestEntry[] = [];
   let previousKey = "";

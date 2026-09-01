@@ -58,6 +58,7 @@ interface PersistedGameSaveEnvelope {
   readonly session: GameSessionState;
   readonly fieldResources: FieldResourceEcologyState;
   readonly physicalCargo?: PhysicalCargoState;
+  readonly regionalTravel?: string;
   readonly integrity?: string;
 }
 
@@ -345,16 +346,23 @@ describe("runtime field-resource integration", () => {
       gatherOnArrival: true,
     });
     expect(stackQuantity(runtime, node.material)).toBe(0);
+    const targetPosition = runtime.getRenderView().fieldResources
+      .find((resource) => resource.id === node.id)?.position;
+    if (!targetPosition) throw new Error("target resource should be projected into the regional window");
+    const renderTileSize = runtime.getRenderView().terrain.tileSize;
+    const targetTileIndex = Math.floor(targetPosition.y / renderTileSize)
+      * runtime.getRenderView().terrain.columns
+      + Math.floor(targetPosition.x / renderTileSize);
 
     let gathered = false;
     for (let step = 0; step < 40; step += 1) {
       advancePlayerSteps(runtime, 1);
       const quantity = stackQuantity(runtime, node.material);
       const currentTile = renderedTileIndex(runtime);
-      if (currentTile !== node.tileIndex) expect(quantity).toBe(0);
+      if (currentTile !== targetTileIndex) expect(quantity).toBe(0);
       if (quantity > 0) {
         expect(quantity).toBe(1);
-        expect(currentTile).toBe(node.tileIndex);
+        expect(currentTile).toBe(targetTileIndex);
         const position = runtime.getRenderView().player.position;
         const target = runtime.getRenderView().fieldResources
           .find((resource) => resource.id === node.id)?.position;
@@ -456,7 +464,8 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(3);
+    expect(saved.version).toBe(4);
+    expect(saved.regionalTravel).toEqual(expect.any(String));
     expect(saved.fieldResources).toEqual(ecology.state);
     expect(saved.player.craftingInventory).toEqual(player.craftingInventory);
     expect(saved.player.nextCraftedGearId).toBe(29);
@@ -648,7 +657,8 @@ describe("runtime field-resource integration", () => {
     )).toBe(true);
     await runtime.save();
     const migrated = decodeGameSave(repository.snapshot());
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(4);
+    expect(migrated.regionalTravel).toEqual(expect.any(String));
     expect(migrated.fieldResources).toEqual({
       version: 1,
       activeTick: world.meta.completedTick,

@@ -77,7 +77,7 @@ function assertContractLifecycle(contract: ContractState): void {
       invariant(contract.completedTick !== null, `fulfilled contract ${contract.id} lacks completedTick`);
       invariant(contract.cargoQuantity === 0, `fulfilled contract ${contract.id} retains cargo`);
       invariant(contract.deliveryCondition !== null && contract.deliveryGrade !== null, `fulfilled contract ${contract.id} lacks a grade`);
-      invariant(contract.deliveryTraceCost !== null && contract.deliveryTraceCost > 0, `fulfilled contract ${contract.id} lacks trace cost`);
+      invariant(contract.deliveryTraceCost !== null && contract.deliveryTraceCost >= 0, `fulfilled contract ${contract.id} lacks trace cost`);
       break;
     case "expired":
     case "cancelled":

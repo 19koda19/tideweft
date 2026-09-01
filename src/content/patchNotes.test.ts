@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.2-alpha.1",
-      buildIdentity: "0.3.2-alpha.1",
-      gameplayContractVersion: 8,
-      tutorialVersion: 9,
+      version: "0.3.3-alpha.0",
+      buildIdentity: "0.3.3-alpha.0",
+      gameplayContractVersion: 9,
+      tutorialVersion: 10,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -75,6 +75,8 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/infinite region streaming|wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
+    expect(activeCopy).toContain("cross regional horizons");
+    expect(activeCopy).toContain("Bounded five-region streaming");
     expect(limitations).toContain("not live");
     expect(limitations).toContain("infinite streaming");
   });

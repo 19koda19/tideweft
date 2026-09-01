@@ -598,6 +598,17 @@ function applyCommands(world: WorldState, commands: readonly SimCommand[], tick:
           error = "delivery condition must be an integer from 0 to 1,000,000";
         } else if (command.trace === undefined) {
           error = "player delivery requires a traveled trace";
+        } else if (command.routeEvidence === "regional-detour") {
+          if (command.trace.length !== 0) {
+            error = "regional detour delivery cannot claim compatibility route tiles";
+          } else {
+            completeContract(world, contract, tick, command.condition, command.trace);
+          }
+        } else if (
+          command.routeEvidence !== undefined
+          && command.routeEvidence !== "compatibility-trace"
+        ) {
+          error = "delivery route evidence kind is invalid";
         } else {
           const traceError = validateTrace(world, contract, command.trace);
           if (traceError !== null) error = traceError;
@@ -1182,6 +1193,11 @@ function completeContract(
     primaryRouteCoverage,
     reinforcedRouteCount: routeCoverages.length,
     reinforcedRouteIds: routeCoverages.map((entry) => entry.routeId).join(","),
+    routeEvidence: contract.carrierKind === "player" && tracedTiles.length === 0
+      ? "regional-detour-no-credit"
+      : contract.carrierKind === "player"
+        ? "compatibility-trace"
+        : "resident-route",
     beneficiaryResidentId: beneficiary?.id ?? null,
   });
 }

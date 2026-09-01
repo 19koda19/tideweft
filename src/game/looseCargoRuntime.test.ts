@@ -15,11 +15,17 @@ import {
 import {
   PLAYER_TO_LOOSE_CARGO_SCALE,
   looseCargoPositionAtPlayer,
+  looseCargoPositionAtRegionalPlayer,
   playerPositionAtLooseCargo,
+  playerPositionAtRegionalLooseCargo,
   projectLooseCargoCarrierToPlayer,
   sampleLooseCargoEnvironment,
   stepLooseCargoInCompatibilityWorld,
 } from "./looseCargoRuntime";
+import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
+import { createTerrainRegionStreamingState } from "./regionStreaming";
+import { createRegionalTerrainWindow } from "./regionalTravel";
+import { createRegionalWorldView, regionalTileIndexInView } from "./regionalWorldView";
 
 const OWNER = { kind: "player", id: "local-porter" } as const;
 
@@ -273,5 +279,68 @@ describe("compatibility-region parcel environment", () => {
         state: cargo,
       });
     }
+  });
+});
+
+describe("signed-region parcel runtime", () => {
+  it("roundtrips a floating player point through exact region-local cargo coordinates", () => {
+    const world = createWorld("parcel crosses east", "wild");
+    const compatibility = createWorldView(world);
+    const stream = createTerrainRegionStreamingState({
+      rootSeed: world.meta.rootSeed,
+      center: { x: 1, y: 0 },
+    });
+    const window = createRegionalTerrainWindow(world.meta.rootSeed, stream);
+    const view = createRegionalWorldView(
+      compatibility,
+      window,
+      projectRegionalCartographyWindow(createRegionalCartography(world.meta.rootSeed), window),
+    );
+    const localTileIndex = 17 * 96 + 23;
+    const viewIndex = regionalTileIndexInView(view, { x: 1, y: 0 }, localTileIndex);
+    const tile = viewIndex === null ? undefined : view.terrain.tiles[viewIndex];
+    if (!tile) throw new Error("regional player coordinate fixture missing");
+    const playerPoint = { x: tile.x * 1_000 + 321, y: tile.y * 1_000 + 654 };
+    const cargoPoint = looseCargoPositionAtRegionalPlayer(view, playerPoint.x, playerPoint.y);
+    expect(cargoPoint).toEqual({
+      region: { x: 1, y: 0 },
+      x: 23_321_000,
+      y: 17_654_000,
+    });
+    expect(playerPositionAtRegionalLooseCargo(view, cargoPoint)).toEqual(playerPoint);
+    expect(playerPositionAtRegionalLooseCargo(view, { ...cargoPoint, region: { x: 9, y: 9 } })).toBeNull();
+  });
+
+  it("samples and steps the active nonzero region against its exact mapped terrain", () => {
+    const world = createWorld("regional parcel weather", "wild");
+    const compatibility = createWorldView(world);
+    const region = { x: -3, y: 5 } as const;
+    const stream = createTerrainRegionStreamingState({ rootSeed: world.meta.rootSeed, center: region });
+    const window = createRegionalTerrainWindow(world.meta.rootSeed, stream);
+    const view = createRegionalWorldView(
+      compatibility,
+      window,
+      projectRegionalCartographyWindow(createRegionalCartography(world.meta.rootSeed), window),
+    );
+    const mapped = Array.from({ length: 96 * 72 }, (_, tileIndex) => ({
+      tileIndex,
+      viewIndex: regionalTileIndexInView(view, region, tileIndex),
+    })).map(({ tileIndex, viewIndex }) => ({ tileIndex, tile: viewIndex === null ? undefined : view.terrain.tiles[viewIndex] }))
+      .filter((entry): entry is { tileIndex: number; tile: NonNullable<typeof entry.tile> } => entry.tile !== undefined)
+      .sort((left, right) => right.tile.waterDepth - left.tile.waterDepth || left.tileIndex - right.tileIndex)[0];
+    if (!mapped) throw new Error("regional parcel terrain fixture missing");
+    let carrier = createLooseCargoCarrier(OWNER, createCraftingInventory(18_000, { cordreed: 1 }));
+    const dropped = dropLooseCargo(createLooseCargoWorld(96, 72, region), carrier, {
+      lotId: "crafting-stack:cordreed",
+      quantity: 1,
+      x: (mapped.tileIndex % 96) * FIXED_POINT + FIXED_POINT / 2,
+      y: Math.floor(mapped.tileIndex / 96) * FIXED_POINT + FIXED_POINT / 2,
+    });
+    if (!dropped.ok) throw new Error(dropped.message);
+    carrier = dropped.carrier;
+    expect(carrier.lots).toHaveLength(0);
+    const sample = sampleLooseCargoEnvironment(view, dropped.world)[0];
+    expect(sample?.waterDepth).toBe(mapped.tile.waterDepth);
+    expect(stepLooseCargoInCompatibilityWorld(view, dropped.world).ok).toBe(true);
   });
 });

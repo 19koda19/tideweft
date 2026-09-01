@@ -4,6 +4,52 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.0 — 2026-09-01
+
+Build: `0.3.3-alpha.0` · Gameplay contract: 9 · Tutorial: 10
+
+The horizon now opens: one deterministic signed world streams through continuous terrain while the floating chart, physical cargo, Wayknots, and local save keep their exact places.
+
+### Gameplay
+
+- The courier can cross regional horizons in every direction, including negative coordinates. Bounded five-region streaming and a one-tile overlap evaluate the real terrain on both sides before the floating 98 × 74 field recenters.
+- Region 0,0 remains the exact authored Alpha estuary. Deterministic generated terrain beyond it continues rivers, relief, water, and biome signals without cloning harbors or easy resource opportunities.
+- Carried lots, region-specific loose-parcel worlds, chart marks, depth soundings, and all six reusable Wayknots retain signed identities across crossing, unloading, return, save, and reload.
+- Promise cargo may take a regional detour and still be delivered after returning. A journey that leaves the authored route network cannot claim fabricated route-reinforcement credit.
+
+### Fixes
+
+- Compatibility resource patches now project only at their true region-0 coordinates; matching local coordinates in another region cannot duplicate, gather, or reset them.
+- Remote PICK UP, DELIVER, and signed-report objectives retain the correct harbor name, finite global distance, and compass bearing instead of collapsing to a false nearby position.
+- Crossing a horizon cancels stale Chart drags, Relief orbit/twist state, pointer captures, and queued local targets so an old spatial frame cannot issue an accidental command in the new one.
+- Published 64 × 48 Alpha saves migrate into compatibility region 0,0 inside the current floating window while preserving their original world, cargo, chart, and choir baseline.
+- A deep-water sweep can continue toward a horizon when no safe bank exists in the current region, rather than deadlocking at the old map edge.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Regional travel does not change fall chances, stamina costs, cargo damage, settlement rewards, or resource rarity.
+- Crossing an empty horizon grants no stock, money, trust, or guaranteed find. Dangerous distance is possibility, not an automatic loot payout.
+
+### Interface
+
+- A restrained horizon message names the signed region after recentering, and the ordinary location line shows R x,y outside the original harbor country.
+- The version-10 T/? field manual adds a complete Horizons page for desktop and touch: crossing, signed addresses, persistence, Promise detours, return guidance, and current frontier limitations.
+- Both Chart 2D and Relief 3D snap cleanly to the same new spatial epoch while preserving camera legibility and the world-north compass.
+
+### Save changes
+
+- Save version 4 adds a sealed regional-travel sidecar containing the signed stream center, transition ordinal, sparse durable manifest, and regional cartography; loaded terrain itself is regenerated from the original seed.
+- The physical-cargo sidecar now separates one active regional parcel world from sealed touched inactive worlds under one exact global custody manifest, preventing unload duplication or silent deletion.
+- Version-1, version-2, and version-3 saves migrate into region 0,0. A version-4 save whose player, cartography, cargo region, or inner and outer seals disagree is quarantined rather than repaired into a different history.
+- The complete outer save is checked against a fixed browser-storage budget before any write; a rejected oversized snapshot cannot overwrite the last durable copy.
+
+### Known limitations
+
+- Authored settlements, residents, Promise generation, route infrastructure, and natural material patches currently exist only in compatibility region 0,0. Generated regional settlement ecology and causal sparse opportunities are not live yet.
+- Loose parcels persist in the region where they stop and reappear with the same identity on return, but autonomous parcel drift does not yet transfer an object across a regional seam.
+- Distant actors, wildlife, humans, aftermath scenes, survival ecology, and low-fidelity unloaded event simulation are not live in this release.
+- Procedural ravines, ladder and rope traversal, living mangrove or bramble catches, and regional weather fronts remain future vertical slices; existing generated ridges, water, global weather, footing, falls, and sweeps are live.
+
 ## 0.3.2-alpha.1 — 2026-09-01
 
 Build: `0.3.2-alpha.1` · Gameplay contract: 8 · Tutorial: 9

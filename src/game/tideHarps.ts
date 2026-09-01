@@ -1,11 +1,13 @@
 import {
   DEFAULT_WAYKNOT_CAPACITY,
+  WAYKNOT_COMPATIBILITY_REGION,
   WAYKNOT_RADII,
   manhattanTileDistance,
   normalizeWayknotState,
   type WayknotGrid,
   type WayknotKind,
 } from "./wayknots";
+import { isRegionCoord, regionKey, type RegionCoord } from "../sim/regions";
 
 export interface TideHarpPoint {
   readonly x: number;
@@ -15,6 +17,7 @@ export interface TideHarpPoint {
 export interface TideHarpKnotRef<K extends WayknotKind = WayknotKind> {
   readonly id: number;
   readonly kind: K;
+  readonly region: RegionCoord;
   readonly tileIndex: number;
   /** Tile-space center, so tile (0, 0) is represented by (0.5, 0.5). */
   readonly point: TideHarpPoint;
@@ -42,6 +45,7 @@ export interface TideHarpEdge {
 export interface TideHarp {
   /** Canonical across input order, save/load, and renderer mode. */
   readonly id: string;
+  readonly region: RegionCoord;
   readonly name: string;
   readonly label: string;
   /** Always Reed mat, Tide anchor, then Wind knot. */
@@ -81,17 +85,29 @@ const TIDE_HARP_NAMES = Object.freeze([
 export function enumerateTideHarpCandidates(
   state: unknown,
   grid: unknown,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): readonly TideHarp[] {
   try {
     const normalizedGrid = normalizeGrid(grid);
-    if (!normalizedGrid) return EMPTY_HARPS;
+    const canonicalRegion = normalizeRegion(region);
+    if (!normalizedGrid || !canonicalRegion) return EMPTY_HARPS;
     const normalizedState = normalizeWayknotState(state, {
       capacity: DEFAULT_WAYKNOT_CAPACITY,
       tileCount: normalizedGrid.tileCount,
     });
     const refs = normalizedState.wayknots.flatMap((wayknot): TideHarpKnotRef[] => {
-      if (wayknot.tileIndex === null) return [];
-      return [makeKnotRef(wayknot.id, wayknot.kind, wayknot.tileIndex, normalizedGrid)];
+      if (
+        wayknot.region === null
+        || !sameRegion(wayknot.region, canonicalRegion)
+        || wayknot.tileIndex === null
+      ) return [];
+      return [makeKnotRef(
+        wayknot.id,
+        wayknot.kind,
+        canonicalRegion,
+        wayknot.tileIndex,
+        normalizedGrid,
+      )];
     });
     const reeds = refs.filter(isReedRef);
     const anchors = refs.filter(isAnchorRef);
@@ -179,8 +195,12 @@ function selectCanonicalTideHarps(candidates: readonly TideHarp[]): readonly Tid
 }
 
 /** Enumerates and resolves the authoritative selected Tide Harps in one call. */
-export function deriveTideHarps(state: unknown, grid: unknown): readonly TideHarp[] {
-  return selectTideHarps(enumerateTideHarpCandidates(state, grid));
+export function deriveTideHarps(
+  state: unknown,
+  grid: unknown,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
+): readonly TideHarp[] {
+  return selectTideHarps(enumerateTideHarpCandidates(state, grid, region));
 }
 
 /** Inclusive point-in-triangle query in tile-space coordinates. */
@@ -240,6 +260,10 @@ function makeCandidate(
   wind: TideHarpKnotRef<"wind-knot">,
   grid: NormalizedGrid,
 ): TideHarp | null {
+  if (
+    !sameRegion(reed.region, anchor.region)
+    || !sameRegion(reed.region, wind.region)
+  ) return null;
   const reedAnchor = makeEdge(reed, anchor, grid);
   const reedWind = makeEdge(reed, wind, grid);
   const anchorWind = makeEdge(anchor, wind, grid);
@@ -249,10 +273,11 @@ function makeCandidate(
   const doubleArea = Math.abs(signedDoubleArea);
   const knots = Object.freeze([reed, anchor, wind]) as TideHarpKnotTuple;
   const edges = Object.freeze([reedAnchor, reedWind, anchorWind]) as TideHarp["edges"];
-  const id = `tide-harp:r${reed.id}-a${anchor.id}-w${wind.id}`;
+  const id = tideHarpId(reed.region, reed.id, anchor.id, wind.id);
   const name = tideHarpName(reed.id, anchor.id, wind.id);
   return Object.freeze({
     id,
+    region: Object.freeze({ ...reed.region }),
     name,
     label: `${name} Tide Harp · R${reed.id} · A${anchor.id} · W${wind.id}`,
     knots,
@@ -292,12 +317,14 @@ function makeEdge(
 function makeKnotRef<K extends WayknotKind>(
   id: number,
   kind: K,
+  region: RegionCoord,
   tileIndex: number,
   grid: NormalizedGrid,
 ): TideHarpKnotRef<K> {
   return Object.freeze({
     id,
     kind,
+    region: Object.freeze({ ...region }),
     tileIndex,
     point: Object.freeze(tileCenter(tileIndex, grid)),
   });
@@ -328,6 +355,8 @@ function normalizeGrid(value: unknown): NormalizedGrid | null {
 }
 
 function compareHarpsCanonical(left: TideHarp, right: TideHarp): number {
+  const regionComparison = compareRegions(left.region, right.region);
+  if (regionComparison !== 0) return regionComparison;
   for (let index = 0; index < 3; index += 1) {
     const leftId = left.knots[index]?.id ?? 0;
     const rightId = right.knots[index]?.id ?? 0;
@@ -352,10 +381,18 @@ function tideHarpName(reedId: number, anchorId: number, windId: number): string 
   return TIDE_HARP_NAMES[fixedKitIndex] ?? "Waywater";
 }
 
+function tideHarpId(region: RegionCoord, reedId: number, anchorId: number, windId: number): string {
+  const members = `r${reedId}-a${anchorId}-w${windId}`;
+  return sameRegion(region, WAYKNOT_COMPATIBILITY_REGION)
+    ? `tide-harp:${members}`
+    : `tide-harp:${regionKey(region)}:${members}`;
+}
+
 function isTideHarp(value: unknown): value is TideHarp {
   if (
     !isRecord(value)
     || typeof value.id !== "string"
+    || !normalizeRegion(value.region)
     || typeof value.name !== "string"
     || typeof value.label !== "string"
   ) return false;
@@ -363,6 +400,8 @@ function isTideHarp(value: unknown): value is TideHarp {
   if (!isKnotRef(value.knots[0], "reed-mat")) return false;
   if (!isKnotRef(value.knots[1], "tide-anchor")) return false;
   if (!isKnotRef(value.knots[2], "wind-knot")) return false;
+  const region = normalizeRegion(value.region);
+  if (!region || value.knots.some((knot) => !sameRegion(knot.region, region))) return false;
   const ids = new Set(value.knots.map((knot) => knot.id));
   if (ids.size !== 3 || !Array.isArray(value.edges) || value.edges.length !== 3) return false;
   return isPoint(value.center)
@@ -379,6 +418,7 @@ function isKnotRef<K extends WayknotKind>(value: unknown, kind: K): value is Tid
   return Number.isSafeInteger(value.id)
     && (value.id as number) > 0
     && value.kind === kind
+    && normalizeRegion(value.region) !== null
     && Number.isSafeInteger(value.tileIndex)
     && (value.tileIndex as number) >= 0
     && isPoint(value.point);
@@ -425,4 +465,23 @@ function isPoint(value: unknown): value is TideHarpPoint {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeRegion(value: unknown): RegionCoord | null {
+  if (
+    !isRecord(value)
+    || Object.keys(value).sort().join(",") !== "x,y"
+    || !isRegionCoord(value)
+  ) return null;
+  return Object.freeze({ x: value.x as number, y: value.y as number });
+}
+
+function sameRegion(left: RegionCoord, right: RegionCoord): boolean {
+  return left.x === right.x && left.y === right.y;
+}
+
+function compareRegions(left: RegionCoord, right: RegionCoord): number {
+  if (left.x !== right.x) return left.x < right.x ? -1 : 1;
+  if (left.y !== right.y) return left.y < right.y ? -1 : 1;
+  return 0;
 }

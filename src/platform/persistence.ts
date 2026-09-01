@@ -35,6 +35,9 @@ export interface SaveRepository {
   remove(slotId: string): Promise<void>;
 }
 
+/** Shared outer fence for runtime envelopes, repositories, and import/export. */
+export const SAVE_WORLD_JSON_MAX_CHARACTERS = 20_000_000;
+
 /** A write that cannot become authoritative must never masquerade as saved. */
 export class StaleSaveWriteError extends Error {
   constructor(slotId: string) {
@@ -768,7 +771,9 @@ export function exportSave(record: SaveRecord): void {
 }
 
 export async function importSave(file: File): Promise<SaveRecord> {
-  if (file.size > 20_000_000) throw new Error("That save is larger than the 20 MB import limit.");
+  if (file.size > SAVE_WORLD_JSON_MAX_CHARACTERS) {
+    throw new Error("That save is larger than the 20 MB import limit.");
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text()) as unknown;
@@ -1130,5 +1135,7 @@ function validateRecord(record: SaveRecord): void {
   ]) {
     if (!Number.isSafeInteger(value) || value < 0) throw new Error("Save metadata contains an invalid number.");
   }
-  if (record.worldJson.length > 20_000_000) throw new Error("Save data exceeds the 20 MB limit.");
+  if (record.worldJson.length > SAVE_WORLD_JSON_MAX_CHARACTERS) {
+    throw new Error("Save data exceeds the 20 MB limit.");
+  }
 }

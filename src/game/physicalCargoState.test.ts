@@ -7,10 +7,15 @@ import { createPlayer, PACK_LOAD_MILLI_PER_UNIT } from "./player";
 import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
 import {
+  PHYSICAL_CARGO_MAX_INACTIVE_WORLDS,
+  PHYSICAL_CARGO_MAX_SERIALIZED_BYTES,
+  PHYSICAL_CARGO_STATE_VERSION,
+  adoptPhysicalCargoStateV1,
   commitPhysicalCargoState,
   createPhysicalCargoStateFromPlayer,
   gameSaveEnvelopeIntegrity,
   quotePhysicalCargoSource,
+  transitionPhysicalCargoRegion,
   validatePhysicalCargoState,
   type PhysicalCargoState,
 } from "./physicalCargoState";
@@ -26,7 +31,9 @@ import {
   scatterLooseCargo,
   setLooseCargoLotMaterialState,
   stepLooseCargo,
+  validateLooseCargoWorld,
 } from "./looseCargo";
+import { projectLooseCargoCarrierToPlayer } from "./looseCargoRuntime";
 
 function fixture() {
   const world = createWorldView(createWorld("physical cargo save fixture", "wild"));
@@ -54,11 +61,41 @@ function resealPhysicalCargoState(
   const unsealed = {
     version: changes.version ?? state.version,
     lastSourceOrdinal: changes.lastSourceOrdinal ?? state.lastSourceOrdinal,
+    activeRegion: changes.activeRegion ?? state.activeRegion,
+    activeRegionKey: changes.activeRegionKey ?? state.activeRegionKey,
     looseWorld: changes.looseWorld ?? state.looseWorld,
+    inactiveWorlds: changes.inactiveWorlds ?? state.inactiveWorlds,
     carrier: changes.carrier ?? state.carrier,
     expectedManifest: changes.expectedManifest ?? state.expectedManifest,
   };
+  const sealPayload = {
+    ...unsealed,
+    inactiveWorlds: unsealed.inactiveWorlds.map(({ regionKey, integrity }) => ({
+      regionKey,
+      integrity,
+    })),
+  };
+  return { ...unsealed, integrity: hashCanonical(sealPayload) };
+}
+
+function legacyPhysicalCargoV1(state: PhysicalCargoState) {
+  const unsealed = {
+    version: 1 as const,
+    lastSourceOrdinal: state.lastSourceOrdinal,
+    looseWorld: state.looseWorld,
+    carrier: state.carrier,
+    expectedManifest: state.expectedManifest,
+  };
   return { ...unsealed, integrity: hashCanonical(unsealed) };
+}
+
+function mirrorPhysicalCarrierToPlayer(
+  state: PhysicalCargoState,
+  player: ReturnType<typeof createPlayer>,
+): void {
+  const mirror = projectLooseCargoCarrierToPlayer(state.carrier);
+  player.craftingInventory = mirror.craftingInventory;
+  player.cargo = mirror.cargo.map((cargo) => ({ ...cargo }));
 }
 
 function commitPromiseDrop(state: PhysicalCargoState): PhysicalCargoState {
@@ -87,12 +124,73 @@ describe("physical cargo save state", () => {
       "gear:7",
       "promise:19",
     ]);
+    expect(state).toMatchObject({
+      version: PHYSICAL_CARGO_STATE_VERSION,
+      activeRegion: { x: 0, y: 0 },
+      activeRegionKey: "r:0:0",
+      inactiveWorlds: [],
+    });
     expect(validatePhysicalCargoState(
       structuredClone(state),
       player,
       world.terrain.width,
       world.terrain.height,
     )).toMatchObject({ valid: true, reason: "valid" });
+  });
+
+  it("adopts an exact sealed v1 sidecar only through the explicit migration gate", () => {
+    const { world, player } = fixture();
+    const current = createPhysicalCargoStateFromPlayer(
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    const legacy = legacyPhysicalCargoV1(current);
+    expect(validatePhysicalCargoState(
+      legacy,
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    ).reason).toBe("invalid-state");
+
+    const adopted = adoptPhysicalCargoStateV1(
+      structuredClone(legacy),
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    expect(adopted).toMatchObject({ valid: true, reason: "valid" });
+    expect(adopted.state).toMatchObject({
+      version: 2,
+      lastSourceOrdinal: legacy.lastSourceOrdinal,
+      activeRegion: { x: 0, y: 0 },
+      activeRegionKey: "r:0:0",
+      inactiveWorlds: [],
+      carrier: legacy.carrier,
+      looseWorld: legacy.looseWorld,
+      expectedManifest: legacy.expectedManifest,
+    });
+
+    const deletedUnsealed = {
+      version: 1 as const,
+      lastSourceOrdinal: legacy.lastSourceOrdinal,
+      looseWorld: legacy.looseWorld,
+      carrier: { ...legacy.carrier, lots: legacy.carrier.lots.slice(1) },
+      expectedManifest: legacy.expectedManifest,
+    };
+    const deleted = { ...deletedUnsealed, integrity: hashCanonical(deletedUnsealed) };
+    expect(adoptPhysicalCargoStateV1(
+      deleted,
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    ).reason).toBe("manifest-mismatch");
+    expect(adoptPhysicalCargoStateV1(
+      { ...legacy, extra: true },
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    ).reason).toBe("invalid-state");
   });
 
   it("deep-freezes every sidecar admitted to the trusted commit fast path", () => {
@@ -113,6 +211,160 @@ describe("physical cargo save state", () => {
       looseWorld: state.looseWorld,
       carrier: state.carrier,
     }, { kind: "conserved" })).not.toThrow();
+  });
+
+  it("drops in two regions, revisits exact worlds, and conserves one global manifest", () => {
+    const { world, player } = fixture();
+    const width = world.terrain.width;
+    const height = world.terrain.height;
+    const initial = createPhysicalCargoStateFromPlayer(player, width, height);
+
+    const zeroDrop = dropLooseCargo(initial.looseWorld, initial.carrier, {
+      lotId: "crafting-stack:cordreed",
+      quantity: 1,
+      x: 500_000,
+      y: 500_000,
+    });
+    if (!zeroDrop.ok || !zeroDrop.entity) throw new Error(`region-zero drop failed: ${zeroDrop.reason}`);
+    const regionZero = commitPhysicalCargoState(initial, {
+      looseWorld: zeroDrop.world,
+      carrier: zeroDrop.carrier,
+    }, { kind: "conserved" });
+    const zeroSnapshot = structuredClone(regionZero.looseWorld);
+
+    const eastEmpty = transitionPhysicalCargoRegion(regionZero, { x: 1, y: 0 }, width, height);
+    expect(eastEmpty.activeRegionKey).toBe("r:1:0");
+    expect(eastEmpty.inactiveWorlds.map(({ regionKey }) => regionKey)).toEqual(["r:0:0"]);
+    const eastDrop = dropLooseCargo(eastEmpty.looseWorld, eastEmpty.carrier, {
+      lotId: "promise:19",
+      x: 750_000,
+      y: 500_000,
+    });
+    if (!eastDrop.ok || !eastDrop.entity) throw new Error(`east-region drop failed: ${eastDrop.reason}`);
+    const east = commitPhysicalCargoState(eastEmpty, {
+      looseWorld: eastDrop.world,
+      carrier: eastDrop.carrier,
+    }, { kind: "conserved" });
+    const eastSnapshot = structuredClone(east.looseWorld);
+    expect(east.expectedManifest).toEqual(initial.expectedManifest);
+    expect(zeroDrop.entity.id).toBe("lc:0:0:parcel:1");
+    expect(eastDrop.entity.id).toBe("lc:1:0:parcel:1");
+
+    const revisitedZero = transitionPhysicalCargoRegion(east, { x: 0, y: 0 }, width, height);
+    expect(revisitedZero.looseWorld).toEqual(zeroSnapshot);
+    expect(revisitedZero.inactiveWorlds.map(({ regionKey }) => regionKey)).toEqual(["r:1:0"]);
+    const revisitedEast = transitionPhysicalCargoRegion(revisitedZero, { x: 1, y: 0 }, width, height);
+    expect(revisitedEast.looseWorld).toEqual(eastSnapshot);
+    expect(revisitedEast.expectedManifest).toEqual(initial.expectedManifest);
+    expect(transitionPhysicalCargoRegion(revisitedEast, { x: 1, y: 0 }, width, height))
+      .toBe(revisitedEast);
+
+    mirrorPhysicalCarrierToPlayer(revisitedEast, player);
+    expect(validatePhysicalCargoState(
+      JSON.parse(JSON.stringify(revisitedEast)),
+      player,
+      width,
+      height,
+    )).toMatchObject({ valid: true, reason: "valid" });
+  });
+
+  it("supports negative and extremely distant transitions without retaining pristine worlds", () => {
+    const { world, player } = fixture();
+    const width = world.terrain.width;
+    const height = world.terrain.height;
+    const initial = createPhysicalCargoStateFromPlayer(player, width, height);
+    const negative = transitionPhysicalCargoRegion(initial, { x: -1, y: -7 }, width, height);
+    expect(negative).toMatchObject({
+      activeRegion: { x: -1, y: -7 },
+      activeRegionKey: "r:-1:-7",
+      inactiveWorlds: [],
+    });
+    expect(negative.lastSourceOrdinal).toBe(initial.lastSourceOrdinal);
+    expect(negative.carrier).toBe(initial.carrier);
+    expect(negative.expectedManifest).toBe(initial.expectedManifest);
+
+    const distantRegion = {
+      x: -Number.MAX_SAFE_INTEGER,
+      y: Number.MAX_SAFE_INTEGER,
+    };
+    const distant = transitionPhysicalCargoRegion(negative, distantRegion, width, height);
+    expect(distant.activeRegion).toEqual(distantRegion);
+    expect(distant.inactiveWorlds).toEqual([]);
+    expect(quotePhysicalCargoSource(distant, "gather", "distant-node").lotId)
+      .toMatch(/^pc:-9007199254740991:9007199254740991:source:1:gather:/u);
+    const boundedSource = quotePhysicalCargoSource(distant, "x".repeat(96), "distant-node");
+    expect(boundedSource.lotId.length).toBeLessThanOrEqual(160);
+    const returned = transitionPhysicalCargoRegion(distant, { x: 0, y: 0 }, width, height);
+    expect(returned.inactiveWorlds).toEqual([]);
+    expect(returned.looseWorld).toEqual(initial.looseWorld);
+    expect(() => transitionPhysicalCargoRegion(returned, { x: -0, y: 0 }, width, height))
+      .toThrow(/safe integers/u);
+    expect(() => transitionPhysicalCargoRegion(returned, { x: 0, y: 0 }, width + 1, height))
+      .toThrow(/dimensions/u);
+  });
+
+  it("keeps transition order deterministic, bounded, and reloadable across a signed-region fuzz walk", () => {
+    const { world, player } = fixture();
+    const width = world.terrain.width;
+    const height = world.terrain.height;
+    const initial = createPhysicalCargoStateFromPlayer(player, width, height);
+    const regions = Array.from({ length: 24 }, (_, index) => ({
+      x: index % 2 === 0 ? index + 1 : -(index + 1),
+      y: ((index * 17) % 11) - 5,
+    }));
+    let state = initial;
+    for (const region of regions) {
+      state = transitionPhysicalCargoRegion(state, region, width, height);
+      const stepped = stepLooseCargo(state.looseWorld, []);
+      if (!stepped.ok) throw new Error(`regional fuzz step failed: ${stepped.reason}`);
+      state = commitPhysicalCargoState(state, {
+        looseWorld: stepped.state,
+        carrier: state.carrier,
+      }, { kind: "conserved" });
+    }
+    expect(state.inactiveWorlds).toHaveLength(regions.length - 1);
+    const keys = state.inactiveWorlds.map(({ regionKey }) => regionKey);
+    expect(keys).toEqual([...keys].sort());
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(state.expectedManifest).toEqual(initial.expectedManifest);
+    expect(state.carrier).toEqual(initial.carrier);
+    expect(state.lastSourceOrdinal).toBe(0);
+
+    for (const region of [...regions].reverse()) {
+      state = transitionPhysicalCargoRegion(state, region, width, height);
+    }
+    mirrorPhysicalCarrierToPlayer(state, player);
+    const cloned = structuredClone(state);
+    expect(validatePhysicalCargoState(cloned, player, width, height))
+      .toMatchObject({ valid: true, reason: "valid" });
+    expect(new TextEncoder().encode(JSON.stringify(cloned)).byteLength)
+      .toBeLessThan(PHYSICAL_CARGO_MAX_SERIALIZED_BYTES);
+    expect(PHYSICAL_CARGO_MAX_INACTIVE_WORLDS).toBe(131_071);
+
+    const inactive = state.inactiveWorlds[0];
+    if (!inactive) throw new Error("regional capacity fixture has no inactive world");
+    const overCapacity = {
+      ...state,
+      inactiveWorlds: Array.from(
+        { length: PHYSICAL_CARGO_MAX_INACTIVE_WORLDS + 1 },
+        () => inactive,
+      ),
+    };
+    expect(validatePhysicalCargoState(overCapacity, player, width, height).reason)
+      .toBe("invalid-inactive-worlds");
+
+    const saturated = resealPhysicalCargoState(state, {
+      lastSourceOrdinal: Number.MAX_SAFE_INTEGER,
+    });
+    expect(() => quotePhysicalCargoSource(saturated, "gather", "no-space"))
+      .toThrow(/identity space is exhausted/u);
+    const transitioned = transitionPhysicalCargoRegion(
+      saturated,
+      { x: 77, y: -88 },
+      width,
+      height,
+    );
+    expect(transitioned.lastSourceOrdinal).toBe(Number.MAX_SAFE_INTEGER);
   });
 
   it("adopts a legacy maximum history tail and archives it on the next step", () => {
@@ -178,6 +430,77 @@ describe("physical cargo save state", () => {
     const wrongMirror = structuredClone(player);
     wrongMirror.cargo[0]!.condition -= 1;
     expect(validate(state, wrongMirror)).toBe("player-mirror-mismatch");
+  });
+
+  it("rejects resealed inactive deletion, archive rollback, coordinate swaps, and parcel duplication", () => {
+    const { world, player } = fixture();
+    const width = world.terrain.width;
+    const height = world.terrain.height;
+    const initial = createPhysicalCargoStateFromPlayer(player, width, height);
+    const dropped = commitPromiseDrop(initial);
+    const activeEast = transitionPhysicalCargoRegion(dropped, { x: 1, y: 0 }, width, height);
+    const inactive = activeEast.inactiveWorlds[0];
+    const parcel = inactive?.world.entities[0];
+    if (!inactive || !parcel) throw new Error("regional tamper fixture is incomplete");
+    const reason = (value: unknown) => validatePhysicalCargoState(
+      value,
+      player,
+      width,
+      height,
+    ).reason;
+
+    expect(reason(resealPhysicalCargoState(activeEast, { inactiveWorlds: [] })))
+      .toBe("manifest-mismatch");
+    expect(reason(resealPhysicalCargoState(activeEast, {
+      inactiveWorlds: [{
+        ...inactive,
+        world: {
+          ...inactive.world,
+          historyBaseOrdinal: 1,
+          historyArchiveHash: "1111111111111111",
+          history: [],
+        },
+      }],
+    }))).toBe("invalid-inactive-worlds");
+    expect(reason(resealPhysicalCargoState(activeEast, {
+      inactiveWorlds: [{ ...inactive, regionKey: "r:2:0" }],
+    }))).toBe("invalid-inactive-worlds");
+    expect(reason(resealPhysicalCargoState(activeEast, {
+      inactiveWorlds: [{
+        ...inactive,
+        world: {
+          ...inactive.world,
+          entities: [{
+            ...parcel,
+            materialState: {
+              ...parcel.materialState,
+              condition: Math.min(1_000_000, parcel.materialState.condition + 1),
+            },
+          }],
+        },
+      }],
+    }))).toBe("invalid-inactive-worlds");
+
+    const duplicatedActiveWorld = {
+      ...activeEast.looseWorld,
+      revision: 1,
+      lastEventOrdinal: parcel.lastEventOrdinal,
+      historyBaseOrdinal: parcel.lastEventOrdinal,
+      historyArchiveHash: "1111111111111111",
+      entities: [parcel],
+    };
+    expect(validateLooseCargoWorld(duplicatedActiveWorld).valid).toBe(true);
+    expect(reason(resealPhysicalCargoState(activeEast, {
+      looseWorld: duplicatedActiveWorld,
+    }))).toBe("duplicate-identity");
+    expect(reason(resealPhysicalCargoState(activeEast, {
+      inactiveWorlds: [inactive, inactive],
+    }))).toBe("noncanonical-order");
+    expect(reason(resealPhysicalCargoState(activeEast, {
+      activeRegion: { x: 2, y: 0 },
+      activeRegionKey: "r:2:0",
+    }))).toBe("invalid-region");
+    expect(reason({ ...activeEast, extra: "not canonical" })).toBe("invalid-state");
   });
 
   it("keeps a quoted source ordinal unspent until the matching mutation commits", () => {

@@ -50,6 +50,12 @@ import {
   gameSaveEnvelopeIntegrity,
   type PhysicalCargoState,
 } from "./physicalCargoState";
+import {
+  REGIONAL_TRAVEL_COLUMNS,
+  REGIONAL_TRAVEL_HALO_TILES,
+  REGIONAL_TRAVEL_ROWS,
+} from "./regionalTravel";
+import type { RegionalPromiseJourneyState } from "./regionalPromiseJourney";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -215,6 +221,8 @@ interface TestGameSaveEnvelope {
   fieldResources?: FieldResourceEcologyState;
   traversalFeedback?: TraversalFeedbackState;
   physicalCargo?: PhysicalCargoState;
+  regionalTravel?: string;
+  promiseJourney?: RegionalPromiseJourneyState;
   integrity?: string;
 }
 
@@ -1314,7 +1322,12 @@ describe("runtime clarity guards", () => {
 
     runtime.dispatchRenderer({
       type: "move-target",
-      point: { x: (channel.x + 0.5) * 24, y: (channel.y + 0.5) * 24 },
+      point: {
+        x: (channel.x + REGIONAL_TRAVEL_HALO_TILES + 0.5)
+          * runtime.getRenderView().terrain.tileSize,
+        y: (channel.y + REGIONAL_TRAVEL_HALO_TILES + 0.5)
+          * runtime.getRenderView().terrain.tileSize,
+      },
       additive: false,
     });
     advancePlayerSteps(runtime, 1);
@@ -1747,10 +1760,17 @@ describe("runtime clarity guards", () => {
     const repairedWorld = deserializeWorld(repaired.world);
     expect(repairedWorld.terrain.width).toBe(LEGACY_WORLD_WIDTH);
     expect(repairedWorld.terrain.height).toBe(LEGACY_WORLD_HEIGHT);
-    expect(repaired.player.worldWidth).toBe(LEGACY_WORLD_WIDTH);
-    expect(repaired.player.worldHeight).toBe(LEGACY_WORLD_HEIGHT);
+    expect(repaired.player.worldWidth).toBe(REGIONAL_TRAVEL_COLUMNS);
+    expect(repaired.player.worldHeight).toBe(REGIONAL_TRAVEL_ROWS);
+    const repairedOrigin = world.settlements.find(
+      (settlement) => settlement.id === contract.originSettlementId,
+    )?.tileIndex;
+    if (repairedOrigin === undefined) throw new Error("legacy Promise origin disappeared");
+    const repairedOriginX = repairedOrigin % LEGACY_WORLD_WIDTH;
+    const repairedOriginY = Math.floor(repairedOrigin / LEGACY_WORLD_WIDTH);
     expect(repaired.player.currentTrace).toEqual([
-      world.settlements.find((settlement) => settlement.id === contract.originSettlementId)?.tileIndex,
+      (repairedOriginY + REGIONAL_TRAVEL_HALO_TILES) * REGIONAL_TRAVEL_COLUMNS
+        + repairedOriginX + REGIONAL_TRAVEL_HALO_TILES,
     ]);
     expect(repaired.player.currentTrace.every(Number.isSafeInteger)).toBe(true);
     expect(repaired.player.wayknots.capacity).toBe(6);
@@ -1882,11 +1902,24 @@ describe("runtime clarity guards", () => {
     const trace = route.fromSettlementId === carriedContract.originSettlementId
       ? [...route.path]
       : [...route.path].reverse();
-    carriedSave.player.x = destinationTile.x * TILE_UNITS + TILE_UNITS / 2;
-    carriedSave.player.y = destinationTile.y * TILE_UNITS + TILE_UNITS / 2;
+    carriedSave.player.x = (destinationTile.x + REGIONAL_TRAVEL_HALO_TILES) * TILE_UNITS
+      + TILE_UNITS / 2;
+    carriedSave.player.y = (destinationTile.y + REGIONAL_TRAVEL_HALO_TILES) * TILE_UNITS
+      + TILE_UNITS / 2;
     carriedSave.player.previousX = carriedSave.player.x;
     carriedSave.player.previousY = carriedSave.player.y;
-    carriedSave.player.currentTrace = trace;
+    carriedSave.player.currentTrace = trace.map((tileIndex) => {
+      const x = tileIndex % carriedWorld.terrain.width;
+      const y = Math.floor(tileIndex / carriedWorld.terrain.width);
+      return (y + REGIONAL_TRAVEL_HALO_TILES) * REGIONAL_TRAVEL_COLUMNS
+        + x + REGIONAL_TRAVEL_HALO_TILES;
+    });
+    carriedSave.promiseJourney = {
+      version: 1,
+      contractId,
+      detoured: false,
+      compatibilityTrace: trace,
+    };
     resealGameSave(carriedSave);
     repository.replace({
       ...carriedSaveRecord,

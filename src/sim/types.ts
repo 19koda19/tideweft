@@ -322,6 +322,11 @@ export interface DeliverContractCommand extends CommandBase {
   destinationSettlementId: EntityId;
   condition: number;
   trace: readonly number[];
+  /**
+   * A journey that left compatibility region 0,0 may still deliver its exact
+   * physical cargo, but its floating indexes are never accepted as route proof.
+   */
+  routeEvidence?: "compatibility-trace" | "regional-detour";
 }
 
 export interface CancelContractCommand extends CommandBase {

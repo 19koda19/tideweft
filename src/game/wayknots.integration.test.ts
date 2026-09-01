@@ -135,12 +135,12 @@ describe("Wayknots game wiring", () => {
 
     expect(player.wayknots.capacity).toBe(6);
     expect(player.wayknots.wayknots).toEqual([
-      { id: 1, kind: "reed-mat", tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
-      { id: 2, kind: "reed-mat", tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
-      { id: 3, kind: "tide-anchor", tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
-      { id: 4, kind: "tide-anchor", tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
-      { id: 5, kind: "wind-knot", tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
-      { id: 6, kind: "wind-knot", tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
+      { id: 1, kind: "reed-mat", region: null, tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
+      { id: 2, kind: "reed-mat", region: null, tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
+      { id: 3, kind: "tide-anchor", region: null, tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
+      { id: 4, kind: "tide-anchor", region: null, tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
+      { id: 5, kind: "wind-knot", region: null, tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
+      { id: 6, kind: "wind-knot", region: null, tileIndex: null, condition: FIXED_POINT, readyTick: 0, serviceWearRemainder: 0 },
     ]);
 
     const placements = [

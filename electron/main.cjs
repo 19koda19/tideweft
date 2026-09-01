@@ -11,20 +11,31 @@ const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`;
 const PRODUCTION_ENTRY_URL = `${APP_ORIGIN}/index.html`;
 const DEV_ORIGIN = 'http://127.0.0.1:5173';
 const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
-const SMOKE_WORLD_TILE_COUNT = 96 * 72;
+const SMOKE_COMPATIBILITY_COLUMNS = 96;
+const SMOKE_REGIONAL_COLUMNS = 98;
+const SMOKE_REGIONAL_ROWS = 74;
+const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.2-alpha.1';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 8;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.0';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 9;
+const smokeRegionalTileIndex = (compatibilityTileIndex) => {
+  const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
+  const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
+  return (y + 1) * SMOKE_REGIONAL_COLUMNS + x + 1;
+};
 const SMOKE_TIDE_HARP = Object.freeze({
   id: 'tide-harp:r1-a3-w5',
   label: 'Glass-Ebb Tide Harp · R1 · A3 · W5',
-  reedTileIndex: 2_942,
-  anchorTileIndex: 3_230,
-  windTileIndex: 2_751,
+  reedLocalTileIndex: 2_942,
+  anchorLocalTileIndex: 3_230,
+  windLocalTileIndex: 2_751,
+  reedTileIndex: smokeRegionalTileIndex(2_942),
+  anchorTileIndex: smokeRegionalTileIndex(3_230),
+  windTileIndex: smokeRegionalTileIndex(2_751),
   // Six tiles south of A3, but nine tiles from the player at R1. The normal
   // radius-8 pulse cannot reach it; the anchor's radius-6 echo can.
-  remoteEchoTileIndex: 3_806,
+  remoteEchoTileIndex: smokeRegionalTileIndex(3_806),
 });
 const SMOKE_MINIMUM_VIEWPORT = Object.freeze({ width: 960, height: 640 });
 const SMOKE_RESPONSIVE_VIEWPORT = Object.freeze({ width: 927, height: 640 });
@@ -1495,24 +1506,39 @@ async function installSmokeTideHarpFixture(contents) {
     const envelope = JSON.parse(record.worldJson);
     const player = envelope?.player;
     const knots = player?.wayknots?.wayknots;
-    if (!player || !Array.isArray(knots)) {
+    const promiseJourney = envelope?.promiseJourney;
+    const activeRegion = envelope?.physicalCargo?.activeRegion;
+    if (
+      envelope?.format !== 'tideweft-session' ||
+      envelope?.version !== 4 ||
+      record.payloadVersion !== 4 ||
+      typeof envelope.regionalTravel !== 'string' ||
+      !player ||
+      !Array.isArray(knots) ||
+      !Number.isSafeInteger(player.activeContractId) ||
+      promiseJourney?.contractId !== player.activeContractId ||
+      promiseJourney?.version !== 1 ||
+      activeRegion?.x !== 0 ||
+      activeRegion?.y !== 0
+    ) {
       database.close();
       return null;
     }
     const placementById = new Map([
-      [1, ${SMOKE_TIDE_HARP.reedTileIndex}],
-      [3, ${SMOKE_TIDE_HARP.anchorTileIndex}],
-      [5, ${SMOKE_TIDE_HARP.windTileIndex}],
+      [1, ${SMOKE_TIDE_HARP.reedLocalTileIndex}],
+      [3, ${SMOKE_TIDE_HARP.anchorLocalTileIndex}],
+      [5, ${SMOKE_TIDE_HARP.windLocalTileIndex}],
     ]);
     player.wayknots.wayknots = knots.map((knot) => ({
       ...knot,
+      region: placementById.has(knot.id) ? { x: 0, y: 0 } : null,
       tileIndex: placementById.has(knot.id) ? placementById.get(knot.id) : null,
     }));
 
     // Player coordinates are fixed-point tile units in the persisted format.
     const columns = player.worldWidth;
     const tileIndex = ${SMOKE_TIDE_HARP.reedTileIndex};
-    if (!Number.isSafeInteger(columns) || columns !== 96) {
+    if (!Number.isSafeInteger(columns) || columns !== ${SMOKE_REGIONAL_COLUMNS}) {
       database.close();
       return null;
     }
@@ -1533,7 +1559,18 @@ async function installSmokeTideHarpFixture(contents) {
     player.currentTrace = [tileIndex];
     player.surveyTrace = [tileIndex];
 
-    // The v3 production loader seals the complete envelope. This smoke-only
+    // Relocating the porter away from the live compatibility trace must also
+    // update the v4 Promise-journey sidecar. A detour preserves contract
+    // custody while explicitly refusing finite-route credit; leaving the old
+    // trace in place is correctly rejected by the production loader.
+    envelope.promiseJourney = {
+      version: promiseJourney.version,
+      contractId: player.activeContractId,
+      detoured: true,
+      compatibilityTrace: [],
+    };
+
+    // The v4 production loader seals the complete envelope. This smoke-only
     // persisted fixture deliberately changes player state, so reseal it with
     // the exact canonical encoder/hash used by the production runtime before
     // proving that the normal load path accepts it.
@@ -1591,6 +1628,10 @@ async function installSmokeTideHarpFixture(contents) {
       seed: record.seed,
       tiles: [...placementById.values()],
       playerTileIndex: tileIndex,
+      saveVersion: envelope.version,
+      gameplayContractVersion: ${SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION},
+      activeRegion: { x: activeRegion.x, y: activeRegion.y },
+      promiseJourney: { ...envelope.promiseJourney },
     };
   })()`, true);
 

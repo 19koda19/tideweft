@@ -15,6 +15,7 @@ export const TUTORIAL_SECTION_IDS = [
   "welcome",
   "whats-new",
   "movement",
+  "signed-regions",
   "promises",
   "reports",
   "water-and-meters",
@@ -295,10 +296,10 @@ export const TUTORIAL_CONTROLS = [
  */
 export const TUTORIAL_PLANNED_MECHANICS = [
   {
-    id: "planned-world-expansion",
+    id: "planned-regional-settlements",
     status: "planned",
-    title: "Broader procedural regions",
-    clarification: "The current estuary is one finite seed-generated map; starting a new game with another seed regenerates its terrain, biome pattern, and harbor sites. Broader regions and dynamically extending a running settlement network are planned, not live in this build.",
+    title: "Regional settlements and living opportunities",
+    clarification: "Signed terrain now generates and streams continuously beyond region 0,0. Authored harbors, their Promise economy, and natural material patches remain in compatibility region 0,0. Generated settlements, actors, causal finds, and extension of the running settlement network are planned rather than cloned into empty country.",
     keywords: ["procedural generation", "world seed", "region", "reseed", "harbor", "settlement"],
   },
   {
@@ -352,7 +353,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "welcome-read-world",
         audience: "all",
         title: "Needs cause promises",
-        body: "Each finite estuary is procedurally generated from its world seed: the same seed reproduces its terrain, biome pattern, and harbor sites. Those settlements produce, consume, build civic projects, and experience shortages, so Promise cards come from simulated needs rather than a disconnected quest table.",
+        body: "Each estuary uses one world seed to reproduce continuous signed terrain in every direction. Compatibility region 0,0 preserves its original biome pattern and harbor sites; those settlements produce, consume, build civic projects, and experience shortages, so Promise cards come from simulated needs rather than a disconnected quest table.",
       },
       {
         id: "welcome-leave-strands",
@@ -458,6 +459,63 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         tone: "mastery",
         title: "Short-screen rhythm",
         body: "Keep the Promises sheet folded while traveling so the compact route, safety, terrain, and action lines stay readable above the world.",
+      },
+    ],
+  },
+  {
+    id: "signed-regions",
+    iconText: "∞",
+    title: "Cross a horizon; keep the same world",
+    shortTitle: "Horizons",
+    summary: "The terrain continues through signed regions. Crossing an edge recenters the floating chart without resetting your courier, cargo, discoveries, or placed field kit.",
+    keywords: ["region", "horizon", "infinite", "signed", "negative", "boundary", "floating origin", "recenter", "return"],
+    controlIds: ["move-keys", "set-destination", "world-zoom"],
+    steps: [
+      {
+        id: "regions-cross",
+        audience: "all",
+        title: "Travel through the edge",
+        body: "Walk to a Chart or Relief edge, or tap a route to its visible edge on touch. Entering the one-tile horizon recenters the same continuous terrain and announces its signed address, such as R +1,0 or R -1,+2. Continue from the new edge; there is no authored outer wall.",
+      },
+      {
+        id: "regions-read-address",
+        audience: "all",
+        title: "Use the address and compass",
+        body: "Outside the original harbor country, the quiet location line shows R x,y. The N compass remains world-north, and a remote PICK UP, DELIVER, report, or lost Promise objective keeps its true global distance and bearing instead of pretending the target is nearby.",
+      },
+      {
+        id: "regions-persist",
+        audience: "all",
+        title: "The horizon does not reset things",
+        body: "The local save records the signed center, chart marks, soundings, deployed Wayknots, carried lot identities, and touched parcel worlds. Returning regenerates deterministic terrain and restores durable changes; a collected compatibility resource never reappears just because its region unloaded.",
+      },
+      {
+        id: "regions-promise-detour",
+        audience: "all",
+        title: "A detour remains an honest delivery",
+        body: "You may carry Promise cargo beyond region 0,0 and return. The physical delivery still counts, but leaving the authored route network permanently marks that journey as a regional detour, so it cannot invent finite-route reinforcement credit.",
+      },
+      {
+        id: "regions-current-boundary",
+        audience: "all",
+        title: "Read the current frontier honestly",
+        body: "Procedural terrain, water, weather exposure, footing, Wayknots, carried cargo, and local saves work across horizons. Generated settlements, wildlife, humans, causal wilderness finds, and natural material patches outside region 0,0 are not live yet. Loose parcels stay persistent in the region where they stop, but they do not yet drift across a seam without the player.",
+      },
+    ],
+    callouts: [
+      {
+        id: "regions-no-copy-loot",
+        audience: "all",
+        tone: "boundary",
+        title: "Infinite ground is not infinite easy loot",
+        body: "An equal local coordinate in another signed region is a different place. Tideweft never clones region 0,0's resource patch or harbor merely because the numbers inside the new region match.",
+      },
+      {
+        id: "regions-camera-snap",
+        audience: "all",
+        tone: "note",
+        title: "A clean camera handoff",
+        body: "Chart drags, Relief orbit/twist gestures, and stale pointer captures cancel at the spatial handoff so a finger or mouse held across a recenter cannot chart an accidental route in the new frame.",
       },
     ],
   },
@@ -691,8 +749,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "cargo-physics-boundary",
         audience: "all",
         tone: "boundary",
-        title: "Physical here, regional later",
-        body: "Loose cargo now drops, takes impact, drifts, tumbles on grade, reaches a loaded-region boundary safely, survives save and reload, and can be recovered. Mangrove and bramble snag callbacks exist only in the simulation kernel until living ecology is connected, so the field manual does not claim those catches yet.",
+        title: "Regional custody; seam drift later",
+        body: "Loose cargo drops, takes impact, drifts, tumbles on grade, and remains the same recoverable object in the signed region where it stops across unload, revisit, save, and reload. Autonomous drift does not yet transfer a parcel across a regional seam. Mangrove and bramble snag callbacks exist only in the simulation kernel until living ecology is connected, so the field manual does not claim those catches yet.",
       },
     ],
   },
@@ -1028,7 +1086,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-no-offline-time",
         audience: "all",
         title: "Nothing advances behind your back; return is automatic",
-        body: "Closing the page or desktop app does not simulate offline time. When a valid local save exists, the next launch enters that same estuary automatically with its saved position, inventory, seed, and history. Compatible older saves migrate to A CHALLENGING HARD, preserve their contents, and gain the exact 18.000 combined-capacity floor.",
+        body: "Closing the page or desktop app does not simulate offline time. When a valid local save exists, the next launch enters that same estuary automatically with its signed region, local position, inventory, seed, and history. Compatible older finite saves migrate into region 0,0 under A CHALLENGING HARD, preserve their contents, and gain the exact 18.000 combined-capacity floor.",
       },
       {
         id: "saves-visible-failure",
@@ -1144,7 +1202,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Seeded terrain, seven visual biomes, deterministic renewable field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, the six inherited Wayknots, tides, global weather and wind, discovery, depth sounding, current arrows and sweeps, cargo condition, settlements, promises, reports, routes, porters, projects, saves, and perpetual play are active systems.",
+        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather and wind, discovery, depth sounding, current arrows and sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1156,7 +1214,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-planned-physics",
         audience: "all",
         title: "Planned traversal and economy phase",
-        body: "Physical loose cargo, terrain-driven stumbles and falls, drift, grade tumble, impact damage, and recovery are live. Ladder-gated formations, regional parcel streaming, living mangrove or bramble catches, the remaining crafted-gear and locker bridges, trust-money rewards, and an anywhere upgrade system are planned and are not currently available actions.",
+        body: "Physical loose cargo, terrain-driven stumbles and falls, drift, grade tumble, impact damage, region-specific unload/revisit custody, and recovery are live. Autonomous parcel drift across a regional seam, ladder-gated formations, living mangrove or bramble catches, the remaining crafted-gear and locker bridges, trust-money rewards, and an anywhere upgrade system are planned and are not currently available actions.",
       },
     ],
     callouts: [
@@ -1171,7 +1229,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 9 as const;
+export const TUTORIAL_CONTENT_VERSION = 10 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

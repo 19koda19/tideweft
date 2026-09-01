@@ -10,18 +10,21 @@ import {
   WAYKNOT_PERMILLE,
   applyWayknotPermille,
   createWayknotState,
-  isWindExposedTile,
-  queryWayknotEffects,
   tideHarpEffectStrength,
   type WayknotEffects,
   type WayknotState,
   type WayknotTileContext,
 } from "./wayknots";
 import {
-  deriveTideHarps,
   tideHarpContainsTileCenter,
   type TideHarp,
 } from "./tideHarps";
+import {
+  regionalTideHarpsAt,
+  regionalWayknotContextAt,
+  regionalWayknotEffectsAt,
+  regionalWayknotViewTileIndex,
+} from "./regionalWayknots";
 import { surfaceCurrentDirection } from "./currentDirection";
 import {
   createCraftingInventory,
@@ -55,6 +58,7 @@ import {
   type RockField,
 } from "../sim/rockTraversal";
 import { promiseCargoLoadMilli } from "./looseCargo";
+import { regionalWindowForWorld } from "./regionalWorldView";
 
 export const TILE_UNITS = 1_000;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
@@ -1206,8 +1210,10 @@ export function pulseScan(player: PlayerState, world: WorldView): boolean {
   soundDepthAround(player, world, 8);
   if (activeTideHarp) {
     for (const knot of activeTideHarp.knots) {
-      discoverAroundTile(player, world, knot.tileIndex, 6);
-      soundDepthAroundTile(player, world, knot.tileIndex, 6);
+      const viewTileIndex = regionalWayknotViewTileIndex(world, knot.region, knot.tileIndex);
+      if (viewTileIndex === null) continue;
+      discoverAroundTile(player, world, viewTileIndex, 6);
+      soundDepthAroundTile(player, world, viewTileIndex, 6);
     }
   }
   return true;
@@ -1304,15 +1310,7 @@ export function wayknotContextAt(
   world: WorldView,
   tileIndex: number,
 ): WayknotTileContext | undefined {
-  const tile = world.terrain.tiles[tileIndex];
-  if (!tile) return undefined;
-  return {
-    tileIndex,
-    terrain: tile.terrain,
-    waterDepth: tile.waterDepth,
-    windExposed: isWindExposedTile(tile),
-    occupied: world.settlements.some((settlement) => settlement.tileIndex === tileIndex),
-  };
+  return regionalWayknotContextAt(world, tileIndex)?.context;
 }
 
 /** Exact local influence used by both fixed-step travel and A* path costs. */
@@ -1321,24 +1319,10 @@ export function wayknotEffectsAt(
   world: WorldView,
   tileIndex: number,
 ): WayknotEffects {
-  const context = wayknotContextAt(world, tileIndex);
-  if (!context) {
-    return queryWayknotEffects(
-      player.wayknots,
-      {
-        tileIndex: -1,
-        terrain: "meadow",
-        waterDepth: 0,
-        windExposed: false,
-      },
-      { width: world.terrain.width, height: world.terrain.height },
-      world.completedTick,
-    );
-  }
-  return queryWayknotEffects(
+  return regionalWayknotEffectsAt(
     player.wayknots,
-    context,
-    { width: world.terrain.width, height: world.terrain.height },
+    world,
+    tileIndex,
     world.completedTick,
   );
 }
@@ -1348,7 +1332,7 @@ export function tunedTideHarps(
   player: PlayerState,
   world: WorldView,
 ): readonly TideHarp[] {
-  return deriveTideHarps(player.wayknots, world.terrain);
+  return regionalTideHarpsAt(player.wayknots, world, playerTileIndex(player));
 }
 
 /**
@@ -1361,12 +1345,20 @@ export function activeTideHarpAtPlayer(
   world: WorldView,
   harps: readonly TideHarp[] = tunedTideHarps(player, world),
 ): TideHarp | undefined {
-  const tileIndex = playerTileIndex(player);
+  const resolved = regionalWayknotContextAt(world, playerTileIndex(player));
+  if (!resolved) return undefined;
   return [...harps]
     .sort((left, right) => left.id.localeCompare(right.id))
     .find((harp) =>
-      tideHarpEffectStrength(player.wayknots, harp.knots, world.completedTick) === FIXED_POINT
-      && tideHarpContainsTileCenter(harp, tileIndex, world.terrain)
+      harp.region.x === resolved.region.x
+      && harp.region.y === resolved.region.y
+      && tideHarpEffectStrength(
+        player.wayknots,
+        harp.knots,
+        world.completedTick,
+        resolved.region,
+      ) === FIXED_POINT
+      && tideHarpContainsTileCenter(harp, resolved.localTileIndex, resolved.grid)
     );
 }
 
@@ -1749,6 +1741,14 @@ function findSweepPath(world: WorldView, startIndex: number): number[] {
     }
   }
 
+  if (bankIndex < 0 && regionalWindowForWorld(world) !== null) {
+    // A river may continue beyond the one-tile halo. In a floating view the
+    // absence of a local bank means "continue into the next region", not
+    // "wait forever". Follow the public current to one reachable outer tile;
+    // the runtime recenters there and the next fixed step replans against the
+    // newly materialized region.
+    bankIndex = regionalSweepContinuationTarget(world, startIndex, visited);
+  }
   if (bankIndex < 0) return [];
   const reversed: number[] = [];
   let cursor = bankIndex;
@@ -1758,6 +1758,45 @@ function findSweepPath(world: WorldView, startIndex: number): number[] {
   }
   reversed.reverse();
   return reversed;
+}
+
+function regionalSweepContinuationTarget(
+  world: WorldView,
+  startIndex: number,
+  visited: Uint8Array,
+): number {
+  const start = world.terrain.tiles[startIndex];
+  if (!start) return -1;
+  const current = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+  let selected = -1;
+  let selectedProgress = Number.NEGATIVE_INFINITY;
+  let selectedDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < world.terrain.tiles.length; index += 1) {
+    const tile = world.terrain.tiles[index];
+    if (
+      index === startIndex
+      || visited[index] !== 1
+      || !tile
+      || (tile.x !== 0
+        && tile.y !== 0
+        && tile.x !== world.terrain.width - 1
+        && tile.y !== world.terrain.height - 1)
+    ) continue;
+    const dx = tile.x - start.x;
+    const dy = tile.y - start.y;
+    const progress = dx * current.x + dy * current.y;
+    const distance = Math.abs(dx) + Math.abs(dy);
+    if (
+      progress > selectedProgress
+      || (progress === selectedProgress && distance < selectedDistance)
+      || (progress === selectedProgress && distance === selectedDistance && index < selected)
+    ) {
+      selected = index;
+      selectedProgress = progress;
+      selectedDistance = distance;
+    }
+  }
+  return selected;
 }
 
 function sweepNeighbors(world: WorldView, index: number): number[] {

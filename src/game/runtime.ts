@@ -6,6 +6,8 @@ import {
   FIXED_POINT,
   serializeWorld,
   STRAND_AUTOMATION_THRESHOLD,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
   stepWorld,
   type ContractState,
   type SimCommand,
@@ -36,6 +38,7 @@ import {
   ConflictingSaveCopiesError,
   createSaveRepository,
   NewerSaveUnavailableError,
+  SAVE_WORLD_JSON_MAX_CHARACTERS,
   StaleSaveWriteError,
   type SaveRecord,
   type SaveRepository,
@@ -59,7 +62,6 @@ import {
   unlockFieldToolAtSettlement,
   unloadContractCargo,
   waterEffortPerStep,
-  wayknotContextAt,
   wayknotEffectsAt,
   type FieldToolKind,
   type PlayerControl,
@@ -129,20 +131,55 @@ import {
   type LooseCargoPayload,
 } from "./looseCargo";
 import {
-  looseCargoPositionAtPlayer,
-  playerPositionAtLooseCargo,
+  looseCargoPositionAtRegionalPlayer,
+  playerPositionAtRegionalLooseCargo,
   projectLooseCargoCarrierToPlayer,
-  stepLooseCargoInCompatibilityWorld,
+  stepLooseCargoInRegionalWorld,
 } from "./looseCargoRuntime";
 import {
+  adoptPhysicalCargoStateV1,
   commitPhysicalCargoState,
   createPhysicalCargoStateFromPlayer,
   gameSaveEnvelopeIntegrity,
   quotePhysicalCargoSource,
+  transitionPhysicalCargoRegion,
   validatePhysicalCargoState,
   type PhysicalCargoState,
 } from "./physicalCargoState";
 import { resolveFallCargo } from "./fallCargo";
+import {
+  capturePlayerRegionalTravel,
+  migratePlayerToRegionalTravel,
+  recenterRegionalPlayer,
+  restorePlayerRegionalTravel,
+  serializePlayerRegionalTravel,
+  type RegionalPlayerTravelState,
+} from "./regionalPlayerTravel";
+import { REGIONAL_TRAVEL_COLUMNS, REGIONAL_TRAVEL_ROWS } from "./regionalTravel";
+import {
+  createRegionalWorldView,
+  regionalAddressAt,
+  regionalTileIndexInView,
+  regionalWorldCenter,
+} from "./regionalWorldView";
+import {
+  projectCompatibilityFieldResources,
+  regionalFieldResourceAtViewTile,
+  regionalFieldResourceById,
+  type RegionalFieldResourceProjection,
+} from "./regionalFieldResources";
+import { createRegionCoord, regionKey } from "../sim/regions";
+import { regionalWayknotContextAt } from "./regionalWayknots";
+import {
+  advanceRegionalPromiseJourney,
+  beginRegionalPromiseJourney,
+  clearRegionalPromiseJourney,
+  createRegionalPromiseJourney,
+  migrateRegionalPromiseJourney,
+  regionalPromiseDeliveryEvidence,
+  restoreRegionalPromiseJourney,
+  type RegionalPromiseJourneyState,
+} from "./regionalPromiseJourney";
 
 const FIXED_STEP_MS = 100;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
@@ -154,7 +191,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 3;
+const GAME_SAVE_VERSION = 4;
+const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
 const FIELD_RESOURCE_GAME_SAVE_VERSION = 2;
 const LEGACY_GAME_SAVE_VERSION = 1;
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
@@ -192,6 +230,8 @@ interface GameSaveEnvelope {
   fieldResources: FieldResourceEcologyState;
   traversalFeedback: TraversalFeedbackState;
   physicalCargo: PhysicalCargoState;
+  regionalTravel: string;
+  promiseJourney: RegionalPromiseJourneyState;
   integrity: string;
 }
 
@@ -211,17 +251,26 @@ export async function createTideweftRuntime(
   repository: SaveRepository = createSaveRepository(),
 ): Promise<TideweftRuntime> {
   let world = createWorld("quiet-delta", HARD_PRESSURE_MODE);
-  let worldView = createWorldView(world);
+  let economyView = createWorldView(world);
   let fieldResourceCatalog = runtimeFieldResourceCatalog(world);
   let fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
   let traversalFeedback = createTraversalFeedbackState();
-  const firstPromise = worldView.contracts.find((contract) => contract.status === "offered");
-  let player = createPlayer(worldView, firstPromise?.originSettlementId);
+  const firstPromise = economyView.contracts.find((contract) => contract.status === "offered");
+  let player = createPlayer(economyView, firstPromise?.originSettlementId);
   let physicalCargo = createPhysicalCargoStateFromPlayer(
     player,
-    worldView.terrain.width,
-    worldView.terrain.height,
+    WORLD_WIDTH,
+    WORLD_HEIGHT,
   );
+  let regionalTravel = migratePlayerToRegionalTravel(world.meta.rootSeed, player);
+  let worldView = createRegionalWorldView(
+    economyView,
+    regionalTravel.window,
+    { discovered: player.discovered, depthSoundings: player.depthSoundings },
+  );
+  let fieldResourceProjection: RegionalFieldResourceProjection =
+    projectCompatibilityFieldResources(fieldResourceCatalog, worldView);
+  let promiseJourney = createRegionalPromiseJourney();
   let session = createSessionState(world.meta.seedText, HARD_POSTURE);
   let renderView = projectGameView(worldView, player, {
     paused: true,
@@ -229,10 +278,12 @@ export async function createTideweftRuntime(
     looseCargoWorld: physicalCargo.looseWorld,
   });
   let uiView = projectUIView(worldView, player, session, {
-    fieldResourceCatalog,
+    economyWorld: economyView,
+    fieldResourceCatalog: fieldResourceProjection.catalog,
     fieldResourceEcology,
     looseCargoCarrier: physicalCargo.carrier,
     looseCargoWorld: physicalCargo.looseWorld,
+    inactiveLooseCargoWorlds: [],
   });
   const soundscape = new TideweftSoundscape();
   let focusHandler: ((point: WorldPoint, zoom?: number) => void) | undefined;
@@ -370,7 +421,7 @@ export async function createTideweftRuntime(
     // Calm/standard remain readable simulation values for old snapshots and
     // deterministic fixtures, but the playable game now has one ruleset.
     world.meta.pressureMode = HARD_PRESSURE_MODE;
-    worldView = createWorldView(world);
+    economyView = createWorldView(world);
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = canonicalizeFieldResourceState(
       fieldResourceCatalog,
@@ -379,7 +430,10 @@ export async function createTideweftRuntime(
     traversalFeedback = loaded.traversalFeedback;
     player = loaded.player;
     physicalCargo = loaded.physicalCargo;
-    normalizePlayerForRuntime(player, worldView);
+    regionalTravel = loaded.regionalTravel;
+    promiseJourney = loaded.promiseJourney;
+    rebuildRegionalWorldView();
+    normalizePlayerForRuntime(player, worldView, economyView);
     session = loaded.session;
     session.pressureMode = HARD_PRESSURE_MODE;
     session.posture = HARD_POSTURE;
@@ -401,20 +455,30 @@ export async function createTideweftRuntime(
     session.sessionBaseline = session.sessionBaseline ?? null;
     session.closureOffered = Boolean(session.closureOffered);
     session.campaignCelebrated = Boolean(session.campaignCelebrated);
-    session.continueSummary = continueSummary(worldView, player);
+    session.continueSummary = continueSummary(economyView, player);
     lastAutosaveTick = world.meta.completedTick;
     beginSession();
     announce(session, "Welcome back to the estuary. Nothing changed while you were away.");
     refreshViews();
   }
 
+  function rebuildRegionalWorldView(): void {
+    economyView = createWorldView(world);
+    worldView = createRegionalWorldView(
+      economyView,
+      regionalTravel.window,
+      { discovered: player.discovered, depthSoundings: player.depthSoundings },
+    );
+    fieldResourceProjection = projectCompatibilityFieldResources(fieldResourceCatalog, worldView);
+  }
+
   function refreshViews(): void {
     const activeContract = player.activeContractId === null
       ? undefined
-      : worldView.contracts.find((contract) => contract.id === player.activeContractId);
+      : economyView.contracts.find((contract) => contract.id === player.activeContractId);
     const trackedContract = session.trackedContractId === null
       ? undefined
-      : worldView.contracts.find((contract) => contract.id === session.trackedContractId);
+      : economyView.contracts.find((contract) => contract.id === session.trackedContractId);
     const objectiveContract = activeContract ?? trackedContract;
     const destinationSettlementId = activeContract
       ? activeContract.destinationSettlementId
@@ -435,7 +499,7 @@ export async function createTideweftRuntime(
       selectedRouteId: objectiveContract?.routeId ?? null,
       destinationSettlementId: destinationSettlementId ?? null,
       ...(destinationKind ? { destinationKind } : {}),
-      fieldResourceCatalog,
+      fieldResourceCatalog: fieldResourceProjection.catalog,
       fieldResourceEcology,
       traversalFeedback,
       looseCargoWorld: physicalCargo.looseWorld,
@@ -443,10 +507,12 @@ export async function createTideweftRuntime(
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
     uiView = projectUIView(worldView, player, session, {
-      fieldResourceCatalog,
+      economyWorld: economyView,
+      fieldResourceCatalog: fieldResourceProjection.catalog,
       fieldResourceEcology,
       looseCargoCarrier: physicalCargo.carrier,
       looseCargoWorld: physicalCargo.looseWorld,
+      inactiveLooseCargoWorlds: physicalCargo.inactiveWorlds.map(({ world: cargoWorld }) => cargoWorld),
       bracing: manualControl.brace,
       requiresSeed: replacementSeedRequired,
       worldCreationBlocked: saveRecoveryBlocked,
@@ -543,7 +609,10 @@ export async function createTideweftRuntime(
     player.cargo = mirror.cargo.map((cargo) => ({ ...cargo }));
   }
 
-  function applyPlayerStepToPhysicalCargo(result: ReturnType<typeof stepPlayer>): void {
+  function applyPlayerStepToPhysicalCargo(
+    result: ReturnType<typeof stepPlayer>,
+    incidentPosition?: ReturnType<typeof looseCargoPositionAtRegionalPlayer>,
+  ): void {
     let carrier = physicalCargo.carrier;
     let changed = false;
     for (const pressure of result.cargoConditionPressures ?? []) {
@@ -585,7 +654,8 @@ export async function createTideweftRuntime(
       const evaluation = result.fallEvaluations.find((candidate) =>
         candidate.usedTraversalOrdinal === incident.traversalOrdinal);
       if (!evaluation) throw new Error("Traversal incident lost its accepted fall evaluation");
-      const position = looseCargoPositionAtPlayer(incident.position.x, incident.position.y);
+      const position = incidentPosition
+        ?? looseCargoPositionAtRegionalPlayer(worldView, incident.position.x, incident.position.y);
       const fall = resolveFallCargo({
         seed: world.meta.rootSeed,
         actorId: incident.actorId,
@@ -611,7 +681,7 @@ export async function createTideweftRuntime(
     }
 
     if (physicalCargo.looseWorld.entities.length > 0) {
-      const stepped = stepLooseCargoInCompatibilityWorld(worldView, physicalCargo.looseWorld);
+      const stepped = stepLooseCargoInRegionalWorld(worldView, physicalCargo.looseWorld);
       if (!stepped.ok) throw new Error(`Loose cargo simulation failed closed: ${stepped.reason}`);
       physicalCargo = commitPhysicalCargoState(
         physicalCargo,
@@ -634,12 +704,59 @@ export async function createTideweftRuntime(
       deferFallCargoConsequence: true,
     });
     if (result.traversalFeedback) traversalFeedback = result.traversalFeedback;
-    applyPlayerStepToPhysicalCargo(result);
+    promiseJourney = advanceRegionalPromiseJourney(
+      promiseJourney,
+      player,
+      economyView,
+      worldView,
+    );
+    const acceptedDistance = Math.round(Math.hypot(player.x - beforeX, player.y - beforeY));
+    const incidentPosition = result.traversalIncident
+      ? looseCargoPositionAtRegionalPlayer(
+          worldView,
+          result.traversalIncident.position.x,
+          result.traversalIncident.position.y,
+        )
+      : undefined;
+    const regionalTransition = recenterRegionalPlayer(
+      world.meta.rootSeed,
+      regionalTravel,
+      player,
+    );
+    regionalTravel = regionalTransition.state;
+    if (regionalTransition.crossed) {
+      physicalCargo = transitionPhysicalCargoRegion(
+        physicalCargo,
+        regionalTransition.to,
+        WORLD_WIDTH,
+        WORLD_HEIGHT,
+      );
+      autopilotPath = [];
+      pendingGatherNodeId = null;
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
+      if (regionalTransition.to.x !== 0 || regionalTransition.to.y !== 0) {
+        player.lastHarborId = null;
+        player.harborTrail = [];
+        player.surveyTrace = [playerTileIndex(player)];
+      }
+      rebuildRegionalWorldView();
+      const axis = (value: number) => value > 0 ? `+${value}` : String(value);
+      const horizon = `R ${axis(regionalTransition.to.x)},${axis(regionalTransition.to.y)}`;
+      session.sessionChanges.push(`Crossed the ${horizon} horizon; chart, cargo, and field structures retained their signed places.`);
+      if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
+      announce(
+        session,
+        `${horizon} · the floating chart has recentered. Return across the same horizon for the original harbors.`,
+      );
+      soundscape.play("strand", 0.28, regionalTravel.stream.transitionOrdinal);
+    }
+    applyPlayerStepToPhysicalCargo(result, incidentPosition);
     if (result.enteredTile !== null && result.settlementId !== null) {
       recordHarborArrival(result.settlementId);
       const unlockedTool = unlockFieldToolAtSettlement(player, worldView, result.settlementId);
       if (unlockedTool) {
-        const harborName = settlementName(worldView, result.settlementId);
+        const harborName = settlementName(economyView, result.settlementId);
         session.sessionChanges.push(`${harborName} entrusted you with ${FIELD_TOOL_LABELS[unlockedTool].toLocaleLowerCase()}.`);
         announce(
           session,
@@ -650,7 +767,7 @@ export async function createTideweftRuntime(
       }
     }
     session.sessionPlayMilliseconds += FIXED_STEP_MS;
-    session.sessionDistanceUnits += Math.round(Math.hypot(player.x - beforeX, player.y - beforeY));
+    session.sessionDistanceUnits += acceptedDistance;
     playerStepsSinceWorldTick += 1;
     const worldAdvanced = playerStepsSinceWorldTick >= PLAYER_STEPS_PER_WORLD_TICK;
     if (worldAdvanced) {
@@ -658,18 +775,18 @@ export async function createTideweftRuntime(
       const elapsedWeather = world.weather;
       world = stepWorld(world, commandQueue);
       commandQueue = [];
-      worldView = createWorldView(world);
       fieldResourceEcology = advanceFieldResourceEcology(
         fieldResourceCatalog,
         fieldResourceEcology,
         1,
         elapsedWeather,
       );
+      rebuildRegionalWorldView();
     }
 
     if (pendingGatherNodeId !== null && autopilotPath.length === 0) {
-      const node = fieldResourceNode(pendingGatherNodeId);
-      if (node && node.tileIndex === playerTileIndex(player)) {
+      const mapping = regionalFieldResourceById(fieldResourceProjection, pendingGatherNodeId);
+      if (mapping && mapping.viewTileIndex === playerTileIndex(player)) {
         const requestedNodeId = pendingGatherNodeId;
         pendingGatherNodeId = null;
         gatherFieldResource(requestedNodeId);
@@ -821,15 +938,16 @@ export async function createTideweftRuntime(
         }
         physicalCargo = removePhysicalPromiseContract(physicalCargo, pendingDelivery.contractId);
         const cargo = unloadContractCargo(player, pendingDelivery.contractId);
+        promiseJourney = clearRegionalPromiseJourney();
         mirrorPhysicalCargoToPlayer();
         pendingDelivery = null;
         if (session.trackedContractId === delivered.id) session.trackedContractId = null;
         session.sessionDeliveries += 1;
         session.tutorial.witnessedChanges += 1;
-        const destination = settlementName(worldView, delivered.destinationSettlementId);
+        const destination = settlementName(economyView, delivered.destinationSettlementId);
         const grade = delivered.deliveryGrade ?? "arrived";
-        const requester = worldView.residents.find((resident) => resident.id === delivered.requesterResidentId)?.name;
-        const route = worldView.routes.find((candidate) => candidate.id === delivered.routeId);
+        const requester = economyView.residents.find((resident) => resident.id === delivered.requesterResidentId)?.name;
+        const route = economyView.routes.find((candidate) => candidate.id === delivered.routeId);
         const newlyAutomated = !deliveryWasAutomated
           && (route?.traceStrength ?? 0) >= STRAND_AUTOMATION_THRESHOLD;
         const unlockedTool = unlockFieldToolAtSettlement(player, worldView, delivered.destinationSettlementId);
@@ -866,7 +984,7 @@ export async function createTideweftRuntime(
       const contract = worldView.contracts.find((candidate) => candidate.id === pendingRenegotiation?.contractId);
       const rejected = rejectionFor([pendingRenegotiation.commandId]);
       if (contract?.status === "cancelled") {
-        const harbor = settlementName(worldView, pendingRenegotiation.settlementId);
+        const harbor = settlementName(economyView, pendingRenegotiation.settlementId);
         releaseLocalCargo(contract.id);
         if (session.trackedContractId === contract.id) session.trackedContractId = null;
         session.sessionChanges.push(`${harbor} accepted a careful cargo handoff; the traveled trace remains charted.`);
@@ -894,9 +1012,9 @@ export async function createTideweftRuntime(
       );
       const rejected = rejectionFor([pendingReinforcement.commandId]);
       if (reinforced) {
-        const route = worldView.routes.find((candidate) => candidate.id === pendingReinforcement?.routeId);
-        const origin = worldView.settlements.find((settlement) => settlement.id === route?.fromSettlementId)?.name ?? "one harbor";
-        const destination = worldView.settlements.find((settlement) => settlement.id === route?.toSettlementId)?.name ?? "another harbor";
+        const route = economyView.routes.find((candidate) => candidate.id === pendingReinforcement?.routeId);
+        const origin = economyView.settlements.find((settlement) => settlement.id === route?.fromSettlementId)?.name ?? "one harbor";
+        const destination = economyView.settlements.find((settlement) => settlement.id === route?.toSettlementId)?.name ?? "another harbor";
         const newlyAutomated = !pendingReinforcement.wasAutomated
           && (route?.traceStrength ?? 0) >= 32_000;
         session.sessionStrandsWoven += 1;
@@ -927,8 +1045,8 @@ export async function createTideweftRuntime(
       );
       const rejected = rejectionFor([pendingReportDelivery.commandId]);
       if (shared && player.report) {
-        const source = settlementName(worldView, player.report.sourceSettlementId);
-        const target = settlementName(worldView, player.report.targetSettlementId);
+        const source = settlementName(economyView, player.report.sourceSettlementId);
+        const target = settlementName(economyView, player.report.targetSettlementId);
         const age = worldView.completedTick - player.report.observedTick;
         const unreserved = setLooseCargoReservedLoad(
           physicalCargo.carrier,
@@ -970,7 +1088,7 @@ export async function createTideweftRuntime(
       if (awakened) {
         const harborNames = pendingChoir.cycle.harborIds
           .slice(0, -1)
-          .map((id) => settlementName(worldView, id));
+          .map((id) => settlementName(economyView, id));
         session.sessionChoirsAwakened += 1;
         session.sessionChanges.push(
           `The ${harborNames.join("–")} loop awakened a Tide Choir; its shared routes became more weatherworthy.`,
@@ -1568,7 +1686,7 @@ export async function createTideweftRuntime(
     session.sessionStrandsWoven = 0;
     session.sessionChoirsAwakened = 0;
     session.sessionDiscoveredAtStart = discoveredCount(player);
-    session.sessionBaseline = captureSessionBaseline(worldView);
+    session.sessionBaseline = captureSessionBaseline(economyView);
     session.closureOffered = false;
     session.sessionChanges = [];
     lastCargoDamageNoticeMs = Number.NEGATIVE_INFINITY;
@@ -1610,7 +1728,10 @@ export async function createTideweftRuntime(
   } {
     const carried = physicalCargo.carrier.lots.filter((lot) =>
       lot.payload.kind === "promise" && lot.payload.contractId === contractId);
-    const loose = physicalCargo.looseWorld.entities.filter((entity) =>
+    const loose = [
+      physicalCargo.looseWorld,
+      ...physicalCargo.inactiveWorlds.map(({ world }) => world),
+    ].flatMap(({ entities }) => entities).filter((entity) =>
       entity.payload.kind === "promise" && entity.payload.contractId === contractId);
     const carriedQuantity = carried.reduce((total, lot) =>
       total + (lot.payload.kind === "promise" ? lot.payload.quantity : 0), 0);
@@ -1667,6 +1788,9 @@ export async function createTideweftRuntime(
     physicalCargo = removePhysicalPromiseContract(physicalCargo, contractId);
     player.cargo = player.cargo.filter((cargo) => cargo.contractId !== contractId);
     if (player.activeContractId === contractId) player.activeContractId = null;
+    if (promiseJourney.contractId === contractId) {
+      promiseJourney = clearRegionalPromiseJourney();
+    }
     mirrorPhysicalCargoToPlayer();
   }
 
@@ -1687,17 +1811,20 @@ export async function createTideweftRuntime(
     }
     session = createSessionState(normalizedSeed, HARD_POSTURE, PERPETUAL_SESSION_SHAPE);
     world = createWorld(normalizedSeed, session.pressureMode);
-    worldView = createWorldView(world);
+    economyView = createWorldView(world);
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     traversalFeedback = createTraversalFeedbackState();
-    const promise = worldView.contracts.find((contract) => contract.status === "offered");
-    player = createPlayer(worldView, promise?.originSettlementId);
+    const promise = economyView.contracts.find((contract) => contract.status === "offered");
+    player = createPlayer(economyView, promise?.originSettlementId);
     physicalCargo = createPhysicalCargoStateFromPlayer(
       player,
-      worldView.terrain.width,
-      worldView.terrain.height,
+      WORLD_WIDTH,
+      WORLD_HEIGHT,
     );
+    regionalTravel = migratePlayerToRegionalTravel(world.meta.rootSeed, player);
+    promiseJourney = createRegionalPromiseJourney();
+    rebuildRegionalWorldView();
     session.titleVisible = false;
     session.paused = false;
     session.hasSave = true;
@@ -1727,16 +1854,16 @@ export async function createTideweftRuntime(
       if (announcePath) announce(session, "The current has the helm until you reach a safe bank.", true);
       return false;
     }
-    const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, world.terrain.width - 1);
-    const tileY = clamp(Math.floor(point.y / RENDER_TILE_SIZE), 0, world.terrain.height - 1);
-    const destination = tileY * world.terrain.width + tileX;
+    const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, worldView.terrain.width - 1);
+    const tileY = clamp(Math.floor(point.y / RENDER_TILE_SIZE), 0, worldView.terrain.height - 1);
+    const destination = tileY * worldView.terrain.width + tileX;
     // Pointer paths use the same live depth/tool costs as manual travel. Unknown
     // water receives a caution premium, so sounding a channel can materially
     // improve the Loom's route without ever making manual exploration illegal.
     const traversalTerrain = {
-      ...world.terrain,
-      tiles: world.terrain.tiles.map((tile, index) => {
-        const live = worldView.terrain.tiles[index];
+      ...worldView.terrain,
+      tiles: worldView.terrain.tiles.map((tile, index) => {
+        const live = tile;
         const depth = live?.waterDepth ?? 0;
         const wayknotEffects = wayknotEffectsAt(player, worldView, index);
         const waterCost = waterEffortPerStep(
@@ -1783,7 +1910,12 @@ export async function createTideweftRuntime(
   function physicalParcelPosition(parcelId: string): WorldPoint | null {
     const entity = physicalCargo.looseWorld.entities.find((candidate) => candidate.id === parcelId);
     if (!entity) return null;
-    const playerPoint = playerPositionAtLooseCargo(entity);
+    const playerPoint = playerPositionAtRegionalLooseCargo(worldView, {
+      region: physicalCargo.looseWorld.region,
+      x: entity.x,
+      y: entity.y,
+    });
+    if (!playerPoint) return null;
     return {
       x: (playerPoint.x / TILE_UNITS) * RENDER_TILE_SIZE,
       y: (playerPoint.y / TILE_UNITS) * RENDER_TILE_SIZE,
@@ -1798,7 +1930,7 @@ export async function createTideweftRuntime(
       }
       return false;
     }
-    const position = looseCargoPositionAtPlayer(player.x, player.y);
+    const position = looseCargoPositionAtRegionalPlayer(worldView, player.x, player.y);
     const recovered = pickupLooseCargo(
       physicalCargo.looseWorld,
       physicalCargo.carrier,
@@ -1897,7 +2029,7 @@ export async function createTideweftRuntime(
       soundscape.play("warning", 0.35);
       return;
     }
-    const position = looseCargoPositionAtPlayer(player.x, player.y);
+    const position = looseCargoPositionAtRegionalPlayer(worldView, player.x, player.y);
     const dropped = dropLooseCargo(
       physicalCargo.looseWorld,
       physicalCargo.carrier,
@@ -1935,24 +2067,27 @@ export async function createTideweftRuntime(
       refreshViews();
       return;
     }
-    const node = fieldResourceNode(nodeId);
-    if (!node || (player.discovered[node.tileIndex] ?? 0) <= 0) {
+    const mapping = regionalFieldResourceById(fieldResourceProjection, nodeId);
+    const node = mapping?.source;
+    if (!mapping || !node || (player.discovered[mapping.viewTileIndex] ?? 0) <= 0) {
       pendingGatherNodeId = null;
       announce(session, "That field sign is not part of the chart you can currently act on.", true);
       soundscape.play("warning", 0.3);
       refreshViews();
       return;
     }
-    if (node.tileIndex === playerTileIndex(player)) {
+    if (mapping.viewTileIndex === playerTileIndex(player)) {
       pendingGatherNodeId = null;
       if (gatherOnArrival) gatherFieldResource(node.id);
       else announce(session, `${materialLabel(node.material)} is underfoot. Press E to gather one unit.`);
       refreshViews();
       return;
     }
+    const tile = worldView.terrain.tiles[mapping.viewTileIndex];
+    if (!tile) throw new Error("Visible field resource lost its regional terrain tile");
     const point = {
-      x: (node.x + 0.5) * RENDER_TILE_SIZE,
-      y: (node.y + 0.5) * RENDER_TILE_SIZE,
+      x: (tile.x + 0.5) * RENDER_TILE_SIZE,
+      y: (tile.y + 0.5) * RENDER_TILE_SIZE,
     };
     pendingGatherNodeId = null;
     if (!setAutopilot(point, false)) {
@@ -1975,8 +2110,9 @@ export async function createTideweftRuntime(
       soundscape.play("warning", 0.3);
       return false;
     }
-    const node = fieldResourceNode(nodeId);
-    if (!node) {
+    const mapping = regionalFieldResourceById(fieldResourceProjection, nodeId);
+    const node = mapping?.source;
+    if (!mapping || !node) {
       announce(session, "That natural patch no longer belongs to this estuary.", true);
       return false;
     }
@@ -1985,11 +2121,11 @@ export async function createTideweftRuntime(
       announce(session, `You cannot gather ${label} until you have your footing.`, true);
       return false;
     }
-    if (node.tileIndex !== playerTileIndex(player)) {
+    if (mapping.viewTileIndex !== playerTileIndex(player)) {
       announce(session, `Move onto the ${label} patch first. On desktop, press E once it is underfoot.`, true);
       return false;
     }
-    if ((player.discovered[node.tileIndex] ?? 0) <= 0) {
+    if ((player.discovered[mapping.viewTileIndex] ?? 0) <= 0) {
       announce(session, "This patch has not entered your chart yet.", true);
       return false;
     }
@@ -2065,7 +2201,7 @@ export async function createTideweftRuntime(
     const staminaCost = GATHER_STAMINA_COST[harvested.material];
     player.stamina = Math.max(0, player.stamina - staminaCost);
     const remaining = Math.max(1, stock - 1);
-    const tile = worldView.terrain.tiles[node.tileIndex];
+    const tile = worldView.terrain.tiles[mapping.viewTileIndex];
     const sweepWarning = player.stamina === 0 && (tile?.waterDepth ?? 0) >= 120_000
       ? " STAMINA EMPTY IN DEEP WATER — the current takes control on the next field beat."
       : "";
@@ -2107,12 +2243,17 @@ export async function createTideweftRuntime(
       return;
     }
     const tileIndex = playerTileIndex(player);
-    const context = wayknotContextAt(worldView, tileIndex);
-    if (!context) {
+    const resolved = regionalWayknotContextAt(worldView, tileIndex);
+    if (!resolved) {
       announce(session, "The field kit cannot read this patch of the estuary.", true);
       return;
     }
-    const existing = wayknotAtTile(player.wayknots, tileIndex);
+    const context = resolved.context;
+    const existing = wayknotAtTile(
+      player.wayknots,
+      resolved.localTileIndex,
+      resolved.region,
+    );
     if (
       !existing
       && context.terrain !== "deep-water"
@@ -2129,7 +2270,12 @@ export async function createTideweftRuntime(
       return;
     }
     const intendedKind = existing?.kind ?? contextualWayknotKind(context);
-    const result = toggleContextualWayknot(player.wayknots, context, worldView.completedTick);
+    const result = toggleContextualWayknot(
+      player.wayknots,
+      context,
+      worldView.completedTick,
+      resolved.region,
+    );
     if (!result.ok || !result.wayknot) {
       announce(
         session,
@@ -2164,7 +2310,7 @@ export async function createTideweftRuntime(
 
   function interact(): void {
     if (session.paused || session.titleVisible) return;
-    const porterPosition = looseCargoPositionAtPlayer(player.x, player.y);
+    const porterPosition = looseCargoPositionAtRegionalPlayer(worldView, player.x, player.y);
     const reachableParcel = physicalCargo.looseWorld.entities
       .map((entity) => ({
         entity,
@@ -2177,12 +2323,12 @@ export async function createTideweftRuntime(
       refreshViews();
       return;
     }
-    const resource = fieldResourceCatalog.nodes.find(
-      (node) => node.tileIndex === playerTileIndex(player)
-        && (player.discovered[node.tileIndex] ?? 0) > 0,
+    const resource = regionalFieldResourceAtViewTile(
+      fieldResourceProjection,
+      playerTileIndex(player),
     );
-    if (resource) {
-      gatherFieldResource(resource.id);
+    if (resource && (player.discovered[resource.viewTileIndex] ?? 0) > 0) {
+      gatherFieldResource(resource.source.id);
       refreshViews();
       return;
     }
@@ -2255,7 +2401,7 @@ export async function createTideweftRuntime(
     const here = settlementAtPlayer(player, worldView);
     if (here !== contract.originSettlementId) {
       session.trackedContractId = contract.id;
-      announce(session, `Pickup charted at ${settlementName(worldView, contract.originSettlementId)}. The amber marker and highlighted route will stay with you.`);
+      announce(session, `Pickup charted at ${settlementName(economyView, contract.originSettlementId)}. The amber marker and highlighted route will stay with you.`);
       focusContractOrigin(contract);
       refreshViews();
       return;
@@ -2315,6 +2461,7 @@ export async function createTideweftRuntime(
     }
     physicalCargo = acceptedPhysicalCargo;
     player = playerCandidate;
+    promiseJourney = beginRegionalPromiseJourney(contract, economyView);
     mirrorPhysicalCargoToPlayer();
     const acceptCommandId = commandId("accept");
     const pickupCommandId = commandId("pickup");
@@ -2337,7 +2484,7 @@ export async function createTideweftRuntime(
     pendingAcceptance = { contractId: contract.id, acceptCommandId, pickupCommandId };
     session.tutorial.acceptedPromises += 1;
     session.trackedContractId = contract.id;
-    announce(session, `Promise made: bring ${contract.quantity} ${humanResource(contract.resource)} to ${settlementName(worldView, contract.destinationSettlementId)}.`);
+    announce(session, `Promise made: bring ${contract.quantity} ${humanResource(contract.resource)} to ${settlementName(economyView, contract.destinationSettlementId)}.`);
     soundscape.play("accept");
     focusContractDestination(contract);
     refreshViews();
@@ -2376,7 +2523,7 @@ export async function createTideweftRuntime(
       sequence: commandSequence,
     });
     pendingRenegotiation = { contractId: contract.id, settlementId: here, commandId: handoffCommandId };
-    announce(session, `${settlementName(worldView, here)} is receiving an accountable handoff. No cargo or map knowledge will vanish.`);
+    announce(session, `${settlementName(economyView, here)} is receiving an accountable handoff. No cargo or map knowledge will vanish.`);
     soundscape.play("strand", 0.45);
   }
 
@@ -2401,14 +2548,20 @@ export async function createTideweftRuntime(
       return;
     }
     const deliverCommandId = commandId("deliver");
-    const deliveryRoute = worldView.routes.find((route) => route.id === contract.routeId);
+    const deliveryRoute = economyView.routes.find((route) => route.id === contract.routeId);
+    const routeEvidence = regionalPromiseDeliveryEvidence(
+      promiseJourney,
+      contract,
+      economyView,
+    );
     queue({
       id: deliverCommandId,
       type: "deliver-contract",
       contractId: contract.id,
       destinationSettlementId: contract.destinationSettlementId,
       condition: custody.condition,
-      trace: [...player.currentTrace],
+      trace: [...routeEvidence.trace],
+      routeEvidence: routeEvidence.routeEvidence,
       sourceId: 0,
       sequence: commandSequence,
     });
@@ -2417,7 +2570,12 @@ export async function createTideweftRuntime(
       commandId: deliverCommandId,
       wasAutomated: (deliveryRoute?.traceStrength ?? 0) >= STRAND_AUTOMATION_THRESHOLD,
     };
-    announce(session, "The harbor is receiving the cargo and reading the route you left behind…");
+    announce(
+      session,
+      routeEvidence.routeEvidence === "regional-detour"
+        ? "The harbor is receiving the cargo. This expedition left the local chart, so delivery counts fully but no finite-map route is reinforced."
+        : "The harbor is receiving the cargo and reading the route you left behind…",
+    );
     soundscape.play("strand", 0.8);
   }
 
@@ -2465,7 +2623,7 @@ export async function createTideweftRuntime(
     player.harborTrail = [...phrase.trail];
     player.surveyTrace = [arrival.tileIndex];
 
-    const fromName = settlementName(worldView, fromHarborId);
+    const fromName = settlementName(economyView, fromHarborId);
     const toName = arrival.name;
     if (!leg.surveyed || leg.routeId === null) {
       announce(
@@ -2504,8 +2662,8 @@ export async function createTideweftRuntime(
   function reinforceStrand(routeId: number, settlementId: number): void {
     if (session.paused || session.titleVisible || pendingReinforcement !== null) return;
     const here = settlementAtPlayer(player, worldView);
-    const settlement = worldView.settlements.find((candidate) => candidate.id === settlementId);
-    const route = worldView.routes.find((candidate) => candidate.id === routeId);
+    const settlement = economyView.settlements.find((candidate) => candidate.id === settlementId);
+    const route = economyView.routes.find((candidate) => candidate.id === routeId);
     if (!settlement || !route || here !== settlementId) {
       announce(session, "Strand work must begin at the harbor whose shared stores will supply it.");
       soundscape.play("warning", 0.4);
@@ -2520,7 +2678,7 @@ export async function createTideweftRuntime(
       const otherId = route.fromSettlementId === settlementId ? route.toSettlementId : route.fromSettlementId;
       announce(
         session,
-        `Survey this corridor first: travel from ${settlement.name} to ${settlementName(worldView, otherId)} along the visible route. Parts only improve paths you have physically learned.`,
+        `Survey this corridor first: travel from ${settlement.name} to ${settlementName(economyView, otherId)} along the visible route. Parts only improve paths you have physically learned.`,
       );
       soundscape.play("warning", 0.4);
       return;
@@ -2552,8 +2710,8 @@ export async function createTideweftRuntime(
 
   function collectReport(sourceSettlementId: number, targetSettlementId: number): void {
     if (session.paused || session.titleVisible) return;
-    const source = worldView.settlements.find((settlement) => settlement.id === sourceSettlementId);
-    const target = worldView.settlements.find((settlement) => settlement.id === targetSettlementId);
+    const source = economyView.settlements.find((settlement) => settlement.id === sourceSettlementId);
+    const target = economyView.settlements.find((settlement) => settlement.id === targetSettlementId);
     if (!source || !target || settlementAtPlayer(player, worldView) !== sourceSettlementId) {
       announce(session, "A signed report must be witnessed at the harbor that produced it.");
       soundscape.play("warning", 0.35);
@@ -2758,11 +2916,13 @@ export async function createTideweftRuntime(
           ? "A newer local save is temporarily unavailable."
           : "The local save replacement counter is exhausted.");
     }
+    const regionalTravelSnapshot = capturePlayerRegionalTravel(regionalTravel, player);
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     const playerSnapshot = structuredClone(player);
     const sessionSnapshot = structuredClone(session);
     let physicalCargoSnapshot = structuredClone(physicalCargo);
+    let promiseJourneySnapshot = promiseJourney;
     const repairedContractIds = repairInterruptedPickups(
       worldSnapshot,
       playerSnapshot,
@@ -2770,6 +2930,9 @@ export async function createTideweftRuntime(
     );
     for (const contractId of repairedContractIds) {
       physicalCargoSnapshot = removePhysicalPromiseContract(physicalCargoSnapshot, contractId);
+      if (promiseJourneySnapshot.contractId === contractId) {
+        promiseJourneySnapshot = clearRegionalPromiseJourney();
+      }
     }
     if (pendingAcceptance !== null && playerSnapshot.activeContractId === pendingAcceptance.contractId) {
       rollbackOptimisticPickup(playerSnapshot, sessionSnapshot, pendingAcceptance.contractId);
@@ -2777,12 +2940,13 @@ export async function createTideweftRuntime(
         physicalCargoSnapshot,
         pendingAcceptance.contractId,
       );
+      promiseJourneySnapshot = clearRegionalPromiseJourney();
     }
     const snapshotPhysicalValidation = validatePhysicalCargoState(
       physicalCargoSnapshot,
       playerSnapshot,
-      worldSnapshot.terrain.width,
-      worldSnapshot.terrain.height,
+      WORLD_WIDTH,
+      WORLD_HEIGHT,
     );
     if (!snapshotPhysicalValidation.valid || !snapshotPhysicalValidation.state) {
       throw new Error(`Refusing to save inconsistent physical cargo: ${snapshotPhysicalValidation.reason}`);
@@ -2797,11 +2961,17 @@ export async function createTideweftRuntime(
       fieldResources: structuredClone(fieldResourceEcology),
       traversalFeedback: structuredClone(traversalFeedback),
       physicalCargo: physicalCargoSnapshot,
+      regionalTravel: serializePlayerRegionalTravel(regionalTravelSnapshot),
+      promiseJourney: promiseJourneySnapshot,
     };
     const envelope: GameSaveEnvelope = {
       ...envelopeBase,
       integrity: gameSaveEnvelopeIntegrity(envelopeBase),
     };
+    const worldJson = JSON.stringify(envelope);
+    if (worldJson.length > SAVE_WORLD_JSON_MAX_CHARACTERS) {
+      throw new Error("The perpetual world has reached this browser save's safe size limit; nothing was overwritten.");
+    }
     const record: SaveRecord = {
       slotId: AUTOSAVE_SLOT,
       label: renderView.worldName ?? "TIDEWEFT estuary",
@@ -2813,7 +2983,7 @@ export async function createTideweftRuntime(
       playTicks: world.meta.completedTick,
       settlementCount: world.settlements.length,
       connectedCount: world.routes.filter((route) => route.traceStrength >= 120_000).length,
-      worldJson: JSON.stringify(envelope),
+      worldJson,
     };
     saveSequence += 1;
     const sequence = saveSequence;
@@ -2888,6 +3058,8 @@ export async function createTideweftRuntime(
     const prior = {
       player: structuredClone(player),
       physicalCargo: structuredClone(physicalCargo),
+      regionalTravel,
+      promiseJourney,
       session: structuredClone(session),
       fieldResourceEcology: structuredClone(fieldResourceEcology),
       traversalFeedback: structuredClone(traversalFeedback),
@@ -2913,11 +3085,12 @@ export async function createTideweftRuntime(
     } catch (error) {
       if (priorWorld) {
         world = priorWorld;
-        worldView = createWorldView(world);
         fieldResourceCatalog = runtimeFieldResourceCatalog(world);
       }
       player = prior.player;
       physicalCargo = prior.physicalCargo;
+      regionalTravel = prior.regionalTravel;
+      promiseJourney = prior.promiseJourney;
       session = prior.session;
       fieldResourceEcology = prior.fieldResourceEcology;
       traversalFeedback = prior.traversalFeedback;
@@ -2925,18 +3098,19 @@ export async function createTideweftRuntime(
       playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
       commandSequence = prior.commandSequence;
       pendingGatherNodeId = prior.pendingGatherNodeId;
-      pendingParcelTargetId = null;
-      pendingParcelRecoverOnArrival = false;
+      pendingParcelTargetId = prior.pendingParcelTargetId;
+      pendingParcelRecoverOnArrival = prior.pendingParcelRecoverOnArrival;
       pendingAcceptance = prior.pendingAcceptance;
       pendingDelivery = prior.pendingDelivery;
       pendingReinforcement = prior.pendingReinforcement;
       pendingRenegotiation = prior.pendingRenegotiation;
       pendingReportDelivery = prior.pendingReportDelivery;
       pendingChoir = prior.pendingChoir;
-      autopilotPath = [];
+      autopilotPath = prior.autopilotPath;
       lastAutosaveTick = prior.lastAutosaveTick;
       lastCargoDamageNoticeMs = prior.lastCargoDamageNoticeMs;
       manualControl = { moveX: 0, moveY: 0, brace: false };
+      rebuildRegionalWorldView();
       runtimeIntegrityFailure = `INTEGRITY HALT — ${errorMessage(error)}.`;
       session.paused = true;
       announce(session, `${runtimeIntegrityFailure} The last complete in-memory step was restored.`, true);
@@ -3017,6 +3191,8 @@ type LoadedAutosave = {
   readonly fieldResources: FieldResourceEcologyState;
   readonly traversalFeedback: TraversalFeedbackState;
   readonly physicalCargo: PhysicalCargoState;
+  readonly regionalTravel: RegionalPlayerTravelState;
+  readonly promiseJourney: RegionalPromiseJourneyState;
   readonly saveGenerationEra: number;
   readonly saveGeneration: number;
   readonly updatedAt: number;
@@ -3095,12 +3271,16 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     return undefined;
   }
   try {
+    if (record.worldJson.length > SAVE_WORLD_JSON_MAX_CHARACTERS) {
+      throw new Error("Save envelope exceeds the safe local size limit");
+    }
     const decoded = JSON.parse(record.worldJson) as Partial<GameSaveEnvelope>;
     if (
       decoded.format !== "tideweft-session" ||
       (
         decoded.version !== LEGACY_GAME_SAVE_VERSION
         && decoded.version !== FIELD_RESOURCE_GAME_SAVE_VERSION
+        && decoded.version !== PHYSICAL_CARGO_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -3115,14 +3295,39 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     ) {
       throw new Error("Save record format fence does not match its embedded envelope");
     }
-    if (decoded.version === GAME_SAVE_VERSION) {
+    if (decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION) {
       if (
         typeof decoded.integrity !== "string"
         || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
       ) throw new Error("Save envelope integrity does not match its contents");
+      if (decoded.version === GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "fieldResources",
+            "format",
+            "integrity",
+            "physicalCargo",
+            "player",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+        ) throw new Error("Current save envelope is not canonical");
+      } else if (
+        Object.hasOwn(decoded, "regionalTravel")
+        || Object.hasOwn(decoded, "promiseJourney")
+      ) {
+        throw new Error("Version 3 save contains v4 regional fields");
+      }
     } else if (
       Object.hasOwn(decoded, "physicalCargo")
       || Object.hasOwn(decoded, "integrity")
+      || Object.hasOwn(decoded, "regionalTravel")
+      || Object.hasOwn(decoded, "promiseJourney")
     ) {
       throw new Error("Legacy save version contains v3-only physical custody fields");
     }
@@ -3140,7 +3345,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       world.choirs.length,
     );
     if (
-      decoded.version === GAME_SAVE_VERSION
+      decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION
       && (
         stableStringify(loadedSession) !== stableStringify(rawSession)
         || loadedSession.posture !== HARD_POSTURE
@@ -3148,6 +3353,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || loadedSession.sessionShape !== PERPETUAL_SESSION_SHAPE
       )
     ) throw new Error("Current save contains noncanonical session state");
+    if (decoded.version <= FIELD_RESOURCE_GAME_SAVE_VERSION) {
+      prepareLegacyWayknotsForRegionalMigration(decoded.player);
+    }
     normalizePlayerCrafting(decoded.player, decoded.version === LEGACY_GAME_SAVE_VERSION);
     const catalog = runtimeFieldResourceCatalog(world);
     const fieldResources = decoded.version >= FIELD_RESOURCE_GAME_SAVE_VERSION
@@ -3155,9 +3363,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       : createFieldResourceEcologyState(world.meta.completedTick);
     const traversalFeedback = canonicalizeTraversalFeedback(
       decoded.traversalFeedback,
-      { allowMissingLegacy: decoded.version < GAME_SAVE_VERSION },
+      { allowMissingLegacy: decoded.version < PHYSICAL_CARGO_GAME_SAVE_VERSION },
     );
-    if (decoded.version === GAME_SAVE_VERSION) {
+    if (decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION) {
       if (stableStringify(fieldResources) !== stableStringify(decoded.fieldResources)) {
         throw new Error("Current save contains noncanonical field-resource state");
       }
@@ -3168,10 +3376,14 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     // Alpha player snapshots predate dynamic world dimensions. Pickup repair
     // can reset currentTrace, so dimensions must be authoritative before it
     // asks playerTileIndex to derive that trace origin.
-    if (decoded.version === GAME_SAVE_VERSION) {
+    if (decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION) {
       if (
-        decoded.player.worldWidth !== world.terrain.width
-        || decoded.player.worldHeight !== world.terrain.height
+        decoded.player.worldWidth !== (decoded.version === GAME_SAVE_VERSION
+          ? REGIONAL_TRAVEL_COLUMNS
+          : world.terrain.width)
+        || decoded.player.worldHeight !== (decoded.version === GAME_SAVE_VERSION
+          ? REGIONAL_TRAVEL_ROWS
+          : world.terrain.height)
       ) throw new Error("Current save player dimensions do not match its world");
       if (stableStringify(decoded.player) !== stableStringify(rawPlayer)) {
         throw new Error("Current save contains noncanonical player crafting state");
@@ -3184,14 +3396,15 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (legacyBaseline && !Number.isFinite(legacyBaseline.awakenedChoirs)) {
       legacyBaseline.awakenedChoirs = world.choirs.length;
     }
-    const repairedContractIds = decoded.version === GAME_SAVE_VERSION
+    const sealedSave = decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION;
+    const repairedContractIds = sealedSave
       ? repairInterruptedPickups(
           structuredClone(world),
           structuredClone(decoded.player),
           structuredClone(loadedSession),
         )
       : repairInterruptedPickups(world, decoded.player, loadedSession);
-    if (decoded.version === GAME_SAVE_VERSION && repairedContractIds.length > 0) {
+    if (sealedSave && repairedContractIds.length > 0) {
       throw new Error("Current save contains an interrupted optimistic Promise transaction");
     }
     if (repairedContractIds.length > 0) {
@@ -3200,34 +3413,72 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         : ["An interrupted cargo pickup was safely reset before any harbor stock moved."];
       loadedSession.trackedContractId = repairedContractIds[0] ?? null;
     }
-    validatePlayer(decoded.player, world);
-    const physicalCargoValidation = decoded.version === GAME_SAVE_VERSION
-      ? validatePhysicalCargoState(
-          decoded.physicalCargo,
-          decoded.player,
-          world.terrain.width,
-          world.terrain.height,
-        )
-      : {
-          valid: true as const,
-          reason: "valid" as const,
-          state: createPhysicalCargoStateFromPlayer(
-            decoded.player,
-            world.terrain.width,
-            world.terrain.height,
-          ),
-        };
-    if (!physicalCargoValidation.valid || !physicalCargoValidation.state) {
-      throw new Error(`Save contains invalid physical cargo: ${physicalCargoValidation.reason}`);
-    }
-    validatePhysicalPromiseCustody(world, decoded.player, physicalCargoValidation.state);
+    validatePlayer(
+      decoded.player,
+      world,
+      decoded.version === GAME_SAVE_VERSION
+        ? REGIONAL_TRAVEL_COLUMNS * REGIONAL_TRAVEL_ROWS
+        : world.terrain.tiles.length,
+    );
+    const compatibilityView = createWorldView(world);
+    let regionalTravel: RegionalPlayerTravelState;
+    let promiseJourney: RegionalPromiseJourneyState;
     if (decoded.version === GAME_SAVE_VERSION) {
+      const restored = restorePlayerRegionalTravel(
+        world.meta.rootSeed,
+        decoded.player,
+        decoded.regionalTravel!,
+      );
+      if (!restored) throw new Error("Current save contains invalid regional travel state");
+      const restoredView = createRegionalWorldView(
+        compatibilityView,
+        restored.window,
+        { discovered: decoded.player.discovered, depthSoundings: decoded.player.depthSoundings },
+      );
+      const playerAddress = regionalAddressAt(restoredView, playerTileIndex(decoded.player));
+      if (!playerAddress || regionKey(playerAddress.region) !== regionKey(restored.stream.center)) {
+        throw new Error("Current save captured a half-completed region crossing");
+      }
+      const restoredJourney = restoreRegionalPromiseJourney(
+        decoded.promiseJourney,
+        decoded.player,
+        compatibilityView,
+        restoredView,
+      );
+      if (!restoredJourney) throw new Error("Current save contains invalid Promise journey state");
       const runtimeCanonicalPlayer = structuredClone(decoded.player);
-      normalizePlayerForRuntime(runtimeCanonicalPlayer, createWorldView(world));
+      normalizePlayerForRuntime(runtimeCanonicalPlayer, restoredView, compatibilityView);
       if (stableStringify(runtimeCanonicalPlayer) !== stableStringify(decoded.player)) {
         throw new Error("Current save contains noncanonical runtime player state");
       }
+      regionalTravel = restored;
+      promiseJourney = restoredJourney;
+    } else {
+      promiseJourney = migrateRegionalPromiseJourney(decoded.player, compatibilityView);
+      normalizePlayerForRuntime(decoded.player, compatibilityView);
+      if (
+        decoded.version === PHYSICAL_CARGO_GAME_SAVE_VERSION
+        && stableStringify(decoded.player) !== stableStringify(rawPlayer)
+      ) throw new Error("Version 3 save contains noncanonical runtime player state");
+      regionalTravel = migratePlayerToRegionalTravel(world.meta.rootSeed, decoded.player);
     }
+    const physicalCargoValidation = decoded.version === GAME_SAVE_VERSION
+      ? validatePhysicalCargoState(decoded.physicalCargo, decoded.player, WORLD_WIDTH, WORLD_HEIGHT)
+      : decoded.version === PHYSICAL_CARGO_GAME_SAVE_VERSION
+        ? adoptPhysicalCargoStateV1(decoded.physicalCargo, decoded.player, WORLD_WIDTH, WORLD_HEIGHT)
+        : {
+            valid: true as const,
+            reason: "valid" as const,
+            state: createPhysicalCargoStateFromPlayer(decoded.player, WORLD_WIDTH, WORLD_HEIGHT),
+          };
+    if (!physicalCargoValidation.valid || !physicalCargoValidation.state) {
+      throw new Error(`Save contains invalid physical cargo: ${physicalCargoValidation.reason}`);
+    }
+    if (
+      decoded.version === GAME_SAVE_VERSION
+      && regionKey(physicalCargoValidation.state.activeRegion) !== regionKey(regionalTravel.stream.center)
+    ) throw new Error("Current save physical cargo is active in the wrong region");
+    validatePhysicalPromiseCustody(world, decoded.player, physicalCargoValidation.state);
     return {
       kind: "loaded",
       world,
@@ -3236,6 +3487,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       fieldResources,
       traversalFeedback,
       physicalCargo: physicalCargoValidation.state,
+      regionalTravel,
+      promiseJourney,
       saveGenerationEra: version.saveGenerationEra,
       saveGeneration: version.saveGeneration,
       updatedAt: record.updatedAt,
@@ -3243,6 +3496,31 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
   } catch {
     return { kind: "corrupt", version };
   }
+}
+
+/**
+ * Old unsealed session envelopes sometimes contain a newly constructed kit
+ * object with legacy half-address deployments. The envelope version—not that
+ * nested object's optimistic version—is authoritative during migration. Strip
+ * the not-yet-persistent region field and let the v2 migrator preserve every
+ * stable core ID, returning unsuitable placements to hand rather than silently
+ * deleting physical equipment.
+ */
+function prepareLegacyWayknotsForRegionalMigration(player: PlayerState): void {
+  const value: unknown = player.wayknots;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
+  const state = value as { readonly capacity?: unknown; readonly wayknots?: unknown };
+  if (!Array.isArray(state.wayknots)) return;
+  const wayknots = state.wayknots.map((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+    const { region: _region, ...legacy } = raw as Record<string, unknown>;
+    return legacy;
+  });
+  (player as unknown as { wayknots: unknown }).wayknots = {
+    version: 2,
+    capacity: state.capacity,
+    wayknots,
+  };
 }
 
 function normalizeLoadedSession(
@@ -3483,7 +3761,10 @@ function removePhysicalPromiseContract(
   state: PhysicalCargoState,
   contractId: number,
 ): PhysicalCargoState {
-  const loose = state.looseWorld.entities.filter((entity) =>
+  const loose = [
+    state.looseWorld,
+    ...state.inactiveWorlds.map(({ world }) => world),
+  ].flatMap(({ entities }) => entities).filter((entity) =>
     entity.payload.kind === "promise" && entity.payload.contractId === contractId);
   if (loose.length > 0) {
     throw new Error("Cannot remove Promise substance while one of its parcels is loose in the world");
@@ -3589,7 +3870,11 @@ function requireFieldResourceState(value: unknown): FieldResourceEcologyState {
   return candidate as FieldResourceEcologyState;
 }
 
-function normalizePlayerForRuntime(player: PlayerState, world: WorldView): void {
+function normalizePlayerForRuntime(
+  player: PlayerState,
+  world: WorldView,
+  economyWorld: WorldView = world,
+): void {
   player.worldWidth = world.terrain.width;
   player.worldHeight = world.terrain.height;
   player.x = clamp(player.x, TILE_UNITS / 2, world.terrain.width * TILE_UNITS - TILE_UNITS / 2);
@@ -3629,12 +3914,16 @@ function normalizePlayerForRuntime(player: PlayerState, world: WorldView): void 
   if (!player.tools.includes("sounding-line")) player.tools.unshift("sounding-line");
   player.wayknots = normalizeWayknotState(player.wayknots, {
     capacity: DEFAULT_WAYKNOT_CAPACITY,
-    tileCount: world.terrain.tiles.length,
+    tileCount: WORLD_WIDTH * WORLD_HEIGHT,
     loadTick: world.completedTick,
-    contextAt: (tileIndex) => {
-      const context = wayknotContextAt(world, tileIndex);
-      if (!context) return undefined;
-      const tile = world.terrain.tiles[tileIndex];
+    contextRegion: regionalWorldCenter(world),
+    contextAt: (localTileIndex, region) => {
+      const viewTileIndex = regionalTileIndexInView(world, region, localTileIndex);
+      if (viewTileIndex === null) return undefined;
+      const resolved = regionalWayknotContextAt(world, viewTileIndex);
+      if (!resolved) return undefined;
+      const context = resolved.context;
+      const tile = world.terrain.tiles[viewTileIndex];
       const canReachAnchorDepth = tile !== undefined
         && MAX_TIDE_LEVEL - tile.elevation >= TIDE_ANCHOR_PLACEMENT_DEPTH;
       return canReachAnchorDepth
@@ -3670,15 +3959,15 @@ function normalizePlayerForRuntime(player: PlayerState, world: WorldView): void 
     ? player.surveyTrace
     : [playerTileIndex(player)];
   player.surveyedRouteIds = Array.isArray(player.surveyedRouteIds)
-    ? [...new Set(player.surveyedRouteIds.filter((id) => world.routes.some((route) => route.id === id)))]
+    ? [...new Set(player.surveyedRouteIds.filter((id) => economyWorld.routes.some((route) => route.id === id)))]
         .sort((left, right) => left - right)
     : [];
   player.lastHarborId = player.lastHarborId === null
-    || world.settlements.some((settlement) => settlement.id === player.lastHarborId)
+    || economyWorld.settlements.some((settlement) => settlement.id === player.lastHarborId)
     ? player.lastHarborId
     : loadedHarborId;
   player.harborTrail = Array.isArray(player.harborTrail)
-    && player.harborTrail.every((id) => world.settlements.some((settlement) => settlement.id === id))
+    && player.harborTrail.every((id) => economyWorld.settlements.some((settlement) => settlement.id === id))
     ? player.harborTrail.slice(-8)
     : player.lastHarborId === null ? [] : [player.lastHarborId];
 }
@@ -3774,11 +4063,15 @@ function expectedCargoProperty(
   }
 }
 
-function validatePlayer(player: PlayerState, world: WorldState): void {
+function validatePlayer(
+  player: PlayerState,
+  world: WorldState,
+  expectedChartTiles = world.terrain.tiles.length,
+): void {
   for (const value of [player.x, player.y, player.stamina, player.stability, player.scanCharge]) {
     if (!Number.isFinite(value)) throw new Error("Save contains invalid player state");
   }
-  if (!Array.isArray(player.discovered) || player.discovered.length !== world.terrain.tiles.length) {
+  if (!Array.isArray(player.discovered) || player.discovered.length !== expectedChartTiles) {
     throw new Error("Save contains an incompatible chart");
   }
   if (!Array.isArray(player.cargo) || !Array.isArray(player.currentTrace)) {
@@ -3823,6 +4116,16 @@ function validatePlayer(player: PlayerState, world: WorldState): void {
   }
 }
 
+function hasExactObjectKeys(
+  value: object,
+  expected: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort();
+  const canonicalExpected = [...expected].sort();
+  return actual.length === canonicalExpected.length
+    && actual.every((key, index) => key === canonicalExpected[index]);
+}
+
 function validatePhysicalPromiseCustody(
   world: WorldState,
   player: PlayerState,
@@ -3840,6 +4143,8 @@ function validatePhysicalPromiseCustody(
   const physicalPromises = [
     ...physicalCargo.carrier.lots.map((lot) => lot.payload),
     ...physicalCargo.looseWorld.entities.map((entity) => entity.payload),
+    ...physicalCargo.inactiveWorlds.flatMap(({ world: cargoWorld }) =>
+      cargoWorld.entities.map((entity) => entity.payload)),
   ].filter((payload): payload is Extract<LooseCargoPayload, { readonly kind: "promise" }> =>
     payload.kind === "promise");
   if (!active) {

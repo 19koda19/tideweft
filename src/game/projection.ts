@@ -25,6 +25,7 @@ import {
   type FieldResourceCatalog,
   type FieldResourceEcologyState,
 } from "../sim/fieldResources";
+import { regionKey } from "../sim/regions";
 import { FIXED_POINT, STRAND_AUTOMATION_THRESHOLD, type TerrainTileView, type WorldView } from "../sim/types";
 import {
   TILE_UNITS,
@@ -33,9 +34,18 @@ import {
   wayknotEffectsAt,
   type PlayerState,
 } from "./player";
-import { deriveTideHarps, type TideHarp } from "./tideHarps";
+import type { TideHarp } from "./tideHarps";
 import { surfaceCurrentDirection } from "./currentDirection";
 import { WAYKNOT_LABELS, WAYKNOT_RADII } from "./wayknots";
+import {
+  regionalWayknotViewTileIndex,
+  visibleRegionalTideHarps,
+} from "./regionalWayknots";
+import {
+  regionalAddressAt,
+  regionalTileIndexInView,
+  regionalWorldCenter,
+} from "./regionalWorldView";
 import {
   projectPlayerBalance,
   projectTraversalIncident,
@@ -108,15 +118,23 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
-  const looseCargo = options.looseCargoWorld
+  const playerAddress = regionalAddressAt(
+    world,
+    Math.floor(player.y / TILE_UNITS) * world.terrain.width + Math.floor(player.x / TILE_UNITS),
+  );
+  const cargoOriginIndex = options.looseCargoWorld
+    ? regionalTileIndexInView(world, options.looseCargoWorld.region, 0)
+    : null;
+  const cargoOriginTile = cargoOriginIndex === null ? undefined : world.terrain.tiles[cargoOriginIndex];
+  const looseCargo = options.looseCargoWorld && playerAddress && cargoOriginTile
     ? projectLooseCargoWorld(options.looseCargoWorld, {
-        worldOrigin: { x: 0, y: 0 },
+        worldOrigin: { x: cargoOriginTile.x * tileSize, y: cargoOriginTile.y * tileSize },
         worldUnitsPerTile: tileSize,
         renderDistance: tileSize * LOOSE_CARGO_RENDER_RADIUS_TILES,
         focusedPromiseContractId: player.activeContractId,
         viewerOwner: { kind: "player", id: "local-porter" },
         player: {
-          region: { x: 0, y: 0 },
+          region: playerAddress.region,
           position: { x: playerX, y: playerY },
           recoveryReach: tileSize * 2,
         },
@@ -125,21 +143,22 @@ export function projectGameView(
   const traversalIncident = projectTraversalIncident(options.traversalFeedback?.incident ?? null);
   const currentPlayerTileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
     + Math.floor(player.x / TILE_UNITS);
-  const harpGrid = { width: world.terrain.width, height: world.terrain.height };
   const activeWayknotIds = new Set(
     wayknotEffectsAt(player, world, currentPlayerTileIndex)
       .influences
       .map((influence) => influence.id),
   );
-  const derivedTideHarps = deriveTideHarps(player.wayknots, harpGrid);
+  const derivedTideHarps = visibleRegionalTideHarps(player.wayknots, world);
   const activeTideHarpId = activeTideHarpAtPlayer(player, world, derivedTideHarps)?.id ?? null;
-  const tideHarps = derivedTideHarps.map((harp) =>
-    projectTideHarp(
+  const tideHarps = derivedTideHarps.flatMap((harp) => {
+    const projected = projectTideHarp(
       harp,
-      world.terrain.width,
+      world,
       tileSize,
       harp.id === activeTideHarpId,
-    ));
+    );
+    return projected ? [projected] : [];
+  });
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const fieldResources = projectFieldResources(
     world,
@@ -213,6 +232,7 @@ export function projectGameView(
 
   return {
     revision: world.completedTick,
+    spatialEpoch: regionKey(regionalWorldCenter(world)),
     tick: world.completedTick,
     worldName: `The ${titleCase(world.seedText)} Estuary`,
     terrain: {
@@ -350,12 +370,14 @@ export function projectGameView(
         : {}),
     },
     wayknots: player.wayknots.wayknots.flatMap((wayknot) => {
-      if (wayknot.tileIndex === null) return [];
+      if (wayknot.region === null || wayknot.tileIndex === null) return [];
+      const viewTileIndex = regionalWayknotViewTileIndex(world, wayknot.region, wayknot.tileIndex);
+      if (viewTileIndex === null) return [];
       return [{
         id: String(wayknot.id),
         kind: wayknot.kind,
         label: `${WAYKNOT_LABELS[wayknot.kind]} #${wayknot.id}`,
-        position: tilePoint(wayknot.tileIndex, world.terrain.width, tileSize),
+        position: tilePoint(viewTileIndex, world.terrain.width, tileSize),
         // A zero-tile Reed-mat radius still covers the physical tile beneath
         // it. Half a tile keeps the drawn footprint truthful while the larger
         // Manhattan fields remain readable as soft world-space rings.
@@ -641,18 +663,32 @@ function writeTerrainIdentity(
 
 function projectTideHarp(
   harp: TideHarp,
-  worldWidth: number,
+  world: WorldView,
   tileSize: number,
   active: boolean,
-): TideHarpView {
+): TideHarpView | null {
   const [reed, anchor, wind] = harp.knots;
   const [reedAnchor, reedWind, anchorWind] = harp.edges;
+  const viewIndex = (tileIndex: number) =>
+    regionalWayknotViewTileIndex(world, harp.region, tileIndex);
+  const reedIndex = viewIndex(reed.tileIndex);
+  const anchorIndex = viewIndex(anchor.tileIndex);
+  const windIndex = viewIndex(wind.tileIndex);
+  if (reedIndex === null || anchorIndex === null || windIndex === null) return null;
+  const reedPoint = tilePoint(reedIndex, world.terrain.width, tileSize);
+  const anchorPoint = tilePoint(anchorIndex, world.terrain.width, tileSize);
+  const windPoint = tilePoint(windIndex, world.terrain.width, tileSize);
+  const pointsById = new Map<number, { readonly x: number; readonly y: number }>([
+    [reed.id, reedPoint],
+    [anchor.id, anchorPoint],
+    [wind.id, windPoint],
+  ]);
   const projectEdge = (edge: TideHarp["edges"][number]) => ({
     id: edge.id,
     fromId: String(edge.fromId),
     toId: String(edge.toId),
-    from: tilePoint(edge.fromTileIndex, worldWidth, tileSize),
-    to: tilePoint(edge.toTileIndex, worldWidth, tileSize),
+    from: pointsById.get(edge.fromId)!,
+    to: pointsById.get(edge.toId)!,
   });
   return {
     id: harp.id,
@@ -661,23 +697,23 @@ function projectTideHarp(
       {
         id: String(reed.id),
         kind: reed.kind,
-        point: tilePoint(reed.tileIndex, worldWidth, tileSize),
+        point: reedPoint,
       },
       {
         id: String(anchor.id),
         kind: anchor.kind,
-        point: tilePoint(anchor.tileIndex, worldWidth, tileSize),
+        point: anchorPoint,
       },
       {
         id: String(wind.id),
         kind: wind.kind,
-        point: tilePoint(wind.tileIndex, worldWidth, tileSize),
+        point: windPoint,
       },
     ],
     edges: [projectEdge(reedAnchor), projectEdge(reedWind), projectEdge(anchorWind)],
     center: {
-      x: harp.center.x * tileSize,
-      y: harp.center.y * tileSize,
+      x: (reedPoint.x + anchorPoint.x + windPoint.x) / 3,
+      y: (reedPoint.y + anchorPoint.y + windPoint.y) / 3,
     },
     active,
   };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { RegionCoord } from "../sim/regions";
 
 import {
   deriveTideHarps,
@@ -29,6 +30,27 @@ function kit(
     version: 1,
     capacity: 6,
     wayknots: options.reverse ? wayknots.reverse() : wayknots,
+  };
+}
+
+function regionalKit(
+  placements: PlacementMap,
+  regionFor: (id: 1 | 2 | 3 | 4 | 5 | 6) => RegionCoord,
+): unknown {
+  const kinds = ["reed-mat", "reed-mat", "tide-anchor", "tide-anchor", "wind-knot", "wind-knot"] as const;
+  return {
+    version: 3,
+    capacity: 6,
+    wayknots: kinds.map((kind, index) => {
+      const id = (index + 1) as 1 | 2 | 3 | 4 | 5 | 6;
+      const tileIndex = placements[id] ?? null;
+      return {
+        id,
+        kind,
+        region: tileIndex === null ? null : regionFor(id),
+        tileIndex,
+      };
+    }),
   };
 }
 
@@ -131,6 +153,42 @@ describe("Tide Harp candidate topology", () => {
       3: indexAt(2, 2),
       5: indexAt(3, 3),
     }), GRID)).toEqual([]);
+  });
+
+  it("forms only within one signed region and exposes a collision-free regional identity", () => {
+    const remote = { x: -7, y: 11 } as const;
+    const elsewhere = { x: 7, y: -11 } as const;
+    const placements = {
+      1: indexAt(1, 1),
+      3: indexAt(4, 1),
+      5: indexAt(1, 4),
+    } as const;
+    const remoteState = regionalKit(placements, () => remote);
+    expect(deriveTideHarps(remoteState, GRID)).toEqual([]);
+    const remoteHarps = deriveTideHarps(remoteState, GRID, remote);
+    expect(remoteHarps).toHaveLength(1);
+    expect(remoteHarps[0]).toMatchObject({
+      id: "tide-harp:r:-7:11:r1-a3-w5",
+      region: remote,
+      knots: [
+        { id: 1, region: remote },
+        { id: 3, region: remote },
+        { id: 5, region: remote },
+      ],
+    });
+    const elsewhereId = deriveTideHarps(
+      regionalKit(placements, () => elsewhere),
+      GRID,
+      elsewhere,
+    )[0]?.id;
+    expect(elsewhereId).toBe("tide-harp:r:7:-11:r1-a3-w5");
+    expect(elsewhereId).not.toBe(remoteHarps[0]?.id);
+
+    const split = regionalKit(placements, (id) => id === 5 ? elsewhere : remote);
+    expect(deriveTideHarps(split, GRID, remote)).toEqual([]);
+    expect(deriveTideHarps(split, GRID, elsewhere)).toEqual([]);
+    expect(deriveTideHarps(remoteState, GRID, { ...remote, alias: true } as RegionCoord))
+      .toEqual([]);
   });
 });
 

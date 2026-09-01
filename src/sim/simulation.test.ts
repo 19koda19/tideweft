@@ -176,6 +176,42 @@ describe("deterministic headless world", () => {
     assertWorldInvariants(world);
   });
 
+  it("delivers exact cargo after a regional detour without inventing route credit", () => {
+    const world = createWorld("regional detour delivery");
+    const contract = requireContract(world);
+    const origin = world.settlements.find(({ id }) => id === contract.originSettlementId);
+    const destination = world.settlements.find(({ id }) => id === contract.destinationSettlementId);
+    const route = world.routes.find(({ id }) => id === contract.routeId);
+    if (!origin || !destination || !route) throw new Error("broken regional delivery fixture");
+    const traceBefore = route.traceStrength;
+    const reliabilityBefore = route.reliability;
+    stepWorld(world, [
+      { id: "regional-accept", type: "accept-contract", carrier: "player", contractId: contract.id },
+      {
+        id: "regional-pickup",
+        type: "pickup-contract",
+        contractId: contract.id,
+        originSettlementId: origin.id,
+      },
+    ]);
+    stepWorld(world, [{
+      id: "regional-deliver",
+      type: "deliver-contract",
+      contractId: contract.id,
+      destinationSettlementId: destination.id,
+      condition: 640_000,
+      trace: [],
+      routeEvidence: "regional-detour",
+    }]);
+    expect(contract.status).toBe("fulfilled");
+    expect(contract.deliveryTraceCost).toBe(0);
+    expect(route.traceStrength).toBe(traceBefore);
+    expect(route.reliability).toBe(reliabilityBefore);
+    expect(world.events.find((event) => event.type === "contract-fulfilled" && event.subjectId === contract.id)?.data)
+      .toMatchObject({ routeEvidence: "regional-detour-no-credit", reinforcedRouteCount: 0 });
+    assertWorldInvariants(world);
+  });
+
   it("reserves fresh offers for inspection before autonomous porters may claim them", () => {
     const world = createWorld("a promise held open");
     const initialContractIds = world.contracts.map((contract) => contract.id);

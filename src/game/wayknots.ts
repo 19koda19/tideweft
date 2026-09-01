@@ -1,5 +1,10 @@
 import type { TerrainKind } from "../sim/types";
 import {
+  isRegionCoord,
+  regionKey,
+  type RegionCoord,
+} from "../sim/regions";
+import {
   CRAFTING_CONDITION_MAX,
   WAYKNOT_MIN_PLACEMENT_CONDITION,
   quoteWayknotServiceWear,
@@ -28,7 +33,8 @@ export const WAYKNOT_PLACEMENT_HINTS: Readonly<Record<WayknotKind, string>> = Ob
   "wind-knot": "Place on exposed wind scrub or a shell ridge.",
 });
 
-export const WAYKNOT_STATE_VERSION = 2 as const;
+export const WAYKNOT_STATE_VERSION = 3 as const;
+export const WAYKNOT_COMPATIBILITY_REGION: RegionCoord = Object.freeze({ x: 0, y: 0 });
 export const DEFAULT_WAYKNOT_CAPACITY = 6;
 export const MAX_WAYKNOT_CAPACITY = 6;
 export const WAYKNOT_WET_DEPTH = 40_000;
@@ -61,13 +67,15 @@ export const WAYKNOT_RADII: Readonly<Record<WayknotKind, number>> = Object.freez
 });
 
 /**
- * A knot remains in the field kit after reclamation. `tileIndex: null` means
- * that the piece is carried. Rebinding spends persistent condition rather than
+ * A knot remains in the field kit after reclamation. A carried piece has both
+ * `region` and `tileIndex` null; a deployed piece has both halves of its
+ * canonical address. Rebinding spends persistent condition rather than
  * creating/deleting a piece; IDs never change during reclaim/redeploy.
  */
 export interface Wayknot {
   readonly id: number;
   readonly kind: WayknotKind;
+  readonly region: RegionCoord | null;
   readonly tileIndex: number | null;
   /** Persistent fixed-point durability. Zero is broken, but never deletes the aid. */
   readonly condition: number;
@@ -138,8 +146,10 @@ export interface NormalizeWayknotOptions {
   readonly tileCount?: number;
   /** Tick at which a legacy deployed knot is loaded; legacy knots are ready immediately. */
   readonly loadTick?: number;
+  /** Region whose terrain may be revalidated by a legacy one-region callback. */
+  readonly contextRegion?: RegionCoord;
   /** Optionally revalidate saved placements against the current terrain. */
-  readonly contextAt?: (tileIndex: number) => WayknotTileContext | undefined;
+  readonly contextAt?: (tileIndex: number, region: RegionCoord) => WayknotTileContext | undefined;
 }
 
 export interface WayknotInfluence {
@@ -200,29 +210,39 @@ const KIND_ORDER = new Map<WayknotKind, number>(
   WAYKNOT_KINDS.map((kind, index) => [kind, index]),
 );
 
+interface NormalizationCandidate {
+  readonly wayknot: Wayknot;
+  readonly strictAddress: boolean;
+}
+
+interface NormalizedWayknotAddress {
+  readonly region: RegionCoord | null;
+  readonly tileIndex: number | null;
+}
+
 const DEFAULT_WAYKNOT_LOADOUT: readonly Wayknot[] = Object.freeze([
   Object.freeze({
-    id: 1, kind: "reed-mat", tileIndex: null,
+    id: 1, kind: "reed-mat", region: null, tileIndex: null,
     condition: WAYKNOT_CONDITION_MAX, readyTick: 0, serviceWearRemainder: 0,
   }),
   Object.freeze({
-    id: 2, kind: "reed-mat", tileIndex: null,
+    id: 2, kind: "reed-mat", region: null, tileIndex: null,
     condition: WAYKNOT_CONDITION_MAX, readyTick: 0, serviceWearRemainder: 0,
   }),
   Object.freeze({
-    id: 3, kind: "tide-anchor", tileIndex: null,
+    id: 3, kind: "tide-anchor", region: null, tileIndex: null,
     condition: WAYKNOT_CONDITION_MAX, readyTick: 0, serviceWearRemainder: 0,
   }),
   Object.freeze({
-    id: 4, kind: "tide-anchor", tileIndex: null,
+    id: 4, kind: "tide-anchor", region: null, tileIndex: null,
     condition: WAYKNOT_CONDITION_MAX, readyTick: 0, serviceWearRemainder: 0,
   }),
   Object.freeze({
-    id: 5, kind: "wind-knot", tileIndex: null,
+    id: 5, kind: "wind-knot", region: null, tileIndex: null,
     condition: WAYKNOT_CONDITION_MAX, readyTick: 0, serviceWearRemainder: 0,
   }),
   Object.freeze({
-    id: 6, kind: "wind-knot", tileIndex: null,
+    id: 6, kind: "wind-knot", region: null, tileIndex: null,
     condition: WAYKNOT_CONDITION_MAX, readyTick: 0, serviceWearRemainder: 0,
   }),
 ]);
@@ -251,10 +271,14 @@ export function normalizeWayknotState(
     ? Math.trunc(options.tileCount ?? 0)
     : undefined;
   const loadTick = normalizeTick(options.loadTick, 0);
+  const strictAddress = record.version === WAYKNOT_STATE_VERSION;
+  const contextRegion = options.contextRegion === undefined
+    ? WAYKNOT_COMPATIBILITY_REGION
+    : canonicalRegion(options.contextRegion);
   const hasExplicitWayknots = Object.prototype.hasOwnProperty.call(record, "wayknots");
   if (!hasExplicitWayknots) return createWayknotState(capacity);
   const rawWayknots = Array.isArray(record.wayknots) ? record.wayknots : [];
-  const candidates = new Map<number, Wayknot[]>();
+  const candidates = new Map<number, NormalizationCandidate[]>();
 
   for (const raw of rawWayknots) {
     if (!isRecord(raw)) continue;
@@ -262,9 +286,17 @@ export function normalizeWayknotState(
     if (!Number.isSafeInteger(id) || (id as number) <= 0) continue;
     const kind = defaultKindForId(id as number);
     if (kind === null) continue;
-    let tileIndex = normalizeTileIndex(raw.tileIndex, tileCount);
-    if (tileIndex !== null && options.contextAt) {
-      const context = options.contextAt(tileIndex);
+    const address = normalizeSavedAddress(raw, strictAddress, tileCount);
+    if (address === undefined) continue;
+    let { region, tileIndex } = address;
+    if (
+      region !== null
+      && tileIndex !== null
+      && options.contextAt
+      && contextRegion !== null
+      && sameRegion(region, contextRegion)
+    ) {
+      const context = options.contextAt(tileIndex, region);
       if (
         !context
         || context.tileIndex !== tileIndex
@@ -272,6 +304,10 @@ export function normalizeWayknotState(
         || context.occupied
         || !supportsWayknot(kind, context)
       ) {
+        // A malformed v3 deployment is discarded, never teleported into the
+        // pack. Legacy region-zero saves retain their established salvage.
+        if (strictAddress) continue;
+        region = null;
         tileIndex = null;
       }
     }
@@ -283,49 +319,66 @@ export function normalizeWayknotState(
     const candidate = freezeWayknot({
       id: id as number,
       kind,
+      region,
       tileIndex,
       condition,
       readyTick,
       serviceWearRemainder,
     });
     const grouped = candidates.get(candidate.id) ?? [];
-    grouped.push(candidate);
+    grouped.push({ wayknot: candidate, strictAddress });
     candidates.set(candidate.id, grouped);
   }
 
-  const deduplicated: Wayknot[] = [];
+  const deduplicated: NormalizationCandidate[] = [];
   for (const id of [...candidates.keys()].sort((left, right) => left - right)) {
     const group = candidates.get(id) ?? [];
-    group.sort(compareNormalizationCandidate);
+    group.sort((left, right) => compareNormalizationCandidate(left.wayknot, right.wayknot));
     const winner = group[0];
     if (winner) deduplicated.push(winner);
   }
 
-  // A malformed save may put several physical aids on one tile. Lowest stable
-  // ID owns it; every later collision is retained but safely returned to hand.
-  const occupiedTiles = new Set<number>();
+  // A malformed save may put several physical aids at one region/tile. Lowest
+  // stable ID owns it. Legacy collisions retain the old carried salvage;
+  // strict v3 collisions are dropped so corruption cannot create free gear.
+  const occupiedAddresses = new Set<string>();
   let deployed = 0;
-  const normalized = deduplicated.map((wayknot) => {
-    if (wayknot.tileIndex === null) return wayknot;
-    if (occupiedTiles.has(wayknot.tileIndex) || deployed >= capacity) {
-      return carriedWayknot(wayknot);
+  const normalized: Wayknot[] = [];
+  for (const candidate of deduplicated) {
+    const wayknot = candidate.wayknot;
+    if (wayknot.region === null || wayknot.tileIndex === null) {
+      normalized.push(wayknot);
+      continue;
     }
-    occupiedTiles.add(wayknot.tileIndex);
+    const key = wayknotAddressKey(wayknot.region, wayknot.tileIndex);
+    if (occupiedAddresses.has(key) || deployed >= capacity) {
+      if (!candidate.strictAddress) normalized.push(carriedWayknot(wayknot));
+      continue;
+    }
+    occupiedAddresses.add(key);
     deployed += 1;
-    return wayknot;
-  });
+    normalized.push(wayknot);
+  }
   return makeState(capacity, normalized);
 }
 
 /** The exact knot occupying a tile, if any. */
-export function wayknotAtTile(state: WayknotState, tileIndex: number): Wayknot | null {
-  if (!Number.isSafeInteger(tileIndex) || tileIndex < 0) return null;
-  return state.wayknots.find((wayknot) => wayknot.tileIndex === tileIndex) ?? null;
+export function wayknotAtTile(
+  state: WayknotState,
+  tileIndex: number,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
+): Wayknot | null {
+  const canonical = canonicalRegion(region);
+  if (!canonical || !Number.isSafeInteger(tileIndex) || tileIndex < 0) return null;
+  return state.wayknots.find((wayknot) =>
+    wayknot.tileIndex === tileIndex
+    && wayknot.region !== null
+    && sameRegion(wayknot.region, canonical)) ?? null;
 }
 
 export function deployedWayknotCount(state: WayknotState): number {
   return state.wayknots.reduce(
-    (total, wayknot) => total + (wayknot.tileIndex === null ? 0 : 1),
+    (total, wayknot) => total + (wayknot.region === null || wayknot.tileIndex === null ? 0 : 1),
     0,
   );
 }
@@ -368,9 +421,11 @@ export function validateWayknotPlacement(
   kind: WayknotKind,
   context: WayknotTileContext,
   movingWayknotId?: number,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): WayknotPlacementReason {
-  if (!isValidTileContext(context)) return "invalid-context";
-  const fieldOccupant = wayknotAtTile(state, context.tileIndex);
+  const canonical = canonicalRegion(region);
+  if (!canonical || !isValidTileContext(context)) return "invalid-context";
+  const fieldOccupant = wayknotAtTile(state, context.tileIndex, canonical);
   if (context.occupied || (fieldOccupant !== null && fieldOccupant.id !== movingWayknotId)) {
     return "occupied";
   }
@@ -378,12 +433,17 @@ export function validateWayknotPlacement(
   const moving = movingWayknotId === undefined
     ? undefined
     : state.wayknots.find((wayknot) => wayknot.id === movingWayknotId);
-  const addsDeployment = !moving || moving.tileIndex === null;
+  if (
+    moving
+    && moving.region !== null
+    && !sameRegion(moving.region, canonical)
+  ) return "capacity-reached";
+  const addsDeployment = !moving || moving.region === null || moving.tileIndex === null;
   if (addsDeployment && deployedWayknotCount(state) >= state.capacity) {
     return "capacity-reached";
   }
   if (moving) {
-    const placementCondition = moving.tileIndex === null
+    const placementCondition = moving.region === null || moving.tileIndex === null
       ? moving.condition
       : quoteWayknotServiceWear(moving.kind, moving.condition, "reclaim").conditionAfter;
     return placementCondition < WAYKNOT_MIN_PLACEMENT_CONDITION
@@ -391,7 +451,7 @@ export function validateWayknotPlacement(
       : "available";
   }
   const carried = state.wayknots.filter(
-    (wayknot) => wayknot.kind === kind && wayknot.tileIndex === null,
+    (wayknot) => wayknot.kind === kind && wayknot.region === null && wayknot.tileIndex === null,
   );
   if (carried.length === 0) return "capacity-reached";
   if (!carried.some((wayknot) => wayknot.condition >= WAYKNOT_MIN_PLACEMENT_CONDITION)) {
@@ -410,13 +470,17 @@ export function placeWayknot(
   kind: WayknotKind,
   context: WayknotTileContext,
   currentTick = 0,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): WayknotActionResult {
-  const validation = validateWayknotPlacement(state, kind, context);
+  const canonical = canonicalRegion(region);
+  if (!canonical) return failedAction(state, "invalid-context");
+  const validation = validateWayknotPlacement(state, kind, context, undefined, canonical);
   if (validation !== "available") return failedPlacementAction(state, validation);
 
   const carried = [...state.wayknots]
     .filter((wayknot) =>
       wayknot.kind === kind
+      && wayknot.region === null
       && wayknot.tileIndex === null
       && wayknot.condition >= WAYKNOT_MIN_PLACEMENT_CONDITION)
     .sort((left, right) => left.id - right.id)[0];
@@ -427,6 +491,7 @@ export function placeWayknot(
   if (!placement.allowed) return failedPlacementAction(state, "condition-too-low", carried);
   const placed = freezeWayknot({
     ...carried,
+    region: canonical,
     tileIndex: context.tileIndex,
     condition: placement.conditionAfter,
     readyTick: settingReadyTick(currentTick),
@@ -441,26 +506,37 @@ export function placeContextualWayknot(
   state: WayknotState,
   context: WayknotTileContext,
   currentTick = 0,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): WayknotActionResult {
-  if (!isValidTileContext(context)) return failedAction(state, "invalid-context");
-  if (context.occupied || wayknotAtTile(state, context.tileIndex)) return failedAction(state, "occupied");
+  const canonical = canonicalRegion(region);
+  if (!canonical || !isValidTileContext(context)) return failedAction(state, "invalid-context");
+  if (context.occupied || wayknotAtTile(state, context.tileIndex, canonical)) {
+    return failedAction(state, "occupied");
+  }
   const kind = contextualWayknotKind(context);
   return kind === null
     ? failedAction(state, "unsuitable-terrain")
-    : placeWayknot(state, kind, context, currentTick);
+    : placeWayknot(state, kind, context, currentTick, canonical);
 }
 
 /** Return a placed aid to the kit without deleting or changing its stable ID. */
-export function reclaimWayknot(state: WayknotState, id: number): WayknotActionResult {
+export function reclaimWayknot(
+  state: WayknotState,
+  id: number,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
+): WayknotActionResult {
+  const canonical = canonicalRegion(region);
+  if (!canonical) return failedAction(state, "not-found");
   const existing = state.wayknots.find((wayknot) => wayknot.id === id);
   if (!existing) return failedAction(state, "not-found");
-  if (existing.tileIndex === null) return failedAction(state, "already-carried", existing);
+  if (existing.region === null || existing.tileIndex === null) {
+    return failedAction(state, "already-carried", existing);
+  }
+  if (!sameRegion(existing.region, canonical)) return failedAction(state, "not-found");
   const reclaim = quoteWayknotServiceWear(existing.kind, existing.condition, "reclaim");
-  const reclaimed = freezeWayknot({
+  const reclaimed = carriedWayknot({
     ...existing,
-    tileIndex: null,
     condition: reclaim.conditionAfter,
-    readyTick: 0,
   });
   const nextState = makeState(
     state.capacity,
@@ -469,9 +545,13 @@ export function reclaimWayknot(state: WayknotState, id: number): WayknotActionRe
   return successfulAction(nextState, "reclaimed", reclaimed);
 }
 
-export function reclaimWayknotAtTile(state: WayknotState, tileIndex: number): WayknotActionResult {
-  const existing = wayknotAtTile(state, tileIndex);
-  return existing ? reclaimWayknot(state, existing.id) : failedAction(state, "not-found");
+export function reclaimWayknotAtTile(
+  state: WayknotState,
+  tileIndex: number,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
+): WayknotActionResult {
+  const existing = wayknotAtTile(state, tileIndex, region);
+  return existing ? reclaimWayknot(state, existing.id, region) : failedAction(state, "not-found");
 }
 
 /** Move one known piece atomically, preserving both its kind and stable ID. */
@@ -480,19 +560,30 @@ export function redeployWayknot(
   id: number,
   context: WayknotTileContext,
   currentTick = 0,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): WayknotActionResult {
+  const canonical = canonicalRegion(region);
+  if (!canonical) return failedAction(state, "invalid-context");
   const existing = state.wayknots.find((wayknot) => wayknot.id === id);
   if (!existing) return failedAction(state, "not-found");
-  if (existing.tileIndex === context.tileIndex) return failedAction(state, "already-there", existing);
-  const validation = validateWayknotPlacement(state, existing.kind, context, existing.id);
+  if (existing.region !== null && !sameRegion(existing.region, canonical)) {
+    return failedAction(state, "not-found");
+  }
+  if (
+    existing.region !== null
+    && sameRegion(existing.region, canonical)
+    && existing.tileIndex === context.tileIndex
+  ) return failedAction(state, "already-there", existing);
+  const validation = validateWayknotPlacement(state, existing.kind, context, existing.id, canonical);
   if (validation !== "available") return failedPlacementAction(state, validation, existing);
-  const afterReclaim = existing.tileIndex === null
+  const afterReclaim = existing.region === null || existing.tileIndex === null
     ? existing.condition
     : quoteWayknotServiceWear(existing.kind, existing.condition, "reclaim").conditionAfter;
   const placement = quoteWayknotServiceWear(existing.kind, afterReclaim, "placement");
   if (!placement.allowed) return failedPlacementAction(state, "condition-too-low", existing);
   const redeployed = freezeWayknot({
     ...existing,
+    region: canonical,
     tileIndex: context.tileIndex,
     condition: placement.conditionAfter,
     readyTick: settingReadyTick(currentTick),
@@ -509,9 +600,12 @@ export function toggleContextualWayknot(
   state: WayknotState,
   context: WayknotTileContext,
   currentTick = 0,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): WayknotActionResult {
-  const existing = wayknotAtTile(state, context.tileIndex);
-  return existing ? reclaimWayknot(state, existing.id) : placeContextualWayknot(state, context, currentTick);
+  const existing = wayknotAtTile(state, context.tileIndex, region);
+  return existing
+    ? reclaimWayknot(state, existing.id, region)
+    : placeContextualWayknot(state, context, currentTick, region);
 }
 
 /**
@@ -524,13 +618,25 @@ export function queryWayknotEffects(
   context: WayknotTileContext,
   grid: WayknotGrid,
   currentTick = Number.MAX_SAFE_INTEGER,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): WayknotEffects {
-  if (!isValidTileContext(context) || !isValidGrid(grid) || context.tileIndex >= grid.width * grid.height) {
+  const canonical = canonicalRegion(region);
+  if (
+    !canonical
+    || !isValidTileContext(context)
+    || !isValidGrid(grid)
+    || context.tileIndex >= grid.width * grid.height
+  ) {
     return neutralEffects();
   }
   const influences: WayknotInfluence[] = [];
   for (const wayknot of state.wayknots) {
-    if (wayknot.tileIndex === null || wayknot.tileIndex >= grid.width * grid.height) continue;
+    if (
+      wayknot.region === null
+      || !sameRegion(wayknot.region, canonical)
+      || wayknot.tileIndex === null
+      || wayknot.tileIndex >= grid.width * grid.height
+    ) continue;
     const effectStrength = wayknotEffectStrength(wayknot, currentTick);
     if (effectStrength === 0) continue;
     const distance = manhattanTileDistance(wayknot.tileIndex, context.tileIndex, grid);
@@ -560,7 +666,8 @@ export function wayknotEffectStrength(
   currentTick = Number.MAX_SAFE_INTEGER,
 ): number {
   if (
-    wayknot.tileIndex === null
+    wayknot.region === null
+    || wayknot.tileIndex === null
     || normalizeCondition(wayknot.condition) === 0
     || !isValidTick(currentTick)
   ) return 0;
@@ -575,19 +682,29 @@ export function wayknotEffectStrength(
  */
 export function tideHarpEffectStrength(
   state: WayknotState,
-  members: readonly (number | { readonly id: number })[],
+  members: readonly (number | { readonly id: number; readonly region?: RegionCoord })[],
   currentTick = Number.MAX_SAFE_INTEGER,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): number {
-  if (members.length !== 3 || !isValidTick(currentTick)) return 0;
+  const canonical = canonicalRegion(region);
+  if (!canonical || members.length !== 3 || !isValidTick(currentTick)) return 0;
   const memberIds = members.map((member) => typeof member === "number" ? member : member.id);
   if (
     memberIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
     || new Set(memberIds).size !== memberIds.length
   ) return 0;
   let strength = WAYKNOT_FULL_STRENGTH;
-  for (const id of memberIds) {
+  for (let index = 0; index < memberIds.length; index += 1) {
+    const id = memberIds[index];
+    if (id === undefined) return 0;
+    const member = members[index];
+    if (member === undefined) return 0;
+    const memberRegion = typeof member === "number" || member.region === undefined
+      ? canonical
+      : canonicalRegion(member.region);
+    if (!memberRegion || !sameRegion(memberRegion, canonical)) return 0;
     const wayknot = state.wayknots.find((candidate) => candidate.id === id);
-    if (!wayknot) return 0;
+    if (!wayknot || wayknot.region === null || !sameRegion(wayknot.region, canonical)) return 0;
     strength = Math.min(strength, wayknotEffectStrength(wayknot, currentTick));
   }
   return strength;
@@ -603,10 +720,16 @@ export function applyWayknotServiceWear(
   id: number,
   currentTick: number,
   requestedBenefit = WAYKNOT_FULL_STRENGTH,
+  region: RegionCoord = WAYKNOT_COMPATIBILITY_REGION,
 ): WayknotServiceResult {
+  const canonical = canonicalRegion(region);
+  if (!canonical) return failedService(state, "not-found");
   const existing = state.wayknots.find((wayknot) => wayknot.id === id);
   if (!existing) return failedService(state, "not-found");
-  if (existing.tileIndex === null) return failedService(state, "not-deployed", existing);
+  if (existing.region === null || existing.tileIndex === null) {
+    return failedService(state, "not-deployed", existing);
+  }
+  if (!sameRegion(existing.region, canonical)) return failedService(state, "not-found");
   if (
     !isValidTick(currentTick)
     || !Number.isSafeInteger(requestedBenefit)
@@ -796,6 +919,36 @@ function normalizeTileIndex(value: unknown, tileCount?: number): number | null {
   return tileCount !== undefined && tileIndex >= tileCount ? null : tileIndex;
 }
 
+function normalizeSavedAddress(
+  value: Readonly<Record<string, unknown>>,
+  strictAddress: boolean,
+  tileCount?: number,
+): NormalizedWayknotAddress | undefined {
+  if (!strictAddress) {
+    const tileIndex = normalizeTileIndex(value.tileIndex, tileCount);
+    return tileIndex === null
+      ? { region: null, tileIndex: null }
+      : { region: WAYKNOT_COMPATIBILITY_REGION, tileIndex };
+  }
+
+  const rawRegion = value.region;
+  const rawTileIndex = value.tileIndex;
+  if (rawRegion === null && rawTileIndex === null) {
+    return { region: null, tileIndex: null };
+  }
+  // Half-addresses, aliases, and out-of-grid deployments are invalid physical
+  // evidence. Dropping the corrupt record is safer than minting carried gear.
+  if (rawRegion === null || rawTileIndex === null) return undefined;
+  const region = canonicalRegion(rawRegion);
+  if (
+    !region
+    || !Number.isSafeInteger(rawTileIndex)
+    || (rawTileIndex as number) < 0
+    || (tileCount !== undefined && (rawTileIndex as number) >= tileCount)
+  ) return undefined;
+  return { region, tileIndex: rawTileIndex as number };
+}
+
 function normalizeCapacity(value: unknown, fallback = DEFAULT_WAYKNOT_CAPACITY): number {
   if (!Number.isSafeInteger(value)) return fallback;
   return Math.max(0, Math.min(MAX_WAYKNOT_CAPACITY, Math.trunc(value as number)));
@@ -829,10 +982,13 @@ function settingReadyTick(currentTick: number): number {
 }
 
 function compareNormalizationCandidate(left: Wayknot, right: Wayknot): number {
-  const leftCarried = left.tileIndex === null ? 0 : 1;
-  const rightCarried = right.tileIndex === null ? 0 : 1;
+  // Conflicting duplicate records prefer physical deployment evidence over a
+  // carried copy, preventing normalization from teleporting an aid into hand.
+  const leftCarried = left.region === null || left.tileIndex === null ? 1 : 0;
+  const rightCarried = right.region === null || right.tileIndex === null ? 1 : 0;
   return leftCarried - rightCarried
     || (KIND_ORDER.get(left.kind) ?? 0) - (KIND_ORDER.get(right.kind) ?? 0)
+    || compareRegions(left.region, right.region)
     || (left.tileIndex ?? -1) - (right.tileIndex ?? -1)
     // Duplicate save records resolve conservatively, never repairing wear.
     || left.condition - right.condition
@@ -870,11 +1026,39 @@ function defaultKindForId(id: number): WayknotKind | null {
 }
 
 function freezeWayknot(wayknot: Wayknot): Wayknot {
-  return Object.freeze({ ...wayknot });
+  return Object.freeze({
+    ...wayknot,
+    region: wayknot.region === null
+      ? null
+      : Object.freeze({ x: wayknot.region.x, y: wayknot.region.y }),
+  });
 }
 
 function carriedWayknot(wayknot: Wayknot): Wayknot {
-  return freezeWayknot({ ...wayknot, tileIndex: null, readyTick: 0 });
+  return freezeWayknot({ ...wayknot, region: null, tileIndex: null, readyTick: 0 });
+}
+
+function canonicalRegion(value: unknown): RegionCoord | null {
+  if (!isRecord(value) || Object.keys(value).sort().join(",") !== "x,y" || !isRegionCoord(value)) {
+    return null;
+  }
+  return Object.freeze({ x: value.x as number, y: value.y as number });
+}
+
+function sameRegion(left: RegionCoord, right: RegionCoord): boolean {
+  return left.x === right.x && left.y === right.y;
+}
+
+function compareRegions(left: RegionCoord | null, right: RegionCoord | null): number {
+  if (left === null) return right === null ? 0 : 1;
+  if (right === null) return -1;
+  if (left.x !== right.x) return left.x < right.x ? -1 : 1;
+  if (left.y !== right.y) return left.y < right.y ? -1 : 1;
+  return 0;
+}
+
+function wayknotAddressKey(region: RegionCoord, tileIndex: number): string {
+  return `${regionKey(region)}:t:${tileIndex}`;
 }
 
 function makeState(capacity: number, wayknots: readonly Wayknot[]): WayknotState {

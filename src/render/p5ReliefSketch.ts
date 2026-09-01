@@ -248,6 +248,8 @@ export function createTideweftReliefRenderer(
   let touchSequenceSuppressed = false;
   let pointerWorld: WorldPoint | null = null;
   let hoverParcelId: string | null = null;
+  let hasObservedSpatialEpoch = false;
+  let observedSpatialEpoch: TideweftView["spatialEpoch"];
   let lastMovement = "0,0";
   let lastOrbitFrameAt: number | undefined;
   const activeTouchPointers = new Map<number, ReliefTouchPoint>();
@@ -374,6 +376,81 @@ export function createTideweftReliefRenderer(
     releaseLooseCargoPointerCaptures(canvasElement, [...activeTouchPointers.keys()]);
     activeTouchPointers.clear();
     lastOrbitFrameAt = undefined;
+  };
+
+  /**
+   * Floating-origin recentering reuses local coordinates for a different
+   * region. Any pointer candidate captured under the old interpretation must
+   * die before pointerup can resolve against the new view.
+   */
+  const cancelSpatialCandidates = (): void => {
+    const capturedPointerIds = new Set<number>(activeTouchPointers.keys());
+    if (orbitDrag) capturedPointerIds.add(orbitDrag.pointerId);
+    if (clickCandidate) capturedPointerIds.add(clickCandidate.pointerId);
+    if (parcelPress) capturedPointerIds.add(parcelPress.pointerId);
+    releaseLooseCargoPointerCaptures(canvasElement, [...capturedPointerIds]);
+    orbitDrag = null;
+    clickCandidate = null;
+    parcelPress = null;
+    twistGesture = null;
+    touchSequenceSuppressed = false;
+    activeTouchPointers.clear();
+    pointerWorld = null;
+    hoverParcelId = null;
+    orbit.focusPoint = undefined;
+    orbit.focusUntil = 0;
+    ripples.length = 0;
+    cached = null;
+    for (const node of labelNodes.values()) node.remove();
+    labelNodes.clear();
+  };
+
+  const snapCameraToView = (view: TideweftView): void => {
+    const target = view.camera.followPlayer ? view.player.position : view.camera.center;
+    const minimumViewport = Math.min(instance?.width ?? 640, instance?.height ?? 480);
+    const baseDistance = clamp(minimumViewport * 0.96, 430, 780);
+    orbit.x = target.x;
+    orbit.y = target.y;
+    orbit.height = discoveredReliefSurfaceHeightAt(
+      view.terrain,
+      target,
+      reliefScale(view.terrain),
+      false,
+    );
+    orbit.distance = clamp(
+      baseDistance / Math.max(0.12, view.camera.zoom * orbit.manualZoom),
+      150,
+      2_200,
+    );
+    orbit.initialized = true;
+    const bounds = view.camera.bounds;
+    if (bounds) {
+      orbit.x = clamp(orbit.x, bounds.minX, bounds.maxX);
+      orbit.y = clamp(orbit.y, bounds.minY, bounds.maxY);
+    }
+  };
+
+  const observeSpatialEpoch = (view: TideweftView): boolean => {
+    const epoch = view.spatialEpoch;
+    // Legacy projections have no floating-origin signal. They retain their
+    // historical interpolation and input behavior rather than fabricating one.
+    if (epoch === undefined) return false;
+    if (!hasObservedSpatialEpoch) {
+      hasObservedSpatialEpoch = true;
+      observedSpatialEpoch = epoch;
+      return false;
+    }
+    if (Object.is(observedSpatialEpoch, epoch)) return false;
+    observedSpatialEpoch = epoch;
+    cancelSpatialCandidates();
+    snapCameraToView(view);
+    return true;
+  };
+
+  const refreshLatestView = (): TideweftView | null => {
+    latestView = options.getView() ?? null;
+    if (latestView) observeSpatialEpoch(latestView);
+    return latestView;
   };
 
   const currentCameraState = (): ReliefCameraState => {
@@ -755,13 +832,15 @@ export function createTideweftReliefRenderer(
   };
 
   const pulseScan = (point?: WorldPoint): void => {
-    const origin = point ?? options.getView()?.player.position;
+    const view = refreshLatestView();
+    const origin = point ?? view?.player.position;
     if (!origin) return;
     ripples.push({ point: { ...origin }, startedAt: performance.now() });
     if (ripples.length > 4) ripples.shift();
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
+    refreshLatestView();
     if (!active
       || contextLost
       || event.ctrlKey
@@ -821,6 +900,7 @@ export function createTideweftReliefRenderer(
   };
 
   const onKeyUp = (event: KeyboardEvent): void => {
+    refreshLatestView();
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
       event.preventDefault();
       heldBraceKeys.delete(event.code);
@@ -888,6 +968,7 @@ export function createTideweftReliefRenderer(
       releasePointerCapture(pointerId);
     };
     const dispatchClick = (event: PointerEvent): void => {
+      refreshLatestView();
       if (clickCandidate?.pointerId !== event.pointerId) return;
       const candidate = clickCandidate;
       clickCandidate = null;
@@ -921,6 +1002,7 @@ export function createTideweftReliefRenderer(
       ));
     };
     const pointerDown = (event: PointerEvent): void => {
+      refreshLatestView();
       if (!active || contextLost) return;
       element.focus({ preventScroll: true });
       if (event.pointerType === "touch" && event.button === 0) {
@@ -996,6 +1078,7 @@ export function createTideweftReliefRenderer(
       event.preventDefault();
     };
     const pointerMove = (event: PointerEvent): void => {
+      refreshLatestView();
       if (event.pointerType === "touch" && activeTouchPointers.has(event.pointerId)) {
         activeTouchPointers.set(event.pointerId, {
           pointerId: event.pointerId,
@@ -1058,6 +1141,7 @@ export function createTideweftReliefRenderer(
       }
     };
     const pointerUp = (event: PointerEvent): void => {
+      refreshLatestView();
       if (event.pointerType === "touch" && activeTouchPointers.has(event.pointerId)) {
         if (!touchSequenceSuppressed) dispatchClick(event);
         else if (clickCandidate?.pointerId === event.pointerId) clickCandidate = null;
@@ -1078,6 +1162,7 @@ export function createTideweftReliefRenderer(
       event.preventDefault();
     };
     const pointerCancel = (event: PointerEvent): void => {
+      refreshLatestView();
       if (orbitDrag?.pointerId === event.pointerId) orbitDrag = null;
       if (clickCandidate?.pointerId === event.pointerId) clickCandidate = null;
       parcelPress = cancelLooseCargoPointerPress(parcelPress, event.pointerId);
@@ -1086,6 +1171,7 @@ export function createTideweftReliefRenderer(
       }
     };
     const lostPointerCapture = (event: PointerEvent): void => {
+      refreshLatestView();
       // Mobile browsers may revoke capture during an OS gesture or interruption
       // without first delivering pointerup/pointercancel. Clear the same
       // per-pointer state so a stale finger cannot swallow the next route tap.
@@ -1094,13 +1180,26 @@ export function createTideweftReliefRenderer(
       parcelPress = cancelLooseCargoPointerPress(parcelPress, event.pointerId);
       if (activeTouchPointers.has(event.pointerId)) endTouch(event.pointerId);
     };
-    const contextMenu = (event: MouseEvent): void => event.preventDefault();
-    const blur = (): void => releaseInput();
-    const windowBlur = (): void => releaseInput();
+    const contextMenu = (event: MouseEvent): void => {
+      refreshLatestView();
+      event.preventDefault();
+    };
+    const blur = (): void => {
+      refreshLatestView();
+      releaseInput();
+    };
+    const windowBlur = (): void => {
+      refreshLatestView();
+      releaseInput();
+    };
     const visibilityChange = (): void => {
-      if (document.visibilityState === "hidden") releaseInput();
+      if (document.visibilityState === "hidden") {
+        refreshLatestView();
+        releaseInput();
+      }
     };
     const wheel = (event: WheelEvent): void => {
+      refreshLatestView();
       if (!active || contextLost) return;
       event.preventDefault();
       orbit.manualZoom = clamp(orbit.manualZoom * Math.exp(-event.deltaY * 0.0012), 0.38, 3.2);
@@ -1115,6 +1214,7 @@ export function createTideweftReliefRenderer(
     const contextRestored = (): void => {
       contextLost = false;
       cached = null;
+      refreshLatestView();
       if (active) instance?.loop();
     };
 
@@ -2743,7 +2843,7 @@ export function createTideweftReliefRenderer(
 
     p.draw = (): void => {
       if (!active || contextLost || !webglSupported) return;
-      latestView = options.getView() ?? null;
+      refreshLatestView();
       const now = performance.now();
       p.background(latestView?.weather.kind === "mist" ? RELIEF_PALETTE.horizon : RELIEF_PALETTE.ink);
       if (!latestView) return;
@@ -2787,6 +2887,7 @@ export function createTideweftReliefRenderer(
       releaseInput();
       instance?.noLoop();
     } else if (!contextLost && webglSupported) {
+      refreshLatestView();
       instance?.loop();
     }
   };
@@ -2802,6 +2903,7 @@ export function createTideweftReliefRenderer(
       instance.resizeCanvas(size.width, size.height, true);
     },
     focusWorld: (point, zoom) => {
+      refreshLatestView();
       orbit.focusPoint = { ...point };
       orbit.focusUntil = performance.now() + (reducedMotion ? 1 : 1_800);
       if (zoom !== undefined) orbit.manualZoom = clamp(zoom, 0.38, 3.2);

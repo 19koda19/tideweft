@@ -1,7 +1,8 @@
 import { deriveBiomeProfile, deriveMagicalWaterInfluence } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
-import { FIXED_POINT, type WorldView } from "../sim/types";
+import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
 import { surfaceCurrentDirection } from "./currentDirection";
+import { regionalAddressAt, regionalTileIndexInView } from "./regionalWorldView";
 import {
   LOOSE_CARGO_TILE_UNITS,
   looseCargoCarrierLoadMilli,
@@ -132,6 +133,49 @@ export function playerPositionAtLooseCargo(
   };
 }
 
+/** Convert a floating-window player point to its exact region-local cargo point. */
+export function looseCargoPositionAtRegionalPlayer(
+  world: WorldView,
+  x: number,
+  y: number,
+): LooseCargoPosition {
+  if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
+    throw new RangeError("Regional player cargo position must use safe integer coordinates");
+  }
+  const tileX = Math.floor(x / 1_000);
+  const tileY = Math.floor(y / 1_000);
+  const viewIndex = tileY * world.terrain.width + tileX;
+  const address = regionalAddressAt(world, viewIndex);
+  if (!address) throw new RangeError("Regional player cargo position is outside the active view");
+  return looseCargoPositionAtPlayer(
+    address.localX * 1_000 + (x - tileX * 1_000),
+    address.localY * 1_000 + (y - tileY * 1_000),
+    address.region,
+  );
+}
+
+/** Project a region-local parcel back into the current floating player view. */
+export function playerPositionAtRegionalLooseCargo(
+  world: WorldView,
+  position: LooseCargoPosition,
+): { readonly x: number; readonly y: number } | null {
+  const local = playerPositionAtLooseCargo(position);
+  const localX = Math.floor(local.x / 1_000);
+  const localY = Math.floor(local.y / 1_000);
+  if (localX < 0 || localX >= WORLD_WIDTH || localY < 0) return null;
+  const viewIndex = regionalTileIndexInView(
+    world,
+    position.region,
+    localY * WORLD_WIDTH + localX,
+  );
+  const tile = viewIndex === null ? undefined : world.terrain.tiles[viewIndex];
+  if (!tile) return null;
+  return {
+    x: tile.x * 1_000 + (local.x - localX * 1_000),
+    y: tile.y * 1_000 + (local.y - localY * 1_000),
+  };
+}
+
 /**
  * Build exactly one authoritative environment sample for every loaded parcel.
  * The returned order is the world's canonical stable-ID order; simulation does
@@ -144,24 +188,25 @@ export function sampleLooseCargoEnvironment(
   landscape: LooseCargoLandscapeSignals = {},
 ): readonly LooseCargoStepSample[] {
   if (
-    cargo.width !== world.terrain.width
-    || cargo.height !== world.terrain.height
-    || cargo.region.x !== 0
-    || cargo.region.y !== 0
+    cargo.width !== WORLD_WIDTH
+    || cargo.height !== WORLD_HEIGHT
+    || regionalTileIndexInView(world, cargo.region, 0) === null
+    || regionalTileIndexInView(world, cargo.region, cargo.width * cargo.height - 1) === null
   ) {
-    throw new RangeError("Compatibility-region cargo dimensions do not match the active world");
+    throw new RangeError("Regional cargo dimensions or active terrain do not match the world view");
   }
   const rootSeed = validRootSeed(world.rootSeed) ? world.rootSeed : seedFromText(world.seedText);
   const currentDirection = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
 
   return cargo.entities.map((entity): LooseCargoStepSample => {
     const tileIndex = tileIndexAt(entity.x, entity.y, cargo.width, cargo.height);
-    const tile = world.terrain.tiles[tileIndex];
+    const viewTileIndex = cargoTileIndexInView(world, cargo, tileIndex);
+    const tile = viewTileIndex === null ? undefined : world.terrain.tiles[viewTileIndex];
     if (!tile) throw new RangeError(`Loose cargo ${entity.id} is outside the active terrain`);
     const biome = deriveBiomeProfile({
       seed: rootSeed,
       tile,
-      gridHeight: world.terrain.height,
+      gridHeight: cargo.height,
       weather: world.weather,
       magicalWaterInfluence: deriveMagicalWaterInfluence(rootSeed, tile),
     });
@@ -169,7 +214,7 @@ export function sampleLooseCargoEnvironment(
     const currentStrength = waterDepth <= 35_000
       ? 0
       : unit((waterDepth - 35_000) * 2 + Math.trunc(world.weather.intensity / 3));
-    const downhill = downhillVector(world, tileIndex);
+    const downhill = downhillVector(world, cargo, tileIndex);
     const rain = world.weather.kind === "rain" || world.weather.kind === "storm"
       ? unit(world.weather.intensity)
       : 0;
@@ -230,25 +275,32 @@ export function stepLooseCargoInCompatibilityWorld(
   }
 }
 
+/** Same authoritative kernel; the historical name remains as a compatible alias. */
+export const stepLooseCargoInRegionalWorld = stepLooseCargoInCompatibilityWorld;
+
 function downhillVector(
   world: WorldView,
+  cargo: LooseCargoWorldState,
   tileIndex: number,
 ): { readonly x: number; readonly y: number } {
-  const origin = world.terrain.tiles[tileIndex];
+  const originViewIndex = cargoTileIndexInView(world, cargo, tileIndex);
+  const origin = originViewIndex === null ? undefined : world.terrain.tiles[originViewIndex];
   if (!origin) return { x: 0, y: 0 };
+  const localX = tileIndex % cargo.width;
+  const localY = Math.floor(tileIndex / cargo.width);
   const candidates = [
-    { x: 0, y: -1, index: tileIndex - world.terrain.width },
+    { x: 0, y: -1, index: tileIndex - cargo.width },
     { x: 1, y: 0, index: tileIndex + 1 },
-    { x: 0, y: 1, index: tileIndex + world.terrain.width },
+    { x: 0, y: 1, index: tileIndex + cargo.width },
     { x: -1, y: 0, index: tileIndex - 1 },
-  ].filter(({ x, y, index }) => {
-    const tile = world.terrain.tiles[index];
-    return tile !== undefined && tile.x === origin.x + x && tile.y === origin.y + y;
-  });
+  ].filter(({ x, y, index }) => localX + x >= 0 && localX + x < cargo.width
+    && localY + y >= 0 && localY + y < cargo.height
+    && index >= 0 && index < cargo.width * cargo.height);
   let selected: (typeof candidates)[number] | undefined;
   let drop = 0;
   for (const candidate of candidates) {
-    const tile = world.terrain.tiles[candidate.index];
+    const candidateViewIndex = cargoTileIndexInView(world, cargo, candidate.index);
+    const tile = candidateViewIndex === null ? undefined : world.terrain.tiles[candidateViewIndex];
     if (!tile) continue;
     const candidateDrop = origin.elevation - tile.elevation;
     if (candidateDrop > drop) {
@@ -258,6 +310,18 @@ function downhillVector(
   }
   const pressure = unit(drop * 3);
   return selected ? { x: selected.x * pressure, y: selected.y * pressure } : { x: 0, y: 0 };
+}
+
+function cargoTileIndexInView(
+  world: WorldView,
+  cargo: LooseCargoWorldState,
+  tileIndex: number,
+): number | null {
+  if (!Number.isSafeInteger(tileIndex) || tileIndex < 0 || tileIndex >= cargo.width * cargo.height) {
+    return null;
+  }
+  if (cargo.width !== WORLD_WIDTH) return null;
+  return regionalTileIndexInView(world, cargo.region, tileIndex);
 }
 
 function tileIndexAt(x: number, y: number, width: number, height: number): number {

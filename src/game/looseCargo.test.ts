@@ -12,16 +12,19 @@ import {
   addLooseCargoStack,
   consumeLooseCargoStack,
   createLooseCargoExpectedManifest,
+  createLooseCargoMultiWorldExpectedManifest,
   createLooseCargoCarrier,
   createLooseCargoWorld,
   deserializeLooseCargoWorld,
   deserializeLooseCargoCarrier,
   deserializeLooseCargoExpectedManifest,
   dropLooseCargo,
+  inspectLooseCargoMultiWorldConservation,
   looseCargoCarrierLoadMilli,
   looseCargoPayloadLoadMilli,
   looseCargoPayloadProperty,
   looseCargoEntityId,
+  looseCargoRegionKey,
   pickupLooseCargo,
   projectLooseCargoCarrier,
   promiseCargoLoadMilli,
@@ -42,6 +45,7 @@ import {
   upsertLooseCargoPromise,
   validateLooseCargoCarrier,
   validateLooseCargoExpectedManifest,
+  validateLooseCargoMultiWorldExpectedManifest,
   validateLooseCargoWorld,
   type LooseCargoCarrierState,
   type LooseCargoDropRequest,
@@ -1007,6 +1011,87 @@ describe("authoritative carrier mutation boundary", () => {
 });
 
 describe("save authority, global addresses, and bounded soak", () => {
+  it("builds one order-independent manifest across signed regional worlds and the carrier", () => {
+    const regionZero = createLooseCargoWorld(4, 4, { x: 0, y: 0 });
+    const first = drop(regionZero, carrier(), {
+      lotId: "crafting-stack:cordreed",
+      quantity: 2,
+      x: 500_000,
+      y: 500_000,
+    });
+    const regionWest = createLooseCargoWorld(4, 4, { x: -1, y: 0 });
+    const second = drop(regionWest, first.carrier, {
+      lotId: "crafting-stack:pitchcloth",
+      quantity: 1,
+      x: 750_000,
+      y: 500_000,
+    });
+
+    const forward = inspectLooseCargoMultiWorldConservation(
+      [first.world, second.world],
+      second.carrier,
+    );
+    const reversed = inspectLooseCargoMultiWorldConservation(
+      [second.world, first.world],
+      second.carrier,
+    );
+    expect(forward).toEqual(reversed);
+    expect(forward.valid).toBe(true);
+    const expected = createLooseCargoMultiWorldExpectedManifest(
+      [second.world, first.world],
+      second.carrier,
+    );
+    expect(validateLooseCargoMultiWorldExpectedManifest(
+      expected,
+      [first.world, second.world],
+      second.carrier,
+    ).reason).toBe("valid");
+
+    const deletedWest = createLooseCargoWorld(4, 4, { x: -1, y: 0 });
+    expect(validateLooseCargoMultiWorldExpectedManifest(
+      expected,
+      [first.world, deletedWest],
+      second.carrier,
+    ).reason).toBe("manifest-mismatch");
+  });
+
+  it("rejects duplicate regions, parcel identities, durable gear, and noncanonical zero", () => {
+    const pack = carrier();
+    const dropped = drop(createLooseCargoWorld(4, 4), pack, {
+      lotId: "gear:17",
+      x: 500_000,
+      y: 500_000,
+    });
+    expect(inspectLooseCargoMultiWorldConservation(
+      [dropped.world, dropped.world],
+      dropped.carrier,
+    ).reason).toBe("duplicate-region");
+    expect(inspectLooseCargoMultiWorldConservation(
+      [dropped.world],
+      pack,
+    ).reason).toBe("duplicate-durable-identity");
+
+    const entity = dropped.world.entities[0]!;
+    const duplicateParcelWorld: LooseCargoWorldState = {
+      ...createLooseCargoWorld(4, 4, { x: 1, y: 0 }),
+      revision: 1,
+      lastEventOrdinal: entity.lastEventOrdinal,
+      historyBaseOrdinal: entity.lastEventOrdinal,
+      historyArchiveHash: "1111111111111111",
+      entities: [entity],
+    };
+    expect(validateLooseCargoWorld(duplicateParcelWorld).valid).toBe(true);
+    expect(inspectLooseCargoMultiWorldConservation(
+      [dropped.world, duplicateParcelWorld],
+      dropped.carrier,
+    ).reason).toBe("duplicate-parcel-identity");
+
+    expect(looseCargoRegionKey({ x: -Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER }))
+      .toBe(`r:${-Number.MAX_SAFE_INTEGER}:${Number.MAX_SAFE_INTEGER}`);
+    expect(() => looseCargoRegionKey({ x: -0, y: 0 })).toThrow(/canonical/u);
+    expect(() => createLooseCargoWorld(4, 4, { x: 0, y: -0 })).toThrow(/safe integers/u);
+  });
+
   it("round-trips exact carrier lots and detects deletion against the persisted expected manifest", () => {
     const beforeWorld = createLooseCargoWorld(4, 4);
     const beforeCarrier = carrier();

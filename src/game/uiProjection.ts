@@ -1,12 +1,14 @@
 import {
   FIXED_POINT,
   STRAND_AUTOMATION_THRESHOLD,
+  WORLD_WIDTH,
   type ContractState,
   type SimEvent,
   type WorldView,
 } from "../sim/types";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
+import { regionLocalToGlobalTile } from "../sim/regions";
 import {
   fieldResourceStockUnits,
   type FieldResourceCatalog,
@@ -25,6 +27,7 @@ import type {
 import {
   FIELD_TOOL_LABELS,
   PACK_LOAD_MILLI_PER_UNIT,
+  TILE_UNITS,
   activeTideHarpAtPlayer,
   cargoWeight,
   cargoWeightMilli,
@@ -34,7 +37,6 @@ import {
   tunedTideHarps,
   waterDepthBand,
   waterEffortPerStep,
-  wayknotContextAt,
   wayknotEffectsAt,
   type PlayerState,
 } from "./player";
@@ -66,13 +68,24 @@ import {
   wayknotAtTile,
 } from "./wayknots";
 import {
+  regionalWayknotContextAt,
+  regionalWayknotViewTileIndex,
+} from "./regionalWayknots";
+import {
   looseCargoPayloadLoadMilli,
   promiseCargoLoadMilli,
   type LooseCargoCarrierState,
   type LooseCargoWorldState,
 } from "./looseCargo";
+import {
+  regionalAddressAt,
+  regionalTileIndexInView,
+  regionalWorldCenter,
+} from "./regionalWorldView";
 
 export interface UIProjectionOptions {
+  /** Full compatibility economy used for names, Promises, people, routes, and events. */
+  readonly economyWorld?: WorldView;
   readonly fieldResourceCatalog?: FieldResourceCatalog;
   readonly fieldResourceEcology?: FieldResourceEcologyState;
   readonly saveWarning?: SaveWarningUIView;
@@ -82,6 +95,8 @@ export interface UIProjectionOptions {
   readonly looseCargoCarrier?: LooseCargoCarrierState;
   /** Authoritative loaded parcels used for RECOVER objectives and interaction. */
   readonly looseCargoWorld?: LooseCargoWorldState;
+  /** Sealed unloaded parcel worlds used only for truthful global custody guidance. */
+  readonly inactiveLooseCargoWorlds?: readonly LooseCargoWorldState[];
   /** Authoritative momentary hold state shared by Shift and touch. */
   readonly bracing?: boolean;
 }
@@ -92,23 +107,25 @@ export function projectUIView(
   session: GameSessionState,
   options: UIProjectionOptions = {},
 ): TideweftUIView {
+  const economy = options.economyWorld ?? world;
   const selectedSettlement = session.selectedSettlementId === null
     ? undefined
-    : world.settlements.find((settlement) => settlement.id === session.selectedSettlementId);
+    : economy.settlements.find((settlement) => settlement.id === session.selectedSettlementId);
   const playerSettlementId = settlementAtPlayer(player, world);
   const localOffers = playerSettlementId === null
     ? []
-    : world.contracts.filter(
+    : economy.contracts.filter(
         (contract) => contract.status === "offered" && contract.originSettlementId === playerSettlementId,
       );
   const activeContract = player.activeContractId === null
     ? undefined
-    : world.contracts.find((contract) => contract.id === player.activeContractId);
+    : economy.contracts.find((contract) => contract.id === player.activeContractId);
   const trackedContract = session.trackedContractId === null
     ? undefined
-    : world.contracts.find((contract) => contract.id === session.trackedContractId);
+    : economy.contracts.find((contract) => contract.id === session.trackedContractId);
   const tutorial = tutorialObjective(session.tutorial, player);
-  const report = reportObjective(world, player);
+  const report = reportObjective(economy, world, player);
+  const spatialCenter = regionalWorldCenter(world);
   const minute = world.completedTick % 1_440;
   const day = Math.floor(world.completedTick / 1_440) + 1;
   const hour = Math.floor(minute / 60);
@@ -117,20 +134,32 @@ export function projectUIView(
   const worldName = `The ${titleCase(world.seedText)} Estuary`;
   const wayknotControl = projectWayknotControl(world, player);
   const localResource = resourceUnderfoot(player, options);
-  const nearbyParcel = nearestLooseParcel(player, options.looseCargoWorld, 2);
+  const nearbyParcel = nearestLooseParcel(player, world, options.looseCargoWorld, 2);
   const activeCustody = activeContract
-    ? promiseCustody(activeContract, player, options.looseCargoCarrier, options.looseCargoWorld)
+    ? promiseCustody(
+        activeContract,
+        player,
+        world,
+        options.looseCargoCarrier,
+        [
+          ...(options.looseCargoWorld ? [options.looseCargoWorld] : []),
+          ...(options.inactiveLooseCargoWorlds ?? []),
+        ],
+      )
     : undefined;
 
   return {
     revision: [
       world.completedTick,
+      `${spatialCenter.x},${spatialCenter.y}`,
       player.x,
       player.y,
       player.stamina,
       player.stability,
       player.scanCharge,
-      player.wayknots.wayknots.map((wayknot) => `${wayknot.id}@${wayknot.tileIndex ?? "pack"}`).join(","),
+      player.wayknots.wayknots.map((wayknot) =>
+        `${wayknot.id}@${wayknot.region ? `${wayknot.region.x},${wayknot.region.y}:` : ""}${wayknot.tileIndex ?? "pack"}`
+      ).join(","),
       craftingRevision(player),
       player.cargo[0]?.condition ?? FIXED_POINT,
       player.pace,
@@ -144,6 +173,8 @@ export function projectUIView(
       options.requiresSeed ? "replacement-seed-required" : "ordinary-seed",
       options.worldCreationBlocked ? "world-creation-blocked" : "world-creation-enabled",
       options.looseCargoWorld?.revision ?? "no-loose-world",
+      ...(options.inactiveLooseCargoWorlds ?? []).map((cargoWorld) =>
+        `${cargoWorld.region.x},${cargoWorld.region.y}:${cargoWorld.revision}`),
     ].join(":"),
     worldName,
     posture: session.posture,
@@ -180,34 +211,41 @@ export function projectUIView(
       pace: player.pace,
       bracing: options.bracing === true,
       ...(playerSettlementId === null
-        ? { locationLabel: player.mode === "skiff" ? "On the tide" : "Between harbors" }
-        : { locationLabel: settlementName(world, playerSettlementId) }),
+        ? {
+            locationLabel: regionalLocationLabel(
+              player.mode === "skiff" ? "On the tide" : "Between harbors",
+              spatialCenter.x,
+              spatialCenter.y,
+            ),
+          }
+        : { locationLabel: settlementName(economy, playerSettlementId) }),
     },
     field: projectFieldReadout(world, player),
     kit: projectKit(world, player, options.looseCargoCarrier),
-    choir: projectChoir(world, player),
+    choir: projectChoir(economy, player),
     ...(activeContract
-      ? { objective: contractObjective(activeContract, world, player, activeCustody) }
+      ? { objective: contractObjective(activeContract, economy, world, player, activeCustody) }
       : report
         ? { objective: report }
         : trackedContract?.status === "offered"
-          ? { objective: pickupObjective(trackedContract, world, player) }
+          ? { objective: pickupObjective(trackedContract, economy, world, player) }
           : tutorial
             ? { objective: tutorial }
             : { objective: perpetualWorldObjective(session, world) }),
-    contracts: world.contracts
+    contracts: economy.contracts
       .filter((contract) => contract.status === "offered" || contract.id === player.activeContractId)
       .sort((left, right) => contractPriority(left, playerSettlementId) - contractPriority(right, playerSettlementId))
       .slice(0, 8)
       .map((contract) => projectContract(
         contract,
+        economy,
         world,
         player,
         session,
         contract.id === activeContract?.id ? activeCustody : undefined,
       )),
-    ...(selectedSettlement ? { selectedSettlement: projectSettlement(selectedSettlement, world, playerSettlementId, player) } : {}),
-    chronicle: world.events.slice(-24).reverse().map((event) => projectChronicle(event, world)),
+    ...(selectedSettlement ? { selectedSettlement: projectSettlement(selectedSettlement, economy, playerSettlementId, player) } : {}),
+    chronicle: economy.events.slice(-24).reverse().map((event) => projectChronicle(event, economy)),
     title: {
       visible: session.titleVisible,
       hasSave: session.hasSave,
@@ -227,7 +265,7 @@ export function projectUIView(
             deliveries: session.sessionDeliveries,
             strandLabel: `${session.sessionStrandsWoven} strands tended · ${session.sessionChoirsAwakened} choirs awakened · ${deployedWayknotCount(player.wayknots)} wayknots bound · ${session.sessionReportsDelivered} reports carried · ${Math.max(0, discoveredTileCount(player) - session.sessionDiscoveredAtStart)} new terrain marks charted`,
             summary: quietSummary(session),
-            changes: quietHourChanges(session, world),
+            changes: quietHourChanges(session, economy),
             quote: "A useful path is a promise the land can keep.",
             canFinish: true,
           },
@@ -283,6 +321,12 @@ export function projectUIView(
       canEndSession: !session.titleVisible,
     },
   };
+}
+
+function regionalLocationLabel(base: string, regionX: number, regionY: number): string {
+  if (regionX === 0 && regionY === 0) return base;
+  const axis = (value: number) => value > 0 ? `+${value}` : String(value);
+  return `${base} · R ${axis(regionX)},${axis(regionY)}`;
 }
 
 function resourceUnderfoot(
@@ -441,7 +485,7 @@ function projectKit(
     const missing = quote?.ingredients.filter(
       ({ item, quantity }) => player.craftingInventory.stacks[item] < quantity,
     ) ?? [];
-    const deployed = wayknot.tileIndex !== null;
+    const deployed = wayknot.region !== null && wayknot.tileIndex !== null;
     const pristine = wayknot.condition >= FIXED_POINT;
     const actionBlocker = actionsBlocked
       ? "Secure your footing before mending a Wayknot."
@@ -452,7 +496,10 @@ function projectKit(
           : missing.length > 0
             ? `Missing ${missing.map(({ item, quantity }) => `${quantity - player.craftingInventory.stacks[item]} ${CRAFTING_STACK_DEFINITIONS[item].label}`).join(" + ")}.`
             : undefined;
-    const tile = wayknot.tileIndex === null ? undefined : world.terrain.tiles[wayknot.tileIndex];
+    const viewTileIndex = wayknot.region === null || wayknot.tileIndex === null
+      ? null
+      : regionalWayknotViewTileIndex(world, wayknot.region, wayknot.tileIndex);
+    const tile = viewTileIndex === null ? undefined : world.terrain.tiles[viewTileIndex];
     return {
       id: String(wayknot.id),
       kind: wayknot.kind,
@@ -460,7 +507,11 @@ function projectKit(
       detail: `LIVE INHERITED CORE · ${WAYKNOT_DESCRIPTIONS[wayknot.kind]} Rebinding spends condition and never refreshes it.`,
       location: deployed ? "deployed" as const : "carried" as const,
       locationLabel: deployed
-        ? `Deployed${tile ? ` at ${tile.x},${tile.y}` : " in the field"}`
+        ? tile && wayknot.region && wayknot.tileIndex !== null
+          ? `Deployed in region ${wayknot.region.x},${wayknot.region.y} at ${wayknot.tileIndex % WORLD_WIDTH},${Math.floor(wayknot.tileIndex / WORLD_WIDTH)}`
+          : wayknot.region
+            ? `Deployed beyond this chart in region ${wayknot.region.x},${wayknot.region.y}`
+            : "Deployed in the field"
         : "Core field-kit piece · zero compatibility load",
       loadMilli: 0,
       condition: wayknot.condition / FIXED_POINT,
@@ -724,7 +775,10 @@ function biomeFieldLabel(biome: BiomeId): string {
 
 function projectWayknotControl(world: WorldView, player: PlayerState) {
   const tileIndex = playerTileIndex(player);
-  const existing = wayknotAtTile(player.wayknots, tileIndex);
+  const resolved = regionalWayknotContextAt(world, tileIndex);
+  const existing = resolved
+    ? wayknotAtTile(player.wayknots, resolved.localTileIndex, resolved.region)
+    : null;
   if (existing) {
     const label = WAYKNOT_LABELS[existing.kind];
     const strength = wayknotEffectStrength(existing, world.completedTick);
@@ -735,7 +789,7 @@ function projectWayknotControl(world: WorldView, player: PlayerState) {
       hint: `${label} #${existing.id} is directly underfoot at ${Math.round(existing.condition / 10_000)}% condition${strength === 0 ? " · BROKEN" : settingTicks > 0 ? ` · SETTING ${settingTicks}t` : " · READY"}. Press F to reclaim it; reclaiming spends 4% condition and never resets wear.`,
     };
   }
-  const context = wayknotContextAt(world, tileIndex);
+  const context = resolved?.context;
   const needsLocalSounding = context !== undefined
     && context.terrain !== "deep-water"
     && context.waterDepth > 20_000
@@ -756,7 +810,13 @@ function projectWayknotControl(world: WorldView, player: PlayerState) {
     };
   }
   const label = WAYKNOT_LABELS[kind];
-  const reason = validateWayknotPlacement(player.wayknots, kind, context);
+  const reason = validateWayknotPlacement(
+    player.wayknots,
+    kind,
+    context,
+    undefined,
+    resolved?.region,
+  );
   if (reason !== "available") {
     return {
       available: false,
@@ -803,16 +863,17 @@ function fieldTerrainLabel(tile: WorldView["terrain"]["tiles"][number]): string 
 function projectContract(
   contract: ContractState,
   world: WorldView,
+  spatialWorld: WorldView,
   player: PlayerState,
   session: GameSessionState,
   custody?: PromiseCustodyProjection,
 ): ContractUIView {
   const origin = settlementName(world, contract.originSettlementId);
   const destination = settlementName(world, contract.destinationSettlementId);
-  const atOrigin = settlementAtPlayer(player, world) === contract.originSettlementId;
+  const atOrigin = settlementAtPlayer(player, spatialWorld) === contract.originSettlementId;
   const isActive = player.activeContractId === contract.id;
   const cargoProperty = propertyForResource(contract.resource);
-  const journey = journeyProgress(contract, world, player);
+  const journey = journeyProgress(contract, world, spatialWorld, player);
   const route = world.routes.find((candidate) => candidate.id === contract.routeId);
   const destinationSettlement = world.settlements.find((settlement) => settlement.id === contract.destinationSettlementId);
   const requester = world.residents.find((resident) => resident.id === contract.requesterResidentId);
@@ -841,7 +902,7 @@ function projectContract(
     actionLabel: isActive && (custody?.looseQuantity ?? 0) > 0
       ? `Recover ${custody?.looseQuantity ?? 0} loose first`
       : isActive
-      ? settlementAtPlayer(player, world) === null
+      ? settlementAtPlayer(player, spatialWorld) === null
         ? "Handoff at any harbor"
         : "Hand off promise safely"
       : atOrigin
@@ -853,13 +914,14 @@ function projectContract(
 function contractObjective(
   contract: ContractState,
   world: WorldView,
+  spatialWorld: WorldView,
   player: PlayerState,
   custody?: PromiseCustodyProjection,
 ) {
   const origin = settlementName(world, contract.originSettlementId);
   const destination = settlementName(world, contract.destinationSettlementId);
   const cargo = player.cargo.find((item) => item.contractId === contract.id);
-  const journey = journeyProgress(contract, world, player);
+  const journey = journeyProgress(contract, world, spatialWorld, player);
   if (custody && custody.looseQuantity > 0) {
     const motion = custody.nearestLoose?.motion === "snagged"
       ? `snagged by ${custody.nearestLoose.snaggedBy ?? "vegetation"}`
@@ -886,7 +948,9 @@ function contractObjective(
       : `The promise is recorded, but pickup is not complete. Return to ${origin} and use the harbor action.`,
     progress: cargo ? journey.progress : 0,
     progressLabel: cargo
-      ? `${journey.remaining.toFixed(1)} tiles remaining · ${Math.round((cargo.condition / FIXED_POINT) * 100)}% condition`
+      ? journey.remaining === null
+        ? `Route position unavailable · ${Math.round((cargo.condition / FIXED_POINT) * 100)}% condition`
+        : `${journey.remaining.toFixed(1)} tiles remaining · ${Math.round((cargo.condition / FIXED_POINT) * 100)}% condition${journey.direction ? ` · bearing ${journey.direction}` : ""}`
       : "Awaiting pickup",
     why: `PICKUP: ${origin} ✓  ·  DELIVERY: ${destination}. Every condition grade still arrives.`,
   };
@@ -907,26 +971,31 @@ interface PromiseCustodyProjection {
 function promiseCustody(
   contract: ContractState,
   player: PlayerState,
+  spatialWorld: WorldView,
   carrier?: LooseCargoCarrierState,
-  looseWorld?: LooseCargoWorldState,
+  looseWorlds: readonly LooseCargoWorldState[] = [],
 ): PromiseCustodyProjection | undefined {
-  if (!carrier || !looseWorld) return undefined;
+  if (!carrier || looseWorlds.length === 0) return undefined;
   const carriedQuantity = carrier.lots.reduce((total, lot) =>
     total + (lot.payload.kind === "promise" && lot.payload.contractId === contract.id
       ? lot.payload.quantity
       : 0), 0);
-  const loose = looseWorld.entities.filter((entity) =>
-    entity.payload.kind === "promise" && entity.payload.contractId === contract.id);
-  const looseQuantity = loose.reduce((total, entity) =>
+  const loose = looseWorlds.flatMap((cargoWorld) => cargoWorld.entities
+    .filter((entity) => entity.payload.kind === "promise" && entity.payload.contractId === contract.id)
+    .map((entity) => ({ cargoWorld, entity })));
+  const looseQuantity = loose.reduce((total, { entity }) =>
     total + (entity.payload.kind === "promise" ? entity.payload.quantity : 0), 0);
   const nearest = [...loose]
-    .map((entity) => ({
-      id: entity.id,
-      distance: looseParcelDistance(player, entity.x, entity.y),
-      direction: looseParcelDirection(player, entity.x, entity.y),
-      motion: entity.motion,
-      snaggedBy: entity.snaggedBy,
-    }))
+    .map(({ cargoWorld, entity }) => {
+      const vector = looseParcelVector(player, spatialWorld, cargoWorld, entity.x, entity.y);
+      return {
+        id: entity.id,
+        distance: vector ? Math.abs(vector.dx) + Math.abs(vector.dy) : Number.POSITIVE_INFINITY,
+        direction: vector ? looseParcelDirection(vector.dx, vector.dy) : "beyond the chart",
+        motion: entity.motion,
+        snaggedBy: entity.snaggedBy,
+      };
+    })
     .sort((left, right) => left.distance - right.distance || left.id.localeCompare(right.id))[0];
   return {
     carriedQuantity,
@@ -937,20 +1006,30 @@ function promiseCustody(
 
 function nearestLooseParcel(
   player: PlayerState,
+  spatialWorld: WorldView,
   looseWorld: LooseCargoWorldState | undefined,
   maximumDistance: number,
 ): LooseCargoWorldState["entities"][number] | undefined {
   if (!looseWorld) return undefined;
   return [...looseWorld.entities]
-    .map((entity) => ({ entity, distance: looseParcelDistance(player, entity.x, entity.y) }))
+    .map((entity) => ({
+      entity,
+      distance: looseParcelDistance(player, spatialWorld, looseWorld, entity.x, entity.y),
+    }))
     .filter(({ distance }) => distance <= maximumDistance)
     .sort((left, right) => left.distance - right.distance
       || left.entity.id.localeCompare(right.entity.id))[0]?.entity;
 }
 
-function looseParcelDistance(player: PlayerState, x: number, y: number): number {
-  return Math.abs(x / FIXED_POINT - player.x / 1_000)
-    + Math.abs(y / FIXED_POINT - player.y / 1_000);
+function looseParcelDistance(
+  player: PlayerState,
+  spatialWorld: WorldView,
+  cargoWorld: LooseCargoWorldState,
+  x: number,
+  y: number,
+): number {
+  const vector = looseParcelVector(player, spatialWorld, cargoWorld, x, y);
+  return vector ? Math.abs(vector.dx) + Math.abs(vector.dy) : Number.POSITIVE_INFINITY;
 }
 
 /**
@@ -958,9 +1037,7 @@ function looseParcelDistance(player: PlayerState, x: number, y: number): number 
  * into a true eight-way compass sector, while naming an overlapping parcel
  * explicitly so RECOVER guidance never loses its direction word.
  */
-function looseParcelDirection(player: PlayerState, x: number, y: number): string {
-  const dx = x / FIXED_POINT - player.x / 1_000;
-  const dy = y / FIXED_POINT - player.y / 1_000;
+function looseParcelDirection(dx: number, dy: number): string {
   if (dx === 0 && dy === 0) return "here";
   const angle = Math.atan2(dy, dx);
   const sector = ((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8;
@@ -976,24 +1053,61 @@ function looseParcelDirection(player: PlayerState, x: number, y: number): string
   ][sector] ?? "here";
 }
 
-function pickupObjective(contract: ContractState, world: WorldView, player: PlayerState) {
+function looseParcelVector(
+  player: PlayerState,
+  spatialWorld: WorldView,
+  cargoWorld: LooseCargoWorldState,
+  x: number,
+  y: number,
+): { readonly dx: number; readonly dy: number } | null {
+  const playerAddress = regionalAddressAt(spatialWorld, playerTileIndex(player));
+  if (!playerAddress) return null;
+  const playerGlobal = regionLocalToGlobalTile(
+    playerAddress.region,
+    playerAddress.localX,
+    playerAddress.localY,
+  );
+  const playerTileX = Math.floor(player.x / TILE_UNITS);
+  const playerTileY = Math.floor(player.y / TILE_UNITS);
+  const playerX = playerGlobal.x + player.x / TILE_UNITS - playerTileX;
+  const playerY = playerGlobal.y + player.y / TILE_UNITS - playerTileY;
+  const cargoLocalX = Math.floor(x / FIXED_POINT);
+  const cargoLocalY = Math.floor(y / FIXED_POINT);
+  const cargoGlobal = regionLocalToGlobalTile(
+    cargoWorld.region,
+    cargoLocalX,
+    cargoLocalY,
+  );
+  return {
+    dx: cargoGlobal.x + x / FIXED_POINT - cargoLocalX - playerX,
+    dy: cargoGlobal.y + y / FIXED_POINT - cargoLocalY - playerY,
+  };
+}
+
+function pickupObjective(
+  contract: ContractState,
+  world: WorldView,
+  spatialWorld: WorldView,
+  player: PlayerState,
+) {
   const origin = world.settlements.find((settlement) => settlement.id === contract.originSettlementId);
   const destination = settlementName(world, contract.destinationSettlementId);
   const originName = origin?.name ?? settlementName(world, contract.originSettlementId);
   const tile = origin ? world.terrain.tiles[origin.tileIndex] : undefined;
-  const dx = tile ? tile.x + 0.5 - player.x / 1_000 : 0;
-  const dy = tile ? tile.y + 0.5 - player.y / 1_000 : 0;
-  const remaining = Math.hypot(dx, dy);
+  const delta = tile ? compatibilityTileDelta(spatialWorld, player, tile.x, tile.y) : null;
+  const remaining = delta ? Math.hypot(delta.dx, delta.dy) : null;
   const route = world.routes.find((candidate) => candidate.id === contract.routeId);
-  const total = Math.max(1, route ? route.path.length - 1 : remaining);
-  const direction = compassDirection(dx, dy);
+  const total = Math.max(1, route ? route.path.length - 1 : remaining ?? 1);
+  const direction = delta ? compassDirection(delta.dx, delta.dy) : "";
   return {
     id: `pickup-${contract.id}`,
     eyebrow: `Pick up at ${originName}`,
     title: `PICK UP ${contract.quantity} ${titleCase(contract.resource)} ← ${originName}`,
     description: `The cargo is waiting at ${originName}; it is not in your pack yet. Follow the amber pickup marker${direction ? ` ${direction}` : ""}, then choose “Pick up cargo here.”`,
-    progress: Math.max(0, Math.min(1, 1 - remaining / total)),
-    progressLabel: `${remaining.toFixed(1)} tiles to pickup · then deliver to ${destination}`,
+    progress: remaining === null ? 0 : Math.max(0, Math.min(1, 1 - remaining / total)),
+    progressLabel: remaining === null
+      ? `Route position unavailable · then deliver to ${destination}`
+      : `${remaining.toFixed(1)} tiles to pickup · then deliver to ${destination}${direction ? ` · pickup bearing ${direction}` : ""}`,
     why: `PICKUP: ${originName}  ·  DELIVERY: ${destination}. The objective changes automatically after collection.`,
   };
 }
@@ -1019,7 +1133,7 @@ function projectChoir(world: WorldView, player: PlayerState) {
   };
 }
 
-function reportObjective(world: WorldView, player: PlayerState) {
+function reportObjective(world: WorldView, spatialWorld: WorldView, player: PlayerState) {
   const report = player.report;
   if (!report) return undefined;
   const source = world.settlements.find((settlement) => settlement.id === report.sourceSettlementId);
@@ -1027,7 +1141,9 @@ function reportObjective(world: WorldView, player: PlayerState) {
   const sourceTile = source ? world.terrain.tiles[source.tileIndex] : undefined;
   const targetTile = target ? world.terrain.tiles[target.tileIndex] : undefined;
   if (!source || !target || !sourceTile || !targetTile) return undefined;
-  const remaining = Math.hypot(targetTile.x + 0.5 - player.x / 1_000, targetTile.y + 0.5 - player.y / 1_000);
+  const delta = compatibilityTileDelta(spatialWorld, player, targetTile.x, targetTile.y);
+  const remaining = delta ? Math.hypot(delta.dx, delta.dy) : null;
+  const direction = delta ? compassDirection(delta.dx, delta.dy) : "";
   const total = Math.max(1, Math.hypot(targetTile.x - sourceTile.x, targetTile.y - sourceTile.y));
   const age = world.completedTick - report.observedTick;
   return {
@@ -1035,23 +1151,68 @@ function reportObjective(world: WorldView, player: PlayerState) {
     eyebrow: `Deliver report to ${target.name}`,
     title: `DELIVER VERIFIED ${titleCase(report.resource)} COUNT → ${target.name}`,
     description: `${source.name} recorded ${report.reportedQuantity} ${titleCase(report.resource)}. The document uses one pack slot, is ${age} in-world minutes old, and is delivered at ${target.name}'s harbor with E.`,
-    progress: Math.max(0, Math.min(1, 1 - remaining / total)),
-    progressLabel: `${remaining.toFixed(1)} tiles remaining · ${age}m old`,
+    progress: remaining === null ? 0 : Math.max(0, Math.min(1, 1 - remaining / total)),
+    progressLabel: remaining === null
+      ? `Route position unavailable · ${age}m old`
+      : `${remaining.toFixed(1)} tiles remaining · ${age}m old${direction ? ` · bearing ${direction}` : ""}`,
     why: `PICKUP: ${source.name} ✓  ·  DELIVERY: ${target.name}. Arrival replaces guesswork with a named, time-stamped source.`,
   };
 }
 
-function journeyProgress(contract: ContractState, world: WorldView, player: PlayerState): { progress: number; remaining: number } {
+function journeyProgress(
+  contract: ContractState,
+  world: WorldView,
+  spatialWorld: WorldView,
+  player: PlayerState,
+): { progress: number; remaining: number | null; direction: string } {
   const origin = world.settlements.find((settlement) => settlement.id === contract.originSettlementId);
   const destination = world.settlements.find((settlement) => settlement.id === contract.destinationSettlementId);
   const originTile = origin ? world.terrain.tiles[origin.tileIndex] : undefined;
   const destinationTile = destination ? world.terrain.tiles[destination.tileIndex] : undefined;
-  if (!originTile || !destinationTile) return { progress: 0, remaining: 0 };
-  const playerX = player.x / 1_000;
-  const playerY = player.y / 1_000;
-  const remaining = Math.hypot(destinationTile.x + 0.5 - playerX, destinationTile.y + 0.5 - playerY);
+  if (!originTile || !destinationTile) return { progress: 0, remaining: null, direction: "" };
+  const delta = compatibilityTileDelta(spatialWorld, player, destinationTile.x, destinationTile.y);
+  if (!delta) return { progress: 0, remaining: null, direction: "" };
+  const remaining = Math.hypot(delta.dx, delta.dy);
   const total = Math.max(1, Math.hypot(destinationTile.x - originTile.x, destinationTile.y - originTile.y));
-  return { progress: Math.max(0, Math.min(1, 1 - remaining / total)), remaining };
+  return {
+    progress: Math.max(0, Math.min(1, 1 - remaining / total)),
+    remaining,
+    direction: compassDirection(delta.dx, delta.dy),
+  };
+}
+
+/** Persistent global delta from the floating player frame to region 0,0. */
+function compatibilityTileDelta(
+  spatialWorld: WorldView,
+  player: PlayerState,
+  targetLocalX: number,
+  targetLocalY: number,
+): { readonly dx: number; readonly dy: number } | null {
+  if (!Number.isFinite(player.x) || !Number.isFinite(player.y)) return null;
+  const playerTileX = Math.floor(player.x / TILE_UNITS);
+  const playerTileY = Math.floor(player.y / TILE_UNITS);
+  if (
+    !Number.isSafeInteger(playerTileX)
+    || !Number.isSafeInteger(playerTileY)
+    || playerTileX < 0
+    || playerTileX >= spatialWorld.terrain.width
+    || playerTileY < 0
+    || playerTileY >= spatialWorld.terrain.height
+  ) return null;
+  const viewTileIndex = playerTileY * spatialWorld.terrain.width + playerTileX;
+  const address = regionalAddressAt(spatialWorld, viewTileIndex);
+  if (!address) return null;
+  const globalTile = regionLocalToGlobalTile(
+    address.region,
+    address.localX,
+    address.localY,
+  );
+  const offsetX = player.x / TILE_UNITS - playerTileX;
+  const offsetY = player.y / TILE_UNITS - playerTileY;
+  return {
+    dx: targetLocalX + 0.5 - (globalTile.x + offsetX),
+    dy: targetLocalY + 0.5 - (globalTile.y + offsetY),
+  };
 }
 
 function projectSettlement(

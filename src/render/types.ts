@@ -389,6 +389,8 @@ export interface CameraView {
 
 export interface TideweftView {
   readonly revision: number | string;
+  /** Changes only when floating-origin coordinates are reinterpreted. */
+  readonly spatialEpoch?: number | string;
   readonly tick: number;
   readonly worldName?: string;
   readonly terrain: TerrainGridView;
