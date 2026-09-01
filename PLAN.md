@@ -24,10 +24,8 @@ active graph and autonomous multi-hop porters
 redundant regional weave and campaign resolution
 ```
 
-The Alpha 0.1 release candidate is locally verified. The remaining release path is external publication, followed by additive Phase 8 work rather than a foundational rewrite:
+Alpha 0.1 is verified and published. The next release path is additive Phase 8 work rather than a foundational rewrite:
 
-- Connect an authenticated GitHub remote, push `main`, select GitHub Actions as the Pages source, and verify the public URL.
-- Run a brief keyboard, pointer, and reduced-motion pass against that deployed URL.
 - Begin Phase 8, **The Tide Choir**, from the frozen Alpha 0.1 baseline: make route memory truthful, make surveying playable, and let completed harbor loops awaken one-time communal harmonies.
 - Treat tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls as later subphases unless release playtesting promotes them.
 
@@ -131,7 +129,7 @@ Deferred polish: wire import/export and multiple slots into the menu. Unsupporte
 
 ## Phase 7 — Verification, packaging, and publication
 
-Status: **local alpha complete; GitHub Pages publication in progress**
+Status: **complete for Alpha 0.1**
 
 Implemented:
 
@@ -141,21 +139,18 @@ Implemented:
 - CI workflow and a Pages deployment workflow that type-check, test, and build before upload.
 - Release README, controls, architecture, design boundaries, save behavior, desktop commands, and deployment instructions.
 
-Remaining exit evidence:
-
-- Public GitHub Pages URL from an authenticated repository.
-- A brief manual keyboard/pointer/reduced-motion pass in the deployed build.
-
 Final local evidence captured 2026-09-01:
 
 - `npm run check` passes TypeScript, 48/48 Vitest checks, the Vite production build, and the nested-path Pages smoke probe.
 - `npm run package:desktop && npm run smoke:desktop` passes against the packaged macOS arm64 app.
 - The desktop probe loads `app://bundle/index.html`, advances the simulation, finds all seven settlements and 3,072 terrain tiles, exposes no Node globals, and reports no renderer warnings or resource failures.
 - A fresh 2,880 × 1,678 smoke screenshot records the verified Alpha 0.1 frame.
+- GitHub Actions repeated CI and Pages verification successfully on commit `5b9e154`.
+- The public HTTPS deployment responds successfully at https://19koda19.github.io/tideweft/ and the source is tagged `v0.1.0-alpha.1`.
 
 ## Phase 8 — The Tide Choir
 
-Status: **planned after Alpha 0.1 publication**
+Status: **in progress after Alpha 0.1 publication**
 
 Purpose: turn walking, surveying, and redundant topology into a truthful, whimsical field system before adding new economies.
 

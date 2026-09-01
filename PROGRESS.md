@@ -72,3 +72,12 @@ Phase 7: final merged verification and publication.
 - Captured a fresh 2,880 × 1,678 packaged-app screenshot as Alpha 0.1 evidence.
 - Promoted publication to the immediate gate before further mechanics. The local GitHub CLI session for `19koda19` is expired, so repository creation/push awaits renewed authentication.
 - Replanned the first post-alpha expansion as **The Tide Choir**: truthful route overlap, genuinely surveyed strands, and one-time audiovisual harmonies for unique harbor loops. Personal tideletters and traveling companions follow after that topology-centered slice.
+
+## 2026-09-01 — Alpha 0.1 published
+
+- Secret-scanned and froze the verified source as commit `5b9e154` with tag `v0.1.0-alpha.1`.
+- Created the public repository at https://github.com/19koda19/tideweft and pushed `main` plus the alpha tag.
+- Enabled the repository's GitHub Actions Pages source with enforced HTTPS.
+- Watched the complete Pages deployment succeed; the remote workflow repeated dependency installation, TypeScript, all simulation/game tests, the production build, nested-path smoke, upload, and deployment.
+- Verified the public deployment responds successfully at https://19koda19.github.io/tideweft/.
+- Opened Phase 8, **The Tide Choir**, from this published baseline.

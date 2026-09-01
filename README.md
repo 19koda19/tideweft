@@ -2,6 +2,8 @@
 
 > A restorative courier ecology about promises, tides, and the dependencies we create.
 
+**Play Alpha 0.1:** https://19koda19.github.io/tideweft/
+
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
 
 The same browser-pure game runs as a static GitHub Pages build and inside a sandboxed Electron shell.
@@ -103,7 +105,7 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 ## GitHub Pages
 
-[`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
+[Alpha 0.1 is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
 To publish:
 
@@ -112,7 +114,7 @@ To publish:
 3. Run **Deploy GitHub Pages**, or push a new commit to `main`.
 4. Confirm the deployment URL reported by the workflow environment.
 
-The deployment workflow is ready, but this checkout has no authenticated GitHub remote yet. Pages is static: saves stay on the device, and real cross-player asynchronous structures would require a deliberately designed backend.
+The source repository is [19koda19/tideweft](https://github.com/19koda19/tideweft), and `main` tracks its `origin/main` branch. Pages is static: saves stay on the device, and real cross-player asynchronous structures would require a deliberately designed backend.
 
 ## Design ethics
 
