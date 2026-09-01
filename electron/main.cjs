@@ -342,8 +342,28 @@ function rendererProbeScript() {
     const contractClientHeight = contractList ? contractList.clientHeight : null;
     const contractScrollHeight = contractList ? contractList.scrollHeight : null;
     const interactButton = document.querySelector('.action-button--interact');
+    const wayknotButton = document.querySelector('.action-button--wayknot');
+    const wayknotCount = document.querySelector('.field-readout__wayknot-count');
+    const wayknotActive = document.querySelector('.field-readout__wayknot-active');
     const activeContracts = uiView && Array.isArray(uiView.contracts)
       ? uiView.contracts.filter((contract) => contract.status === 'accepted' || contract.status === 'tracked')
+      : [];
+    const terrain = renderView?.terrain;
+    const playerPosition = renderView?.player?.position;
+    const playerTileIndex = terrain && playerPosition
+      ? Math.floor(playerPosition.y / terrain.tileSize) * terrain.columns +
+        Math.floor(playerPosition.x / terrain.tileSize)
+      : null;
+    const projectedWayknots = renderView && Array.isArray(renderView.wayknots)
+      ? renderView.wayknots.map((wayknot) => ({
+          id: wayknot.id,
+          kind: wayknot.kind,
+          active: wayknot.active,
+          tileIndex: terrain
+            ? Math.floor(wayknot.position.y / terrain.tileSize) * terrain.columns +
+              Math.floor(wayknot.position.x / terrain.tileSize)
+            : null,
+        }))
       : [];
     return {
       url: location.href,
@@ -374,12 +394,39 @@ function rendererProbeScript() {
       playerDestinationLabel: renderView && renderView.player
         ? renderView.player.destinationLabel || null
         : null,
+      playerPosition: playerPosition
+        ? { x: playerPosition.x, y: playerPosition.y }
+        : null,
+      playerVelocity: renderView && renderView.player
+        ? { x: renderView.player.velocity.x, y: renderView.player.velocity.y }
+        : null,
+      playerTileIndex,
       interact: interactButton
         ? {
             label: interactButton.childNodes[0]?.textContent?.trim() || interactButton.textContent?.trim() || null,
             disabled: interactButton instanceof HTMLButtonElement ? interactButton.disabled : null,
           }
         : null,
+      wayknots: {
+        projectedCount: projectedWayknots.length,
+        projected: projectedWayknots,
+        deployedCount: uiView?.field?.deployedWayknots ?? null,
+        capacity: uiView?.field?.wayknotCapacity ?? null,
+        activeLabels: Array.isArray(uiView?.field?.activeWayknotLabels)
+          ? [...uiView.field.activeWayknotLabels]
+          : [],
+        countText: wayknotCount?.textContent?.trim() || null,
+        activeText: wayknotActive?.textContent?.trim() || null,
+        button: wayknotButton
+          ? {
+              label: wayknotButton.querySelector('.action-button__label')?.textContent?.trim() || null,
+              title: wayknotButton.getAttribute('title'),
+              disabled: wayknotButton instanceof HTMLButtonElement ? wayknotButton.disabled : null,
+            }
+          : null,
+        controlAvailable: uiView?.controls?.canWayknot ?? null,
+        controlLabel: uiView?.controls?.wayknotLabel ?? null,
+      },
       canvasCount: canvasStates.length,
       activeCanvasCount: activeCanvases.length,
       activeRenderer: activeCanvas ? activeCanvas.renderer : null,
@@ -538,6 +585,102 @@ async function acceptSmokePromise(contents) {
       probe.playerDestinationLabel.startsWith('DELIVER'),
     SMOKE_TEST.timeoutMs,
   );
+}
+
+async function bindSmokeWayknot(contents) {
+  const target = await contents.executeJavaScript(`(() => {
+    const runtime = window.__TIDEWEFT__?.runtime;
+    const view = runtime?.getRenderView?.();
+    const terrain = view?.terrain;
+    const player = view?.player;
+    if (!runtime || !terrain || !player?.position) return null;
+
+    const playerX = Math.floor(player.position.x / terrain.tileSize);
+    const playerY = Math.floor(player.position.y / terrain.tileSize);
+    const occupied = new Set(
+      view.settlements.map((settlement) =>
+        Math.floor(settlement.position.y / terrain.tileSize) * terrain.columns +
+        Math.floor(settlement.position.x / terrain.tileSize),
+      ),
+    );
+    // These render categories correspond to dry authoritative contexts for a
+    // Reed mat or Wind knot. Staying out of live water keeps this smoke path
+    // focused on binding and avoids making it depend on a particular tide.
+    const compatibleLand = new Set(['salt-marsh', 'mudflat', 'sandbar', 'scrub', 'ridge']);
+    const candidates = terrain.tiles.flatMap((tile, index) => {
+      if (
+        !compatibleLand.has(tile.kind) ||
+        occupied.has(index) ||
+        !Number.isFinite(tile.waterDepth) ||
+        tile.waterDepth > 0.04
+      ) return [];
+      const x = index % terrain.columns;
+      const y = Math.floor(index / terrain.columns);
+      const distance = Math.abs(x - playerX) + Math.abs(y - playerY);
+      if (distance === 0) return [];
+      return [{
+        index,
+        kind: tile.kind,
+        distance,
+        point: {
+          x: x * terrain.tileSize + terrain.tileSize / 2,
+          y: y * terrain.tileSize + terrain.tileSize / 2,
+        },
+      }];
+    }).sort((left, right) => left.distance - right.distance || left.index - right.index);
+    const candidate = candidates[0];
+    if (!candidate || candidate.distance > 8) return null;
+
+    runtime.dispatchUI({ type: 'set-pace', pace: 'swift' });
+    runtime.dispatchRenderer({ type: 'move-target', point: candidate.point, additive: false });
+    return candidate;
+  })()`, true);
+
+  if (!target) {
+    throw new Error('no dry Wayknot-compatible terrain was reachable within eight tiles');
+  }
+
+  const arrival = await waitForRenderer(
+    contents,
+    (probe) => {
+      const dx = (probe.playerPosition?.x ?? Number.POSITIVE_INFINITY) - target.point.x;
+      const dy = (probe.playerPosition?.y ?? Number.POSITIVE_INFINITY) - target.point.y;
+      return probe.playerTileIndex === target.index &&
+        Math.hypot(dx, dy) <= 3 &&
+        probe.wayknots?.controlAvailable === true &&
+        probe.wayknots?.button?.disabled === false;
+    },
+    SMOKE_TEST.timeoutMs,
+  );
+
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.action-button--wayknot');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error('the Wayknot action was unavailable after reaching compatible terrain');
+
+  const bound = await waitForRenderer(
+    contents,
+    (probe) => {
+      const projected = probe.wayknots?.projected;
+      return probe.playerTileIndex === target.index &&
+        probe.wayknots?.projectedCount === 1 &&
+        probe.wayknots?.deployedCount === 1 &&
+        probe.wayknots?.capacity === 6 &&
+        Array.isArray(projected) &&
+        projected.length === 1 &&
+        projected[0]?.tileIndex === target.index &&
+        projected[0]?.active === true &&
+        probe.wayknots?.activeLabels?.length === 1 &&
+        probe.wayknots?.button?.disabled === false &&
+        probe.wayknots?.button?.label?.startsWith('Reclaim ');
+    },
+    SMOKE_TEST.timeoutMs,
+  );
+
+  return { target, arrival, bound };
 }
 
 async function focusSmokePlayer(contents) {
@@ -736,6 +879,11 @@ async function runProductionSmoke(window) {
   // and replace PICK UP guidance with an explicit DELIVER marker.
   const promisePickupProbe = await acceptSmokePromise(contents);
 
+  // Walk out of the harbor through the public pointer-routing command, then
+  // use the real field-kit button. The resulting object must exist in the
+  // renderer projection and agree with the HUD's deployed/active accounting.
+  const wayknotProbe = await bindSmokeWayknot(contents);
+
   const chartProbe = await toggleSmokeView(contents, 'chart-2d');
   const reliefProbe = await toggleSmokeView(contents, 'relief-3d');
 
@@ -781,6 +929,7 @@ async function runProductionSmoke(window) {
     boot: bootProbe,
     world: worldProbe,
     promisePickup: promisePickupProbe,
+    wayknot: wayknotProbe,
     modeToggle: {
       chart: chartProbe,
       relief: reliefProbe,

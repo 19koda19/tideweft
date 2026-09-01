@@ -4,15 +4,18 @@ import type { TerrainMeshBounds } from "./terrainMesh";
 import {
   MAX_RELIEF_PITCH,
   MIN_RELIEF_PITCH,
+  cameraRelativeReliefMovement,
   normalizeReliefCamera,
   projectReliefPoint,
   reliefBoundsVisible,
   reliefCameraPose,
   reliefFogAmount,
+  screenToDiscoveredReliefSurface,
   screenToReliefPlane,
   type ReliefCameraState,
   type ReliefViewport,
 } from "./reliefCamera";
+import type { TerrainGridView } from "./types";
 
 const viewport: ReliefViewport = { width: 1_000, height: 700 };
 
@@ -84,6 +87,35 @@ describe("relief camera normalization", () => {
   });
 });
 
+describe("camera-relative Relief movement", () => {
+  it("preserves chart directions before orbiting", () => {
+    expect(cameraRelativeReliefMovement({ x: 1, y: 0 }, 0)).toEqual({ x: 1, y: 0 });
+    expect(cameraRelativeReliefMovement({ x: 0, y: -1 }, 0)).toEqual({ x: 0, y: -1 });
+  });
+
+  it("rotates WASD and arrows with the visible map after orbiting", () => {
+    const quarterTurn = Math.PI / 2;
+    const forward = cameraRelativeReliefMovement({ x: 0, y: -1 }, quarterTurn);
+    const right = cameraRelativeReliefMovement({ x: 1, y: 0 }, quarterTurn);
+
+    expect(forward.x).toBe(-1);
+    expect(forward.y).toBe(0);
+    expect(right.x).toBe(0);
+    expect(right.y).toBe(-1);
+  });
+
+  it("keeps the slight default orbit from causing accidental diagonal travel", () => {
+    expect(cameraRelativeReliefMovement({ x: 0, y: -1 }, -0.36))
+      .toEqual({ x: 0, y: -1 });
+  });
+
+  it("normalizes diagonal input while snapping to its nearest travel heading", () => {
+    const moved = cameraRelativeReliefMovement({ x: 1, y: -1 }, 0.37);
+    expect(Math.hypot(moved.x, moved.y)).toBeCloseTo(1, 12);
+    expect(moved).toEqual({ x: Math.SQRT1_2, y: -Math.SQRT1_2 });
+  });
+});
+
 describe("relief projection and picking", () => {
   it("projects the target to canvas center and round-trips the ground center", () => {
     const flatCamera = camera({ targetHeight: 0 });
@@ -109,6 +141,42 @@ describe("relief projection and picking", () => {
   it("returns null when a ray cannot meet a plane in front of the camera", () => {
     const highPlane = screenToReliefPlane({ x: 500, y: 350 }, 10_000, camera(), viewport);
     expect(highPlane).toBeNull();
+  });
+
+  it("picks identical points over hidden tiles regardless of authoritative height", () => {
+    const hiddenGrid = (elevation: number, waterDepth: number): TerrainGridView => ({
+      columns: 1,
+      rows: 1,
+      tileSize: 1_000,
+      origin: { x: -100, y: -200 },
+      revision: "hidden",
+      tiles: [{
+        kind: "ridge",
+        elevation,
+        waterDepth,
+        discovered: 0,
+      }],
+    });
+    const orbit = camera({ yaw: 0.42, targetHeight: 0 });
+    const screen = { x: 610, y: 390 };
+    const low = screenToDiscoveredReliefSurface(
+      screen,
+      hiddenGrid(0.05, 0),
+      180,
+      orbit,
+      viewport,
+    );
+    const high = screenToDiscoveredReliefSurface(
+      screen,
+      hiddenGrid(1, 1),
+      180,
+      orbit,
+      viewport,
+    );
+
+    expect(low).not.toBeNull();
+    expect(high?.x).toBeCloseTo(low?.x ?? 0, 10);
+    expect(high?.y).toBeCloseTo(low?.y ?? 0, 10);
   });
 });
 

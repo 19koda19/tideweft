@@ -134,6 +134,9 @@ export interface FieldReadoutUIView {
   readonly effortLabel: string;
   readonly hint: string;
   readonly toolLabels: readonly string[];
+  readonly deployedWayknots: number;
+  readonly wayknotCapacity: number;
+  readonly activeWayknotLabels: readonly string[];
   readonly swept: boolean;
   readonly sweptProgress: number;
 }
@@ -196,6 +199,9 @@ export interface ControlAvailabilityUIView {
   readonly canInteract?: boolean;
   readonly interactLabel?: string;
   readonly interactHint?: string;
+  readonly canWayknot?: boolean;
+  readonly wayknotLabel?: string;
+  readonly wayknotHint?: string;
   readonly canChangePace?: boolean;
   readonly canEndSession?: boolean;
 }
@@ -232,6 +238,7 @@ export type TideweftUICommand =
   | { readonly type: "toggle-pause" }
   | { readonly type: "scan" }
   | { readonly type: "interact" }
+  | { readonly type: "wayknot" }
   | { readonly type: "set-pace"; readonly pace: PaceView }
   | { readonly type: "set-session-shape"; readonly sessionShape: SessionShape }
   | {

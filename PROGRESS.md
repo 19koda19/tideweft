@@ -58,10 +58,10 @@
 
 ## Current checkpoint
 
-Phase 8: Alpha 0.2 published; post-alpha fieldwork is the active expansion gate.
+Phase 9: the Wayknots post-alpha preview is locally verified; Pages publication is the active gate.
 
 - The public repository and Pages deployment now serve Alpha 0.2 from `d9b8cea` / `v0.2.0-alpha.1`.
-- The complete local web and packaged desktop gates now cover the 96 × 72 Perlin world, real Relief 3D, physical promise pickup, explicit delivery guidance, renderer switching, and the shallow-window Promises scroller.
+- The complete local web and packaged desktop gates now cover the 96 × 72 Perlin world, real Relief 3D, physical promise pickup, an actually bound 3D Wayknot, explicit delivery guidance, renderer switching, and the shallow-window Promises scroller.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
 ## 2026-09-01 — Alpha 0.1 verification recovered
@@ -99,3 +99,21 @@ Phase 8: Alpha 0.2 published; post-alpha fieldwork is the active expansion gate.
 - Pushed public source and watched both tag/main CI runs plus the GitHub Pages deployment succeed on that exact commit.
 - Confirmed the live HTTPS origin responds successfully and references the exact production JS/CSS hashes verified locally.
 - Kept the long-running build goal active and moved the next gate to post-alpha terrain fieldwork and deeper whimsical simulation rather than declaring the game finished.
+
+## 2026-09-01 — Phase 9 Wayknots opened
+
+- Added a fixed six-piece reusable field kit: two Reed mats, two Tide anchors, and two Wind knots with stable save-safe identities, contextual F placement, exact reclaim, terrain/occupancy validation, and conservative legacy repair.
+- Wired the aids into fixed-step movement and pointer routing: soft-ground drag/stamina, water effort/current recovery, and wind stability all use deterministic local influence queries rather than presentation-only bonuses.
+- Added bounded Waychords where unlike influences overlap; the shared field recharges the Loom slightly faster and has explicit word/pattern feedback.
+- Added physical Wayknot forms to both world presentations, including low-poly Relief 3D slats, buoy/anchor line, and ribbon mast on discovery-masked terrain.
+- Repaired Relief field feel with camera-relative eight-way input, discovery-safe surface/picking/label heights, and per-projection discovery-signature memoization.
+- Hardened persistence with sticky IndexedDB-to-localStorage runtime failover, newest-copy reconciliation, monotonic writes, clone isolation, and coalesced newest autosaves behind an in-flight write.
+- Passed TypeScript, 23 Vitest files / 168 checks, the production build, and the nested `/tideweft/` Pages smoke; the source secret scan is clean.
+- Rebuilt the packaged Electron 44 app and passed the deterministic physical-Wayknot smoke repeatedly: it walks to salt marsh, binds Reed mat #1 through the real button, observes one projected/active knot plus `1 / 6 deployed`, and preserves the Chart/Relief round trip with no warnings or resource failures.
+- Inspected the fresh 2,880 × 1,800 evidence frame: the low-poly woven mat, world label, active field copy, reclaim button, loaded delivery objective, and scrollable Promises pane are all visible. Pages publication remains the checkpoint gate.
+
+## 2026-09-01 — Phase 9 Wayknots candidate verified
+
+- Added an integrated legacy-save assertion proving a published Alpha player snapshot with no Wayknot field receives exactly the six carried fixed-ID pieces without changing the old 64 × 48 world.
+- Extended the packaged smoke harness from HUD inspection to actual play: public pointer routing reaches compatible terrain, the real action button binds the knot, and render/UI projections must agree before evidence capture.
+- Completed the local release-candidate gate with 23 test files / 168 checks, production and nested-path web output, packaged Relief 3D play, screenshot review, dependency inspection, diff validation, and a scoped source secret scan.

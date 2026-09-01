@@ -1,4 +1,5 @@
 import type { TerrainMeshChunk } from "./terrainMesh";
+import { reliefDiscoveryVisibility } from "./reliefTerrain";
 import type { TerrainGridView, TerrainKind } from "./types";
 
 export interface ReliefMaterialBatch {
@@ -22,7 +23,7 @@ export function buildReliefMaterialBatches(
 
   for (const tile of chunk.tiles) {
     const source = grid.tiles[tile.row * grid.columns + tile.column];
-    const visibility = Math.round(unit(source?.discovered, 1) * 4) / 4;
+    const visibility = Math.round(reliefDiscoveryVisibility(source) * 4) / 4;
     if (visibility <= 0) continue;
 
     const tileIndices = chunk.indices.slice(tile.indexOffset, tile.indexOffset + 6);
@@ -43,9 +44,4 @@ export function buildReliefMaterialBatches(
 
   return [...groups.values()]
     .sort((left, right) => left.kind.localeCompare(right.kind) || left.visibility - right.visibility);
-}
-
-function unit(value: number | undefined, fallback = 0): number {
-  const finite = Number.isFinite(value) ? value as number : fallback;
-  return Math.max(0, Math.min(1, finite));
 }

@@ -108,7 +108,13 @@ class IndexedDbSaveRepository implements SaveRepository {
     validateRecord(record);
     const database = await this.database();
     const transaction = database.transaction(SAVE_STORE, "readwrite", { durability: "strict" });
-    transaction.objectStore(SAVE_STORE).put(structuredClone(record));
+    const store = transaction.objectStore(SAVE_STORE);
+    const existing = await requestResult(
+      store.get(record.slotId) as IDBRequest<SaveRecord | undefined>,
+    );
+    if (!existing || !isRecordNewer(existing, record)) {
+      store.put(structuredClone(record));
+    }
     await transactionComplete(transaction);
   }
 
@@ -121,8 +127,10 @@ class IndexedDbSaveRepository implements SaveRepository {
 }
 
 class LocalStorageSaveRepository implements SaveRepository {
+  constructor(private readonly storage: Storage) {}
+
   private read(): SaveRecord[] {
-    const raw = localStorage.getItem(FALLBACK_KEY);
+    const raw = this.storage.getItem(FALLBACK_KEY);
     if (!raw) return [];
     try {
       const records = JSON.parse(raw) as unknown;
@@ -133,7 +141,7 @@ class LocalStorageSaveRepository implements SaveRepository {
   }
 
   private write(records: SaveRecord[]): void {
-    localStorage.setItem(FALLBACK_KEY, JSON.stringify(records));
+    this.storage.setItem(FALLBACK_KEY, JSON.stringify(records));
   }
 
   async list(): Promise<SaveSummary[]> {
@@ -148,7 +156,10 @@ class LocalStorageSaveRepository implements SaveRepository {
 
   async save(record: SaveRecord): Promise<void> {
     validateRecord(record);
-    const records = this.read().filter((candidate) => candidate.slotId !== record.slotId);
+    const stored = this.read();
+    const existing = stored.find((candidate) => candidate.slotId === record.slotId);
+    if (existing && isRecordNewer(existing, record)) return;
+    const records = stored.filter((candidate) => candidate.slotId !== record.slotId);
     records.push(structuredClone(record));
     this.write(records);
   }
@@ -158,10 +169,130 @@ class LocalStorageSaveRepository implements SaveRepository {
   }
 }
 
+/**
+ * IndexedDB remains the roomy primary store, while localStorage is a small,
+ * synchronous browser-owned lifeboat. Reading both stores prevents a newer
+ * fallback written during an earlier IndexedDB outage from disappearing when
+ * IndexedDB happens to open on the next launch. Once a primary operation
+ * fails, this repository stays on the fallback for the rest of its lifetime;
+ * alternating between a flaky primary and fallback could otherwise resurrect
+ * stale state between consecutive saves.
+ */
+class FailoverSaveRepository implements SaveRepository {
+  private primaryFailed = false;
+
+  constructor(
+    private readonly primary: SaveRepository,
+    private readonly fallback: SaveRepository,
+  ) {}
+
+  async list(): Promise<SaveSummary[]> {
+    if (this.primaryFailed) return this.fallback.list();
+
+    let primary: SaveSummary[];
+    try {
+      primary = await this.primary.list();
+    } catch {
+      this.primaryFailed = true;
+      return this.fallback.list();
+    }
+
+    let fallback: SaveSummary[];
+    try {
+      fallback = await this.fallback.list();
+    } catch {
+      return primary;
+    }
+    return mergeNewest(primary, fallback);
+  }
+
+  async load(slotId: string): Promise<SaveRecord | undefined> {
+    if (this.primaryFailed) return cloneRecord(await this.fallback.load(slotId));
+
+    let primary: SaveRecord | undefined;
+    try {
+      primary = await this.primary.load(slotId);
+    } catch {
+      this.primaryFailed = true;
+      return cloneRecord(await this.fallback.load(slotId));
+    }
+
+    let fallback: SaveRecord | undefined;
+    try {
+      fallback = await this.fallback.load(slotId);
+    } catch {
+      return cloneRecord(primary);
+    }
+    const newest = newestRecord(primary, fallback);
+    return cloneRecord(newest);
+  }
+
+  async save(record: SaveRecord): Promise<void> {
+    validateRecord(record);
+    const snapshot = structuredClone(record);
+    if (this.primaryFailed) {
+      await this.fallback.save(snapshot);
+      return;
+    }
+
+    // Do not let a stale runtime snapshot overwrite either backend after a
+    // previous session successfully reached the fallback during an outage.
+    try {
+      const fallbackRecord = await this.fallback.load(snapshot.slotId);
+      if (fallbackRecord && isRecordNewer(fallbackRecord, snapshot)) return;
+    } catch {
+      // A working primary is still useful when localStorage is unavailable or
+      // over quota. A primary failure below will surface the fallback error.
+    }
+
+    try {
+      await this.primary.save(structuredClone(snapshot));
+    } catch {
+      this.primaryFailed = true;
+      await this.fallback.save(structuredClone(snapshot));
+    }
+  }
+
+  async remove(slotId: string): Promise<void> {
+    if (this.primaryFailed) {
+      await this.fallback.remove(slotId);
+      return;
+    }
+
+    try {
+      await this.primary.remove(slotId);
+    } catch {
+      this.primaryFailed = true;
+      await this.fallback.remove(slotId);
+      return;
+    }
+
+    // Remove any older emergency copy too, or a merged read could resurrect a
+    // slot that the player deliberately deleted.
+    try {
+      await this.fallback.remove(slotId);
+    } catch {
+      // The authoritative IndexedDB deletion succeeded. If localStorage is
+      // unavailable, there is no readable fallback to resurrect in this run.
+    }
+  }
+}
+
+export function createFailoverSaveRepository(
+  primary: SaveRepository,
+  fallback: SaveRepository,
+): SaveRepository {
+  return new FailoverSaveRepository(primary, fallback);
+}
+
 export function createSaveRepository(): SaveRepository {
-  return typeof indexedDB === "undefined"
-    ? new LocalStorageSaveRepository()
-    : new IndexedDbSaveRepository();
+  const fallback = availableLocalStorage();
+  if (typeof indexedDB === "undefined") {
+    if (fallback) return fallback;
+    throw new Error("This browser does not provide persistent save storage.");
+  }
+  const primary = new IndexedDbSaveRepository();
+  return fallback ? createFailoverSaveRepository(primary, fallback) : primary;
 }
 
 export function exportSave(record: SaveRecord): void {
@@ -217,6 +348,47 @@ function isValidSaveRecord(value: unknown): value is SaveRecord {
   } catch {
     return false;
   }
+}
+
+function availableLocalStorage(): SaveRepository | undefined {
+  try {
+    if (typeof localStorage === "undefined") return undefined;
+    return new LocalStorageSaveRepository(localStorage);
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecordNewer(
+  candidate: Pick<SaveRecord, "updatedAt" | "playTicks">,
+  reference: Pick<SaveRecord, "updatedAt" | "playTicks">,
+): boolean {
+  return candidate.updatedAt > reference.updatedAt
+    || (candidate.updatedAt === reference.updatedAt && candidate.playTicks > reference.playTicks);
+}
+
+function newestRecord(
+  primary: SaveRecord | undefined,
+  fallback: SaveRecord | undefined,
+): SaveRecord | undefined {
+  if (!primary) return fallback;
+  if (!fallback) return primary;
+  return isRecordNewer(fallback, primary) ? fallback : primary;
+}
+
+function cloneRecord(record: SaveRecord | undefined): SaveRecord | undefined {
+  return record ? structuredClone(record) : undefined;
+}
+
+function mergeNewest(primary: SaveSummary[], fallback: SaveSummary[]): SaveSummary[] {
+  const merged = new Map<string, SaveSummary>();
+  for (const summary of primary) merged.set(summary.slotId, summary);
+  for (const summary of fallback) {
+    const existing = merged.get(summary.slotId);
+    if (!existing || isRecordNewer(summary, existing)) merged.set(summary.slotId, summary);
+  }
+  return [...merged.values()].map((summary) => structuredClone(summary))
+    .sort((left, right) => right.updatedAt - left.updatedAt || left.slotId.localeCompare(right.slotId));
 }
 
 function validateRecord(record: SaveRecord): void {

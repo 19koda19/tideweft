@@ -31,12 +31,27 @@ import {
   unlockFieldToolAtSettlement,
   unloadContractCargo,
   waterEffortPerStep,
+  wayknotContextAt,
+  wayknotEffectsAt,
   type FieldToolKind,
   type PlayerControl,
   type PlayerMode,
   type PlayerState,
   type TravelPace,
 } from "./player";
+import {
+  DEFAULT_WAYKNOT_CAPACITY,
+  TIDE_ANCHOR_PLACEMENT_DEPTH,
+  WAYKNOT_DESCRIPTIONS,
+  WAYKNOT_LABELS,
+  contextualWayknotKind,
+  modifyPathCost,
+  normalizeWayknotState,
+  toggleContextualWayknot,
+  wayknotAtTile,
+  type WayknotActionReason,
+  type WayknotKind,
+} from "./wayknots";
 import { projectGameView } from "./projection";
 import {
   announce,
@@ -110,7 +125,14 @@ export async function createTideweftRuntime(
   let pendingChoir: { commandId: string; cycle: TideChoirCycle } | null = null;
   let lastAutosaveTick = 0;
   let lastCargoDamageNoticeMs = Number.NEGATIVE_INFINITY;
-  let saveInFlight: Promise<void> | undefined;
+  let pendingSave: { sequence: number; record: SaveRecord } | undefined;
+  let saveWorkerRunning = false;
+  let saveSequence = 0;
+  const saveWaiters: Array<{
+    sequence: number;
+    resolve: () => void;
+    reject: (reason: unknown) => void;
+  }> = [];
 
   const loaded = await loadAutosave(repository);
   if (loaded) {
@@ -152,6 +174,19 @@ export async function createTideweftRuntime(
       ? [...new Set(player.tools.filter((tool): tool is FieldToolKind => validTools.includes(tool as FieldToolKind)))].sort()
       : ["sounding-line"];
     if (!player.tools.includes("sounding-line")) player.tools.unshift("sounding-line");
+    player.wayknots = normalizeWayknotState(player.wayknots, {
+      capacity: DEFAULT_WAYKNOT_CAPACITY,
+      tileCount: worldView.terrain.tiles.length,
+      contextAt: (tileIndex) => {
+        const context = wayknotContextAt(worldView, tileIndex);
+        // A Tide anchor may have been set while this stable substrate was
+        // flooded. Receding water must not silently pull a persisted aid back
+        // into the pack on load; the tide can make it useful again later.
+        return context
+          ? { ...context, waterDepth: Math.max(context.waterDepth, TIDE_ANCHOR_PLACEMENT_DEPTH) }
+          : undefined;
+      },
+    });
     player.depthSoundings = Array.isArray(player.depthSoundings)
       && player.depthSoundings.length === worldView.terrain.tiles.length
       ? player.depthSoundings.map((value) => Number.isFinite(value) ? Math.max(0, Math.min(1_000_000, value)) : 0)
@@ -585,6 +620,9 @@ export async function createTideweftRuntime(
       case "interact":
         interact();
         break;
+      case "wayknot":
+        toggleWayknot();
+        break;
       case "toggle-pause":
         togglePause();
         break;
@@ -633,6 +671,9 @@ export async function createTideweftRuntime(
         break;
       case "interact":
         interact();
+        break;
+      case "wayknot":
+        toggleWayknot();
         break;
       case "set-pace":
         if (player.mode === "swept") {
@@ -798,13 +839,22 @@ export async function createTideweftRuntime(
       tiles: world.terrain.tiles.map((tile, index) => {
         const live = worldView.terrain.tiles[index];
         const depth = live?.waterDepth ?? 0;
-        const waterCost = waterEffortPerStep(player, depth);
+        const wayknotEffects = wayknotEffectsAt(player, worldView, index);
+        const waterCost = waterEffortPerStep(
+          player,
+          depth,
+          wayknotEffects.staminaCostPermille,
+        );
         const unknownWaterCost = depth > 40_000 && (player.depthSoundings[index] ?? 0) <= 0 ? 850 : 0;
         const stiltsRelief = player.tools.includes("marsh-stilts")
           && (tile.terrain === "marsh" || tile.terrain === "tidal-flat") ? 130 : 0;
+        const unknottedCost = Math.max(
+          40,
+          tile.baseTravelCost + waterCost + unknownWaterCost - stiltsRelief,
+        );
         return {
           ...tile,
-          baseTravelCost: Math.max(40, tile.baseTravelCost + waterCost + unknownWaterCost - stiltsRelief),
+          baseTravelCost: Math.max(40, modifyPathCost(unknottedCost, wayknotEffects)),
         };
       }),
     };
@@ -843,6 +893,48 @@ export async function createTideweftRuntime(
       announce(session, "The Loom is recharging. The current map remains trustworthy.");
       soundscape.play("warning", 0.3);
     }
+  }
+
+  function toggleWayknot(): void {
+    if (session.paused || session.titleVisible || session.quietHourVisible) return;
+    if (player.mode === "swept") {
+      announce(session, "The current has the helm. Reclaim or bind a Wayknot after the safe bank catches you.", true);
+      soundscape.play("warning", 0.3);
+      refreshViews();
+      return;
+    }
+    const tileIndex = playerTileIndex(player);
+    const context = wayknotContextAt(worldView, tileIndex);
+    if (!context) {
+      announce(session, "The field kit cannot read this patch of the estuary.", true);
+      return;
+    }
+    const existing = wayknotAtTile(player.wayknots, tileIndex);
+    const intendedKind = existing?.kind ?? contextualWayknotKind(context);
+    const result = toggleContextualWayknot(player.wayknots, context);
+    if (!result.ok || !result.wayknot) {
+      announce(session, wayknotFailureMessage(result.reason, intendedKind), true);
+      soundscape.play("warning", 0.35);
+      refreshViews();
+      return;
+    }
+    player.wayknots = result.state;
+    const label = WAYKNOT_LABELS[result.wayknot.kind];
+    if (result.reason === "reclaimed") {
+      session.sessionChanges.push(`${label} #${result.wayknot.id} returned to the reusable field kit.`);
+      announce(session, `${label} reclaimed. Its numbered piece is back in your pack and can be rebound elsewhere.`);
+      soundscape.play("rest", 0.52);
+    } else {
+      session.sessionChanges.push(`${label} #${result.wayknot.id} was bound into the traveled landscape.`);
+      announce(
+        session,
+        `${label} bound here. ${WAYKNOT_DESCRIPTIONS[result.wayknot.kind]} Stand on it and press F again to reclaim it.`,
+        true,
+      );
+      soundscape.play("strand", 0.72);
+    }
+    if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
+    refreshViews();
   }
 
   function togglePause(): void {
@@ -1206,7 +1298,6 @@ export async function createTideweftRuntime(
   }
 
   async function save(): Promise<void> {
-    if (saveInFlight) return saveInFlight;
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     const playerSnapshot = structuredClone(player);
@@ -1232,10 +1323,51 @@ export async function createTideweftRuntime(
       connectedCount: world.routes.filter((route) => route.traceStrength >= 120_000).length,
       worldJson: JSON.stringify(envelope),
     };
-    saveInFlight = repository.save(record).finally(() => {
-      saveInFlight = undefined;
+    saveSequence += 1;
+    const sequence = saveSequence;
+    // While storage is busy, retain the most recent complete snapshot rather
+    // than returning the older in-flight write. Every superseded caller waits
+    // for the newer snapshot that covers it.
+    pendingSave = { sequence, record };
+    const completion = new Promise<void>((resolve, reject) => {
+      saveWaiters.push({ sequence, resolve, reject });
     });
-    return saveInFlight;
+    startSaveWorker();
+    return completion;
+  }
+
+  function startSaveWorker(): void {
+    if (saveWorkerRunning) return;
+    saveWorkerRunning = true;
+    void drainSaveQueue().finally(() => {
+      saveWorkerRunning = false;
+      // A request can arrive after the loop observes an empty queue but before
+      // this microtask clears the running flag (notably visibility → pagehide).
+      if (pendingSave) startSaveWorker();
+    });
+  }
+
+  async function drainSaveQueue(): Promise<void> {
+    while (pendingSave) {
+      const candidate = pendingSave;
+      pendingSave = undefined;
+      try {
+        await repository.save(candidate.record);
+        settleSaveWaiters(candidate.sequence, false);
+      } catch (error) {
+        settleSaveWaiters(candidate.sequence, true, error);
+      }
+    }
+  }
+
+  function settleSaveWaiters(sequence: number, failed: boolean, error?: unknown): void {
+    for (let index = saveWaiters.length - 1; index >= 0; index -= 1) {
+      const waiter = saveWaiters[index];
+      if (!waiter || waiter.sequence > sequence) continue;
+      saveWaiters.splice(index, 1);
+      if (failed) waiter.reject(error);
+      else waiter.resolve();
+    }
   }
 
   function frame(now: number): void {
@@ -1493,6 +1625,33 @@ function fieldToolEffect(tool: FieldToolKind): string {
       return "Deep-water travel is faster and uses less stamina.";
     case "storm-kite":
       return "Strong wind harms stability less and any current sweep reaches shore sooner.";
+  }
+}
+
+function wayknotFailureMessage(
+  reason: WayknotActionReason,
+  kind: WayknotKind | null,
+): string {
+  const label = kind ? WAYKNOT_LABELS[kind] : "Wayknot";
+  switch (reason) {
+    case "capacity-reached":
+      return `Both reusable ${label.toLocaleLowerCase()} pieces are already in the field. Stand on one and press F to reclaim it.`;
+    case "occupied":
+      return "This tile already holds a harbor or Wayknot. Stand directly on a placed knot and press F to reclaim it.";
+    case "unsuitable-terrain":
+      return "No field weave fits this ground: reed mats bind mudflat or marsh, Tide anchors bind waist-deep water, and Wind knots bind scrub or ridge.";
+    case "invalid-context":
+      return "The field kit cannot safely read this terrain patch.";
+    case "not-found":
+      return "No placed Wayknot is underfoot to reclaim.";
+    case "already-carried":
+      return `${label} is already carried in the reusable field kit.`;
+    case "already-there":
+      return `${label} is already bound here.`;
+    case "placed":
+    case "reclaimed":
+    case "redeployed":
+      return `${label} is ready.`;
   }
 }
 

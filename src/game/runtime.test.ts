@@ -61,6 +61,54 @@ class MemoryRepository implements SaveRepository {
   }
 }
 
+class DeferredSaveRepository implements SaveRepository {
+  private record: SaveRecord | undefined;
+  private readonly pending: Array<{
+    record: SaveRecord;
+    resolve: () => void;
+    reject: (reason: unknown) => void;
+  }> = [];
+  readonly started: SaveRecord[] = [];
+
+  async list() {
+    return [];
+  }
+
+  async load(slotId: string) {
+    return slotId === "autosave" && this.record ? structuredClone(this.record) : undefined;
+  }
+
+  async save(record: SaveRecord): Promise<void> {
+    const snapshot = structuredClone(record);
+    this.started.push(snapshot);
+    await new Promise<void>((resolve, reject) => {
+      this.pending.push({ record: snapshot, resolve, reject });
+    });
+    this.record = snapshot;
+  }
+
+  async remove(): Promise<void> {
+    this.record = undefined;
+  }
+
+  resolveNext(): void {
+    const pending = this.pending.shift();
+    if (!pending) throw new Error("test repository has no pending save");
+    pending.resolve();
+  }
+
+  rejectNext(reason: unknown): void {
+    const pending = this.pending.shift();
+    if (!pending) throw new Error("test repository has no pending save");
+    pending.reject(reason);
+  }
+
+  snapshot(): SaveRecord {
+    if (!this.record) throw new Error("test repository has no completed save");
+    return structuredClone(this.record);
+  }
+}
+
 interface TestGameSaveEnvelope {
   format: "tideweft-session";
   version: 1;
@@ -332,6 +380,7 @@ describe("runtime clarity guards", () => {
     delete legacyPlayer.scanPulse;
     delete legacyPlayer.depthSoundings;
     delete legacyPlayer.tools;
+    delete legacyPlayer.wayknots;
     delete legacyPlayer.sweepTicksRemaining;
     delete legacyPlayer.sweepTotalTicks;
     delete legacyPlayer.sweepPath;
@@ -384,6 +433,9 @@ describe("runtime clarity guards", () => {
       world.settlements.find((settlement) => settlement.id === contract.originSettlementId)?.tileIndex,
     ]);
     expect(repaired.player.currentTrace.every(Number.isSafeInteger)).toBe(true);
+    expect(repaired.player.wayknots.capacity).toBe(6);
+    expect(repaired.player.wayknots.wayknots).toHaveLength(6);
+    expect(repaired.player.wayknots.wayknots.every((wayknot) => wayknot.tileIndex === null)).toBe(true);
     expect(repaired.session.sessionBaseline?.awakenedChoirs).toBe(repairedWorld.choirs.length);
     assertWorldInvariants(repairedWorld);
     runtime.destroy();
@@ -531,5 +583,55 @@ describe("runtime clarity guards", () => {
     expect(deliveredWorld.contracts.find((contract) => contract.id === contractId)?.status).toBe("fulfilled");
     expectConserved(deliveredWorld);
     atDestination.destroy();
+  });
+
+  it("coalesces visibility and pagehide saves behind an in-flight write and persists the newest snapshot", async () => {
+    const repository = new DeferredSaveRepository();
+    const runtime = await createTideweftRuntime(repository);
+    const firstSave = runtime.save();
+    expect(repository.started).toHaveLength(1);
+
+    runtime.dispatchUI({ type: "resume-world" });
+    const visibilitySave = runtime.save();
+    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
+    const pagehideSave = runtime.save();
+    expect(repository.started).toHaveLength(1);
+
+    let visibilitySettled = false;
+    void visibilitySave.then(() => { visibilitySettled = true; });
+    repository.resolveNext();
+    await firstSave;
+    await vi.waitFor(() => expect(repository.started).toHaveLength(2));
+    expect(visibilitySettled).toBe(false);
+    // Only the latest of the two lifecycle snapshots reaches the repository.
+    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("swift");
+
+    repository.resolveNext();
+    await Promise.all([visibilitySave, pagehideSave]);
+    const newest = decodeGameSave(repository.snapshot());
+    expect(newest.player.pace).toBe("swift");
+    expect(repository.started).toHaveLength(2);
+    expect(repository.started[0]?.playTicks).toBe(repository.started[1]?.playTicks);
+    runtime.destroy();
+  });
+
+  it("continues with a queued newer snapshot when an earlier repository write fails", async () => {
+    const repository = new DeferredSaveRepository();
+    const runtime = await createTideweftRuntime(repository);
+    const failedSave = runtime.save();
+    const failedExpectation = expect(failedSave).rejects.toThrow("transient storage failure");
+
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
+    const recoverySave = runtime.save();
+    repository.rejectNext(new Error("transient storage failure"));
+    await failedExpectation;
+    await vi.waitFor(() => expect(repository.started).toHaveLength(2));
+    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("swift");
+
+    repository.resolveNext();
+    await recoverySave;
+    expect(decodeGameSave(repository.snapshot()).player.pace).toBe("swift");
+    runtime.destroy();
   });
 });

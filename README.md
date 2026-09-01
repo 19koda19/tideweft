@@ -20,6 +20,8 @@ Alpha 0.2 is built in three connected slices:
 
 Playtest fixes also make the HUD lighter, keep the Promises list genuinely scrollable even in shallow windows, stop live contract-card updates from swallowing clicks, state why stability is changing, and put explicit **PICK UP** / **DELIVER** instructions on each physical cargo promise.
 
+Post-alpha development is now in **Phase 9: Wayknots**. The locally verified source preview adds six fixed, reusable field aids—two Reed mats, two Tide anchors, and two Wind knots—which can be bound or reclaimed with **F**. They change the same authoritative movement and pointer-route costs, appear as physical motifs in Chart 2D and low-poly objects in Relief 3D, and can form a small **Waychord** where unlike fields overlap. Pages publication is the active checkpoint; this is not yet a separately tagged release.
+
 ## What is playable
 
 Each new seed creates a 96 × 72 tidal world with seven well-separated settlements, 42 named residents, five resource economies, changing weather, shortage-driven promises, and five civic projects. Alpha 0.1's existing 64 × 48 saves migrate without regenerating or discarding their world. The main loop is:
@@ -39,6 +41,7 @@ The campaign resolves when every settlement belongs to a sufficiently redundant 
 - Deterministic multi-octave gradient Perlin terrain, tides, global weather, production, consumption, shortages, residents, relationships, intentions, projects, contracts, and conservation checks.
 - Continuous foot/wading/skiff travel with stamina, active bracing, load stability, fragile shock, perishable freshness, depth sounding, discovery, three paces, emergency camp, swept-current recovery, and infrastructure-enabled rescue.
 - A civic field kit: the Sounding line is available immediately; completed Crossings, Ferries, and Beacons can entrust visiting couriers with Marsh stilts, a Tide sail, and a Storm kite.
+- Six reusable Wayknots carried from the start: Reed mats ease mudflat/marsh footing, Tide anchors reduce nearby water effort and shorten current recovery, and Wind knots soften exposed-ground gusts. Press F on suitable terrain to bind one; stand on it and press F again to reclaim the same numbered piece. Unlike overlapping fields hum as a Waychord and recharge the Loom a little faster.
 - An active route graph with stable multi-hop porter planning, weather closures, congestion, capacity, bridge detection, cycle rank, coverage, and resilience.
 - Five permanent civic consequences: beacons support signals in storms, caches improve recovery, crossings shorten and harden routes, clinics enable connected rescue, and ferries increase capacity.
 - Information as physical cargo: one signed count records its source, subject, resource, observation tick, quantity, and confidence. Its age remains visible when another settlement receives it.
@@ -59,6 +62,7 @@ The world canvas must have focus for travel keys. Buttons and contract cards rem
 | Pointer click | Chart a destination |
 | Space | Pulse the Loom to reveal nearby terrain and sound water depth |
 | E / Enter | Interact, deliver, or inspect the harbor underfoot |
+| F | Bind the terrain-appropriate Wayknot, or reclaim the one underfoot |
 | [ / ] | Move between Rest, Steady, and Swift pace |
 | P | Pause or resume world time |
 | V / Header View control | Switch between playable Chart 2D and Relief 3D |
@@ -69,6 +73,8 @@ The world canvas must have focus for travel keys. Buttons and contract cards rem
 
 Holding Shift braces the load without stopping; standing still or using Rest pace also restores stability. Completed caches shelter perishable food from freshness loss while you are there. The HUD names the live cause whenever stability falls.
 
+Relief 3D travel is camera-relative: after orbiting, WASD/arrows continue to mean screen-left, screen-right, forward, and back. Hidden terrain remains flat possibility for rendering, labels, and pointer picking until it is genuinely discovered; the discovery mesh signature is cached per immutable projection instead of rehashed every animation frame.
+
 Water never becomes an arbitrary invisible wall. A sounding pulse marks nearby bathymetry; deeper water spends more stamina, while a Tide sail lowers that cost. Empty stamina on dry ground makes camp. Empty stamina in deep water yields steering to a deterministic adjacent current path toward the nearest safe bank; cargo quantity is preserved, condition weathers once, and a connected clinic can prevent the sweep while a ferry or Storm kite shortens it.
 
 Physical cargo promises and signed reports are different jobs. A promise moves actual supplies from its **PICK UP** harbor to its **DELIVER** harbor. A signed stock report uses one pack slot but moves information only: it records a named harbor's current stock count and becomes useful after you carry it to the named recipient. The contextual E button says which action it will perform.
@@ -77,7 +83,7 @@ Physical cargo promises and signed reports are different jobs. A promise moves a
 
 The current game exposes one local autosave and a Continue card. It saves periodically, when the page is hidden or closed, when the title is opened, and when Quiet Hour begins. The simulation never advances while the game is closed.
 
-IndexedDB is the primary store; localStorage is the fallback when IndexedDB is unavailable. The authoritative world has its own version and checksum, while the outer session save also preserves the player, chart, cargo/report, tutorial, session shape, and recap history. Corrupt or incompatible autosaves are ignored safely.
+IndexedDB is the primary store; localStorage is a sticky runtime fallback if opening or a later transaction fails. Reads choose the newest available copy, and overlapping lifecycle/autosave requests coalesce behind an in-flight write so the newest complete snapshot is still flushed. The authoritative world has its own version and checksum, while the outer session save also preserves the player, chart, cargo/report, Wayknots, tutorial, session shape, and recap history. Corrupt or incompatible autosaves are ignored safely.
 
 The platform layer already validates multi-slot list/load/remove and versioned JSON import/export, including size and future-format guards. Those import/export controls are not yet exposed in the game menu.
 
@@ -121,7 +127,7 @@ npm run smoke:desktop
 npm run make:desktop
 ```
 
-`package:desktop` rebuilds the web target and writes an unpacked app under `release/`. The smoke command launches that packaged app with isolated user data, verifies the secure `app://bundle/` build, starts a 96 × 72 world in Relief 3D, accepts and physically loads a promise, checks explicit delivery guidance, round-trips both views, verifies the Promises scroller at the minimum window size, and writes `artifacts/electron-smoke.png` unless `--no-screenshot` is supplied. `make:desktop` creates the platform ZIP.
+`package:desktop` rebuilds the web target and writes an unpacked app under `release/`. The smoke command launches that packaged app with isolated user data, verifies the secure `app://bundle/` build, starts a 96 × 72 world in Relief 3D, accepts and physically loads a promise, walks to compatible terrain, binds a real Wayknot through the field-action button, checks renderer/HUD agreement and explicit delivery guidance, round-trips both views, verifies the Promises scroller at the minimum window size, and writes `artifacts/electron-smoke.png` unless `--no-screenshot` is supplied. `make:desktop` creates the platform ZIP.
 
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 

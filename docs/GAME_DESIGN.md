@@ -12,16 +12,17 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 
 ## Current verbs
 
-**Listen → choose → collect → travel → adapt → deliver → tend → witness**
+**Listen → choose → collect → travel → adapt → bind → deliver → tend → witness**
 
 1. Inspect nearby facts, named requesters, shortages, project needs, route reliability, weather, and tide.
 2. Choose a promise by consequence and journey mood rather than abstract reward value.
 3. Reach the origin and collect a physical load, or witness one signed report into the document case.
 4. Travel manually or chart a pointer path in the overhead chart or angled relief view.
 5. Scan, reroute, slow down, hold Shift to brace while moving, stand still to recover, or accept a weathered load.
-6. Deliver or hand off safely at a harbor.
-7. Spend a shared part to reinforce a corridor, or let repeated delivery use weave it naturally.
-8. Read the arrival response, project change, route state, resident movement, and causal chronicle.
+6. Bind a reusable terrain-appropriate Wayknot, or reclaim one underfoot to move the care elsewhere.
+7. Deliver or hand off safely at a harbor.
+8. Spend a shared part to reinforce a corridor, or let repeated delivery use weave it naturally.
+9. Read the arrival response, project change, route state, resident movement, and causal chronicle.
 
 There is no separate currency payout. A delivery’s reward is the system becoming more capable and more legible.
 
@@ -40,6 +41,7 @@ The tide changes water depth across the map. Water is always physically enterabl
 - Movement has terrain drag, continuous acceleration cues, wake/foot feedback, camera response, stamina, and load stability.
 - The Loom pulse immediately expands the permanent chart and records nearby water soundings separately from ordinary discovery.
 - Active Shift-bracing trades speed for stability and fragile-cargo protection; Rest pace or stillness restores further.
+- F binds or reclaims one of six reusable Wayknots. Mats, anchors, and wind-knots change the relevant local hazard without consuming cargo; unlike overlapping fields form a bounded Waychord and speed Loom recharge slightly.
 - Every consequential command responds through animation, sound, text, or an accessible live announcement.
 
 ### One journey
@@ -122,11 +124,13 @@ At a source harbor, the player can witness its specialization count into a singl
 ## Journey play
 
 - WASD/arrows and pointer-directed routes share the same continuous travel rules in Chart 2D and Relief 3D.
+- Relief 3D rotates held movement with the orbit camera so travel remains screen-relative; Chart 2D retains world-up controls.
 - Rest, Steady, and Swift paces trade recovery, control, and speed.
 - Holding Shift while moving actively braces: travel continues more slowly, stability rises, and fragile loads avoid handling shock.
 - Terrain, water depth, load ratio, roughness, sharp changes in direction, wind, and pace affect effort or stability.
 - Perishable food loses freshness gently during travel; a completed cache suspends that decay while the player is sheltered at its harbor.
 - A charge-gated Loom pulse reveals nearby permanent chart information and bathymetry; sounded depth also informs pointer-path cost.
+- Pointer paths price the same Wayknot fields as manual travel. The placed aids persist in saves and can always be reclaimed; they never become an upgrade currency or upkeep chore.
 - The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
 - The objective always identifies the active pickup, material destination, or report destination.
 
@@ -177,7 +181,7 @@ Implemented now:
 - authoritative active/multi-hop logistics;
 - all five rule-changing civic projects;
 - route reinforcement, topology campaign resolution, and endless continuation;
-- surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, and dual Chart 2D/Relief 3D play;
+- surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, six reusable terrain-bound Wayknots and their Waychords, and dual Chart 2D/Relief 3D play;
 - Drift/Weave/Wander plus Quiet Hour;
 - local resume, secure desktop packaging, and static Pages output.
 

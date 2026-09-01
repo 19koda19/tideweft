@@ -44,6 +44,9 @@ interface UIRefs {
   fieldDepth: HTMLSpanElement;
   fieldEffort: HTMLSpanElement;
   fieldTools: HTMLSpanElement;
+  fieldWayknots: HTMLDivElement;
+  fieldWayknotCount: HTMLElement;
+  fieldWayknotActive: HTMLSpanElement;
   fieldHint: HTMLSpanElement;
   fieldSweep: HTMLProgressElement;
   choirReadout: HTMLDivElement;
@@ -74,6 +77,8 @@ interface UIRefs {
   pauseButton: HTMLButtonElement;
   scanButton: HTMLButtonElement;
   interactButton: HTMLButtonElement;
+  wayknotButton: HTMLButtonElement;
+  wayknotButtonLabel: HTMLSpanElement;
   quietButton: HTMLButtonElement;
   titleButton: HTMLButtonElement;
   helpButton: HTMLButtonElement;
@@ -347,7 +352,10 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const objectiveProgressLabel = createElement("span", "objective-panel__progress-label", "Not begun");
   const objectiveWhy = createElement("p", "objective-panel__why");
   const fieldReadout = createElement("div", "field-readout");
-  fieldReadout.setAttribute("aria-label", "Current terrain, water depth, stamina cost, and field tools");
+  fieldReadout.setAttribute(
+    "aria-label",
+    "Current terrain, water depth, stamina cost, field tools, and Wayknot status",
+  );
   const fieldHeader = createElement("span", "field-readout__header");
   fieldHeader.append(createElement("span", "field-readout__symbol", "⌖"));
   const fieldTerrain = createElement("strong", "field-readout__terrain", "Uncharted ground");
@@ -357,11 +365,24 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const fieldEffort = createElement("span", "field-readout__effort", "Normal stamina use");
   fieldMetrics.append(fieldDepth, fieldEffort);
   const fieldTools = createElement("span", "field-readout__tools", "FIELD KIT · Sounding line");
+  const fieldWayknots = createElement("div", "field-readout__wayknots");
+  const fieldWayknotCount = createElement(
+    "strong",
+    "field-readout__wayknot-count",
+    "WAYKNOTS · 0 / 0 deployed",
+  );
+  const fieldWayknotActive = createElement(
+    "span",
+    "field-readout__wayknot-active",
+    "No Wayknot active here",
+  );
+  fieldWayknots.setAttribute("role", "group");
+  fieldWayknots.append(fieldWayknotCount, fieldWayknotActive);
   const fieldHint = createElement("span", "field-readout__hint", "Pulse Space to sound nearby water.");
   const fieldSweep = makeProgress("Progress toward a safe bank while swept");
   fieldSweep.classList.add("field-readout__sweep");
   fieldSweep.hidden = true;
-  fieldReadout.append(fieldHeader, fieldMetrics, fieldTools, fieldHint, fieldSweep);
+  fieldReadout.append(fieldHeader, fieldMetrics, fieldTools, fieldWayknots, fieldHint, fieldSweep);
   const choirReadout = createElement("div", "choir-readout");
   choirReadout.setAttribute("aria-label", "Tide Choir survey progress");
   const choirHeader = createElement("span", "choir-readout__header");
@@ -452,6 +473,14 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   scanButton.append(createElement("kbd", "keycap", "Space"));
   const interactButton = createButton("action-button action-button--interact", "Interact");
   interactButton.append(createElement("kbd", "keycap", "E"));
+  const wayknotButton = createButton(
+    "action-button action-button--wayknot",
+    "",
+    "Place or reclaim a reusable Wayknot",
+  );
+  const wayknotButtonLabel = createElement("span", "action-button__label", "Place Wayknot");
+  wayknotButton.setAttribute("aria-keyshortcuts", "F");
+  wayknotButton.append(wayknotButtonLabel, createElement("kbd", "keycap", "F"));
   const pauseButton = createButton("action-button pause-button", "Hold tide");
   pauseButton.append(createElement("kbd", "keycap", "P"));
 
@@ -468,6 +497,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   actionDock.append(
     scanButton,
     interactButton,
+    wayknotButton,
     pauseButton,
     paceGroup,
     quietButton,
@@ -634,6 +664,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     ["Pointer", "Choose a world destination"],
     ["Space", "Sound water depth and reveal nearby terrain"],
     ["E / Enter", "Interact"],
+    ["F", "Place or reclaim the terrain-appropriate Wayknot"],
     ["[ / ]", "Change pace"],
     ["P", "Hold or release the tide"],
     ["V", "Switch Chart 2D / Relief 3D"],
@@ -651,14 +682,19 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const accessibilityNote = createElement(
     "p",
     "help-dialog__note",
-    "Important states use words, symbols, and line patterns in addition to color. Reduced-motion preferences are honored automatically.",
+    "Important states—including Wayknot capacity, the active knot or Waychord, and whether an action is available—use words, counts, native disabled controls, symbols, and line patterns in addition to color. Reduced-motion preferences are honored automatically.",
   );
   const journeyNote = createElement(
     "p",
     "help-dialog__note",
     "Cargo promises move physical goods from the named PICK UP harbor to the named DELIVER harbor. Signed stock reports are separate one-slot information jobs. Deep water drains more stamina; if it empties, the current sweeps you toward a safe bank while cargo stays with you. Visit completed civic projects to inherit field tools.",
   );
-  helpContent.append(helpHeader, helpIntro, helpGrid, journeyNote, accessibilityNote);
+  const wayknotNote = createElement(
+    "p",
+    "help-dialog__note help-dialog__note--wayknots",
+    "Wayknots are reusable field aids, not spent cargo: press F to bind the terrain-appropriate piece or reclaim the piece underfoot. Reed mats ease mudflats and marshes; tide anchors steady wet crossings and weaken nearby currents; wind knots shelter exposed ridges and scrub. Where their areas overlap, that shared shelter is a Waychord; only the strongest help for each hazard applies, so overlaps stay bounded.",
+  );
+  helpContent.append(helpHeader, helpIntro, helpGrid, journeyNote, wayknotNote, accessibilityNote);
   helpDialog.append(helpContent);
 
   shell.append(
@@ -707,6 +743,9 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     fieldDepth,
     fieldEffort,
     fieldTools,
+    fieldWayknots,
+    fieldWayknotCount,
+    fieldWayknotActive,
     fieldHint,
     fieldSweep,
     choirReadout,
@@ -737,6 +776,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     pauseButton,
     scanButton,
     interactButton,
+    wayknotButton,
+    wayknotButtonLabel,
     quietButton,
     titleButton,
     helpButton,
@@ -1135,6 +1176,31 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.fieldDepth.dataset.known = view.field.depthKnown ? "true" : "false";
     refs.fieldEffort.textContent = view.field.effortLabel;
     refs.fieldTools.textContent = `FIELD KIT · ${view.field.toolLabels.join(" · ")}`;
+    const activeWayknotLabels = view.field.activeWayknotLabels;
+    const wayknotStatus = activeWayknotLabels.length === 0
+      ? "No Wayknot active here"
+      : activeWayknotLabels.length === 1
+        ? `${activeWayknotLabels[0]} active here`
+        : `WAYCHORD · ${activeWayknotLabels.join(" + ")}`;
+    const wayknotAccessibleStatus = activeWayknotLabels.length === 0
+      ? "No Wayknot is active at your position."
+      : activeWayknotLabels.length === 1
+        ? `${activeWayknotLabels[0]} is active at your position.`
+        : `Waychord active at your position: ${activeWayknotLabels.join(", ")}.`;
+    refs.fieldWayknotCount.textContent =
+      `WAYKNOTS · ${view.field.deployedWayknots} / ${view.field.wayknotCapacity} deployed`;
+    refs.fieldWayknotActive.textContent = wayknotStatus;
+    refs.fieldWayknots.dataset.active = activeWayknotLabels.length > 0 ? "true" : "false";
+    refs.fieldWayknots.dataset.waychord = activeWayknotLabels.length > 1 ? "true" : "false";
+    refs.fieldWayknots.dataset.full =
+      view.field.wayknotCapacity > 0
+      && view.field.deployedWayknots >= view.field.wayknotCapacity
+        ? "true"
+        : "false";
+    const fieldWayknotAccessibleLabel =
+      `${view.field.deployedWayknots} of ${view.field.wayknotCapacity} Wayknot slots deployed. ${wayknotAccessibleStatus}`;
+    refs.fieldWayknots.setAttribute("aria-label", fieldWayknotAccessibleLabel);
+    refs.fieldWayknots.title = fieldWayknotAccessibleLabel;
     refs.fieldHint.textContent = view.field.hint;
     refs.fieldReadout.dataset.swept = view.field.swept ? "true" : "false";
     refs.fieldSweep.hidden = !view.field.swept;
@@ -1153,6 +1219,13 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.interactButton.textContent = view.controls?.interactLabel ?? "Interact";
     refs.interactButton.append(createElement("kbd", "keycap", "E"));
     refs.interactButton.title = view.controls?.interactHint ?? "Interact with the current harbor";
+    const wayknotLabel = view.controls?.wayknotLabel ?? "Place Wayknot";
+    const wayknotHint =
+      view.controls?.wayknotHint ?? "Place or reclaim a reusable Wayknot at your position";
+    refs.wayknotButton.disabled = view.controls?.canWayknot === false;
+    refs.wayknotButtonLabel.textContent = wayknotLabel;
+    refs.wayknotButton.title = wayknotHint;
+    refs.wayknotButton.setAttribute("aria-label", `${wayknotLabel}. ${wayknotHint}`);
     refs.quietButton.disabled = view.controls?.canEndSession === false;
     for (const [pace, button] of Object.entries(refs.paceButtons) as Array<[PaceView, HTMLButtonElement]>) {
       button.setAttribute("aria-pressed", pace === view.player.pace ? "true" : "false");
@@ -1198,6 +1271,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   window.addEventListener("pointercancel", cancelContractPointer);
   refs.scanButton.addEventListener("click", () => options.dispatch({ type: "scan" }));
   refs.interactButton.addEventListener("click", () => options.dispatch({ type: "interact" }));
+  refs.wayknotButton.addEventListener("click", () => options.dispatch({ type: "wayknot" }));
   refs.quietButton.addEventListener("click", () => options.dispatch({ type: "quiet-hour", action: "open" }));
   refs.titleButton.addEventListener("click", () => options.dispatch({ type: "open-title" }));
   refs.helpButton.addEventListener("click", () => syncDialog(refs.helpDialog, true));

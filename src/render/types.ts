@@ -168,6 +168,19 @@ export interface TideChoirMemoryView {
   readonly label: string;
 }
 
+export type WayknotKind = "reed-mat" | "tide-anchor" | "wind-knot";
+
+/** A player-tied field aid with a physical presence in both world views. */
+export interface WayknotView {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: WayknotKind;
+  readonly position: WorldPoint;
+  /** Radius of its field effect in renderer world units. */
+  readonly influenceRadius: number;
+  readonly active: boolean;
+}
+
 export interface TraceView {
   readonly id: string;
   readonly points: readonly WorldPoint[];
@@ -232,6 +245,7 @@ export interface TideweftView {
   readonly player: PlayerView;
   readonly routes: readonly RouteView[];
   readonly choirs: readonly TideChoirMemoryView[];
+  readonly wayknots: readonly WayknotView[];
   readonly traces: readonly TraceView[];
   readonly porters: readonly PorterView[];
   readonly particles?: readonly ParticleView[];
@@ -247,6 +261,7 @@ export type RendererCommand =
   | { readonly type: "move-target"; readonly point: WorldPoint; readonly additive: boolean }
   | { readonly type: "scan" }
   | { readonly type: "interact" }
+  | { readonly type: "wayknot" }
   | { readonly type: "toggle-pause" }
   | { readonly type: "pace-step"; readonly delta: -1 | 1 }
   | {

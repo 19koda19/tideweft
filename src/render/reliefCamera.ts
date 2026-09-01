@@ -1,5 +1,6 @@
 import type { TerrainMeshBounds } from "./terrainMesh";
-import type { WorldPoint } from "./types";
+import { discoveredReliefSurfaceHeightAt } from "./reliefTerrain";
+import type { TerrainGridView, WorldPoint } from "./types";
 
 export interface ReliefVector3 {
   readonly x: number;
@@ -77,6 +78,40 @@ export function normalizeReliefCamera(state: ReliefCameraState): ReliefCameraSta
     verticalFov: clamp(finite(state.verticalFov, Math.PI / 3), MIN_RELIEF_FOV, MAX_RELIEF_FOV),
     near,
     far: Math.max(near + 1, finite(state.far, 8_000)),
+  };
+}
+
+/**
+ * Rotates canvas-relative travel into map coordinates. Positive input x is
+ * screen-right and positive input y is screen-down, matching WASD/arrows at
+ * yaw zero; orbiting the camera rotates that basis with the visible world.
+ * The result snaps to the simulation's eight travel headings, with an octant
+ * dead zone that prevents Relief's slight default orbit from turning W into
+ * an accidental diagonal.
+ */
+export function cameraRelativeReliefMovement(
+  movement: WorldPoint,
+  yaw: number,
+): WorldPoint {
+  let inputX = clamp(finite(movement.x, 0), -1, 1);
+  let inputY = clamp(finite(movement.y, 0), -1, 1);
+  const magnitude = Math.hypot(inputX, inputY);
+  if (magnitude > 1) {
+    inputX /= magnitude;
+    inputY /= magnitude;
+  }
+  const angle = finite(yaw, 0);
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  let worldX = snapTravelAxis(inputX * cosine + inputY * sine);
+  let worldY = snapTravelAxis(-inputX * sine + inputY * cosine);
+  if (worldX !== 0 && worldY !== 0) {
+    worldX *= Math.SQRT1_2;
+    worldY *= Math.SQRT1_2;
+  }
+  return {
+    x: worldX,
+    y: worldY,
   };
 }
 
@@ -169,6 +204,29 @@ export function screenToReliefPlane(
     x: pose.eye.x + direction.x * amount,
     y: pose.eye.z + direction.z * amount,
   };
+}
+
+/**
+ * Iteratively casts onto Relief's discovery-masked surface. Because the
+ * sampler never reads an uncharted height, cursor movement and click targets
+ * cannot disclose hidden ridges or water through parallax.
+ */
+export function screenToDiscoveredReliefSurface(
+  screen: WorldPoint,
+  grid: TerrainGridView,
+  verticalScale: number,
+  camera: ReliefCameraState,
+  viewport: ReliefViewport,
+): WorldPoint | null {
+  const normalized = normalizeReliefCamera(camera);
+  let point = screenToReliefPlane(screen, normalized.targetHeight, normalized, viewport)
+    ?? screenToReliefPlane(screen, 0, normalized, viewport);
+  if (!point) return null;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const height = discoveredReliefSurfaceHeightAt(grid, point, verticalScale, true);
+    point = screenToReliefPlane(screen, height, normalized, viewport) ?? point;
+  }
+  return point;
 }
 
 /** Conservative sphere/frustum test for independently renderable mesh chunks. */
@@ -272,4 +330,9 @@ function clamp(value: number, low: number, high: number): number {
 
 function finite(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
+}
+
+function snapTravelAxis(value: number): -1 | 0 | 1 {
+  if (Math.abs(value) < Math.sin(Math.PI / 8)) return 0;
+  return value < 0 ? -1 : 1;
 }

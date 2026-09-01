@@ -5,7 +5,8 @@ import type {
   WeatherKind as RenderWeatherKind,
 } from "../render/types";
 import { FIXED_POINT, STRAND_AUTOMATION_THRESHOLD, type TerrainTileView, type WorldView } from "../sim/types";
-import { TILE_UNITS, cargoWeight, type PlayerState } from "./player";
+import { TILE_UNITS, cargoWeight, wayknotEffectsAt, type PlayerState } from "./player";
+import { WAYKNOT_LABELS, WAYKNOT_RADII } from "./wayknots";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
 
@@ -26,6 +27,11 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
+  const activeWayknotIds = new Set(
+    wayknotEffectsAt(player, world, Math.floor(player.y / TILE_UNITS) * world.terrain.width + Math.floor(player.x / TILE_UNITS))
+      .influences
+      .map((influence) => influence.id),
+  );
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const traces = player.currentTrace.length > 1
     ? [
@@ -200,6 +206,20 @@ export function projectGameView(
           }
         : {}),
     },
+    wayknots: player.wayknots.wayknots.flatMap((wayknot) => {
+      if (wayknot.tileIndex === null) return [];
+      return [{
+        id: String(wayknot.id),
+        kind: wayknot.kind,
+        label: `${WAYKNOT_LABELS[wayknot.kind]} #${wayknot.id}`,
+        position: tilePoint(wayknot.tileIndex, world.terrain.width, tileSize),
+        // A zero-tile Reed-mat radius still covers the physical tile beneath
+        // it. Half a tile keeps the drawn footprint truthful while the larger
+        // Manhattan fields remain readable as soft world-space rings.
+        influenceRadius: (WAYKNOT_RADII[wayknot.kind] + 0.5) * tileSize,
+        active: activeWayknotIds.has(wayknot.id),
+      }];
+    }),
     routes: world.routes
       .filter((route) => {
         if (options.selectedRouteId === route.id) return true;

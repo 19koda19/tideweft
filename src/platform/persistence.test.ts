@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  createFailoverSaveRepository,
   createSaveRepository,
   exportSave,
   importSave,
   type SaveRecord,
+  type SaveRepository,
 } from "./persistence";
 
 const FALLBACK_KEY = "tideweft.saves.v1";
@@ -59,6 +61,11 @@ function useFallbackRepository(storage = new MemoryStorage()) {
 
 function exportedFile(payload: unknown, name = "tideweft-save.json"): File {
   return new File([JSON.stringify(payload)], name, { type: "application/json" });
+}
+
+function summary(record: SaveRecord) {
+  const { worldJson: _worldJson, screenshot, ...metadata } = record;
+  return { ...metadata, hasScreenshot: Boolean(screenshot) };
 }
 
 afterEach(() => {
@@ -183,6 +190,96 @@ describe("local-storage save repository", () => {
     ).rejects.toThrow("missing required fields");
 
     expect(await repository.load(valid.slotId)).toEqual(valid);
+  });
+
+  it("does not replace a newer valid slot with an older snapshot", async () => {
+    const { repository } = useFallbackRepository();
+    const newest = makeRecord({ updatedAt: 500, playTicks: 900, label: "Newest crossing" });
+    await repository.save(newest);
+
+    await repository.save(makeRecord({ updatedAt: 499, playTicks: 20, label: "Old clock" }));
+    await repository.save(makeRecord({ updatedAt: 500, playTicks: 899, label: "Old tick" }));
+
+    expect(await repository.load(newest.slotId)).toEqual(newest);
+  });
+});
+
+describe("IndexedDB runtime failover", () => {
+  it("loads the newest copy across stores using ticks to break timestamp ties", async () => {
+    const primaryRecord = makeRecord({ updatedAt: 700, playTicks: 80, label: "Primary copy" });
+    const fallbackRecord = makeRecord({ updatedAt: 700, playTicks: 81, label: "Fallback copy" });
+    const primary: SaveRepository = {
+      list: vi.fn(async () => [summary(primaryRecord)]),
+      load: vi.fn(async () => structuredClone(primaryRecord)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const fallback: SaveRepository = {
+      list: vi.fn(async () => [summary(fallbackRecord)]),
+      load: vi.fn(async () => structuredClone(fallbackRecord)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const repository = createFailoverSaveRepository(primary, fallback);
+
+    const loaded = await repository.load("autosave");
+    expect(loaded).toEqual(fallbackRecord);
+    if (loaded) loaded.label = "mutated caller copy";
+    expect(await repository.load("autosave")).toEqual(fallbackRecord);
+    expect(await repository.list()).toEqual([summary(fallbackRecord)]);
+  });
+
+  it("sticks to fallback after a primary runtime failure and preserves its newer record", async () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal("indexedDB", undefined);
+    vi.stubGlobal("localStorage", storage);
+    const fallback = createSaveRepository();
+    const existing = makeRecord({ updatedAt: 900, playTicks: 400, label: "Safe fallback" });
+    await fallback.save(existing);
+    const primary: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => { throw new Error("IndexedDB transaction aborted"); }),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const repository = createFailoverSaveRepository(primary, fallback);
+
+    await expect(repository.load("autosave")).resolves.toEqual(existing);
+    await repository.save(makeRecord({ updatedAt: 899, playTicks: 999, label: "Stale runtime" }));
+    expect(await fallback.load("autosave")).toEqual(existing);
+    expect(primary.save).not.toHaveBeenCalled();
+
+    const latest = makeRecord({ updatedAt: 901, playTicks: 401, label: "Recovered runtime" });
+    await repository.save(latest);
+    expect(await fallback.load("autosave")).toEqual(latest);
+    expect(primary.load).toHaveBeenCalledOnce();
+    expect(primary.save).not.toHaveBeenCalled();
+  });
+
+  it("falls through when a primary save fails after opening successfully", async () => {
+    let fallbackRecord = makeRecord({ updatedAt: 100, playTicks: 10 });
+    const primary: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => undefined),
+      save: vi.fn(async () => { throw new Error("IndexedDB quota failure"); }),
+      remove: vi.fn(async () => undefined),
+    };
+    const fallback: SaveRepository = {
+      list: vi.fn(async () => [summary(fallbackRecord)]),
+      load: vi.fn(async () => structuredClone(fallbackRecord)),
+      save: vi.fn(async (record) => { fallbackRecord = structuredClone(record); }),
+      remove: vi.fn(async () => undefined),
+    };
+    const repository = createFailoverSaveRepository(primary, fallback);
+    const first = makeRecord({ updatedAt: 200, playTicks: 20, label: "First fallback" });
+    const second = makeRecord({ updatedAt: 300, playTicks: 30, label: "Sticky fallback" });
+
+    await repository.save(first);
+    await repository.save(second);
+
+    expect(primary.save).toHaveBeenCalledOnce();
+    expect(fallback.save).toHaveBeenCalledTimes(2);
+    expect(fallbackRecord).toEqual(second);
   });
 });
 

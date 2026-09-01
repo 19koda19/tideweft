@@ -115,11 +115,11 @@ Remote inspector values therefore distinguish direct knowledge from unverified r
 There are two nested versions:
 
 1. `tideweft-world` contains the save-format version, rules version, checksum, and canonical `WorldState`. Deserialization checks shape, version, checksum, and every invariant.
-2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart state, tutorial state, chosen posture/session shape, and recap history.
+2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart/Wayknot state, tutorial state, chosen posture/session shape, and recap history.
 
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
 
-The browser repository prefers IndexedDB and falls back to localStorage. Repository operations clone writes, sort summaries deterministically, and isolate malformed records. The platform export/import envelope has a version, 20 MB limit, slot/metadata validation, future-format rejection, and object-URL cleanup. The current UI does not expose those import/export helpers yet.
+The browser repository prefers IndexedDB and switches to a sticky localStorage fallback if opening or a later transaction fails. Cross-store reads reconcile the newest usable copy, record writes are monotonic, and overlapping runtime save requests coalesce to the newest complete snapshot behind the in-flight write. Repository operations clone records, sort summaries deterministically, and isolate malformed data. The platform export/import envelope has a version, 20 MB limit, slot/metadata validation, future-format rejection, and object-URL cleanup. The current UI does not expose those import/export helpers yet.
 
 Unsupported simulation versions fail rather than being guessed into a current world. Explicit checksum-first migrations preserve the prior 64 × 48 world under current Tide Choir rules; no migration silently regenerates terrain from its seed.
 

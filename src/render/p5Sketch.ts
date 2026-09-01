@@ -1,5 +1,7 @@
 import p5 from "p5";
 
+import { buildWaychordBindings, buildWaychords } from "./wayknots";
+
 import type {
   CameraView,
   ParticleView,
@@ -16,6 +18,8 @@ import type {
   TideweftRendererOptions,
   TideweftView,
   TraceView,
+  WayknotKind,
+  WayknotView,
   WeatherView,
   WorldEventView,
   WorldPoint,
@@ -369,6 +373,10 @@ export function createTideweftRenderer(
       case "KeyE":
       case "Enter":
         emit({ type: "interact" });
+        break;
+      case "KeyF":
+        event.preventDefault();
+        emit({ type: "wayknot" });
         break;
       case "KeyP":
         emit({ type: "toggle-pause" });
@@ -1025,6 +1033,193 @@ export function createTideweftRenderer(
       clearDash();
     };
 
+    const wayknotColor = (kind: WayknotKind): string => {
+      switch (kind) {
+        case "reed-mat": return PALETTE.amber;
+        case "tide-anchor": return PALETTE.sky;
+        case "wind-knot": return PALETTE.violet;
+      }
+    };
+
+    const drawWaychords = (view: TideweftView): void => {
+      const tileSize = view.terrain.tileSize;
+      const railHalfWidth = Math.max(tileSize * 0.075, 1.2 / camera.zoom);
+      const chords = buildWaychords(view.wayknots);
+      for (const chord of chords) {
+        const leftFrom = {
+          x: chord.from.x + chord.normal.x * railHalfWidth,
+          y: chord.from.y + chord.normal.y * railHalfWidth,
+        };
+        const leftTo = {
+          x: chord.to.x + chord.normal.x * railHalfWidth,
+          y: chord.to.y + chord.normal.y * railHalfWidth,
+        };
+        const rightFrom = {
+          x: chord.from.x - chord.normal.x * railHalfWidth,
+          y: chord.from.y - chord.normal.y * railHalfWidth,
+        };
+        const rightTo = {
+          x: chord.to.x - chord.normal.x * railHalfWidth,
+          y: chord.to.y - chord.normal.y * railHalfWidth,
+        };
+        p.noFill();
+        clearDash();
+        p.stroke(withAlpha(PALETTE.ink, 205));
+        p.strokeWeight(4.6 / camera.zoom);
+        p.line(leftFrom.x, leftFrom.y, leftTo.x, leftTo.y);
+        p.line(rightFrom.x, rightFrom.y, rightTo.x, rightTo.y);
+        p.stroke(withAlpha(PALETTE.foam, 172));
+        p.strokeWeight(1.15 / camera.zoom);
+        p.line(leftFrom.x, leftFrom.y, leftTo.x, leftTo.y);
+        p.line(rightFrom.x, rightFrom.y, rightTo.x, rightTo.y);
+
+        const bindings = buildWaychordBindings(
+          chord,
+          Math.max(tileSize * 0.7, 10 / camera.zoom),
+          railHalfWidth,
+          18,
+        );
+        p.stroke(withAlpha(PALETTE.coral, 205));
+        p.strokeWeight(1.35 / camera.zoom);
+        for (const binding of bindings) {
+          p.line(binding.left.x, binding.left.y, binding.right.x, binding.right.y);
+        }
+        const diamond = Math.max(tileSize * 0.12, 2.5 / camera.zoom);
+        p.push();
+        p.translate(chord.midpoint.x, chord.midpoint.y);
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.ink, 235));
+        p.rotate(Math.PI / 4);
+        p.rectMode(p.CENTER);
+        p.rect(0, 0, diamond * 2, diamond * 2, diamond * 0.25);
+        p.fill(withAlpha(PALETTE.foam, 225));
+        p.rect(0, 0, diamond, diamond, diamond * 0.18);
+        p.pop();
+      }
+      clearDash();
+    };
+
+    const drawWayknotMotif = (
+      wayknot: WayknotView,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const size = tileSize * (wayknot.active ? 0.68 : 0.58);
+      const color = wayknotColor(wayknot.kind);
+      const orientation = (stringHash(wayknot.id) / 4_294_967_295) * p.TWO_PI;
+      p.push();
+      p.translate(wayknot.position.x, wayknot.position.y);
+
+      if (wayknot.active && wayknot.influenceRadius > 0) {
+        p.noFill();
+        p.stroke(withAlpha(color, 54));
+        p.strokeWeight(1.05 / camera.zoom);
+        setDash(
+          [5 / camera.zoom, 8 / camera.zoom],
+          reducedMotion ? 0 : -now * 0.004,
+        );
+        p.circle(0, 0, wayknot.influenceRadius * 2);
+        clearDash();
+        for (let tick = 0; tick < 4; tick += 1) {
+          const angle = tick * p.HALF_PI;
+          const halfTick = Math.min(
+            wayknot.influenceRadius * 0.18,
+            2.5 / camera.zoom,
+          );
+          const inner = Math.max(0, wayknot.influenceRadius - halfTick);
+          const outer = wayknot.influenceRadius + halfTick;
+          p.line(
+            Math.cos(angle) * inner,
+            Math.sin(angle) * inner,
+            Math.cos(angle) * outer,
+            Math.sin(angle) * outer,
+          );
+        }
+      }
+
+      p.rotate(orientation);
+      p.strokeWeight(Math.max(0.8, 1.3 / camera.zoom));
+      switch (wayknot.kind) {
+        case "reed-mat": {
+          p.rectMode(p.CENTER);
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.ink, wayknot.active ? 210 : 190));
+          p.rect(0, 0, size * 1.12, size * 0.86, size * 0.12);
+          for (let slat = -2; slat <= 2; slat += 1) {
+            const y = slat * size * 0.16;
+            p.stroke(withAlpha(color, wayknot.active ? 238 : 200));
+            p.strokeWeight(size * 0.105);
+            p.line(-size * 0.48, y, size * 0.48, y);
+          }
+          p.stroke(withAlpha(PALETTE.foam, wayknot.active ? 196 : 170));
+          p.strokeWeight(size * 0.075);
+          for (const x of [-0.28, 0, 0.28]) {
+            p.line(x * size, -size * 0.4, x * size, size * 0.4);
+          }
+          break;
+        }
+        case "tide-anchor": {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.foam, wayknot.active ? 228 : 180));
+          p.strokeWeight(size * 0.085);
+          p.line(0, -size * 0.22, 0, size * 0.36);
+          p.arc(0, size * 0.18, size * 0.7, size * 0.65, 0.08, p.PI - 0.08);
+          p.line(-size * 0.35, size * 0.2, -size * 0.43, size * 0.04);
+          p.line(size * 0.35, size * 0.2, size * 0.43, size * 0.04);
+          p.stroke(withAlpha(color, wayknot.active ? 245 : 205));
+          p.fill(withAlpha(PALETTE.ink, 220));
+          p.circle(0, -size * 0.3, size * 0.38);
+          p.noStroke();
+          p.fill(withAlpha(color, wayknot.active ? 245 : 205));
+          p.rectMode(p.CENTER);
+          p.rect(0, -size * 0.3, size * 0.5, size * 0.1, size * 0.04);
+          break;
+        }
+        case "wind-knot": {
+          p.stroke(withAlpha(PALETTE.foam, wayknot.active ? 225 : 180));
+          p.strokeWeight(size * 0.08);
+          p.line(-size * 0.18, size * 0.43, -size * 0.18, -size * 0.48);
+          p.noStroke();
+          p.fill(withAlpha(color, wayknot.active ? 240 : 200));
+          p.beginShape();
+          p.vertex(-size * 0.15, -size * 0.46);
+          p.vertex(size * 0.5, -size * 0.26);
+          p.vertex(size * 0.2, -size * 0.03);
+          p.vertex(-size * 0.15, -size * 0.14);
+          p.endShape(p.CLOSE);
+          p.stroke(withAlpha(PALETTE.coral, wayknot.active ? 220 : 180));
+          p.strokeWeight(size * 0.055);
+          const flutter = reducedMotion ? 0 : Math.sin(now * 0.004 + orientation) * size * 0.055;
+          p.line(size * 0.2, -size * 0.03, size * 0.46, size * 0.18 + flutter);
+          p.line(size * 0.06, -size * 0.08, size * 0.22, size * 0.27 - flutter);
+          break;
+        }
+      }
+      p.pop();
+
+      const labelSize = 8.5 / camera.zoom;
+      p.push();
+      p.translate(wayknot.position.x, wayknot.position.y + size * 0.78 + 8 / camera.zoom);
+      p.textAlign(p.CENTER, p.CENTER);
+      p.textStyle(p.BOLD);
+      p.textSize(labelSize);
+      const width = p.textWidth(wayknot.label) + 9 / camera.zoom;
+      p.noStroke();
+      p.rectMode(p.CENTER);
+      p.fill(withAlpha(PALETTE.ink, wayknot.active ? 220 : 205));
+      p.rect(0, 0, width, 13 / camera.zoom, 4 / camera.zoom);
+      p.fill(withAlpha(color, wayknot.active ? 245 : 210));
+      p.text(wayknot.label, 0, -0.25 / camera.zoom);
+      p.pop();
+    };
+
+    const drawWayknots = (view: TideweftView, now: number): void => {
+      drawWaychords(view);
+      for (const wayknot of view.wayknots) {
+        drawWayknotMotif(wayknot, view.terrain.tileSize, now);
+      }
+    };
+
     const settlementStatusColor = (status: SettlementStatus): string => {
       switch (status) {
         case "steady":
@@ -1560,11 +1755,11 @@ export function createTideweftRenderer(
       canvasElement.setAttribute("role", "application");
       canvasElement.setAttribute(
         "aria-label",
-        "TIDEWEFT estuary. Use WASD or arrow keys to travel, Space to scan, E to interact, and Escape to cancel.",
+        "TIDEWEFT estuary. Use WASD or arrow keys to travel, Space to scan, E to interact, F to tie or tend a Wayknot, and Escape to cancel.",
       );
       canvasElement.setAttribute(
         "aria-keyshortcuts",
-        "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D Space E P Escape",
+        "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D Space E F P Escape",
       );
       p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
       p.frameRate(60);
@@ -1599,6 +1794,7 @@ export function createTideweftRenderer(
       drawRoutes(latestView.routes, now);
       drawChoirs(latestView.choirs, now);
       drawDepthSoundings(latestView);
+      drawWayknots(latestView, now);
       drawSettlements(latestView.settlements, now);
       drawPorters(latestView.porters);
       drawParticles(latestView.particles ?? []);

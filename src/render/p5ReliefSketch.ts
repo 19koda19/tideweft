@@ -12,15 +12,23 @@ import {
 import {
   MAX_RELIEF_PITCH,
   MIN_RELIEF_PITCH,
+  cameraRelativeReliefMovement,
   normalizeReliefCamera,
   projectReliefPoint,
   reliefBoundsVisible,
   reliefCameraPose,
   reliefFogAmount,
-  screenToReliefPlane,
+  screenToDiscoveredReliefSurface,
   type ReliefCameraState,
 } from "./reliefCamera";
 import { reliefSoundingStyle, type ReliefDepthBand } from "./reliefSounding";
+import {
+  createReliefDiscoverySignatureMemo,
+  discoveredReliefSurfaceHeightAt,
+  maskReliefTileForDiscovery,
+  reliefDiscoveryVisibility,
+} from "./reliefTerrain";
+import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import type {
   PorterView,
   RendererCommand,
@@ -32,6 +40,8 @@ import type {
   TideweftRendererController,
   TideweftRendererOptions,
   TideweftView,
+  WayknotKind,
+  WayknotView,
   WorldPoint,
 } from "./types";
 
@@ -180,6 +190,7 @@ export function createTideweftReliefRenderer(
   const heldDirections = new Set<string>();
   const heldBraceKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
+  const discoverySignatureFor = createReliefDiscoverySignatureMemo();
   const orbit: OrbitRuntime = {
     x: 0,
     y: 0,
@@ -256,6 +267,7 @@ export function createTideweftReliefRenderer(
       x *= Math.SQRT1_2;
       y *= Math.SQRT1_2;
     }
+    ({ x, y } = cameraRelativeReliefMovement({ x, y }, orbit.yaw));
     const signature = `${x},${y}`;
     if (signature === lastMovement) return;
     lastMovement = signature;
@@ -301,13 +313,14 @@ export function createTideweftReliefRenderer(
     if (!view || !p) return null;
     const viewport = { width: p.width, height: p.height };
     const camera = currentCameraState();
-    let point = screenToReliefPlane(screen, orbit.height, camera, viewport)
-      ?? screenToReliefPlane(screen, 0, camera, viewport);
+    const point = screenToDiscoveredReliefSurface(
+      screen,
+      view.terrain,
+      cached?.mesh.verticalScale ?? reliefScale(view.terrain),
+      camera,
+      viewport,
+    );
     if (!point) return null;
-    for (let pass = 0; pass < 2; pass += 1) {
-      const height = surfaceHeightAt(view.terrain, point, cached?.mesh.verticalScale ?? reliefScale(view.terrain), true);
-      point = screenToReliefPlane(screen, height, camera, viewport) ?? point;
-    }
     const bounds = view.camera.bounds;
     return bounds
       ? {
@@ -336,7 +349,7 @@ export function createTideweftReliefRenderer(
       text: string,
       point: WorldPoint,
       height: number,
-      tone: "harbor" | "destination",
+      tone: "harbor" | "destination" | "wayknot",
       selected = false,
     ): void => {
       const projected = projectReliefPoint(
@@ -364,7 +377,12 @@ export function createTideweftReliefRenderer(
 
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
-      const surface = surfaceHeightAt(view.terrain, settlement.position, cache.mesh.verticalScale, true);
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        settlement.position,
+        cache.mesh.verticalScale,
+        true,
+      );
       const isDestination = Boolean(
         destination && distanceSquared(destination, settlement.position) <= tileSize * tileSize * 0.25,
       );
@@ -383,13 +401,39 @@ export function createTideweftReliefRenderer(
       (settlement) => settlement.discovered !== false
         && distanceSquared(destination, settlement.position) <= tileSize * tileSize * 0.25,
     )) {
-      const surface = surfaceHeightAt(view.terrain, destination, cache.mesh.verticalScale, true);
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        destination,
+        cache.mesh.verticalScale,
+        true,
+      );
       place(
         "journey-destination",
         view.player.destinationLabel ?? "DESTINATION",
         destination,
         surface + tileSize,
         "destination",
+      );
+    }
+    for (const wayknot of view.wayknots) {
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        wayknot.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      const labelLift = wayknot.kind === "wind-knot"
+        ? tileSize * 1.62
+        : wayknot.kind === "tide-anchor"
+          ? tileSize * 0.9
+          : tileSize * 0.58;
+      place(
+        `wayknot-${wayknot.id}`,
+        wayknot.active ? `WAYKNOT · ${wayknot.label}` : wayknot.label,
+        wayknot.position,
+        surface + labelLift,
+        "wayknot",
+        wayknot.active,
       );
     }
     for (const [id, node] of labelNodes) {
@@ -465,6 +509,10 @@ export function createTideweftReliefRenderer(
       case "KeyE":
       case "Enter":
         emit({ type: "interact" });
+        break;
+      case "KeyF":
+        event.preventDefault();
+        emit({ type: "wayknot" });
         break;
       case "KeyP":
         emit({ type: "toggle-pause" });
@@ -546,6 +594,7 @@ export function createTideweftReliefRenderer(
         if (Math.abs(dx) + Math.abs(dy) > 0.5) orbitDrag.moved = true;
         orbit.yaw -= dx * 0.008;
         orbit.pitch = clamp(orbit.pitch + dy * 0.006, MIN_RELIEF_PITCH, MAX_RELIEF_PITCH);
+        updateMovement();
         orbitDrag.lastX = event.clientX;
         orbitDrag.lastY = event.clientY;
         event.preventDefault();
@@ -636,7 +685,7 @@ export function createTideweftReliefRenderer(
 
   const ensureMesh = (view: TideweftView): CachedReliefMesh => {
     const scale = reliefScale(view.terrain);
-    const discoveryKey = discoverySignature(view.terrain);
+    const discoveryKey = discoverySignatureFor(view.terrain);
     const key = [
       typeof view.terrain.revision,
       String(view.terrain.revision),
@@ -651,16 +700,9 @@ export function createTideweftReliefRenderer(
     const maskedTerrain: TerrainGridView = {
       ...view.terrain,
       revision: key,
-      tiles: view.terrain.tiles.map((tile) => {
-        const visibility = unit(tile.discovered, 1);
-        return {
-          ...tile,
-          // Unknown topography remains a flat dark possibility until the Loom
-          // actually charts it. Partial edge discovery eases the relief in.
-          elevation: unit(tile.elevation) * visibility,
-          waterDepth: unit(tile.waterDepth) * visibility,
-        };
-      }),
+      // Unknown topography remains a flat dark possibility until the Loom
+      // actually charts it. Partial edge discovery eases the relief in.
+      tiles: view.terrain.tiles.map(maskReliefTileForDiscovery),
     };
     const mesh = buildTerrainMesh(maskedTerrain, {
       chunkSize: options.chunkSize ?? 16,
@@ -685,7 +727,12 @@ export function createTideweftReliefRenderer(
       150,
       2_200,
     );
-    const targetHeight = surfaceHeightAt(view.terrain, target, mesh.verticalScale, false);
+    const targetHeight = discoveredReliefSurfaceHeightAt(
+      view.terrain,
+      target,
+      mesh.verticalScale,
+      false,
+    );
     if (!orbit.initialized || reducedMotion) {
       orbit.x = target.x;
       orbit.y = target.y;
@@ -771,13 +818,19 @@ export function createTideweftReliefRenderer(
       for (let row = startRow; row <= endRow; row += 1) {
         for (let column = startColumn; column <= endColumn; column += 1) {
           const tile = grid.tiles[row * grid.columns + column];
-          const depth = unit(tile?.waterDepth);
-          if (!tile || depth <= 0.002 || unit(tile.discovered, 1) <= 0.08) continue;
+          const visibility = reliefDiscoveryVisibility(tile);
+          const depth = unit(tile?.waterDepth) * visibility;
+          if (!tile || depth <= 0.002 || visibility <= 0.08) continue;
           const x0 = grid.origin.x + column * tileSize;
           const x1 = x0 + tileSize;
           const z0 = grid.origin.y + row * tileSize;
           const z1 = z0 + tileSize;
-          const surface = (unit(tile.elevation) + depth) * cache.mesh.verticalScale + 0.45;
+          const surface = discoveredReliefSurfaceHeightAt(
+            grid,
+            { x: x0 + tileSize / 2, y: z0 + tileSize / 2 },
+            cache.mesh.verticalScale,
+            true,
+          ) + 0.45;
           p.normal(0, -1, 0);
           p.vertex(x0, -surface, z0);
           p.vertex(x1, -surface, z0);
@@ -805,7 +858,12 @@ export function createTideweftReliefRenderer(
       p.strokeWeight(route.selected ? 3 : 1.45 + unit(route.strength));
       p.beginShape();
       for (const point of route.points) {
-        const height = surfaceHeightAt(view.terrain, point, cache.mesh.verticalScale, true) + 2.2;
+        const height = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          point,
+          cache.mesh.verticalScale,
+          true,
+        ) + 2.2;
         p.vertex(point.x, -height, point.y);
       }
       p.endShape();
@@ -821,7 +879,12 @@ export function createTideweftReliefRenderer(
         for (const path of choir.routePaths) {
           p.beginShape();
           for (const point of path) {
-            const height = surfaceHeightAt(view.terrain, point, cache.mesh.verticalScale, true) + 4;
+            const height = discoveredReliefSurfaceHeightAt(
+              view.terrain,
+              point,
+              cache.mesh.verticalScale,
+              true,
+            ) + 4;
             p.vertex(point.x, -height, point.y);
           }
           p.endShape();
@@ -850,10 +913,282 @@ export function createTideweftReliefRenderer(
           x: point.x + Math.cos(angle) * radius,
           y: point.y + Math.sin(angle) * radius,
         };
-        const height = surfaceHeightAt(view.terrain, sample, cache.mesh.verticalScale, true) + 3;
+        const height = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          sample,
+          cache.mesh.verticalScale,
+          true,
+        ) + 3;
         p.vertex(sample.x, -height, sample.y);
       }
       p.endShape();
+    };
+
+    const wayknotColor = (kind: WayknotKind): string => {
+      switch (kind) {
+        case "reed-mat": return RELIEF_PALETTE.amber;
+        case "tide-anchor": return RELIEF_PALETTE.water;
+        case "wind-knot": return RELIEF_PALETTE.violet;
+      }
+    };
+
+    const drawWaychords = (view: TideweftView, cache: CachedReliefMesh): void => {
+      const tileSize = view.terrain.tileSize;
+      const halfWidth = Math.max(1.4, tileSize * 0.075);
+      for (const chord of buildWaychords(view.wayknots)) {
+        const segmentCount = clampInteger(
+          Math.ceil(chord.length / Math.max(8, tileSize * 0.5)),
+          2,
+          32,
+        );
+        const drawRail = (offset: number, color: p5.Color, weight: number): void => {
+          p.noFill();
+          p.stroke(color);
+          p.strokeWeight(weight);
+          p.beginShape();
+          for (let index = 0; index <= segmentCount; index += 1) {
+            const amount = index / segmentCount;
+            const point = {
+              x: chord.from.x + (chord.to.x - chord.from.x) * amount + chord.normal.x * offset,
+              y: chord.from.y + (chord.to.y - chord.from.y) * amount + chord.normal.y * offset,
+            };
+            const height = discoveredReliefSurfaceHeightAt(
+              view.terrain,
+              point,
+              cache.mesh.verticalScale,
+              true,
+            ) + 3.2;
+            p.vertex(point.x, -height, point.y);
+          }
+          p.endShape();
+        };
+
+        drawRail(halfWidth, withAlpha(RELIEF_PALETTE.ink, 225), 4.8);
+        drawRail(-halfWidth, withAlpha(RELIEF_PALETTE.ink, 225), 4.8);
+        drawRail(halfWidth, withAlpha(RELIEF_PALETTE.foam, 195), 1.25);
+        drawRail(-halfWidth, withAlpha(RELIEF_PALETTE.foam, 195), 1.25);
+
+        p.stroke(withAlpha(RELIEF_PALETTE.coral, 220));
+        p.strokeWeight(1.5);
+        const bindings = buildWaychordBindings(
+          chord,
+          Math.max(10, tileSize * 0.72),
+          halfWidth,
+          18,
+        );
+        for (const binding of bindings) {
+          const leftHeight = discoveredReliefSurfaceHeightAt(
+            view.terrain,
+            binding.left,
+            cache.mesh.verticalScale,
+            true,
+          ) + 3.4;
+          const rightHeight = discoveredReliefSurfaceHeightAt(
+            view.terrain,
+            binding.right,
+            cache.mesh.verticalScale,
+            true,
+          ) + 3.4;
+          p.line(
+            binding.left.x,
+            -leftHeight,
+            binding.left.y,
+            binding.right.x,
+            -rightHeight,
+            binding.right.y,
+          );
+        }
+
+        const midpointHeight = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          chord.midpoint,
+          cache.mesh.verticalScale,
+          true,
+        );
+        p.push();
+        p.noStroke();
+        p.translate(chord.midpoint.x, -midpointHeight - 4, chord.midpoint.y);
+        p.rotateY(Math.atan2(chord.to.y - chord.from.y, chord.to.x - chord.from.x) + Math.PI / 4);
+        p.ambientMaterial(RELIEF_PALETTE.foam);
+        p.box(tileSize * 0.18, tileSize * 0.1, tileSize * 0.18);
+        p.pop();
+      }
+    };
+
+    const drawReedMat = (
+      wayknot: WayknotView,
+      surface: number,
+      size: number,
+      orientation: number,
+    ): void => {
+      p.push();
+      p.translate(wayknot.position.x, -surface - size * 0.035, wayknot.position.y);
+      p.rotateY(orientation);
+      p.noStroke();
+      for (let slat = -2; slat <= 2; slat += 1) {
+        p.push();
+        p.translate(0, slat % 2 === 0 ? -size * 0.018 : 0, slat * size * 0.145);
+        if (wayknot.active) p.emissiveMaterial(RELIEF_PALETTE.amber);
+        else p.ambientMaterial(RELIEF_PALETTE.amber);
+        p.box(size * 0.92, size * 0.07, size * 0.105);
+        p.pop();
+      }
+      for (const cross of [-0.27, 0, 0.27]) {
+        p.push();
+        p.translate(cross * size, -size * 0.045, 0);
+        p.ambientMaterial(RELIEF_PALETTE.foam);
+        p.box(size * 0.075, size * 0.055, size * 0.72);
+        p.pop();
+      }
+      p.pop();
+    };
+
+    const drawTideAnchor = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      wayknot: WayknotView,
+      surface: number,
+      size: number,
+      orientation: number,
+    ): void => {
+      const ground = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        wayknot.position,
+        cache.mesh.verticalScale,
+        false,
+      );
+      const ropeTop = surface + size * 0.03;
+      const ropeBottom = ground + size * 0.08;
+      p.stroke(withAlpha(RELIEF_PALETTE.foam, wayknot.active ? 220 : 120));
+      p.strokeWeight(1.45);
+      p.line(
+        wayknot.position.x,
+        -ropeTop,
+        wayknot.position.y,
+        wayknot.position.x,
+        -ropeBottom,
+        wayknot.position.y,
+      );
+
+      p.push();
+      p.noStroke();
+      p.translate(wayknot.position.x, -surface - size * 0.14, wayknot.position.y);
+      p.rotateY(orientation);
+      if (wayknot.active) p.emissiveMaterial(RELIEF_PALETTE.water);
+      else p.ambientMaterial(RELIEF_PALETTE.shallows);
+      p.sphere(size * 0.2, 7, 4);
+      p.ambientMaterial(RELIEF_PALETTE.foam);
+      p.box(size * 0.48, size * 0.075, size * 0.11);
+      p.pop();
+
+      p.push();
+      p.noStroke();
+      p.translate(wayknot.position.x, -ground - size * 0.22, wayknot.position.y);
+      p.rotateY(orientation);
+      p.ambientMaterial(wayknot.active ? RELIEF_PALETTE.foam : RELIEF_PALETTE.built);
+      p.box(size * 0.08, size * 0.42, size * 0.08);
+      p.push();
+      p.translate(0, -size * 0.1, 0);
+      p.box(size * 0.45, size * 0.065, size * 0.08);
+      p.pop();
+      for (const direction of [-1, 1]) {
+        p.push();
+        p.translate(direction * size * 0.18, size * 0.15, 0);
+        p.rotateZ(direction * -0.66);
+        p.box(size * 0.3, size * 0.07, size * 0.09);
+        p.pop();
+      }
+      p.pop();
+    };
+
+    const drawWindKnot = (
+      wayknot: WayknotView,
+      surface: number,
+      size: number,
+      orientation: number,
+      now: number,
+    ): void => {
+      const mastHeight = size * 1.18;
+      p.push();
+      p.noStroke();
+      p.translate(
+        wayknot.position.x,
+        -surface - mastHeight / 2,
+        wayknot.position.y,
+      );
+      p.rotateY(orientation);
+      p.ambientMaterial(wayknot.active ? RELIEF_PALETTE.foam : RELIEF_PALETTE.built);
+      p.box(size * 0.075, mastHeight, size * 0.075);
+      p.pop();
+
+      const flutter = reducedMotion
+        ? 0
+        : Math.sin(now * 0.004 + orientation * 3) * size * 0.12;
+      p.push();
+      p.translate(
+        wayknot.position.x,
+        -surface - mastHeight * 0.93,
+        wayknot.position.y,
+      );
+      p.rotateY(orientation);
+      p.noStroke();
+      if (wayknot.active) p.emissiveMaterial(RELIEF_PALETTE.violet);
+      else p.ambientMaterial(RELIEF_PALETTE.violet);
+      p.beginShape(p.TRIANGLES);
+      p.vertex(0, 0, 0);
+      p.vertex(size * 0.72, size * 0.18, flutter);
+      p.vertex(size * 0.34, size * 0.42, -flutter * 0.35);
+      p.vertex(0, 0, 0);
+      p.vertex(size * 0.34, size * 0.42, -flutter * 0.35);
+      p.vertex(0, size * 0.3, 0);
+      p.endShape();
+      if (wayknot.active) p.emissiveMaterial(RELIEF_PALETTE.coral);
+      else p.ambientMaterial(RELIEF_PALETTE.coral);
+      p.beginShape(p.TRIANGLES);
+      p.vertex(size * 0.34, size * 0.42, -flutter * 0.35);
+      p.vertex(size * 0.67, size * 0.66, flutter);
+      p.vertex(size * 0.24, size * 0.54, 0);
+      p.endShape();
+      p.pop();
+    };
+
+    const drawWayknots = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      now: number,
+    ): void => {
+      drawWaychords(view, cache);
+      const size = view.terrain.tileSize;
+      for (const wayknot of view.wayknots) {
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          wayknot.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        if (wayknot.active && wayknot.influenceRadius > 0) {
+          drawGroundRing(
+            view,
+            cache,
+            wayknot.position,
+            wayknot.influenceRadius,
+            wayknotColor(wayknot.kind),
+            72,
+          );
+        }
+        const orientation = reliefStringHash(wayknot.id) / 4_294_967_295 * Math.PI * 2;
+        switch (wayknot.kind) {
+          case "reed-mat":
+            drawReedMat(wayknot, surface, size, orientation);
+            break;
+          case "tide-anchor":
+            drawTideAnchor(view, cache, wayknot, surface, size, orientation);
+            break;
+          case "wind-knot":
+            drawWindKnot(wayknot, surface, size, orientation, now);
+            break;
+        }
+      }
     };
 
     const settlementColor = (status: SettlementStatus): string => {
@@ -877,7 +1212,12 @@ export function createTideweftReliefRenderer(
     ): void => {
       if (settlement.discovered === false) return;
       const tileSize = view.terrain.tileSize;
-      const surface = surfaceHeightAt(view.terrain, settlement.position, cache.mesh.verticalScale, true);
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        settlement.position,
+        cache.mesh.verticalScale,
+        true,
+      );
       const towerHeight = tileSize * clamp(0.52 + Math.log2(Math.max(1, settlement.population)) * 0.055, 0.56, 1.18);
       const color = settlementColor(settlement.status);
       drawGroundRing(
@@ -909,7 +1249,12 @@ export function createTideweftReliefRenderer(
     const drawPorters = (view: TideweftView, cache: CachedReliefMesh): void => {
       const size = view.terrain.tileSize;
       for (const porter of view.porters) {
-        const surface = surfaceHeightAt(view.terrain, porter.position, cache.mesh.verticalScale, true);
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          porter.position,
+          cache.mesh.verticalScale,
+          true,
+        );
         p.push();
         p.noStroke();
         p.translate(porter.position.x, -surface - size * 0.23, porter.position.y);
@@ -939,7 +1284,12 @@ export function createTideweftReliefRenderer(
     const drawPlayer = (view: TideweftView, cache: CachedReliefMesh): void => {
       const player = view.player;
       const size = view.terrain.tileSize;
-      const surface = surfaceHeightAt(view.terrain, player.position, cache.mesh.verticalScale, true);
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        player.position,
+        cache.mesh.verticalScale,
+        true,
+      );
       const playerColor = player.mode === "swept" ? RELIEF_PALETTE.water : RELIEF_PALETTE.tide;
       drawDestination(view, cache);
       drawGroundRing(
@@ -955,7 +1305,12 @@ export function createTideweftReliefRenderer(
         x: player.position.x + Math.cos(player.facing) * size * 0.7,
         y: player.position.y + Math.sin(player.facing) * size * 0.7,
       };
-      const facingSurface = surfaceHeightAt(view.terrain, facing, cache.mesh.verticalScale, true);
+      const facingSurface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        facing,
+        cache.mesh.verticalScale,
+        true,
+      );
       p.stroke(withAlpha(RELIEF_PALETTE.foam, 225));
       p.strokeWeight(2.2);
       p.line(
@@ -981,7 +1336,12 @@ export function createTideweftReliefRenderer(
           + Math.cos(player.facing + Math.PI / 2) * side;
         const behindY = player.position.y - Math.sin(player.facing) * size * 0.38
           + Math.sin(player.facing + Math.PI / 2) * side;
-        const cargoSurface = surfaceHeightAt(view.terrain, { x: behindX, y: behindY }, cache.mesh.verticalScale, true);
+        const cargoSurface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          { x: behindX, y: behindY },
+          cache.mesh.verticalScale,
+          true,
+        );
         p.push();
         p.noStroke();
         p.translate(behindX, -cargoSurface - size * 0.14, behindY);
@@ -1018,7 +1378,12 @@ export function createTideweftReliefRenderer(
             x: grid.origin.x + (column + 0.5) * tileSize,
             y: grid.origin.y + (row + 0.5) * tileSize,
           };
-          const surface = surfaceHeightAt(grid, point, cache.mesh.verticalScale, true);
+          const surface = discoveredReliefSurfaceHeightAt(
+            grid,
+            point,
+            cache.mesh.verticalScale,
+            true,
+          );
           const needle = tileSize * style.needleScale;
           p.stroke(withAlpha(soundingColor(style.band), 95 + known * 150));
           p.line(point.x, -surface - 1, point.y, point.x, -surface - needle, point.y);
@@ -1089,6 +1454,7 @@ export function createTideweftReliefRenderer(
       drawWater(view, cache);
       drawRoutes(view, cache);
       drawSoundings(view, cache);
+      drawWayknots(view, cache, now);
       for (const settlement of view.settlements) drawSettlement(view, cache, settlement);
       drawPorters(view, cache);
       drawPlayer(view, cache);
@@ -1106,11 +1472,11 @@ export function createTideweftReliefRenderer(
         canvasElement.setAttribute("role", "application");
         canvasElement.setAttribute(
           "aria-label",
-          "TIDEWEFT relief view. Travel with WASD or arrows. Space sounds the water, E interacts, Shift braces, P pauses, wheel zooms, and right-drag orbits the estuary.",
+          "TIDEWEFT relief view. Travel with WASD or arrows. Space sounds the water, E interacts, F ties or tends a Wayknot, Shift braces, P pauses, wheel zooms, and right-drag orbits the estuary.",
         );
         canvasElement.setAttribute(
           "aria-keyshortcuts",
-          "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D Shift Space E P Escape",
+          "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D Shift Space E F P Escape",
         );
         labelLayer = document.createElement("div");
         labelLayer.className = "relief-label-layer";
@@ -1196,11 +1562,13 @@ export function createTideweftReliefRenderer(
     setOrbit: (yaw, pitch) => {
       orbit.yaw = Number.isFinite(yaw) ? yaw : DEFAULT_YAW;
       orbit.pitch = clamp(Number.isFinite(pitch) ? pitch : DEFAULT_PITCH, MIN_RELIEF_PITCH, MAX_RELIEF_PITCH);
+      updateMovement();
     },
     resetOrbit: () => {
       orbit.yaw = DEFAULT_YAW;
       orbit.pitch = DEFAULT_PITCH;
       orbit.manualZoom = 1;
+      updateMovement();
     },
     destroy,
   };
@@ -1242,29 +1610,6 @@ function detectWebGLSupport(): boolean {
   }
 }
 
-function surfaceHeightAt(
-  grid: TerrainGridView,
-  point: WorldPoint,
-  verticalScale: number,
-  includeWater: boolean,
-): number {
-  if (grid.columns < 1 || grid.rows < 1 || grid.tileSize <= 0) return 0;
-  const column = clampInteger(
-    Math.floor((point.x - grid.origin.x) / grid.tileSize),
-    0,
-    grid.columns - 1,
-  );
-  const row = clampInteger(
-    Math.floor((point.y - grid.origin.y) / grid.tileSize),
-    0,
-    grid.rows - 1,
-  );
-  const tile = grid.tiles[row * grid.columns + column];
-  if (!tile) return 0;
-  return (unit(tile.elevation) + (includeWater ? unit(tile.waterDepth) : 0))
-    * Math.max(0, verticalScale);
-}
-
 function distanceSquared(a: WorldPoint, b: WorldPoint): number {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
@@ -1291,16 +1636,13 @@ function routeDistanceSquared(point: WorldPoint, route: RouteView): number {
   return nearest;
 }
 
-function discoverySignature(grid: TerrainGridView): string {
+function reliefStringHash(value: string): number {
   let hash = 2_166_136_261;
-  let discovered = 0;
-  for (const tile of grid.tiles) {
-    const bucket = Math.round(unit(tile.discovered, 1) * 255);
-    discovered += bucket > 0 ? 1 : 0;
-    hash ^= bucket;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16_777_619);
   }
-  return `${discovered}:${hash >>> 0}`;
+  return hash >>> 0;
 }
 
 function unit(value: number | undefined, fallback = 0): number {

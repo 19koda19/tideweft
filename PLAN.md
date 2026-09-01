@@ -199,6 +199,28 @@ Local Alpha 0.2 evidence captured 2026-09-01:
 - A 2,880 × 1,800 screenshot records the wedge-free 3D discovery island, loaded cargo HUD, explicit delivery objective, and scrollable promise card.
 - GitHub repeated CI and Pages verification successfully on commit `d9b8cea`; tag `v0.2.0-alpha.1` and the public HTTPS build are live at https://19koda19.github.io/tideweft/.
 
+## Phase 9 — Wayknots
+
+Status: **locally verified post-alpha preview; Pages publication pending**
+
+Purpose: let terrain knowledge become small, reclaimable acts of care in the traveled world rather than another shop, currency, or permanent build menu.
+
+Implemented in the current source checkpoint:
+
+1. **Fixed reusable kit:** the player ferrier begins with six stable pieces—two Reed mats, two Tide anchors, and two Wind knots. F binds the terrain-appropriate piece or reclaims the exact numbered piece underfoot; no cargo, random drop, decay clock, or new currency is involved.
+2. **Authoritative field effects:** mats reduce marsh/mudflat drag and stamina cost, anchors reduce nearby water effort and speed current recovery, and wind-knots reduce gust-driven stability loss on exposed scrub/ridge. Manual movement, the HUD, and pointer A* read the same deterministic Manhattan fields.
+3. **Waychords:** unlike influences can overlap at terrain boundaries. Their bounded strongest-per-hazard effects remain distinct, while the overlap gives a small Loom-recharge harmony and a patterned connection in both presentations.
+4. **Physical dual-view presence:** Chart 2D draws different non-color motifs; Relief 3D models woven slats, a buoyed anchor/line, and a ribbon mast on the discovery-masked surface.
+5. **Relief field-feel repair:** movement rotates with the orbit camera, hidden authoritative height cannot leak through picking or label placement, and discovery signatures are memoized by immutable projected tile arrays.
+6. **Save resilience:** legacy saves receive the carried kit, malformed placements repair conservatively, runtime IndexedDB errors stick to localStorage, cross-store reads select the newest available record, and saves requested during an in-flight write coalesce to the newest snapshot.
+
+Local checkpoint evidence captured 2026-09-01:
+
+- TypeScript, 23 Vitest files / 168 checks, the production build, and the nested `/tideweft/` Pages smoke all pass; the final artifact references `index-DFAeV3cN.js` and `index-BVBXIgMF.css`.
+- The packaged Electron 44 smoke walks one tile from Bellwake, binds Reed mat #1 through the real field-action button, and proves the projection, active field, `1 / 6 deployed` HUD, and reclaim control agree in both view modes.
+- A fresh 2,880 × 1,800 Relief screenshot visibly records the woven 3D mat, its world label, active description, explicit cargo destination, and still-scrollable Promises pane.
+- The source scan found no private-key headers, credential tokens, credential assignments, or credential-bearing URLs; Pages publication remains the only open checkpoint gate.
+
 ## Reward-loop acceptance audit
 
 1. **Immediate legibility — implemented:** commands have visual/audio/text responses and rejected state changes explain why.

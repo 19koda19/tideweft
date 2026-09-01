@@ -19,10 +19,19 @@ import {
   settlementAtPlayer,
   waterDepthBand,
   waterEffortPerStep,
+  wayknotContextAt,
+  wayknotEffectsAt,
   type PlayerState,
 } from "./player";
 import { sessionOutcomeDelta, type GameSessionState } from "./sessionTypes";
 import { tutorialObjective } from "./tutorial";
+import {
+  WAYKNOT_LABELS,
+  contextualWayknotKind,
+  deployedWayknotCount,
+  validateWayknotPlacement,
+  wayknotAtTile,
+} from "./wayknots";
 
 export function projectUIView(
   world: WorldView,
@@ -52,6 +61,7 @@ export function projectUIView(
   const minutes = minute % 60;
   const tidePhase = tidePhaseName(world.tide.phase);
   const worldName = `The ${titleCase(world.seedText)} Estuary`;
+  const wayknotControl = projectWayknotControl(world, player);
 
   return {
     revision: [
@@ -61,6 +71,7 @@ export function projectUIView(
       player.stamina,
       player.stability,
       player.scanCharge,
+      player.wayknots.wayknots.map((wayknot) => `${wayknot.id}@${wayknot.tileIndex ?? "pack"}`).join(","),
       player.cargo[0]?.condition ?? FIXED_POINT,
       player.pace,
       session.selectedSettlementId ?? "none",
@@ -137,7 +148,7 @@ export function projectUIView(
             durationLabel: formatDuration(session.sessionPlayMilliseconds),
             distanceLabel: `${(session.sessionDistanceUnits / 1_000).toFixed(1)} tiles crossed`,
             deliveries: session.sessionDeliveries,
-            strandLabel: `${session.sessionStrandsWoven} strands tended · ${session.sessionChoirsAwakened} choirs awakened · ${session.sessionReportsDelivered} reports carried · ${Math.max(0, discoveredTileCount(player) - session.sessionDiscoveredAtStart)} new terrain marks charted`,
+            strandLabel: `${session.sessionStrandsWoven} strands tended · ${session.sessionChoirsAwakened} choirs awakened · ${deployedWayknotCount(player.wayknots)} wayknots bound · ${session.sessionReportsDelivered} reports carried · ${Math.max(0, discoveredTileCount(player) - session.sessionDiscoveredAtStart)} new terrain marks charted`,
             summary: quietSummary(session),
             changes: quietHourChanges(session, world),
             quote: "A useful path is a promise the land can keep.",
@@ -176,6 +187,13 @@ export function projectUIView(
           : localOffers.length > 1
             ? `${localOffers.length} local cargo promises are waiting; open Promises to choose one.`
             : "Open this harbor's people, stores, routes, and reports.",
+      canWayknot: !session.paused
+        && !session.titleVisible
+        && !session.quietHourVisible
+        && player.mode !== "swept"
+        && wayknotControl.available,
+      wayknotLabel: wayknotControl.label,
+      wayknotHint: wayknotControl.hint,
       canChangePace: !session.paused && player.mode !== "swept",
       canEndSession: !session.titleVisible,
     },
@@ -189,7 +207,11 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
   const depth = tile?.waterDepth ?? 0;
   const depthKnown = (player.depthSoundings[index] ?? 0) > 0;
   const band = waterDepthBand(depth);
-  const effort = waterEffortPerStep(player, depth);
+  const effects = wayknotEffectsAt(player, world, index);
+  const effort = waterEffortPerStep(player, depth, effects.staminaCostPermille);
+  const activeWayknotLabels = [...new Set(
+    effects.influences.map((influence) => WAYKNOT_LABELS[influence.kind]),
+  )];
   const sweptProgress = sweepProgress(player);
   const terrainLabel = settlement
     ? `${settlement.name} harbor decking`
@@ -212,15 +234,23 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
           : "Severe water drain";
   const hint = player.mode === "swept"
     ? `Current has the helm · ${Math.round(sweptProgress * 100)}% toward a safe bank. Pace, steering, and sounding return ashore; cargo remains with you.`
-    : depth > 20_000 && !depthKnown
-      ? "Use the sounding line (Space) from shore to reveal nearby depth before committing stamina."
-      : depth > 20_000
-        ? `${titleCase(band)} water costs ${effort.toLocaleString()} extra stamina per movement step${player.tools.includes("tide-sail") ? "; the Tide sail is reducing it" : ""}. Empty stamina in deep water means a recoverable sweep.`
-        : tile?.terrain === "marsh" || tile?.terrain === "tidal-flat"
-          ? player.tools.includes("marsh-stilts")
-            ? "Marsh stilts are reducing drag and ground effort here."
-            : "A completed crossing can entrust you with Marsh stilts for soft terrain."
-          : "Complete civic projects, then visit their harbor to inherit practical field tools.";
+    : activeWayknotLabels.length >= 2
+      ? `WAYCHORD · ${activeWayknotLabels.join(" + ")} overlap here. Their terrain effects remain distinct, while the harmony recharges the Loom faster.`
+      : activeWayknotLabels[0] === WAYKNOT_LABELS["reed-mat"]
+        ? "A reusable Reed mat is reducing soft-ground drag and stamina cost here. Stand on its woven mark and press F to reclaim it."
+        : activeWayknotLabels[0] === WAYKNOT_LABELS["tide-anchor"]
+          ? "A nearby Tide anchor is reducing water stamina cost and weakening any current sweep. Stand on its buoy and press F to reclaim it."
+          : activeWayknotLabels[0] === WAYKNOT_LABELS["wind-knot"]
+            ? "A nearby Wind knot is softening gust-driven stability loss. Stand at its mast and press F to reclaim it."
+            : depth > 20_000 && !depthKnown
+              ? "Use the sounding line (Space) from shore to reveal nearby depth before committing stamina."
+              : depth > 20_000
+                ? `${titleCase(band)} water costs ${effort.toLocaleString()} extra stamina per movement step${player.tools.includes("tide-sail") ? "; the Tide sail is reducing it" : ""}. Empty stamina in deep water means a recoverable sweep.`
+                : tile?.terrain === "marsh" || tile?.terrain === "tidal-flat"
+                  ? player.tools.includes("marsh-stilts")
+                    ? "Marsh stilts are reducing drag and ground effort here."
+                    : "A completed crossing can entrust you with Marsh stilts for soft terrain."
+                  : "Complete civic projects, then visit their harbor to inherit practical field tools.";
   return {
     terrainLabel,
     depthLabel,
@@ -228,8 +258,50 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
     effortLabel,
     hint,
     toolLabels: player.tools.map((tool) => FIELD_TOOL_LABELS[tool]),
+    deployedWayknots: deployedWayknotCount(player.wayknots),
+    wayknotCapacity: player.wayknots.capacity,
+    activeWayknotLabels,
     swept: player.mode === "swept",
     sweptProgress,
+  };
+}
+
+function projectWayknotControl(world: WorldView, player: PlayerState) {
+  const tileIndex = playerTileIndex(player);
+  const existing = wayknotAtTile(player.wayknots, tileIndex);
+  if (existing) {
+    const label = WAYKNOT_LABELS[existing.kind];
+    return {
+      available: true,
+      label: `Reclaim ${label}`,
+      hint: `${label} #${existing.id} is directly underfoot. Press F to return this reusable piece to your pack.`,
+    };
+  }
+  const context = wayknotContextAt(world, tileIndex);
+  const kind = context ? contextualWayknotKind(context) : null;
+  if (!context || !kind) {
+    return {
+      available: false,
+      label: "Bind Wayknot",
+      hint: "Find marsh or mudflat for a Reed mat, waist-deep water for a Tide anchor, or exposed scrub/ridge for a Wind knot.",
+    };
+  }
+  const label = WAYKNOT_LABELS[kind];
+  const reason = validateWayknotPlacement(player.wayknots, kind, context);
+  if (reason !== "available") {
+    return {
+      available: false,
+      label: reason === "capacity-reached" ? `No ${label} free` : "Bind Wayknot",
+      hint: reason === "capacity-reached"
+        ? `Both reusable ${label.toLocaleLowerCase()} pieces are deployed. Stand on one and press F to reclaim it.`
+        : "Harbor decking and occupied tiles cannot hold a field weave.",
+    };
+  }
+  const verb = kind === "reed-mat" ? "Lay" : kind === "tide-anchor" ? "Set" : "Tie";
+  return {
+    available: true,
+    label: `${verb} ${label}`,
+    hint: `${label} fits this terrain. Press F to bind one reusable piece; stand on it and press F again to reclaim it.`,
   };
 }
 

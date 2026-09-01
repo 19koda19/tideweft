@@ -5,6 +5,16 @@ import {
   type ProjectKind,
   type WorldView,
 } from "../sim/types";
+import {
+  WAYKNOT_PERMILLE,
+  applyWayknotPermille,
+  createWayknotState,
+  isWindExposedTile,
+  queryWayknotEffects,
+  type WayknotEffects,
+  type WayknotState,
+  type WayknotTileContext,
+} from "./wayknots";
 
 export const TILE_UNITS = 1_000;
 
@@ -68,6 +78,8 @@ export interface PlayerState {
   pace: TravelPace;
   mode: PlayerMode;
   tools: FieldToolKind[];
+  /** Reusable, reclaimable terrain aids carried or bound into the estuary. */
+  wayknots: WayknotState;
   sweepTicksRemaining: number;
   sweepTotalTicks: number;
   /** Adjacent tiles still to be crossed by an involuntary current drift. */
@@ -150,6 +162,7 @@ export function createPlayer(world: WorldView, startSettlementId?: number): Play
     pace: "steady",
     mode: "foot",
     tools: ["sounding-line"],
+    wayknots: createWayknotState(),
     sweepTicksRemaining: 0,
     sweepTotalTicks: 0,
     sweepPath: [],
@@ -187,6 +200,14 @@ export function stepPlayer(
   const priorTileIndex = playerTileIndex(player);
   const priorTile = world.terrain.tiles[priorTileIndex];
   if (!priorTile) throw new Error("Player is outside the terrain grid.");
+  const priorWayknotEffects = wayknotEffectsAt(player, world, priorTileIndex);
+  const activeWayknotKinds = new Set(priorWayknotEffects.influences.map((influence) => influence.kind));
+  if (activeWayknotKinds.size >= 2) {
+    // Different field weaves resonate at terrain boundaries. The bonus is
+    // deliberately small: a Waychord rewards thoughtful placement without
+    // turning the fixed kit into another progression currency.
+    player.scanCharge = Math.min(FIXED_POINT, player.scanCharge + 600);
+  }
 
   // The adjacent bank path, not an estimate, is authoritative. A sweep may
   // begin between tile centers and need one more interpolation step than its
@@ -212,7 +233,11 @@ export function stepPlayer(
     const hasStilts = hasFieldTool(player, "marsh-stilts")
       && (priorTile.terrain === "marsh" || priorTile.terrain === "tidal-flat");
     const hasSail = hasFieldTool(player, "tide-sail") && waterDepth > 180_000;
-    const terrainDrag = Math.min(1_050, TERRAIN_DRAG[priorTile.terrain] + (hasStilts ? 235 : 0));
+    const wayknotFooting = WAYKNOT_PERMILLE - priorWayknotEffects.movementCostPermille;
+    const terrainDrag = Math.min(
+      1_050,
+      TERRAIN_DRAG[priorTile.terrain] + (hasStilts ? 235 : 0) + wayknotFooting,
+    );
     const waterFit = player.mode === "skiff"
       ? Math.max(480, Math.min(1_120, 760 + Math.floor(waterDepth / 4_000) + (hasSail ? 160 : 0)))
       : Math.max(430, 1_000 - Math.floor(waterDepth / 2_500));
@@ -244,15 +269,22 @@ export function stepPlayer(
   if (velocityX || velocityY) {
     player.facingMilliRadians = approximateAngleMilliRadians(velocityX, velocityY);
     const paceDrain = player.pace === "swift" ? 4_300 : 1_550;
-    const terrainDrain = Math.max(
+    const rawTerrainDrain = Math.max(
       0,
       1_000 - TERRAIN_DRAG[priorTile.terrain]
         - (hasFieldTool(player, "marsh-stilts")
           && (priorTile.terrain === "marsh" || priorTile.terrain === "tidal-flat") ? 210 : 0),
     );
+    const terrainDrain = applyWayknotPermille(
+      rawTerrainDrain,
+      priorWayknotEffects.staminaCostPermille,
+    );
+    const destinationTileIndex = tileIndexAt(nextX, nextY, world.terrain.width, world.terrain.height);
+    const destinationWayknotEffects = wayknotEffectsAt(player, world, destinationTileIndex);
     const waterDrain = waterEffortPerStep(
       player,
       Math.max(waterDepth, destinationTile?.waterDepth ?? 0),
+      destinationWayknotEffects.staminaCostPermille,
     );
     player.stamina = Math.max(
       0,
@@ -271,7 +303,11 @@ export function stepPlayer(
   const stabilityBefore = player.stability;
   const turnStress = Math.abs(velocityX - priorVelocityX) + Math.abs(velocityY - priorVelocityY);
   const rawWeatherStress = Math.floor((world.weather.intensity * (Math.abs(world.weather.windX) + Math.abs(world.weather.windY))) / 2_000_000);
-  const weatherStress = hasFieldTool(player, "storm-kite") ? Math.floor(rawWeatherStress * 0.45) : rawWeatherStress;
+  const toolWeatherStress = hasFieldTool(player, "storm-kite") ? Math.floor(rawWeatherStress * 0.45) : rawWeatherStress;
+  const weatherStress = applyWayknotPermille(
+    toolWeatherStress,
+    priorWayknotEffects.stabilityLossPermille,
+  );
   const surfaceStress = Math.floor((priorTile.roughness * (velocityX || velocityY ? 1 : 0)) / 290);
   const rawWaterStress = velocityX || velocityY
     ? Math.floor(Math.max(0, waterDepth - 35_000) / 130)
@@ -307,7 +343,11 @@ export function stepPlayer(
     if (turnStress > 40) causes.push("sharp turning");
     if (causes.length === 0) causes.push("unbraced travel");
     player.stabilityTrend = "falling";
-    player.stabilityHint = `Falling: ${causes.join(" + ")} · hold Shift to brace`;
+    const windKnotHelp = rawWeatherStress > weatherStress
+      && priorWayknotEffects.stabilityLossPermille < WAYKNOT_PERMILLE
+      ? " · nearby Wind knot is softening the gusts"
+      : "";
+    player.stabilityHint = `Falling: ${causes.join(" + ")} · hold Shift to brace${windKnotHelp}`;
   } else {
     player.stabilityTrend = "steady";
     player.stabilityHint = "Stable · hold Shift while moving to brace";
@@ -482,13 +522,65 @@ export function waterDepthBand(depth: number): WaterDepthBand {
   return "channel";
 }
 
-/** Extra stamina spent each 100ms movement step; monotone in sounded depth. */
-export function waterEffortPerStep(player: PlayerState, depth: number): number {
+/**
+ * Extra stamina spent each 100ms movement step; monotone in sounded depth.
+ * The optional multiplier lets live movement, the HUD, and pointer routing use
+ * the same nearby Tide-anchor influence without coupling this pure curve to a
+ * particular world projection.
+ */
+export function waterEffortPerStep(
+  player: PlayerState,
+  depth: number,
+  wayknotStaminaPermille = WAYKNOT_PERMILLE,
+): number {
   if (depth <= 40_000) return 0;
   const raw = Math.min(3_000, Math.floor((depth - 40_000) / 160));
-  return hasFieldTool(player, "tide-sail") && depth > 180_000
+  const toolAdjusted = hasFieldTool(player, "tide-sail") && depth > 180_000
     ? Math.floor(raw * 0.48)
     : raw;
+  return applyWayknotPermille(toolAdjusted, wayknotStaminaPermille);
+}
+
+/** Authoritative terrain context shared by placement, movement, and routing. */
+export function wayknotContextAt(
+  world: WorldView,
+  tileIndex: number,
+): WayknotTileContext | undefined {
+  const tile = world.terrain.tiles[tileIndex];
+  if (!tile) return undefined;
+  return {
+    tileIndex,
+    terrain: tile.terrain,
+    waterDepth: tile.waterDepth,
+    windExposed: isWindExposedTile(tile),
+    occupied: world.settlements.some((settlement) => settlement.tileIndex === tileIndex),
+  };
+}
+
+/** Exact local influence used by both fixed-step travel and A* path costs. */
+export function wayknotEffectsAt(
+  player: PlayerState,
+  world: WorldView,
+  tileIndex: number,
+): WayknotEffects {
+  const context = wayknotContextAt(world, tileIndex);
+  if (!context) {
+    return queryWayknotEffects(
+      player.wayknots,
+      {
+        tileIndex: -1,
+        terrain: "meadow",
+        waterDepth: 0,
+        windExposed: false,
+      },
+      { width: world.terrain.width, height: world.terrain.height },
+    );
+  }
+  return queryWayknotEffects(
+    player.wayknots,
+    context,
+    { width: world.terrain.width, height: world.terrain.height },
+  );
 }
 
 export function cargoWeight(player: PlayerState): number {
@@ -585,7 +677,7 @@ function stepSweptPlayer(
     const dx = targetX - player.x;
     const dy = targetY - player.y;
     const distance = Math.max(1, Math.hypot(dx, dy));
-    const speed = Math.min(distance, sweepStepSpeed(player));
+    const speed = Math.min(distance, sweepStepSpeed(player, world));
     player.velocityX = Math.round((dx / distance) * speed);
     player.velocityY = Math.round((dy / distance) * speed);
     player.x = clamp(
@@ -702,14 +794,16 @@ function stepSweptPlayer(
   };
 }
 
-function sweepStepSpeed(player: PlayerState): number {
+function sweepStepSpeed(player: PlayerState, world: WorldView): number {
   const infrastructure = player.sweepSupport === "ferry" ? 80 : 0;
   const kite = hasFieldTool(player, "storm-kite") ? 55 : 0;
-  return 180 + infrastructure + kite;
+  const currentEffects = wayknotEffectsAt(player, world, playerTileIndex(player));
+  const anchorPull = Math.floor((WAYKNOT_PERMILLE - currentEffects.sweepRiskPermille) * 0.3);
+  return 180 + infrastructure + kite + anchorPull;
 }
 
 function estimateSweepTicks(player: PlayerState, world: WorldView, path: readonly number[]): number {
-  const speed = Math.max(1, sweepStepSpeed(player));
+  const speed = Math.max(1, sweepStepSpeed(player, world));
   let x = player.x;
   let y = player.y;
   let ticks = 0;
