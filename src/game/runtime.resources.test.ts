@@ -161,6 +161,35 @@ function decodeV2(record: SaveRecord): V2GameSaveEnvelope {
   return JSON.parse(record.worldJson) as V2GameSaveEnvelope;
 }
 
+const VALID_CARGO_FIXTURE = {
+  contractId: 1,
+  resource: "reed" as const,
+  quantity: 1,
+  condition: FIXED_POINT,
+  property: "ordinary" as const,
+};
+
+const MALFORMED_CARGO_CASES: readonly (readonly [string, unknown])[] = [
+  ["non-numeric quantity", { ...VALID_CARGO_FIXTURE, quantity: "not-a-number" }],
+  ["negative quantity", { ...VALID_CARGO_FIXTURE, quantity: -1 }],
+  ["fractional quantity", { ...VALID_CARGO_FIXTURE, quantity: 1.5 }],
+  ["quantity beyond pack bounds", {
+    ...VALID_CARGO_FIXTURE,
+    quantity: BASE_CARGO_CAPACITY + 1,
+  }],
+  ["negative contract ID", { ...VALID_CARGO_FIXTURE, contractId: -1 }],
+  ["unknown resource", { ...VALID_CARGO_FIXTURE, resource: "moon-silt" }],
+  ["mismatched light property", {
+    ...VALID_CARGO_FIXTURE,
+    resource: "parts",
+    property: "ordinary",
+  }],
+  ["condition above fixed-point range", {
+    ...VALID_CARGO_FIXTURE,
+    condition: FIXED_POINT + 1,
+  }],
+];
+
 function placePlayerOnNode(
   player: PlayerState,
   node: FieldResourceNode,
@@ -428,27 +457,10 @@ describe("runtime field-resource integration", () => {
     runtime.destroy();
   });
 
-  it("rejects malformed cargo before shared-pack load arithmetic can admit NaN or negative load", async () => {
-    const world = createWorld("the malformed cargo stays quarantined", "calm");
-    const validCargo = {
-      contractId: 1,
-      resource: "reed" as const,
-      quantity: 1,
-      condition: FIXED_POINT,
-      property: "ordinary" as const,
-    };
-    const malformedCargo: readonly [string, unknown][] = [
-      ["non-numeric quantity", { ...validCargo, quantity: "not-a-number" }],
-      ["negative quantity", { ...validCargo, quantity: -1 }],
-      ["fractional quantity", { ...validCargo, quantity: 1.5 }],
-      ["quantity beyond pack bounds", { ...validCargo, quantity: BASE_CARGO_CAPACITY + 1 }],
-      ["negative contract ID", { ...validCargo, contractId: -1 }],
-      ["unknown resource", { ...validCargo, resource: "moon-silt" }],
-      ["mismatched light property", { ...validCargo, resource: "parts", property: "ordinary" }],
-      ["condition above fixed-point range", { ...validCargo, condition: FIXED_POINT + 1 }],
-    ];
-
-    for (const [label, cargo] of malformedCargo) {
+  it.each(MALFORMED_CARGO_CASES)(
+    "rejects malformed cargo before shared-pack load arithmetic can admit NaN or negative load: %s",
+    async (label, cargo) => {
+      const world = createWorld("the malformed cargo stays quarantined", "calm");
       const player = createPlayer(createWorldView(world));
       player.cargo = [cargo] as PlayerState["cargo"];
       player.activeContractId = 1;
@@ -470,8 +482,8 @@ describe("runtime field-resource integration", () => {
       expect(Number.isFinite(runtime.getUIView().kit?.combinedLoadMilli ?? Number.NaN), label)
         .toBe(true);
       runtime.destroy();
-    }
-  });
+    },
+  );
 
   it("rejects crafted gear IDs reserved for inherited Wayknots", async () => {
     const world = createWorld("the numbered core keeps its identity", "calm");
