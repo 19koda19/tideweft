@@ -129,11 +129,13 @@ describe("Patch Notes dialog", () => {
     expect(scroll?.tabIndex).toBe(0);
     expect(scroll?.getAttribute("aria-label")).toContain("newest release first");
     expect(releases.map((release) => release.dataset.version)).toEqual([
+      "0.3.1-alpha.1",
       "0.3.1-alpha.0",
       "0.3.0-alpha.1",
     ]);
     expect(releases[0]?.dataset.latest).toBe("true");
-    expect(nodes.filter((node) => node.className === "patch-category")).toHaveLength(12);
+    expect(nodes.filter((node) => node.className === "patch-category"))
+      .toHaveLength(releases.length * 6);
     expect(nodes.some((node) => node.textContent.includes("A CHALLENGING HARD"))).toBe(true);
     expect(nodes.every((node) => node.innerHtmlWrites === 0)).toBe(true);
   });

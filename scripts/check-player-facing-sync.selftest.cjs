@@ -26,7 +26,7 @@ const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "src/content/gameplayContract.json"), "utf8"));
 const patchNotes = JSON.parse(fs.readFileSync(path.join(root, "src/content/patchNotes.json"), "utf8"));
 const packageDocument = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-const tutorialSource = "export const TUTORIAL_CONTENT_VERSION = 6 as const;";
+const tutorialSource = "export const TUTORIAL_CONTENT_VERSION = 7 as const;";
 
 let assertions = 0;
 function test(name, body) {
@@ -119,7 +119,7 @@ test("the explicit tutorial constant is parsed without matching unrelated versio
 test("current content contracts agree", () => {
   const result = validateContentDocuments({ manifest, tutorialSource, patchNotes, packageDocument });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.tutorialVersion, 6);
+  assert.equal(result.tutorialVersion, 7);
 });
 
 test("the first explicit tutorial contract advances the legacy v5 guide", () => {
@@ -138,7 +138,7 @@ test("the first explicit tutorial contract advances the legacy v5 guide", () => 
       base: fixture.base,
       evaluation,
       manifest,
-      tutorialVersion: 6,
+      tutorialVersion: 7,
       patchNotes,
     }), []);
   } finally {
@@ -147,10 +147,10 @@ test("the first explicit tutorial contract advances the legacy v5 guide", () => 
 });
 
 test("browser metadata exposes the same official ruleset and release identity", () => {
-  const valid = '<meta content="A CHALLENGING HARD" name="tideweft-ruleset"><meta name="tideweft-build" content="0.3.1-alpha.0">';
+  const valid = `<meta content="A CHALLENGING HARD" name="tideweft-ruleset"><meta name="tideweft-build" content="${packageDocument.version}">`;
   assert.deepEqual(validateBuildMetadata(valid, manifest, packageDocument), []);
   assert.equal(validateBuildMetadata(valid.replace("A CHALLENGING HARD", "Normal"), manifest, packageDocument).length, 1);
-  assert.equal(validateBuildMetadata(valid.replace("0.3.1-alpha.0", "stale"), manifest, packageDocument).length, 1);
+  assert.equal(validateBuildMetadata(valid.replace(packageDocument.version, "stale"), manifest, packageDocument).length, 1);
   assert.equal(validateBuildMetadata("", manifest, packageDocument).length, 2);
 });
 
@@ -186,7 +186,7 @@ test("deleted canonical sources cannot be hidden by a changed-file record", () =
     fs.writeFileSync(path.join(tempRoot, "package.json"), JSON.stringify(packageDocument));
     fs.writeFileSync(
       path.join(tempRoot, "index.html"),
-      '<meta name="tideweft-ruleset" content="A CHALLENGING HARD"><meta name="tideweft-build" content="0.3.1-alpha.0">',
+      `<meta name="tideweft-ruleset" content="A CHALLENGING HARD"><meta name="tideweft-build" content="${packageDocument.version}">`,
     );
     const result = validateLocalContent(tempRoot);
     assert.ok(result.errors.some((error) => error.includes(manifest.patchNoteSourcePath)));

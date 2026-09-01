@@ -38,6 +38,12 @@ export const RECOVERY_SEED_REQUIRED_MESSAGE =
   "Enter a non-empty seed phrase before replacing the unreadable or conflicting local autosave.";
 export const WORLD_CREATION_BLOCKED_MESSAGE =
   "Reload after local storage is available; this window will not create or replace a world.";
+export const TITLE_SURFACE_COPY = {
+  heading: "TIDEWEFT",
+  seed: "Seed phrase",
+  start: "START",
+  patchNotes: "PATCH NOTES",
+} as const;
 const RESTART_SEED_REQUIRED_MESSAGE =
   "Enter a non-empty seed phrase before replacing this estuary.";
 
@@ -404,7 +410,6 @@ interface UIRefs {
   titleButton: HTMLButtonElement;
   helpButton: HTMLButtonElement;
   titleDialog: HTMLDialogElement;
-  titleSubtitle: HTMLParagraphElement;
   continueButton: HTMLButtonElement;
   continueName: HTMLSpanElement;
   continueSummary: HTMLSpanElement;
@@ -1030,16 +1035,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const titleBackdrop = createElement("div", "title-dialog__backdrop");
   titleBackdrop.setAttribute("aria-hidden", "true");
   const titleContent = createElement("div", "title-dialog__content");
-  const titleKnot = createElement("span", "title-knot");
-  titleKnot.setAttribute("aria-hidden", "true");
-  const titleEyebrow = createElement("p", "title-dialog__eyebrow", "A living logistics fable");
-  const titleHeading = createElement("h1", "title-dialog__heading", "TIDEWEFT");
+  const titleHeading = createElement("h1", "title-dialog__heading", TITLE_SURFACE_COPY.heading);
   titleHeading.id = "title-dialog-heading";
-  const titleSubtitle = createElement(
-    "p",
-    "title-dialog__subtitle",
-    "A perpetual, locally saved estuary of promises and paths that learn.",
-  );
   const titleSaveWarning = createSaveWarningBanner("title");
   const continueButton = createButton("continue-card", "");
   const continueKicker = createElement("span", "continue-card__kicker", "Return to");
@@ -1081,13 +1078,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
 
   const newWorldForm = createElement("form", "new-world-form");
   newWorldForm.setAttribute("aria-label", "Begin a new estuary");
-  const newWorldHeading = createElement("h2", "new-world-form__heading", "Choose a new seed phrase");
-  const hardRules = createElement(
-    "p",
-    "new-world-form__rules",
-    "ONE RULESET · A CHALLENGING HARD · perpetual tides, scarce finds, careful cargo, local continuity",
-  );
-  const seedLabel = createElement("label", "field-label", "Seed phrase");
+  const seedLabel = createElement("label", "field-label", TITLE_SURFACE_COPY.seed);
   seedLabel.htmlFor = "world-seed";
   const seedInput = createElement("input", "seed-input");
   seedInput.id = "world-seed";
@@ -1098,21 +1089,18 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   seedInput.spellcheck = false;
   seedInput.placeholder = "Leave blank for quiet-delta";
 
-  const beginButton = createButton("text-button text-button--primary text-button--wide", "Start A CHALLENGING HARD");
+  const beginButton = createButton("text-button text-button--primary text-button--wide", TITLE_SURFACE_COPY.start);
   beginButton.type = "submit";
-  newWorldForm.append(newWorldHeading, hardRules, seedLabel, seedInput, beginButton);
+  newWorldForm.append(seedLabel, seedInput, beginButton);
   const titlePatchNotes = createButton(
     "text-button text-button--wide patch-notes-trigger",
-    "PATCH NOTES",
+    TITLE_SURFACE_COPY.patchNotes,
     "Open offline Patch Notes from the title",
   );
   titlePatchNotes.setAttribute("aria-haspopup", "dialog");
   titlePatchNotes.setAttribute("aria-controls", PATCH_NOTES_DIALOG_ID);
   titleContent.append(
-    titleKnot,
-    titleEyebrow,
     titleHeading,
-    titleSubtitle,
     titleSaveWarning.element,
     continueButton,
     restartForm,
@@ -1337,7 +1325,6 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     titleButton,
     helpButton,
     titleDialog,
-    titleSubtitle,
     continueButton,
     continueName,
     continueSummary,
@@ -1817,7 +1804,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     lastRevision = revision;
 
     refs.worldName.textContent = view.worldName;
-    refs.location.textContent = view.player.locationLabel ?? "A CHALLENGING HARD · perpetual";
+    refs.location.textContent = view.player.locationLabel ?? "Between harbors";
     refs.clockDay.textContent = view.clock.dayLabel ?? `Day ${view.clock.day}`;
     refs.clockTime.textContent = view.clock.timeLabel;
     refs.tideReadout.dataset.phase = view.tide.phase;
@@ -1976,9 +1963,6 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     if (!titleFormDirty && view.title.suggestedSeed && document.activeElement !== refs.seedInput) {
       refs.seedInput.placeholder = view.title.suggestedSeed;
     }
-    refs.titleSubtitle.textContent =
-      view.title.subtitle ??
-      "A perpetual, locally saved estuary of promises and paths that learn.";
     refs.continueButton.hidden = !view.title.hasSave;
     const seedRequirement = titleSeedRequirement(view.title, restartUnlocked);
     const worldCreation = titleWorldCreationState(view.title);

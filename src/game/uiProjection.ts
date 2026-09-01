@@ -65,7 +65,6 @@ import {
   wayknotEffectStrength,
   wayknotAtTile,
 } from "./wayknots";
-import { GAMEPLAY_CONTRACT_NAME } from "../content/gameplayContract";
 
 export interface UIProjectionOptions {
   readonly fieldResourceCatalog?: FieldResourceCatalog;
@@ -192,7 +191,6 @@ export function projectUIView(
       worldName,
       ...(session.continueSummary ? { continueSummary: session.continueSummary } : {}),
       suggestedSeed: session.seed,
-      subtitle: `${GAMEPLAY_CONTRACT_NAME} · one perpetual ruleset. Local saves return directly to your saved estuary and history.`,
     },
     ...(session.quietHourVisible
       ? {

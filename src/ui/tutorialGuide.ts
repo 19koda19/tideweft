@@ -1028,7 +1028,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-hard-restart",
         audience: "all",
         title: "One ruleset; restarting takes two deliberate steps",
-        body: "There is no difficulty selector. Every new and resumed estuary uses the one perpetual ruleset, A CHALLENGING HARD. To replace a save, open the title through Quiet Hour and type restartrestartrestart exactly. That only unlocks the seed field; the existing world remains safe until you submit a non-empty new seed phrase. A blank seed changes nothing.",
+        body: "There is no difficulty selector. The first-launch title stays deliberately quiet—TIDEWEFT, Seed phrase, START, and PATCH NOTES—while this manual records the single A CHALLENGING HARD rules contract. To replace a save, open the title through Quiet Hour and type restartrestartrestart exactly. That only unlocks the seed field; the existing world remains safe until you submit a non-empty new seed phrase. A blank seed changes nothing.",
       },
       {
         id: "saves-quiet-hour",
@@ -1153,7 +1153,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 6 as const;
+export const TUTORIAL_CONTENT_VERSION = 7 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

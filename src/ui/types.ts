@@ -282,7 +282,6 @@ export interface TitleOverlayUIView {
   readonly worldName?: string;
   readonly continueSummary?: string;
   readonly suggestedSeed?: string;
-  readonly subtitle?: string;
 }
 
 export interface QuietHourUIView {

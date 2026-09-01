@@ -7,6 +7,7 @@ import {
   RECOVERY_SEED_REQUIRED_MESSAGE,
   WORLD_CREATION_BLOCKED_MESSAGE,
   TIDE_HARP_HELP_COPY,
+  TITLE_SURFACE_COPY,
   WAYKNOT_KEY_SHORTCUT,
   handleTideweftUIShortcut,
   mobileHudCopy,
@@ -20,6 +21,18 @@ import {
   titleWorldCreationState,
   wayknotActionButtonState,
 } from "./createTideweftUI";
+
+describe("minimal title surface", () => {
+  it("keeps only the useful first-launch copy and no difficulty slogan", () => {
+    expect(TITLE_SURFACE_COPY).toEqual({
+      heading: "TIDEWEFT",
+      seed: "Seed phrase",
+      start: "START",
+      patchNotes: "PATCH NOTES",
+    });
+    expect(Object.values(TITLE_SURFACE_COPY).join(" ")).not.toMatch(/challenging|ruleset|perpetual/iu);
+  });
+});
 
 function keyEvent(overrides: Partial<{
   code: string;

@@ -2,6 +2,35 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.1-alpha.1",
+      "releaseDate": "2026-09-01",
+      "buildIdentity": "0.3.1-alpha.1",
+      "summary": "A quieter first hello: the new-estuary title now presents only TIDEWEFT and the actions needed to begin or read the release ledger.",
+      "gameplayContractVersion": 6,
+      "tutorialVersion": 7,
+      "categories": {
+        "gameplay": [
+          "World rules, hazard pressure, rewards, and save continuity are unchanged in this interface-only checkpoint."
+        ],
+        "fixes": [
+          "The field location fallback now says Between harbors instead of repeating the difficulty contract in ordinary HUD chrome."
+        ],
+        "balancing": [
+          "No balance values changed."
+        ],
+        "interface": [
+          "The first-launch title is reduced to TIDEWEFT, Seed phrase, START, and PATCH NOTES; the slogan, difficulty banner, and redundant new-world heading were removed."
+        ],
+        "saves": [
+          "Automatic return, visible save-health warnings, deliberate restart phrase, replacement seed requirement, and local-save protections are unchanged."
+        ],
+        "knownLimitations": [
+          "The playable world remains the finite compatibility region while infinite streaming is under construction.",
+          "Physical falls, loose world cargo, and rock traversal are still in active integration and are not claimed by this title-only checkpoint."
+        ]
+      }
+    },
+    {
       "version": "0.3.1-alpha.0",
       "releaseDate": "2026-09-01",
       "buildIdentity": "0.3.1-alpha.0",

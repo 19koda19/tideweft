@@ -4,6 +4,37 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.1-alpha.1 — 2026-09-01
+
+Build: `0.3.1-alpha.1` · Gameplay contract: 6 · Tutorial: 7
+
+A quieter first hello: the new-estuary title now presents only TIDEWEFT and the actions needed to begin or read the release ledger.
+
+### Gameplay
+
+- World rules, hazard pressure, rewards, and save continuity are unchanged in this interface-only checkpoint.
+
+### Fixes
+
+- The field location fallback now says Between harbors instead of repeating the difficulty contract in ordinary HUD chrome.
+
+### Balancing
+
+- No balance values changed.
+
+### Interface
+
+- The first-launch title is reduced to TIDEWEFT, Seed phrase, START, and PATCH NOTES; the slogan, difficulty banner, and redundant new-world heading were removed.
+
+### Save changes
+
+- Automatic return, visible save-health warnings, deliberate restart phrase, replacement seed requirement, and local-save protections are unchanged.
+
+### Known limitations
+
+- The playable world remains the finite compatibility region while infinite streaming is under construction.
+- Physical falls, loose world cargo, and rock traversal are still in active integration and are not claimed by this title-only checkpoint.
+
 ## 0.3.1-alpha.0 — 2026-09-01
 
 Build: `0.3.1-alpha.0` · Gameplay contract: 6 · Tutorial: 6

@@ -11,16 +11,18 @@ import {
 } from "./patchNotes";
 
 const copy = (): unknown => JSON.parse(JSON.stringify(patchNotesJson));
+const allCategoryCopy = (category: (typeof PATCH_NOTE_CATEGORIES)[number]): string =>
+  TIDEWEFT_PATCH_NOTES.releases.flatMap((release) => release.categories[category]).join(" ");
 
 describe("canonical offline patch notes", () => {
   it("validates the one canonical source with all six ordered categories", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.1-alpha.0",
-      buildIdentity: "0.3.1-alpha.0",
+      version: "0.3.1-alpha.1",
+      buildIdentity: "0.3.1-alpha.1",
       gameplayContractVersion: 6,
-      tutorialVersion: 6,
+      tutorialVersion: 7,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -71,22 +73,22 @@ describe("canonical offline patch notes", () => {
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
-    const limitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/persistent world object that can tumble|infinite region streaming|wildlife encounters are live/iu);
     expect(limitations).toContain("not live");
     expect(limitations).toContain("does not yet become a persistent world object");
   });
 
   it("states the non-pausing field behavior without claiming a hidden time stop", () => {
-    const saveCopy = LATEST_PATCH_NOTE.categories.saves.join(" ");
+    const saveCopy = allCategoryCopy("saves");
     expect(saveCopy).toContain("dispatches no simulation or save command");
     expect(saveCopy).toContain("world continues underneath");
     expect(saveCopy).not.toContain("never advances the simulation");
   });
 
   it("documents persistent save failure, bounded fresh retries, and recovery", () => {
-    const fixes = LATEST_PATCH_NOTE.categories.fixes.join(" ");
-    const saves = LATEST_PATCH_NOTE.categories.saves.join(" ");
+    const fixes = allCategoryCopy("fixes");
+    const saves = allCategoryCopy("saves");
     expect(fixes).toContain("LOCAL SAVE NOT STORED");
     expect(fixes).toContain("Quiet Hour, KIT, tutorial, and Patch Notes");
     expect(saves).toContain("bounded backoff");
@@ -107,6 +109,6 @@ describe("canonical offline patch notes", () => {
     expect(saves).toContain("partial or total backend read failure");
     expect(saves).toContain("performs no automatic retry or write");
     expect(saves).toContain("if either store cannot be read, no copy is adopted");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("largest safe integer");
+    expect(allCategoryCopy("knownLimitations")).toContain("largest safe integer");
   });
 });

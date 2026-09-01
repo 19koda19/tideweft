@@ -14,6 +14,7 @@ const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
 const SMOKE_WORLD_TILE_COUNT = 96 * 72;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.1-alpha.1';
 const SMOKE_TIDE_HARP = Object.freeze({
   id: 'tide-harp:r1-a3-w5',
   label: 'Glass-Ebb Tide Harp · R1 · A3 · W5',
@@ -379,8 +380,9 @@ function rendererProbeScript() {
     const restartForm = document.querySelector('.restart-form');
     const restartInput = document.querySelector('#restart-phrase');
     const newWorldForm = document.querySelector('.new-world-form');
+    const seedLabel = newWorldForm?.querySelector('label[for="world-seed"]') || null;
+    const seedInput = newWorldForm?.querySelector('#world-seed') || null;
     const beginWorldButton = newWorldForm?.querySelector('button[type="submit"]') || null;
-    const hardRules = newWorldForm?.querySelector('.new-world-form__rules') || null;
     const continueWorldButton = document.querySelector('.continue-card');
     const quietDialog = document.querySelector('.quiet-dialog');
     const quietFinishButton = quietDialog?.querySelector('.text-button--primary') || null;
@@ -623,18 +625,23 @@ function rendererProbeScript() {
         dialog: rectOf(title),
         content: rectOf(titleContent),
         heading: rectOf(titleHeading),
+        headingText: titleHeading?.textContent?.trim() || null,
         restartForm: rectOf(restartForm),
         form: rectOf(newWorldForm),
+        seedLabel: rectOf(seedLabel),
+        seedInput: rectOf(seedInput),
         beginButton: rectOf(beginWorldButton),
         contentVisible: visiblyIntersectsViewport(titleContent),
         headingVisible: visiblyIntersectsViewport(titleHeading),
+        seedLabelVisible: visiblyIntersectsViewport(seedLabel),
+        seedLabelText: seedLabel?.textContent?.trim() || null,
+        seedInputVisible: visiblyIntersectsViewport(seedInput),
         restartFormVisible: visiblyIntersectsViewport(restartForm),
         restartInputVisible: visiblyIntersectsViewport(restartInput),
         formVisible: visiblyIntersectsViewport(newWorldForm),
         beginButtonVisible: visiblyIntersectsViewport(beginWorldButton),
+        beginButtonText: beginWorldButton?.textContent?.trim() || null,
         continueButtonVisible: visiblyIntersectsViewport(continueWorldButton),
-        hardRulesVisible: visiblyIntersectsViewport(hardRules),
-        hardRulesText: hardRules?.textContent?.trim() || null,
         patchNotesTrigger: {
           ...targetProbe(titlePatchNotesButton),
           text: titlePatchNotesButton?.textContent?.trim() || null,
@@ -1173,8 +1180,8 @@ function probeHasOpenPatchNotes(probe, source) {
   return Boolean(
     notes?.open === true &&
     notes.source === source &&
-    notes.latestVersion === '0.3.1-alpha.0' &&
-    notes.latestBuild === '0.3.1-alpha.0' &&
+    notes.latestVersion === SMOKE_EXPECTED_RELEASE_VERSION &&
+    notes.latestBuild === SMOKE_EXPECTED_RELEASE_VERSION &&
     notes.dialog?.visible === true &&
     notes.dialog.insideViewport === true &&
     notes.content?.visible === true &&
@@ -2547,17 +2554,21 @@ async function runProductionSmoke(window) {
   await new Promise((resolve) => setTimeout(resolve, 120));
   const paintedTitleProbe = await readRendererProbe(contents);
   if (
-    paintedTitleProbe.release?.version !== '0.3.1-alpha.0' ||
-    paintedTitleProbe.release?.buildIdentity !== '0.3.1-alpha.0' ||
+    paintedTitleProbe.release?.version !== SMOKE_EXPECTED_RELEASE_VERSION ||
+    paintedTitleProbe.release?.buildIdentity !== SMOKE_EXPECTED_RELEASE_VERSION ||
     paintedTitleProbe.release?.gameplayContract?.id !== 'challenging-hard' ||
     paintedTitleProbe.release?.gameplayContract?.name !== 'A CHALLENGING HARD' ||
     paintedTitleProbe.release?.gameplayContract?.version !== 6 ||
     paintedTitleProbe.titleOpen !== true ||
     paintedTitleProbe.titleLayout?.contentVisible !== true ||
+    paintedTitleProbe.titleLayout?.headingVisible !== true ||
+    paintedTitleProbe.titleLayout?.headingText !== 'TIDEWEFT' ||
+    paintedTitleProbe.titleLayout?.seedLabelVisible !== true ||
+    paintedTitleProbe.titleLayout?.seedLabelText !== 'Seed phrase' ||
+    paintedTitleProbe.titleLayout?.seedInputVisible !== true ||
     paintedTitleProbe.titleLayout?.beginButtonVisible !== true ||
+    paintedTitleProbe.titleLayout?.beginButtonText !== 'START' ||
     paintedTitleProbe.titleLayout?.continueButtonVisible !== false ||
-    paintedTitleProbe.titleLayout?.hardRulesVisible !== true ||
-    !paintedTitleProbe.titleLayout?.hardRulesText?.includes('ONE RULESET · A CHALLENGING HARD') ||
     paintedTitleProbe.titleLayout?.patchNotesTrigger?.visible !== true ||
     paintedTitleProbe.titleLayout?.patchNotesTrigger?.insideViewport !== true ||
     paintedTitleProbe.titleLayout?.patchNotesTrigger?.rect?.width < 44 ||
