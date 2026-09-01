@@ -20,6 +20,7 @@ import {
   tideHarpContainsTileCenter,
   type TideHarp,
 } from "./tideHarps";
+import { surfaceCurrentDirection } from "./currentDirection";
 
 export const TILE_UNITS = 1_000;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
@@ -124,6 +125,8 @@ export interface PlayerStepResult {
   becameSwept: boolean;
   swept: boolean;
   washedAshore: boolean;
+  /** Present only on the fixed step where control is first lost to the current. */
+  sweepCause: "stamina" | "stability" | null;
   sweepSupport: SweepSupport;
   settlementId: number | null;
 }
@@ -198,6 +201,10 @@ export function stepPlayer(
 ): PlayerStepResult {
   const priorVelocityX = player.velocityX;
   const priorVelocityY = player.velocityY;
+  // A loaded or live player who has already lost all stability in the current
+  // cannot cancel that failure by releasing input and receiving the ordinary
+  // stillness recovery later in this same fixed step.
+  const stabilityDepletedAtStepStart = player.stability === 0;
   player.previousX = player.x;
   player.previousY = player.y;
   player.scanPulse = Math.max(0, player.scanPulse - 24_000);
@@ -412,13 +419,17 @@ export function stepPlayer(
   }
 
   const exhausted = player.stamina === 0;
+  const currentTile = world.terrain.tiles[currentTileIndex];
+  const inSweepWater = (currentTile?.waterDepth ?? 0) >= SWEEP_DEPTH_THRESHOLD;
+  const destabilizedInCurrent = inSweepWater
+    && (stabilityDepletedAtStepStart || player.stability === 0);
   let rescued = false;
   let becameSwept = false;
+  let sweepCause: PlayerStepResult["sweepCause"] = null;
   let sweepSupport: SweepSupport = null;
-  if (exhausted) {
-    const currentTile = world.terrain.tiles[currentTileIndex];
+  if (exhausted || destabilizedInCurrent) {
     sweepSupport = sweepSupportAtTile(world, currentTileIndex);
-    if ((currentTile?.waterDepth ?? 0) >= SWEEP_DEPTH_THRESHOLD && sweepSupport !== "clinic") {
+    if (inSweepWater && sweepSupport !== "clinic") {
       // The presentation estimate and live drift must begin with the same
       // infrastructure support. Previously the first estimate was calculated
       // before ferry support reached player state, so its ETA was pessimistic.
@@ -433,6 +444,11 @@ export function stepPlayer(
       player.stabilityTrend = "falling";
       player.stabilityHint = `Swept by ${world.tide.direction > 0 ? "flood" : "ebb"} current · the shore will catch you`;
       becameSwept = true;
+      // If both meters fail on the same fixed step, stability is the more
+      // specific explanation for losing footing in water; stamina remains
+      // truthfully exposed through `exhausted` on the same result.
+      sweepCause = destabilizedInCurrent ? "stability" : "stamina";
+      if (sweepCause === "stability") player.stability = 0;
       // A sweep is a setback, not deletion. Weather cargo once at the moment
       // control is lost, then preserve quantity and trace every drift tile.
       for (const cargo of player.cargo) cargo.condition = Math.max(0, cargo.condition - 35_000);
@@ -461,6 +477,7 @@ export function stepPlayer(
     becameSwept,
     swept: becameSwept,
     washedAshore: false,
+    sweepCause,
     sweepSupport,
     settlementId: settlementAtPlayer(player, world),
   };
@@ -855,6 +872,7 @@ function stepSweptPlayer(
       becameSwept: false,
       swept: false,
       washedAshore: true,
+      sweepCause: null,
       sweepSupport: support,
       settlementId: harborId,
     };
@@ -869,6 +887,7 @@ function stepSweptPlayer(
     becameSwept: false,
     swept: true,
     washedAshore: false,
+    sweepCause: null,
     sweepSupport: support,
     settlementId: null,
   };
@@ -1002,14 +1021,13 @@ function sweepNeighbors(world: WorldView, index: number): number[] {
   if (tile.x + 1 < world.terrain.width) candidates.push(index + 1);
   if (tile.y > 0) candidates.push(index - world.terrain.width);
   if (tile.y + 1 < world.terrain.height) candidates.push(index + world.terrain.width);
-  const desiredX = world.tide.direction > 0 ? -1 : 1;
-  const desiredY = Math.sign(world.weather.windY);
+  const desired = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
   return candidates.sort((leftIndex, rightIndex) => {
     const left = world.terrain.tiles[leftIndex];
     const right = world.terrain.tiles[rightIndex];
     if (!left || !right) return leftIndex - rightIndex;
-    const leftCurrent = (left.x - tile.x) * desiredX + (left.y - tile.y) * desiredY;
-    const rightCurrent = (right.x - tile.x) * desiredX + (right.y - tile.y) * desiredY;
+    const leftCurrent = (left.x - tile.x) * desired.x + (left.y - tile.y) * desired.y;
+    const rightCurrent = (right.x - tile.x) * desired.x + (right.y - tile.y) * desired.y;
     return rightCurrent - leftCurrent || left.waterDepth - right.waterDepth || leftIndex - rightIndex;
   });
 }

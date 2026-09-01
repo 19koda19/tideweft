@@ -251,13 +251,14 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
           : activeWayknotLabels[0] === WAYKNOT_LABELS["wind-knot"]
             ? "A nearby Wind knot is softening gust-driven stability loss. Stand at its mast and press F to reclaim it."
             : depth > 20_000
-                ? `${titleCase(band)} water costs ${effort.toLocaleString()} extra stamina per movement step${player.tools.includes("tide-sail") ? "; the Tide sail is reducing it" : ""}. Empty stamina in deep water means a recoverable sweep.`
+                ? `${titleCase(band)} water costs ${effort.toLocaleString()} extra stamina per movement step${player.tools.includes("tide-sail") ? "; the Tide sail is reducing it" : ""}. Empty stamina or stability in deep water means a recoverable sweep.`
                 : tile?.terrain === "marsh" || tile?.terrain === "tidal-flat"
                   ? player.tools.includes("marsh-stilts")
                     ? "Marsh stilts are reducing drag and ground effort here."
                     : "A completed crossing can entrust you with Marsh stilts for soft terrain."
                   : "Complete civic projects, then visit their harbor to inherit practical field tools.";
   return {
+    isWater: depth > 20_000,
     terrainLabel,
     depthLabel,
     depthKnown,

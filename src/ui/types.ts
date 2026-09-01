@@ -135,6 +135,7 @@ export interface TideHarpFieldUIView {
 }
 
 export interface FieldReadoutUIView {
+  readonly isWater: boolean;
   readonly terrainLabel: string;
   readonly depthLabel: string;
   readonly depthKnown: boolean;

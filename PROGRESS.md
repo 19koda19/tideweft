@@ -58,11 +58,12 @@
 
 ## Current checkpoint
 
-Phase 10: Tide Harps are verified and published as an untagged post-alpha preview; the long-running build can move to the next gameplay slice.
+Phase 10: Tide Harps are verified and published as an untagged post-alpha preview. A focused mobile/current hotfix is implemented in the working candidate and is now the release gate before the next gameplay slice.
 
 - The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; the tag has not moved. Pages now serves the untagged Phase 10 commit `6f74fe9e016ba566116e2085b05ecf2988213754`.
 - The published Phase 10 source derives exact maximum knot-disjoint Tide Harps from compact one-Reed/one-Anchor/one-Wind triangles, adds bounded recharge and four-origin sounding, and projects clear HUD/help plus Chart strings and a Relief bell/cord structure.
 - The complete local web gate passes 28 test files / 205 checks, and the extended packaged Electron smoke passes deterministic Harp placement/pulse, title paint, dual-view, and 1,440/960/927/700-pixel layout probes. Fresh title and Relief screenshots have been inspected.
+- The working hotfix candidate folds large panels by default at or below 44rem while retaining an always-visible route/safety/action strip, makes stability-zero and stamina-zero share recoverable deterministic sweep behavior in water at or above 120,000 depth, and shows current direction only on discovered wet surface without revealing bathymetry.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
 ## 2026-09-01 — Alpha 0.1 verification recovered
@@ -151,3 +152,14 @@ Phase 10: Tide Harps are verified and published as an untagged post-alpha previe
 - Pushed exact feature commit `6f74fe9e016ba566116e2085b05ecf2988213754` without moving the Alpha 0.2 tag.
 - Watched GitHub CI run `33494152504` and Pages run `33494152310` succeed for that source.
 - Verified the live HTTPS HTML references `index-CKlzWR1L.css` and `index-D30XtHH3.js`; both exact assets return HTTP 200. Phase 10 is a published untagged preview, not a new tagged release.
+
+## 2026-09-01 — Mobile/current hotfix locally verified
+
+- Replaced the obstructive small-screen panel stack on portrait and short-landscape phones with a compact LED-style strip and no duplicate desktop HUD. An accessible 44-pixel `PROMISES + / PROMISES −` control opens one full safe-area Promises sheet; settlement interaction uses a mutually exclusive inspector sheet, while the route, stamina/stability safety, truthful ground/water terrain, and contextual E/Space/F actions remain visible.
+- Made zero stability as consequential and recoverable as zero stamina in deep/current water: at 120,000 depth or greater, either cause enters the existing deterministic path to a safe bank. Dry ground and shallows retain their previous recovery behavior, cargo quantity is preserved, and condition weathers once.
+- Projected one shared tide/wind current direction into sparse arrows on discovered wet surface in both Chart 2D and Relief 3D. The cue uses fixed geometry and spacing and does not inspect or encode unsounded depth.
+- Kept the hotfix free of new authoritative or persisted state. Browser saves remain local-first, using IndexedDB as primary storage and the existing sticky localStorage fallback when it fails.
+- Extended the packaged release probe through 700 × 640, 390 × 700 portrait, and 844 × 390 landscape states. It verifies default collapse, 44-pixel input, full-width Promises scrolling, mutually exclusive inspector state, safe gaps around the strip/action dock, pointer-transparent objective copy, and zero renderer warnings or resource failures.
+- Passed TypeScript, 31 Vitest files / 221 checks, the production build (`index-DTJENodE.css` / `index-CGVn5Ai9.js`), and the nested `/tideweft/` web smoke. A fresh 780 × 1,400 mobile capture confirms the minimalist collapsed HUD visually.
+- Set the next direction without claiming it as current behavior: remove Drift/Weave's 10/25-minute framing, make new worlds perpetual on the same local save foundation, then add ladder-gated rock, physical dropped/tumbling/drifting cargo, condition-sensitive trust/compensation, and safely available upgrades.
+- `git diff --check` and the scoped public-source secret scan are clean. Commit, CI, Pages publication, and live-asset verification are pending.

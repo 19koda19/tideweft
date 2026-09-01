@@ -27,6 +27,8 @@ const SMOKE_TIDE_HARP = Object.freeze({
 const SMOKE_MINIMUM_VIEWPORT = Object.freeze({ width: 960, height: 640 });
 const SMOKE_RESPONSIVE_VIEWPORT = Object.freeze({ width: 927, height: 640 });
 const SMOKE_PHONE_VIEWPORT = Object.freeze({ width: 700, height: 640 });
+const SMOKE_NARROW_PHONE_VIEWPORT = Object.freeze({ width: 390, height: 700 });
+const SMOKE_LANDSCAPE_PHONE_VIEWPORT = Object.freeze({ width: 844, height: 390 });
 const SMOKE_SCREENSHOT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 
 const SMOKE_TEST = Object.freeze({
@@ -35,6 +37,7 @@ const SMOKE_TEST = Object.freeze({
     process.argv.includes('--tideweft-smoke'),
   screenshotPath: process.env.TIDEWEFT_SMOKE_SCREENSHOT || '',
   titleScreenshotPath: process.env.TIDEWEFT_SMOKE_TITLE_SCREENSHOT || '',
+  mobileScreenshotPath: process.env.TIDEWEFT_SMOKE_MOBILE_SCREENSHOT || '',
   timeoutMs: Math.max(
     5_000,
     Math.min(60_000, Number.parseInt(process.env.TIDEWEFT_SMOKE_TIMEOUT_MS || '30000', 10) || 30_000),
@@ -243,7 +246,7 @@ function createWindow(options = {}) {
     width: 1440,
     height: 900,
     minWidth: SMOKE_TEST.enabled ? 320 : 960,
-    minHeight: 640,
+    minHeight: SMOKE_TEST.enabled ? 320 : 640,
     backgroundColor: '#07141a',
     show: false,
     webPreferences: {
@@ -342,6 +345,22 @@ function rendererProbeScript() {
         rect.left < window.innerWidth &&
         rect.top < window.innerHeight;
     };
+    const whollyInsideViewport = (element) => {
+      if (!visiblyIntersectsViewport(element)) return false;
+      const rect = element.getBoundingClientRect();
+      const tolerance = 0.5;
+      return rect.left >= -tolerance &&
+        rect.top >= -tolerance &&
+        rect.right <= window.innerWidth + tolerance &&
+        rect.bottom <= window.innerHeight + tolerance;
+    };
+    const elementsOverlap = (left, right) => {
+      if (!visiblyIntersectsViewport(left) || !visiblyIntersectsViewport(right)) return false;
+      const leftRect = left.getBoundingClientRect();
+      const rightRect = right.getBoundingClientRect();
+      return Math.max(leftRect.left, rightRect.left) < Math.min(leftRect.right, rightRect.right) &&
+        Math.max(leftRect.top, rightRect.top) < Math.min(leftRect.bottom, rightRect.bottom);
+    };
     const status = document.querySelector('#connection-status');
     const shell = document.querySelector('#game-ui .ui-layer');
     const title = document.querySelector('.title-dialog');
@@ -385,8 +404,18 @@ function rendererProbeScript() {
     const leftRail = document.querySelector('.left-rail');
     const hudBar = document.querySelector('.hud-bar');
     const actionDock = document.querySelector('.action-dock');
+    const actionControls = actionDock ? Array.from(actionDock.children) : [];
+    const mobileFieldStrip = document.querySelector('.mobile-field-strip');
+    const mobileHudToggle = document.querySelector('.mobile-field-toggle');
+    const mobileFieldCopy = document.querySelector('.mobile-field-strip__copy');
+    const mobileObjective = document.querySelector('.mobile-field-strip__objective');
+    const mobileSafety = document.querySelector('.mobile-field-strip__safety');
+    const mobileTerrain = document.querySelector('.mobile-field-strip__terrain');
+    const mobileActions = document.querySelector('.mobile-field-strip__actions');
     const contractRail = document.querySelector('.contract-rail');
+    const contractSummary = contractRail?.querySelector('.panel-summary') || null;
     const contractList = document.querySelector('.contract-list');
+    const settlementInspector = document.querySelector('.settlement-inspector');
     const contractStyle = contractList ? getComputedStyle(contractList) : null;
     const contractClientHeight = contractList ? contractList.clientHeight : null;
     const contractScrollHeight = contractList ? contractList.scrollHeight : null;
@@ -497,6 +526,14 @@ function rendererProbeScript() {
       paused: renderView ? Boolean(renderView.paused) : null,
       tick: renderView && Number.isFinite(renderView.tick) ? renderView.tick : null,
       worldName: renderView ? renderView.worldName : null,
+      surfaceCurrent: renderView?.tide?.surfaceCurrent &&
+        Number.isFinite(renderView.tide.surfaceCurrent.x) &&
+        Number.isFinite(renderView.tide.surfaceCurrent.y)
+        ? {
+            x: renderView.tide.surfaceCurrent.x,
+            y: renderView.tide.surfaceCurrent.y,
+          }
+        : null,
       settlementCount: renderView && Array.isArray(renderView.settlements)
         ? renderView.settlements.length
         : null,
@@ -611,6 +648,12 @@ function rendererProbeScript() {
         : null,
       promises: {
         railOpen: contractRail instanceof HTMLDetailsElement ? contractRail.open : null,
+        railVisible: visiblyIntersectsViewport(contractRail),
+        railInsideViewport: whollyInsideViewport(contractRail),
+        summaryVisible: visiblyIntersectsViewport(contractSummary),
+        listVisible: visiblyIntersectsViewport(contractList),
+        listInsideViewport: whollyInsideViewport(contractList),
+        listTabIndex: contractList instanceof HTMLElement ? contractList.tabIndex : null,
         clientHeight: contractClientHeight,
         scrollHeight: contractScrollHeight,
         overflowY: contractStyle ? contractStyle.overflowY : null,
@@ -619,13 +662,113 @@ function rendererProbeScript() {
           contractScrollHeight !== null &&
           contractScrollHeight > contractClientHeight + 1,
       },
+      mobileHud: {
+        breakpointActive: window.matchMedia(
+          '(max-width: 44rem), (max-height: 34rem) and (max-width: 64rem)',
+        ).matches,
+        portraitBreakpointActive: window.matchMedia('(max-width: 44rem)').matches,
+        shortLandscapeBreakpointActive: window.matchMedia(
+          '(max-height: 34rem) and (max-width: 64rem)',
+        ).matches,
+        expanded: shell?.getAttribute('data-mobile-hud-expanded') || null,
+        sheet: shell?.getAttribute('data-mobile-sheet') || null,
+        desktopHud: {
+          visible: visiblyIntersectsViewport(hudBar),
+          display: hudBar ? getComputedStyle(hudBar).display : null,
+          rect: rectOf(hudBar),
+        },
+        strip: {
+          visible: visiblyIntersectsViewport(mobileFieldStrip),
+          insideViewport: whollyInsideViewport(mobileFieldStrip),
+          rect: rectOf(mobileFieldStrip),
+          overflowX: mobileFieldStrip instanceof HTMLElement
+            ? mobileFieldStrip.scrollWidth > mobileFieldStrip.clientWidth + 1
+            : null,
+        },
+        toggle: mobileHudToggle
+          ? {
+              visible: visiblyIntersectsViewport(mobileHudToggle),
+              insideViewport: whollyInsideViewport(mobileHudToggle),
+              rect: rectOf(mobileHudToggle),
+              ariaExpanded: mobileHudToggle.getAttribute('aria-expanded'),
+              ariaControls: mobileHudToggle.getAttribute('aria-controls'),
+              ariaLabel: mobileHudToggle.getAttribute('aria-label'),
+              text: mobileHudToggle.textContent?.trim() || null,
+              disabled: mobileHudToggle instanceof HTMLButtonElement ? mobileHudToggle.disabled : null,
+            }
+          : null,
+        compactCopy: {
+          visible: visiblyIntersectsViewport(mobileFieldCopy),
+          objective: mobileObjective?.textContent?.trim() || null,
+          safety: mobileSafety?.textContent?.trim() || null,
+          terrain: mobileTerrain?.textContent?.trim() || null,
+          actions: mobileActions?.textContent?.trim() || null,
+        },
+        objective: {
+          visible: visiblyIntersectsViewport(objectivePanel),
+          insideViewport: whollyInsideViewport(objectivePanel),
+          rect: rectOf(objectivePanel),
+          display: objectivePanel ? getComputedStyle(objectivePanel).display : null,
+          pointerEvents: objectivePanel ? getComputedStyle(objectivePanel).pointerEvents : null,
+          overlapsStrip: elementsOverlap(objectivePanel, mobileFieldStrip),
+          overlapsActionDock: elementsOverlap(objectivePanel, actionDock),
+        },
+        promises: {
+          visible: visiblyIntersectsViewport(contractRail),
+          insideViewport: whollyInsideViewport(contractRail),
+          rect: rectOf(contractRail),
+          display: contractRail ? getComputedStyle(contractRail).display : null,
+          pointerEvents: contractRail ? getComputedStyle(contractRail).pointerEvents : null,
+          overlapsStrip: elementsOverlap(contractRail, mobileFieldStrip),
+          overlapsActionDock: elementsOverlap(contractRail, actionDock),
+        },
+        inspector: {
+          visible: visiblyIntersectsViewport(settlementInspector),
+          insideViewport: whollyInsideViewport(settlementInspector),
+          rect: rectOf(settlementInspector),
+          display: settlementInspector ? getComputedStyle(settlementInspector).display : null,
+          pointerEvents: settlementInspector ? getComputedStyle(settlementInspector).pointerEvents : null,
+          clientHeight: settlementInspector instanceof HTMLElement ? settlementInspector.clientHeight : null,
+          scrollHeight: settlementInspector instanceof HTMLElement ? settlementInspector.scrollHeight : null,
+          overflowY: settlementInspector ? getComputedStyle(settlementInspector).overflowY : null,
+          hidden: settlementInspector instanceof HTMLElement ? settlementInspector.hidden : null,
+          overlapsStrip: elementsOverlap(settlementInspector, mobileFieldStrip),
+          overlapsActionDock: elementsOverlap(settlementInspector, actionDock),
+        },
+        actionDock: {
+          visible: visiblyIntersectsViewport(actionDock),
+          insideViewport: whollyInsideViewport(actionDock),
+          controlsInsideViewport: actionControls
+            .filter((control) => visiblyIntersectsViewport(control))
+            .every((control) => whollyInsideViewport(control)),
+          coreControlsVisibleAndInside: [scanButton, interactButton, wayknotButton]
+            .every((control) => visiblyIntersectsViewport(control) && whollyInsideViewport(control)),
+          labelsInsideControls: actionControls
+            .filter((control) => visiblyIntersectsViewport(control))
+            .every((control) => Array.from(control.querySelectorAll('.action-button__label')).every((label) => {
+              const controlRect = control.getBoundingClientRect();
+              const labelRect = label.getBoundingClientRect();
+              return labelRect.left >= controlRect.left - 1 &&
+                labelRect.right <= controlRect.right + 1 &&
+                labelRect.top >= controlRect.top - 1 &&
+                labelRect.bottom <= controlRect.bottom + 1;
+            })),
+          rect: rectOf(actionDock),
+          overflowX: actionDock instanceof HTMLElement
+            ? actionDock.scrollWidth > actionDock.clientWidth + 1
+            : null,
+        },
+      },
       leftPaneGap: objectivePanel && contractRail
         ? contractRail.getBoundingClientRect().top - objectivePanel.getBoundingClientRect().bottom
         : null,
       layout: {
         leftRailDisplay: leftRail ? getComputedStyle(leftRail).display : null,
+        leftRailPointerEvents: leftRail ? getComputedStyle(leftRail).pointerEvents : null,
         objectivePosition: objectivePanel ? getComputedStyle(objectivePanel).position : null,
+        objectivePointerEvents: objectivePanel ? getComputedStyle(objectivePanel).pointerEvents : null,
         contractPosition: contractRail ? getComputedStyle(contractRail).position : null,
+        contractPointerEvents: contractRail ? getComputedStyle(contractRail).pointerEvents : null,
         objective: objectiveRect,
         contract: contractRect,
         hud: rectOf(hudBar),
@@ -1101,6 +1244,177 @@ function probeHasViewButtonMode(probe, expectedMode) {
   );
 }
 
+function probeHasSurfaceCurrent(probe) {
+  const current = probe?.surfaceCurrent;
+  return Boolean(
+    current &&
+    (current.x === -1 || current.x === 1) &&
+    (current.y === -1 || current.y === 0 || current.y === 1),
+  );
+}
+
+function probeHasPointerTransparentObjective(probe) {
+  return Boolean(
+    probe?.layout?.leftRailPointerEvents === 'none' &&
+    probe.layout.objectivePointerEvents === 'none' &&
+    probe.layout.contractPointerEvents === 'auto',
+  );
+}
+
+function probeHasMobileHudFrame(probe) {
+  const mobile = probe?.mobileHud;
+  const toggle = mobile?.toggle;
+  return Boolean(
+    mobile?.breakpointActive === true &&
+    mobile.strip?.visible === true &&
+    mobile.strip?.insideViewport === true &&
+    mobile.strip?.overflowX === false &&
+    mobile.compactCopy?.visible === true &&
+    mobile.compactCopy.objective?.includes('DELIVER') &&
+    mobile.compactCopy.safety?.includes('STAM') &&
+    mobile.compactCopy.safety?.includes('STAB') &&
+    mobile.compactCopy.safety?.startsWith('DEEP: STAM/STAB 0 → SWEPT') &&
+    /^(?:WATER|GROUND) · /u.test(mobile.compactCopy.terrain || '') &&
+    mobile.compactCopy.terrain.split(' · ').length >= 4 &&
+    mobile.compactCopy.actions?.startsWith('E ') &&
+    mobile.compactCopy.actions?.includes('SPACE') &&
+    mobile.compactCopy.actions?.includes('F ') &&
+    toggle?.visible === true &&
+    toggle.insideViewport === true &&
+    toggle.rect?.width >= 44 &&
+    toggle.rect?.height >= 44 &&
+    (toggle.ariaControls === 'promises-panel' || toggle.ariaControls === 'settlement-inspector') &&
+    toggle.disabled === false &&
+    mobile.actionDock?.visible === true &&
+    mobile.actionDock.insideViewport === true &&
+    mobile.actionDock.controlsInsideViewport === true &&
+    mobile.actionDock.coreControlsVisibleAndInside === true &&
+    mobile.actionDock.labelsInsideControls === true &&
+    mobile.actionDock.overflowX === false &&
+    probeHasSurfaceCurrent(probe),
+  );
+}
+
+function probeHasCollapsedMobileHud(probe) {
+  const mobile = probe?.mobileHud;
+  return Boolean(
+    probeHasMobileHudFrame(probe) &&
+    mobile.expanded === 'false' &&
+    mobile.sheet === 'promises' &&
+    mobile.toggle?.ariaExpanded === 'false' &&
+    mobile.toggle?.ariaLabel === 'Open promises' &&
+    mobile.toggle?.text === 'PROMISES +' &&
+    mobile.objective?.visible === false &&
+    mobile.promises?.visible === false &&
+    mobile.inspector?.visible === false,
+  );
+}
+
+function probeHasLandscapeMobileFrame(probe) {
+  const mobile = probe?.mobileHud;
+  return Boolean(
+    probeHasMobileHudFrame(probe) &&
+    mobile.portraitBreakpointActive === false &&
+    mobile.shortLandscapeBreakpointActive === true &&
+    mobile.desktopHud?.visible === false &&
+    mobile.desktopHud.display === 'none' &&
+    probe.layout?.leftRailDisplay === 'contents',
+  );
+}
+
+function probeHasExpandedMobileHud(probe) {
+  const mobile = probe?.mobileHud;
+  return Boolean(
+    probeHasMobileHudFrame(probe) &&
+    mobile.expanded === 'true' &&
+    mobile.sheet === 'promises' &&
+    mobile.toggle?.ariaExpanded === 'true' &&
+    mobile.toggle?.ariaLabel === 'Close promises' &&
+    mobile.toggle?.text === 'PROMISES −' &&
+    mobile.objective?.visible === false &&
+    mobile.objective.pointerEvents === 'none' &&
+    mobile.promises?.visible === true &&
+    mobile.promises.insideViewport === true &&
+    mobile.promises.pointerEvents === 'auto' &&
+    mobile.promises.overlapsStrip === false &&
+    mobile.promises.overlapsActionDock === false &&
+    mobile.promises.rect?.top >= mobile.strip.rect?.bottom - 1 &&
+    mobile.promises.rect?.bottom <= mobile.actionDock.rect?.top + 1 &&
+    mobile.inspector?.visible === false &&
+    probe.layout?.leftPaneOverlap === false &&
+    probeHasPointerTransparentObjective(probe) &&
+    probe.leftPaneGap >= 0 &&
+    probe.promises?.railOpen === true &&
+    probe.promises.railVisible === true &&
+    probe.promises.railInsideViewport === true &&
+    probe.promises.summaryVisible === true &&
+    probe.promises.listVisible === true &&
+    probe.promises.listInsideViewport === true &&
+    probe.promises.listTabIndex === 0 &&
+    probe.promises.clientHeight >= 96 &&
+    probe.promises.hasVerticalOverflow === true &&
+    (probe.promises.overflowY === 'auto' || probe.promises.overflowY === 'scroll'),
+  );
+}
+
+function probeHasExpandedMobileInspector(probe) {
+  const mobile = probe?.mobileHud;
+  return Boolean(
+    probeHasMobileHudFrame(probe) &&
+    mobile.expanded === 'true' &&
+    mobile.sheet === 'inspector' &&
+    mobile.toggle?.ariaExpanded === 'true' &&
+    mobile.toggle?.ariaControls === 'settlement-inspector' &&
+    mobile.toggle?.ariaLabel === 'Close settlement details' &&
+    mobile.toggle?.text === 'CLOSE ×' &&
+    mobile.objective?.visible === false &&
+    mobile.promises?.visible === false &&
+    mobile.inspector?.visible === true &&
+    mobile.inspector.insideViewport === true &&
+    mobile.inspector.hidden === false &&
+    mobile.inspector.pointerEvents === 'auto' &&
+    mobile.inspector.overlapsStrip === false &&
+    mobile.inspector.overlapsActionDock === false &&
+    mobile.inspector.rect?.top >= mobile.strip.rect?.bottom - 1 &&
+    mobile.inspector.rect?.bottom <= mobile.actionDock.rect?.top + 1 &&
+    mobile.inspector.clientHeight >= 96 &&
+    mobile.inspector.scrollHeight >= mobile.inspector.clientHeight &&
+    (mobile.inspector.overflowY === 'auto' || mobile.inspector.overflowY === 'scroll') &&
+    probeHasPointerTransparentObjective(probe)
+  );
+}
+
+async function toggleSmokeMobileHud(contents, expanded) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.mobile-field-toggle');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error(`mobile HUD toggle was unavailable while setting expanded=${String(expanded)}`);
+  return waitForRenderer(
+    contents,
+    expanded ? probeHasExpandedMobileHud : probeHasCollapsedMobileHud,
+    SMOKE_TEST.timeoutMs,
+  );
+}
+
+async function openSmokeMobileInspector(contents) {
+  const opened = await contents.executeJavaScript(`(() => {
+    const runtime = window.__TIDEWEFT__?.runtime;
+    const settlement = runtime?.getRenderView?.()?.settlements?.[0];
+    if (!runtime?.dispatchUI || !settlement?.id) return false;
+    runtime.dispatchUI({
+      type: 'settlement',
+      action: 'focus',
+      settlementId: String(settlement.id),
+    });
+    return true;
+  })()`, true);
+  if (!opened) throw new Error('a settlement could not be opened through the public mobile UI command path');
+  return waitForRenderer(contents, probeHasExpandedMobileInspector, SMOKE_TEST.timeoutMs);
+}
+
 async function toggleSmokeView(contents, expectedMode) {
   const clicked = await contents.executeJavaScript(`(() => {
     const button = document.querySelector('#view-mode-toggle');
@@ -1292,6 +1606,7 @@ async function runProductionSmoke(window) {
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasViewButtonMode(probe, 'relief-3d') &&
       probeHasPlayableTideHarp(probe) &&
+      probeHasPointerTransparentObjective(probe) &&
       probe.leftPaneGap >= 0 &&
       probe.promises &&
       probe.promises.railOpen === true &&
@@ -1307,6 +1622,7 @@ async function runProductionSmoke(window) {
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasViewButtonMode(probe, 'relief-3d') &&
       probeHasPlayableTideHarp(probe) &&
+      probeHasPointerTransparentObjective(probe) &&
       probe.layout?.leftRailDisplay === 'flex' &&
       probe.layout?.leftPaneOverlap === false &&
       probe.leftPaneGap >= 0 &&
@@ -1317,23 +1633,69 @@ async function runProductionSmoke(window) {
       probe.promises?.hasVerticalOverflow === true,
   );
 
-  const phoneViewportProbe = await resizeSmokeViewport(
+  const phoneViewportCollapsedProbe = await resizeSmokeViewport(
     window,
     SMOKE_PHONE_VIEWPORT,
     (probe) =>
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasViewButtonMode(probe, 'relief-3d') &&
-      probeHasPlayableTideHarp(probe) &&
+      probeHasCollapsedMobileHud(probe) &&
       probe.layout?.leftRailDisplay === 'contents' &&
-      probe.layout?.objectivePosition === 'absolute' &&
       probe.layout?.contractPosition === 'absolute' &&
-      probe.layout?.leftPaneOverlap === false &&
-      probe.layout?.objective?.width <= 320 &&
-      probe.layout?.contract?.width <= 340 &&
-      probe.layout?.hud?.height <= 64 &&
-      probe.promises?.clientHeight >= 64 &&
-      probe.promises?.hasVerticalOverflow === true,
+      probe.layout?.hud?.height <= 64,
   );
+  const phoneViewportExpandedProbe = await toggleSmokeMobileHud(contents, true);
+  const phoneViewportRecollapsedProbe = await toggleSmokeMobileHud(contents, false);
+
+  const narrowPhoneCollapsedProbe = await resizeSmokeViewport(
+    window,
+    SMOKE_NARROW_PHONE_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasCollapsedMobileHud(probe) &&
+      probe.layout?.leftRailDisplay === 'contents' &&
+      probe.layout?.hud?.height <= 64,
+  );
+  const narrowPhoneExpandedProbe = await toggleSmokeMobileHud(contents, true);
+  const narrowPhoneRecollapsedProbe = await toggleSmokeMobileHud(contents, false);
+
+  if (!await focusSmokePlayer(contents)) {
+    throw new Error('the active mobile renderer could not return its camera to the courier');
+  }
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  const mobileScreenshot = await captureSmokeEvidence(window, SMOKE_TEST.mobileScreenshotPath);
+
+  const landscapePhoneCollapsedProbe = await resizeSmokeViewport(
+    window,
+    SMOKE_LANDSCAPE_PHONE_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasLandscapeMobileFrame(probe) &&
+      probeHasCollapsedMobileHud(probe),
+  );
+  await toggleSmokeMobileHud(contents, true);
+  const landscapePhoneExpandedProbe = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasLandscapeMobileFrame(probe) &&
+      probeHasExpandedMobileHud(probe) &&
+      probe.mobileHud.promises.rect?.width >= probe.viewport.width - 32,
+    SMOKE_TEST.timeoutMs,
+  );
+  await toggleSmokeMobileHud(contents, false);
+  const landscapePhoneRecollapsedProbe = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasLandscapeMobileFrame(probe) &&
+      probeHasCollapsedMobileHud(probe),
+    SMOKE_TEST.timeoutMs,
+  );
+  const landscapeInspectorProbe = await openSmokeMobileInspector(contents);
+  const landscapeInspectorClosedProbe = await toggleSmokeMobileHud(contents, false);
 
   const screenshotViewportProbe = await resizeSmokeViewport(
     window,
@@ -1379,11 +1741,28 @@ async function runProductionSmoke(window) {
     },
     minimumViewport: minimumViewportProbe,
     responsiveViewport: responsiveViewportProbe,
-    phoneViewport: phoneViewportProbe,
+    phoneViewport: {
+      collapsed: phoneViewportCollapsedProbe,
+      expanded: phoneViewportExpandedProbe,
+      recollapsed: phoneViewportRecollapsedProbe,
+    },
+    narrowPhoneViewport: {
+      collapsed: narrowPhoneCollapsedProbe,
+      expanded: narrowPhoneExpandedProbe,
+      recollapsed: narrowPhoneRecollapsedProbe,
+    },
+    landscapePhoneViewport: {
+      collapsed: landscapePhoneCollapsedProbe,
+      expanded: landscapePhoneExpandedProbe,
+      recollapsed: landscapePhoneRecollapsedProbe,
+      inspector: landscapeInspectorProbe,
+      inspectorClosed: landscapeInspectorClosedProbe,
+    },
     screenshotViewport: screenshotViewportProbe,
     rendererWarnings,
     resourceFailures,
     titleScreenshot,
+    mobileScreenshot,
     screenshot,
   });
 }

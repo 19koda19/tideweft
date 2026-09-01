@@ -59,6 +59,11 @@ export interface TideView {
   readonly phase: TidePhase;
   readonly level: number;
   readonly progress: number;
+  /**
+   * Public surface-flow direction. Components express heading only, never
+   * current strength or hidden bathymetry.
+   */
+  readonly surfaceCurrent?: WorldPoint;
   readonly label?: string;
   readonly nextPhaseInSeconds?: number;
 }

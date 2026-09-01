@@ -14,6 +14,7 @@ import {
   type PlayerState,
 } from "./player";
 import { deriveTideHarps, type TideHarp } from "./tideHarps";
+import { surfaceCurrentDirection } from "./currentDirection";
 import { WAYKNOT_LABELS, WAYKNOT_RADII } from "./wayknots";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
@@ -139,6 +140,7 @@ export function projectGameView(
       phase: tidePhase(world.tide.phase),
       level: world.tide.level / FIXED_POINT,
       progress: tideProgress(world.tide.phase),
+      surfaceCurrent: surfaceCurrentDirection(world.tide.direction, world.weather.windY),
       label: `${tidePhase(world.tide.phase)} tide`,
       nextPhaseInSeconds: Math.max(0, 180 - (world.completedTick % 180)),
     },

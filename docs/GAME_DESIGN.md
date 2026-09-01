@@ -33,7 +33,7 @@ The estuary sits beneath the Aurora, a weather phenomenon used as poetic languag
 
 The quantum framing is thematic, not a claim about real-world physics. Current play does not branch or rewind timelines. Its meaningful possibility space comes from seeded worlds, tide-dependent traversal, changing weather, route choice, cargo condition, shortage timing, project order, and network topology.
 
-The tide changes water depth across the map. Water is always physically enterable, but sounded depth, stamina, field tools, and the risk of being swept to a safe bank make route choice legible. Weather changes stamina/load pressure, stability, and whether marginal autonomous corridors remain usable.
+The tide changes water depth across the map. Water is always physically enterable, but sounded depth, stamina, stability, field tools, and the risk of being swept to a safe bank make route choice legible. Sparse arrows on discovered wet surface show the shared tide/wind current direction before entry; fixed arrow geometry does not encode unsounded bathymetry. Weather changes stamina/load pressure, stability, and whether marginal autonomous corridors remain usable.
 
 ## Nested reward loops
 
@@ -134,6 +134,7 @@ At a source harbor, the player can witness its specialization count into a singl
 - Terrain, water depth, load ratio, roughness, sharp changes in direction, wind, and pace affect effort or stability.
 - Perishable food loses freshness gently during travel; a completed cache suspends that decay while the player is sheltered at its harbor.
 - A charge-gated Loom pulse reveals nearby permanent chart information and bathymetry; sounded depth also informs pointer-path cost.
+- Discovered wet surface shows sparse current-direction arrows in both Chart and Relief. The cue tells the player where a sweep would pull without revealing whether unsounded water is shallow or deep.
 - Pointer paths price the same Wayknot fields as manual travel. The placed aids persist in saves and can always be reclaimed; they never become an upgrade currency or upkeep chore.
 - An active Tide Harp adds its three knot-centered echoes without changing cargo, settlement stock, route history, or the simulation ledger. Overlapping selected triangles still grant only one Harp recharge benefit at the courier's tile.
 - The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
@@ -143,7 +144,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 
 ## Setback and recovery
 
-- Dry-ground exhaustion creates an emergency camp and Rest pace. Deep-water exhaustion yields control to a deterministic adjacent current path toward the nearest safe bank; cargo quantity stays with the player and weathers once. A connected clinic can intervene before the sweep, while ferries and the Storm kite shorten recovery.
+- Dry-ground stamina exhaustion creates an emergency camp and Rest pace. In deep/current water at or above 120,000 depth, either stamina or stability reaching zero yields control to the same deterministic adjacent current path toward the nearest safe bank; cargo quantity stays with the player and weathers once. A connected clinic can intervene before the sweep, while ferries and the Storm kite shorten recovery.
 - Low stability gradually weathers cargo instead of destroying the contract. Fragile medicine reacts earlier to shocks, perishable food rewards an efficient line, and Shift-bracing supplies an explicit protective choice.
 - Every condition grade still delivers material and strengthens a route.
 - An unwanted or risky promise can be handed into accountable care at any harbor; cargo returns to local stock and learned chart/trace remains.
@@ -152,7 +153,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
-## Session shapes and pressure
+## Session shapes, pressure, and perpetual direction
 
 Session shape is a commitment from the game about when it will offer closure, not a difficulty or payout multiplier:
 
@@ -161,6 +162,8 @@ Session shape is a commitment from the game about when it will offer closure, no
 - **Wander (open):** explore, inspect, report, deliver, tend, or stop without a quota.
 
 When Drift or Weave reaches its threshold, the UI explicitly says the chosen shape is complete. Continuing has no bonus and leaving has no penalty.
+
+Those timed labels remain current behavior only while the focused mobile/current hotfix is being published. The next compatibility-preserving design pass removes the 10/25-minute framing from new-world setup and makes every new world perpetual by default. Quiet Hour remains a voluntary pause, save, and causal recap rather than a forced ending. Existing saves continue on the local-first IndexedDB repository with its sticky localStorage fallback; this direction does not require cloud or server state.
 
 World posture adjusts pressure without changing reward value:
 
@@ -172,7 +175,7 @@ Quiet Hour pauses immediately, saves, and summarizes duration, distance, deliver
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. The Tide Harp HUD teaches `Reed + Anchor + Wind in a compact triangle` when none exist, distinguishes tuned-but-inactive from active, and names the +900/three-origin benefit; Help repeats the model, while unsounded local water keeps the first explanatory priority. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. The packaged layout probe now covers 1,440 × 900, 960 × 640, the 927-pixel desktop/tablet boundary, and the 700-pixel compact layout so objective copy and a genuinely scrollable Promises pane do not overlap. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. The Tide Harp HUD teaches `Reed + Anchor + Wind in a compact triangle` when none exist, distinguishes tuned-but-inactive from active, and names the +900/three-origin benefit; Help repeats the model, while unsounded local water keeps the first explanatory priority. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears and detailed surfaces begin folded behind an accessible 44-pixel HUD disclosure. A compact route/safety/terrain/action strip and the action dock remain available; opening Promises or a settlement inspector gives that one surface the full safe sheet rather than stacking both. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
 Chart 2D represents each instrument with three persistent bowed strings along each edge—nine in all—a written label, and fixed activity marks. Relief 3D uses three surface-rooted cords and a suspended faceted bell rather than a flat icon. Hidden terrain height is never consulted for visible placement, and reduced motion freezes bob/sway while keeping every structural and textual cue. Packaged inspection verifies the deterministic Harp, its remote sounding echo, both presentations, visible title controls, and fresh title/game captures. Exact-commit CI and Pages deployment also pass, so Phase 10 is now a published untagged preview; Alpha 0.2 remains the latest tag.
 
@@ -194,6 +197,10 @@ Implemented now:
 
 Expansion runway, not current behavior:
 
+- perpetual-by-default new-world setup with the 10/25-minute Drift/Weave framing removed while voluntary Quiet Hour recaps remain;
+- procedural rock formations that block ordinary traversal and a carried, recoverable ladder that changes the same manual-movement and pointer-routing rule;
+- physical dropped cargo that can tumble on rock, drift in currents, take condition damage, and affect trust/compensation without becoming an unrecoverable deletion trap;
+- an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;
 - letters, passengers, personal narrative promise families, migration, and richer rumor disputes;
 - manually placed beacons/caches/crossings outside civic projects;
 - localized moving weather fronts and more tide-specific tools;

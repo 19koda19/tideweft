@@ -13,8 +13,99 @@ import type {
 } from "./types";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
+export const MOBILE_PROMISES_PANEL_ID = "promises-panel";
+export const MOBILE_INSPECTOR_PANEL_ID = "settlement-inspector";
+const COMPACT_HUD_MEDIA_QUERY = "(max-width: 44rem), (max-height: 34rem) and (max-width: 64rem)";
 export const TIDE_HARP_HELP_COPY =
   "Place one Reed mat, one Tide anchor, and one Wind knot as a compact triangle to tune a Tide Harp. Stand inside its triangle for +900 Loom charge each tick; a Space pulse then sounds from you and all three knots.";
+
+export interface MobileHudDisclosureState {
+  readonly ariaExpanded: "true" | "false";
+  readonly ariaControls: string;
+  readonly visibleLabel: string;
+  readonly accessibleLabel: string;
+}
+
+export interface MobileHudCopyInput {
+  readonly objectiveTitle: string | undefined;
+  readonly objectiveRoute: string | undefined;
+  readonly objectiveProgress: string | undefined;
+  readonly stamina: number;
+  readonly stability: number;
+  readonly stabilityHint: string;
+  readonly isWater: boolean;
+  readonly terrain: string;
+  readonly depth: string;
+  readonly effort: string;
+  readonly swept: boolean;
+  readonly fieldHint: string;
+  readonly canScan: boolean | undefined;
+  readonly interactLabel: string | undefined;
+  readonly wayknotLabel: string | undefined;
+}
+
+export interface MobileHudCopy {
+  readonly objective: string;
+  readonly safety: string;
+  readonly terrain: string;
+  readonly actions: string;
+}
+
+/** Native disclosure copy stays synchronized without becoming saved game state. */
+export function mobileHudDisclosureState(
+  expanded: boolean,
+  sheet: "promises" | "inspector" = "promises",
+): MobileHudDisclosureState {
+  if (expanded && sheet === "inspector") {
+    return {
+      ariaExpanded: "true",
+      ariaControls: MOBILE_INSPECTOR_PANEL_ID,
+      visibleLabel: "CLOSE ×",
+      accessibleLabel: "Close settlement details",
+    };
+  }
+  return expanded
+    ? {
+        ariaExpanded: "true",
+        ariaControls: MOBILE_PROMISES_PANEL_ID,
+        visibleLabel: "PROMISES −",
+        accessibleLabel: "Close promises",
+      }
+    : {
+        ariaExpanded: "false",
+        ariaControls: MOBILE_PROMISES_PANEL_ID,
+        visibleLabel: "PROMISES +",
+        accessibleLabel: "Open promises",
+      };
+}
+
+/** Builds the three terse lines that remain readable while mobile panels are closed. */
+export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
+  const stamina = Math.round(Math.max(0, Math.min(1, Number.isFinite(input.stamina) ? input.stamina : 0)) * 100);
+  const stability = Math.round(Math.max(0, Math.min(1, Number.isFinite(input.stability) ? input.stability : 0)) * 100);
+  const route = input.objectiveRoute?.trim() || "PICKUP cargo → DELIVER cargo";
+  const objective = [
+    route,
+    input.objectiveTitle?.trim() || "Listen for a promise",
+    input.objectiveProgress?.trim(),
+  ].filter(Boolean).join(" · ");
+  const stabilityCause = input.stabilityHint
+    .replace(/^Falling(?::|\s*·)?\s*/u, "↓ ")
+    .replace(/^Recovering(?: while)?\s*/u, "↑ ")
+    .replace(/^Stable\s*·.*$/u, "steady · Shift braces")
+    .replace(/\s*·\s*hold Shift to brace.*$/iu, " · Shift braces");
+  const sweepRule = "DEEP: STAM/STAB 0 → SWEPT";
+  const safety = input.swept
+    ? `SWEPT · ${input.fieldHint} · STAM ${stamina}% · STAB ${stability}%`
+    : `${sweepRule} · STAM ${stamina}% · STAB ${stability}% · ${stabilityCause}`;
+  const terrain = `${input.isWater ? "WATER" : "GROUND"} · ${input.terrain} · ${input.depth} · ${input.effort}`;
+  const actions = [
+    `E ${input.interactLabel?.trim() || "Interact"}`,
+    input.canScan === false ? "SPACE SCAN LOCKED" : "SPACE SCAN",
+    `F ${input.wayknotLabel?.trim() || "Place Wayknot"}`,
+  ].join(" · ");
+  return { objective, safety, terrain, actions };
+}
 
 export interface WayknotActionButtonState {
   readonly disabled: boolean;
@@ -106,6 +197,12 @@ export function handleTideweftUIShortcut(
 
 interface UIRefs {
   shell: HTMLDivElement;
+  mobileFieldStrip: HTMLElement;
+  mobileHudToggle: HTMLButtonElement;
+  mobileObjective: HTMLSpanElement;
+  mobileSafety: HTMLSpanElement;
+  mobileTerrain: HTMLSpanElement;
+  mobileActions: HTMLSpanElement;
   worldName: HTMLParagraphElement;
   clockDay: HTMLSpanElement;
   clockTime: HTMLSpanElement;
@@ -379,6 +476,8 @@ const chronicleSignature = (entries: readonly ChronicleEntryUIView[]): string =>
 
 const buildShell = (options: TideweftUIOptions): UIRefs => {
   const shell = createElement("div", "ui-layer");
+  shell.dataset.mobileHudExpanded = "false";
+  shell.dataset.mobileSheet = "promises";
 
   const topbar = createElement("section", "hud-bar glass-panel");
   topbar.setAttribute("aria-label", "World and journey status");
@@ -433,6 +532,40 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   cargoWrapper.append(cargoLabel);
   vitals.append(staminaWrapper, stabilityWrapper, scanWrapper, cargoWrapper);
   topbar.append(identity, clock, tideReadout, weatherReadout, vitals);
+
+  const mobileFieldStrip = createElement("section", "mobile-field-strip glass-panel");
+  mobileFieldStrip.setAttribute("aria-label", "Compact field status");
+  const initialMobileDisclosure = mobileHudDisclosureState(false);
+  const mobileHudToggle = createButton(
+    "mobile-field-toggle",
+    initialMobileDisclosure.visibleLabel,
+    initialMobileDisclosure.accessibleLabel,
+  );
+  mobileHudToggle.setAttribute("aria-expanded", initialMobileDisclosure.ariaExpanded);
+  mobileHudToggle.setAttribute("aria-controls", initialMobileDisclosure.ariaControls);
+  const mobileFieldCopy = createElement("div", "mobile-field-strip__copy");
+  const mobileObjective = createElement(
+    "span",
+    "mobile-field-strip__line mobile-field-strip__objective",
+    "PICKUP cargo → DELIVER cargo · Listen for a promise",
+  );
+  const mobileSafety = createElement(
+    "span",
+    "mobile-field-strip__line mobile-field-strip__safety",
+    "STABILITY 100% · WATER depth unsounded",
+  );
+  const mobileTerrain = createElement(
+    "span",
+    "mobile-field-strip__line mobile-field-strip__terrain",
+    "WATER · depth unsounded · pulse Space",
+  );
+  const mobileActions = createElement(
+    "span",
+    "mobile-field-strip__line mobile-field-strip__actions",
+    "SPACE SCAN · E Interact · F Place Wayknot",
+  );
+  mobileFieldCopy.append(mobileObjective, mobileSafety, mobileTerrain, mobileActions);
+  mobileFieldStrip.append(mobileHudToggle, mobileFieldCopy);
 
   const objectivePanel = createElement("aside", "objective-panel glass-panel");
   objectivePanel.setAttribute("aria-labelledby", "objective-title");
@@ -524,6 +657,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   );
 
   const contractDetails = createElement("details", "contract-rail glass-panel");
+  contractDetails.id = MOBILE_PROMISES_PANEL_ID;
   contractDetails.open = true;
   const contractSummary = createElement("summary", "panel-summary");
   contractSummary.append(createElement("span", "panel-summary__title", "Promises"));
@@ -540,6 +674,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   contractDetails.append(contractSummary, contractGuide, contractList);
 
   const inspector = createElement("aside", "settlement-inspector glass-panel");
+  inspector.id = MOBILE_INSPECTOR_PANEL_ID;
   inspector.setAttribute("aria-labelledby", "settlement-inspector-title");
   inspector.hidden = true;
   const inspectorHeader = createElement("header", "inspector-header");
@@ -810,7 +945,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const journeyNote = createElement(
     "p",
     "help-dialog__note",
-    "Cargo promises move physical goods from the named PICK UP harbor to the named DELIVER harbor. Signed stock reports are separate one-slot information jobs. Deep water drains more stamina; if it empties, the current sweeps you toward a safe bank while cargo stays with you. Visit completed civic projects to inherit field tools.",
+    "Cargo promises move physical goods from the named PICK UP harbor to the named DELIVER harbor. Signed stock reports are separate one-slot information jobs. Deep water drains stamina and can erode stability; if either reaches zero there, the current gives you a recoverable sweep toward a safe bank while cargo stays with you. Visit completed civic projects to inherit field tools.",
   );
   const wayknotNote = createElement(
     "p",
@@ -821,10 +956,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   helpDialog.append(helpContent);
 
   const leftRail = createElement("div", "left-rail");
+  leftRail.id = "field-hud-panels";
   leftRail.append(objectivePanel, contractDetails);
 
   shell.append(
     topbar,
+    mobileFieldStrip,
     leftRail,
     inspector,
     chronicleDetails,
@@ -837,6 +974,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
 
   return {
     shell,
+    mobileFieldStrip,
+    mobileHudToggle,
+    mobileObjective,
+    mobileSafety,
+    mobileTerrain,
+    mobileActions,
     worldName,
     clockDay,
     clockTime,
@@ -953,6 +1096,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let forcedQuietHour: boolean | null = null;
   let titleFormDirty = false;
   let contractPointerActive = false;
+  let selectedInspectorId: string | null = null;
   let running = false;
   let frameHandle: number | null = null;
 
@@ -972,6 +1116,16 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     window.setTimeout(() => {
       announcer.textContent = message;
     }, 20);
+  };
+
+  const setMobileHudExpanded = (expanded: boolean): void => {
+    const sheet = refs.shell.dataset.mobileSheet === "inspector" ? "inspector" : "promises";
+    const disclosure = mobileHudDisclosureState(expanded, sheet);
+    refs.shell.dataset.mobileHudExpanded = disclosure.ariaExpanded;
+    refs.mobileHudToggle.setAttribute("aria-expanded", disclosure.ariaExpanded);
+    refs.mobileHudToggle.setAttribute("aria-controls", disclosure.ariaControls);
+    refs.mobileHudToggle.setAttribute("aria-label", disclosure.accessibleLabel);
+    refs.mobileHudToggle.textContent = disclosure.visibleLabel;
   };
 
   const renderContracts = (contracts: readonly ContractUIView[]): void => {
@@ -1344,6 +1498,19 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
     renderContracts(view.contracts);
     renderInspector(view.selectedSettlement);
+    const nextInspectorId = view.selectedSettlement?.id ?? null;
+    const inspectorJustOpened = nextInspectorId !== null && nextInspectorId !== selectedInspectorId;
+    selectedInspectorId = nextInspectorId;
+    const inspectorOpenedOnCompactViewport =
+      inspectorJustOpened
+      && typeof window.matchMedia === "function"
+      && window.matchMedia(COMPACT_HUD_MEDIA_QUERY).matches;
+    if (nextInspectorId === null) {
+      refs.shell.dataset.mobileSheet = "promises";
+    } else if (inspectorOpenedOnCompactViewport) {
+      refs.shell.dataset.mobileSheet = "inspector";
+      setMobileHudExpanded(true);
+    }
     renderChronicle(view.chronicle);
 
     refs.pauseButton.textContent = view.clock.paused ? "Release tide" : "Hold tide";
@@ -1361,6 +1528,33 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.wayknotButton.title = wayknotAction.hint;
     refs.wayknotButton.setAttribute("aria-label", wayknotAction.ariaLabel);
     refs.wayknotButton.setAttribute("aria-keyshortcuts", wayknotAction.ariaKeyShortcuts);
+    const compactHud = mobileHudCopy({
+      objectiveTitle: objective?.title,
+      objectiveRoute: objective?.why,
+      objectiveProgress: objective?.progressLabel,
+      stamina: view.player.stamina,
+      stability: view.player.stability,
+      stabilityHint: view.player.stabilityHint,
+      isWater: view.field.isWater,
+      terrain: view.field.terrainLabel,
+      depth: view.field.depthLabel,
+      effort: view.field.effortLabel,
+      swept: view.field.swept,
+      fieldHint: view.field.hint,
+      canScan: view.controls?.canScan,
+      interactLabel: view.controls?.interactLabel,
+      wayknotLabel: wayknotAction.label,
+    });
+    refs.mobileObjective.textContent = compactHud.objective;
+    refs.mobileObjective.title = compactHud.objective;
+    refs.mobileSafety.textContent = compactHud.safety;
+    refs.mobileSafety.title = compactHud.safety;
+    refs.mobileTerrain.textContent = compactHud.terrain;
+    refs.mobileTerrain.title = compactHud.terrain;
+    refs.mobileActions.textContent = compactHud.actions;
+    refs.mobileActions.title = compactHud.actions;
+    refs.mobileFieldStrip.dataset.swept = view.field.swept ? "true" : "false";
+    refs.mobileFieldStrip.dataset.stabilityTrend = view.player.stabilityTrend;
     refs.quietButton.disabled = view.controls?.canEndSession === false;
     for (const [pace, button] of Object.entries(refs.paceButtons) as Array<[PaceView, HTMLButtonElement]>) {
       button.setAttribute("aria-pressed", pace === view.player.pace ? "true" : "false");
@@ -1407,11 +1601,36 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   refs.scanButton.addEventListener("click", () => options.dispatch({ type: "scan" }));
   refs.interactButton.addEventListener("click", () => options.dispatch({ type: "interact" }));
   refs.wayknotButton.addEventListener("click", () => options.dispatch({ type: "wayknot" }));
+  refs.mobileHudToggle.addEventListener("click", () => {
+    const expanding = refs.shell.dataset.mobileHudExpanded !== "true";
+    if (expanding) {
+      // The HUD control always opens Promises. Settlement interaction opens a
+      // separate full-size inspector sheet, so the two never compete for a
+      // phone's short viewport.
+      refs.shell.dataset.mobileSheet = "promises";
+      if (latestView?.selectedSettlement) {
+        options.dispatch({
+          type: "settlement",
+          action: "close",
+          settlementId: latestView.selectedSettlement.id,
+        });
+      }
+    } else if (latestView?.selectedSettlement) {
+      options.dispatch({
+        type: "settlement",
+        action: "close",
+        settlementId: latestView.selectedSettlement.id,
+      });
+    }
+    setMobileHudExpanded(expanding);
+  });
   refs.quietButton.addEventListener("click", () => options.dispatch({ type: "quiet-hour", action: "open" }));
   refs.titleButton.addEventListener("click", () => options.dispatch({ type: "open-title" }));
   refs.helpButton.addEventListener("click", () => syncDialog(refs.helpDialog, true));
   refs.helpClose.addEventListener("click", () => syncDialog(refs.helpDialog, false));
   refs.inspectorClose.addEventListener("click", () => {
+    refs.shell.dataset.mobileSheet = "promises";
+    setMobileHudExpanded(false);
     options.dispatch({
       type: "settlement",
       action: "close",

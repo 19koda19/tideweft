@@ -287,6 +287,32 @@ function alphaWorldSaveText(world: WorldState): string {
 }
 
 describe("runtime clarity guards", () => {
+  it("announces stability loss, rather than stamina loss, when deep water takes control", async () => {
+    const world = createWorld("runtime stability sweep", "calm");
+    const view = createWorldView(world);
+    const deepTile = view.terrain.tiles.find((tile) => tile.waterDepth >= 120_000);
+    if (!deepTile) throw new Error("fixture did not generate deep water");
+    const player = createPlayer(view);
+    placePlayerOnTile(player, deepTile);
+    player.stability = 0;
+    player.stamina = 800_000;
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      player,
+      createSessionState(world.meta.seedText),
+      "Stability sweep",
+    ));
+
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    advancePlayerSteps(runtime, 1);
+
+    expect(runtime.getRenderView().player.mode).toBe("swept");
+    expect(runtime.getUIView().announcement?.message).toContain("STABILITY EMPTY IN DEEP WATER");
+    expect(runtime.getUIView().announcement?.message).not.toContain("STAMINA EMPTY");
+    runtime.destroy();
+  });
+
   it("explains current control and ignores scan and pace commands while swept", async () => {
     const world = createWorld("runtime swept guard", "calm");
     const view = createWorldView(world);

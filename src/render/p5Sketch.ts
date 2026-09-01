@@ -1,5 +1,6 @@
 import p5 from "p5";
 
+import { buildSurfaceCurrentCues } from "./currentCues";
 import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 
@@ -719,6 +720,44 @@ export function createTideweftRenderer(
           }
         }
       }
+    };
+
+    const drawSurfaceCurrents = (view: TideweftView, now: number): void => {
+      const grid = view.terrain;
+      const tileSize = Math.max(0.1, grid.tileSize);
+      const halfWidth = p.width / (2 * camera.zoom);
+      const halfHeight = p.height / (2 * camera.zoom);
+      const bounds = {
+        firstColumn: Math.floor((camera.x - halfWidth - grid.origin.x) / tileSize) - 1,
+        lastColumn: Math.ceil((camera.x + halfWidth - grid.origin.x) / tileSize) + 1,
+        firstRow: Math.floor((camera.y - halfHeight - grid.origin.y) / tileSize) - 1,
+        lastRow: Math.ceil((camera.y + halfHeight - grid.origin.y) / tileSize) + 1,
+      };
+      const cues = buildSurfaceCurrentCues(grid, view.tide.surfaceCurrent, {
+        bounds,
+        focus: { x: camera.x, y: camera.y },
+        tideLevel: view.tide.level,
+        timeMs: now,
+        reducedMotion,
+        maxCues: 220,
+      });
+      if (cues.length === 0) return;
+
+      const strokeCue = (cue: (typeof cues)[number]): void => {
+        p.line(cue.tail.x, cue.tail.y, cue.tip.x, cue.tip.y);
+        p.line(cue.tip.x, cue.tip.y, cue.headLeft.x, cue.headLeft.y);
+        p.line(cue.tip.x, cue.tip.y, cue.headRight.x, cue.headRight.y);
+      };
+      p.push();
+      p.noFill();
+      clearDash();
+      p.stroke(withAlpha(PALETTE.ink, 186));
+      p.strokeWeight(3.2 / camera.zoom);
+      for (const cue of cues) strokeCue(cue);
+      p.stroke(withAlpha(PALETTE.foam, 198));
+      p.strokeWeight(1.15 / camera.zoom);
+      for (const cue of cues) strokeCue(cue);
+      p.pop();
     };
 
     const drawDepthSoundings = (view: TideweftView): void => {
@@ -1887,6 +1926,7 @@ export function createTideweftRenderer(
       p.scale(camera.zoom);
       p.translate(-camera.x, -camera.y);
       drawTerrain(latestView);
+      drawSurfaceCurrents(latestView, now);
       drawTraces(latestView.traces, now);
       drawRoutes(latestView.routes, now);
       drawChoirs(latestView.choirs, now);

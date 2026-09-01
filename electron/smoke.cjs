@@ -14,12 +14,14 @@ function parseArguments(argv) {
   let executable = process.env.TIDEWEFT_PACKAGED_EXECUTABLE || '';
   let screenshot = path.join(projectRoot, 'artifacts', 'electron-smoke.png');
   let titleScreenshot = path.join(projectRoot, 'artifacts', 'electron-title-smoke.png');
+  let mobileScreenshot = path.join(projectRoot, 'artifacts', 'electron-mobile-smoke.png');
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--no-screenshot') {
       screenshot = '';
       titleScreenshot = '';
+      mobileScreenshot = '';
     } else if (argument === '--executable') {
       executable = argv[index + 1] || '';
       index += 1;
@@ -35,6 +37,11 @@ function parseArguments(argv) {
       index += 1;
     } else if (argument.startsWith('--title-screenshot=')) {
       titleScreenshot = argument.slice('--title-screenshot='.length);
+    } else if (argument === '--mobile-screenshot') {
+      mobileScreenshot = argv[index + 1] || '';
+      index += 1;
+    } else if (argument.startsWith('--mobile-screenshot=')) {
+      mobileScreenshot = argument.slice('--mobile-screenshot='.length);
     } else {
       throw new Error(`Unknown desktop smoke argument: ${argument}`);
     }
@@ -44,6 +51,7 @@ function parseArguments(argv) {
     executable: executable ? path.resolve(executable) : '',
     screenshot: screenshot ? path.resolve(screenshot) : '',
     titleScreenshot: titleScreenshot ? path.resolve(titleScreenshot) : '',
+    mobileScreenshot: mobileScreenshot ? path.resolve(mobileScreenshot) : '',
   };
 }
 
@@ -133,7 +141,13 @@ function parseSmokeResult(output) {
   return null;
 }
 
-async function runPackagedApp(executable, screenshot, titleScreenshot, userDataDirectory) {
+async function runPackagedApp(
+  executable,
+  screenshot,
+  titleScreenshot,
+  mobileScreenshot,
+  userDataDirectory,
+) {
   const child = spawn(executable, ['--tideweft-smoke'], {
     cwd: projectRoot,
     env: {
@@ -143,6 +157,7 @@ async function runPackagedApp(executable, screenshot, titleScreenshot, userDataD
       TIDEWEFT_SMOKE_USER_DATA: userDataDirectory,
       ...(screenshot ? { TIDEWEFT_SMOKE_SCREENSHOT: screenshot } : {}),
       ...(titleScreenshot ? { TIDEWEFT_SMOKE_TITLE_SCREENSHOT: titleScreenshot } : {}),
+      ...(mobileScreenshot ? { TIDEWEFT_SMOKE_MOBILE_SCREENSHOT: mobileScreenshot } : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -194,6 +209,12 @@ async function runPackagedApp(executable, screenshot, titleScreenshot, userDataD
       throw new Error(`Title smoke screenshot is missing or too small: ${titleScreenshot}`);
     }
   }
+  if (mobileScreenshot) {
+    const mobileScreenshotStat = await fs.stat(mobileScreenshot);
+    if (!mobileScreenshotStat.isFile() || mobileScreenshotStat.size < 1_024) {
+      throw new Error(`Mobile smoke screenshot is missing or too small: ${mobileScreenshot}`);
+    }
+  }
 
   return payload;
 }
@@ -208,17 +229,20 @@ async function main() {
     // Never let a screenshot from an earlier run masquerade as current evidence.
     if (options.screenshot) await fs.rm(options.screenshot, { force: true });
     if (options.titleScreenshot) await fs.rm(options.titleScreenshot, { force: true });
+    if (options.mobileScreenshot) await fs.rm(options.mobileScreenshot, { force: true });
     process.stdout.write(`Verifying packaged desktop app: ${executable}\n`);
     const result = await runPackagedApp(
       executable,
       options.screenshot,
       options.titleScreenshot,
+      options.mobileScreenshot,
       userDataDirectory,
     );
     process.stdout.write(
       `Packaged desktop smoke passed at tick ${String(result.world.tick)}` +
         (result.screenshot
           ? `; world screenshot ${result.screenshot.bytes} bytes` +
+            (result.mobileScreenshot ? `; mobile screenshot ${result.mobileScreenshot.bytes} bytes` : '') +
             (result.titleScreenshot ? `; title screenshot ${result.titleScreenshot.bytes} bytes.\n` : '.\n')
           : '.\n'),
     );

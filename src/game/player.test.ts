@@ -447,6 +447,7 @@ describe("effort, stability, and discovery", () => {
     expect(swept.exhausted).toBe(true);
     expect(swept.becameSwept).toBe(true);
     expect(swept.swept).toBe(true);
+    expect(swept.sweepCause).toBe("stamina");
     expect(player.mode).toBe("swept");
     expect(player.cargo[0]).toMatchObject({ quantity: 4, condition: FIXED_POINT - 35_000 });
     expect(player.surveyTrace).toEqual([startIndex]);
@@ -474,6 +475,110 @@ describe("effort, stability, and discovery", () => {
     expect(player.cargo[0]?.condition).toBe(weatheredCondition);
     expect(player.surveyTrace).toEqual([playerTileIndex(player)]);
     expect(player.harborTrail).toEqual([]);
+  });
+
+  it("turns zero stability in deep water into the same deterministic sweep while stamina remains", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const world = controlledWorld((tiles) => {
+      const water = tiles[startIndex];
+      if (!water) throw new Error("fixture tile missing");
+      tiles[startIndex] = {
+        ...water,
+        terrain: "deep-water",
+        roughness: FIXED_POINT,
+        waterDepth: 520_000,
+      };
+    });
+    const makeUnstablePlayer = () => {
+      const player = createPlayer(world);
+      placePlayer(player, 10, 10);
+      player.pace = "swift";
+      player.stamina = FIXED_POINT;
+      player.stability = 1;
+      expect(loadContractCargo(player, offeredContract(world, {
+        id: 92_002,
+        resource: "parts",
+        quantity: 4,
+      }))).toBe(true);
+      return player;
+    };
+    const player = makeUnstablePlayer();
+    const comparison = makeUnstablePlayer();
+
+    const swept = stepPlayer(player, world, MOVE_RIGHT);
+    const comparisonSweep = stepPlayer(comparison, world, MOVE_RIGHT);
+
+    expect(swept.exhausted).toBe(false);
+    expect(player.stamina).toBeGreaterThan(0);
+    expect(player.stability).toBe(0);
+    expect(swept).toMatchObject({
+      becameSwept: true,
+      swept: true,
+      sweepCause: "stability",
+    });
+    expect(player.mode).toBe("swept");
+    expect(player.sweepPath).toEqual(comparison.sweepPath);
+    expect(comparisonSweep.sweepCause).toBe("stability");
+    expect(player.cargo[0]?.quantity).toBe(4);
+
+    const conditionAfterLoss = player.cargo[0]?.condition;
+    const drift = stepPlayer(player, world, NO_INPUT);
+    expect(drift.swept).toBe(true);
+    expect(drift.sweepCause).toBeNull();
+    expect(player.cargo[0]).toMatchObject({
+      quantity: 4,
+      condition: conditionAfterLoss,
+    });
+  });
+
+  it("cannot cancel an already-zero deep-water stability failure with same-step stillness recovery", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const world = controlledWorld((tiles) => {
+      const water = tiles[startIndex];
+      if (!water) throw new Error("fixture tile missing");
+      tiles[startIndex] = { ...water, terrain: "deep-water", waterDepth: 520_000 };
+    });
+    const player = createPlayer(world);
+    placePlayer(player, 10, 10);
+    player.stamina = FIXED_POINT;
+    player.stability = 0;
+
+    const swept = stepPlayer(player, world, NO_INPUT);
+
+    expect(swept.exhausted).toBe(false);
+    expect(swept.becameSwept).toBe(true);
+    expect(swept.sweepCause).toBe("stability");
+    expect(player.mode).toBe("swept");
+    expect(player.stability).toBe(0);
+  });
+
+  it("lets zero stability recover on dry ground and sub-threshold shallows without sweeping", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    for (const waterDepth of [0, 119_999]) {
+      const world = controlledWorld((tiles) => {
+        const tile = tiles[startIndex];
+        if (!tile) throw new Error("fixture tile missing");
+        tiles[startIndex] = {
+          ...tile,
+          terrain: waterDepth === 0 ? "meadow" : "tidal-flat",
+          waterDepth,
+        };
+      });
+      const player = createPlayer(world);
+      placePlayer(player, 10, 10);
+      player.stamina = FIXED_POINT;
+      player.stability = 0;
+
+      const recovering = stepPlayer(player, world, NO_INPUT);
+
+      expect(recovering.exhausted).toBe(false);
+      expect(recovering.becameSwept).toBe(false);
+      expect(recovering.swept).toBe(false);
+      expect(recovering.sweepCause).toBeNull();
+      expect(player.mode).not.toBe("swept");
+      expect(player.stability).toBeGreaterThan(0);
+      expect(player.stabilityTrend).toBe("recovering");
+    }
   });
 
   it("rebuilds a saved sweep as an adjacent route with an honest fresh estimate", () => {

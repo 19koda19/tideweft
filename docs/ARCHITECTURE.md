@@ -16,7 +16,7 @@ keyboard / pointer / DOM commands
               ▼
 immutable render + UI projections ──> p5 Chart 2D or Relief 3D / accessible DOM / Web Audio
 
-IndexedDB (localStorage fallback)
+local-first IndexedDB (sticky localStorage fallback)
     └── game-session envelope ──> checksummed simulation envelope
 ```
 
@@ -25,7 +25,7 @@ IndexedDB (localStorage fallback)
 - `src/sim`: authoritative deterministic world, active graph, rules, invariants, views, and serialization. It imports no DOM, p5, Electron, Node, wall clock, or browser persistence.
 - `src/game`: fixed-step host, player travel, command scheduling, session flow, save orchestration, onboarding, and presentation projections.
 - `src/render`: two swappable p5 instance-mode presentations, cameras, world hit-testing, a pure chunked height-mesh builder, and shared renderer commands. Only the active Chart 2D or Relief 3D canvas loops or accepts input.
-- `src/ui`: accessible DOM panels and controls. It reads a view and emits typed commands.
+- `src/ui`: accessible DOM panels and controls. It reads a view and emits typed commands; its small-screen disclosure state is local presentation state rather than authoritative or saved state.
 - `src/audio`: procedural Web Audio feedback. It unlocks only after player interaction.
 - `src/platform`: browser save repositories plus export/import validation.
 - `electron`: hardened local protocol, desktop lifecycle, Forge packaging, and production smoke mode. There is no preload or renderer Node API.
@@ -74,6 +74,12 @@ The playable slice uses:
 - A complete set of potential inter-settlement corridors. Only routes above the strand-strength and condition threshold participate in autonomous service.
 
 Presented prose is derived from structured facts. UI copy may explain a cause, but it cannot invent stock, a person, a project contribution, or a route event that the simulation did not record.
+
+## Current recovery and discovery-safe cues
+
+The player host treats water depth of **120,000** fixed-point units or greater as deep/current water for involuntary recovery. If stamina is empty there, or if stability is empty at step entry or falls to zero during that step, the result enters the same deterministic swept-current path toward a safe bank. Dry-ground stamina exhaustion still camps, and water below the threshold does not trigger the sweep rule. The recovery path retains the existing clinic interception and ferry, Storm-kite, and Tide-anchor modifiers; cargo quantity is conserved and any carried cargo is weathered once rather than repeatedly on each recovery step.
+
+One pure surface-current function derives the directional vector from authoritative tide direction and wind Y. Player recovery and the projected cue consume that shared vector so the displayed heading cannot drift from the movement rule. The render cue builder receives only the projected wet mask, discovery mask, dimensions, direction, and motion preference: it does not receive bathymetry. It emits a bounded sparse set of fixed-size arrows only for discovered wet tiles, so Chart 2D and Relief 3D can show pre-entry flow without encoding hidden depth through size, density, or animation speed. Reduced motion freezes phase while retaining direction.
 
 ## Derived Wayknot topology
 
@@ -135,17 +141,21 @@ There are two nested versions:
 
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
 
-The browser repository prefers IndexedDB and switches to a sticky localStorage fallback if opening or a later transaction fails. Cross-store reads reconcile the newest usable copy, record writes are monotonic, and overlapping runtime save requests coalesce to the newest complete snapshot behind the in-flight write. A separate versioned localStorage deletion journal is written before best-effort backend cleanup, so an inaccessible stale IndexedDB copy cannot reappear in a later repository instance; only a strictly newer save clears that marker. Repository operations clone records, sort summaries deterministically, and isolate malformed data. The platform export/import envelope has a version, 20 MB limit, slot/metadata validation, future-format rejection, and object-URL cleanup. The current UI does not expose those import/export helpers yet.
+The browser repository is local-first: it prefers IndexedDB and switches to a sticky localStorage fallback if opening or a later transaction fails. Cross-store reads reconcile the newest usable copy, record writes are monotonic, and overlapping runtime save requests coalesce to the newest complete snapshot behind the in-flight write. A separate versioned localStorage deletion journal is written before best-effort backend cleanup, so an inaccessible stale IndexedDB copy cannot reappear in a later repository instance; only a strictly newer save clears that marker. Repository operations clone records, sort summaries deterministically, and isolate malformed data. The platform export/import envelope has a version, 20 MB limit, slot/metadata validation, future-format rejection, and object-URL cleanup. The current UI does not expose those import/export helpers yet.
+
+The next session-flow pass will make new worlds perpetual and remove the 10/25-minute Drift/Weave framing while preserving existing saves and voluntary Quiet Hour recaps. That is planned rather than implemented. It will reuse this repository contract and will not introduce a server or cloud dependency.
 
 Unsupported simulation versions fail rather than being guessed into a current world. Explicit checksum-first migrations preserve the prior 64 × 48 world under current Tide Choir rules; no migration silently regenerates terrain from its seed.
 
 ## Dual p5 presentation
 
-Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean. Chart 2D retains dense labels, color-independent terrain motifs, and low-motion readability; its Harps use three persistent bowed strings per edge—nine in all—a labeled center plate, and six fixed active marks rather than color alone. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and material references, draws live per-tile water, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active.
+Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean, plus the shared surface-current direction. Chart 2D retains dense labels, color-independent terrain motifs, low-motion readability, and sparse current arrows over discovered wet tiles; its Harps use three persistent bowed strings per edge—nine in all—a labeled center plate, and six fixed active marks rather than color alone. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and material references, draws live per-tile water and discovery-safe surface arrows, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active.
 
 Relief cord roots and bell/label placement sample the discovery-masked surface rather than authoritative hidden elevation. Reduced-motion mode sets decorative bell bob and sway to zero but leaves cords, bell, labels, crown, and active words intact. Geometry memoization keys immutable projected Harp data, keeping these derived strings/cords out of the fixed-step rules.
 
 The composed controller stops and hides the inactive p5 instance, releases held movement/brace input during a switch, and falls back to Chart 2D if WebGL setup fails or its context is lost. The explicit view preference is local presentation state and is deliberately outside the authoritative save/checksum.
+
+At widths at or below 44rem—or at short landscape sizes no wider than 64rem—CSS removes the duplicate desktop HUD and folds the detailed objective, Promises, and inspector surfaces when the UI shell's disclosure flag is false. The shell starts compact and exposes a native 44-pixel `PROMISES + / PROMISES −` button whose `aria-expanded` state controls only the identified Promises surface. A separate projected strip keeps route, stamina/stability safety, authoritative ground/water terrain, and contextual E/Space/F copy visible while the action dock remains reachable. The shell also carries an explicit ephemeral sheet mode: the disclosure opens the existing scrollable Promises DOM as one full safe-area sheet, while settlement interaction opens the existing inspector as a mutually exclusive sheet. Neither disclosure nor sheet mode enters game saves.
 
 ## Electron security
 
@@ -175,9 +185,11 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 4. Save/reload continuation and checksum rejection.
 5. Economy/cargo conservation and legal contract transitions.
 6. Active-graph pathfinding, storms, congestion, topology metrics, and project effects.
-7. Player traversal, stability, recovery, tutorial, signed reports, and platform persistence.
+7. Player traversal, stamina/stability sweep causes, deterministic recovery, tutorial, signed reports, and platform persistence.
 8. Tide Harp candidate/selection/containment determinism, active/inactive recharge and four-origin sounding, cargo/inventory non-mutation, legacy save shape, UI copy, and discovery-safe/reduced-motion render geometry.
 9. Vite production build under relative paths.
-10. Packaged Electron launch, visible title controls, `app://` resource load, exact 96 × 72 world probe, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, 1,440 × 900 / 960 × 640 / 927 × 640 / 700 × 640 Promises-layout probes, Node-global absence, zero renderer warnings/resource failures, and separate title/game screenshots.
+10. Packaged Electron launch, visible title controls, `app://` resource load, exact 96 × 72 world probe, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, 1,440 × 900 / 960 × 640 / 927 × 640 / 700 × 640 desktop layouts plus 390 × 700 portrait and 844 × 390 landscape mobile-sheet probes, Node-global absence, zero renderer warnings/resource failures, and separate title/game/mobile screenshots.
 
 The Phase 10 gate passes TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, that extended packaged smoke, `git diff --check`, and a scoped source secret scan. Exact commit `6f74fe9e016ba566116e2085b05ecf2988213754` is published: CI run `33494152504` and Pages run `33494152310` succeeded, and the live HTML serves the inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets with HTTP 200 responses. The deployment is an untagged preview; `v0.2.0-alpha.1` remains unchanged.
+
+The focused mobile/current hotfix adds unit coverage for both sweep causes, discovery-safe current geometry, shared direction projection, and compact HUD disclosure/copy. Its local gate passes TypeScript, 31 test files / 221 checks, production and nested-path web builds, the scoped public-source secret scan, and packaged desktop/mobile smoke with no renderer warnings or resource failures. Commit, CI, Pages, and live assets remain pending. Perpetual defaults, ladder-gated rock traversal, physical dropped-cargo simulation, and global upgrades belong to later authoritative phases and are not implemented in this architecture yet.

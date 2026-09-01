@@ -30,6 +30,7 @@ Alpha 0.1 and Alpha 0.2 are verified and published. Alpha 0.2 was built additive
 - **Wild Reaches** expands new seeds to a 96 × 72 Perlin estuary with meaningful terrain, sounded water, recoverable currents, and civic field tools.
 - **The Estuary in Relief** adds an actual playable p5/WebGL presentation while retaining the complete Chart 2D fallback.
 - **Wayknots** entered the published, untagged Phase 9 preview at `eb12db0` and its hardened checkpoint was `1bc136e`. The untagged Phase 10 Tide Harps preview is now published at `6f74fe9`; its exact-commit CI, Pages deployment, and live assets are verified. Alpha 0.2 remains tagged separately and unchanged.
+- A focused post-Phase-10 mobile/current hotfix is locally verified: compact-by-default HUD behavior on portrait and short-landscape phones, discovery-safe surface-current arrows, and deterministic deep-water sweep recovery triggered by either empty stamina or empty stability. Pages publication is still pending.
 - Tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls remain later subphases unless release playtesting promotes them.
 
 ## Phase 0 — Evidence and contract
@@ -249,6 +250,31 @@ Local release evidence captured 2026-09-01:
 
 The final source passes `git diff --check`, and the scoped scan finds no private-key headers, credential-token patterns, credential assignments, credential-bearing URLs, or committed environment files. Exact commit `6f74fe9e016ba566116e2085b05ecf2988213754` is pushed; CI run `33494152504` and Pages run `33494152310` succeeded; and the live HTTPS origin serves the inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets with HTTP 200 responses. This is an untagged mainline preview: Alpha 0.2 remains `v0.2.0-alpha.1`.
 
+## Focused mobile/current hotfix
+
+Status: **implemented and locally verified; Pages publication pending**
+
+Purpose: keep the world playable on a phone and make water failure readable before it takes control away, without revealing bathymetry that the player has not sounded.
+
+Implemented in the current working source:
+
+1. **Compact mobile field HUD:** at widths at or below 44rem, or short landscape viewports no wider than 64rem, the desktop HUD and detailed surfaces yield to a keyboard-accessible `PROMISES + / PROMISES −` disclosure with truthful `aria-expanded` and `aria-controls` state.
+2. **Always-reachable essentials:** folding the large panels leaves a compact LED-style strip showing the active pickup/delivery route, stamina/stability safety, truthful ground/water terrain, and the contextual E/Space/F actions. `PROMISES +` opens a full safe-area Promises sheet; settlement interaction opens a mutually exclusive inspector sheet. The action dock remains available and neither sheet overlaps it.
+3. **Two honest sweep causes:** in deep/current water at or above 120,000 depth, either stamina or stability reaching zero enters the same recoverable deterministic swept-current path. Dry ground and shallower water retain their existing recovery behavior; cargo quantity remains conserved and condition weathers once.
+4. **Pre-entry current reading:** sparse arrows appear only on discovered wet surface in Chart 2D and Relief 3D. Their direction is derived from the same tide/wind current vector as recovery, while fixed geometry and spacing avoid leaking unsounded depth magnitude.
+5. **No persistence expansion:** the hotfix adds presentation and derived cue state only. Saves remain local-first with IndexedDB primary and the existing sticky localStorage fallback.
+
+Local verification on 2026-09-01: **31 test files / 221 checks**, TypeScript, production build, nested `/tideweft/` web smoke, scoped public-source secret scan, and the packaged Electron gate all pass. The device gate covers 700 × 640, 390 × 700 portrait, and 844 × 390 landscape; it proves a 44-pixel toggle, scrollable full-width Promises, a separately scrollable inspector sheet, clean safe-area gaps, and zero renderer warnings or resource failures. Commit, CI, Pages, and live-asset verification remain pending.
+
+## Next world-direction phases
+
+These are planned follow-ons, not current behavior:
+
+1. **Perpetual new worlds:** remove the Drift/Weave 10/25-minute framing from new-world setup and make all newly created worlds open-ended. Preserve compatibility with existing session saves, keep Quiet Hour as a voluntary save/recap action, and continue local-first persistence through IndexedDB with localStorage fallback rather than adding a server dependency.
+2. **Ladder-gated rock traversal:** add rock formations as authoritative procedural terrain obstacles plus a carried ladder that creates a legible way across them. This must affect manual travel and pointer routing through the same rule, with clear world/HUD cues and recoverable placement.
+3. **Physical cargo and upgrades:** let carried cargo be deliberately dropped, tumble down steep rock, drift in current, and lose condition without silently disappearing. Arrival condition must feed trust/compensation, while a safe anywhere-accessible upgrade surface changes authoritative capacity and traversal rules rather than acting as a cosmetic menu.
+4. **Broader living fields:** only after those gates, continue with spatial weather/ecology and further terrain tools derived from observed play rather than feature-count momentum.
+
 ## Reward-loop acceptance audit
 
 1. **Immediate legibility — implemented:** commands have visual/audio/text responses and rejected state changes explain why.
@@ -257,14 +283,21 @@ The final source passes `git diff --check`, and the scoped scan finds no private
 4. **Autonomy — implemented structurally, seed audit pending:** contracts expose consequence/mood; travel supports manual and pointer paths; reports and route tending provide non-contract work.
 5. **Relatedness — implemented:** promises name a requester and arrival copy identifies the person/harbor/project helped.
 6. **Compounding impact — implemented:** deliveries and parts can cross the self-carrying threshold; earlier corridors later carry resident work.
-7. **Session closure — implemented:** Drift and Weave declare completion; Wander has no quota; Quiet Hour pauses, saves, and recaps.
+7. **Session closure — implemented but scheduled for reframing:** Drift and Weave currently declare completion, Wander has no quota, and Quiet Hour pauses, saves, and recaps. The next phase removes the 10/25-minute new-world framing in favor of perpetual play while retaining voluntary Quiet Hour closure.
 8. **No coercion — implemented:** no streak, daily reset, paid/random payout, offline loss, or continue bonus.
 9. **Low frustration — implemented:** cargo weathers instead of vanishing; camp, clinic rescue, and harbor handoff preserve progress and knowledge.
 10. **Intrinsic core — qualitative playtest pending:** movement, planning, charting, and observing porters are built to stand without score escalation.
 
 ## Next replan gate
 
-After the first external Pages playtest, classify feedback into:
+The first external Pages playtest promoted mobile obstruction and unreadable current failure above expansion work. The immediate replan order is:
+
+1. verify and publish the focused mobile/current hotfix;
+2. replace timed-session framing with perpetual new worlds on the existing local-first save foundation;
+3. add ladder-gated procedural rock traversal through shared movement/pathfinding rules;
+4. resume spatial weather, ecology, and whimsical simulation.
+
+Continue classifying later feedback into:
 
 - comprehension failures that block the current loop;
 - reward/pace problems that weaken restoration;

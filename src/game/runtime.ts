@@ -352,19 +352,28 @@ export async function createTideweftRuntime(
     if (result.becameSwept) {
       autopilotPath = [];
       manualControl = { ...manualControl, moveX: 0, moveY: 0 };
+      const collapse = result.sweepCause === "stability"
+        ? {
+            change: "Deep-water instability became a recoverable sweep; the cargo stayed accountable and weathered once.",
+            warning: "STABILITY EMPTY IN DEEP WATER — SWEPT.",
+          }
+        : {
+            change: "Deep-water exhaustion became a recoverable sweep; the cargo stayed accountable and weathered once.",
+            warning: "STAMINA EMPTY IN DEEP WATER — SWEPT.",
+          };
       const support = result.sweepSupport === "ferry"
         ? " A connected ferry crew has shortened the drift."
         : " The current is carrying you toward the nearest safe bank.";
-      session.sessionChanges.push("Water exhaustion became a recoverable sweep; the cargo stayed accountable and weathered once.");
+      session.sessionChanges.push(collapse.change);
       announce(
         session,
-        `STAMINA EMPTY IN DEEP WATER — SWEPT. Steering is temporarily lost; cargo stays with you.${support}`,
+        `${collapse.warning} Steering is temporarily lost; cargo stays with you.${support}`,
         true,
       );
       soundscape.play("warning", 0.82);
-    } else if (result.exhausted) {
+    } else if (result.exhausted || (result.rescued && !result.washedAshore)) {
       if (result.rescued) {
-        session.sessionChanges.push("A completed clinic and established strand turned exhaustion into mutual aid.");
+        session.sessionChanges.push("A completed clinic and established strand turned a field collapse into mutual aid.");
         announce(session, "A clinic crew reached you through the established strand. Nothing was lost; infrastructure changed failure into care.", true);
         soundscape.play("deliver", 0.62);
       } else {

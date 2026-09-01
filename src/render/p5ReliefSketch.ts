@@ -1,5 +1,6 @@
 import p5 from "p5";
 
+import { buildSurfaceCurrentCues } from "./currentCues";
 import {
   buildTerrainMesh,
   type TerrainMesh,
@@ -883,6 +884,60 @@ export function createTideweftReliefRenderer(
       gl.depthMask(true);
     };
 
+    const drawSurfaceCurrents = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      now: number,
+    ): void => {
+      const grid = view.terrain;
+      const tileSize = grid.tileSize;
+      const reach = orbit.distance * 1.45;
+      const bounds = {
+        firstColumn: Math.floor((orbit.x - reach - grid.origin.x) / tileSize),
+        lastColumn: Math.ceil((orbit.x + reach - grid.origin.x) / tileSize),
+        firstRow: Math.floor((orbit.y - reach - grid.origin.y) / tileSize),
+        lastRow: Math.ceil((orbit.y + reach - grid.origin.y) / tileSize),
+      };
+      const cues = buildSurfaceCurrentCues(grid, view.tide.surfaceCurrent, {
+        bounds,
+        focus: { x: orbit.x, y: orbit.y },
+        tideLevel: view.tide.level,
+        timeMs: now,
+        reducedMotion,
+        maxCues: 220,
+      });
+      if (cues.length === 0) return;
+
+      const heights = cues.map((cue) => discoveredReliefSurfaceHeightAt(
+        grid,
+        cue.center,
+        cache.mesh.verticalScale,
+        true,
+      ) + 1.25);
+      const strokeCue = (cue: (typeof cues)[number], surface: number): void => {
+        p.line(cue.tail.x, -surface, cue.tail.y, cue.tip.x, -surface, cue.tip.y);
+        p.line(cue.tip.x, -surface, cue.tip.y, cue.headLeft.x, -surface, cue.headLeft.y);
+        p.line(cue.tip.x, -surface, cue.tip.y, cue.headRight.x, -surface, cue.headRight.y);
+      };
+      p.push();
+      p.noFill();
+      p.stroke(withAlpha(RELIEF_PALETTE.ink, 210));
+      p.strokeWeight(3.7);
+      for (let index = 0; index < cues.length; index += 1) {
+        const cue = cues[index];
+        const surface = heights[index];
+        if (cue && surface !== undefined) strokeCue(cue, surface);
+      }
+      p.stroke(withAlpha(RELIEF_PALETTE.foam, 220));
+      p.strokeWeight(1.35);
+      for (let index = 0; index < cues.length; index += 1) {
+        const cue = cues[index];
+        const surface = heights[index];
+        if (cue && surface !== undefined) strokeCue(cue, surface);
+      }
+      p.pop();
+    };
+
     const drawRoute = (view: TideweftView, route: RouteView, cache: CachedReliefMesh): void => {
       if (route.points.length < 2) return;
       const color = route.selected
@@ -1621,6 +1676,7 @@ export function createTideweftReliefRenderer(
       p.directionalLight(76, 128, 146, 0.65, 0.2, 0.7);
       drawTerrain(view, cache, camera);
       drawWater(view, cache);
+      drawSurfaceCurrents(view, cache, now);
       drawRoutes(view, cache);
       drawSoundings(view, cache);
       drawTideHarps(view, cache, now);
