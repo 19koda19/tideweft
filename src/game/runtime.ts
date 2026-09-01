@@ -14,6 +14,18 @@ import {
 } from "../sim/public";
 import { findTilePath, MAX_TIDE_LEVEL } from "../sim/terrain";
 import {
+  advanceFieldResourceEcology,
+  canonicalizeFieldResourceState,
+  createFieldResourceEcologyState,
+  fieldResourceStockUnits,
+  generateFieldResourceCatalog,
+  harvestFieldResource,
+  type FieldMaterialId,
+  type FieldResourceCatalog,
+  type FieldResourceEcologyState,
+  type FieldResourceNode,
+} from "../sim/fieldResources";
+import {
   PERPETUAL_SESSION_SHAPE,
   type TideweftUICommand,
   type TideweftUIView,
@@ -22,9 +34,11 @@ import { TideweftSoundscape } from "../audio/soundscape";
 import { createSaveRepository, type SaveRecord, type SaveRepository } from "../platform/persistence";
 import {
   FIELD_TOOL_LABELS,
+  PACK_LOAD_MILLI_PER_UNIT,
   TILE_UNITS,
   activeTideHarpAtPlayer,
   cargoWeight,
+  cargoWeightMilli,
   createPlayer,
   cyclePace,
   loadContractCargo,
@@ -44,6 +58,19 @@ import {
   type PlayerState,
   type TravelPace,
 } from "./player";
+import {
+  CRAFTING_CONDITION_MAX,
+  CRAFTING_RECIPES,
+  CRAFTING_STACK_DEFINITIONS,
+  createCraftingInventory,
+  craft,
+  dismantle,
+  inventoryLoadMilli,
+  quoteWayknotRepairCost,
+  repair,
+  type CraftingInventory,
+  type CraftingStackId,
+} from "./crafting";
 import type { TideHarp } from "./tideHarps";
 import {
   DEFAULT_WAYKNOT_CAPACITY,
@@ -57,6 +84,7 @@ import {
   wayknotAtTile,
   type WayknotActionReason,
   type WayknotKind,
+  type WayknotPlacementReason,
 } from "./wayknots";
 import { projectGameView } from "./projection";
 import {
@@ -75,7 +103,32 @@ const MAX_STEPS_PER_FRAME = 6;
 const AUTOSAVE_INTERVAL_TICKS = 600;
 const AUTOSAVE_SLOT = "autosave";
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 1;
+const GAME_SAVE_VERSION = 2;
+const LEGACY_GAME_SAVE_VERSION = 1;
+const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
+const MAX_SAFE_CARGO_QUANTITY = Math.floor(
+  Number.MAX_SAFE_INTEGER / (2 * PACK_LOAD_MILLI_PER_UNIT),
+);
+
+const PLAYER_CARGO_RESOURCES: ReadonlySet<ContractState["resource"]> = new Set([
+  "food",
+  "freshWater",
+  "medicine",
+  "parts",
+  "reed",
+]);
+
+const GATHER_STAMINA_COST: Readonly<Record<FieldMaterialId, number>> = {
+  bladderkelp: 4_000,
+  cordreed: 4_000,
+  driftwood: 6_000,
+  "glimmer-spore": 4_000,
+  hookstone: 8_000,
+  pitchmoss: 4_000,
+  shellstone: 8_000,
+  stormlichen: 6_000,
+  sunfiber: 4_000,
+};
 
 interface GameSaveEnvelope {
   format: "tideweft-session";
@@ -83,6 +136,7 @@ interface GameSaveEnvelope {
   world: string;
   player: PlayerState;
   session: GameSessionState;
+  fieldResources: FieldResourceEcologyState;
 }
 
 export interface TideweftRuntime {
@@ -102,11 +156,16 @@ export async function createTideweftRuntime(
 ): Promise<TideweftRuntime> {
   let world = createWorld("quiet-delta", "standard");
   let worldView = createWorldView(world);
+  let fieldResourceCatalog = runtimeFieldResourceCatalog(world);
+  let fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
   const firstPromise = worldView.contracts.find((contract) => contract.status === "offered");
   let player = createPlayer(worldView, firstPromise?.originSettlementId);
   let session = createSessionState(world.meta.seedText);
   let renderView = projectGameView(worldView, player, { paused: true });
-  let uiView = projectUIView(worldView, player, session);
+  let uiView = projectUIView(worldView, player, session, {
+    fieldResourceCatalog,
+    fieldResourceEcology,
+  });
   const soundscape = new TideweftSoundscape();
   let focusHandler: ((point: WorldPoint, zoom?: number) => void) | undefined;
   let animationFrame = 0;
@@ -118,6 +177,7 @@ export async function createTideweftRuntime(
   let playerStepsSinceWorldTick = 0;
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
   let autopilotPath: number[] = [];
+  let pendingGatherNodeId: string | null = null;
   let pendingAcceptance: { contractId: number; acceptCommandId: string; pickupCommandId: string } | null = null;
   let pendingDelivery: { contractId: number; commandId: string; wasAutomated: boolean } | null = null;
   let pendingReinforcement: {
@@ -144,6 +204,11 @@ export async function createTideweftRuntime(
   if (loaded) {
     world = loaded.world;
     worldView = createWorldView(world);
+    fieldResourceCatalog = runtimeFieldResourceCatalog(world);
+    fieldResourceEcology = canonicalizeFieldResourceState(
+      fieldResourceCatalog,
+      loaded.fieldResources,
+    );
     player = loaded.player;
     player.worldWidth = worldView.terrain.width;
     player.worldHeight = worldView.terrain.height;
@@ -183,6 +248,7 @@ export async function createTideweftRuntime(
     player.wayknots = normalizeWayknotState(player.wayknots, {
       capacity: DEFAULT_WAYKNOT_CAPACITY,
       tileCount: worldView.terrain.tiles.length,
+      loadTick: worldView.completedTick,
       contextAt: (tileIndex) => {
         const context = wayknotContextAt(worldView, tileIndex);
         if (!context) return undefined;
@@ -283,9 +349,14 @@ export async function createTideweftRuntime(
       selectedRouteId: objectiveContract?.routeId ?? null,
       destinationSettlementId: destinationSettlementId ?? null,
       ...(destinationKind ? { destinationKind } : {}),
+      fieldResourceCatalog,
+      fieldResourceEcology,
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
-    uiView = projectUIView(worldView, player, session);
+    uiView = projectUIView(worldView, player, session, {
+      fieldResourceCatalog,
+      fieldResourceEcology,
+    });
   }
 
   function commandId(kind: string): string {
@@ -305,6 +376,7 @@ export async function createTideweftRuntime(
     const tile = worldView.terrain.tiles[nextIndex];
     if (!tile) {
       autopilotPath = [];
+      pendingGatherNodeId = null;
       return manualControl;
     }
     const targetX = tile.x * TILE_UNITS + TILE_UNITS / 2;
@@ -347,14 +419,31 @@ export async function createTideweftRuntime(
     const worldAdvanced = playerStepsSinceWorldTick >= PLAYER_STEPS_PER_WORLD_TICK;
     if (worldAdvanced) {
       playerStepsSinceWorldTick = 0;
+      const elapsedWeather = world.weather;
       world = stepWorld(world, commandQueue);
       commandQueue = [];
       worldView = createWorldView(world);
+      fieldResourceEcology = advanceFieldResourceEcology(
+        fieldResourceCatalog,
+        fieldResourceEcology,
+        1,
+        elapsedWeather,
+      );
+    }
+
+    if (pendingGatherNodeId !== null && autopilotPath.length === 0) {
+      const node = fieldResourceNode(pendingGatherNodeId);
+      if (node && node.tileIndex === playerTileIndex(player)) {
+        const requestedNodeId = pendingGatherNodeId;
+        pendingGatherNodeId = null;
+        gatherFieldResource(requestedNodeId);
+      }
     }
 
     if (result.moved) soundscape.play("step", player.pace === "swift" ? 0.8 : 0.42);
     if (result.becameSwept) {
       autopilotPath = [];
+      pendingGatherNodeId = null;
       manualControl = { ...manualControl, moveX: 0, moveY: 0 };
       const collapse = result.sweepCause === "stability"
         ? {
@@ -623,13 +712,20 @@ export async function createTideweftRuntime(
           moveY: signControl(command.vector.y),
           brace: manualControl.brace,
         };
-        if (manualControl.moveX || manualControl.moveY) autopilotPath = [];
+        if (manualControl.moveX || manualControl.moveY) {
+          autopilotPath = [];
+          pendingGatherNodeId = null;
+        }
         break;
       case "brace":
         manualControl = { ...manualControl, brace: command.active };
         break;
       case "move-target":
+        pendingGatherNodeId = null;
         setAutopilot(command.point, command.additive);
+        break;
+      case "resource-target":
+        targetFieldResource(command.nodeId, command.gatherOnArrival);
         break;
       case "scan":
         scan();
@@ -659,6 +755,7 @@ export async function createTideweftRuntime(
         break;
       case "cancel":
         autopilotPath = [];
+        pendingGatherNodeId = null;
         session.selectedSettlementId = null;
         refreshViews();
         break;
@@ -706,6 +803,13 @@ export async function createTideweftRuntime(
       case "report":
         collectReport(Number(command.sourceSettlementId), Number(command.targetSettlementId));
         break;
+      case "kit":
+        if (command.action === "craft") craftFromKit(command.recipeId);
+        if (command.action === "repair") {
+          repairFromKit(Number(command.gearId), command.conditionGain);
+        }
+        if (command.action === "dismantle") dismantleFromKit(Number(command.gearId));
+        break;
       case "settlement":
         if (command.action === "close") {
           session.selectedSettlementId = null;
@@ -743,6 +847,167 @@ export async function createTideweftRuntime(
         break;
     }
     refreshViews();
+  }
+
+  function availableCraftingInventory(): CraftingInventory | null {
+    const availableMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT
+      - (cargoWeightMilli(player) - inventoryLoadMilli(player.craftingInventory));
+    try {
+      return createCraftingInventory(
+        Math.max(0, availableMilli),
+        player.craftingInventory.stacks,
+        player.craftingInventory.gear,
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  function persistCraftingInventory(inventory: CraftingInventory): void {
+    player.craftingInventory = createCraftingInventory(
+      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
+      inventory.stacks,
+      inventory.gear,
+    );
+  }
+
+  function kitActionBlocked(): boolean {
+    if (session.titleVisible || session.quietHourVisible || session.paused) return true;
+    if (player.mode !== "swept" && player.mode !== "rescued") return false;
+    announce(session, "Secure your footing before making or mending field gear.", true);
+    soundscape.play("warning", 0.3);
+    return true;
+  }
+
+  function craftFromKit(recipeId: string): void {
+    if (kitActionBlocked()) return;
+    const inventory = availableCraftingInventory();
+    if (!inventory) {
+      announce(session, "The shared pack is over capacity; free space before making anything.", true);
+      soundscape.play("warning", 0.35);
+      return;
+    }
+    const recipe = CRAFTING_RECIPES.find((candidate) => candidate.id === recipeId);
+    const request = recipe?.output.type === "gear"
+      ? { recipeId, gearId: player.nextCraftedGearId }
+      : { recipeId };
+    const result = craft(inventory, request);
+    if (!result.ok || !result.recipe) {
+      announce(session, result.message, true);
+      soundscape.play("warning", 0.32);
+      return;
+    }
+    persistCraftingInventory(result.inventory);
+    if (result.craftedGear) player.nextCraftedGearId += 1;
+    const outputLabel = result.recipe.output.type === "gear"
+      ? result.craftedGear
+        ? `${result.recipe.label.replace(/^Make\s+/u, "")} #${result.craftedGear.id}`
+        : result.recipe.label
+      : CRAFTING_STACK_DEFINITIONS[result.recipe.output.item].label;
+    announce(
+      session,
+      `${outputLabel} made in KIT · pack ${formatMilliLoad(cargoWeightMilli(player))} / ${formatMilliLoad(player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT)}.`,
+      true,
+    );
+    session.sessionChanges.push(`${outputLabel} was made from gathered field materials.`);
+    if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
+    soundscape.play("strand", 0.7);
+  }
+
+  function repairFromKit(gearId: number, conditionGain: number): void {
+    if (kitActionBlocked()) return;
+    const inventory = availableCraftingInventory();
+    if (!inventory) {
+      announce(session, "The shared pack is over capacity; free space before mending.", true);
+      return;
+    }
+    const coreWayknot = player.wayknots.wayknots.find((wayknot) => wayknot.id === gearId);
+    if (coreWayknot) {
+      if (coreWayknot.tileIndex !== null) {
+        announce(session, `Reclaim ${WAYKNOT_LABELS[coreWayknot.kind]} #${gearId} before mending it.`, true);
+        soundscape.play("warning", 0.3);
+        return;
+      }
+      const quote = quoteWayknotRepairCost(coreWayknot.kind, coreWayknot.condition, conditionGain);
+      if (!quote || quote.conditionRestored <= 0) {
+        announce(session, `${WAYKNOT_LABELS[coreWayknot.kind]} #${gearId} is already pristine.`, true);
+        return;
+      }
+      const missing = quote.ingredients.filter(
+        ({ item, quantity }) => inventory.stacks[item] < quantity,
+      );
+      if (missing.length > 0) {
+        announce(
+          session,
+          `MEND needs ${missing.map(({ item, quantity }) => `${quantity - inventory.stacks[item]} more ${CRAFTING_STACK_DEFINITIONS[item].label}`).join(" + ")}.`,
+          true,
+        );
+        soundscape.play("warning", 0.3);
+        return;
+      }
+      const nextStacks = { ...inventory.stacks } as Record<CraftingStackId, number>;
+      for (const ingredient of quote.ingredients) {
+        nextStacks[ingredient.item] -= ingredient.quantity;
+      }
+      persistCraftingInventory(createCraftingInventory(
+        inventory.capacityMilliLoad,
+        nextStacks,
+        inventory.gear,
+      ));
+      player.wayknots = {
+        ...player.wayknots,
+        wayknots: player.wayknots.wayknots.map((wayknot) => wayknot.id === gearId
+          ? { ...wayknot, condition: quote.conditionAfter }
+          : wayknot),
+      };
+      announce(
+        session,
+        `${WAYKNOT_LABELS[coreWayknot.kind]} #${gearId} mended to ${Math.round(quote.conditionAfter / 10_000)}% condition. Its stable ID and wear history remain.`,
+        true,
+      );
+      soundscape.play("rest", 0.62);
+      return;
+    }
+    const result = repair(inventory, gearId, conditionGain);
+    if (!result.ok || !result.gear || !result.quote) {
+      announce(session, result.message, true);
+      soundscape.play("warning", 0.3);
+      return;
+    }
+    persistCraftingInventory(result.inventory);
+    const label = result.gear.kind === "ladder"
+      ? "Field ladder"
+      : result.gear.kind.split("-").map(titleCaseWord).join(" ");
+    announce(
+      session,
+      `${label} #${gearId} mended to ${Math.round(result.quote.conditionAfter / 10_000)}% condition.`,
+      true,
+    );
+    soundscape.play("rest", 0.62);
+  }
+
+  function dismantleFromKit(gearId: number): void {
+    if (kitActionBlocked()) return;
+    const inventory = availableCraftingInventory();
+    if (!inventory) {
+      announce(session, "The shared pack is over capacity; free space before dismantling.", true);
+      return;
+    }
+    const result = dismantle(inventory, gearId);
+    if (!result.ok || !result.gear) {
+      announce(session, result.message, true);
+      soundscape.play("warning", 0.3);
+      return;
+    }
+    persistCraftingInventory(result.inventory);
+    announce(
+      session,
+      result.salvage.length > 0
+        ? `${result.gear.kind.split("-").map(titleCaseWord).join(" ")} #${gearId} dismantled. Lossy salvage returned to PACK.`
+        : `${result.gear.kind.split("-").map(titleCaseWord).join(" ")} #${gearId} was too worn to return usable parts.`,
+      true,
+    );
+    soundscape.play("rest", 0.5);
   }
 
   function beginSession(): void {
@@ -799,6 +1064,8 @@ export async function createTideweftRuntime(
     session = createSessionState(normalizedSeed, posture, PERPETUAL_SESSION_SHAPE);
     world = createWorld(normalizedSeed, session.pressureMode);
     worldView = createWorldView(world);
+    fieldResourceCatalog = runtimeFieldResourceCatalog(world);
+    fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     const promise = worldView.contracts.find((contract) => contract.status === "offered");
     player = createPlayer(worldView, promise?.originSettlementId);
     session.titleVisible = false;
@@ -807,6 +1074,7 @@ export async function createTideweftRuntime(
     commandQueue = [];
     playerStepsSinceWorldTick = 0;
     autopilotPath = [];
+    pendingGatherNodeId = null;
     pendingAcceptance = null;
     pendingDelivery = null;
     pendingReinforcement = null;
@@ -819,10 +1087,10 @@ export async function createTideweftRuntime(
     refreshViews();
   }
 
-  function setAutopilot(point: WorldPoint, additive: boolean): void {
+  function setAutopilot(point: WorldPoint, additive: boolean): boolean {
     if (player.mode === "swept") {
       announce(session, "The current has the helm until you reach a safe bank.", true);
-      return;
+      return false;
     }
     const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, world.terrain.width - 1);
     const tileY = clamp(Math.floor(point.y / RENDER_TILE_SIZE), 0, world.terrain.height - 1);
@@ -858,7 +1126,7 @@ export async function createTideweftRuntime(
     if (path.length < 2) {
       announce(session, "The Loom cannot currently resolve a traversable line there.");
       soundscape.play("warning", 0.45);
-      return;
+      return false;
     }
     const next = path.slice(1);
     autopilotPath = additive ? [...autopilotPath, ...next] : next;
@@ -870,6 +1138,132 @@ export async function createTideweftRuntime(
       session,
       `Loom path set across ${next.length} terrain marks${unknownWater > 0 ? `, including ${unknownWater} unsounded water marks` : " using sounded depth and your field tools"}.`,
     );
+    return true;
+  }
+
+  function fieldResourceNode(nodeId: string): FieldResourceNode | undefined {
+    return fieldResourceCatalog.nodes.find((node) => node.id === nodeId);
+  }
+
+  function targetFieldResource(nodeId: string, gatherOnArrival: boolean): void {
+    if (session.paused || session.titleVisible || session.quietHourVisible) return;
+    if (player.mode === "swept" || player.mode === "rescued") {
+      announce(session, "The current has the helm. Gather after the shore gives your footing back.", true);
+      soundscape.play("warning", 0.3);
+      refreshViews();
+      return;
+    }
+    const node = fieldResourceNode(nodeId);
+    if (!node || (player.discovered[node.tileIndex] ?? 0) <= 0) {
+      pendingGatherNodeId = null;
+      announce(session, "That field sign is not part of the chart you can currently act on.", true);
+      soundscape.play("warning", 0.3);
+      refreshViews();
+      return;
+    }
+    if (node.tileIndex === playerTileIndex(player)) {
+      pendingGatherNodeId = null;
+      if (gatherOnArrival) gatherFieldResource(node.id);
+      else announce(session, `${materialLabel(node.material)} is underfoot. Press E to gather one unit.`);
+      refreshViews();
+      return;
+    }
+    const point = {
+      x: (node.x + 0.5) * RENDER_TILE_SIZE,
+      y: (node.y + 0.5) * RENDER_TILE_SIZE,
+    };
+    pendingGatherNodeId = null;
+    if (!setAutopilot(point, false)) {
+      refreshViews();
+      return;
+    }
+    pendingGatherNodeId = gatherOnArrival ? node.id : null;
+    announce(
+      session,
+      gatherOnArrival
+        ? `${materialLabel(node.material)} marked. You will gather one unit when you reach its exact patch.`
+        : `${materialLabel(node.material)} marked. Reach its exact patch and press E to gather.`,
+    );
+    refreshViews();
+  }
+
+  function gatherFieldResource(nodeId: string): boolean {
+    const node = fieldResourceNode(nodeId);
+    if (!node) {
+      announce(session, "That natural patch no longer belongs to this estuary.", true);
+      return false;
+    }
+    const label = materialLabel(node.material);
+    if (player.mode === "swept" || player.mode === "rescued") {
+      announce(session, `You cannot gather ${label} until you have your footing.`, true);
+      return false;
+    }
+    if (node.tileIndex !== playerTileIndex(player)) {
+      announce(session, `Move onto the ${label} patch first. On desktop, press E once it is underfoot.`, true);
+      return false;
+    }
+    if ((player.discovered[node.tileIndex] ?? 0) <= 0) {
+      announce(session, "This patch has not entered your chart yet.", true);
+      return false;
+    }
+    const stock = fieldResourceStockUnits(fieldResourceCatalog, fieldResourceEcology, node.id);
+    if (stock === null || stock <= 1) {
+      announce(session, `${label} is recovering. Its final living unit stays in the landscape.`, true);
+      soundscape.play("warning", 0.3);
+      return false;
+    }
+    const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
+    const freeMilli = Math.max(0, capacityMilli - cargoWeightMilli(player));
+    if (node.unitLoadMilli > freeMilli) {
+      announce(
+        session,
+        `Pack needs ${formatMilliLoad(node.unitLoadMilli - freeMilli)} more load for one ${label}. Open KIT to make room.`,
+        true,
+      );
+      soundscape.play("warning", 0.35);
+      return false;
+    }
+    const harvested = harvestFieldResource(
+      fieldResourceCatalog,
+      fieldResourceEcology,
+      node.id,
+      1,
+    );
+    if (!harvested.ok || harvested.material === null) {
+      announce(
+        session,
+        harvested.reason === "living-reserve"
+          ? `${label} is recovering. Its final living unit stays in the landscape.`
+          : `${label} could not be gathered; the patch was left unchanged.`,
+        true,
+      );
+      soundscape.play("warning", 0.3);
+      return false;
+    }
+    const nextStacks = {
+      ...player.craftingInventory.stacks,
+      [harvested.material]: player.craftingInventory.stacks[harvested.material] + 1,
+    };
+    player.craftingInventory = createCraftingInventory(
+      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
+      nextStacks,
+      player.craftingInventory.gear,
+    );
+    fieldResourceEcology = harvested.state;
+    const staminaCost = GATHER_STAMINA_COST[harvested.material];
+    player.stamina = Math.max(0, player.stamina - staminaCost);
+    const remaining = Math.max(1, stock - 1);
+    const tile = worldView.terrain.tiles[node.tileIndex];
+    const sweepWarning = player.stamina === 0 && (tile?.waterDepth ?? 0) >= 120_000
+      ? " STAMINA EMPTY IN DEEP WATER — the current takes control on the next field beat."
+      : "";
+    announce(
+      session,
+      `Gathered 1 ${label} · ${resourceStockBand(remaining, node.capacityUnits)} remains · pack ${formatMilliLoad(cargoWeightMilli(player))} / ${formatMilliLoad(capacityMilli)}.${sweepWarning}`,
+      sweepWarning.length > 0,
+    );
+    soundscape.play("strand", 0.42);
+    return true;
   }
 
   function scan(): void {
@@ -923,9 +1317,13 @@ export async function createTideweftRuntime(
       return;
     }
     const intendedKind = existing?.kind ?? contextualWayknotKind(context);
-    const result = toggleContextualWayknot(player.wayknots, context);
+    const result = toggleContextualWayknot(player.wayknots, context, worldView.completedTick);
     if (!result.ok || !result.wayknot) {
-      announce(session, wayknotFailureMessage(result.reason, intendedKind), true);
+      announce(
+        session,
+        wayknotFailureMessage(result.reason, intendedKind, result.placementReason),
+        true,
+      );
       soundscape.play("warning", 0.35);
       refreshViews();
       return;
@@ -934,13 +1332,16 @@ export async function createTideweftRuntime(
     const label = WAYKNOT_LABELS[result.wayknot.kind];
     if (result.reason === "reclaimed") {
       session.sessionChanges.push(`${label} #${result.wayknot.id} returned to the reusable field kit.`);
-      announce(session, `${label} reclaimed. Its numbered piece is back in your pack and can be rebound elsewhere.`);
+      announce(
+        session,
+        `${label} reclaimed at ${Math.round(result.wayknot.condition / 10_000)}% condition. Moving a field aid wears it; open KIT → MEND to repair this same numbered core piece.`,
+      );
       soundscape.play("rest", 0.52);
     } else {
       session.sessionChanges.push(`${label} #${result.wayknot.id} was bound into the traveled landscape.`);
       announce(
         session,
-        `${label} bound here. ${WAYKNOT_DESCRIPTIONS[result.wayknot.kind]} Stand on it and press F again to reclaim it.`,
+        `${label} bound here at ${Math.round(result.wayknot.condition / 10_000)}% condition. It supplies half strength while setting for 3 world ticks, then full strength. ${WAYKNOT_DESCRIPTIONS[result.wayknot.kind]} Stand on it and press F again to reclaim it.`,
         true,
       );
       soundscape.play("strand", 0.72);
@@ -951,6 +1352,15 @@ export async function createTideweftRuntime(
 
   function interact(): void {
     if (session.paused || session.titleVisible) return;
+    const resource = fieldResourceCatalog.nodes.find(
+      (node) => node.tileIndex === playerTileIndex(player)
+        && (player.discovered[node.tileIndex] ?? 0) > 0,
+    );
+    if (resource) {
+      gatherFieldResource(resource.id);
+      refreshViews();
+      return;
+    }
     const settlementId = settlementAtPlayer(player, worldView);
     if (settlementId === null) {
       announce(session, "No harbor or strand structure is within reach.");
@@ -1252,8 +1662,11 @@ export async function createTideweftRuntime(
       announce(session, "Your document case already holds one accountable report. Deliver or hand it on before taking another.");
       return;
     }
-    if (cargoWeight(player) >= player.cargoCapacity) {
-      announce(session, "The pack is completely committed. Leave one unit free for the sealed document case.");
+    if (
+      cargoWeightMilli(player) + PACK_LOAD_MILLI_PER_UNIT
+      > player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT
+    ) {
+      announce(session, "The pack needs one full load free for the sealed document case. Open KIT to make room.");
       soundscape.play("warning", 0.35);
       return;
     }
@@ -1316,6 +1729,7 @@ export async function createTideweftRuntime(
       world: serializeWorld(worldSnapshot),
       player: playerSnapshot,
       session: sessionSnapshot,
+      fieldResources: structuredClone(fieldResourceEcology),
     };
     const record: SaveRecord = {
       slotId: AUTOSAVE_SLOT,
@@ -1425,14 +1839,19 @@ export async function createTideweftRuntime(
 
 async function loadAutosave(
   repository: SaveRepository,
-): Promise<{ world: WorldState; player: PlayerState; session: GameSessionState } | undefined> {
+): Promise<{
+  world: WorldState;
+  player: PlayerState;
+  session: GameSessionState;
+  fieldResources: FieldResourceEcologyState;
+} | undefined> {
   try {
     const record = await repository.load(AUTOSAVE_SLOT);
     if (!record) return undefined;
     const decoded = JSON.parse(record.worldJson) as Partial<GameSaveEnvelope>;
     if (
       decoded.format !== "tideweft-session" ||
-      decoded.version !== GAME_SAVE_VERSION ||
+      (decoded.version !== LEGACY_GAME_SAVE_VERSION && decoded.version !== GAME_SAVE_VERSION) ||
       typeof decoded.world !== "string" ||
       !decoded.player ||
       !decoded.session
@@ -1440,6 +1859,11 @@ async function loadAutosave(
       return undefined;
     }
     const world = deserializeWorld(decoded.world);
+    normalizePlayerCrafting(decoded.player, decoded.version === LEGACY_GAME_SAVE_VERSION);
+    const catalog = runtimeFieldResourceCatalog(world);
+    const fieldResources = decoded.version === GAME_SAVE_VERSION
+      ? canonicalizeFieldResourceState(catalog, requireFieldResourceState(decoded.fieldResources))
+      : createFieldResourceEcologyState(world.meta.completedTick);
     // Alpha player snapshots predate dynamic world dimensions. Pickup repair
     // can reset currentTrace, so dimensions must be authoritative before it
     // asks playerTileIndex to derive that trace origin.
@@ -1461,6 +1885,7 @@ async function loadAutosave(
       world,
       player: decoded.player,
       session: decoded.session,
+      fieldResources,
     };
   } catch {
     return undefined;
@@ -1546,6 +1971,117 @@ function resetContractToOffered(contract: ContractState): void {
   contract.deliveryTraceCost = null;
 }
 
+function runtimeFieldResourceCatalog(world: WorldState): FieldResourceCatalog {
+  const natural = generateFieldResourceCatalog(world.meta.rootSeed, world.terrain);
+  const occupied = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+  return {
+    ...natural,
+    // Harbors remain unambiguous interaction tiles. Their stone, gardens, and
+    // workshops are civic space rather than remotely harvestable nature.
+    nodes: natural.nodes.filter((node) => !occupied.has(node.tileIndex)),
+  };
+}
+
+function requireFieldResourceState(value: unknown): FieldResourceEcologyState {
+  if (!value || typeof value !== "object") {
+    throw new Error("Save is missing field-resource ecology");
+  }
+  const candidate = value as Partial<FieldResourceEcologyState>;
+  if (
+    candidate.version !== 1
+    || !Number.isSafeInteger(candidate.activeTick)
+    || (candidate.activeTick ?? -1) < 0
+    || !Array.isArray(candidate.depletion)
+  ) {
+    throw new Error("Save contains invalid field-resource ecology");
+  }
+  return candidate as FieldResourceEcologyState;
+}
+
+function normalizePlayerCrafting(player: PlayerState, allowMissing: boolean): void {
+  if (!Number.isSafeInteger(player.cargoCapacity) || player.cargoCapacity <= 0) {
+    throw new Error("Save contains invalid pack capacity");
+  }
+  const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
+  if (!Number.isSafeInteger(capacityMilli)) {
+    throw new Error("Save contains invalid pack capacity");
+  }
+  requireValidPlayerCargoForLoad(player);
+  const snapshot = (player as PlayerState & { craftingInventory?: CraftingInventory }).craftingInventory;
+  if (!snapshot) {
+    if (!allowMissing) throw new Error("Save is missing crafting inventory");
+    player.craftingInventory = createCraftingInventory(capacityMilli);
+  } else {
+    if (!snapshot.stacks || !Array.isArray(snapshot.gear)) {
+      throw new Error("Save contains invalid crafting inventory");
+    }
+    if (snapshot.gear.some((gear) => {
+      const id = gear && typeof gear === "object"
+        ? (gear as { readonly id?: unknown }).id
+        : undefined;
+      return !Number.isSafeInteger(id) || (id as number) < FIRST_CRAFTED_GEAR_ID;
+    })) {
+      throw new Error("Save contains a crafted gear ID reserved for the inherited Wayknot kit");
+    }
+    player.craftingInventory = createCraftingInventory(
+      capacityMilli,
+      snapshot.stacks,
+      snapshot.gear,
+    );
+  }
+  if (cargoWeightMilli(player) > capacityMilli) {
+    throw new Error("Save contains an over-capacity pack");
+  }
+  const nextAvailableId = Math.max(
+    FIRST_CRAFTED_GEAR_ID,
+    ...player.craftingInventory.gear.map((gear) => gear.id + 1),
+  );
+  player.nextCraftedGearId = Number.isSafeInteger(player.nextCraftedGearId)
+    && player.nextCraftedGearId >= nextAvailableId
+    ? player.nextCraftedGearId
+    : nextAvailableId;
+}
+
+/** Validate transport fields before any shared-pack arithmetic can admit NaN. */
+function requireValidPlayerCargoForLoad(player: PlayerState): void {
+  if (!Array.isArray(player.cargo) || player.cargo.length > 1) {
+    throw new Error("Save contains invalid player cargo");
+  }
+  for (const value of player.cargo as unknown[]) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("Save contains invalid player cargo");
+    }
+    const cargo = value as Partial<PlayerState["cargo"][number]>;
+    if (
+      !Number.isSafeInteger(cargo.contractId)
+      || (cargo.contractId ?? 0) <= 0
+      || !PLAYER_CARGO_RESOURCES.has(cargo.resource as ContractState["resource"])
+      || !Number.isSafeInteger(cargo.quantity)
+      || (cargo.quantity ?? 0) <= 0
+      || (cargo.quantity ?? 0) > player.cargoCapacity
+      || (cargo.quantity ?? 0) > MAX_SAFE_CARGO_QUANTITY
+      || !Number.isSafeInteger(cargo.condition)
+      || (cargo.condition ?? -1) < 0
+      || (cargo.condition ?? FIXED_POINT + 1) > FIXED_POINT
+      || cargo.property !== expectedCargoProperty(cargo.resource as ContractState["resource"])
+    ) {
+      throw new Error("Save contains invalid player cargo");
+    }
+  }
+}
+
+function expectedCargoProperty(
+  resource: ContractState["resource"],
+): PlayerState["cargo"][number]["property"] {
+  switch (resource) {
+    case "medicine": return "fragile";
+    case "food": return "perishable";
+    case "freshWater":
+    case "parts": return "heavy";
+    case "reed": return "ordinary";
+  }
+}
+
 function validatePlayer(player: PlayerState, world: WorldState): void {
   for (const value of [player.x, player.y, player.stamina, player.stability, player.scanCharge]) {
     if (!Number.isFinite(value)) throw new Error("Save contains invalid player state");
@@ -1555,6 +2091,9 @@ function validatePlayer(player: PlayerState, world: WorldState): void {
   }
   if (!Array.isArray(player.cargo) || !Array.isArray(player.currentTrace)) {
     throw new Error("Save contains invalid player cargo or trace");
+  }
+  if (!player.craftingInventory || !Number.isSafeInteger(player.nextCraftedGearId)) {
+    throw new Error("Save contains invalid crafting state");
   }
   if (player.surveyTrace !== undefined && !Array.isArray(player.surveyTrace)) {
     throw new Error("Save contains an invalid survey trace");
@@ -1590,6 +2129,27 @@ function validatePlayer(player: PlayerState, world: WorldState): void {
       throw new Error("Save contains an invalid signed report");
     }
   }
+}
+
+function materialLabel(material: FieldMaterialId): string {
+  return CRAFTING_STACK_DEFINITIONS[material].label;
+}
+
+function titleCaseWord(word: string): string {
+  return word.length === 0 ? word : `${word[0]?.toLocaleUpperCase() ?? ""}${word.slice(1)}`;
+}
+
+function formatMilliLoad(loadMilli: number): string {
+  const value = Math.max(0, Math.trunc(loadMilli)) / PACK_LOAD_MILLI_PER_UNIT;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/u, "").replace(/\.$/u, "");
+}
+
+function resourceStockBand(stock: number, capacity: number): string {
+  if (stock <= 1) return "recovering";
+  const ratio = stock / Math.max(1, capacity);
+  if (ratio >= 2 / 3) return "plentiful";
+  if (ratio >= 1 / 3) return "some";
+  return "recovering";
 }
 
 function signControl(value: number): -1 | 0 | 1 {
@@ -1643,8 +2203,12 @@ function fieldToolEffect(tool: FieldToolKind): string {
 function wayknotFailureMessage(
   reason: WayknotActionReason,
   kind: WayknotKind | null,
+  placementReason?: WayknotPlacementReason,
 ): string {
   const label = kind ? WAYKNOT_LABELS[kind] : "Wayknot";
+  if (placementReason === "condition-too-low") {
+    return `${label} is too frail to bind. Reclaiming and redeploying preserve wear; it needs at least 15% condition before placement.`;
+  }
   switch (reason) {
     case "capacity-reached":
       return `Both reusable ${label.toLocaleLowerCase()} pieces are already in the field. Stand on one and press F to reclaim it.`;

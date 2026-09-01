@@ -19,7 +19,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(2);
+    expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(3);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
     const contentIds = TUTORIAL_GUIDE_SECTIONS.flatMap((section) => [
@@ -95,7 +95,9 @@ describe("TIDEWEFT field-manual content", () => {
 
     expect(mobile).toHaveLength(TUTORIAL_SECTION_IDS.length);
     expect(mobileCopy).toContain("Tap open terrain");
+    expect(mobileCopy).toContain("gathers it automatically on arrival");
     expect(mobileCopy).toContain("PROMISES +");
+    expect(mobileCopy).toContain("PACK / MAKE / MEND");
     expect(mobileCopy).toContain("full Promises sheet");
     expect(mobileCopy).toContain("compact safety line");
     expect(mobileCopy).toContain("Let movement stop or cancel the destination");
@@ -107,6 +109,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileControls.some((control) => control.id === "set-destination")).toBe(true);
     expect(mobileControls.some((control) => control.id === "promises-sheet")).toBe(true);
     expect(mobileControls.some((control) => control.id === "tutorial-button")).toBe(true);
+    expect(mobileControls.some((control) => control.id === "kit-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "brace-key")).toBe(false);
   });
 
@@ -136,13 +139,58 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Tide Harp");
   });
 
+  it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
+    const foraging = tutorialSectionById("foraging");
+    const kit = tutorialSectionById("pack-and-crafting");
+    expect(foraging).toBeDefined();
+    expect(kit).toBeDefined();
+    const copy = [foraging, kit].flatMap((section) => section ? [
+      section.summary,
+      ...section.steps.map((step) => step.body),
+      ...section.callouts.map((callout) => callout.body),
+    ] : []).join(" ");
+
+    expect(copy).toContain("E when its contextual action says Gather");
+    expect(copy).toContain("gathers automatically on arrival, taking one whole unit");
+    expect(copy).toContain("unharvestable living unit");
+    expect(copy).toContain("no offline harvests");
+    expect(copy).toContain("COMBINED LOAD");
+    expect(copy).toContain("PACK, MAKE, and MEND");
+    expect(copy).toContain("does not pause");
+    expect(copy).toContain("up to 25% condition");
+    expect(copy).toContain("DISMANTLE is deliberately lossy");
+    expect(tutorialControlById("kit-key")).toMatchObject({ input: "I", audience: "desktop" });
+    expect(tutorialControlById("make-key")).toMatchObject({ input: "C", audience: "desktop" });
+  });
+
+  it("describes finite seeded generation without hard-coding a settlement count", () => {
+    const tutorialCopy = JSON.stringify(TIDEWEFT_TUTORIAL_GUIDE);
+    const welcome = tutorialSectionById("welcome");
+    const welcomeCopy = welcome === undefined
+      ? ""
+      : [welcome.summary, ...welcome.steps.map((step) => step.body)].join(" ");
+    const expansion = TUTORIAL_PLANNED_MECHANICS.find(
+      (mechanic) => mechanic.id === "planned-world-expansion",
+    );
+
+    expect(tutorialCopy).not.toMatch(/\b(?:seven|7)\s+settlements?\b/iu);
+    expect(welcomeCopy).toContain("Each finite estuary is procedurally generated from its world seed");
+    expect(welcomeCopy).toContain("terrain, biome pattern, and harbor sites");
+    expect(expansion?.clarification).toContain("one finite seed-generated map");
+    expect(expansion?.clarification).toContain("starting a new game with another seed regenerates");
+    expect(expansion?.clarification).toContain("dynamically extending a running settlement network");
+    expect(expansion?.clarification).toContain("not live in this build");
+  });
+
   it("marks requested future systems as planned instead of claiming that they affect play", () => {
     expect(TUTORIAL_PLANNED_MECHANICS.every((mechanic) => mechanic.status === "planned")).toBe(true);
     expect(TUTORIAL_PLANNED_MECHANICS.map((mechanic) => mechanic.id)).toEqual([
+      "planned-world-expansion",
       "planned-regional-biomes",
       "planned-magic-water-cargo",
       "planned-loose-cargo-physics",
       "planned-rocks-and-ladders",
+      "planned-staged-gear-bridges",
       "planned-anywhere-upgrades",
     ]);
     const plannedCopy = TUTORIAL_PLANNED_MECHANICS
@@ -153,6 +201,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
     expect(plannedCopy).toContain("cannot fall down rocks or drift away");
     expect(plannedCopy).toContain("not implemented yet");
+    expect(plannedCopy).toContain("do not become deployable Wayknots yet");
+    expect(plannedCopy).toContain("harbor locker storage");
     expect(plannedCopy).toContain("not yet a trust-money wallet");
   });
 

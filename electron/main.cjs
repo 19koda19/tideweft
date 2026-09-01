@@ -445,6 +445,53 @@ function rendererProbeScript() {
     const tutorialPrevious = document.querySelector('[data-tutorial-action="previous"]');
     const tutorialNext = document.querySelector('[data-tutorial-action="next"]');
     const tutorialClose = document.querySelector('[data-tutorial-action="close"]');
+    const mobileKitButton = document.querySelector('.mobile-kit-button');
+    const kitDialog = document.querySelector('.kit-dialog');
+    const kitContent = document.querySelector('.kit-dialog__content');
+    const kitHeader = document.querySelector('.kit-dialog__header');
+    const kitClose = document.querySelector('[data-kit-action="close"]');
+    const kitLoad = document.querySelector('.kit-load');
+    const kitLoadLabel = document.querySelector('.kit-load__label');
+    const kitLoadValue = document.querySelector('.kit-load__value');
+    const kitLoadProgress = document.querySelector('.kit-load__progress');
+    const kitTabs = Array.from(document.querySelectorAll('.kit-tab'));
+    const kitPanel = document.querySelector('.kit-panel');
+    const kitScroll = document.querySelector('.kit-panel__scroll');
+    const kitRecipeCards = Array.from(document.querySelectorAll('.kit-recipe'));
+    const kitRecipeActions = Array.from(document.querySelectorAll('.kit-action--make'));
+    const kitBlockedRecipeCards = kitRecipeCards.filter(
+      (recipe) => recipe.getAttribute('data-ready') === 'false',
+    );
+    const kitBlockedReasons = kitBlockedRecipeCards
+      .map((recipe) => recipe.querySelector('.kit-row__reason'))
+      .filter((reason) => reason instanceof Element);
+    const kitScrollStyle = kitScroll ? getComputedStyle(kitScroll) : null;
+    const visiblyRendered = (element) => {
+      if (!(element instanceof Element)) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        Number.parseFloat(style.opacity || '1') > 0 &&
+        rect.width > 0 &&
+        rect.height > 0;
+    };
+    const visiblyIntersectsKitScroll = (element) => {
+      if (!visiblyRendered(element) || !(kitScroll instanceof Element)) return false;
+      const rect = element.getBoundingClientRect();
+      const scrollRect = kitScroll.getBoundingClientRect();
+      return Math.max(rect.left, scrollRect.left, 0) <
+          Math.min(rect.right, scrollRect.right, window.innerWidth) &&
+        Math.max(rect.top, scrollRect.top, 0) <
+          Math.min(rect.bottom, scrollRect.bottom, window.innerHeight);
+    };
+    const targetProbe = (target) => ({
+      visible: visiblyIntersectsViewport(target),
+      rendered: visiblyRendered(target),
+      insideViewport: whollyInsideViewport(target),
+      rect: rectOf(target),
+      disabled: target instanceof HTMLButtonElement ? target.disabled : null,
+    });
     const contractRail = document.querySelector('.contract-rail');
     const contractSummary = contractRail?.querySelector('.panel-summary') || null;
     const contractList = document.querySelector('.contract-list');
@@ -864,6 +911,115 @@ function rendererProbeScript() {
           rect: rectOf(control),
           disabled: control instanceof HTMLButtonElement ? control.disabled : null,
         })),
+      },
+      kit: {
+        trigger: mobileKitButton
+          ? {
+              ...targetProbe(mobileKitButton),
+              text: mobileKitButton.textContent?.trim() || null,
+              ariaControls: mobileKitButton.getAttribute('aria-controls'),
+              ariaExpanded: mobileKitButton.getAttribute('aria-expanded'),
+              ariaHasPopup: mobileKitButton.getAttribute('aria-haspopup'),
+              ariaKeyShortcuts: mobileKitButton.getAttribute('aria-keyshortcuts'),
+              pointerEvents: getComputedStyle(mobileKitButton).pointerEvents,
+            }
+          : null,
+        open: kitDialog instanceof HTMLDialogElement ? kitDialog.open : null,
+        modal: kitDialog instanceof HTMLDialogElement && kitDialog.open
+          ? kitDialog.matches(':modal')
+          : false,
+        tab: kitDialog?.getAttribute('data-kit-tab') || null,
+        pausesWorld: kitDialog?.getAttribute('data-pauses-world') || null,
+        dialog: targetProbe(kitDialog),
+        content: targetProbe(kitContent),
+        header: targetProbe(kitHeader),
+        close: {
+          ...targetProbe(kitClose),
+          text: kitClose?.textContent?.trim() || null,
+          ariaLabel: kitClose?.getAttribute('aria-label') || null,
+        },
+        load: {
+          ...targetProbe(kitLoad),
+          label: kitLoadLabel?.textContent?.trim() || null,
+          value: kitLoadValue?.textContent?.trim() || null,
+          valueVisible: visiblyIntersectsViewport(kitLoadValue),
+          progress: kitLoadProgress instanceof HTMLProgressElement
+            ? {
+                visible: visiblyIntersectsViewport(kitLoadProgress),
+                insideViewport: whollyInsideViewport(kitLoadProgress),
+                value: kitLoadProgress.value,
+                max: kitLoadProgress.max,
+                ariaLabel: kitLoadProgress.getAttribute('aria-label'),
+                ariaValueText: kitLoadProgress.getAttribute('aria-valuetext'),
+              }
+            : null,
+        },
+        tabs: kitTabs.map((tab) => ({
+          ...targetProbe(tab),
+          text: tab.textContent?.trim() || null,
+          id: tab.id || null,
+          selected: tab.getAttribute('aria-selected'),
+          controls: tab.getAttribute('aria-controls'),
+          role: tab.getAttribute('role'),
+        })),
+        panel: {
+          ...targetProbe(kitPanel),
+          role: kitPanel?.getAttribute('role') || null,
+          labelledBy: kitPanel?.getAttribute('aria-labelledby') || null,
+        },
+        scroll: {
+          ...targetProbe(kitScroll),
+          ariaLabel: kitScroll?.getAttribute('aria-label') || null,
+          tabIndex: kitScroll instanceof HTMLElement ? kitScroll.tabIndex : null,
+          clientHeight: kitScroll instanceof HTMLElement ? kitScroll.clientHeight : null,
+          scrollHeight: kitScroll instanceof HTMLElement ? kitScroll.scrollHeight : null,
+          scrollTop: kitScroll instanceof HTMLElement ? kitScroll.scrollTop : null,
+          maxScrollTop: kitScroll instanceof HTMLElement
+            ? Math.max(0, kitScroll.scrollHeight - kitScroll.clientHeight)
+            : null,
+          overflowY: kitScrollStyle?.overflowY || null,
+          overscrollBehavior: kitScrollStyle?.overscrollBehavior || null,
+          hasVerticalOverflow: kitScroll instanceof HTMLElement
+            ? kitScroll.scrollHeight > kitScroll.clientHeight + 1
+            : null,
+        },
+        fixedChromeSeparated: Boolean(
+          kitLoad &&
+          kitTabs[0] &&
+          kitPanel &&
+          kitLoad.getBoundingClientRect().bottom <= kitTabs[0].getBoundingClientRect().top + 1 &&
+          kitTabs[0].getBoundingClientRect().bottom <= kitPanel.getBoundingClientRect().top + 1
+        ),
+        recipeCount: kitRecipeCards.length,
+        recipeActionCount: kitRecipeActions.length,
+        blockedRecipeCount: kitBlockedRecipeCards.length,
+        blockedReasonCount: kitBlockedReasons.length,
+        visibleRecipeActionCount: kitRecipeActions.filter(visiblyIntersectsKitScroll).length,
+        visibleBlockedReasonCount: kitBlockedReasons.filter(visiblyIntersectsKitScroll).length,
+        recipeActionsAtLeast44: kitRecipeActions.every((action) => {
+          const rect = action.getBoundingClientRect();
+          return rect.width >= 44 && rect.height >= 44;
+        }),
+        recipeActionsWithinScrollWidth: kitScroll instanceof HTMLElement
+          ? kitRecipeActions.every((action) => {
+              const actionRect = action.getBoundingClientRect();
+              const scrollRect = kitScroll.getBoundingClientRect();
+              return actionRect.left >= scrollRect.left - 1 && actionRect.right <= scrollRect.right + 1;
+            })
+          : null,
+        blockedReasonsRendered: kitBlockedReasons.every((reason) =>
+          visiblyRendered(reason) && Boolean(reason.textContent?.trim())
+        ),
+        disabledActionsHaveReasons: kitBlockedRecipeCards.every((recipe) => {
+          const action = recipe.querySelector('.kit-action--make');
+          const reason = recipe.querySelector('.kit-row__reason');
+          return action instanceof HTMLButtonElement &&
+            action.disabled &&
+            Boolean(action.title.trim()) &&
+            visiblyRendered(reason) &&
+            Boolean(reason?.textContent?.trim());
+        }),
+        activeElementIsTrigger: document.activeElement === mobileKitButton,
       },
       leftPaneGap: objectivePanel && contractRail
         ? contractRail.getBoundingClientRect().top - objectivePanel.getBoundingClientRect().bottom
@@ -1372,6 +1528,7 @@ function probeHasMobileHudFrame(probe) {
   const toggle = mobile?.toggle;
   const vitals = mobile?.compactCopy?.vitals;
   const tutorial = probe?.tutorial?.button;
+  const kit = probe?.kit?.trigger;
   return Boolean(
     mobile?.breakpointActive === true &&
     mobile.strip?.visible === true &&
@@ -1409,6 +1566,16 @@ function probeHasMobileHudFrame(probe) {
     tutorial.visibleText === '?' &&
     tutorial.ariaLabel?.toLowerCase().includes('tutorial') &&
     tutorial.ariaKeyShortcuts === 'T' &&
+    kit?.visible === true &&
+    kit.insideViewport === true &&
+    kit.rect?.width >= 44 &&
+    kit.rect?.height >= 44 &&
+    kit.text === 'KIT' &&
+    kit.disabled === false &&
+    kit.ariaControls === 'tideweft-kit' &&
+    kit.ariaHasPopup === 'dialog' &&
+    kit.ariaKeyShortcuts === 'I' &&
+    kit.pointerEvents === 'auto' &&
     mobile.titleMenuButton?.visible === false &&
     mobile.titleMenuButton?.display === 'none' &&
     mobile.quietHourButton?.visible === true &&
@@ -1463,6 +1630,107 @@ function probeHasOpenMobileTutorial(probe) {
       control.rect?.width >= 44 &&
       control.rect?.height >= 44
     )
+  );
+}
+
+function probeHasOpenMobileKit(probe, expectedTab = 'pack') {
+  const kit = probe?.kit;
+  const tabs = kit?.tabs;
+  const selectedTabId = `kit-tab-${expectedTab}`;
+  return Boolean(
+    probeHasMobileHudFrame(probe) &&
+    probe?.paused === false &&
+    probe?.tutorial?.open === false &&
+    kit?.open === true &&
+    kit.modal === true &&
+    kit.tab === expectedTab &&
+    kit.pausesWorld === 'false' &&
+    kit.trigger?.ariaExpanded === 'true' &&
+    kit.dialog?.visible === true &&
+    kit.dialog.insideViewport === true &&
+    kit.content?.visible === true &&
+    kit.content.insideViewport === true &&
+    kit.header?.visible === true &&
+    kit.header.insideViewport === true &&
+    kit.close?.visible === true &&
+    kit.close.insideViewport === true &&
+    kit.close.rect?.width >= 44 &&
+    kit.close.rect?.height >= 44 &&
+    kit.close.disabled === false &&
+    kit.close.ariaLabel?.includes('return to play') &&
+    kit.load?.visible === true &&
+    kit.load.insideViewport === true &&
+    kit.load.label === 'COMBINED LOAD' &&
+    /^\d+\.\d{3} load \/ \d+\.\d{3} load$/u.test(kit.load.value || '') &&
+    kit.load.valueVisible === true &&
+    kit.load.progress?.visible === true &&
+    kit.load.progress.insideViewport === true &&
+    Number.isFinite(kit.load.progress.value) &&
+    kit.load.progress.max === 1 &&
+    kit.load.progress.value >= 0 &&
+    kit.load.progress.value <= kit.load.progress.max &&
+    kit.load.progress.ariaLabel === 'Combined pack load' &&
+    kit.load.progress.ariaValueText?.includes('combined capacity') &&
+    Array.isArray(tabs) &&
+    tabs.length === 3 &&
+    tabs.map((tab) => tab.text).join(',') === 'PACK,MAKE,MEND' &&
+    tabs.every((tab) =>
+      tab.visible === true &&
+      tab.insideViewport === true &&
+      tab.rect?.width >= 44 &&
+      tab.rect?.height >= 44 &&
+      tab.disabled === false &&
+      tab.role === 'tab' &&
+      tab.controls === 'tideweft-kit-panel'
+    ) &&
+    tabs.filter((tab) => tab.selected === 'true').length === 1 &&
+    tabs.some((tab) => tab.id === selectedTabId && tab.selected === 'true') &&
+    kit.panel?.visible === true &&
+    kit.panel.insideViewport === true &&
+    kit.panel.role === 'tabpanel' &&
+    kit.panel.labelledBy === selectedTabId &&
+    kit.scroll?.visible === true &&
+    kit.scroll.insideViewport === true &&
+    kit.scroll.tabIndex === 0 &&
+    kit.scroll.ariaLabel?.startsWith(expectedTab.toUpperCase()) &&
+    kit.scroll.clientHeight >= 96 &&
+    kit.scroll.scrollHeight >= kit.scroll.clientHeight &&
+    (kit.scroll.overflowY === 'auto' || kit.scroll.overflowY === 'scroll') &&
+    kit.fixedChromeSeparated === true &&
+    probe.mobileHud?.expanded === 'false'
+  );
+}
+
+function probeHasOpenMobileMakeKit(probe, requireScrolled = false) {
+  const kit = probe?.kit;
+  return Boolean(
+    probeHasOpenMobileKit(probe, 'make') &&
+    kit?.recipeCount > 0 &&
+    kit.recipeActionCount === kit.recipeCount &&
+    kit.blockedRecipeCount > 0 &&
+    kit.blockedReasonCount === kit.blockedRecipeCount &&
+    kit.recipeActionsAtLeast44 === true &&
+    kit.recipeActionsWithinScrollWidth === true &&
+    kit.blockedReasonsRendered === true &&
+    kit.disabledActionsHaveReasons === true &&
+    kit.scroll?.hasVerticalOverflow === true &&
+    kit.scroll.maxScrollTop > 0 &&
+    (!requireScrolled || (
+      kit.scroll.scrollTop > 0 &&
+      kit.visibleRecipeActionCount > 0 &&
+      kit.visibleBlockedReasonCount > 0
+    ))
+  );
+}
+
+function probeHasClosedMobileKit(probe) {
+  return Boolean(
+    probeHasCollapsedMobileHud(probe) &&
+    probe?.paused === false &&
+    probe?.tutorial?.open === false &&
+    probe?.kit?.open === false &&
+    probe.kit.trigger?.ariaExpanded === 'false' &&
+    probe.kit.activeElementIsTrigger === true
   );
 }
 
@@ -1632,6 +1900,61 @@ async function closeSmokeTutorialWithKeyboard(contents) {
     (probe) => probe?.tutorial?.open === false && probe?.paused === false,
     SMOKE_TEST.timeoutMs,
   );
+}
+
+async function openSmokeMobileKit(contents, previousTick) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.mobile-kit-button');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error('the compact mobile KIT trigger was unavailable');
+  return waitForRenderer(
+    contents,
+    (probe) => probeHasOpenMobileKit(probe, 'pack') && probe.tick > previousTick,
+    SMOKE_TEST.timeoutMs,
+  );
+}
+
+async function switchSmokeMobileKitToMake(contents) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('[data-kit-tab="make"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error('the mobile KIT MAKE tab was unavailable');
+  return waitForRenderer(contents, probeHasOpenMobileMakeKit, SMOKE_TEST.timeoutMs);
+}
+
+async function scrollSmokeMobileMakeKit(contents) {
+  const scrolled = await contents.executeJavaScript(`(() => {
+    const scroll = document.querySelector('.kit-panel__scroll');
+    if (!(scroll instanceof HTMLElement)) return false;
+    const maximum = scroll.scrollHeight - scroll.clientHeight;
+    if (maximum <= 1) return false;
+    scroll.scrollTop = maximum;
+    scroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+    return scroll.scrollTop > 0;
+  })()`, true);
+  if (!scrolled) throw new Error('the mobile KIT MAKE panel did not accept independent scrolling');
+  return waitForRenderer(
+    contents,
+    (probe) => probeHasOpenMobileMakeKit(probe, true),
+    SMOKE_TEST.timeoutMs,
+  );
+}
+
+async function closeSmokeMobileKit(contents) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('[data-kit-action="close"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error('the mobile KIT close control was unavailable');
+  return waitForRenderer(contents, probeHasClosedMobileKit, SMOKE_TEST.timeoutMs);
 }
 
 async function toggleSmokeView(contents, expectedMode) {
@@ -1809,6 +2132,19 @@ async function runProductionSmoke(window) {
   // renderer projection and agree with the HUD's deployed/active accounting.
   const wayknotProbe = await bindSmokeWayknot(contents);
 
+  // UI pickup is intentionally optimistic until accept + pickup cross an
+  // authoritative world-tick boundary. Do not snapshot the Harp fixture in
+  // that short window: production load repair correctly rolls it back.
+  const promiseCommitProbe = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.tick > wayknotProbe.bound.tick &&
+      probe.activeContractCount === 1 &&
+      probe.playerCargoLoad > 0 &&
+      probe.playerDestinationLabel?.startsWith('DELIVER'),
+    SMOKE_TEST.timeoutMs,
+  );
+
   // Complete the proven generated three-piece formation through a smoke-only
   // persisted fixture, reload it through production validation, and use the
   // real HUD/Relief/Scan paths for every assertion that follows.
@@ -1886,6 +2222,13 @@ async function runProductionSmoke(window) {
     compactTutorialOpenedProbe.tutorial.pageId,
   );
   const compactTutorialClosedProbe = await closeSmokeTutorialWithKeyboard(contents);
+  const compactKitOpenedProbe = await openSmokeMobileKit(
+    contents,
+    compactTutorialClosedProbe.tick,
+  );
+  const compactKitMakeProbe = await switchSmokeMobileKitToMake(contents);
+  const compactKitMakeScrolledProbe = await scrollSmokeMobileMakeKit(contents);
+  const compactKitClosedProbe = await closeSmokeMobileKit(contents);
 
   const narrowPhoneCollapsedProbe = await resizeSmokeViewport(
     window,
@@ -1968,6 +2311,7 @@ async function runProductionSmoke(window) {
     boot: paintedTitleProbe,
     world: worldProbe,
     promisePickup: promisePickupProbe,
+    promiseCommit: promiseCommitProbe,
     wayknot: wayknotProbe,
     tideHarp: {
       fixture: tideHarpFixture,
@@ -1994,6 +2338,12 @@ async function runProductionSmoke(window) {
         opened: compactTutorialOpenedProbe,
         advanced: compactTutorialAdvancedProbe,
         closed: compactTutorialClosedProbe,
+      },
+      kit: {
+        opened: compactKitOpenedProbe,
+        make: compactKitMakeProbe,
+        makeScrolled: compactKitMakeScrolledProbe,
+        closed: compactKitClosedProbe,
       },
     },
     narrowPhoneViewport: {

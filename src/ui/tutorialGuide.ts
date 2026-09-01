@@ -19,6 +19,8 @@ export const TUTORIAL_SECTION_IDS = [
   "water-and-meters",
   "cargo-care",
   "terrain-and-tools",
+  "foraging",
+  "pack-and-crafting",
   "wayknots-and-harps",
   "routes-and-settlements",
   "views-and-hud",
@@ -38,6 +40,11 @@ export const TUTORIAL_CONTROL_IDS = [
   "scan-button",
   "interact-key",
   "interact-button",
+  "gather-key",
+  "kit-key",
+  "make-key",
+  "kit-button",
+  "kit-tabs",
   "wayknot-key",
   "wayknot-button",
   "view-key",
@@ -162,6 +169,38 @@ export const TUTORIAL_CONTROLS = [
     detail: "Read its live label: the action changes with your location and carried job.",
   },
   {
+    id: "gather-key",
+    audience: "desktop",
+    input: "E over a field find",
+    action: "Gather the resource underfoot",
+    detail: "The one-unit harvest must fit. A living reserve remains in an ordinary node.",
+  },
+  {
+    id: "kit-key",
+    audience: "desktop",
+    input: "I",
+    action: "Open or close KIT on PACK",
+  },
+  {
+    id: "make-key",
+    audience: "desktop",
+    input: "C",
+    action: "Open KIT directly on MAKE",
+  },
+  {
+    id: "kit-button",
+    audience: "all",
+    input: "KIT",
+    action: "Open the field inventory without pausing the world",
+    detail: "On touch it sits beside PROMISES in the compact top strip; on desktop it is in the action dock.",
+  },
+  {
+    id: "kit-tabs",
+    audience: "all",
+    input: "PACK / MAKE / MEND",
+    action: "Read carried load, craft, repair, or dismantle in one surface",
+  },
+  {
     id: "wayknot-key",
     audience: "desktop",
     input: "F",
@@ -238,6 +277,13 @@ export const TUTORIAL_CONTROLS = [
  */
 export const TUTORIAL_PLANNED_MECHANICS = [
   {
+    id: "planned-world-expansion",
+    status: "planned",
+    title: "Broader procedural regions",
+    clarification: "The current estuary is one finite seed-generated map; starting a new game with another seed regenerates its terrain, biome pattern, and harbor sites. Broader regions and dynamically extending a running settlement network are planned, not live in this build.",
+    keywords: ["procedural generation", "world seed", "region", "reseed", "harbor", "settlement"],
+  },
+  {
     id: "planned-regional-biomes",
     status: "planned",
     title: "Biome ecology and local exposure consequences",
@@ -266,6 +312,13 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     keywords: ["rock", "ladder", "climb", "obstacle"],
   },
   {
+    id: "planned-staged-gear-bridges",
+    status: "planned",
+    title: "Remaining crafted-gear and locker effects",
+    clarification: "Recipes and durable items are live, but crafted Reed mats, Tide anchors, and Wind knots do not become deployable Wayknots yet. Ladder traversal, Pannier capacity, Rain shroud and Glimmer liner cargo protection, and harbor locker storage are also staged rather than active.",
+    keywords: ["crafted wayknot", "pannier", "rain shroud", "glimmer liner", "locker", "gear effect"],
+  },
+  {
     id: "planned-anywhere-upgrades",
     status: "planned",
     title: "Anywhere upgrade system",
@@ -288,7 +341,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "welcome-read-world",
         audience: "all",
         title: "Needs cause promises",
-        body: "Seven settlements produce, consume, build civic projects, and experience shortages. Promise cards come from those simulated needs rather than a disconnected quest table.",
+        body: "Each finite estuary is procedurally generated from its world seed: the same seed reproduces its terrain, biome pattern, and harbor sites. Those settlements produce, consume, build civic projects, and experience shortages, so Promise cards come from simulated needs rather than a disconnected quest table.",
       },
       {
         id: "welcome-leave-strands",
@@ -340,7 +393,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "movement-touch",
         audience: "mobile",
         title: "Tap to travel",
-        body: "Tap open terrain in Chart or Relief to set a destination. Tapping a harbor charts to its exact center so pickup and delivery cannot miss; once you arrive, use the contextual touch action to pick up, deliver, or inspect. The porter follows the charted line until arrival, danger, or a new destination.",
+        body: "Tap open terrain in Chart or Relief to set a destination. Tapping a harbor charts to its exact center so pickup and delivery cannot miss. Tapping a visible field resource charts within reach and gathers it automatically on arrival. The porter follows the line until arrival, danger, or a new destination.",
         controlId: "set-destination",
       },
       {
@@ -608,12 +661,110 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     ],
   },
   {
-    id: "wayknots-and-harps",
+    id: "foraging",
     iconText: "08",
+    title: "Gather answers from the ground",
+    shortTitle: "Foraging",
+    summary: "Seeded biome resources are finite but renewable. Harvest whole units into the same capacity used by cargo, and leave each natural node a living reserve.",
+    keywords: ["forage", "gather", "resource", "material", "cordreed", "bladderkelp", "driftwood", "pitchmoss", "sunfiber", "hookstone", "shellstone", "stormlichen", "glimmer spore", "regrow"],
+    controlIds: ["gather-key", "set-destination", "scan-key", "scan-button"],
+    steps: [
+      {
+        id: "foraging-read-habitats",
+        audience: "all",
+        title: "Each biome grows a material language",
+        body: "Channels favor Bladderkelp and Driftwood; flats Shellstone and Sunfiber; marshes Cordreed and Pitchmoss; meadows Pitchmoss, Sunfiber, and Driftwood; ridges Hookstone and Stormlichen; Glimmerfen Glimmer spores. Rare finds cross those patterns. Written labels and silhouettes carry the information as well as color.",
+      },
+      {
+        id: "foraging-desktop",
+        audience: "desktop",
+        title: "Stand over the find and press E",
+        body: "Move onto a discovered resource node and use E when its contextual action says Gather. The current field action gathers exactly one whole unit. Its stamina cost and exact pack load are checked before anything changes.",
+        controlId: "gather-key",
+      },
+      {
+        id: "foraging-mobile",
+        audience: "mobile",
+        title: "Tap to route and auto-gather",
+        body: "Tap a visible resource. The porter charts within gathering reach and gathers automatically on arrival, taking one whole unit, so a tap cannot be stolen by an inspector panel. A rejected harvest stays untouched and names the blocker, such as pack room or a recovering node.",
+        controlId: "set-destination",
+      },
+      {
+        id: "foraging-renewal",
+        audience: "all",
+        title: "Take from growth, never the last life",
+        body: "Common, secondary, and rare nodes have seeded capacities. Ordinary harvest always leaves one unharvestable living unit. Missing units regrow only while this world's simulation advances; material-specific weather changes the bounded regrowth rate, and closed worlds gain no offline harvests.",
+      },
+    ],
+    callouts: [
+      {
+        id: "foraging-no-random-bonus",
+        audience: "all",
+        tone: "note",
+        title: "No timing trick or critical yield",
+        body: "A successful gather takes the displayed whole unit. There are no animation bonuses, daily claims, remote harvesting, or hidden random multipliers.",
+      },
+    ],
+  },
+  {
+    id: "pack-and-crafting",
+    iconText: "09",
+    title: "Pack, make, and mend in one KIT",
+    shortTitle: "KIT",
+    summary: "KIT combines entrusted transport, field finds, prepared components, and durable gear under one exact load limit. PACK, MAKE, and MEND are tabs of the same non-pausing surface.",
+    keywords: ["kit", "inventory", "pack", "load", "capacity", "locker", "make", "craft", "recipe", "mend", "repair", "condition", "durability", "dismantle"],
+    controlIds: ["kit-key", "make-key", "kit-button", "kit-tabs"],
+    steps: [
+      {
+        id: "kit-open",
+        audience: "all",
+        title: "Open KIT anywhere",
+        body: "Use KIT, or I on desktop. C opens directly to MAKE. Opening KIT does not pause: the world, tide, weather, porters, and route continue underneath. KIT and this tutorial close one another so only one field dialog occupies the safe viewport.",
+        controlId: "kit-button",
+      },
+      {
+        id: "kit-pack",
+        audience: "all",
+        title: "PACK reconciles every carried weight",
+        body: "COMBINED LOAD is the exact sum of Promise cargo and signed reports under Transport plus carried materials, components, and gear under Finds + gear. Every row shows exact thousandth-load values. This build carries those stacks in PACK; harbor locker storage is staged and is not a hidden remote inventory.",
+      },
+      {
+        id: "kit-make",
+        audience: "all",
+        title: "MAKE shows the whole transaction",
+        body: "Each recipe names every ingredient available and required, the exact result, its use, and its carried load. MAKE is atomic: all inputs and result capacity are checked together. A disabled recipe names its precise first blocker and consumes nothing.",
+        controlId: "kit-tabs",
+      },
+      {
+        id: "kit-mend",
+        audience: "all",
+        title: "MEND keeps identity and condition",
+        body: "Crafted gear is durable and keeps a stable identity, location, and condition. Each MEND restores up to 25% condition and scales its shown component cost to the actual missing condition. DISMANTLE is deliberately lossy and shows the salvage before you choose it.",
+      },
+      {
+        id: "kit-live-adaptations",
+        audience: "all",
+        title: "Four carried adaptations work in the field now",
+        body: "Marsh wraps help soft ground, a Float sash helps water, Ridge cleats help rough ridges, and a Weather cape helps exposed travel. Their assistance wears condition per aided tile. Other craftable gear remains durable inventory while its matching traversal or cargo system is staged; MAKE does not claim an effect that is not connected yet.",
+      },
+    ],
+    callouts: [
+      {
+        id: "kit-capacity-is-shared",
+        audience: "all",
+        tone: "safety",
+        title: "Crafting cannot hide weight",
+        body: "Transport and field inventory share one capacity. Components and gear can be lighter or heavier than their ingredients, so MAKE checks the post-craft combined load rather than only counting free slots.",
+      },
+    ],
+  },
+  {
+    id: "wayknots-and-harps",
+    iconText: "10",
     title: "Bind reusable help into the field",
     shortTitle: "Wayknots",
-    summary: "Your fixed six-piece Wayknot kit alters authoritative travel. Thoughtful combinations can form Waychords and three-knot Tide Harps.",
-    keywords: ["wayknot", "reed mat", "tide anchor", "wind knot", "waychord", "tide harp", "reclaim", "loom"],
+    summary: "The six inherited Reed mats, Tide anchors, and Wind knots alter authoritative travel. Their durable condition matters; thoughtful combinations can form Waychords and three-knot Tide Harps.",
+    keywords: ["wayknot", "reed mat", "tide anchor", "wind knot", "waychord", "tide harp", "reclaim", "loom", "durability", "condition"],
     controlIds: ["wayknot-key", "wayknot-button", "scan-key", "scan-button"],
     steps: [
       {
@@ -632,8 +783,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "wayknots-reclaim",
         audience: "all",
-        title: "Nothing is consumed",
-        body: "You carry two of each kind. Stand directly on a bound mark and use the same field action to reclaim that numbered piece. If the button says none are free, retrieve one already deployed.",
+        title: "Reclaim the same durable piece",
+        body: "Stand directly on a bound mark and use the same field action to reclaim its numbered core item. Placement spends 8% condition and reclaiming spends 4%; neither duplicates the item nor refreshes condition. A newly placed knot takes a three-tick setting period before giving full service. After reclaiming it, MEND repairs that same stable item.",
         controlId: "wayknot-key",
       },
       {
@@ -658,11 +809,18 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         title: "The field readout confirms the instrument",
         body: "It names tuned and active Tide Harps, the three numbered components, and the scan benefit. If it still says “Tune one,” move the pieces into a smaller, non-flat triangle.",
       },
+      {
+        id: "wayknots-crafted-boundary",
+        audience: "all",
+        tone: "boundary",
+        title: "Crafted knot recipes are not deployment slots yet",
+        body: "MAKE can produce durable Reed mat, Tide anchor, and Wind knot inventory items, but those crafted copies are not bridged into the F deployment system in this build. Only the six inherited numbered core pieces form active marks, Waychords, and Tide Harps.",
+      },
     ],
   },
   {
     id: "routes-and-settlements",
-    iconText: "09",
+    iconText: "11",
     title: "Turn footsteps into a resilient weave",
     shortTitle: "Living world",
     summary: "Deliveries affect material stocks, people, trust, projects, and routes. Surveyed and tended corridors can support autonomous porters and remembered loops.",
@@ -712,12 +870,12 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
   {
     id: "views-and-hud",
-    iconText: "10",
+    iconText: "12",
     title: "Two views, one simulation",
     shortTitle: "Views & HUD",
     summary: "Chart 2D and Relief 3D read and command the same world state. Switching presentation cannot fork the simulation or reveal undiscovered terrain.",
     keywords: ["chart", "2d", "relief", "3d", "view", "hud", "promises", "mobile", "inspector", "camera"],
-    controlIds: ["view-key", "view-button", "relief-orbit", "world-zoom", "promises-sheet"],
+    controlIds: ["view-key", "view-button", "relief-orbit", "world-zoom", "promises-sheet", "kit-button"],
     steps: [
       {
         id: "views-switch",
@@ -743,7 +901,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-mobile-sheets",
         audience: "mobile",
         title: "Only one sheet opens at a time",
-        body: "PROMISES + opens the scrollable Promises sheet. Inspecting a harbor opens a separate full-size settlement sheet and closes Promises, so panels do not stack across the short landscape viewport.",
+        body: "PROMISES + opens the scrollable Promises sheet. KIT opens the safe-area PACK / MAKE / MEND dialog beside it, while ? opens this manual. KIT and the tutorial close one another; inspecting a harbor uses a separate full-size sheet, so panes do not stack across a short landscape viewport.",
         controlId: "promises-sheet",
       },
     ],
@@ -759,7 +917,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
   {
     id: "saves-and-quiet-hour",
-    iconText: "11",
+    iconText: "13",
     title: "Stop safely without ending the world",
     shortTitle: "Saves",
     summary: "The perpetual world autosaves locally and never advances while closed. Quiet Hour is a voluntary recap and stopping surface, not a timer or quota.",
@@ -804,12 +962,12 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
   {
     id: "accessibility",
-    iconText: "12",
+    iconText: "14",
     title: "The estuary should explain itself",
     shortTitle: "Accessibility",
     summary: "Actions, hazards, availability, and progress use words and structure in addition to color, with keyboard, touch, reduced-motion, and assistive announcements supported.",
     keywords: ["accessibility", "keyboard", "touch", "screen reader", "reduced motion", "focus", "tutorial", "color"],
-    controlIds: ["tutorial-key", "tutorial-button", "promises-sheet", "view-button"],
+    controlIds: ["tutorial-key", "tutorial-button", "promises-sheet", "kit-button", "view-button"],
     steps: [
       {
         id: "accessibility-open-desktop",
@@ -824,6 +982,13 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         title: "Use the dedicated Tutorial control",
         body: "Open the same field manual from the mobile ? button. It uses the safe viewport, scrolls independently, and keeps page controls large enough for touch.",
         controlId: "tutorial-button",
+      },
+      {
+        id: "accessibility-kit-mobile",
+        audience: "mobile",
+        title: "KIT fits the safe viewport",
+        body: "The 44-pixel KIT control sits beside PROMISES. Its tabs and actions remain at least 44 pixels tall, PACK / MAKE / MEND scroll independently beneath a fixed summary, and closing returns focus to the trigger.",
+        controlId: "kit-button",
       },
       {
         id: "accessibility-not-color-only",
@@ -856,18 +1021,18 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
   {
     id: "build-boundaries",
-    iconText: "13",
+    iconText: "15",
     title: "What is live, and what comes next",
     shortTitle: "Build status",
     summary: "The field manual describes only mechanics that affect this build. Requested simulation phases are listed plainly so absence never feels like a secret rule.",
-    keywords: ["planned", "roadmap", "biome", "magic water", "cargo physics", "ladder", "upgrade"],
+    keywords: ["planned", "roadmap", "biome", "foraging", "crafting", "durability", "weather", "magic water", "cargo physics", "ladder", "upgrade"],
     controlIds: [],
     steps: [
       {
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Seeded terrain, seven stable visual biomes, live local climate signals, tides, global weather and wind, discovery, depth sounding, current arrows and sweeps, cargo condition, perishable and fragile handling, civic tools, Wayknots, Tide Harps, settlements, promises, reports, routes, porters, projects, saves, and perpetual play are active systems.",
+        body: "Seeded terrain, seven visual biomes, deterministic renewable field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, the six inherited Wayknots, tides, global weather and wind, discovery, depth sounding, current arrows and sweeps, cargo condition, settlements, promises, reports, routes, porters, projects, saves, and perpetual play are active systems.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -879,7 +1044,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-planned-physics",
         audience: "all",
         title: "Planned traversal and economy phase",
-        body: "Loose cargo that can be dropped, swept away, or tumbled down rocks; ladder-gated obstacles; trust-money rewards; and an anywhere upgrade system are planned and are not currently available actions.",
+        body: "Loose cargo that can be dropped, swept away, or tumbled down rocks; ladder-gated obstacles; the remaining crafted-gear and locker bridges; trust-money rewards; and an anywhere upgrade system are planned and are not currently available actions.",
       },
     ],
     callouts: [
@@ -895,7 +1060,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
 ] as const satisfies readonly TutorialGuideSection[];
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
-  version: 2,
+  version: 3,
   title: "TIDEWEFT FIELD MANUAL",
   subtitle: "Promises, currents, and the paths that learn",
   sections: TUTORIAL_GUIDE_SECTIONS,

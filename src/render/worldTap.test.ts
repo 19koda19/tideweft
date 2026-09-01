@@ -11,6 +11,15 @@ const view = {
       discovered: true,
     },
   ],
+  fieldResources: [
+    {
+      id: "field-v1:reed",
+      material: "cordreed",
+      label: "Cordreed",
+      position: { x: 204, y: 228 },
+      knowledge: "charted",
+    },
+  ],
 } as unknown as TideweftView;
 
 describe("world tap intent", () => {
@@ -44,6 +53,45 @@ describe("world tap intent", () => {
       type: "move-target",
       point: { x: 80, y: 90 },
       additive: true,
+    });
+  });
+
+  it("routes resource taps to the exact node and only enables touch arrival gathering", () => {
+    expect(commandForWorldTap(
+      view,
+      { entity: "resource", id: "field-v1:reed" },
+      { x: 197, y: 220 },
+      true,
+      true,
+    )).toEqual({
+      type: "resource-target",
+      nodeId: "field-v1:reed",
+      point: { x: 204, y: 228 },
+      gatherOnArrival: true,
+    });
+    expect(commandForWorldTap(
+      view,
+      { entity: "resource", id: "field-v1:reed" },
+      { x: 197, y: 220 },
+      false,
+    )).toEqual({
+      type: "resource-target",
+      nodeId: "field-v1:reed",
+      point: { x: 204, y: 228 },
+      gatherOnArrival: false,
+    });
+  });
+
+  it("cannot target a hidden or stale resource ID", () => {
+    expect(commandForWorldTap(
+      view,
+      { entity: "resource", id: "field-v1:hidden" },
+      { x: 400, y: 440 },
+      true,
+    )).toEqual({
+      type: "move-target",
+      point: { x: 400, y: 440 },
+      additive: false,
     });
   });
 

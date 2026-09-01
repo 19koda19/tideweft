@@ -15,6 +15,92 @@ export type SessionShape = "drift" | "weave" | "wander";
 export const PERPETUAL_SESSION_SHAPE: SessionShape = "wander";
 export type JourneyPosture = "hearth" | "journey" | "gale";
 
+export const KIT_REPAIR_CONDITION_GAIN = 250_000 as const;
+export type KitTabId = "pack" | "make" | "mend";
+export type KitStackTier = "raw" | "component";
+export type KitStackLocation = "pack" | "locker";
+export type KitGearLocation = "carried" | "equipped" | "locker" | "deployed";
+
+/** Physical Promise/report load shown separately inside the combined pack. */
+export interface KitTransportRowUIView {
+  readonly id: string;
+  readonly kind: "promise-cargo" | "signed-report";
+  readonly label: string;
+  readonly detail: string;
+  readonly loadMilli: number;
+  /** Normalized 0..1 condition for physical cargo; absent for information. */
+  readonly condition?: number;
+}
+
+/** One exact material/component stack in the carried pack or local locker. */
+export interface KitStackUIView {
+  readonly id: string;
+  readonly tier: KitStackTier;
+  readonly label: string;
+  readonly quantity: number;
+  readonly unitLoadMilli: number;
+  readonly totalLoadMilli: number;
+  readonly location: KitStackLocation;
+  readonly locationLabel?: string;
+}
+
+/** One durable, stable-ID field item. Condition is normalized to 0..1. */
+export interface KitGearUIView {
+  readonly id: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly detail: string;
+  readonly location: KitGearLocation;
+  readonly locationLabel: string;
+  readonly loadMilli: number;
+  readonly condition: number;
+  readonly conditionLabel: string;
+  readonly repairCostLabel: string;
+  readonly salvageLabel: string;
+  readonly canRepair: boolean;
+  readonly repairDisabledReason?: string;
+  readonly canDismantle: boolean;
+  readonly dismantleDisabledReason?: string;
+}
+
+export interface KitRecipeIngredientUIView {
+  readonly id: string;
+  readonly label: string;
+  readonly required: number;
+  readonly available: number;
+  readonly sufficient: boolean;
+}
+
+/** A complete recipe preview; disabled rows always explain the first blocker. */
+export interface KitRecipeUIView {
+  readonly id: string;
+  readonly label: string;
+  readonly resultLabel: string;
+  readonly resultDetail: string;
+  readonly resultLoadMilli: number;
+  readonly ingredientCopy: string;
+  readonly ingredients: readonly KitRecipeIngredientUIView[];
+  readonly canCraft: boolean;
+  readonly disabledReason?: string;
+}
+
+/**
+ * Presentation-only field inventory. All load values are exact integer
+ * thousandths; `combinedLoadMilli` includes transport plus stacks and gear.
+ */
+export interface KitUIView {
+  readonly revision: number | string;
+  readonly combinedLoadMilli: number;
+  readonly capacityMilli: number;
+  readonly transportLoadMilli: number;
+  readonly transportRows: readonly KitTransportRowUIView[];
+  readonly stackRows: readonly KitStackUIView[];
+  readonly gearRows: readonly KitGearUIView[];
+  readonly recipes: readonly KitRecipeUIView[];
+  readonly locationLabel?: string;
+  readonly hint?: string;
+}
+
 export interface ClockUIView {
   readonly day: number;
   readonly timeLabel: string;
@@ -241,6 +327,8 @@ export interface TideweftUIView {
   readonly quietHour?: QuietHourUIView;
   readonly announcement?: AnnouncementUIView;
   readonly controls?: ControlAvailabilityUIView;
+  /** Additive while the gathering runtime migrates; absent renders an empty KIT. */
+  readonly kit?: KitUIView;
 }
 
 export type TideweftUICommand =
@@ -280,6 +368,22 @@ export type TideweftUICommand =
       readonly action: "collect";
       readonly sourceSettlementId: string;
       readonly targetSettlementId: string;
+    }
+  | {
+      readonly type: "kit";
+      readonly action: "craft";
+      readonly recipeId: string;
+    }
+  | {
+      readonly type: "kit";
+      readonly action: "repair";
+      readonly gearId: string;
+      readonly conditionGain: typeof KIT_REPAIR_CONDITION_GAIN;
+    }
+  | {
+      readonly type: "kit";
+      readonly action: "dismantle";
+      readonly gearId: string;
     };
 
 export interface TideweftUIOptions {
@@ -301,4 +405,6 @@ export interface TideweftUIController {
   readonly setQuietHourVisible: (visible: boolean) => void;
   readonly openHelp: () => void;
   readonly closeHelp: () => void;
+  readonly openKit: (tab?: KitTabId) => void;
+  readonly closeKit: () => void;
 }

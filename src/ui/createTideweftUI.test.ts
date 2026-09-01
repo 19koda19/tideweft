@@ -121,6 +121,38 @@ describe("Wayknot UI accessibility", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  it("toggles KIT with I and opens its MAKE tab with C without a gameplay command", () => {
+    const dispatch = vi.fn();
+    const openTutorial = vi.fn();
+    const toggleKit = vi.fn();
+    const openMake = vi.fn();
+    const inventory = keyEvent({ code: "KeyI", key: "i" });
+    const crafting = keyEvent({ code: "KeyC", key: "c" });
+
+    expect(handleTideweftUIShortcut(
+      inventory,
+      false,
+      dispatch,
+      openTutorial,
+      toggleKit,
+      openMake,
+    )).toBe(true);
+    expect(handleTideweftUIShortcut(
+      crafting,
+      false,
+      dispatch,
+      openTutorial,
+      toggleKit,
+      openMake,
+    )).toBe(true);
+    expect(inventory.preventDefault).toHaveBeenCalledOnce();
+    expect(crafting.preventDefault).toHaveBeenCalledOnce();
+    expect(toggleKit).toHaveBeenCalledOnce();
+    expect(openMake).toHaveBeenCalledOnce();
+    expect(openTutorial).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("explains Tide Harp formation, activation, recharge, and three-origin sounding in words", () => {
     expect(TIDE_HARP_HELP_COPY).toContain("one Reed mat, one Tide anchor, and one Wind knot");
     expect(TIDE_HARP_HELP_COPY).toContain("compact triangle");

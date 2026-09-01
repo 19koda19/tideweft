@@ -12,7 +12,7 @@ const COMPACT_TUTORIAL_QUERY = "(max-width: 44rem), (max-height: 34rem) and (max
 export interface TutorialDialogController {
   readonly element: HTMLDialogElement;
   readonly open: (trigger?: HTMLElement | null) => void;
-  readonly close: () => void;
+  readonly close: (restoreFocus?: boolean) => void;
   readonly toggle: (trigger?: HTMLElement | null) => void;
   readonly next: () => void;
   readonly previous: () => void;
@@ -54,6 +54,7 @@ export function createTutorialDialog(): TutorialDialogController {
   dialog.id = "tideweft-tutorial";
   dialog.setAttribute("aria-labelledby", "tutorial-dialog-heading");
   dialog.setAttribute("aria-describedby", "tutorial-dialog-subtitle");
+  dialog.dataset.pausesWorld = "false";
 
   const content = element("div", "tutorial-dialog__content");
   const header = element("header", "tutorial-dialog__header");
@@ -105,7 +106,11 @@ export function createTutorialDialog(): TutorialDialogController {
   const footer = element("footer", "tutorial-dialog__footer");
   const previousButton = button("tutorial-page-button", "← PREVIOUS", "Previous tutorial page");
   previousButton.dataset.tutorialAction = "previous";
-  const footerPosition = element("span", "tutorial-dialog__position", "01 / 13");
+  const footerPosition = element(
+    "span",
+    "tutorial-dialog__position",
+    `01 / ${String(TIDEWEFT_TUTORIAL_GUIDE.sections.length).padStart(2, "0")}`,
+  );
   const nextButton = button("tutorial-page-button tutorial-page-button--next", "NEXT →", "Next tutorial page");
   nextButton.dataset.tutorialAction = "next";
   footer.append(previousButton, footerPosition, nextButton);
@@ -243,14 +248,18 @@ export function createTutorialDialog(): TutorialDialogController {
 
   const open = (trigger?: HTMLElement | null): void => {
     if (destroyed) return;
-    returnFocus = trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    if (!dialog.open) {
+      returnFocus = trigger
+        ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    }
     refreshAudience();
     renderPage(false);
     if (!dialog.open) dialog.showModal();
     closeButton.focus({ preventScroll: true });
   };
 
-  const close = (): void => {
+  const close = (restoreFocus = true): void => {
+    if (!restoreFocus) returnFocus = null;
     if (dialog.open) dialog.close();
   };
 
@@ -261,7 +270,7 @@ export function createTutorialDialog(): TutorialDialogController {
 
   previousButton.addEventListener("click", () => setPage(activeIndex - 1, true));
   nextButton.addEventListener("click", () => setPage(activeIndex + 1, true));
-  closeButton.addEventListener("click", close);
+  closeButton.addEventListener("click", () => close());
   dialog.addEventListener("cancel", (event) => {
     event.preventDefault();
     close();

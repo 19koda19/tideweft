@@ -43,7 +43,10 @@ import {
 } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
+import { hitTestFieldResource } from "./resourceHitTest";
+import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
 import type {
+  FieldResourceNodeView,
   PorterView,
   RendererCommand,
   RouteView,
@@ -452,6 +455,33 @@ export function createTideweftReliefRenderer(
         wayknot.active,
       );
     }
+    if (pointerWorld) {
+      const resourceHit = hitTestFieldResource(
+        view.fieldResources,
+        pointerWorld,
+        Math.max(tileSize * 0.58, unitsPerPixel() * 22),
+      );
+      if (resourceHit) {
+        const node = resourceHit.node;
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          node.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        const detail = node.knowledge === "sounded"
+          ? `${node.rarity ?? "known"} · ${node.stockUnits ?? 0} ready`
+          : "charted · sound for stock";
+        place(
+          `resource-${node.id}`,
+          `${FIELD_RESOURCE_PRESENTATION[node.material].label} · ${detail}`,
+          node.position,
+          surface + tileSize * 0.82,
+          "wayknot",
+          true,
+        );
+      }
+    }
     const tideHarps = tideHarpGeometryFor(view.tideHarps, tileSize * 0.1);
     for (const harp of tideHarps) {
       const centerSurface = discoveredReliefSurfaceHeightAt(
@@ -493,10 +523,10 @@ export function createTideweftReliefRenderer(
 
   const findSelection = (
     point: WorldPoint,
-  ): { entity: "settlement" | "porter" | "route"; id: string } | null => {
+  ): { entity: "settlement" | "porter" | "route" | "resource"; id: string } | null => {
     const view = latestView;
     if (!view) return null;
-    let nearest: { entity: "settlement" | "porter" | "route"; id: string; distance: number } | null = null;
+    let nearest: { entity: "settlement" | "porter" | "route" | "resource"; id: string; distance: number } | null = null;
     const settlementRadius = Math.max(view.terrain.tileSize * 0.55, unitsPerPixel() * 18);
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
@@ -504,6 +534,15 @@ export function createTideweftReliefRenderer(
       if (distance <= settlementRadius ** 2 && (!nearest || distance < nearest.distance)) {
         nearest = { entity: "settlement", id: settlement.id, distance };
       }
+    }
+    const resourceRadius = Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22);
+    const resourceHit = hitTestFieldResource(view.fieldResources, point, resourceRadius);
+    if (resourceHit && (!nearest || resourceHit.distanceSquared < nearest.distance)) {
+      nearest = {
+        entity: "resource",
+        id: resourceHit.node.id,
+        distance: resourceHit.distanceSquared,
+      };
     }
     const porterRadius = Math.max(view.terrain.tileSize * 0.35, unitsPerPixel() * 12);
     for (const porter of view.porters) {
@@ -670,6 +709,7 @@ export function createTideweftReliefRenderer(
       clickCandidate = null;
       const point = pickWorld(localPointer(event));
       if (!point) return;
+      pointerWorld = point;
       const target = findSelection(point);
       const view = latestView;
       if (view) emit(commandForWorldTap(
@@ -1124,6 +1164,213 @@ export function createTideweftReliefRenderer(
         p.vertex(sample.x, -height, sample.y);
       }
       p.endShape();
+    };
+
+    const drawFieldResourceNode = (
+      node: FieldResourceNodeView,
+      surface: number,
+      size: number,
+    ): void => {
+      const presentation = FIELD_RESOURCE_PRESENTATION[node.material];
+      const orientation = reliefStringHash(node.id) / 4_294_967_295 * Math.PI * 2;
+      const color = presentation.reliefColor;
+      const foam = RELIEF_PALETTE.foam;
+
+      p.push();
+      p.translate(node.position.x, -surface, node.position.y);
+      p.rotateY(orientation);
+      p.noStroke();
+      switch (presentation.motif) {
+        case "kelp-bladders":
+          for (let index = -1; index <= 1; index += 1) {
+            const height = size * (0.72 + (index === 0 ? 0.28 : Math.abs(index) * 0.08));
+            p.push();
+            p.translate(index * size * 0.3, -height / 2, index * size * 0.08);
+            p.ambientMaterial(color);
+            p.box(size * 0.075, height, size * 0.075);
+            p.translate(0, -height / 2 - size * 0.11, 0);
+            p.ambientMaterial(index === 0 && node.knowledge === "sounded" ? foam : color);
+            p.sphere(size * 0.18, 6, 4);
+            p.pop();
+          }
+          break;
+        case "crossed-driftwood":
+          for (const angle of [-0.58, 0.58]) {
+            p.push();
+            p.translate(0, -size * 0.12, angle * size * 0.08);
+            p.rotateY(angle);
+            p.rotateZ(angle * 0.08);
+            p.ambientMaterial(color);
+            p.box(size * 1.35, size * 0.2, size * 0.18);
+            p.pop();
+          }
+          break;
+        case "glimmer-cap":
+          p.push();
+          p.translate(0, -size * 0.42, 0);
+          p.ambientMaterial(foam);
+          p.box(size * 0.13, size * 0.78, size * 0.13);
+          p.translate(0, -size * 0.42, 0);
+          p.scale(1, 0.38, 1);
+          if (node.knowledge === "sounded") p.emissiveMaterial(color);
+          else p.ambientMaterial(color);
+          p.sphere(size * 0.56, 7, 4);
+          p.pop();
+          break;
+        case "shell-spiral":
+          p.push();
+          p.translate(0, -size * 0.34, 0);
+          p.rotateX(p.HALF_PI);
+          p.ambientMaterial(color);
+          p.torus(size * 0.35, size * 0.12, 7, 4);
+          p.ambientMaterial(foam);
+          p.sphere(size * 0.14, 5, 3);
+          p.pop();
+          break;
+        case "sunburst-fiber":
+          p.push();
+          p.translate(0, -size * 0.52, 0);
+          p.ambientMaterial(color);
+          p.box(size * 0.11, size * 1.04, size * 0.11);
+          p.translate(0, -size * 0.48, 0);
+          p.emissiveMaterial(node.knowledge === "sounded" ? color : foam);
+          p.sphere(size * 0.17, 6, 4);
+          for (let ray = 0; ray < 6; ray += 1) {
+            p.push();
+            p.rotateY(ray * Math.PI / 3);
+            p.translate(size * 0.34, 0, 0);
+            p.ambientMaterial(color);
+            p.box(size * 0.48, size * 0.075, size * 0.075);
+            p.pop();
+          }
+          p.pop();
+          break;
+        case "hooked-stone":
+          p.push();
+          p.translate(-size * 0.16, -size * 0.48, 0);
+          p.ambientMaterial(color);
+          p.box(size * 0.28, size * 0.92, size * 0.34);
+          p.translate(size * 0.28, -size * 0.34, 0);
+          p.rotateZ(p.HALF_PI);
+          p.box(size * 0.28, size * 0.72, size * 0.34);
+          p.translate(0, -size * 0.38, 0);
+          p.ambientMaterial(foam);
+          p.cone(size * 0.17, size * 0.34, 5, 1);
+          p.pop();
+          break;
+        case "bound-reeds":
+          for (let index = -2; index <= 2; index += 1) {
+            const height = size * (0.68 + (2 - Math.abs(index)) * 0.14);
+            p.push();
+            p.translate(index * size * 0.18, -height / 2, Math.abs(index) * size * 0.04);
+            p.rotateZ(index * 0.055);
+            p.ambientMaterial(color);
+            p.box(size * 0.105, height, size * 0.105);
+            p.pop();
+          }
+          p.push();
+          p.translate(0, -size * 0.34, 0);
+          p.ambientMaterial(foam);
+          p.box(size * 0.92, size * 0.1, size * 0.16);
+          p.pop();
+          break;
+        case "moss-cushion":
+          for (const [x, z, scale] of [
+            [-0.32, 0.04, 0.66],
+            [0.05, -0.08, 0.88],
+            [0.38, 0.08, 0.54],
+          ] as const) {
+            p.push();
+            p.translate(x * size, -size * 0.16 * scale, z * size);
+            p.scale(1, 0.38, 0.82);
+            p.ambientMaterial(color);
+            p.sphere(size * scale * 0.48, 6, 3);
+            p.pop();
+          }
+          break;
+        case "forked-lichen": {
+          const branch = (x: number, y: number, angle: number, length: number): void => {
+            p.push();
+            p.translate(x * size, y * size, 0);
+            p.rotateZ(angle);
+            p.ambientMaterial(color);
+            p.box(size * 0.1, size * length, size * 0.1);
+            p.pop();
+          };
+          branch(0, -0.43, 0, 0.86);
+          branch(-0.18, -0.58, -0.72, 0.58);
+          branch(0.2, -0.48, 0.68, 0.64);
+          branch(-0.38, -0.78, -0.35, 0.38);
+          p.push();
+          p.translate(0, -size * 0.88, 0);
+          if (node.knowledge === "sounded") p.emissiveMaterial(color);
+          else p.ambientMaterial(foam);
+          p.sphere(size * 0.12, 5, 3);
+          p.pop();
+          break;
+        }
+      }
+      p.pop();
+    };
+
+    const drawFieldResources = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+    ): void => {
+      const reachSquared = (orbit.distance * 1.18) ** 2;
+      const visible = view.fieldResources
+        .map((node) => ({
+          node,
+          distance: distanceSquared(node.position, { x: orbit.x, y: orbit.y }),
+        }))
+        .filter((candidate) => candidate.distance <= reachSquared)
+        .sort((left, right) => left.distance - right.distance
+          || (left.node.id < right.node.id ? -1 : left.node.id > right.node.id ? 1 : 0))
+        .slice(0, 220);
+      const hoveredId = pointerWorld
+        ? hitTestFieldResource(
+            view.fieldResources,
+            pointerWorld,
+            Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22),
+          )?.node.id
+        : undefined;
+      const size = view.terrain.tileSize * 0.42;
+
+      for (const { node } of visible) {
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          node.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        if (node.knowledge === "sounded" || node.id === hoveredId) {
+          drawGroundRing(
+            view,
+            cache,
+            node.position,
+            view.terrain.tileSize * (node.id === hoveredId ? 0.58 : 0.43),
+            FIELD_RESOURCE_PRESENTATION[node.material].reliefColor,
+            node.id === hoveredId ? 220 : 105,
+          );
+          if (node.knowledge === "sounded") {
+            const markCount = node.rarity === "rare" ? 3 : node.rarity === "secondary" ? 2 : 1;
+            for (let mark = 0; mark < markCount; mark += 1) {
+              const angle = -0.35 + mark * 0.35 - (markCount - 1) * 0.175;
+              p.push();
+              p.noStroke();
+              p.translate(
+                node.position.x + Math.cos(angle) * size * 0.58,
+                -surface - size * 0.08,
+                node.position.y + Math.sin(angle) * size * 0.58,
+              );
+              p.ambientMaterial(RELIEF_PALETTE.foam);
+              p.sphere(size * 0.055, 4, 2);
+              p.pop();
+            }
+          }
+        }
+        drawFieldResourceNode(node, surface, size);
+      }
     };
 
     const wayknotColor = (kind: WayknotKind): string => {
@@ -1785,6 +2032,7 @@ export function createTideweftReliefRenderer(
       drawTerrain(view, cache, camera);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
+      drawFieldResources(view, cache);
       drawSurfaceCurrents(view, cache, now);
       drawRoutes(view, cache);
       drawSoundings(view, cache);

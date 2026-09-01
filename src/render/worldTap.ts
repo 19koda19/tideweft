@@ -5,7 +5,7 @@ import type {
 } from "./types";
 
 export interface WorldTapTarget {
-  readonly entity: "settlement" | "porter" | "route";
+  readonly entity: "settlement" | "porter" | "route" | "resource";
   readonly id: string;
 }
 
@@ -28,6 +28,17 @@ export function commandForWorldTap(
   coarsePointer: boolean,
   additive = false,
 ): RendererCommand {
+  if (target?.entity === "resource") {
+    const node = view.fieldResources.find((candidate) => candidate.id === target.id);
+    if (node) {
+      return {
+        type: "resource-target",
+        nodeId: node.id,
+        point: { ...node.position },
+        gatherOnArrival: coarsePointer,
+      };
+    }
+  }
   if (coarsePointer && target?.entity === "settlement") {
     const settlement = view.settlements.find((candidate) => candidate.id === target.id);
     if (settlement && settlement.discovered !== false) {
@@ -38,7 +49,7 @@ export function commandForWorldTap(
       };
     }
   }
-  if (target) {
+  if (target && target.entity !== "resource") {
     return {
       type: "select",
       entity: target.entity,

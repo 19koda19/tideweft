@@ -15,6 +15,12 @@ import {
   type BiomeClimate,
   type BiomeId,
 } from "../sim/public";
+import {
+  FIELD_RESOURCE_LIVING_RESERVE_UNITS,
+  canonicalizeFieldResourceState,
+  type FieldResourceCatalog,
+  type FieldResourceEcologyState,
+} from "../sim/fieldResources";
 import { FIXED_POINT, STRAND_AUTOMATION_THRESHOLD, type TerrainTileView, type WorldView } from "../sim/types";
 import {
   TILE_UNITS,
@@ -72,6 +78,10 @@ export interface ProjectionOptions {
   destinationKind?: "pickup" | "delivery" | "report";
   paused?: boolean;
   recentEventIds?: readonly number[];
+  /** Derived, seed-stable ecology catalog. Both fields are required to reveal nodes. */
+  fieldResourceCatalog?: FieldResourceCatalog;
+  /** Sparse live depletion state paired with fieldResourceCatalog. */
+  fieldResourceEcology?: FieldResourceEcologyState;
 }
 
 export function projectGameView(
@@ -100,6 +110,14 @@ export function projectGameView(
       harp.id === activeTideHarpId,
     ));
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+  const fieldResources = projectFieldResources(
+    world,
+    player,
+    settlementTiles,
+    options.fieldResourceCatalog,
+    options.fieldResourceEcology,
+    tileSize,
+  );
   const biomeCache = stableBiomeTerrain(world);
   const projectedBiomes = weatherAdjustedBiomeTiles(biomeCache.tiles, world.weather);
   const traces = player.currentTrace.length > 1
@@ -302,6 +320,7 @@ export function projectGameView(
       }];
     }),
     tideHarps,
+    fieldResources,
     routes: world.routes
       .filter((route) => {
         if (options.selectedRouteId === route.id) return true;
@@ -389,6 +408,64 @@ export function projectGameView(
     },
     ...(options.paused === undefined ? {} : { paused: options.paused }),
   };
+}
+
+function projectFieldResources(
+  world: WorldView,
+  player: PlayerState,
+  settlementTiles: ReadonlySet<number>,
+  catalog: FieldResourceCatalog | undefined,
+  ecology: FieldResourceEcologyState | undefined,
+  tileSize: number,
+): TideweftView["fieldResources"] {
+  if (
+    !catalog
+    || !ecology
+    || catalog.width !== world.terrain.width
+    || catalog.height !== world.terrain.height
+  ) return [];
+
+  const canonical = canonicalizeFieldResourceState(catalog, ecology);
+  const missingByNodeId = new Map(
+    canonical.depletion.map((entry) => [entry.nodeId, entry.missingUnits] as const),
+  );
+  const seenTiles = new Set<number>();
+  const visible: Array<TideweftView["fieldResources"][number] & { tileIndex: number }> = [];
+
+  for (const node of catalog.nodes) {
+    const tile = world.terrain.tiles[node.tileIndex];
+    if (
+      !tile
+      || tile.index !== node.tileIndex
+      || seenTiles.has(node.tileIndex)
+      || settlementTiles.has(node.tileIndex)
+      || (player.discovered[node.tileIndex] ?? 0) <= 0
+      || !Number.isSafeInteger(node.capacityUnits)
+      || node.capacityUnits <= FIELD_RESOURCE_LIVING_RESERVE_UNITS
+    ) continue;
+    seenTiles.add(node.tileIndex);
+
+    const totalStock = node.capacityUnits - (missingByNodeId.get(node.id) ?? 0);
+    const harvestableStock = totalStock - FIELD_RESOURCE_LIVING_RESERVE_UNITS;
+    // The final living unit is ecology, not inventory. Keeping it out of the
+    // view prevents a tappable promise that gathering is required to reject.
+    if (harvestableStock <= 0) continue;
+
+    const sounded = (player.depthSoundings[node.tileIndex] ?? 0) > 0;
+    visible.push({
+      id: node.id,
+      material: node.material,
+      label: titleCase(node.material),
+      position: tilePoint(node.tileIndex, world.terrain.width, tileSize),
+      knowledge: sounded ? "sounded" : "charted",
+      ...(sounded ? { rarity: node.rarity, stockUnits: harvestableStock } : {}),
+      tileIndex: node.tileIndex,
+    });
+  }
+
+  visible.sort((left, right) => left.tileIndex - right.tileIndex
+    || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+  return visible.map(({ tileIndex: _tileIndex, ...node }) => node);
 }
 
 function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {

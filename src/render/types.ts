@@ -208,6 +208,37 @@ export interface WayknotView {
   readonly active: boolean;
 }
 
+export type FieldMaterialView =
+  | "bladderkelp"
+  | "driftwood"
+  | "glimmer-spore"
+  | "shellstone"
+  | "sunfiber"
+  | "hookstone"
+  | "cordreed"
+  | "pitchmoss"
+  | "stormlichen";
+
+export type FieldResourceRarityView = "common" | "secondary" | "rare";
+
+/**
+ * A gatherable natural material that is already part of the courier's public
+ * map knowledge. Hidden catalog nodes never enter the renderer contract.
+ */
+export interface FieldResourceNodeView {
+  readonly id: string;
+  readonly material: FieldMaterialView;
+  readonly label: string;
+  /** Exact tile center; navigation is always routed here rather than to the tap edge. */
+  readonly position: WorldPoint;
+  /** A Loom sounding promotes a discovered silhouette to an identified reading. */
+  readonly knowledge: "charted" | "sounded";
+  /** Deliberately absent until sounded. */
+  readonly rarity?: FieldResourceRarityView;
+  /** Exact harvestable stock, excluding the living reserve; absent until sounded. */
+  readonly stockUnits?: number;
+}
+
 export interface TideHarpKnotView<K extends WayknotKind = WayknotKind> {
   readonly id: string;
   readonly kind: K;
@@ -307,6 +338,7 @@ export interface TideweftView {
   readonly choirs: readonly TideChoirMemoryView[];
   readonly wayknots: readonly WayknotView[];
   readonly tideHarps: readonly TideHarpView[];
+  readonly fieldResources: readonly FieldResourceNodeView[];
   readonly traces: readonly TraceView[];
   readonly porters: readonly PorterView[];
   readonly particles?: readonly ParticleView[];
@@ -320,6 +352,13 @@ export type RendererCommand =
   | { readonly type: "movement"; readonly vector: WorldPoint }
   | { readonly type: "brace"; readonly active: boolean }
   | { readonly type: "move-target"; readonly point: WorldPoint; readonly additive: boolean }
+  | {
+      readonly type: "resource-target";
+      readonly nodeId: string;
+      readonly point: WorldPoint;
+      /** Touch gathers on arrival; precise-pointer players retain E as the harvest action. */
+      readonly gatherOnArrival: boolean;
+    }
   | { readonly type: "scan" }
   | { readonly type: "interact" }
   | { readonly type: "wayknot" }

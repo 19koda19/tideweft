@@ -31,6 +31,36 @@ export type {
   BiomeTerrainInput,
   BiomeWeatherInput,
 } from "./biomes";
+export {
+  BOOTSTRAP_FIBER_MATERIALS,
+  BOOTSTRAP_RIGID_MATERIALS,
+  BOOTSTRAP_SAFE_BIOMES,
+  FIELD_MATERIALS_BY_BIOME,
+  FIELD_MATERIAL_IDS,
+  FIELD_MATERIAL_UNIT_LOAD_MILLI,
+  FIELD_RESOURCE_LIVING_RESERVE_UNITS,
+  advanceFieldResourceEcology,
+  canonicalizeFieldResourceState,
+  createFieldResourceEcologyState,
+  deriveFieldResourceNode,
+  evaluateHarborBootstrap,
+  fieldResourceStockUnits,
+  fieldResourceWeatherMultiplierPermille,
+  generateFieldResourceCatalog,
+  harvestFieldResource,
+} from "./fieldResources";
+export type {
+  BiomeMaterialSet,
+  FieldHarvestReason,
+  FieldHarvestResult,
+  FieldMaterialId,
+  FieldResourceCatalog,
+  FieldResourceDepletion,
+  FieldResourceEcologyState,
+  FieldResourceNode,
+  FieldResourceRarity,
+  HarborBootstrapEvaluation,
+} from "./fieldResources";
 export { createWorldView } from "./view";
 export { calculateNetworkMetrics, findAutonomousRoutePlan, routeCapacity, routeIsActive } from "./network";
 export type { AutonomousRoutePlan, NetworkMetrics } from "./network";

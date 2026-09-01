@@ -11,6 +11,7 @@ import {
   createWayknotState,
   isWindExposedTile,
   queryWayknotEffects,
+  tideHarpEffectStrength,
   type WayknotEffects,
   type WayknotState,
   type WayknotTileContext,
@@ -21,9 +22,21 @@ import {
   type TideHarp,
 } from "./tideHarps";
 import { surfaceCurrentDirection } from "./currentDirection";
+import {
+  createCraftingInventory,
+  inventoryLoadMilli,
+  type CraftingInventory,
+} from "./crafting";
+import {
+  applyGearServiceWear,
+  queryCarriedGearEffects,
+  type GearBenefitId,
+  type GearEffectContext,
+} from "./gearEffects";
 
 export const TILE_UNITS = 1_000;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
+export const PACK_LOAD_MILLI_PER_UNIT = 1_000;
 
 export type TravelPace = "rest" | "steady" | "swift";
 export type StabilityTrend = "recovering" | "steady" | "falling";
@@ -95,6 +108,10 @@ export interface PlayerState {
   cargoCapacity: number;
   cargo: PlayerCargo[];
   report: PlayerReport | null;
+  /** Raw finds, prepared components, and carried durable adaptations. */
+  craftingInventory: CraftingInventory;
+  /** Stable IDs are monotonic and never reused, including after dismantling. */
+  nextCraftedGearId: number;
   activeContractId: number | null;
   discovered: number[];
   currentTrace: number[];
@@ -179,6 +196,8 @@ export function createPlayer(world: WorldView, startSettlementId?: number): Play
     cargoCapacity: 16,
     cargo: [],
     report: null,
+    craftingInventory: createCraftingInventory(16 * PACK_LOAD_MILLI_PER_UNIT),
+    nextCraftedGearId: 7,
     activeContractId: null,
     discovered,
     currentTrace: [start.tileIndex],
@@ -204,6 +223,7 @@ export function stepPlayer(
   // A loaded or live player who has already lost all stability in the current
   // cannot cancel that failure by releasing input and receiving the ordinary
   // stillness recovery later in this same fixed step.
+  const staminaDepletedAtStepStart = player.stamina === 0;
   const stabilityDepletedAtStepStart = player.stability === 0;
   player.previousX = player.x;
   player.previousY = player.y;
@@ -240,10 +260,24 @@ export function stepPlayer(
   const harbor = world.settlements.find((settlement) => settlement.tileIndex === priorTileIndex);
   const completedProject = harbor?.project.status === "complete" ? harbor.project.kind : undefined;
   const bracing = control.brace || player.pace === "rest" || !hasInput;
-  const cargoLoad = cargoWeight(player);
-  const loadRatio = Math.min(FIXED_POINT, Math.floor((cargoLoad * FIXED_POINT) / player.cargoCapacity));
+  const loadRatio = Math.min(
+    FIXED_POINT,
+    Math.floor(
+      (cargoWeightMilli(player) * FIXED_POINT)
+      / Math.max(PACK_LOAD_MILLI_PER_UNIT, player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT),
+    ),
+  );
   const waterDepth = priorTile.waterDepth;
   player.mode = waterDepth > 360_000 ? "skiff" : waterDepth > 35_000 ? "wading" : "foot";
+  const onMarshGround = priorTile.terrain === "marsh" || priorTile.terrain === "tidal-flat";
+  const onRidgeGround = priorTile.terrain === "ridge";
+  const carriedGearEffects = queryCarriedGearEffects(player.craftingInventory, {
+    marsh: onMarshGround,
+    wet: waterDepth > 40_000,
+    rock: onRidgeGround,
+    exposure: world.weather.intensity > 0,
+    gust: world.weather.windX !== 0 || world.weather.windY !== 0,
+  });
 
   let velocityX = 0;
   let velocityY = 0;
@@ -254,10 +288,18 @@ export function stepPlayer(
       && (priorTile.terrain === "marsh" || priorTile.terrain === "tidal-flat");
     const hasSail = hasFieldTool(player, "tide-sail") && waterDepth > 180_000;
     const wayknotFooting = WAYKNOT_PERMILLE - priorWayknotEffects.movementCostPermille;
-    const terrainDrag = Math.min(
+    const unadaptedTerrainDrag = Math.min(
       1_050,
       TERRAIN_DRAG[priorTile.terrain] + (hasStilts ? 235 : 0) + wayknotFooting,
     );
+    const gearTerrainCostPermille = onMarshGround
+      ? carriedGearEffects.marshMovementCostPermille
+      : onRidgeGround
+        ? carriedGearEffects.rockTravelCostPermille
+        : 1_000;
+    const terrainDrag = unadaptedTerrainDrag >= 1_000
+      ? unadaptedTerrainDrag
+      : 1_000 - Math.floor(((1_000 - unadaptedTerrainDrag) * gearTerrainCostPermille) / 1_000);
     const waterFit = player.mode === "skiff"
       ? Math.max(480, Math.min(1_120, 760 + Math.floor(waterDepth / 4_000) + (hasSail ? 160 : 0)))
       : Math.max(430, 1_000 - Math.floor(waterDepth / 2_500));
@@ -323,12 +365,21 @@ export function stepPlayer(
   const stabilityBefore = player.stability;
   const turnStress = Math.abs(velocityX - priorVelocityX) + Math.abs(velocityY - priorVelocityY);
   const rawWeatherStress = Math.floor((world.weather.intensity * (Math.abs(world.weather.windX) + Math.abs(world.weather.windY))) / 2_000_000);
-  const toolWeatherStress = hasFieldTool(player, "storm-kite") ? Math.floor(rawWeatherStress * 0.45) : rawWeatherStress;
+  const gearedWeatherStress = Math.floor(
+    (rawWeatherStress * carriedGearEffects.gustStabilityLossPermille) / 1_000,
+  );
+  const toolWeatherStress = hasFieldTool(player, "storm-kite") ? Math.floor(gearedWeatherStress * 0.45) : gearedWeatherStress;
   const weatherStress = applyWayknotPermille(
     toolWeatherStress,
     priorWayknotEffects.stabilityLossPermille,
   );
-  const surfaceStress = Math.floor((priorTile.roughness * (velocityX || velocityY ? 1 : 0)) / 290);
+  const rawSurfaceStress = Math.floor((priorTile.roughness * (velocityX || velocityY ? 1 : 0)) / 290);
+  const surfaceGearPermille = onMarshGround
+    ? carriedGearEffects.marshStabilityLossPermille
+    : onRidgeGround
+      ? carriedGearEffects.fallRiskPermille
+      : 1_000;
+  const surfaceStress = Math.floor((rawSurfaceStress * surfaceGearPermille) / 1_000);
   const rawWaterStress = velocityX || velocityY
     ? Math.floor(Math.max(0, waterDepth - 35_000) / 130)
     : 0;
@@ -416,11 +467,33 @@ export function stepPlayer(
     appendLoopErasedTile(player.currentTrace, currentTileIndex);
     appendLoopErasedTile(player.surveyTrace, currentTileIndex);
     discoverAround(player, world, 2);
+    const entered = world.terrain.tiles[currentTileIndex];
+    if (entered) {
+      if (entered.terrain === "marsh" || entered.terrain === "tidal-flat") {
+        serviceCarriedGear(player, { marsh: true }, "marsh-footing");
+      }
+      if (Math.max(waterDepth, entered.waterDepth) > 40_000) {
+        serviceCarriedGear(player, { wet: true }, "wet-buoyancy");
+      }
+      if (entered.terrain === "ridge") {
+        serviceCarriedGear(player, { rock: true }, "ridge-grip");
+      }
+      if (rawWeatherStress > 0) {
+        serviceCarriedGear(
+          player,
+          { exposure: true, gust: world.weather.windX !== 0 || world.weather.windY !== 0 },
+          "weather-shelter",
+        );
+      }
+    }
   }
 
-  const exhausted = player.stamina === 0;
   const currentTile = world.terrain.tiles[currentTileIndex];
   const inSweepWater = (currentTile?.waterDepth ?? 0) >= SWEEP_DEPTH_THRESHOLD;
+  // Exhaustion caused by an interaction such as gathering is authoritative
+  // before idle recovery. Releasing input in deep water must never cancel the
+  // current taking control on the next fixed step.
+  const exhausted = player.stamina === 0 || (inSweepWater && staminaDepletedAtStepStart);
   const destabilizedInCurrent = inSweepWater
     && (stabilityDepletedAtStepStart || player.stability === 0);
   let rescued = false;
@@ -449,6 +522,7 @@ export function stepPlayer(
       // truthfully exposed through `exhausted` on the same result.
       sweepCause = destabilizedInCurrent ? "stability" : "stamina";
       if (sweepCause === "stability") player.stability = 0;
+      if (sweepCause === "stamina") player.stamina = 0;
       // A sweep is a setback, not deletion. Weather cargo once at the moment
       // control is lost, then preserve quantity and trace every drift tile.
       for (const cargo of player.cargo) cargo.condition = Math.max(0, cargo.condition - 35_000);
@@ -578,7 +652,18 @@ export function waterEffortPerStep(
   const toolAdjusted = hasFieldTool(player, "tide-sail") && depth > 180_000
     ? Math.floor(raw * 0.48)
     : raw;
-  return applyWayknotPermille(toolAdjusted, wayknotStaminaPermille);
+  const wayknotAdjusted = applyWayknotPermille(toolAdjusted, wayknotStaminaPermille);
+  const gearAdjusted = queryCarriedGearEffects(player.craftingInventory, { wet: true });
+  return Math.floor((wayknotAdjusted * gearAdjusted.wetStaminaCostPermille) / 1_000);
+}
+
+function serviceCarriedGear(
+  player: PlayerState,
+  context: GearEffectContext,
+  benefit: GearBenefitId,
+): void {
+  const result = applyGearServiceWear(player.craftingInventory, context, benefit);
+  if (result.ok) player.craftingInventory = result.inventory;
 }
 
 /** Authoritative terrain context shared by placement, movement, and routing. */
@@ -614,12 +699,14 @@ export function wayknotEffectsAt(
         windExposed: false,
       },
       { width: world.terrain.width, height: world.terrain.height },
+      world.completedTick,
     );
   }
   return queryWayknotEffects(
     player.wayknots,
     context,
     { width: world.terrain.width, height: world.terrain.height },
+    world.completedTick,
   );
 }
 
@@ -644,7 +731,10 @@ export function activeTideHarpAtPlayer(
   const tileIndex = playerTileIndex(player);
   return [...harps]
     .sort((left, right) => left.id.localeCompare(right.id))
-    .find((harp) => tideHarpContainsTileCenter(harp, tileIndex, world.terrain));
+    .find((harp) =>
+      tideHarpEffectStrength(player.wayknots, harp.knots, world.completedTick) === FIXED_POINT
+      && tideHarpContainsTileCenter(harp, tileIndex, world.terrain)
+    );
 }
 
 /** One or many containing triangles still provide exactly one bounded bonus. */
@@ -659,17 +749,32 @@ export function tideHarpScanRechargeAtPlayer(
 }
 
 export function cargoWeight(player: PlayerState): number {
-  return player.cargo.reduce((total, cargo) => {
+  return Math.ceil(cargoWeightMilli(player) / PACK_LOAD_MILLI_PER_UNIT);
+}
+
+/** Promise cargo and a signed report retain their legacy whole-load accounting. */
+export function transportLoadMilli(player: Pick<PlayerState, "cargo" | "report">): number {
+  const cargoLoad = player.cargo.reduce((total, cargo) => {
     const multiplier = cargo.property === "heavy" ? 2 : cargo.property === "fragile" ? 1.25 : 1;
-    return total + Math.ceil(cargo.quantity * multiplier);
-  }, player.report === null ? 0 : 1);
+    return total + Math.ceil(cargo.quantity * multiplier) * PACK_LOAD_MILLI_PER_UNIT;
+  }, 0);
+  return cargoLoad + (player.report ? PACK_LOAD_MILLI_PER_UNIT : 0);
+}
+
+/** Exact shared load used by gathering, crafting, Promise pickup, and the HUD. */
+export function cargoWeightMilli(
+  player: Pick<PlayerState, "cargo" | "report" | "craftingInventory">,
+): number {
+  return transportLoadMilli(player) + inventoryLoadMilli(player.craftingInventory);
 }
 
 export function loadContractCargo(player: PlayerState, contract: ContractState): boolean {
   if (player.activeContractId !== null || contract.status !== "offered") return false;
   const property = cargoProperty(contract.resource);
   const multiplier = property === "heavy" ? 2 : property === "fragile" ? 1.25 : 1;
-  if (Math.ceil(contract.quantity * multiplier) + (player.report === null ? 0 : 1) > player.cargoCapacity) return false;
+  const promisedLoadMilli = Math.ceil(contract.quantity * multiplier) * PACK_LOAD_MILLI_PER_UNIT;
+  const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
+  if (cargoWeightMilli(player) + promisedLoadMilli > capacityMilli) return false;
   player.cargo = [
     {
       contractId: contract.id,

@@ -37,7 +37,13 @@ interface GeneratedHarpFixture {
 }
 
 function generatedHarpFixture(): GeneratedHarpFixture {
-  const world = createWorldView(createWorld(FIXTURE_SEED, "calm"));
+  // The durable v2 knots spend three active world ticks setting before a Harp
+  // can answer. This fixture observes the already-set formation; setting and
+  // broken-member gating have focused coverage in wayknots.test.ts.
+  const world = {
+    ...createWorldView(createWorld(FIXTURE_SEED, "calm")),
+    completedTick: 3,
+  };
   const player = createPlayer(world);
   const inventoryBeforeFormation = settlementInventory(world);
   for (const tileIndex of HARP_TILE_INDICES) {

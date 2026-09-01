@@ -7,19 +7,29 @@ import {
 } from "../sim/types";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
+import {
+  fieldResourceStockUnits,
+  type FieldResourceCatalog,
+  type FieldResourceEcologyState,
+  type FieldResourceNode,
+} from "../sim/fieldResources";
 import type {
   ChronicleEntryUIView,
   ContractMood,
   ContractUIView,
+  KitUIView,
   SettlementInspectorUIView,
   TideweftUIView,
 } from "../ui/types";
 import {
   FIELD_TOOL_LABELS,
+  PACK_LOAD_MILLI_PER_UNIT,
   activeTideHarpAtPlayer,
   cargoWeight,
+  cargoWeightMilli,
   playerTileIndex,
   settlementAtPlayer,
+  transportLoadMilli,
   tunedTideHarps,
   waterDepthBand,
   waterEffortPerStep,
@@ -27,20 +37,44 @@ import {
   wayknotEffectsAt,
   type PlayerState,
 } from "./player";
+import {
+  CRAFTED_GEAR_DEFINITIONS,
+  CRAFTING_RECIPES,
+  CRAFTING_STACK_DEFINITIONS,
+  CRAFTING_STACK_IDS,
+  createCraftingInventory,
+  inventoryLoadMilli,
+  previewCraft,
+  previewDismantle,
+  previewRepair,
+  quoteWayknotRepairCost,
+  salvageForGear,
+  type CraftingInventory,
+  type StackAmount,
+} from "./crafting";
 import { sessionOutcomeDelta, type GameSessionState } from "./sessionTypes";
 import { tutorialObjective } from "./tutorial";
 import {
+  WAYKNOT_DESCRIPTIONS,
   WAYKNOT_LABELS,
+  WAYKNOT_MIN_PLACEMENT_CONDITION,
   contextualWayknotKind,
   deployedWayknotCount,
   validateWayknotPlacement,
+  wayknotEffectStrength,
   wayknotAtTile,
 } from "./wayknots";
+
+export interface UIProjectionOptions {
+  readonly fieldResourceCatalog?: FieldResourceCatalog;
+  readonly fieldResourceEcology?: FieldResourceEcologyState;
+}
 
 export function projectUIView(
   world: WorldView,
   player: PlayerState,
   session: GameSessionState,
+  options: UIProjectionOptions = {},
 ): TideweftUIView {
   const selectedSettlement = session.selectedSettlementId === null
     ? undefined
@@ -66,6 +100,7 @@ export function projectUIView(
   const tidePhase = tidePhaseName(world.tide.phase);
   const worldName = `The ${titleCase(world.seedText)} Estuary`;
   const wayknotControl = projectWayknotControl(world, player);
+  const localResource = resourceUnderfoot(player, options);
 
   return {
     revision: [
@@ -76,6 +111,7 @@ export function projectUIView(
       player.stability,
       player.scanCharge,
       player.wayknots.wayknots.map((wayknot) => `${wayknot.id}@${wayknot.tileIndex ?? "pack"}`).join(","),
+      craftingRevision(player),
       player.cargo[0]?.condition ?? FIXED_POINT,
       player.pace,
       session.selectedSettlementId ?? "none",
@@ -122,6 +158,7 @@ export function projectUIView(
         : { locationLabel: settlementName(world, playerSettlementId) }),
     },
     field: projectFieldReadout(world, player),
+    kit: projectKit(world, player),
     choir: projectChoir(world, player),
     ...(activeContract
       ? { objective: contractObjective(activeContract, world, player) }
@@ -174,9 +211,11 @@ export function projectUIView(
       : {}),
     controls: {
       canScan: player.mode !== "swept" && player.scanCharge >= 280_000,
-      canInteract: player.mode !== "swept" && playerSettlementId !== null,
+      canInteract: player.mode !== "swept" && (localResource !== undefined || playerSettlementId !== null),
       interactLabel: player.mode === "swept"
         ? "Current has helm"
+        : localResource
+          ? `Gather ${CRAFTING_STACK_DEFINITIONS[localResource.material].label}`
         : activeContract?.destinationSettlementId === playerSettlementId
         ? "Deliver cargo"
         : player.report?.targetSettlementId === playerSettlementId
@@ -186,6 +225,8 @@ export function projectUIView(
             : "Inspect harbor",
       interactHint: player.mode === "swept"
         ? "Harbor actions return after the safe bank catches you."
+        : localResource
+          ? `One ${CRAFTING_STACK_DEFINITIONS[localResource.material].label} unit is underfoot. Desktop: press E. Mobile: tapping its field mark routes here and gathers automatically.`
         : playerSettlementId === null
         ? "Reach a harbor mark first."
         : localOffers.length === 1
@@ -204,6 +245,275 @@ export function projectUIView(
       canEndSession: !session.titleVisible,
     },
   };
+}
+
+function resourceUnderfoot(
+  player: PlayerState,
+  options: UIProjectionOptions,
+): FieldResourceNode | undefined {
+  const catalog = options.fieldResourceCatalog;
+  const ecology = options.fieldResourceEcology;
+  if (!catalog || !ecology) return undefined;
+  const tileIndex = playerTileIndex(player);
+  const node = catalog.nodes.find((candidate) => candidate.tileIndex === tileIndex);
+  if (!node || (player.discovered[tileIndex] ?? 0) <= 0) return undefined;
+  const stock = fieldResourceStockUnits(catalog, ecology, node.id);
+  return stock !== null && stock > 1 ? node : undefined;
+}
+
+function craftingRevision(player: PlayerState): string {
+  const stacks = CRAFTING_STACK_IDS
+    .map((id) => `${id}:${player.craftingInventory.stacks[id]}`)
+    .join(",");
+  const gear = player.craftingInventory.gear
+    .map((item) => `${item.id}:${item.kind}:${item.condition}`)
+    .join(",");
+  return `${stacks}|${gear}|${player.nextCraftedGearId}|${cargoWeightMilli(player)}`;
+}
+
+function projectKit(world: WorldView, player: PlayerState): KitUIView {
+  const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
+  const transportMilli = transportLoadMilli(player);
+  const inventory = actionableCraftingInventory(player);
+  const actionsBlocked = player.mode === "swept" || player.mode === "rescued";
+  const transportRows: KitUIView["transportRows"] = [
+    ...player.cargo.map((cargo) => ({
+      id: `cargo-${cargo.contractId}`,
+      kind: "promise-cargo" as const,
+      label: `${cargo.quantity} ${titleCase(cargo.resource)}`,
+      detail: `${titleCase(cargo.property)} Promise cargo`,
+      loadMilli: legacyCargoLoadMilli(cargo.quantity, cargo.property),
+      condition: cargo.condition / FIXED_POINT,
+    })),
+    ...(player.report
+      ? [{
+          id: `report-${player.report.sourceSettlementId}-${player.report.targetSettlementId}`,
+          kind: "signed-report" as const,
+          label: `Signed ${titleCase(player.report.resource)} report`,
+          detail: "Information only · sealed document case",
+          loadMilli: PACK_LOAD_MILLI_PER_UNIT,
+        }]
+      : []),
+  ];
+  const stackRows: KitUIView["stackRows"] = CRAFTING_STACK_IDS.flatMap((id) => {
+    const quantity = player.craftingInventory.stacks[id];
+    if (quantity <= 0) return [];
+    const definition = CRAFTING_STACK_DEFINITIONS[id];
+    return [{
+      id,
+      tier: definition.tier,
+      label: definition.label,
+      quantity,
+      unitLoadMilli: definition.loadMilli,
+      totalLoadMilli: definition.loadMilli * quantity,
+      location: "pack" as const,
+      locationLabel: "Carried PACK",
+    }];
+  });
+  const craftedGearRows: KitUIView["gearRows"] = player.craftingInventory.gear.map((gear) => {
+    const definition = CRAFTED_GEAR_DEFINITIONS[gear.kind];
+    const repairPreview = inventory
+      ? previewRepair(inventory, gear.id, 250_000)
+      : null;
+    const dismantlePreview = inventory
+      ? previewDismantle(inventory, gear.id)
+      : null;
+    const actionBlocker = actionsBlocked
+      ? "Secure your footing before changing field gear."
+      : inventory
+        ? undefined
+        : "Shared pack is over capacity.";
+    return {
+      id: String(gear.id),
+      kind: gear.kind,
+      label: `${definition.label} #${gear.id}`,
+      detail: gearPurpose(gear.kind),
+      location: "carried" as const,
+      locationLabel: "Carried in PACK",
+      loadMilli: definition.loadMilli,
+      condition: gear.condition / FIXED_POINT,
+      conditionLabel: conditionBand(gear.condition),
+      repairCostLabel: repairPreview?.quote
+        ? stackAmountsLabel(repairPreview.quote.ingredients)
+        : gear.condition >= FIXED_POINT
+          ? "Already pristine"
+          : "Repair quote unavailable",
+      salvageLabel: stackAmountsLabel(salvageForGear(gear), "No usable salvage"),
+      canRepair: actionBlocker === undefined && repairPreview?.ok === true,
+      ...(actionBlocker || !repairPreview?.ok
+        ? { repairDisabledReason: actionBlocker ?? repairPreview?.message ?? "Cannot mend this item." }
+        : {}),
+      canDismantle: actionBlocker === undefined && dismantlePreview?.ok === true,
+      ...(actionBlocker || !dismantlePreview?.ok
+        ? { dismantleDisabledReason: actionBlocker ?? dismantlePreview?.message ?? "Cannot dismantle this item." }
+        : {}),
+    };
+  });
+  const coreWayknotRows: KitUIView["gearRows"] = player.wayknots.wayknots.map((wayknot) => {
+    const quote = quoteWayknotRepairCost(wayknot.kind, wayknot.condition, 250_000);
+    const missing = quote?.ingredients.filter(
+      ({ item, quantity }) => player.craftingInventory.stacks[item] < quantity,
+    ) ?? [];
+    const deployed = wayknot.tileIndex !== null;
+    const pristine = wayknot.condition >= FIXED_POINT;
+    const actionBlocker = actionsBlocked
+      ? "Secure your footing before mending a Wayknot."
+      : deployed
+        ? "Reclaim this Wayknot before mending it."
+        : pristine
+          ? "Already pristine."
+          : missing.length > 0
+            ? `Missing ${missing.map(({ item, quantity }) => `${quantity - player.craftingInventory.stacks[item]} ${CRAFTING_STACK_DEFINITIONS[item].label}`).join(" + ")}.`
+            : undefined;
+    const tile = wayknot.tileIndex === null ? undefined : world.terrain.tiles[wayknot.tileIndex];
+    return {
+      id: String(wayknot.id),
+      kind: wayknot.kind,
+      label: `${WAYKNOT_LABELS[wayknot.kind]} #${wayknot.id}`,
+      detail: `LIVE INHERITED CORE · ${WAYKNOT_DESCRIPTIONS[wayknot.kind]} Rebinding spends condition and never refreshes it.`,
+      location: deployed ? "deployed" as const : "carried" as const,
+      locationLabel: deployed
+        ? `Deployed${tile ? ` at ${tile.x},${tile.y}` : " in the field"}`
+        : "Core field-kit piece · zero compatibility load",
+      loadMilli: 0,
+      condition: wayknot.condition / FIXED_POINT,
+      conditionLabel: conditionBand(wayknot.condition),
+      repairCostLabel: quote
+        ? stackAmountsLabel(quote.ingredients, "Already pristine")
+        : "Repair quote unavailable",
+      salvageLabel: "Core piece cannot be dismantled",
+      canRepair: actionBlocker === undefined && (quote?.conditionRestored ?? 0) > 0,
+      ...(actionBlocker ? { repairDisabledReason: actionBlocker } : {}),
+      canDismantle: false,
+      dismantleDisabledReason: "The six inherited core Wayknots keep their stable identities.",
+    };
+  });
+  const gearRows: KitUIView["gearRows"] = [...coreWayknotRows, ...craftedGearRows];
+  const recipes: KitUIView["recipes"] = CRAFTING_RECIPES.map((recipe) => {
+    const gearId = recipe.output.type === "gear" ? player.nextCraftedGearId : undefined;
+    const preview = inventory
+      ? previewCraft(inventory, { recipeId: recipe.id, ...(gearId ? { gearId } : {}) })
+      : null;
+    const ingredients = recipe.inputs.map(({ item, quantity }) => ({
+      id: item,
+      label: CRAFTING_STACK_DEFINITIONS[item].label,
+      required: quantity,
+      available: player.craftingInventory.stacks[item],
+      sufficient: player.craftingInventory.stacks[item] >= quantity,
+    }));
+    const resultDefinition = recipe.output.type === "gear"
+      ? CRAFTED_GEAR_DEFINITIONS[recipe.output.kind]
+      : CRAFTING_STACK_DEFINITIONS[recipe.output.item];
+    const actionBlocker = actionsBlocked
+      ? "Secure your footing before making field gear."
+      : inventory
+        ? undefined
+        : "Shared pack is over capacity.";
+    return {
+      id: recipe.id,
+      label: recipe.label,
+      resultLabel: resultDefinition.label,
+      resultDetail: recipe.output.type === "gear"
+        ? gearPurpose(recipe.output.kind)
+        : componentPurpose(recipe.output.item),
+      resultLoadMilli: resultDefinition.loadMilli,
+      ingredientCopy: ingredients
+        .map((ingredient) => `${ingredient.available}/${ingredient.required} ${ingredient.label}`)
+        .join(" · "),
+      ingredients,
+      canCraft: actionBlocker === undefined && preview?.ok === true,
+      ...(actionBlocker || !preview?.ok
+        ? { disabledReason: actionBlocker ?? preview?.message ?? "Recipe unavailable." }
+        : {}),
+    };
+  });
+  const settlementId = settlementAtPlayer(player, world);
+  return {
+    revision: craftingRevision(player),
+    combinedLoadMilli: cargoWeightMilli(player),
+    capacityMilli,
+    transportLoadMilli: transportMilli,
+    transportRows,
+    stackRows,
+    gearRows,
+    recipes,
+    locationLabel: settlementId === null
+      ? "Field crafting · PACK only"
+      : `${settlementName(world, settlementId)} harbor · PACK only`,
+    hint: "Natural finds, components, durable gear, Promise cargo, and reports share one physical pack. MAKE and MEND never pause the estuary. Wraps, sash, cleats, and cape already adapt travel; each staged item says what still awaits its terrain phase.",
+  };
+}
+
+function actionableCraftingInventory(player: PlayerState): CraftingInventory | null {
+  const availableMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT - transportLoadMilli(player);
+  try {
+    return createCraftingInventory(
+      Math.max(0, availableMilli),
+      player.craftingInventory.stacks,
+      player.craftingInventory.gear,
+    );
+  } catch {
+    return null;
+  }
+}
+
+function legacyCargoLoadMilli(
+  quantity: number,
+  property: PlayerState["cargo"][number]["property"],
+): number {
+  const multiplier = property === "heavy" ? 2 : property === "fragile" ? 1.25 : 1;
+  return Math.ceil(quantity * multiplier) * PACK_LOAD_MILLI_PER_UNIT;
+}
+
+function conditionBand(condition: number): string {
+  const percent = Math.round(Math.max(0, Math.min(FIXED_POINT, condition)) / 10_000);
+  const band = condition <= 0
+    ? "BROKEN"
+    : condition <= 350_000
+      ? "FRAIL"
+      : condition <= 750_000
+        ? "WORN"
+        : "SOUND";
+  return `${band} · ${percent}%`;
+}
+
+function stackAmountsLabel(
+  amounts: readonly StackAmount[],
+  empty = "No materials",
+): string {
+  if (amounts.length === 0) return empty;
+  return amounts
+    .map(({ item, quantity }) => `${quantity} ${CRAFTING_STACK_DEFINITIONS[item].label}`)
+    .join(" + ");
+}
+
+function componentPurpose(kind: string): string {
+  switch (kind) {
+    case "braided-cord": return "Prepared binding for frames, wearables, and deployables.";
+    case "float-cell": return "Buoyant prepared cell for water adaptations.";
+    case "glimmer-seal": return "Magic-water seal for protective cargo layers.";
+    case "pitchcloth": return "Weather-shedding prepared cloth.";
+    case "stone-fitting": return "Rigid fitting for grip, anchors, and ladders.";
+    case "stormweave": return "Wind-reactive weave for exposed terrain.";
+    default: return "Prepared component used by durable field adaptations.";
+  }
+}
+
+function gearPurpose(kind: string): string {
+  switch (kind) {
+    case "cargo-rain-shroud": return "STAGED · cargo wetting arrives with the exposure simulation.";
+    case "float-sash": return "LIVE · reduces stamina spent while moving through water; zero meters still mean sweep.";
+    case "glimmer-liner": return "STAGED · magical-water cargo reactions arrive with exposure.";
+    case "ladder": return "STAGED · deployment arrives with solid rock formations.";
+    case "marsh-wraps": return "LIVE · improves movement and footing across marsh and tidal flats.";
+    case "pannier": return "STAGED · capacity bonus awaits explicit over-capacity grace rules.";
+    case "reed-mat": return "STAGED CRAFTED SPARE · the six inherited core mats remain the deployable set.";
+    case "ridge-cleats": return "LIVE · improves speed and footing on existing ridge terrain.";
+    case "tide-anchor": return "STAGED CRAFTED SPARE · the inherited core anchors remain deployable.";
+    case "weather-cape": return "LIVE · softens gust-driven stability loss on exposed travel.";
+    case "wind-knot": return "STAGED CRAFTED SPARE · the inherited core knots remain deployable.";
+    default: return "Durable field adaptation.";
+  }
 }
 
 function projectFieldReadout(world: WorldView, player: PlayerState) {
@@ -316,10 +626,12 @@ function projectWayknotControl(world: WorldView, player: PlayerState) {
   const existing = wayknotAtTile(player.wayknots, tileIndex);
   if (existing) {
     const label = WAYKNOT_LABELS[existing.kind];
+    const strength = wayknotEffectStrength(existing, world.completedTick);
+    const settingTicks = Math.max(0, existing.readyTick - world.completedTick);
     return {
       available: true,
       label: `Reclaim ${label}`,
-      hint: `${label} #${existing.id} is directly underfoot. Press F to return this reusable piece to your pack.`,
+      hint: `${label} #${existing.id} is directly underfoot at ${Math.round(existing.condition / 10_000)}% condition${strength === 0 ? " · BROKEN" : settingTicks > 0 ? ` · SETTING ${settingTicks}t` : " · READY"}. Press F to reclaim it; reclaiming spends 4% condition and never resets wear.`,
     };
   }
   const context = wayknotContextAt(world, tileIndex);
@@ -347,10 +659,16 @@ function projectWayknotControl(world: WorldView, player: PlayerState) {
   if (reason !== "available") {
     return {
       available: false,
-      label: reason === "capacity-reached" ? `No ${label} free` : "Bind Wayknot",
-      hint: reason === "capacity-reached"
-        ? `Both reusable ${label.toLocaleLowerCase()} pieces are deployed. Stand on one and press F to reclaim it.`
-        : "Harbor decking and occupied tiles cannot hold a field weave.",
+      label: reason === "condition-too-low"
+        ? `${label} too frail`
+        : reason === "capacity-reached"
+          ? `No ${label} free`
+          : "Bind Wayknot",
+      hint: reason === "condition-too-low"
+        ? `${label} needs at least ${Math.round(WAYKNOT_MIN_PLACEMENT_CONDITION / 10_000)}% condition to bind. Redeploying preserves wear rather than refreshing it.`
+        : reason === "capacity-reached"
+          ? `Both reusable ${label.toLocaleLowerCase()} pieces are deployed. Stand on one and press F to reclaim it.`
+          : "Harbor decking and occupied tiles cannot hold a field weave.",
     };
   }
   const verb = kind === "reed-mat" ? "Lay" : kind === "tide-anchor" ? "Set" : "Tie";
@@ -601,7 +919,8 @@ function projectSettlement(
       ).length;
       const isHere = playerSettlementId === settlement.id;
       const partsAvailable = settlement.inventory.parts > 0;
-      const reportPackFull = cargoWeight(player) >= player.cargoCapacity;
+      const reportPackFull = cargoWeightMilli(player) + PACK_LOAD_MILLI_PER_UNIT
+        > player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
       const automated = (route?.traceStrength ?? 0) >= STRAND_AUTOMATION_THRESHOLD;
       const surveyed = route !== undefined && player.surveyedRouteIds.includes(route.id);
       const choirMember = route !== undefined && world.choirs.some((choir) => choir.routeIds.includes(route.id));

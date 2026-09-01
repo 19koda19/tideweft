@@ -9,9 +9,12 @@ import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
+import { hitTestFieldResource } from "./resourceHitTest";
+import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
 
 import type {
   CameraView,
+  FieldResourceNodeView,
   ParticleView,
   PorterView,
   RendererCommand,
@@ -84,7 +87,7 @@ interface ScanRipple {
 }
 
 interface HoverTarget {
-  entity: "settlement" | "porter" | "route";
+  entity: "settlement" | "porter" | "route" | "resource";
   id: string;
 }
 
@@ -319,6 +322,18 @@ export function createTideweftRenderer(
           distance,
         };
       }
+    }
+
+    const resourceRadius = Math.max(
+      view.terrain.tileSize * 0.58,
+      22 / Math.max(camera.zoom, 0.01),
+    );
+    const resourceHit = hitTestFieldResource(view.fieldResources, point, resourceRadius);
+    if (resourceHit && (!nearest || resourceHit.distanceSquared < nearest.distance)) {
+      nearest = {
+        target: { entity: "resource", id: resourceHit.node.id },
+        distance: resourceHit.distanceSquared,
+      };
     }
 
     const porterRadius = 16 / Math.max(camera.zoom, 0.01);
@@ -1174,6 +1189,180 @@ export function createTideweftRenderer(
         }
       }
       clearDash();
+    };
+
+    const drawFieldResourceMotif = (
+      node: FieldResourceNodeView,
+      size: number,
+    ): void => {
+      const presentation = FIELD_RESOURCE_PRESENTATION[node.material];
+      const color = presentation.chartColor;
+      const sounded = node.knowledge === "sounded";
+      const orientation = (stringHash(node.id) / 4_294_967_295) * p.TWO_PI;
+      const inkAlpha = sounded ? 238 : 190;
+
+      p.push();
+      p.translate(node.position.x, node.position.y);
+      p.rotate(orientation * 0.18 - 0.2);
+      p.strokeCap(p.ROUND);
+      p.strokeJoin(p.ROUND);
+      p.stroke(withAlpha(PALETTE.ink, 218));
+      p.strokeWeight(Math.max(size * 0.3, 3.2 / camera.zoom));
+
+      switch (presentation.motif) {
+        case "kelp-bladders":
+          for (const offset of [-0.34, 0, 0.34]) {
+            p.line(offset * size, size * 0.48, offset * size * 0.62, -size * 0.2);
+            p.fill(withAlpha(color, inkAlpha));
+            p.stroke(withAlpha(PALETTE.ink, 218));
+            p.strokeWeight(1 / camera.zoom);
+            p.circle(offset * size * 0.62, -size * (0.2 + Math.abs(offset) * 0.22), size * 0.42);
+          }
+          break;
+        case "crossed-driftwood":
+          p.stroke(withAlpha(color, inkAlpha));
+          p.strokeWeight(size * 0.23);
+          p.line(-size * 0.62, -size * 0.28, size * 0.58, size * 0.26);
+          p.line(-size * 0.46, size * 0.45, size * 0.5, -size * 0.48);
+          p.stroke(withAlpha(PALETTE.foam, 145));
+          p.strokeWeight(size * 0.055);
+          p.line(-size * 0.32, -size * 0.14, -size * 0.02, -size * 0.01);
+          break;
+        case "glimmer-cap":
+          p.stroke(withAlpha(PALETTE.foam, 205));
+          p.strokeWeight(size * 0.12);
+          p.line(0, size * 0.46, 0, -size * 0.06);
+          p.noStroke();
+          p.fill(withAlpha(color, inkAlpha));
+          p.arc(0, -size * 0.06, size * 1.18, size * 0.82, p.PI, p.TWO_PI, p.CHORD);
+          p.fill(withAlpha(PALETTE.foam, sounded ? 238 : 170));
+          p.circle(-size * 0.2, -size * 0.24, size * 0.12);
+          p.circle(size * 0.19, -size * 0.32, size * 0.1);
+          break;
+        case "shell-spiral":
+          p.fill(withAlpha(PALETTE.ink, 205));
+          p.stroke(withAlpha(color, inkAlpha));
+          p.strokeWeight(size * 0.13);
+          p.circle(0, 0, size * 1.08);
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.foam, 205));
+          p.strokeWeight(size * 0.075);
+          p.arc(0, 0, size * 0.68, size * 0.68, -0.4, p.TWO_PI - 0.4);
+          p.arc(size * 0.07, 0, size * 0.3, size * 0.3, -0.4, p.TWO_PI - 0.4);
+          break;
+        case "sunburst-fiber":
+          p.stroke(withAlpha(color, inkAlpha));
+          p.strokeWeight(size * 0.1);
+          p.line(0, size * 0.58, 0, -size * 0.18);
+          for (let ray = 0; ray < 7; ray += 1) {
+            const angle = -p.PI + (ray / 6) * p.PI;
+            p.line(
+              0,
+              -size * 0.12,
+              Math.cos(angle) * size * 0.58,
+              -size * 0.12 + Math.sin(angle) * size * 0.58,
+            );
+          }
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.foam, 218));
+          p.circle(0, -size * 0.12, size * 0.24);
+          break;
+        case "hooked-stone":
+          p.noFill();
+          p.stroke(withAlpha(color, inkAlpha));
+          p.strokeWeight(size * 0.27);
+          p.arc(-size * 0.02, -size * 0.05, size * 0.84, size * 1.02, -p.HALF_PI, p.PI * 0.78);
+          p.stroke(withAlpha(PALETTE.foam, 175));
+          p.strokeWeight(size * 0.07);
+          p.line(size * 0.2, size * 0.34, size * 0.52, size * 0.5);
+          break;
+        case "bound-reeds":
+          p.stroke(withAlpha(color, inkAlpha));
+          p.strokeWeight(size * 0.13);
+          for (const offset of [-0.3, 0, 0.3]) {
+            p.line(offset * size, size * 0.58, offset * size * 0.78, -size * 0.58);
+          }
+          p.stroke(withAlpha(PALETTE.foam, 205));
+          p.strokeWeight(size * 0.08);
+          p.line(-size * 0.43, size * 0.08, size * 0.43, size * 0.08);
+          p.line(-size * 0.4, size * 0.25, size * 0.4, size * 0.25);
+          break;
+        case "moss-cushion":
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.ink, 205));
+          p.ellipse(0, size * 0.2, size * 1.35, size * 0.62);
+          p.fill(withAlpha(color, inkAlpha));
+          p.circle(-size * 0.34, size * 0.04, size * 0.62);
+          p.circle(size * 0.06, -size * 0.08, size * 0.78);
+          p.circle(size * 0.4, size * 0.08, size * 0.5);
+          break;
+        case "forked-lichen":
+          p.stroke(withAlpha(color, inkAlpha));
+          p.strokeWeight(size * 0.11);
+          p.line(0, size * 0.58, 0, -size * 0.24);
+          p.line(0, size * 0.1, -size * 0.43, -size * 0.28);
+          p.line(-size * 0.2, -size * 0.08, -size * 0.45, -size * 0.52);
+          p.line(0, -size * 0.1, size * 0.42, -size * 0.46);
+          p.line(size * 0.2, -size * 0.28, size * 0.52, -size * 0.16);
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.foam, 205));
+          p.circle(0, -size * 0.24, size * 0.15);
+          break;
+      }
+      p.pop();
+    };
+
+    const drawFieldResources = (view: TideweftView): void => {
+      const baseSize = Math.max(view.terrain.tileSize * 0.38, 5.5 / camera.zoom);
+      for (const node of view.fieldResources) {
+        const screen = worldToScreen(node.position);
+        if (screen.x < -40 || screen.y < -40 || screen.x > p.width + 40 || screen.y > p.height + 40) {
+          continue;
+        }
+        const hovered = hoverTarget?.entity === "resource" && hoverTarget.id === node.id;
+        if (node.knowledge === "sounded" || hovered) {
+          p.push();
+          p.translate(node.position.x, node.position.y);
+          p.noFill();
+          p.stroke(withAlpha(
+            FIELD_RESOURCE_PRESENTATION[node.material].chartColor,
+            hovered ? 225 : 118,
+          ));
+          p.strokeWeight((hovered ? 1.5 : 0.9) / camera.zoom);
+          p.circle(0, 0, baseSize * (hovered ? 3.15 : 2.7));
+          if (node.knowledge === "sounded") {
+            const markCount = node.rarity === "rare" ? 3 : node.rarity === "secondary" ? 2 : 1;
+            p.noStroke();
+            p.fill(withAlpha(PALETTE.foam, hovered ? 235 : 175));
+            for (let mark = 0; mark < markCount; mark += 1) {
+              const x = (mark - (markCount - 1) / 2) * baseSize * 0.38;
+              p.circle(x, baseSize * 1.58, baseSize * 0.13);
+            }
+          }
+          p.pop();
+        }
+        drawFieldResourceMotif(node, baseSize);
+
+        if (!hovered) continue;
+        const presentation = FIELD_RESOURCE_PRESENTATION[node.material];
+        const detail = node.knowledge === "sounded"
+          ? `${node.rarity ?? "known"} · ${node.stockUnits ?? 0} ready`
+          : "charted · sound for stock";
+        const label = `${presentation.label} · ${detail}`;
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textStyle(p.BOLD);
+        p.textSize(11);
+        const labelWidth = p.textWidth(label) + 16;
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.ink, 232));
+        p.rectMode(p.CENTER);
+        p.rect(screen.x, screen.y + 25, labelWidth, 20, 7);
+        p.fill(withAlpha(PALETTE.foam, 242));
+        p.text(label, screen.x, screen.y + 24.5);
+        p.pop();
+      }
     };
 
     const wayknotColor = (kind: WayknotKind): string => {
@@ -2033,6 +2222,7 @@ export function createTideweftRenderer(
       drawRoutes(latestView.routes, now);
       drawChoirs(latestView.choirs, now);
       drawDepthSoundings(latestView);
+      drawFieldResources(latestView);
       drawTideHarps(latestView);
       drawWayknots(latestView, now);
       drawSettlements(latestView.settlements, now);

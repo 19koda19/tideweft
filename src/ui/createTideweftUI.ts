@@ -5,12 +5,18 @@ import {
   type ContractStatus,
   type ContractUIView,
   type JourneyPosture,
+  type KitTabId,
   type SettlementInspectorUIView,
   type TideweftUIController,
   type TideweftUIOptions,
   type TideweftUICommand,
   type TideweftUIView,
 } from "./types";
+import {
+  KIT_DIALOG_ID,
+  createKitDialog,
+  type KitDialogController,
+} from "./kitDialog";
 import { createTutorialDialog, type TutorialDialogController } from "./tutorialDialog";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
@@ -182,6 +188,8 @@ export function handleTideweftUIShortcut(
   canWayknot: boolean,
   dispatch: (command: TideweftUICommand) => void,
   openHelp: () => void,
+  toggleKit: () => void = () => undefined,
+  openMake: () => void = () => undefined,
 ): boolean {
   if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
     return false;
@@ -195,6 +203,16 @@ export function handleTideweftUIShortcut(
     openHelp();
     return true;
   }
+  if (event.code === "KeyI") {
+    event.preventDefault();
+    toggleKit();
+    return true;
+  }
+  if (event.code === "KeyC") {
+    event.preventDefault();
+    openMake();
+    return true;
+  }
   if (event.code !== "KeyF" || !canWayknot) return false;
   event.preventDefault();
   dispatch({ type: "wayknot" });
@@ -205,6 +223,7 @@ interface UIRefs {
   shell: HTMLDivElement;
   mobileFieldStrip: HTMLElement;
   mobileHudToggle: HTMLButtonElement;
+  mobileKitButton: HTMLButtonElement;
   mobileObjective: HTMLSpanElement;
   mobileStamina: HTMLProgressElement;
   mobileStaminaValue: HTMLSpanElement;
@@ -286,6 +305,7 @@ interface UIRefs {
   interactButton: HTMLButtonElement;
   wayknotButton: HTMLButtonElement;
   wayknotButtonLabel: HTMLSpanElement;
+  kitButton: HTMLButtonElement;
   quietButton: HTMLButtonElement;
   titleButton: HTMLButtonElement;
   helpButton: HTMLButtonElement;
@@ -309,6 +329,7 @@ interface UIRefs {
   quietFinish: HTMLButtonElement;
   quietContinue: HTMLButtonElement;
   tutorial: TutorialDialogController;
+  kit: KitDialogController;
 }
 
 const createElement = <K extends keyof HTMLElementTagNameMap>(
@@ -589,6 +610,15 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   );
   mobileHudToggle.setAttribute("aria-expanded", initialMobileDisclosure.ariaExpanded);
   mobileHudToggle.setAttribute("aria-controls", initialMobileDisclosure.ariaControls);
+  const mobileKitButton = createButton(
+    "mobile-kit-button",
+    "KIT",
+    "Open KIT inventory. The world continues while it is open.",
+  );
+  mobileKitButton.setAttribute("aria-keyshortcuts", "I");
+  mobileKitButton.setAttribute("aria-haspopup", "dialog");
+  mobileKitButton.setAttribute("aria-controls", KIT_DIALOG_ID);
+  mobileKitButton.setAttribute("aria-expanded", "false");
   const mobileFieldCopy = createElement("div", "mobile-field-strip__copy");
   const mobileObjective = createElement(
     "span",
@@ -642,7 +672,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     "Sound / Scan · Interact · Place Wayknot",
   );
   mobileFieldCopy.append(mobileObjective, mobileVitals, mobileSafety, mobileTerrain, mobileActions);
-  mobileFieldStrip.append(mobileHudToggle, mobileFieldCopy);
+  mobileFieldStrip.append(mobileHudToggle, mobileKitButton, mobileFieldCopy);
 
   const objectivePanel = createElement("aside", "objective-panel glass-panel");
   objectivePanel.setAttribute("aria-labelledby", "objective-title");
@@ -831,6 +861,15 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     wayknotButtonLabel,
     createElement("kbd", "keycap", WAYKNOT_KEY_SHORTCUT),
   );
+  const kitButton = createButton(
+    "icon-button icon-button--labeled kit-button",
+    "KIT",
+    "Open KIT inventory. The world continues while it is open.",
+  );
+  kitButton.setAttribute("aria-keyshortcuts", "I");
+  kitButton.setAttribute("aria-haspopup", "dialog");
+  kitButton.setAttribute("aria-controls", KIT_DIALOG_ID);
+  kitButton.setAttribute("aria-expanded", "false");
   const quietButton = createButton(
     "icon-button icon-button--labeled quiet-button",
     "",
@@ -851,6 +890,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     scanButton,
     interactButton,
     wayknotButton,
+    kitButton,
     quietButton,
     titleButton,
     helpButton,
@@ -972,6 +1012,14 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   quietDialog.append(quietContent);
 
   const tutorial = createTutorialDialog();
+  const kit = createKitDialog({
+    dispatch: options.dispatch,
+    onOpenChange: (open) => {
+      const expanded = open ? "true" : "false";
+      kitButton.setAttribute("aria-expanded", expanded);
+      mobileKitButton.setAttribute("aria-expanded", expanded);
+    },
+  });
 
   const leftRail = createElement("div", "left-rail");
   leftRail.id = "field-hud-panels";
@@ -987,6 +1035,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     titleDialog,
     quietDialog,
     tutorial.element,
+    kit.element,
   );
   options.root.replaceChildren(shell);
 
@@ -994,6 +1043,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     shell,
     mobileFieldStrip,
     mobileHudToggle,
+    mobileKitButton,
     mobileObjective,
     mobileStamina,
     mobileStaminaValue,
@@ -1075,6 +1125,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     interactButton,
     wayknotButton,
     wayknotButtonLabel,
+    kitButton,
     quietButton,
     titleButton,
     helpButton,
@@ -1098,6 +1149,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     quietFinish,
     quietContinue,
     tutorial,
+    kit,
   };
 };
 
@@ -1161,6 +1213,40 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.mobileHudToggle.setAttribute("aria-controls", disclosure.ariaControls);
     refs.mobileHudToggle.setAttribute("aria-label", disclosure.accessibleLabel);
     refs.mobileHudToggle.textContent = disclosure.visibleLabel;
+  };
+
+  const openKit = (tab: KitTabId = "pack", trigger?: HTMLElement | null): void => {
+    if (refs.titleDialog.open || refs.quietDialog.open) return;
+    refs.tutorial.close(false);
+    setMobileHudExpanded(false);
+    refs.kit.open(tab, trigger);
+  };
+
+  const toggleKit = (tab: KitTabId = "pack", trigger?: HTMLElement | null): void => {
+    if (refs.kit.isOpen()) {
+      refs.kit.close();
+      return;
+    }
+    openKit(tab, trigger);
+  };
+
+  const openHelp = (trigger?: HTMLElement | null): void => {
+    refs.kit.close(false);
+    setMobileHudExpanded(false);
+    refs.tutorial.open(trigger);
+  };
+
+  const toggleHelp = (trigger?: HTMLElement | null): void => {
+    if (refs.tutorial.element.open) {
+      refs.tutorial.close();
+      return;
+    }
+    openHelp(trigger);
+  };
+
+  const closeFieldDialogs = (): void => {
+    refs.kit.close(false);
+    refs.tutorial.close(false);
   };
 
   const renderContracts = (contracts: readonly ContractUIView[]): void => {
@@ -1445,12 +1531,18 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const update = (providedView?: TideweftUIView | null): void => {
     const view = providedView === undefined ? options.getView() ?? null : providedView;
     latestView = view;
+    refs.kit.update(view?.kit);
     if (!view) {
       refs.shell.dataset.ready = "false";
+      closeFieldDialogs();
       syncDialog(refs.titleDialog, forcedTitle ?? true);
       return;
     }
     refs.shell.dataset.ready = "true";
+    if (
+      (forcedTitle ?? view.title.visible)
+      || (forcedQuietHour ?? view.quietHour?.visible ?? false)
+    ) refs.kit.close(false);
     const revision = String(view.revision);
     const isNewRevision = revision !== lastRevision;
     if (!isNewRevision) {
@@ -1659,6 +1751,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   refs.scanButton.addEventListener("click", () => options.dispatch({ type: "scan" }));
   refs.interactButton.addEventListener("click", () => options.dispatch({ type: "interact" }));
   refs.wayknotButton.addEventListener("click", () => options.dispatch({ type: "wayknot" }));
+  refs.kitButton.addEventListener("click", () => toggleKit("pack", refs.kitButton));
+  refs.mobileKitButton.addEventListener("click", () => toggleKit("pack", refs.mobileKitButton));
   refs.mobileHudToggle.addEventListener("click", () => {
     const expanding = refs.shell.dataset.mobileHudExpanded !== "true";
     if (expanding) {
@@ -1682,9 +1776,15 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
     setMobileHudExpanded(expanding);
   });
-  refs.quietButton.addEventListener("click", () => options.dispatch({ type: "quiet-hour", action: "open" }));
-  refs.titleButton.addEventListener("click", () => options.dispatch({ type: "open-title" }));
-  refs.helpButton.addEventListener("click", () => refs.tutorial.toggle(refs.helpButton));
+  refs.quietButton.addEventListener("click", () => {
+    closeFieldDialogs();
+    options.dispatch({ type: "quiet-hour", action: "open" });
+  });
+  refs.titleButton.addEventListener("click", () => {
+    closeFieldDialogs();
+    options.dispatch({ type: "open-title" });
+  });
+  refs.helpButton.addEventListener("click", () => toggleHelp(refs.helpButton));
   refs.inspectorClose.addEventListener("click", () => {
     refs.shell.dataset.mobileSheet = "promises";
     setMobileHudExpanded(false);
@@ -1746,7 +1846,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       event,
       latestView?.controls?.canWayknot === true,
       options.dispatch,
-      () => refs.tutorial.toggle(),
+      () => toggleHelp(),
+      () => toggleKit("pack"),
+      () => openKit("make"),
     );
   };
   document.addEventListener("keydown", onGlobalKeyDown);
@@ -1779,14 +1881,18 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     announce,
     setTitleVisible: (visible) => {
       forcedTitle = visible;
+      if (visible) refs.kit.close(false);
       syncDialog(refs.titleDialog, visible);
     },
     setQuietHourVisible: (visible) => {
       forcedQuietHour = visible;
+      if (visible) refs.kit.close(false);
       syncDialog(refs.quietDialog, visible);
     },
-    openHelp: () => refs.tutorial.open(),
+    openHelp: () => openHelp(),
     closeHelp: () => refs.tutorial.close(),
+    openKit: (tab = "pack") => openKit(tab),
+    closeKit: () => refs.kit.close(),
     destroy: () => {
       stop();
       document.removeEventListener("keydown", onGlobalKeyDown);
@@ -1794,6 +1900,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       window.removeEventListener("pointercancel", cancelContractPointer);
       window.removeEventListener("pointerup", releaseSignedReportPointer);
       window.removeEventListener("pointercancel", cancelSignedReportPointer);
+      refs.kit.destroy();
       refs.tutorial.destroy();
       syncDialog(refs.quietDialog, false);
       syncDialog(refs.titleDialog, false);

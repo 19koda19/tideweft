@@ -3,10 +3,19 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_WAYKNOT_CAPACITY,
   MAX_WAYKNOT_CAPACITY,
+  WAYKNOT_CONDITION_MAX,
   WAYKNOT_DESCRIPTIONS,
+  WAYKNOT_FULL_STRENGTH,
   WAYKNOT_LABELS,
   WAYKNOT_PERMILLE,
+  WAYKNOT_PLACEMENT_CONDITION_COST,
   WAYKNOT_PLACEMENT_HINTS,
+  WAYKNOT_RECLAIM_CONDITION_COST,
+  WAYKNOT_SERVICE_REMAINDER_SCALE,
+  WAYKNOT_SETTING_STRENGTH,
+  WAYKNOT_SETTING_TICKS,
+  WAYKNOT_STATE_VERSION,
+  applyWayknotServiceWear,
   applyWayknotPermille,
   contextualWayknotKind,
   createWayknotState,
@@ -25,12 +34,16 @@ import {
   reclaimWayknot,
   redeployWayknot,
   supportsWayknot,
+  tideHarpEffectStrength,
   toggleContextualWayknot,
   validateWayknotPlacement,
   wayknotAtTile,
+  wayknotEffectStrength,
+  type Wayknot,
   type WayknotState,
   type WayknotTileContext,
 } from "./wayknots";
+import { deriveTideHarps } from "./tideHarps";
 
 const GRID = Object.freeze({ width: 10, height: 10 });
 
@@ -48,10 +61,30 @@ function tile(
 }
 
 function placedState(
-  wayknots: WayknotState["wayknots"],
+  wayknots: readonly (
+    Pick<Wayknot, "id" | "kind" | "tileIndex">
+    & Partial<Pick<Wayknot, "condition" | "readyTick" | "serviceWearRemainder">>
+  )[],
   capacity = DEFAULT_WAYKNOT_CAPACITY,
 ): WayknotState {
   return normalizeWayknotState({ capacity, wayknots }, { capacity, tileCount: 100 });
+}
+
+function fullKnot(
+  id: number,
+  kind: Wayknot["kind"],
+  tileIndex: number | null,
+  overrides: Partial<Pick<Wayknot, "condition" | "readyTick" | "serviceWearRemainder">> = {},
+): Wayknot {
+  return {
+    id,
+    kind,
+    tileIndex,
+    condition: WAYKNOT_CONDITION_MAX,
+    readyTick: 0,
+    serviceWearRemainder: 0,
+    ...overrides,
+  };
 }
 
 describe("wayknot field kit", () => {
@@ -59,15 +92,15 @@ describe("wayknot field kit", () => {
     const state = createWayknotState();
 
     expect(state).toEqual({
-      version: 1,
+      version: WAYKNOT_STATE_VERSION,
       capacity: 6,
       wayknots: [
-        { id: 1, kind: "reed-mat", tileIndex: null },
-        { id: 2, kind: "reed-mat", tileIndex: null },
-        { id: 3, kind: "tide-anchor", tileIndex: null },
-        { id: 4, kind: "tide-anchor", tileIndex: null },
-        { id: 5, kind: "wind-knot", tileIndex: null },
-        { id: 6, kind: "wind-knot", tileIndex: null },
+        fullKnot(1, "reed-mat", null),
+        fullKnot(2, "reed-mat", null),
+        fullKnot(3, "tide-anchor", null),
+        fullKnot(4, "tide-anchor", null),
+        fullKnot(5, "wind-knot", null),
+        fullKnot(6, "wind-knot", null),
       ],
     });
     expect(state.capacity).toBe(DEFAULT_WAYKNOT_CAPACITY);
@@ -124,7 +157,10 @@ describe("wayknot field kit", () => {
 
     expect(first.ok).toBe(true);
     expect(first.reason).toBe("placed");
-    expect(first.wayknot).toEqual({ id: 1, kind: "reed-mat", tileIndex: 11 });
+    expect(first.wayknot).toEqual(fullKnot(1, "reed-mat", 11, {
+      condition: WAYKNOT_CONDITION_MAX - WAYKNOT_PLACEMENT_CONDITION_COST,
+      readyTick: WAYKNOT_SETTING_TICKS,
+    }));
     expect(start.wayknots.every((wayknot) => wayknot.tileIndex === null)).toBe(true);
     expect(wayknotAtTile(first.state, 11)?.id).toBe(1);
     expect(validateWayknotPlacement(first.state, "wind-knot", marsh)).toBe("occupied");
@@ -171,7 +207,11 @@ describe("wayknot field kit", () => {
 
     expect(reclaimed.ok).toBe(true);
     expect(reclaimed.reason).toBe("reclaimed");
-    expect(reclaimed.wayknot).toEqual({ id: 3, kind: "tide-anchor", tileIndex: null });
+    expect(reclaimed.wayknot).toEqual(fullKnot(3, "tide-anchor", null, {
+      condition: WAYKNOT_CONDITION_MAX
+        - WAYKNOT_PLACEMENT_CONDITION_COST
+        - WAYKNOT_RECLAIM_CONDITION_COST,
+    }));
     expect(reclaimed.state.wayknots).toHaveLength(6);
     expect(deployedWayknotCount(reclaimed.state)).toBe(0);
 
@@ -185,7 +225,12 @@ describe("wayknot field kit", () => {
     );
     expect(redeployed.ok).toBe(true);
     expect(redeployed.reason).toBe("redeployed");
-    expect(redeployed.wayknot).toEqual({ id: 3, kind: "tide-anchor", tileIndex: 46 });
+    expect(redeployed.wayknot).toEqual(fullKnot(3, "tide-anchor", 46, {
+      condition: WAYKNOT_CONDITION_MAX
+        - WAYKNOT_PLACEMENT_CONDITION_COST * 2
+        - WAYKNOT_RECLAIM_CONDITION_COST,
+      readyTick: WAYKNOT_SETTING_TICKS,
+    }));
     expect(redeployed.state.wayknots).toHaveLength(6);
   });
 
@@ -203,14 +248,20 @@ describe("wayknot field kit", () => {
       tile(13, { terrain: "marsh" }),
     );
 
-    expect(first.wayknot).toEqual({ id: 1, kind: "reed-mat", tileIndex: 11 });
-    expect(second.wayknot).toEqual({ id: 2, kind: "reed-mat", tileIndex: 12 });
+    expect(first.wayknot).toEqual(fullKnot(1, "reed-mat", 11, {
+      condition: WAYKNOT_CONDITION_MAX - WAYKNOT_PLACEMENT_CONDITION_COST,
+      readyTick: WAYKNOT_SETTING_TICKS,
+    }));
+    expect(second.wayknot).toEqual(fullKnot(2, "reed-mat", 12, {
+      condition: WAYKNOT_CONDITION_MAX - WAYKNOT_PLACEMENT_CONDITION_COST,
+      readyTick: WAYKNOT_SETTING_TICKS,
+    }));
     expect(exhausted.ok).toBe(false);
     expect(exhausted.reason).toBe("capacity-reached");
     expect(exhausted.state.wayknots.filter((wayknot) => wayknot.kind === "wind-knot"))
       .toEqual([
-        { id: 5, kind: "wind-knot", tileIndex: null },
-        { id: 6, kind: "wind-knot", tileIndex: null },
+        fullKnot(5, "wind-knot", null),
+        fullKnot(6, "wind-knot", null),
       ]);
 
     const reclaimed = reclaimWayknot(second.state, 1);
@@ -218,7 +269,12 @@ describe("wayknot field kit", () => {
       reclaimed.state,
       tile(13, { terrain: "marsh" }),
     );
-    expect(replacement.wayknot).toEqual({ id: 1, kind: "reed-mat", tileIndex: 13 });
+    expect(replacement.wayknot).toEqual(fullKnot(1, "reed-mat", 13, {
+      condition: WAYKNOT_CONDITION_MAX
+        - WAYKNOT_PLACEMENT_CONDITION_COST * 2
+        - WAYKNOT_RECLAIM_CONDITION_COST,
+      readyTick: WAYKNOT_SETTING_TICKS,
+    }));
     expect(replacement.state.wayknots).toHaveLength(6);
   });
 
@@ -249,13 +305,13 @@ describe("wayknot field kit", () => {
         { id: 2, kind: "wind-knot", tileIndex: Number.NaN },
         { id: 3, kind: "reed-mat", tileIndex: 200 },
       ],
-    }, { tileCount: 100 });
+    }, { tileCount: 100, loadTick: 77 });
 
     expect(normalized.capacity).toBe(MAX_WAYKNOT_CAPACITY);
     expect(normalized.wayknots).toEqual([
-      { id: 1, kind: "reed-mat", tileIndex: 1 },
-      { id: 2, kind: "reed-mat", tileIndex: null },
-      { id: 3, kind: "tide-anchor", tileIndex: null },
+      fullKnot(1, "reed-mat", 1, { readyTick: 77 }),
+      fullKnot(2, "reed-mat", null),
+      fullKnot(3, "tide-anchor", null),
     ]);
     expect(normalized.wayknots).toHaveLength(3);
   });
@@ -271,6 +327,7 @@ describe("wayknot field kit", () => {
       ],
     }, {
       tileCount: 100,
+      loadTick: 55,
       contextAt: (index) => {
         if (index === 11) return tile(index, { terrain: "marsh" });
         if (index === 22) return tile(index, { terrain: "deep-water", waterDepth: 300_000 });
@@ -280,10 +337,10 @@ describe("wayknot field kit", () => {
     });
 
     expect(normalized.wayknots).toEqual([
-      { id: 1, kind: "reed-mat", tileIndex: 11 },
-      { id: 3, kind: "tide-anchor", tileIndex: null },
-      { id: 4, kind: "tide-anchor", tileIndex: 22 },
-      { id: 5, kind: "wind-knot", tileIndex: null },
+      fullKnot(1, "reed-mat", 11, { readyTick: 55 }),
+      fullKnot(3, "tide-anchor", null),
+      fullKnot(4, "tide-anchor", 22, { readyTick: 55 }),
+      fullKnot(5, "wind-knot", null),
     ]);
   });
 
@@ -292,6 +349,14 @@ describe("wayknot field kit", () => {
       { id: 6, kind: "wind-knot", tileIndex: 18 },
       { id: 2, kind: "tide-anchor", tileIndex: 22 },
       { id: 6, kind: "reed-mat", tileIndex: 11 },
+      {
+        id: 6,
+        kind: "wind-knot",
+        tileIndex: 11,
+        condition: 700_000,
+        readyTick: 5,
+        serviceWearRemainder: 123,
+      },
       { id: 5, kind: "wind-knot", tileIndex: null },
     ];
     const forward = normalizeWayknotState({ capacity: 3, wayknots: records }, { tileCount: 100 });
@@ -302,14 +367,152 @@ describe("wayknot field kit", () => {
 
     expect(forward).toEqual(reverse);
     expect(forward.wayknots).toEqual([
-      { id: 2, kind: "reed-mat", tileIndex: 22 },
-      { id: 5, kind: "wind-knot", tileIndex: null },
-      { id: 6, kind: "wind-knot", tileIndex: 11 },
+      fullKnot(2, "reed-mat", 22),
+      fullKnot(5, "wind-knot", null),
+      fullKnot(6, "wind-knot", 11, {
+        condition: 700_000,
+        readyTick: 5,
+        serviceWearRemainder: 123,
+      }),
     ]);
+  });
+
+  it("normalizes v2 durability fields to exact safe bounds without repairing hostile wear", () => {
+    const normalized = normalizeWayknotState({
+      version: 2,
+      capacity: 6,
+      wayknots: [
+        {
+          id: 1,
+          kind: "reed-mat",
+          tileIndex: 11,
+          condition: -50,
+          readyTick: Number.NaN,
+          serviceWearRemainder: Number.MAX_SAFE_INTEGER,
+        },
+        {
+          id: 3,
+          kind: "tide-anchor",
+          tileIndex: 14,
+          condition: Number.POSITIVE_INFINITY,
+          readyTick: 91,
+          serviceWearRemainder: -2,
+        },
+        {
+          id: 5,
+          kind: "wind-knot",
+          tileIndex: null,
+          condition: WAYKNOT_CONDITION_MAX + 20,
+          readyTick: 999,
+          serviceWearRemainder: 42,
+        },
+      ],
+    }, { tileCount: 100, loadTick: 88 });
+
+    expect(normalized.wayknots).toEqual([
+      fullKnot(1, "reed-mat", 11, {
+        condition: 0,
+        readyTick: 88,
+        serviceWearRemainder: WAYKNOT_SERVICE_REMAINDER_SCALE - 1,
+      }),
+      fullKnot(3, "tide-anchor", 14, { condition: 0, readyTick: 91 }),
+      fullKnot(5, "wind-knot", null, { serviceWearRemainder: 42 }),
+    ]);
+    expect(normalized.version).toBe(2);
+  });
+
+  it("charges every placement/reclaim cycle and keeps broken aids reclaimable", () => {
+    const tooWorn = placedState([
+      fullKnot(1, "reed-mat", null, { condition: 149_999 }),
+    ]);
+    const marsh = tile(11, { terrain: "marsh" });
+    expect(validateWayknotPlacement(tooWorn, "reed-mat", marsh)).toBe("condition-too-low");
+    expect(placeWayknot(tooWorn, "reed-mat", marsh, 10)).toMatchObject({
+      ok: false,
+      reason: "capacity-reached",
+      placementReason: "condition-too-low",
+    });
+
+    const exactMinimum = placedState([
+      fullKnot(1, "reed-mat", null, { condition: 150_000 }),
+    ]);
+    const placed = placeWayknot(exactMinimum, "reed-mat", marsh, 10);
+    expect(placed.wayknot).toEqual(fullKnot(1, "reed-mat", 11, {
+      condition: 70_000,
+      readyTick: 13,
+    }));
+
+    const directlyMoved = redeployWayknot(
+      placedState([fullKnot(1, "reed-mat", 11, { condition: 500_000 })]),
+      1,
+      tile(12, { terrain: "marsh" }),
+      20,
+    );
+    expect(directlyMoved.wayknot).toEqual(fullKnot(1, "reed-mat", 12, {
+      condition: 380_000,
+      readyTick: 23,
+    }));
+
+    const broken = placedState([fullKnot(1, "reed-mat", 11, { condition: 0 })]);
+    const reclaimed = reclaimWayknot(broken, 1);
+    expect(reclaimed).toMatchObject({ ok: true, reason: "reclaimed" });
+    expect(reclaimed.wayknot).toEqual(fullKnot(1, "reed-mat", null, { condition: 0 }));
   });
 });
 
 describe("wayknot traversal effects", () => {
+  it("supplies exact half strength for three setting ticks, then the original full benefit", () => {
+    const state = placedState([
+      fullKnot(1, "reed-mat", 11, { condition: 920_000, readyTick: 103 }),
+    ]);
+    const context = tile(11, { terrain: "marsh" });
+    const setting = queryWayknotEffects(state, context, GRID, 100);
+    const lastSettingTick = queryWayknotEffects(state, context, GRID, 102);
+    const ready = queryWayknotEffects(state, context, GRID, 103);
+
+    expect(setting).toMatchObject({
+      movementCostPermille: 780,
+      staminaCostPermille: 880,
+      pathCostPermille: 780,
+      influences: [{ effectStrength: WAYKNOT_SETTING_STRENGTH }],
+    });
+    expect(lastSettingTick).toEqual(setting);
+    expect(ready).toMatchObject({
+      movementCostPermille: 560,
+      staminaCostPermille: 760,
+      pathCostPermille: 560,
+      influences: [{ effectStrength: WAYKNOT_FULL_STRENGTH }],
+    });
+    expect(wayknotEffectStrength(state.wayknots[0]!, 102)).toBe(WAYKNOT_SETTING_STRENGTH);
+    expect(wayknotEffectStrength(state.wayknots[0]!, 103)).toBe(WAYKNOT_FULL_STRENGTH);
+    // Legacy callers that have not integrated a world tick retain full-strength behavior.
+    expect(queryWayknotEffects(state, context, GRID)).toEqual(ready);
+  });
+
+  it("keeps a broken placement visible and reclaimable while making its influence inert", () => {
+    const state = placedState([
+      fullKnot(3, "tide-anchor", 44, { condition: 0, readyTick: 900 }),
+    ]);
+    const effects = queryWayknotEffects(
+      state,
+      tile(44, { terrain: "deep-water", waterDepth: 300_000 }),
+      GRID,
+      100,
+    );
+
+    expect(wayknotAtTile(state, 44)).toEqual(fullKnot(3, "tide-anchor", 44, {
+      condition: 0,
+      readyTick: 900,
+    }));
+    expect(deployedWayknotCount(state)).toBe(1);
+    expect(effects.influences).toEqual([]);
+    expect(effects).toMatchObject({
+      staminaCostPermille: WAYKNOT_PERMILLE,
+      sweepRiskPermille: WAYKNOT_PERMILLE,
+      pathCostPermille: WAYKNOT_PERMILLE,
+    });
+  });
+
   it("gives a reed mat an exact local-only drag and path benefit", () => {
     const state = placedState([{ id: 1, kind: "reed-mat", tileIndex: 11 }]);
     const local = queryWayknotEffects(state, tile(11, { terrain: "marsh" }), GRID);
@@ -410,14 +613,88 @@ describe("wayknot traversal effects", () => {
     expect(applyWayknotPermille(Number.NaN, 500)).toBe(0);
   });
 
-  it("has no clock, random reward, or decay input: identical state and tile always give identical output", () => {
+  it("accumulates deterministic fractional wear only when an active knot supplies benefit", () => {
+    const setting = placedState([
+      fullKnot(3, "tide-anchor", 44, { condition: 500_000, readyTick: 100 }),
+    ]);
+    const half = applyWayknotServiceWear(setting, 3, 99);
+    expect(half).toMatchObject({
+      ok: true,
+      reason: "serviced",
+      appliedBenefit: 500_000,
+      conditionSpent: 8_000,
+      wayknot: {
+        condition: 492_000,
+        serviceWearRemainder: 0,
+      },
+    });
+
+    const first = applyWayknotServiceWear(setting, 3, 100, 333_333);
+    expect(first).toMatchObject({
+      appliedBenefit: 333_333,
+      conditionSpent: 5_333,
+      wayknot: {
+        condition: 494_667,
+        serviceWearRemainder: 328_000,
+      },
+    });
+    const second = applyWayknotServiceWear(first.state, 3, 100, 333_333);
+    expect(second).toMatchObject({
+      conditionSpent: 5_333,
+      wayknot: {
+        condition: 489_334,
+        serviceWearRemainder: 656_000,
+      },
+    });
+    expect(applyWayknotServiceWear(setting, 3, 100, 0)).toMatchObject({
+      ok: false,
+      reason: "no-benefit",
+      state: setting,
+      conditionSpent: 0,
+    });
+
+    const broken = placedState([fullKnot(3, "tide-anchor", 44, { condition: 0 })]);
+    expect(applyWayknotServiceWear(broken, 3, 100)).toMatchObject({
+      ok: false,
+      reason: "inactive",
+      state: broken,
+      conditionSpent: 0,
+    });
+  });
+
+  it("keeps Tide Harp geometry while weakest-member strength gates its effectiveness", () => {
+    const setting = placedState([
+      fullKnot(1, "reed-mat", 11, { condition: 500_000, readyTick: 103 }),
+      fullKnot(3, "tide-anchor", 14, { condition: 500_000, readyTick: 103 }),
+      fullKnot(5, "wind-knot", 41, { condition: 500_000, readyTick: 103 }),
+    ]);
+    const settingHarps = deriveTideHarps(setting, GRID);
+    expect(settingHarps).toHaveLength(1);
+    expect(tideHarpEffectStrength(setting, settingHarps[0]?.knots ?? [], 100))
+      .toBe(WAYKNOT_SETTING_STRENGTH);
+    expect(tideHarpEffectStrength(setting, settingHarps[0]?.knots ?? [], 103))
+      .toBe(WAYKNOT_FULL_STRENGTH);
+
+    const broken = normalizeWayknotState({
+      ...setting,
+      wayknots: setting.wayknots.map((wayknot) => wayknot.id === 3
+        ? { ...wayknot, condition: 0 }
+        : wayknot),
+    }, { tileCount: 100 });
+    const brokenHarps = deriveTideHarps(broken, GRID);
+    expect(brokenHarps).toHaveLength(1);
+    expect(brokenHarps[0]?.id).toBe(settingHarps[0]?.id);
+    expect(tideHarpEffectStrength(broken, brokenHarps[0]?.knots ?? [], 103)).toBe(0);
+  });
+
+  it("uses only the explicit tick: identical state, tile, and tick always give identical output", () => {
     const roundTripped = normalizeWayknotState(JSON.parse(JSON.stringify(placedState([
       { id: 5, kind: "wind-knot", tileIndex: 55 },
     ]))), { tileCount: 100 });
     const context = tile(56, { terrain: "meadow", windExposed: true });
 
-    expect(queryWayknotEffects(roundTripped, context, GRID)).toEqual(
-      queryWayknotEffects(roundTripped, context, GRID),
+    expect(queryWayknotEffects(roundTripped, context, GRID, 400)).toEqual(
+      queryWayknotEffects(roundTripped, context, GRID, 400),
     );
   });
 });
