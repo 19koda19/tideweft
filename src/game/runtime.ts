@@ -12,7 +12,7 @@ import {
   type WorldState,
   type WorldView,
 } from "../sim/public";
-import { findTilePath } from "../sim/terrain";
+import { findTilePath, MAX_TIDE_LEVEL } from "../sim/terrain";
 import type { TideweftUICommand, TideweftUIView } from "../ui/types";
 import { TideweftSoundscape } from "../audio/soundscape";
 import { createSaveRepository, type SaveRecord, type SaveRepository } from "../platform/persistence";
@@ -179,12 +179,17 @@ export async function createTideweftRuntime(
       tileCount: worldView.terrain.tiles.length,
       contextAt: (tileIndex) => {
         const context = wayknotContextAt(worldView, tileIndex);
-        // A Tide anchor may have been set while this stable substrate was
-        // flooded. Receding water must not silently pull a persisted aid back
-        // into the pack on load; the tide can make it useful again later.
-        return context
+        if (!context) return undefined;
+        const tile = worldView.terrain.tiles[tileIndex];
+        const canReachAnchorDepth = tile !== undefined
+          && MAX_TIDE_LEVEL - tile.elevation >= TIDE_ANCHOR_PLACEMENT_DEPTH;
+        // Preserve an anchor that could truthfully have been set at peak tide,
+        // even if this save resumes during an ebb. High marsh, meadow, and
+        // ridge that can never reach placement depth remain authoritative so
+        // malformed imported placements return safely to the carried kit.
+        return canReachAnchorDepth
           ? { ...context, waterDepth: Math.max(context.waterDepth, TIDE_ANCHOR_PLACEMENT_DEPTH) }
-          : undefined;
+          : context;
       },
     });
     player.depthSoundings = Array.isArray(player.depthSoundings)
@@ -910,6 +915,21 @@ export async function createTideweftRuntime(
       return;
     }
     const existing = wayknotAtTile(player.wayknots, tileIndex);
+    if (
+      !existing
+      && context.terrain !== "deep-water"
+      && context.waterDepth > 20_000
+      && (player.depthSoundings[tileIndex] ?? 0) <= 0
+    ) {
+      announce(
+        session,
+        "Sound this flooded ground before binding a Wayknot. Pulse Space first; the recorded depth will tell the field kit which weave is safe.",
+        true,
+      );
+      soundscape.play("warning", 0.35);
+      refreshViews();
+      return;
+    }
     const intendedKind = existing?.kind ?? contextualWayknotKind(context);
     const result = toggleContextualWayknot(player.wayknots, context);
     if (!result.ok || !result.wayknot) {

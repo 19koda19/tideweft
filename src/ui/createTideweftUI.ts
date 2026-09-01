@@ -8,8 +8,71 @@ import type {
   SettlementInspectorUIView,
   TideweftUIController,
   TideweftUIOptions,
+  TideweftUICommand,
   TideweftUIView,
 } from "./types";
+
+export const WAYKNOT_KEY_SHORTCUT = "F";
+
+export interface WayknotActionButtonState {
+  readonly disabled: boolean;
+  readonly label: string;
+  readonly hint: string;
+  readonly ariaLabel: string;
+  readonly ariaKeyShortcuts: typeof WAYKNOT_KEY_SHORTCUT;
+}
+
+/** Pure presentation state keeps the visible, tooltip, and spoken action in lockstep. */
+export function wayknotActionButtonState(
+  controls: TideweftUIView["controls"],
+): WayknotActionButtonState {
+  const label = controls?.wayknotLabel ?? "Place Wayknot";
+  const hint = controls?.wayknotHint ?? "Place or reclaim a reusable Wayknot at your position";
+  return {
+    disabled: controls?.canWayknot === false,
+    label,
+    hint,
+    ariaLabel: `${label}. ${hint}`,
+    ariaKeyShortcuts: WAYKNOT_KEY_SHORTCUT,
+  };
+}
+
+interface UIShortcutEvent {
+  readonly code: string;
+  readonly key: string;
+  readonly repeat: boolean;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+  readonly shiftKey: boolean;
+  readonly defaultPrevented: boolean;
+  preventDefault(): void;
+}
+
+/**
+ * Handles document-level non-movement shortcuts. Canvas handlers prevent the
+ * same event first, so focused play never dispatches F twice; the global path
+ * keeps the advertised shortcut usable while focus is elsewhere in the HUD.
+ */
+export function handleTideweftUIShortcut(
+  event: UIShortcutEvent,
+  canWayknot: boolean,
+  dispatch: (command: TideweftUICommand) => void,
+  openHelp: () => void,
+): boolean {
+  if (event.defaultPrevented || event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
+    return false;
+  }
+  if (event.key === "?" || (event.key === "/" && event.code === "Slash" && event.shiftKey)) {
+    event.preventDefault();
+    openHelp();
+    return true;
+  }
+  if (event.code !== "KeyF" || !canWayknot) return false;
+  event.preventDefault();
+  dispatch({ type: "wayknot" });
+  return true;
+}
 
 interface UIRefs {
   shell: HTMLDivElement;
@@ -479,8 +542,11 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     "Place or reclaim a reusable Wayknot",
   );
   const wayknotButtonLabel = createElement("span", "action-button__label", "Place Wayknot");
-  wayknotButton.setAttribute("aria-keyshortcuts", "F");
-  wayknotButton.append(wayknotButtonLabel, createElement("kbd", "keycap", "F"));
+  wayknotButton.setAttribute("aria-keyshortcuts", WAYKNOT_KEY_SHORTCUT);
+  wayknotButton.append(
+    wayknotButtonLabel,
+    createElement("kbd", "keycap", WAYKNOT_KEY_SHORTCUT),
+  );
   const pauseButton = createButton("action-button pause-button", "Hold tide");
   pauseButton.append(createElement("kbd", "keycap", "P"));
 
@@ -1219,13 +1285,12 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.interactButton.textContent = view.controls?.interactLabel ?? "Interact";
     refs.interactButton.append(createElement("kbd", "keycap", "E"));
     refs.interactButton.title = view.controls?.interactHint ?? "Interact with the current harbor";
-    const wayknotLabel = view.controls?.wayknotLabel ?? "Place Wayknot";
-    const wayknotHint =
-      view.controls?.wayknotHint ?? "Place or reclaim a reusable Wayknot at your position";
-    refs.wayknotButton.disabled = view.controls?.canWayknot === false;
-    refs.wayknotButtonLabel.textContent = wayknotLabel;
-    refs.wayknotButton.title = wayknotHint;
-    refs.wayknotButton.setAttribute("aria-label", `${wayknotLabel}. ${wayknotHint}`);
+    const wayknotAction = wayknotActionButtonState(view.controls);
+    refs.wayknotButton.disabled = wayknotAction.disabled;
+    refs.wayknotButtonLabel.textContent = wayknotAction.label;
+    refs.wayknotButton.title = wayknotAction.hint;
+    refs.wayknotButton.setAttribute("aria-label", wayknotAction.ariaLabel);
+    refs.wayknotButton.setAttribute("aria-keyshortcuts", wayknotAction.ariaKeyShortcuts);
     refs.quietButton.disabled = view.controls?.canEndSession === false;
     for (const [pace, button] of Object.entries(refs.paceButtons) as Array<[PaceView, HTMLButtonElement]>) {
       button.setAttribute("aria-pressed", pace === view.player.pace ? "true" : "false");
@@ -1327,13 +1392,20 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
   const onGlobalKeyDown = (event: KeyboardEvent): void => {
     const target = event.target;
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
       return;
     }
-    if ((event.key === "?" || (event.key === "/" && event.shiftKey)) && !event.ctrlKey && !event.metaKey) {
-      event.preventDefault();
-      syncDialog(refs.helpDialog, true);
-    }
+    handleTideweftUIShortcut(
+      event,
+      latestView?.controls?.canWayknot === true,
+      options.dispatch,
+      () => syncDialog(refs.helpDialog, true),
+    );
   };
   document.addEventListener("keydown", onGlobalKeyDown);
 

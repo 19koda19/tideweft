@@ -50,6 +50,26 @@ function eligibleContext(
   throw new Error(`Generated fixture has no eligible ${kind} tile`);
 }
 
+function longSweepAnchorContext(world: WorldView): WayknotTileContext {
+  for (const tile of world.terrain.tiles) {
+    if (tile.terrain !== "deep-water" || tile.waterDepth < 120_000) continue;
+    const context = wayknotContextAt(world, tile.index);
+    if (!context || context.occupied) continue;
+    const probe = createPlayer(world);
+    placePlayerAt(probe, world, tile.index);
+    probe.pace = "swift";
+    probe.stamina = 13_000;
+    const started = stepPlayer(probe, world, MOVE_RIGHT);
+    if (!started.becameSwept) continue;
+    if (probe.sweepPath.some((index) =>
+      manhattanTileDistance(tile.index, index, world.terrain) > 2
+    )) {
+      return context;
+    }
+  }
+  throw new Error("Generated fixture has no Tide-anchor crossing with a changing sweep field");
+}
+
 function placePlayerAt(player: PlayerState, world: WorldView, tileIndex: number): void {
   const tile = world.terrain.tiles[tileIndex];
   if (!tile) throw new Error(`Generated fixture is missing tile ${tileIndex}`);
@@ -67,6 +87,18 @@ function bindContextually(player: PlayerState, context: WayknotTileContext): voi
   const result = placeContextualWayknot(player.wayknots, context);
   if (!result.ok) throw new Error(`Could not bind fixture Wayknot: ${result.reason}`);
   player.wayknots = result.state;
+}
+
+function ticksUntilAshore(player: PlayerState, world: WorldView): number {
+  let ticks = 0;
+  while (player.mode === "swept") {
+    stepPlayer(player, world, NO_INPUT);
+    ticks += 1;
+    if (ticks > world.terrain.tiles.length * 8) {
+      throw new Error("Sweep fixture did not reach a safe bank");
+    }
+  }
+  return ticks;
 }
 
 function activeSession() {
@@ -171,6 +203,78 @@ describe("Wayknots game wiring", () => {
     expect(player.wayknots.wayknots).toHaveLength(6);
   });
 
+  it("keeps contextual F depth-neutral on unsounded flooded ground", () => {
+    const world = generatedWorld();
+    const marsh = eligibleContext(world, "reed-mat", (tile) => tile.terrain === "marsh");
+    const tile = world.terrain.tiles[marsh.tileIndex];
+    if (!tile) throw new Error("Generated marsh fixture disappeared");
+    const player = createPlayer(world);
+    const session = activeSession();
+    placePlayerAt(player, world, marsh.tileIndex);
+
+    tile.waterDepth = 80_000;
+    player.depthSoundings[marsh.tileIndex] = 0;
+    const unsoundedShallows = projectUIView(world, player, session);
+    expect(unsoundedShallows.controls).toMatchObject({
+      canWayknot: false,
+      wayknotLabel: "Sound water first",
+    });
+    expect(unsoundedShallows.controls?.wayknotHint).toContain("Sound this flooded ground with Space");
+    expect(unsoundedShallows.field.hint).toMatch(/^Sound this water first \(Space\)/u);
+
+    tile.waterDepth = 180_000;
+    const unsoundedWaistWater = projectUIView(world, player, session);
+    expect(unsoundedWaistWater.controls).toMatchObject({
+      canWayknot: false,
+      wayknotLabel: "Sound water first",
+    });
+    expect(unsoundedWaistWater.controls?.wayknotHint).toBe(
+      unsoundedShallows.controls?.wayknotHint,
+    );
+
+    player.depthSoundings[marsh.tileIndex] = FIXED_POINT;
+    const sounded = projectUIView(world, player, session);
+    expect(sounded.controls).toMatchObject({
+      canWayknot: true,
+      wayknotLabel: "Set Tide anchor",
+    });
+
+    const obviousChannel = eligibleContext(world, "tide-anchor", (candidate) =>
+      candidate.terrain === "deep-water");
+    const channelPlayer = createPlayer(world);
+    placePlayerAt(channelPlayer, world, obviousChannel.tileIndex);
+    channelPlayer.depthSoundings[obviousChannel.tileIndex] = 0;
+    expect(projectUIView(world, channelPlayer, session).controls).toMatchObject({
+      canWayknot: true,
+      wayknotLabel: "Set Tide anchor",
+    });
+  });
+
+  it("prioritizes unsounded-water guidance over active-field copy without hiding reclaim", () => {
+    const world = generatedWorld();
+    const marsh = eligibleContext(world, "reed-mat", (tile) => tile.terrain === "marsh");
+    const tile = world.terrain.tiles[marsh.tileIndex];
+    if (!tile) throw new Error("Generated marsh fixture disappeared");
+    tile.waterDepth = 180_000;
+    const player = createPlayer(world);
+    const session = activeSession();
+    placePlayerAt(player, world, marsh.tileIndex);
+    player.depthSoundings[marsh.tileIndex] = FIXED_POINT;
+    const anchorContext = wayknotContextAt(world, marsh.tileIndex);
+    if (!anchorContext) throw new Error("Flooded marsh context disappeared");
+    bindContextually(player, anchorContext);
+
+    player.depthSoundings[marsh.tileIndex] = 0;
+    const view = projectUIView(world, player, session);
+    expect(view.field.activeWayknotLabels).toEqual(["Tide anchor"]);
+    expect(view.field.hint).toMatch(/^Sound this water first \(Space\)/u);
+    expect(view.field.hint).not.toContain("nearby Tide anchor");
+    expect(view.controls).toMatchObject({
+      canWayknot: true,
+      wayknotLabel: "Reclaim Tide anchor",
+    });
+  });
+
   it("makes a bound Reed mat faster and less tiring on generated soft ground", () => {
     const world = generatedWorld();
     const marsh = eligibleContext(world, "reed-mat", (tile) => tile.terrain === "marsh");
@@ -192,8 +296,7 @@ describe("Wayknots game wiring", () => {
 
   it("makes a Tide anchor lower water effort and shorten a generated deep-water sweep", () => {
     const world = generatedWorld();
-    const water = eligibleContext(world, "tide-anchor", (tile) =>
-      tile.terrain === "deep-water" && tile.waterDepth >= 120_000);
+    const water = longSweepAnchorContext(world);
     const tile = world.terrain.tiles[water.tileIndex];
     if (!tile) throw new Error("Generated deep-water fixture disappeared");
     const baseline = createPlayer(world);
@@ -222,7 +325,18 @@ describe("Wayknots game wiring", () => {
     expect(plainSweep.becameSwept).toBe(true);
     expect(anchoredSweep.becameSwept).toBe(true);
     expect(anchored.sweepPath).toEqual(baseline.sweepPath);
-    expect(anchored.sweepTotalTicks).toBeLessThan(baseline.sweepTotalTicks);
+    expect(anchored.sweepPath.some((index) =>
+      manhattanTileDistance(water.tileIndex, index, world.terrain) > 2
+    )).toBe(true);
+
+    const plainEstimate = baseline.sweepTotalTicks;
+    const anchoredEstimate = anchored.sweepTotalTicks;
+    const plainActual = ticksUntilAshore(baseline, world);
+    const anchoredActual = ticksUntilAshore(anchored, world);
+
+    expect(plainActual).toBe(plainEstimate);
+    expect(anchoredActual).toBe(anchoredEstimate);
+    expect(anchoredActual).toBeLessThan(plainActual);
   });
 
   it("makes a Wind knot reduce gust-driven stability loss on generated exposed ground", () => {
@@ -252,6 +366,7 @@ describe("Wayknots game wiring", () => {
     const chord = createPlayer(world);
     placePlayerAt(baseline, world, reed.tileIndex);
     placePlayerAt(chord, world, reed.tileIndex);
+    chord.depthSoundings[reed.tileIndex] = FIXED_POINT;
     bindContextually(chord, reed);
     bindContextually(chord, anchor);
 

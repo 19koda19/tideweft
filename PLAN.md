@@ -213,6 +213,7 @@ Implemented in the current source checkpoint:
 4. **Physical dual-view presence:** Chart 2D draws different non-color motifs; Relief 3D models woven slats, a buoyed anchor/line, and a ribbon mast on the discovery-masked surface.
 5. **Relief field-feel repair:** movement rotates with the orbit camera, hidden authoritative height cannot leak through picking or label placement, and discovery signatures are memoized by immutable projected tile arrays.
 6. **Save resilience:** legacy saves receive the carried kit, malformed placements repair conservatively, runtime IndexedDB errors stick to localStorage, cross-store reads select the newest available record, and saves requested during an in-flight write coalesce to the newest snapshot.
+7. **Post-publication truth pass:** durable deletion markers suppress stale saves across recovered storage sessions; anchor reload validation uses maximum possible tide against elevation; sweep ETA simulates the same changing per-tile pull as live drift; and unsounded flooded flats expose only a neutral Sound-first action through both UI and runtime paths.
 
 Local checkpoint evidence captured 2026-09-01:
 
@@ -221,6 +222,7 @@ Local checkpoint evidence captured 2026-09-01:
 - A fresh 2,880 × 1,800 Relief screenshot visibly records the woven 3D mat, its world label, active description, explicit cargo destination, and still-scrollable Promises pane.
 - The source scan found no private-key headers, credential tokens, credential assignments, or credential-bearing URLs.
 - GitHub CI and Pages repeated every web gate successfully on commit `eb12db0`; the live HTTPS origin serves the exact locally inspected JS/CSS artifacts. This is an untagged mainline preview after Alpha 0.2.
+- The follow-up hardening candidate passes 24 Vitest files / 178 checks, produces `index-CtM8H4DA.js` and `index-DJ8ONY8I.css`, and repeats the packaged 3D Wayknot/minimum-viewport smoke with no renderer warnings or resource failures.
 
 ## Reward-loop acceptance audit
 

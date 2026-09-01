@@ -11,6 +11,8 @@ import { clampInteger } from "./util";
 
 const TERRAIN_DOMAIN = 0x5445_5252;
 const TIDE_PERIOD_TICKS = 720;
+const MIN_TIDE_LEVEL = 230_000;
+export const MAX_TIDE_LEVEL = 560_000;
 
 const GRADIENTS = [
   [1, 0],
@@ -196,7 +198,8 @@ export function tideAtTick(tick: number): TideState {
   const half = TIDE_PERIOD_TICKS / 2;
   const rising = phase < half;
   const triangle = rising ? phase : TIDE_PERIOD_TICKS - phase;
-  const level = 230_000 + Math.trunc((triangle * 330_000) / half);
+  const level = MIN_TIDE_LEVEL
+    + Math.trunc((triangle * (MAX_TIDE_LEVEL - MIN_TIDE_LEVEL)) / half);
   return { phase, level, direction: rising ? 1 : -1 };
 }
 

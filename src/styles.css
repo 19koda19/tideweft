@@ -2567,6 +2567,18 @@ button:focus-visible .keycap {
     min-width: 2.1rem;
     padding-inline: 0.3rem;
   }
+
+  .field-readout__wayknots {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.12rem;
+  }
+
+  .field-readout__wayknot-active {
+    overflow: visible;
+    text-align: left;
+    text-overflow: clip;
+    white-space: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

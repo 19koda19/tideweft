@@ -9,12 +9,20 @@ import {
   createWorld,
   createWorldView,
   deserializeWorld,
+  runTicks,
   serializeWorld,
   stepWorld,
   type WorldState,
 } from "../sim/public";
+import { tideAtTick } from "../sim/terrain";
 import { hashCanonical } from "../sim/util";
-import { createPlayer, loadContractCargo, TILE_UNITS, type PlayerState } from "./player";
+import {
+  createPlayer,
+  loadContractCargo,
+  TILE_UNITS,
+  wayknotContextAt,
+  type PlayerState,
+} from "./player";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
   captureSessionBaseline,
@@ -22,6 +30,7 @@ import {
   type GameSessionState,
   type SessionBaseline,
 } from "./sessionTypes";
+import { placeWayknot } from "./wayknots";
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
@@ -134,6 +143,42 @@ afterEach(() => {
 
 function decodeGameSave(record: SaveRecord): TestGameSaveEnvelope {
   return JSON.parse(record.worldJson) as TestGameSaveEnvelope;
+}
+
+function runtimeSaveRecord(
+  world: WorldState,
+  player: PlayerState,
+  session: GameSessionState,
+  label: string,
+): SaveRecord {
+  const envelope: TestGameSaveEnvelope = {
+    format: "tideweft-session",
+    version: 1,
+    world: serializeWorld(world),
+    player,
+    session,
+  };
+  return {
+    slotId: "autosave",
+    label,
+    seed: world.meta.seedText,
+    updatedAt: 1,
+    playTicks: world.meta.completedTick,
+    settlementCount: world.settlements.length,
+    connectedCount: 0,
+    worldJson: JSON.stringify(envelope),
+  };
+}
+
+function placePlayerOnTile(player: PlayerState, tile: { x: number; y: number; index: number }): void {
+  player.x = tile.x * TILE_UNITS + TILE_UNITS / 2;
+  player.y = tile.y * TILE_UNITS + TILE_UNITS / 2;
+  player.previousX = player.x;
+  player.previousY = player.y;
+  player.velocityX = 0;
+  player.velocityY = 0;
+  player.currentTrace = [tile.index];
+  player.surveyTrace = [tile.index];
 }
 
 function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
@@ -287,6 +332,139 @@ describe("runtime clarity guards", () => {
     expect(runtime.getUIView().player.pace).toBe("rest");
     expect(runtime.getUIView().announcement?.message).toContain("pace returns ashore");
     runtime.destroy();
+  });
+
+  it("preserves a legitimately high-tide Tide anchor when its tidal flat reloads at low water", async () => {
+    const world = createWorld("receded anchor save", "calm");
+    const lowView = createWorldView(world);
+    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+    const tidalFlat = lowView.terrain.tiles.find(
+      (tile) => tile.terrain === "tidal-flat" && !settlementTiles.has(tile.index),
+    );
+    if (!tidalFlat) throw new Error("fixture did not generate an open tidal flat");
+    const context = wayknotContextAt(lowView, tidalFlat.index);
+    if (!context) throw new Error("fixture tidal flat has no Wayknot context");
+    const highTideDepth = Math.max(0, tideAtTick(360).level - tidalFlat.elevation);
+    expect(context.waterDepth).toBeLessThan(120_000);
+    expect(highTideDepth).toBeGreaterThanOrEqual(120_000);
+
+    const player = createPlayer(lowView);
+    const placed = placeWayknot(player.wayknots, "tide-anchor", {
+      ...context,
+      waterDepth: highTideDepth,
+    });
+    expect(placed.ok).toBe(true);
+    player.wayknots = placed.state;
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      player,
+      createSessionState(world.meta.seedText),
+      "Receded anchor",
+    ));
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getRenderView().wayknots).toEqual([
+      expect.objectContaining({ id: "3", kind: "tide-anchor" }),
+    ]);
+    await runtime.save();
+    expect(
+      decodeGameSave(repository.snapshot()).player.wayknots.wayknots
+        .find((wayknot) => wayknot.id === 3)?.tileIndex,
+    ).toBe(tidalFlat.index);
+    runtime.destroy();
+  });
+
+  it("returns malformed Tide anchors on permanently unsuitable meadow and ridge to the pack", async () => {
+    const world = createWorld("dry anchor repair", "calm");
+    const view = createWorldView(world);
+    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+    const meadow = view.terrain.tiles.find(
+      (tile) => tile.terrain === "meadow" && !settlementTiles.has(tile.index),
+    );
+    const ridge = view.terrain.tiles.find(
+      (tile) => tile.terrain === "ridge" && !settlementTiles.has(tile.index),
+    );
+    if (!meadow || !ridge) throw new Error("fixture did not generate open meadow and ridge tiles");
+    expect(meadow.waterDepth).toBeLessThan(120_000);
+    expect(ridge.waterDepth).toBeLessThan(120_000);
+
+    const player = createPlayer(view);
+    player.wayknots = {
+      ...player.wayknots,
+      wayknots: player.wayknots.wayknots.map((wayknot) => {
+        if (wayknot.id === 3) return { ...wayknot, tileIndex: meadow.index };
+        if (wayknot.id === 4) return { ...wayknot, tileIndex: ridge.index };
+        return wayknot;
+      }),
+    };
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      player,
+      createSessionState(world.meta.seedText),
+      "Dry malformed anchors",
+    ));
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getRenderView().wayknots).toEqual([]);
+    await runtime.save();
+    const repaired = decodeGameSave(repository.snapshot()).player.wayknots.wayknots;
+    expect(repaired.find((wayknot) => wayknot.id === 3)?.tileIndex).toBeNull();
+    expect(repaired.find((wayknot) => wayknot.id === 4)?.tileIndex).toBeNull();
+    runtime.destroy();
+  });
+
+  it("requires a sounding before binding a flooded non-channel anchor but still permits reclaim", async () => {
+    const world = runTicks(createWorld("sound before anchor", "calm"), 360);
+    const view = createWorldView(world);
+    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+    const flooded = view.terrain.tiles.find((tile) =>
+      tile.terrain !== "deep-water"
+      && tile.waterDepth >= 120_000
+      && !settlementTiles.has(tile.index),
+    );
+    if (!flooded) throw new Error("fixture did not generate sounded-anchor ground at high tide");
+    const player = createPlayer(view);
+    placePlayerOnTile(player, flooded);
+    player.depthSoundings[flooded.index] = 0;
+    const session = createSessionState(world.meta.seedText);
+    session.titleVisible = false;
+    session.paused = false;
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      player,
+      session,
+      "Unsounded flooded anchor",
+    ));
+
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchUI({ type: "wayknot" });
+    expect(runtime.getRenderView().wayknots).toEqual([]);
+    expect(runtime.getUIView().announcement?.message).toContain("Pulse Space first");
+
+    runtime.dispatchUI({ type: "scan" });
+    expect(runtime.getUIView().field.depthKnown).toBe(true);
+    runtime.dispatchUI({ type: "wayknot" });
+    expect(runtime.getRenderView().wayknots).toEqual([
+      expect.objectContaining({ id: "3", kind: "tide-anchor" }),
+    ]);
+    await runtime.save();
+    runtime.destroy();
+
+    const unsoundedRecord = repository.snapshot();
+    const unsoundedEnvelope = decodeGameSave(unsoundedRecord);
+    unsoundedEnvelope.player.depthSoundings[flooded.index] = 0;
+    unsoundedRecord.updatedAt += 1;
+    unsoundedRecord.worldJson = JSON.stringify(unsoundedEnvelope);
+    repository.replace(unsoundedRecord);
+
+    const resumed = await createTideweftRuntime(repository);
+    resumed.dispatchUI({ type: "resume-world" });
+    expect(resumed.getRenderView().wayknots).toHaveLength(1);
+    resumed.dispatchUI({ type: "wayknot" });
+    expect(resumed.getRenderView().wayknots).toEqual([]);
+    expect(resumed.getUIView().announcement?.message).toContain("reclaimed");
+    resumed.destroy();
   });
 
   it("collects a promise immediately when its action is used at the offer harbor", async () => {

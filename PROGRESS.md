@@ -124,3 +124,12 @@ Phase 9: the Wayknots post-alpha preview is verified and live; refinement is the
 - Watched both exact-commit GitHub CI and Pages workflows pass dependency installation, TypeScript, all 168 checks, production build, nested-path artifact smoke, upload, and deployment.
 - Confirmed the live HTTPS page and the precise `index-DFAeV3cN.js` / `index-BVBXIgMF.css` artifacts return successfully.
 - Kept the long-running build goal active; the next slice begins with save-delete resilience, tide-anchor reload truthfulness, sweep ETA accuracy, and sounded-depth action clarity found during the parallel review.
+
+## 2026-09-01 — Phase 9 post-publication truth pass
+
+- Added a separate, validated localStorage deletion journal so removing a slot remains authoritative when IndexedDB is down and after it recovers; stale callbacks cannot recreate it, while a strictly newer deliberate save can.
+- Made low-tide anchor migration depend on whether peak tide can genuinely reach placement depth at that elevation. Impossible high-marsh/meadow/ridge imports return the fixed piece to the pack.
+- Replaced start-tile sweep estimates with the exact fixed-step, tile-local pull used by live current recovery; generated tests now compare estimated ticks with actual ticks ashore after leaving an anchor field.
+- Made unsounded flooded non-channel terrain depth-neutral: button, ARIA, global F shortcut, canvas F runtime enforcement, and field hint all say to sound first; existing objects always remain reclaimable.
+- Added compact Wayknot status wrapping and focused accessibility/shortcut coverage, bringing the complete suite to 24 files / 178 checks.
+- Rebuilt and re-smoked Electron 44 with the physical 3D Reed mat, Chart/Relief round trip, 79px Promises viewport, 2,880 × 1,800 evidence frame, and zero renderer/resource errors.

@@ -10,6 +10,7 @@ import {
 } from "./persistence";
 
 const FALLBACK_KEY = "tideweft.saves.v1";
+const DELETION_KEY = "tideweft.save-deletions.v1";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -280,6 +281,73 @@ describe("IndexedDB runtime failover", () => {
     expect(primary.save).toHaveBeenCalledOnce();
     expect(fallback.save).toHaveBeenCalledTimes(2);
     expect(fallbackRecord).toEqual(second);
+  });
+
+  it("keeps a failed-primary deletion authoritative across repository instances", async () => {
+    const deletionStorage = new MemoryStorage();
+    vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const original = makeRecord({ updatedAt: 900, playTicks: 40, label: "Before deletion" });
+    let primaryAvailable = false;
+    let primaryRecord: SaveRecord | undefined = structuredClone(original);
+    let fallbackRecord: SaveRecord | undefined = structuredClone(original);
+    const primary: SaveRepository = {
+      list: vi.fn(async () => {
+        if (!primaryAvailable) throw new Error("IndexedDB transaction aborted");
+        return primaryRecord ? [summary(primaryRecord)] : [];
+      }),
+      load: vi.fn(async () => {
+        if (!primaryAvailable) throw new Error("IndexedDB transaction aborted");
+        return primaryRecord ? structuredClone(primaryRecord) : undefined;
+      }),
+      save: vi.fn(async (record) => {
+        if (!primaryAvailable) throw new Error("IndexedDB transaction aborted");
+        primaryRecord = structuredClone(record);
+      }),
+      remove: vi.fn(async () => {
+        if (!primaryAvailable) throw new Error("IndexedDB transaction aborted");
+        primaryRecord = undefined;
+      }),
+    };
+    const fallback: SaveRepository = {
+      list: vi.fn(async () => fallbackRecord ? [summary(fallbackRecord)] : []),
+      load: vi.fn(async () => fallbackRecord ? structuredClone(fallbackRecord) : undefined),
+      save: vi.fn(async (record) => { fallbackRecord = structuredClone(record); }),
+      remove: vi.fn(async () => { fallbackRecord = undefined; }),
+    };
+
+    const failedSession = createFailoverSaveRepository(primary, fallback, deletionStorage);
+    await expect(failedSession.load("autosave")).resolves.toEqual(original);
+    await failedSession.remove("autosave");
+
+    expect(primary.remove).not.toHaveBeenCalled();
+    expect(primaryRecord).toEqual(original);
+    expect(fallbackRecord).toBeUndefined();
+    expect(await failedSession.load("autosave")).toBeUndefined();
+    expect(await failedSession.list()).toEqual([]);
+    expect(JSON.parse(deletionStorage.getItem(DELETION_KEY) ?? "[]")).toEqual([
+      { slotId: "autosave", updatedAt: 1_000, playTicks: 0 },
+    ]);
+
+    primaryAvailable = true;
+    const recoveredSession = createFailoverSaveRepository(primary, fallback, deletionStorage);
+    expect(await recoveredSession.load("autosave")).toBeUndefined();
+    expect(await recoveredSession.list()).toEqual([]);
+
+    const staleSave = makeRecord({ updatedAt: 999, playTicks: 9_999, label: "Stale callback" });
+    await recoveredSession.save(staleSave);
+    expect(primary.save).not.toHaveBeenCalled();
+    expect(primaryRecord).toEqual(original);
+    expect(await recoveredSession.load("autosave")).toBeUndefined();
+
+    const recreated = makeRecord({ updatedAt: 1_001, playTicks: 1, label: "New crossing" });
+    await recoveredSession.save(recreated);
+    expect(primary.save).toHaveBeenCalledOnce();
+    expect(primaryRecord).toEqual(recreated);
+    expect(JSON.parse(deletionStorage.getItem(DELETION_KEY) ?? "[]")).toEqual([]);
+
+    const nextSession = createFailoverSaveRepository(primary, fallback, deletionStorage);
+    expect(await nextSession.load("autosave")).toEqual(recreated);
+    expect(await nextSession.list()).toEqual([summary(recreated)]);
   });
 });
 

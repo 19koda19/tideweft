@@ -234,6 +234,8 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
           : "Severe water drain";
   const hint = player.mode === "swept"
     ? `Current has the helm · ${Math.round(sweptProgress * 100)}% toward a safe bank. Pace, steering, and sounding return ashore; cargo remains with you.`
+    : depth > 20_000 && !depthKnown
+      ? "Sound this water first (Space). Depth changes stamina use and whether flooded ground takes a Reed mat or Tide anchor."
     : activeWayknotLabels.length >= 2
       ? `WAYCHORD · ${activeWayknotLabels.join(" + ")} overlap here. Their terrain effects remain distinct, while the harmony recharges the Loom faster.`
       : activeWayknotLabels[0] === WAYKNOT_LABELS["reed-mat"]
@@ -242,9 +244,7 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
           ? "A nearby Tide anchor is reducing water stamina cost and weakening any current sweep. Stand on its buoy and press F to reclaim it."
           : activeWayknotLabels[0] === WAYKNOT_LABELS["wind-knot"]
             ? "A nearby Wind knot is softening gust-driven stability loss. Stand at its mast and press F to reclaim it."
-            : depth > 20_000 && !depthKnown
-              ? "Use the sounding line (Space) from shore to reveal nearby depth before committing stamina."
-              : depth > 20_000
+            : depth > 20_000
                 ? `${titleCase(band)} water costs ${effort.toLocaleString()} extra stamina per movement step${player.tools.includes("tide-sail") ? "; the Tide sail is reducing it" : ""}. Empty stamina in deep water means a recoverable sweep.`
                 : tile?.terrain === "marsh" || tile?.terrain === "tidal-flat"
                   ? player.tools.includes("marsh-stilts")
@@ -278,6 +278,17 @@ function projectWayknotControl(world: WorldView, player: PlayerState) {
     };
   }
   const context = wayknotContextAt(world, tileIndex);
+  const needsLocalSounding = context !== undefined
+    && context.terrain !== "deep-water"
+    && context.waterDepth > 20_000
+    && (player.depthSoundings[tileIndex] ?? 0) <= 0;
+  if (needsLocalSounding) {
+    return {
+      available: false,
+      label: "Sound water first",
+      hint: "Sound this flooded ground with Space before using F. Outside an obvious tidal channel, the field kit waits for a sounding before choosing a Reed mat or Tide anchor.",
+    };
+  }
   const kind = context ? contextualWayknotKind(context) : null;
   if (!context || !kind) {
     return {

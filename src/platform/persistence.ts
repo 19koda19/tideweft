@@ -25,6 +25,25 @@ const DATABASE_NAME = "tideweft";
 const DATABASE_VERSION = 1;
 const SAVE_STORE = "saves";
 const FALLBACK_KEY = "tideweft.saves.v1";
+const DELETION_KEY = "tideweft.save-deletions.v1";
+
+/**
+ * A deletion is a version marker rather than a synthetic SaveRecord. Keeping
+ * it under a separate key means older builds continue to understand their
+ * existing save array and no tombstone can leak through SaveRepository.
+ */
+interface SaveDeletionTombstone {
+  readonly slotId: string;
+  readonly updatedAt: number;
+  readonly playTicks: number;
+}
+
+interface SaveDeletionJournal {
+  list(): Promise<SaveDeletionTombstone[]>;
+  load(slotId: string): Promise<SaveDeletionTombstone | undefined>;
+  save(tombstone: SaveDeletionTombstone): Promise<void>;
+  remove(slotId: string): Promise<void>;
+}
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -169,6 +188,112 @@ class LocalStorageSaveRepository implements SaveRepository {
   }
 }
 
+class MemoryDeletionJournal implements SaveDeletionJournal {
+  private readonly tombstones = new Map<string, SaveDeletionTombstone>();
+
+  async list(): Promise<SaveDeletionTombstone[]> {
+    return [...this.tombstones.values()].map((tombstone) => ({ ...tombstone }));
+  }
+
+  async load(slotId: string): Promise<SaveDeletionTombstone | undefined> {
+    const tombstone = this.tombstones.get(slotId);
+    return tombstone ? { ...tombstone } : undefined;
+  }
+
+  async save(tombstone: SaveDeletionTombstone): Promise<void> {
+    const existing = this.tombstones.get(tombstone.slotId);
+    if (!existing || isRecordNewer(tombstone, existing)) {
+      this.tombstones.set(tombstone.slotId, { ...tombstone });
+    }
+  }
+
+  async remove(slotId: string): Promise<void> {
+    this.tombstones.delete(slotId);
+  }
+}
+
+class LocalStorageDeletionJournal implements SaveDeletionJournal {
+  constructor(private readonly storage: Storage) {}
+
+  private read(): SaveDeletionTombstone[] {
+    const raw = this.storage.getItem(DELETION_KEY);
+    if (!raw) return [];
+    try {
+      const decoded = JSON.parse(raw) as unknown;
+      if (!Array.isArray(decoded)) return [];
+      const newest = new Map<string, SaveDeletionTombstone>();
+      for (const value of decoded) {
+        if (!isValidDeletionTombstone(value)) continue;
+        const existing = newest.get(value.slotId);
+        if (!existing || isRecordNewer(value, existing)) newest.set(value.slotId, value);
+      }
+      return [...newest.values()];
+    } catch {
+      return [];
+    }
+  }
+
+  private write(tombstones: readonly SaveDeletionTombstone[]): void {
+    this.storage.setItem(DELETION_KEY, JSON.stringify(tombstones));
+  }
+
+  async list(): Promise<SaveDeletionTombstone[]> {
+    return this.read().map((tombstone) => ({ ...tombstone }));
+  }
+
+  async load(slotId: string): Promise<SaveDeletionTombstone | undefined> {
+    const tombstone = this.read().find((candidate) => candidate.slotId === slotId);
+    return tombstone ? { ...tombstone } : undefined;
+  }
+
+  async save(tombstone: SaveDeletionTombstone): Promise<void> {
+    const stored = this.read();
+    const existing = stored.find((candidate) => candidate.slotId === tombstone.slotId);
+    if (existing && !isRecordNewer(tombstone, existing)) return;
+    this.write([
+      ...stored.filter((candidate) => candidate.slotId !== tombstone.slotId),
+      { ...tombstone },
+    ]);
+  }
+
+  async remove(slotId: string): Promise<void> {
+    this.write(this.read().filter((tombstone) => tombstone.slotId !== slotId));
+  }
+}
+
+/** Applies the same durable deletion semantics when IndexedDB is unavailable. */
+class JournaledSaveRepository implements SaveRepository {
+  constructor(
+    private readonly repository: SaveRepository,
+    private readonly deletions: SaveDeletionJournal,
+  ) {}
+
+  async list(): Promise<SaveSummary[]> {
+    return filterDeletedSummaries(await this.repository.list(), this.deletions);
+  }
+
+  async load(slotId: string): Promise<SaveRecord | undefined> {
+    return filterDeletedRecord(await this.repository.load(slotId), this.deletions);
+  }
+
+  async save(record: SaveRecord): Promise<void> {
+    validateRecord(record);
+    const tombstone = await this.deletions.load(record.slotId);
+    if (tombstone && !isRecordNewer(record, tombstone)) return;
+    await this.repository.save(record);
+    if (tombstone) await clearDeletionBestEffort(this.deletions, record.slotId);
+  }
+
+  async remove(slotId: string): Promise<void> {
+    const existing = await this.repository.load(slotId).catch(() => undefined);
+    const tombstone = await deletionTombstone(slotId, this.deletions, [existing]);
+    await this.deletions.save(tombstone);
+    // The journal is now authoritative. Physical cleanup is best effort so a
+    // backend outage cannot turn a completed delete into a later resurrection.
+    await this.repository.remove(slotId).catch(() => undefined);
+  }
+}
+
 /**
  * IndexedDB remains the roomy primary store, while localStorage is a small,
  * synchronous browser-owned lifeboat. Reading both stores prevents a newer
@@ -184,54 +309,62 @@ class FailoverSaveRepository implements SaveRepository {
   constructor(
     private readonly primary: SaveRepository,
     private readonly fallback: SaveRepository,
+    private readonly deletions: SaveDeletionJournal,
   ) {}
 
   async list(): Promise<SaveSummary[]> {
-    if (this.primaryFailed) return this.fallback.list();
+    if (this.primaryFailed) {
+      return filterDeletedSummaries(await this.fallback.list(), this.deletions);
+    }
 
     let primary: SaveSummary[];
     try {
       primary = await this.primary.list();
     } catch {
       this.primaryFailed = true;
-      return this.fallback.list();
+      return filterDeletedSummaries(await this.fallback.list(), this.deletions);
     }
 
     let fallback: SaveSummary[];
     try {
       fallback = await this.fallback.list();
     } catch {
-      return primary;
+      return filterDeletedSummaries(primary, this.deletions);
     }
-    return mergeNewest(primary, fallback);
+    return filterDeletedSummaries(mergeNewest(primary, fallback), this.deletions);
   }
 
   async load(slotId: string): Promise<SaveRecord | undefined> {
-    if (this.primaryFailed) return cloneRecord(await this.fallback.load(slotId));
+    if (this.primaryFailed) {
+      return filterDeletedRecord(await this.fallback.load(slotId), this.deletions);
+    }
 
     let primary: SaveRecord | undefined;
     try {
       primary = await this.primary.load(slotId);
     } catch {
       this.primaryFailed = true;
-      return cloneRecord(await this.fallback.load(slotId));
+      return filterDeletedRecord(await this.fallback.load(slotId), this.deletions);
     }
 
     let fallback: SaveRecord | undefined;
     try {
       fallback = await this.fallback.load(slotId);
     } catch {
-      return cloneRecord(primary);
+      return filterDeletedRecord(primary, this.deletions);
     }
     const newest = newestRecord(primary, fallback);
-    return cloneRecord(newest);
+    return filterDeletedRecord(newest, this.deletions);
   }
 
   async save(record: SaveRecord): Promise<void> {
     validateRecord(record);
     const snapshot = structuredClone(record);
+    const tombstone = await this.deletions.load(snapshot.slotId);
+    if (tombstone && !isRecordNewer(snapshot, tombstone)) return;
     if (this.primaryFailed) {
       await this.fallback.save(snapshot);
+      if (tombstone) await clearDeletionBestEffort(this.deletions, snapshot.slotId);
       return;
     }
 
@@ -239,7 +372,10 @@ class FailoverSaveRepository implements SaveRepository {
     // previous session successfully reached the fallback during an outage.
     try {
       const fallbackRecord = await this.fallback.load(snapshot.slotId);
-      if (fallbackRecord && isRecordNewer(fallbackRecord, snapshot)) return;
+      if (fallbackRecord && isRecordNewer(fallbackRecord, snapshot)) {
+        if (tombstone) await clearDeletionBestEffort(this.deletions, snapshot.slotId);
+        return;
+      }
     } catch {
       // A working primary is still useful when localStorage is unavailable or
       // over quota. A primary failure below will surface the fallback error.
@@ -251,29 +387,40 @@ class FailoverSaveRepository implements SaveRepository {
       this.primaryFailed = true;
       await this.fallback.save(structuredClone(snapshot));
     }
+    if (tombstone) await clearDeletionBestEffort(this.deletions, snapshot.slotId);
   }
 
   async remove(slotId: string): Promise<void> {
-    if (this.primaryFailed) {
-      await this.fallback.remove(slotId);
-      return;
+    let primaryRecord: SaveRecord | undefined;
+    if (!this.primaryFailed) {
+      try {
+        primaryRecord = await this.primary.load(slotId);
+      } catch {
+        this.primaryFailed = true;
+      }
     }
+    const fallbackRecord = await this.fallback.load(slotId).catch(() => undefined);
+    const tombstone = await deletionTombstone(
+      slotId,
+      this.deletions,
+      [primaryRecord, fallbackRecord],
+    );
+    // Persist first. Even if the failed backend cannot physically delete its
+    // stale copy, every later repository instance will suppress that copy.
+    await this.deletions.save(tombstone);
 
-    try {
-      await this.primary.remove(slotId);
-    } catch {
-      this.primaryFailed = true;
-      await this.fallback.remove(slotId);
-      return;
+    if (!this.primaryFailed) {
+      try {
+        await this.primary.remove(slotId);
+      } catch {
+        this.primaryFailed = true;
+      }
     }
-
-    // Remove any older emergency copy too, or a merged read could resurrect a
-    // slot that the player deliberately deleted.
     try {
       await this.fallback.remove(slotId);
     } catch {
-      // The authoritative IndexedDB deletion succeeded. If localStorage is
-      // unavailable, there is no readable fallback to resurrect in this run.
+      // The tombstone is durable, so an undeleted physical fallback remains
+      // invisible and can be cleaned by a future successful remove.
     }
   }
 }
@@ -281,18 +428,32 @@ class FailoverSaveRepository implements SaveRepository {
 export function createFailoverSaveRepository(
   primary: SaveRepository,
   fallback: SaveRepository,
+  deletionStorage?: Storage,
 ): SaveRepository {
-  return new FailoverSaveRepository(primary, fallback);
+  const deletions = deletionStorage
+    ? new LocalStorageDeletionJournal(deletionStorage)
+    : new MemoryDeletionJournal();
+  return new FailoverSaveRepository(primary, fallback, deletions);
 }
 
 export function createSaveRepository(): SaveRepository {
-  const fallback = availableLocalStorage();
+  const fallbackStorage = availableLocalStorage();
+  const fallback = fallbackStorage
+    ? new LocalStorageSaveRepository(fallbackStorage)
+    : undefined;
   if (typeof indexedDB === "undefined") {
-    if (fallback) return fallback;
+    if (fallback && fallbackStorage) {
+      return new JournaledSaveRepository(
+        fallback,
+        new LocalStorageDeletionJournal(fallbackStorage),
+      );
+    }
     throw new Error("This browser does not provide persistent save storage.");
   }
   const primary = new IndexedDbSaveRepository();
-  return fallback ? createFailoverSaveRepository(primary, fallback) : primary;
+  return fallback && fallbackStorage
+    ? createFailoverSaveRepository(primary, fallback, fallbackStorage)
+    : primary;
 }
 
 export function exportSave(record: SaveRecord): void {
@@ -350,10 +511,88 @@ function isValidSaveRecord(value: unknown): value is SaveRecord {
   }
 }
 
-function availableLocalStorage(): SaveRepository | undefined {
+function isValidSlotId(slotId: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{0,63}$/.test(slotId);
+}
+
+function isValidDeletionTombstone(value: unknown): value is SaveDeletionTombstone {
+  if (!value || typeof value !== "object") return false;
+  const tombstone = value as Partial<SaveDeletionTombstone>;
+  return (
+    typeof tombstone.slotId === "string" &&
+    isValidSlotId(tombstone.slotId) &&
+    Number.isSafeInteger(tombstone.updatedAt) &&
+    (tombstone.updatedAt ?? -1) >= 0 &&
+    Number.isSafeInteger(tombstone.playTicks) &&
+    (tombstone.playTicks ?? -1) >= 0
+  );
+}
+
+async function deletionTombstone(
+  slotId: string,
+  deletions: SaveDeletionJournal,
+  records: readonly (Pick<SaveRecord, "updatedAt" | "playTicks"> | undefined)[],
+): Promise<SaveDeletionTombstone> {
+  if (!isValidSlotId(slotId)) throw new Error("Invalid save slot identifier.");
+  const now = Date.now();
+  let newest: SaveDeletionTombstone = {
+    slotId,
+    updatedAt: Number.isSafeInteger(now) && now >= 0 ? now : 0,
+    playTicks: 0,
+  };
+  const existing = await deletions.load(slotId);
+  for (const version of [existing, ...records]) {
+    if (version && isRecordNewer(version, newest)) {
+      newest = { slotId, updatedAt: version.updatedAt, playTicks: version.playTicks };
+    }
+  }
+  return newest;
+}
+
+async function clearDeletionBestEffort(
+  deletions: SaveDeletionJournal,
+  slotId: string,
+): Promise<void> {
+  try {
+    await deletions.remove(slotId);
+  } catch {
+    // A newer record remains visible by version even if journal cleanup fails.
+  }
+}
+
+async function filterDeletedRecord(
+  record: SaveRecord | undefined,
+  deletions: SaveDeletionJournal,
+): Promise<SaveRecord | undefined> {
+  if (!record) return undefined;
+  const tombstone = await deletions.load(record.slotId);
+  if (!tombstone) return cloneRecord(record);
+  if (!isRecordNewer(record, tombstone)) return undefined;
+  await clearDeletionBestEffort(deletions, record.slotId);
+  return cloneRecord(record);
+}
+
+async function filterDeletedSummaries(
+  summaries: readonly SaveSummary[],
+  deletions: SaveDeletionJournal,
+): Promise<SaveSummary[]> {
+  const tombstones = new Map(
+    (await deletions.list()).map((tombstone) => [tombstone.slotId, tombstone] as const),
+  );
+  const visible: SaveSummary[] = [];
+  for (const summary of summaries) {
+    const tombstone = tombstones.get(summary.slotId);
+    if (tombstone && !isRecordNewer(summary, tombstone)) continue;
+    if (tombstone) await clearDeletionBestEffort(deletions, summary.slotId);
+    visible.push(structuredClone(summary));
+  }
+  return visible;
+}
+
+function availableLocalStorage(): Storage | undefined {
   try {
     if (typeof localStorage === "undefined") return undefined;
-    return new LocalStorageSaveRepository(localStorage);
+    return localStorage;
   } catch {
     return undefined;
   }
@@ -393,7 +632,7 @@ function mergeNewest(primary: SaveSummary[], fallback: SaveSummary[]): SaveSumma
 
 function validateRecord(record: SaveRecord): void {
   if (!isSaveRecord(record)) throw new Error("Save record is missing required fields.");
-  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(record.slotId)) throw new Error("Invalid save slot identifier.");
+  if (!isValidSlotId(record.slotId)) throw new Error("Invalid save slot identifier.");
   if (record.label.length > 80 || record.seed.length > 128) throw new Error("Save metadata is too long.");
   for (const value of [record.updatedAt, record.playTicks, record.settlementCount, record.connectedCount]) {
     if (!Number.isSafeInteger(value) || value < 0) throw new Error("Save metadata contains an invalid number.");

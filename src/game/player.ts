@@ -406,10 +406,13 @@ export function stepPlayer(
     const currentTile = world.terrain.tiles[currentTileIndex];
     sweepSupport = sweepSupportAtTile(world, currentTileIndex);
     if ((currentTile?.waterDepth ?? 0) >= SWEEP_DEPTH_THRESHOLD && sweepSupport !== "clinic") {
+      // The presentation estimate and live drift must begin with the same
+      // infrastructure support. Previously the first estimate was calculated
+      // before ferry support reached player state, so its ETA was pessimistic.
+      player.sweepSupport = sweepSupport;
       player.sweepPath = findSweepPath(world, currentTileIndex);
       player.sweepTotalTicks = estimateSweepTicks(player, world, player.sweepPath);
       player.sweepTicksRemaining = player.sweepTotalTicks;
-      player.sweepSupport = sweepSupport;
       player.mode = "swept";
       player.pace = "rest";
       player.velocityX = 0;
@@ -795,15 +798,22 @@ function stepSweptPlayer(
 }
 
 function sweepStepSpeed(player: PlayerState, world: WorldView): number {
+  return sweepStepSpeedAtTile(player, world, playerTileIndex(player));
+}
+
+function sweepStepSpeedAtTile(
+  player: PlayerState,
+  world: WorldView,
+  tileIndex: number,
+): number {
   const infrastructure = player.sweepSupport === "ferry" ? 80 : 0;
   const kite = hasFieldTool(player, "storm-kite") ? 55 : 0;
-  const currentEffects = wayknotEffectsAt(player, world, playerTileIndex(player));
+  const currentEffects = wayknotEffectsAt(player, world, tileIndex);
   const anchorPull = Math.floor((WAYKNOT_PERMILLE - currentEffects.sweepRiskPermille) * 0.3);
   return 180 + infrastructure + kite + anchorPull;
 }
 
 function estimateSweepTicks(player: PlayerState, world: WorldView, path: readonly number[]): number {
-  const speed = Math.max(1, sweepStepSpeed(player, world));
   let x = player.x;
   let y = player.y;
   let ticks = 0;
@@ -812,9 +822,41 @@ function estimateSweepTicks(player: PlayerState, world: WorldView, path: readonl
     if (!tile) continue;
     const targetX = tile.x * TILE_UNITS + TILE_UNITS / 2;
     const targetY = tile.y * TILE_UNITS + TILE_UNITS / 2;
-    ticks += Math.max(1, Math.ceil(Math.hypot(targetX - x, targetY - y) / speed));
-    x = targetX;
-    y = targetY;
+    // Mirror the live 100 ms drift rather than applying the starting tile's
+    // Tide-anchor pull to the whole route. A segment can cross an influence
+    // boundary before reaching its next tile center, so sample the simulated
+    // position each step just as stepSweptPlayer does.
+    while (true) {
+      const dx = targetX - x;
+      const dy = targetY - y;
+      const distance = Math.max(1, Math.hypot(dx, dy));
+      const currentTileIndex = tileIndexAt(
+        x,
+        y,
+        world.terrain.width,
+        world.terrain.height,
+      );
+      const speed = Math.min(
+        distance,
+        Math.max(1, sweepStepSpeedAtTile(player, world, currentTileIndex)),
+      );
+      x = clamp(
+        x + Math.round((dx / distance) * speed),
+        TILE_UNITS / 2,
+        world.terrain.width * TILE_UNITS - TILE_UNITS / 2,
+      );
+      y = clamp(
+        y + Math.round((dy / distance) * speed),
+        TILE_UNITS / 2,
+        world.terrain.height * TILE_UNITS - TILE_UNITS / 2,
+      );
+      ticks += 1;
+      if (distance <= speed) {
+        x = targetX;
+        y = targetY;
+        break;
+      }
+    }
   }
   return Math.max(1, ticks);
 }
