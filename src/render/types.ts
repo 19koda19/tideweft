@@ -32,6 +32,8 @@ export interface TerrainTileView {
   readonly moisture?: number;
   /** Current normalized water depth. If omitted, the renderer derives it from tide/elevation. */
   readonly waterDepth?: number;
+  /** Confidence from physical sounding, where 0 is unknown and 1 is freshly measured. */
+  readonly depthKnown?: number;
   /** 0 is hidden, 1 is fully charted. */
   readonly discovered?: number;
   /** Strength of incidental foot/wake traffic through this tile. */
@@ -125,12 +127,16 @@ export interface PlayerView {
   readonly stability: number;
   readonly scanCharge: number;
   readonly scanProgress?: number;
+  /** 0 at the start of an involuntary current drift, 1 on reaching shore. */
+  readonly sweptProgress?: number;
   readonly cargoLoad: number;
   readonly cargoCapacity: number;
   readonly cargo: readonly CargoStackView[];
   readonly pace: PaceView;
-  readonly mode: "foot" | "skiff" | "camp" | "rescued";
+  readonly mode: "foot" | "wading" | "skiff" | "swept" | "camp" | "rescued";
   readonly destination?: WorldPoint;
+  /** Explicit world-marker copy, such as PICK UP CARGO or DELIVER CARGO. */
+  readonly destinationLabel?: string;
   readonly active?: boolean;
 }
 
@@ -147,6 +153,19 @@ export interface RouteView {
   readonly traffic?: number;
   readonly selected?: boolean;
   readonly directional?: boolean;
+}
+
+/** A persistent map memory left by an awakened loop of shared routes. */
+export interface TideChoirMemoryView {
+  readonly id: string;
+  /** Every member corridor, in its authoritative route direction. */
+  readonly routePaths: readonly (readonly WorldPoint[])[];
+  /** Harbors participating in the loop. */
+  readonly harborPoints: readonly WorldPoint[];
+  /** Whole simulation ticks elapsed since the choir awakened. */
+  readonly age: number;
+  readonly emphasis: "quiet" | "normal" | "strong";
+  readonly label: string;
 }
 
 export interface TraceView {
@@ -212,6 +231,7 @@ export interface TideweftView {
   readonly settlements: readonly SettlementView[];
   readonly player: PlayerView;
   readonly routes: readonly RouteView[];
+  readonly choirs: readonly TideChoirMemoryView[];
   readonly traces: readonly TraceView[];
   readonly porters: readonly PorterView[];
   readonly particles?: readonly ParticleView[];
@@ -249,4 +269,7 @@ export interface TideweftRendererController {
   readonly resize: () => void;
   readonly focusWorld: (point: WorldPoint, zoom?: number) => void;
   readonly pulseScan: (point?: WorldPoint) => void;
+  /** Optional on leaf renderers; the composed renderer uses it to stop hidden draw loops. */
+  readonly isActive?: () => boolean;
+  readonly setActive?: (active: boolean) => void;
 }

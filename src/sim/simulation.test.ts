@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   FIXED_POINT,
+  MIN_SETTLEMENT_MANHATTAN_DISTANCE,
   RESOURCE_KINDS,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
   assertWorldInvariants,
   createWorld,
   createWorldView,
@@ -42,15 +45,18 @@ describe("deterministic headless world", () => {
   it("generates the required tidal vertical-slice state", () => {
     const world = createWorld("first lantern");
     assertWorldInvariants(world);
-    expect(world.terrain.width).toBe(64);
-    expect(world.terrain.height).toBe(48);
-    expect(world.terrain.tiles).toHaveLength(64 * 48);
+    expect(world.terrain.width).toBe(WORLD_WIDTH);
+    expect(world.terrain.height).toBe(WORLD_HEIGHT);
+    expect(world.terrain.tiles).toHaveLength(WORLD_WIDTH * WORLD_HEIGHT);
     expect(world.settlements).toHaveLength(7);
     expect(world.residents).toHaveLength(42);
     expect(new Set(world.residents.map((resident) => resident.name)).size).toBe(42);
     expect(world.routes).toHaveLength(21);
     expect(world.contracts.length).toBeGreaterThanOrEqual(3);
     expect(world.contracts.every((contract) => contract.playerExclusiveUntilTick >= 300)).toBe(true);
+
+    const worldCreated = world.events.find((event) => event.type === "world-created");
+    expect(worldCreated?.data).toMatchObject({ width: WORLD_WIDTH, height: WORLD_HEIGHT });
 
     const view = createWorldView(world);
     expect(view.terrain.tiles.some((tile) => tile.waterDepth > 0)).toBe(true);
@@ -208,6 +214,23 @@ describe("deterministic headless world", () => {
     expect(first.terrain.tiles.map((tile) => tile.elevation)).not.toEqual(
       second.terrain.tiles.map((tile) => tile.elevation),
     );
+  });
+
+  it("keeps every harbor materially separated across a deterministic seed sample", () => {
+    for (let seedIndex = 0; seedIndex < 32; seedIndex += 1) {
+      const world = createWorld(`wide-estuary-${seedIndex}`);
+      for (let leftIndex = 0; leftIndex < world.settlements.length; leftIndex += 1) {
+        const left = world.terrain.tiles[world.settlements[leftIndex]?.tileIndex ?? -1];
+        if (left === undefined) throw new Error("missing left settlement tile");
+        for (let rightIndex = leftIndex + 1; rightIndex < world.settlements.length; rightIndex += 1) {
+          const right = world.terrain.tiles[world.settlements[rightIndex]?.tileIndex ?? -1];
+          if (right === undefined) throw new Error("missing right settlement tile");
+          expect(Math.abs(left.x - right.x) + Math.abs(left.y - right.y)).toBeGreaterThanOrEqual(
+            MIN_SETTLEMENT_MANHATTAN_DISTANCE,
+          );
+        }
+      }
+    }
   });
 
   it("always generates starter promises that fit the sixteen-unit pack", () => {

@@ -10,6 +10,7 @@ import {
   type PressureMode,
   type ResidentState,
   type ResourceKind,
+  type RouteState,
   type SimCommand,
   type SimEventDatum,
   type SimEventType,
@@ -26,6 +27,24 @@ const CONTRACT_TARGET_STOCK = 46;
 const CONTRACT_DONOR_RESERVE = 54;
 const CONTRACT_OFFER_LIMIT = 18;
 const MAX_TERMINAL_CONTRACT_HISTORY = 256;
+
+/** A traced corridor must be substantially followed before traffic can strengthen it. */
+export const MIN_ROUTE_REINFORCEMENT_COVERAGE = 700_000;
+export const TIDE_CHOIR_CONDITION_BONUS = 30_000;
+export const TIDE_CHOIR_RELIABILITY_BONUS = 40_000;
+
+export interface RouteTraceCoverage {
+  routeId: number;
+  coverage: number;
+}
+
+type RouteCoverageWorld = {
+  readonly terrain: {
+    readonly tiles: readonly { readonly x: number; readonly y: number }[];
+  };
+};
+
+type RouteCoveragePath = Pick<RouteState, "path">;
 
 function playerCarryLimit(resource: ResourceKind): number {
   switch (resource) {
@@ -187,6 +206,149 @@ function deliveryGrade(condition: number): DeliveryGrade {
   return "rescued";
 }
 
+function tileIndicesAreAdjacent(
+  world: RouteCoverageWorld,
+  leftIndex: number,
+  rightIndex: number,
+): boolean {
+  const left = world.terrain.tiles[leftIndex];
+  const right = world.terrain.tiles[rightIndex];
+  return left !== undefined
+    && right !== undefined
+    && Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y)) <= 1;
+}
+
+function corridorCoverageInRange(
+  world: RouteCoverageWorld,
+  route: RouteCoveragePath,
+  trace: readonly number[],
+  firstTraceIndex: number,
+  lastTraceIndex: number,
+): number {
+  const tileIsCovered = (routeTileIndex: number): boolean => {
+    for (let traceIndex = firstTraceIndex; traceIndex <= lastTraceIndex; traceIndex += 1) {
+      const traceTileIndex = trace[traceIndex];
+      if (traceTileIndex !== undefined && tileIndicesAreAdjacent(world, routeTileIndex, traceTileIndex)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  let longestCoveredRun = 0;
+  let coveredRun = 0;
+  for (let routeIndex = 1; routeIndex < route.path.length; routeIndex += 1) {
+    const previousRouteTile = route.path[routeIndex - 1];
+    const routeTile = route.path[routeIndex];
+    if (
+      previousRouteTile !== undefined
+      && routeTile !== undefined
+      && tileIsCovered(previousRouteTile)
+      && tileIsCovered(routeTile)
+    ) {
+      coveredRun += 1;
+      longestCoveredRun = Math.max(longestCoveredRun, coveredRun);
+    } else {
+      coveredRun = 0;
+    }
+  }
+  return Math.trunc((longestCoveredRun * FIXED_POINT) / (route.path.length - 1));
+}
+
+/**
+ * Measures how much of a harbor-to-harbor route corridor a tile trace actually
+ * followed. Both route endpoints must be reached (their eight neighboring
+ * tiles count), and only the trace section between those endpoint visits is
+ * measured. This keeps a remote detour from strengthening a nominal shortcut
+ * while allowing a natural diagonal crossing beside an orthogonal route path.
+ */
+export function calculateRouteTraceCoverage(
+  world: RouteCoverageWorld,
+  route: RouteCoveragePath,
+  trace: readonly number[],
+): number {
+  if (route.path.length < 2 || trace.length < 2) return 0;
+  for (const tileIndex of route.path) {
+    if (!Number.isSafeInteger(tileIndex) || world.terrain.tiles[tileIndex] === undefined) return 0;
+  }
+  for (const tileIndex of trace) {
+    if (!Number.isSafeInteger(tileIndex) || world.terrain.tiles[tileIndex] === undefined) return 0;
+  }
+
+  const firstRouteTile = route.path[0];
+  const lastRouteTile = route.path[route.path.length - 1];
+  if (firstRouteTile === undefined || lastRouteTile === undefined) return 0;
+
+  const firstEndpointHits: number[] = [];
+  const lastEndpointHits: number[] = [];
+  for (let index = 0; index < trace.length; index += 1) {
+    const traceTile = trace[index];
+    if (traceTile === undefined) continue;
+    if (tileIndicesAreAdjacent(world, firstRouteTile, traceTile)) firstEndpointHits.push(index);
+    if (tileIndicesAreAdjacent(world, lastRouteTile, traceTile)) lastEndpointHits.push(index);
+  }
+
+  let bestCoverage = 0;
+  const measureOrientation = (starts: readonly number[], ends: readonly number[]): void => {
+    const first = starts[0];
+    const last = ends[ends.length - 1];
+    if (first === undefined || last === undefined || first >= last) return;
+    bestCoverage = Math.max(
+      bestCoverage,
+      corridorCoverageInRange(world, route, trace, first, last),
+    );
+  };
+  measureOrientation(firstEndpointHits, lastEndpointHits);
+  measureOrientation(lastEndpointHits, firstEndpointHits);
+  return bestCoverage;
+}
+
+/** Returns only substantially traversed routes, in stable route-ID order. */
+export function findTraceReinforcedRoutes(
+  world: RouteCoverageWorld & {
+    readonly settlements: readonly { readonly id: number; readonly tileIndex: number }[];
+    readonly routes: readonly RouteState[];
+  },
+  trace: readonly number[],
+): RouteTraceCoverage[] {
+  const settlementByTile = new Map(
+    world.settlements.map((settlement) => [settlement.tileIndex, settlement.id] as const),
+  );
+  const checkpoints: { settlementId: number; traceIndex: number }[] = [];
+  for (let traceIndex = 0; traceIndex < trace.length; traceIndex += 1) {
+    const tileIndex = trace[traceIndex];
+    const settlementId = tileIndex === undefined ? undefined : settlementByTile.get(tileIndex);
+    if (settlementId === undefined) continue;
+    const previous = checkpoints[checkpoints.length - 1];
+    if (previous?.settlementId === settlementId) previous.traceIndex = traceIndex;
+    else checkpoints.push({ settlementId, traceIndex });
+  }
+
+  const coverageByRouteId = new Map<number, number>();
+  for (let checkpointIndex = 1; checkpointIndex < checkpoints.length; checkpointIndex += 1) {
+    const from = checkpoints[checkpointIndex - 1];
+    const to = checkpoints[checkpointIndex];
+    if (from === undefined || to === undefined || from.settlementId === to.settlementId) continue;
+    const low = Math.min(from.settlementId, to.settlementId);
+    const high = Math.max(from.settlementId, to.settlementId);
+    const route = world.routes.find(
+      (candidate) => candidate.fromSettlementId === low && candidate.toSettlementId === high,
+    );
+    if (route === undefined) continue;
+    const coverage = calculateRouteTraceCoverage(
+      world,
+      route,
+      trace.slice(from.traceIndex, to.traceIndex + 1),
+    );
+    if (coverage < MIN_ROUTE_REINFORCEMENT_COVERAGE) continue;
+    coverageByRouteId.set(route.id, Math.max(coverageByRouteId.get(route.id) ?? 0, coverage));
+  }
+
+  return [...coverageByRouteId]
+    .map(([routeId, coverage]) => ({ routeId, coverage }))
+    .sort((left, right) => left.routeId - right.routeId);
+}
+
 function validateTrace(world: WorldState, contract: ContractState, trace: readonly number[]): string | null {
   if (trace.length < 2 || trace.length > world.terrain.tiles.length * 2) return "trace length is invalid";
   const origin = settlementById(world, contract.originSettlementId);
@@ -242,6 +404,85 @@ function reinforceRoute(world: WorldState, command: Extract<SimCommand, { type: 
     parts: command.parts,
     traceStrength: route.traceStrength,
     condition: route.condition,
+  });
+  return null;
+}
+
+function awakenTideChoir(
+  world: WorldState,
+  command: Extract<SimCommand, { type: "awaken-tide-choir" }>,
+  tick: number,
+): string | null {
+  if (!Array.isArray(command.routeIds) || command.routeIds.length < 3 || command.routeIds.length > 7) {
+    return "a tide choir must contain 3 to 7 routes";
+  }
+  if (command.routeIds.some((routeId) => !Number.isSafeInteger(routeId) || routeId <= 0)) {
+    return "tide choir route IDs must be positive safe integers";
+  }
+  const routeIds = [...command.routeIds].sort((left, right) => left - right);
+  if (new Set(routeIds).size !== routeIds.length) return "a tide choir cannot repeat a route";
+  const routes = routeIds.map((routeId) => world.routes.find((route) => route.id === routeId));
+  if (routes.some((route) => route === undefined)) return "tide choir route does not exist";
+
+  const degreeBySettlement = new Map<number, number>();
+  const neighborsBySettlement = new Map<number, number[]>();
+  for (const route of routes) {
+    if (route === undefined) continue;
+    degreeBySettlement.set(route.fromSettlementId, (degreeBySettlement.get(route.fromSettlementId) ?? 0) + 1);
+    degreeBySettlement.set(route.toSettlementId, (degreeBySettlement.get(route.toSettlementId) ?? 0) + 1);
+    const fromNeighbors = neighborsBySettlement.get(route.fromSettlementId) ?? [];
+    fromNeighbors.push(route.toSettlementId);
+    neighborsBySettlement.set(route.fromSettlementId, fromNeighbors);
+    const toNeighbors = neighborsBySettlement.get(route.toSettlementId) ?? [];
+    toNeighbors.push(route.fromSettlementId);
+    neighborsBySettlement.set(route.toSettlementId, toNeighbors);
+  }
+  const settlementIds = [...degreeBySettlement.keys()].sort((left, right) => left - right);
+  if (
+    settlementIds.length !== routeIds.length
+    || settlementIds.some((settlementId) => degreeBySettlement.get(settlementId) !== 2)
+  ) {
+    return "tide choir routes must form one simple cycle";
+  }
+  const visited = new Set<number>();
+  const pending = settlementIds[0] === undefined ? [] : [settlementIds[0]];
+  while (pending.length > 0) {
+    const settlementId = pending.pop();
+    if (settlementId === undefined || visited.has(settlementId)) continue;
+    visited.add(settlementId);
+    for (const neighbor of neighborsBySettlement.get(settlementId) ?? []) {
+      if (!visited.has(neighbor)) pending.push(neighbor);
+    }
+  }
+  if (visited.size !== settlementIds.length) return "tide choir routes must form one connected cycle";
+
+  const signature = routeIds.join(",");
+  if (world.choirs.some((choir) => choir.routeIds.join(",") === signature)) {
+    return "that tide choir is already awake";
+  }
+
+  const choir = {
+    id: world.meta.nextEntityId,
+    routeIds,
+    settlementIds,
+    awakenedTick: tick,
+  };
+  world.meta.nextEntityId += 1;
+  world.choirs.push(choir);
+  for (const route of routes) {
+    if (route === undefined) continue;
+    route.condition = clampInteger(route.condition + TIDE_CHOIR_CONDITION_BONUS);
+    route.reliability = clampInteger(route.reliability + TIDE_CHOIR_RELIABILITY_BONUS);
+  }
+  emitEvent(world, tick, "tide-choir-awakened", choir.id, {
+    commandId: command.id,
+    choirId: choir.id,
+    routeCount: routeIds.length,
+    routeIds: signature,
+    settlementCount: settlementIds.length,
+    settlementIds: settlementIds.join(","),
+    conditionBonus: TIDE_CHOIR_CONDITION_BONUS,
+    reliabilityBonus: TIDE_CHOIR_RELIABILITY_BONUS,
   });
   return null;
 }
@@ -355,10 +596,12 @@ function applyCommands(world: WorldState, commands: readonly SimCommand[], tick:
           error = "delivery is at the wrong settlement";
         } else if (!Number.isSafeInteger(command.condition) || command.condition < 0 || command.condition > FIXED_POINT) {
           error = "delivery condition must be an integer from 0 to 1,000,000";
-        } else if (command.trace !== undefined && validateTrace(world, contract, command.trace) !== null) {
-          error = validateTrace(world, contract, command.trace);
+        } else if (command.trace === undefined) {
+          error = "player delivery requires a traveled trace";
         } else {
-          completeContract(world, contract, tick, command.condition, command.trace);
+          const traceError = validateTrace(world, contract, command.trace);
+          if (traceError !== null) error = traceError;
+          else completeContract(world, contract, tick, command.condition, command.trace);
         }
         break;
       }
@@ -396,6 +639,9 @@ function applyCommands(world: WorldState, commands: readonly SimCommand[], tick:
       }
       case "reinforce-route":
         error = reinforceRoute(world, command, tick);
+        break;
+      case "awaken-tide-choir":
+        error = awakenTideChoir(world, command, tick);
         break;
       case "share-knowledge":
         error = shareKnowledge(world, command, tick);
@@ -869,25 +1115,34 @@ function completeContract(
     resident.intention = "work";
     resident.needs.belonging = clampInteger(resident.needs.belonging - 45_000);
   }
-  const usedRoutes = contract.carrierKind === "resident" && contract.porterRouteIds.length > 0
-    ? contract.porterRouteIds
-        .map((routeId) => world.routes.find((candidate) => candidate.id === routeId))
-        .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== undefined)
-    : [route];
-  for (const usedRoute of usedRoutes) {
+  const tracedTiles = playerTrace ?? porterTrace(world, contract);
+  const routeCoverages: RouteTraceCoverage[] = contract.carrierKind === "player"
+    ? findTraceReinforcedRoutes(world, tracedTiles)
+    : [...new Set(contract.porterRouteIds)]
+        .sort((left, right) => left - right)
+        .map((routeId) => ({ routeId, coverage: FIXED_POINT }));
+  const primaryRouteCoverage = contract.carrierKind === "player"
+    ? calculateRouteTraceCoverage(world, route, tracedTiles)
+    : routeCoverages.some((entry) => entry.routeId === route.id)
+      ? FIXED_POINT
+      : 0;
+  for (const entry of routeCoverages) {
+    const usedRoute = world.routes.find((candidate) => candidate.id === entry.routeId);
+    if (usedRoute === undefined) continue;
     const playerCarried = contract.carrierKind === "player";
+    const fullTraceGain = playerCarried ? 8_000 + Math.trunc(condition / 55) : 2_000 + Math.trunc(condition / 220);
+    const fullReliabilityGain = playerCarried ? 5_000 + Math.trunc(condition / 90) : 1_500 + Math.trunc(condition / 300);
     usedRoute.traceStrength = clampInteger(
-      usedRoute.traceStrength + (playerCarried ? 8_000 + Math.trunc(condition / 55) : 2_000 + Math.trunc(condition / 220)),
+      usedRoute.traceStrength + Math.trunc((fullTraceGain * entry.coverage) / FIXED_POINT),
     );
     usedRoute.reliability = clampInteger(
-      usedRoute.reliability + (playerCarried ? 5_000 + Math.trunc(condition / 90) : 1_500 + Math.trunc(condition / 300)),
+      usedRoute.reliability + Math.trunc((fullReliabilityGain * entry.coverage) / FIXED_POINT),
     );
     usedRoute.traffic += 1;
     usedRoute.lastUsedTick = tick;
   }
-  const tracedTiles = playerTrace ?? porterTrace(world, contract);
   contract.deliveryTraceCost = traceTravelCost(world, tracedTiles);
-  for (const tileIndex of tracedTiles) {
+  for (const tileIndex of new Set(tracedTiles)) {
     const tile = world.terrain.tiles[tileIndex];
     if (tile !== undefined) tile.traceStrength = clampInteger(tile.traceStrength + 300 + Math.trunc(condition / 1_000));
   }
@@ -923,7 +1178,10 @@ function completeContract(
     originSettlementId: contract.originSettlementId,
     destinationSettlementId: contract.destinationSettlementId,
     routeId: route.id,
-    routeHops: usedRoutes.length,
+    routeHops: routeCoverages.length,
+    primaryRouteCoverage,
+    reinforcedRouteCount: routeCoverages.length,
+    reinforcedRouteIds: routeCoverages.map((entry) => entry.routeId).join(","),
     beneficiaryResidentId: beneficiary?.id ?? null,
   });
 }

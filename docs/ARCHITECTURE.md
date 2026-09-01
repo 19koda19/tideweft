@@ -14,7 +14,7 @@ keyboard / pointer / DOM commands
               │                               ├── active route graph
               │                               └── versioned world snapshot
               ▼
-immutable render + UI projections ──> p5 canvas / accessible DOM / Web Audio
+immutable render + UI projections ──> p5 Chart 2D or Relief 3D / accessible DOM / Web Audio
 
 IndexedDB (localStorage fallback)
     └── game-session envelope ──> checksummed simulation envelope
@@ -24,7 +24,7 @@ IndexedDB (localStorage fallback)
 
 - `src/sim`: authoritative deterministic world, active graph, rules, invariants, views, and serialization. It imports no DOM, p5, Electron, Node, wall clock, or browser persistence.
 - `src/game`: fixed-step host, player travel, command scheduling, session flow, save orchestration, onboarding, and presentation projections.
-- `src/render`: p5 instance-mode drawing, camera, world hit-testing, and renderer commands.
+- `src/render`: two swappable p5 instance-mode presentations, cameras, world hit-testing, a pure chunked height-mesh builder, and shared renderer commands. Only the active Chart 2D or Relief 3D canvas loops or accepts input.
 - `src/ui`: accessible DOM panels and controls. It reads a view and emits typed commands.
 - `src/audio`: procedural Web Audio feedback. It unlocks only after player interaction.
 - `src/platform`: browser save repositories plus export/import validation.
@@ -67,7 +67,7 @@ The main thread is sufficient at the current seven-settlement/42-resident scale.
 
 The playable slice uses:
 
-- A 64 × 48 tile field with elevation, moisture, roughness, terrain, tidal water depth, traversal cost, trace strength, and player discovery.
+- A 96 × 72 tile field for new worlds, generated from seeded gradient Perlin/fBm elevation, moisture, channel meander, and roughness. It carries authoritative terrain, live tidal water depth, traversal cost, trace strength, player discovery, and a separate bathymetry mask. Migrated Alpha 0.1 saves preserve their serialized 64 × 48 field.
 - Seven specialized settlements with five-resource inventories, recipes, stress, inter-settlement trust, sourced knowledge, and one civic project each.
 - 42 named residents with roles, traits, needs, relationships, intention, location, and optional active contract.
 - Shortage-derived contracts with a named requester, real origin stock, destination need, due tick, carrier, cargo conservation, condition grade, and traveled trace cost.
@@ -94,11 +94,11 @@ Projects consume their named resource during scheduled simulation updates. Compl
 
 | Project | Permanent effect |
 | --- | --- |
-| Beacon | Raises incident-route reliability and local knowledge confidence; helps marginal active routes remain legible in severe storms |
+| Beacon | Raises incident-route reliability and local knowledge confidence; helps marginal active routes remain legible in severe storms; entrusts a visiting courier with a Storm kite |
 | Cache | Improves incident-route condition, accelerates player stamina/load-stability recovery, and halts perishable-food decay while sheltered at that harbor |
-| Crossing | Raises incident-route condition and reduces their base travel time |
+| Crossing | Raises incident-route condition, reduces their base travel time, and entrusts a visiting courier with Marsh stilts |
 | Clinic | Relieves local stress/needs and turns exhaustion on an incident active route into connected rescue |
-| Ferry | Raises incident-route reliability, reduces travel time, and adds porter capacity |
+| Ferry | Raises incident-route reliability, reduces travel time, adds porter capacity, and entrusts a visiting courier with a Tide sail |
 
 Deliveries can contribute directly to a building project when the cargo matches its required resource. The contract UI explains this before acceptance, and the chronicle records completion and effect afterward.
 
@@ -121,7 +121,13 @@ The runtime currently writes one `autosave` slot on a world-tick interval, page 
 
 The browser repository prefers IndexedDB and falls back to localStorage. Repository operations clone writes, sort summaries deterministically, and isolate malformed records. The platform export/import envelope has a version, 20 MB limit, slot/metadata validation, future-format rejection, and object-URL cleanup. The current UI does not expose those import/export helpers yet.
 
-Unsupported simulation versions fail rather than being guessed into a current world. Explicit pure migrations can be added when a second save format exists.
+Unsupported simulation versions fail rather than being guessed into a current world. Explicit checksum-first migrations preserve the prior 64 × 48 world under current Tide Choir rules; no migration silently regenerates terrain from its seed.
+
+## Dual p5 presentation
+
+Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. Chart 2D retains dense labels, color-independent terrain motifs, and low-motion readability. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and material references, draws live per-tile water, and projects pointer rays back onto the height field for selection and movement. Its orbit, zoom, fog, and scan ripples are cosmetic local state.
+
+The composed controller stops and hides the inactive p5 instance, releases held movement/brace input during a switch, and falls back to Chart 2D if WebGL setup fails or its context is lost. The explicit view preference is local presentation state and is deliberately outside the authoritative save/checksum.
 
 ## Electron security
 
@@ -153,4 +159,4 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 6. Active-graph pathfinding, storms, congestion, topology metrics, and project effects.
 7. Player traversal, stability, recovery, tutorial, signed reports, and platform persistence.
 8. Vite production build under relative paths.
-9. Packaged Electron launch, `app://` resource load, canvas/UI/world probe, Node-global absence, and screenshot evidence.
+9. Packaged Electron launch, `app://` resource load, exact 96 × 72 world probe, both Chart/Relief canvas switches, minimum-window Promises scrolling, Node-global absence, and screenshot evidence.

@@ -7,10 +7,13 @@ import type {
 import { FIXED_POINT, STRAND_AUTOMATION_THRESHOLD, type TerrainTileView, type WorldView } from "../sim/types";
 import { TILE_UNITS, cargoWeight, type PlayerState } from "./player";
 
+const CHOIR_HIGHLIGHT_TICKS = 24;
+
 export interface ProjectionOptions {
   selectedSettlementId?: number | null;
   selectedRouteId?: number | null;
   destinationSettlementId?: number | null;
+  destinationKind?: "pickup" | "delivery" | "report";
   paused?: boolean;
   recentEventIds?: readonly number[];
 }
@@ -23,11 +26,12 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
+  const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const traces = player.currentTrace.length > 1
     ? [
         {
           id: "current-journey",
-          kind: (player.mode === "skiff" ? "wake" : "foot") as "wake" | "foot",
+          kind: (player.mode === "skiff" || player.mode === "wading" || player.mode === "swept" ? "wake" : "foot") as "wake" | "foot",
           points: player.currentTrace.map((index) => tilePoint(index, world.terrain.width, tileSize)),
           intensity: 0.72,
           age: 0,
@@ -37,15 +41,31 @@ export function projectGameView(
   const destinationSettlement = options.destinationSettlementId === null || options.destinationSettlementId === undefined
     ? undefined
     : world.settlements.find((settlement) => settlement.id === options.destinationSettlementId);
+  const newestChoir = world.choirs.reduce<(typeof world.choirs)[number] | undefined>(
+    (latest, choir) => {
+      if (!latest || choir.awakenedTick > latest.awakenedTick) return choir;
+      if (choir.awakenedTick === latest.awakenedTick && choir.id > latest.id) return choir;
+      return latest;
+    },
+    undefined,
+  );
 
   const latestEvents = world.events.slice(-12).map((event) => {
-    const eventSettlementId = [
-      event.data.destinationSettlementId,
-      event.data.settlementId,
-      event.data.returnSettlementId,
-      event.data.originSettlementId,
-      event.subjectId,
-    ].find((value): value is number =>
+    const settlementCandidates = event.type === "contract-offered"
+      ? [
+          event.data.originSettlementId,
+          event.data.settlementId,
+          event.data.destinationSettlementId,
+          event.subjectId,
+        ]
+      : [
+          event.data.destinationSettlementId,
+          event.data.settlementId,
+          event.data.returnSettlementId,
+          event.data.originSettlementId,
+          event.subjectId,
+        ];
+    const eventSettlementId = settlementCandidates.find((value): value is number =>
       typeof value === "number" && world.settlements.some((candidate) => candidate.id === value),
     );
     const settlement = eventSettlementId === undefined
@@ -55,7 +75,9 @@ export function projectGameView(
     return {
       id: `event-${event.sequence}`,
       kind: eventKind(event.type),
-      label: eventLabel(event.type),
+      label: event.type === "contract-offered" && settlement
+        ? `Cargo pickup at ${settlement.name}`
+        : eventLabel(event.type),
       progress: Math.max(0, Math.min(1, (world.completedTick - event.tick) / 180)),
       emphasis: event.type === "project-completed" || event.type === "contract-fulfilled"
         ? ("strong" as const)
@@ -76,14 +98,15 @@ export function projectGameView(
       origin: { x: 0, y: 0 },
       revision: `${world.seedText}:${world.completedTick >> 7}`,
       tiles: world.terrain.tiles.map((tile, index) => ({
-        kind: renderTerrain(tile),
+          kind: renderTerrain(tile, settlementTiles.has(index)),
         elevation: tile.elevation / FIXED_POINT,
         moisture: tile.moisture / FIXED_POINT,
         waterDepth: tile.waterDepth / FIXED_POINT,
+        depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
         discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
         trace: tile.traceStrength / FIXED_POINT,
         shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
-        blocked: tile.terrain === "deep-water" && tile.waterDepth < 240_000,
+        blocked: false,
       })),
     },
     tide: {
@@ -141,6 +164,9 @@ export function projectGameView(
       stability: player.stability / FIXED_POINT,
       scanCharge: player.scanCharge / FIXED_POINT,
       scanProgress: player.scanPulse / FIXED_POINT,
+      sweptProgress: player.mode === "swept"
+        ? 1 - player.sweepTicksRemaining / Math.max(1, player.sweepTotalTicks)
+        : 0,
       cargoLoad: cargoWeight(player),
       cargoCapacity: player.cargoCapacity,
       cargo: [
@@ -168,7 +194,10 @@ export function projectGameView(
       mode: player.mode,
       active: !options.paused,
       ...(destinationSettlement
-        ? { destination: tilePoint(destinationSettlement.tileIndex, world.terrain.width, tileSize) }
+        ? {
+            destination: tilePoint(destinationSettlement.tileIndex, world.terrain.width, tileSize),
+            destinationLabel: destinationMarkerLabel(options.destinationKind, destinationSettlement.name),
+          }
         : {}),
     },
     routes: world.routes
@@ -193,6 +222,35 @@ export function projectGameView(
       traffic: Math.min(1, route.traffic / 20),
       selected: options.selectedRouteId === route.id,
       })),
+    choirs: world.choirs.map((choir) => {
+      const age = Math.max(0, world.completedTick - choir.awakenedTick);
+      const harborNames = choir.settlementIds.flatMap((settlementId) => {
+        const settlement = world.settlements.find((candidate) => candidate.id === settlementId);
+        return settlement ? [settlement.name] : [];
+      });
+      return {
+        id: String(choir.id),
+        routePaths: choir.routeIds.flatMap((routeId) => {
+          const route = world.routes.find((candidate) => candidate.id === routeId);
+          return route
+            ? [route.path.map((index) => tilePoint(index, world.terrain.width, tileSize))]
+            : [];
+        }),
+        harborPoints: choir.settlementIds.flatMap((settlementId) => {
+          const settlement = world.settlements.find((candidate) => candidate.id === settlementId);
+          return settlement
+            ? [tilePoint(settlement.tileIndex, world.terrain.width, tileSize)]
+            : [];
+        }),
+        age,
+        emphasis: newestChoir?.id === choir.id && age < CHOIR_HIGHLIGHT_TICKS
+          ? ("strong" as const)
+          : ("normal" as const),
+        label: harborNames.length > 0
+          ? `Tide Choir · ${harborNames.join(" · ")}`
+          : "Tide Choir",
+      };
+    }),
     traces,
     porters: world.residents.flatMap((resident) => {
       const location = resident.location;
@@ -231,16 +289,35 @@ export function projectGameView(
   };
 }
 
-function renderTerrain(tile: TerrainTileView): RenderTerrainKind {
+function destinationMarkerLabel(
+  kind: ProjectionOptions["destinationKind"],
+  settlementName: string,
+): string {
+  switch (kind) {
+    case "pickup": return `PICK UP CARGO · ${settlementName}`;
+    case "report": return `DELIVER REPORT · ${settlementName}`;
+    case "delivery": return `DELIVER CARGO · ${settlementName}`;
+    default: return `DESTINATION · ${settlementName}`;
+  }
+}
+
+function renderTerrain(tile: TerrainTileView, built: boolean): RenderTerrainKind {
+  if (built) return "built";
   switch (tile.terrain) {
     case "deep-water":
       return "deep-water";
     case "tidal-flat":
-      return tile.waterDepth > 500_000 ? "channel" : tile.waterDepth > 120_000 ? "shallows" : "mudflat";
+      return tile.waterDepth > 500_000
+        ? "channel"
+        : tile.waterDepth > 120_000
+          ? "shallows"
+          : tile.moisture < 560_000 || tile.elevation > 310_000
+            ? "sandbar"
+            : "mudflat";
     case "marsh":
       return "salt-marsh";
     case "meadow":
-      return tile.moisture > 680_000 ? "scrub" : "meadow";
+      return tile.moisture < 545_000 || tile.roughness > 610_000 ? "scrub" : "meadow";
     case "ridge":
       return "ridge";
   }
@@ -305,6 +382,7 @@ function eventKind(type: WorldView["events"][number]["type"]): "arrival" | "deli
 }
 
 function eventLabel(type: WorldView["events"][number]["type"]): string {
+  if (type === "contract-offered") return "Cargo pickup available";
   return titleCase(type.replaceAll("-", " "));
 }
 

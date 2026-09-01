@@ -33,6 +33,8 @@ export interface WeatherUIView {
 export interface PlayerUIView {
   readonly stamina: number;
   readonly stability: number;
+  readonly stabilityTrend: "recovering" | "steady" | "falling";
+  readonly stabilityHint: string;
   readonly scanCharge: number;
   readonly cargoLoad: number;
   readonly cargoCapacity: number;
@@ -105,10 +107,35 @@ export interface ConnectionUIView {
   readonly conditionLabel: string;
   readonly reliability: number;
   readonly redundant?: boolean;
+  readonly surveyed?: boolean;
+  readonly choirMember?: boolean;
   readonly actionLabel?: string;
+  readonly actionHint?: string;
   readonly actionDisabled?: boolean;
   readonly reportActionLabel?: string;
+  readonly reportActionHint?: string;
   readonly reportActionDisabled?: boolean;
+}
+
+export interface TideChoirUIView {
+  readonly awakenedCount: number;
+  readonly surveyedCount: number;
+  readonly totalRoutes: number;
+  readonly phraseHarbors: readonly string[];
+  readonly progress: number;
+  readonly label: string;
+  readonly hint: string;
+}
+
+export interface FieldReadoutUIView {
+  readonly terrainLabel: string;
+  readonly depthLabel: string;
+  readonly depthKnown: boolean;
+  readonly effortLabel: string;
+  readonly hint: string;
+  readonly toolLabels: readonly string[];
+  readonly swept: boolean;
+  readonly sweptProgress: number;
 }
 
 export interface SettlementInspectorUIView {
@@ -167,6 +194,8 @@ export interface ControlAvailabilityUIView {
   readonly canPause?: boolean;
   readonly canScan?: boolean;
   readonly canInteract?: boolean;
+  readonly interactLabel?: string;
+  readonly interactHint?: string;
   readonly canChangePace?: boolean;
   readonly canEndSession?: boolean;
 }
@@ -180,6 +209,8 @@ export interface TideweftUIView {
   readonly tide: TideUIView;
   readonly weather: WeatherUIView;
   readonly player: PlayerUIView;
+  readonly field: FieldReadoutUIView;
+  readonly choir: TideChoirUIView;
   readonly objective?: ObjectiveUIView;
   readonly contracts: readonly ContractUIView[];
   readonly selectedSettlement?: SettlementInspectorUIView;

@@ -1,9 +1,12 @@
-export const WORLD_WIDTH = 64;
-export const WORLD_HEIGHT = 48;
+export const WORLD_WIDTH = 96;
+export const WORLD_HEIGHT = 72;
+export const LEGACY_WORLD_WIDTH = 64;
+export const LEGACY_WORLD_HEIGHT = 48;
+export const MIN_SETTLEMENT_MANHATTAN_DISTANCE = 14;
 export const FIXED_POINT = 1_000_000;
 export const STRAND_AUTOMATION_THRESHOLD = 32_000;
-export const SAVE_FORMAT_VERSION = 1;
-export const RULES_VERSION = "tideweft-sim/2";
+export const SAVE_FORMAT_VERSION = 2;
+export const RULES_VERSION = "tideweft-sim/4";
 
 export const RESOURCE_KINDS = [
   "food",
@@ -178,6 +181,19 @@ export interface RouteState {
   lastUsedTick: Tick;
 }
 
+/**
+ * A route cycle that has been deliberately sounded into the shared world.
+ * Route and settlement IDs are stored in ascending order so a cycle has one
+ * authoritative representation regardless of the order in which it was
+ * proposed.
+ */
+export interface TideChoirState {
+  id: EntityId;
+  routeIds: EntityId[];
+  settlementIds: EntityId[];
+  awakenedTick: Tick;
+}
+
 export type ContractStatus =
   | "offered"
   | "accepted"
@@ -233,6 +249,7 @@ export type SimEventType =
   | "contract-expired"
   | "contract-cancelled"
   | "route-reinforced"
+  | "tide-choir-awakened"
   | "project-completed"
   | "weather-changed"
   | "knowledge-shared";
@@ -266,6 +283,7 @@ export interface WorldState {
   settlements: SettlementState[];
   residents: ResidentState[];
   routes: RouteState[];
+  choirs: TideChoirState[];
   contracts: ContractState[];
   ledger: ConservationLedger;
   processedCommandIds: string[];
@@ -303,7 +321,7 @@ export interface DeliverContractCommand extends CommandBase {
   contractId: EntityId;
   destinationSettlementId: EntityId;
   condition: number;
-  trace?: readonly number[];
+  trace: readonly number[];
 }
 
 export interface CancelContractCommand extends CommandBase {
@@ -330,13 +348,19 @@ export interface ShareKnowledgeCommand extends CommandBase {
   confidence?: number;
 }
 
+export interface AwakenTideChoirCommand extends CommandBase {
+  type: "awaken-tide-choir";
+  routeIds: readonly EntityId[];
+}
+
 export type SimCommand =
   | AcceptContractCommand
   | PickupContractCommand
   | DeliverContractCommand
   | CancelContractCommand
   | ReinforceRouteCommand
-  | ShareKnowledgeCommand;
+  | ShareKnowledgeCommand
+  | AwakenTideChoirCommand;
 
 export type CommandsByTick =
   | ReadonlyMap<number, readonly SimCommand[]>
@@ -374,6 +398,7 @@ export interface WorldView {
   settlements: readonly SettlementView[];
   residents: readonly ResidentState[];
   routes: readonly RouteState[];
+  choirs: readonly TideChoirState[];
   contracts: readonly ContractState[];
   events: readonly SimEvent[];
   totals: Readonly<Inventory>;

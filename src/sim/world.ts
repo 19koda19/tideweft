@@ -8,6 +8,7 @@ import {
 } from "./terrain";
 import {
   FIXED_POINT,
+  MIN_SETTLEMENT_MANHATTAN_DISTANCE,
   RESOURCE_KINDS,
   RULES_VERSION,
   SAVE_FORMAT_VERSION,
@@ -189,15 +190,19 @@ function chooseSettlementTiles(seed: RootSeed, terrain: TerrainState): number[] 
         if (other === undefined) continue;
         minimumDistance = Math.min(minimumDistance, Math.abs(tile.x - other.x) + Math.abs(tile.y - other.y));
       }
-      const spacing = selected.length === 0 ? 0 : Math.min(minimumDistance, 24) * 45_000;
-      const crowdingPenalty = minimumDistance < 9 ? (9 - minimumDistance) * 1_000_000 : 0;
-      const score = settlementCandidateScore(seed, tile, ordinal) + spacing - crowdingPenalty;
+      if (selected.length > 0 && minimumDistance < MIN_SETTLEMENT_MANHATTAN_DISTANCE) continue;
+      const spacing = selected.length === 0 ? 0 : Math.min(minimumDistance, 36) * 45_000;
+      const score = settlementCandidateScore(seed, tile, ordinal) + spacing;
       if (score > bestScore || (score === bestScore && tile.index < bestIndex)) {
         bestScore = score;
         bestIndex = tile.index;
       }
     }
-    if (bestIndex < 0) throw new Error("Terrain did not provide enough settlement sites");
+    if (bestIndex < 0) {
+      throw new Error(
+        `Terrain did not provide seven settlement sites at least ${MIN_SETTLEMENT_MANHATTAN_DISTANCE} tiles apart`,
+      );
+    }
     selected.push(bestIndex);
   }
   return selected;
@@ -430,6 +435,7 @@ export function createInitialWorld(seedText: string, pressureMode: PressureMode)
     settlements,
     residents,
     routes,
+    choirs: [],
     contracts: [],
     ledger: {
       initial: copyInventory(initial),
@@ -443,7 +449,12 @@ export function createInitialWorld(seedText: string, pressureMode: PressureMode)
         sequence: 1,
         type: "world-created",
         subjectId: null,
-        data: { settlements: settlements.length, residents: residents.length, width: 64, height: 48 },
+        data: {
+          settlements: settlements.length,
+          residents: residents.length,
+          width: terrain.width,
+          height: terrain.height,
+        },
       },
     ],
   };

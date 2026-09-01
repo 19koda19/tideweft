@@ -141,6 +141,7 @@ button:disabled {
   background: rgb(3 14 16 / 94%);
   border-bottom: 1px solid var(--line);
   box-shadow: 0 0.4rem 1.5rem rgb(0 0 0 / 18%);
+  gap: 0.75rem;
 }
 
 .wordmark {
@@ -203,6 +204,88 @@ button:disabled {
   white-space: nowrap;
 }
 
+.view-mode-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(4.7rem, auto);
+  grid-template-rows: auto auto;
+  min-width: 10.2rem;
+  margin-left: auto;
+  padding: 0.25rem 0.72rem 0.24rem 1.08rem;
+  color: var(--foam);
+  background:
+    linear-gradient(90deg, rgb(88 225 207 / 9%), transparent 35%),
+    rgb(2 13 15 / 66%);
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line-strong);
+  clip-path: polygon(0.28rem 0, 100% 0, calc(100% - 0.28rem) 100%, 0 100%);
+  gap: 0 0.42rem;
+  text-align: left;
+  text-shadow: 0 0 0.7rem rgb(156 248 229 / 28%);
+}
+
+.view-mode-toggle::before {
+  position: absolute;
+  top: 50%;
+  left: 0.48rem;
+  width: 0.28rem;
+  aspect-ratio: 1;
+  background: var(--foam-faint);
+  border-radius: 50%;
+  box-shadow: 0 0 0.45rem currentcolor;
+  content: "";
+  translate: 0 -50%;
+}
+
+.view-mode-toggle:hover {
+  background:
+    linear-gradient(90deg, rgb(88 225 207 / 16%), transparent 42%),
+    rgb(2 13 15 / 78%);
+}
+
+.view-mode-toggle[data-view-mode="relief-3d"]::before {
+  color: var(--tide-bright);
+  background: currentcolor;
+}
+
+.view-mode-toggle__eyebrow,
+.view-mode-toggle__next {
+  color: var(--foam-faint);
+  font-size: 0.46rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.view-mode-toggle__eyebrow {
+  grid-row: 1 / -1;
+  align-self: center;
+  color: var(--gold);
+  writing-mode: vertical-rl;
+  rotate: 180deg;
+}
+
+.view-mode-toggle__current {
+  overflow: hidden;
+  color: var(--tide-bright);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.035em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.view-mode-toggle__next {
+  overflow: hidden;
+  max-width: 8.5rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .game-shell,
 .game-viewport,
 .game-ui,
@@ -238,6 +321,54 @@ button:disabled {
   width: 100% !important;
   height: 100% !important;
   touch-action: none;
+}
+
+.canvas-mount canvas[hidden] {
+  display: none !important;
+}
+
+.relief-label-layer {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.relief-label-layer[hidden],
+.relief-world-label[hidden] {
+  display: none !important;
+}
+
+.relief-world-label {
+  position: absolute;
+  max-width: min(17rem, 34vw);
+  padding: 0.2rem 0.42rem;
+  overflow: hidden;
+  color: var(--foam);
+  background: rgb(2 14 16 / 78%);
+  border-left: 2px solid var(--tide);
+  font-size: clamp(0.5rem, 0.65vw, 0.64rem);
+  font-weight: 780;
+  letter-spacing: 0.045em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 5px #000;
+  text-transform: uppercase;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+}
+
+.relief-world-label[data-selected="true"] {
+  border-left-color: var(--mauve);
+  box-shadow: 0 0 0 1px rgb(190 169 255 / 38%);
+}
+
+.relief-world-label[data-tone="destination"] {
+  color: var(--gold);
+  background: rgb(5 18 19 / 92%);
+  border-left-color: var(--gold);
+  box-shadow: 0 0 0 1px rgb(241 198 111 / 34%), 0 0 1rem rgb(241 198 111 / 16%);
 }
 
 .canvas-mount canvas:focus-visible {
@@ -305,6 +436,18 @@ button:disabled {
   min-height: 5.5rem;
   padding: 0.58rem 0.75rem;
   gap: 0.75rem;
+}
+
+/* The journey HUD sits directly over the world instead of enclosing every
+   readout in one heavy box. A directional wash preserves contrast over water. */
+.hud-bar.glass-panel {
+  color: var(--foam);
+  background: linear-gradient(180deg, rgb(2 15 17 / 82%), rgb(2 15 17 / 34%) 72%, transparent);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  text-shadow: 0 2px 8px rgb(0 4 5 / 92%);
 }
 
 .hud-identity {
@@ -433,6 +576,25 @@ button:disabled {
   letter-spacing: 0.035em;
 }
 
+.vital__detail {
+  grid-column: 1 / -1;
+  margin-top: -0.22rem;
+  overflow: hidden;
+  color: var(--foam-faint);
+  font-size: 0.48rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vital__detail[data-trend="falling"] {
+  color: var(--gold);
+}
+
+.vital__detail[data-trend="recovering"] {
+  color: var(--good);
+}
+
 .vital__value {
   color: var(--foam);
   font-variant-numeric: tabular-nums;
@@ -500,6 +662,17 @@ button:disabled {
   border-left: 0.18rem solid var(--gold);
 }
 
+.objective-panel.glass-panel {
+  background: linear-gradient(90deg, rgb(2 18 20 / 82%), rgb(2 18 20 / 46%) 72%, transparent);
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  text-shadow: 0 2px 7px rgb(0 4 5 / 90%);
+}
+
 .panel-eyebrow {
   margin: 0 0 0.22rem;
   color: var(--gold);
@@ -551,6 +724,104 @@ button:disabled {
   font-size: 0.63rem;
 }
 
+.field-readout,
+.choir-readout {
+  display: grid;
+  margin-top: 0.62rem;
+  padding-top: 0.5rem;
+  gap: 0.28rem;
+  border-top: 1px solid rgb(156 248 229 / 18%);
+}
+
+.field-readout__header,
+.field-readout__metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.field-readout__header {
+  color: var(--gold);
+  font-size: 0.63rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.field-readout__symbol {
+  color: var(--tide-bright);
+}
+
+.field-readout__terrain {
+  margin-right: auto;
+}
+
+.field-readout__metrics,
+.field-readout__tools,
+.field-readout__hint {
+  color: var(--foam-faint);
+  font-size: 0.54rem;
+  line-height: 1.35;
+}
+
+.field-readout__depth[data-known="true"] {
+  color: var(--tide-bright);
+}
+
+.field-readout__effort {
+  color: var(--foam-muted);
+  text-align: right;
+}
+
+.field-readout__tools {
+  overflow: hidden;
+  color: var(--foam-muted);
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-readout[data-swept="true"] {
+  border-top-color: var(--coral);
+}
+
+.field-readout[data-swept="true"] .field-readout__terrain,
+.field-readout[data-swept="true"] .field-readout__hint {
+  color: var(--coral);
+}
+
+.field-readout__sweep {
+  height: 0.24rem;
+}
+
+.choir-readout__header {
+  display: flex;
+  align-items: center;
+  gap: 0.36rem;
+  color: var(--tide-bright);
+  font-size: 0.6rem;
+  font-weight: 780;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.choir-readout__symbol {
+  color: var(--mauve);
+  font-size: 0.9rem;
+}
+
+.choir-readout__hint {
+  color: var(--foam-faint);
+  font-size: 0.55rem;
+  line-height: 1.35;
+}
+
+.choir-readout[data-awake="true"] .choir-readout__symbol {
+  color: var(--gold);
+}
+
 .objective-panel[data-completed="true"] {
   border-left-color: var(--good);
 }
@@ -560,12 +831,44 @@ button:disabled {
 }
 
 .contract-rail {
-  top: clamp(20rem, 42vh, 24.5rem);
+  top: clamp(20rem, 52vh, 29rem);
   bottom: 5.3rem;
   left: var(--ui-gap);
   width: clamp(16rem, 23vw, 20.5rem);
   min-height: 2.75rem;
   overflow: hidden;
+}
+
+.contract-rail[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Chromium exposes non-summary <details> children through an internal
+   ::details-content box. Make that wrapper the shrinking flex column too, or
+   a long promise list keeps its intrinsic height and is merely clipped by the
+   rail instead of becoming scrollable. Older engines ignore this rule and use
+   the direct-child flex behavior above. */
+.contract-rail[open]::details-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.contract-rail > .panel-summary {
+  flex: 0 0 auto;
+}
+
+.contract-rail__guide {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.05rem 0.82rem 0.55rem;
+  color: var(--foam-muted);
+  border-bottom: 1px solid rgb(156 248 229 / 10%);
+  font-size: 0.56rem;
+  line-height: 1.35;
 }
 
 .panel-summary {
@@ -624,11 +927,30 @@ details[open] > .panel-summary::before {
 }
 
 .contract-list {
-  max-height: calc(100% - 2.65rem);
+  min-height: 0;
+  max-height: none;
+  flex: 1 1 auto;
   padding: 0 0.55rem 0.65rem;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-color: var(--line-strong) transparent;
   scrollbar-width: thin;
+}
+
+.contract-list::-webkit-scrollbar {
+  width: 0.42rem;
+}
+
+.contract-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 99rem;
+}
+
+.contract-list:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .contract-list__item + .contract-list__item {
@@ -751,9 +1073,26 @@ details[open] > .panel-summary::before {
 }
 
 .contract-card__route {
-  gap: 0.34rem;
+  justify-content: space-between;
+  gap: 0.42rem;
   font-size: 0.61rem;
   font-weight: 730;
+}
+
+.contract-card__route-stop {
+  display: grid;
+  min-width: 0;
+}
+
+.contract-card__route-stop--delivery {
+  text-align: right;
+}
+
+.contract-card__route-verb {
+  color: var(--gold);
+  font-size: 0.46rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
 }
 
 .contract-card__origin,
@@ -1079,7 +1418,26 @@ details[open] > .panel-summary::before {
 
 .connection-item__actions {
   display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.25rem;
+}
+
+.connection-item__action-hint {
+  grid-column: 1 / -1;
+  color: var(--foam-faint);
+  font-size: 0.52rem;
+  line-height: 1.35;
+}
+
+.connection-item[data-surveyed="true"] .connection-item__name::before {
+  content: "✓ ";
+  color: var(--tide-bright);
+}
+
+.connection-item[data-choir="true"] .connection-item__name::after {
+  content: "  ⌁";
+  color: var(--gold);
 }
 
 .connection-item[data-redundant="true"] .connection-item__name::after {
@@ -1803,6 +2161,33 @@ button:focus-visible .keycap {
   }
 }
 
+/* Wide but shallow windows need two genuinely usable left-hand panes. Compact
+   the explanatory copy before allowing the Promises scroller to collapse. */
+@media (max-height: 48rem) and (min-width: 58.001rem) {
+  .objective-panel {
+    top: calc(var(--ui-gap) + 5.35rem);
+    padding-block: 0.62rem;
+  }
+
+  .objective-panel__description,
+  .objective-panel__why,
+  .field-readout__hint,
+  .choir-readout__hint {
+    display: none;
+  }
+
+  .field-readout,
+  .choir-readout {
+    margin-top: 0.42rem;
+    padding-top: 0.36rem;
+    gap: 0.2rem;
+  }
+
+  .contract-rail {
+    top: clamp(20rem, 52vh, 25rem);
+  }
+}
+
 @media (max-width: 74rem) {
   .hud-bar {
     grid-template-columns: minmax(7rem, 1fr) auto minmax(8rem, 0.8fr) minmax(12rem, 1.25fr);
@@ -1840,7 +2225,7 @@ button:focus-visible .keycap {
     top: auto;
     bottom: 5rem;
     width: min(19rem, calc(50% - 0.75rem));
-    max-height: min(47vh, 25rem);
+    max-height: min(35vh, 22rem);
   }
 
   .settlement-inspector {
@@ -1854,6 +2239,16 @@ button:focus-visible .keycap {
   }
 
   .quiet-button {
+    display: none;
+  }
+
+  .view-mode-toggle {
+    grid-template-columns: auto minmax(4.5rem, auto);
+    min-width: 7.6rem;
+    padding-right: 0.55rem;
+  }
+
+  .view-mode-toggle__next {
     display: none;
   }
 
@@ -1884,7 +2279,7 @@ button:focus-visible .keycap {
   }
 
   .app-masthead__status {
-    font-size: 0.58rem;
+    display: none;
   }
 
   .hud-bar {
@@ -1941,7 +2336,7 @@ button:focus-visible .keycap {
     bottom: 4.75rem;
     left: auto;
     width: min(20rem, calc(100% - 2 * var(--ui-gap)));
-    max-height: 39vh;
+    max-height: 34vh;
   }
 
   .contract-rail:not([open]) {
@@ -2107,7 +2502,8 @@ button:focus-visible .keycap {
   .estuary-dialog,
   .contract-card,
   .metric,
-  .control-grid__row {
+  .control-grid__row,
+  .view-mode-toggle {
     border: 1px solid CanvasText;
     forced-color-adjust: auto;
   }

@@ -11,6 +11,9 @@ const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`;
 const PRODUCTION_ENTRY_URL = `${APP_ORIGIN}/index.html`;
 const DEV_ORIGIN = 'http://127.0.0.1:5173';
 const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
+const SMOKE_WORLD_TILE_COUNT = 96 * 72;
+const SMOKE_MINIMUM_VIEWPORT = Object.freeze({ width: 960, height: 640 });
+const SMOKE_SCREENSHOT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 
 const SMOKE_TEST = Object.freeze({
   enabled:
@@ -245,6 +248,9 @@ function createWindow(options = {}) {
       spellcheck: false,
       devTools: !app.isPackaged,
       backgroundThrottling: !SMOKE_TEST.enabled,
+      // Keep the packaged intent explicit: Relief 3D is optional at runtime,
+      // but Electron should offer WebGL whenever Chromium can initialize it.
+      webgl: true,
     },
   });
 
@@ -298,19 +304,56 @@ function rendererProbeScript() {
     const status = document.querySelector('#connection-status');
     const shell = document.querySelector('#game-ui .ui-layer');
     const title = document.querySelector('.title-dialog');
-    const canvas = document.querySelector('#p5-mount canvas');
+    const canvases = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'));
     const bridge = window.__TIDEWEFT__;
     const runtime = bridge && bridge.runtime;
+    const renderer = bridge && bridge.renderer;
     const renderView = runtime && typeof runtime.getRenderView === 'function'
       ? runtime.getRenderView()
       : null;
     const uiView = runtime && typeof runtime.getUIView === 'function'
       ? runtime.getUIView()
       : null;
+    const canvasStates = canvases.map((canvas) => {
+      const style = getComputedStyle(canvas);
+      const active = !canvas.hidden &&
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        style.opacity !== '0';
+      return {
+        renderer: canvas.dataset.renderer || null,
+        active,
+        hidden: canvas.hidden,
+        width: canvas.width,
+        height: canvas.height,
+        clientWidth: canvas.clientWidth,
+        clientHeight: canvas.clientHeight,
+      };
+    });
+    const activeCanvases = canvasStates.filter((canvas) => canvas.active);
+    const activeCanvas = activeCanvases[0] || null;
+    const controllerCanvas = renderer && typeof renderer.canvas === 'function'
+      ? renderer.canvas()
+      : null;
+    const viewButton = document.querySelector('#view-mode-toggle');
+    const contractRail = document.querySelector('.contract-rail');
+    const contractList = document.querySelector('.contract-list');
+    const contractStyle = contractList ? getComputedStyle(contractList) : null;
+    const contractClientHeight = contractList ? contractList.clientHeight : null;
+    const contractScrollHeight = contractList ? contractList.scrollHeight : null;
+    const interactButton = document.querySelector('.action-button--interact');
+    const activeContracts = uiView && Array.isArray(uiView.contracts)
+      ? uiView.contracts.filter((contract) => contract.status === 'accepted' || contract.status === 'tracked')
+      : [];
     return {
       url: location.href,
       title: document.title,
       documentReadyState: document.readyState,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio,
+      },
       statusState: status ? status.getAttribute('data-state') : null,
       statusText: status ? status.textContent : null,
       hasRuntime: Boolean(runtime),
@@ -326,9 +369,51 @@ function rendererProbeScript() {
         ? renderView.terrain.tiles.length
         : null,
       contractCount: uiView && Array.isArray(uiView.contracts) ? uiView.contracts.length : null,
-      canvas: canvas
-        ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight }
+      activeContractCount: activeContracts.length,
+      playerCargoLoad: renderView && renderView.player ? renderView.player.cargoLoad : null,
+      playerDestinationLabel: renderView && renderView.player
+        ? renderView.player.destinationLabel || null
         : null,
+      interact: interactButton
+        ? {
+            label: interactButton.childNodes[0]?.textContent?.trim() || interactButton.textContent?.trim() || null,
+            disabled: interactButton instanceof HTMLButtonElement ? interactButton.disabled : null,
+          }
+        : null,
+      canvasCount: canvasStates.length,
+      activeCanvasCount: activeCanvases.length,
+      activeRenderer: activeCanvas ? activeCanvas.renderer : null,
+      canvases: canvasStates,
+      canvas: activeCanvas,
+      controllerCanvasRenderer: controllerCanvas instanceof HTMLCanvasElement
+        ? controllerCanvas.dataset.renderer || null
+        : null,
+      viewMode: bridge ? bridge.viewMode || null : null,
+      rendererMode: renderer && typeof renderer.mode === 'function' ? renderer.mode() : null,
+      reliefSupported: renderer && typeof renderer.reliefSupported === 'function'
+        ? renderer.reliefSupported()
+        : null,
+      reliefFailure: document.querySelector('#p5-mount')?.dataset.reliefFailure || null,
+      viewButton: viewButton
+        ? {
+            mode: viewButton.getAttribute('data-view-mode'),
+            ariaPressed: viewButton.getAttribute('aria-pressed'),
+            ariaDisabled: viewButton.getAttribute('aria-disabled'),
+            disabled: viewButton instanceof HTMLButtonElement ? viewButton.disabled : null,
+            current: viewButton.querySelector('[data-view-mode-current]')?.textContent || null,
+            next: viewButton.querySelector('[data-view-mode-next]')?.textContent || null,
+          }
+        : null,
+      promises: {
+        railOpen: contractRail instanceof HTMLDetailsElement ? contractRail.open : null,
+        clientHeight: contractClientHeight,
+        scrollHeight: contractScrollHeight,
+        overflowY: contractStyle ? contractStyle.overflowY : null,
+        hasVerticalOverflow:
+          contractClientHeight !== null &&
+          contractScrollHeight !== null &&
+          contractScrollHeight > contractClientHeight + 1,
+      },
       styleSheetCount: document.styleSheets.length,
       nodeGlobalsAbsent:
         typeof window.require === 'undefined' &&
@@ -340,6 +425,64 @@ function rendererProbeScript() {
 
 async function readRendererProbe(contents) {
   return contents.executeJavaScript(rendererProbeScript(), true);
+}
+
+async function readGpuDiagnostics(contents) {
+  let gpuInfoAvailable = false;
+  let gpuInfoError = null;
+
+  try {
+    await app.getGPUInfo('basic');
+    gpuInfoAvailable = true;
+  } catch (error) {
+    gpuInfoError = error instanceof Error ? error.message : String(error);
+  }
+
+  let renderer = null;
+  try {
+    renderer = await contents.executeJavaScript(`(() => {
+      const probeContext = (name) => {
+        const canvas = document.createElement('canvas');
+        let creationError = null;
+        canvas.addEventListener('webglcontextcreationerror', (event) => {
+          creationError = typeof event.statusMessage === 'string' ? event.statusMessage : 'unknown';
+        }, { once: true });
+        let context = null;
+        try {
+          context = canvas.getContext(name, { antialias: false });
+        } catch (error) {
+          creationError = error instanceof Error ? error.message : String(error);
+        }
+        const result = {
+          available: Boolean(context),
+          creationError,
+          version: context ? context.getParameter(context.VERSION) : null,
+          renderer: context ? context.getParameter(context.RENDERER) : null,
+          vendor: context ? context.getParameter(context.VENDOR) : null,
+        };
+        if (context) context.getExtension('WEBGL_lose_context')?.loseContext();
+        return result;
+      };
+      return {
+        webglConstructor: typeof WebGLRenderingContext,
+        webgl2Constructor: typeof WebGL2RenderingContext,
+        webgl2: probeContext('webgl2'),
+        webgl: probeContext('webgl'),
+      };
+    })()`, true);
+  } catch (error) {
+    renderer = {
+      probeError: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  return {
+    hardwareAccelerationEnabled: app.isHardwareAccelerationEnabled(),
+    featureStatus: app.getGPUFeatureStatus(),
+    gpuInfoAvailable,
+    gpuInfoError,
+    renderer,
+  };
 }
 
 async function waitForRenderer(contents, predicate, timeoutMs) {
@@ -373,6 +516,105 @@ async function startSmokeWorld(contents) {
   })()`, true);
 
   if (!started) throw new Error('the title screen did not expose its new-world form');
+}
+
+async function acceptSmokePromise(contents) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector(
+      '.contract-card[data-status="available"] .contract-card__action:not(:disabled)',
+    );
+    if (!(button instanceof HTMLButtonElement)) return false;
+    button.click();
+    return true;
+  })()`, true);
+
+  if (!clicked) throw new Error('no available pickup promise action could be clicked');
+  return waitForRenderer(
+    contents,
+    (probe) =>
+      probe.activeContractCount === 1 &&
+      probe.playerCargoLoad > 0 &&
+      typeof probe.playerDestinationLabel === 'string' &&
+      probe.playerDestinationLabel.startsWith('DELIVER'),
+    SMOKE_TEST.timeoutMs,
+  );
+}
+
+async function focusSmokePlayer(contents) {
+  return contents.executeJavaScript(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge?.runtime?.getRenderView?.();
+    if (!view?.player?.position || typeof bridge?.renderer?.focusWorld !== 'function') return false;
+    bridge.renderer.focusWorld(view.player.position, 1);
+    return true;
+  })()`, true);
+}
+
+function probeHasActiveRenderer(probe, expectedRenderer) {
+  if (
+    !probe ||
+    probe.canvasCount !== 2 ||
+    probe.activeCanvasCount !== 1 ||
+    probe.activeRenderer !== expectedRenderer ||
+    probe.controllerCanvasRenderer !== expectedRenderer ||
+    probe.viewMode !== expectedRenderer ||
+    probe.rendererMode !== expectedRenderer ||
+    !Array.isArray(probe.canvases)
+  ) {
+    return false;
+  }
+
+  return probe.canvases.every((canvas) =>
+    canvas.renderer === expectedRenderer
+      ? canvas.active === true && canvas.hidden === false && canvas.clientWidth > 0 && canvas.clientHeight > 0
+      : canvas.active === false && canvas.hidden === true,
+  );
+}
+
+function probeHasViewButtonMode(probe, expectedMode) {
+  const button = probe && probe.viewButton;
+  const relief = expectedMode === 'relief-3d';
+  return Boolean(
+    button &&
+    button.mode === expectedMode &&
+    button.ariaPressed === String(relief) &&
+    button.ariaDisabled === 'false' &&
+    button.disabled === false &&
+    button.current === (relief ? 'Relief 3D' : 'Chart 2D') &&
+    button.next === (relief ? 'Switch to Chart 2D' : 'Switch to Relief 3D'),
+  );
+}
+
+async function toggleSmokeView(contents, expectedMode) {
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('#view-mode-toggle');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+
+  if (!clicked) throw new Error(`view toggle was unavailable while switching to ${expectedMode}`);
+  return waitForRenderer(
+    contents,
+    (probe) =>
+      probe.reliefSupported === true &&
+      probeHasActiveRenderer(probe, expectedMode) &&
+      probeHasViewButtonMode(probe, expectedMode),
+    SMOKE_TEST.timeoutMs,
+  );
+}
+
+async function resizeSmokeViewport(window, size, predicate) {
+  window.setContentSize(size.width, size.height, false);
+  return waitForRenderer(
+    window.webContents,
+    (probe) =>
+      probe.viewport &&
+      probe.viewport.width === size.width &&
+      probe.viewport.height === size.height &&
+      predicate(probe),
+    SMOKE_TEST.timeoutMs,
+  );
 }
 
 async function captureSmokeEvidence(window, screenshotPath) {
@@ -435,6 +677,22 @@ async function runProductionSmoke(window) {
   });
 
   await window.loadURL(PRODUCTION_ENTRY_URL);
+  const shellProbe = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.url === PRODUCTION_ENTRY_URL &&
+      probe.documentReadyState === 'complete' &&
+      probe.statusState === 'ready' &&
+      probe.hasRuntime === true &&
+      probe.uiReady === 'true',
+    SMOKE_TEST.timeoutMs,
+  );
+  if (shellProbe.reliefSupported !== true) {
+    throw new Error(
+      `Relief 3D initialization failed: ${shellProbe.reliefFailure || 'unknown reason'}. ` +
+        `Renderer warnings: ${JSON.stringify(rendererWarnings)}`,
+    );
+  }
   const bootProbe = await waitForRenderer(
     contents,
     (probe) =>
@@ -446,6 +704,9 @@ async function runProductionSmoke(window) {
       probe.titleOpen === true &&
       probe.nodeGlobalsAbsent === true &&
       probe.styleSheetCount > 0 &&
+      probe.reliefSupported === true &&
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
       probe.canvas !== null &&
       probe.canvas.width > 0 &&
       probe.canvas.height > 0,
@@ -461,13 +722,51 @@ async function runProductionSmoke(window) {
       probe.tick >= 2 &&
       probe.worldName === 'The Electron Smoke Estuary' &&
       probe.settlementCount >= 5 &&
-      probe.terrainTileCount >= 3_000 &&
-      probe.contractCount > 0,
+      probe.terrainTileCount === SMOKE_WORLD_TILE_COUNT &&
+      probe.contractCount > 0 &&
+      probe.reliefSupported === true &&
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d'),
     SMOKE_TEST.timeoutMs,
   );
 
-  // Give p5 a couple of paint frames after the deterministic simulation advances.
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  // Exercise the exact UI path that previously lost clicks during live card
+  // refreshes. The deterministic smoke seed begins beside an offered cargo
+  // promise, so one action must reserve the contract, load physical cargo,
+  // and replace PICK UP guidance with an explicit DELIVER marker.
+  const promisePickupProbe = await acceptSmokePromise(contents);
+
+  const chartProbe = await toggleSmokeView(contents, 'chart-2d');
+  const reliefProbe = await toggleSmokeView(contents, 'relief-3d');
+
+  const minimumViewportProbe = await resizeSmokeViewport(
+    window,
+    SMOKE_MINIMUM_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probe.promises &&
+      probe.promises.railOpen === true &&
+      probe.promises.clientHeight >= 64 &&
+      probe.promises.hasVerticalOverflow === true &&
+      (probe.promises.overflowY === 'auto' || probe.promises.overflowY === 'scroll'),
+  );
+
+  const screenshotViewportProbe = await resizeSmokeViewport(
+    window,
+    SMOKE_SCREENSHOT_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probe.terrainTileCount === SMOKE_WORLD_TILE_COUNT,
+  );
+
+  if (!await focusSmokePlayer(contents)) {
+    throw new Error('the active renderer could not return its camera to the courier');
+  }
+  // Let the Relief camera ease back from contract inspection to the courier,
+  // so visual evidence contains both actual terrain and the loaded delivery UI.
+  await new Promise((resolve) => setTimeout(resolve, 750));
   const screenshot = await captureSmokeEvidence(window, SMOKE_TEST.screenshotPath);
 
   if (resourceFailures.length > 0) {
@@ -481,6 +780,13 @@ async function runProductionSmoke(window) {
     entryUrl: PRODUCTION_ENTRY_URL,
     boot: bootProbe,
     world: worldProbe,
+    promisePickup: promisePickupProbe,
+    modeToggle: {
+      chart: chartProbe,
+      relief: reliefProbe,
+    },
+    minimumViewport: minimumViewportProbe,
+    screenshotViewport: screenshotViewportProbe,
     rendererWarnings,
     resourceFailures,
     screenshot,
@@ -493,10 +799,19 @@ app.whenReady().then(() => {
   if (SMOKE_TEST.enabled) {
     const window = createWindow({ deferLoad: true });
     void runProductionSmoke(window).catch((error) => {
-      smokeFailure('smoke-verification-failed', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
+      void readGpuDiagnostics(window.webContents)
+        .catch((diagnosticError) => ({
+          diagnosticError: diagnosticError instanceof Error
+            ? diagnosticError.message
+            : String(diagnosticError),
+        }))
+        .then((gpu) => {
+          smokeFailure('smoke-verification-failed', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            gpu,
+          });
+        });
     });
     return;
   }

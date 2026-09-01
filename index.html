@@ -31,6 +31,24 @@
           <span class="wordmark__title">TIDEWEFT</span>
           <span class="wordmark__subtitle">An Estuary of Promises</span>
         </div>
+        <!-- View-mode integration contract:
+             #view-mode-toggle carries data-view-mode="chart-2d|relief-3d";
+             update [data-view-mode-current], [data-view-mode-next], the aria-label,
+             and aria-pressed (true means Relief 3D) whenever the renderer changes. -->
+        <button
+          id="view-mode-toggle"
+          class="view-mode-toggle"
+          type="button"
+          data-view-mode-toggle
+          data-view-mode="chart-2d"
+          aria-controls="p5-mount"
+          aria-label="Current view: Chart 2D. Switch to Relief 3D."
+          aria-pressed="false"
+        >
+          <span class="view-mode-toggle__eyebrow">View</span>
+          <strong class="view-mode-toggle__current" data-view-mode-current>Chart 2D</strong>
+          <span class="view-mode-toggle__next" data-view-mode-next>Switch to Relief 3D</span>
+        </button>
         <p class="app-masthead__status" id="connection-status">
           The estuary is listening
         </p>
@@ -47,7 +65,8 @@
           <p id="canvas-instructions" class="visually-hidden">
             Focus the world view, then use WASD or arrow keys to travel. Press
             and hold Shift while moving to brace the load. Press Space to scan,
-            E to interact, and Escape to cancel a destination.
+            E to interact, V to switch Chart 2D and Relief 3D, and Escape to
+            cancel a destination. In Relief 3D, right-drag or Alt-drag orbits.
           </p>
           <div class="viewport-grain" aria-hidden="true"></div>
           <div class="viewport-vignette" aria-hidden="true"></div>

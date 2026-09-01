@@ -28,6 +28,7 @@ interface UIRefs {
   location: HTMLParagraphElement;
   stamina: HTMLProgressElement;
   stability: HTMLProgressElement;
+  stabilityDetail: HTMLSpanElement;
   scanCharge: HTMLProgressElement;
   cargo: HTMLProgressElement;
   cargoLabel: HTMLSpanElement;
@@ -38,6 +39,17 @@ interface UIRefs {
   objectiveProgress: HTMLProgressElement;
   objectiveProgressLabel: HTMLSpanElement;
   objectiveWhy: HTMLParagraphElement;
+  fieldReadout: HTMLDivElement;
+  fieldTerrain: HTMLSpanElement;
+  fieldDepth: HTMLSpanElement;
+  fieldEffort: HTMLSpanElement;
+  fieldTools: HTMLSpanElement;
+  fieldHint: HTMLSpanElement;
+  fieldSweep: HTMLProgressElement;
+  choirReadout: HTMLDivElement;
+  choirLabel: HTMLSpanElement;
+  choirProgress: HTMLProgressElement;
+  choirHint: HTMLSpanElement;
   contractDetails: HTMLDetailsElement;
   contractSummary: HTMLElement;
   contractCount: HTMLSpanElement;
@@ -250,9 +262,6 @@ const contractSignature = (contracts: readonly ContractUIView[]): string =>
         contract.status,
         contract.selected ? 1 : 0,
         contract.disabled ? 1 : 0,
-        Math.round((contract.progress ?? -1) * 100),
-        contract.eta ?? "",
-        contract.forecast ?? "",
         contract.masteryHint ?? "",
         contract.consequence ?? "",
         contract.actionLabel ?? "",
@@ -315,6 +324,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   };
   const [staminaWrapper, stamina] = makeVital("Stamina", "stamina");
   const [stabilityWrapper, stability] = makeVital("Stability", "stability");
+  const stabilityDetail = createElement("span", "vital__detail", "Stable · hold Shift to brace");
+  stabilityWrapper.append(stabilityDetail);
   const [scanWrapper, scanCharge] = makeVital("Loom", "scan");
   const [cargoWrapper, cargo] = makeVital("Cargo", "cargo");
   const cargoLabel = createElement("span", "vital__value", "0 / 0");
@@ -335,6 +346,31 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const objectiveProgress = makeProgress("Objective progress");
   const objectiveProgressLabel = createElement("span", "objective-panel__progress-label", "Not begun");
   const objectiveWhy = createElement("p", "objective-panel__why");
+  const fieldReadout = createElement("div", "field-readout");
+  fieldReadout.setAttribute("aria-label", "Current terrain, water depth, stamina cost, and field tools");
+  const fieldHeader = createElement("span", "field-readout__header");
+  fieldHeader.append(createElement("span", "field-readout__symbol", "⌖"));
+  const fieldTerrain = createElement("strong", "field-readout__terrain", "Uncharted ground");
+  fieldHeader.append(fieldTerrain);
+  const fieldMetrics = createElement("span", "field-readout__metrics");
+  const fieldDepth = createElement("span", "field-readout__depth", "Depth unsounded");
+  const fieldEffort = createElement("span", "field-readout__effort", "Normal stamina use");
+  fieldMetrics.append(fieldDepth, fieldEffort);
+  const fieldTools = createElement("span", "field-readout__tools", "FIELD KIT · Sounding line");
+  const fieldHint = createElement("span", "field-readout__hint", "Pulse Space to sound nearby water.");
+  const fieldSweep = makeProgress("Progress toward a safe bank while swept");
+  fieldSweep.classList.add("field-readout__sweep");
+  fieldSweep.hidden = true;
+  fieldReadout.append(fieldHeader, fieldMetrics, fieldTools, fieldHint, fieldSweep);
+  const choirReadout = createElement("div", "choir-readout");
+  choirReadout.setAttribute("aria-label", "Tide Choir survey progress");
+  const choirHeader = createElement("span", "choir-readout__header");
+  choirHeader.append(createElement("span", "choir-readout__symbol", "⌁"));
+  const choirLabel = createElement("span", "choir-readout__label", "No strands heard yet");
+  choirHeader.append(choirLabel);
+  const choirProgress = makeProgress("Tide Choir phrase progress");
+  const choirHint = createElement("span", "choir-readout__hint", "Travel between harbors along a corridor to survey it.");
+  choirReadout.append(choirHeader, choirProgress, choirHint);
   objectivePanel.append(
     objectiveEyebrow,
     objectiveTitle,
@@ -342,6 +378,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     objectiveProgress,
     objectiveProgressLabel,
     objectiveWhy,
+    fieldReadout,
+    choirReadout,
   );
 
   const contractDetails = createElement("details", "contract-rail glass-panel");
@@ -351,8 +389,14 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const contractCount = createElement("span", "panel-summary__count", "0");
   contractSummary.append(contractCount);
   const contractList = createElement("ol", "contract-list");
-  contractList.setAttribute("aria-label", "Available and active promises");
-  contractDetails.append(contractSummary, contractList);
+  contractList.tabIndex = 0;
+  contractList.setAttribute("aria-label", "Scrollable list of available and active promises");
+  const contractGuide = createElement(
+    "p",
+    "contract-rail__guide",
+    "Cargo promises: go to PICK UP, carry the goods, then DELIVER. Stock reports are separate information errands.",
+  );
+  contractDetails.append(contractSummary, contractGuide, contractList);
 
   const inspector = createElement("aside", "settlement-inspector glass-panel");
   inspector.setAttribute("aria-labelledby", "settlement-inspector-title");
@@ -404,9 +448,9 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
 
   const actionDock = createElement("nav", "action-dock glass-panel");
   actionDock.setAttribute("aria-label", "Journey actions");
-  const scanButton = createButton("action-button action-button--scan", "Scan", "Send a Loom scan pulse");
+  const scanButton = createButton("action-button action-button--scan", "Sound / Scan", "Pulse the Loom to reveal terrain and water depth");
   scanButton.append(createElement("kbd", "keycap", "Space"));
-  const interactButton = createButton("action-button", "Interact");
+  const interactButton = createButton("action-button action-button--interact", "Interact");
   interactButton.append(createElement("kbd", "keycap", "E"));
   const pauseButton = createButton("action-button pause-button", "Hold tide");
   pauseButton.append(createElement("kbd", "keycap", "P"));
@@ -588,10 +632,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     ["WASD / Arrows", "Travel"],
     ["Hold Shift", "Brace while moving"],
     ["Pointer", "Choose a world destination"],
-    ["Space", "Pulse the Loom"],
+    ["Space", "Sound water depth and reveal nearby terrain"],
     ["E / Enter", "Interact"],
     ["[ / ]", "Change pace"],
     ["P", "Hold or release the tide"],
+    ["V", "Switch Chart 2D / Relief 3D"],
+    ["Right / Alt drag", "Orbit the Relief 3D camera"],
     ["Escape / right click", "Cancel destination"],
     ["?", "Open this help"],
   ];
@@ -607,7 +653,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     "help-dialog__note",
     "Important states use words, symbols, and line patterns in addition to color. Reduced-motion preferences are honored automatically.",
   );
-  helpContent.append(helpHeader, helpIntro, helpGrid, accessibilityNote);
+  const journeyNote = createElement(
+    "p",
+    "help-dialog__note",
+    "Cargo promises move physical goods from the named PICK UP harbor to the named DELIVER harbor. Signed stock reports are separate one-slot information jobs. Deep water drains more stamina; if it empties, the current sweeps you toward a safe bank while cargo stays with you. Visit completed civic projects to inherit field tools.",
+  );
+  helpContent.append(helpHeader, helpIntro, helpGrid, journeyNote, accessibilityNote);
   helpDialog.append(helpContent);
 
   shell.append(
@@ -640,6 +691,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     location,
     stamina,
     stability,
+    stabilityDetail,
     scanCharge,
     cargo,
     cargoLabel,
@@ -650,6 +702,17 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     objectiveProgress,
     objectiveProgressLabel,
     objectiveWhy,
+    fieldReadout,
+    fieldTerrain,
+    fieldDepth,
+    fieldEffort,
+    fieldTools,
+    fieldHint,
+    fieldSweep,
+    choirReadout,
+    choirLabel,
+    choirProgress,
+    choirHint,
     contractDetails,
     contractSummary,
     contractCount,
@@ -720,8 +783,19 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let forcedTitle: boolean | null = null;
   let forcedQuietHour: boolean | null = null;
   let titleFormDirty = false;
+  let contractPointerActive = false;
   let running = false;
   let frameHandle: number | null = null;
+
+  const releaseContractPointer = (): void => {
+    window.setTimeout(() => {
+      contractPointerActive = false;
+    }, 0);
+  };
+
+  const cancelContractPointer = (): void => {
+    contractPointerActive = false;
+  };
 
   const announce = (message: string, assertive = false): void => {
     announcer.setAttribute("aria-live", assertive ? "assertive" : "polite");
@@ -734,6 +808,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const renderContracts = (contracts: readonly ContractUIView[]): void => {
     const signature = contractSignature(contracts);
     if (signature === lastContracts) return;
+    // Never replace a button between pointer-down and click. Live ETA/progress
+    // values are deliberately absent from the structural signature, so cards
+    // otherwise update only when their actionable state actually changes.
+    if (lastContracts !== "" && contractPointerActive) return;
     lastContracts = signature;
     refs.contractList.replaceChildren();
     refs.contractCount.textContent = String(contracts.length);
@@ -772,9 +850,15 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
         : undefined;
       const summary = createElement("span", "contract-card__summary", contract.summary);
       const route = createElement("span", "contract-card__route");
-      route.append(createElement("span", "contract-card__origin", contract.origin));
+      const pickup = createElement("span", "contract-card__route-stop contract-card__route-stop--pickup");
+      pickup.append(createElement("span", "contract-card__route-verb", "PICK UP"));
+      pickup.append(createElement("span", "contract-card__origin", contract.origin));
+      const delivery = createElement("span", "contract-card__route-stop contract-card__route-stop--delivery");
+      delivery.append(createElement("span", "contract-card__route-verb", "DELIVER"));
+      delivery.append(createElement("span", "contract-card__destination", contract.destination));
+      route.append(pickup);
       route.append(createElement("span", "contract-card__arrow", "→"));
-      route.append(createElement("span", "contract-card__destination", contract.destination));
+      route.append(delivery);
       const cargo = createElement("span", "contract-card__cargo");
       cargo.append(createElement("span", "contract-card__cargo-symbol", "◇"));
       cargo.append(createElement("span", "contract-card__cargo-label", contract.cargoLabel));
@@ -882,6 +966,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     for (const connection of settlement.connections) {
       const item = createElement("li", "connection-item");
       if (connection.redundant) item.dataset.redundant = "true";
+      if (connection.surveyed) item.dataset.surveyed = "true";
+      if (connection.choirMember) item.dataset.choir = "true";
       const copy = createElement("span", "connection-item__copy");
       copy.append(createElement("strong", "connection-item__name", connection.settlementName));
       copy.append(createElement("span", "connection-item__condition", connection.conditionLabel));
@@ -906,6 +992,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
         });
         actions.append(action);
       }
+      if (connection.actionHint) {
+        actions.append(createElement("span", "connection-item__action-hint", connection.actionHint));
+      }
       if (connection.settlementId && connection.reportActionLabel) {
         const reportAction = createButton(
           "connection-item__action text-button",
@@ -922,6 +1011,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
           });
         });
         actions.append(reportAction);
+      }
+      if (connection.reportActionHint) {
+        actions.append(createElement("span", "connection-item__action-hint", connection.reportActionHint));
       }
       if (actions.childElementCount > 0) item.append(actions);
       refs.inspectorConnections.append(item);
@@ -1015,6 +1107,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     );
     setProgress(refs.stamina, view.player.stamina);
     setProgress(refs.stability, view.player.stability);
+    refs.stabilityDetail.textContent = view.player.stabilityHint;
+    refs.stabilityDetail.dataset.trend = view.player.stabilityTrend;
     setProgress(refs.scanCharge, view.player.scanCharge);
     const cargoRatio = view.player.cargoLoad / Math.max(1, view.player.cargoCapacity);
     setProgress(refs.cargo, cargoRatio, `${view.player.cargoLoad} of ${view.player.cargoCapacity}`);
@@ -1032,6 +1126,19 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       refs.objectiveWhy.textContent = objective.why ?? "";
       refs.objectiveWhy.hidden = !objective.why;
     }
+    refs.choirLabel.textContent = view.choir.label;
+    setProgress(refs.choirProgress, view.choir.progress, `${Math.round(view.choir.progress * 100)} percent of a harbor phrase`);
+    refs.choirHint.textContent = view.choir.hint;
+    refs.choirReadout.dataset.awake = view.choir.awakenedCount > 0 ? "true" : "false";
+    refs.fieldTerrain.textContent = view.field.terrainLabel;
+    refs.fieldDepth.textContent = view.field.depthLabel;
+    refs.fieldDepth.dataset.known = view.field.depthKnown ? "true" : "false";
+    refs.fieldEffort.textContent = view.field.effortLabel;
+    refs.fieldTools.textContent = `FIELD KIT · ${view.field.toolLabels.join(" · ")}`;
+    refs.fieldHint.textContent = view.field.hint;
+    refs.fieldReadout.dataset.swept = view.field.swept ? "true" : "false";
+    refs.fieldSweep.hidden = !view.field.swept;
+    setProgress(refs.fieldSweep, view.field.sweptProgress, `${Math.round(view.field.sweptProgress * 100)} percent toward shore`);
 
     renderContracts(view.contracts);
     renderInspector(view.selectedSettlement);
@@ -1043,6 +1150,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.pauseButton.disabled = view.controls?.canPause === false;
     refs.scanButton.disabled = view.controls?.canScan === false;
     refs.interactButton.disabled = view.controls?.canInteract === false;
+    refs.interactButton.textContent = view.controls?.interactLabel ?? "Interact";
+    refs.interactButton.append(createElement("kbd", "keycap", "E"));
+    refs.interactButton.title = view.controls?.interactHint ?? "Interact with the current harbor";
     refs.quietButton.disabled = view.controls?.canEndSession === false;
     for (const [pace, button] of Object.entries(refs.paceButtons) as Array<[PaceView, HTMLButtonElement]>) {
       button.setAttribute("aria-pressed", pace === view.player.pace ? "true" : "false");
@@ -1081,6 +1191,11 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   refs.pauseButton.addEventListener("click", () => options.dispatch({ type: "toggle-pause" }));
+  refs.contractList.addEventListener("pointerdown", () => {
+    contractPointerActive = true;
+  });
+  window.addEventListener("pointerup", releaseContractPointer);
+  window.addEventListener("pointercancel", cancelContractPointer);
   refs.scanButton.addEventListener("click", () => options.dispatch({ type: "scan" }));
   refs.interactButton.addEventListener("click", () => options.dispatch({ type: "interact" }));
   refs.quietButton.addEventListener("click", () => options.dispatch({ type: "quiet-hour", action: "open" }));
@@ -1187,6 +1302,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     destroy: () => {
       stop();
       document.removeEventListener("keydown", onGlobalKeyDown);
+      window.removeEventListener("pointerup", releaseContractPointer);
+      window.removeEventListener("pointercancel", cancelContractPointer);
       syncDialog(refs.helpDialog, false);
       syncDialog(refs.quietDialog, false);
       syncDialog(refs.titleDialog, false);

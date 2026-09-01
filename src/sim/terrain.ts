@@ -1,6 +1,5 @@
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "./rng";
 import {
-  FIXED_POINT,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   type TerrainKind,
@@ -13,32 +12,103 @@ import { clampInteger } from "./util";
 const TERRAIN_DOMAIN = 0x5445_5252;
 const TIDE_PERIOD_TICKS = 720;
 
-function lerpInteger(left: number, right: number, numerator: number, denominator: number): number {
-  return left + Math.trunc(((right - left) * numerator) / denominator);
+const GRADIENTS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [Math.SQRT1_2, Math.SQRT1_2],
+  [-Math.SQRT1_2, Math.SQRT1_2],
+  [Math.SQRT1_2, -Math.SQRT1_2],
+  [-Math.SQRT1_2, -Math.SQRT1_2],
+] as const;
+
+function fade(value: number): number {
+  return value * value * value * (value * (value * 6 - 15) + 10);
 }
 
-function latticeValue(seed: RootSeed, gridX: number, gridY: number, domain: number): number {
-  const entity = gridY * 4096 + gridX;
-  return keyedRandomU32(seed, TERRAIN_DOMAIN, domain, entity, 0) % (FIXED_POINT + 1);
+function lerp(left: number, right: number, amount: number): number {
+  return left + (right - left) * amount;
 }
 
-function valueNoise(seed: RootSeed, x: number, y: number, scale: number, domain: number): number {
-  const gridX = Math.floor(x / scale);
-  const gridY = Math.floor(y / scale);
-  const offsetX = x % scale;
-  const offsetY = y % scale;
-  const northWest = latticeValue(seed, gridX, gridY, domain);
-  const northEast = latticeValue(seed, gridX + 1, gridY, domain);
-  const southWest = latticeValue(seed, gridX, gridY + 1, domain);
-  const southEast = latticeValue(seed, gridX + 1, gridY + 1, domain);
-  const north = lerpInteger(northWest, northEast, offsetX, scale);
-  const south = lerpInteger(southWest, southEast, offsetX, scale);
-  return lerpInteger(north, south, offsetY, scale);
+type GradientCache = Map<number, number>;
+
+function gradientAt(
+  seed: RootSeed,
+  latticeX: number,
+  latticeY: number,
+  domain: number,
+  cache: GradientCache,
+) {
+  const cacheKey = domain * 1_000_000 + latticeY * 1_000 + latticeX;
+  let gradientIndex = cache.get(cacheKey);
+  if (gradientIndex === undefined) {
+    const entity = latticeY * 4096 + latticeX;
+    gradientIndex = keyedRandomU32(seed, TERRAIN_DOMAIN, domain, entity, 0) % GRADIENTS.length;
+    cache.set(cacheKey, gradientIndex);
+  }
+  const gradient = GRADIENTS[gradientIndex];
+  if (gradient === undefined) throw new Error("Perlin gradient table is incomplete");
+  return gradient;
 }
 
-function channelCenter(seed: RootSeed, x: number): number {
-  const broad = valueNoise(seed, x, 0, 12, 41);
-  return Math.floor(WORLD_HEIGHT / 2) + Math.trunc((broad - 500_000) / 62_500);
+/** Seeded two-dimensional gradient Perlin noise, normalized to approximately -1..1. */
+function perlinNoise(
+  seed: RootSeed,
+  x: number,
+  y: number,
+  scale: number,
+  domain: number,
+  cache: GradientCache,
+): number {
+  const sampleX = x / scale;
+  const sampleY = y / scale;
+  const west = Math.floor(sampleX);
+  const north = Math.floor(sampleY);
+  const offsetX = sampleX - west;
+  const offsetY = sampleY - north;
+  const east = west + 1;
+  const south = north + 1;
+
+  const dot = (latticeX: number, latticeY: number): number => {
+    const gradient = gradientAt(seed, latticeX, latticeY, domain, cache);
+    return gradient[0] * (sampleX - latticeX) + gradient[1] * (sampleY - latticeY);
+  };
+  const amountX = fade(offsetX);
+  const amountY = fade(offsetY);
+  const northBlend = lerp(dot(west, north), dot(east, north), amountX);
+  const southBlend = lerp(dot(west, south), dot(east, south), amountX);
+  return Math.max(-1, Math.min(1, lerp(northBlend, southBlend, amountY) * Math.SQRT2));
+}
+
+/** Fractal Brownian motion composed from independently seeded Perlin octaves. */
+function fractalNoise(
+  seed: RootSeed,
+  x: number,
+  y: number,
+  baseScale: number,
+  octaves: number,
+  domain: number,
+  cache: GradientCache,
+  persistence = 0.52,
+): number {
+  let total = 0;
+  let totalAmplitude = 0;
+  let amplitude = 1;
+  let scale = baseScale;
+  for (let octave = 0; octave < octaves; octave += 1) {
+    total += perlinNoise(seed, x, y, scale, domain + octave * 977, cache) * amplitude;
+    totalAmplitude += amplitude;
+    amplitude *= persistence;
+    scale /= 2;
+  }
+  return totalAmplitude === 0 ? 0 : total / totalAmplitude;
+}
+
+function channelCenter(seed: RootSeed, x: number, cache: GradientCache): number {
+  const broadMeander = fractalNoise(seed, x, 11.5, 52, 3, 41, cache, 0.58);
+  const braidedMeander = fractalNoise(seed, x, 29.25, 19, 2, 53, cache, 0.46);
+  return Math.floor(WORLD_HEIGHT / 2) + Math.trunc(broadMeander * 15 + braidedMeander * 4);
 }
 
 function terrainKind(elevation: number): TerrainKind {
@@ -67,30 +137,41 @@ function travelCost(kind: TerrainKind, roughness: number): number {
 
 export function generateTerrain(seed: RootSeed): TerrainState {
   const tiles: TerrainTile[] = [];
+  const gradientCache: GradientCache = new Map();
+  const channelCenters = Array.from(
+    { length: WORLD_WIDTH },
+    (_, x) => channelCenter(seed, x, gradientCache),
+  );
   for (let y = 0; y < WORLD_HEIGHT; y += 1) {
     for (let x = 0; x < WORLD_WIDTH; x += 1) {
-      const broad = valueNoise(seed, x, y, 16, 1);
-      const medium = valueNoise(seed, x, y, 8, 2);
-      const detail = valueNoise(seed, x, y, 4, 3);
-      const center = channelCenter(seed, x);
+      const broad = fractalNoise(seed, x, y, 48, 4, 1, gradientCache, 0.54);
+      const detail = fractalNoise(seed, x, y, 11, 3, 13, gradientCache, 0.46);
+      const center = channelCenters[x] ?? Math.floor(WORLD_HEIGHT / 2);
       const channelDistance = Math.abs(y - center);
-      const channelCut = Math.max(0, 390_000 - channelDistance * 50_000);
-      const edgeRise = Math.trunc((Math.abs(y - WORLD_HEIGHT / 2) * 85_000) / WORLD_HEIGHT);
+      const channelCut = Math.max(0, 455_000 - channelDistance * 47_000 + Math.trunc(detail * 38_000));
+      const edgeRise = Math.trunc(
+        (Math.abs(y - WORLD_HEIGHT / 2) * 480_000) / WORLD_HEIGHT,
+      );
       const elevation = clampInteger(
-        230_000 +
-          Math.trunc((broad * 42) / 100) +
-          Math.trunc((medium * 18) / 100) +
-          Math.trunc((detail * 10) / 100) +
+        500_000 +
+          Math.trunc(broad * 285_000) +
+          Math.trunc(detail * 85_000) +
           edgeRise -
           channelCut,
       );
-      const moistureNoise = valueNoise(seed, x, y, 9, 4);
+      const moistureNoise = fractalNoise(seed, x, y, 29, 3, 71, gradientCache, 0.55);
       const moisture = clampInteger(
-        760_000 - channelDistance * 24_000 + Math.trunc((moistureNoise - 500_000) / 3),
+        730_000
+          - channelDistance * 13_000
+          - Math.trunc(Math.max(0, elevation - 620_000) / 4)
+          + Math.trunc(moistureNoise * 190_000)
+          + Math.trunc(detail * 55_000),
       );
-      const roughNoise = valueNoise(seed, x, y, 3, 5);
       const roughness = clampInteger(
-        Math.trunc(Math.abs(detail - medium) / 2) + Math.trunc(roughNoise / 3),
+        85_000
+          + Math.trunc(Math.abs(broad - detail) * 220_000)
+          + Math.trunc(Math.abs(detail) * 310_000)
+          + Math.trunc(Math.abs(detail * 0.65 + broad * 0.35) * 90_000),
       );
       const terrain = terrainKind(elevation);
       const index = y * WORLD_WIDTH + x;

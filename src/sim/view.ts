@@ -43,6 +43,11 @@ export function createWorldView(world: WorldState): WorldView {
       location: { ...resident.location },
     })),
     routes: world.routes.map((route) => ({ ...route, path: [...route.path] })),
+    choirs: world.choirs.map((choir) => ({
+      ...choir,
+      routeIds: [...choir.routeIds],
+      settlementIds: [...choir.settlementIds],
+    })),
     contracts: world.contracts.map((contract) => ({
       ...contract,
       porterRouteIds: [...contract.porterRouteIds],

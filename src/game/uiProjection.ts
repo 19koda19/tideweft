@@ -12,7 +12,15 @@ import type {
   SettlementInspectorUIView,
   TideweftUIView,
 } from "../ui/types";
-import { cargoWeight, settlementAtPlayer, type PlayerState } from "./player";
+import {
+  FIELD_TOOL_LABELS,
+  cargoWeight,
+  playerTileIndex,
+  settlementAtPlayer,
+  waterDepthBand,
+  waterEffortPerStep,
+  type PlayerState,
+} from "./player";
 import { sessionOutcomeDelta, type GameSessionState } from "./sessionTypes";
 import { tutorialObjective } from "./tutorial";
 
@@ -25,9 +33,17 @@ export function projectUIView(
     ? undefined
     : world.settlements.find((settlement) => settlement.id === session.selectedSettlementId);
   const playerSettlementId = settlementAtPlayer(player, world);
+  const localOffers = playerSettlementId === null
+    ? []
+    : world.contracts.filter(
+        (contract) => contract.status === "offered" && contract.originSettlementId === playerSettlementId,
+      );
   const activeContract = player.activeContractId === null
     ? undefined
     : world.contracts.find((contract) => contract.id === player.activeContractId);
+  const trackedContract = session.trackedContractId === null
+    ? undefined
+    : world.contracts.find((contract) => contract.id === session.trackedContractId);
   const tutorial = tutorialObjective(session.tutorial, player);
   const report = reportObjective(world, player);
   const minute = world.completedTick % 1_440;
@@ -77,6 +93,8 @@ export function projectUIView(
     player: {
       stamina: player.stamina / FIXED_POINT,
       stability: player.stability / FIXED_POINT,
+      stabilityTrend: player.stabilityTrend,
+      stabilityHint: player.stabilityHint,
       scanCharge: player.scanCharge / FIXED_POINT,
       cargoLoad: cargoWeight(player),
       cargoCapacity: player.cargoCapacity,
@@ -85,13 +103,17 @@ export function projectUIView(
         ? { locationLabel: player.mode === "skiff" ? "On the tide" : "Between harbors" }
         : { locationLabel: settlementName(world, playerSettlementId) }),
     },
+    field: projectFieldReadout(world, player),
+    choir: projectChoir(world, player),
     ...(activeContract
       ? { objective: contractObjective(activeContract, world, player) }
       : report
         ? { objective: report }
-        : tutorial
-          ? { objective: tutorial }
-          : { objective: sessionShapeObjective(session, player, world) }),
+        : trackedContract?.status === "offered"
+          ? { objective: pickupObjective(trackedContract, world, player) }
+          : tutorial
+            ? { objective: tutorial }
+            : { objective: sessionShapeObjective(session, player, world) }),
     contracts: world.contracts
       .filter((contract) => contract.status === "offered" || contract.id === player.activeContractId)
       .sort((left, right) => contractPriority(left, playerSettlementId) - contractPriority(right, playerSettlementId))
@@ -115,7 +137,7 @@ export function projectUIView(
             durationLabel: formatDuration(session.sessionPlayMilliseconds),
             distanceLabel: `${(session.sessionDistanceUnits / 1_000).toFixed(1)} tiles crossed`,
             deliveries: session.sessionDeliveries,
-            strandLabel: `${session.sessionStrandsWoven} strands tended · ${session.sessionReportsDelivered} reports carried · ${Math.max(0, discoveredTileCount(player) - session.sessionDiscoveredAtStart)} new terrain marks charted`,
+            strandLabel: `${session.sessionStrandsWoven} strands tended · ${session.sessionChoirsAwakened} choirs awakened · ${session.sessionReportsDelivered} reports carried · ${Math.max(0, discoveredTileCount(player) - session.sessionDiscoveredAtStart)} new terrain marks charted`,
             summary: quietSummary(session),
             changes: quietHourChanges(session, world),
             quote: "A useful path is a promise the land can keep.",
@@ -134,12 +156,101 @@ export function projectUIView(
       : {}),
     controls: {
       canPause: !session.titleVisible,
-      canScan: player.scanCharge >= 280_000,
-      canInteract: playerSettlementId !== null,
-      canChangePace: !session.paused,
+      canScan: player.mode !== "swept" && player.scanCharge >= 280_000,
+      canInteract: player.mode !== "swept" && playerSettlementId !== null,
+      interactLabel: player.mode === "swept"
+        ? "Current has helm"
+        : activeContract?.destinationSettlementId === playerSettlementId
+        ? "Deliver cargo"
+        : player.report?.targetSettlementId === playerSettlementId
+          ? "Deliver report"
+          : player.activeContractId === null && player.report === null && localOffers.length === 1
+            ? "Pick up cargo"
+            : "Inspect harbor",
+      interactHint: player.mode === "swept"
+        ? "Harbor actions return after the safe bank catches you."
+        : playerSettlementId === null
+        ? "Reach a harbor mark first."
+        : localOffers.length === 1
+          ? "One local promise is ready here; this collects its physical cargo."
+          : localOffers.length > 1
+            ? `${localOffers.length} local cargo promises are waiting; open Promises to choose one.`
+            : "Open this harbor's people, stores, routes, and reports.",
+      canChangePace: !session.paused && player.mode !== "swept",
       canEndSession: !session.titleVisible,
     },
   };
+}
+
+function projectFieldReadout(world: WorldView, player: PlayerState) {
+  const index = playerTileIndex(player);
+  const tile = world.terrain.tiles[index];
+  const settlement = world.settlements.find((candidate) => candidate.tileIndex === index);
+  const depth = tile?.waterDepth ?? 0;
+  const depthKnown = (player.depthSoundings[index] ?? 0) > 0;
+  const band = waterDepthBand(depth);
+  const effort = waterEffortPerStep(player, depth);
+  const sweptProgress = sweepProgress(player);
+  const terrainLabel = settlement
+    ? `${settlement.name} harbor decking`
+    : tile
+      ? fieldTerrainLabel(tile)
+      : "Uncharted ground";
+  const depthLabel = depth <= 20_000
+    ? "Dry footing"
+    : depthKnown
+      ? `${(depth / 125_000).toFixed(1)}m sounding · ${band} water`
+      : "Water depth unsounded · pulse Space";
+  const effortLabel = effort <= 0
+    ? tile?.terrain === "marsh" || tile?.terrain === "tidal-flat" ? "Soft ground effort" : "Normal stamina use"
+    : effort < 900
+      ? "Low water drain"
+      : effort < 1_800
+        ? "Moderate water drain"
+        : effort < 2_700
+          ? "High water drain"
+          : "Severe water drain";
+  const hint = player.mode === "swept"
+    ? `Current has the helm · ${Math.round(sweptProgress * 100)}% toward a safe bank. Pace, steering, and sounding return ashore; cargo remains with you.`
+    : depth > 20_000 && !depthKnown
+      ? "Use the sounding line (Space) from shore to reveal nearby depth before committing stamina."
+      : depth > 20_000
+        ? `${titleCase(band)} water costs ${effort.toLocaleString()} extra stamina per movement step${player.tools.includes("tide-sail") ? "; the Tide sail is reducing it" : ""}. Empty stamina in deep water means a recoverable sweep.`
+        : tile?.terrain === "marsh" || tile?.terrain === "tidal-flat"
+          ? player.tools.includes("marsh-stilts")
+            ? "Marsh stilts are reducing drag and ground effort here."
+            : "A completed crossing can entrust you with Marsh stilts for soft terrain."
+          : "Complete civic projects, then visit their harbor to inherit practical field tools.";
+  return {
+    terrainLabel,
+    depthLabel,
+    depthKnown,
+    effortLabel,
+    hint,
+    toolLabels: player.tools.map((tool) => FIELD_TOOL_LABELS[tool]),
+    swept: player.mode === "swept",
+    sweptProgress,
+  };
+}
+
+function sweepProgress(player: PlayerState): number {
+  if (player.mode !== "swept") return 0;
+  const total = Math.max(1, player.sweepTotalTicks);
+  const raw = 1 - player.sweepTicksRemaining / total;
+  // Completion is only truthful after stepPlayer reaches a safe bank and
+  // leaves swept mode. Rounding or a repaired legacy save must never show
+  // 100% while control is still unavailable.
+  return Math.max(0, Math.min(0.99, raw));
+}
+
+function fieldTerrainLabel(tile: WorldView["terrain"]["tiles"][number]): string {
+  switch (tile.terrain) {
+    case "deep-water": return "Tidal channel";
+    case "tidal-flat": return tile.moisture < 560_000 || tile.elevation > 310_000 ? "Shell sandbar" : "Silt flat";
+    case "marsh": return "Reed marsh";
+    case "meadow": return tile.moisture < 545_000 || tile.roughness > 610_000 ? "Wind scrub" : "Salt meadow";
+    case "ridge": return "Shell ridge";
+  }
 }
 
 function projectContract(
@@ -161,7 +272,7 @@ function projectContract(
     && destinationSettlement.project.resource === contract.resource;
   return {
     id: String(contract.id),
-    title: `${titleCase(contract.resource)} for ${destination}`,
+    title: `${contract.quantity} ${titleCase(contract.resource)} · ${origin} → ${destination}`,
     ...(requester ? { requester: `Requested by ${requester.name} · ${titleCase(requester.role)}` } : {}),
     summary: `${destination} reports a real shortage; ${origin} can spare ${contract.quantity}.`,
     origin,
@@ -184,27 +295,71 @@ function projectContract(
         ? "Handoff at any harbor"
         : "Hand off promise safely"
       : atOrigin
-        ? "Carry this promise"
-        : `Chart pickup at ${origin}`,
+        ? "Pick up cargo here"
+        : `Go to ${origin} for pickup`,
   };
 }
 
 function contractObjective(contract: ContractState, world: WorldView, player: PlayerState) {
+  const origin = settlementName(world, contract.originSettlementId);
   const destination = settlementName(world, contract.destinationSettlementId);
   const cargo = player.cargo.find((item) => item.contractId === contract.id);
   const journey = journeyProgress(contract, world, player);
   return {
     id: String(contract.id),
-    eyebrow: "Promise carried",
-    title: `Bring ${titleCase(contract.resource)} to ${destination}`,
+    eyebrow: `Deliver to ${destination}`,
+    title: `DELIVER ${contract.quantity} ${titleCase(contract.resource)} → ${destination}`,
     description: cargo
-      ? `${cargo.quantity} units at ${Math.round((cargo.condition / FIXED_POINT) * 100)}% condition. Every arrival still matters.`
-      : "Return to the origin to collect the cargo.",
+      ? `Pickup complete at ${origin}. The cargo is in your pack at ${Math.round((cargo.condition / FIXED_POINT) * 100)}% condition; reach ${destination}'s harbor mark and press E.`
+      : `The promise is recorded, but pickup is not complete. Return to ${origin} and use the harbor action.`,
     progress: cargo ? journey.progress : 0,
     progressLabel: cargo
       ? `${journey.remaining.toFixed(1)} tiles remaining · ${Math.round((cargo.condition / FIXED_POINT) * 100)}% condition`
       : "Awaiting pickup",
-    why: `${destination} issued this because its simulated stock fell below a safe reserve.`,
+    why: `PICKUP: ${origin} ✓  ·  DELIVERY: ${destination}. Every condition grade still arrives.`,
+  };
+}
+
+function pickupObjective(contract: ContractState, world: WorldView, player: PlayerState) {
+  const origin = world.settlements.find((settlement) => settlement.id === contract.originSettlementId);
+  const destination = settlementName(world, contract.destinationSettlementId);
+  const originName = origin?.name ?? settlementName(world, contract.originSettlementId);
+  const tile = origin ? world.terrain.tiles[origin.tileIndex] : undefined;
+  const dx = tile ? tile.x + 0.5 - player.x / 1_000 : 0;
+  const dy = tile ? tile.y + 0.5 - player.y / 1_000 : 0;
+  const remaining = Math.hypot(dx, dy);
+  const route = world.routes.find((candidate) => candidate.id === contract.routeId);
+  const total = Math.max(1, route ? route.path.length - 1 : remaining);
+  const direction = compassDirection(dx, dy);
+  return {
+    id: `pickup-${contract.id}`,
+    eyebrow: `Pick up at ${originName}`,
+    title: `PICK UP ${contract.quantity} ${titleCase(contract.resource)} ← ${originName}`,
+    description: `The cargo is waiting at ${originName}; it is not in your pack yet. Follow the amber pickup marker${direction ? ` ${direction}` : ""}, then choose “Pick up cargo here.”`,
+    progress: Math.max(0, Math.min(1, 1 - remaining / total)),
+    progressLabel: `${remaining.toFixed(1)} tiles to pickup · then deliver to ${destination}`,
+    why: `PICKUP: ${originName}  ·  DELIVERY: ${destination}. The objective changes automatically after collection.`,
+  };
+}
+
+function projectChoir(world: WorldView, player: PlayerState) {
+  const phraseHarbors = player.harborTrail
+    .map((id) => world.settlements.find((settlement) => settlement.id === id)?.name)
+    .filter((name): name is string => name !== undefined);
+  const legCount = Math.max(0, phraseHarbors.length - 1);
+  const awakenedCount = world.choirs.length;
+  return {
+    awakenedCount,
+    surveyedCount: player.surveyedRouteIds.length,
+    totalRoutes: world.routes.length,
+    phraseHarbors,
+    progress: Math.min(1, legCount / 3),
+    label: awakenedCount === 0
+      ? `${player.surveyedRouteIds.length} strands heard`
+      : `${awakenedCount} ${awakenedCount === 1 ? "choir" : "choirs"} awake`,
+    hint: phraseHarbors.length <= 1
+      ? "Travel from this harbor to another along its visible corridor to survey the first note."
+      : `Current phrase: ${phraseHarbors.join(" → ")}. Close a simple loop of three or more harbors to wake its choir.`,
   };
 }
 
@@ -221,12 +376,12 @@ function reportObjective(world: WorldView, player: PlayerState) {
   const age = world.completedTick - report.observedTick;
   return {
     id: `report-${source.id}-${target.id}`,
-    eyebrow: "Information is cargo",
-    title: `Carry ${source.name}'s signed count to ${target.name}`,
-    description: `${titleCase(report.resource)} was observed at ${report.reportedQuantity}. The document is ${age} in-world minutes old and retains its named source.`,
+    eyebrow: `Deliver report to ${target.name}`,
+    title: `DELIVER VERIFIED ${titleCase(report.resource)} COUNT → ${target.name}`,
+    description: `${source.name} recorded ${report.reportedQuantity} ${titleCase(report.resource)}. The document uses one pack slot, is ${age} in-world minutes old, and is delivered at ${target.name}'s harbor with E.`,
     progress: Math.max(0, Math.min(1, 1 - remaining / total)),
     progressLabel: `${remaining.toFixed(1)} tiles remaining · ${age}m old`,
-    why: "A delivered fact updates what another autonomous settlement can responsibly plan and request.",
+    why: `PICKUP: ${source.name} ✓  ·  DELIVERY: ${target.name}. Arrival replaces guesswork with a named, time-stamped source.`,
   };
 }
 
@@ -276,7 +431,7 @@ function projectSettlement(
       ? `${Math.floor(average(settlement.knowledge.map((record) => record.ageTicks)) / 60)} hours ago`
       : "Verified locally",
     summary: verifiedLocally
-      ? `${settlement.name} specializes in ${titleCase(settlement.specialization)} and is ${Math.round(settlement.project.progress / Math.max(1, settlement.project.target) * 100)}% through its ${titleCase(settlement.project.kind)} project.`
+      ? `${settlement.name} specializes in ${titleCase(settlement.specialization)} and is ${Math.round(settlement.project.progress / Math.max(1, settlement.project.target) * 100)}% through its ${titleCase(settlement.project.kind)} project. ${projectFieldGift(settlement.project.kind, settlement.project.status)}`
       : `${settlement.name} is known for ${titleCase(settlement.specialization)}, but its stores and civic work are still based on sourced reports rather than direct observation.`,
     metrics: [
       {
@@ -319,28 +474,60 @@ function projectSettlement(
       const isHere = playerSettlementId === settlement.id;
       const partsAvailable = settlement.inventory.parts > 0;
       const automated = (route?.traceStrength ?? 0) >= STRAND_AUTOMATION_THRESHOLD;
+      const surveyed = route !== undefined && player.surveyedRouteIds.includes(route.id);
+      const choirMember = route !== undefined && world.choirs.some((choir) => choir.routeIds.includes(route.id));
       const weaveProgress = Math.min(100, Math.round(((route?.traceStrength ?? 0) / STRAND_AUTOMATION_THRESHOLD) * 100));
       return {
         id: String(trust.settlementId),
         ...(route ? { routeId: String(route.id) } : {}),
         settlementId: String(settlement.id),
         settlementName: settlementName(world, trust.settlementId),
-        conditionLabel: automated
-          ? "Self-carrying strand"
-          : `Faint trace · ${weaveProgress}% woven`,
+        conditionLabel: `${choirMember ? "Choir loop · " : surveyed ? "Surveyed · " : "Unsurveyed · "}${automated
+          ? "self-carrying strand"
+          : `faint trace · ${weaveProgress}% woven`}`,
         reliability: ((route?.reliability ?? trust.value) + (route?.condition ?? trust.value)) / (2 * FIXED_POINT),
         redundant: automated && establishedConnections > 1,
+        surveyed,
+        choirMember,
         ...(route
           ? {
-              actionLabel: automated ? "Tend with 1 part" : "Weave with 1 part",
-              actionDisabled: !isHere || !partsAvailable,
-              reportActionLabel: player.report === null ? "Carry signed report" : "Report already carried",
+              actionLabel: !surveyed
+                ? "Survey this route first"
+                : automated
+                  ? "Spend 1 part to repair route"
+                  : "Spend 1 part to strengthen route",
+              actionHint: !surveyed
+                ? `Travel from ${settlement.name} to ${settlementName(world, trust.settlementId)} along this corridor first. Surveying proves which physical path the work will improve.`
+                : automated
+                  ? `Uses 1 part from ${settlement.name}'s shared stores. Permanently improves this self-carrying route's strength and weather condition.`
+                  : `Uses 1 part from ${settlement.name}'s shared stores. Permanently raises strand strength and condition; at 100% woven, resident porters can carry promises here automatically.`,
+              actionDisabled: !isHere || !partsAvailable || !surveyed,
+              reportActionLabel: player.report === null
+                ? `Carry stock report to ${settlementName(world, trust.settlementId)}`
+                : "Document case already occupied",
+              reportActionHint: player.report === null
+                ? `Records ${settlement.name}'s current ${titleCase(settlement.specialization)} count, uses 1 pack slot, and gives ${settlementName(world, trust.settlementId)} a sourced fact after you arrive and press E.`
+                : "Deliver the report already in your document case before collecting another.",
               reportActionDisabled: !isHere || player.report !== null || cargoWeight(player) >= player.cargoCapacity,
             }
           : {}),
       };
     }),
   };
+}
+
+function projectFieldGift(
+  kind: WorldView["settlements"][number]["project"]["kind"],
+  status: WorldView["settlements"][number]["project"]["status"],
+): string {
+  const prefix = status === "complete" ? "Visit to collect its field benefit:" : "When complete, a visit can entrust you with";
+  switch (kind) {
+    case "crossing": return `${prefix} Marsh stilts for mudflats and reed marsh.`;
+    case "ferry": return `${prefix} a Tide sail for faster, less tiring deep water.`;
+    case "beacon": return `${prefix} a Storm kite for wind stability and shorter sweeps.`;
+    case "clinic": return "Completed clinics can rescue an exhausted courier through an established strand, including before a water sweep begins.";
+    case "cache": return "Completed caches improve rest, stability, and perishable shelter at this harbor.";
+  }
 }
 
 function projectChronicle(event: SimEvent, world: WorldView): ChronicleEntryUIView {
@@ -373,6 +560,7 @@ function eventTitle(type: SimEvent["type"]): string {
     case "contract-expired": return "Need renegotiated";
     case "contract-cancelled": return "Promise released";
     case "route-reinforced": return "Strand tended";
+    case "tide-choir-awakened": return "A Tide Choir wakes";
     case "project-completed": return "Civic work complete";
     case "weather-changed": return "The weather turns";
     case "knowledge-shared": return "Knowledge carried";
@@ -432,6 +620,16 @@ function eventDetail(event: SimEvent, world: WorldView): string {
         : `The faint trace is ${Math.round((traceStrength / STRAND_AUTOMATION_THRESHOLD) * 100)}% woven toward self-carrying capacity.`;
       return `${settlement("settlementId")} invested ${numberData("parts") ?? 0} part in a shared route. ${strandResult}`;
     }
+    case "tide-choir-awakened": {
+      const routeCount = numberData("routeCount") ?? 0;
+      const settlementIds = String(event.data.settlementIds ?? "")
+        .split(",")
+        .map(Number)
+        .filter(Number.isInteger);
+      const harbors = settlementIds.map((id) => settlementName(world, id));
+      const phrase = harbors.length > 0 ? harbors.join(" → ") : "a surveyed harbor loop";
+      return `${phrase} closed into a Tide Choir. ${routeCount || "Its"} shared ${routeCount === 1 ? "route was" : "routes were"} strengthened as one remembered circuit.`;
+    }
     case "project-completed":
       return `${settlement("settlementId")} completed its ${titleCase(String(event.data.kind ?? "civic"))}: ${String(event.data.effect ?? "the recorded civic work is ready to support future journeys")}.`;
     case "weather-changed":
@@ -461,6 +659,12 @@ function quietHourChanges(session: GameSessionState, world: WorldView): string[]
   if (delta.autonomousDeliveries > 0) {
     changes.push(
       `${delta.autonomousDeliveries} ${delta.autonomousDeliveries === 1 ? "promise arrived" : "promises arrived"} through autonomous strands without you carrying the cargo.`,
+    );
+  }
+
+  if (delta.awakenedChoirs > 0) {
+    changes.push(
+      `${delta.awakenedChoirs} new ${delta.awakenedChoirs === 1 ? "Tide Choir was" : "Tide Choirs were"} awakened by closing a surveyed harbor loop.`,
     );
   }
 
@@ -498,6 +702,9 @@ function quietHourChanges(session: GameSessionState, world: WorldView): string[]
 function quietSummary(session: GameSessionState): string {
   if (session.campaignCelebrated) {
     return "You completed a resilient regional weave: care can route around broken corridors without depending on your constant presence. Endless tending remains optional.";
+  }
+  if (session.sessionChoirsAwakened > 0) {
+    return `You taught ${session.sessionChoirsAwakened} harbor ${session.sessionChoirsAwakened === 1 ? "loop" : "loops"} to sing as shared infrastructure. The estuary is safely paused.`;
   }
   if (session.sessionDeliveries > 0) {
     return `You kept ${session.sessionDeliveries} ${session.sessionDeliveries === 1 ? "promise" : "promises"}. The estuary is safely paused exactly where you left it.`;
@@ -540,7 +747,7 @@ function sessionShapeObjective(session: GameSessionState, player: PlayerState, w
     };
   }
   if (session.sessionShape === "weave") {
-    const progress = Math.max(session.sessionStrandsWoven, session.sessionDeliveries / 2);
+    const progress = Math.max(session.sessionStrandsWoven, session.sessionChoirsAwakened, session.sessionDeliveries / 2);
     return {
       id: "session-weave",
       eyebrow: "Tonight's Weave",
@@ -549,7 +756,7 @@ function sessionShapeObjective(session: GameSessionState, player: PlayerState, w
         ? "A route crossed a shared-capacity milestone. Quiet Hour is ready, and continuing is entirely optional."
         : "Establish or tend one self-carrying strand, or complete two useful promises along the network.",
       progress: Math.min(1, progress),
-      progressLabel: `${session.sessionStrandsWoven} tended · ${session.sessionDeliveries} promises · ${regionalStatus}`,
+      progressLabel: `${session.sessionStrandsWoven} tended · ${session.sessionChoirsAwakened} choirs · ${session.sessionDeliveries} promises · ${regionalStatus}`,
       why: "The reward compounds when autonomous porters inherit work you genuinely solved.",
       completed: session.closureOffered,
     };
@@ -753,6 +960,13 @@ function tidePhaseProgress(phase: number): number {
 
 function settlementName(world: WorldView, settlementId: number): string {
   return world.settlements.find((settlement) => settlement.id === settlementId)?.name ?? `Settlement ${settlementId}`;
+}
+
+function compassDirection(dx: number, dy: number): string {
+  if (Math.hypot(dx, dy) < 0.75) return "";
+  const horizontal = dx > 0.5 ? "east" : dx < -0.5 ? "west" : "";
+  const vertical = dy > 0.5 ? "south" : dy < -0.5 ? "north" : "";
+  return horizontal && vertical ? `${vertical}-${horizontal}` : horizontal || vertical;
 }
 
 function formatDuration(milliseconds: number): string {

@@ -24,10 +24,12 @@ active graph and autonomous multi-hop porters
 redundant regional weave and campaign resolution
 ```
 
-Alpha 0.1 is verified and published. The next release path is additive Phase 8 work rather than a foundational rewrite:
+Alpha 0.1 is verified and published. Alpha 0.2 is now a locally verified release candidate built additively from that frozen baseline:
 
-- Begin Phase 8, **The Tide Choir**, from the frozen Alpha 0.1 baseline: make route memory truthful, make surveying playable, and let completed harbor loops awaken one-time communal harmonies.
-- Treat tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls as later subphases unless release playtesting promotes them.
+- **The Tide Choir** makes route memory truthful, surveying playable, and completed harbor loops capable of awakening one-time communal harmonies.
+- **Wild Reaches** expands new seeds to a 96 × 72 Perlin estuary with meaningful terrain, sounded water, recoverable currents, and civic field tools.
+- **The Estuary in Relief** adds an actual playable p5/WebGL presentation while retaining the complete Chart 2D fallback.
+- Tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls remain later subphases unless release playtesting promotes them.
 
 ## Phase 0 — Evidence and contract
 
@@ -150,18 +152,51 @@ Final local evidence captured 2026-09-01:
 
 ## Phase 8 — The Tide Choir
 
-Status: **in progress after Alpha 0.1 publication**
+Status: **complete for the Alpha 0.2 release candidate**
 
 Purpose: turn walking, surveying, and redundant topology into a truthful, whimsical field system before adding new economies.
 
-Planned subphases:
+Subphases in the current working build:
 
-1. **Truthful trails:** delivery reinforcement follows actual overlap between the traveled trace and a corridor; a distant detour still marks its exact tiles but cannot magically strengthen an unrelated direct edge.
-2. **Surveyed strands:** a route becomes tendable only after the player genuinely travels enough of it between endpoint harbors. Route and porter selection become first-class inspectable interactions.
-3. **Harbor songs:** consecutive surveyed legs form a personal route phrase. Closing a unique simple loop of at least three harbors awakens its Tide Choir once, gently restoring condition/reliability on those edges without minting cargo or bypassing traversal.
-4. **Whimsical memory:** canonical loop memories appear as color-independent halos, lantern-moth signals, a layered procedural chime, route-inspector history, and Quiet Hour causes; reduced-motion mode substitutes stable marks for animation.
+1. **Truthful trails — verified:** delivery reinforcement follows actual overlap between the traveled trace and a corridor; a distant detour still marks its exact tiles but cannot magically strengthen an unrelated direct edge.
+2. **Surveyed strands — verified:** a route becomes tendable only after the player genuinely travels enough of it between endpoint harbors. The route inspector explains both the survey gate and the exact one-part consequence.
+3. **Harbor songs — verified:** consecutive surveyed legs form a personal route phrase. Closing a unique simple loop of at least three harbors awakens its Tide Choir once, gently restoring condition/reliability on those edges without minting cargo or bypassing traversal.
+4. **Whimsical memory — verified:** canonical loop memories appear as color-independent halos, lantern-moth signals, a layered procedural chime, route-inspector history, and Quiet Hour causes; reduced-motion mode substitutes stable marks for animation.
+5. **Comprehension repair — verified:** promise cards stop rebuilding beneath active clicks, the list scrolls, map/objective/card copy names pickup and delivery, reports are labeled as separate information jobs, route-work buttons state their cost/effect, and stability names its current cause.
 
 Exit evidence will include deterministic overlap scoring, unseen-route tending rejection, canonical/repeat-safe cycle detection, save compatibility, replay/conservation/soak coverage, and full web/Electron verification.
+
+## Phase 8B — Wild Reaches
+
+Status: **core complete for the Alpha 0.2 release candidate**
+
+Purpose: make the space between harbors a meaningful strand journey rather than empty commute time. Larger separation, new terrain, and tools must all feed the same promise/survey/infrastructure loop.
+
+Implemented first slice:
+
+1. **Longer seeded reaches — implemented, balance playtest pending:** new worlds are 96 × 72, every harbor is at least 14 Manhattan tiles from every other harbor, and multi-octave seeded gradient Perlin noise produces the height field. Stored 64 × 48 Alpha worlds migrate in place.
+2. **Readable terrain — implemented, screenshot review pending:** built decking, shell sandbars, silt flats, shallows, channels, reed marsh, salt meadow, wind scrub, ridges, and deep water have distinct labels, colors, and deterministic non-color motifs.
+3. **Sounded water — implemented, playtest pending:** ordinary discovery and bathymetry are separate; the starting Sounding line makes Loom pulses reveal depth, and deeper water adds a monotone, explicitly labeled stamina cost.
+4. **Recoverable sweep — implemented, playtest pending:** deep-water exhaustion follows a deterministic adjacent path to a safe bank. Cargo quantity is never deleted, cargo weathers once, involuntary drift cannot earn survey/Choir credit, and connected clinics/ferries change recovery.
+5. **Civic field kit — implemented, progression balance pending:** completed Crossings, Ferries, and Beacons entrust visiting couriers with Marsh stilts, a Tide sail, and a Storm kite. The tools change soft-ground drag, deep-water effort, wind stability, and sweep time without an isolated upgrade shop.
+6. **Terrain-aware pointer paths — implemented, balance pending:** Loom routes price live depth and owned tools, conservatively penalizing unsounded water while leaving manual exploration legal.
+
+Exit evidence will include deterministic terrain/spawn checks, old-save migration, depth/drain boundaries, swept recovery without cargo loss, tool effects, pathfinding, browser readability, and desktop smoke coverage.
+
+## Phase 8C — The Estuary in Relief
+
+Status: **complete for the Alpha 0.2 release candidate**
+
+The 96 × 72 height field compiles into deterministic cullable terrain chunks with seam-safe vertices and normals, consistent triangle winding, material/depth references, bounds, and a separate live-water plane. Default worlds produce 30 bounded chunks rather than one monolithic mesh. Pure tests cover geometry counts, seams, normals, water extrema, determinism, malformed input, camera projection, picking, culling, and fog.
+
+The optional p5/WebGL renderer now consumes that mesh as a playable angled relief view with lit terrain, live tile water, distance fog, 3D strands/Choirs, harbors, porters, player cargo, soundings, scan ripples, terrain-aware pointer picking, zoom, and orbit. A persisted header control and V shortcut switch presentations without forking state; an unavailable or lost WebGL context falls back to the complete Chart 2D view. Reduced-motion users begin in Chart 2D unless they explicitly saved another choice.
+
+Local Alpha 0.2 evidence captured 2026-09-01:
+
+- `npm run check` passes TypeScript, 19 Vitest files / 122 checks, the production build, and the nested `/tideweft/` Pages smoke probe.
+- Packaged Electron 44 starts Relief 3D by default, round-trips through Chart 2D, creates the exact 6,912-tile world, and reports no renderer warnings, resource failures, or Node-global leakage.
+- The packaged UI smoke clicks a live available promise, observes 14 physical cargo units and `DELIVER CARGO · Latchmere`, then proves the Promises viewport still has real vertical overflow at 960 × 640.
+- A 2,880 × 1,800 screenshot records the wedge-free 3D discovery island, loaded cargo HUD, explicit delivery objective, and scrollable promise card.
 
 ## Reward-loop acceptance audit
 

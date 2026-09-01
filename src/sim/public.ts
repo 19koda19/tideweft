@@ -1,4 +1,14 @@
-export { createWorld, runTicks, stepWorld } from "./engine";
+export {
+  MIN_ROUTE_REINFORCEMENT_COVERAGE,
+  TIDE_CHOIR_CONDITION_BONUS,
+  TIDE_CHOIR_RELIABILITY_BONUS,
+  calculateRouteTraceCoverage,
+  createWorld,
+  findTraceReinforcedRoutes,
+  runTicks,
+  stepWorld,
+} from "./engine";
+export type { RouteTraceCoverage } from "./engine";
 export { assertWorldInvariants } from "./invariants";
 export { deserializeWorld, hashWorld, serializeWorld } from "./persistence";
 export { keyedChance, keyedRandomInt, keyedRandomU32, mixUint32, seedFromText } from "./rng";

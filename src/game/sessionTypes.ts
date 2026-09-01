@@ -10,6 +10,7 @@ export interface SessionBaseline {
   averageTrust: number;
   projectProgress: number;
   fulfilledContracts: number;
+  awakenedChoirs: number;
 }
 
 export interface SessionOutcomeDelta {
@@ -20,6 +21,7 @@ export interface SessionOutcomeDelta {
   averageStress: number;
   averageTrust: number;
   projectProgress: number;
+  awakenedChoirs: number;
 }
 
 export interface GameSessionState {
@@ -39,6 +41,7 @@ export interface GameSessionState {
   sessionDeliveries: number;
   sessionReportsDelivered: number;
   sessionStrandsWoven: number;
+  sessionChoirsAwakened: number;
   sessionDiscoveredAtStart: number;
   sessionBaseline: SessionBaseline | null;
   closureOffered: boolean;
@@ -84,6 +87,7 @@ export function createSessionState(
     sessionDeliveries: 0,
     sessionReportsDelivered: 0,
     sessionStrandsWoven: 0,
+    sessionChoirsAwakened: 0,
     sessionDiscoveredAtStart: 0,
     sessionBaseline: null,
     closureOffered: false,
@@ -116,6 +120,7 @@ export function captureSessionBaseline(world: WorldView): SessionBaseline {
     averageTrust: average(trustValues),
     projectProgress: world.settlements.reduce((total, settlement) => total + settlement.project.progress, 0),
     fulfilledContracts: world.contracts.filter((contract) => contract.status === "fulfilled").length,
+    awakenedChoirs: world.choirs.length,
   };
 }
 
@@ -132,6 +137,7 @@ export function sessionOutcomeDelta(session: GameSessionState, world: WorldView)
     averageStress: current.averageStress - baseline.averageStress,
     averageTrust: current.averageTrust - baseline.averageTrust,
     projectProgress: current.projectProgress - baseline.projectProgress,
+    awakenedChoirs: current.awakenedChoirs - baseline.awakenedChoirs,
   };
 }
 

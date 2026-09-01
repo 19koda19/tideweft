@@ -1,6 +1,8 @@
 import { tideAtTick } from "./terrain";
 import {
   FIXED_POINT,
+  LEGACY_WORLD_HEIGHT,
+  LEGACY_WORLD_WIDTH,
   RESOURCE_KINDS,
   RULES_VERSION,
   SAVE_FORMAT_VERSION,
@@ -109,12 +111,21 @@ export function assertWorldInvariants(world: WorldState): void {
   invariant(world.meta.rootSeed.length === 4, "root seed must contain four words");
   for (const word of world.meta.rootSeed) invariant(word >= 0 && word <= 0xffff_ffff, "root seed word is outside uint32");
 
-  invariant(world.terrain.width === WORLD_WIDTH && world.terrain.height === WORLD_HEIGHT, "terrain dimensions changed");
-  invariant(world.terrain.tiles.length === WORLD_WIDTH * WORLD_HEIGHT, "terrain tile count is wrong");
+  const hasCurrentDimensions = world.terrain.width === WORLD_WIDTH && world.terrain.height === WORLD_HEIGHT;
+  const hasLegacyDimensions =
+    world.terrain.width === LEGACY_WORLD_WIDTH && world.terrain.height === LEGACY_WORLD_HEIGHT;
+  invariant(hasCurrentDimensions || hasLegacyDimensions, "terrain dimensions are unsupported");
+  invariant(
+    world.terrain.tiles.length === world.terrain.width * world.terrain.height,
+    "terrain tile count is wrong",
+  );
   for (let index = 0; index < world.terrain.tiles.length; index += 1) {
     const tile = world.terrain.tiles[index];
     invariant(tile !== undefined && tile.index === index, `terrain tile ${index} has the wrong index`);
-    invariant(tile.x === index % WORLD_WIDTH && tile.y === Math.floor(index / WORLD_WIDTH), `terrain tile ${index} has wrong coordinates`);
+    invariant(
+      tile.x === index % world.terrain.width && tile.y === Math.floor(index / world.terrain.width),
+      `terrain tile ${index} has wrong coordinates`,
+    );
     assertFixed(tile.elevation, `tile ${index}.elevation`);
     assertFixed(tile.moisture, `tile ${index}.moisture`);
     assertFixed(tile.roughness, `tile ${index}.roughness`);
@@ -139,6 +150,7 @@ export function assertWorldInvariants(world: WorldState): void {
   assertSortedIds(world.settlements, "settlements");
   assertSortedIds(world.residents, "residents");
   assertSortedIds(world.routes, "routes");
+  assertSortedIds(world.choirs, "choirs");
   assertSortedIds(world.contracts, "contracts");
 
   const entityIds = new Set<number>();
@@ -219,11 +231,16 @@ export function assertWorldInvariants(world: WorldState): void {
     }
   }
 
+  const routeEndpointSignatures = new Set<string>();
   for (const route of world.routes) {
     claimId(route.id, `route ${route.id}`);
     invariant(settlementIds.has(route.fromSettlementId) && settlementIds.has(route.toSettlementId), `route ${route.id} endpoint is invalid`);
     invariant(route.fromSettlementId < route.toSettlementId, `route ${route.id} endpoint order is unstable`);
+    const endpointSignature = `${route.fromSettlementId},${route.toSettlementId}`;
+    invariant(!routeEndpointSignatures.has(endpointSignature), `route ${route.id} duplicates an endpoint pair`);
+    routeEndpointSignatures.add(endpointSignature);
     invariant(route.path.length >= 2, `route ${route.id} path is too short`);
+    invariant(new Set(route.path).size === route.path.length, `route ${route.id} path repeats a tile`);
     const from = world.settlements.find((settlement) => settlement.id === route.fromSettlementId);
     const to = world.settlements.find((settlement) => settlement.id === route.toSettlementId);
     invariant(route.path[0] === from?.tileIndex && route.path[route.path.length - 1] === to?.tileIndex, `route ${route.id} path endpoints are wrong`);
@@ -239,6 +256,66 @@ export function assertWorldInvariants(world: WorldState): void {
     invariant(route.baseTravelTicks > 0 && route.traffic >= 0, `route ${route.id} timing or traffic is invalid`);
   }
 
+  const tideChoirSignatures = new Set<string>();
+  for (const choir of world.choirs) {
+    claimId(choir.id, `tide choir ${choir.id}`);
+    invariant(choir.awakenedTick >= 0 && choir.awakenedTick <= world.meta.completedTick, `tide choir ${choir.id} awakening tick is invalid`);
+    invariant(choir.routeIds.length >= 3 && choir.routeIds.length <= 7, `tide choir ${choir.id} must contain 3 to 7 routes`);
+    invariant(choir.settlementIds.length === choir.routeIds.length, `tide choir ${choir.id} cycle size is invalid`);
+    for (let index = 1; index < choir.routeIds.length; index += 1) {
+      invariant(
+        (choir.routeIds[index - 1] ?? 0) < (choir.routeIds[index] ?? 0),
+        `tide choir ${choir.id} route IDs are not canonical`,
+      );
+    }
+    for (let index = 1; index < choir.settlementIds.length; index += 1) {
+      invariant(
+        (choir.settlementIds[index - 1] ?? 0) < (choir.settlementIds[index] ?? 0),
+        `tide choir ${choir.id} settlement IDs are not canonical`,
+      );
+    }
+    const signature = choir.routeIds.join(",");
+    invariant(!tideChoirSignatures.has(signature), `tide choir ${choir.id} repeats an awakened cycle`);
+    tideChoirSignatures.add(signature);
+
+    const degrees = new Map<number, number>();
+    const neighbors = new Map<number, number[]>();
+    for (const routeId of choir.routeIds) {
+      invariant(routeIds.has(routeId), `tide choir ${choir.id} route ${routeId} is invalid`);
+      const route = world.routes.find((candidate) => candidate.id === routeId);
+      invariant(route !== undefined, `tide choir ${choir.id} route ${routeId} is missing`);
+      degrees.set(route.fromSettlementId, (degrees.get(route.fromSettlementId) ?? 0) + 1);
+      degrees.set(route.toSettlementId, (degrees.get(route.toSettlementId) ?? 0) + 1);
+      const fromNeighbors = neighbors.get(route.fromSettlementId) ?? [];
+      fromNeighbors.push(route.toSettlementId);
+      neighbors.set(route.fromSettlementId, fromNeighbors);
+      const toNeighbors = neighbors.get(route.toSettlementId) ?? [];
+      toNeighbors.push(route.fromSettlementId);
+      neighbors.set(route.toSettlementId, toNeighbors);
+    }
+    const derivedSettlementIds = [...degrees.keys()].sort((left, right) => left - right);
+    invariant(
+      derivedSettlementIds.length === choir.routeIds.length
+        && derivedSettlementIds.every((settlementId) => degrees.get(settlementId) === 2),
+      `tide choir ${choir.id} is not a simple cycle`,
+    );
+    invariant(
+      derivedSettlementIds.every((settlementId, index) => settlementId === choir.settlementIds[index]),
+      `tide choir ${choir.id} settlement IDs do not match its routes`,
+    );
+    const visited = new Set<number>();
+    const pending = derivedSettlementIds[0] === undefined ? [] : [derivedSettlementIds[0]];
+    while (pending.length > 0) {
+      const settlementId = pending.pop();
+      if (settlementId === undefined || visited.has(settlementId)) continue;
+      visited.add(settlementId);
+      for (const neighbor of neighbors.get(settlementId) ?? []) {
+        if (!visited.has(neighbor)) pending.push(neighbor);
+      }
+    }
+    invariant(visited.size === derivedSettlementIds.length, `tide choir ${choir.id} cycle is disconnected`);
+  }
+
   for (const contract of world.contracts) {
     claimId(contract.id, `contract ${contract.id}`);
     assertContractLifecycle(contract);
@@ -247,6 +324,13 @@ export function assertWorldInvariants(world: WorldState): void {
     invariant(requester !== undefined, `contract ${contract.id} requester is invalid`);
     invariant(requester.homeSettlementId === contract.destinationSettlementId, `contract ${contract.id} requester is not at its destination`);
     invariant(routeIds.has(contract.routeId), `contract ${contract.id} route is invalid`);
+    const primaryRoute = world.routes.find((route) => route.id === contract.routeId);
+    invariant(
+      primaryRoute !== undefined
+        && primaryRoute.fromSettlementId === Math.min(contract.originSettlementId, contract.destinationSettlementId)
+        && primaryRoute.toSettlementId === Math.max(contract.originSettlementId, contract.destinationSettlementId),
+      `contract ${contract.id} primary route does not connect its settlements`,
+    );
     for (const routeId of contract.porterRouteIds) {
       invariant(routeIds.has(routeId), `contract ${contract.id} porter route is invalid`);
     }
@@ -261,6 +345,28 @@ export function assertWorldInvariants(world: WorldState): void {
           && contract.porterSettlementIds.at(-1) === contract.destinationSettlementId,
         `resident contract ${contract.id} route plan endpoints are invalid`,
       );
+      invariant(
+        new Set(contract.porterRouteIds).size === contract.porterRouteIds.length,
+        `resident contract ${contract.id} route plan repeats a route`,
+      );
+      invariant(
+        new Set(contract.porterSettlementIds).size === contract.porterSettlementIds.length,
+        `resident contract ${contract.id} route plan repeats a settlement`,
+      );
+      for (let legIndex = 0; legIndex < contract.porterRouteIds.length; legIndex += 1) {
+        const porterRouteId = contract.porterRouteIds[legIndex];
+        const fromSettlementId = contract.porterSettlementIds[legIndex];
+        const toSettlementId = contract.porterSettlementIds[legIndex + 1];
+        const porterRoute = world.routes.find((route) => route.id === porterRouteId);
+        invariant(
+          porterRoute !== undefined
+            && fromSettlementId !== undefined
+            && toSettlementId !== undefined
+            && porterRoute.fromSettlementId === Math.min(fromSettlementId, toSettlementId)
+            && porterRoute.toSettlementId === Math.max(fromSettlementId, toSettlementId),
+          `resident contract ${contract.id} porter leg ${legIndex} is disconnected`,
+        );
+      }
     } else {
       invariant(contract.porterRouteIds.length === 0, `non-resident contract ${contract.id} has a porter route plan`);
       invariant(contract.porterSettlementIds.length === 0, `non-resident contract ${contract.id} has porter settlements`);

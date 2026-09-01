@@ -11,6 +11,7 @@ import type {
   SettlementView,
   TerrainKind,
   TerrainTileView,
+  TideChoirMemoryView,
   TideweftRendererController,
   TideweftRendererOptions,
   TideweftView,
@@ -137,6 +138,59 @@ const routeDistanceSquared = (point: WorldPoint, route: RouteView): number => {
   return nearest;
 };
 
+interface PathSample {
+  readonly point: WorldPoint;
+  readonly angle: number;
+}
+
+const samplePath = (points: readonly WorldPoint[], amount: number): PathSample | null => {
+  const first = points[0];
+  if (!first) return null;
+  if (points.length === 1) return { point: first, angle: 0 };
+
+  const lengths: number[] = [];
+  let totalLength = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    if (!start || !end) continue;
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    lengths.push(length);
+    totalLength += length;
+  }
+  if (totalLength <= 0) return { point: first, angle: 0 };
+
+  const target = clamp(amount, 0, 1) * totalLength;
+  let traversed = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    if (!start || !end) continue;
+    const length = lengths[index - 1] ?? 0;
+    if (traversed + length >= target || index === points.length - 1) {
+      const local = length <= 0 ? 0 : clamp((target - traversed) / length, 0, 1);
+      return {
+        point: {
+          x: start.x + (end.x - start.x) * local,
+          y: start.y + (end.y - start.y) * local,
+        },
+        angle: Math.atan2(end.y - start.y, end.x - start.x),
+      };
+    }
+    traversed += length;
+  }
+  return { point: first, angle: 0 };
+};
+
+const stringHash = (value: string): number => {
+  let result = 2_166_136_261;
+  for (let index = 0; index < value.length; index += 1) {
+    result ^= value.charCodeAt(index);
+    result = Math.imul(result, 16_777_619);
+  }
+  return result >>> 0;
+};
+
 const lineDashForStatus = (status: SettlementStatus, scale: number): number[] => {
   const size = Math.max(0.4, scale);
   switch (status) {
@@ -167,6 +221,7 @@ export function createTideweftRenderer(
   let attached: AttachedCanvasListeners | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
   let latestView: TideweftView | null = null;
+  let active = true;
   let hoverTarget: HoverTarget | null = null;
   let pointerWorld: WorldPoint | null = null;
   let lastMovement = "0,0";
@@ -184,7 +239,15 @@ export function createTideweftRenderer(
   };
 
   const emit = (command: RendererCommand): void => {
-    options.dispatch(command);
+    if (active) options.dispatch(command);
+  };
+
+  const syncActivePresentation = (): void => {
+    if (!canvasElement) return;
+    canvasElement.hidden = !active;
+    canvasElement.tabIndex = active ? 0 : -1;
+    canvasElement.dataset.active = active ? "true" : "false";
+    canvasElement.setAttribute("aria-hidden", active ? "false" : "true");
   };
 
   const getCanvasSize = (): { width: number; height: number } => {
@@ -451,6 +514,122 @@ export function createTideweftRenderer(
       p.endShape();
     };
 
+    const drawTerrainTexture = (
+      tile: TerrainTileView,
+      column: number,
+      row: number,
+      x: number,
+      y: number,
+      tileSize: number,
+      waterDepth: number,
+    ): void => {
+      const centerX = x + tileSize * 0.5;
+      const centerY = y + tileSize * 0.5;
+      const stroke = tile.kind === "mudflat" || tile.kind === "sandbar"
+        ? PALETTE.ink
+        : PALETTE.foam;
+      const alpha = tile.kind === "deep-water"
+        ? 45 + waterDepth * 28
+        : tile.kind === "channel" || tile.kind === "shallows"
+          ? 54
+          : 48;
+      const variant = hash01(column, row, 0x74657874);
+      const offset = (variant - 0.5) * tileSize * 0.12;
+      const weight = 0.72 / camera.zoom;
+
+      p.noFill();
+      p.stroke(withAlpha(stroke, alpha));
+      p.strokeWeight(weight);
+      clearDash();
+      switch (tile.kind) {
+        case "deep-water": {
+          const width = tileSize * 0.58;
+          p.arc(centerX, centerY - tileSize * 0.12 + offset, width, tileSize * 0.22, p.PI, p.TWO_PI);
+          p.arc(centerX, centerY + tileSize * 0.13 + offset, width * 0.72, tileSize * 0.18, 0, p.PI);
+          break;
+        }
+        case "channel": {
+          const direction = variant > 0.5 ? 1 : -1;
+          p.line(
+            centerX - tileSize * 0.33,
+            centerY + direction * tileSize * 0.23,
+            centerX + tileSize * 0.33,
+            centerY - direction * tileSize * 0.23,
+          );
+          p.line(centerX + tileSize * 0.08, centerY - direction * tileSize * 0.06, centerX, centerY - direction * tileSize * 0.24);
+          p.line(centerX + tileSize * 0.08, centerY - direction * tileSize * 0.06, centerX + tileSize * 0.27, centerY - direction * tileSize * 0.02);
+          break;
+        }
+        case "shallows": {
+          for (let line = -1; line <= 1; line += 1) {
+            const half = tileSize * (0.22 - Math.abs(line) * 0.035);
+            const lineY = centerY + line * tileSize * 0.16 + offset * 0.35;
+            p.line(centerX - half, lineY, centerX + half, lineY);
+          }
+          break;
+        }
+        case "mudflat": {
+          const forkY = centerY + tileSize * 0.03;
+          p.line(centerX + offset, y + tileSize * 0.2, centerX + offset, forkY);
+          p.line(centerX + offset, forkY, x + tileSize * 0.26, y + tileSize * 0.8);
+          p.line(centerX + offset, forkY, x + tileSize * 0.74, y + tileSize * 0.7);
+          p.line(x + tileSize * 0.26, y + tileSize * 0.8, x + tileSize * 0.17, y + tileSize * 0.69);
+          break;
+        }
+        case "sandbar": {
+          p.arc(centerX, centerY + tileSize * 0.06, tileSize * 0.72, tileSize * 0.43, p.PI, p.TWO_PI);
+          p.arc(centerX, centerY + tileSize * 0.12, tileSize * 0.42, tileSize * 0.24, p.PI, p.TWO_PI);
+          break;
+        }
+        case "salt-marsh": {
+          for (let reed = -1; reed <= 1; reed += 1) {
+            const reedX = centerX + reed * tileSize * 0.16;
+            const top = centerY - tileSize * (reed === 0 ? 0.31 : 0.2);
+            p.line(reedX, centerY + tileSize * 0.28, reedX, top);
+            p.line(reedX, top + tileSize * 0.11, reedX + (reed <= 0 ? -1 : 1) * tileSize * 0.1, top + tileSize * 0.03);
+          }
+          break;
+        }
+        case "meadow": {
+          const baseY = centerY + tileSize * 0.24;
+          p.line(centerX, baseY, centerX, centerY - tileSize * 0.22);
+          p.line(centerX, centerY, centerX - tileSize * 0.22, centerY - tileSize * 0.14);
+          p.line(centerX, centerY + tileSize * 0.06, centerX + tileSize * 0.23, centerY - tileSize * 0.08);
+          break;
+        }
+        case "scrub": {
+          const half = tileSize * 0.26;
+          p.line(centerX - half, centerY + half, centerX + half, centerY - half);
+          p.line(centerX - tileSize * 0.08, centerY + tileSize * 0.08, centerX - half, centerY - tileSize * 0.04);
+          p.line(centerX + tileSize * 0.08, centerY - tileSize * 0.08, centerX + half, centerY + tileSize * 0.04);
+          p.rectMode(p.CENTER);
+          p.rect(centerX, centerY, tileSize * 0.11, tileSize * 0.11);
+          break;
+        }
+        case "ridge": {
+          for (let ridge = 0; ridge < 2; ridge += 1) {
+            const inset = ridge * tileSize * 0.14;
+            const baseY = centerY + tileSize * (0.22 - ridge * 0.08);
+            p.beginShape();
+            p.vertex(x + tileSize * 0.17 + inset, baseY);
+            p.vertex(centerX, y + tileSize * 0.22 + inset * 0.4);
+            p.vertex(x + tileSize * 0.83 - inset, baseY);
+            p.endShape();
+          }
+          break;
+        }
+        case "built": {
+          p.rectMode(p.CENTER);
+          p.rect(centerX, centerY, tileSize * 0.52, tileSize * 0.52);
+          p.line(centerX - tileSize * 0.26, centerY, centerX + tileSize * 0.26, centerY);
+          p.line(centerX, centerY - tileSize * 0.26, centerX, centerY + tileSize * 0.26);
+          break;
+        }
+      }
+      p.rectMode(p.CORNER);
+      p.noStroke();
+    };
+
     const drawTerrain = (view: TideweftView): void => {
       const grid = view.terrain;
       const tileSize = Math.max(0.1, grid.tileSize);
@@ -505,6 +684,8 @@ export function createTideweftRenderer(
             p.circle(x + tileSize * 0.34, y + tileSize * 0.39, fleck);
           }
 
+          drawTerrainTexture(tile, column, row, x, y, tileSize, waterDepth);
+
           const trace = unit(tile.trace);
           if (trace > 0.02) {
             p.stroke(withAlpha(PALETTE.amber, 24 + trace * 72));
@@ -527,6 +708,95 @@ export function createTideweftRenderer(
             p.rect(x, y, tileSize + 0.4 / camera.zoom, tileSize + 0.4 / camera.zoom);
           }
         }
+      }
+    };
+
+    const drawDepthSoundings = (view: TideweftView): void => {
+      const scanProgress = view.player.scanProgress;
+      if (scanProgress === undefined || scanProgress <= 0.001) return;
+      const grid = view.terrain;
+      const tileSize = Math.max(0.1, grid.tileSize);
+      const centerColumn = Math.floor((view.player.position.x - grid.origin.x) / tileSize);
+      const centerRow = Math.floor((view.player.position.y - grid.origin.y) / tileSize);
+      const radiusTiles = 5.5;
+      const candidates: {
+        readonly point: WorldPoint;
+        readonly depth: number;
+        readonly distanceSquared: number;
+        readonly order: number;
+      }[] = [];
+
+      for (let row = Math.max(0, centerRow - 6); row <= Math.min(grid.rows - 1, centerRow + 6); row += 1) {
+        for (let column = Math.max(0, centerColumn - 6); column <= Math.min(grid.columns - 1, centerColumn + 6); column += 1) {
+          const dx = column + 0.5 - (centerColumn + 0.5);
+          const dy = row + 0.5 - (centerRow + 0.5);
+          const distance = dx * dx + dy * dy;
+          if (distance > radiusTiles * radiusTiles || distance < 1.15) continue;
+          const tile = grid.tiles[row * grid.columns + column];
+          if (!tile || unit(tile.discovered, 1) <= 0.08) continue;
+          if (unit(tile.depthKnown, unit(tile.discovered, 1)) <= 0.08) continue;
+          const derivedDepth = clamp(view.tide.level * 0.82 - unit(tile.elevation), 0, 1);
+          const depth = unit(tile.waterDepth, derivedDepth);
+          if (depth <= 0.035) continue;
+          candidates.push({
+            point: {
+              x: grid.origin.x + (column + 0.5) * tileSize,
+              y: grid.origin.y + (row + 0.5) * tileSize,
+            },
+            depth,
+            distanceSquared: distance,
+            order: hash01(column, row, 0x736f756e),
+          });
+        }
+      }
+
+      candidates.sort((left, right) =>
+        left.distanceSquared - right.distanceSquared || left.order - right.order,
+      );
+      const selected: typeof candidates = [];
+      const separationSquared = tileSize * tileSize * 2.35;
+      for (const candidate of candidates) {
+        if (selected.some((other) => distanceSquared(candidate.point, other.point) < separationSquared)) continue;
+        selected.push(candidate);
+        if (selected.length >= 7) break;
+      }
+
+      for (const sounding of selected) {
+        const depthRank = Math.max(1, Math.min(9, Math.round(sounding.depth * 9)));
+        const quality = sounding.depth < 0.28 ? "shoal" : sounding.depth < 0.62 ? "mid" : "deep";
+        const shaft = tileSize * (0.15 + sounding.depth * 0.3);
+        const rungCount = 1 + Math.floor(sounding.depth * 3);
+        p.push();
+        p.translate(sounding.point.x, sounding.point.y - tileSize * 0.08);
+        p.noFill();
+        p.stroke(withAlpha(PALETTE.foam, 218));
+        p.strokeWeight(1.05 / camera.zoom);
+        p.line(0, -shaft / 2, 0, shaft / 2);
+        for (let rung = 0; rung < rungCount; rung += 1) {
+          const amount = rungCount === 1 ? 0.5 : rung / (rungCount - 1);
+          const rungY = -shaft / 2 + shaft * amount;
+          const halfWidth = tileSize * (0.075 + sounding.depth * 0.035);
+          p.line(-halfWidth, rungY, halfWidth, rungY);
+        }
+        p.fill(withAlpha(PALETTE.ink, 230));
+        p.circle(0, shaft / 2, 2.8 / camera.zoom);
+        p.pop();
+
+        const screen = worldToScreen(sounding.point);
+        const label = `${depthRank} ${quality}`;
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textStyle(p.BOLD);
+        p.textSize(8.5);
+        const labelWidth = p.textWidth(label) + 8;
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.ink, 218));
+        p.rectMode(p.CENTER);
+        p.rect(screen.x, screen.y + 10, labelWidth, 13, 4);
+        p.fill(withAlpha(PALETTE.foam, 238));
+        p.text(label, screen.x, screen.y + 9.5);
+        p.pop();
       }
     };
 
@@ -606,6 +876,149 @@ export function createTideweftRenderer(
           p.fill(withAlpha(color, 210));
           const size = 3.8 / camera.zoom;
           p.triangle(size, 0, -size, -size * 0.7, -size, size * 0.7);
+          p.pop();
+        }
+      }
+      clearDash();
+    };
+
+    const drawChoirs = (choirs: readonly TideChoirMemoryView[], now: number): void => {
+      const context = p.drawingContext as CanvasRenderingContext2D;
+      for (const choir of choirs) {
+        if (choir.routePaths.length === 0 && choir.harborPoints.length === 0) continue;
+        const strong = choir.emphasis === "strong";
+        const quiet = choir.emphasis === "quiet";
+        const alpha = quiet ? 48 : strong ? 168 : 88;
+        const salt = stringHash(choir.id);
+
+        // The parallel outline, fixed dotted phrase, and diamond notes preserve
+        // the loop's meaning without asking color alone to carry it.
+        for (let routeIndex = 0; routeIndex < choir.routePaths.length; routeIndex += 1) {
+          const path = choir.routePaths[routeIndex];
+          if (!path || path.length < 2) continue;
+          context.save();
+          context.shadowColor = PALETTE.violet;
+          context.shadowBlur = strong ? 13 : 5;
+          p.noFill();
+          clearDash();
+          p.stroke(withAlpha(PALETTE.foam, alpha * 0.34));
+          p.strokeWeight((strong ? 7.4 : 5.6) / camera.zoom);
+          drawPolyline(path);
+          p.stroke(withAlpha(PALETTE.violet, alpha));
+          p.strokeWeight((strong ? 2.15 : 1.45) / camera.zoom);
+          setDash([1.2 / camera.zoom, 5.4 / camera.zoom], 0);
+          drawPolyline(path);
+          clearDash();
+          context.restore();
+
+          const note = samplePath(path, 0.5);
+          if (!note) continue;
+          const noteSize = (strong ? 4.4 : 3.5) / camera.zoom;
+          p.push();
+          p.translate(note.point.x, note.point.y);
+          p.rotate(note.angle);
+          p.fill(withAlpha(PALETTE.ink, 238));
+          p.stroke(withAlpha(PALETTE.foam, strong ? 238 : 188));
+          p.strokeWeight((strong ? 1.35 : 1) / camera.zoom);
+          p.quad(0, -noteSize, noteSize, 0, 0, noteSize, -noteSize, 0);
+          p.line(noteSize, 0, noteSize, -noteSize * 1.85);
+          p.line(noteSize, -noteSize * 1.85, noteSize * 1.7, -noteSize * 1.45);
+          p.pop();
+        }
+
+        for (const harbor of choir.harborPoints) {
+          const radius = (strong ? 15 : 12) / camera.zoom;
+          p.push();
+          p.translate(harbor.x, harbor.y);
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.foam, strong ? 146 : 72));
+          p.strokeWeight((strong ? 1.5 : 1) / camera.zoom);
+          clearDash();
+          p.circle(0, 0, radius * 2);
+          setDash([1.1 / camera.zoom, 3.2 / camera.zoom], 0);
+          p.stroke(withAlpha(PALETTE.violet, strong ? 230 : 132));
+          p.circle(0, 0, radius * 2.7);
+          clearDash();
+          for (let mark = 0; mark < 4; mark += 1) {
+            const angle = mark * p.HALF_PI;
+            p.line(
+              Math.cos(angle) * radius * 1.48,
+              Math.sin(angle) * radius * 1.48,
+              Math.cos(angle) * radius * 1.78,
+              Math.sin(angle) * radius * 1.78,
+            );
+          }
+          p.pop();
+        }
+
+        // Motion is entirely optional decoration. Reduced-motion retains the
+        // fixed double halo and note glyphs above, with no clock-derived state.
+        if (!reducedMotion && choir.routePaths.length > 0) {
+          const mothCount = Math.min(2, choir.routePaths.length);
+          for (let moteIndex = 0; moteIndex < mothCount; moteIndex += 1) {
+            const path = choir.routePaths[(salt + moteIndex) % choir.routePaths.length];
+            if (!path) continue;
+            const seed = hash01(salt, moteIndex, 0x63686f69);
+            const progress = (seed + now * (0.000018 + moteIndex * 0.000004)) % 1;
+            const sample = samplePath(path, progress);
+            if (!sample) continue;
+            const wing = (1.2 + Math.sin(now * 0.006 + seed * 17) * 0.35) / camera.zoom;
+            const drift = Math.sin(now * 0.0019 + seed * 23) * 2.1 / camera.zoom;
+            const moteAlpha = strong ? 210 : 112;
+            p.push();
+            p.translate(
+              sample.point.x - Math.sin(sample.angle) * drift,
+              sample.point.y + Math.cos(sample.angle) * drift,
+            );
+            p.rotate(sample.angle);
+            p.noStroke();
+            p.fill(withAlpha(PALETTE.amber, moteAlpha * 0.68));
+            p.ellipse(-wing * 0.9, -wing * 0.55, wing * 1.6, wing);
+            p.ellipse(-wing * 0.9, wing * 0.55, wing * 1.6, wing);
+            p.fill(withAlpha(PALETTE.foam, moteAlpha));
+            p.ellipse(0, 0, wing * 1.9, wing * 0.68);
+            p.pop();
+          }
+
+          if (strong && choir.harborPoints.length > 0) {
+            const signalStep = Math.floor(now / 1_500);
+            const harbor = choir.harborPoints[(salt + signalStep) % choir.harborPoints.length];
+            if (harbor) {
+              const progress = (now % 1_500) / 1_500;
+              const radius = (5 + progress * 12) / camera.zoom;
+              p.push();
+              p.translate(harbor.x, harbor.y);
+              p.noFill();
+              p.stroke(withAlpha(PALETTE.foam, 170 * (1 - progress)));
+              p.strokeWeight(1 / camera.zoom);
+              p.circle(0, 0, radius * 2);
+              p.pop();
+            }
+          }
+        }
+
+        if (strong && choir.harborPoints.length > 0) {
+          const total = choir.harborPoints.reduce(
+            (total, point) => ({ x: total.x + point.x, y: total.y + point.y }),
+            { x: 0, y: 0 },
+          );
+          const center = {
+            x: total.x / choir.harborPoints.length,
+            y: total.y / choir.harborPoints.length,
+          };
+          const screen = worldToScreen(center);
+          p.push();
+          p.resetMatrix();
+          p.textAlign(p.CENTER, p.CENTER);
+          p.textStyle(p.BOLD);
+          p.textSize(11.5);
+          const width = Math.min(310, p.textWidth(choir.label) + 22);
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.ink, 224));
+          p.rectMode(p.CENTER);
+          p.rect(screen.x, screen.y - 35, width, 23, 8);
+          p.fill(withAlpha(PALETTE.foam, 245));
+          p.text(choir.label, screen.x, screen.y - 35.5, width - 12, 21);
           p.pop();
         }
       }
@@ -789,6 +1202,48 @@ export function createTideweftRenderer(
       clearDash();
       p.line(-radius, 0, radius, 0);
       p.line(0, -radius, 0, radius);
+      if (view.player.destinationLabel) {
+        const label = view.player.destinationLabel;
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textStyle(p.BOLD);
+        p.textSize(10 / camera.zoom);
+        const labelWidth = p.textWidth(label) + 14 / camera.zoom;
+        const labelY = -radius * 2.45;
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.ink, 224));
+        p.rectMode(p.CENTER);
+        p.rect(0, labelY, labelWidth, 18 / camera.zoom, 5 / camera.zoom);
+        p.fill(withAlpha(PALETTE.amber, 246));
+        p.text(label, 0, labelY + 0.2 / camera.zoom);
+        p.rectMode(p.CORNER);
+      }
+      p.pop();
+    };
+
+    const drawSweptCurrent = (view: TideweftView, radius: number): void => {
+      const player = view.player;
+      if (player.mode !== "swept") return;
+      const progress = unit(player.sweptProgress);
+      const wakeLength = radius * (3.1 + progress * 1.25);
+      p.push();
+      p.translate(player.position.x, player.position.y);
+      p.rotate(player.facing);
+      p.noFill();
+      p.stroke(withAlpha(PALETTE.ink, 205));
+      p.strokeWeight(4.6 / camera.zoom);
+      clearDash();
+      p.arc(0, 0, radius * 4.8, radius * 3.5, -p.PI * 0.72, p.PI * 0.72);
+      p.stroke(withAlpha(PALETTE.sky, 218));
+      p.strokeWeight(1.25 / camera.zoom);
+      p.arc(0, 0, radius * 4.8, radius * 3.5, -p.PI * 0.72, p.PI * 0.72);
+      setDash([2 / camera.zoom, 3.4 / camera.zoom], 0);
+      p.arc(0, 0, radius * 6.25, radius * 4.7, p.PI * 0.28, p.PI * 1.72);
+      clearDash();
+      p.stroke(withAlpha(PALETTE.foam, 168));
+      p.line(-radius * 0.9, -radius * 0.5, -wakeLength, -radius * 1.15);
+      p.line(-radius * 0.9, radius * 0.5, -wakeLength, radius * 1.15);
+      p.line(-wakeLength * 0.72, -radius * 0.9, -wakeLength * 0.9, 0);
+      p.line(-wakeLength * 0.72, radius * 0.9, -wakeLength * 0.9, 0);
       p.pop();
     };
 
@@ -798,20 +1253,24 @@ export function createTideweftRenderer(
       const radius = 7.2 / camera.zoom;
       const stability = unit(player.stability, 1);
       const loadRatio = clamp(player.cargoLoad / Math.max(1, player.cargoCapacity), 0, 1.5);
-      const sway = reducedMotion ? 0 : Math.sin(now * 0.005) * (1 - stability) * 0.18;
+      const sway = reducedMotion
+        ? 0
+        : Math.sin(now * (player.mode === "swept" ? 0.0022 : 0.005))
+          * (player.mode === "swept" ? 0.08 : (1 - stability) * 0.18);
       const context = p.drawingContext as CanvasRenderingContext2D;
 
       drawDestination(view, now);
+      drawSweptCurrent(view, radius);
       p.push();
       p.translate(position.x, position.y);
       p.rotate(player.facing + sway);
 
       context.save();
-      context.shadowColor = PALETTE.tide;
-      context.shadowBlur = 18;
+      context.shadowColor = player.mode === "swept" ? PALETTE.sky : PALETTE.tide;
+      context.shadowBlur = player.mode === "swept" ? 12 : 18;
       p.noStroke();
-      p.fill(withAlpha(PALETTE.tide, 35));
-      p.circle(0, 0, radius * 5.5);
+      p.fill(withAlpha(player.mode === "swept" ? PALETTE.sky : PALETTE.tide, player.mode === "swept" ? 52 : 35));
+      p.circle(0, 0, radius * (player.mode === "swept" ? 4.4 : 5.5));
       context.restore();
 
       const cargoShown = Math.min(4, player.cargo.length);
@@ -845,10 +1304,25 @@ export function createTideweftRenderer(
         p.vertex(-radius * 1.15, 0);
         p.vertex(-radius * 0.8, radius * 0.72);
         p.endShape(p.CLOSE);
+      } else if (player.mode === "swept") {
+        p.ellipse(0, 0, radius * 2.45, radius * 1.42);
+        p.line(-radius * 0.52, -radius * 0.52, radius * 0.5, radius * 0.5);
+        p.line(-radius * 0.52, radius * 0.52, radius * 0.5, -radius * 0.5);
+        p.noStroke();
+        p.fill(PALETTE.foam);
+        p.triangle(radius * 1.42, 0, radius * 0.62, -radius * 0.3, radius * 0.62, radius * 0.3);
       } else {
         p.circle(0, 0, radius * 2.1);
         p.fill(PALETTE.foam);
         p.triangle(radius * 1.18, 0, radius * 0.38, -radius * 0.34, radius * 0.38, radius * 0.34);
+        if (player.mode === "wading") {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.sky, 238));
+          p.strokeWeight(1 / camera.zoom);
+          p.arc(0, radius * 0.48, radius * 2.8, radius * 0.92, p.PI, p.TWO_PI);
+          p.line(-radius * 1.14, radius * 0.51, -radius * 0.54, radius * 0.51);
+          p.line(radius * 0.54, radius * 0.51, radius * 1.14, radius * 0.51);
+        }
       }
 
       p.noFill();
@@ -857,7 +1331,7 @@ export function createTideweftRenderer(
       p.arc(0, 0, radius * 3.3, radius * 3.3, -p.HALF_PI, -p.HALF_PI + p.TWO_PI * unit(player.stamina));
       p.pop();
 
-      if (player.scanProgress !== undefined) {
+      if (player.scanProgress !== undefined && player.scanProgress > 0.001) {
         drawScanRing(position, unit(player.scanProgress), 220);
       }
     };
@@ -1081,6 +1555,7 @@ export function createTideweftRenderer(
       const renderer = p.createCanvas(size.width, size.height, p.P2D);
       canvasElement = renderer.elt as HTMLCanvasElement;
       canvasElement.classList.add("tideweft-canvas");
+      canvasElement.dataset.renderer = "chart-2d";
       canvasElement.tabIndex = 0;
       canvasElement.setAttribute("role", "application");
       canvasElement.setAttribute(
@@ -1097,9 +1572,12 @@ export function createTideweftRenderer(
       p.strokeCap(p.ROUND);
       p.strokeJoin(p.ROUND);
       attachCanvasListeners(canvasElement);
+      syncActivePresentation();
+      if (!active) p.noLoop();
     };
 
     p.draw = (): void => {
+      if (!active) return;
       const now = performance.now();
       latestView = options.getView() ?? null;
       if (!latestView) {
@@ -1119,6 +1597,8 @@ export function createTideweftRenderer(
       drawTerrain(latestView);
       drawTraces(latestView.traces, now);
       drawRoutes(latestView.routes, now);
+      drawChoirs(latestView.choirs, now);
+      drawDepthSoundings(latestView);
       drawSettlements(latestView.settlements, now);
       drawPorters(latestView.porters);
       drawParticles(latestView.particles ?? []);
@@ -1153,6 +1633,26 @@ export function createTideweftRenderer(
 
   return {
     canvas: () => canvasElement,
+    isActive: () => active,
+    setActive: (nextActive) => {
+      if (active === nextActive) {
+        syncActivePresentation();
+        return;
+      }
+      if (!nextActive) {
+        heldDirections.clear();
+        if (heldBraceKeys.size > 0) options.dispatch({ type: "brace", active: false });
+        heldBraceKeys.clear();
+        if (lastMovement !== "0,0") {
+          lastMovement = "0,0";
+          options.dispatch({ type: "movement", vector: { x: 0, y: 0 } });
+        }
+      }
+      active = nextActive;
+      syncActivePresentation();
+      if (active) instance?.loop();
+      else instance?.noLoop();
+    },
     resize: () => {
       if (!instance) return;
       const size = getCanvasSize();

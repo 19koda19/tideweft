@@ -3,6 +3,7 @@ import {
   createWorld,
   createWorldView,
   deserializeWorld,
+  FIXED_POINT,
   serializeWorld,
   STRAND_AUTOMATION_THRESHOLD,
   stepWorld,
@@ -16,6 +17,7 @@ import type { TideweftUICommand, TideweftUIView } from "../ui/types";
 import { TideweftSoundscape } from "../audio/soundscape";
 import { createSaveRepository, type SaveRecord, type SaveRepository } from "../platform/persistence";
 import {
+  FIELD_TOOL_LABELS,
   TILE_UNITS,
   cargoWeight,
   createPlayer,
@@ -23,11 +25,17 @@ import {
   loadContractCargo,
   playerTileIndex,
   pulseScan,
+  restoreSweptPlayer,
   settlementAtPlayer,
   stepPlayer,
+  unlockFieldToolAtSettlement,
   unloadContractCargo,
+  waterEffortPerStep,
+  type FieldToolKind,
   type PlayerControl,
+  type PlayerMode,
   type PlayerState,
+  type TravelPace,
 } from "./player";
 import { projectGameView } from "./projection";
 import {
@@ -37,6 +45,7 @@ import {
   type GameSessionState,
 } from "./sessionTypes";
 import { updateTutorial } from "./tutorial";
+import { appendSurveyedHarborLeg, assessHarborLeg, type TideChoirCycle } from "./tideChoir";
 import { projectUIView } from "./uiProjection";
 
 const FIXED_STEP_MS = 100;
@@ -98,6 +107,7 @@ export async function createTideweftRuntime(
   } | null = null;
   let pendingRenegotiation: { contractId: number; settlementId: number; commandId: string } | null = null;
   let pendingReportDelivery: { commandId: string; targetSettlementId: number } | null = null;
+  let pendingChoir: { commandId: string; cycle: TideChoirCycle } | null = null;
   let lastAutosaveTick = 0;
   let lastCargoDamageNoticeMs = Number.NEGATIVE_INFINITY;
   let saveInFlight: Promise<void> | undefined;
@@ -107,8 +117,75 @@ export async function createTideweftRuntime(
     world = loaded.world;
     worldView = createWorldView(world);
     player = loaded.player;
+    player.worldWidth = worldView.terrain.width;
+    player.worldHeight = worldView.terrain.height;
+    player.x = clamp(player.x, TILE_UNITS / 2, worldView.terrain.width * TILE_UNITS - TILE_UNITS / 2);
+    player.y = clamp(player.y, TILE_UNITS / 2, worldView.terrain.height * TILE_UNITS - TILE_UNITS / 2);
+    player.previousX = Number.isFinite(player.previousX)
+      ? clamp(player.previousX, TILE_UNITS / 2, worldView.terrain.width * TILE_UNITS - TILE_UNITS / 2)
+      : player.x;
+    player.previousY = Number.isFinite(player.previousY)
+      ? clamp(player.previousY, TILE_UNITS / 2, worldView.terrain.height * TILE_UNITS - TILE_UNITS / 2)
+      : player.y;
+    player.velocityX = Number.isFinite(player.velocityX) ? player.velocityX : 0;
+    player.velocityY = Number.isFinite(player.velocityY) ? player.velocityY : 0;
+    player.facingMilliRadians = Number.isFinite(player.facingMilliRadians) ? player.facingMilliRadians : 0;
+    player.stamina = clamp(player.stamina, 0, FIXED_POINT);
+    player.stability = clamp(player.stability, 0, FIXED_POINT);
+    player.scanCharge = clamp(player.scanCharge, 0, FIXED_POINT);
+    player.scanPulse = Number.isFinite(player.scanPulse) ? clamp(player.scanPulse, 0, FIXED_POINT) : 0;
+    player.pace = isTravelPace(player.pace) ? player.pace : "steady";
+    player.mode = isPlayerMode(player.mode) ? player.mode : "foot";
     player.report = player.report ?? null;
-    player.reportsDelivered = Number.isFinite(player.reportsDelivered) ? player.reportsDelivered : 0;
+    player.reportsDelivered = Number.isFinite(player.reportsDelivered) ? Math.max(0, Math.floor(player.reportsDelivered)) : 0;
+    player.stabilityTrend = player.stabilityTrend === "falling" || player.stabilityTrend === "recovering"
+      ? player.stabilityTrend
+      : "steady";
+    player.stabilityHint = typeof player.stabilityHint === "string" && player.stabilityHint.trim().length > 0
+      ? player.stabilityHint
+      : "Stable · hold Shift while moving to brace";
+    player.discovered = player.discovered.map((value) => Number.isFinite(value)
+      ? clamp(value, 0, FIXED_POINT)
+      : 0);
+    const validTools: readonly FieldToolKind[] = ["sounding-line", "marsh-stilts", "tide-sail", "storm-kite"];
+    player.tools = Array.isArray(player.tools)
+      ? [...new Set(player.tools.filter((tool): tool is FieldToolKind => validTools.includes(tool as FieldToolKind)))].sort()
+      : ["sounding-line"];
+    if (!player.tools.includes("sounding-line")) player.tools.unshift("sounding-line");
+    player.depthSoundings = Array.isArray(player.depthSoundings)
+      && player.depthSoundings.length === worldView.terrain.tiles.length
+      ? player.depthSoundings.map((value) => Number.isFinite(value) ? Math.max(0, Math.min(1_000_000, value)) : 0)
+      : Array.from({ length: worldView.terrain.tiles.length }, () => 0);
+    player.sweepPath = Array.isArray(player.sweepPath) ? player.sweepPath : [];
+    player.sweepTicksRemaining = Number.isFinite(player.sweepTicksRemaining)
+      ? Math.max(0, Math.floor(player.sweepTicksRemaining))
+      : 0;
+    player.sweepTotalTicks = Number.isFinite(player.sweepTotalTicks)
+      ? Math.max(player.sweepTicksRemaining, Math.floor(player.sweepTotalTicks))
+      : player.sweepTicksRemaining;
+    player.sweepSupport = player.sweepSupport === "clinic" || player.sweepSupport === "ferry"
+      ? player.sweepSupport
+      : null;
+    if (player.mode === "swept" && !restoreSweptPlayer(player, worldView)) {
+      player.mode = "camp";
+      player.stamina = Math.max(player.stamina, 150_000);
+      restoreSweptPlayer(player, worldView);
+    } else if (player.mode !== "swept") {
+      restoreSweptPlayer(player, worldView);
+    }
+    const loadedHarborId = settlementAtPlayer(player, worldView);
+    player.surveyTrace = Array.isArray(player.surveyTrace) && player.surveyTrace.length > 0
+      ? player.surveyTrace
+      : [playerTileIndex(player)];
+    player.surveyedRouteIds = Array.isArray(player.surveyedRouteIds)
+      ? [...new Set(player.surveyedRouteIds.filter((id) => worldView.routes.some((route) => route.id === id)))].sort((left, right) => left - right)
+      : [];
+    player.lastHarborId = player.lastHarborId === null || worldView.settlements.some((settlement) => settlement.id === player.lastHarborId)
+      ? player.lastHarborId
+      : loadedHarborId;
+    player.harborTrail = Array.isArray(player.harborTrail) && player.harborTrail.every((id) => worldView.settlements.some((settlement) => settlement.id === id))
+      ? player.harborTrail.slice(-8)
+      : player.lastHarborId === null ? [] : [player.lastHarborId];
     session = loaded.session;
     session.paused = true;
     session.titleVisible = true;
@@ -118,6 +195,7 @@ export async function createTideweftRuntime(
       ? Math.max(0, session.sessionPlayMilliseconds)
       : 0;
     session.sessionStrandsWoven = Number.isFinite(session.sessionStrandsWoven) ? session.sessionStrandsWoven : 0;
+    session.sessionChoirsAwakened = Number.isFinite(session.sessionChoirsAwakened) ? session.sessionChoirsAwakened : 0;
     session.sessionReportsDelivered = Number.isFinite(session.sessionReportsDelivered)
       ? session.sessionReportsDelivered
       : 0;
@@ -147,10 +225,18 @@ export async function createTideweftRuntime(
       : trackedContract?.status === "offered"
         ? trackedContract.originSettlementId
         : trackedContract?.destinationSettlementId;
+    const destinationKind = activeContract
+      ? "delivery" as const
+      : player.report
+        ? "report" as const
+        : trackedContract?.status === "offered"
+          ? "pickup" as const
+          : undefined;
     renderView = projectGameView(worldView, player, {
       selectedSettlementId: session.selectedSettlementId,
       selectedRouteId: objectiveContract?.routeId ?? null,
       destinationSettlementId: destinationSettlementId ?? null,
+      ...(destinationKind ? { destinationKind } : {}),
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
     uiView = projectUIView(worldView, player, session);
@@ -195,6 +281,20 @@ export async function createTideweftRuntime(
     const beforeX = player.x;
     const beforeY = player.y;
     const result = stepPlayer(player, worldView, currentControl());
+    if (result.enteredTile !== null && result.settlementId !== null) {
+      recordHarborArrival(result.settlementId);
+      const unlockedTool = unlockFieldToolAtSettlement(player, worldView, result.settlementId);
+      if (unlockedTool) {
+        const harborName = settlementName(worldView, result.settlementId);
+        session.sessionChanges.push(`${harborName} entrusted you with ${FIELD_TOOL_LABELS[unlockedTool].toLocaleLowerCase()}.`);
+        announce(
+          session,
+          `${harborName}'s completed civic work adds ${FIELD_TOOL_LABELS[unlockedTool]} to your field kit. ${fieldToolEffect(unlockedTool)}`,
+          true,
+        );
+        soundscape.play("strand", 0.68);
+      }
+    }
     session.sessionPlayMilliseconds += FIXED_STEP_MS;
     session.sessionDistanceUnits += Math.round(Math.hypot(player.x - beforeX, player.y - beforeY));
     playerStepsSinceWorldTick += 1;
@@ -207,7 +307,20 @@ export async function createTideweftRuntime(
     }
 
     if (result.moved) soundscape.play("step", player.pace === "swift" ? 0.8 : 0.42);
-    if (result.exhausted) {
+    if (result.becameSwept) {
+      autopilotPath = [];
+      manualControl = { ...manualControl, moveX: 0, moveY: 0 };
+      const support = result.sweepSupport === "ferry"
+        ? " A connected ferry crew has shortened the drift."
+        : " The current is carrying you toward the nearest safe bank.";
+      session.sessionChanges.push("Water exhaustion became a recoverable sweep; the cargo stayed accountable and weathered once.");
+      announce(
+        session,
+        `STAMINA EMPTY IN DEEP WATER — SWEPT. Steering is temporarily lost; cargo stays with you.${support}`,
+        true,
+      );
+      soundscape.play("warning", 0.82);
+    } else if (result.exhausted) {
       if (result.rescued) {
         session.sessionChanges.push("A completed clinic and established strand turned exhaustion into mutual aid.");
         announce(session, "A clinic crew reached you through the established strand. Nothing was lost; infrastructure changed failure into care.", true);
@@ -217,7 +330,15 @@ export async function createTideweftRuntime(
         soundscape.play("rest");
       }
     }
-    if (result.damagedCargo && session.sessionPlayMilliseconds - lastCargoDamageNoticeMs >= 2_500) {
+    if (result.washedAshore) {
+      const support = result.sweepSupport
+        ? `${result.sweepSupport === "clinic" ? "Clinic" : "Ferry"} support brought you in sooner.`
+        : "The nearest safe bank caught you.";
+      session.sessionChanges.push(`You washed ashore with every cargo item still in your care. ${support}`);
+      announce(session, `ASHORE — ${support} Rest has restored enough stamina to continue; cargo quantity was never lost.`, true);
+      soundscape.play("rest", 0.9);
+    }
+    if (!result.becameSwept && result.damagedCargo && session.sessionPlayMilliseconds - lastCargoDamageNoticeMs >= 2_500) {
       lastCargoDamageNoticeMs = session.sessionPlayMilliseconds;
       const property = player.cargo[0]?.property;
       announce(
@@ -297,14 +418,18 @@ export async function createTideweftRuntime(
         const route = worldView.routes.find((candidate) => candidate.id === delivered.routeId);
         const newlyAutomated = !deliveryWasAutomated
           && (route?.traceStrength ?? 0) >= STRAND_AUTOMATION_THRESHOLD;
+        const unlockedTool = unlockFieldToolAtSettlement(player, worldView, delivered.destinationSettlementId);
         if (newlyAutomated) session.sessionStrandsWoven += 1;
         const change = `${requester ?? destination} received ${delivered.quantity} ${humanResource(delivered.resource)} at ${destination} (${grade})${newlyAutomated ? "; the route became self-carrying" : ""}.`;
         session.sessionChanges.push(change);
+        if (unlockedTool) {
+          session.sessionChanges.push(`${destination}'s completed project entrusted you with ${FIELD_TOOL_LABELS[unlockedTool].toLocaleLowerCase()}.`);
+        }
         if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
         const closureReady = updateClosureMilestone();
         announce(
           session,
-          `${requester ?? destination} received the promise${cargo ? ` at ${Math.round(cargo.condition / 10_000)}% condition` : ""}. The route and relationship both changed${newlyAutomated ? ", and autonomous porters can now inherit this corridor" : ""}.${closureReady ? " Tonight's chosen shape is complete; continue freely or choose Quiet Hour whenever the feeling is right." : ""}`,
+          `${requester ?? destination} received the promise${cargo ? ` at ${Math.round(cargo.condition / 10_000)}% condition` : ""}. The route and relationship both changed${newlyAutomated ? ", and autonomous porters can now inherit this corridor" : ""}.${unlockedTool ? ` ${destination} adds ${FIELD_TOOL_LABELS[unlockedTool]} to your field kit: ${fieldToolEffect(unlockedTool)}` : ""}${closureReady ? " Tonight's chosen shape is complete; continue freely or choose Quiet Hour whenever the feeling is right." : ""}`,
           true,
         );
         soundscape.play("deliver", 1);
@@ -407,6 +532,34 @@ export async function createTideweftRuntime(
         soundscape.play("warning");
       }
     }
+
+    if (pendingChoir !== null) {
+      const awakened = worldView.events.find(
+        (event) => event.type === "tide-choir-awakened" && event.data.commandId === pendingChoir?.commandId,
+      );
+      const rejected = rejectionFor([pendingChoir.commandId]);
+      if (awakened) {
+        const harborNames = pendingChoir.cycle.harborIds
+          .slice(0, -1)
+          .map((id) => settlementName(worldView, id));
+        session.sessionChoirsAwakened += 1;
+        session.sessionChanges.push(
+          `The ${harborNames.join("–")} loop awakened a Tide Choir; its shared routes became more weatherworthy.`,
+        );
+        const closureReady = updateClosureMilestone();
+        pendingChoir = null;
+        announce(
+          session,
+          `The loop closes: ${harborNames.join(" → ")} → ${harborNames[0] ?? "home"}. Lantern-moths answer in harmony, and every route in this unique Tide Choir gains condition and reliability.${closureReady ? " Tonight's Weave is complete; Quiet Hour is ready whenever you are." : ""}`,
+          true,
+        );
+        soundscape.play("choir", 1);
+      } else if (rejected) {
+        pendingChoir = null;
+        announce(session, `The harbor phrase could not settle into the network: ${rejected}. The surveyed routes remain remembered.`, true);
+        soundscape.play("warning", 0.45);
+      }
+    }
   }
 
   function dispatchRenderer(command: RendererCommand): void {
@@ -436,6 +589,11 @@ export async function createTideweftRuntime(
         togglePause();
         break;
       case "pace-step":
+        if (player.mode === "swept") {
+          announce(session, "The current has the helm until you reach a safe bank; pace returns ashore.", true);
+          refreshViews();
+          break;
+        }
         cyclePace(player, command.delta);
         refreshViews();
         break;
@@ -477,6 +635,10 @@ export async function createTideweftRuntime(
         interact();
         break;
       case "set-pace":
+        if (player.mode === "swept") {
+          announce(session, "The current has the helm until you reach a safe bank; pace returns ashore.", true);
+          break;
+        }
         player.pace = command.pace;
         soundscape.play("ui");
         break;
@@ -538,6 +700,7 @@ export async function createTideweftRuntime(
     session.sessionDeliveries = 0;
     session.sessionReportsDelivered = 0;
     session.sessionStrandsWoven = 0;
+    session.sessionChoirsAwakened = 0;
     session.sessionDiscoveredAtStart = discoveredCount(player);
     session.sessionBaseline = captureSessionBaseline(worldView);
     session.closureOffered = false;
@@ -549,7 +712,7 @@ export async function createTideweftRuntime(
     if (session.closureOffered || session.sessionShape === "wander") return false;
     const complete = session.sessionShape === "drift"
       ? session.sessionDeliveries >= 1
-      : session.sessionStrandsWoven >= 1 || session.sessionDeliveries >= 2;
+      : session.sessionStrandsWoven >= 1 || session.sessionChoirsAwakened >= 1 || session.sessionDeliveries >= 2;
     if (!complete) return false;
     session.closureOffered = true;
     session.sessionChanges.push(
@@ -612,6 +775,7 @@ export async function createTideweftRuntime(
     pendingReinforcement = null;
     pendingRenegotiation = null;
     pendingReportDelivery = null;
+    pendingChoir = null;
     lastAutosaveTick = 0;
     announce(session, "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.");
     soundscape.play("strand", 0.9);
@@ -619,10 +783,32 @@ export async function createTideweftRuntime(
   }
 
   function setAutopilot(point: WorldPoint, additive: boolean): void {
+    if (player.mode === "swept") {
+      announce(session, "The current has the helm until you reach a safe bank.", true);
+      return;
+    }
     const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, world.terrain.width - 1);
     const tileY = clamp(Math.floor(point.y / RENDER_TILE_SIZE), 0, world.terrain.height - 1);
     const destination = tileY * world.terrain.width + tileX;
-    const path = findTilePath(world.terrain, playerTileIndex(player), destination);
+    // Pointer paths use the same live depth/tool costs as manual travel. Unknown
+    // water receives a caution premium, so sounding a channel can materially
+    // improve the Loom's route without ever making manual exploration illegal.
+    const traversalTerrain = {
+      ...world.terrain,
+      tiles: world.terrain.tiles.map((tile, index) => {
+        const live = worldView.terrain.tiles[index];
+        const depth = live?.waterDepth ?? 0;
+        const waterCost = waterEffortPerStep(player, depth);
+        const unknownWaterCost = depth > 40_000 && (player.depthSoundings[index] ?? 0) <= 0 ? 850 : 0;
+        const stiltsRelief = player.tools.includes("marsh-stilts")
+          && (tile.terrain === "marsh" || tile.terrain === "tidal-flat") ? 130 : 0;
+        return {
+          ...tile,
+          baseTravelCost: Math.max(40, tile.baseTravelCost + waterCost + unknownWaterCost - stiltsRelief),
+        };
+      }),
+    };
+    const path = findTilePath(traversalTerrain, playerTileIndex(player), destination);
     if (path.length < 2) {
       announce(session, "The Loom cannot currently resolve a traversable line there.");
       soundscape.play("warning", 0.45);
@@ -630,15 +816,28 @@ export async function createTideweftRuntime(
     }
     const next = path.slice(1);
     autopilotPath = additive ? [...autopilotPath, ...next] : next;
-    announce(session, `Loom path set across ${next.length} terrain marks.`);
+    const unknownWater = next.filter(
+      (index) => (worldView.terrain.tiles[index]?.waterDepth ?? 0) > 40_000
+        && (player.depthSoundings[index] ?? 0) <= 0,
+    ).length;
+    announce(
+      session,
+      `Loom path set across ${next.length} terrain marks${unknownWater > 0 ? `, including ${unknownWater} unsounded water marks` : " using sounded depth and your field tools"}.`,
+    );
   }
 
   function scan(): void {
     if (session.paused || session.titleVisible) return;
+    if (player.mode === "swept") {
+      announce(session, "The current has the helm until you reach a safe bank. The sounding line is secured during the drift.", true);
+      soundscape.play("warning", 0.3);
+      refreshViews();
+      return;
+    }
     if (pulseScan(player, worldView)) {
       session.tutorial.scansUsed += 1;
       soundscape.play("scan");
-      announce(session, "The Loom charts nearby terrain. What you learned will remain on this world.");
+      announce(session, "The sounding line charts nearby terrain and water depth. Those bathymetry marks will remain on this world.");
       refreshViews();
     } else {
       announce(session, "The Loom is recharging. The current map remains trustworthy.");
@@ -671,6 +870,26 @@ export async function createTideweftRuntime(
     if (player.report?.targetSettlementId === settlementId) {
       deliverReport();
       return;
+    }
+    if (player.activeContractId === null && player.report === null) {
+      const localOffers = worldView.contracts
+        .filter((contract) => contract.status === "offered" && contract.originSettlementId === settlementId)
+        .sort((left, right) => left.dueTick - right.dueTick || left.id - right.id);
+      const trackedLocal = localOffers.find((contract) => contract.id === session.trackedContractId);
+      if (trackedLocal || localOffers.length === 1) {
+        accept(trackedLocal ?? localOffers[0]!);
+        return;
+      }
+      if (localOffers.length > 1) {
+        session.selectedSettlementId = settlementId;
+        announce(
+          session,
+          `${localOffers.length} physical cargo promises are waiting here. Choose one in the scrollable Promises list; “Carry stock report” is a separate one-slot information journey.`,
+        );
+        soundscape.play("ui");
+        refreshViews();
+        return;
+      }
     }
     session.selectedSettlementId = settlementId;
     const settlement = worldView.settlements.find((candidate) => candidate.id === settlementId);
@@ -815,6 +1034,66 @@ export async function createTideweftRuntime(
     if (tile) focusHandler?.({ x: (tile.x + 0.5) * RENDER_TILE_SIZE, y: (tile.y + 0.5) * RENDER_TILE_SIZE }, 1.25);
   }
 
+  function recordHarborArrival(arrivalHarborId: number): void {
+    const fromHarborId = player.lastHarborId;
+    const arrival = worldView.settlements.find((settlement) => settlement.id === arrivalHarborId);
+    if (!arrival) return;
+    if (fromHarborId === null) {
+      player.lastHarborId = arrivalHarborId;
+      player.harborTrail = [arrivalHarborId];
+      player.surveyTrace = [arrival.tileIndex];
+      return;
+    }
+    if (fromHarborId === arrivalHarborId) {
+      player.surveyTrace = [arrival.tileIndex];
+      return;
+    }
+
+    const leg = assessHarborLeg(worldView, fromHarborId, arrivalHarborId, player.surveyTrace);
+    const rememberedChoirKeys = worldView.choirs.map(
+      (choir) => `tide-choir:${[...choir.routeIds].sort((left, right) => left - right).join("-")}`,
+    );
+    const phrase = appendSurveyedHarborLeg(worldView, player.harborTrail, leg, rememberedChoirKeys);
+    player.lastHarborId = arrivalHarborId;
+    player.harborTrail = [...phrase.trail];
+    player.surveyTrace = [arrival.tileIndex];
+
+    const fromName = settlementName(worldView, fromHarborId);
+    const toName = arrival.name;
+    if (!leg.surveyed || leg.routeId === null) {
+      announce(
+        session,
+        `${fromName} → ${toName} was traveled, but only ${Math.round(leg.coverage / 10_000)}% followed that corridor. Exact terrain still remembers you; stay near the visible route for 70% to survey its shared strand.`,
+      );
+      return;
+    }
+
+    if (!player.surveyedRouteIds.includes(leg.routeId)) {
+      player.surveyedRouteIds = [...player.surveyedRouteIds, leg.routeId].sort((left, right) => left - right);
+      session.sessionChanges.push(`${fromName} ↔ ${toName} was surveyed closely enough for accountable strand work.`);
+      announce(
+        session,
+        `Survey complete: ${fromName} ↔ ${toName} is now safe to strengthen with shared parts. ${Math.round(leg.coverage / 10_000)}% of the corridor was heard.`,
+      );
+      soundscape.play("strand", 0.58);
+    } else if (phrase.reason === "immediate-backtrack") {
+      announce(session, `${fromName} ↔ ${toName} remains surveyed. A Tide Choir needs at least three different harbor legs, so a simple out-and-back does not close a song.`);
+    }
+
+    if (phrase.choir === null || pendingChoir !== null) return;
+    const awakenCommandId = commandId("choir");
+    queue({
+      id: awakenCommandId,
+      type: "awaken-tide-choir",
+      routeIds: [...phrase.choir.routeIds],
+      sourceId: 0,
+      sequence: commandSequence,
+    });
+    pendingChoir = { commandId: awakenCommandId, cycle: phrase.choir };
+    announce(session, `A complete harbor loop is resonating. The estuary is checking whether this Tide Choir has sung before…`);
+    soundscape.play("strand", 0.82);
+  }
+
   function reinforceStrand(routeId: number, settlementId: number): void {
     if (session.paused || session.titleVisible || pendingReinforcement !== null) return;
     const here = settlementAtPlayer(player, worldView);
@@ -827,6 +1106,15 @@ export async function createTideweftRuntime(
     }
     if (route.fromSettlementId !== settlementId && route.toSettlementId !== settlementId) {
       announce(session, "That route does not meet this harbor.");
+      soundscape.play("warning", 0.4);
+      return;
+    }
+    if (!player.surveyedRouteIds.includes(route.id)) {
+      const otherId = route.fromSettlementId === settlementId ? route.toSettlementId : route.fromSettlementId;
+      announce(
+        session,
+        `Survey this corridor first: travel from ${settlement.name} to ${settlementName(worldView, otherId)} along the visible route. Parts only improve paths you have physically learned.`,
+      );
       soundscape.play("warning", 0.4);
       return;
     }
@@ -919,12 +1207,20 @@ export async function createTideweftRuntime(
 
   async function save(): Promise<void> {
     if (saveInFlight) return saveInFlight;
+    const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
+    const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
+    const playerSnapshot = structuredClone(player);
+    const sessionSnapshot = structuredClone(session);
+    repairInterruptedPickups(worldSnapshot, playerSnapshot, sessionSnapshot);
+    if (pendingAcceptance !== null && playerSnapshot.activeContractId === pendingAcceptance.contractId) {
+      rollbackOptimisticPickup(playerSnapshot, sessionSnapshot, pendingAcceptance.contractId);
+    }
     const envelope: GameSaveEnvelope = {
       format: "tideweft-session",
       version: GAME_SAVE_VERSION,
-      world: serializeWorld(world),
-      player: structuredClone(player),
-      session: structuredClone(session),
+      world: serializeWorld(worldSnapshot),
+      player: playerSnapshot,
+      session: sessionSnapshot,
     };
     const record: SaveRecord = {
       slotId: AUTOSAVE_SLOT,
@@ -1008,6 +1304,22 @@ async function loadAutosave(
       return undefined;
     }
     const world = deserializeWorld(decoded.world);
+    // Alpha player snapshots predate dynamic world dimensions. Pickup repair
+    // can reset currentTrace, so dimensions must be authoritative before it
+    // asks playerTileIndex to derive that trace origin.
+    decoded.player.worldWidth = world.terrain.width;
+    decoded.player.worldHeight = world.terrain.height;
+    const legacyBaseline = decoded.session.sessionBaseline;
+    if (legacyBaseline && !Number.isFinite(legacyBaseline.awakenedChoirs)) {
+      legacyBaseline.awakenedChoirs = world.choirs.length;
+    }
+    const repairedContractIds = repairInterruptedPickups(world, decoded.player, decoded.session);
+    if (repairedContractIds.length > 0) {
+      decoded.session.sessionChanges = Array.isArray(decoded.session.sessionChanges)
+        ? [...decoded.session.sessionChanges, "An interrupted cargo pickup was safely reset before any harbor stock moved."]
+        : ["An interrupted cargo pickup was safely reset before any harbor stock moved."];
+      decoded.session.trackedContractId = repairedContractIds[0] ?? null;
+    }
     validatePlayer(decoded.player, world);
     return {
       world,
@@ -1019,6 +1331,85 @@ async function loadAutosave(
   }
 }
 
+/**
+ * Accepting a promise is optimistic in the game layer but atomic in the
+ * simulation: origin stock is not debited until accept + pickup run together.
+ * A save taken inside that short window therefore persists the authoritative
+ * offered contract and rolls back only its uncommitted local pack copy.
+ */
+function rollbackOptimisticPickup(
+  player: PlayerState,
+  session: GameSessionState,
+  contractId: number,
+): void {
+  player.cargo = player.cargo.filter((cargo) => cargo.contractId !== contractId);
+  if (player.activeContractId === contractId) {
+    player.activeContractId = null;
+    player.currentTrace = [playerTileIndex(player)];
+  }
+  session.trackedContractId = contractId;
+  session.tutorial.acceptedPromises = Math.max(0, session.tutorial.acceptedPromises - 1);
+  if (session.tutorial.stage === "travel" && player.completedJourneys === 0) {
+    session.tutorial.stage = "promise";
+  }
+}
+
+/**
+ * Repairs snapshots produced before pending pickups were reconciled at save
+ * time. The common offered state only needs its phantom local cargo removed.
+ * An accepted-without-pickup state has not moved inventory either, so it can
+ * deterministically return to offered without creating or destroying stock.
+ */
+function repairInterruptedPickups(
+  world: WorldState,
+  player: PlayerState,
+  session: GameSessionState,
+): number[] {
+  const repairedContractIds: number[] = [];
+  const contractId = player.activeContractId;
+  if (contractId !== null) {
+    const activeContract = world.contracts.find((candidate) => candidate.id === contractId);
+    if (activeContract?.status === "offered" && activeContract.cargoQuantity === 0) {
+      rollbackOptimisticPickup(player, session, contractId);
+      repairedContractIds.push(contractId);
+    }
+  }
+
+  // A player-accepted contract with no authoritative cargo is never a stable
+  // runtime state: the game always submits accept + pickup as one pair. It can
+  // remain only when pickup failed and the follow-up release command was lost,
+  // or in a legacy save captured between those operations. No inventory moved,
+  // so returning it to offered is the unique conservation-preserving repair.
+  for (const contract of world.contracts) {
+    if (!isAcceptedWithoutPickup(contract)) continue;
+    resetContractToOffered(contract);
+    rollbackOptimisticPickup(player, session, contract.id);
+    if (!repairedContractIds.includes(contract.id)) repairedContractIds.push(contract.id);
+  }
+  return repairedContractIds.sort((left, right) => left - right);
+}
+
+function isAcceptedWithoutPickup(contract: ContractState): boolean {
+  return contract.status === "accepted"
+    && contract.carrierKind === "player"
+    && contract.cargoQuantity === 0;
+}
+
+function resetContractToOffered(contract: ContractState): void {
+  contract.status = "offered";
+  contract.acceptedTick = null;
+  contract.departedTick = null;
+  contract.arrivalTick = null;
+  contract.completedTick = null;
+  contract.carrierKind = null;
+  contract.assignedResidentId = null;
+  contract.porterRouteIds = [];
+  contract.porterSettlementIds = [];
+  contract.deliveryCondition = null;
+  contract.deliveryGrade = null;
+  contract.deliveryTraceCost = null;
+}
+
 function validatePlayer(player: PlayerState, world: WorldState): void {
   for (const value of [player.x, player.y, player.stamina, player.stability, player.scanCharge]) {
     if (!Number.isFinite(value)) throw new Error("Save contains invalid player state");
@@ -1028,6 +1419,27 @@ function validatePlayer(player: PlayerState, world: WorldState): void {
   }
   if (!Array.isArray(player.cargo) || !Array.isArray(player.currentTrace)) {
     throw new Error("Save contains invalid player cargo or trace");
+  }
+  if (player.surveyTrace !== undefined && !Array.isArray(player.surveyTrace)) {
+    throw new Error("Save contains an invalid survey trace");
+  }
+  if (player.surveyedRouteIds !== undefined && !Array.isArray(player.surveyedRouteIds)) {
+    throw new Error("Save contains invalid surveyed routes");
+  }
+  if (player.harborTrail !== undefined && !Array.isArray(player.harborTrail)) {
+    throw new Error("Save contains an invalid harbor phrase");
+  }
+  if (
+    player.depthSoundings !== undefined
+    && !Array.isArray(player.depthSoundings)
+  ) {
+    throw new Error("Save contains an invalid depth chart");
+  }
+  if (player.tools !== undefined && !Array.isArray(player.tools)) {
+    throw new Error("Save contains an invalid field kit");
+  }
+  if (player.sweepPath !== undefined && !Array.isArray(player.sweepPath)) {
+    throw new Error("Save contains an invalid sweep path");
   }
   if (player.report !== undefined && player.report !== null) {
     const report = player.report;
@@ -1050,12 +1462,38 @@ function signControl(value: number): -1 | 0 | 1 {
   return 0;
 }
 
+function isTravelPace(value: unknown): value is TravelPace {
+  return value === "rest" || value === "steady" || value === "swift";
+}
+
+function isPlayerMode(value: unknown): value is PlayerMode {
+  return value === "foot"
+    || value === "wading"
+    || value === "skiff"
+    || value === "swept"
+    || value === "camp"
+    || value === "rescued";
+}
+
 function settlementName(world: WorldView, id: number): string {
   return world.settlements.find((settlement) => settlement.id === id)?.name ?? `Settlement ${id}`;
 }
 
 function humanResource(resource: ContractState["resource"]): string {
   return resource === "freshWater" ? "fresh water" : resource;
+}
+
+function fieldToolEffect(tool: FieldToolKind): string {
+  switch (tool) {
+    case "sounding-line":
+      return "Loom pulses now reveal nearby water depth.";
+    case "marsh-stilts":
+      return "Mudflats and reed marsh cost less stamina and no longer drag as heavily.";
+    case "tide-sail":
+      return "Deep-water travel is faster and uses less stamina.";
+    case "storm-kite":
+      return "Strong wind harms stability less and any current sweep reaches shore sooner.";
+  }
 }
 
 function isTerminal(status: ContractState["status"]): boolean {

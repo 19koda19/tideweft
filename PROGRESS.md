@@ -58,10 +58,10 @@
 
 ## Current checkpoint
 
-Phase 7: final merged verification and publication.
+Phase 8: Alpha 0.2 release candidate verified; publication is the immediate gate.
 
-- Re-run the complete check and packaged smoke after parallel gameplay changes settle.
-- The Pages workflow is ready, but this checkout has no Git remote and the configured GitHub CLI credential is invalid; authenticated repository creation/push is the remaining external deployment step.
+- The public repository and Pages deployment are healthy from Alpha 0.1.
+- The complete local web and packaged desktop gates now cover the 96 × 72 Perlin world, real Relief 3D, physical promise pickup, explicit delivery guidance, renderer switching, and the shallow-window Promises scroller.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
 ## 2026-09-01 — Alpha 0.1 verification recovered
@@ -81,3 +81,14 @@ Phase 7: final merged verification and publication.
 - Watched the complete Pages deployment succeed; the remote workflow repeated dependency installation, TypeScript, all simulation/game tests, the production build, nested-path smoke, upload, and deployment.
 - Verified the public deployment responds successfully at https://19koda19.github.io/tideweft/.
 - Opened Phase 8, **The Tide Choir**, from this published baseline.
+
+## 2026-09-01 — Alpha 0.2 release candidate verified
+
+- Grew new worlds from 64 × 48 to 96 × 72 while preserving legacy Alpha saves, enforcing wide harbor separation, and replacing the old field with deterministic multi-octave gradient Perlin terrain.
+- Added distinct terrain, live traversable water, separate depth sounding, monotone depth/stamina costs, deterministic swept-current recovery, and infrastructure-earned Sounding line, Marsh stilts, Tide sail, and Storm kite tools.
+- Made corridor reinforcement follow actual traveled overlap, gated route tending behind genuine surveying, and added repeat-safe canonical Tide Choir cycles with persistent audiovisual memory.
+- Repaired the comprehension failures from Alpha 0.1: stable live contract actions, explicit pickup/delivery copy and map markers, separate signed-report language, stability-cause text, route-work cost/effect text, and a Chromium `::details-content` scroll fix.
+- Added an actual p5/WebGL Relief 3D renderer with chunked seam-safe terrain, live water, 3D entities/routes/soundings, orbit, zoom, terrain picking, persistent view switching, reduced-motion defaults, and secure Chart 2D fallback.
+- Closed release races around optimistic pickup saves, legacy 64 × 48 migration, dynamic swept-water replanning, hidden WebGL context loss, and shutdown audio ordering.
+- Passed `npm run check` with 19 files / 122 tests and a successful nested Pages artifact probe.
+- Passed the packaged Electron smoke with Relief 3D active, physical cargo loaded, an explicit `DELIVER CARGO · Latchmere` marker, a working Chart/Relief round trip, a real 79px scroll viewport at 960 × 640, and zero renderer warnings or failed resources.

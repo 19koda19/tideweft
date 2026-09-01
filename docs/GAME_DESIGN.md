@@ -17,7 +17,7 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 1. Inspect nearby facts, named requesters, shortages, project needs, route reliability, weather, and tide.
 2. Choose a promise by consequence and journey mood rather than abstract reward value.
 3. Reach the origin and collect a physical load, or witness one signed report into the document case.
-4. Travel manually or chart a pointer path over the continuous map.
+4. Travel manually or chart a pointer path in the overhead chart or angled relief view.
 5. Scan, reroute, slow down, hold Shift to brace while moving, stand still to recover, or accept a weathered load.
 6. Deliver or hand off safely at a harbor.
 7. Spend a shared part to reinforce a corridor, or let repeated delivery use weave it naturally.
@@ -31,14 +31,14 @@ The estuary sits beneath the Aurora, a weather phenomenon used as poetic languag
 
 The quantum framing is thematic, not a claim about real-world physics. Current play does not branch or rewind timelines. Its meaningful possibility space comes from seeded worlds, tide-dependent traversal, changing weather, route choice, cargo condition, shortage timing, project order, and network topology.
 
-The tide changes water depth across the map. Some ground becomes awkward or unavailable on foot while skiff-friendly water opens. Weather changes stamina/load pressure and whether marginal autonomous corridors remain usable.
+The tide changes water depth across the map. Water is always physically enterable, but sounded depth, stamina, field tools, and the risk of being swept to a safe bank make route choice legible. Weather changes stamina/load pressure, stability, and whether marginal autonomous corridors remain usable.
 
 ## Nested reward loops
 
 ### Moment to moment
 
 - Movement has terrain drag, continuous acceleration cues, wake/foot feedback, camera response, stamina, and load stability.
-- The Loom pulse immediately expands the permanent chart.
+- The Loom pulse immediately expands the permanent chart and records nearby water soundings separately from ordinary discovery.
 - Active Shift-bracing trades speed for stability and fragile-cargo protection; Rest pace or stillness restores further.
 - Every consequential command responds through animation, sound, text, or an accessible live announcement.
 
@@ -51,10 +51,11 @@ The tide changes water depth across the map. Some ground becomes awkward or unav
 
 ### One corridor
 
-- Weak traces can be reinforced at an incident harbor with one shared part.
+- A corridor must be physically surveyed between its endpoint harbors before one shared part can reinforce it.
 - Crossing the active threshold allows residents to inherit the route.
 - Repeated use strengthens reliability but also adds traffic; capacity and congestion remain relevant.
 - A second way around matters more than endlessly maximizing one trunk.
+- Closing a unique simple loop of at least three surveyed harbor legs awakens its one-time Tide Choir, strengthening the remembered circuit without minting cargo.
 
 ### Regional arc
 
@@ -67,7 +68,7 @@ The tide changes water depth across the map. Some ground becomes awkward or unav
 
 Each seed creates:
 
-- A 64 × 48 elevation/moisture/roughness field with five terrain kinds and tidal water depth.
+- A 96 × 72 seeded multi-octave gradient Perlin elevation/moisture/roughness field with five authoritative terrain families, readable presentation variants, and tidal water depth. Stored Alpha 0.1 worlds retain their original 64 × 48 serialized field.
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
 - 42 named residents with a role, resolve/empathy/curiosity traits, food/rest/belonging needs, local relationships, an intention, and a world location.
 - Recipes that produce and consume conserved resources.
@@ -97,11 +98,11 @@ Projects are not progress bars that only unlock flavor text. They consume an act
 
 | Project | Player-visible consequence |
 | --- | --- |
-| Beacon | Stronger local knowledge/signals and better severe-storm route legibility |
+| Beacon | Stronger local knowledge/signals, better severe-storm route legibility, and a visiting courier's Storm kite |
 | Cache | Faster stamina/cargo-stability recovery and a shelter that halts perishable-food freshness loss |
-| Crossing | Faster, better-conditioned incident corridors |
+| Crossing | Faster, better-conditioned incident corridors and a visiting courier's Marsh stilts |
 | Clinic | Lower local strain and mutual-aid rescue on connected active routes |
-| Ferry | Faster/more reliable incident corridors and higher porter capacity |
+| Ferry | Faster/more reliable incident corridors, higher porter capacity, and a visiting courier's Tide sail |
 
 A matching material delivery can feed a building project. The contract preview says when this will happen; completion produces a named chronicle entry and changes subsequent play.
 
@@ -120,20 +121,20 @@ At a source harbor, the player can witness its specialization count into a singl
 
 ## Journey play
 
-- WASD/arrows and pointer-directed routes share the same continuous travel rules.
+- WASD/arrows and pointer-directed routes share the same continuous travel rules in Chart 2D and Relief 3D.
 - Rest, Steady, and Swift paces trade recovery, control, and speed.
 - Holding Shift while moving actively braces: travel continues more slowly, stability rises, and fragile loads avoid handling shock.
 - Terrain, water depth, load ratio, roughness, sharp changes in direction, wind, and pace affect effort or stability.
 - Perishable food loses freshness gently during travel; a completed cache suspends that decay while the player is sheltered at its harbor.
-- A charge-gated Loom pulse reveals nearby permanent chart information.
-- At deep enough water the ferrier travels by skiff; land and shallow water use foot movement.
+- A charge-gated Loom pulse reveals nearby permanent chart information and bathymetry; sounded depth also informs pointer-path cost.
+- The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
 - The objective always identifies the active pickup, material destination, or report destination.
 
 The activity must remain pleasant before progression numbers: readable motion, surface response, luminous traces, weather, terrain sound, and immediate stability feedback form the lowest loop.
 
 ## Setback and recovery
 
-- Exhaustion creates an emergency camp and Rest pace. On an active route connected to a finished clinic, it becomes a named mutual-aid rescue.
+- Dry-ground exhaustion creates an emergency camp and Rest pace. Deep-water exhaustion yields control to a deterministic adjacent current path toward the nearest safe bank; cargo quantity stays with the player and weathers once. A connected clinic can intervene before the sweep, while ferries and the Storm kite shorten recovery.
 - Low stability gradually weathers cargo instead of destroying the contract. Fragile medicine reacts earlier to shocks, perishable food rewards an efficient line, and Shift-bracing supplies an explicit protective choice.
 - Every condition grade still delivers material and strengthens a route.
 - An unwanted or risky promise can be handed into accountable care at any harbor; cargo returns to local stock and learned chart/trace remains.
@@ -147,7 +148,7 @@ There is no character death, lost save, currency fine, streak break, or zero-pro
 Session shape is a commitment from the game about when it will offer closure, not a difficulty or payout multiplier:
 
 - **Drift (about 10 minutes):** one useful delivery is a complete evening.
-- **Weave (about 25 minutes):** activate/tend one self-carrying corridor or finish two useful deliveries.
+- **Weave (about 25 minutes):** activate/tend one self-carrying corridor, awaken one Tide Choir, or finish two useful deliveries.
 - **Wander (open):** explore, inspect, report, deliver, tend, or stop without a quota.
 
 When Drift or Weave reaches its threshold, the UI explicitly says the chosen shape is complete. Continuing has no bonus and leaving has no penalty.
@@ -162,7 +163,7 @@ Quiet Hour pauses immediately, saves, and summarizes duration, distance, deliver
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, scan, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
 The current build has procedural sound but does not yet expose separate volume controls or key remapping.
 
@@ -176,6 +177,7 @@ Implemented now:
 - authoritative active/multi-hop logistics;
 - all five rule-changing civic projects;
 - route reinforcement, topology campaign resolution, and endless continuation;
+- surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, and dual Chart 2D/Relief 3D play;
 - Drift/Weave/Wander plus Quiet Hour;
 - local resume, secure desktop packaging, and static Pages output.
 

@@ -4,6 +4,7 @@ export type SoundCue =
   | "accept"
   | "deliver"
   | "strand"
+  | "choir"
   | "warning"
   | "rest"
   | "ui";
@@ -78,8 +79,12 @@ export class TideweftSoundscape {
       this.noiseBurst(now, 0.025, 250, 0.018 * strength);
       return;
     }
+    if (cue === "choir") {
+      this.choir(now, strength);
+      return;
+    }
 
-    const patterns: Record<Exclude<SoundCue, "step">, readonly [number, number, OscillatorType, number][]> = {
+    const patterns: Record<Exclude<SoundCue, "step" | "choir">, readonly [number, number, OscillatorType, number][]> = {
       scan: [
         [196, 0, "sine", 0.18],
         [392, 0.07, "sine", 0.28],
@@ -187,6 +192,24 @@ export class TideweftSoundscape {
     envelope.connect(this.effectsGain);
     oscillator.start(start);
     oscillator.stop(start + duration + 0.02);
+  }
+
+  private choir(start: number, strength: number): void {
+    // An open, overlapping D/A chord makes the choir read as several distant
+    // harbors answering one another instead of another short UI arpeggio.
+    const voices: readonly [number, number, OscillatorType, number, number][] = [
+      [146.83, 0, "sine", 1.45, 0.035],
+      [220, 0.025, "sine", 1.28, 0.031],
+      [293.66, 0.07, "triangle", 1.08, 0.026],
+      [369.99, 0.16, "sine", 0.94, 0.022],
+      [440, 0.3, "triangle", 0.86, 0.024],
+      [587.33, 0.46, "sine", 0.78, 0.021],
+      [880, 0.7, "sine", 0.5, 0.015],
+    ];
+    for (const [frequency, delay, type, duration, level] of voices) {
+      this.tone(frequency, start + delay, duration, type, level * strength);
+    }
+    this.noiseBurst(start + 0.12, 0.34, 1_450, 0.0065 * strength);
   }
 
   private noiseBurst(start: number, duration: number, frequency: number, level: number): void {
