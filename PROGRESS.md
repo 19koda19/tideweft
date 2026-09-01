@@ -58,9 +58,9 @@
 
 ## Current checkpoint
 
-Phase 8: Alpha 0.2 release candidate verified; publication is the immediate gate.
+Phase 8: Alpha 0.2 published; post-alpha fieldwork is the active expansion gate.
 
-- The public repository and Pages deployment are healthy from Alpha 0.1.
+- The public repository and Pages deployment now serve Alpha 0.2 from `d9b8cea` / `v0.2.0-alpha.1`.
 - The complete local web and packaged desktop gates now cover the 96 × 72 Perlin world, real Relief 3D, physical promise pickup, explicit delivery guidance, renderer switching, and the shallow-window Promises scroller.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
@@ -92,3 +92,10 @@ Phase 8: Alpha 0.2 release candidate verified; publication is the immediate gate
 - Closed release races around optimistic pickup saves, legacy 64 × 48 migration, dynamic swept-water replanning, hidden WebGL context loss, and shutdown audio ordering.
 - Passed `npm run check` with 19 files / 122 tests and a successful nested Pages artifact probe.
 - Passed the packaged Electron smoke with Relief 3D active, physical cargo loaded, an explicit `DELIVER CARGO · Latchmere` marker, a working Chart/Relief round trip, a real 79px scroll viewport at 960 × 640, and zero renderer warnings or failed resources.
+
+## 2026-09-01 — Alpha 0.2 published
+
+- Secret-scanned and froze the verified Wild Reaches / Relief source as commit `d9b8cea` with annotated tag `v0.2.0-alpha.1`.
+- Pushed public source and watched both tag/main CI runs plus the GitHub Pages deployment succeed on that exact commit.
+- Confirmed the live HTTPS origin responds successfully and references the exact production JS/CSS hashes verified locally.
+- Kept the long-running build goal active and moved the next gate to post-alpha terrain fieldwork and deeper whimsical simulation rather than declaring the game finished.

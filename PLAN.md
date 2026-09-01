@@ -24,7 +24,7 @@ active graph and autonomous multi-hop porters
 redundant regional weave and campaign resolution
 ```
 
-Alpha 0.1 is verified and published. Alpha 0.2 is now a locally verified release candidate built additively from that frozen baseline:
+Alpha 0.1 and Alpha 0.2 are verified and published. Alpha 0.2 was built additively from the frozen first-alpha baseline:
 
 - **The Tide Choir** makes route memory truthful, surveying playable, and completed harbor loops capable of awakening one-time communal harmonies.
 - **Wild Reaches** expands new seeds to a 96 × 72 Perlin estuary with meaningful terrain, sounded water, recoverable currents, and civic field tools.
@@ -152,7 +152,7 @@ Final local evidence captured 2026-09-01:
 
 ## Phase 8 — The Tide Choir
 
-Status: **complete for the Alpha 0.2 release candidate**
+Status: **complete for Alpha 0.2**
 
 Purpose: turn walking, surveying, and redundant topology into a truthful, whimsical field system before adding new economies.
 
@@ -168,7 +168,7 @@ Exit evidence will include deterministic overlap scoring, unseen-route tending r
 
 ## Phase 8B — Wild Reaches
 
-Status: **core complete for the Alpha 0.2 release candidate**
+Status: **core complete for Alpha 0.2**
 
 Purpose: make the space between harbors a meaningful strand journey rather than empty commute time. Larger separation, new terrain, and tools must all feed the same promise/survey/infrastructure loop.
 
@@ -185,7 +185,7 @@ Exit evidence will include deterministic terrain/spawn checks, old-save migratio
 
 ## Phase 8C — The Estuary in Relief
 
-Status: **complete for the Alpha 0.2 release candidate**
+Status: **complete for Alpha 0.2**
 
 The 96 × 72 height field compiles into deterministic cullable terrain chunks with seam-safe vertices and normals, consistent triangle winding, material/depth references, bounds, and a separate live-water plane. Default worlds produce 30 bounded chunks rather than one monolithic mesh. Pure tests cover geometry counts, seams, normals, water extrema, determinism, malformed input, camera projection, picking, culling, and fog.
 
@@ -197,6 +197,7 @@ Local Alpha 0.2 evidence captured 2026-09-01:
 - Packaged Electron 44 starts Relief 3D by default, round-trips through Chart 2D, creates the exact 6,912-tile world, and reports no renderer warnings, resource failures, or Node-global leakage.
 - The packaged UI smoke clicks a live available promise, observes 14 physical cargo units and `DELIVER CARGO · Latchmere`, then proves the Promises viewport still has real vertical overflow at 960 × 640.
 - A 2,880 × 1,800 screenshot records the wedge-free 3D discovery island, loaded cargo HUD, explicit delivery objective, and scrollable promise card.
+- GitHub repeated CI and Pages verification successfully on commit `d9b8cea`; tag `v0.2.0-alpha.1` and the public HTTPS build are live at https://19koda19.github.io/tideweft/.
 
 ## Reward-loop acceptance audit
 
