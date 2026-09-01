@@ -12,7 +12,21 @@ const PRODUCTION_ENTRY_URL = `${APP_ORIGIN}/index.html`;
 const DEV_ORIGIN = 'http://127.0.0.1:5173';
 const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
 const SMOKE_WORLD_TILE_COUNT = 96 * 72;
+const SMOKE_WORLD_SEED = 'phase ten glass ebb';
+const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
+const SMOKE_TIDE_HARP = Object.freeze({
+  id: 'tide-harp:r1-a3-w5',
+  label: 'Glass-Ebb Tide Harp · R1 · A3 · W5',
+  reedTileIndex: 2_942,
+  anchorTileIndex: 3_230,
+  windTileIndex: 2_751,
+  // Six tiles south of A3, but nine tiles from the player at R1. The normal
+  // radius-8 pulse cannot reach it; the anchor's radius-6 echo can.
+  remoteEchoTileIndex: 3_806,
+});
 const SMOKE_MINIMUM_VIEWPORT = Object.freeze({ width: 960, height: 640 });
+const SMOKE_RESPONSIVE_VIEWPORT = Object.freeze({ width: 927, height: 640 });
+const SMOKE_PHONE_VIEWPORT = Object.freeze({ width: 700, height: 640 });
 const SMOKE_SCREENSHOT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 
 const SMOKE_TEST = Object.freeze({
@@ -20,6 +34,7 @@ const SMOKE_TEST = Object.freeze({
     process.env.TIDEWEFT_SMOKE === '1' ||
     process.argv.includes('--tideweft-smoke'),
   screenshotPath: process.env.TIDEWEFT_SMOKE_SCREENSHOT || '',
+  titleScreenshotPath: process.env.TIDEWEFT_SMOKE_TITLE_SCREENSHOT || '',
   timeoutMs: Math.max(
     5_000,
     Math.min(60_000, Number.parseInt(process.env.TIDEWEFT_SMOKE_TIMEOUT_MS || '30000', 10) || 30_000),
@@ -227,7 +242,7 @@ function createWindow(options = {}) {
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 960,
+    minWidth: SMOKE_TEST.enabled ? 320 : 960,
     minHeight: 640,
     backgroundColor: '#07141a',
     show: false,
@@ -301,9 +316,39 @@ function smokeFailure(reason, details = {}) {
 
 function rendererProbeScript() {
   return `(() => {
+    const rectOf = (element) => {
+      if (!(element instanceof Element)) return null;
+      const rect = element.getBoundingClientRect();
+      return {
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+    const visiblyIntersectsViewport = (element) => {
+      if (!(element instanceof Element)) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        style.opacity !== '0' &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.right > 0 &&
+        rect.bottom > 0 &&
+        rect.left < window.innerWidth &&
+        rect.top < window.innerHeight;
+    };
     const status = document.querySelector('#connection-status');
     const shell = document.querySelector('#game-ui .ui-layer');
     const title = document.querySelector('.title-dialog');
+    const titleContent = document.querySelector('.title-dialog__content');
+    const titleHeading = document.querySelector('.title-dialog__heading');
+    const newWorldForm = document.querySelector('.new-world-form');
+    const beginWorldButton = newWorldForm?.querySelector('button[type="submit"]') || null;
     const canvases = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'));
     const bridge = window.__TIDEWEFT__;
     const runtime = bridge && bridge.runtime;
@@ -336,15 +381,31 @@ function rendererProbeScript() {
       ? renderer.canvas()
       : null;
     const viewButton = document.querySelector('#view-mode-toggle');
+    const objectivePanel = document.querySelector('.objective-panel');
+    const leftRail = document.querySelector('.left-rail');
+    const hudBar = document.querySelector('.hud-bar');
+    const actionDock = document.querySelector('.action-dock');
     const contractRail = document.querySelector('.contract-rail');
     const contractList = document.querySelector('.contract-list');
     const contractStyle = contractList ? getComputedStyle(contractList) : null;
     const contractClientHeight = contractList ? contractList.clientHeight : null;
     const contractScrollHeight = contractList ? contractList.scrollHeight : null;
+    const objectiveRect = rectOf(objectivePanel);
+    const contractRect = rectOf(contractRail);
+    const leftPaneOverlap = objectiveRect && contractRect
+      ? Math.max(objectiveRect.left, contractRect.left) < Math.min(objectiveRect.right, contractRect.right) &&
+        Math.max(objectiveRect.top, contractRect.top) < Math.min(objectiveRect.bottom, contractRect.bottom)
+      : null;
     const interactButton = document.querySelector('.action-button--interact');
     const wayknotButton = document.querySelector('.action-button--wayknot');
     const wayknotCount = document.querySelector('.field-readout__wayknot-count');
     const wayknotActive = document.querySelector('.field-readout__wayknot-active');
+    const scanButton = document.querySelector('.action-button--scan');
+    const tideHarpField = document.querySelector('.field-readout__tide-harps');
+    const tideHarpCount = document.querySelector('.field-readout__tide-harp-count');
+    const tideHarpActive = document.querySelector('.field-readout__tide-harp-active');
+    const tideHarpActiveStyle = tideHarpActive ? getComputedStyle(tideHarpActive) : null;
+    const reliefLabelLayer = document.querySelector('.relief-label-layer[data-renderer="relief-3d"]');
     const activeContracts = uiView && Array.isArray(uiView.contracts)
       ? uiView.contracts.filter((contract) => contract.status === 'accepted' || contract.status === 'tracked')
       : [];
@@ -365,6 +426,46 @@ function rendererProbeScript() {
             : null,
         }))
       : [];
+    const projectedTideHarps = renderView && Array.isArray(renderView.tideHarps)
+      ? renderView.tideHarps.map((harp) => ({
+          id: harp.id,
+          label: harp.label,
+          active: harp.active,
+          center: harp.center ? { x: harp.center.x, y: harp.center.y } : null,
+          knots: Array.isArray(harp.knots)
+            ? harp.knots.map((knot) => ({
+                id: knot.id,
+                kind: knot.kind,
+                tileIndex: terrain
+                  ? Math.floor(knot.point.y / terrain.tileSize) * terrain.columns +
+                    Math.floor(knot.point.x / terrain.tileSize)
+                  : null,
+              }))
+            : [],
+          edges: Array.isArray(harp.edges)
+            ? harp.edges.map((edge) => ({
+                id: edge.id,
+                fromId: edge.fromId,
+                toId: edge.toId,
+                from: edge.from ? { x: edge.from.x, y: edge.from.y } : null,
+                to: edge.to ? { x: edge.to.x, y: edge.to.y } : null,
+              }))
+            : [],
+        }))
+      : [];
+    const remoteEchoTile = terrain && Array.isArray(terrain.tiles)
+      ? terrain.tiles[${SMOKE_TIDE_HARP.remoteEchoTileIndex}]
+      : null;
+    const reliefHarpLabels = reliefLabelLayer
+      ? Array.from(reliefLabelLayer.querySelectorAll('.relief-world-label'))
+          .filter((node) => node.textContent?.includes('Tide Harp'))
+          .map((node) => ({
+            text: node.textContent?.trim() || null,
+            hidden: node.hidden,
+            tone: node.getAttribute('data-tone'),
+            selected: node.getAttribute('data-selected'),
+          }))
+      : [];
     return {
       url: location.href,
       title: document.title,
@@ -379,6 +480,20 @@ function rendererProbeScript() {
       hasRuntime: Boolean(runtime),
       uiReady: shell ? shell.getAttribute('data-ready') : null,
       titleOpen: Boolean(title && title.open),
+      titleLayout: {
+        dialog: rectOf(title),
+        content: rectOf(titleContent),
+        heading: rectOf(titleHeading),
+        form: rectOf(newWorldForm),
+        beginButton: rectOf(beginWorldButton),
+        contentVisible: visiblyIntersectsViewport(titleContent),
+        headingVisible: visiblyIntersectsViewport(titleHeading),
+        formVisible: visiblyIntersectsViewport(newWorldForm),
+        beginButtonVisible: visiblyIntersectsViewport(beginWorldButton),
+        clientHeight: title instanceof HTMLElement ? title.clientHeight : null,
+        scrollHeight: title instanceof HTMLElement ? title.scrollHeight : null,
+        overflowY: title instanceof Element ? getComputedStyle(title).overflowY : null,
+      },
       paused: renderView ? Boolean(renderView.paused) : null,
       tick: renderView && Number.isFinite(renderView.tick) ? renderView.tick : null,
       worldName: renderView ? renderView.worldName : null,
@@ -427,6 +542,49 @@ function rendererProbeScript() {
         controlAvailable: uiView?.controls?.canWayknot ?? null,
         controlLabel: uiView?.controls?.wayknotLabel ?? null,
       },
+      tideHarps: {
+        projectedCount: projectedTideHarps.length,
+        projected: projectedTideHarps,
+        tunedCount: uiView?.field?.tideHarps?.tunedCount ?? null,
+        activeId: uiView?.field?.tideHarps?.activeId ?? null,
+        activeLabel: uiView?.field?.tideHarps?.activeLabel ?? null,
+        benefitLabel: uiView?.field?.tideHarps?.benefitLabel ?? null,
+        countText: tideHarpCount?.textContent?.trim() || null,
+        activeText: tideHarpActive?.textContent?.trim() || null,
+        dataActive: tideHarpField?.getAttribute('data-active') || null,
+        dataHarpId: tideHarpField?.getAttribute('data-harp-id') || null,
+        ariaLabel: tideHarpField?.getAttribute('aria-label') || null,
+        activeGeometry: tideHarpActive
+          ? {
+              clientWidth: tideHarpActive.clientWidth,
+              scrollWidth: tideHarpActive.scrollWidth,
+              clientHeight: tideHarpActive.clientHeight,
+              scrollHeight: tideHarpActive.scrollHeight,
+              whiteSpace: tideHarpActiveStyle?.whiteSpace || null,
+              overflowX: tideHarpActiveStyle?.overflowX || null,
+              overflowY: tideHarpActiveStyle?.overflowY || null,
+            }
+          : null,
+        reliefLayerHidden: reliefLabelLayer instanceof HTMLElement ? reliefLabelLayer.hidden : null,
+        reliefLabels: reliefHarpLabels,
+        remoteEcho: remoteEchoTile
+          ? {
+              tileIndex: ${SMOKE_TIDE_HARP.remoteEchoTileIndex},
+              discovered: Number(remoteEchoTile.discovered || 0),
+              depthKnown: Number(remoteEchoTile.depthKnown || 0),
+            }
+          : null,
+      },
+      scan: scanButton
+        ? { disabled: scanButton instanceof HTMLButtonElement ? scanButton.disabled : null }
+        : null,
+      announcement: uiView?.announcement
+        ? {
+            id: uiView.announcement.id,
+            message: uiView.announcement.message,
+            assertive: uiView.announcement.assertive,
+          }
+        : null,
       canvasCount: canvasStates.length,
       activeCanvasCount: activeCanvases.length,
       activeRenderer: activeCanvas ? activeCanvas.renderer : null,
@@ -460,6 +618,19 @@ function rendererProbeScript() {
           contractClientHeight !== null &&
           contractScrollHeight !== null &&
           contractScrollHeight > contractClientHeight + 1,
+      },
+      leftPaneGap: objectivePanel && contractRail
+        ? contractRail.getBoundingClientRect().top - objectivePanel.getBoundingClientRect().bottom
+        : null,
+      layout: {
+        leftRailDisplay: leftRail ? getComputedStyle(leftRail).display : null,
+        objectivePosition: objectivePanel ? getComputedStyle(objectivePanel).position : null,
+        contractPosition: contractRail ? getComputedStyle(contractRail).position : null,
+        objective: objectiveRect,
+        contract: contractRect,
+        hud: rectOf(hudBar),
+        actionDock: rectOf(actionDock),
+        leftPaneOverlap,
       },
       styleSheetCount: document.styleSheets.length,
       nodeGlobalsAbsent:
@@ -556,7 +727,7 @@ async function startSmokeWorld(contents) {
     const form = document.querySelector('.new-world-form');
     const seed = document.querySelector('#world-seed');
     if (!(form instanceof HTMLFormElement) || !(seed instanceof HTMLInputElement)) return false;
-    seed.value = 'electron-smoke';
+    seed.value = ${JSON.stringify(SMOKE_WORLD_SEED)};
     seed.dispatchEvent(new Event('input', { bubbles: true }));
     form.requestSubmit();
     return true;
@@ -681,6 +852,208 @@ async function bindSmokeWayknot(contents) {
   );
 
   return { target, arrival, bound };
+}
+
+/**
+ * The proven Harp fixture is intentionally installed through the smoke
+ * profile's persisted save, then reloaded through the production validator.
+ * Walking the remote generated fixture with loaded cargo would make this
+ * package gate depend on stamina recovery and tide timing. No renderer or
+ * gameplay debug API is shipped for this setup.
+ */
+async function installSmokeTideHarpFixture(contents) {
+  const fixture = await contents.executeJavaScript(`(async () => {
+    const runtime = window.__TIDEWEFT__?.runtime;
+    if (!runtime?.save || !runtime?.getRenderView) return null;
+    await runtime.save();
+
+    const openRequest = indexedDB.open('tideweft', 1);
+    const database = await new Promise((resolve, reject) => {
+      openRequest.addEventListener('success', () => resolve(openRequest.result), { once: true });
+      openRequest.addEventListener('error', () => reject(openRequest.error), { once: true });
+    });
+    const readTransaction = database.transaction('saves', 'readonly');
+    const getRequest = readTransaction.objectStore('saves').get('autosave');
+    const record = await new Promise((resolve, reject) => {
+      getRequest.addEventListener('success', () => resolve(getRequest.result), { once: true });
+      getRequest.addEventListener('error', () => reject(getRequest.error), { once: true });
+    });
+    if (!record || typeof record.worldJson !== 'string') {
+      database.close();
+      return null;
+    }
+
+    const envelope = JSON.parse(record.worldJson);
+    const player = envelope?.player;
+    const knots = player?.wayknots?.wayknots;
+    if (!player || !Array.isArray(knots)) {
+      database.close();
+      return null;
+    }
+    const placementById = new Map([
+      [1, ${SMOKE_TIDE_HARP.reedTileIndex}],
+      [3, ${SMOKE_TIDE_HARP.anchorTileIndex}],
+      [5, ${SMOKE_TIDE_HARP.windTileIndex}],
+    ]);
+    player.wayknots.wayknots = knots.map((knot) => ({
+      ...knot,
+      tileIndex: placementById.has(knot.id) ? placementById.get(knot.id) : null,
+    }));
+
+    // Player coordinates are fixed-point tile units in the persisted format.
+    const columns = player.worldWidth;
+    const tileIndex = ${SMOKE_TIDE_HARP.reedTileIndex};
+    if (!Number.isSafeInteger(columns) || columns !== 96) {
+      database.close();
+      return null;
+    }
+    player.x = (tileIndex % columns) * 1_000 + 500;
+    player.y = Math.floor(tileIndex / columns) * 1_000 + 500;
+    player.previousX = player.x;
+    player.previousY = player.y;
+    player.velocityX = 0;
+    player.velocityY = 0;
+    player.mode = 'foot';
+    player.pace = 'steady';
+    player.stamina = 1_000_000;
+    player.scanCharge = 1_000_000;
+    player.sweepPath = [];
+    player.sweepTicksRemaining = 0;
+    player.sweepTotalTicks = 0;
+    player.sweepSupport = null;
+    player.currentTrace = [tileIndex];
+    player.surveyTrace = [tileIndex];
+
+    record.worldJson = JSON.stringify(envelope);
+    record.updatedAt = Math.max(Date.now(), Number(record.updatedAt || 0) + 1);
+    const writeTransaction = database.transaction('saves', 'readwrite');
+    writeTransaction.objectStore('saves').put(record);
+    await new Promise((resolve, reject) => {
+      writeTransaction.addEventListener('complete', resolve, { once: true });
+      writeTransaction.addEventListener('abort', () => reject(writeTransaction.error), { once: true });
+      writeTransaction.addEventListener('error', () => reject(writeTransaction.error), { once: true });
+    });
+    database.close();
+
+    // Pagehide normally saves the live pre-fixture closure. Disable that one
+    // smoke-page write so it cannot race and overwrite the verified record.
+    runtime.save = async () => {};
+    return {
+      seed: record.seed,
+      tiles: [...placementById.values()],
+      playerTileIndex: tileIndex,
+    };
+  })()`, true);
+
+  if (!fixture) throw new Error('the smoke-only Tide Harp save fixture could not be installed');
+  await contents.loadURL(PRODUCTION_ENTRY_URL);
+  await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === true &&
+      probe.worldName === SMOKE_WORLD_NAME &&
+      probe.hasRuntime === true &&
+      probe.uiReady === 'true',
+    SMOKE_TEST.timeoutMs,
+  );
+  const continued = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.continue-card');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!continued) throw new Error('the validated Tide Harp fixture did not expose Continue');
+  return fixture;
+}
+
+function probeHasPlayableTideHarp(probe) {
+  const projected = probe?.tideHarps?.projected;
+  const harp = Array.isArray(projected)
+    ? projected.find((candidate) => candidate.id === SMOKE_TIDE_HARP.id)
+    : null;
+  if (
+    !harp ||
+    harp.label !== SMOKE_TIDE_HARP.label ||
+    harp.active !== true ||
+    !Array.isArray(harp.knots) ||
+    harp.knots.length !== 3 ||
+    !Array.isArray(harp.edges) ||
+    harp.edges.length !== 3
+  ) return false;
+  const expectedKnots = [
+    `reed-mat:${SMOKE_TIDE_HARP.reedTileIndex}`,
+    `tide-anchor:${SMOKE_TIDE_HARP.anchorTileIndex}`,
+    `wind-knot:${SMOKE_TIDE_HARP.windTileIndex}`,
+  ];
+  const knots = harp.knots.map((knot) => `${knot.kind}:${knot.tileIndex}`);
+  const edgePairs = new Set(harp.edges.map((edge) =>
+    [String(edge.fromId), String(edge.toId)].sort().join('-'),
+  ));
+  const reliefLabel = probe.tideHarps.reliefLabels?.find(
+    (label) => label.text === SMOKE_TIDE_HARP.label,
+  );
+  return expectedKnots.every((expected) => knots.includes(expected)) &&
+    edgePairs.size === 3 &&
+    ['1-3', '1-5', '3-5'].every((pair) => edgePairs.has(pair)) &&
+    probe.tideHarps.projectedCount === 1 &&
+    probe.tideHarps.tunedCount === 1 &&
+    probe.tideHarps.activeId === SMOKE_TIDE_HARP.id &&
+    probe.tideHarps.activeLabel === SMOKE_TIDE_HARP.label &&
+    probe.tideHarps.benefitLabel === '+900 Loom/tick · Space sounds radius 6 from all 3 knots' &&
+    probe.tideHarps.countText === 'TIDE HARPS · 1 tuned' &&
+    probe.tideHarps.activeText ===
+      `${SMOKE_TIDE_HARP.label} active · +900 Loom/tick · Space sounds radius 6 from all 3 knots` &&
+    probe.tideHarps.dataActive === 'true' &&
+    probe.tideHarps.dataHarpId === SMOKE_TIDE_HARP.id &&
+    probe.tideHarps.ariaLabel?.includes('1 Tide Harp tuned') &&
+    probe.tideHarps.activeGeometry?.clientWidth > 0 &&
+    probe.tideHarps.activeGeometry?.clientHeight > 0 &&
+    probe.tideHarps.activeGeometry.scrollWidth <= probe.tideHarps.activeGeometry.clientWidth + 1 &&
+    probe.tideHarps.activeGeometry.scrollHeight <= probe.tideHarps.activeGeometry.clientHeight + 1 &&
+    probe.tideHarps.reliefLayerHidden === false &&
+    reliefLabel?.hidden === false &&
+    reliefLabel.tone === 'wayknot' &&
+    reliefLabel.selected === 'true' &&
+    probeHasActiveRenderer(probe, 'relief-3d');
+}
+
+async function verifySmokeTideHarp(contents) {
+  const tuned = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === false &&
+      probe.playerTileIndex === SMOKE_TIDE_HARP.reedTileIndex &&
+      probe.activeContractCount === 1 &&
+      probe.playerCargoLoad > 0 &&
+      probe.playerDestinationLabel?.startsWith('DELIVER') &&
+      probe.scan?.disabled === false &&
+      probe.tideHarps?.remoteEcho?.tileIndex === SMOKE_TIDE_HARP.remoteEchoTileIndex &&
+      probe.tideHarps.remoteEcho.discovered === 0 &&
+      probe.tideHarps.remoteEcho.depthKnown === 0 &&
+      probeHasPlayableTideHarp(probe),
+    SMOKE_TEST.timeoutMs,
+  );
+  const announcementId = tuned.announcement?.id ?? 0;
+  const clicked = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.action-button--scan');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!clicked) throw new Error('the active Tide Harp could not pulse the real Scan control');
+  const expectedEcho = `${SMOKE_TIDE_HARP.label} answered the Loom. One pulse sounded from your position and from its three knot origins: Reed mat #1, Tide anchor #3, and Wind knot #5. Each origin recorded nearby terrain and water depth.`;
+  const echoed = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasPlayableTideHarp(probe) &&
+      (probe.announcement?.id ?? 0) > announcementId &&
+      probe.announcement?.message === expectedEcho &&
+      probe.tideHarps?.remoteEcho?.tileIndex === SMOKE_TIDE_HARP.remoteEchoTileIndex &&
+      probe.tideHarps.remoteEcho.discovered > 0 &&
+      probe.tideHarps.remoteEcho.depthKnown > 0,
+    SMOKE_TEST.timeoutMs,
+  );
+  return { tuned, echoed, expectedEcho };
 }
 
 async function focusSmokePlayer(contents) {
@@ -845,6 +1218,12 @@ async function runProductionSmoke(window) {
       probe.hasRuntime === true &&
       probe.uiReady === 'true' &&
       probe.titleOpen === true &&
+      probe.titleLayout?.contentVisible === true &&
+      probe.titleLayout?.headingVisible === true &&
+      probe.titleLayout?.formVisible === true &&
+      probe.titleLayout?.beginButtonVisible === true &&
+      probe.titleLayout?.content?.width > 0 &&
+      probe.titleLayout?.content?.height > 0 &&
       probe.nodeGlobalsAbsent === true &&
       probe.styleSheetCount > 0 &&
       probe.reliefSupported === true &&
@@ -855,6 +1234,19 @@ async function runProductionSmoke(window) {
       probe.canvas.height > 0,
     SMOKE_TEST.timeoutMs,
   );
+  await contents.executeJavaScript(`new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
+  })`, true);
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const paintedTitleProbe = await readRendererProbe(contents);
+  if (
+    paintedTitleProbe.titleOpen !== true ||
+    paintedTitleProbe.titleLayout?.contentVisible !== true ||
+    paintedTitleProbe.titleLayout?.beginButtonVisible !== true
+  ) {
+    throw new Error(`title screen was not visibly painted: ${JSON.stringify(paintedTitleProbe.titleLayout)}`);
+  }
+  const titleScreenshot = await captureSmokeEvidence(window, SMOKE_TEST.titleScreenshotPath);
 
   await startSmokeWorld(contents);
   const worldProbe = await waitForRenderer(
@@ -863,7 +1255,7 @@ async function runProductionSmoke(window) {
       probe.titleOpen === false &&
       probe.paused === false &&
       probe.tick >= 2 &&
-      probe.worldName === 'The Electron Smoke Estuary' &&
+      probe.worldName === SMOKE_WORLD_NAME &&
       probe.settlementCount >= 5 &&
       probe.terrainTileCount === SMOKE_WORLD_TILE_COUNT &&
       probe.contractCount > 0 &&
@@ -884,6 +1276,12 @@ async function runProductionSmoke(window) {
   // renderer projection and agree with the HUD's deployed/active accounting.
   const wayknotProbe = await bindSmokeWayknot(contents);
 
+  // Complete the proven generated three-piece formation through a smoke-only
+  // persisted fixture, reload it through production validation, and use the
+  // real HUD/Relief/Scan paths for every assertion that follows.
+  const tideHarpFixture = await installSmokeTideHarpFixture(contents);
+  const tideHarpProbe = await verifySmokeTideHarp(contents);
+
   const chartProbe = await toggleSmokeView(contents, 'chart-2d');
   const reliefProbe = await toggleSmokeView(contents, 'relief-3d');
 
@@ -893,11 +1291,48 @@ async function runProductionSmoke(window) {
     (probe) =>
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasPlayableTideHarp(probe) &&
+      probe.leftPaneGap >= 0 &&
       probe.promises &&
       probe.promises.railOpen === true &&
       probe.promises.clientHeight >= 64 &&
       probe.promises.hasVerticalOverflow === true &&
       (probe.promises.overflowY === 'auto' || probe.promises.overflowY === 'scroll'),
+  );
+
+  const responsiveViewportProbe = await resizeSmokeViewport(
+    window,
+    SMOKE_RESPONSIVE_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasPlayableTideHarp(probe) &&
+      probe.layout?.leftRailDisplay === 'flex' &&
+      probe.layout?.leftPaneOverlap === false &&
+      probe.leftPaneGap >= 0 &&
+      probe.layout?.objective?.width <= 320 &&
+      probe.layout?.contract?.width <= 320 &&
+      probe.layout?.hud?.height <= 64 &&
+      probe.promises?.clientHeight >= 64 &&
+      probe.promises?.hasVerticalOverflow === true,
+  );
+
+  const phoneViewportProbe = await resizeSmokeViewport(
+    window,
+    SMOKE_PHONE_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasPlayableTideHarp(probe) &&
+      probe.layout?.leftRailDisplay === 'contents' &&
+      probe.layout?.objectivePosition === 'absolute' &&
+      probe.layout?.contractPosition === 'absolute' &&
+      probe.layout?.leftPaneOverlap === false &&
+      probe.layout?.objective?.width <= 320 &&
+      probe.layout?.contract?.width <= 340 &&
+      probe.layout?.hud?.height <= 64 &&
+      probe.promises?.clientHeight >= 64 &&
+      probe.promises?.hasVerticalOverflow === true,
   );
 
   const screenshotViewportProbe = await resizeSmokeViewport(
@@ -906,6 +1341,8 @@ async function runProductionSmoke(window) {
     (probe) =>
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasPlayableTideHarp(probe) &&
+      probe.leftPaneGap >= 0 &&
       probe.terrainTileCount === SMOKE_WORLD_TILE_COUNT,
   );
 
@@ -926,18 +1363,27 @@ async function runProductionSmoke(window) {
 
   smokeResult(true, {
     entryUrl: PRODUCTION_ENTRY_URL,
-    boot: bootProbe,
+    boot: paintedTitleProbe,
     world: worldProbe,
     promisePickup: promisePickupProbe,
     wayknot: wayknotProbe,
+    tideHarp: {
+      fixture: tideHarpFixture,
+      tuned: tideHarpProbe.tuned,
+      echoed: tideHarpProbe.echoed,
+      expectedEcho: tideHarpProbe.expectedEcho,
+    },
     modeToggle: {
       chart: chartProbe,
       relief: reliefProbe,
     },
     minimumViewport: minimumViewportProbe,
+    responsiveViewport: responsiveViewportProbe,
+    phoneViewport: phoneViewportProbe,
     screenshotViewport: screenshotViewportProbe,
     rendererWarnings,
     resourceFailures,
+    titleScreenshot,
     screenshot,
   });
 }

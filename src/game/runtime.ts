@@ -19,6 +19,7 @@ import { createSaveRepository, type SaveRecord, type SaveRepository } from "../p
 import {
   FIELD_TOOL_LABELS,
   TILE_UNITS,
+  activeTideHarpAtPlayer,
   cargoWeight,
   createPlayer,
   cyclePace,
@@ -39,6 +40,7 @@ import {
   type PlayerState,
   type TravelPace,
 } from "./player";
+import type { TideHarp } from "./tideHarps";
 import {
   DEFAULT_WAYKNOT_CAPACITY,
   TIDE_ANCHOR_PLACEMENT_DEPTH,
@@ -889,10 +891,11 @@ export async function createTideweftRuntime(
       refreshViews();
       return;
     }
+    const activeTideHarp = activeTideHarpAtPlayer(player, worldView);
     if (pulseScan(player, worldView)) {
       session.tutorial.scansUsed += 1;
       soundscape.play("scan");
-      announce(session, "The sounding line charts nearby terrain and water depth. Those bathymetry marks will remain on this world.");
+      announce(session, tideHarpPulseAnnouncement(activeTideHarp));
       refreshViews();
     } else {
       announce(session, "The Loom is recharging. The current map remains trustworthy.");
@@ -1633,6 +1636,14 @@ function settlementName(world: WorldView, id: number): string {
 
 function humanResource(resource: ContractState["resource"]): string {
   return resource === "freshWater" ? "fresh water" : resource;
+}
+
+export function tideHarpPulseAnnouncement(harp: TideHarp | undefined): string {
+  if (!harp) {
+    return "The sounding line charts nearby terrain and water depth. Those bathymetry marks will remain on this world.";
+  }
+  const [reed, anchor, wind] = harp.knots;
+  return `${harp.label} answered the Loom. One pulse sounded from your position and from its three knot origins: Reed mat #${reed.id}, Tide anchor #${anchor.id}, and Wind knot #${wind.id}. Each origin recorded nearby terrain and water depth.`;
 }
 
 function fieldToolEffect(tool: FieldToolKind): string {

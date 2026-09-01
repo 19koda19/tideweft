@@ -14,9 +14,11 @@ import type {
 } from "../ui/types";
 import {
   FIELD_TOOL_LABELS,
+  activeTideHarpAtPlayer,
   cargoWeight,
   playerTileIndex,
   settlementAtPlayer,
+  tunedTideHarps,
   waterDepthBand,
   waterEffortPerStep,
   wayknotContextAt,
@@ -212,6 +214,8 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
   const activeWayknotLabels = [...new Set(
     effects.influences.map((influence) => WAYKNOT_LABELS[influence.kind]),
   )];
+  const tideHarps = tunedTideHarps(player, world);
+  const activeTideHarp = activeTideHarpAtPlayer(player, world, tideHarps);
   const sweptProgress = sweepProgress(player);
   const terrainLabel = settlement
     ? `${settlement.name} harbor decking`
@@ -236,6 +240,8 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
     ? `Current has the helm · ${Math.round(sweptProgress * 100)}% toward a safe bank. Pace, steering, and sounding return ashore; cargo remains with you.`
     : depth > 20_000 && !depthKnown
       ? "Sound this water first (Space). Depth changes stamina use and whether flooded ground takes a Reed mat or Tide anchor."
+    : activeTideHarp
+      ? `${activeTideHarp.label} is active around you. It adds a bounded +900 Loom charge each tick beyond any Waychord recharge; Space still sounds here and also echoes a radius-6 sounding from all three knot origins.`
     : activeWayknotLabels.length >= 2
       ? `WAYCHORD · ${activeWayknotLabels.join(" + ")} overlap here. Their terrain effects remain distinct, while the harmony recharges the Loom faster.`
       : activeWayknotLabels[0] === WAYKNOT_LABELS["reed-mat"]
@@ -261,6 +267,12 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
     deployedWayknots: deployedWayknotCount(player.wayknots),
     wayknotCapacity: player.wayknots.capacity,
     activeWayknotLabels,
+    tideHarps: {
+      tunedCount: tideHarps.length,
+      activeId: activeTideHarp?.id ?? null,
+      activeLabel: activeTideHarp?.label ?? null,
+      benefitLabel: "+900 Loom/tick · Space sounds radius 6 from all 3 knots",
+    },
     swept: player.mode === "swept",
     sweptProgress,
   };

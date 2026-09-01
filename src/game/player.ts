@@ -15,8 +15,14 @@ import {
   type WayknotState,
   type WayknotTileContext,
 } from "./wayknots";
+import {
+  deriveTideHarps,
+  tideHarpContainsTileCenter,
+  type TideHarp,
+} from "./tideHarps";
 
 export const TILE_UNITS = 1_000;
+export const TIDE_HARP_SCAN_RECHARGE = 900;
 
 export type TravelPace = "rest" | "steady" | "swift";
 export type StabilityTrend = "recovering" | "steady" | "falling";
@@ -207,6 +213,13 @@ export function stepPlayer(
     // deliberately small: a Waychord rewards thoughtful placement without
     // turning the fixed kit into another progression currency.
     player.scanCharge = Math.min(FIXED_POINT, player.scanCharge + 600);
+  }
+  const tideHarpRecharge = tideHarpScanRechargeAtPlayer(player, world);
+  if (tideHarpRecharge > 0) {
+    // A player can stand inside overlapping selected triangles. Their field
+    // resonance is deliberately boolean so topology never becomes an
+    // unbounded recharge multiplier or another progression currency.
+    player.scanCharge = Math.min(FIXED_POINT, player.scanCharge + tideHarpRecharge);
   }
 
   // The adjacent bank path, not an estimate, is authoritative. A sweep may
@@ -455,10 +468,17 @@ export function stepPlayer(
 
 export function pulseScan(player: PlayerState, world: WorldView): boolean {
   if (!hasFieldTool(player, "sounding-line") || player.mode === "swept" || player.scanCharge < 280_000) return false;
+  const activeTideHarp = activeTideHarpAtPlayer(player, world);
   player.scanCharge -= 280_000;
   player.scanPulse = FIXED_POINT;
   discoverAround(player, world, 8);
   soundDepthAround(player, world, 8);
+  if (activeTideHarp) {
+    for (const knot of activeTideHarp.knots) {
+      discoverAroundTile(player, world, knot.tileIndex, 6);
+      soundDepthAroundTile(player, world, knot.tileIndex, 6);
+    }
+  }
   return true;
 }
 
@@ -586,6 +606,41 @@ export function wayknotEffectsAt(
   );
 }
 
+/** Selected Tide Harps are topology derived from the fixed Wayknot kit. */
+export function tunedTideHarps(
+  player: PlayerState,
+  world: WorldView,
+): readonly TideHarp[] {
+  return deriveTideHarps(player.wayknots, world.terrain);
+}
+
+/**
+ * At most one deterministic Harp supplies gameplay benefits at a position.
+ * Selected Harps can geometrically overlap, so canonical ID order prevents
+ * deployment input order from changing which three sounding origins answer.
+ */
+export function activeTideHarpAtPlayer(
+  player: PlayerState,
+  world: WorldView,
+  harps: readonly TideHarp[] = tunedTideHarps(player, world),
+): TideHarp | undefined {
+  const tileIndex = playerTileIndex(player);
+  return [...harps]
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .find((harp) => tideHarpContainsTileCenter(harp, tileIndex, world.terrain));
+}
+
+/** One or many containing triangles still provide exactly one bounded bonus. */
+export function tideHarpScanRechargeAtPlayer(
+  player: PlayerState,
+  world: WorldView,
+  harps: readonly TideHarp[] = tunedTideHarps(player, world),
+): 0 | typeof TIDE_HARP_SCAN_RECHARGE {
+  return activeTideHarpAtPlayer(player, world, harps)
+    ? TIDE_HARP_SCAN_RECHARGE
+    : 0;
+}
+
 export function cargoWeight(player: PlayerState): number {
   return player.cargo.reduce((total, cargo) => {
     const multiplier = cargo.property === "heavy" ? 2 : cargo.property === "fragile" ? 1.25 : 1;
@@ -632,8 +687,19 @@ export function playerTileIndex(player: PlayerState): number {
 }
 
 export function discoverAround(player: PlayerState, world: WorldView, radius: number): void {
-  const centerX = Math.floor(player.x / TILE_UNITS);
-  const centerY = Math.floor(player.y / TILE_UNITS);
+  discoverAroundTile(player, world, playerTileIndex(player), radius);
+}
+
+function discoverAroundTile(
+  player: PlayerState,
+  world: WorldView,
+  centerTileIndex: number,
+  radius: number,
+): void {
+  const center = world.terrain.tiles[centerTileIndex];
+  if (!center) return;
+  const centerX = center.x;
+  const centerY = center.y;
   for (let y = Math.max(0, centerY - radius); y <= Math.min(world.terrain.height - 1, centerY + radius); y += 1) {
     for (let x = Math.max(0, centerX - radius); x <= Math.min(world.terrain.width - 1, centerX + radius); x += 1) {
       const dx = x - centerX;
@@ -647,8 +713,19 @@ export function discoverAround(player: PlayerState, world: WorldView, radius: nu
 }
 
 function soundDepthAround(player: PlayerState, world: WorldView, radius: number): void {
-  const centerX = Math.floor(player.x / TILE_UNITS);
-  const centerY = Math.floor(player.y / TILE_UNITS);
+  soundDepthAroundTile(player, world, playerTileIndex(player), radius);
+}
+
+function soundDepthAroundTile(
+  player: PlayerState,
+  world: WorldView,
+  centerTileIndex: number,
+  radius: number,
+): void {
+  const center = world.terrain.tiles[centerTileIndex];
+  if (!center) return;
+  const centerX = center.x;
+  const centerY = center.y;
   for (let y = Math.max(0, centerY - radius); y <= Math.min(world.terrain.height - 1, centerY + radius); y += 1) {
     for (let x = Math.max(0, centerX - radius); x <= Math.min(world.terrain.width - 1, centerX + radius); x += 1) {
       const dx = x - centerX;

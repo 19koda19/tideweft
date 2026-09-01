@@ -20,7 +20,9 @@ Alpha 0.2 is built in three connected slices:
 
 Playtest fixes also make the HUD lighter, keep the Promises list genuinely scrollable even in shallow windows, stop live contract-card updates from swallowing clicks, state why stability is changing, and put explicit **PICK UP** / **DELIVER** instructions on each physical cargo promise.
 
-Post-alpha development is now in **Phase 9: Wayknots**. The live mainline preview adds six fixed, reusable field aids—two Reed mats, two Tide anchors, and two Wind knots—which can be bound or reclaimed with **F**. They change the same authoritative movement and pointer-route costs, appear as physical motifs in Chart 2D and low-poly objects in Relief 3D, and can form a small **Waychord** where unlike fields overlap. It is deployed on Pages from commit `eb12db0`; this remains an untagged preview after Alpha 0.2.
+The latest published post-alpha checkpoint is **Phase 9: Wayknots**. Its six fixed, reusable field aids—two Reed mats, two Tide anchors, and two Wind knots—can be bound or reclaimed with **F**, change the same authoritative movement and pointer-route costs, appear physically in both views, and form a small **Waychord** where unlike fields overlap. The feature entered Pages at `eb12db0`; the currently served hardened Phase 9 source is `1bc136e`. The Alpha 0.2 tag has not moved.
+
+The working source now opens **Phase 10: Tide Harps**, an untagged preview that is not a new release and is not yet claimed as deployed. One Reed mat, one Tide anchor, and one Wind knot can tune a compact, non-collinear triangle. The game derives every valid triangle, selects an exact maximum knot-disjoint set, then breaks equal solutions by smaller total perimeter and canonical component IDs. The eight deterministic instrument names are **Glass-Ebb**, **Gullweather**, **Moon-Reed**, **Lantern Shoal**, **Mothcurrent**, **Brine Lullaby**, **Quiet Rigging**, and **Estuary Chime**.
 
 ## What is playable
 
@@ -42,6 +44,7 @@ The campaign resolves when every settlement belongs to a sufficiently redundant 
 - Continuous foot/wading/skiff travel with stamina, active bracing, load stability, fragile shock, perishable freshness, depth sounding, discovery, three paces, emergency camp, swept-current recovery, and infrastructure-enabled rescue.
 - A civic field kit: the Sounding line is available immediately; completed Crossings, Ferries, and Beacons can entrust visiting couriers with Marsh stilts, a Tide sail, and a Storm kite.
 - Six reusable Wayknots carried from the start: Reed mats ease mudflat/marsh footing, Tide anchors reduce nearby water effort and shorten current recovery, and Wind knots soften exposed-ground gusts. Press F on suitable terrain to bind one; flooded flats first ask for a Space sounding so the field action cannot reveal hidden depth. Stand on a bound knot and press F again to reclaim the same numbered piece. Unlike overlapping fields hum as a Waychord and recharge the Loom a little faster.
+- Phase 10 working preview: the selected one-of-each Wayknot triangles become Tide Harps without minting currency or adding a save field. Standing inside or on one adds a single bounded **+900 Loom charge per 100 ms player tick**, on top of normal and Waychord recharge. A successful Space pulse keeps its radius-8 player sounding and adds three radius-6 discovery-and-depth soundings—one from each knot—so the instrument has four truthful origins in all.
 - An active route graph with stable multi-hop porter planning, weather closures, congestion, capacity, bridge detection, cycle rank, coverage, and resilience.
 - Five permanent civic consequences: beacons support signals in storms, caches improve recovery, crossings shorten and harden routes, clinics enable connected rescue, and ferries increase capacity.
 - Information as physical cargo: one signed count records its source, subject, resource, observation tick, quantity, and confidence. Its age remains visible when another settlement receives it.
@@ -60,7 +63,7 @@ The world canvas must have focus for travel keys. Buttons and contract cards rem
 | WASD / arrow keys | Travel |
 | Hold Shift while moving | Brace: trade speed for stability and fragile-cargo protection |
 | Pointer click | Chart a destination |
-| Space | Pulse the Loom to reveal nearby terrain and sound water depth |
+| Space | Pulse the Loom to reveal nearby terrain and sound water depth; an active Tide Harp echoes from all three knots |
 | E / Enter | Interact, deliver, or inspect the harbor underfoot |
 | F | Bind the terrain-appropriate Wayknot, or reclaim the one underfoot |
 | [ / ] | Move between Rest, Steady, and Swift pace |
@@ -84,6 +87,8 @@ Physical cargo promises and signed reports are different jobs. A promise moves a
 The current game exposes one local autosave and a Continue card. It saves periodically, when the page is hidden or closed, when the title is opened, and when Quiet Hour begins. The simulation never advances while the game is closed.
 
 IndexedDB is the primary store; localStorage is a sticky runtime fallback if opening or a later transaction fails. Reads choose the newest available copy, overlapping lifecycle/autosave requests coalesce behind an in-flight write, and a durable deletion marker prevents a stale primary copy from resurrecting after failover. The authoritative world has its own version and checksum, while the outer session save also preserves the player, chart, cargo/report, Wayknots, tutorial, session shape, and recap history. Corrupt or incompatible autosaves are ignored safely.
+
+Tide Harps are recomputed from the existing fixed-ID Wayknot placements and terrain dimensions. They add no currency, inventory, timer, authoritative world member, player member, save-format version, or migration burden; an older save that resumes with its Wayknots derives the same selected instruments.
 
 The platform layer already validates multi-slot list/load/remove and versioned JSON import/export, including size and future-format guards. Those import/export controls are not yet exposed in the game menu.
 
@@ -127,7 +132,9 @@ npm run smoke:desktop
 npm run make:desktop
 ```
 
-`package:desktop` rebuilds the web target and writes an unpacked app under `release/`. The smoke command launches that packaged app with isolated user data, verifies the secure `app://bundle/` build, starts a 96 × 72 world in Relief 3D, accepts and physically loads a promise, walks to compatible terrain, binds a real Wayknot through the field-action button, checks renderer/HUD agreement and explicit delivery guidance, round-trips both views, verifies the Promises scroller at the minimum window size, and writes `artifacts/electron-smoke.png` unless `--no-screenshot` is supplied. `make:desktop` creates the platform ZIP.
+`package:desktop` rebuilds the web target and writes an unpacked app under `release/`. The smoke command launches that packaged app with isolated user data, proves the text-only title controls are visibly painted, verifies the secure `app://bundle/` build, starts a 96 × 72 world in Relief 3D, accepts and physically loads a promise, and binds a real Wayknot through the field-action button. It then reloads a deterministic R1/A3/W5 Tide Harp fixture through production save validation, verifies projection/HUD agreement, sounds a remote tile that the ordinary player-radius pulse cannot reach, round-trips Chart and Relief, and checks non-overlapping objective/Promises layouts at 1,440 × 900, 960 × 640, 927 × 640, and 700 × 640. Unless `--no-screenshot` is supplied, it writes both `artifacts/electron-title-smoke.png` and `artifacts/electron-smoke.png`. `make:desktop` creates the platform ZIP.
+
+The Phase 10 source also gives Chart 2D persistent bowed strings and a labeled center mark, while Relief 3D suspends an actual faceted bell on three cords above the discovery-safe surface. Active-state marks remain legible without color; reduced motion freezes decorative bob and sway. The local candidate passes TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, a scoped source secret scan, and the extended packaged smoke with no renderer warnings or resource failures. Fresh 2,880 × 1,678 title and 2,880 × 1,800 Relief captures show the start controls, actual bell/cords, active Harp copy, explicit delivery guidance, and unobstructed Promises rail. Phase 10 publication, remote CI, and live Pages verification remain pending; this is not a new release claim.
 
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 

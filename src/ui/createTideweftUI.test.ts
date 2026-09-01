@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  TIDE_HARP_HELP_COPY,
   WAYKNOT_KEY_SHORTCUT,
   handleTideweftUIShortcut,
+  tideHarpFieldStatus,
   wayknotActionButtonState,
 } from "./createTideweftUI";
 
@@ -96,6 +98,47 @@ describe("Wayknot UI accessibility", () => {
     }
     expect(dispatch).not.toHaveBeenCalled();
     expect(openHelp).not.toHaveBeenCalled();
+  });
+
+  it("explains Tide Harp formation, activation, recharge, and three-origin sounding in words", () => {
+    expect(TIDE_HARP_HELP_COPY).toContain("one Reed mat, one Tide anchor, and one Wind knot");
+    expect(TIDE_HARP_HELP_COPY).toContain("compact triangle");
+    expect(TIDE_HARP_HELP_COPY).toContain("+900 Loom charge each tick");
+    expect(TIDE_HARP_HELP_COPY).toContain("sounds from you and all three knots");
+
+    const active = tideHarpFieldStatus({
+      tunedCount: 2,
+      activeId: "tide-harp:r1-a3-w5",
+      activeLabel: "Glass-Reed Harp",
+      benefitLabel: "+900 Loom/tick · Space sounds from all 3 knots",
+    });
+    expect(active).toEqual({
+      visible: "Glass-Reed Harp active · +900 Loom/tick · Space sounds from all 3 knots",
+      accessible: "2 Tide Harps tuned. Glass-Reed Harp active · +900 Loom/tick · Space sounds from all 3 knots.",
+      active: true,
+    });
+    expect(tideHarpFieldStatus({
+      tunedCount: 2,
+      activeId: null,
+      activeLabel: null,
+      benefitLabel: "+900 Loom/tick · Space sounds from all 3 knots",
+    })).toEqual({
+      visible: "Stand inside a tuned triangle to activate",
+      accessible: "2 Tide Harps tuned. Stand inside a tuned triangle to activate. Benefit when active: +900 Loom/tick · Space sounds from all 3 knots.",
+      active: false,
+    });
+    expect(tideHarpFieldStatus({
+      tunedCount: 0,
+      activeId: null,
+      activeLabel: null,
+      benefitLabel: "+900 Loom/tick · Space sounds from all 3 knots",
+    }).visible).toBe("Tune one: Reed + Anchor + Wind in a compact triangle");
+    expect(tideHarpFieldStatus({
+      tunedCount: 1,
+      activeId: "tide-harp:r1-a3-w5",
+      activeLabel: "Glass-Ebb Tide Harp · R1 · A3 · W5",
+      benefitLabel: "+900 Loom/tick · Space sounds from all 3 knots",
+    }).accessible).toMatch(/^1 Tide Harp tuned\./u);
   });
 
 });

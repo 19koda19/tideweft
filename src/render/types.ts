@@ -181,6 +181,39 @@ export interface WayknotView {
   readonly active: boolean;
 }
 
+export interface TideHarpKnotView<K extends WayknotKind = WayknotKind> {
+  readonly id: string;
+  readonly kind: K;
+  readonly point: WorldPoint;
+}
+
+export type TideHarpKnotTupleView = readonly [
+  TideHarpKnotView<"reed-mat">,
+  TideHarpKnotView<"tide-anchor">,
+  TideHarpKnotView<"wind-knot">,
+];
+
+export interface TideHarpEdgeView {
+  readonly id: string;
+  readonly fromId: string;
+  readonly toId: string;
+  readonly from: WorldPoint;
+  readonly to: WorldPoint;
+}
+
+/** A selected, persistent three-knot instrument projected into world units. */
+export interface TideHarpView {
+  readonly id: string;
+  readonly label: string;
+  /** Always Reed mat, Tide anchor, then Wind knot. */
+  readonly knots: TideHarpKnotTupleView;
+  /** Always Reed↔Anchor, Reed↔Wind, then Anchor↔Wind. */
+  readonly edges: readonly [TideHarpEdgeView, TideHarpEdgeView, TideHarpEdgeView];
+  readonly center: WorldPoint;
+  /** True exactly when the courier's tile center lies inside or on the triangle. */
+  readonly active: boolean;
+}
+
 export interface TraceView {
   readonly id: string;
   readonly points: readonly WorldPoint[];
@@ -246,6 +279,7 @@ export interface TideweftView {
   readonly routes: readonly RouteView[];
   readonly choirs: readonly TideChoirMemoryView[];
   readonly wayknots: readonly WayknotView[];
+  readonly tideHarps: readonly TideHarpView[];
   readonly traces: readonly TraceView[];
   readonly porters: readonly PorterView[];
   readonly particles?: readonly ParticleView[];

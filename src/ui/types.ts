@@ -127,6 +127,13 @@ export interface TideChoirUIView {
   readonly hint: string;
 }
 
+export interface TideHarpFieldUIView {
+  readonly tunedCount: number;
+  readonly activeId: string | null;
+  readonly activeLabel: string | null;
+  readonly benefitLabel: string;
+}
+
 export interface FieldReadoutUIView {
   readonly terrainLabel: string;
   readonly depthLabel: string;
@@ -137,6 +144,7 @@ export interface FieldReadoutUIView {
   readonly deployedWayknots: number;
   readonly wayknotCapacity: number;
   readonly activeWayknotLabels: readonly string[];
+  readonly tideHarps: TideHarpFieldUIView;
   readonly swept: boolean;
   readonly sweptProgress: number;
 }

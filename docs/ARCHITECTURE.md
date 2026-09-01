@@ -75,6 +75,22 @@ The playable slice uses:
 
 Presented prose is derived from structured facts. UI copy may explain a cause, but it cannot invent stock, a person, a project contribution, or a route event that the simulation did not record.
 
+## Derived Wayknot topology
+
+Tide Harps live at the game/projection boundary, not in authoritative simulation or save state. Given the existing fixed-ID `WayknotState` and `{ width, height }` grid, the pure topology pass:
+
+1. normalizes the fixed six-piece kit without inventing pieces;
+2. enumerates every pairwise-connected, non-collinear triangle containing exactly one Reed mat, one Tide anchor, and one Wind knot;
+3. sorts canonical R/A/W component tuples;
+4. exhaustively selects the maximum number of knot-disjoint candidates;
+5. resolves equal counts by minimum total Euclidean perimeter, then lexicographic canonical IDs.
+
+The fixed kit bounds the candidate space, so exact search is smaller and more auditable than a heuristic. A canonical ID such as `tide-harp:r1-a3-w5` survives input order and save/load because its components already have stable identities. A deterministic mapping supplies eight player-facing names: Glass-Ebb, Gullweather, Moon-Reed, Lantern Shoal, Mothcurrent, Brine Lullaby, Quiet Rigging, and Estuary Chime.
+
+Containment is an inclusive integer-cross-product test against tile centers. At a containing tile, gameplay asks only whether at least one selected Harp is active: the extra recharge is one bounded +900 fixed-point units per 100 ms player step, never one bonus per overlap. A successful scan retains the player-centered radius-8 discovery/bathymetry pass and performs three more radius-6 passes centered on the Harp's fixed R/A/W knot tiles. Discovery and exact bathymetry remain separate arrays, so geometry alone cannot reveal hidden depth.
+
+This topology adds no resource, cargo, settlement inventory, clock, random draw, authoritative world field, `PlayerState` field, or save format. Reclaiming or rebinding an existing Wayknot simply changes what will be derived on the next projection or fixed step.
+
 ## Active graph and multi-hop logistics
 
 The active route graph is an authoritative subsystem rather than decoration:
@@ -115,7 +131,7 @@ Remote inspector values therefore distinguish direct knowledge from unverified r
 There are two nested versions:
 
 1. `tideweft-world` contains the save-format version, rules version, checksum, and canonical `WorldState`. Deserialization checks shape, version, checksum, and every invariant.
-2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart/Wayknot state, tutorial state, chosen posture/session shape, and recap history.
+2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart/Wayknot state, tutorial state, chosen posture/session shape, and recap history. It does not serialize derived Tide Harps.
 
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
 
@@ -125,7 +141,9 @@ Unsupported simulation versions fail rather than being guessed into a current wo
 
 ## Dual p5 presentation
 
-Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. Chart 2D retains dense labels, color-independent terrain motifs, and low-motion readability. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and material references, draws live per-tile water, and projects pointer rays back onto the height field for selection and movement. Its orbit, zoom, fog, and scan ripples are cosmetic local state.
+Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean. Chart 2D retains dense labels, color-independent terrain motifs, and low-motion readability; its Harps use three persistent bowed strings per edge—nine in all—a labeled center plate, and six fixed active marks rather than color alone. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and material references, draws live per-tile water, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active.
+
+Relief cord roots and bell/label placement sample the discovery-masked surface rather than authoritative hidden elevation. Reduced-motion mode sets decorative bell bob and sway to zero but leaves cords, bell, labels, crown, and active words intact. Geometry memoization keys immutable projected Harp data, keeping these derived strings/cords out of the fixed-step rules.
 
 The composed controller stops and hides the inactive p5 instance, releases held movement/brace input during a switch, and falls back to Chart 2D if WebGL setup fails or its context is lost. The explicit view preference is local presentation state and is deliberately outside the authoritative save/checksum.
 
@@ -158,5 +176,8 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 5. Economy/cargo conservation and legal contract transitions.
 6. Active-graph pathfinding, storms, congestion, topology metrics, and project effects.
 7. Player traversal, stability, recovery, tutorial, signed reports, and platform persistence.
-8. Vite production build under relative paths.
-9. Packaged Electron launch, `app://` resource load, exact 96 × 72 world probe, both Chart/Relief canvas switches, minimum-window Promises scrolling, Node-global absence, and screenshot evidence.
+8. Tide Harp candidate/selection/containment determinism, active/inactive recharge and four-origin sounding, cargo/inventory non-mutation, legacy save shape, UI copy, and discovery-safe/reduced-motion render geometry.
+9. Vite production build under relative paths.
+10. Packaged Electron launch, visible title controls, `app://` resource load, exact 96 × 72 world probe, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, 1,440 × 900 / 960 × 640 / 927 × 640 / 700 × 640 Promises-layout probes, Node-global absence, zero renderer warnings/resource failures, and separate title/game screenshots.
+
+The current Phase 10 local gate passes TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, that extended packaged smoke, `git diff --check`, and a scoped source secret scan. Publication remains a separate exact-commit gate: remote CI, Pages deployment, and live-origin verification must still succeed.

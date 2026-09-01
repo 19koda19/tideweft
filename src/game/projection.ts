@@ -1,11 +1,19 @@
 import type {
+  TideHarpView,
   TideweftView,
   TerrainKind as RenderTerrainKind,
   TidePhase,
   WeatherKind as RenderWeatherKind,
 } from "../render/types";
 import { FIXED_POINT, STRAND_AUTOMATION_THRESHOLD, type TerrainTileView, type WorldView } from "../sim/types";
-import { TILE_UNITS, cargoWeight, wayknotEffectsAt, type PlayerState } from "./player";
+import {
+  TILE_UNITS,
+  activeTideHarpAtPlayer,
+  cargoWeight,
+  wayknotEffectsAt,
+  type PlayerState,
+} from "./player";
+import { deriveTideHarps, type TideHarp } from "./tideHarps";
 import { WAYKNOT_LABELS, WAYKNOT_RADII } from "./wayknots";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
@@ -27,11 +35,23 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
+  const currentPlayerTileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
+    + Math.floor(player.x / TILE_UNITS);
+  const harpGrid = { width: world.terrain.width, height: world.terrain.height };
   const activeWayknotIds = new Set(
-    wayknotEffectsAt(player, world, Math.floor(player.y / TILE_UNITS) * world.terrain.width + Math.floor(player.x / TILE_UNITS))
+    wayknotEffectsAt(player, world, currentPlayerTileIndex)
       .influences
       .map((influence) => influence.id),
   );
+  const derivedTideHarps = deriveTideHarps(player.wayknots, harpGrid);
+  const activeTideHarpId = activeTideHarpAtPlayer(player, world, derivedTideHarps)?.id ?? null;
+  const tideHarps = derivedTideHarps.map((harp) =>
+    projectTideHarp(
+      harp,
+      world.terrain.width,
+      tileSize,
+      harp.id === activeTideHarpId,
+    ));
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const traces = player.currentTrace.length > 1
     ? [
@@ -220,6 +240,7 @@ export function projectGameView(
         active: activeWayknotIds.has(wayknot.id),
       }];
     }),
+    tideHarps,
     routes: world.routes
       .filter((route) => {
         if (options.selectedRouteId === route.id) return true;
@@ -306,6 +327,50 @@ export function projectGameView(
       shake: world.weather.kind === "storm" ? world.weather.intensity / FIXED_POINT / 2 : 0,
     },
     ...(options.paused === undefined ? {} : { paused: options.paused }),
+  };
+}
+
+function projectTideHarp(
+  harp: TideHarp,
+  worldWidth: number,
+  tileSize: number,
+  active: boolean,
+): TideHarpView {
+  const [reed, anchor, wind] = harp.knots;
+  const [reedAnchor, reedWind, anchorWind] = harp.edges;
+  const projectEdge = (edge: TideHarp["edges"][number]) => ({
+    id: edge.id,
+    fromId: String(edge.fromId),
+    toId: String(edge.toId),
+    from: tilePoint(edge.fromTileIndex, worldWidth, tileSize),
+    to: tilePoint(edge.toTileIndex, worldWidth, tileSize),
+  });
+  return {
+    id: harp.id,
+    label: harp.label,
+    knots: [
+      {
+        id: String(reed.id),
+        kind: reed.kind,
+        point: tilePoint(reed.tileIndex, worldWidth, tileSize),
+      },
+      {
+        id: String(anchor.id),
+        kind: anchor.kind,
+        point: tilePoint(anchor.tileIndex, worldWidth, tileSize),
+      },
+      {
+        id: String(wind.id),
+        kind: wind.kind,
+        point: tilePoint(wind.tileIndex, worldWidth, tileSize),
+      },
+    ],
+    edges: [projectEdge(reedAnchor), projectEdge(reedWind), projectEdge(anchorWind)],
+    center: {
+      x: harp.center.x * tileSize,
+      y: harp.center.y * tileSize,
+    },
+    active,
   };
 }
 

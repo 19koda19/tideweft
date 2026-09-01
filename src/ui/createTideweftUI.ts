@@ -13,6 +13,8 @@ import type {
 } from "./types";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
+export const TIDE_HARP_HELP_COPY =
+  "Place one Reed mat, one Tide anchor, and one Wind knot as a compact triangle to tune a Tide Harp. Stand inside its triangle for +900 Loom charge each tick; a Space pulse then sounds from you and all three knots.";
 
 export interface WayknotActionButtonState {
   readonly disabled: boolean;
@@ -20,6 +22,34 @@ export interface WayknotActionButtonState {
   readonly hint: string;
   readonly ariaLabel: string;
   readonly ariaKeyShortcuts: typeof WAYKNOT_KEY_SHORTCUT;
+}
+
+export interface TideHarpFieldStatus {
+  readonly visible: string;
+  readonly accessible: string;
+  readonly active: boolean;
+}
+
+/** Keeps the compact field line and its fuller assistive description truthful. */
+export function tideHarpFieldStatus(
+  tideHarps: TideweftUIView["field"]["tideHarps"],
+): TideHarpFieldStatus {
+  const active = tideHarps.activeId !== null;
+  const visible = active
+    ? `${tideHarps.activeLabel ?? "Tide Harp"} active · ${tideHarps.benefitLabel}`
+    : tideHarps.tunedCount === 0
+      ? "Tune one: Reed + Anchor + Wind in a compact triangle"
+      : "Stand inside a tuned triangle to activate";
+  const tunedSummary = tideHarps.tunedCount === 1
+    ? "1 Tide Harp tuned"
+    : `${tideHarps.tunedCount} Tide Harps tuned`;
+  return {
+    visible,
+    accessible: active
+      ? `${tunedSummary}. ${visible}.`
+      : `${tunedSummary}. ${visible}. Benefit when active: ${tideHarps.benefitLabel}.`,
+    active,
+  };
 }
 
 /** Pure presentation state keeps the visible, tooltip, and spoken action in lockstep. */
@@ -110,6 +140,9 @@ interface UIRefs {
   fieldWayknots: HTMLDivElement;
   fieldWayknotCount: HTMLElement;
   fieldWayknotActive: HTMLSpanElement;
+  fieldTideHarps: HTMLDivElement;
+  fieldTideHarpCount: HTMLElement;
+  fieldTideHarpActive: HTMLSpanElement;
   fieldHint: HTMLSpanElement;
   fieldSweep: HTMLProgressElement;
   choirReadout: HTMLDivElement;
@@ -417,7 +450,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const fieldReadout = createElement("div", "field-readout");
   fieldReadout.setAttribute(
     "aria-label",
-    "Current terrain, water depth, stamina cost, field tools, and Wayknot status",
+    "Current terrain, water depth, stamina cost, field tools, Wayknots, and Tide Harps",
   );
   const fieldHeader = createElement("span", "field-readout__header");
   fieldHeader.append(createElement("span", "field-readout__symbol", "⌖"));
@@ -441,11 +474,35 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   );
   fieldWayknots.setAttribute("role", "group");
   fieldWayknots.append(fieldWayknotCount, fieldWayknotActive);
+  const fieldTideHarps = createElement(
+    "div",
+    "field-readout__wayknots field-readout__tide-harps",
+  );
+  const fieldTideHarpCount = createElement(
+    "strong",
+    "field-readout__wayknot-count field-readout__tide-harp-count",
+    "TIDE HARPS · 0 tuned",
+  );
+  const fieldTideHarpActive = createElement(
+    "span",
+    "field-readout__wayknot-active field-readout__tide-harp-active",
+    "Tune one: Reed + Anchor + Wind in a compact triangle",
+  );
+  fieldTideHarps.setAttribute("role", "group");
+  fieldTideHarps.append(fieldTideHarpCount, fieldTideHarpActive);
   const fieldHint = createElement("span", "field-readout__hint", "Pulse Space to sound nearby water.");
   const fieldSweep = makeProgress("Progress toward a safe bank while swept");
   fieldSweep.classList.add("field-readout__sweep");
   fieldSweep.hidden = true;
-  fieldReadout.append(fieldHeader, fieldMetrics, fieldTools, fieldWayknots, fieldHint, fieldSweep);
+  fieldReadout.append(
+    fieldHeader,
+    fieldMetrics,
+    fieldTools,
+    fieldWayknots,
+    fieldTideHarps,
+    fieldHint,
+    fieldSweep,
+  );
   const choirReadout = createElement("div", "choir-readout");
   choirReadout.setAttribute("aria-label", "Tide Choir survey progress");
   const choirHeader = createElement("span", "choir-readout__header");
@@ -728,7 +785,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     ["WASD / Arrows", "Travel"],
     ["Hold Shift", "Brace while moving"],
     ["Pointer", "Choose a world destination"],
-    ["Space", "Sound water depth and reveal nearby terrain"],
+    ["Space", "Sound nearby water; an active Tide Harp echoes from all three knots"],
     ["E / Enter", "Interact"],
     ["F", "Place or reclaim the terrain-appropriate Wayknot"],
     ["[ / ]", "Change pace"],
@@ -748,7 +805,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const accessibilityNote = createElement(
     "p",
     "help-dialog__note",
-    "Important states—including Wayknot capacity, the active knot or Waychord, and whether an action is available—use words, counts, native disabled controls, symbols, and line patterns in addition to color. Reduced-motion preferences are honored automatically.",
+    "Important states—including Wayknot capacity, the active knot, Waychord or Tide Harp, and whether an action is available—use words, counts, native disabled controls, symbols, and line patterns in addition to color. Reduced-motion preferences are honored automatically.",
   );
   const journeyNote = createElement(
     "p",
@@ -758,15 +815,17 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const wayknotNote = createElement(
     "p",
     "help-dialog__note help-dialog__note--wayknots",
-    "Wayknots are reusable field aids, not spent cargo: press F to bind the terrain-appropriate piece or reclaim the piece underfoot. Reed mats ease mudflats and marshes; tide anchors steady wet crossings and weaken nearby currents; wind knots shelter exposed ridges and scrub. Where their areas overlap, that shared shelter is a Waychord; only the strongest help for each hazard applies, so overlaps stay bounded.",
+    `Wayknots are reusable field aids, not spent cargo: press F to bind the terrain-appropriate piece or reclaim the piece underfoot. Reed mats ease mudflats and marshes; tide anchors steady wet crossings and weaken nearby currents; wind knots shelter exposed ridges and scrub. Where their areas overlap, that shared shelter is a Waychord; only the strongest help for each hazard applies, so overlaps stay bounded. ${TIDE_HARP_HELP_COPY}`,
   );
   helpContent.append(helpHeader, helpIntro, helpGrid, journeyNote, wayknotNote, accessibilityNote);
   helpDialog.append(helpContent);
 
+  const leftRail = createElement("div", "left-rail");
+  leftRail.append(objectivePanel, contractDetails);
+
   shell.append(
     topbar,
-    objectivePanel,
-    contractDetails,
+    leftRail,
     inspector,
     chronicleDetails,
     actionDock,
@@ -812,6 +871,9 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     fieldWayknots,
     fieldWayknotCount,
     fieldWayknotActive,
+    fieldTideHarps,
+    fieldTideHarpCount,
+    fieldTideHarpActive,
     fieldHint,
     fieldSweep,
     choirReadout,
@@ -1267,6 +1329,14 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       `${view.field.deployedWayknots} of ${view.field.wayknotCapacity} Wayknot slots deployed. ${wayknotAccessibleStatus}`;
     refs.fieldWayknots.setAttribute("aria-label", fieldWayknotAccessibleLabel);
     refs.fieldWayknots.title = fieldWayknotAccessibleLabel;
+    const tideHarpStatus = tideHarpFieldStatus(view.field.tideHarps);
+    refs.fieldTideHarpCount.textContent =
+      `TIDE HARPS · ${view.field.tideHarps.tunedCount} tuned`;
+    refs.fieldTideHarpActive.textContent = tideHarpStatus.visible;
+    refs.fieldTideHarps.dataset.active = tideHarpStatus.active ? "true" : "false";
+    refs.fieldTideHarps.dataset.harpId = view.field.tideHarps.activeId ?? "";
+    refs.fieldTideHarps.setAttribute("aria-label", tideHarpStatus.accessible);
+    refs.fieldTideHarps.title = tideHarpStatus.accessible;
     refs.fieldHint.textContent = view.field.hint;
     refs.fieldReadout.dataset.swept = view.field.swept ? "true" : "false";
     refs.fieldSweep.hidden = !view.field.swept;

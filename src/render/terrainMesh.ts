@@ -2,6 +2,7 @@ import type {
   TerrainGridView,
   TerrainKind,
   TerrainTileView,
+  WorldPoint,
 } from "./types";
 
 const DEFAULT_CHUNK_SIZE = 16;
@@ -28,6 +29,11 @@ export interface TerrainMeshOptions {
   /** World-space height represented by a normalized elevation of 1. */
   readonly verticalScale?: number;
 }
+
+export type TerrainMeshElevationReader = (
+  tile: TerrainTileView | undefined,
+  tileIndex: number,
+) => number | undefined;
 
 export interface MeshVector3 {
   readonly x: number;
@@ -211,6 +217,90 @@ export function buildTerrainMesh(
   };
 }
 
+/**
+ * Samples the exact piecewise-planar land surface emitted by buildTerrainMesh.
+ * Callers that mask source elevation may supply the same masked elevation
+ * reader without allocating a complete shadow grid for each query.
+ */
+export function sampleTerrainMeshLandHeightAt(
+  grid: TerrainGridView,
+  point: WorldPoint,
+  verticalScale: number,
+  elevationReader: TerrainMeshElevationReader = (tile) => tile?.elevation,
+): number {
+  const columns = finiteInteger(grid?.columns, 0);
+  const rows = finiteInteger(grid?.rows, 0);
+  const sourceTiles = Array.isArray(grid?.tiles) ? grid.tiles : [];
+  if (
+    columns < 1
+    || rows < 1
+    || sourceTiles.length === 0
+    || columns * rows > MAX_TERRAIN_CELLS
+  ) {
+    return 0;
+  }
+
+  const tileSize = positiveFinite(grid?.tileSize, 1);
+  const scale = nonNegativeFinite(verticalScale, 0);
+  const originX = finiteNumber(grid.origin?.x, 0);
+  const originY = finiteNumber(grid.origin?.y, 0);
+  const normalizedX = clamp(
+    (finiteNumber(point?.x, originX) - originX) / tileSize,
+    0,
+    columns,
+  );
+  const normalizedY = clamp(
+    (finiteNumber(point?.y, originY) - originY) / tileSize,
+    0,
+    rows,
+  );
+  const column = Math.min(columns - 1, Math.floor(normalizedX));
+  const row = Math.min(rows - 1, Math.floor(normalizedY));
+  const localX = clamp(normalizedX - column, 0, 1);
+  const localY = clamp(normalizedY - row, 0, 1);
+  const elevationAt = (index: number): number =>
+    unit(elevationReader(sourceTiles[index], index));
+  const topLeft = averageCornerElevation(
+    columns,
+    rows,
+    column,
+    row,
+    elevationAt,
+  );
+  const topRight = averageCornerElevation(
+    columns,
+    rows,
+    column + 1,
+    row,
+    elevationAt,
+  );
+  const bottomLeft = averageCornerElevation(
+    columns,
+    rows,
+    column,
+    row + 1,
+    elevationAt,
+  );
+  const bottomRight = averageCornerElevation(
+    columns,
+    rows,
+    column + 1,
+    row + 1,
+    elevationAt,
+  );
+
+  // buildChunks splits every tile from top-left to bottom-right. Interpolate
+  // on that same diagonal so anchors match either emitted triangle exactly.
+  const normalizedHeight = localX >= localY
+    ? topLeft
+      + localX * (topRight - topLeft)
+      + localY * (bottomRight - topRight)
+    : topLeft
+      + localX * (bottomRight - bottomLeft)
+      + localY * (bottomLeft - topLeft);
+  return normalizedHeight * scale;
+}
+
 function sanitizeTiles(
   sourceTiles: readonly TerrainTileView[],
   expectedCount: number,
@@ -232,26 +322,41 @@ function buildCornerElevations(
 ): readonly number[] {
   const stride = columns + 1;
   const elevations = new Array<number>((columns + 1) * (rows + 1));
+  const elevationAt = (index: number): number => tiles[index]?.elevation ?? 0;
 
   for (let row = 0; row <= rows; row += 1) {
     for (let column = 0; column <= columns; column += 1) {
-      let total = 0;
-      let count = 0;
-      for (let tileRow = row - 1; tileRow <= row; tileRow += 1) {
-        if (tileRow < 0 || tileRow >= rows) continue;
-        for (let tileColumn = column - 1; tileColumn <= column; tileColumn += 1) {
-          if (tileColumn < 0 || tileColumn >= columns) continue;
-          const tile = tiles[tileRow * columns + tileColumn];
-          if (!tile) continue;
-          total += tile.elevation;
-          count += 1;
-        }
-      }
-      elevations[row * stride + column] = count > 0 ? total / count : 0;
+      elevations[row * stride + column] = averageCornerElevation(
+        columns,
+        rows,
+        column,
+        row,
+        elevationAt,
+      );
     }
   }
 
   return elevations;
+}
+
+function averageCornerElevation(
+  columns: number,
+  rows: number,
+  cornerColumn: number,
+  cornerRow: number,
+  elevationAt: (tileIndex: number) => number,
+): number {
+  let total = 0;
+  let count = 0;
+  for (let tileRow = cornerRow - 1; tileRow <= cornerRow; tileRow += 1) {
+    if (tileRow < 0 || tileRow >= rows) continue;
+    for (let tileColumn = cornerColumn - 1; tileColumn <= cornerColumn; tileColumn += 1) {
+      if (tileColumn < 0 || tileColumn >= columns) continue;
+      total += elevationAt(tileRow * columns + tileColumn);
+      count += 1;
+    }
+  }
+  return count > 0 ? total / count : 0;
 }
 
 function buildPositions(
@@ -563,4 +668,8 @@ function nonNegativeFinite(value: unknown, fallback: number): number {
 
 function finiteNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.max(low, Math.min(high, value));
 }

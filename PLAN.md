@@ -29,6 +29,7 @@ Alpha 0.1 and Alpha 0.2 are verified and published. Alpha 0.2 was built additive
 - **The Tide Choir** makes route memory truthful, surveying playable, and completed harbor loops capable of awakening one-time communal harmonies.
 - **Wild Reaches** expands new seeds to a 96 × 72 Perlin estuary with meaningful terrain, sounded water, recoverable currents, and civic field tools.
 - **The Estuary in Relief** adds an actual playable p5/WebGL presentation while retaining the complete Chart 2D fallback.
+- **Wayknots** entered the published, untagged Phase 9 preview at `eb12db0` and its hardened live checkpoint is `1bc136e`; the working tree beyond it is now the untagged Phase 10 Tide Harps preview. Local web and packaged Electron verification are complete, while publication, remote CI, and live Pages verification remain pending.
 - Tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls remain later subphases unless release playtesting promotes them.
 
 ## Phase 0 — Evidence and contract
@@ -223,6 +224,30 @@ Local checkpoint evidence captured 2026-09-01:
 - The source scan found no private-key headers, credential tokens, credential assignments, or credential-bearing URLs.
 - GitHub CI and Pages repeated every web gate successfully on commit `eb12db0`; the live HTTPS origin serves the exact locally inspected JS/CSS artifacts. This is an untagged mainline preview after Alpha 0.2.
 - The follow-up hardening candidate passes 24 Vitest files / 178 checks, produces `index-CtM8H4DA.js` and `index-DJ8ONY8I.css`, and repeats the packaged 3D Wayknot/minimum-viewport smoke with no renderer warnings or resource failures.
+
+## Phase 10 — Tide Harps
+
+Status: **locally verified implementation preview; publication pending**
+
+Purpose: let the fixed Wayknot kit become a small spatial instrument—something the player composes by understanding terrain—without adding a shop, resource, upgrade track, or save migration.
+
+Implemented in the current working source and covered by the local release gate:
+
+1. **Exact derived formation:** every connected, non-collinear compact triangle containing exactly one Reed mat, one Tide anchor, and one Wind knot is enumerated from fixed-ID Wayknot placements and grid dimensions. The selector finds an exact maximum knot-disjoint set; equal-size sets prefer lower total Euclidean perimeter, then canonical R/A/W ID tuples. Collinear triples and formations sharing a selected knot do not become Harps.
+2. **Stable identity and whimsy:** canonical IDs use the fixed components, while eight deterministic player-facing names—Glass-Ebb, Gullweather, Moon-Reed, Lantern Shoal, Mothcurrent, Brine Lullaby, Quiet Rigging, and Estuary Chime—give the formations memorable labels.
+3. **Bounded field benefit:** when the courier's tile center is inside or on a selected triangle, one Harp adds exactly +900 Loom charge per 100 ms player step, capped at full charge and never multiplied by overlapping Harps. Normal recharge and the existing Waychord bonus remain separate.
+4. **Four-origin sounding:** a successful Space pulse still discovers and sounds radius 8 around the courier, then discovers and sounds radius 6 around each of the active Harp's three fixed knot origins. It spends the existing Loom charge, preserves the boolean scan contract, and never exposes water depth before a genuine sounding.
+5. **Derived, reward-neutral state:** Harps are recomputed from existing Wayknot placement and grid data. They mint no cargo or settlement stock and add no authoritative simulation member, player save field, currency, timer, format version, or legacy migration.
+6. **Legible field instruction:** the HUD reports the total selected Harps. With none tuned it teaches `Reed + Anchor + Wind in a compact triangle`; outside an existing Harp it asks the player to stand inside; inside it names the instrument and states the +900/three-origin benefit. Help and the successful scan announcement repeat the formation and sounding model, while local unsounded-water guidance keeps priority.
+7. **Dual-view instrument:** Chart 2D keeps three bowed strings along each triangle edge—nine in all—plus a persistent label and fixed active marks. Relief 3D raises three discovery-safe cords to a suspended faceted bell with stable beads/crown cues; reduced motion removes decorative bell bob and sway rather than removing the structure.
+
+Local release evidence captured 2026-09-01:
+
+- TypeScript, 28 Vitest files / 205 checks, the production build, and the nested `/tideweft/` web smoke pass. The inspected build emits `index-CKlzWR1L.css` and `index-D30XtHH3.js`.
+- The packaged Electron smoke visibly paints the title controls; loads one physical cargo promise; validates the deterministic R1/A3/W5 Harp through the production save path; proves the active HUD/projection and remote knot echo; round-trips Chart/Relief; and keeps Promises scrollable without objective overlap at 1,440 × 900, 960 × 640, 927 × 640, and 700 × 640. It reports no renderer warnings or resource failures.
+- Fresh 2,880 × 1,678 title and 2,880 × 1,800 Relief captures show the usable text-first start screen, explicit delivery state, active Harp copy, and actual discovery-safe bell/cord structure.
+
+The final source passes `git diff --check`, and the scoped scan finds no private-key headers, credential-token patterns, credential assignments, credential-bearing URLs, or committed environment files. Before any Phase 10 publication claim, publish the exact reviewed commit and require its remote CI and Pages deployment to succeed. Alpha 0.2 remains tagged at `v0.2.0-alpha.1` throughout this preview.
 
 ## Reward-loop acceptance audit
 

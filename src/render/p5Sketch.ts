@@ -1,5 +1,6 @@
 import p5 from "p5";
 
+import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 
 import type {
@@ -232,6 +233,7 @@ export function createTideweftRenderer(
   const heldDirections = new Set<string>();
   const heldBraceKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
+  const tideHarpGeometryFor = createTideHarpGeometryMemo();
   const camera: RuntimeCamera = {
     x: 0,
     y: 0,
@@ -1041,6 +1043,101 @@ export function createTideweftRenderer(
       }
     };
 
+    const drawTideHarps = (view: TideweftView): void => {
+      const tileSize = view.terrain.tileSize;
+      const geometry = tideHarpGeometryFor(
+        view.tideHarps,
+        Math.max(tileSize * 0.105, 1.4 / camera.zoom),
+      );
+      const context = p.drawingContext as CanvasRenderingContext2D;
+      for (const harp of geometry) {
+        p.push();
+        context.shadowColor = PALETTE.violet;
+        context.shadowBlur = harp.active ? 13 : 4;
+        clearDash();
+        for (const string of harp.strings) {
+          // A dark casing keeps all three strings readable in monochrome and
+          // on top of any terrain hue; unlike Waychords these bow and never
+          // use cross-ties.
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.ink, harp.active ? 230 : 196));
+          p.strokeWeight((harp.active ? 4.1 : 3.4) / camera.zoom);
+          p.bezier(
+            string.from.x,
+            string.from.y,
+            string.control.x,
+            string.control.y,
+            string.control.x,
+            string.control.y,
+            string.to.x,
+            string.to.y,
+          );
+          p.stroke(withAlpha(PALETTE.foam, harp.active ? 232 : 148));
+          p.strokeWeight((string.stringIndex === 0 ? 1.3 : 0.9) / camera.zoom);
+          p.bezier(
+            string.from.x,
+            string.from.y,
+            string.control.x,
+            string.control.y,
+            string.control.x,
+            string.control.y,
+            string.to.x,
+            string.to.y,
+          );
+        }
+        p.pop();
+
+        const noteSize = tileSize * (harp.active ? 0.34 : 0.28);
+        p.push();
+        p.translate(harp.center.x, harp.center.y);
+        if (harp.active) {
+          // Six fixed sounding marks make activity legible without color or
+          // animation. The harp remains fully recognizable when inactive.
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.foam, 220));
+          p.strokeWeight(1.2 / camera.zoom);
+          p.circle(0, 0, noteSize * 3.15);
+          for (let mark = 0; mark < 6; mark += 1) {
+            const angle = mark * p.TWO_PI / 6;
+            p.line(
+              Math.cos(angle) * noteSize * 1.72,
+              Math.sin(angle) * noteSize * 1.72,
+              Math.cos(angle) * noteSize * 2.08,
+              Math.sin(angle) * noteSize * 2.08,
+            );
+          }
+        }
+        p.rotate(Math.PI / 4);
+        p.rectMode(p.CENTER);
+        p.fill(withAlpha(PALETTE.ink, 236));
+        p.stroke(withAlpha(PALETTE.violet, harp.active ? 248 : 190));
+        p.strokeWeight((harp.active ? 1.8 : 1.2) / camera.zoom);
+        p.rect(0, 0, noteSize * 1.8, noteSize * 1.8, noteSize * 0.18);
+        p.stroke(withAlpha(PALETTE.foam, harp.active ? 240 : 184));
+        p.strokeWeight(0.8 / camera.zoom);
+        for (const offset of [-0.38, 0, 0.38]) {
+          p.line(-noteSize * 0.72, noteSize * offset, noteSize * 0.72, noteSize * offset);
+          p.line(noteSize * offset, -noteSize * 0.72, noteSize * offset, noteSize * 0.72);
+        }
+        p.pop();
+
+        p.push();
+        p.translate(harp.center.x, harp.center.y + noteSize * 2.15);
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textStyle(p.BOLD);
+        p.textSize(8 / camera.zoom);
+        const labelWidth = p.textWidth(harp.label) + 10 / camera.zoom;
+        p.noStroke();
+        p.rectMode(p.CENTER);
+        p.fill(withAlpha(PALETTE.ink, 218));
+        p.rect(0, 0, labelWidth, 13 / camera.zoom, 4 / camera.zoom);
+        p.fill(withAlpha(PALETTE.foam, harp.active ? 245 : 184));
+        p.text(harp.label, 0, -0.2 / camera.zoom);
+        p.pop();
+      }
+      clearDash();
+    };
+
     const drawWaychords = (view: TideweftView): void => {
       const tileSize = view.terrain.tileSize;
       const railHalfWidth = Math.max(tileSize * 0.075, 1.2 / camera.zoom);
@@ -1794,6 +1891,7 @@ export function createTideweftRenderer(
       drawRoutes(latestView.routes, now);
       drawChoirs(latestView.choirs, now);
       drawDepthSoundings(latestView);
+      drawTideHarps(latestView);
       drawWayknots(latestView, now);
       drawSettlements(latestView.settlements, now);
       drawPorters(latestView.porters);

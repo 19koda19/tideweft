@@ -1,6 +1,10 @@
 import type { TerrainGridView, TerrainTileView, WorldPoint } from "./types";
+import { sampleTerrainMeshLandHeightAt } from "./terrainMesh";
 
 export type DiscoverySignature = (grid: TerrainGridView) => string;
+
+const MIN_RENDERED_WATER_DEPTH = 0.002;
+const MIN_RENDERED_WATER_VISIBILITY = 0.08;
 
 /** Missing legacy confidence is visible; malformed or missing tiles are not. */
 export function reliefDiscoveryVisibility(tile: TerrainTileView | undefined): number {
@@ -34,6 +38,14 @@ export function discoveredReliefSurfaceHeightAt(
   includeWater: boolean,
 ): number {
   if (grid.columns < 1 || grid.rows < 1 || grid.tileSize <= 0) return 0;
+  const scale = Math.max(0, finite(verticalScale, 0));
+  const landHeight = sampleTerrainMeshLandHeightAt(
+    grid,
+    point,
+    scale,
+    maskedElevation,
+  );
+  if (!includeWater) return landHeight;
   const column = clampInteger(
     Math.floor((point.x - grid.origin.x) / grid.tileSize),
     0,
@@ -45,11 +57,31 @@ export function discoveredReliefSurfaceHeightAt(
     grid.rows - 1,
   );
   const tile = grid.tiles[row * grid.columns + column];
-  if (!tile) return 0;
+  if (!tile) return landHeight;
   const visibility = reliefDiscoveryVisibility(tile);
-  const surface = unit(tile.elevation)
-    + (includeWater ? unit(tile.waterDepth) : 0);
-  return surface * visibility * Math.max(0, finite(verticalScale, 0));
+  const visibleDepth = unit(tile.waterDepth) * visibility;
+  if (
+    visibility <= MIN_RENDERED_WATER_VISIBILITY
+    || visibleDepth <= MIN_RENDERED_WATER_DEPTH
+  ) {
+    return landHeight;
+  }
+
+  // Relief draws one flat local water sheet per wet tile. Its level is the
+  // discovery-masked triangulated bed at that tile's center plus local masked
+  // depth. Returning the upper of that sheet and land matches the actual
+  // depth-tested surface at arbitrary points within the tile.
+  const waterCenter = {
+    x: grid.origin.x + (column + 0.5) * grid.tileSize,
+    y: grid.origin.y + (row + 0.5) * grid.tileSize,
+  };
+  const waterHeight = sampleTerrainMeshLandHeightAt(
+    grid,
+    waterCenter,
+    scale,
+    maskedElevation,
+  ) + visibleDepth * scale;
+  return Math.max(landHeight, waterHeight);
 }
 
 /** Stable summary of per-tile discovery confidence for the terrain mesh key. */
@@ -86,6 +118,10 @@ export function createReliefDiscoverySignatureMemo(
 
 function unit(value: number | undefined, fallback = 0): number {
   return clamp(finite(value, fallback), 0, 1);
+}
+
+function maskedElevation(tile: TerrainTileView | undefined): number {
+  return unit(tile?.elevation) * reliefDiscoveryVisibility(tile);
 }
 
 function clampInteger(value: number, low: number, high: number): number {

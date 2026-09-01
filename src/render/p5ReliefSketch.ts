@@ -28,6 +28,12 @@ import {
   maskReliefTileForDiscovery,
   reliefDiscoveryVisibility,
 } from "./reliefTerrain";
+import {
+  createTideHarpGeometryMemo,
+  tideHarpBellBaseHeight,
+  tideHarpBellBob,
+  tideHarpRootLift,
+} from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import type {
   PorterView,
@@ -191,6 +197,7 @@ export function createTideweftReliefRenderer(
   const heldBraceKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
   const discoverySignatureFor = createReliefDiscoverySignatureMemo();
+  const tideHarpGeometryFor = createTideHarpGeometryMemo();
   const orbit: OrbitRuntime = {
     x: 0,
     y: 0,
@@ -434,6 +441,38 @@ export function createTideweftReliefRenderer(
         surface + labelLift,
         "wayknot",
         wayknot.active,
+      );
+    }
+    const tideHarps = tideHarpGeometryFor(view.tideHarps, tileSize * 0.1);
+    for (const harp of tideHarps) {
+      const centerSurface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        harp.center,
+        cache.mesh.verticalScale,
+        true,
+      );
+      const rootSurfaces = harp.spokes.map((spoke) => ({
+        kind: spoke.kind,
+        surface: discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          spoke.from,
+          cache.mesh.verticalScale,
+          true,
+        ),
+      }));
+      const bellBase = tideHarpBellBaseHeight(
+        centerSurface,
+        rootSurfaces,
+        tileSize,
+        harp.active,
+      );
+      place(
+        `tide-harp-${harp.id}`,
+        harp.label,
+        harp.center,
+        bellBase + tileSize * (harp.active ? 1.18 : 1.02),
+        "wayknot",
+        harp.active,
       );
     }
     for (const [id, node] of labelNodes) {
@@ -1152,6 +1191,136 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawTideHarps = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      now: number,
+    ): void => {
+      const size = view.terrain.tileSize;
+      const geometry = tideHarpGeometryFor(view.tideHarps, size * 0.1);
+      for (const harp of geometry) {
+        const centerSurface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          harp.center,
+          cache.mesh.verticalScale,
+          true,
+        );
+        const rootSurfaces = harp.spokes.map((spoke) => ({
+          id: spoke.knotId,
+          kind: spoke.kind,
+          surface: discoveredReliefSurfaceHeightAt(
+            view.terrain,
+            spoke.from,
+            cache.mesh.verticalScale,
+            true,
+          ),
+        }));
+        const bellBase = tideHarpBellBaseHeight(
+          centerSurface,
+          rootSurfaces,
+          size,
+          harp.active,
+        );
+        const bellHeight = bellBase + tideHarpBellBob(
+          harp.id,
+          now,
+          size,
+          harp.active,
+          reducedMotion,
+        );
+
+        for (const spoke of harp.spokes) {
+          const root = rootSurfaces.find((candidate) => candidate.id === spoke.knotId);
+          if (!root) continue;
+          const rootHeight = root.surface + tideHarpRootLift(root.kind, size);
+          p.stroke(withAlpha(RELIEF_PALETTE.ink, 230));
+          p.strokeWeight(harp.active ? 4.2 : 3.4);
+          p.line(
+            spoke.from.x,
+            -rootHeight,
+            spoke.from.y,
+            harp.center.x,
+            -bellHeight,
+            harp.center.y,
+          );
+          p.stroke(withAlpha(RELIEF_PALETTE.foam, harp.active ? 232 : 148));
+          p.strokeWeight(harp.active ? 1.5 : 1.05);
+          p.line(
+            spoke.from.x,
+            -rootHeight,
+            spoke.from.y,
+            harp.center.x,
+            -bellHeight,
+            harp.center.y,
+          );
+          if (harp.active) {
+            const amount = 0.56;
+            p.push();
+            p.noStroke();
+            p.translate(
+              spoke.from.x + (harp.center.x - spoke.from.x) * amount,
+              -(rootHeight + (bellHeight - rootHeight) * amount),
+              spoke.from.y + (harp.center.y - spoke.from.y) * amount,
+            );
+            p.ambientMaterial(RELIEF_PALETTE.foam);
+            p.box(size * 0.095);
+            p.pop();
+          }
+        }
+
+        const phase = reliefStringHash(harp.id) / 4_294_967_295 * Math.PI * 2;
+        const sway = reducedMotion ? 0 : Math.sin(now * 0.0017 + phase) * 0.09;
+        const bellScale = harp.active ? 1.2 : 1;
+        p.push();
+        p.translate(harp.center.x, -bellHeight, harp.center.y);
+        p.rotateY(phase);
+        p.rotateZ(sway);
+        p.noStroke();
+        if (harp.active) p.emissiveMaterial(RELIEF_PALETTE.violet);
+        else p.ambientMaterial(RELIEF_PALETTE.violet);
+        p.cone(size * 0.34 * bellScale, size * 0.52 * bellScale, 6, 1);
+        p.push();
+        p.translate(0, size * 0.31 * bellScale, 0);
+        p.ambientMaterial(RELIEF_PALETTE.foam);
+        p.sphere(size * 0.115 * bellScale, 6, 4);
+        p.pop();
+        // A blocky note stem and head make the suspended object read as an
+        // instrument from oblique camera angles rather than as another buoy.
+        p.push();
+        p.translate(size * 0.34 * bellScale, -size * 0.04 * bellScale, 0);
+        p.ambientMaterial(RELIEF_PALETTE.foam);
+        p.box(size * 0.07 * bellScale, size * 0.54 * bellScale, size * 0.07 * bellScale);
+        p.translate(-size * 0.11 * bellScale, size * 0.28 * bellScale, 0);
+        p.sphere(size * 0.145 * bellScale, 6, 4);
+        p.pop();
+        if (harp.active) {
+          // The six-pronged crown and three cord beads are fixed structural
+          // activity cues, so monochrome and reduced-motion play remain clear.
+          const crownRadius = size * 0.52;
+          const crownY = -size * 0.48;
+          p.noFill();
+          p.stroke(withAlpha(RELIEF_PALETTE.foam, 235));
+          p.strokeWeight(1.4);
+          for (let mark = 0; mark < 6; mark += 1) {
+            const angle = mark * Math.PI * 2 / 6;
+            const next = (mark + 1) * Math.PI * 2 / 6;
+            const x = Math.cos(angle) * crownRadius;
+            const z = Math.sin(angle) * crownRadius;
+            p.line(
+              x,
+              crownY,
+              z,
+              Math.cos(next) * crownRadius,
+              crownY,
+              Math.sin(next) * crownRadius,
+            );
+            p.line(x, crownY, z, x * 0.48, -size * 0.16, z * 0.48);
+          }
+        }
+        p.pop();
+      }
+    };
+
     const drawWayknots = (
       view: TideweftView,
       cache: CachedReliefMesh,
@@ -1454,6 +1623,7 @@ export function createTideweftReliefRenderer(
       drawWater(view, cache);
       drawRoutes(view, cache);
       drawSoundings(view, cache);
+      drawTideHarps(view, cache, now);
       drawWayknots(view, cache, now);
       for (const settlement of view.settlements) drawSettlement(view, cache, settlement);
       drawPorters(view, cache);

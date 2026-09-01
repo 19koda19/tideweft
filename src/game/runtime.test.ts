@@ -614,6 +614,7 @@ describe("runtime clarity guards", () => {
     expect(repaired.player.wayknots.capacity).toBe(6);
     expect(repaired.player.wayknots.wayknots).toHaveLength(6);
     expect(repaired.player.wayknots.wayknots.every((wayknot) => wayknot.tileIndex === null)).toBe(true);
+    expect(Object.hasOwn(repaired.player, "tideHarps")).toBe(false);
     expect(repaired.session.sessionBaseline?.awakenedChoirs).toBe(repairedWorld.choirs.length);
     assertWorldInvariants(repairedWorld);
     runtime.destroy();

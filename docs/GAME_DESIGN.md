@@ -12,7 +12,7 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 
 ## Current verbs
 
-**Listen → choose → collect → travel → adapt → bind → deliver → tend → witness**
+**Listen → choose → collect → travel → adapt → bind → tune → deliver → tend → witness**
 
 1. Inspect nearby facts, named requesters, shortages, project needs, route reliability, weather, and tide.
 2. Choose a promise by consequence and journey mood rather than abstract reward value.
@@ -20,9 +20,10 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 4. Travel manually or chart a pointer path in the overhead chart or angled relief view.
 5. Scan, reroute, slow down, hold Shift to brace while moving, stand still to recover, or accept a weathered load.
 6. Bind a reusable terrain-appropriate Wayknot, or reclaim one underfoot to move the care elsewhere.
-7. Deliver or hand off safely at a harbor.
-8. Spend a shared part to reinforce a corridor, or let repeated delivery use weave it naturally.
-9. Read the arrival response, project change, route state, resident movement, and causal chronicle.
+7. Tune a compact Tide Harp triangle from one Wayknot of each kind, then stand within it to extend the Loom's sounding field.
+8. Deliver or hand off safely at a harbor.
+9. Spend a shared part to reinforce a corridor, or let repeated delivery use weave it naturally.
+10. Read the arrival response, project change, route state, resident movement, and causal chronicle.
 
 There is no separate currency payout. A delivery’s reward is the system becoming more capable and more legible.
 
@@ -42,7 +43,10 @@ The tide changes water depth across the map. Water is always physically enterabl
 - The Loom pulse immediately expands the permanent chart and records nearby water soundings separately from ordinary discovery.
 - Active Shift-bracing trades speed for stability and fragile-cargo protection; Rest pace or stillness restores further.
 - F binds or reclaims one of six reusable Wayknots. Mats, anchors, and wind-knots change the relevant local hazard without consuming cargo; unlike overlapping fields form a bounded Waychord and speed Loom recharge slightly.
+- A connected, non-collinear triangle of one Reed mat, one Tide anchor, and one Wind knot can become a Tide Harp. Standing inside/on one gives a single capped +900 Loom recharge each player tick. Space still sounds radius 8 from the ferrier and also sounds radius 6 from each of the three knots: four origins, one existing charge cost, and no hidden depth shortcut.
 - Every consequential command responds through animation, sound, text, or an accessible live announcement.
+
+Tide Harps are spatial understanding, not crafting inventory. The pure selector chooses an exact maximum knot-disjoint set; equally numerous arrangements prefer shorter total strings, then canonical fixed-piece IDs. Their eight deterministic names—Glass-Ebb, Gullweather, Moon-Reed, Lantern Shoal, Mothcurrent, Brine Lullaby, Quiet Rigging, and Estuary Chime—give stable personality without random loot. Because the formation is derived from Wayknots already in the save, it introduces no currency, resource sink, timer, PlayerState field, or migration.
 
 ### One journey
 
@@ -131,6 +135,7 @@ At a source harbor, the player can witness its specialization count into a singl
 - Perishable food loses freshness gently during travel; a completed cache suspends that decay while the player is sheltered at its harbor.
 - A charge-gated Loom pulse reveals nearby permanent chart information and bathymetry; sounded depth also informs pointer-path cost.
 - Pointer paths price the same Wayknot fields as manual travel. The placed aids persist in saves and can always be reclaimed; they never become an upgrade currency or upkeep chore.
+- An active Tide Harp adds its three knot-centered echoes without changing cargo, settlement stock, route history, or the simulation ledger. Overlapping selected triangles still grant only one Harp recharge benefit at the courier's tile.
 - The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
 - The objective always identifies the active pickup, material destination, or report destination.
 
@@ -167,7 +172,9 @@ Quiet Hour pauses immediately, saves, and summarizes duration, distance, deliver
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. The Tide Harp HUD teaches `Reed + Anchor + Wind in a compact triangle` when none exist, distinguishes tuned-but-inactive from active, and names the +900/three-origin benefit; Help repeats the model, while unsounded local water keeps the first explanatory priority. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. The packaged layout probe now covers 1,440 × 900, 960 × 640, the 927-pixel desktop/tablet boundary, and the 700-pixel compact layout so objective copy and a genuinely scrollable Promises pane do not overlap. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
+
+Chart 2D represents each instrument with three persistent bowed strings along each edge—nine in all—a written label, and fixed activity marks. Relief 3D uses three surface-rooted cords and a suspended faceted bell rather than a flat icon. Hidden terrain height is never consulted for visible placement, and reduced motion freezes bob/sway while keeping every structural and textual cue. Local packaged inspection now verifies the deterministic Harp, its remote sounding echo, both presentations, visible title controls, and fresh title/game captures. Phase 10 remains an unpublished working preview until exact-commit CI, Pages deployment, and live-origin verification succeed.
 
 The current build has procedural sound but does not yet expose separate volume controls or key remapping.
 
@@ -181,7 +188,7 @@ Implemented now:
 - authoritative active/multi-hop logistics;
 - all five rule-changing civic projects;
 - route reinforcement, topology campaign resolution, and endless continuation;
-- surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, six reusable terrain-bound Wayknots and their Waychords, and dual Chart 2D/Relief 3D play;
+- surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, six reusable terrain-bound Wayknots and their Waychords, derived Tide Harps in the untagged Phase 10 working preview, and dual Chart 2D/Relief 3D play;
 - Drift/Weave/Wander plus Quiet Hour;
 - local resume, secure desktop packaging, and static Pages output.
 
