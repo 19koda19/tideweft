@@ -6,6 +6,7 @@ import type {
   TidePhase,
   WeatherKind as RenderWeatherKind,
 } from "../render/types";
+import { projectLooseCargoWorld } from "../render/looseCargoPresentation";
 import {
   applyWeatherToBiomeClimate,
   classifyBiome,
@@ -32,6 +33,12 @@ import {
 import { deriveTideHarps, type TideHarp } from "./tideHarps";
 import { surfaceCurrentDirection } from "./currentDirection";
 import { WAYKNOT_LABELS, WAYKNOT_RADII } from "./wayknots";
+import {
+  projectPlayerBalance,
+  projectTraversalIncident,
+  type TraversalFeedbackState,
+} from "./traversalFeedback";
+import type { LooseCargoWorldState } from "./looseCargo";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
 const MAX_BIOME_CACHE_ENTRIES = 4;
@@ -82,6 +89,10 @@ export interface ProjectionOptions {
   fieldResourceCatalog?: FieldResourceCatalog;
   /** Sparse live depletion state paired with fieldResourceCatalog. */
   fieldResourceEcology?: FieldResourceEcologyState;
+  /** Persistent footing incident shared by Chart and Relief presentation. */
+  traversalFeedback?: TraversalFeedbackState;
+  /** Validated loaded-region parcels. Production always supplies this sidecar. */
+  looseCargoWorld?: LooseCargoWorldState;
 }
 
 export function projectGameView(
@@ -92,6 +103,19 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
+  const looseCargo = options.looseCargoWorld
+    ? projectLooseCargoWorld(options.looseCargoWorld, {
+        worldOrigin: { x: 0, y: 0 },
+        worldUnitsPerTile: tileSize,
+        viewerOwner: { kind: "player", id: "local-porter" },
+        player: {
+          region: { x: 0, y: 0 },
+          position: { x: playerX, y: playerY },
+          recoveryReach: tileSize * 2,
+        },
+      })
+    : [];
+  const traversalIncident = projectTraversalIncident(options.traversalFeedback?.incident ?? null);
   const currentPlayerTileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
     + Math.floor(player.x / TILE_UNITS);
   const harpGrid = { width: world.terrain.width, height: world.terrain.height };
@@ -298,6 +322,18 @@ export function projectGameView(
       pace: player.pace,
       mode: player.mode,
       active: !options.paused,
+      ...(options.traversalFeedback
+        ? {
+            balanceState: projectPlayerBalance(options.traversalFeedback, {
+              swept: player.mode === "swept",
+              stability: player.stability,
+              stabilityTrend: player.stabilityTrend,
+            }),
+            ...(traversalIncident
+              ? { incident: traversalIncident }
+              : {}),
+          }
+        : {}),
       ...(destinationSettlement
         ? {
             destination: tilePoint(destinationSettlement.tileIndex, world.terrain.width, tileSize),
@@ -321,6 +357,7 @@ export function projectGameView(
     }),
     tideHarps,
     fieldResources,
+    looseCargo,
     routes: world.routes
       .filter((route) => {
         if (options.selectedRouteId === route.id) return true;

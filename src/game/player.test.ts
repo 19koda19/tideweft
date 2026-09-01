@@ -18,7 +18,6 @@ import {
   TILE_UNITS,
   cargoWeight,
   createPlayer,
-  cyclePace,
   discoverAround,
   hasFieldTool,
   loadContractCargo,
@@ -33,6 +32,9 @@ import {
   type PlayerState,
 } from "./player";
 import { createCraftingInventory } from "./crafting";
+import { seedFromText } from "../sim/rng";
+import type { LadderKitState, RockField, RockObstacle } from "../sim/rockTraversal";
+import { createTraversalFeedbackState } from "./traversalFeedback";
 
 const NO_INPUT = { moveX: 0, moveY: 0, brace: false } as const;
 const MOVE_RIGHT = { moveX: 1, moveY: 0, brace: false } as const;
@@ -70,6 +72,44 @@ function placePlayer(player: PlayerState, tileX: number, tileY: number, offsetX 
   player.velocityY = 0;
   player.currentTrace = [tileY * player.worldWidth + tileX];
   player.surveyTrace = [tileY * player.worldWidth + tileX];
+}
+
+function rockObstacle(
+  tileIndex: number,
+  overrides: Partial<RockObstacle> = {},
+): RockObstacle {
+  return {
+    id: tileIndex + 1,
+    formationId: tileIndex + 1,
+    tileIndex,
+    height: 620_000,
+    slope: 580_000,
+    severity: "scramble",
+    walkingBlocked: false,
+    highRisk: true,
+    fallRiskPermille: 600,
+    travelCostPermille: 1_600,
+    ...overrides,
+  };
+}
+
+function rockField(world: WorldView, obstacle: RockObstacle): RockField {
+  return {
+    version: 1,
+    width: world.terrain.width,
+    height: world.terrain.height,
+    obstacles: [obstacle],
+    formations: [{
+      id: obstacle.formationId,
+      obstacleIds: [obstacle.id],
+      tileIndices: [obstacle.tileIndex],
+      minX: obstacle.tileIndex % world.terrain.width,
+      minY: Math.floor(obstacle.tileIndex / world.terrain.width),
+      maxX: obstacle.tileIndex % world.terrain.width,
+      maxY: Math.floor(obstacle.tileIndex / world.terrain.width),
+      peakHeight: obstacle.height,
+    }],
+  };
 }
 
 function drySteadyEndurance(
@@ -231,6 +271,236 @@ describe("player movement", () => {
     expect(player.currentTrace.every((index) => index >= 0 && index < world.terrain.tiles.length)).toBe(true);
     expect(player.surveyTrace.every((index) => index >= 0 && index < world.terrain.tiles.length)).toBe(true);
   });
+
+  it("derives steady travel, rest, and swift motion only from a carrying slope", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const downhillIndex = startIndex + 1;
+    const world = controlledWorld((tiles) => {
+      const start = tiles[startIndex];
+      const downhill = tiles[downhillIndex];
+      if (!start || !downhill) throw new Error("pace fixture tile missing");
+      tiles[startIndex] = { ...start, elevation: 700_000 };
+      tiles[downhillIndex] = { ...downhill, elevation: 300_000 };
+    });
+    const ordinaryWorld = controlledWorld();
+    const ordinary = createPlayer(ordinaryWorld);
+    placePlayer(ordinary, 10, 10);
+    ordinary.pace = "swift";
+    stepPlayer(ordinary, ordinaryWorld, MOVE_RIGHT);
+    expect(ordinary.pace).toBe("steady");
+    stepPlayer(ordinary, ordinaryWorld, NO_INPUT);
+    expect(ordinary.pace).toBe("rest");
+
+    const downhill = createPlayer(world);
+    placePlayer(downhill, 10, 10);
+    stepPlayer(downhill, world, MOVE_RIGHT);
+    expect(downhill.pace).toBe("swift");
+  });
+
+  it("evaluates an exact-corner diagonal X before Y and binds a second-edge fall to n+1", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const xEdgeIndex = startIndex + 1;
+    const finalIndex = xEdgeIndex + WORLD_WIDTH;
+    const beyondIndex = startIndex + 2;
+    const base = controlledWorld((tiles) => {
+      const final = tiles[finalIndex];
+      if (!final) throw new Error("diagonal water fixture missing");
+      tiles[finalIndex] = {
+        ...final,
+        terrain: "deep-water",
+        waterDepth: 520_000,
+        roughness: 0,
+      };
+    });
+    const world: WorldView = {
+      ...base,
+      settlements: base.settlements.map((settlement, index) => ({
+        ...settlement,
+        tileIndex: index,
+      })),
+      routes: [],
+    };
+    const obstacle = rockObstacle(xEdgeIndex, {
+      fallRiskPermille: 300,
+      travelCostPermille: 1_300,
+    });
+    const ladders: LadderKitState = {
+      version: 1,
+      ladders: [{
+        id: 1,
+        maxSpan: 3,
+        condition: FIXED_POINT,
+        deployment: {
+          fromTileIndex: startIndex,
+          toTileIndex: beyondIndex,
+          orientation: "east-west",
+          span: 2,
+          pathTileIndices: [startIndex, xEdgeIndex, beyondIndex],
+          obstacleIds: [obstacle.id],
+          formationId: obstacle.formationId,
+          support: 930_000,
+        },
+      }],
+    };
+    const player = createPlayer(world);
+    placePlayer(player, 10, 10, 950);
+    player.y = 10 * TILE_UNITS + 950;
+    player.previousY = player.y;
+    player.stability = 0;
+    const result = stepPlayer(
+      player,
+      world,
+      { moveX: 1, moveY: 1, brace: false },
+      {
+        seed: seedFromText("diagonal ordinal fixture"),
+        actorId: 0,
+        feedback: createTraversalFeedbackState(),
+        rocks: rockField(world, obstacle),
+        ladders,
+      },
+    );
+
+    expect(result.fallEvaluations.map((evaluation) => evaluation.usedTraversalOrdinal))
+      .toEqual([0, 1]);
+    expect(result.fallEvaluations.map((evaluation) => evaluation.outcome))
+      .toEqual(["held", "fell"]);
+    expect(result.footingEvaluations).toHaveLength(2);
+    expect(result.footingEvaluations[0]?.mitigation.fixture).toBeGreaterThan(0);
+    expect(result.footingEvaluations[1]?.mitigation.fixture).toBe(0);
+    expect(result.fallEvaluation?.usedTraversalOrdinal).toBe(1);
+    expect(result.traversalIncident?.traversalOrdinal).toBe(1);
+    expect(result.traversalFeedback?.nextTraversalOrdinal).toBe(2);
+    expect(playerTileIndex(player)).toBe(finalIndex);
+  });
+
+  it("stops a diagonal after an X-edge fall without entering or assigning Y", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const xEdgeIndex = startIndex + 1;
+    const finalIndex = xEdgeIndex + WORLD_WIDTH;
+    const world = controlledWorld((tiles) => {
+      const xEdge = tiles[xEdgeIndex];
+      const final = tiles[finalIndex];
+      if (!xEdge || !final) throw new Error("diagonal stop fixture missing");
+      tiles[xEdgeIndex] = { ...xEdge, terrain: "ridge", roughness: FIXED_POINT };
+      tiles[finalIndex] = { ...final, terrain: "deep-water", waterDepth: 520_000 };
+    });
+    const player = createPlayer(world);
+    placePlayer(player, 10, 10, 950);
+    player.y = 10 * TILE_UNITS + 950;
+    player.previousY = player.y;
+    player.stability = 0;
+    const result = stepPlayer(
+      player,
+      world,
+      { moveX: 1, moveY: 1, brace: false },
+      {
+        seed: seedFromText("diagonal first edge fall"),
+        actorId: 0,
+        feedback: createTraversalFeedbackState(),
+      },
+    );
+
+    expect(result.fallEvaluations).toHaveLength(1);
+    expect(result.fallEvaluations[0]).toMatchObject({
+      outcome: "fell",
+      usedTraversalOrdinal: 0,
+    });
+    expect(result.traversalIncident?.traversalOrdinal).toBe(0);
+    expect(result.traversalFeedback?.nextTraversalOrdinal).toBe(1);
+    expect(playerTileIndex(player)).toBe(xEdgeIndex);
+    expect(playerTileIndex(player)).not.toBe(finalIndex);
+  });
+
+  it("uses the same deterministic hazardous-entry result after a pre-entry reload", () => {
+    const ridgeIndex = 10 * WORLD_WIDTH + 11;
+    const world = controlledWorld((tiles) => {
+      const ridge = tiles[ridgeIndex];
+      if (!ridge) throw new Error("replay fixture missing");
+      tiles[ridgeIndex] = { ...ridge, terrain: "ridge", roughness: FIXED_POINT };
+    });
+    const before = createPlayer(world);
+    placePlayer(before, 10, 10, 950);
+    before.stability = 260_000;
+    const feedback = createTraversalFeedbackState();
+    const run = (player: PlayerState) => stepPlayer(player, world, MOVE_RIGHT, {
+      seed: seedFromText("reload cannot reroll"),
+      actorId: 0,
+      feedback,
+    });
+    const first = run(structuredClone(before));
+    const reloaded = run(structuredClone(before));
+
+    expect(reloaded.fallEvaluation).toEqual(first.fallEvaluation);
+    expect(reloaded.traversalIncident).toEqual(first.traversalIncident);
+    expect(reloaded.traversalFeedback).toEqual(first.traversalFeedback);
+  });
+
+  it("blocks a hazardous edge when the traversal ordinal is exhausted", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const ridgeIndex = startIndex + 1;
+    const world = controlledWorld((tiles) => {
+      const ridge = tiles[ridgeIndex];
+      if (!ridge) throw new Error("ordinal fixture missing");
+      tiles[ridgeIndex] = { ...ridge, terrain: "ridge", roughness: FIXED_POINT };
+    });
+    const player = createPlayer(world);
+    placePlayer(player, 10, 10, 950);
+    const beforeX = player.x;
+    const beforeStability = player.stability;
+    const result = stepPlayer(player, world, MOVE_RIGHT, {
+      seed: seedFromText("ordinal exhaustion fixture"),
+      actorId: 0,
+      feedback: {
+        ...createTraversalFeedbackState(),
+        nextTraversalOrdinal: Number.MAX_SAFE_INTEGER,
+      },
+    });
+
+    expect(result.moved).toBe(false);
+    expect(player.x).toBe(beforeX);
+    expect(player.stability).toBe(beforeStability);
+    expect(result.fallEvaluation).toMatchObject({
+      valid: false,
+      outcome: "ordinal-exhausted",
+      ordinalExhausted: true,
+    });
+    expect(result.fallEvaluations).toEqual([]);
+    expect(result.traversalFeedback?.nextTraversalOrdinal).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it("locks movement during physical fall recovery and keeps its incident identity", () => {
+    const ridgeIndex = 10 * WORLD_WIDTH + 11;
+    const world = controlledWorld((tiles) => {
+      const ridge = tiles[ridgeIndex];
+      if (!ridge) throw new Error("recovery fixture missing");
+      tiles[ridgeIndex] = { ...ridge, terrain: "ridge", roughness: FIXED_POINT };
+    });
+    const player = createPlayer(world);
+    placePlayer(player, 10, 10, 950);
+    player.stability = 0;
+    const first = stepPlayer(player, world, MOVE_RIGHT, {
+      seed: seedFromText("recovery lock fixture"),
+      actorId: 0,
+      feedback: createTraversalFeedbackState(),
+    });
+    if (!first.traversalFeedback || !first.traversalIncident) {
+      throw new Error("fixture did not produce a fall incident");
+    }
+    const lockedX = player.x;
+    const lockedY = player.y;
+    const locked = stepPlayer(player, world, { moveX: -1, moveY: 0, brace: false }, {
+      seed: seedFromText("recovery lock fixture"),
+      actorId: 0,
+      feedback: first.traversalFeedback,
+    });
+
+    expect(locked.moved).toBe(false);
+    expect([player.x, player.y]).toEqual([lockedX, lockedY]);
+    expect(player.pace).toBe("rest");
+    expect(locked.traversalFeedback?.incident?.id).toBe(first.traversalIncident.id);
+    expect(locked.traversalFeedback?.incident?.remainingSteps)
+      .toBe(first.traversalIncident.remainingSteps - 1);
+  });
 });
 
 describe("effort, stability, and discovery", () => {
@@ -252,12 +522,12 @@ describe("effort, stability, and discovery", () => {
     expect(fullPack.steps / 10).toBeLessThan(60);
   });
 
-  it("spends more effort at swift pace, enters camp on exhaustion, and recovers while resting", () => {
+  it("derives steady intent, enters camp on exhaustion, and recovers at rest", () => {
     const world = controlledWorld();
     const player = createPlayer(world);
     placePlayer(player, 10, 10);
-    player.pace = "swift";
-    player.stamina = 16_000;
+    player.pace = "swift"; // stale/player-written pace is not authoritative.
+    player.stamina = 12_500;
 
     const exhausted = stepPlayer(player, world, MOVE_RIGHT);
     expect(exhausted.exhausted).toBe(true);
@@ -266,6 +536,7 @@ describe("effort, stability, and discovery", () => {
     expect(player.pace).toBe("rest");
     expect(exhausted.becameSwept).toBe(false);
     expect(exhausted.swept).toBe(false);
+    expect(player.pace).toBe("rest");
 
     const recovering = stepPlayer(player, world, NO_INPUT);
     expect(recovering.exhausted).toBe(false);
@@ -296,7 +567,7 @@ describe("effort, stability, and discovery", () => {
     expect(bracedStep.damagedCargo).toBe(false);
   });
 
-  it("names the live causes of falling stability and explains braced recovery", () => {
+  it("names live footing causes and makes brace mitigate rather than erase a strong current", () => {
     const roughIndex = 10 * WORLD_WIDTH + 10;
     const world = controlledWorld((tiles) => {
       const rough = tiles[roughIndex];
@@ -313,19 +584,22 @@ describe("effort, stability, and discovery", () => {
     player.pace = "swift";
     player.stability = 600_000;
 
+    const beforeUnbraced = player.stability;
     stepPlayer(player, world, MOVE_RIGHT);
+    const unbracedLoss = beforeUnbraced - player.stability;
     expect(player.stabilityTrend).toBe("falling");
-    expect(player.stabilityHint).toContain("Falling:");
-    expect(player.stabilityHint).toContain("swift pace");
-    expect(player.stabilityHint).toContain("rough ground");
+    expect(player.stabilityHint).toContain("Footing falling:");
     expect(player.stabilityHint).toContain("deep water");
-    expect(player.stabilityHint).toContain("sharp turning");
-    expect(player.stabilityHint).toContain("hold Shift to brace");
+    expect(player.stabilityHint).toContain("cross-current");
+    expect(player.stabilityHint).toContain("BRACE or find support");
 
+    const beforeBraced = player.stability;
     stepPlayer(player, world, { moveX: 1, moveY: 0, brace: true });
-    expect(player.stabilityTrend).toBe("recovering");
-    expect(player.stabilityHint).toContain("Recovering while braced");
-    expect(player.stabilityHint).toContain("Shift trades speed for control");
+    const bracedLoss = beforeBraced - player.stability;
+    expect(player.stabilityTrend).toBe("falling");
+    expect(bracedLoss).toBeGreaterThan(0);
+    expect(bracedLoss).toBeLessThan(unbracedLoss);
+    expect(player.stabilityHint).toContain("deep water");
   });
 
   it("makes fragile loads shock-sensitive while heavy loads resist the same handling", () => {
@@ -372,20 +646,13 @@ describe("effort, stability, and discovery", () => {
     expect(sheltered.cargo[0]?.condition).toBe(FIXED_POINT);
   });
 
-  it("cycles pace within bounds and makes scans charge-gated and persistent", () => {
+  it("makes scans charge-gated and persistent while pace remains simulation-derived", () => {
     const world = controlledWorld();
     const player = createPlayer(world);
     placePlayer(player, 30, 24);
     player.discovered.fill(0);
 
-    cyclePace(player, -1);
-    cyclePace(player, -1);
-    expect(player.pace).toBe("rest");
-    cyclePace(player, 1);
     expect(player.pace).toBe("steady");
-    cyclePace(player, 1);
-    cyclePace(player, 1);
-    expect(player.pace).toBe("swift");
 
     expect(pulseScan(player, world)).toBe(true);
     expect(player.scanCharge).toBe(720_000);
@@ -399,7 +666,6 @@ describe("effort, stability, and discovery", () => {
     player.mode = "swept";
     player.pace = "rest";
     player.scanCharge = FIXED_POINT;
-    cyclePace(player, 1);
     expect(player.pace).toBe("rest");
     expect(pulseScan(player, world)).toBe(false);
     expect(player.scanCharge).toBe(FIXED_POINT);
@@ -517,7 +783,7 @@ describe("effort, stability, and discovery", () => {
     expect(washedAshore).toBe(true);
     expect(player.mode).toBe("camp");
     expect(player.stamina).toBeGreaterThan(0);
-    expect(player.pace).toBe("steady");
+    expect(player.pace).toBe("rest");
     expect(world.terrain.tiles[playerTileIndex(player)]?.waterDepth).toBeLessThanOrEqual(55_000);
     expect(player.cargo).toHaveLength(1);
     expect(player.cargo[0]?.quantity).toBe(4);
@@ -623,7 +889,7 @@ describe("effort, stability, and discovery", () => {
     expect(player.stability).toBe(0);
   });
 
-  it("lets zero stability recover on dry ground and sub-threshold shallows without sweeping", () => {
+  it("lets zero stability recover on dry ground while shallow current remains escapable", () => {
     const startIndex = 10 * WORLD_WIDTH + 10;
     for (const waterDepth of [0, 119_999]) {
       const world = controlledWorld((tiles) => {
@@ -647,8 +913,13 @@ describe("effort, stability, and discovery", () => {
       expect(recovering.swept).toBe(false);
       expect(recovering.sweepCause).toBeNull();
       expect(player.mode).not.toBe("swept");
-      expect(player.stability).toBeGreaterThan(0);
-      expect(player.stabilityTrend).toBe("recovering");
+      if (waterDepth === 0) {
+        expect(player.stability).toBeGreaterThan(0);
+        expect(player.stabilityTrend).toBe("recovering");
+      } else {
+        expect(player.stability).toBe(0);
+        expect(stepPlayer(player, world, MOVE_RIGHT).moved).toBe(true);
+      }
     }
   });
 

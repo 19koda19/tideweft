@@ -20,6 +20,7 @@ import {
 } from "../sim/public";
 import {
   createCraftingInventory,
+  type CraftingStackId,
 } from "./crafting";
 import {
   BASE_CARGO_CAPACITY,
@@ -30,6 +31,7 @@ import {
 } from "./player";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState, type GameSessionState } from "./sessionTypes";
+import type { PhysicalCargoState } from "./physicalCargoState";
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
@@ -48,13 +50,15 @@ interface V1GameSaveEnvelope {
   readonly session: GameSessionState;
 }
 
-interface V2GameSaveEnvelope {
+interface PersistedGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 2;
+  readonly version: number;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
   readonly fieldResources: FieldResourceEcologyState;
+  readonly physicalCargo?: PhysicalCargoState;
+  readonly integrity?: string;
 }
 
 class MemoryRepository implements SaveRepository {
@@ -113,7 +117,7 @@ function v2SaveRecord(
   player: PlayerState,
   ecology = createFieldResourceEcologyState(world.meta.completedTick),
 ): SaveRecord {
-  const envelope: V2GameSaveEnvelope = {
+  const envelope: PersistedGameSaveEnvelope = {
     format: "tideweft-session",
     version: 2,
     world: serializeWorld(world),
@@ -157,8 +161,8 @@ function v1SaveRecord(
   };
 }
 
-function decodeV2(record: SaveRecord): V2GameSaveEnvelope {
-  return JSON.parse(record.worldJson) as V2GameSaveEnvelope;
+function decodeGameSave(record: SaveRecord): PersistedGameSaveEnvelope {
+  return JSON.parse(record.worldJson) as PersistedGameSaveEnvelope;
 }
 
 const VALID_CARGO_FIXTURE = {
@@ -233,8 +237,10 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function stackQuantity(runtime: TideweftRuntime, material: FieldMaterialId): number {
-  return runtime.getUIView().kit?.stackRows.find((row) => row.id === material)?.quantity ?? 0;
+function stackQuantity(runtime: TideweftRuntime, material: CraftingStackId): number {
+  return runtime.getUIView().kit?.stackRows
+    .filter((row) => row.itemId === material)
+    .reduce((total, row) => total + row.quantity, 0) ?? 0;
 }
 
 function renderedTileIndex(runtime: TideweftRuntime): number {
@@ -390,7 +396,7 @@ describe("runtime field-resource integration", () => {
     expect(runtime.getUIView().player.stamina).toBe(staminaBefore);
     expect(runtime.getUIView().announcement?.message).toContain("Pack needs");
     await runtime.save();
-    expect(decodeV2(repository.snapshot()).fieldResources.depletion).toEqual([]);
+    expect(decodeGameSave(repository.snapshot()).fieldResources.depletion).toEqual([]);
     runtime.destroy();
   });
 
@@ -420,7 +426,7 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, node.material)).toBe(0);
     expect(runtime.getUIView().announcement?.message).toContain("final living unit");
     await runtime.save();
-    expect(decodeV2(repository.snapshot()).fieldResources).toEqual(drained.state);
+    expect(decodeGameSave(repository.snapshot()).fieldResources).toEqual(drained.state);
     runtime.destroy();
   });
 
@@ -449,12 +455,122 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "cordreed")).toBe(2);
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
-    const saved = decodeV2(repository.snapshot());
-    expect(saved.version).toBe(2);
+    const saved = decodeGameSave(repository.snapshot());
+    expect(saved.version).toBe(3);
     expect(saved.fieldResources).toEqual(ecology.state);
     expect(saved.player.craftingInventory).toEqual(player.craftingInventory);
     expect(saved.player.nextCraftedGearId).toBe(29);
     runtime.destroy();
+  });
+
+  it("crafts one exact component transaction and preserves its source lot through tick, save, and reload", async () => {
+    const world = createWorld("the braid keeps every fiber", "calm");
+    const player = createPlayer(createWorldView(world));
+    player.craftingInventory = createCraftingInventory(
+      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
+      { cordreed: 2, sunfiber: 1 },
+    );
+    const repository = new MemoryRepository(v2SaveRecord(world, player));
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+
+    runtime.dispatchUI({ type: "kit", action: "craft", recipeId: "component/braided-cord" });
+
+    expect(stackQuantity(runtime, "cordreed")).toBe(0);
+    expect(stackQuantity(runtime, "sunfiber")).toBe(0);
+    expect(stackQuantity(runtime, "braided-cord")).toBe(1);
+    const lotId = runtime.getUIView().kit?.stackRows.find((row) =>
+      row.itemId === "braided-cord")?.lotId;
+    expect(lotId).toMatch(/^pc:0:0:source:/u);
+    advancePlayerSteps(runtime, 1);
+    await runtime.save();
+    const saved = decodeGameSave(repository.snapshot());
+    expect(saved.physicalCargo?.carrier.lots).toEqual([
+      expect.objectContaining({
+        id: lotId,
+        payload: { kind: "stack", item: "braided-cord", quantity: 1 },
+      }),
+    ]);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().kit?.stackRows.find((row) =>
+      row.itemId === "braided-cord")?.lotId).toBe(lotId);
+    expect(stackQuantity(resumed, "cordreed")).toBe(0);
+    resumed.destroy();
+  });
+
+  it("mends a worn exact gear lot once, consumes exact ingredients, and keeps its durable identity", async () => {
+    const world = createWorld("the cape remembers the mending", "calm");
+    const player = createPlayer(createWorldView(world));
+    player.craftingInventory = createCraftingInventory(
+      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
+      { stormlichen: 1, pitchmoss: 1 },
+      [{ id: 7, kind: "weather-cape", condition: 500_000 }],
+    );
+    player.nextCraftedGearId = 8;
+    const repository = new MemoryRepository(v2SaveRecord(world, player));
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    const originalLotId = runtime.getUIView().kit?.gearRows.find((row) => row.id === "7")?.lotId;
+
+    runtime.dispatchUI({
+      type: "kit",
+      action: "repair",
+      gearId: "7",
+      conditionGain: 250_000,
+    });
+
+    const mended = runtime.getUIView().kit?.gearRows.find((row) => row.id === "7");
+    expect(mended?.condition).toBe(0.75);
+    expect(mended?.lotId).toBe(originalLotId);
+    expect(stackQuantity(runtime, "stormlichen")).toBe(0);
+    expect(stackQuantity(runtime, "pitchmoss")).toBe(0);
+    runtime.dispatchUI({
+      type: "kit",
+      action: "repair",
+      gearId: "7",
+      conditionGain: 250_000,
+    });
+    expect(runtime.getUIView().kit?.gearRows.find((row) => row.id === "7")?.condition).toBe(0.75);
+    expect(runtime.getUIView().announcement?.message).toContain("Missing");
+    await runtime.save();
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().kit?.gearRows.find((row) => row.id === "7")).toMatchObject({
+      lotId: originalLotId,
+      condition: 0.75,
+    });
+    expect(stackQuantity(resumed, "stormlichen")).toBe(0);
+    expect(stackQuantity(resumed, "pitchmoss")).toBe(0);
+    resumed.destroy();
+  });
+
+  it("blocks durable gear identity exhaustion before consuming ingredients", async () => {
+    const world = createWorld("the last name in the kit", "calm");
+    const player = createPlayer(createWorldView(world));
+    player.craftingInventory = createCraftingInventory(
+      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
+      { "braided-cord": 1, pitchcloth: 1 },
+    );
+    player.nextCraftedGearId = Number.MAX_SAFE_INTEGER;
+    const repository = new MemoryRepository(v2SaveRecord(world, player));
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+
+    runtime.dispatchUI({ type: "kit", action: "craft", recipeId: "gear/marsh-wraps" });
+
+    expect(stackQuantity(runtime, "braided-cord")).toBe(1);
+    expect(stackQuantity(runtime, "pitchcloth")).toBe(1);
+    expect(runtime.getUIView().kit?.gearRows.some((row) => row.kind === "marsh-wraps")).toBe(false);
+    expect(runtime.getUIView().announcement?.message).toContain("identity limit");
+    await runtime.save();
+    runtime.destroy();
+    const resumed = await createTideweftRuntime(repository);
+    expect(stackQuantity(resumed, "braided-cord")).toBe(1);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    resumed.destroy();
   });
 
   it.each(MALFORMED_CARGO_CASES)(
@@ -531,8 +647,8 @@ describe("runtime field-resource integration", () => {
       row.locationLabel.includes("Core field-kit piece") && row.loadMilli === 0
     )).toBe(true);
     await runtime.save();
-    const migrated = decodeV2(repository.snapshot());
-    expect(migrated.version).toBe(2);
+    const migrated = decodeGameSave(repository.snapshot());
+    expect(migrated.version).toBe(3);
     expect(migrated.fieldResources).toEqual({
       version: 1,
       activeTick: world.meta.completedTick,
@@ -564,7 +680,7 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "cordreed")).toBe(2);
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
-    const migrated = decodeV2(repository.snapshot());
+    const migrated = decodeGameSave(repository.snapshot());
     expect(migrated.player.cargoCapacity).toBe(BASE_CARGO_CAPACITY);
     expect(migrated.player.craftingInventory.capacityMilliLoad).toBe(18_000);
     expect(migrated.player.craftingInventory.stacks.cordreed).toBe(2);

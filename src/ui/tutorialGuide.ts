@@ -37,7 +37,6 @@ export const TUTORIAL_CONTROL_IDS = [
   "set-destination",
   "brace-key",
   "brace-button",
-  "pace-keys",
   "scan-key",
   "scan-button",
   "interact-key",
@@ -152,12 +151,6 @@ export const TUTORIAL_CONTROLS = [
     input: "Hold BRACE",
     action: "Brace during touch travel",
     detail: "Keep holding through danger to trade route speed for stability and fragile-cargo protection; release to stop bracing.",
-  },
-  {
-    id: "pace-keys",
-    audience: "desktop",
-    input: "[ / ]",
-    action: "Step through Rest, Steady, and Swift pace",
   },
   {
     id: "scan-key",
@@ -321,13 +314,6 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     title: "Magic-water and weather reactions by cargo material",
     clarification: "Depth, current, and a one-time sweep penalty are live. Rain, heat, immersion, salinity, and magical water do not yet transform specific cargo materials.",
     keywords: ["magic water", "cargo material", "rain", "immersion", "salinity"],
-  },
-  {
-    id: "planned-loose-cargo-physics",
-    status: "planned",
-    title: "Dropped, tumbling, and drifting cargo",
-    clarification: "Cargo condition and delivery grades are live, but cargo currently stays in the pack and cannot fall down rocks or drift away as a world object.",
-    keywords: ["drop", "cargo physics", "tumble", "drift", "fall"],
   },
   {
     id: "planned-rocks-and-ladders",
@@ -580,9 +566,9 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "05",
     title: "Read the water before it takes the helm",
     shortTitle: "Water & safety",
-    summary: "Stamina pays for movement; stability measures control of body and load. Depth, current, pace, terrain, wind, turning, and bracing explain every change.",
-    keywords: ["stamina", "stability", "water", "depth", "scan", "sounding", "current", "swept", "arrow"],
-    controlIds: ["brace-key", "brace-button", "pace-keys", "scan-key", "scan-button"],
+    summary: "Stamina pays for movement; stability measures control of body and load. Terrain, grade, roughness, moisture, water, current, wind, turning, load, footwear, and BRACE explain every change.",
+    keywords: ["stamina", "stability", "water", "depth", "scan", "sounding", "current", "swept", "arrow", "fall", "stumble", "pace"],
+    controlIds: ["brace-key", "brace-button", "scan-key", "scan-button"],
     steps: [
       {
         id: "meters-scan-depth",
@@ -601,13 +587,19 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-stability",
         audience: "all",
         title: "Stability always names its cause",
-        body: "Unbraced travel lowers stability. Swift pace, rough ground, deep water, strong wind, and sharp turns can add stress. The HUD's stability line names the active causes. Standing still recovers control.",
+        body: "Stability is footing, not a second stamina bar. Sound ground can hold or restore it; steep grade, loose rock, slick moisture, deep water, cross-current, wind, sharp turns, and a shifting load can pull it down. The HUD names the active causes, while standing still or holding BRACE on a supported line recovers control.",
+      },
+      {
+        id: "meters-derived-pace",
+        audience: "all",
+        title: "Pace follows the ground",
+        body: "Pace has no selector. REST means you are still, exhausted, swept, or physically recovering; STEADY is ordinary controlled travel; SWIFT appears automatically when gravity carries you downhill or a deep current carries you with its flow. The same deterministic rule applies on keyboard and touch.",
       },
       {
         id: "meters-brace-desktop",
         audience: "desktop",
         title: "Brace through a difficult patch",
-        body: "Hold Shift while moving to trade speed for stability and fragile-cargo protection. Release it after the hazard; Steady pace preserves more stamina than Swift.",
+        body: "Hold Shift while moving to trade speed for stability and fragile-cargo protection. Release it after the hazard. BRACE cannot erase an unsupported edge, but it can turn a prepared crossing into a controlled one.",
         controlId: "brace-key",
       },
       {
@@ -621,7 +613,13 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-sweep",
         audience: "all",
         title: "Zero in deep water means swept",
-        body: "In current water at or above the deep-water threshold, stamina or stability reaching zero gives steering to a deterministic drift toward a safe bank. Pace, steering, and scanning return ashore. Cargo quantity stays with you, but carried cargo weathers once.",
+        body: "In current water at or above the deep-water threshold, stamina or stability reaching zero gives steering to a deterministic drift toward a safe bank. Steering and scanning return ashore. Cargo stays physically accounted for, but the fall can damage one exact lot and separate recoverable parcels that keep drifting with the water.",
+      },
+      {
+        id: "meters-fall-feedback",
+        audience: "all",
+        title: "A mishap is visible and physical",
+        body: "Hazardous crossings consume a durable traversal ordinal, so reloading cannot reroll the outcome. A stumble or fall briefly changes the courier's color and silhouette, speaks a small OOP, THUD, or WHHSH callout near the courier, and plays the matching simple tone. Falling can hurt cargo or break part of a lot loose; regain your feet before moving again.",
       },
     ],
     callouts: [
@@ -640,8 +638,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     title: "Deliveries are graded, not binary",
     shortTitle: "Cargo care",
     summary: "Load weight changes stamina and speed, while cargo property and condition determine what rough travel costs the delivery.",
-    keywords: ["cargo", "condition", "heavy", "fragile", "perishable", "freshness", "damage", "pack"],
-    controlIds: ["brace-key", "pace-keys"],
+    keywords: ["cargo", "condition", "heavy", "fragile", "perishable", "freshness", "damage", "pack", "magic water"],
+    controlIds: ["brace-key", "interact-key", "interact-button", "kit-key", "kit-button"],
     steps: [
       {
         id: "cargo-pack-capacity",
@@ -653,13 +651,33 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "cargo-stability-condition",
         audience: "all",
         title: "Low stability weathers a load",
-        body: "Fragile medicine reacts earliest to rough unbraced handling. Perishable food loses freshness gently while traveling. A current sweep applies one additional condition loss, never repeated damage on every drift step.",
+        body: "Fragile medicine reacts earliest to rough unbraced handling. Perishable food loses freshness gently while traveling. A stumble or fall damages one deterministic physical lot; a current sweep adds its own one-time impact instead of repeating the same carried-cargo damage on every drift step.",
       },
       {
         id: "cargo-protect",
         audience: "all",
         title: "Choose control over panic",
-        body: "Sound water, stop to recover, and take field-tool or Wayknot-assisted lines. On desktop, [ and ] can lower or raise pace before a difficult leg. Completed cache harbors improve recovery and shelter perishable food while you are there.",
+        body: "Sound water, stop to recover, hold BRACE through supported hazards, and take field-tool or Wayknot-assisted lines. Pace follows the terrain rather than a button. Completed cache harbors improve recovery and shelter perishable food while you are there.",
+      },
+      {
+        id: "cargo-drop-recover",
+        audience: "all",
+        title: "Dropped cargo remains in the world",
+        body: "Open KIT → PACK to DROP an exact stack quantity or a whole Promise or gear lot. The parcel keeps a stable identity, condition, wetness, contamination, and provenance while currents move it, grades tumble it, impacts weather it, and local magic water applies its material reaction. A dropped active Promise changes the objective to RECOVER CARGO and cannot be delivered or renegotiated until its exact quantity is back in custody.",
+      },
+      {
+        id: "cargo-recover-desktop",
+        audience: "desktop",
+        title: "Recover a nearby parcel",
+        body: "Move within the marked two-tile reach and press E when the contextual action says Recover parcel. A fine-pointer click selects the visible parcel but never recovers it remotely. Recovery preserves the parcel's material state and retires its former carried-lot identity instead of duplicating it.",
+        controlId: "interact-key",
+      },
+      {
+        id: "cargo-recover-mobile",
+        audience: "mobile",
+        title: "Tap the parcel, not a tiny time window",
+        body: "Tap a visible loose parcel. The courier charts toward it and recovers it automatically on entering the exact reach, so a harbor inspector cannot steal the tap. Open KIT from the mobile dock to inspect or drop carried lots.",
+        controlId: "interact-button",
       },
       {
         id: "cargo-arrival",
@@ -670,11 +688,11 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     ],
     callouts: [
       {
-        id: "cargo-current-boundary",
+        id: "cargo-physics-boundary",
         audience: "all",
         tone: "boundary",
-        title: "Cargo is not loose physics yet",
-        body: "In this build, cargo remains in the pack during a sweep. Dropping, rock tumbles, world-space drift, and material-specific magic-water reactions are planned, not hidden current rules.",
+        title: "Physical here, regional later",
+        body: "Loose cargo now drops, takes impact, drifts, tumbles on grade, reaches a loaded-region boundary safely, survives save and reload, and can be recovered. Mangrove and bramble snag callbacks exist only in the simulation kernel until living ecology is connected, so the field manual does not claim those catches yet.",
       },
     ],
   },
@@ -1138,7 +1156,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-planned-physics",
         audience: "all",
         title: "Planned traversal and economy phase",
-        body: "Loose cargo that can be dropped, swept away, or tumbled down rocks; ladder-gated obstacles; the remaining crafted-gear and locker bridges; trust-money rewards; and an anywhere upgrade system are planned and are not currently available actions.",
+        body: "Physical loose cargo, terrain-driven stumbles and falls, drift, grade tumble, impact damage, and recovery are live. Ladder-gated formations, regional parcel streaming, living mangrove or bramble catches, the remaining crafted-gear and locker bridges, trust-money rewards, and an anywhere upgrade system are planned and are not currently available actions.",
       },
     ],
     callouts: [
@@ -1153,7 +1171,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 7 as const;
+export const TUTORIAL_CONTENT_VERSION = 8 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

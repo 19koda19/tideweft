@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.1-alpha.1",
-      buildIdentity: "0.3.1-alpha.1",
-      gameplayContractVersion: 6,
-      tutorialVersion: 7,
+      version: "0.3.2-alpha.0",
+      buildIdentity: "0.3.2-alpha.0",
+      gameplayContractVersion: 7,
+      tutorialVersion: 8,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -74,9 +74,9 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(activeCopy).not.toMatch(/persistent world object that can tumble|infinite region streaming|wildlife encounters are live/iu);
+    expect(activeCopy).not.toMatch(/infinite region streaming|wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
     expect(limitations).toContain("not live");
-    expect(limitations).toContain("does not yet become a persistent world object");
+    expect(limitations).toContain("infinite streaming");
   });
 
   it("states the non-pausing field behavior without claiming a hidden time stop", () => {

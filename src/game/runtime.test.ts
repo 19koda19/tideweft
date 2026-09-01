@@ -24,6 +24,10 @@ import {
 import { tideAtTick } from "../sim/terrain";
 import { hashCanonical } from "../sim/util";
 import {
+  createFieldResourceEcologyState,
+  type FieldResourceEcologyState,
+} from "../sim/fieldResources";
+import {
   createPlayer,
   loadContractCargo,
   TILE_UNITS,
@@ -38,11 +42,20 @@ import {
   type SessionBaseline,
 } from "./sessionTypes";
 import { placeWayknot } from "./wayknots";
+import {
+  createTraversalFeedbackState,
+  type TraversalFeedbackState,
+} from "./traversalFeedback";
+import {
+  gameSaveEnvelopeIntegrity,
+  type PhysicalCargoState,
+} from "./physicalCargoState";
 
+const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
-    play(): void {}
+    play(...args: unknown[]): void { soundscapePlay(...args); }
     updateAmbience(): void {}
     destroy(): void {}
   },
@@ -195,16 +208,21 @@ class DeferredSaveRepository implements SaveRepository {
 
 interface TestGameSaveEnvelope {
   format: "tideweft-session";
-  version: 1;
+  version: number;
   world: string;
   player: PlayerState;
   session: GameSessionState;
+  fieldResources?: FieldResourceEcologyState;
+  traversalFeedback?: TraversalFeedbackState;
+  physicalCargo?: PhysicalCargoState;
+  integrity?: string;
 }
 
 let scheduledFrame: ((now: number) => void) | undefined;
 
 beforeEach(() => {
   scheduledFrame = undefined;
+  soundscapePlay.mockClear();
   vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
     scheduledFrame = callback;
     return 1;
@@ -220,6 +238,10 @@ afterEach(() => {
 
 function decodeGameSave(record: SaveRecord): TestGameSaveEnvelope {
   return JSON.parse(record.worldJson) as TestGameSaveEnvelope;
+}
+
+function resealGameSave(envelope: TestGameSaveEnvelope): void {
+  envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
 }
 
 function runtimeSaveRecord(
@@ -759,6 +781,53 @@ describe("perpetual new worlds", () => {
     resumed.destroy();
   });
 
+  it.each([
+    ["missing outer format fence", (record: SaveRecord, _envelope: TestGameSaveEnvelope) => {
+      delete record.payloadVersion;
+    }],
+    ["contradictory outer format fence", (record: SaveRecord, _envelope: TestGameSaveEnvelope) => {
+      record.payloadVersion = 2;
+    }],
+    ["unsealed player mutation", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+      envelope.player.stamina = 123_456;
+    }],
+    ["resealed noncanonical session", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+      envelope.session.posture = "hearth";
+      resealGameSave(envelope);
+    }],
+    ["resealed invalid field ecology", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+      if (!envelope.fieldResources) throw new Error("v3 fixture lost field ecology");
+      envelope.fieldResources = { ...envelope.fieldResources, version: 2 as 1 };
+      resealGameSave(envelope);
+    }],
+    ["resealed invalid traversal ledger", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+      if (!envelope.traversalFeedback) throw new Error("v3 fixture lost traversal feedback");
+      envelope.traversalFeedback = { ...envelope.traversalFeedback, completedSteps: -1 };
+      resealGameSave(envelope);
+    }],
+    ["resealed missing physical custody", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+      delete envelope.physicalCargo;
+      resealGameSave(envelope);
+    }],
+  ] as const)("quarantines a current v3 save with %s", async (_label, mutate) => {
+    const repository = new MemoryRepository();
+    const original = await createTideweftRuntime(repository);
+    await original.save();
+    original.destroy();
+    const record = repository.snapshot();
+    const envelope = decodeGameSave(record);
+
+    mutate(record, envelope);
+    record.worldJson = JSON.stringify(envelope);
+    repository.replace(record);
+
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().title.visible).toBe(true);
+    expect(rejected.getUIView().title.hasSave).toBe(false);
+    expect(rejected.getUIView().announcement?.message).toContain("could not be read");
+    rejected.destroy();
+  });
+
   it("rolls a valid maximum generation into a new era on deliberate restart", async () => {
     const oldWorld = createWorld("valid maximum generation", "calm");
     const record = runtimeSaveRecord(
@@ -1049,12 +1118,11 @@ describe("perpetual new worlds", () => {
 
     // The retry snapshots live state instead of replaying a stale failed
     // record, so changes made while storage is unavailable remain included.
-    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
     await vi.advanceTimersByTimeAsync(2_000);
     expect(repository.started).toHaveLength(2);
     const retryEnvelope = decodeGameSave(repository.started[1] as SaveRecord);
     expect(deserializeWorld(retryEnvelope.world).meta.seedText).toBe("retryable replacement");
-    expect(retryEnvelope.player.pace).toBe("swift");
+    expect(retryEnvelope.player.pace).toBe("steady");
     expect(repository.started[1]?.saveGeneration).toBe(1);
 
     repository.resolveNext();
@@ -1196,7 +1264,7 @@ describe("runtime clarity guards", () => {
     if (!channelView) throw new Error("fixture channel disappeared from the world view");
     placePlayerOnTile(player, channelView);
     player.pace = "swift";
-    player.stamina = 16_000;
+    player.stamina = 12_001;
     const repository = new MemoryRepository(runtimeSaveRecord(
       world,
       player,
@@ -1219,7 +1287,7 @@ describe("runtime clarity guards", () => {
     }
 
     expect(runtime.getRenderView().player.mode).toBe("camp");
-    expect(runtime.getUIView().player.pace).toBe("steady");
+    expect(runtime.getUIView().player.pace).toBe("rest");
     const shoreStamina = runtime.getUIView().player.stamina;
     expect(shoreStamina).toBeCloseTo(0.15, 6);
     expect(runtime.getRenderView().player.stamina).toBe(shoreStamina);
@@ -1268,7 +1336,9 @@ describe("runtime clarity guards", () => {
     advancePlayerSteps(runtime, 1);
 
     expect(runtime.getRenderView().player.mode).toBe("swept");
-    expect(runtime.getUIView().announcement?.message).toContain("STABILITY EMPTY IN DEEP WATER");
+    expect(runtime.getRenderView().player.incident?.kind).toBe("sweep");
+    expect(runtime.getUIView().announcement?.message).toContain("WHHSH!");
+    expect(runtime.getUIView().announcement?.message).toContain("lost balance");
     expect(runtime.getUIView().announcement?.message).not.toContain("STAMINA EMPTY");
     runtime.destroy();
   });
@@ -1310,13 +1380,10 @@ describe("runtime clarity guards", () => {
     runtime.dispatchUI({ type: "resume-world" });
 
     expect(runtime.getUIView().field.swept).toBe(true);
-    expect(runtime.getUIView().controls?.canChangePace).toBe(false);
     runtime.dispatchUI({ type: "scan" });
     expect(runtime.getUIView().announcement?.message).toContain("current has the helm");
     expect(runtime.getUIView().announcement?.message).toContain("sounding line is secured");
-    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
     expect(runtime.getUIView().player.pace).toBe("rest");
-    expect(runtime.getUIView().announcement?.message).toContain("pace returns ashore");
     runtime.destroy();
   });
 
@@ -1440,6 +1507,7 @@ describe("runtime clarity guards", () => {
     const unsoundedRecord = repository.snapshot();
     const unsoundedEnvelope = decodeGameSave(unsoundedRecord);
     unsoundedEnvelope.player.depthSoundings[flooded.index] = 0;
+    resealGameSave(unsoundedEnvelope);
     unsoundedRecord.updatedAt += 1;
     unsoundedRecord.worldJson = JSON.stringify(unsoundedEnvelope);
     repository.replace(unsoundedRecord);
@@ -1469,6 +1537,74 @@ describe("runtime clarity guards", () => {
     expect(runtime.getUIView().objective?.title).toContain("DELIVER");
     expect(runtime.getUIView().objective?.description).toContain("cargo is in your pack");
     runtime.destroy();
+  });
+
+  it("turns a dropped Promise into a persistent RECOVER objective and restores the same exact parcel", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    const offer = runtime.getUIView().contracts.find((contract) =>
+      contract.actionLabel === "Pick up cargo here");
+    if (!offer) throw new Error("fixture did not begin at a physical Promise pickup");
+    runtime.dispatchUI({ type: "contract", action: "accept", contractId: offer.id });
+    advancePlayerSteps(runtime, 10);
+    const promiseRow = runtime.getUIView().kit?.transportRows.find((row) =>
+      row.kind === "promise-cargo" && row.lotId !== undefined);
+    if (!promiseRow?.lotId || !promiseRow.dropQuantity) {
+      throw new Error("accepted Promise did not expose its exact carried lot");
+    }
+
+    runtime.dispatchUI({
+      type: "kit",
+      action: "drop",
+      lotId: promiseRow.lotId,
+      quantity: promiseRow.dropQuantity,
+    });
+
+    const loose = runtime.getRenderView().looseCargo ?? [];
+    expect(loose).toHaveLength(1);
+    expect(loose[0]).toMatchObject({
+      contentKind: "promise",
+      promiseContractId: Number(offer.id),
+      recovery: "reachable",
+    });
+    expect(runtime.getUIView().objective).toMatchObject({
+      id: `recover-${offer.id}`,
+      eyebrow: "Recover loose Promise cargo",
+    });
+    expect(runtime.getUIView().controls).toMatchObject({
+      canInteract: true,
+      interactLabel: "Recover parcel",
+    });
+    runtime.dispatchUI({ type: "contract", action: "renegotiate", contractId: offer.id });
+    expect(runtime.getUIView().announcement?.message).toContain("RECOVER CARGO");
+    const parcelId = loose[0]?.id;
+    if (!parcelId) throw new Error("dropped Promise lost its parcel identity");
+    await runtime.save();
+    const beforeReload = decodeGameSave(repository.snapshot()).physicalCargo;
+    expect(beforeReload?.looseWorld.entities[0]?.id).toBe(parcelId);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().objective?.id).toBe(`recover-${offer.id}`);
+    expect(resumed.getRenderView().looseCargo?.map(({ id }) => id)).toEqual([parcelId]);
+    resumed.dispatchRenderer({
+      type: "parcel-target",
+      parcelId,
+      recoverOnArrival: true,
+    });
+    expect(resumed.getRenderView().looseCargo).toEqual([]);
+    expect(resumed.getUIView().objective?.id).toBe(offer.id);
+    expect(resumed.getUIView().objective?.title).toContain("DELIVER");
+    const recoveredLotId = `loose:${parcelId}`;
+    expect(resumed.getUIView().kit?.transportRows.find((row) =>
+      row.kind === "promise-cargo")?.lotId).toBe(recoveredLotId);
+    await resumed.save();
+    const recoveredSave = decodeGameSave(repository.snapshot()).physicalCargo;
+    expect(recoveredSave?.looseWorld.entities).toEqual([]);
+    expect(recoveredSave?.carrier.lots.some((lot) => lot.id === recoveredLotId)).toBe(true);
+    expect(recoveredSave?.carrier.retiredLotIds).toContain(promiseRow.lotId);
+    resumed.destroy();
   });
 
   it("repairs an older accepted-without-pickup snapshot back to an offered promise", async () => {
@@ -1731,6 +1867,7 @@ describe("runtime clarity guards", () => {
     carriedSave.player.previousX = carriedSave.player.x;
     carriedSave.player.previousY = carriedSave.player.y;
     carriedSave.player.currentTrace = trace;
+    resealGameSave(carriedSave);
     repository.replace({
       ...carriedSaveRecord,
       worldJson: JSON.stringify(carriedSave),
@@ -1758,7 +1895,6 @@ describe("runtime clarity guards", () => {
 
     runtime.dispatchUI({ type: "resume-world" });
     const visibilitySave = runtime.save();
-    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
     const pagehideSave = runtime.save();
     expect(repository.started).toHaveLength(1);
 
@@ -1769,12 +1905,12 @@ describe("runtime clarity guards", () => {
     await vi.waitFor(() => expect(repository.started).toHaveLength(2));
     expect(visibilitySettled).toBe(false);
     // Only the latest of the two lifecycle snapshots reaches the repository.
-    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("swift");
+    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("steady");
 
     repository.resolveNext();
     await Promise.all([visibilitySave, pagehideSave]);
     const newest = decodeGameSave(repository.snapshot());
-    expect(newest.player.pace).toBe("swift");
+    expect(newest.player.pace).toBe("steady");
     expect(repository.started).toHaveLength(2);
     expect(repository.started[0]?.playTicks).toBe(repository.started[1]?.playTicks);
     runtime.destroy();
@@ -1787,16 +1923,15 @@ describe("runtime clarity guards", () => {
     const failedExpectation = expect(failedSave).rejects.toThrow("transient storage failure");
 
     runtime.dispatchUI({ type: "resume-world" });
-    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
     const recoverySave = runtime.save();
     repository.rejectNext(new Error("transient storage failure"));
     await failedExpectation;
     await vi.waitFor(() => expect(repository.started).toHaveLength(2));
-    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("swift");
+    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("steady");
 
     repository.resolveNext();
     await recoverySave;
-    expect(decodeGameSave(repository.snapshot()).player.pace).toBe("swift");
+    expect(decodeGameSave(repository.snapshot()).player.pace).toBe("steady");
     expect(runtime.getUIView().saveWarning).toBeUndefined();
     expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
     runtime.destroy();
@@ -1814,7 +1949,6 @@ describe("runtime clarity guards", () => {
 
     await vi.advanceTimersByTimeAsync(2_000);
     expect(repository.started).toHaveLength(2);
-    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
     const newerSave = runtime.save();
     expect(repository.started).toHaveLength(2);
 
@@ -1822,7 +1956,7 @@ describe("runtime clarity guards", () => {
     await vi.waitFor(() => expect(repository.started).toHaveLength(3));
     expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
     expect(runtime.getUIView().announcement?.message).not.toContain("LOCAL SAVE RESTORED");
-    expect(decodeGameSave(repository.started[2] as SaveRecord).player.pace).toBe("swift");
+    expect(decodeGameSave(repository.started[2] as SaveRecord).player.pace).toBe("steady");
 
     const newerFailure = expect(newerSave).rejects.toThrow("newest snapshot failed");
     repository.rejectNext(new Error("newest snapshot failed"));
@@ -1831,7 +1965,7 @@ describe("runtime clarity guards", () => {
 
     await vi.advanceTimersByTimeAsync(4_000);
     expect(repository.started).toHaveLength(4);
-    expect(decodeGameSave(repository.started[3] as SaveRecord).player.pace).toBe("swift");
+    expect(decodeGameSave(repository.started[3] as SaveRecord).player.pace).toBe("steady");
     repository.resolveNext();
     await vi.waitFor(() => expect(runtime.getUIView().saveWarning).toBeUndefined());
     expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");

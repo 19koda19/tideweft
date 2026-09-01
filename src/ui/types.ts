@@ -24,17 +24,27 @@ export type KitGearLocation = "carried" | "equipped" | "locker" | "deployed";
 /** Physical Promise/report load shown separately inside the combined pack. */
 export interface KitTransportRowUIView {
   readonly id: string;
+  /** Stable authoritative carrier-lot identity. Absent rows are not droppable. */
+  readonly lotId?: string;
   readonly kind: "promise-cargo" | "signed-report";
   readonly label: string;
   readonly detail: string;
   readonly loadMilli: number;
   /** Normalized 0..1 condition for physical cargo; absent for information. */
   readonly condition?: number;
+  /** Exact quantity released by the whole-row DROP action. */
+  readonly dropQuantity?: number;
+  readonly canDrop?: boolean;
+  readonly dropDisabledReason?: string;
 }
 
 /** One exact material/component stack in the carried pack or local locker. */
 export interface KitStackUIView {
   readonly id: string;
+  /** Stable material/component kind shared by split physical lots. */
+  readonly itemId: string;
+  /** Stable authoritative carrier-lot identity. Absent aggregate rows are not droppable. */
+  readonly lotId?: string;
   readonly tier: KitStackTier;
   readonly label: string;
   readonly quantity: number;
@@ -42,11 +52,15 @@ export interface KitStackUIView {
   readonly totalLoadMilli: number;
   readonly location: KitStackLocation;
   readonly locationLabel?: string;
+  readonly canDrop?: boolean;
+  readonly dropDisabledReason?: string;
 }
 
 /** One durable, stable-ID field item. Condition is normalized to 0..1. */
 export interface KitGearUIView {
   readonly id: string;
+  /** Stable authoritative carrier-lot identity. Absent compatibility gear cannot be dropped. */
+  readonly lotId?: string;
   readonly kind: string;
   readonly label: string;
   readonly detail: string;
@@ -61,6 +75,8 @@ export interface KitGearUIView {
   readonly repairDisabledReason?: string;
   readonly canDismantle: boolean;
   readonly dismantleDisabledReason?: string;
+  readonly canDrop?: boolean;
+  readonly dropDisabledReason?: string;
 }
 
 export interface KitRecipeIngredientUIView {
@@ -319,7 +335,6 @@ export interface ControlAvailabilityUIView {
   readonly canWayknot?: boolean;
   readonly wayknotLabel?: string;
   readonly wayknotHint?: string;
-  readonly canChangePace?: boolean;
   readonly canEndSession?: boolean;
 }
 
@@ -361,7 +376,6 @@ export type TideweftUICommand =
   | { readonly type: "scan" }
   | { readonly type: "interact" }
   | { readonly type: "wayknot" }
-  | { readonly type: "set-pace"; readonly pace: PaceView }
   | { readonly type: "set-session-shape"; readonly sessionShape: SessionShape }
   | {
       readonly type: "contract";
@@ -402,6 +416,14 @@ export type TideweftUICommand =
       readonly type: "kit";
       readonly action: "dismantle";
       readonly gearId: string;
+    }
+  | {
+      readonly type: "kit";
+      readonly action: "drop";
+      /** Exact stable carried-lot identity; presentation labels are never authoritative. */
+      readonly lotId: string;
+      /** Positive integer quantity. Durable gear always uses one. */
+      readonly quantity: number;
     };
 
 export interface TideweftUIOptions {

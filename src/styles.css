@@ -4774,6 +4774,17 @@ body {
   gap: 0.55rem;
 }
 
+.kit-row__actions,
+.kit-row > .kit-row__reason {
+  grid-column: 1 / -1;
+}
+
+.kit-row__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
 .kit-row__copy,
 .kit-row__meta,
 .kit-recipe__copy,
@@ -4961,6 +4972,11 @@ body {
   color: var(--foam-muted);
 }
 
+.kit-action--drop {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
 @media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
   .mobile-field-strip {
     grid-template-columns: auto auto minmax(0, 1fr);
@@ -5075,6 +5091,10 @@ body {
   }
 
   .kit-mend-row__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kit-row__actions {
     grid-template-columns: minmax(0, 1fr);
   }
 }

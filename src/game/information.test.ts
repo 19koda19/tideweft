@@ -163,12 +163,12 @@ describe("information as physical, sourced progress", () => {
 
     const projected = projectUIView(view, player, session);
     expect(projected.controls?.canScan).toBe(false);
-    expect(projected.controls?.canChangePace).toBe(false);
     expect(projected.controls?.canInteract).toBe(false);
     expect(projected.field.swept).toBe(true);
     expect(projected.field.sweptProgress).toBeLessThan(1);
     expect(projected.field.hint).toContain("Current has the helm");
-    expect(projected.field.hint).toContain("Pace, steering, and sounding return ashore");
+    expect(projected.field.hint).toContain("Steering and sounding return ashore");
+    expect(projected.field.hint).not.toContain("Pace");
   });
 
   it("explains that stock reports are documents and route tending requires a surveyed path", () => {

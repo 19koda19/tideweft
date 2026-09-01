@@ -3,6 +3,7 @@ import {
   STRAND_AUTOMATION_THRESHOLD,
   type ContractState,
   type ProjectKind,
+  type TerrainTileView,
   type WorldView,
 } from "../sim/types";
 import {
@@ -33,6 +34,27 @@ import {
   type GearBenefitId,
   type GearEffectContext,
 } from "./gearEffects";
+import { evaluateFooting, type FootingEvaluation, type FootingSurface } from "./footing";
+import {
+  evaluateFallRiskOnEntry,
+  type FallConsequenceQuote,
+  type FallRiskEvaluation,
+} from "./fallRisk";
+import {
+  acceptFallFeedback,
+  advanceTraversalFeedback,
+  traversalControlLocked,
+  type TraversalFeedbackState,
+  type TraversalIncident,
+} from "./traversalFeedback";
+import type { RootSeed } from "../sim/rng";
+import {
+  querySweptRockCrossing,
+  type LadderKitState,
+  type RockCrossingEffect,
+  type RockField,
+} from "../sim/rockTraversal";
+import { promiseCargoLoadMilli } from "./looseCargo";
 
 export const TILE_UNITS = 1_000;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
@@ -135,6 +157,17 @@ export interface PlayerControl {
   brace: boolean;
 }
 
+/** Runtime-owned deterministic address and persistent feedback ledger. */
+export interface PlayerTraversalContext {
+  readonly seed: RootSeed;
+  readonly actorId: number;
+  readonly feedback: TraversalFeedbackState;
+  readonly rocks?: RockField;
+  readonly ladders?: LadderKitState;
+  /** Runtime exact-lot integration applies the quoted cargo shock atomically. */
+  readonly deferFallCargoConsequence?: boolean;
+}
+
 export interface PlayerStepResult {
   moved: boolean;
   enteredTile: number | null;
@@ -148,6 +181,23 @@ export interface PlayerStepResult {
   sweepCause: "stamina" | "stability" | null;
   sweepSupport: SweepSupport;
   settlementId: number | null;
+  /** Present when the runtime supplied the persistent traversal sidecar. */
+  traversalFeedback: TraversalFeedbackState | null;
+  /** Present only on the fixed step that accepted a new stumble or fall. */
+  traversalIncident: TraversalIncident | null;
+  /** Authoritative entry result, including held crossings that consumed an ordinal. */
+  fallEvaluation: FallRiskEvaluation | null;
+  /** Canonical cardinal-edge order; diagonals may contain two accepted evaluations. */
+  fallEvaluations: readonly FallRiskEvaluation[];
+  /** Footing is evaluated every ordinary fixed step, independently of stamina. */
+  footing: FootingEvaluation | null;
+  /** Accepted contact order, used to prove that support never leaks across a corner. */
+  footingEvaluations: readonly FootingEvaluation[];
+  /** Raw non-fall handling/weather pressure for exact-lot runtime application. */
+  cargoConditionPressures?: readonly {
+    readonly contractId: number;
+    readonly conditionLoss: number;
+  }[];
 }
 
 const PACE_SPEED: Record<TravelPace, number> = {
@@ -230,7 +280,16 @@ export function stepPlayer(
   player: PlayerState,
   world: WorldView,
   control: PlayerControl,
+  traversal?: PlayerTraversalContext,
 ): PlayerStepResult {
+  let traversalFeedback = traversal
+    ? advanceTraversalFeedback(traversal.feedback)
+    : null;
+  let traversalIncident: TraversalIncident | null = null;
+  let fallEvaluation: FallRiskEvaluation | null = null;
+  const fallEvaluations: FallRiskEvaluation[] = [];
+  let footing: FootingEvaluation | null = null;
+  const footingEvaluations: FootingEvaluation[] = [];
   const priorVelocityX = player.velocityX;
   const priorVelocityY = player.velocityY;
   // A loaded or live player who has already lost all stability in the current
@@ -266,13 +325,27 @@ export function stepPlayer(
   // begin between tile centers and need one more interpolation step than its
   // display budget predicts; never return control until the path is complete.
   if (player.mode === "swept") {
-    return stepSweptPlayer(player, world, priorTileIndex);
+    return {
+      ...stepSweptPlayer(player, world, priorTileIndex),
+      traversalFeedback,
+      traversalIncident,
+      fallEvaluation,
+      fallEvaluations,
+      footing,
+      footingEvaluations,
+    };
   }
 
-  const hasInput = control.moveX !== 0 || control.moveY !== 0;
+  const recoveryLocked = traversalFeedback !== null
+    && traversalControlLocked(traversalFeedback);
+  const effectiveControl: PlayerControl = recoveryLocked
+    ? { moveX: 0, moveY: 0, brace: control.brace }
+    : control;
+  const hasInput = effectiveControl.moveX !== 0 || effectiveControl.moveY !== 0;
   const harbor = world.settlements.find((settlement) => settlement.tileIndex === priorTileIndex);
   const completedProject = harbor?.project.status === "complete" ? harbor.project.kind : undefined;
-  const bracing = control.brace || player.pace === "rest" || !hasInput;
+  player.pace = deriveContextualPace(player, world, priorTileIndex, effectiveControl);
+  const bracing = effectiveControl.brace || !hasInput;
   const loadRatio = Math.min(
     FIXED_POINT,
     Math.floor(
@@ -295,7 +368,7 @@ export function stepPlayer(
   let velocityX = 0;
   let velocityY = 0;
   if (hasInput && player.stamina > 12_000) {
-    const diagonal = control.moveX !== 0 && control.moveY !== 0;
+    const diagonal = effectiveControl.moveX !== 0 && effectiveControl.moveY !== 0;
     const baseSpeed = PACE_SPEED[player.pace];
     const hasStilts = hasFieldTool(player, "marsh-stilts")
       && (priorTile.terrain === "marsh" || priorTile.terrain === "tidal-flat");
@@ -317,26 +390,311 @@ export function stepPlayer(
       ? Math.max(480, Math.min(1_120, 760 + Math.floor(waterDepth / 4_000) + (hasSail ? 160 : 0)))
       : Math.max(430, 1_000 - Math.floor(waterDepth / 2_500));
     const burden = 1_000 - Math.floor(loadRatio / 3_200);
-    const braceFit = control.brace ? 620 : 1_000;
+    const braceFit = effectiveControl.brace ? 620 : 1_000;
     const speed = Math.max(
       24,
       Math.floor((baseSpeed * terrainDrag * waterFit * burden * braceFit) / 1_000_000_000_000),
     );
     const diagonalScale = diagonal ? 707 : 1_000;
-    velocityX = Math.floor((control.moveX * speed * diagonalScale) / 1_000);
-    velocityY = Math.floor((control.moveY * speed * diagonalScale) / 1_000);
+    velocityX = Math.floor((effectiveControl.moveX * speed * diagonalScale) / 1_000);
+    velocityY = Math.floor((effectiveControl.moveY * speed * diagonalScale) / 1_000);
   }
 
   const nextX = clamp(player.x + velocityX, TILE_UNITS / 2, world.terrain.width * TILE_UNITS - TILE_UNITS / 2);
   const nextY = clamp(player.y + velocityY, TILE_UNITS / 2, world.terrain.height * TILE_UNITS - TILE_UNITS / 2);
-  const destinationTile = world.terrain.tiles[tileIndexAt(nextX, nextY, world.terrain.width, world.terrain.height)];
-  const impassable = !destinationTile;
-  if (!impassable) {
-    player.x = nextX;
-    player.y = nextY;
+  const proposedTileIndex = tileIndexAt(nextX, nextY, world.terrain.width, world.terrain.height);
+  const destinationTile = world.terrain.tiles[proposedTileIndex];
+  const rockSweep = traversal?.rocks && traversal.ladders
+    ? querySweptRockCrossing(traversal.rocks, traversal.ladders, {
+        from: { x: player.x, y: player.y },
+        to: { x: nextX, y: nextY },
+        tileUnits: TILE_UNITS,
+      })
+    : null;
+  const turnPressure = traversalTurnPressure(
+    priorVelocityX,
+    priorVelocityY,
+    velocityX,
+    velocityY,
+  );
+  const fallbackEdges = cardinalFallbackEdges(
+    priorTileIndex,
+    proposedTileIndex,
+    world.terrain.width,
+  );
+  const cardinalEdges = rockSweep
+    ? rockSweep.edges.map((edge) => ({
+        committed: edge.committed,
+        effect: edge.effect,
+        fromTileIndex: edge.effect.fromTileIndex,
+        toTileIndex: edge.effect.toTileIndex,
+      }))
+    : fallbackEdges;
+  let acceptedTileIndex = priorTileIndex;
+  let acceptedRockTravelCostPermille = 1_000;
+  let acceptedWaterDrain = 0;
+  let acceptedWeatherExposure = false;
+  const stabilityBeforeFooting = player.stability;
+  let workingStability = player.stability;
+  let entryRejected = destinationTile === undefined
+    || (rockSweep !== null && !rockSweep.valid);
+  const contactFor = (
+    edgeOrigin: TerrainTileView,
+    edgeDestination: TerrainTileView,
+    effect: RockCrossingEffect | null,
+    edgeTurnPressure: number,
+  ) => {
+    const touchesMarsh = edgeOrigin.terrain === "marsh"
+      || edgeOrigin.terrain === "tidal-flat"
+      || edgeDestination.terrain === "marsh"
+      || edgeDestination.terrain === "tidal-flat";
+    const touchesRock = edgeOrigin.terrain === "ridge"
+      || edgeDestination.terrain === "ridge"
+      || (effect?.obstacleIds.length ?? 0) > 0;
+    const contactDepth = Math.max(edgeOrigin.waterDepth, edgeDestination.waterDepth);
+    const gear = queryCarriedGearEffects(player.craftingInventory, {
+      marsh: touchesMarsh,
+      wet: contactDepth > 40_000,
+      rock: touchesRock,
+      exposure: world.weather.intensity > 0,
+      gust: world.weather.windX !== 0 || world.weather.windY !== 0,
+    });
+    const originWayknots = wayknotEffectsAt(player, world, edgeOrigin.index);
+    const destinationWayknots = wayknotEffectsAt(player, world, edgeDestination.index);
+    const current = footingCurrentVector(
+      world,
+      contactDepth,
+      gear.currentForcePermille,
+      hasFieldTool(player, "tide-sail"),
+    );
+    const wind = footingWindVector(
+      world,
+      gear.gustStabilityLossPermille,
+      hasFieldTool(player, "storm-kite"),
+      Math.min(originWayknots.stabilityLossPermille, destinationWayknots.stabilityLossPermille),
+    );
+    const fixture = Math.max(
+      effect?.ladderSupport ?? 0,
+      footingFixtureSupport(world, edgeDestination.index, destinationWayknots),
+    );
+    const footwear = footingFootwearGrip(
+      gear.marshStabilityLossPermille,
+      gear.fallRiskPermille,
+      edgeOrigin.terrain,
+      edgeDestination.terrain,
+    );
+    const rockPressure = (effect?.fallRiskPermille ?? 0) * 1_000;
+    const evaluation = evaluateFooting({
+      stability: workingStability,
+      moving: velocityX !== 0 || velocityY !== 0,
+      surface: footingSurfaceFor(edgeOrigin, edgeDestination, rockPressure > 0),
+      elevationDelta: clamp(edgeDestination.elevation - edgeOrigin.elevation, -FIXED_POINT, FIXED_POINT),
+      roughness: Math.max(edgeOrigin.roughness, edgeDestination.roughness, rockPressure),
+      moisture: Math.max(edgeOrigin.moisture, edgeDestination.moisture),
+      waterDepth: contactDepth,
+      movement: normalizedFootingVector(velocityX, velocityY),
+      current,
+      wind,
+      weatherIntensity: world.weather.intensity,
+      turnPressure: edgeTurnPressure,
+      loadRatio,
+      cargoShift: 0,
+      pace: player.pace,
+      brace: bracing,
+      footwearGrip: footwear,
+      fixtureSupport: fixture,
+      reliableGround: world.settlements.some((settlement) =>
+        settlement.tileIndex === edgeOrigin.index || settlement.tileIndex === edgeDestination.index),
+      recoveryBonus: completedProject === "cache" ? 3_000 : 0,
+      unsupportedEdge: effect?.baseWalkingBlocked
+        ? effect.baseFallRiskPermille * 1_000
+        : 0,
+    });
+    return {
+      evaluation,
+      current,
+      wind,
+      fixture,
+      footwear,
+      destinationWayknots,
+      contactDepth,
+    };
+  };
+
+  if (!entryRejected && cardinalEdges.length === 0) {
+    const contact = contactFor(priorTile, priorTile, null, turnPressure);
+    footing = contact.evaluation;
+    footingEvaluations.push(contact.evaluation);
+    workingStability = contact.evaluation.stabilityAfter;
+    acceptedWaterDrain = waterEffortPerStep(
+      player,
+      contact.contactDepth,
+      contact.destinationWayknots.staminaCostPermille,
+    );
+    acceptedWeatherExposure = footingWindMagnitude(contact.wind) > 0;
+    // A porter whose footing reaches zero while already standing in a serious
+    // current has crossed a physical loss-of-control boundary even though no
+    // tile boundary was crossed. Resolve that transition once, before the
+    // existing sweep state takes control, so it receives the same durable
+    // incident identity and exactly-once feedback as an entry fall.
+    if (
+      traversal
+      && traversalFeedback
+      && contact.contactDepth >= SWEEP_DEPTH_THRESHOLD
+      && (stabilityDepletedAtStepStart || workingStability === 0)
+    ) {
+      const hazards = fallHazardsForEntry(priorTile, priorTile, contact.current, null);
+      fallEvaluation = evaluateFallRiskOnEntry({
+        seed: traversal.seed,
+        actorId: traversal.actorId,
+        traversalOrdinal: traversalFeedback.nextTraversalOrdinal,
+        entry: {
+          kind: "hazardous-tile",
+          fromTileId: priorTile.index,
+          toTileId: priorTile.index,
+        },
+        hazards,
+        porter: {
+          stability: workingStability,
+          loadRatio,
+          pace: player.pace,
+          wind: footingWindMagnitude(contact.wind),
+          turnPressure,
+          brace: bracing,
+          footwearGrip: contact.footwear,
+          fixtureSupport: contact.fixture,
+        },
+      });
+      if (fallEvaluation.valid && fallEvaluation.evaluated) {
+        const accepted = acceptFallFeedback(
+          traversalFeedback,
+          fallEvaluation,
+          traversal.actorId,
+          { x: player.x, y: player.y },
+        );
+        if (accepted.ok) {
+          fallEvaluations.push(fallEvaluation);
+          traversalFeedback = accepted.state;
+          traversalIncident = accepted.incident;
+        }
+      }
+    }
+  }
+
+  for (let edgeIndex = 0; edgeIndex < cardinalEdges.length; edgeIndex += 1) {
+    const edge = cardinalEdges[edgeIndex];
+    if (!edge) continue;
+    if (entryRejected || !edge.committed) break;
+    const edgeOrigin = world.terrain.tiles[edge.fromTileIndex];
+    const edgeDestination = world.terrain.tiles[edge.toTileIndex];
+    if (!edgeOrigin || !edgeDestination) {
+      entryRejected = true;
+      break;
+    }
+    const contact = contactFor(
+      edgeOrigin,
+      edgeDestination,
+      edge.effect,
+      edgeIndex === 0 ? turnPressure : 0,
+    );
+    if (
+      traversal
+      && traversalFeedback
+      && hazardousTraversalEntry(edgeOrigin, edgeDestination, world, edge.effect)
+    ) {
+      const hazards = fallHazardsForEntry(
+        edgeOrigin,
+        edgeDestination,
+        contact.current,
+        edge.effect,
+      );
+      fallEvaluation = evaluateFallRiskOnEntry({
+        seed: traversal.seed,
+        actorId: traversal.actorId,
+        traversalOrdinal: traversalFeedback.nextTraversalOrdinal,
+        entry: {
+          kind: edge.effect?.obstacleIds.length
+            || hazards.elevationDrop > 0
+            || hazards.grade >= 180_000
+            ? "hazardous-edge"
+            : "hazardous-tile",
+          fromTileId: edge.fromTileIndex,
+          toTileId: edge.toTileIndex,
+        },
+        hazards,
+        porter: {
+          stability: contact.evaluation.stabilityAfter,
+          loadRatio,
+          pace: player.pace,
+          wind: footingWindMagnitude(contact.wind),
+          turnPressure: edgeIndex === 0 ? turnPressure : 0,
+          brace: bracing,
+          footwearGrip: contact.footwear,
+          fixtureSupport: contact.fixture,
+        },
+      });
+      if (!fallEvaluation.valid || !fallEvaluation.evaluated) {
+        entryRejected = true;
+        break;
+      }
+      const accepted = acceptFallFeedback(
+        traversalFeedback,
+        fallEvaluation,
+        traversal.actorId,
+        positionWithinTile(nextX, nextY, edgeDestination),
+      );
+      if (!accepted.ok) {
+        entryRejected = true;
+        break;
+      }
+      fallEvaluations.push(fallEvaluation);
+      traversalFeedback = accepted.state;
+      traversalIncident = accepted.incident;
+    }
+    footing = contact.evaluation;
+    footingEvaluations.push(contact.evaluation);
+    workingStability = contact.evaluation.stabilityAfter;
+    acceptedTileIndex = edge.toTileIndex;
+    acceptedRockTravelCostPermille = Math.max(
+      acceptedRockTravelCostPermille,
+      edge.effect?.travelCostPermille ?? 1_000,
+    );
+    acceptedWaterDrain += waterEffortPerStep(
+      player,
+      contact.contactDepth,
+      contact.destinationWayknots.staminaCostPermille,
+    );
+    acceptedWeatherExposure ||= footingWindMagnitude(contact.wind) > 0;
+    // A physical mishap ends this fixed movement transaction. A diagonal's
+    // later cardinal edge is neither entered nor assigned another ordinal.
+    if (fallEvaluation?.fell || fallEvaluation?.stumbled) break;
+  }
+
+  const stoppedBeforeRequested = proposedTileIndex !== priorTileIndex
+    && acceptedTileIndex !== proposedTileIndex;
+  const movedWithinPriorTile = proposedTileIndex === priorTileIndex && !entryRejected;
+  const committedAnyEntry = acceptedTileIndex !== priorTileIndex;
+  if (movedWithinPriorTile || committedAnyEntry) {
+    const committedPoint = stoppedBeforeRequested
+      ? positionWithinTile(
+          nextX,
+          nextY,
+          world.terrain.tiles[acceptedTileIndex] ?? priorTile,
+        )
+      : { x: nextX, y: nextY };
+    player.x = committedPoint.x;
+    player.y = committedPoint.y;
+    player.stability = workingStability;
+    velocityX = player.x - player.previousX;
+    velocityY = player.y - player.previousY;
   } else {
     velocityX = 0;
     velocityY = 0;
+    footing = null;
+    player.stabilityTrend = "steady";
+    player.stabilityHint = fallEvaluation?.ordinalExhausted
+      ? "Footing ledger exhausted · this hazardous edge is safely blocked"
+      : "Hazardous edge rejected · footing state was not changed";
   }
 
   player.velocityX = velocityX;
@@ -355,16 +713,10 @@ export function stepPlayer(
       rawTerrainDrain,
       priorWayknotEffects.staminaCostPermille,
     );
-    const destinationTileIndex = tileIndexAt(nextX, nextY, world.terrain.width, world.terrain.height);
-    const destinationWayknotEffects = wayknotEffectsAt(player, world, destinationTileIndex);
-    const waterDrain = waterEffortPerStep(
-      player,
-      Math.max(waterDepth, destinationTile?.waterDepth ?? 0),
-      destinationWayknotEffects.staminaCostPermille,
-    );
+    const rockDrain = Math.max(0, acceptedRockTravelCostPermille - 1_000) * 3;
     player.stamina = Math.max(
       0,
-      player.stamina - paceDrain - burdenDrain - terrainDrain * 3 - waterDrain,
+      player.stamina - paceDrain - burdenDrain - terrainDrain * 3 - acceptedWaterDrain - rockDrain,
     );
     // The movement gate below this threshold prevents another step. Collapse
     // the remaining sliver of stamina into the explicit exhausted state so a
@@ -376,84 +728,52 @@ export function stepPlayer(
     player.stamina = Math.min(FIXED_POINT, player.stamina + recovery);
   }
 
-  const stabilityBefore = player.stability;
-  const turnStress = Math.abs(velocityX - priorVelocityX) + Math.abs(velocityY - priorVelocityY);
-  const rawWeatherStress = Math.floor((world.weather.intensity * (Math.abs(world.weather.windX) + Math.abs(world.weather.windY))) / 2_000_000);
-  const gearedWeatherStress = Math.floor(
-    (rawWeatherStress * carriedGearEffects.gustStabilityLossPermille) / 1_000,
-  );
-  const toolWeatherStress = hasFieldTool(player, "storm-kite") ? Math.floor(gearedWeatherStress * 0.45) : gearedWeatherStress;
-  const weatherStress = applyWayknotPermille(
-    toolWeatherStress,
-    priorWayknotEffects.stabilityLossPermille,
-  );
-  const rawSurfaceStress = Math.floor((priorTile.roughness * (velocityX || velocityY ? 1 : 0)) / 290);
-  const surfaceGearPermille = onMarshGround
-    ? carriedGearEffects.marshStabilityLossPermille
-    : onRidgeGround
-      ? carriedGearEffects.fallRiskPermille
-      : 1_000;
-  const surfaceStress = Math.floor((rawSurfaceStress * surfaceGearPermille) / 1_000);
-  const rawWaterStress = velocityX || velocityY
-    ? Math.floor(Math.max(0, waterDepth - 35_000) / 130)
-    : 0;
-  const waterStress = hasFieldTool(player, "tide-sail")
-    ? Math.floor(rawWaterStress * 0.55)
-    : rawWaterStress;
-  if (bracing) {
-    const cacheStability = completedProject === "cache" ? 8_000 : 0;
-    const braceRecovery = hasInput ? 4_200 : 13_000;
-    player.stability = Math.min(FIXED_POINT, player.stability + braceRecovery + cacheStability);
-  } else {
-    const paceStress = player.pace === "swift" ? 3_600 : 700;
-    player.stability = Math.max(
-      0,
-      player.stability - paceStress - surfaceStress - waterStress - weatherStress - turnStress * 20,
-    );
-  }
-  const stabilityDelta = player.stability - stabilityBefore;
-  if (stabilityDelta > 0) {
+  const stabilityDelta = footing ? player.stability - stabilityBeforeFooting : 0;
+  if (footing && stabilityDelta > 0) {
     player.stabilityTrend = "recovering";
     player.stabilityHint = completedProject === "cache"
-      ? "Recovering quickly in cache shelter"
-      : control.brace && hasInput
+      ? "Recovering on dependable cache decking"
+      : effectiveControl.brace && hasInput
         ? "Recovering while braced · Shift trades speed for control"
-        : "Recovering while still or resting";
-  } else if (stabilityDelta < 0) {
-    const causes: string[] = [];
-    if (player.pace === "swift") causes.push("swift pace");
-    if (surfaceStress > 500) causes.push("rough ground");
-    if (waterStress > 500) causes.push("deep water");
-    if (weatherStress > 500) causes.push("wind");
-    if (turnStress > 40) causes.push("sharp turning");
-    if (causes.length === 0) causes.push("unbraced travel");
+        : "Recovering while still or on sound footing";
+  } else if (footing && stabilityDelta < 0) {
+    const causes = footing.causes.map(({ label }) => label);
     player.stabilityTrend = "falling";
-    const windKnotHelp = rawWeatherStress > weatherStress
-      && priorWayknotEffects.stabilityLossPermille < WAYKNOT_PERMILLE
-      ? " · nearby Wind knot is softening the gusts"
-      : "";
-    player.stabilityHint = `Falling: ${causes.join(" + ")} · hold Shift to brace${windKnotHelp}`;
-  } else {
+    player.stabilityHint = `Footing falling: ${causes.join(" + ")} · BRACE or find support`;
+  } else if (footing) {
     player.stabilityTrend = "steady";
-    player.stabilityHint = "Stable · hold Shift while moving to brace";
+    player.stabilityHint = footing.causes.length > 0
+      ? `Holding through ${footing.causes.map(({ label }) => label).join(" + ")}`
+      : "Stable on sound footing";
   }
 
-  let damagedCargo = false;
+  let damagedCargo = applyTraversalConsequence(
+    player,
+    fallEvaluation?.consequenceQuote ?? null,
+    traversal?.deferFallCargoConsequence !== true,
+  );
+  if (traversalIncident) {
+    player.stabilityTrend = fallEvaluation?.fell ? "falling" : "steady";
+    player.stabilityHint = traversalIncident.label;
+  }
+  const cargoConditionPressures: Array<{ contractId: number; conditionLoss: number }> = [];
   for (const cargo of player.cargo) {
     const conditionBefore = cargo.condition;
+    let conditionPressure = 0;
 
     // Food rewards an efficient line and makes completed caches strategically
     // meaningful. Decay is gentle enough that every arrival remains useful.
     if (cargo.property === "perishable" && completedProject !== "cache") {
       const freshnessLoss = hasInput
-        ? player.pace === "swift" ? 190 : control.brace ? 58 : 96
+        ? player.pace === "swift" ? 190 : effectiveControl.brace ? 58 : 96
         : 24;
+      conditionPressure += freshnessLoss;
       cargo.condition = Math.max(0, cargo.condition - freshnessLoss);
     }
 
     // Fragile medicine begins reacting to rough handling much earlier than
     // ordinary cargo. Holding brace while moving trades speed for protection.
-    if (!bracing) {
+    if (!bracing && traversalIncident === null) {
       const shockThreshold = cargo.property === "fragile" ? 480_000 : cargo.property === "perishable" ? 150_000 : 90_000;
       if (player.stability < shockThreshold) {
         const baseShock = 120 + Math.floor((shockThreshold - player.stability) / 180);
@@ -464,11 +784,16 @@ export function stepPlayer(
             : cargo.property === "perishable"
               ? 1_150
               : 1_000;
-        cargo.condition = Math.max(0, cargo.condition - Math.floor((baseShock * shockMultiplier) / 1_000));
+        const handlingLoss = Math.floor((baseShock * shockMultiplier) / 1_000);
+        conditionPressure += handlingLoss;
+        cargo.condition = Math.max(0, cargo.condition - handlingLoss);
       }
     }
 
     if (cargo.condition < conditionBefore) damagedCargo = true;
+    if (conditionPressure > 0) {
+      cargoConditionPressures.push({ contractId: cargo.contractId, conditionLoss: conditionPressure });
+    }
   }
 
   const currentTileIndex = playerTileIndex(player);
@@ -492,7 +817,7 @@ export function stepPlayer(
       if (entered.terrain === "ridge") {
         serviceCarriedGear(player, { rock: true }, "ridge-grip");
       }
-      if (rawWeatherStress > 0) {
+      if (acceptedWeatherExposure) {
         serviceCarriedGear(
           player,
           { exposure: true, gust: world.weather.windX !== 0 || world.weather.windY !== 0 },
@@ -539,7 +864,12 @@ export function stepPlayer(
       if (sweepCause === "stamina") player.stamina = 0;
       // A sweep is a setback, not deletion. Weather cargo once at the moment
       // control is lost, then preserve quantity and trace every drift tile.
-      for (const cargo of player.cargo) cargo.condition = Math.max(0, cargo.condition - 35_000);
+      for (const cargo of player.cargo) {
+        cargo.condition = Math.max(0, cargo.condition - 35_000);
+        const pressure = cargoConditionPressures.find((entry) => entry.contractId === cargo.contractId);
+        if (pressure) pressure.conditionLoss += 35_000;
+        else cargoConditionPressures.push({ contractId: cargo.contractId, conditionLoss: 35_000 });
+      }
       damagedCargo = damagedCargo || player.cargo.length > 0;
       player.surveyTrace = [currentTileIndex];
       player.harborTrail = [];
@@ -568,7 +898,288 @@ export function stepPlayer(
     sweepCause,
     sweepSupport,
     settlementId: settlementAtPlayer(player, world),
+    traversalFeedback,
+    traversalIncident,
+    fallEvaluation,
+    fallEvaluations,
+    footing,
+    footingEvaluations,
+    cargoConditionPressures,
   };
+}
+
+function deriveContextualPace(
+  player: PlayerState,
+  world: WorldView,
+  priorTileIndex: number,
+  control: PlayerControl,
+): TravelPace {
+  if ((control.moveX === 0 && control.moveY === 0) || player.stamina <= 12_000) return "rest";
+  const prior = world.terrain.tiles[priorTileIndex];
+  if (!prior) return "steady";
+  const targetX = clamp(prior.x + control.moveX, 0, world.terrain.width - 1);
+  const targetY = clamp(prior.y + control.moveY, 0, world.terrain.height - 1);
+  const target = world.terrain.tiles[targetY * world.terrain.width + targetX];
+  const downhill = target !== undefined && target.elevation <= prior.elevation - 90_000;
+  const current = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+  const currentAssist = Math.max(prior.waterDepth, target?.waterDepth ?? 0) >= SWEEP_DEPTH_THRESHOLD
+    && control.moveX * current.x + control.moveY * current.y > 0;
+  return downhill || currentAssist ? "swift" : "steady";
+}
+
+function normalizedFootingVector(x: number, y: number): { readonly x: number; readonly y: number } {
+  const magnitude = Math.max(Math.abs(x), Math.abs(y));
+  if (magnitude <= 0 || !Number.isFinite(magnitude)) return { x: 0, y: 0 };
+  return {
+    x: clamp(Math.trunc((x * FIXED_POINT) / magnitude), -FIXED_POINT, FIXED_POINT),
+    y: clamp(Math.trunc((y * FIXED_POINT) / magnitude), -FIXED_POINT, FIXED_POINT),
+  };
+}
+
+function traversalTurnPressure(
+  priorX: number,
+  priorY: number,
+  nextX: number,
+  nextY: number,
+): number {
+  if ((priorX === 0 && priorY === 0) || (nextX === 0 && nextY === 0)) return 0;
+  const prior = normalizedFootingVector(priorX, priorY);
+  const next = normalizedFootingVector(nextX, nextY);
+  const dot = Math.trunc((prior.x * next.x + prior.y * next.y) / FIXED_POINT);
+  return clamp(Math.trunc((FIXED_POINT - clamp(dot, -FIXED_POINT, FIXED_POINT)) / 2), 0, FIXED_POINT);
+}
+
+function footingCurrentVector(
+  world: WorldView,
+  waterDepth: number,
+  gearPermille: number,
+  hasTideSail: boolean,
+): { readonly x: number; readonly y: number } {
+  if (waterDepth <= 35_000) return { x: 0, y: 0 };
+  const direction = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+  const base = clamp(260_000 + Math.trunc(world.tide.level * 0.55), 0, FIXED_POINT);
+  const sailPermille = hasTideSail && waterDepth > 180_000 ? 600 : 1_000;
+  const magnitude = Math.trunc(
+    (base * clamp(gearPermille, 0, 1_000) * sailPermille) / 1_000_000,
+  );
+  return { x: direction.x * magnitude, y: direction.y * magnitude };
+}
+
+function footingWindVector(
+  world: WorldView,
+  gearPermille: number,
+  hasStormKite: boolean,
+  wayknotPermille: number,
+): { readonly x: number; readonly y: number } {
+  const toolPermille = hasStormKite ? 450 : 1_000;
+  const combinedPermille = Math.trunc(
+    (clamp(gearPermille, 0, 1_000) * clamp(wayknotPermille, 0, 1_000) * toolPermille)
+      / 1_000_000,
+  );
+  return {
+    // Weather vectors describe the front's mean motion. Exposed footing feels
+    // peak gust force, so use a bounded 2x impulse here. This keeps ordinary
+    // breezes beneath firm-ground tolerance while making a live storm and its
+    // weather-cape mitigation mechanically observable.
+    x: clamp(Math.trunc((world.weather.windX * combinedPermille * 2) / 1_000), -FIXED_POINT, FIXED_POINT),
+    y: clamp(Math.trunc((world.weather.windY * combinedPermille * 2) / 1_000), -FIXED_POINT, FIXED_POINT),
+  };
+}
+
+function footingWindMagnitude(vector: { readonly x: number; readonly y: number }): number {
+  return clamp(Math.max(Math.abs(vector.x), Math.abs(vector.y)), 0, FIXED_POINT);
+}
+
+function footingFixtureSupport(
+  world: WorldView,
+  tileIndex: number,
+  effects: WayknotEffects,
+): number {
+  let support = world.settlements.some((settlement) => settlement.tileIndex === tileIndex)
+    ? 850_000
+    : 0;
+  for (const influence of effects.influences) {
+    if (influence.kind === "reed-mat" && influence.distance === 0) {
+      support = Math.max(support, Math.trunc(influence.effectStrength * 0.58));
+    }
+    if (influence.kind === "tide-anchor") {
+      support = Math.max(support, (1_000 - influence.sweepRiskPermille) * 1_000);
+    }
+  }
+  return clamp(support, 0, FIXED_POINT);
+}
+
+function footingFootwearGrip(
+  marshPermille: number,
+  rockPermille: number,
+  origin: TerrainTileView["terrain"],
+  destination: TerrainTileView["terrain"],
+): number {
+  const touchesSoft = origin === "marsh" || origin === "tidal-flat"
+    || destination === "marsh" || destination === "tidal-flat";
+  const touchesRock = origin === "ridge" || destination === "ridge";
+  return clamp(Math.max(
+    touchesSoft ? (1_000 - marshPermille) * 1_000 : 0,
+    touchesRock ? (1_000 - rockPermille) * 1_000 : 0,
+  ), 0, FIXED_POINT);
+}
+
+function footingSurfaceFor(
+  origin: TerrainTileView,
+  destination: TerrainTileView | undefined,
+  crossesRock: boolean,
+): FootingSurface {
+  const wettest = Math.max(origin.waterDepth, destination?.waterDepth ?? 0);
+  if (wettest > 35_000) return "water";
+  if (crossesRock || origin.terrain === "ridge" || destination?.terrain === "ridge") return "rock";
+  if (
+    origin.terrain === "marsh"
+    || origin.terrain === "tidal-flat"
+    || destination?.terrain === "marsh"
+    || destination?.terrain === "tidal-flat"
+  ) return "soft";
+  return "firm";
+}
+
+function hazardousTraversalEntry(
+  origin: TerrainTileView,
+  destination: TerrainTileView,
+  world: WorldView,
+  rock: RockCrossingEffect | null,
+): boolean {
+  const grade = Math.abs(destination.elevation - origin.elevation);
+  const depth = Math.max(origin.waterDepth, destination.waterDepth);
+  const roughness = Math.max(origin.roughness, destination.roughness);
+  const wind = Math.max(Math.abs(world.weather.windX), Math.abs(world.weather.windY));
+  return depth > SAFE_BANK_DEPTH
+    || (rock?.highRisk ?? false)
+    || (rock?.fallRiskPermille ?? 0) > 0
+    || origin.terrain === "ridge"
+    || destination.terrain === "ridge"
+    || grade >= 180_000
+    || roughness >= 650_000
+    || Math.trunc((wind * world.weather.intensity) / FIXED_POINT) >= 400_000;
+}
+
+function fallHazardsForEntry(
+  origin: TerrainTileView,
+  destination: TerrainTileView,
+  current: { readonly x: number; readonly y: number },
+  rockEffect: RockCrossingEffect | null,
+): {
+  readonly grade: number;
+  readonly rock: number;
+  readonly current: number;
+  readonly depth: number;
+  readonly brambleVines: number;
+  readonly elevationDrop: number;
+  readonly unsupportedGap: number;
+  readonly surfaceSlip: number;
+} {
+  const delta = destination.elevation - origin.elevation;
+  const depth = clamp(Math.max(origin.waterDepth, destination.waterDepth), 0, FIXED_POINT);
+  const rock = Math.max(
+    rockEffect?.fallRiskPermille ? rockEffect.fallRiskPermille * 1_000 : 0,
+    origin.terrain === "ridge" || destination.terrain === "ridge"
+      ? Math.max(650_000, origin.roughness, destination.roughness)
+      : 0,
+  );
+  const softness = destination.terrain === "marsh" || destination.terrain === "tidal-flat"
+    ? destination.moisture
+    : 0;
+  return {
+    grade: clamp(Math.abs(delta), 0, FIXED_POINT),
+    rock: clamp(rock, 0, FIXED_POINT),
+    current: depth > 35_000 ? footingWindMagnitude(current) : 0,
+    depth,
+    brambleVines: 0,
+    elevationDrop: clamp(Math.max(0, -delta), 0, FIXED_POINT),
+    unsupportedGap: 0,
+    surfaceSlip: clamp(Math.max(softness, Math.trunc(depth * 0.45)), 0, FIXED_POINT),
+  };
+}
+
+function positionWithinTile(
+  x: number,
+  y: number,
+  tile: TerrainTileView,
+): { readonly x: number; readonly y: number } {
+  return {
+    x: clamp(x, tile.x * TILE_UNITS, (tile.x + 1) * TILE_UNITS - 1),
+    y: clamp(y, tile.y * TILE_UNITS, (tile.y + 1) * TILE_UNITS - 1),
+  };
+}
+
+function cardinalFallbackEdges(
+  fromTileIndex: number,
+  toTileIndex: number,
+  width: number,
+): readonly {
+  readonly committed: true;
+  readonly effect: null;
+  readonly fromTileIndex: number;
+  readonly toTileIndex: number;
+}[] {
+  if (fromTileIndex === toTileIndex) return [];
+  const fromX = fromTileIndex % width;
+  const fromY = Math.floor(fromTileIndex / width);
+  const toX = toTileIndex % width;
+  const toY = Math.floor(toTileIndex / width);
+  const edges: Array<{
+    readonly committed: true;
+    readonly effect: null;
+    readonly fromTileIndex: number;
+    readonly toTileIndex: number;
+  }> = [];
+  let currentX = fromX;
+  let currentY = fromY;
+  while (currentX !== toX) {
+    const nextX = currentX + Math.sign(toX - currentX);
+    edges.push({
+      committed: true,
+      effect: null,
+      fromTileIndex: currentY * width + currentX,
+      toTileIndex: currentY * width + nextX,
+    });
+    currentX = nextX;
+  }
+  while (currentY !== toY) {
+    const nextY = currentY + Math.sign(toY - currentY);
+    edges.push({
+      committed: true,
+      effect: null,
+      fromTileIndex: currentY * width + currentX,
+      toTileIndex: nextY * width + currentX,
+    });
+    currentY = nextY;
+  }
+  return edges;
+}
+
+function applyTraversalConsequence(
+  player: PlayerState,
+  quote: FallConsequenceQuote | null,
+  damageCargo = true,
+): boolean {
+  if (!quote) return false;
+  player.stamina = Math.max(0, player.stamina - quote.staminaShock);
+  player.stability = Math.max(0, player.stability - quote.stabilityShock);
+  if (!damageCargo) return false;
+  let damaged = false;
+  for (const cargo of player.cargo) {
+    const resistancePermille = cargo.property === "heavy"
+      ? 420
+      : cargo.property === "fragile"
+        ? 1_000
+        : cargo.property === "perishable"
+          ? 800
+          : 620;
+    const conditionLoss = Math.max(1, Math.trunc((quote.cargoShock * resistancePermille) / 1_000));
+    const before = cargo.condition;
+    cargo.condition = Math.max(0, cargo.condition - conditionLoss);
+    damaged ||= cargo.condition < before;
+  }
+  return damaged;
 }
 
 /**
@@ -600,13 +1211,6 @@ export function pulseScan(player: PlayerState, world: WorldView): boolean {
     }
   }
   return true;
-}
-
-export function cyclePace(player: PlayerState, delta: -1 | 1): void {
-  if (player.mode === "swept") return;
-  const paces: TravelPace[] = ["rest", "steady", "swift"];
-  const index = paces.indexOf(player.pace);
-  player.pace = paces[clamp(index + delta, 0, paces.length - 1)] ?? "steady";
 }
 
 /**
@@ -783,10 +1387,10 @@ export function cargoWeight(player: PlayerState): number {
 
 /** Promise cargo and a signed report retain their legacy whole-load accounting. */
 export function transportLoadMilli(player: Pick<PlayerState, "cargo" | "report">): number {
-  const cargoLoad = player.cargo.reduce((total, cargo) => {
-    const multiplier = cargo.property === "heavy" ? 2 : cargo.property === "fragile" ? 1.25 : 1;
-    return total + Math.ceil(cargo.quantity * multiplier) * PACK_LOAD_MILLI_PER_UNIT;
-  }, 0);
+  const cargoLoad = player.cargo.reduce(
+    (total, cargo) => total + promiseCargoLoadMilli(cargo.quantity, cargo.property),
+    0,
+  );
   return cargoLoad + (player.report ? PACK_LOAD_MILLI_PER_UNIT : 0);
 }
 
@@ -800,8 +1404,7 @@ export function cargoWeightMilli(
 export function loadContractCargo(player: PlayerState, contract: ContractState): boolean {
   if (player.activeContractId !== null || contract.status !== "offered") return false;
   const property = cargoProperty(contract.resource);
-  const multiplier = property === "heavy" ? 2 : property === "fragile" ? 1.25 : 1;
-  const promisedLoadMilli = Math.ceil(contract.quantity * multiplier) * PACK_LOAD_MILLI_PER_UNIT;
+  const promisedLoadMilli = promiseCargoLoadMilli(contract.quantity, property);
   const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
   if (cargoWeightMilli(player) + promisedLoadMilli > capacityMilli) return false;
   player.cargo = [
@@ -896,7 +1499,15 @@ function stepSweptPlayer(
   player: PlayerState,
   world: WorldView,
   priorTileIndex: number,
-): PlayerStepResult {
+): Omit<
+  PlayerStepResult,
+  | "traversalFeedback"
+  | "traversalIncident"
+  | "fallEvaluation"
+  | "fallEvaluations"
+  | "footing"
+  | "footingEvaluations"
+> {
   const targetIndex = player.sweepPath[0];
   const target = targetIndex === undefined ? undefined : world.terrain.tiles[targetIndex];
   const support = player.sweepSupport;
@@ -981,13 +1592,9 @@ function stepSweptPlayer(
   if (reachedBank) {
     const rescued = support !== null;
     player.mode = rescued ? "rescued" : "camp";
-    // A sweep temporarily forces the internal rest pace while the current has
-    // control. Returning the player to steady here is essential now that pace
-    // is contextual rather than a required HUD choice: otherwise a touch path
-    // accepted immediately after recovery has zero velocity and quietly
-    // rebuilds stamina instead of moving (which makes the stamina meter appear
-    // stale on re-entry).
-    player.pace = "steady";
+    // The porter is still physically recovering on the bank. The first later
+    // accepted movement step derives steady (or force-driven swift) itself.
+    player.pace = "rest";
     player.stamina = rescued ? 240_000 : 150_000;
     player.stability = Math.max(player.stability, rescued ? 460_000 : 320_000);
     player.stabilityTrend = "recovering";

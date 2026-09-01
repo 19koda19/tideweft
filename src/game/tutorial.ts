@@ -89,7 +89,7 @@ export function tutorialObjective(tutorial: TutorialState, player: PlayerState):
         id: "tutorial-travel",
         eyebrow: "Keep the cargo",
         title: "Reach the named destination",
-        description: "Swift pace is fast but tiring. Hold Shift to brace while moving; you trade speed for stability. Weathered cargo still helps, so a rough trip is never a dead run.",
+        description: "Pace follows terrain and current automatically. Hold Shift—or BRACE on touch—through supported hazards: falls can damage or separate physical cargo, but visible parcels remain recoverable and weathered deliveries still matter.",
         progress: player.cargo[0]?.condition ? player.cargo[0].condition / 1_000_000 : 0,
         progressLabel: `${Math.round(((player.cargo[0]?.condition ?? 0) / 1_000_000) * 100)}% cargo condition`,
         why: "Arrival is graded, not binary. Recovery and improvisation are part of the story.",

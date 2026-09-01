@@ -11,10 +11,36 @@ import { visibleWaterPresentation } from "./waterPresentation";
 import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
+import {
+  EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE,
+  beginLooseCargoPointerPress,
+  beginLooseCargoTouch,
+  cancelLooseCargoPointerPress,
+  endLooseCargoTouch,
+  hitTestLooseCargoScreen,
+  keyboardLooseCargoRecoveryCommand,
+  looseCargoHitRadiusPixels,
+  looseCargoRecoveryLabel,
+  looseCargoTouchCanDispatch,
+  looseCargoVisual,
+  moveLooseCargoPointerPress,
+  nearestRecoverableLooseCargo,
+  releaseLooseCargoPointerCaptures,
+  resolveLooseCargoPointerRelease,
+  safeLooseCargoViews,
+  type LooseCargoPointerPress,
+  type LooseCargoTouchSequence,
+} from "./looseCargoPresentation";
+import {
+  placeIncidentCallout,
+  playerBalancePresentation,
+  type PlayerBalancePresentation,
+} from "./playerPresentation";
 
 import type {
   CameraView,
   FieldResourceNodeView,
+  LooseCargoView,
   ParticleView,
   PorterView,
   RendererCommand,
@@ -86,20 +112,32 @@ interface ScanRipple {
   startedAt: number;
 }
 
-interface HoverTarget {
-  entity: "settlement" | "porter" | "route" | "resource";
-  id: string;
+type HoverTarget =
+  | { readonly entity: "settlement" | "porter" | "route" | "resource"; readonly id: string }
+  | { readonly entity: "parcel"; readonly id: string };
+
+interface ClickCandidate {
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startY: number;
+  readonly shiftKey: boolean;
+  readonly coarsePointer: boolean;
 }
 
 interface AttachedCanvasListeners {
   element: HTMLCanvasElement;
   pointerDown: (event: PointerEvent) => void;
   pointerMove: (event: PointerEvent) => void;
+  pointerUp: (event: PointerEvent) => void;
+  pointerCancel: (event: PointerEvent) => void;
+  lostPointerCapture: (event: PointerEvent) => void;
   pointerLeave: () => void;
   contextMenu: (event: MouseEvent) => void;
   keyDown: (event: KeyboardEvent) => void;
   keyUp: (event: KeyboardEvent) => void;
   blur: () => void;
+  windowBlur: () => void;
+  visibilityChange: () => void;
   wheel: (event: WheelEvent) => void;
 }
 
@@ -239,6 +277,9 @@ export function createTideweftRenderer(
   let active = true;
   let hoverTarget: HoverTarget | null = null;
   let pointerWorld: WorldPoint | null = null;
+  let clickCandidate: ClickCandidate | null = null;
+  let parcelPress: LooseCargoPointerPress | null = null;
+  let touchSequence: LooseCargoTouchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
   let lastMovement = "0,0";
   const heldDirections = new Set<string>();
   const heldBraceKeys = new Set<string>();
@@ -306,6 +347,34 @@ export function createTideweftRenderer(
       y: (localY - rectangle.height / 2) / camera.zoom + camera.y,
     };
   };
+
+  const clientToScreen = (clientX: number, clientY: number): WorldPoint => {
+    const rectangle = canvasElement?.getBoundingClientRect();
+    return {
+      x: clientX - (rectangle?.left ?? 0),
+      y: clientY - (rectangle?.top ?? 0),
+    };
+  };
+
+  const looseCargoViews = (): readonly LooseCargoView[] =>
+    safeLooseCargoViews(latestView?.looseCargo ?? []);
+
+  const releaseActiveTouchPointerCaptures = (): void => {
+    releaseLooseCargoPointerCaptures(canvasElement, touchSequence.activePointerIds);
+  };
+
+  const parcelHitAt = (
+    screen: WorldPoint,
+    coarsePointer: boolean,
+  ) => hitTestLooseCargoScreen(
+    looseCargoViews(),
+    screen,
+    looseCargoHitRadiusPixels(
+      coarsePointer,
+      Math.max(6, (latestView?.terrain.tileSize ?? 24) * camera.zoom * 0.28),
+    ),
+    (parcel) => worldToScreen(parcel.position),
+  );
 
   const findHoverTarget = (point: WorldPoint): HoverTarget | null => {
     const view = latestView;
@@ -395,22 +464,26 @@ export function createTideweftRenderer(
         emit({ type: "scan" });
         break;
       case "KeyE":
-      case "Enter":
-        emit({ type: "interact" });
+      case "Enter": {
+        const view = latestView;
+        const parcel = view
+          ? nearestRecoverableLooseCargo(
+              looseCargoViews(),
+              view.player.position,
+              Math.max(1, view.terrain.tileSize * 0.9),
+            )
+          : null;
+        const parcelCommand = keyboardLooseCargoRecoveryCommand(parcel);
+        if (parcelCommand) {
+          emit(parcelCommand);
+        } else {
+          emit({ type: "interact" });
+        }
         break;
+      }
       case "KeyF":
         event.preventDefault();
         emit({ type: "wayknot" });
-        break;
-      case "Equal":
-      case "NumpadAdd":
-      case "BracketRight":
-        emit({ type: "pace-step", delta: 1 });
-        break;
-      case "Minus":
-      case "NumpadSubtract":
-      case "BracketLeft":
-        emit({ type: "pace-step", delta: -1 });
         break;
       case "Escape":
         emit({ type: "cancel" });
@@ -435,11 +508,16 @@ export function createTideweftRenderer(
     const { element } = attached;
     element.removeEventListener("pointerdown", attached.pointerDown);
     element.removeEventListener("pointermove", attached.pointerMove);
+    element.removeEventListener("pointerup", attached.pointerUp);
+    element.removeEventListener("pointercancel", attached.pointerCancel);
+    element.removeEventListener("lostpointercapture", attached.lostPointerCapture);
     element.removeEventListener("pointerleave", attached.pointerLeave);
     element.removeEventListener("contextmenu", attached.contextMenu);
     element.removeEventListener("keydown", attached.keyDown);
     element.removeEventListener("keyup", attached.keyUp);
     element.removeEventListener("blur", attached.blur);
+    window.removeEventListener("blur", attached.windowBlur);
+    document.removeEventListener("visibilitychange", attached.visibilityChange);
     element.removeEventListener("wheel", attached.wheel);
     attached = null;
   };
@@ -447,30 +525,156 @@ export function createTideweftRenderer(
   const attachCanvasListeners = (element: HTMLCanvasElement): void => {
     detachCanvasListeners();
 
+    const releasePointerCapture = (pointerId: number): void => {
+      releaseLooseCargoPointerCaptures(element, [pointerId]);
+    };
+
+    const endTouch = (pointerId: number): void => {
+      touchSequence = endLooseCargoTouch(touchSequence, pointerId);
+      releasePointerCapture(pointerId);
+    };
+
+    const clearPointer = (pointerId?: number): void => {
+      const capturedPointer = pointerId ?? clickCandidate?.pointerId ?? parcelPress?.pointerId;
+      if (pointerId === undefined || clickCandidate?.pointerId === pointerId) clickCandidate = null;
+      parcelPress = cancelLooseCargoPointerPress(parcelPress, pointerId);
+      if (capturedPointer !== undefined) releasePointerCapture(capturedPointer);
+    };
+
     const pointerDown = (event: PointerEvent): void => {
       if (event.button !== 0) return;
       element.focus({ preventScroll: true });
+      if (event.pointerType === "touch") {
+        touchSequence = beginLooseCargoTouch(touchSequence, event.pointerId);
+        element.setPointerCapture?.(event.pointerId);
+        if (touchSequence.suppressed) {
+          clickCandidate = null;
+          parcelPress = null;
+          hoverTarget = null;
+          event.preventDefault();
+          return;
+        }
+      }
+      const coarsePointer = usesCoarseWorldPointer(
+        event.pointerType,
+        window.matchMedia?.("(pointer: coarse)").matches ?? false,
+      );
+      const screen = clientToScreen(event.clientX, event.clientY);
+      const radius = looseCargoHitRadiusPixels(
+        coarsePointer,
+        Math.max(6, (latestView?.terrain.tileSize ?? 24) * camera.zoom * 0.28),
+      );
+      parcelPress = beginLooseCargoPointerPress(
+        event.pointerId,
+        screen,
+        looseCargoViews(),
+        radius,
+        coarsePointer ? 18 : 7,
+        (parcel) => worldToScreen(parcel.position),
+        "chart-2d",
+      );
+      clickCandidate = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        shiftKey: event.shiftKey,
+        coarsePointer,
+      };
+      element.setPointerCapture?.(event.pointerId);
+      pointerWorld = clientToWorld(event.clientX, event.clientY);
+      event.preventDefault();
+    };
+
+    const pointerMove = (event: PointerEvent): void => {
+      pointerWorld = clientToWorld(event.clientX, event.clientY);
+      const coarsePointer = usesCoarseWorldPointer(
+        event.pointerType,
+        window.matchMedia?.("(pointer: coarse)").matches ?? false,
+      );
+      const parcelHit = parcelHitAt(clientToScreen(event.clientX, event.clientY), coarsePointer);
+      hoverTarget = parcelHit
+        ? { entity: "parcel", id: parcelHit.parcel.id }
+        : findHoverTarget(pointerWorld);
+      element.dataset.hoverEntity = hoverTarget?.entity ?? "world";
+      if (clickCandidate?.pointerId === event.pointerId) {
+        const maximumTravel = clickCandidate.coarsePointer ? 18 : 7;
+        parcelPress = moveLooseCargoPointerPress(
+          parcelPress,
+          event.pointerId,
+          clientToScreen(event.clientX, event.clientY),
+        );
+        if (Math.hypot(
+          event.clientX - clickCandidate.startX,
+          event.clientY - clickCandidate.startY,
+        ) > maximumTravel) {
+          clickCandidate = null;
+        }
+      }
+    };
+
+    const pointerUp = (event: PointerEvent): void => {
+      const trackedTouch = event.pointerType === "touch"
+        && touchSequence.activePointerIds.includes(event.pointerId);
+      if (trackedTouch && !looseCargoTouchCanDispatch(touchSequence, event.pointerId)) {
+        clickCandidate = null;
+        parcelPress = null;
+        endTouch(event.pointerId);
+        event.preventDefault();
+        return;
+      }
+      if (clickCandidate?.pointerId !== event.pointerId) {
+        clearPointer(event.pointerId);
+        if (trackedTouch) endTouch(event.pointerId);
+        return;
+      }
+      const candidate = clickCandidate;
+      clickCandidate = null;
+      const screen = clientToScreen(event.clientX, event.clientY);
+      const parcelRelease = resolveLooseCargoPointerRelease(
+        parcelPress,
+        event.pointerId,
+        screen,
+        looseCargoViews(),
+        looseCargoHitRadiusPixels(
+          candidate.coarsePointer,
+          Math.max(6, (latestView?.terrain.tileSize ?? 24) * camera.zoom * 0.28),
+        ),
+        (parcel) => worldToScreen(parcel.position),
+        "chart-2d",
+        candidate.coarsePointer,
+      );
+      parcelPress = null;
+      releasePointerCapture(event.pointerId);
+      if (trackedTouch) endTouch(event.pointerId);
+      if (parcelRelease.consumesWorldTap) {
+        if (parcelRelease.command) emit(parcelRelease.command);
+        event.preventDefault();
+        return;
+      }
       const point = clientToWorld(event.clientX, event.clientY);
       pointerWorld = point;
       const target = findHoverTarget(point);
       const view = latestView;
       if (view) emit(commandForWorldTap(
         view,
-        target,
+        target?.entity === "parcel" ? null : target,
         point,
-        usesCoarseWorldPointer(
-          event.pointerType,
-          window.matchMedia?.("(pointer: coarse)").matches ?? false,
-        ),
-        event.shiftKey,
+        candidate.coarsePointer,
+        candidate.shiftKey || event.shiftKey,
       ));
       event.preventDefault();
     };
 
-    const pointerMove = (event: PointerEvent): void => {
-      pointerWorld = clientToWorld(event.clientX, event.clientY);
-      hoverTarget = findHoverTarget(pointerWorld);
-      element.dataset.hoverEntity = hoverTarget?.entity ?? "world";
+    const pointerCancel = (event: PointerEvent): void => {
+      clearPointer(event.pointerId);
+      if (touchSequence.activePointerIds.includes(event.pointerId)) endTouch(event.pointerId);
+    };
+
+    const lostPointerCapture = (event: PointerEvent): void => {
+      clearPointer(event.pointerId);
+      if (touchSequence.activePointerIds.includes(event.pointerId)) {
+        touchSequence = endLooseCargoTouch(touchSequence, event.pointerId);
+      }
     };
 
     const pointerLeave = (): void => {
@@ -481,6 +685,7 @@ export function createTideweftRenderer(
 
     const contextMenu = (event: MouseEvent): void => {
       event.preventDefault();
+      clearPointer();
       emit({ type: "cancel" });
     };
 
@@ -489,6 +694,14 @@ export function createTideweftRenderer(
       if (heldBraceKeys.size > 0) emit({ type: "brace", active: false });
       heldBraceKeys.clear();
       updateMovement();
+      clearPointer();
+      releaseLooseCargoPointerCaptures(element, touchSequence.activePointerIds);
+      touchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
+    };
+
+    const windowBlur = (): void => blur();
+    const visibilityChange = (): void => {
+      if (document.visibilityState === "hidden") blur();
     };
 
     const wheel = (event: WheelEvent): void => {
@@ -502,21 +715,31 @@ export function createTideweftRenderer(
 
     element.addEventListener("pointerdown", pointerDown);
     element.addEventListener("pointermove", pointerMove);
+    element.addEventListener("pointerup", pointerUp);
+    element.addEventListener("pointercancel", pointerCancel);
+    element.addEventListener("lostpointercapture", lostPointerCapture);
     element.addEventListener("pointerleave", pointerLeave);
     element.addEventListener("contextmenu", contextMenu);
     element.addEventListener("keydown", onKeyDown);
     element.addEventListener("keyup", onKeyUp);
     element.addEventListener("blur", blur);
+    window.addEventListener("blur", windowBlur);
+    document.addEventListener("visibilitychange", visibilityChange);
     element.addEventListener("wheel", wheel, { passive: false });
     attached = {
       element,
       pointerDown,
       pointerMove,
+      pointerUp,
+      pointerCancel,
+      lostPointerCapture,
       pointerLeave,
       contextMenu,
       keyDown: onKeyDown,
       keyUp: onKeyUp,
       blur,
+      windowBlur,
+      visibilityChange,
       wheel,
     };
   };
@@ -1365,6 +1588,198 @@ export function createTideweftRenderer(
       }
     };
 
+    const drawLooseCargo = (view: TideweftView, now: number): void => {
+      const parcels = safeLooseCargoViews(view.looseCargo ?? []);
+      if (parcels.length === 0) return;
+      const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+      const nearby = nearestRecoverableLooseCargo(
+        parcels,
+        view.player.position,
+        Math.max(1, view.terrain.tileSize * 0.9),
+      );
+      const size = Math.max(view.terrain.tileSize * 0.31, 6.5 / camera.zoom);
+
+      for (const parcel of parcels) {
+        const screen = worldToScreen(parcel.position);
+        if (screen.x < -50 || screen.y < -50 || screen.x > p.width + 50 || screen.y > p.height + 50) {
+          continue;
+        }
+        const visual = looseCargoVisual(parcel);
+        const hovered = hoverTarget?.entity === "parcel" && hoverTarget.id === parcel.id;
+        const recoveryFocus = nearby?.id === parcel.id;
+        const highlighted = hovered || recoveryFocus;
+        const tumble = visual.motionMark === "tumble" && !reducedMotion
+          ? now * 0.004 + visual.orientationRadians
+          : visual.orientationRadians * 0.22;
+
+        p.push();
+        p.translate(parcel.position.x, parcel.position.y);
+
+        if (visual.motionMark === "wake") {
+          const wakeLength = size * 2.2;
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.sky, 185));
+          p.strokeWeight(1.15 / camera.zoom);
+          const nx = -visual.wake.x;
+          const ny = -visual.wake.y;
+          const px = -ny;
+          const py = nx;
+          p.line(
+            nx * size * 0.45 + px * size * 0.3,
+            ny * size * 0.45 + py * size * 0.3,
+            nx * wakeLength + px * size * 0.58,
+            ny * wakeLength + py * size * 0.58,
+          );
+          p.line(
+            nx * size * 0.45 - px * size * 0.3,
+            ny * size * 0.45 - py * size * 0.3,
+            nx * wakeLength - px * size * 0.58,
+            ny * wakeLength - py * size * 0.58,
+          );
+        }
+
+        if (visual.snagMark !== "none") {
+          const anchorAngle = visual.orientationRadians + (visual.snagMark === "roots" ? 0.9 : -0.7);
+          const anchor = {
+            x: Math.cos(anchorAngle) * size * 1.75,
+            y: Math.sin(anchorAngle) * size * 1.75,
+          };
+          p.noFill();
+          p.stroke(withAlpha(visual.snagMark === "roots" ? PALETTE.marsh : PALETTE.coral, 235));
+          p.strokeWeight(1.35 / camera.zoom);
+          if (visual.snagMark === "roots") {
+            p.line(0, 0, anchor.x, anchor.y);
+            p.line(anchor.x, anchor.y, anchor.x - size * 0.46, anchor.y + size * 0.33);
+            p.line(anchor.x, anchor.y, anchor.x + size * 0.38, anchor.y + size * 0.42);
+          } else {
+            p.beginShape();
+            p.vertex(0, 0);
+            p.vertex(anchor.x * 0.35 - size * 0.2, anchor.y * 0.35);
+            p.vertex(anchor.x * 0.68 + size * 0.18, anchor.y * 0.68);
+            p.vertex(anchor.x, anchor.y);
+            p.endShape();
+          }
+        }
+
+        if (highlighted || parcel.recovery === "reachable") {
+          p.noFill();
+          p.stroke(withAlpha(
+            parcel.recovery === "reachable" ? PALETTE.foam : visual.accent,
+            highlighted ? 230 : 115,
+          ));
+          p.strokeWeight((highlighted ? 1.6 : 0.9) / camera.zoom);
+          p.circle(0, 0, size * (highlighted ? 3.05 : 2.6));
+        }
+
+        p.rotate(tumble);
+        p.rectMode(p.CENTER);
+        p.stroke(withAlpha(visual.outline, 245));
+        p.strokeWeight(1.15 / camera.zoom);
+        p.fill(withAlpha(visual.fill, parcel.recoverable ? 244 : 155));
+        switch (visual.silhouette) {
+          case "bundle":
+            p.beginShape();
+            p.vertex(0, -size * 0.58);
+            p.vertex(size * 0.62, -size * 0.12);
+            p.vertex(size * 0.48, size * 0.54);
+            p.vertex(-size * 0.5, size * 0.54);
+            p.vertex(-size * 0.64, -size * 0.12);
+            p.endShape(p.CLOSE);
+            break;
+          case "crate":
+            p.rect(0, 0, size * 1.2, size * 1.02, size * 0.08);
+            p.line(-size * 0.48, -size * 0.36, size * 0.48, size * 0.36);
+            break;
+          case "case":
+            p.rect(0, size * 0.06, size * 1.28, size * 0.84, size * 0.2);
+            p.noFill();
+            p.arc(0, -size * 0.38, size * 0.58, size * 0.46, p.PI, p.TWO_PI);
+            break;
+          case "sealed-case":
+            p.rect(0, 0, size * 1.3, size * 0.94, size * 0.12);
+            p.fill(withAlpha(PALETTE.violet, 250));
+            p.circle(0, 0, size * 0.34);
+            p.noFill();
+            p.line(-size * 0.65, 0, -size * 0.19, 0);
+            p.line(size * 0.19, 0, size * 0.65, 0);
+            break;
+        }
+
+        p.noFill();
+        p.stroke(withAlpha(PALETTE.ink, 225));
+        p.strokeWeight(1.2 / camera.zoom);
+        switch (visual.conditionMark) {
+          case "none": break;
+          case "slash":
+            p.line(-size * 0.42, size * 0.34, size * 0.42, -size * 0.34);
+            break;
+          case "crack":
+            p.beginShape();
+            p.vertex(-size * 0.34, -size * 0.38);
+            p.vertex(-size * 0.08, -size * 0.06);
+            p.vertex(-size * 0.2, size * 0.12);
+            p.vertex(size * 0.36, size * 0.4);
+            p.endShape();
+            break;
+          case "cross":
+            p.line(-size * 0.42, -size * 0.36, size * 0.42, size * 0.36);
+            p.line(-size * 0.42, size * 0.36, size * 0.42, -size * 0.36);
+            break;
+        }
+
+        if (visual.wetMark) {
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.sky, 235));
+          p.circle(size * 0.47, -size * 0.43, size * 0.22);
+          p.circle(-size * 0.36, size * 0.4, size * 0.14);
+        }
+        if (visual.contaminationMarks > 0) {
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.violet, 230));
+          for (let mark = 0; mark < visual.contaminationMarks; mark += 1) {
+            p.circle(
+              (mark - (visual.contaminationMarks - 1) / 2) * size * 0.3,
+              size * 0.62,
+              size * 0.12,
+            );
+          }
+        }
+        if (parcel.impactMark !== "none") {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.coral, 230));
+          p.strokeWeight(1 / camera.zoom);
+          for (let ray = 0; ray < 4; ray += 1) {
+            const angle = ray * p.HALF_PI + visual.orientationRadians;
+            p.line(
+              Math.cos(angle) * size * 0.75,
+              Math.sin(angle) * size * 0.75,
+              Math.cos(angle) * size * 1.05,
+              Math.sin(angle) * size * 1.05,
+            );
+          }
+        }
+        p.pop();
+
+        if (!highlighted) continue;
+        const label = looseCargoRecoveryLabel(parcel, coarsePointer);
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textStyle(p.BOLD);
+        p.textSize(11);
+        const labelWidth = Math.min(260, p.textWidth(label) + 18);
+        p.rectMode(p.CENTER);
+        p.fill(withAlpha(PALETTE.ink, 238));
+        p.stroke(withAlpha(visual.outline, 210));
+        p.strokeWeight(1);
+        p.rect(screen.x, screen.y + 27, labelWidth, 21, 6);
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.foam, 248));
+        p.text(label, screen.x, screen.y + 26.5, labelWidth - 10, 19);
+        p.pop();
+      }
+    };
+
     const wayknotColor = (kind: WayknotKind): string => {
       switch (kind) {
         case "reed-mat": return PALETTE.amber;
@@ -1869,8 +2284,155 @@ export function createTideweftRenderer(
       p.pop();
     };
 
+    const drawPlayerBalanceMark = (
+      presentation: PlayerBalancePresentation,
+      radius: number,
+    ): void => {
+      p.push();
+      p.noFill();
+      p.stroke(presentation.outline);
+      p.strokeWeight(1.25 / camera.zoom);
+      switch (presentation.mark) {
+        case "keel":
+          p.line(-radius * 0.48, 0, radius * 0.5, 0);
+          p.line(radius * 0.18, -radius * 0.22, radius * 0.5, 0);
+          p.line(radius * 0.18, radius * 0.22, radius * 0.5, 0);
+          break;
+        case "counterweight":
+          p.line(-radius * 0.52, -radius * 0.66, -radius * 0.52, radius * 0.66);
+          p.circle(-radius * 0.52, -radius * 0.66, radius * 0.2);
+          p.circle(-radius * 0.52, radius * 0.66, radius * 0.2);
+          break;
+        case "skid":
+          p.line(-radius * 1.55, -radius * 0.5, -radius * 0.55, -radius * 0.28);
+          p.line(-radius * 1.42, radius * 0.38, -radius * 0.48, radius * 0.2);
+          break;
+        case "impact":
+          for (const angle of [0, p.HALF_PI, p.PI, p.PI + p.HALF_PI]) {
+            p.line(
+              Math.cos(angle) * radius * 0.88,
+              Math.sin(angle) * radius * 0.88,
+              Math.cos(angle) * radius * 1.38,
+              Math.sin(angle) * radius * 1.38,
+            );
+          }
+          break;
+        case "eddy":
+          p.arc(0, 0, radius * 2.8, radius * 2.25, -p.PI * 0.2, p.PI * 1.18);
+          p.line(radius * 1.05, radius * 0.36, radius * 1.36, radius * 0.58);
+          break;
+        case "rise":
+          p.line(-radius * 0.55, radius * 0.34, 0, -radius * 0.28);
+          p.line(0, -radius * 0.28, radius * 0.55, radius * 0.34);
+          p.line(0, -radius * 0.28, 0, -radius * 0.92);
+          break;
+      }
+      p.pop();
+    };
+
+    const drawPlayerSilhouette = (
+      presentation: PlayerBalancePresentation,
+      player: TideweftView["player"],
+      radius: number,
+    ): void => {
+      p.stroke(presentation.outline);
+      p.strokeWeight(1.35 / camera.zoom);
+      p.fill(withAlpha(presentation.fill, 238));
+      if (player.mode === "skiff") {
+        p.beginShape();
+        p.vertex(radius * 1.55, 0);
+        p.vertex(-radius * 0.8, -radius * 0.72);
+        p.vertex(-radius * 1.15, 0);
+        p.vertex(-radius * 0.8, radius * 0.72);
+        p.endShape(p.CLOSE);
+      } else {
+        switch (presentation.silhouette) {
+          case "upright":
+            p.ellipse(0, 0, radius * 2.08, radius * 1.95);
+            break;
+          case "leaning":
+            p.ellipse(radius * 0.1, 0, radius * 2.25, radius * 1.48);
+            break;
+          case "off-step":
+            p.ellipse(radius * 0.3, 0, radius * 2.38, radius * 1.26);
+            p.circle(-radius * 0.78, radius * 0.58, radius * 0.38);
+            break;
+          case "low":
+            p.ellipse(0, 0, radius * 2.82, radius * 0.82);
+            break;
+          case "afloat":
+            p.ellipse(0, 0, radius * 2.52, radius * 1.36);
+            break;
+          case "rising":
+            p.ellipse(-radius * 0.08, 0, radius * 1.7, radius * 2.12);
+            break;
+        }
+      }
+
+      if (presentation.silhouette !== "low" && presentation.silhouette !== "afloat") {
+        p.noStroke();
+        p.fill(presentation.outline);
+        p.triangle(
+          radius * 1.15,
+          0,
+          radius * 0.36,
+          -radius * 0.3,
+          radius * 0.36,
+          radius * 0.3,
+        );
+      }
+      drawPlayerBalanceMark(presentation, radius);
+    };
+
+    const drawPlayerIncident = (view: TideweftView): void => {
+      const incident = view.player.incident;
+      if (!incident || typeof incident.id !== "string" || incident.id.length === 0) return;
+      const presentation = playerBalancePresentation(view.player.balanceState);
+      const compact = p.width <= 704 || (p.height <= 544 && p.width <= 1_024);
+      const variant = Number.isSafeInteger(incident.variantSeed)
+        ? ((incident.variantSeed % 3) + 3) % 3 - 1
+        : 0;
+      const courier = worldToScreen(view.player.position);
+      const label = compact || !incident.detail
+        ? incident.label
+        : `${incident.label} · ${incident.detail}`;
+      p.push();
+      p.resetMatrix();
+      p.textAlign(p.CENTER, p.CENTER);
+      p.textStyle(p.BOLD);
+      p.textSize(compact ? 10 : 11);
+      const desiredWidth = Math.min(compact ? 226 : 310, p.textWidth(label) + 22);
+      const placed = placeIncidentCallout(
+        { x: courier.x + variant * 3, y: courier.y },
+        desiredWidth,
+        {
+          width: p.width,
+          height: p.height,
+          safeTop: compact ? 76 : 70,
+          safeBottom: compact ? 92 : 58,
+          compact,
+        },
+      );
+      const progress = unit(incident.progress);
+      const alpha = 246 - Math.trunc(progress * 38);
+      const connectorY = placed.y + (placed.aboveCourier ? 11 : -11);
+      p.stroke(withAlpha(presentation.fill, alpha * 0.82));
+      p.strokeWeight(1);
+      p.line(placed.x, connectorY, courier.x, courier.y);
+      p.rectMode(p.CENTER);
+      p.fill(withAlpha(PALETTE.ink, alpha));
+      p.stroke(withAlpha(presentation.fill, alpha));
+      p.strokeWeight(1.2);
+      p.rect(placed.x, placed.y, placed.width, 22, 5);
+      p.noStroke();
+      p.fill(withAlpha(presentation.outline, alpha));
+      p.text(label, placed.x, placed.y - 0.5, placed.width - 12, 18);
+      p.pop();
+    };
+
     const drawPlayer = (view: TideweftView, now: number): void => {
       const player = view.player;
+      const presentation = playerBalancePresentation(player.balanceState);
       const position = player.position;
       const radius = 7.2 / camera.zoom;
       const stability = unit(player.stability, 1);
@@ -1879,20 +2441,22 @@ export function createTideweftRenderer(
         ? 0
         : Math.sin(now * (player.mode === "swept" ? 0.0022 : 0.005))
           * (player.mode === "swept" ? 0.08 : (1 - stability) * 0.18);
+      const balanceLean = presentation.leanRadians;
+      const bodyRotation = player.facing + sway + balanceLean;
       const context = p.drawingContext as CanvasRenderingContext2D;
 
       drawDestination(view, now);
       drawSweptCurrent(view, radius);
       p.push();
       p.translate(position.x, position.y);
-      p.rotate(player.facing + sway);
+      p.rotate(bodyRotation);
 
       context.save();
-      context.shadowColor = player.mode === "swept" ? PALETTE.sky : PALETTE.tide;
-      context.shadowBlur = player.mode === "swept" ? 12 : 18;
+      context.shadowColor = presentation.fill;
+      context.shadowBlur = 12 + presentation.haloScale * 6;
       p.noStroke();
-      p.fill(withAlpha(player.mode === "swept" ? PALETTE.sky : PALETTE.tide, player.mode === "swept" ? 52 : 35));
-      p.circle(0, 0, radius * (player.mode === "swept" ? 4.4 : 5.5));
+      p.fill(withAlpha(presentation.fill, player.mode === "swept" ? 52 : 35));
+      p.circle(0, 0, radius * 4.4 * presentation.haloScale);
       context.restore();
 
       const cargoShown = Math.min(4, player.cargo.length);
@@ -1903,7 +2467,7 @@ export function createTideweftRenderer(
         const distance = radius * (1.15 + loadRatio * 0.28);
         p.push();
         p.translate(Math.cos(angle) * distance, Math.sin(angle) * distance);
-        p.rotate(-player.facing - sway);
+        p.rotate(-bodyRotation);
         p.rectMode(p.CENTER);
         p.noStroke();
         p.fill(withAlpha(cargo.color ?? PALETTE.amber, 235));
@@ -1916,35 +2480,14 @@ export function createTideweftRenderer(
         p.pop();
       }
 
-      p.stroke(withAlpha(PALETTE.foam, 245));
-      p.strokeWeight(1.35 / camera.zoom);
-      p.fill(withAlpha(PALETTE.ink, 245));
-      if (player.mode === "skiff") {
-        p.beginShape();
-        p.vertex(radius * 1.55, 0);
-        p.vertex(-radius * 0.8, -radius * 0.72);
-        p.vertex(-radius * 1.15, 0);
-        p.vertex(-radius * 0.8, radius * 0.72);
-        p.endShape(p.CLOSE);
-      } else if (player.mode === "swept") {
-        p.ellipse(0, 0, radius * 2.45, radius * 1.42);
-        p.line(-radius * 0.52, -radius * 0.52, radius * 0.5, radius * 0.5);
-        p.line(-radius * 0.52, radius * 0.52, radius * 0.5, -radius * 0.5);
-        p.noStroke();
-        p.fill(PALETTE.foam);
-        p.triangle(radius * 1.42, 0, radius * 0.62, -radius * 0.3, radius * 0.62, radius * 0.3);
-      } else {
-        p.circle(0, 0, radius * 2.1);
-        p.fill(PALETTE.foam);
-        p.triangle(radius * 1.18, 0, radius * 0.38, -radius * 0.34, radius * 0.38, radius * 0.34);
-        if (player.mode === "wading") {
-          p.noFill();
-          p.stroke(withAlpha(PALETTE.sky, 238));
-          p.strokeWeight(1 / camera.zoom);
-          p.arc(0, radius * 0.48, radius * 2.8, radius * 0.92, p.PI, p.TWO_PI);
-          p.line(-radius * 1.14, radius * 0.51, -radius * 0.54, radius * 0.51);
-          p.line(radius * 0.54, radius * 0.51, radius * 1.14, radius * 0.51);
-        }
+      drawPlayerSilhouette(presentation, player, radius);
+      if (player.mode === "wading") {
+        p.noFill();
+        p.stroke(withAlpha(PALETTE.sky, 238));
+        p.strokeWeight(1 / camera.zoom);
+        p.arc(0, radius * 0.48, radius * 2.8, radius * 0.92, p.PI, p.TWO_PI);
+        p.line(-radius * 1.14, radius * 0.51, -radius * 0.54, radius * 0.51);
+        p.line(radius * 0.54, radius * 0.51, radius * 1.14, radius * 0.51);
       }
 
       p.noFill();
@@ -2182,7 +2725,7 @@ export function createTideweftRenderer(
       canvasElement.setAttribute("role", "application");
       canvasElement.setAttribute(
         "aria-label",
-        "TIDEWEFT estuary. Use WASD or arrow keys to travel, Space to scan, E to interact, F to tie or tend a Wayknot, T for the tutorial, and Escape to cancel.",
+        "TIDEWEFT estuary. Use WASD or arrow keys to travel, Space to scan, E to interact or recover a nearby parcel, F to tie or tend a Wayknot, T for the tutorial, and Escape to cancel. On touch, tap a visible parcel to approach and recover it.",
       );
       canvasElement.setAttribute(
         "aria-keyshortcuts",
@@ -2223,6 +2766,7 @@ export function createTideweftRenderer(
       drawChoirs(latestView.choirs, now);
       drawDepthSoundings(latestView);
       drawFieldResources(latestView);
+      drawLooseCargo(latestView, now);
       drawTideHarps(latestView);
       drawWayknots(latestView, now);
       drawSettlements(latestView.settlements, now);
@@ -2234,6 +2778,7 @@ export function createTideweftRenderer(
       p.pop();
       drawEvents(latestView.events ?? []);
       drawWeather(latestView.weather, now);
+      drawPlayerIncident(latestView);
       if (latestView.paused) drawPausedVeil();
     };
   };
@@ -2266,6 +2811,10 @@ export function createTideweftRenderer(
         return;
       }
       if (!nextActive) {
+        releaseActiveTouchPointerCaptures();
+        clickCandidate = null;
+        parcelPress = null;
+        touchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
         heldDirections.clear();
         if (heldBraceKeys.size > 0) options.dispatch({ type: "brace", active: false });
         heldBraceKeys.clear();
@@ -2291,6 +2840,10 @@ export function createTideweftRenderer(
     },
     pulseScan,
     destroy: () => {
+      releaseActiveTouchPointerCaptures();
+      clickCandidate = null;
+      parcelPress = null;
+      touchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
       heldDirections.clear();
       if (heldBraceKeys.size > 0) emit({ type: "brace", active: false });
       heldBraceKeys.clear();

@@ -303,6 +303,21 @@ describe("local-storage save repository", () => {
     await expect(repository.save(conflict)).rejects.toBeInstanceOf(StaleSaveWriteError);
     expect(await repository.load("autosave")).toEqual(durable);
   });
+
+  it("treats the outer payload-version fence as part of an exact retry", async () => {
+    const { repository } = useFallbackRepository();
+    const durable = makeRecord({
+      payloadVersion: 3,
+      updatedAt: 881,
+      playTicks: 43,
+      worldJson: '{"format":"tideweft-session","version":3}',
+    });
+    await repository.save(durable);
+
+    await expect(repository.save({ ...durable, payloadVersion: 2 }))
+      .rejects.toBeInstanceOf(StaleSaveWriteError);
+    expect(await repository.load("autosave")).toEqual(durable);
+  });
 });
 
 describe("IndexedDB runtime failover", () => {
@@ -409,6 +424,32 @@ describe("IndexedDB runtime failover", () => {
   it("rejects equal-version divergent copies instead of choosing a backend silently", async () => {
     const primaryRecord = makeRecord({ updatedAt: 330, playTicks: 33, label: "Same summary" });
     const fallbackRecord = { ...primaryRecord, worldJson: '{"world":"divergent"}' };
+    const primary: SaveRepository = {
+      list: vi.fn(async () => [summary(primaryRecord)]),
+      load: vi.fn(async () => structuredClone(primaryRecord)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const fallback: SaveRepository = {
+      list: vi.fn(async () => [summary(fallbackRecord)]),
+      load: vi.fn(async () => structuredClone(fallbackRecord)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const repository = createFailoverSaveRepository(primary, fallback);
+
+    await expect(repository.load("autosave")).rejects.toBeInstanceOf(ConflictingSaveCopiesError);
+    await expect(repository.list()).rejects.toBeInstanceOf(ConflictingSaveCopiesError);
+  });
+
+  it("rejects equal-version copies that disagree only on the outer payload-version fence", async () => {
+    const primaryRecord = makeRecord({
+      payloadVersion: 3,
+      updatedAt: 331,
+      playTicks: 34,
+      worldJson: '{"format":"tideweft-session","version":3}',
+    });
+    const fallbackRecord = { ...primaryRecord, payloadVersion: 2 };
     const primary: SaveRepository = {
       list: vi.fn(async () => [summary(primaryRecord)]),
       load: vi.fn(async () => structuredClone(primaryRecord)),

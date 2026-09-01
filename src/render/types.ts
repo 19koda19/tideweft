@@ -146,6 +146,25 @@ export interface CargoStackView {
 
 export type PaceView = "rest" | "steady" | "swift";
 
+export type PlayerBalanceView =
+  | "balanced"
+  | "swaying"
+  | "stumbling"
+  | "fallen"
+  | "swept"
+  | "recovering";
+
+export interface PlayerIncidentView {
+  /** Durable actor + traversal-ordinal identity; never a 32-bit visual seed. */
+  readonly id: string;
+  readonly kind: "stumble" | "fall" | "sweep" | "cargo-impact" | "recovery";
+  readonly label: string;
+  readonly detail?: string;
+  readonly progress: number;
+  /** Presentation variation only. This is not the incident's identity. */
+  readonly variantSeed: number;
+}
+
 export interface PlayerView {
   readonly position: WorldPoint;
   readonly velocity: WorldPoint;
@@ -160,6 +179,9 @@ export interface PlayerView {
   readonly cargoCapacity: number;
   readonly cargo: readonly CargoStackView[];
   readonly pace: PaceView;
+  /** Explicit physical pose; renderers must not communicate this by color alone. */
+  readonly balanceState?: PlayerBalanceView;
+  readonly incident?: PlayerIncidentView;
   readonly mode: "foot" | "wading" | "skiff" | "swept" | "camp" | "rescued";
   readonly destination?: WorldPoint;
   /** Explicit world-marker copy, such as PICK UP CARGO or DELIVER CARGO. */
@@ -237,6 +259,44 @@ export interface FieldResourceNodeView {
   readonly rarity?: FieldResourceRarityView;
   /** Exact harvestable stock, excluding the living reserve; absent until sounded. */
   readonly stockUnits?: number;
+}
+
+export type LooseCargoContentKindView = "raw-material" | "component" | "gear" | "promise";
+export type LooseCargoConditionBandView = "sound" | "worn" | "damaged" | "ruined";
+export type LooseCargoMotionView = "resting" | "drifting" | "tumbling" | "snagged" | "boundary-rest";
+export type LooseCargoSnagView = "mangrove" | "bramble";
+
+/**
+ * One loaded physical parcel, projected from the authoritative fixed-point
+ * loose-cargo kernel. A renderer may reorder these views, but must never use
+ * the array index or the human-readable label as an interaction identity.
+ */
+export interface LooseCargoView {
+  readonly id: string;
+  /** Signed global region address; compatibility-map parcels use 0,0. */
+  readonly region: { readonly x: number; readonly y: number };
+  /** Exact local point in the same world units as terrain and the courier. */
+  readonly position: WorldPoint;
+  readonly velocity: WorldPoint;
+  readonly contentKind: LooseCargoContentKindView;
+  /** Public physical contents only; Promise destinations never enter this view. */
+  readonly resourceKind: string;
+  readonly resourceLabel: string;
+  readonly quantity: number;
+  readonly property: CargoProperty;
+  readonly condition: number;
+  readonly conditionBand: LooseCargoConditionBandView;
+  /** Current visible surface water, separate from durable contamination. */
+  readonly wetness: number;
+  readonly contamination: number;
+  readonly decay: number;
+  readonly motion: LooseCargoMotionView;
+  readonly snaggedBy: LooseCargoSnagView | null;
+  readonly impactMark: "none" | "rock" | "boundary" | "other";
+  /** Association only; this deliberately contains no destination or reward. */
+  readonly promiseContractId?: number;
+  readonly recoverable: boolean;
+  readonly recovery: "unavailable" | "approach" | "reachable";
 }
 
 export interface TideHarpKnotView<K extends WayknotKind = WayknotKind> {
@@ -339,6 +399,8 @@ export interface TideweftView {
   readonly wayknots: readonly WayknotView[];
   readonly tideHarps: readonly TideHarpView[];
   readonly fieldResources: readonly FieldResourceNodeView[];
+  /** Optional during the save-schema migration; production projections supply it. */
+  readonly looseCargo?: readonly LooseCargoView[];
   readonly traces: readonly TraceView[];
   readonly porters: readonly PorterView[];
   readonly particles?: readonly ParticleView[];
@@ -359,10 +421,16 @@ export type RendererCommand =
       /** Touch gathers on arrival; precise-pointer players retain E as the harvest action. */
       readonly gatherOnArrival: boolean;
     }
+  | {
+      readonly type: "parcel-target";
+      /** Exact persistent entity identity; the host resolves its current point. */
+      readonly parcelId: string;
+      /** Touch may recover on arrival; desktop E recovers only when already in reach. */
+      readonly recoverOnArrival: boolean;
+    }
   | { readonly type: "scan" }
   | { readonly type: "interact" }
   | { readonly type: "wayknot" }
-  | { readonly type: "pace-step"; readonly delta: -1 | 1 }
   | {
       readonly type: "select";
       readonly entity: "settlement" | "porter" | "route" | "world";

@@ -13,6 +13,18 @@ export const KIT_DIALOG_PANEL_ID = "tideweft-kit-panel";
 export const KIT_DIALOG_SCROLL_REGION_ID = "tideweft-kit-scroll-region";
 export const KIT_MINIMUM_TARGET_CSS_PIXELS = 44;
 export const KIT_FALLBACK_CAPACITY_MILLI = 18_000;
+const KIT_MAX_TRACKED_POINTERS = 16;
+
+export interface KitPointerSequence {
+  readonly activePointerIds: readonly number[];
+  /** Latched through the final pointerup so its synthesized click is rejected. */
+  readonly suppressed: boolean;
+}
+
+export const EMPTY_KIT_POINTER_SEQUENCE: KitPointerSequence = Object.freeze({
+  activePointerIds: Object.freeze([]),
+  suppressed: false,
+});
 
 export const KIT_TABS = [
   { id: "pack", label: "PACK", description: "Carried cargo, finds, components, and durable gear" },
@@ -60,6 +72,8 @@ interface KitFocusToken {
   readonly action: string;
   readonly recipeId: string;
   readonly gearId: string;
+  readonly lotId: string;
+  readonly quantity: string;
 }
 
 type KitTabArrowKey = "ArrowLeft" | "ArrowRight" | "Home" | "End";
@@ -105,6 +119,65 @@ export function nextKitTab(current: KitTabId, key: KitTabArrowKey): KitTabId {
   return KIT_TABS[(index + delta + KIT_TABS.length) % KIT_TABS.length]!.id;
 }
 
+/** Adds one pointer; any overlap suppresses the complete sequence. */
+export function beginKitPointerSequence(
+  sequence: KitPointerSequence,
+  pointerId: number,
+): KitPointerSequence {
+  if (!Number.isSafeInteger(pointerId)) {
+    return Object.freeze({
+      activePointerIds: sequence.activePointerIds,
+      suppressed: true,
+    });
+  }
+  if (sequence.activePointerIds.includes(pointerId)) return sequence;
+  if (sequence.activePointerIds.length >= KIT_MAX_TRACKED_POINTERS) {
+    return Object.freeze({
+      activePointerIds: sequence.activePointerIds,
+      suppressed: true,
+    });
+  }
+  const activePointerIds = Object.freeze(
+    [...sequence.activePointerIds, pointerId].sort((left, right) => left - right),
+  );
+  return Object.freeze({
+    activePointerIds,
+    suppressed: sequence.suppressed || activePointerIds.length > 1,
+  });
+}
+
+/** Ends one pointer without clearing a multi-touch latch prematurely. */
+export function endKitPointerSequence(
+  sequence: KitPointerSequence,
+  pointerId: number,
+): KitPointerSequence {
+  if (!Number.isSafeInteger(pointerId)
+    || !sequence.activePointerIds.includes(pointerId)) return sequence;
+  return Object.freeze({
+    activePointerIds: Object.freeze(
+      sequence.activePointerIds.filter((candidate) => candidate !== pointerId),
+    ),
+    suppressed: sequence.suppressed,
+  });
+}
+
+export function resetKitPointerSequence(): KitPointerSequence {
+  return EMPTY_KIT_POINTER_SEQUENCE;
+}
+
+/** Used by the click capture gate; keyboard activation remains available. */
+export function kitPointerSequenceAllowsAction(sequence: KitPointerSequence): boolean {
+  return !sequence.suppressed;
+}
+
+/** Native keyboard/programmatic button activation has MouseEvent.detail 0. */
+export function kitPointerSequenceAllowsClick(
+  sequence: KitPointerSequence,
+  clickDetail: number,
+): boolean {
+  return kitPointerSequenceAllowsAction(sequence) || clickDetail === 0;
+}
+
 /** Only visible/actionable inventory state participates in structural refresh. */
 export function kitViewSignature(view: KitUIView | undefined): string {
   if (!view) return "kit-unavailable";
@@ -117,14 +190,19 @@ export function kitViewSignature(view: KitUIView | undefined): string {
     view.hint ?? "",
     view.transportRows.map((row) => [
       row.id,
+      row.lotId ?? "",
       row.kind,
       row.label,
       row.detail,
       row.loadMilli,
       row.condition ?? null,
+      row.dropQuantity ?? null,
+      row.canDrop ? 1 : 0,
+      row.dropDisabledReason ?? "",
     ]),
     view.stackRows.map((row) => [
       row.id,
+      row.lotId ?? "",
       row.tier,
       row.label,
       row.quantity,
@@ -132,9 +210,12 @@ export function kitViewSignature(view: KitUIView | undefined): string {
       row.totalLoadMilli,
       row.location,
       row.locationLabel ?? "",
+      row.canDrop ? 1 : 0,
+      row.dropDisabledReason ?? "",
     ]),
     view.gearRows.map((row) => [
       row.id,
+      row.lotId ?? "",
       row.kind,
       row.label,
       row.detail,
@@ -149,6 +230,8 @@ export function kitViewSignature(view: KitUIView | undefined): string {
       row.repairDisabledReason ?? "",
       row.canDismantle ? 1 : 0,
       row.dismantleDisabledReason ?? "",
+      row.canDrop ? 1 : 0,
+      row.dropDisabledReason ?? "",
     ]),
     view.recipes.map((recipe) => [
       recipe.id,
@@ -291,7 +374,76 @@ function section(title: string, detail?: string): [HTMLElement, HTMLElement] {
   return [wrapper, body];
 }
 
-function renderTransport(view: KitUIView, target: HTMLElement): void {
+function dropButton(
+  label: string,
+  itemLabel: string,
+  lotId: string,
+  quantity: number,
+  canDrop: boolean,
+  disabledReason: string | undefined,
+  dispatch: KitDialogOptions["dispatch"],
+): HTMLButtonElement {
+  const action = button(
+    "kit-action kit-action--drop",
+    label,
+    `${label.toLocaleLowerCase()} ${itemLabel}. The released parcel remains physical in the world.`,
+  );
+  action.dataset.kitAction = "drop";
+  action.dataset.lotId = lotId;
+  action.dataset.quantity = String(quantity);
+  action.disabled = !canDrop;
+  if (!canDrop) action.title = disabledReason ?? "This lot cannot be dropped here.";
+  action.addEventListener("click", () => {
+    dispatch({ type: "kit", action: "drop", lotId, quantity });
+  });
+  return action;
+}
+
+function appendDropActions(
+  item: HTMLElement,
+  input: {
+    readonly label: string;
+    readonly lotId: string | undefined;
+    readonly quantity: number;
+    readonly canDrop: boolean | undefined;
+    readonly disabledReason: string | undefined;
+    readonly allowSingle?: boolean;
+  },
+  dispatch: KitDialogOptions["dispatch"],
+): void {
+  if (!input.lotId || !Number.isSafeInteger(input.quantity) || input.quantity <= 0) return;
+  const actions = element("div", "kit-row__actions");
+  if (input.allowSingle && input.quantity > 1) {
+    actions.append(dropButton(
+      "DROP 1",
+      input.label,
+      input.lotId,
+      1,
+      input.canDrop === true,
+      input.disabledReason,
+      dispatch,
+    ));
+  }
+  actions.append(dropButton(
+    input.allowSingle && input.quantity > 1 ? "DROP ALL" : "DROP",
+    input.label,
+    input.lotId,
+    input.quantity,
+    input.canDrop === true,
+    input.disabledReason,
+    dispatch,
+  ));
+  item.append(actions);
+  if (input.canDrop !== true && input.disabledReason) {
+    item.append(element("p", "kit-row__reason", input.disabledReason));
+  }
+}
+
+function renderTransport(
+  view: KitUIView,
+  target: HTMLElement,
+  dispatch: KitDialogOptions["dispatch"],
+): void {
   const [wrapper, body] = section("Transport", formatKitMilliLoad(view.transportLoadMilli));
   if (view.transportRows.length === 0) {
     body.append(emptyState("No entrusted load", "Promise cargo and signed reports appear here."));
@@ -317,12 +469,22 @@ function renderTransport(view: KitUIView, target: HTMLElement): void {
       meta.append(condition);
     }
     item.append(copy, meta);
+    appendDropActions(item, {
+      label: row.label,
+      lotId: row.lotId,
+      quantity: row.dropQuantity ?? 0,
+      canDrop: row.canDrop,
+      disabledReason: row.dropDisabledReason,
+    }, dispatch);
     body.append(item);
   }
   target.append(wrapper);
 }
 
-function stackRow(row: KitStackUIView): HTMLElement {
+function stackRow(
+  row: KitStackUIView,
+  dispatch?: KitDialogOptions["dispatch"],
+): HTMLElement {
   const item = element("article", "kit-row kit-row--stack");
   item.dataset.tier = row.tier;
   item.dataset.location = row.location;
@@ -341,10 +503,23 @@ function stackRow(row: KitStackUIView): HTMLElement {
     element("span", "kit-row__unit", `${formatKitMilliLoad(row.unitLoadMilli)} each`),
   );
   item.append(copy, meta);
+  if (dispatch && row.location === "pack") {
+    appendDropActions(item, {
+      label: row.label,
+      lotId: row.lotId,
+      quantity: row.quantity,
+      canDrop: row.canDrop,
+      disabledReason: row.dropDisabledReason,
+      allowSingle: true,
+    }, dispatch);
+  }
   return item;
 }
 
-function gearSummary(row: KitGearUIView): HTMLElement {
+function gearSummary(
+  row: KitGearUIView,
+  dispatch?: KitDialogOptions["dispatch"],
+): HTMLElement {
   const item = element("article", "kit-row kit-row--gear");
   item.dataset.condition = row.condition <= 0
     ? "broken"
@@ -374,11 +549,24 @@ function gearSummary(row: KitGearUIView): HTMLElement {
   );
   meta.append(condition);
   item.append(copy, meta);
+  if (dispatch && row.location === "carried") {
+    appendDropActions(item, {
+      label: row.label,
+      lotId: row.lotId,
+      quantity: 1,
+      canDrop: row.canDrop,
+      disabledReason: row.dropDisabledReason,
+    }, dispatch);
+  }
   return item;
 }
 
-function renderPack(view: KitUIView, target: HTMLElement): void {
-  renderTransport(view, target);
+function renderPack(
+  view: KitUIView,
+  target: HTMLElement,
+  dispatch: KitDialogOptions["dispatch"],
+): void {
+  renderTransport(view, target, dispatch);
   const packStacks = view.stackRows.filter((row) => row.location === "pack");
   const lockerStacks = view.stackRows.filter((row) => row.location === "locker");
   const [finds, findsBody] = section("Finds + components", `${packStacks.length} carried stacks`);
@@ -388,14 +576,14 @@ function renderPack(view: KitUIView, target: HTMLElement): void {
       "On desktop, stand over a discovered resource and press E. On touch, tap it to route and gather on arrival.",
     ));
   }
-  for (const row of packStacks) findsBody.append(stackRow(row));
+  for (const row of packStacks) findsBody.append(stackRow(row, dispatch));
   target.append(finds);
 
   const [gear, gearBody] = section("Durable gear", `${view.gearRows.length} known items`);
   if (view.gearRows.length === 0) {
     gearBody.append(emptyState("No crafted adaptations", "MAKE shows every recipe and its exact blocker."));
   }
-  for (const row of view.gearRows) gearBody.append(gearSummary(row));
+  for (const row of view.gearRows) gearBody.append(gearSummary(row, dispatch));
   target.append(gear);
 
   if (lockerStacks.length > 0) {
@@ -553,7 +741,9 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
   let tab: KitTabId = "pack";
   let signature = "";
   let pointerActive = false;
+  let pointerSequence: KitPointerSequence = EMPTY_KIT_POINTER_SEQUENCE;
   let renderPending = false;
+  let pointerReleaseTimer: number | undefined;
   let returnFocus: HTMLElement | null = null;
   let destroyed = false;
 
@@ -565,6 +755,8 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
       action: active.dataset.kitAction ?? "",
       recipeId: active.dataset.recipeId ?? "",
       gearId: active.dataset.gearId ?? "",
+      lotId: active.dataset.lotId ?? "",
+      quantity: active.dataset.quantity ?? "",
     };
   };
 
@@ -578,7 +770,9 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
       .find((candidate) =>
         (candidate.dataset.kitAction ?? "") === token.action
         && (candidate.dataset.recipeId ?? "") === token.recipeId
-        && (candidate.dataset.gearId ?? "") === token.gearId);
+        && (candidate.dataset.gearId ?? "") === token.gearId
+        && (candidate.dataset.lotId ?? "") === token.lotId
+        && (candidate.dataset.quantity ?? "") === token.quantity);
     if (target && (!(target instanceof HTMLButtonElement) || !target.disabled)) {
       target.focus({ preventScroll: true });
       return;
@@ -619,7 +813,7 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
       ));
       return;
     }
-    if (tab === "pack") renderPack(view, refs.scroll);
+    if (tab === "pack") renderPack(view, refs.scroll, options.dispatch);
     else if (tab === "make") renderMake(view, refs.scroll, options.dispatch);
     else renderMend(view, refs.scroll, options.dispatch);
   };
@@ -644,15 +838,61 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
   };
 
   const flushPendingRender = (): void => {
+    pointerReleaseTimer = undefined;
     pointerActive = false;
-    if (renderPending) render();
+    pointerSequence = resetKitPointerSequence();
+    if (renderPending && !destroyed) render();
+    else renderPending = false;
   };
   const schedulePointerRelease = (): void => {
-    window.setTimeout(flushPendingRender, 0);
+    if (pointerReleaseTimer !== undefined) window.clearTimeout(pointerReleaseTimer);
+    pointerReleaseTimer = window.setTimeout(flushPendingRender, 0);
   };
   const cancelPointer = (): void => {
+    if (pointerReleaseTimer !== undefined) {
+      window.clearTimeout(pointerReleaseTimer);
+      pointerReleaseTimer = undefined;
+    }
     pointerActive = false;
-    if (renderPending) render();
+    pointerSequence = resetKitPointerSequence();
+    if (renderPending && !destroyed) render();
+    else renderPending = false;
+  };
+  const pointerDown = (event: PointerEvent): void => {
+    if (pointerReleaseTimer !== undefined) {
+      window.clearTimeout(pointerReleaseTimer);
+      pointerReleaseTimer = undefined;
+    }
+    pointerSequence = beginKitPointerSequence(pointerSequence, event.pointerId);
+    pointerActive = pointerSequence.activePointerIds.length > 0;
+    if (pointerSequence.suppressed || !pointerActive) event.preventDefault();
+    if (!pointerActive) schedulePointerRelease();
+  };
+  const pointerUp = (event: PointerEvent): void => {
+    if (!pointerSequence.activePointerIds.includes(event.pointerId)) return;
+    if (pointerSequence.suppressed) event.preventDefault();
+    pointerSequence = endKitPointerSequence(pointerSequence, event.pointerId);
+    pointerActive = pointerSequence.activePointerIds.length > 0;
+    if (!pointerActive) schedulePointerRelease();
+  };
+  const cancelPointerId = (event: PointerEvent): void => {
+    if (!pointerSequence.activePointerIds.includes(event.pointerId)) return;
+    if (pointerSequence.suppressed) event.preventDefault();
+    pointerSequence = endKitPointerSequence(pointerSequence, event.pointerId);
+    pointerActive = pointerSequence.activePointerIds.length > 0;
+    if (!pointerActive) cancelPointer();
+  };
+  const blockSuppressedActionClick = (event: MouseEvent): void => {
+    // Keyboard activation reports detail 0 and must remain usable even if a
+    // cancelled touch sequence is waiting for its end-of-task cleanup.
+    if (kitPointerSequenceAllowsClick(pointerSequence, event.detail)) return;
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest("[data-kit-action]")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  const cancelPointerOnHidden = (): void => {
+    if (document.visibilityState === "hidden") cancelPointer();
   };
 
   const setTab = (next: KitTabId, focus = false): void => {
@@ -693,6 +933,7 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
   };
 
   const close = (restoreFocus = true): void => {
+    cancelPointer();
     if (!refs.dialog.open) return;
     if (!restoreFocus) returnFocus = null;
     try {
@@ -726,16 +967,19 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
     close();
   });
   refs.dialog.addEventListener("close", () => {
+    cancelPointer();
     options.onOpenChange?.(false);
     const target = returnFocus;
     returnFocus = null;
     if (target?.isConnected) target.focus({ preventScroll: true });
   });
-  refs.scroll.addEventListener("pointerdown", () => {
-    pointerActive = true;
-  });
-  window.addEventListener("pointerup", schedulePointerRelease);
-  window.addEventListener("pointercancel", cancelPointer);
+  refs.dialog.addEventListener("pointerdown", pointerDown, true);
+  refs.dialog.addEventListener("click", blockSuppressedActionClick, true);
+  window.addEventListener("pointerup", pointerUp);
+  window.addEventListener("pointercancel", cancelPointerId);
+  window.addEventListener("blur", cancelPointer);
+  refs.dialog.addEventListener("lostpointercapture", cancelPointerId, true);
+  document.addEventListener("visibilitychange", cancelPointerOnHidden);
   render(true);
 
   return {
@@ -752,8 +996,14 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
     isOpen: () => refs.dialog.open,
     destroy: () => {
       destroyed = true;
-      window.removeEventListener("pointerup", schedulePointerRelease);
-      window.removeEventListener("pointercancel", cancelPointer);
+      cancelPointer();
+      refs.dialog.removeEventListener("pointerdown", pointerDown, true);
+      refs.dialog.removeEventListener("click", blockSuppressedActionClick, true);
+      window.removeEventListener("pointerup", pointerUp);
+      window.removeEventListener("pointercancel", cancelPointerId);
+      window.removeEventListener("blur", cancelPointer);
+      refs.dialog.removeEventListener("lostpointercapture", cancelPointerId, true);
+      document.removeEventListener("visibilitychange", cancelPointerOnHidden);
       returnFocus = null;
       close();
     },

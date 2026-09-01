@@ -4,6 +4,58 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.2-alpha.0 — 2026-09-01
+
+Build: `0.3.2-alpha.0` · Gameplay contract: 7 · Tutorial: 8
+
+The ground can finally take the load: terrain-driven footing now causes legible stumbles and falls, while every dropped or separated parcel remains a persistent, recoverable physical object.
+
+### Gameplay
+
+- Stability is now terrain-responsive footing rather than a second stamina drain: grade, roughness, moisture, depth, current, wind, turning, load, footwear, Wayknots, and BRACE determine whether control holds, recovers, stumbles, or falls.
+- Hazardous entries consume durable deterministic traversal ordinals. A fall briefly takes movement control, damages one exact carried lot, and can separate persistent parcels without allowing reloads to reroll the outcome.
+- KIT can DROP exact stack quantities or whole Promise and gear lots. Loose parcels retain identity, material condition, wetness, contamination, origin, custody, and causal history while current moves them, grade tumbles them, impacts weather them, and local magic water applies material pressure.
+- A dropped or fallen active Promise becomes a RECOVER CARGO objective. Delivery and renegotiation remain blocked until the contract's exact quantity is physically back in custody; desktop E recovers within reach and a touch parcel tap charts an approach before recovery.
+- REST, STEADY, and SWIFT are now read-only movement states derived automatically from stillness, recovery, ordinary travel, downhill grade, and assisting deep current; the manual pace buttons and bracket-key commands are gone.
+
+### Fixes
+
+- Zero Stability in deep current now produces the same recoverable swept state as exhausted Stamina instead of remaining visually stable at zero.
+- Promise pickup, handoff, rejection, report reservation, crafting, mending, dismantling, and Wayknot repair now transact against exact physical lots before their aggregate inventory mirrors update, closing reclaim and duplication paths.
+- Physical cargo commits reject stale revisions, ordinal rollback, history rewriting, retired-lot resurrection, material improvement during conserved movement, and silent quantity deletion.
+- The shared two-tile parcel reach now matches UI guidance and authoritative pickup checks, and Promise drop sends the whole identified lot instead of an invalid quantity argument.
+- KIT suppresses overlapping touch gestures until every involved pointer ends, and Chart and Relief release surviving pointer captures safely on cancellation, focus loss, hidden pages, mode changes, and teardown.
+- Sweep, fall, and shore messages no longer claim that every parcel stayed on the porter after physical separation.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. BRACE trades speed for control and fragile-cargo protection, but it cannot erase an unsupported edge or guarantee safety on an unprepared line.
+- A stumble or fall applies one deterministic lot impact; severe falls can split divisible freight, while a full loaded-region cap keeps the lot carried but still applies the resolved damage instead of granting fall immunity.
+- Cargo quantity is conserved through drop, fall, drift, save, reload, and recovery. Failure costs condition, time, position, and retrieval effort rather than deleting the Promise or creating free stock.
+
+### Interface
+
+- Chart 2D and Relief 3D now share balance-state colors, silhouettes, and structural marks for balanced, swaying, stumbling, fallen, swept, and recovering states.
+- Stumbles and falls produce compact OOP, NNF, HUP, SKK, THUD, WHK, or WHHSH text near the courier plus deterministic square-wave and triangle-wave cues; compact placement avoids the mobile vital strip and action dock.
+- Loose parcels are visible and selectable in both views with material, motion, condition, ownership, and recovery-range presentation. The objective and contextual action name RECOVER before delivery can continue.
+- The version-8 T/? field manual removes obsolete pace controls and explains footing causes, BRACE on desktop and touch, falls, physical drop/recovery, parcel persistence, and honest current limitations.
+- The title remains the quiet TIDEWEFT, Seed phrase, START, and PATCH NOTES surface without a prominent difficulty slogan.
+
+### Save changes
+
+- Save version 3 adds a sealed physical-cargo sidecar with stable lot, parcel, event, source, and retired identities; an expected manifest prevents duplication and silent deletion across save and reload.
+- The traversal sidecar preserves the next deterministic ordinal and incident identity, marks loaded cues as heard, and prevents a reload from rerolling a fall or replaying its sound.
+- Current saves require a matching outer payload-version fence, intact envelope integrity, canonical one-ruleset session/player/ecology/traversal state, valid physical manifests, and exact Promise custody before adoption.
+- Compatible version-1 and version-2 saves migrate into canonical version-3 physical custody without regenerating collected resources or losing valid pack contents.
+
+### Known limitations
+
+- The playable world remains compatibility region (0,0); infinite streaming, negative-coordinate travel, floating origin, and distant simulation are not live.
+- The deterministic rock and ladder kernel is still disconnected from production traversal. Existing ridge terrain and falls are live, but procedural ladder-gated outcrops, ravines, ropes, and regional vertical rescue are not.
+- Mangrove and bramble snag behavior exists in the loose-cargo simulation kernel but is not connected to living field ecology, so the released game does not claim those catches yet.
+- Terrain, water soundings, current arrows, and active stability causes are visible, but an exact pre-entry fall percentage is not yet projected in the route UI.
+- Health, injury, hunger, thirst, camps, wildlife, human waylayers, actor speech, and regional weather fronts are not live in this release.
+
 ## 0.3.1-alpha.1 — 2026-09-01
 
 Build: `0.3.1-alpha.1` · Gameplay contract: 6 · Tutorial: 7

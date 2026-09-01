@@ -340,7 +340,21 @@ describe("Wayknots game wiring", () => {
   });
 
   it("makes a Wind knot reduce gust-driven stability loss on generated exposed ground", () => {
-    const world = generatedWorld();
+    const generated = generatedWorld();
+    // Eligibility means the ground can host a Wind knot; it does not promise
+    // that the generated front is currently strong or transverse enough to
+    // exceed firm-ground tolerance. Keep the generated terrain and inject one
+    // deterministic cross-gust so this fixture measures the claimed effect.
+    const world: WorldView = {
+      ...generated,
+      weather: {
+        ...generated.weather,
+        kind: "storm",
+        intensity: 400_000,
+        windX: 300_000,
+        windY: -200_000,
+      },
+    };
     const exposed = eligibleContext(world, "wind-knot");
     const baseline = createPlayer(world);
     const sheltered = createPlayer(world);

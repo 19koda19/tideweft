@@ -18,7 +18,7 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 2. Choose a promise by consequence and journey mood rather than abstract reward value.
 3. Reach the origin and collect a physical load from Promises, or separately witness one information-only signed report into the document case.
 4. Travel manually or chart a pointer path in the overhead chart or angled relief view.
-5. Scan, reroute, slow down, hold Shift to brace while moving, stand still to recover, or accept a weathered load.
+5. Sound uncertain water, read the terrain-driven footing causes, reroute, hold Shift to BRACE while moving, stand still to recover, or accept a weathered load; pace follows stillness, slope, current, and recovery automatically.
 6. Bind a reusable terrain-appropriate Wayknot, or reclaim one underfoot to move the care elsewhere.
 7. Tune a compact Tide Harp triangle from one Wayknot of each kind, then stand within it to extend the Loom's sounding field.
 8. Deliver or hand off safely at a harbor.
@@ -35,7 +35,7 @@ The quantum framing is thematic, not a claim about real-world physics. Current p
 
 The tide changes water depth across the map. Water is always physically enterable, but sounded depth, stamina, stability, field tools, and the risk of being swept to a safe bank make route choice legible. Sparse arrows on discovered wet surface show the shared tide/wind current direction before entry; fixed arrow geometry does not encode unsounded bathymetry. Weather changes stamina/load pressure, stability, and whether marginal autonomous corridors remain usable.
 
-The published `29ea8dc` checkpoint gives each discovered place one stable derived biome identity and current rainfall, heat, salinity, exposure, and magical-water context. Those signals currently change the map/readout language only. They do not yet accumulate exposure, alter cargo materials, grow ecology, or modify settlement and infrastructure rules; every such consequence must become forecastable and tutorial-visible before activation.
+The published `29ea8dc` checkpoint gives each discovered place one stable derived biome identity and current rainfall, heat, salinity, exposure, and magical-water context. Those signals drive field-resource families and bounded active regrowth; local current, grade, immersion, impact, and magical-water flux now affect physical loose parcels through their material traits. They do not yet accumulate courier exposure or drive carried-cargo rain/heat, infrastructure, or settlement consequences; every such consequence must become forecastable and tutorial-visible before activation.
 
 ## Nested reward loops
 
@@ -43,7 +43,9 @@ The published `29ea8dc` checkpoint gives each discovered place one stable derive
 
 - Movement has terrain drag, continuous acceleration cues, wake/foot feedback, camera response, stamina, and load stability.
 - The Loom pulse immediately expands the permanent chart and records nearby water soundings separately from ordinary discovery.
-- Active Shift-bracing trades speed for stability and fragile-cargo protection; Rest pace or stillness restores further.
+- Active Shift-bracing trades speed for stability and fragile-cargo protection; stillness restores further. REST, STEADY, and SWIFT are read-only states derived from stillness/recovery, ordinary travel, downhill grade, and assisting deep current.
+- Footing evaluates grade, rock, moisture, depth, current, wind, turning, load, footwear, fixtures, and BRACE. Accepted hazardous entries use a durable ordinal, so reload cannot reroll a stumble or fall.
+- A mishap changes the courier's color/silhouette, produces a short text voice and tone, damages an exact lot, and can release stable world parcels whose current/grade/material state continues after the incident.
 - F binds or reclaims one of six reusable Wayknots. Mats, anchors, and wind-knots change the relevant local hazard without consuming cargo; unlike overlapping fields form a bounded Waychord and speed Loom recharge slightly.
 - A connected, non-collinear triangle of one Reed mat, one Tide anchor, and one Wind knot can become a Tide Harp. Standing inside/on one gives a single capped +900 Loom recharge each player tick. Space still sounds radius 8 from the ferrier and also sounds radius 6 from each of the three knots: four origins, one existing charge cost, and no hidden depth shortcut.
 - Every consequential command responds through animation, sound, text, or an accessible live announcement.
@@ -134,9 +136,9 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 - WASD/arrows and pointer-directed routes share the same continuous travel rules in Chart 2D and Relief 3D.
 - On coarse pointers, tapping a harbor charts to its exact center; after arrival, the contextual touch action performs pickup, delivery, report handoff, or inspection. The tap itself does not open a sheet while the courier is still passing through the interaction tile.
 - Relief 3D rotates held movement with the orbit camera so travel remains screen-relative; Chart 2D retains world-up controls.
-- Rest, Steady, and Swift paces trade recovery, control, and speed.
+- Rest, Steady, and Swift describe the current traversal state; players do not select them. Stillness/recovery yields Rest, ordinary movement stays Steady, and downhill or current-assisted travel becomes Swift automatically.
 - Holding Shift while moving actively braces: travel continues more slowly, stability rises, and fragile loads avoid handling shock.
-- Terrain, water depth, load ratio, roughness, sharp changes in direction, wind, and pace affect effort or stability.
+- Terrain grade, water depth/current, moisture, load ratio, roughness, sharp changes in direction, wind, footwear, fixtures, and derived pace affect effort, footing, stability, stumble, and fall risk.
 - Perishable food loses freshness gently during travel; a completed cache suspends that decay while the player is sheltered at its harbor.
 - A charge-gated Loom pulse reveals nearby permanent chart information and bathymetry; sounded depth also informs pointer-path cost.
 - Discovered wet surface shows sparse current-direction arrows in both Chart and Relief. The cue tells the player where a sweep would pull without revealing whether unsounded water is shallow or deep.
@@ -144,14 +146,15 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 - An active Tide Harp adds its three knot-centered echoes without changing cargo, settlement stock, route history, or the simulation ledger. Overlapping selected triangles still grant only one Harp recharge benefit at the courier's tile.
 - The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
 - The objective always identifies the active pickup, material destination, or report destination.
+- KIT can drop an exact stack quantity or a whole Promise/gear lot. A loose active Promise blocks delivery and renegotiation, becomes a RECOVER objective, and preserves exact quantity/condition across drift, tumble, impact, save, reload, and pickup. Touch taps can chart to a visible parcel; desktop E recovers only within authoritative reach.
 - The local field readout names the derived biome. Chart and Relief share restrained color plus motif cues, while undiscovered cells expose no biome presentation.
 
 The activity must remain pleasant before progression numbers: readable motion, surface response, luminous traces, weather, terrain sound, and immediate stability feedback form the lowest loop.
 
 ## Setback and recovery
 
-- Dry-ground stamina exhaustion creates an emergency camp and Rest pace. In deep/current water at or above 120,000 depth, either stamina or stability reaching zero yields control to the same deterministic adjacent current path toward the nearest safe bank; cargo quantity stays with the player and weathers once. A connected clinic can intervene before the sweep, while ferries and the Storm kite shorten recovery.
-- Low stability gradually weathers cargo instead of destroying the contract. Fragile medicine reacts earlier to shocks, perishable food rewards an efficient line, and Shift-bracing supplies an explicit protective choice.
+- Dry-ground stamina exhaustion creates an emergency camp and Rest state. In deep/current water at or above 120,000 depth, either stamina or stability reaching zero yields control to the same deterministic adjacent current path toward the nearest safe bank. Cargo quantity remains accountable, but the fall can damage or separate parcels that keep moving until recovered. A connected clinic can intervene before the sweep, while ferries and the Storm kite shorten recovery.
+- Low stability is terrain-responsive footing, not another stamina drain. Fragile medicine reacts earlier to shocks, perishable food rewards an efficient line, and Shift/BRACE supplies an explicit protective choice; severe hazardous entries can still cause a deterministic stumble or fall.
 - Every condition grade still delivers material and strengthens a route.
 - An unwanted or risky promise can be handed into accountable care at any harbor; cargo returns to local stock and learned chart/trace remains.
 - Expired or rejected commands are explained, and another useful shortage can emerge.
@@ -161,21 +164,21 @@ There is no character death, lost save, currency fine, streak break, or zero-pro
 
 ## Perpetual play and pressure
 
-Every new world is perpetual. The title asks only for a seed and starts **A CHALLENGING HARD**; it does not offer a difficulty/posture selector or prescribe a 10/25-minute shape, delivery count, corridor quota, or forced ending. The regional resilient-weave resolution remains a meaningful systemic achievement, but the estuary stays open afterward.
+Every new world is perpetual. The visible title is only TIDEWEFT, Seed phrase, START, and PATCH NOTES; the one **A CHALLENGING HARD** contract remains the authoritative ruleset without becoming title-screen marketing copy. There is no difficulty/posture selector, 10/25-minute shape, delivery count, corridor quota, or forced ending. The regional resilient-weave resolution remains a meaningful systemic achievement, but the estuary stays open afterward.
 
 Earlier saves may contain `drift`, `weave`, or `wander`. Those values remain valid compatibility data and round-trip safely, but all project the same open-ended objective and none reactivates a timer or milestone-completion prompt.
 
-There is exactly one authoritative ruleset. Legacy `hearth`, `journey`, and `gale` values remain readable only for backward compatibility and normalize to the existing `gale`/`wild` pressure implementation on load. Accessibility may improve input, camera, timing presentation, subtitles, sound cues, contrast, remapping, and interface use; it cannot alter hazards, actors, loot, scarcity, rewards, or the economy.
+There is exactly one authoritative ruleset. Version-1/version-2 legacy `hearth`, `journey`, and `gale` values remain readable only for backward compatibility and normalize to the existing `gale`/`wild` pressure implementation on load; current version-3 saves must already contain the canonical hard/perpetual state. Accessibility may improve input, camera, timing presentation, subtitles, sound cues, contrast, remapping, and interface use; it cannot alter hazards, actors, loot, scarcity, rewards, or the economy.
 
 There is no manual in-play pause. Quiet Hour immediately saves, halts the simulation, and summarizes duration, distance, deliveries, reports, strands, discoveries, and up to five causal changes. The title also saves and halts safely. The player may continue or finish from either stopping surface; neither choice creates an expiring task.
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same thirteen-topic source covering every current control, physical Promises, information-only reports, meters and sweep recovery, cargo care, biomes/tools, Wayknots/Harps, routes/projects, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same sixteen-topic source covering every current control, physical Promises and parcels, information-only reports, terrain-responsive footing/falls, sweep recovery, cargo care, biomes/tools, Wayknots/Harps, routes/projects, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
 
 The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
-The title and field chrome use a restrained near-monochrome palette, hairline structure, and only small seafoam/gold semantic accents. The visible Rest/Steady/Swift button row is absent; any later automatic contextual pace behavior must be introduced as a truthful simulation rule and reflected in this manual rather than as another permanent HUD cluster.
+The title and field chrome use a restrained near-monochrome palette, hairline structure, and only small seafoam/gold semantic accents. The visible Rest/Steady/Swift button row is absent; contextual pace is now a truthful automatic simulation rule reflected in the meter and manual rather than another permanent HUD control.
 
 Chart 2D represents each instrument with three persistent bowed strings along each edge—nine in all—a written label, and fixed activity marks. Relief 3D uses three surface-rooted cords and a suspended faceted bell rather than a flat icon. Relief water uses the same shallow/channel/deep semantic palette as Chart, conditioned only by public tide and discovered biome state; partially known terrain is banded before presentation so raw hidden depth cannot leak. Hidden terrain height is never consulted for visible placement, and reduced motion freezes bob/sway while keeping every structural and textual cue. Packaged inspection verifies the deterministic Harp, its remote sounding echo, both presentations, visible title controls, and fresh title/game captures. Exact-commit CI and Pages deployment also pass, so Phase 10 is now a published untagged preview; Alpha 0.2 remains the latest tag.
 
@@ -196,14 +199,15 @@ Implemented now:
 - a near-monochrome title/HUD, four-vital mobile overlay and touch dock, exact-center mobile harbor routing, mutually exclusive safe-area sheets, and a versioned T/? field manual;
 - separately labeled, refresh-stable information-report controls that cannot be mistaken for physical Promises;
 - seven deterministic biome identities plus bounded local climate signals projected and rendered through shared Chart/Relief color-and-motif language without persisted biome state;
-- a deterministic, bounded cargo-environment evaluator for material traits, condition/contamination/decay pressure, readable causes, and future loose-cargo force; it is not yet connected to carried or dropped cargo;
+- a deterministic, bounded cargo-environment evaluator connected to exact physical loose cargo for material traits, condition/contamination/decay pressure, impact, current/lift, magical-water force, world presentation, persistence, and recovery;
+- terrain-driven stability, deterministic stumble/fall ordinals, physical cargo impact/separation, short callout/audio feedback, balance-state color/silhouette, and fail-closed exact custody across drop, craft, mend, dismantle, reports, and Promise delivery;
 - a deterministic rock/ladder rules kernel for coherent outcrops, crossing risk/cost, and finite reusable ladder validation; it is not yet connected to movement, rendering, UI, or saves;
 - local resume, secure desktop packaging, and static Pages output.
 
 Expansion runway, not current behavior:
 
 - runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
-- physical dropped cargo that can tumble on rock, drift in currents, take condition damage, and affect trust/compensation without becoming an unrecoverable deletion trap;
+- regional streaming and distant simulation for physical parcels beyond compatibility region `(0,0)`, plus living mangrove/bramble snag integration and delivery compensation that prices recovered condition;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;
 - gameplay integration of the already-visible biome signals and the cargo-environment kernel so spatial rain, heat, exposure, salinity, and magical estuary water react with live cargo, ecology, tools, infrastructure, and settlement needs through visible causal rules;
 - letters, passengers, personal narrative promise families, migration, and richer rumor disputes;

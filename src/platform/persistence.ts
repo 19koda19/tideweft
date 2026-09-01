@@ -14,6 +14,8 @@ export interface SaveRecord {
    * written before generations existed omit it and are treated as zero.
    */
   saveGeneration?: number;
+  /** Outer format fence; current writers set this to the embedded envelope version. */
+  payloadVersion?: number;
   updatedAt: number;
   playTicks: number;
   settlementCount: number;
@@ -159,6 +161,7 @@ function summarize(record: SaveRecord): SaveSummary {
     seed: record.seed,
     ...(record.saveGenerationEra === undefined ? {} : { saveGenerationEra: record.saveGenerationEra }),
     ...(record.saveGeneration === undefined ? {} : { saveGeneration: record.saveGeneration }),
+    ...(record.payloadVersion === undefined ? {} : { payloadVersion: record.payloadVersion }),
     updatedAt: record.updatedAt,
     playTicks: record.playTicks,
     settlementCount: record.settlementCount,
@@ -790,6 +793,7 @@ function isSaveRecord(value: unknown): value is SaveRecord {
     typeof record.seed === "string" &&
     (record.saveGenerationEra === undefined || typeof record.saveGenerationEra === "number") &&
     (record.saveGeneration === undefined || typeof record.saveGeneration === "number") &&
+    (record.payloadVersion === undefined || typeof record.payloadVersion === "number") &&
     typeof record.updatedAt === "number" &&
     typeof record.playTicks === "number" &&
     typeof record.settlementCount === "number" &&
@@ -1018,6 +1022,7 @@ function sameSaveRecord(left: SaveRecord, right: SaveRecord): boolean {
     && left.seed === right.seed
     && saveGenerationEraOf(left) === saveGenerationEraOf(right)
     && saveGenerationOf(left) === saveGenerationOf(right)
+    && (left.payloadVersion ?? 0) === (right.payloadVersion ?? 0)
     && left.updatedAt === right.updatedAt
     && left.playTicks === right.playTicks
     && left.settlementCount === right.settlementCount
@@ -1040,6 +1045,7 @@ function saveRecordFingerprint(record: SaveRecord): string {
     record.seed,
     String(saveGenerationEraOf(record)),
     String(saveGenerationOf(record)),
+    String(record.payloadVersion ?? 0),
     String(record.updatedAt),
     String(record.playTicks),
     String(record.settlementCount),
@@ -1116,6 +1122,7 @@ function validateRecord(record: SaveRecord): void {
   for (const value of [
     record.saveGenerationEra ?? 0,
     record.saveGeneration ?? 0,
+    record.payloadVersion ?? 0,
     record.updatedAt,
     record.playTicks,
     record.settlementCount,

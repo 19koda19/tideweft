@@ -11,10 +11,12 @@ import { FIXED_POINT, type TerrainKind, type TerrainState, type TerrainTile } fr
 export const ROCK_FIELD_VERSION = 1 as const;
 export const LADDER_KIT_VERSION = 1 as const;
 export const DEFAULT_LADDER_COUNT = 2;
+/** Maximum physical ladder records accepted by this bounded sidecar, not an ID ceiling. */
 export const MAX_LADDER_COUNT = 4;
 export const MIN_LADDER_SPAN = 2;
 export const MAX_LADDER_SPAN = 4;
 export const MIN_LADDER_PLACEMENT_CONDITION = 250_000;
+/** Minimum endpoint/span support for a deployment, independent of item wear. */
 export const MIN_LADDER_SUPPORT = 350_000;
 
 export const ROCK_SEVERITIES = [
@@ -74,6 +76,15 @@ export interface RockField {
   readonly formations: readonly RockFormation[];
 }
 
+export interface RockGenerationOptions {
+  /**
+   * Compatibility-region tiles that must remain physically free of generated
+   * rock for harbors, spawn apertures, and established route corridors.
+   * Invalid, duplicate, and out-of-grid entries are ignored canonically.
+   */
+  readonly protectedTileIndices?: readonly number[];
+}
+
 export interface LadderDeployment {
   readonly fromTileIndex: number;
   readonly toTileIndex: number;
@@ -84,7 +95,11 @@ export interface LadderDeployment {
   readonly pathTileIndices: readonly number[];
   readonly obstacleIds: readonly number[];
   readonly formationId: number;
-  /** Placement support before future wear, fixed-point 0..1. */
+  /**
+   * Support supplied by the endpoints and span, fixed-point 0..1. This is an
+   * environmental property of the deployment; reusable-kit condition remains
+   * on `LadderKitItem` and is combined with this value when an edge is queried.
+   */
   readonly support: number;
 }
 
@@ -171,11 +186,50 @@ export interface RockCrossingEffect {
   readonly baseFallRiskPermille: number;
   readonly baseTravelCostPermille: number;
   readonly ladderId: number | null;
+  /** Endpoint/span support multiplied by current ladder condition. */
   readonly ladderSupport: number;
   readonly passable: boolean;
   readonly highRisk: boolean;
   readonly fallRiskPermille: number;
   readonly travelCostPermille: number;
+}
+
+export interface RockTraversalPoint {
+  /** Integer world coordinate. Callers choose the scale through `tileUnits`. */
+  readonly x: number;
+  /** Integer world coordinate. Callers choose the scale through `tileUnits`. */
+  readonly y: number;
+}
+
+export interface RockTraversalSegment {
+  readonly from: RockTraversalPoint;
+  readonly to: RockTraversalPoint;
+  /** Positive integer number of world-coordinate units in one terrain tile. */
+  readonly tileUnits: number;
+}
+
+export type RockBoundaryAxis = "x" | "y";
+
+export interface RockSweptEdge {
+  readonly ordinal: number;
+  readonly axis: RockBoundaryAxis;
+  /** Exact parametric crossing time is numerator / denominator. */
+  readonly crossingTimeNumerator: number;
+  readonly crossingTimeDenominator: number;
+  /** False only for the first blocked edge; later edges are never evaluated. */
+  readonly committed: boolean;
+  readonly effect: RockCrossingEffect;
+}
+
+export interface RockSweptCrossing {
+  readonly valid: boolean;
+  readonly fromTileIndex: number | null;
+  readonly requestedTileIndex: number | null;
+  /** Last tile reached before a blocked edge, or the requested tile on success. */
+  readonly reachedTileIndex: number | null;
+  readonly passable: boolean;
+  readonly blockedEdgeOrdinal: number | null;
+  readonly edges: readonly RockSweptEdge[];
 }
 
 interface CanonicalTerrainTile {
@@ -533,12 +587,36 @@ function buildFormation(
   };
 }
 
+function canonicalProtectedTileIndices(
+  options: RockGenerationOptions | undefined,
+  width: number,
+  height: number,
+): ReadonlySet<number> {
+  const candidate: unknown = options;
+  if (!isRecord(candidate) || !Array.isArray(candidate.protectedTileIndices)) {
+    return new Set();
+  }
+  const tileCount = width * height;
+  const protectedTiles = new Set<number>();
+  for (const value of candidate.protectedTileIndices) {
+    if (!Number.isSafeInteger(value) || value < 0 || value >= tileCount) continue;
+    protectedTiles.add(value);
+  }
+  return protectedTiles;
+}
+
 /**
  * Derives sparse connected outcrops from coarse seeded geology and the current
- * terrain's elevation, roughness, and cardinal slope. Isolated one-tile noise
- * is discarded, leaving formations with at least two cardinally joined rocks.
+ * terrain's elevation, roughness, and cardinal slope. Natural isolated noise
+ * is discarded first. Protected harbor/spawn/route tiles are then physically
+ * carved out before formations are rebuilt; this can deliberately leave a
+ * one-rock remnant rather than deleting unprotected neighboring geology.
  */
-export function generateRockField(seedInput: RootSeed, terrainInput: RockTerrain): RockField {
+export function generateRockField(
+  seedInput: RootSeed,
+  terrainInput: RockTerrain,
+  options?: RockGenerationOptions,
+): RockField {
   const seed = normalizeSeed(seedInput);
   const terrain = canonicalTerrain(terrainInput);
   if (terrain.width === 0 || terrain.height === 0) {
@@ -571,6 +649,16 @@ export function generateRockField(seedInput: RootSeed, terrainInput: RockTerrain
       .some((adjacentIndex) => candidateMap.has(adjacentIndex));
     if (!joined) candidateMap.delete(tileIndex);
   }
+
+  // Protection is an authoritative geology carve, not a renderer mask. Apply
+  // it after natural speckle rejection so protecting one corridor tile cannot
+  // silently delete an unprotected neighbor that becomes a singleton.
+  const protectedTiles = canonicalProtectedTileIndices(
+    options,
+    terrain.width,
+    terrain.height,
+  );
+  for (const tileIndex of protectedTiles) candidateMap.delete(tileIndex);
 
   const visited = new Set<number>();
   const formations: RockFormation[] = [];
@@ -615,6 +703,50 @@ function normalizeLadderCount(value: number): number {
   return Math.max(0, Math.min(MAX_LADDER_COUNT, Math.trunc(value)));
 }
 
+function normalizeDeployment(value: unknown): LadderDeployment | null {
+  if (!isRecord(value)
+    || !Number.isSafeInteger(value.fromTileIndex)
+    || (value.fromTileIndex as number) < 0
+    || !Number.isSafeInteger(value.toTileIndex)
+    || (value.toTileIndex as number) < 0
+    || (value.orientation !== "east-west" && value.orientation !== "north-south")
+    || !Number.isSafeInteger(value.span)
+    || (value.span as number) < MIN_LADDER_SPAN
+    || (value.span as number) > MAX_LADDER_SPAN
+    || !Array.isArray(value.pathTileIndices)
+    || value.pathTileIndices.length !== (value.span as number) + 1
+    || !Array.isArray(value.obstacleIds)
+    || value.obstacleIds.length === 0
+    || value.obstacleIds.length > (value.span as number) - 1
+    || !Number.isSafeInteger(value.formationId)
+    || (value.formationId as number) <= 0
+    || !Number.isSafeInteger(value.support)
+    || (value.support as number) < MIN_LADDER_SUPPORT
+    || (value.support as number) > FIXED_POINT) {
+    return null;
+  }
+  const path = value.pathTileIndices;
+  const obstacleIds = value.obstacleIds;
+  if (path.some((index) => !Number.isSafeInteger(index) || index < 0)
+    || new Set(path).size !== path.length
+    || path[0] !== value.fromTileIndex
+    || path[path.length - 1] !== value.toTileIndex
+    || obstacleIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
+    || new Set(obstacleIds).size !== obstacleIds.length) {
+    return null;
+  }
+  return {
+    fromTileIndex: value.fromTileIndex as number,
+    toTileIndex: value.toTileIndex as number,
+    orientation: value.orientation,
+    span: value.span as number,
+    pathTileIndices: [...path] as number[],
+    obstacleIds: [...obstacleIds] as number[],
+    formationId: value.formationId as number,
+    support: value.support as number,
+  };
+}
+
 function maxSpanForId(id: number): number {
   return id % 2 === 0 ? MAX_LADDER_SPAN : MAX_LADDER_SPAN - 1;
 }
@@ -636,19 +768,27 @@ export function createLadderKitState(count = DEFAULT_LADDER_COUNT): LadderKitSta
 
 function safeLadders(state: LadderKitState): readonly LadderKitItem[] {
   const candidate: unknown = state;
-  if (!isRecord(candidate)) return [];
+  if (!isRecord(candidate) || candidate.version !== LADDER_KIT_VERSION) return [];
   const ladders = candidate.ladders;
   if (!Array.isArray(ladders)) return [];
   const normalized: LadderKitItem[] = [];
   for (const raw of ladders.slice(0, MAX_LADDER_COUNT)) {
     if (!isRecord(raw) || !Number.isSafeInteger(raw.id)) continue;
     const id = raw.id as number;
-    if (id <= 0 || id > MAX_LADDER_COUNT || normalized.some((ladder) => ladder.id === id)) continue;
+    // MAX_LADDER_COUNT bounds how many physical ladders this sidecar accepts;
+    // it is not an ID ceiling. Crafted gear uses one shared monotonic ID space,
+    // so a perfectly ordinary Field ladder can have an ID well above four.
+    if (id <= 0 || normalized.some((ladder) => ladder.id === id)) continue;
+    const condition = Number.isSafeInteger(raw.condition)
+      && (raw.condition as number) >= 0
+      && (raw.condition as number) <= FIXED_POINT
+      ? raw.condition as number
+      : 0;
     normalized.push({
       id,
       maxSpan: maxSpanForId(id),
-      condition: clampFixed(raw.condition as number),
-      deployment: isRecord(raw.deployment) ? raw.deployment as unknown as LadderDeployment : null,
+      condition,
+      deployment: normalizeDeployment(raw.deployment),
     });
   }
   return normalized.sort((left, right) => left.id - right.id);
@@ -656,12 +796,53 @@ function safeLadders(state: LadderKitState): readonly LadderKitItem[] {
 
 function rockByTile(field: RockField): Map<number, RockObstacle> {
   const result = new Map<number, RockObstacle>();
-  const obstacles: unknown = (field as { readonly obstacles?: unknown } | null)?.obstacles;
+  const rawField: unknown = field;
+  const width = normalizeGridDimension(isRecord(rawField) ? rawField.width as number : 0);
+  const height = normalizeGridDimension(isRecord(rawField) ? rawField.height as number : 0);
+  if (width === 0 || height === 0) return result;
+  const obstacles: unknown = isRecord(rawField) ? rawField.obstacles : undefined;
   if (!Array.isArray(obstacles)) return result;
-  for (const raw of obstacles) {
+  for (const raw of obstacles.slice(0, MAX_DERIVED_GRID_TILES)) {
     if (!isRecord(raw)) continue;
-    const obstacle = raw as unknown as RockObstacle;
-    if (!Number.isSafeInteger(obstacle.tileIndex) || obstacle.tileIndex < 0) continue;
+    if (!Number.isSafeInteger(raw.tileIndex)
+      || (raw.tileIndex as number) < 0
+      || (raw.tileIndex as number) >= width * height) continue;
+    const tileIndex = raw.tileIndex as number;
+    const severityValid = typeof raw.severity === "string"
+      && (ROCK_SEVERITIES as readonly string[]).includes(raw.severity);
+    const obstacleValid = Number.isSafeInteger(raw.id)
+      && (raw.id as number) > 0
+      && Number.isSafeInteger(raw.formationId)
+      && (raw.formationId as number) > 0
+      && Number.isSafeInteger(raw.height)
+      && (raw.height as number) >= 0
+      && (raw.height as number) <= FIXED_POINT
+      && Number.isSafeInteger(raw.slope)
+      && (raw.slope as number) >= 0
+      && (raw.slope as number) <= FIXED_POINT
+      && severityValid
+      && typeof raw.walkingBlocked === "boolean"
+      && typeof raw.highRisk === "boolean"
+      && Number.isSafeInteger(raw.fallRiskPermille)
+      && (raw.fallRiskPermille as number) >= 0
+      && (raw.fallRiskPermille as number) <= RISK_LIMIT
+      && Number.isSafeInteger(raw.travelCostPermille)
+      && (raw.travelCostPermille as number) >= 1_000
+      && (raw.travelCostPermille as number) <= COST_LIMIT;
+    const obstacle: RockObstacle = obstacleValid
+      ? raw as unknown as RockObstacle
+      : {
+        id: -(tileIndex + 1),
+        formationId: -(tileIndex + 1),
+        tileIndex,
+        height: FIXED_POINT,
+        slope: FIXED_POINT,
+        severity: "wall",
+        walkingBlocked: true,
+        highRisk: true,
+        fallRiskPermille: RISK_LIMIT,
+        travelCostPermille: COST_LIMIT,
+      };
     const previous = result.get(obstacle.tileIndex);
     if (previous === undefined || obstacle.id < previous.id) result.set(obstacle.tileIndex, obstacle);
   }
@@ -695,6 +876,43 @@ function lineBetween(
     span,
     path: Array.from({ length: span + 1 }, (_, offset) => fromTileIndex + offset * delta),
   };
+}
+
+function numberArraysEqual(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function deploymentMatchesField(
+  deployment: LadderDeployment,
+  width: number,
+  height: number,
+  rocks: ReadonlyMap<number, RockObstacle>,
+): boolean {
+  const line = lineBetween(
+    deployment.fromTileIndex,
+    deployment.toTileIndex,
+    width,
+    height,
+  );
+  if (typeof line !== "object"
+    || line.orientation !== deployment.orientation
+    || line.span !== deployment.span
+    || !numberArraysEqual(line.path, deployment.pathTileIndices)
+    || rocks.has(deployment.fromTileIndex)
+    || rocks.has(deployment.toTileIndex)) {
+    return false;
+  }
+  const obstacles = line.path.slice(1, -1).map((tileIndex) => rocks.get(tileIndex));
+  if (obstacles.length === 0 || obstacles.some((obstacle) => obstacle === undefined)) {
+    return false;
+  }
+  const crossed = obstacles.filter((obstacle): obstacle is RockObstacle => obstacle !== undefined);
+  return crossed.every((obstacle) => obstacle.id > 0
+      && obstacle.formationId === deployment.formationId)
+    && numberArraysEqual(
+      crossed.map((obstacle) => obstacle.id),
+      deployment.obstacleIds,
+    );
 }
 
 function endpointSupport(tile: CanonicalTerrainTile): number {
@@ -814,9 +1032,10 @@ export function validateLadderPlacement(
     return invalidPlacement(ladderId, "mixed-formation");
   }
   const spanPenalty = Math.max(0, line.span - MIN_LADDER_SPAN) * 40_000;
-  const support = clampFixed(
-    multiplyFixed(Math.min(fromSupport, toSupport), condition) - spanPenalty,
-  );
+  // Endpoint/span support and reusable-item condition are independent axes.
+  // Baking condition into this saved deployment value made the placement gate
+  // apply wear once here and again during crossing queries.
+  const support = clampFixed(Math.min(fromSupport, toSupport) - spanPenalty);
   if (support < MIN_LADDER_SUPPORT) {
     return invalidPlacement(ladderId, "support-too-low");
   }
@@ -994,13 +1213,20 @@ export function queryRockCrossing(
       if (deployment === null || !edgeIsOnDeployment(deployment, fromTileIndex, toTileIndex)) {
         return false;
       }
+      if (!deploymentMatchesField(deployment, width, height, rocks)) return false;
       return Array.isArray(deployment.obstacleIds)
         && obstacleIds.some((id) => deployment.obstacleIds.includes(id));
     });
-  const ladderSupport = ladder?.deployment === null || ladder === undefined
+  const ladderCondition = ladder === undefined ? 0 : clampFixed(ladder.condition);
+  const deploymentSupport = ladder?.deployment === null || ladder === undefined
     ? 0
-    : Math.min(clampFixed(ladder.condition), clampFixed(ladder.deployment.support));
-  const ladderUsable = ladderSupport >= MIN_LADDER_SUPPORT;
+    : clampFixed(ladder.deployment.support);
+  const ladderSupport = multiplyFixed(deploymentSupport, ladderCondition);
+  // Sound endpoints keep an intact ladder physically traversable as it wears.
+  // Condition scales its benefit continuously; only a fully broken ladder
+  // disappears as an aid. This prevents ordinary placement/service wear from
+  // turning a just-deployed ladder into an invisible hard wall.
+  const ladderUsable = deploymentSupport >= MIN_LADDER_SUPPORT && ladderCondition > 0;
   const riskMitigationPermille = ladderUsable
     ? Math.trunc((ladderSupport * 800) / FIXED_POINT)
     : 0;
@@ -1028,6 +1254,186 @@ export function queryRockCrossing(
     highRisk: fallRiskPermille >= 350,
     fallRiskPermille,
     travelCostPermille,
+  };
+}
+
+function invalidSweptCrossing(): RockSweptCrossing {
+  return {
+    valid: false,
+    fromTileIndex: null,
+    requestedTileIndex: null,
+    reachedTileIndex: null,
+    passable: false,
+    blockedEdgeOrdinal: null,
+    edges: [],
+  };
+}
+
+function compareRationalTimes(
+  leftNumerator: number,
+  leftDenominator: number,
+  rightNumerator: number,
+  rightDenominator: number,
+): number {
+  const left = BigInt(leftNumerator) * BigInt(rightDenominator);
+  const right = BigInt(rightNumerator) * BigInt(leftDenominator);
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/**
+ * Traces a continuous integer-coordinate segment through the authoritative
+ * cardinal rock-edge query. Boundary times are compared as exact rationals;
+ * an exact corner resolves X before Y. The first blocked edge stops the whole
+ * segment (there is deliberately no implicit wall slide), so diagonal and
+ * high-speed movement cannot jump across an unqueried rock edge.
+ *
+ * This is a pure quote: callers commit position, wear, effort, and consequences
+ * only for returned edges whose `committed` flag is true.
+ */
+export function querySweptRockCrossing(
+  field: RockField,
+  state: LadderKitState,
+  segment: RockTraversalSegment,
+): RockSweptCrossing {
+  const rawField: unknown = field;
+  const width = normalizeGridDimension(isRecord(rawField) ? rawField.width as number : 0);
+  const height = normalizeGridDimension(isRecord(rawField) ? rawField.height as number : 0);
+  const rawSegment: unknown = segment;
+  if (width === 0 || height === 0 || !isRecord(rawSegment)) return invalidSweptCrossing();
+  const from = rawSegment.from;
+  const to = rawSegment.to;
+  const tileUnits = rawSegment.tileUnits;
+  if (
+    !isRecord(from)
+    || !isRecord(to)
+    || !Number.isSafeInteger(tileUnits)
+    || (tileUnits as number) <= 0
+  ) return invalidSweptCrossing();
+  const units = tileUnits as number;
+  const worldWidth = width * units;
+  const worldHeight = height * units;
+  if (!Number.isSafeInteger(worldWidth) || !Number.isSafeInteger(worldHeight)) {
+    return invalidSweptCrossing();
+  }
+  const fromX = from.x;
+  const fromY = from.y;
+  const toX = to.x;
+  const toY = to.y;
+  if (
+    !Number.isSafeInteger(fromX)
+    || !Number.isSafeInteger(fromY)
+    || !Number.isSafeInteger(toX)
+    || !Number.isSafeInteger(toY)
+    || (fromX as number) < 0
+    || (fromY as number) < 0
+    || (toX as number) < 0
+    || (toY as number) < 0
+    || (fromX as number) >= worldWidth
+    || (toX as number) >= worldWidth
+    || (fromY as number) >= worldHeight
+    || (toY as number) >= worldHeight
+  ) return invalidSweptCrossing();
+
+  const startX = Math.floor((fromX as number) / units);
+  const startY = Math.floor((fromY as number) / units);
+  const targetX = Math.floor((toX as number) / units);
+  const targetY = Math.floor((toY as number) / units);
+  const fromTileIndex = startY * width + startX;
+  const requestedTileIndex = targetY * width + targetX;
+  let currentX = startX;
+  let currentY = startY;
+  const deltaX = (toX as number) - (fromX as number);
+  const deltaY = (toY as number) - (fromY as number);
+  const directionX = Math.sign(deltaX);
+  const directionY = Math.sign(deltaY);
+  const denominatorX = Math.abs(deltaX);
+  const denominatorY = Math.abs(deltaY);
+  const edges: RockSweptEdge[] = [];
+
+  const boundaryTime = (axis: RockBoundaryAxis): {
+    readonly numerator: number;
+    readonly denominator: number;
+  } | null => {
+    if (axis === "x") {
+      if (currentX === targetX || directionX === 0) return null;
+      const boundary = (directionX > 0 ? currentX + 1 : currentX) * units;
+      return {
+        numerator: directionX > 0
+          ? boundary - (fromX as number)
+          : (fromX as number) - boundary,
+        denominator: denominatorX,
+      };
+    }
+    if (currentY === targetY || directionY === 0) return null;
+    const boundary = (directionY > 0 ? currentY + 1 : currentY) * units;
+    return {
+      numerator: directionY > 0
+        ? boundary - (fromY as number)
+        : (fromY as number) - boundary,
+      denominator: denominatorY,
+    };
+  };
+
+  while (currentX !== targetX || currentY !== targetY) {
+    const xTime = boundaryTime("x");
+    const yTime = boundaryTime("y");
+    const axes: RockBoundaryAxis[] = (() => {
+      if (xTime === null) return yTime === null ? [] : ["y"];
+      if (yTime === null) return ["x"];
+      const order = compareRationalTimes(
+        xTime.numerator,
+        xTime.denominator,
+        yTime.numerator,
+        yTime.denominator,
+      );
+      if (order < 0) return ["x"];
+      if (order > 0) return ["y"];
+      return ["x", "y"];
+    })();
+    if (axes.length === 0) return invalidSweptCrossing();
+
+    for (const axis of axes) {
+      const time = axis === "x" ? xTime : yTime;
+      if (time === null) continue;
+      const nextX = currentX + (axis === "x" ? directionX : 0);
+      const nextY = currentY + (axis === "y" ? directionY : 0);
+      const edgeFromTileIndex = currentY * width + currentX;
+      const edgeToTileIndex = nextY * width + nextX;
+      const effect = queryRockCrossing(field, state, edgeFromTileIndex, edgeToTileIndex);
+      const committed = effect.valid && effect.passable;
+      const ordinal = edges.length;
+      edges.push({
+        ordinal,
+        axis,
+        crossingTimeNumerator: time.numerator,
+        crossingTimeDenominator: time.denominator,
+        committed,
+        effect,
+      });
+      if (!committed) {
+        return {
+          valid: true,
+          fromTileIndex,
+          requestedTileIndex,
+          reachedTileIndex: edgeFromTileIndex,
+          passable: false,
+          blockedEdgeOrdinal: ordinal,
+          edges,
+        };
+      }
+      currentX = nextX;
+      currentY = nextY;
+    }
+  }
+
+  return {
+    valid: true,
+    fromTileIndex,
+    requestedTileIndex,
+    reachedTileIndex: requestedTileIndex,
+    passable: true,
+    blockedEdgeOrdinal: null,
+    edges,
   };
 }
 

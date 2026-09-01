@@ -56,8 +56,29 @@ import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
+import {
+  beginLooseCargoPointerPress,
+  cancelLooseCargoPointerPress,
+  hitTestLooseCargoScreen,
+  keyboardLooseCargoRecoveryCommand,
+  looseCargoHitRadiusPixels,
+  looseCargoRecoveryLabel,
+  looseCargoVisual,
+  moveLooseCargoPointerPress,
+  nearestRecoverableLooseCargo,
+  releaseLooseCargoPointerCaptures,
+  resolveLooseCargoPointerRelease,
+  safeLooseCargoViews,
+  type LooseCargoPointerPress,
+} from "./looseCargoPresentation";
+import {
+  placeIncidentCallout,
+  playerBalancePresentation,
+  type PlayerBalancePresentation,
+} from "./playerPresentation";
 import type {
   FieldResourceNodeView,
+  LooseCargoView,
   PorterView,
   RendererCommand,
   RouteView,
@@ -222,9 +243,11 @@ export function createTideweftReliefRenderer(
   let cached: CachedReliefMesh | null = null;
   let orbitDrag: OrbitDrag | null = null;
   let clickCandidate: ClickCandidate | null = null;
+  let parcelPress: LooseCargoPointerPress | null = null;
   let twistGesture: ReliefTwistGesture | null = null;
   let touchSequenceSuppressed = false;
   let pointerWorld: WorldPoint | null = null;
+  let hoverParcelId: string | null = null;
   let lastMovement = "0,0";
   let lastOrbitFrameAt: number | undefined;
   const activeTouchPointers = new Map<number, ReliefTouchPoint>();
@@ -344,13 +367,11 @@ export function createTideweftReliefRenderer(
     updateMovement();
     orbitDrag = null;
     clickCandidate = null;
+    parcelPress = null;
+    hoverParcelId = null;
     twistGesture = null;
     touchSequenceSuppressed = false;
-    for (const pointerId of activeTouchPointers.keys()) {
-      if (canvasElement?.hasPointerCapture?.(pointerId)) {
-        canvasElement.releasePointerCapture(pointerId);
-      }
-    }
+    releaseLooseCargoPointerCaptures(canvasElement, [...activeTouchPointers.keys()]);
     activeTouchPointers.clear();
     lastOrbitFrameAt = undefined;
   };
@@ -378,6 +399,36 @@ export function createTideweftReliefRenderer(
       y: event.clientY - (rectangle?.top ?? 0),
     };
   };
+
+  const looseCargoViews = (): readonly LooseCargoView[] =>
+    safeLooseCargoViews(latestView?.looseCargo ?? []);
+
+  const projectParcelScreen = (parcel: LooseCargoView): WorldPoint | null => {
+    const view = latestView;
+    const p = instance;
+    if (!view || !p) return null;
+    const surface = discoveredReliefSurfaceHeightAt(
+      view.terrain,
+      parcel.position,
+      cached?.mesh.verticalScale ?? reliefScale(view.terrain),
+      true,
+    );
+    const projected = projectReliefPoint(
+      parcel.position,
+      surface + view.terrain.tileSize * 0.24,
+      currentCameraState(),
+      { width: p.width, height: p.height },
+    );
+    return projected.visible ? { x: projected.x, y: projected.y } : null;
+  };
+
+  const parcelHitAt = (screen: WorldPoint, coarsePointer: boolean) =>
+    hitTestLooseCargoScreen(
+      looseCargoViews(),
+      screen,
+      looseCargoHitRadiusPixels(coarsePointer, 10),
+      projectParcelScreen,
+    );
 
   const pickWorld = (screen: WorldPoint): WorldPoint | null => {
     const view = latestView;
@@ -416,6 +467,18 @@ export function createTideweftReliefRenderer(
     const used = new Set<string>();
     const destination = view.player.destination;
     const tileSize = view.terrain.tileSize;
+    const labelNode = (id: string, text: string): HTMLSpanElement => {
+      let node = labelNodes.get(id);
+      if (!node) {
+        node = document.createElement("span");
+        node.className = "relief-world-label";
+        labelLayer?.append(node);
+        labelNodes.set(id, node);
+      }
+      used.add(id);
+      if (node.textContent !== text) node.textContent = text;
+      return node;
+    };
     const place = (
       id: string,
       text: string,
@@ -430,17 +493,9 @@ export function createTideweftReliefRenderer(
         camera,
         { width: instance?.width ?? 1, height: instance?.height ?? 1 },
       );
-      let node = labelNodes.get(id);
-      if (!node) {
-        node = document.createElement("span");
-        node.className = "relief-world-label";
-        labelLayer?.append(node);
-        labelNodes.set(id, node);
-      }
-      used.add(id);
+      const node = labelNode(id, text);
       node.hidden = !projected.visible;
       if (!projected.visible) return;
-      if (node.textContent !== text) node.textContent = text;
       node.dataset.tone = tone;
       node.dataset.selected = selected ? "true" : "false";
       node.style.left = `${projected.x.toFixed(1)}px`;
@@ -508,7 +563,7 @@ export function createTideweftReliefRenderer(
         wayknot.active,
       );
     }
-    if (pointerWorld) {
+    if (pointerWorld && !hoverParcelId) {
       const resourceHit = hitTestFieldResource(
         view.fieldResources,
         pointerWorld,
@@ -534,6 +589,33 @@ export function createTideweftReliefRenderer(
           true,
         );
       }
+    }
+    const parcels = looseCargoViews();
+    const nearbyParcel = nearestRecoverableLooseCargo(
+      parcels,
+      view.player.position,
+      Math.max(1, tileSize * 0.9),
+    );
+    const labeledParcel = parcels.find(({ id }) => id === hoverParcelId)
+      ?? nearbyParcel;
+    if (labeledParcel) {
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        labeledParcel.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      place(
+        `parcel-${labeledParcel.id}`,
+        looseCargoRecoveryLabel(
+          labeledParcel,
+          window.matchMedia?.("(pointer: coarse)").matches ?? false,
+        ),
+        labeledParcel.position,
+        surface + tileSize * 0.78,
+        "wayknot",
+        true,
+      );
     }
     const tideHarps = tideHarpGeometryFor(view.tideHarps, tileSize * 0.1);
     for (const harp of tideHarps) {
@@ -566,6 +648,64 @@ export function createTideweftReliefRenderer(
         "wayknot",
         harp.active,
       );
+    }
+    const incident = view.player.incident;
+    if (incident && typeof incident.id === "string" && incident.id.length > 0) {
+      const compact = instance.width <= 704
+        || (instance.height <= 544 && instance.width <= 1_024);
+      const text = compact || !incident.detail
+        ? incident.label
+        : `${incident.label} · ${incident.detail}`;
+      const node = labelNode(`player-incident-${incident.id}`, text);
+      const playerSurface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        view.player.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      const projected = projectReliefPoint(
+        view.player.position,
+        playerSurface + tileSize * 0.72,
+        camera,
+        { width: instance.width, height: instance.height },
+      );
+      node.hidden = !projected.visible;
+      if (projected.visible) {
+        const presentation = playerBalancePresentation(view.player.balanceState);
+        const variant = Number.isSafeInteger(incident.variantSeed)
+          ? ((incident.variantSeed % 3) + 3) % 3 - 1
+          : 0;
+        const desiredWidth = Math.min(
+          compact ? 226 : 310,
+          Math.max(86, text.length * (compact ? 5.8 : 6.4) + 22),
+        );
+        const placed = placeIncidentCallout(
+          { x: projected.x + variant * 3, y: projected.y },
+          desiredWidth,
+          {
+            width: instance.width,
+            height: instance.height,
+            safeTop: compact ? 76 : 70,
+            safeBottom: compact ? 92 : 58,
+            compact,
+          },
+        );
+        const progress = unit(incident.progress);
+        node.dataset.tone = "incident";
+        node.dataset.selected = "false";
+        node.dataset.incidentKind = incident.kind;
+        node.dataset.placement = placed.aboveCourier ? "above" : "below";
+        node.style.left = `${placed.x.toFixed(1)}px`;
+        node.style.top = `${placed.y.toFixed(1)}px`;
+        node.style.width = `${placed.width.toFixed(1)}px`;
+        node.style.maxWidth = `${placed.width.toFixed(1)}px`;
+        node.style.boxSizing = "border-box";
+        node.style.color = presentation.outline;
+        node.style.borderLeftColor = presentation.fill;
+        node.style.boxShadow = `0 0 0 1px ${presentation.fill}55`;
+        node.style.opacity = `${(0.98 - progress * 0.14).toFixed(3)}`;
+        node.style.transform = "translate(-50%, -50%)";
+      }
     }
     for (const [id, node] of labelNodes) {
       if (used.has(id)) continue;
@@ -653,22 +793,26 @@ export function createTideweftReliefRenderer(
         emit({ type: "scan" });
         break;
       case "KeyE":
-      case "Enter":
-        emit({ type: "interact" });
+      case "Enter": {
+        const view = latestView;
+        const parcel = view
+          ? nearestRecoverableLooseCargo(
+              looseCargoViews(),
+              view.player.position,
+              Math.max(1, view.terrain.tileSize * 0.9),
+            )
+          : null;
+        const parcelCommand = keyboardLooseCargoRecoveryCommand(parcel);
+        if (parcelCommand) {
+          emit(parcelCommand);
+        } else {
+          emit({ type: "interact" });
+        }
         break;
+      }
       case "KeyF":
         event.preventDefault();
         emit({ type: "wayknot" });
-        break;
-      case "Equal":
-      case "NumpadAdd":
-      case "BracketRight":
-        emit({ type: "pace-step", delta: 1 });
-        break;
-      case "Minus":
-      case "NumpadSubtract":
-      case "BracketLeft":
-        emit({ type: "pace-step", delta: -1 });
         break;
       case "Escape":
         emit({ type: "cancel" });
@@ -732,7 +876,7 @@ export function createTideweftReliefRenderer(
   const attachCanvasListeners = (element: HTMLCanvasElement): void => {
     detachCanvasListeners();
     const releasePointerCapture = (pointerId: number): void => {
-      if (element.hasPointerCapture?.(pointerId)) element.releasePointerCapture(pointerId);
+      releaseLooseCargoPointerCaptures(element, [pointerId]);
     };
     const endTouch = (pointerId: number): void => {
       activeTouchPointers.delete(pointerId);
@@ -747,7 +891,23 @@ export function createTideweftReliefRenderer(
       if (clickCandidate?.pointerId !== event.pointerId) return;
       const candidate = clickCandidate;
       clickCandidate = null;
-      const point = pickWorld(localPointer(event));
+      const screen = localPointer(event);
+      const parcelRelease = resolveLooseCargoPointerRelease(
+        parcelPress,
+        event.pointerId,
+        screen,
+        looseCargoViews(),
+        looseCargoHitRadiusPixels(candidate.coarsePointer, 10),
+        projectParcelScreen,
+        "relief-3d",
+        candidate.coarsePointer,
+      );
+      parcelPress = null;
+      if (parcelRelease.consumesWorldTap) {
+        if (parcelRelease.command) emit(parcelRelease.command);
+        return;
+      }
+      const point = pickWorld(screen);
       if (!point) return;
       pointerWorld = point;
       const target = findSelection(point);
@@ -776,8 +936,20 @@ export function createTideweftReliefRenderer(
           // camera manipulation and can never leak through as a route click.
           touchSequenceSuppressed = true;
           clickCandidate = null;
+          parcelPress = null;
+          hoverParcelId = null;
           orbitDrag = null;
         } else if (!touchSequenceSuppressed) {
+          const screen = localPointer(event);
+          parcelPress = beginLooseCargoPointerPress(
+            event.pointerId,
+            screen,
+            looseCargoViews(),
+            looseCargoHitRadiusPixels(true, 10),
+            18,
+            projectParcelScreen,
+            "relief-3d",
+          );
           clickCandidate = {
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -800,15 +972,25 @@ export function createTideweftReliefRenderer(
         };
         element.setPointerCapture?.(event.pointerId);
       } else if (event.button === 0) {
+        const coarsePointer = usesCoarseWorldPointer(
+          event.pointerType,
+          window.matchMedia?.("(pointer: coarse)").matches ?? false,
+        );
+        parcelPress = beginLooseCargoPointerPress(
+          event.pointerId,
+          localPointer(event),
+          looseCargoViews(),
+          looseCargoHitRadiusPixels(coarsePointer, 10),
+          coarsePointer ? 18 : 7,
+          projectParcelScreen,
+          "relief-3d",
+        );
         clickCandidate = {
           pointerId: event.pointerId,
           startX: event.clientX,
           startY: event.clientY,
           shiftKey: event.shiftKey,
-          coarsePointer: usesCoarseWorldPointer(
-            event.pointerType,
-            window.matchMedia?.("(pointer: coarse)").matches ?? false,
-          ),
+          coarsePointer,
         };
       }
       event.preventDefault();
@@ -828,11 +1010,15 @@ export function createTideweftReliefRenderer(
           twistGesture = update.gesture;
           if (update.yawDelta !== 0) setOrbitYaw(orbit.yaw + update.yawDelta);
           clickCandidate = null;
+          parcelPress = null;
+          hoverParcelId = null;
           event.preventDefault();
           return;
         }
         if (touchSequenceSuppressed) {
           clickCandidate = null;
+          parcelPress = null;
+          hoverParcelId = null;
           event.preventDefault();
           return;
         }
@@ -845,14 +1031,30 @@ export function createTideweftReliefRenderer(
         orbit.pitch = clamp(orbit.pitch + dy * 0.006, MIN_RELIEF_PITCH, MAX_RELIEF_PITCH);
         orbitDrag.lastX = event.clientX;
         orbitDrag.lastY = event.clientY;
+        hoverParcelId = null;
         event.preventDefault();
         return;
       }
       const local = localPointer(event);
       pointerWorld = pickWorld(local);
-      if (clickCandidate?.pointerId === event.pointerId
-        && Math.hypot(event.clientX - clickCandidate.startX, event.clientY - clickCandidate.startY) > 7) {
-        clickCandidate = null;
+      const coarsePointer = usesCoarseWorldPointer(
+        event.pointerType,
+        window.matchMedia?.("(pointer: coarse)").matches ?? false,
+      );
+      hoverParcelId = parcelHitAt(local, coarsePointer)?.parcel.id ?? null;
+      if (clickCandidate?.pointerId === event.pointerId) {
+        const maximumTravel = clickCandidate.coarsePointer ? 18 : 7;
+        parcelPress = moveLooseCargoPointerPress(
+          parcelPress,
+          event.pointerId,
+          local,
+        );
+        if (Math.hypot(
+          event.clientX - clickCandidate.startX,
+          event.clientY - clickCandidate.startY,
+        ) > maximumTravel) {
+          clickCandidate = null;
+        }
       }
     };
     const pointerUp = (event: PointerEvent): void => {
@@ -878,6 +1080,7 @@ export function createTideweftReliefRenderer(
     const pointerCancel = (event: PointerEvent): void => {
       if (orbitDrag?.pointerId === event.pointerId) orbitDrag = null;
       if (clickCandidate?.pointerId === event.pointerId) clickCandidate = null;
+      parcelPress = cancelLooseCargoPointerPress(parcelPress, event.pointerId);
       if (event.pointerType === "touch" && activeTouchPointers.has(event.pointerId)) {
         endTouch(event.pointerId);
       }
@@ -888,6 +1091,7 @@ export function createTideweftReliefRenderer(
       // per-pointer state so a stale finger cannot swallow the next route tap.
       if (orbitDrag?.pointerId === event.pointerId) orbitDrag = null;
       if (clickCandidate?.pointerId === event.pointerId) clickCandidate = null;
+      parcelPress = cancelLooseCargoPointerPress(parcelPress, event.pointerId);
       if (activeTouchPointers.has(event.pointerId)) endTouch(event.pointerId);
     };
     const contextMenu = (event: MouseEvent): void => event.preventDefault();
@@ -1566,6 +1770,187 @@ export function createTideweftReliefRenderer(
       }
     };
 
+    const drawLooseCargo = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      now: number,
+    ): void => {
+      const parcels = safeLooseCargoViews(view.looseCargo ?? []);
+      if (parcels.length === 0) return;
+      const nearby = nearestRecoverableLooseCargo(
+        parcels,
+        view.player.position,
+        Math.max(1, view.terrain.tileSize * 0.9),
+      );
+      const size = Math.max(3, view.terrain.tileSize * 0.34);
+
+      for (const parcel of parcels) {
+        const visual = looseCargoVisual(parcel);
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          parcel.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        const highlighted = hoverParcelId === parcel.id || nearby?.id === parcel.id;
+
+        if (visual.motionMark === "wake") {
+          const nx = -visual.wake.x;
+          const nz = -visual.wake.y;
+          const px = -nz;
+          const pz = nx;
+          p.noFill();
+          p.stroke(withAlpha(RELIEF_PALETTE.water, 185));
+          p.strokeWeight(1.3);
+          for (const side of [-1, 1]) {
+            p.line(
+              parcel.position.x + nx * size * 0.3 + px * side * size * 0.28,
+              -surface - 2,
+              parcel.position.y + nz * size * 0.3 + pz * side * size * 0.28,
+              parcel.position.x + nx * size * 2.35 + px * side * size * 0.62,
+              -surface - 2,
+              parcel.position.y + nz * size * 2.35 + pz * side * size * 0.62,
+            );
+          }
+        }
+
+        if (visual.snagMark !== "none") {
+          const angle = visual.orientationRadians + (visual.snagMark === "roots" ? 0.9 : -0.7);
+          const anchor = {
+            x: parcel.position.x + Math.cos(angle) * size * 1.9,
+            y: parcel.position.y + Math.sin(angle) * size * 1.9,
+          };
+          p.stroke(visual.snagMark === "roots" ? RELIEF_PALETTE.marsh : RELIEF_PALETTE.coral);
+          p.strokeWeight(1.6);
+          p.line(
+            parcel.position.x,
+            -surface - size * 0.18,
+            parcel.position.y,
+            anchor.x,
+            -surface - size * 0.08,
+            anchor.y,
+          );
+          if (visual.snagMark === "roots") {
+            p.line(anchor.x, -surface, anchor.y, anchor.x - size * 0.45, -surface, anchor.y + size * 0.38);
+            p.line(anchor.x, -surface, anchor.y, anchor.x + size * 0.4, -surface, anchor.y + size * 0.35);
+          } else {
+            p.push();
+            p.noStroke();
+            p.translate(anchor.x, -surface - size * 0.16, anchor.y);
+            p.ambientMaterial(RELIEF_PALETTE.coral);
+            p.cone(size * 0.16, size * 0.5, 4, 1);
+            p.pop();
+          }
+        }
+
+        if (highlighted || parcel.recovery === "reachable") {
+          drawGroundRing(
+            view,
+            cache,
+            parcel.position,
+            view.terrain.tileSize * (highlighted ? 0.5 : 0.4),
+            parcel.recovery === "reachable" ? RELIEF_PALETTE.foam : visual.accent,
+            highlighted ? 225 : 115,
+          );
+        }
+
+        p.push();
+        p.noStroke();
+        p.translate(parcel.position.x, -surface - size * 0.27, parcel.position.y);
+        p.rotateY(visual.orientationRadians);
+        if (visual.motionMark === "tumble") {
+          const tumble = reducedMotion ? visual.orientationRadians * 0.16 : now * 0.0035;
+          p.rotateX(tumble);
+          p.rotateZ(tumble * 0.72);
+        }
+        p.ambientMaterial(visual.fill);
+        switch (visual.silhouette) {
+          case "bundle":
+            p.scale(1, 0.72, 0.88);
+            p.sphere(size * 0.55, 6, 4);
+            break;
+          case "crate":
+            p.box(size * 1.05, size * 0.82, size * 0.92);
+            break;
+          case "case":
+            p.box(size * 1.18, size * 0.62, size * 0.82, 2, 1);
+            p.push();
+            p.translate(0, -size * 0.42, 0);
+            p.ambientMaterial(visual.outline);
+            p.torus(size * 0.23, size * 0.055, 6, 3);
+            p.pop();
+            break;
+          case "sealed-case":
+            p.box(size * 1.2, size * 0.72, size * 0.9);
+            p.push();
+            p.translate(0, 0, size * 0.49);
+            p.emissiveMaterial(RELIEF_PALETTE.violet);
+            p.sphere(size * 0.17, 6, 4);
+            p.pop();
+            break;
+        }
+
+        // Durable non-color condition marks remain visible in monochrome and
+        // under color-vision filters.
+        p.stroke(RELIEF_PALETTE.ink);
+        p.strokeWeight(1.8);
+        switch (visual.conditionMark) {
+          case "none": break;
+          case "slash":
+            p.line(-size * 0.42, -size * 0.28, size * 0.48, size * 0.3);
+            break;
+          case "crack":
+            p.line(-size * 0.42, -size * 0.2, -size * 0.1, size * 0.02);
+            p.line(-size * 0.1, size * 0.02, size * 0.02, -size * 0.16);
+            p.line(size * 0.02, -size * 0.16, size * 0.46, size * 0.28);
+            break;
+          case "cross":
+            p.line(-size * 0.42, -size * 0.3, size * 0.42, size * 0.3);
+            p.line(-size * 0.42, size * 0.3, size * 0.42, -size * 0.3);
+            break;
+        }
+
+        if (visual.wetMark) {
+          p.noStroke();
+          p.push();
+          p.translate(size * 0.46, -size * 0.38, size * 0.25);
+          p.emissiveMaterial(RELIEF_PALETTE.water);
+          p.sphere(size * 0.12, 5, 3);
+          p.pop();
+        }
+        for (let mark = 0; mark < visual.contaminationMarks; mark += 1) {
+          p.push();
+          p.noStroke();
+          p.translate(
+            (mark - (visual.contaminationMarks - 1) / 2) * size * 0.28,
+            size * 0.37,
+            size * 0.46,
+          );
+          p.emissiveMaterial(RELIEF_PALETTE.violet);
+          p.sphere(size * 0.075, 4, 2);
+          p.pop();
+        }
+        p.pop();
+
+        if (parcel.impactMark !== "none") {
+          p.noFill();
+          p.stroke(RELIEF_PALETTE.coral);
+          p.strokeWeight(1.25);
+          for (let ray = 0; ray < 4; ray += 1) {
+            const angle = visual.orientationRadians + ray * Math.PI / 2;
+            p.line(
+              parcel.position.x + Math.cos(angle) * size * 0.7,
+              -surface - size * 0.3,
+              parcel.position.y + Math.sin(angle) * size * 0.7,
+              parcel.position.x + Math.cos(angle) * size * 1.05,
+              -surface - size * 0.48,
+              parcel.position.y + Math.sin(angle) * size * 1.05,
+            );
+          }
+        }
+      }
+    };
+
     const wayknotColor = (kind: WayknotKind): string => {
       switch (kind) {
         case "reed-mat": return RELIEF_PALETTE.amber;
@@ -2053,8 +2438,66 @@ export function createTideweftReliefRenderer(
       );
     };
 
+    const drawReliefBalanceMark = (
+      presentation: PlayerBalancePresentation,
+      size: number,
+    ): void => {
+      p.push();
+      p.noFill();
+      p.stroke(presentation.outline);
+      p.strokeWeight(1.7);
+      switch (presentation.mark) {
+        case "keel":
+          p.line(-size * 0.25, 0, 0, size * 0.28, 0, 0);
+          p.line(size * 0.12, -size * 0.08, 0, size * 0.28, 0, 0);
+          p.line(size * 0.12, size * 0.08, 0, size * 0.28, 0, 0);
+          break;
+        case "counterweight":
+          p.line(-size * 0.12, 0, -size * 0.31, -size * 0.12, 0, size * 0.31);
+          p.line(-size * 0.18, -size * 0.06, -size * 0.31, -size * 0.06, size * 0.06, -size * 0.31);
+          p.line(-size * 0.18, -size * 0.06, size * 0.31, -size * 0.06, size * 0.06, size * 0.31);
+          break;
+        case "skid":
+          p.line(-size * 0.62, size * 0.16, -size * 0.18, -size * 0.18, size * 0.08, -size * 0.18);
+          p.line(-size * 0.58, size * 0.16, size * 0.18, -size * 0.14, size * 0.08, size * 0.18);
+          break;
+        case "impact":
+          p.line(-size * 0.55, size * 0.12, 0, -size * 0.3, 0, 0);
+          p.line(size * 0.3, 0, 0, size * 0.55, size * 0.12, 0);
+          p.line(0, size * 0.12, -size * 0.55, 0, 0, -size * 0.3);
+          p.line(0, 0, size * 0.3, 0, size * 0.12, size * 0.55);
+          break;
+        case "eddy":
+          p.line(-size * 0.4, size * 0.08, -size * 0.2, size * 0.3, 0, -size * 0.38);
+          p.line(size * 0.3, 0, -size * 0.38, size * 0.42, size * 0.08, size * 0.08);
+          p.line(size * 0.42, size * 0.08, size * 0.08, size * 0.08, 0, size * 0.4);
+          p.line(size * 0.08, 0, size * 0.4, -size * 0.32, size * 0.08, size * 0.26);
+          break;
+        case "rise":
+          p.line(-size * 0.22, size * 0.06, 0, 0, -size * 0.2, 0);
+          p.line(0, -size * 0.2, 0, size * 0.22, size * 0.06, 0);
+          p.line(0, -size * 0.2, 0, 0, -size * 0.52, 0);
+          break;
+      }
+      p.pop();
+    };
+
+    const reliefSilhouetteScale = (
+      presentation: PlayerBalancePresentation,
+    ): readonly [number, number, number] => {
+      switch (presentation.silhouette) {
+        case "upright": return [0.8, 1.1, 0.8];
+        case "leaning": return [1.02, 0.9, 0.72];
+        case "off-step": return [1.18, 0.7, 0.7];
+        case "low": return [1.38, 0.4, 0.86];
+        case "afloat": return [1.3, 0.46, 1.04];
+        case "rising": return [0.74, 0.96, 0.74];
+      }
+    };
+
     const drawPlayer = (view: TideweftView, cache: CachedReliefMesh): void => {
       const player = view.player;
+      const presentation = playerBalancePresentation(player.balanceState);
       const size = view.terrain.tileSize;
       const surface = discoveredReliefSurfaceHeightAt(
         view.terrain,
@@ -2062,7 +2505,7 @@ export function createTideweftReliefRenderer(
         cache.mesh.verticalScale,
         true,
       );
-      const playerColor = player.mode === "swept" ? RELIEF_PALETTE.water : RELIEF_PALETTE.tide;
+      const playerColor = presentation.fill;
       drawDestination(view, cache);
       drawGroundRing(
         view,
@@ -2091,12 +2534,24 @@ export function createTideweftReliefRenderer(
       );
       p.push();
       p.noStroke();
-      p.translate(player.position.x, -surface - size * 0.36, player.position.y);
+      const bodyLift = size * (0.08 + presentation.heightScale * 0.26);
+      p.translate(player.position.x, -surface - bodyLift, player.position.y);
+      p.rotateY(-player.facing);
+      p.rotateZ(presentation.leanRadians);
       p.emissiveMaterial(playerColor);
-      if (player.mode === "skiff" || player.mode === "swept") {
+      const silhouetteScale = reliefSilhouetteScale(presentation);
+      p.scale(...silhouetteScale);
+      if (player.mode === "skiff") {
         p.scale(1.45, 0.55, 0.8);
       }
       p.sphere(size * 0.26, 10, 7);
+      p.pop();
+
+      p.push();
+      p.translate(player.position.x, -surface - bodyLift, player.position.y);
+      p.rotateY(-player.facing);
+      p.rotateZ(presentation.leanRadians);
+      drawReliefBalanceMark(presentation, size);
       p.pop();
 
       const shownCargo = Math.min(5, player.cargo.length);
@@ -2229,6 +2684,7 @@ export function createTideweftReliefRenderer(
       drawBiomeDetails(view, cache);
       drawFieldResources(view, cache);
       drawSurfaceCurrents(view, cache, now);
+      drawLooseCargo(view, cache, now);
       drawRoutes(view, cache);
       drawSoundings(view, cache);
       drawTideHarps(view, cache, now);
@@ -2250,7 +2706,7 @@ export function createTideweftReliefRenderer(
         canvasElement.setAttribute("role", "application");
         canvasElement.setAttribute(
           "aria-label",
-          "TIDEWEFT relief view. Travel with WASD or arrows. Hold J or L to spin the map; on touch, twist with two fingers. Space sounds the water, E interacts, F ties or tends a Wayknot, T opens the tutorial, Shift braces, wheel zooms, and right-drag also orbits the estuary.",
+          "TIDEWEFT relief view. Travel with WASD or arrows. Hold J or L to spin the map; on touch, twist with two fingers and tap a visible parcel to approach and recover it. Space sounds the water, E interacts or recovers a nearby parcel, F ties or tends a Wayknot, T opens the tutorial, Shift braces, wheel zooms, and right-drag also orbits the estuary.",
         );
         canvasElement.setAttribute(
           "aria-keyshortcuts",

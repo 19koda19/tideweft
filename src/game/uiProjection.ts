@@ -65,6 +65,12 @@ import {
   wayknotEffectStrength,
   wayknotAtTile,
 } from "./wayknots";
+import {
+  looseCargoPayloadLoadMilli,
+  promiseCargoLoadMilli,
+  type LooseCargoCarrierState,
+  type LooseCargoWorldState,
+} from "./looseCargo";
 
 export interface UIProjectionOptions {
   readonly fieldResourceCatalog?: FieldResourceCatalog;
@@ -72,6 +78,10 @@ export interface UIProjectionOptions {
   readonly saveWarning?: SaveWarningUIView;
   readonly requiresSeed?: boolean;
   readonly worldCreationBlocked?: boolean;
+  /** Authoritative exact lots; absent only for legacy fixtures and migration UI. */
+  readonly looseCargoCarrier?: LooseCargoCarrierState;
+  /** Authoritative loaded parcels used for RECOVER objectives and interaction. */
+  readonly looseCargoWorld?: LooseCargoWorldState;
 }
 
 export function projectUIView(
@@ -105,6 +115,10 @@ export function projectUIView(
   const worldName = `The ${titleCase(world.seedText)} Estuary`;
   const wayknotControl = projectWayknotControl(world, player);
   const localResource = resourceUnderfoot(player, options);
+  const nearbyParcel = nearestLooseParcel(player, options.looseCargoWorld, 2);
+  const activeCustody = activeContract
+    ? promiseCustody(activeContract, player, options.looseCargoCarrier, options.looseCargoWorld)
+    : undefined;
 
   return {
     revision: [
@@ -126,6 +140,7 @@ export function projectUIView(
       options.saveWarning?.id ?? "save-ok",
       options.requiresSeed ? "replacement-seed-required" : "ordinary-seed",
       options.worldCreationBlocked ? "world-creation-blocked" : "world-creation-enabled",
+      options.looseCargoWorld?.revision ?? "no-loose-world",
     ].join(":"),
     worldName,
     posture: session.posture,
@@ -165,10 +180,10 @@ export function projectUIView(
         : { locationLabel: settlementName(world, playerSettlementId) }),
     },
     field: projectFieldReadout(world, player),
-    kit: projectKit(world, player),
+    kit: projectKit(world, player, options.looseCargoCarrier),
     choir: projectChoir(world, player),
     ...(activeContract
-      ? { objective: contractObjective(activeContract, world, player) }
+      ? { objective: contractObjective(activeContract, world, player, activeCustody) }
       : report
         ? { objective: report }
         : trackedContract?.status === "offered"
@@ -180,7 +195,13 @@ export function projectUIView(
       .filter((contract) => contract.status === "offered" || contract.id === player.activeContractId)
       .sort((left, right) => contractPriority(left, playerSettlementId) - contractPriority(right, playerSettlementId))
       .slice(0, 8)
-      .map((contract) => projectContract(contract, world, player, session)),
+      .map((contract) => projectContract(
+        contract,
+        world,
+        player,
+        session,
+        contract.id === activeContract?.id ? activeCustody : undefined,
+      )),
     ...(selectedSettlement ? { selectedSettlement: projectSettlement(selectedSettlement, world, playerSettlementId, player) } : {}),
     chronicle: world.events.slice(-24).reverse().map((event) => projectChronicle(event, world)),
     title: {
@@ -220,9 +241,12 @@ export function projectUIView(
     ...(options.saveWarning ? { saveWarning: options.saveWarning } : {}),
     controls: {
       canScan: player.mode !== "swept" && player.scanCharge >= 280_000,
-      canInteract: player.mode !== "swept" && (localResource !== undefined || playerSettlementId !== null),
+      canInteract: player.mode !== "swept"
+        && (nearbyParcel !== undefined || localResource !== undefined || playerSettlementId !== null),
       interactLabel: player.mode === "swept"
         ? "Current has helm"
+        : nearbyParcel
+          ? "Recover parcel"
         : localResource
           ? `Gather ${CRAFTING_STACK_DEFINITIONS[localResource.material].label}`
         : activeContract?.destinationSettlementId === playerSettlementId
@@ -234,6 +258,8 @@ export function projectUIView(
             : "Inspect harbor",
       interactHint: player.mode === "swept"
         ? "Harbor actions return after the safe bank catches you."
+        : nearbyParcel
+          ? `A physical ${nearbyParcel.payload.kind === "promise" ? "Promise parcel" : "field item"} is within reach. Desktop: press E. Mobile: tap the parcel.`
         : localResource
           ? `One ${CRAFTING_STACK_DEFINITIONS[localResource.material].label} unit is underfoot. Desktop: press E. Mobile: tapping its field mark routes here and gathers automatically.`
         : playerSettlementId === null
@@ -250,7 +276,6 @@ export function projectUIView(
         && wayknotControl.available,
       wayknotLabel: wayknotControl.label,
       wayknotHint: wayknotControl.hint,
-      canChangePace: !session.paused && player.mode !== "swept",
       canEndSession: !session.titleVisible,
     },
   };
@@ -280,20 +305,44 @@ function craftingRevision(player: PlayerState): string {
   return `${stacks}|${gear}|${player.nextCraftedGearId}|${cargoWeightMilli(player)}`;
 }
 
-function projectKit(world: WorldView, player: PlayerState): KitUIView {
+function projectKit(
+  world: WorldView,
+  player: PlayerState,
+  carrier?: LooseCargoCarrierState,
+): KitUIView {
   const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
   const transportMilli = transportLoadMilli(player);
   const inventory = actionableCraftingInventory(player);
   const actionsBlocked = player.mode === "swept" || player.mode === "rescued";
+  const dropBlocker = actionsBlocked
+    ? "Secure your footing before releasing anything from the PACK."
+    : undefined;
+  const exactPromiseLots = carrier?.lots.filter((lot) => lot.payload.kind === "promise") ?? [];
   const transportRows: KitUIView["transportRows"] = [
-    ...player.cargo.map((cargo) => ({
-      id: `cargo-${cargo.contractId}`,
-      kind: "promise-cargo" as const,
-      label: `${cargo.quantity} ${titleCase(cargo.resource)}`,
-      detail: `${titleCase(cargo.property)} Promise cargo`,
-      loadMilli: legacyCargoLoadMilli(cargo.quantity, cargo.property),
-      condition: cargo.condition / FIXED_POINT,
-    })),
+    ...(carrier
+      ? exactPromiseLots.map((lot) => {
+          if (lot.payload.kind !== "promise") throw new Error("Promise lot projection lost its kind");
+          return {
+            id: lot.id,
+            lotId: lot.id,
+            kind: "promise-cargo" as const,
+            label: `${lot.payload.quantity} ${titleCase(lot.payload.resource)}`,
+            detail: `${titleCase(lot.payload.property)} Promise cargo · exact physical lot`,
+            loadMilli: looseCargoPayloadLoadMilli(lot.payload),
+            condition: lot.materialState.condition / FIXED_POINT,
+            dropQuantity: lot.payload.quantity,
+            canDrop: dropBlocker === undefined,
+            ...(dropBlocker ? { dropDisabledReason: dropBlocker } : {}),
+          };
+        })
+      : player.cargo.map((cargo) => ({
+          id: `cargo-${cargo.contractId}`,
+          kind: "promise-cargo" as const,
+          label: `${cargo.quantity} ${titleCase(cargo.resource)}`,
+          detail: `${titleCase(cargo.property)} Promise cargo`,
+          loadMilli: legacyCargoLoadMilli(cargo.quantity, cargo.property),
+          condition: cargo.condition / FIXED_POINT,
+        }))),
     ...(player.report
       ? [{
           id: `report-${player.report.sourceSettlementId}-${player.report.targetSettlementId}`,
@@ -304,21 +353,41 @@ function projectKit(world: WorldView, player: PlayerState): KitUIView {
         }]
       : []),
   ];
-  const stackRows: KitUIView["stackRows"] = CRAFTING_STACK_IDS.flatMap((id) => {
-    const quantity = player.craftingInventory.stacks[id];
-    if (quantity <= 0) return [];
-    const definition = CRAFTING_STACK_DEFINITIONS[id];
-    return [{
-      id,
-      tier: definition.tier,
-      label: definition.label,
-      quantity,
-      unitLoadMilli: definition.loadMilli,
-      totalLoadMilli: definition.loadMilli * quantity,
-      location: "pack" as const,
-      locationLabel: "Carried PACK",
-    }];
-  });
+  const stackRows: KitUIView["stackRows"] = carrier
+    ? carrier.lots.flatMap((lot) => {
+        if (lot.payload.kind !== "stack") return [];
+        const definition = CRAFTING_STACK_DEFINITIONS[lot.payload.item];
+        return [{
+          id: lot.id,
+          itemId: lot.payload.item,
+          lotId: lot.id,
+          tier: definition.tier,
+          label: definition.label,
+          quantity: lot.payload.quantity,
+          unitLoadMilli: definition.loadMilli,
+          totalLoadMilli: definition.loadMilli * lot.payload.quantity,
+          location: "pack" as const,
+          locationLabel: materialStateLabel(lot.materialState),
+          canDrop: dropBlocker === undefined,
+          ...(dropBlocker ? { dropDisabledReason: dropBlocker } : {}),
+        }];
+      })
+    : CRAFTING_STACK_IDS.flatMap((id) => {
+        const quantity = player.craftingInventory.stacks[id];
+        if (quantity <= 0) return [];
+        const definition = CRAFTING_STACK_DEFINITIONS[id];
+        return [{
+          id,
+          itemId: id,
+          tier: definition.tier,
+          label: definition.label,
+          quantity,
+          unitLoadMilli: definition.loadMilli,
+          totalLoadMilli: definition.loadMilli * quantity,
+          location: "pack" as const,
+          locationLabel: "Carried PACK",
+        }];
+      });
   const craftedGearRows: KitUIView["gearRows"] = player.craftingInventory.gear.map((gear) => {
     const definition = CRAFTED_GEAR_DEFINITIONS[gear.kind];
     const repairPreview = inventory
@@ -332,8 +401,11 @@ function projectKit(world: WorldView, player: PlayerState): KitUIView {
       : inventory
         ? undefined
         : "Shared pack is over capacity.";
+    const carrierLot = carrier?.lots.find((lot) =>
+      lot.payload.kind === "gear" && lot.payload.gearId === gear.id);
     return {
       id: String(gear.id),
+      ...(carrierLot ? { lotId: carrierLot.id } : {}),
       kind: gear.kind,
       label: `${definition.label} #${gear.id}`,
       detail: gearPurpose(gear.kind),
@@ -356,6 +428,8 @@ function projectKit(world: WorldView, player: PlayerState): KitUIView {
       ...(actionBlocker || !dismantlePreview?.ok
         ? { dismantleDisabledReason: actionBlocker ?? dismantlePreview?.message ?? "Cannot dismantle this item." }
         : {}),
+      canDrop: carrierLot !== undefined && dropBlocker === undefined,
+      ...(carrierLot && dropBlocker ? { dropDisabledReason: dropBlocker } : {}),
     };
   });
   const coreWayknotRows: KitUIView["gearRows"] = player.wayknots.wayknots.map((wayknot) => {
@@ -438,7 +512,7 @@ function projectKit(world: WorldView, player: PlayerState): KitUIView {
   });
   const settlementId = settlementAtPlayer(player, world);
   return {
-    revision: craftingRevision(player),
+    revision: `${craftingRevision(player)}|carrier:${carrier?.revision ?? "legacy"}`,
     combinedLoadMilli: cargoWeightMilli(player),
     capacityMilli,
     transportLoadMilli: transportMilli,
@@ -451,6 +525,21 @@ function projectKit(world: WorldView, player: PlayerState): KitUIView {
       : `${settlementName(world, settlementId)} harbor · PACK only`,
     hint: "Natural finds, components, durable gear, Promise cargo, and reports share one physical pack. MAKE and MEND never pause the estuary. Wraps, sash, cleats, and cape already adapt travel; each staged item says what still awaits its terrain phase.",
   };
+}
+
+function materialStateLabel(state: {
+  readonly condition: number;
+  readonly contamination: number;
+  readonly decay: number;
+}): string {
+  const condition = Math.floor((state.condition * 100) / FIXED_POINT);
+  const contamination = Math.floor((state.contamination * 100) / FIXED_POINT);
+  const decay = Math.floor((state.decay * 100) / FIXED_POINT);
+  const extras = [
+    contamination > 0 ? `${contamination}% tainted` : "",
+    decay > 0 ? `${decay}% weathered` : "",
+  ].filter(Boolean);
+  return `Carried PACK · ${condition}% condition${extras.length > 0 ? ` · ${extras.join(" · ")}` : ""}`;
 }
 
 function actionableCraftingInventory(player: PlayerState): CraftingInventory | null {
@@ -470,8 +559,7 @@ function legacyCargoLoadMilli(
   quantity: number,
   property: PlayerState["cargo"][number]["property"],
 ): number {
-  const multiplier = property === "heavy" ? 2 : property === "fragile" ? 1.25 : 1;
-  return Math.ceil(quantity * multiplier) * PACK_LOAD_MILLI_PER_UNIT;
+  return promiseCargoLoadMilli(quantity, property);
 }
 
 function conditionBand(condition: number): string {
@@ -562,7 +650,7 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
           ? "High water drain"
           : "Severe water drain";
   const hint = player.mode === "swept"
-    ? `Current has the helm · ${Math.round(sweptProgress * 100)}% toward a safe bank. Pace, steering, and sounding return ashore; cargo remains with you.`
+    ? `Current has the helm · ${Math.round(sweptProgress * 100)}% toward a safe bank. Steering and sounding return ashore; cargo remains physical, and anything separated stays recoverable.`
     : depth > 20_000 && !depthKnown
       ? "Sound this water first (Space). Depth changes stamina use and whether flooded ground takes a Reed mat or Tide anchor."
     : activeTideHarp
@@ -713,6 +801,7 @@ function projectContract(
   world: WorldView,
   player: PlayerState,
   session: GameSessionState,
+  custody?: PromiseCustodyProjection,
 ): ContractUIView {
   const origin = settlementName(world, contract.originSettlementId);
   const destination = settlementName(world, contract.destinationSettlementId);
@@ -745,7 +834,9 @@ function projectContract(
       : `${destination}'s reserve, inter-harbor trust, and the exact route you travel will respond.`,
     selected: session.inspectedContractId === contract.id || session.trackedContractId === contract.id,
     disabled: !isActive && player.activeContractId !== null,
-    actionLabel: isActive
+    actionLabel: isActive && (custody?.looseQuantity ?? 0) > 0
+      ? `Recover ${custody?.looseQuantity ?? 0} loose first`
+      : isActive
       ? settlementAtPlayer(player, world) === null
         ? "Handoff at any harbor"
         : "Hand off promise safely"
@@ -755,11 +846,33 @@ function projectContract(
   };
 }
 
-function contractObjective(contract: ContractState, world: WorldView, player: PlayerState) {
+function contractObjective(
+  contract: ContractState,
+  world: WorldView,
+  player: PlayerState,
+  custody?: PromiseCustodyProjection,
+) {
   const origin = settlementName(world, contract.originSettlementId);
   const destination = settlementName(world, contract.destinationSettlementId);
   const cargo = player.cargo.find((item) => item.contractId === contract.id);
   const journey = journeyProgress(contract, world, player);
+  if (custody && custody.looseQuantity > 0) {
+    const motion = custody.nearestLoose?.motion === "snagged"
+      ? `snagged by ${custody.nearestLoose.snaggedBy ?? "vegetation"}`
+      : custody.nearestLoose?.motion ?? "moving";
+    const range = custody.nearestLoose
+      ? `${custody.nearestLoose.distance.toFixed(1)} tiles away · ${motion}`
+      : "marked in the loaded landscape";
+    return {
+      id: `recover-${contract.id}`,
+      eyebrow: "Recover loose Promise cargo",
+      title: `RECOVER ${custody.looseQuantity} ${titleCase(contract.resource)} BEFORE DELIVERY`,
+      description: `${custody.carriedQuantity} of ${contract.quantity} promised units are secured. The nearest exact parcel is ${range}; press E within reach on desktop or tap its parcel marker on mobile. Water and grade may keep moving it.`,
+      progress: Math.max(0, Math.min(1, custody.carriedQuantity / Math.max(1, contract.quantity))),
+      progressLabel: `${custody.carriedQuantity} carried · ${custody.looseQuantity} loose · harbor handoff blocked`,
+      why: `RECOVERY FIRST: every physical unit must be back in the PACK before ${destination} can sign the receipt.`,
+    };
+  }
   return {
     id: String(contract.id),
     eyebrow: `Deliver to ${destination}`,
@@ -773,6 +886,65 @@ function contractObjective(contract: ContractState, world: WorldView, player: Pl
       : "Awaiting pickup",
     why: `PICKUP: ${origin} ✓  ·  DELIVERY: ${destination}. Every condition grade still arrives.`,
   };
+}
+
+interface PromiseCustodyProjection {
+  readonly carriedQuantity: number;
+  readonly looseQuantity: number;
+  readonly nearestLoose?: {
+    readonly id: string;
+    readonly distance: number;
+    readonly motion: LooseCargoWorldState["entities"][number]["motion"];
+    readonly snaggedBy: LooseCargoWorldState["entities"][number]["snaggedBy"];
+  };
+}
+
+function promiseCustody(
+  contract: ContractState,
+  player: PlayerState,
+  carrier?: LooseCargoCarrierState,
+  looseWorld?: LooseCargoWorldState,
+): PromiseCustodyProjection | undefined {
+  if (!carrier || !looseWorld) return undefined;
+  const carriedQuantity = carrier.lots.reduce((total, lot) =>
+    total + (lot.payload.kind === "promise" && lot.payload.contractId === contract.id
+      ? lot.payload.quantity
+      : 0), 0);
+  const loose = looseWorld.entities.filter((entity) =>
+    entity.payload.kind === "promise" && entity.payload.contractId === contract.id);
+  const looseQuantity = loose.reduce((total, entity) =>
+    total + (entity.payload.kind === "promise" ? entity.payload.quantity : 0), 0);
+  const nearest = [...loose]
+    .map((entity) => ({
+      id: entity.id,
+      distance: looseParcelDistance(player, entity.x, entity.y),
+      motion: entity.motion,
+      snaggedBy: entity.snaggedBy,
+    }))
+    .sort((left, right) => left.distance - right.distance || left.id.localeCompare(right.id))[0];
+  return {
+    carriedQuantity,
+    looseQuantity,
+    ...(nearest ? { nearestLoose: nearest } : {}),
+  };
+}
+
+function nearestLooseParcel(
+  player: PlayerState,
+  looseWorld: LooseCargoWorldState | undefined,
+  maximumDistance: number,
+): LooseCargoWorldState["entities"][number] | undefined {
+  if (!looseWorld) return undefined;
+  return [...looseWorld.entities]
+    .map((entity) => ({ entity, distance: looseParcelDistance(player, entity.x, entity.y) }))
+    .filter(({ distance }) => distance <= maximumDistance)
+    .sort((left, right) => left.distance - right.distance
+      || left.entity.id.localeCompare(right.entity.id))[0]?.entity;
+}
+
+function looseParcelDistance(player: PlayerState, x: number, y: number): number {
+  return Math.abs(x / FIXED_POINT - player.x / 1_000)
+    + Math.abs(y / FIXED_POINT - player.y / 1_000);
 }
 
 function pickupObjective(contract: ContractState, world: WorldView, player: PlayerState) {

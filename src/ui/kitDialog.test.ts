@@ -1,21 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  EMPTY_KIT_POINTER_SEQUENCE,
   KIT_DIALOG_ID,
   KIT_DIALOG_PANEL_ID,
   KIT_DIALOG_SCROLL_REGION_ID,
   KIT_FALLBACK_CAPACITY_MILLI,
   KIT_MINIMUM_TARGET_CSS_PIXELS,
   KIT_TABS,
+  beginKitPointerSequence,
+  endKitPointerSequence,
   formatKitMilliLoad,
+  kitPointerSequenceAllowsAction,
+  kitPointerSequenceAllowsClick,
   kitViewSignature,
   nextKitTab,
+  resetKitPointerSequence,
 } from "./kitDialog";
 import {
   KIT_REPAIR_CONDITION_GAIN,
+  type ControlAvailabilityUIView,
   type KitUIView,
   type TideweftUICommand,
 } from "./types";
+
+import type { RendererCommand } from "../render/types";
 
 const view = (disabledReason = "Need 1 Braided cord"): KitUIView => ({
   revision: 7,
@@ -26,14 +35,19 @@ const view = (disabledReason = "Need 1 Braided cord"): KitUIView => ({
   hint: "World continues.",
   transportRows: [{
     id: "promise:1",
+    lotId: "lot/promise/1",
     kind: "promise-cargo",
     label: "Medicine for Lowglass",
     detail: "Fragile · DELIVER LOWGLASS",
     loadMilli: 4_000,
     condition: 0.82,
+    dropQuantity: 2,
+    canDrop: true,
   }],
   stackRows: [{
     id: "cordreed:pack",
+    itemId: "cordreed",
+    lotId: "lot/find/cordreed/7",
     tier: "raw",
     label: "Cordreed",
     quantity: 3,
@@ -41,9 +55,11 @@ const view = (disabledReason = "Need 1 Braided cord"): KitUIView => ({
     totalLoadMilli: 1_800,
     location: "pack",
     locationLabel: "Carried",
+    canDrop: true,
   }],
   gearRows: [{
     id: "gear:reed-mat:1",
+    lotId: "lot/gear/reed-mat/1",
     kind: "reed-mat",
     label: "Reed mat R1",
     detail: "Improves soft footing",
@@ -56,6 +72,7 @@ const view = (disabledReason = "Need 1 Braided cord"): KitUIView => ({
     salvageLabel: "1 Cordreed",
     canRepair: true,
     canDismantle: true,
+    canDrop: true,
   }],
   recipes: [{
     id: "gear/reed-mat",
@@ -121,9 +138,81 @@ describe("KIT dialog presentation contract", () => {
         conditionGain: KIT_REPAIR_CONDITION_GAIN,
       },
       { type: "kit", action: "dismantle", gearId: "gear:reed-mat:1" },
+      { type: "kit", action: "drop", lotId: "lot/find/cordreed/7", quantity: 1 },
     ];
     expect(KIT_REPAIR_CONDITION_GAIN).toBe(250_000);
     expect(commands.map((command) => command.type === "kit" ? command.action : command.type))
-      .toEqual(["craft", "repair", "dismantle"]);
+      .toEqual(["craft", "repair", "dismantle", "drop"]);
+  });
+
+  it("refreshes an exact-lot drop row when its authority or blocker changes", () => {
+    const current = view();
+    expect(kitViewSignature({
+      ...current,
+      stackRows: current.stackRows.map((row) => ({ ...row, canDrop: false, dropDisabledReason: "Recover your footing first." })),
+    })).not.toBe(kitViewSignature(current));
+    expect(kitViewSignature({
+      ...current,
+      stackRows: current.stackRows.map((row) => ({ ...row, lotId: "lot/find/cordreed/8" })),
+    })).not.toBe(kitViewSignature(current));
+  });
+
+  it("has no manual pace mutation command or availability surface", () => {
+    const noUICommand: Extract<TideweftUICommand, { type: "set-pace" }> extends never
+      ? true : false = true;
+    const noRendererCommand: Extract<RendererCommand, { type: "pace-step" }> extends never
+      ? true : false = true;
+    const noAvailabilityFlag: "canChangePace" extends keyof ControlAvailabilityUIView
+      ? false : true = true;
+    expect([noUICommand, noRendererCommand, noAvailabilityFlag]).toEqual([true, true, true]);
+  });
+
+  it("allows one pointer to activate a 44px KIT action", () => {
+    let sequence = beginKitPointerSequence(EMPTY_KIT_POINTER_SEQUENCE, 41);
+    expect(sequence.activePointerIds).toEqual([41]);
+    expect(kitPointerSequenceAllowsAction(sequence)).toBe(true);
+    sequence = endKitPointerSequence(sequence, 41);
+    expect(sequence.activePointerIds).toEqual([]);
+    expect(kitPointerSequenceAllowsAction(sequence)).toBe(true);
+    expect(KIT_MINIMUM_TARGET_CSS_PIXELS).toBe(44);
+  });
+
+  it("latches suppression after a second pointer until the complete sequence ends", () => {
+    let sequence = beginKitPointerSequence(EMPTY_KIT_POINTER_SEQUENCE, 7);
+    sequence = beginKitPointerSequence(sequence, 9);
+    expect(kitPointerSequenceAllowsAction(sequence)).toBe(false);
+
+    sequence = endKitPointerSequence(sequence, 7);
+    expect(sequence.activePointerIds).toEqual([9]);
+    expect(kitPointerSequenceAllowsAction(sequence)).toBe(false);
+
+    sequence = endKitPointerSequence(sequence, 9);
+    expect(sequence.activePointerIds).toEqual([]);
+    expect(kitPointerSequenceAllowsAction(sequence)).toBe(false);
+    expect(kitPointerSequenceAllowsClick(sequence, 1)).toBe(false);
+    expect(kitPointerSequenceAllowsClick(sequence, 0)).toBe(true);
+  });
+
+  it("does not dispatch DROP during multi-touch and resets on cancellation or focus loss", () => {
+    let sequence = beginKitPointerSequence(EMPTY_KIT_POINTER_SEQUENCE, 2);
+    sequence = beginKitPointerSequence(sequence, 5);
+    const commands: TideweftUICommand[] = [];
+    if (kitPointerSequenceAllowsAction(sequence)) {
+      commands.push({ type: "kit", action: "drop", lotId: "lot/find/cordreed/7", quantity: 1 });
+    }
+    expect(commands).toEqual([]);
+
+    sequence = resetKitPointerSequence();
+    expect(sequence).toBe(EMPTY_KIT_POINTER_SEQUENCE);
+    expect(kitPointerSequenceAllowsAction(sequence)).toBe(true);
+  });
+
+  it("handles rapid pointer ID reuse without retaining a stale suppression latch", () => {
+    let sequence = beginKitPointerSequence(EMPTY_KIT_POINTER_SEQUENCE, 12);
+    sequence = endKitPointerSequence(sequence, 12);
+    sequence = resetKitPointerSequence();
+    sequence = beginKitPointerSequence(sequence, 12);
+    expect(sequence.activePointerIds).toEqual([12]);
+    expect(kitPointerSequenceAllowsAction(sequence)).toBe(true);
   });
 });

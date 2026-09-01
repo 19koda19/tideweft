@@ -14,7 +14,8 @@ const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
 const SMOKE_WORLD_TILE_COUNT = 96 * 72;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.1-alpha.1';
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.2-alpha.0';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 7;
 const SMOKE_TIDE_HARP = Object.freeze({
   id: 'tide-harp:r1-a3-w5',
   label: 'Glass-Ebb Tide Harp · R1 · A3 · W5',
@@ -1403,7 +1404,6 @@ async function bindSmokeWayknot(contents) {
     const candidate = candidates[0];
     if (!candidate || candidate.distance > 8) return null;
 
-    runtime.dispatchUI({ type: 'set-pace', pace: 'swift' });
     runtime.dispatchRenderer({ type: 'move-target', point: candidate.point, additive: false });
     return candidate;
   })()`, true);
@@ -1524,6 +1524,46 @@ async function installSmokeTideHarpFixture(contents) {
     player.sweepSupport = null;
     player.currentTrace = [tileIndex];
     player.surveyTrace = [tileIndex];
+
+    // The v3 production loader seals the complete envelope. This smoke-only
+    // persisted fixture deliberately changes player state, so reseal it with
+    // the exact canonical encoder/hash used by the production runtime before
+    // proving that the normal load path accepts it.
+    const stableStringify = (value) => {
+      if (value === null) return 'null';
+      switch (typeof value) {
+        case 'boolean': return value ? 'true' : 'false';
+        case 'number':
+          if (!Number.isFinite(value)) throw new TypeError('Cannot encode a non-finite number');
+          if (Object.is(value, -0)) return '0';
+          return JSON.stringify(value);
+        case 'string': return JSON.stringify(value);
+        case 'object': {
+          if (Array.isArray(value)) {
+            return '[' + value.map((entry) => stableStringify(entry)).join(',') + ']';
+          }
+          const keys = Object.keys(value).sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+          return '{' + keys.map((key) => {
+            if (value[key] === undefined) throw new TypeError('Cannot encode undefined at key ' + key);
+            return JSON.stringify(key) + ':' + stableStringify(value[key]);
+          }).join(',') + '}';
+        }
+        default: throw new TypeError('Cannot canonically encode ' + typeof value);
+      }
+    };
+    const unsealed = { ...envelope };
+    delete unsealed.integrity;
+    const encoded = stableStringify(unsealed);
+    let high = 0x811c9dc5;
+    let low = 0x9e3779b9;
+    for (let index = 0; index < encoded.length; index += 1) {
+      const code = encoded.charCodeAt(index);
+      high = Math.imul(high ^ code, 0x01000193) >>> 0;
+      low = Math.imul(low ^ code, 0x85ebca6b) >>> 0;
+      low ^= high >>> 13;
+    }
+    envelope.integrity = (high >>> 0).toString(16).padStart(8, '0')
+      + (low >>> 0).toString(16).padStart(8, '0');
 
     record.worldJson = JSON.stringify(envelope);
     record.updatedAt = Math.max(Date.now(), Number(record.updatedAt || 0) + 1);
@@ -2558,7 +2598,7 @@ async function runProductionSmoke(window) {
     paintedTitleProbe.release?.buildIdentity !== SMOKE_EXPECTED_RELEASE_VERSION ||
     paintedTitleProbe.release?.gameplayContract?.id !== 'challenging-hard' ||
     paintedTitleProbe.release?.gameplayContract?.name !== 'A CHALLENGING HARD' ||
-    paintedTitleProbe.release?.gameplayContract?.version !== 6 ||
+    paintedTitleProbe.release?.gameplayContract?.version !== SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION ||
     paintedTitleProbe.titleOpen !== true ||
     paintedTitleProbe.titleLayout?.contentVisible !== true ||
     paintedTitleProbe.titleLayout?.headingVisible !== true ||

@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(7);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(8);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -88,6 +88,8 @@ describe("TIDEWEFT field-manual content", () => {
       detail: expect.stringContaining("Open tutorial"),
     });
     expect(tutorialControlById("pace-buttons")).toBeUndefined();
+    expect(tutorialControlById("pace-keys")).toBeUndefined();
+    expect(controlCopy).not.toMatch(/\[\s*\/\s*\]|change pace|select.*pace/iu);
   });
 
   it("spells out the physical promise pickup and delivery flow without treating tracking as acceptance", () => {
@@ -178,9 +180,12 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("one-slot information journey");
     expect(copy).toContain("Signed reports · information only");
     expect(copy).toContain("disabled button says why");
-    expect(copy).toContain("Unbraced travel lowers stability");
+    expect(copy).toContain("Stability is footing, not a second stamina bar");
+    expect(copy).toContain("Pace has no selector");
     expect(copy).toContain("Sparse arrows");
     expect(copy).toContain("stamina or stability reaching zero");
+    expect(copy).toContain("durable traversal ordinal");
+    expect(copy).toContain("changes the courier's color and silhouette");
     expect(copy).toContain("Marsh stilts");
     expect(copy).toContain("Tide sail");
     expect(copy).toContain("Storm kite");
@@ -268,7 +273,6 @@ describe("TIDEWEFT field-manual content", () => {
       "planned-world-expansion",
       "planned-regional-biomes",
       "planned-magic-water-cargo",
-      "planned-loose-cargo-physics",
       "planned-rocks-and-ladders",
       "planned-staged-gear-bridges",
       "planned-anywhere-upgrades",
@@ -279,7 +283,6 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("Seven stable visual biomes");
     expect(plannedCopy).toContain("do not affect the courier or cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
-    expect(plannedCopy).toContain("cannot fall down rocks or drift away");
     expect(plannedCopy).toContain("not implemented yet");
     expect(plannedCopy).toContain("do not become deployable Wayknots yet");
     expect(plannedCopy).toContain("harbor locker storage");

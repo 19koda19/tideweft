@@ -7,7 +7,19 @@ export type SoundCue =
   | "choir"
   | "warning"
   | "rest"
+  | "stumble"
+  | "fall"
+  | "impact"
+  | "sweep"
+  | "recover"
   | "ui";
+
+export interface SoundToneStep {
+  readonly frequency: number;
+  readonly delay: number;
+  readonly type: OscillatorType;
+  readonly duration: number;
+}
 
 export interface AudioSettings {
   enabled: boolean;
@@ -69,7 +81,7 @@ export class TideweftSoundscape {
     this.ambienceGain.gain.setTargetAtTime(level, now, 0.9);
   }
 
-  play(cue: SoundCue, intensity = 0.7): void {
+  play(cue: SoundCue, intensity = 0.7, variantSeed = 0): void {
     if (!this.context || !this.effectsGain || !this.settings.enabled || this.context.state !== "running") return;
     const strength = clamp01(intensity);
     const now = this.context.currentTime;
@@ -84,40 +96,45 @@ export class TideweftSoundscape {
       return;
     }
 
-    const patterns: Record<Exclude<SoundCue, "step" | "choir">, readonly [number, number, OscillatorType, number][]> = {
+    const patterns: Record<Exclude<SoundCue, "step" | "choir">, readonly SoundToneStep[]> = {
       scan: [
-        [196, 0, "sine", 0.18],
-        [392, 0.07, "sine", 0.28],
-        [784, 0.14, "triangle", 0.32],
+        toneStep(196, 0, "sine", 0.18),
+        toneStep(392, 0.07, "sine", 0.28),
+        toneStep(784, 0.14, "triangle", 0.32),
       ],
       accept: [
-        [262, 0, "triangle", 0.12],
-        [330, 0.08, "triangle", 0.18],
+        toneStep(262, 0, "triangle", 0.12),
+        toneStep(330, 0.08, "triangle", 0.18),
       ],
       deliver: [
-        [220, 0, "sine", 0.32],
-        [330, 0.08, "sine", 0.38],
-        [440, 0.16, "sine", 0.48],
-        [660, 0.28, "triangle", 0.62],
+        toneStep(220, 0, "sine", 0.32),
+        toneStep(330, 0.08, "sine", 0.38),
+        toneStep(440, 0.16, "sine", 0.48),
+        toneStep(660, 0.28, "triangle", 0.62),
       ],
       strand: [
-        [147, 0, "sine", 0.28],
-        [294, 0.1, "triangle", 0.42],
-        [587, 0.22, "sine", 0.56],
+        toneStep(147, 0, "sine", 0.28),
+        toneStep(294, 0.1, "triangle", 0.42),
+        toneStep(587, 0.22, "sine", 0.56),
       ],
       warning: [
-        [165, 0, "sawtooth", 0.11],
-        [147, 0.14, "sawtooth", 0.16],
+        toneStep(165, 0, "sawtooth", 0.11),
+        toneStep(147, 0.14, "sawtooth", 0.16),
       ],
       rest: [
-        [196, 0, "sine", 0.45],
-        [247, 0.12, "sine", 0.52],
-        [294, 0.25, "sine", 0.7],
+        toneStep(196, 0, "sine", 0.45),
+        toneStep(247, 0.12, "sine", 0.52),
+        toneStep(294, 0.25, "sine", 0.7),
       ],
-      ui: [[520, 0, "sine", 0.055]],
+      stumble: incidentSoundPattern("stumble", variantSeed),
+      fall: incidentSoundPattern("fall", variantSeed),
+      impact: incidentSoundPattern("impact", variantSeed),
+      sweep: incidentSoundPattern("sweep", variantSeed),
+      recover: incidentSoundPattern("recover", variantSeed),
+      ui: [toneStep(520, 0, "sine", 0.055)],
     };
 
-    for (const [frequency, delay, type, duration] of patterns[cue]) {
+    for (const { frequency, delay, type, duration } of patterns[cue]) {
       this.tone(frequency, now + delay, duration, type, (0.025 + duration * 0.035) * strength);
     }
   }
@@ -236,6 +253,52 @@ export class TideweftSoundscape {
     envelope.connect(this.effectsGain);
     source.start(start);
   }
+}
+
+/** A tiny, deterministic Atari-like voice for a persisted traversal incident. */
+export function incidentSoundPattern(
+  cue: "stumble" | "fall" | "impact" | "sweep" | "recover",
+  variantSeed: number,
+): readonly SoundToneStep[] {
+  const seed = Number.isSafeInteger(variantSeed) ? variantSeed >>> 0 : 0;
+  const shift = ((seed % 7) - 3) * 5;
+  switch (cue) {
+    case "stumble":
+      return [
+        toneStep(210 + shift, 0, "square", 0.055),
+        toneStep(156 + shift, 0.052, "square", 0.075),
+      ];
+    case "fall":
+      return [
+        toneStep(176 + shift, 0, "square", 0.07),
+        toneStep(92 + shift, 0.065, "sawtooth", 0.14),
+      ];
+    case "impact":
+      return [
+        toneStep(132 + shift, 0, "square", 0.045),
+        toneStep(66 + Math.trunc(shift / 2), 0.038, "square", 0.19),
+      ];
+    case "sweep":
+      return [
+        toneStep(118 + shift, 0, "triangle", 0.16),
+        toneStep(164 + shift, 0.09, "square", 0.11),
+        toneStep(102 + shift, 0.18, "triangle", 0.18),
+      ];
+    case "recover":
+      return [
+        toneStep(164 + shift, 0, "square", 0.06),
+        toneStep(246 + shift, 0.065, "triangle", 0.1),
+      ];
+  }
+}
+
+function toneStep(
+  frequency: number,
+  delay: number,
+  type: OscillatorType,
+  duration: number,
+): SoundToneStep {
+  return { frequency, delay, type, duration };
 }
 
 function clamp01(value: number): number {

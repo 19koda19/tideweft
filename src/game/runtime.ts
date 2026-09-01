@@ -13,6 +13,7 @@ import {
   type WorldView,
 } from "../sim/public";
 import { findTilePath, MAX_TIDE_LEVEL } from "../sim/terrain";
+import { stableStringify } from "../sim/util";
 import {
   advanceFieldResourceEcology,
   canonicalizeFieldResourceState,
@@ -49,7 +50,6 @@ import {
   cargoWeight,
   cargoWeightMilli,
   createPlayer,
-  cyclePace,
   loadContractCargo,
   playerTileIndex,
   pulseScan,
@@ -67,6 +67,12 @@ import {
   type PlayerState,
   type TravelPace,
 } from "./player";
+import {
+  acknowledgeIncidentCue,
+  canonicalizeTraversalFeedback,
+  createTraversalFeedbackState,
+  type TraversalFeedbackState,
+} from "./traversalFeedback";
 import {
   CRAFTING_CONDITION_MAX,
   CRAFTING_RECIPES,
@@ -105,6 +111,38 @@ import {
 import { updateTutorial } from "./tutorial";
 import { appendSurveyedHarborLeg, assessHarborLeg, type TideChoirCycle } from "./tideChoir";
 import { projectUIView } from "./uiProjection";
+import {
+  addLooseCargoStack,
+  consumeLooseCargoStack,
+  dropLooseCargo,
+  LOOSE_CARGO_MAX_PICKUP_REACH,
+  pickupLooseCargo,
+  removeLooseCargoGear,
+  removeLooseCargoPromise,
+  setLooseCargoGearCondition,
+  setLooseCargoPromiseMaterialState,
+  setLooseCargoReservedLoad,
+  upsertLooseCargoGear,
+  upsertLooseCargoPromise,
+  type CarriedCargoLot,
+  type LooseCargoCarrierState,
+  type LooseCargoPayload,
+} from "./looseCargo";
+import {
+  looseCargoPositionAtPlayer,
+  playerPositionAtLooseCargo,
+  projectLooseCargoCarrierToPlayer,
+  stepLooseCargoInCompatibilityWorld,
+} from "./looseCargoRuntime";
+import {
+  commitPhysicalCargoState,
+  createPhysicalCargoStateFromPlayer,
+  gameSaveEnvelopeIntegrity,
+  quotePhysicalCargoSource,
+  validatePhysicalCargoState,
+  type PhysicalCargoState,
+} from "./physicalCargoState";
+import { resolveFallCargo } from "./fallCargo";
 
 const FIXED_STEP_MS = 100;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
@@ -116,12 +154,14 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 2;
+const GAME_SAVE_VERSION = 3;
+const FIELD_RESOURCE_GAME_SAVE_VERSION = 2;
 const LEGACY_GAME_SAVE_VERSION = 1;
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
 const MAX_SAFE_CARGO_QUANTITY = Math.floor(
   Number.MAX_SAFE_INTEGER / (2 * PACK_LOAD_MILLI_PER_UNIT),
 );
+const LOOSE_CARGO_RECOVERY_REACH = LOOSE_CARGO_MAX_PICKUP_REACH;
 
 const PLAYER_CARGO_RESOURCES: ReadonlySet<ContractState["resource"]> = new Set([
   "food",
@@ -150,6 +190,9 @@ interface GameSaveEnvelope {
   player: PlayerState;
   session: GameSessionState;
   fieldResources: FieldResourceEcologyState;
+  traversalFeedback: TraversalFeedbackState;
+  physicalCargo: PhysicalCargoState;
+  integrity: string;
 }
 
 export interface TideweftRuntime {
@@ -171,13 +214,25 @@ export async function createTideweftRuntime(
   let worldView = createWorldView(world);
   let fieldResourceCatalog = runtimeFieldResourceCatalog(world);
   let fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
+  let traversalFeedback = createTraversalFeedbackState();
   const firstPromise = worldView.contracts.find((contract) => contract.status === "offered");
   let player = createPlayer(worldView, firstPromise?.originSettlementId);
+  let physicalCargo = createPhysicalCargoStateFromPlayer(
+    player,
+    worldView.terrain.width,
+    worldView.terrain.height,
+  );
   let session = createSessionState(world.meta.seedText, HARD_POSTURE);
-  let renderView = projectGameView(worldView, player, { paused: true });
+  let renderView = projectGameView(worldView, player, {
+    paused: true,
+    traversalFeedback,
+    looseCargoWorld: physicalCargo.looseWorld,
+  });
   let uiView = projectUIView(worldView, player, session, {
     fieldResourceCatalog,
     fieldResourceEcology,
+    looseCargoCarrier: physicalCargo.carrier,
+    looseCargoWorld: physicalCargo.looseWorld,
   });
   const soundscape = new TideweftSoundscape();
   let focusHandler: ((point: WorldPoint, zoom?: number) => void) | undefined;
@@ -191,6 +246,8 @@ export async function createTideweftRuntime(
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
   let autopilotPath: number[] = [];
   let pendingGatherNodeId: string | null = null;
+  let pendingParcelTargetId: string | null = null;
+  let pendingParcelRecoverOnArrival = false;
   let pendingAcceptance: { contractId: number; acceptCommandId: string; pickupCommandId: string } | null = null;
   let pendingDelivery: { contractId: number; commandId: string; wasAutomated: boolean } | null = null;
   let pendingReinforcement: {
@@ -217,6 +274,7 @@ export async function createTideweftRuntime(
   let newerSaveUnavailable = false;
   let staleSaveDetected = false;
   let saveReadFailed = false;
+  let runtimeIntegrityFailure: string | null = null;
   let recoverableSaveIssue: "corrupt" | "conflict" | null = null;
   let replacementSeedRequired = false;
   let destroyed = false;
@@ -318,95 +376,10 @@ export async function createTideweftRuntime(
       fieldResourceCatalog,
       loaded.fieldResources,
     );
+    traversalFeedback = loaded.traversalFeedback;
     player = loaded.player;
-    player.worldWidth = worldView.terrain.width;
-    player.worldHeight = worldView.terrain.height;
-    player.x = clamp(player.x, TILE_UNITS / 2, worldView.terrain.width * TILE_UNITS - TILE_UNITS / 2);
-    player.y = clamp(player.y, TILE_UNITS / 2, worldView.terrain.height * TILE_UNITS - TILE_UNITS / 2);
-    player.previousX = Number.isFinite(player.previousX)
-      ? clamp(player.previousX, TILE_UNITS / 2, worldView.terrain.width * TILE_UNITS - TILE_UNITS / 2)
-      : player.x;
-    player.previousY = Number.isFinite(player.previousY)
-      ? clamp(player.previousY, TILE_UNITS / 2, worldView.terrain.height * TILE_UNITS - TILE_UNITS / 2)
-      : player.y;
-    player.velocityX = Number.isFinite(player.velocityX) ? player.velocityX : 0;
-    player.velocityY = Number.isFinite(player.velocityY) ? player.velocityY : 0;
-    player.facingMilliRadians = Number.isFinite(player.facingMilliRadians) ? player.facingMilliRadians : 0;
-    player.stamina = clamp(player.stamina, 0, FIXED_POINT);
-    player.stability = clamp(player.stability, 0, FIXED_POINT);
-    player.scanCharge = clamp(player.scanCharge, 0, FIXED_POINT);
-    player.scanPulse = Number.isFinite(player.scanPulse) ? clamp(player.scanPulse, 0, FIXED_POINT) : 0;
-    player.pace = isTravelPace(player.pace) ? player.pace : "steady";
-    player.mode = isPlayerMode(player.mode) ? player.mode : "foot";
-    player.report = player.report ?? null;
-    player.reportsDelivered = Number.isFinite(player.reportsDelivered) ? Math.max(0, Math.floor(player.reportsDelivered)) : 0;
-    player.stabilityTrend = player.stabilityTrend === "falling" || player.stabilityTrend === "recovering"
-      ? player.stabilityTrend
-      : "steady";
-    player.stabilityHint = typeof player.stabilityHint === "string" && player.stabilityHint.trim().length > 0
-      ? player.stabilityHint
-      : "Stable · hold Shift while moving to brace";
-    player.discovered = player.discovered.map((value) => Number.isFinite(value)
-      ? clamp(value, 0, FIXED_POINT)
-      : 0);
-    const validTools: readonly FieldToolKind[] = ["sounding-line", "marsh-stilts", "tide-sail", "storm-kite"];
-    player.tools = Array.isArray(player.tools)
-      ? [...new Set(player.tools.filter((tool): tool is FieldToolKind => validTools.includes(tool as FieldToolKind)))].sort()
-      : ["sounding-line"];
-    if (!player.tools.includes("sounding-line")) player.tools.unshift("sounding-line");
-    player.wayknots = normalizeWayknotState(player.wayknots, {
-      capacity: DEFAULT_WAYKNOT_CAPACITY,
-      tileCount: worldView.terrain.tiles.length,
-      loadTick: worldView.completedTick,
-      contextAt: (tileIndex) => {
-        const context = wayknotContextAt(worldView, tileIndex);
-        if (!context) return undefined;
-        const tile = worldView.terrain.tiles[tileIndex];
-        const canReachAnchorDepth = tile !== undefined
-          && MAX_TIDE_LEVEL - tile.elevation >= TIDE_ANCHOR_PLACEMENT_DEPTH;
-        // Preserve an anchor that could truthfully have been set at peak tide,
-        // even if this save resumes during an ebb. High marsh, meadow, and
-        // ridge that can never reach placement depth remain authoritative so
-        // malformed imported placements return safely to the carried kit.
-        return canReachAnchorDepth
-          ? { ...context, waterDepth: Math.max(context.waterDepth, TIDE_ANCHOR_PLACEMENT_DEPTH) }
-          : context;
-      },
-    });
-    player.depthSoundings = Array.isArray(player.depthSoundings)
-      && player.depthSoundings.length === worldView.terrain.tiles.length
-      ? player.depthSoundings.map((value) => Number.isFinite(value) ? Math.max(0, Math.min(1_000_000, value)) : 0)
-      : Array.from({ length: worldView.terrain.tiles.length }, () => 0);
-    player.sweepPath = Array.isArray(player.sweepPath) ? player.sweepPath : [];
-    player.sweepTicksRemaining = Number.isFinite(player.sweepTicksRemaining)
-      ? Math.max(0, Math.floor(player.sweepTicksRemaining))
-      : 0;
-    player.sweepTotalTicks = Number.isFinite(player.sweepTotalTicks)
-      ? Math.max(player.sweepTicksRemaining, Math.floor(player.sweepTotalTicks))
-      : player.sweepTicksRemaining;
-    player.sweepSupport = player.sweepSupport === "clinic" || player.sweepSupport === "ferry"
-      ? player.sweepSupport
-      : null;
-    if (player.mode === "swept" && !restoreSweptPlayer(player, worldView)) {
-      player.mode = "camp";
-      player.stamina = Math.max(player.stamina, 150_000);
-      restoreSweptPlayer(player, worldView);
-    } else if (player.mode !== "swept") {
-      restoreSweptPlayer(player, worldView);
-    }
-    const loadedHarborId = settlementAtPlayer(player, worldView);
-    player.surveyTrace = Array.isArray(player.surveyTrace) && player.surveyTrace.length > 0
-      ? player.surveyTrace
-      : [playerTileIndex(player)];
-    player.surveyedRouteIds = Array.isArray(player.surveyedRouteIds)
-      ? [...new Set(player.surveyedRouteIds.filter((id) => worldView.routes.some((route) => route.id === id)))].sort((left, right) => left - right)
-      : [];
-    player.lastHarborId = player.lastHarborId === null || worldView.settlements.some((settlement) => settlement.id === player.lastHarborId)
-      ? player.lastHarborId
-      : loadedHarborId;
-    player.harborTrail = Array.isArray(player.harborTrail) && player.harborTrail.every((id) => worldView.settlements.some((settlement) => settlement.id === id))
-      ? player.harborTrail.slice(-8)
-      : player.lastHarborId === null ? [] : [player.lastHarborId];
+    physicalCargo = loaded.physicalCargo;
+    normalizePlayerForRuntime(player, worldView);
     session = loaded.session;
     session.pressureMode = HARD_PRESSURE_MODE;
     session.posture = HARD_POSTURE;
@@ -464,14 +437,27 @@ export async function createTideweftRuntime(
       ...(destinationKind ? { destinationKind } : {}),
       fieldResourceCatalog,
       fieldResourceEcology,
+      traversalFeedback,
+      looseCargoWorld: physicalCargo.looseWorld,
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
     uiView = projectUIView(worldView, player, session, {
       fieldResourceCatalog,
       fieldResourceEcology,
+      looseCargoCarrier: physicalCargo.carrier,
+      looseCargoWorld: physicalCargo.looseWorld,
       requiresSeed: replacementSeedRequired,
       worldCreationBlocked: saveRecoveryBlocked,
-      ...(saveFailureVisible
+      ...(runtimeIntegrityFailure
+        ? {
+            saveWarning: {
+              id: "runtime-integrity-halt",
+              message: "SIMULATION PAUSED SAFELY",
+              detail: `${runtimeIntegrityFailure} No further world step was accepted. Reload the last durable save; this window will not continue from a partial transaction.`,
+              tone: "danger" as const,
+            },
+          }
+        : saveFailureVisible
         ? {
             saveWarning: {
               id: `local-save-${recoverableSaveIssue ?? (saveReadFailed ? "read-unavailable" : staleSaveDetected ? "superseded" : newerSaveUnavailable ? "unavailable" : saveRecoveryBlocked ? "blocked" : "failed")}-era-${saveGenerationEra}-generation-${saveGeneration}`,
@@ -514,7 +500,17 @@ export async function createTideweftRuntime(
     commandQueue.push(command);
   }
 
+  function physicalReceiptPending(): boolean {
+    return pendingAcceptance !== null
+      || pendingDelivery !== null
+      || pendingRenegotiation !== null
+      || pendingReportDelivery !== null;
+  }
+
   function currentControl(): PlayerControl {
+    if (physicalReceiptPending()) {
+      return { moveX: 0, moveY: 0, brace: manualControl.brace };
+    }
     if (manualControl.moveX || manualControl.moveY || autopilotPath.length === 0) return manualControl;
     const nextIndex = autopilotPath[0];
     if (nextIndex === undefined) return manualControl;
@@ -539,11 +535,104 @@ export async function createTideweftRuntime(
     };
   }
 
+  function mirrorPhysicalCargoToPlayer(): void {
+    const mirror = projectLooseCargoCarrierToPlayer(physicalCargo.carrier);
+    player.craftingInventory = mirror.craftingInventory;
+    player.cargo = mirror.cargo.map((cargo) => ({ ...cargo }));
+  }
+
+  function applyPlayerStepToPhysicalCargo(result: ReturnType<typeof stepPlayer>): void {
+    let carrier = physicalCargo.carrier;
+    let changed = false;
+    for (const pressure of result.cargoConditionPressures ?? []) {
+      for (const lot of carrier.lots.filter((candidate) =>
+        candidate.payload.kind === "promise"
+        && candidate.payload.contractId === pressure.contractId)) {
+        const materialState = {
+          ...lot.materialState,
+          condition: Math.max(0, lot.materialState.condition - pressure.conditionLoss),
+        };
+        const mutation = setLooseCargoPromiseMaterialState(carrier, lot.id, materialState);
+        if (!mutation.ok) throw new Error(`Promise weathering failed: ${mutation.reason}`);
+        carrier = mutation.carrier;
+        changed ||= mutation.reason === "applied";
+      }
+    }
+    for (const gear of player.craftingInventory.gear) {
+      const lot = carrier.lots.find((candidate) =>
+        candidate.payload.kind === "gear" && candidate.payload.gearId === gear.id);
+      if (!lot || lot.payload.kind !== "gear") {
+        throw new Error(`Physical gear #${gear.id} vanished during service wear`);
+      }
+      if (lot.materialState.condition === gear.condition) continue;
+      const mutation = setLooseCargoGearCondition(carrier, gear.id, gear.condition);
+      if (!mutation.ok) throw new Error(`Physical gear wear failed: ${mutation.reason}`);
+      carrier = mutation.carrier;
+      changed = true;
+    }
+    if (changed) {
+      physicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        { looseWorld: physicalCargo.looseWorld, carrier },
+        { kind: "conserved" },
+      );
+    }
+
+    const incident = result.traversalIncident;
+    if (incident) {
+      const evaluation = result.fallEvaluations.find((candidate) =>
+        candidate.usedTraversalOrdinal === incident.traversalOrdinal);
+      if (!evaluation) throw new Error("Traversal incident lost its accepted fall evaluation");
+      const position = looseCargoPositionAtPlayer(incident.position.x, incident.position.y);
+      const fall = resolveFallCargo({
+        seed: world.meta.rootSeed,
+        actorId: incident.actorId,
+        evaluation,
+        nextTraversalOrdinal: incident.traversalOrdinal,
+        world: physicalCargo.looseWorld,
+        carrier: physicalCargo.carrier,
+        expectedManifest: physicalCargo.expectedManifest,
+        x: position.x,
+        y: position.y,
+      });
+      if (!fall.ok) throw new Error(`Physical fall transaction failed: ${fall.reason}`);
+      physicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        { looseWorld: fall.world, carrier: fall.carrier },
+        { kind: "conserved" },
+      );
+      if (fall.outcome === "separated") {
+        session.sessionChanges.push(
+          `${incident.label}; ${fall.separatedEntityIds.length} physical parcel${fall.separatedEntityIds.length === 1 ? "" : "s"} broke loose and remained recoverable.`,
+        );
+      }
+    }
+
+    if (physicalCargo.looseWorld.entities.length > 0) {
+      const stepped = stepLooseCargoInCompatibilityWorld(worldView, physicalCargo.looseWorld);
+      if (!stepped.ok) throw new Error(`Loose cargo simulation failed closed: ${stepped.reason}`);
+      physicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        { looseWorld: stepped.state, carrier: physicalCargo.carrier },
+        { kind: "conserved" },
+      );
+    }
+    mirrorPhysicalCargoToPlayer();
+  }
+
   function tick(): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
+    advancePendingParcelTarget();
     const beforeX = player.x;
     const beforeY = player.y;
-    const result = stepPlayer(player, worldView, currentControl());
+    const result = stepPlayer(player, worldView, currentControl(), {
+      seed: world.meta.rootSeed,
+      actorId: 0,
+      feedback: traversalFeedback,
+      deferFallCargoConsequence: true,
+    });
+    if (result.traversalFeedback) traversalFeedback = result.traversalFeedback;
+    applyPlayerStepToPhysicalCargo(result);
     if (result.enteredTile !== null && result.settlementId !== null) {
       recordHarborArrival(result.settlementId);
       const unlockedTool = unlockFieldToolAtSettlement(player, worldView, result.settlementId);
@@ -589,6 +678,8 @@ export async function createTideweftRuntime(
     if (result.becameSwept) {
       autopilotPath = [];
       pendingGatherNodeId = null;
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
       manualControl = { ...manualControl, moveX: 0, moveY: 0 };
       const collapse = result.sweepCause === "stability"
         ? {
@@ -603,19 +694,21 @@ export async function createTideweftRuntime(
         ? " A connected ferry crew has shortened the drift."
         : " The current is carrying you toward the nearest safe bank.";
       session.sessionChanges.push(collapse.change);
-      announce(
-        session,
-        `${collapse.warning} Steering is temporarily lost; cargo stays with you.${support}`,
-        true,
-      );
-      soundscape.play("warning", 0.82);
+      if (result.traversalIncident?.kind !== "sweep") {
+        announce(
+          session,
+          `${collapse.warning} Steering is temporarily lost; cargo remains physical, and anything separated stays recoverable.${support}`,
+          true,
+        );
+        soundscape.play("warning", 0.82);
+      }
     } else if (result.exhausted || (result.rescued && !result.washedAshore)) {
       if (result.rescued) {
         session.sessionChanges.push("A completed clinic and established strand turned a field collapse into mutual aid.");
         announce(session, "A clinic crew reached you through the established strand. Nothing was lost; infrastructure changed failure into care.", true);
         soundscape.play("deliver", 0.62);
       } else {
-        announce(session, "You made camp. Nothing was lost; rest pace will rebuild your stamina.");
+        announce(session, "You made camp. Nothing was lost; staying still will rebuild your stamina.");
         soundscape.play("rest");
       }
     }
@@ -623,11 +716,22 @@ export async function createTideweftRuntime(
       const support = result.sweepSupport
         ? `${result.sweepSupport === "clinic" ? "Clinic" : "Ferry"} support brought you in sooner.`
         : "The nearest safe bank caught you.";
-      session.sessionChanges.push(`You washed ashore with every cargo item still in your care. ${support}`);
-      announce(session, `ASHORE — ${support} Rest has restored enough stamina to continue; cargo quantity was never lost.`, true);
+      session.sessionChanges.push(
+        `You washed ashore; cargo quantity stayed accountable, and any separated parcel remains recoverable. ${support}`,
+      );
+      announce(
+        session,
+        `ASHORE — ${support} Staying still restored enough stamina to continue; check RECOVER for any separated cargo.`,
+        true,
+      );
       soundscape.play("rest", 0.9);
     }
-    if (!result.becameSwept && result.damagedCargo && session.sessionPlayMilliseconds - lastCargoDamageNoticeMs >= 2_500) {
+    if (
+      !result.becameSwept
+      && !result.traversalIncident
+      && result.damagedCargo
+      && session.sessionPlayMilliseconds - lastCargoDamageNoticeMs >= 2_500
+    ) {
       lastCargoDamageNoticeMs = session.sessionPlayMilliseconds;
       const property = player.cargo[0]?.property;
       announce(
@@ -636,9 +740,22 @@ export async function createTideweftRuntime(
           ? "Fresh provisions age gently in transit. Choose an efficient line; completed harbor caches halt the loss while sheltered."
           : property === "fragile"
             ? "The medicine case felt that jolt. Hold Shift to brace while moving: slower, steadier, and fully protected from handling shock."
-            : "The load shifted and weathered slightly. Ease the pace or hold Shift to brace it while moving.",
+            : "The load shifted and weathered slightly. Stop to recover, choose sounder footing, or hold Shift to BRACE while moving.",
       );
       soundscape.play("warning", 0.32);
+    }
+    const audibleIncident = acknowledgeIncidentCue(traversalFeedback);
+    traversalFeedback = audibleIncident.state;
+    if (audibleIncident.incident) {
+      const incident = audibleIncident.incident;
+      announce(session, `${incident.label} — ${incident.detail}`, incident.kind !== "stumble");
+      soundscape.play(incident.cue, incident.kind === "stumble" ? 0.58 : 0.9, incident.variantSeed);
+      if (incident.kind !== "stumble") {
+        session.sessionChanges.push(
+          `${incident.label}; every cargo identity persisted, and any separated parcel remains physically recoverable.`,
+        );
+        if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
+      }
     }
     if (worldAdvanced) {
       reconcileContract();
@@ -696,7 +813,13 @@ export async function createTideweftRuntime(
       const delivered = worldView.contracts.find((contract) => contract.id === pendingDelivery?.contractId);
       if (delivered?.status === "fulfilled") {
         const deliveryWasAutomated = pendingDelivery.wasAutomated;
+        const custody = physicalPromiseCustody(pendingDelivery.contractId);
+        if (custody.looseQuantity > 0 || custody.carriedQuantity !== delivered.quantity) {
+          throw new Error("A fulfilled Promise lost exact physical custody before its harbor handoff");
+        }
+        physicalCargo = removePhysicalPromiseContract(physicalCargo, pendingDelivery.contractId);
         const cargo = unloadContractCargo(player, pendingDelivery.contractId);
+        mirrorPhysicalCargoToPlayer();
         pendingDelivery = null;
         if (session.trackedContractId === delivered.id) session.trackedContractId = null;
         session.sessionDeliveries += 1;
@@ -717,7 +840,7 @@ export async function createTideweftRuntime(
         if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
         announce(
           session,
-          `${requester ?? destination} received the promise${cargo ? ` at ${Math.round(cargo.condition / 10_000)}% condition` : ""}. The route and relationship both changed${newlyAutomated ? ", and autonomous porters can now inherit this corridor" : ""}.${unlockedTool ? ` ${destination} adds ${FIELD_TOOL_LABELS[unlockedTool]} to your field kit: ${fieldToolEffect(unlockedTool)}` : ""}`,
+          `${requester ?? destination} received the promise${cargo ? ` at ${Math.round(custody.condition / 10_000)}% condition` : ""}. The route and relationship both changed${newlyAutomated ? ", and autonomous porters can now inherit this corridor" : ""}.${unlockedTool ? ` ${destination} adds ${FIELD_TOOL_LABELS[unlockedTool]} to your field kit: ${fieldToolEffect(unlockedTool)}` : ""}`,
           true,
         );
         soundscape.play("deliver", 1);
@@ -758,8 +881,7 @@ export async function createTideweftRuntime(
     if (player.activeContractId !== null) {
       const active = worldView.contracts.find((contract) => contract.id === player.activeContractId);
       if (!active || active.status === "expired" || active.status === "cancelled") {
-        player.cargo = [];
-        player.activeContractId = null;
+        releaseLocalCargo(player.activeContractId);
         announce(session, "That promise changed before arrival. Your route knowledge remains, and the harbor will renegotiate.");
       }
     }
@@ -806,6 +928,24 @@ export async function createTideweftRuntime(
         const source = settlementName(worldView, player.report.sourceSettlementId);
         const target = settlementName(worldView, player.report.targetSettlementId);
         const age = worldView.completedTick - player.report.observedTick;
+        const unreserved = setLooseCargoReservedLoad(
+          physicalCargo.carrier,
+          physicalCargo.carrier.reservedLoadMilli - PACK_LOAD_MILLI_PER_UNIT,
+        );
+        if (!unreserved.ok) throw new Error(`Signed report load could not leave the pack: ${unreserved.reason}`);
+        physicalCargo = commitPhysicalCargoState(
+          physicalCargo,
+          {
+            looseWorld: physicalCargo.looseWorld,
+            carrier: unreserved.carrier,
+          },
+          {
+            kind: "delta",
+            removed: [],
+            added: [],
+            reservedLoadDeltaMilli: -PACK_LOAD_MILLI_PER_UNIT,
+          },
+        );
         player.report = null;
         player.reportsDelivered += 1;
         session.sessionReportsDelivered += 1;
@@ -860,6 +1000,8 @@ export async function createTideweftRuntime(
         if (manualControl.moveX || manualControl.moveY) {
           autopilotPath = [];
           pendingGatherNodeId = null;
+          pendingParcelTargetId = null;
+          pendingParcelRecoverOnArrival = false;
         }
         break;
       case "brace":
@@ -867,10 +1009,17 @@ export async function createTideweftRuntime(
         break;
       case "move-target":
         pendingGatherNodeId = null;
+        pendingParcelTargetId = null;
+        pendingParcelRecoverOnArrival = false;
         setAutopilot(command.point, command.additive);
         break;
       case "resource-target":
+        pendingParcelTargetId = null;
+        pendingParcelRecoverOnArrival = false;
         targetFieldResource(command.nodeId, command.gatherOnArrival);
+        break;
+      case "parcel-target":
+        targetPhysicalParcel(command.parcelId, command.recoverOnArrival);
         break;
       case "scan":
         scan();
@@ -880,15 +1029,6 @@ export async function createTideweftRuntime(
         break;
       case "wayknot":
         toggleWayknot();
-        break;
-      case "pace-step":
-        if (player.mode === "swept") {
-          announce(session, "The current has the helm until you reach a safe bank; pace returns ashore.", true);
-          refreshViews();
-          break;
-        }
-        cyclePace(player, command.delta);
-        refreshViews();
         break;
       case "select":
         if (command.entity === "settlement" && command.id) {
@@ -901,6 +1041,8 @@ export async function createTideweftRuntime(
       case "cancel":
         autopilotPath = [];
         pendingGatherNodeId = null;
+        pendingParcelTargetId = null;
+        pendingParcelRecoverOnArrival = false;
         session.selectedSettlementId = null;
         refreshViews();
         break;
@@ -973,14 +1115,6 @@ export async function createTideweftRuntime(
       case "wayknot":
         toggleWayknot();
         break;
-      case "set-pace":
-        if (player.mode === "swept") {
-          announce(session, "The current has the helm until you reach a safe bank; pace returns ashore.", true);
-          break;
-        }
-        player.pace = command.pace;
-        soundscape.play("ui");
-        break;
       case "set-session-shape":
         session.sessionShape = command.sessionShape;
         break;
@@ -999,6 +1133,7 @@ export async function createTideweftRuntime(
           repairFromKit(Number(command.gearId), command.conditionGain);
         }
         if (command.action === "dismantle") dismantleFromKit(Number(command.gearId));
+        if (command.action === "drop") dropPhysicalLot(command.lotId, command.quantity);
         break;
       case "settlement":
         if (command.action === "close") {
@@ -1075,16 +1210,50 @@ export async function createTideweftRuntime(
     }
   }
 
-  function persistCraftingInventory(inventory: CraftingInventory): void {
-    player.craftingInventory = createCraftingInventory(
-      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
-      inventory.stacks,
-      inventory.gear,
-    );
+  function consumePhysicalIngredients(
+    initialCarrier: LooseCargoCarrierState,
+    ingredients: readonly { readonly item: CraftingStackId; readonly quantity: number }[],
+  ): {
+    readonly carrier: LooseCargoCarrierState;
+    readonly removedLots: readonly CarriedCargoLot[];
+    readonly removedPayloads: readonly LooseCargoPayload[];
+  } {
+    let carrier = initialCarrier;
+    const removedLots: CarriedCargoLot[] = [];
+    for (const ingredient of ingredients) {
+      const mutation = consumeLooseCargoStack(carrier, ingredient);
+      if (!mutation.ok) {
+        throw new Error(`Physical ingredient ${ingredient.item} could not be consumed: ${mutation.reason}`);
+      }
+      carrier = mutation.carrier;
+      removedLots.push(...mutation.removed);
+    }
+    return {
+      carrier,
+      removedLots,
+      removedPayloads: removedLots.map(({ payload }) => payload),
+    };
+  }
+
+  /** Crafting inherits the weakest condition and strongest taint of its exact inputs. */
+  function materialStateFromInputs(
+    inputs: readonly CarriedCargoLot[],
+  ): CarriedCargoLot["materialState"] {
+    if (inputs.length === 0) return { condition: FIXED_POINT, contamination: 0, decay: 0 };
+    return {
+      condition: Math.min(...inputs.map(({ materialState }) => materialState.condition)),
+      contamination: Math.max(...inputs.map(({ materialState }) => materialState.contamination)),
+      decay: Math.max(...inputs.map(({ materialState }) => materialState.decay)),
+    };
   }
 
   function kitActionBlocked(): boolean {
     if (session.titleVisible || session.quietHourVisible || session.paused) return true;
+    if (physicalReceiptPending()) {
+      announce(session, "The harbor is sealing an exact receipt. PACK changes resume as soon as it settles.", true);
+      soundscape.play("warning", 0.3);
+      return true;
+    }
     if (player.mode !== "swept" && player.mode !== "rescued") return false;
     announce(session, "Secure your footing before making or mending field gear.", true);
     soundscape.play("warning", 0.3);
@@ -1100,6 +1269,11 @@ export async function createTideweftRuntime(
       return;
     }
     const recipe = CRAFTING_RECIPES.find((candidate) => candidate.id === recipeId);
+    if (recipe?.output.type === "gear" && player.nextCraftedGearId >= Number.MAX_SAFE_INTEGER) {
+      announce(session, "KIT has reached its durable identity limit. No ingredients were consumed; dismantle or continue with the gear already named.", true);
+      soundscape.play("warning", 0.35);
+      return;
+    }
     const request = recipe?.output.type === "gear"
       ? { recipeId, gearId: player.nextCraftedGearId }
       : { recipeId };
@@ -1109,7 +1283,71 @@ export async function createTideweftRuntime(
       soundscape.play("warning", 0.32);
       return;
     }
-    persistCraftingInventory(result.inventory);
+    let consumed: ReturnType<typeof consumePhysicalIngredients>;
+    let carrier: LooseCargoCarrierState;
+    let addedPayload: LooseCargoPayload;
+    try {
+      consumed = consumePhysicalIngredients(physicalCargo.carrier, result.recipe.inputs);
+      carrier = consumed.carrier;
+      const source = quotePhysicalCargoSource(
+        physicalCargo,
+        "craft",
+        `${result.recipe.id}:gear:${result.craftedGear?.id ?? "stack"}`,
+      );
+      const materialState = materialStateFromInputs(consumed.removedLots);
+      if (result.recipe.output.type === "gear") {
+        if (!result.craftedGear) throw new Error("Crafted gear lost its durable identity");
+        addedPayload = {
+          kind: "gear",
+          gearId: result.craftedGear.id,
+          gearKind: result.recipe.output.kind,
+        };
+        const mutation = upsertLooseCargoGear(carrier, {
+          sourceLotId: source.lotId,
+          gearId: result.craftedGear.id,
+          gearKind: result.recipe.output.kind,
+          materialState,
+        });
+        if (!mutation.ok) throw new Error(`Physical crafted gear could not be packed: ${mutation.reason}`);
+        carrier = mutation.carrier;
+      } else {
+        addedPayload = {
+          kind: "stack",
+          item: result.recipe.output.item,
+          quantity: result.recipe.output.quantity,
+        };
+        const mutation = addLooseCargoStack(carrier, {
+          sourceLotId: source.lotId,
+          item: result.recipe.output.item,
+          quantity: result.recipe.output.quantity,
+          materialState,
+        });
+        if (!mutation.ok) throw new Error(`Physical crafted stack could not be packed: ${mutation.reason}`);
+        carrier = mutation.carrier;
+      }
+      physicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        {
+          looseWorld: physicalCargo.looseWorld,
+          carrier,
+          committedSourceOrdinal: source.ordinal,
+        },
+        {
+          kind: "delta",
+          removed: consumed.removedPayloads,
+          added: [addedPayload],
+        },
+      );
+    } catch (error) {
+      announce(
+        session,
+        `KIT kept every item unchanged because the exact craft could not be sealed: ${errorMessage(error)}.`,
+        true,
+      );
+      soundscape.play("warning", 0.35);
+      return;
+    }
+    mirrorPhysicalCargoToPlayer();
     if (result.craftedGear) player.nextCraftedGearId += 1;
     const outputLabel = result.recipe.output.type === "gear"
       ? result.craftedGear
@@ -1157,21 +1395,34 @@ export async function createTideweftRuntime(
         soundscape.play("warning", 0.3);
         return;
       }
-      const nextStacks = { ...inventory.stacks } as Record<CraftingStackId, number>;
-      for (const ingredient of quote.ingredients) {
-        nextStacks[ingredient.item] -= ingredient.quantity;
+      try {
+        const consumed = consumePhysicalIngredients(physicalCargo.carrier, quote.ingredients);
+        const source = quotePhysicalCargoSource(
+          physicalCargo,
+          "repair-core-wayknot",
+          `${coreWayknot.kind}:${gearId}:${quote.conditionAfter}`,
+        );
+        physicalCargo = commitPhysicalCargoState(
+          physicalCargo,
+          {
+            looseWorld: physicalCargo.looseWorld,
+            carrier: consumed.carrier,
+            committedSourceOrdinal: source.ordinal,
+          },
+          { kind: "delta", removed: consumed.removedPayloads, added: [] },
+        );
+      } catch (error) {
+        announce(session, `MEND kept every item unchanged: ${errorMessage(error)}.`, true);
+        soundscape.play("warning", 0.35);
+        return;
       }
-      persistCraftingInventory(createCraftingInventory(
-        inventory.capacityMilliLoad,
-        nextStacks,
-        inventory.gear,
-      ));
       player.wayknots = {
         ...player.wayknots,
         wayknots: player.wayknots.wayknots.map((wayknot) => wayknot.id === gearId
           ? { ...wayknot, condition: quote.conditionAfter }
           : wayknot),
       };
+      mirrorPhysicalCargoToPlayer();
       announce(
         session,
         `${WAYKNOT_LABELS[coreWayknot.kind]} #${gearId} mended to ${Math.round(quote.conditionAfter / 10_000)}% condition. Its stable ID and wear history remain.`,
@@ -1186,7 +1437,43 @@ export async function createTideweftRuntime(
       soundscape.play("warning", 0.3);
       return;
     }
-    persistCraftingInventory(result.inventory);
+    try {
+      const consumed = consumePhysicalIngredients(physicalCargo.carrier, result.quote.ingredients);
+      const repaired = setLooseCargoGearCondition(
+        consumed.carrier,
+        gearId,
+        result.quote.conditionAfter,
+      );
+      if (!repaired.ok) throw new Error(`Physical gear could not be mended: ${repaired.reason}`);
+      const gearPayload: LooseCargoPayload = {
+        kind: "gear",
+        gearId,
+        gearKind: result.gear.kind,
+      };
+      const source = quotePhysicalCargoSource(
+        physicalCargo,
+        "repair-gear",
+        `${result.gear.kind}:${gearId}:${result.quote.conditionAfter}`,
+      );
+      physicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        {
+          looseWorld: physicalCargo.looseWorld,
+          carrier: repaired.carrier,
+          committedSourceOrdinal: source.ordinal,
+        },
+        {
+          kind: "delta",
+          removed: [...consumed.removedPayloads, gearPayload],
+          added: [gearPayload],
+        },
+      );
+    } catch (error) {
+      announce(session, `MEND kept every item unchanged: ${errorMessage(error)}.`, true);
+      soundscape.play("warning", 0.35);
+      return;
+    }
+    mirrorPhysicalCargoToPlayer();
     const label = result.gear.kind === "ladder"
       ? "Field ladder"
       : result.gear.kind.split("-").map(titleCaseWord).join(" ");
@@ -1211,7 +1498,52 @@ export async function createTideweftRuntime(
       soundscape.play("warning", 0.3);
       return;
     }
-    persistCraftingInventory(result.inventory);
+    try {
+      const gearLot = physicalCargo.carrier.lots.find((lot) =>
+        lot.payload.kind === "gear" && lot.payload.gearId === gearId);
+      if (!gearLot || gearLot.payload.kind !== "gear") {
+        throw new Error(`Physical gear #${gearId} is not in the pack`);
+      }
+      const source = quotePhysicalCargoSource(
+        physicalCargo,
+        "dismantle-gear",
+        `${gearLot.payload.gearKind}:${gearId}`,
+      );
+      const removed = removeLooseCargoGear(physicalCargo.carrier, gearId);
+      if (!removed.ok) throw new Error(`Physical gear could not be dismantled: ${removed.reason}`);
+      let carrier = removed.carrier;
+      const added: LooseCargoPayload[] = [];
+      for (const salvage of result.salvage) {
+        const payload: LooseCargoPayload = {
+          kind: "stack",
+          item: salvage.item,
+          quantity: salvage.quantity,
+        };
+        const addition = addLooseCargoStack(carrier, {
+          sourceLotId: `${source.lotId}:salvage:${salvage.item}`,
+          item: salvage.item,
+          quantity: salvage.quantity,
+          materialState: gearLot.materialState,
+        });
+        if (!addition.ok) throw new Error(`Physical salvage could not be packed: ${addition.reason}`);
+        carrier = addition.carrier;
+        added.push(payload);
+      }
+      physicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        {
+          looseWorld: physicalCargo.looseWorld,
+          carrier,
+          committedSourceOrdinal: source.ordinal,
+        },
+        { kind: "delta", removed: [gearLot.payload], added },
+      );
+    } catch (error) {
+      announce(session, `DISMANTLE kept every item unchanged: ${errorMessage(error)}.`, true);
+      soundscape.play("warning", 0.35);
+      return;
+    }
+    mirrorPhysicalCargoToPlayer();
     announce(
       session,
       result.salvage.length > 0
@@ -1266,9 +1598,71 @@ export async function createTideweftRuntime(
     return undefined;
   }
 
+  function physicalPromiseCustody(contractId: number): {
+    readonly carriedQuantity: number;
+    readonly looseQuantity: number;
+    readonly condition: number;
+  } {
+    const carried = physicalCargo.carrier.lots.filter((lot) =>
+      lot.payload.kind === "promise" && lot.payload.contractId === contractId);
+    const loose = physicalCargo.looseWorld.entities.filter((entity) =>
+      entity.payload.kind === "promise" && entity.payload.contractId === contractId);
+    const carriedQuantity = carried.reduce((total, lot) =>
+      total + (lot.payload.kind === "promise" ? lot.payload.quantity : 0), 0);
+    const looseQuantity = loose.reduce((total, entity) =>
+      total + (entity.payload.kind === "promise" ? entity.payload.quantity : 0), 0);
+    const weightedCondition = carried.reduce((total, lot) =>
+      total + (lot.payload.kind === "promise"
+        ? lot.payload.quantity * lot.materialState.condition
+        : 0), 0);
+    return {
+      carriedQuantity,
+      looseQuantity,
+      condition: carriedQuantity > 0 ? Math.trunc(weightedCondition / carriedQuantity) : 0,
+    };
+  }
+
+  function preflightPhysicalPromiseRemoval(contractId: number): string | null {
+    try {
+      removePhysicalPromiseContract(physicalCargo, contractId);
+      return null;
+    } catch (error) {
+      return errorMessage(error);
+    }
+  }
+
+  function preflightReportRelease(): string | null {
+    try {
+      const unreserved = setLooseCargoReservedLoad(
+        physicalCargo.carrier,
+        physicalCargo.carrier.reservedLoadMilli - PACK_LOAD_MILLI_PER_UNIT,
+      );
+      if (!unreserved.ok) throw new Error(unreserved.reason);
+      commitPhysicalCargoState(
+        physicalCargo,
+        { looseWorld: physicalCargo.looseWorld, carrier: unreserved.carrier },
+        {
+          kind: "delta",
+          removed: [],
+          added: [],
+          reservedLoadDeltaMilli: -PACK_LOAD_MILLI_PER_UNIT,
+        },
+      );
+      return null;
+    } catch (error) {
+      return errorMessage(error);
+    }
+  }
+
   function releaseLocalCargo(contractId: number): void {
+    const custody = physicalPromiseCustody(contractId);
+    if (custody.looseQuantity > 0) {
+      throw new Error("Cannot hand off a Promise while one of its physical parcels remains loose");
+    }
+    physicalCargo = removePhysicalPromiseContract(physicalCargo, contractId);
     player.cargo = player.cargo.filter((cargo) => cargo.contractId !== contractId);
     if (player.activeContractId === contractId) player.activeContractId = null;
+    mirrorPhysicalCargoToPlayer();
   }
 
   function newWorld(seed: string, replacesExistingSave: boolean): void {
@@ -1291,8 +1685,14 @@ export async function createTideweftRuntime(
     worldView = createWorldView(world);
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
+    traversalFeedback = createTraversalFeedbackState();
     const promise = worldView.contracts.find((contract) => contract.status === "offered");
     player = createPlayer(worldView, promise?.originSettlementId);
+    physicalCargo = createPhysicalCargoStateFromPlayer(
+      player,
+      worldView.terrain.width,
+      worldView.terrain.height,
+    );
     session.titleVisible = false;
     session.paused = false;
     session.hasSave = true;
@@ -1302,6 +1702,8 @@ export async function createTideweftRuntime(
     playerStepsSinceWorldTick = 0;
     autopilotPath = [];
     pendingGatherNodeId = null;
+    pendingParcelTargetId = null;
+    pendingParcelRecoverOnArrival = false;
     pendingAcceptance = null;
     pendingDelivery = null;
     pendingReinforcement = null;
@@ -1315,9 +1717,9 @@ export async function createTideweftRuntime(
     saveInBackground();
   }
 
-  function setAutopilot(point: WorldPoint, additive: boolean): boolean {
+  function setAutopilot(point: WorldPoint, additive: boolean, announcePath = true): boolean {
     if (player.mode === "swept") {
-      announce(session, "The current has the helm until you reach a safe bank.", true);
+      if (announcePath) announce(session, "The current has the helm until you reach a safe bank.", true);
       return false;
     }
     const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, world.terrain.width - 1);
@@ -1352,8 +1754,10 @@ export async function createTideweftRuntime(
     };
     const path = findTilePath(traversalTerrain, playerTileIndex(player), destination);
     if (path.length < 2) {
-      announce(session, "The Loom cannot currently resolve a traversable line there.");
-      soundscape.play("warning", 0.45);
+      if (announcePath) {
+        announce(session, "The Loom cannot currently resolve a traversable line there.");
+        soundscape.play("warning", 0.45);
+      }
       return false;
     }
     const next = path.slice(1);
@@ -1362,11 +1766,156 @@ export async function createTideweftRuntime(
       (index) => (worldView.terrain.tiles[index]?.waterDepth ?? 0) > 40_000
         && (player.depthSoundings[index] ?? 0) <= 0,
     ).length;
-    announce(
-      session,
-      `Loom path set across ${next.length} terrain marks${unknownWater > 0 ? `, including ${unknownWater} unsounded water marks` : " using sounded depth and your field tools"}.`,
-    );
+    if (announcePath) {
+      announce(
+        session,
+        `Loom path set across ${next.length} terrain marks${unknownWater > 0 ? `, including ${unknownWater} unsounded water marks` : " using sounded depth and your field tools"}.`,
+      );
+    }
     return true;
+  }
+
+  function physicalParcelPosition(parcelId: string): WorldPoint | null {
+    const entity = physicalCargo.looseWorld.entities.find((candidate) => candidate.id === parcelId);
+    if (!entity) return null;
+    const playerPoint = playerPositionAtLooseCargo(entity);
+    return {
+      x: (playerPoint.x / TILE_UNITS) * RENDER_TILE_SIZE,
+      y: (playerPoint.y / TILE_UNITS) * RENDER_TILE_SIZE,
+    };
+  }
+
+  function recoverPhysicalParcel(parcelId: string, announceFailure = true): boolean {
+    if (physicalReceiptPending()) {
+      if (announceFailure) {
+        announce(session, "The harbor is sealing an exact receipt. Recover the parcel when that transaction settles.", true);
+        soundscape.play("warning", 0.3);
+      }
+      return false;
+    }
+    const position = looseCargoPositionAtPlayer(player.x, player.y);
+    const recovered = pickupLooseCargo(
+      physicalCargo.looseWorld,
+      physicalCargo.carrier,
+      {
+        entityId: parcelId,
+        x: position.x,
+        y: position.y,
+        reach: LOOSE_CARGO_RECOVERY_REACH,
+      },
+    );
+    if (!recovered.ok) {
+      if (announceFailure) {
+        announce(session, recovered.message, recovered.reason !== "out-of-reach");
+        if (recovered.reason !== "out-of-reach") soundscape.play("warning", 0.32);
+      }
+      return false;
+    }
+    physicalCargo = commitPhysicalCargoState(
+      physicalCargo,
+      { looseWorld: recovered.world, carrier: recovered.carrier },
+      { kind: "conserved" },
+    );
+    mirrorPhysicalCargoToPlayer();
+    if (pendingParcelTargetId === parcelId) {
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
+      autopilotPath = [];
+    }
+    announce(session, `${recovered.message} Its exact condition and history stayed with it.`, true);
+    soundscape.play("strand", 0.58);
+    return true;
+  }
+
+  function targetPhysicalParcel(parcelId: string, recoverOnArrival: boolean): void {
+    if (session.paused || session.titleVisible || session.quietHourVisible) return;
+    const point = physicalParcelPosition(parcelId);
+    if (!point) {
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
+      announce(session, "That parcel is no longer in the loaded landscape.", true);
+      return;
+    }
+    if (recoverPhysicalParcel(parcelId, false)) {
+      refreshViews();
+      return;
+    }
+    if (!recoverOnArrival) {
+      announce(session, "That parcel moved beyond arm's reach. Move closer and press E again.");
+      refreshViews();
+      return;
+    }
+    pendingGatherNodeId = null;
+    pendingParcelTargetId = parcelId;
+    pendingParcelRecoverOnArrival = true;
+    if (!setAutopilot(point, false, false)) {
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
+      announce(session, "The parcel is visible, but the Loom cannot currently resolve a safe approach.", true);
+      soundscape.play("warning", 0.35);
+    } else {
+      announce(session, "Parcel marked. The Loom follows its current position; recovery happens only inside physical reach.");
+    }
+    refreshViews();
+  }
+
+  function advancePendingParcelTarget(): void {
+    const parcelId = pendingParcelTargetId;
+    if (!parcelId || !pendingParcelRecoverOnArrival) return;
+    const point = physicalParcelPosition(parcelId);
+    if (!point) {
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
+      autopilotPath = [];
+      announce(session, "The marked parcel left the loaded scene; no other object was targeted in its place.", true);
+      return;
+    }
+    if (recoverPhysicalParcel(parcelId, false)) return;
+    if (!setAutopilot(point, false, false)) {
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
+      autopilotPath = [];
+      announce(session, "The marked parcel is currently unreachable. Its identity remains on the chart.", true);
+    }
+  }
+
+  function dropPhysicalLot(lotId: string, quantity: number): void {
+    if (kitActionBlocked()) return;
+    const lot = physicalCargo.carrier.lots.find((candidate) => candidate.id === lotId);
+    if (!lot) {
+      announce(session, "That exact carried lot is no longer in the PACK.", true);
+      return;
+    }
+    if (lot.payload.kind === "promise"
+      && (pendingAcceptance !== null || pendingDelivery !== null || pendingRenegotiation !== null)) {
+      announce(session, "The harbor is still sealing this Promise transaction. Keep its cargo in hand until the receipt settles.", true);
+      soundscape.play("warning", 0.35);
+      return;
+    }
+    const position = looseCargoPositionAtPlayer(player.x, player.y);
+    const dropped = dropLooseCargo(
+      physicalCargo.looseWorld,
+      physicalCargo.carrier,
+      {
+        lotId,
+        ...(lot.payload.kind === "stack" ? { quantity } : {}),
+        x: position.x,
+        y: position.y,
+      },
+    );
+    if (!dropped.ok) {
+      announce(session, dropped.message, true);
+      soundscape.play("warning", 0.35);
+      return;
+    }
+    physicalCargo = commitPhysicalCargoState(
+      physicalCargo,
+      { looseWorld: dropped.world, carrier: dropped.carrier },
+      { kind: "conserved" },
+    );
+    mirrorPhysicalCargoToPlayer();
+    announce(session, `${dropped.message} Water, grade, weather, and rock impact can now move or mark it.`, true);
+    soundscape.play("impact", 0.42, dropped.entity?.origin.ordinal ?? 0);
   }
 
   function fieldResourceNode(nodeId: string): FieldResourceNode | undefined {
@@ -1416,6 +1965,11 @@ export async function createTideweftRuntime(
   }
 
   function gatherFieldResource(nodeId: string): boolean {
+    if (physicalReceiptPending()) {
+      announce(session, "The harbor is sealing an exact receipt. Gather when that transaction settles.", true);
+      soundscape.play("warning", 0.3);
+      return false;
+    }
     const node = fieldResourceNode(nodeId);
     if (!node) {
       announce(session, "That natural patch no longer belongs to this estuary.", true);
@@ -1468,15 +2022,40 @@ export async function createTideweftRuntime(
       soundscape.play("warning", 0.3);
       return false;
     }
-    const nextStacks = {
-      ...player.craftingInventory.stacks,
-      [harvested.material]: player.craftingInventory.stacks[harvested.material] + 1,
+    const payload: LooseCargoPayload = {
+      kind: "stack",
+      item: harvested.material,
+      quantity: 1,
     };
-    player.craftingInventory = createCraftingInventory(
-      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
-      nextStacks,
-      player.craftingInventory.gear,
-    );
+    let gatheredPhysicalCargo: PhysicalCargoState;
+    try {
+      const source = quotePhysicalCargoSource(
+        physicalCargo,
+        "gather",
+        `${node.id}:${harvested.state.activeTick}`,
+      );
+      const added = addLooseCargoStack(physicalCargo.carrier, {
+        sourceLotId: source.lotId,
+        item: harvested.material,
+        quantity: 1,
+      });
+      if (!added.ok) throw new Error(added.reason);
+      gatheredPhysicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        {
+          looseWorld: physicalCargo.looseWorld,
+          carrier: added.carrier,
+          committedSourceOrdinal: source.ordinal,
+        },
+        { kind: "delta", removed: [], added: [payload] },
+      );
+    } catch (error) {
+      announce(session, `The ${label} remained rooted because its exact PACK transaction could not settle: ${errorMessage(error)}.`, true);
+      soundscape.play("warning", 0.35);
+      return false;
+    }
+    physicalCargo = gatheredPhysicalCargo;
+    mirrorPhysicalCargoToPlayer();
     fieldResourceEcology = harvested.state;
     const staminaCost = GATHER_STAMINA_COST[harvested.material];
     player.stamina = Math.max(0, player.stamina - staminaCost);
@@ -1580,6 +2159,19 @@ export async function createTideweftRuntime(
 
   function interact(): void {
     if (session.paused || session.titleVisible) return;
+    const porterPosition = looseCargoPositionAtPlayer(player.x, player.y);
+    const reachableParcel = physicalCargo.looseWorld.entities
+      .map((entity) => ({
+        entity,
+        distance: Math.abs(entity.x - porterPosition.x) + Math.abs(entity.y - porterPosition.y),
+      }))
+      .filter(({ distance }) => distance <= LOOSE_CARGO_RECOVERY_REACH)
+      .sort((left, right) => left.distance - right.distance || left.entity.id.localeCompare(right.entity.id))[0];
+    if (reachableParcel) {
+      recoverPhysicalParcel(reachableParcel.entity.id);
+      refreshViews();
+      return;
+    }
     const resource = fieldResourceCatalog.nodes.find(
       (node) => node.tileIndex === playerTileIndex(player)
         && (player.discovered[node.tileIndex] ?? 0) > 0,
@@ -1667,11 +2259,58 @@ export async function createTideweftRuntime(
       announce(session, "Finish or renegotiate the promise already in your pack before taking another.");
       return;
     }
-    if (!loadContractCargo(player, contract)) {
+    const playerCandidate = structuredClone(player);
+    if (!loadContractCargo(playerCandidate, contract)) {
       announce(session, "That load does not fit the current pack. Choose a lighter promise.", true);
       soundscape.play("warning");
       return;
     }
+    const cargo = playerCandidate.cargo.find((candidate) => candidate.contractId === contract.id);
+    if (!cargo) throw new Error("Promise pickup did not create its player mirror");
+    const payload: LooseCargoPayload = {
+      kind: "promise",
+      contractId: contract.id,
+      resource: contract.resource,
+      quantity: contract.quantity,
+      property: cargo.property,
+    };
+    let acceptedPhysicalCargo: PhysicalCargoState;
+    try {
+      const source = quotePhysicalCargoSource(
+        physicalCargo,
+        "promise-pickup",
+        `contract:${contract.id}:origin:${contract.originSettlementId}`,
+      );
+      const physicalPickup = upsertLooseCargoPromise(physicalCargo.carrier, {
+        sourceLotId: source.lotId,
+        contractId: contract.id,
+        resource: contract.resource,
+        quantity: contract.quantity,
+        property: cargo.property,
+        materialState: { condition: FIXED_POINT, contamination: 0, decay: 0 },
+      });
+      if (!physicalPickup.ok) throw new Error(physicalPickup.reason);
+      acceptedPhysicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        {
+          looseWorld: physicalCargo.looseWorld,
+          carrier: physicalPickup.carrier,
+          committedSourceOrdinal: source.ordinal,
+        },
+        { kind: "delta", removed: [], added: [payload] },
+      );
+      // Acceptance remains reversible until the simulation confirms pickup.
+      // Proving retirement now prevents a later rejected command from trapping
+      // an optimistic physical lot in the pack.
+      removePhysicalPromiseContract(acceptedPhysicalCargo, contract.id);
+    } catch (error) {
+      announce(session, `That load remained in harbor because its exact custody could not be sealed: ${errorMessage(error)}.`, true);
+      soundscape.play("warning", 0.4);
+      return;
+    }
+    physicalCargo = acceptedPhysicalCargo;
+    player = playerCandidate;
+    mirrorPhysicalCargoToPlayer();
     const acceptCommandId = commandId("accept");
     const pickupCommandId = commandId("pickup");
     queue({
@@ -1706,6 +2345,22 @@ export async function createTideweftRuntime(
       announce(session, "Reach any harbor to hand the cargo into accountable local care. Your traveled trace will remain.");
       return;
     }
+    const custody = physicalPromiseCustody(contract.id);
+    if (custody.looseQuantity > 0 || custody.carriedQuantity !== contract.cargoQuantity) {
+      announce(
+        session,
+        `RECOVER CARGO — ${custody.looseQuantity} promised unit${custody.looseQuantity === 1 ? " is" : "s are"} still loose. A harbor cannot sign for a partial handoff.`,
+        true,
+      );
+      soundscape.play("warning", 0.42);
+      return;
+    }
+    const preflightFailure = preflightPhysicalPromiseRemoval(contract.id);
+    if (preflightFailure) {
+      announce(session, `The harbor left the Promise untouched because its exact handoff could not be sealed: ${preflightFailure}.`, true);
+      soundscape.play("warning", 0.42);
+      return;
+    }
     const handoffCommandId = commandId("handoff");
     queue({
       id: handoffCommandId,
@@ -1722,9 +2377,22 @@ export async function createTideweftRuntime(
 
   function deliver(contract: ContractState): void {
     if (pendingDelivery !== null) return;
-    const cargo = player.cargo.find((candidate) => candidate.contractId === contract.id);
-    if (!cargo) {
-      announce(session, "The promise is recorded, but its cargo is not in your pack.", true);
+    const custody = physicalPromiseCustody(contract.id);
+    if (custody.looseQuantity > 0 || custody.carriedQuantity !== contract.cargoQuantity) {
+      announce(
+        session,
+        custody.looseQuantity > 0
+          ? `RECOVER CARGO — ${custody.looseQuantity} promised unit${custody.looseQuantity === 1 ? " is" : "s are"} still loose in the world. The harbor will only receive the complete physical shipment.`
+          : "The promise is recorded, but its complete physical cargo is not in your pack.",
+        true,
+      );
+      soundscape.play("warning", 0.42);
+      return;
+    }
+    const preflightFailure = preflightPhysicalPromiseRemoval(contract.id);
+    if (preflightFailure) {
+      announce(session, `The harbor left the Promise in your pack because its exact delivery could not be sealed: ${preflightFailure}.`, true);
+      soundscape.play("warning", 0.42);
       return;
     }
     const deliverCommandId = commandId("deliver");
@@ -1734,7 +2402,7 @@ export async function createTideweftRuntime(
       type: "deliver-contract",
       contractId: contract.id,
       destinationSettlementId: contract.destinationSettlementId,
-      condition: cargo.condition,
+      condition: custody.condition,
       trace: [...player.currentTrace],
       sourceId: 0,
       sequence: commandSequence,
@@ -1898,6 +2566,38 @@ export async function createTideweftRuntime(
       soundscape.play("warning", 0.35);
       return;
     }
+    let reportedPhysicalCargo: PhysicalCargoState;
+    try {
+      const reportSource = quotePhysicalCargoSource(
+        physicalCargo,
+        "report-sign",
+        `${sourceSettlementId}:${targetSettlementId}:${worldView.completedTick}`,
+      );
+      const reserved = setLooseCargoReservedLoad(
+        physicalCargo.carrier,
+        physicalCargo.carrier.reservedLoadMilli + PACK_LOAD_MILLI_PER_UNIT,
+      );
+      if (!reserved.ok) throw new Error(reserved.reason);
+      reportedPhysicalCargo = commitPhysicalCargoState(
+        physicalCargo,
+        {
+          looseWorld: physicalCargo.looseWorld,
+          carrier: reserved.carrier,
+          committedSourceOrdinal: reportSource.ordinal,
+        },
+        {
+          kind: "delta",
+          removed: [],
+          added: [],
+          reservedLoadDeltaMilli: PACK_LOAD_MILLI_PER_UNIT,
+        },
+      );
+    } catch (error) {
+      announce(session, `The sealed document case stayed at the desk: ${errorMessage(error)}.`, true);
+      soundscape.play("warning", 0.35);
+      return;
+    }
+    physicalCargo = reportedPhysicalCargo;
     const resource = source.specialization;
     player.report = {
       sourceSettlementId,
@@ -1916,6 +2616,12 @@ export async function createTideweftRuntime(
   function deliverReport(): void {
     const report = player.report;
     if (!report || pendingReportDelivery !== null) return;
+    const preflightFailure = preflightReportRelease();
+    if (preflightFailure) {
+      announce(session, `The report stayed in its sealed case because the handoff could not be recorded exactly: ${preflightFailure}.`, true);
+      soundscape.play("warning", 0.4);
+      return;
+    }
     const reportCommandId = commandId("report");
     queue({
       id: reportCommandId,
@@ -2051,17 +2757,45 @@ export async function createTideweftRuntime(
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     const playerSnapshot = structuredClone(player);
     const sessionSnapshot = structuredClone(session);
-    repairInterruptedPickups(worldSnapshot, playerSnapshot, sessionSnapshot);
+    let physicalCargoSnapshot = structuredClone(physicalCargo);
+    const repairedContractIds = repairInterruptedPickups(
+      worldSnapshot,
+      playerSnapshot,
+      sessionSnapshot,
+    );
+    for (const contractId of repairedContractIds) {
+      physicalCargoSnapshot = removePhysicalPromiseContract(physicalCargoSnapshot, contractId);
+    }
     if (pendingAcceptance !== null && playerSnapshot.activeContractId === pendingAcceptance.contractId) {
       rollbackOptimisticPickup(playerSnapshot, sessionSnapshot, pendingAcceptance.contractId);
+      physicalCargoSnapshot = removePhysicalPromiseContract(
+        physicalCargoSnapshot,
+        pendingAcceptance.contractId,
+      );
     }
-    const envelope: GameSaveEnvelope = {
+    const snapshotPhysicalValidation = validatePhysicalCargoState(
+      physicalCargoSnapshot,
+      playerSnapshot,
+      worldSnapshot.terrain.width,
+      worldSnapshot.terrain.height,
+    );
+    if (!snapshotPhysicalValidation.valid || !snapshotPhysicalValidation.state) {
+      throw new Error(`Refusing to save inconsistent physical cargo: ${snapshotPhysicalValidation.reason}`);
+    }
+    validatePhysicalPromiseCustody(worldSnapshot, playerSnapshot, snapshotPhysicalValidation.state);
+    const envelopeBase: Omit<GameSaveEnvelope, "integrity"> = {
       format: "tideweft-session",
       version: GAME_SAVE_VERSION,
       world: serializeWorld(worldSnapshot),
       player: playerSnapshot,
       session: sessionSnapshot,
       fieldResources: structuredClone(fieldResourceEcology),
+      traversalFeedback: structuredClone(traversalFeedback),
+      physicalCargo: physicalCargoSnapshot,
+    };
+    const envelope: GameSaveEnvelope = {
+      ...envelopeBase,
+      integrity: gameSaveEnvelopeIntegrity(envelopeBase),
     };
     const record: SaveRecord = {
       slotId: AUTOSAVE_SLOT,
@@ -2069,6 +2803,7 @@ export async function createTideweftRuntime(
       seed: world.meta.seedText,
       ...(saveGenerationEra === 0 ? {} : { saveGenerationEra }),
       saveGeneration,
+      payloadVersion: GAME_SAVE_VERSION,
       updatedAt: nextSaveTimestamp(),
       playTicks: world.meta.completedTick,
       settlementCount: world.settlements.length,
@@ -2142,6 +2877,71 @@ export async function createTideweftRuntime(
     }
   }
 
+  function runTickFailClosed(): boolean {
+    const worldWillAdvance = playerStepsSinceWorldTick + 1 >= PLAYER_STEPS_PER_WORLD_TICK;
+    const priorWorld = worldWillAdvance ? structuredClone(world) : null;
+    const prior = {
+      player: structuredClone(player),
+      physicalCargo: structuredClone(physicalCargo),
+      session: structuredClone(session),
+      fieldResourceEcology: structuredClone(fieldResourceEcology),
+      traversalFeedback: structuredClone(traversalFeedback),
+      commandQueue: structuredClone(commandQueue),
+      playerStepsSinceWorldTick,
+      commandSequence,
+      pendingGatherNodeId,
+      pendingParcelTargetId,
+      pendingParcelRecoverOnArrival,
+      pendingAcceptance: structuredClone(pendingAcceptance),
+      pendingDelivery: structuredClone(pendingDelivery),
+      pendingReinforcement: structuredClone(pendingReinforcement),
+      pendingRenegotiation: structuredClone(pendingRenegotiation),
+      pendingReportDelivery: structuredClone(pendingReportDelivery),
+      pendingChoir: structuredClone(pendingChoir),
+      autopilotPath: [...autopilotPath],
+      lastAutosaveTick,
+      lastCargoDamageNoticeMs,
+    };
+    try {
+      tick();
+      return true;
+    } catch (error) {
+      if (priorWorld) {
+        world = priorWorld;
+        worldView = createWorldView(world);
+        fieldResourceCatalog = runtimeFieldResourceCatalog(world);
+      }
+      player = prior.player;
+      physicalCargo = prior.physicalCargo;
+      session = prior.session;
+      fieldResourceEcology = prior.fieldResourceEcology;
+      traversalFeedback = prior.traversalFeedback;
+      commandQueue = prior.commandQueue;
+      playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
+      commandSequence = prior.commandSequence;
+      pendingGatherNodeId = prior.pendingGatherNodeId;
+      pendingParcelTargetId = null;
+      pendingParcelRecoverOnArrival = false;
+      pendingAcceptance = prior.pendingAcceptance;
+      pendingDelivery = prior.pendingDelivery;
+      pendingReinforcement = prior.pendingReinforcement;
+      pendingRenegotiation = prior.pendingRenegotiation;
+      pendingReportDelivery = prior.pendingReportDelivery;
+      pendingChoir = prior.pendingChoir;
+      autopilotPath = [];
+      lastAutosaveTick = prior.lastAutosaveTick;
+      lastCargoDamageNoticeMs = prior.lastCargoDamageNoticeMs;
+      manualControl = { moveX: 0, moveY: 0, brace: false };
+      runtimeIntegrityFailure = `INTEGRITY HALT — ${errorMessage(error)}.`;
+      session.paused = true;
+      announce(session, `${runtimeIntegrityFailure} The last complete in-memory step was restored.`, true);
+      soundscape.play("warning", 1);
+      running = false;
+      refreshViews();
+      return false;
+    }
+  }
+
   function frame(now: number): void {
     if (!running) return;
     if (previousFrame === 0) previousFrame = now;
@@ -2149,16 +2949,17 @@ export async function createTideweftRuntime(
     previousFrame = now;
     let steps = 0;
     while (accumulator >= FIXED_STEP_MS && steps < MAX_STEPS_PER_FRAME) {
-      tick();
+      if (!runTickFailClosed()) break;
       accumulator -= FIXED_STEP_MS;
       steps += 1;
     }
+    if (!running) return;
     if (steps === MAX_STEPS_PER_FRAME) accumulator = 0;
     animationFrame = requestAnimationFrame(frame);
   }
 
   function start(): void {
-    if (running) return;
+    if (running || runtimeIntegrityFailure !== null) return;
     running = true;
     previousFrame = 0;
     animationFrame = requestAnimationFrame(frame);
@@ -2209,6 +3010,8 @@ type LoadedAutosave = {
   readonly player: PlayerState;
   readonly session: GameSessionState;
   readonly fieldResources: FieldResourceEcologyState;
+  readonly traversalFeedback: TraversalFeedbackState;
+  readonly physicalCargo: PhysicalCargoState;
   readonly saveGenerationEra: number;
   readonly saveGeneration: number;
   readonly updatedAt: number;
@@ -2290,12 +3093,33 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     const decoded = JSON.parse(record.worldJson) as Partial<GameSaveEnvelope>;
     if (
       decoded.format !== "tideweft-session" ||
-      (decoded.version !== LEGACY_GAME_SAVE_VERSION && decoded.version !== GAME_SAVE_VERSION) ||
+      (
+        decoded.version !== LEGACY_GAME_SAVE_VERSION
+        && decoded.version !== FIELD_RESOURCE_GAME_SAVE_VERSION
+        && decoded.version !== GAME_SAVE_VERSION
+      ) ||
       typeof decoded.world !== "string" ||
       !decoded.player ||
       !decoded.session
     ) {
       throw new Error("Save contains an invalid session envelope");
+    }
+    if (
+      (decoded.version === GAME_SAVE_VERSION && record.payloadVersion !== GAME_SAVE_VERSION)
+      || (record.payloadVersion !== undefined && record.payloadVersion !== decoded.version)
+    ) {
+      throw new Error("Save record format fence does not match its embedded envelope");
+    }
+    if (decoded.version === GAME_SAVE_VERSION) {
+      if (
+        typeof decoded.integrity !== "string"
+        || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
+      ) throw new Error("Save envelope integrity does not match its contents");
+    } else if (
+      Object.hasOwn(decoded, "physicalCargo")
+      || Object.hasOwn(decoded, "integrity")
+    ) {
+      throw new Error("Legacy save version contains v3-only physical custody fields");
     }
     const world = deserializeWorld(decoded.world);
     // Ordering metadata is authoritative only when it describes the payload
@@ -2303,26 +3127,68 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (record.playTicks !== world.meta.completedTick) {
       throw new Error("Save metadata does not match the decoded world tick");
     }
+    const rawSession = structuredClone(decoded.session);
+    const rawPlayer = structuredClone(decoded.player);
     const loadedSession = normalizeLoadedSession(
       decoded.session,
       world.meta.seedText,
       world.choirs.length,
     );
+    if (
+      decoded.version === GAME_SAVE_VERSION
+      && (
+        stableStringify(loadedSession) !== stableStringify(rawSession)
+        || loadedSession.posture !== HARD_POSTURE
+        || loadedSession.pressureMode !== HARD_PRESSURE_MODE
+        || loadedSession.sessionShape !== PERPETUAL_SESSION_SHAPE
+      )
+    ) throw new Error("Current save contains noncanonical session state");
     normalizePlayerCrafting(decoded.player, decoded.version === LEGACY_GAME_SAVE_VERSION);
     const catalog = runtimeFieldResourceCatalog(world);
-    const fieldResources = decoded.version === GAME_SAVE_VERSION
+    const fieldResources = decoded.version >= FIELD_RESOURCE_GAME_SAVE_VERSION
       ? canonicalizeFieldResourceState(catalog, requireFieldResourceState(decoded.fieldResources))
       : createFieldResourceEcologyState(world.meta.completedTick);
+    const traversalFeedback = canonicalizeTraversalFeedback(
+      decoded.traversalFeedback,
+      { allowMissingLegacy: decoded.version < GAME_SAVE_VERSION },
+    );
+    if (decoded.version === GAME_SAVE_VERSION) {
+      if (stableStringify(fieldResources) !== stableStringify(decoded.fieldResources)) {
+        throw new Error("Current save contains noncanonical field-resource state");
+      }
+      if (stableStringify(traversalFeedback) !== stableStringify(decoded.traversalFeedback)) {
+        throw new Error("Current save contains noncanonical traversal feedback");
+      }
+    }
     // Alpha player snapshots predate dynamic world dimensions. Pickup repair
     // can reset currentTrace, so dimensions must be authoritative before it
     // asks playerTileIndex to derive that trace origin.
-    decoded.player.worldWidth = world.terrain.width;
-    decoded.player.worldHeight = world.terrain.height;
+    if (decoded.version === GAME_SAVE_VERSION) {
+      if (
+        decoded.player.worldWidth !== world.terrain.width
+        || decoded.player.worldHeight !== world.terrain.height
+      ) throw new Error("Current save player dimensions do not match its world");
+      if (stableStringify(decoded.player) !== stableStringify(rawPlayer)) {
+        throw new Error("Current save contains noncanonical player crafting state");
+      }
+    } else {
+      decoded.player.worldWidth = world.terrain.width;
+      decoded.player.worldHeight = world.terrain.height;
+    }
     const legacyBaseline = loadedSession.sessionBaseline;
     if (legacyBaseline && !Number.isFinite(legacyBaseline.awakenedChoirs)) {
       legacyBaseline.awakenedChoirs = world.choirs.length;
     }
-    const repairedContractIds = repairInterruptedPickups(world, decoded.player, loadedSession);
+    const repairedContractIds = decoded.version === GAME_SAVE_VERSION
+      ? repairInterruptedPickups(
+          structuredClone(world),
+          structuredClone(decoded.player),
+          structuredClone(loadedSession),
+        )
+      : repairInterruptedPickups(world, decoded.player, loadedSession);
+    if (decoded.version === GAME_SAVE_VERSION && repairedContractIds.length > 0) {
+      throw new Error("Current save contains an interrupted optimistic Promise transaction");
+    }
     if (repairedContractIds.length > 0) {
       loadedSession.sessionChanges = Array.isArray(loadedSession.sessionChanges)
         ? [...loadedSession.sessionChanges, "An interrupted cargo pickup was safely reset before any harbor stock moved."]
@@ -2330,12 +3196,41 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       loadedSession.trackedContractId = repairedContractIds[0] ?? null;
     }
     validatePlayer(decoded.player, world);
+    const physicalCargoValidation = decoded.version === GAME_SAVE_VERSION
+      ? validatePhysicalCargoState(
+          decoded.physicalCargo,
+          decoded.player,
+          world.terrain.width,
+          world.terrain.height,
+        )
+      : {
+          valid: true as const,
+          reason: "valid" as const,
+          state: createPhysicalCargoStateFromPlayer(
+            decoded.player,
+            world.terrain.width,
+            world.terrain.height,
+          ),
+        };
+    if (!physicalCargoValidation.valid || !physicalCargoValidation.state) {
+      throw new Error(`Save contains invalid physical cargo: ${physicalCargoValidation.reason}`);
+    }
+    validatePhysicalPromiseCustody(world, decoded.player, physicalCargoValidation.state);
+    if (decoded.version === GAME_SAVE_VERSION) {
+      const runtimeCanonicalPlayer = structuredClone(decoded.player);
+      normalizePlayerForRuntime(runtimeCanonicalPlayer, createWorldView(world));
+      if (stableStringify(runtimeCanonicalPlayer) !== stableStringify(decoded.player)) {
+        throw new Error("Current save contains noncanonical runtime player state");
+      }
+    }
     return {
       kind: "loaded",
       world,
       player: decoded.player,
       session: loadedSession,
       fieldResources,
+      traversalFeedback,
+      physicalCargo: physicalCargoValidation.state,
       saveGenerationEra: version.saveGenerationEra,
       saveGeneration: version.saveGeneration,
       updatedAt: record.updatedAt,
@@ -2579,6 +3474,33 @@ function rollbackOptimisticPickup(
   }
 }
 
+function removePhysicalPromiseContract(
+  state: PhysicalCargoState,
+  contractId: number,
+): PhysicalCargoState {
+  const loose = state.looseWorld.entities.filter((entity) =>
+    entity.payload.kind === "promise" && entity.payload.contractId === contractId);
+  if (loose.length > 0) {
+    throw new Error("Cannot remove Promise substance while one of its parcels is loose in the world");
+  }
+  const lots = state.carrier.lots.filter((lot) =>
+    lot.payload.kind === "promise" && lot.payload.contractId === contractId);
+  if (lots.length === 0) return state;
+  let carrier = state.carrier;
+  const removed: LooseCargoPayload[] = [];
+  for (const lot of lots) {
+    const result = removeLooseCargoPromise(carrier, lot.id);
+    if (!result.ok) throw new Error(`Could not remove physical Promise lot: ${result.reason}`);
+    carrier = result.carrier;
+    removed.push(lot.payload);
+  }
+  return commitPhysicalCargoState(
+    state,
+    { looseWorld: state.looseWorld, carrier },
+    { kind: "delta", removed, added: [] },
+  );
+}
+
 /**
  * Repairs snapshots produced before pending pickups were reconciled at save
  * time. The common offered state only needs its phantom local cargo removed.
@@ -2662,6 +3584,100 @@ function requireFieldResourceState(value: unknown): FieldResourceEcologyState {
   return candidate as FieldResourceEcologyState;
 }
 
+function normalizePlayerForRuntime(player: PlayerState, world: WorldView): void {
+  player.worldWidth = world.terrain.width;
+  player.worldHeight = world.terrain.height;
+  player.x = clamp(player.x, TILE_UNITS / 2, world.terrain.width * TILE_UNITS - TILE_UNITS / 2);
+  player.y = clamp(player.y, TILE_UNITS / 2, world.terrain.height * TILE_UNITS - TILE_UNITS / 2);
+  player.previousX = Number.isFinite(player.previousX)
+    ? clamp(player.previousX, TILE_UNITS / 2, world.terrain.width * TILE_UNITS - TILE_UNITS / 2)
+    : player.x;
+  player.previousY = Number.isFinite(player.previousY)
+    ? clamp(player.previousY, TILE_UNITS / 2, world.terrain.height * TILE_UNITS - TILE_UNITS / 2)
+    : player.y;
+  player.velocityX = Number.isFinite(player.velocityX) ? player.velocityX : 0;
+  player.velocityY = Number.isFinite(player.velocityY) ? player.velocityY : 0;
+  player.facingMilliRadians = Number.isFinite(player.facingMilliRadians) ? player.facingMilliRadians : 0;
+  player.stamina = clamp(player.stamina, 0, FIXED_POINT);
+  player.stability = clamp(player.stability, 0, FIXED_POINT);
+  player.scanCharge = clamp(player.scanCharge, 0, FIXED_POINT);
+  player.scanPulse = Number.isFinite(player.scanPulse) ? clamp(player.scanPulse, 0, FIXED_POINT) : 0;
+  player.pace = isTravelPace(player.pace) ? player.pace : "steady";
+  player.mode = isPlayerMode(player.mode) ? player.mode : "foot";
+  player.report = player.report ?? null;
+  player.reportsDelivered = Number.isFinite(player.reportsDelivered)
+    ? Math.max(0, Math.floor(player.reportsDelivered))
+    : 0;
+  player.stabilityTrend = player.stabilityTrend === "falling" || player.stabilityTrend === "recovering"
+    ? player.stabilityTrend
+    : "steady";
+  player.stabilityHint = typeof player.stabilityHint === "string" && player.stabilityHint.trim().length > 0
+    ? player.stabilityHint
+    : "Stable · hold Shift while moving to brace";
+  player.discovered = player.discovered.map((value) => Number.isFinite(value)
+    ? clamp(value, 0, FIXED_POINT)
+    : 0);
+  const validTools: readonly FieldToolKind[] = ["sounding-line", "marsh-stilts", "tide-sail", "storm-kite"];
+  player.tools = Array.isArray(player.tools)
+    ? [...new Set(player.tools.filter((tool): tool is FieldToolKind => validTools.includes(tool as FieldToolKind)))].sort()
+    : ["sounding-line"];
+  if (!player.tools.includes("sounding-line")) player.tools.unshift("sounding-line");
+  player.wayknots = normalizeWayknotState(player.wayknots, {
+    capacity: DEFAULT_WAYKNOT_CAPACITY,
+    tileCount: world.terrain.tiles.length,
+    loadTick: world.completedTick,
+    contextAt: (tileIndex) => {
+      const context = wayknotContextAt(world, tileIndex);
+      if (!context) return undefined;
+      const tile = world.terrain.tiles[tileIndex];
+      const canReachAnchorDepth = tile !== undefined
+        && MAX_TIDE_LEVEL - tile.elevation >= TIDE_ANCHOR_PLACEMENT_DEPTH;
+      return canReachAnchorDepth
+        ? { ...context, waterDepth: Math.max(context.waterDepth, TIDE_ANCHOR_PLACEMENT_DEPTH) }
+        : context;
+    },
+  });
+  player.depthSoundings = Array.isArray(player.depthSoundings)
+    && player.depthSoundings.length === world.terrain.tiles.length
+    ? player.depthSoundings.map((value) => Number.isFinite(value)
+      ? Math.max(0, Math.min(FIXED_POINT, value))
+      : 0)
+    : Array.from({ length: world.terrain.tiles.length }, () => 0);
+  player.sweepPath = Array.isArray(player.sweepPath) ? player.sweepPath : [];
+  player.sweepTicksRemaining = Number.isFinite(player.sweepTicksRemaining)
+    ? Math.max(0, Math.floor(player.sweepTicksRemaining))
+    : 0;
+  player.sweepTotalTicks = Number.isFinite(player.sweepTotalTicks)
+    ? Math.max(player.sweepTicksRemaining, Math.floor(player.sweepTotalTicks))
+    : player.sweepTicksRemaining;
+  player.sweepSupport = player.sweepSupport === "clinic" || player.sweepSupport === "ferry"
+    ? player.sweepSupport
+    : null;
+  if (player.mode === "swept" && !restoreSweptPlayer(player, world)) {
+    player.mode = "camp";
+    player.stamina = Math.max(player.stamina, 150_000);
+    restoreSweptPlayer(player, world);
+  } else if (player.mode !== "swept") {
+    restoreSweptPlayer(player, world);
+  }
+  const loadedHarborId = settlementAtPlayer(player, world);
+  player.surveyTrace = Array.isArray(player.surveyTrace) && player.surveyTrace.length > 0
+    ? player.surveyTrace
+    : [playerTileIndex(player)];
+  player.surveyedRouteIds = Array.isArray(player.surveyedRouteIds)
+    ? [...new Set(player.surveyedRouteIds.filter((id) => world.routes.some((route) => route.id === id)))]
+        .sort((left, right) => left - right)
+    : [];
+  player.lastHarborId = player.lastHarborId === null
+    || world.settlements.some((settlement) => settlement.id === player.lastHarborId)
+    ? player.lastHarborId
+    : loadedHarborId;
+  player.harborTrail = Array.isArray(player.harborTrail)
+    && player.harborTrail.every((id) => world.settlements.some((settlement) => settlement.id === id))
+    ? player.harborTrail.slice(-8)
+    : player.lastHarborId === null ? [] : [player.lastHarborId];
+}
+
 function normalizePlayerCrafting(player: PlayerState, allowMissing: boolean): void {
   if (!Number.isSafeInteger(player.cargoCapacity) || player.cargoCapacity <= 0) {
     throw new Error("Save contains invalid pack capacity");
@@ -2700,10 +3716,13 @@ function normalizePlayerCrafting(player: PlayerState, allowMissing: boolean): vo
   if (cargoWeightMilli(player) > capacityMilli) {
     throw new Error("Save contains an over-capacity pack");
   }
-  const nextAvailableId = Math.max(
-    FIRST_CRAFTED_GEAR_ID,
-    ...player.craftingInventory.gear.map((gear) => gear.id + 1),
+  const highestGearId = player.craftingInventory.gear.reduce(
+    (highest, gear) => Math.max(highest, gear.id),
+    FIRST_CRAFTED_GEAR_ID - 1,
   );
+  const nextAvailableId = highestGearId >= Number.MAX_SAFE_INTEGER
+    ? Number.MAX_SAFE_INTEGER
+    : Math.max(FIRST_CRAFTED_GEAR_ID, highestGearId + 1);
   player.nextCraftedGearId = Number.isSafeInteger(player.nextCraftedGearId)
     && player.nextCraftedGearId >= nextAvailableId
     ? player.nextCraftedGearId
@@ -2799,12 +3818,58 @@ function validatePlayer(player: PlayerState, world: WorldState): void {
   }
 }
 
+function validatePhysicalPromiseCustody(
+  world: WorldState,
+  player: PlayerState,
+  physicalCargo: PhysicalCargoState,
+): void {
+  const playerContracts = world.contracts.filter((contract) =>
+    contract.status === "in-transit" && contract.carrierKind === "player");
+  if (playerContracts.length > 1) {
+    throw new Error("Save contains more than one player-carried Promise");
+  }
+  const active = playerContracts[0] ?? null;
+  if ((active?.id ?? null) !== player.activeContractId) {
+    throw new Error("Save Promise ownership does not match the active physical carrier");
+  }
+  const physicalPromises = [
+    ...physicalCargo.carrier.lots.map((lot) => lot.payload),
+    ...physicalCargo.looseWorld.entities.map((entity) => entity.payload),
+  ].filter((payload): payload is Extract<LooseCargoPayload, { readonly kind: "promise" }> =>
+    payload.kind === "promise");
+  if (!active) {
+    if (physicalPromises.length > 0 || player.cargo.length > 0) {
+      throw new Error("Save retains physical Promise cargo without an active contract");
+    }
+    return;
+  }
+  let quantity = 0;
+  for (const payload of physicalPromises) {
+    if (
+      payload.contractId !== active.id
+      || payload.resource !== active.resource
+      || payload.property !== expectedCargoProperty(active.resource)
+    ) throw new Error("Save contains a Promise parcel with contradictory ownership or contents");
+    quantity += payload.quantity;
+    if (!Number.isSafeInteger(quantity)) throw new Error("Save Promise quantity overflowed");
+  }
+  if (quantity !== active.cargoQuantity || active.cargoQuantity !== active.quantity) {
+    throw new Error("Save physical Promise quantity does not match authoritative contract custody");
+  }
+}
+
 function materialLabel(material: FieldMaterialId): string {
   return CRAFTING_STACK_DEFINITIONS[material].label;
 }
 
 function titleCaseWord(word: string): string {
   return word.length === 0 ? word : `${word[0]?.toLocaleUpperCase() ?? ""}${word.slice(1)}`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : "the transaction failed closed";
 }
 
 function formatMilliLoad(loadMilli: number): string {
