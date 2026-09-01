@@ -390,6 +390,8 @@ export interface TideweftUIOptions {
   readonly root: HTMLElement;
   readonly getView: () => TideweftUIView | null | undefined;
   readonly dispatch: (command: TideweftUICommand) => void;
+  /** Feeds the touch hold control into the same brace bit as desktop Shift. */
+  readonly setBrace: (active: boolean) => void;
   readonly announcer?: HTMLElement;
   /** Defaults to true. When false, the host calls update itself. */
   readonly autoStart?: boolean;

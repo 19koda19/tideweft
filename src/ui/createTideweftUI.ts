@@ -17,6 +17,7 @@ import {
   createKitDialog,
   type KitDialogController,
 } from "./kitDialog";
+import { bindMobileBraceHold } from "./mobileBrace";
 import { createTutorialDialog, type TutorialDialogController } from "./tutorialDialog";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
@@ -101,6 +102,7 @@ export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
     .replace(/^Recovering(?: while)?\s*/u, "↑ ")
     .replace(/^Stable\s*·.*$/u, "STABLE")
     .replace(/\s*·\s*hold Shift to brace.*$/iu, "")
+    .replace(/\s*·\s*Shift trades speed for control.*$/iu, "")
     .trim() || "STABLE";
   const sweepRule = "DEEP: STAM/STAB 0 → SWEPT";
   const safety = input.swept
@@ -305,6 +307,7 @@ interface UIRefs {
   interactButton: HTMLButtonElement;
   wayknotButton: HTMLButtonElement;
   wayknotButtonLabel: HTMLSpanElement;
+  braceButton: HTMLButtonElement;
   kitButton: HTMLButtonElement;
   quietButton: HTMLButtonElement;
   titleButton: HTMLButtonElement;
@@ -861,6 +864,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     wayknotButtonLabel,
     createElement("kbd", "keycap", WAYKNOT_KEY_SHORTCUT),
   );
+  const braceButton = createButton(
+    "action-button brace-button",
+    "BRACE",
+    "Hold to brace. Trades travel speed for stability and protects fragile cargo.",
+  );
+  braceButton.setAttribute("aria-pressed", "false");
   const kitButton = createButton(
     "icon-button icon-button--labeled kit-button",
     "KIT",
@@ -889,6 +898,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   actionDock.append(
     scanButton,
     interactButton,
+    braceButton,
     wayknotButton,
     kitButton,
     quietButton,
@@ -1125,6 +1135,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     interactButton,
     wayknotButton,
     wayknotButtonLabel,
+    braceButton,
     kitButton,
     quietButton,
     titleButton,
@@ -1155,6 +1166,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
 
 export function createTideweftUI(options: TideweftUIOptions): TideweftUIController {
   const refs = buildShell(options);
+  const mobileBrace = bindMobileBraceHold({
+    button: refs.braceButton,
+    documentTarget: document,
+    windowTarget: window,
+    onBraceChange: options.setBrace,
+  });
   const announcer = options.announcer ?? document.getElementById("announcer") ?? createElement("div", "visually-hidden");
   if (!announcer.isConnected) {
     announcer.setAttribute("role", "status");
@@ -1216,6 +1233,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   const openKit = (tab: KitTabId = "pack", trigger?: HTMLElement | null): void => {
+    mobileBrace.release();
     if (refs.titleDialog.open || refs.quietDialog.open) return;
     refs.tutorial.close(false);
     setMobileHudExpanded(false);
@@ -1223,6 +1241,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   const toggleKit = (tab: KitTabId = "pack", trigger?: HTMLElement | null): void => {
+    mobileBrace.release();
     if (refs.kit.isOpen()) {
       refs.kit.close();
       return;
@@ -1231,6 +1250,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   const openHelp = (trigger?: HTMLElement | null): void => {
+    mobileBrace.release();
     refs.kit.close(false);
     setMobileHudExpanded(false);
     refs.tutorial.open(trigger);
@@ -1245,6 +1265,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   const closeFieldDialogs = (): void => {
+    mobileBrace.release();
     refs.kit.close(false);
     refs.tutorial.close(false);
   };
@@ -1533,6 +1554,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     latestView = view;
     refs.kit.update(view?.kit);
     if (!view) {
+      mobileBrace.release();
       refs.shell.dataset.ready = "false";
       closeFieldDialogs();
       syncDialog(refs.titleDialog, forcedTitle ?? true);
@@ -1542,7 +1564,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     if (
       (forcedTitle ?? view.title.visible)
       || (forcedQuietHour ?? view.quietHour?.visible ?? false)
-    ) refs.kit.close(false);
+    ) {
+      mobileBrace.release();
+      refs.kit.close(false);
+    }
     const revision = String(view.revision);
     const isNewRevision = revision !== lastRevision;
     if (!isNewRevision) {
@@ -1777,10 +1802,12 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     setMobileHudExpanded(expanding);
   });
   refs.quietButton.addEventListener("click", () => {
+    mobileBrace.release();
     closeFieldDialogs();
     options.dispatch({ type: "quiet-hour", action: "open" });
   });
   refs.titleButton.addEventListener("click", () => {
+    mobileBrace.release();
     closeFieldDialogs();
     options.dispatch({ type: "open-title" });
   });
@@ -1866,6 +1893,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   const stop = (): void => {
+    mobileBrace.release();
     running = false;
     if (frameHandle !== null) window.cancelAnimationFrame(frameHandle);
     frameHandle = null;
@@ -1881,12 +1909,18 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     announce,
     setTitleVisible: (visible) => {
       forcedTitle = visible;
-      if (visible) refs.kit.close(false);
+      if (visible) {
+        mobileBrace.release();
+        refs.kit.close(false);
+      }
       syncDialog(refs.titleDialog, visible);
     },
     setQuietHourVisible: (visible) => {
       forcedQuietHour = visible;
-      if (visible) refs.kit.close(false);
+      if (visible) {
+        mobileBrace.release();
+        refs.kit.close(false);
+      }
       syncDialog(refs.quietDialog, visible);
     },
     openHelp: () => openHelp(),
@@ -1895,6 +1929,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     closeKit: () => refs.kit.close(),
     destroy: () => {
       stop();
+      mobileBrace.destroy();
       document.removeEventListener("keydown", onGlobalKeyDown);
       window.removeEventListener("pointerup", releaseContractPointer);
       window.removeEventListener("pointercancel", cancelContractPointer);

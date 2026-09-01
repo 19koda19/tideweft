@@ -35,6 +35,7 @@ export const TUTORIAL_CONTROL_IDS = [
   "move-keys",
   "set-destination",
   "brace-key",
+  "brace-button",
   "pace-keys",
   "scan-key",
   "scan-button",
@@ -135,6 +136,13 @@ export const TUTORIAL_CONTROLS = [
     input: "Hold Shift while moving",
     action: "Brace the load",
     detail: "Bracing trades speed for stability and protects fragile cargo.",
+  },
+  {
+    id: "brace-button",
+    audience: "mobile",
+    input: "Hold BRACE",
+    action: "Brace during touch travel",
+    detail: "Keep holding through danger to trade route speed for stability and fragile-cargo protection; release to stop bracing.",
   },
   {
     id: "pace-keys",
@@ -520,7 +528,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     shortTitle: "Water & safety",
     summary: "Stamina pays for movement; stability measures control of body and load. Depth, current, pace, terrain, wind, turning, and bracing explain every change.",
     keywords: ["stamina", "stability", "water", "depth", "scan", "sounding", "current", "swept", "arrow"],
-    controlIds: ["brace-key", "pace-keys", "scan-key", "scan-button"],
+    controlIds: ["brace-key", "brace-button", "pace-keys", "scan-key", "scan-button"],
     steps: [
       {
         id: "meters-scan-depth",
@@ -551,8 +559,9 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "meters-brace-mobile",
         audience: "mobile",
-        title: "Stop before a risky crossing on touch",
-        body: "Touch travel follows a charted path. Let movement stop or cancel the destination to recover before entering rough or wet ground. The compact safety line keeps stamina, stability, and its live cause visible.",
+        title: "Hold BRACE through a risky patch",
+        body: "Press and keep holding BRACE while a charted touch route crosses rough or wet ground. It feeds the same bracing rule as desktop Shift: travel slows, stability recovers, and fragile cargo gets more protection. The compact safety line keeps the live stability cause visible. Release the button after the hazard; any interrupted touch releases it automatically so it cannot stick.",
+        controlId: "brace-button",
       },
       {
         id: "meters-sweep",
@@ -895,7 +904,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-mobile-strip",
         audience: "mobile",
         title: "The compact strip is the travel HUD",
-        body: "Its translucent overlay keeps the active PICK UP / DELIVER route plus labeled Stamina, Stability, Loom, and Cargo meters above the map. The terrain line names the biome, depth, effort, and current risk; the large touch dock below supplies the contextual action, Scan, and Wayknot controls without keyboard-instruction clutter.",
+        body: "Its translucent overlay keeps the active PICK UP / DELIVER route plus labeled Stamina, Stability, Loom, and Cargo meters above the map. The terrain line names the biome, depth, effort, and current risk; the large touch dock below supplies the contextual action, hold-to-BRACE, Scan, and Wayknot controls without keyboard-instruction clutter.",
       },
       {
         id: "views-mobile-sheets",
@@ -1060,7 +1069,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
 ] as const satisfies readonly TutorialGuideSection[];
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
-  version: 3,
+  version: 4,
   title: "TIDEWEFT FIELD MANUAL",
   subtitle: "Promises, currents, and the paths that learn",
   sections: TUTORIAL_GUIDE_SECTIONS,

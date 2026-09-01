@@ -16,7 +16,7 @@ Alpha 0.3 grows the three earlier slices with a fourth fieldcraft layer:
 
 - **Tide Choir:** routes must be physically surveyed before shared parts can improve them. Closing a unique loop of three or more surveyed harbor legs awakens a one-time communal harmony and permanently strengthens that circuit.
 - **Wild Reaches:** new worlds now span 96 × 72 tiles, keep every harbor at least 14 Manhattan tiles apart, and use seeded multi-octave gradient Perlin noise. Water is traversable, sounded depth scales stamina cost, civic field tools change difficult crossings, and deep-water exhaustion becomes a recoverable swept-away state.
-- **Relief estuary:** the same authoritative terrain now drives a playable p5/WebGL height field with lit chunked land, translucent water, depth fog, 3D routes, harbors, porters, cargo, soundings, pointer picking, zoom, and an orbiting camera. Relief water shares Chart's shallow/channel/deep palette, with only discovery-safe tide and biome conditioning instead of one uniform cyan sheet. **Relief 3D** is the default where WebGL is available; **Chart 2D** is a persisted, reduced-motion-friendly fallback.
+- **Relief estuary:** the same authoritative terrain now drives a playable p5/WebGL height field with lit chunked land, dark depth-ordered water, depth fog, 3D routes, harbors, porters, cargo, soundings, pointer picking, zoom, and an orbiting camera. Relief water shares Chart's shallow/channel/deep palette, but uses a stronger discovery-masked opacity floor so shallow water is visibly dark, channels are darker, and deep water is darkest instead of washing into lit land. **Relief 3D** is the default where WebGL is available; **Chart 2D** is a persisted, reduced-motion-friendly fallback.
 - **Living commons:** nine seed-derived material families now grow visibly in suitable biomes. Desktop and touch gathering feed one exact shared pack, while the anywhere **KIT** turns those finds into six prepared components and eleven durable tools through mobile-safe **PACK / MAKE / MEND** tabs.
 
 Playtest fixes also make the HUD lighter, keep the Promises list genuinely scrollable even in shallow windows, stop live contract-card updates from swallowing clicks, state why stability is changing, and put explicit **PICK UP** / **DELIVER** instructions on each physical cargo promise.
@@ -59,7 +59,7 @@ The campaign resolves when every settlement belongs to a sufficiently redundant 
 
 The current published checkpoint removes the old Drift/Weave 10/25-minute title choice and creates every new world with perpetual semantics. Earlier saves may still contain `drift`, `weave`, or `wander`; all three values load and round-trip safely, but none restores a quota or timed objective. The manual in-play pause command is also gone: opening Quiet Hour or the title safely stops the simulation and saves, while ordinary play keeps the world moving. Its title and field chrome use a restrained near-monochrome, hairline treatment instead of stacked glass panes.
 
-On phones, Alpha 0.3 exposes four translucent, labeled vitals—**Stamina, Stability, Loom, and Cargo**—plus a touch action dock, while keeping keyboard hints out of the travel HUD. Harbor taps chart a route to the exact harbor center so arrival does not race a menu. Promises and settlement details remain independent safe-area sheets. The former mobile Title slot now opens the live **KIT** inventory and crafting surface; a 44-pixel **☾ Quiet Hour** control retains the saved recap and return-to-title path. Desktop **T** and the mobile **?** open the same versioned, independently scrollable field manual; its live/planned boundary is updated whenever a mechanic changes. Physical cargo remains in Promises, while inspector controls say **Sign info report → [harbor]** and identify reports as information-only, one-document-slot journeys. Those stable, touch-sized controls are not rebuilt under the pointer as their facts refresh.
+On phones, Alpha 0.3 exposes four translucent, labeled vitals—**Stamina, Stability, Loom, and Cargo**—plus a touch action dock, while keeping keyboard hints out of the travel HUD. A momentary **BRACE** control feeds the same authoritative rule as desktop Shift during tap-to-route travel: hold it through danger, then release. It visibly reads **BRACING** while active and fails safe on cancelled touches, lost focus, hidden pages, or opened dialogs. Harbor taps chart a route to the exact harbor center so arrival does not race a menu. Promises and settlement details remain independent safe-area sheets. The former mobile Title slot now opens the live **KIT** inventory and crafting surface; a 44-pixel **☾ Quiet Hour** control retains the saved recap and return-to-title path. Desktop **T** and the mobile **?** open the same versioned, independently scrollable field manual; its live/planned boundary is updated whenever a mechanic changes. Physical cargo remains in Promises, while inspector controls say **Sign info report → [harbor]** and identify reports as information-only, one-document-slot journeys. Those stable, touch-sized controls are not rebuilt under the pointer as their facts refresh.
 
 Seven derived biomes—Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen—are projected from the seeded terrain and presented with restrained color-and-motif language in both Chart and Relief. Their bounded rainfall, heat, salinity, exposure, and magical-water signals remain derived rather than separately saved. Alpha 0.3 uses biome identity to choose natural material families and active weather to bound their regrowth, but climate still does **not** cause courier exposure, material-specific cargo damage, infrastructure reactions, or settlement consequences.
 
@@ -73,6 +73,7 @@ The world canvas must have focus for travel keys. Buttons and contract cards rem
 | --- | --- |
 | WASD / arrow keys | Travel |
 | Hold Shift while moving | Brace: trade speed for stability and fragile-cargo protection |
+| Hold BRACE (mobile) | Apply the same bracing rule during a charted touch route; release to stop |
 | Pointer click / tap | Chart a destination; a touch harbor tap routes to its exact center, while a visible resource tap routes to that exact patch and gathers on arrival |
 | Space | Pulse the Loom to reveal nearby terrain and sound water depth; an active Tide Harp echoes from all three knots |
 | E / Enter | Interact, deliver, inspect a harbor, or gather one discovered resource unit underfoot |
@@ -88,7 +89,7 @@ The world canvas must have focus for travel keys. Buttons and contract cards rem
 | PROMISES + / PROMISES − (portrait or short landscape phones) | Open or fold the full-size Promises sheet; the four vitals and touch controls remain available |
 | KIT (mobile) | Open the safe-area PACK / MAKE / MEND inventory and crafting surface |
 
-Holding Shift braces the load without stopping; standing still or using Rest pace also restores stability. Completed caches shelter perishable food from freshness loss while you are there. The HUD names the live cause whenever stability falls.
+Holding Shift—or holding **BRACE** on mobile—braces the load without stopping; standing still or using Rest pace also restores stability. Completed caches shelter perishable food from freshness loss while you are there. The HUD names the live cause whenever stability falls.
 
 Desktop world clicks route to resources but never harvest remotely: step onto the marked tile and press E. On touch, tapping a visible resource is the explicit gather command, so it routes to the exact tile and takes one unit on arrival. Either path rejects the whole action without changing the patch if the pack lacks room or only its final living unit remains. KIT can be opened between harbors; the tide, weather, residents, and route continue while PACK, MAKE, or MEND is visible.
 
@@ -160,13 +161,15 @@ The perpetual/mobile/biome checkpoint passes TypeScript, **40 Vitest files / 311
 
 The Alpha 0.3 field ecology / KIT checkpoint passes TypeScript, **49 Vitest files / 386 checks**, the production build, the nested `/tideweft/` smoke, a scoped source-secret scan, and the packaged desktop/mobile/KIT gate with no renderer warnings or resource failures. Fresh title, portrait-gameplay, and Relief captures were inspected. Exact feature commit `d22668b3b481ea937e08ece5c7a26b6eb8c18870` passed CI run `33514087307` and Pages run `33514087320`; the live `index-CHONaHrC.js` and `index-cSiSqast.css` assets both return HTTP 200.
 
+The coherent version promotion is exact commit `ab270dbae92730d65ded3f56408d3f7032f18fec`, tagged `v0.3.0-alpha.1`. Main CI run `33514967147`, tag CI run `33514966921`, and Pages run `33514967288` all succeeded. The public page serves the promotion build's inspected `index-2OVXbDIf.js` and `index-cSiSqast.css`, both returning HTTP 200.
+
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 
 ## GitHub Pages
 
 [The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The Alpha 0.3 feature baseline is verified at commit `d22668b3b481ea937e08ece5c7a26b6eb8c18870`; successful CI run `33514087307` and Pages run `33514087320` produced the exact inspected `index-CHONaHrC.js` and `index-cSiSqast.css` assets.
+The tagged Alpha 0.3 release is verified at commit `ab270dbae92730d65ded3f56408d3f7032f18fec`; successful main CI run `33514967147`, tag CI run `33514966921`, and Pages run `33514967288` produced the exact inspected `index-2OVXbDIf.js` and `index-cSiSqast.css` assets.
 
 To publish:
 

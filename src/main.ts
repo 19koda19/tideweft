@@ -76,6 +76,7 @@ async function boot(): Promise<void> {
   const ui = createTideweftUI({
     root: uiRoot,
     getView: runtime.getUIView,
+    setBrace: (active) => runtime.dispatchRenderer({ type: "brace", active }),
     dispatch: (command) => {
       runtime.dispatchUI(command);
       const returnsToPlay = command.type === "resume-world"

@@ -15,7 +15,10 @@ import {
   buildReliefMaterialBatches,
   type ReliefMaterialBatch,
 } from "./reliefTerrainBatches";
-import { buildReliefWaterMaterialBatches } from "./reliefWaterBatches";
+import {
+  buildReliefWaterMaterialBatches,
+  reliefWaterOpacity,
+} from "./reliefWaterBatches";
 import {
   MAX_RELIEF_PITCH,
   MIN_RELIEF_PITCH,
@@ -860,14 +863,14 @@ export function createTideweftReliefRenderer(
       const conditioned = p.lerpColor(
         base,
         p.color(biome?.accentColor ?? RELIEF_PALETTE.foam),
-        clamp(material.environment * 0.08, 0, 0.08),
+        biome ? clamp(0.07 + material.environment * 0.15, 0.07, 0.22) : 0.04,
       );
       const revealed = p.lerpColor(
         p.color(RELIEF_PALETTE.ink),
         conditioned,
         Math.pow(unit(material.visibility), 0.72),
       );
-      return p.lerpColor(revealed, p.color(RELIEF_PALETTE.horizon), clamp(fog * 0.72, 0, 0.78));
+      return p.lerpColor(revealed, p.color(RELIEF_PALETTE.horizon), clamp(fog * 0.5, 0, 0.58));
     };
 
     const setCamera = (state: ReliefCameraState): void => {
@@ -1005,7 +1008,10 @@ export function createTideweftReliefRenderer(
         lastRow: endRow,
       });
       for (const batch of waterBatches) {
-        p.ambientMaterial(withAlpha(batch.material.color, batch.material.opacity));
+        // Emissive here means "use the authored dark surface color unchanged,"
+        // not "glow": low-valued palette colors remain dark instead of being
+        // lifted toward the pale terrain by WebGL's directional lights.
+        p.emissiveMaterial(withAlpha(batch.material.color, reliefWaterOpacity(batch.material)));
         p.beginShape(p.TRIANGLES);
         for (const cell of batch.cells) {
           const { column, row } = cell;
@@ -1368,6 +1374,17 @@ export function createTideweftReliefRenderer(
               p.pop();
             }
           }
+        } else {
+          // Keep an understated material-colored halo around every discovered
+          // find so low-poly silhouettes stay distinct from lit terrain.
+          drawGroundRing(
+            view,
+            cache,
+            node.position,
+            view.terrain.tileSize * 0.29,
+            FIELD_RESOURCE_PRESENTATION[node.material].reliefColor,
+            96,
+          );
         }
         drawFieldResourceNode(node, surface, size);
       }
@@ -2026,9 +2043,11 @@ export function createTideweftReliefRenderer(
           0,
         );
       }
-      p.ambientLight(72, 91, 90);
-      p.directionalLight(190, 220, 207, -0.55, 0.9, -0.35);
-      p.directionalLight(76, 128, 146, 0.65, 0.2, 0.7);
+      // A warm neutral key and restrained cool fill preserve material identity;
+      // the former cyan-heavy rig flattened water, land, and finds together.
+      p.ambientLight(94, 91, 82);
+      p.directionalLight(224, 207, 174, -0.55, 0.9, -0.35);
+      p.directionalLight(66, 105, 126, 0.65, 0.2, 0.7);
       drawTerrain(view, cache, camera);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);

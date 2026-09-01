@@ -22,6 +22,24 @@ export interface ReliefWaterBatchBounds {
   readonly lastRow: number;
 }
 
+/**
+ * Relief water sits over a lit terrain mesh, so Chart's translucent alpha can
+ * wash out into pale ground. Keep the shared RGB language unchanged while
+ * giving each discovery-masked depth band a stronger, monotone alpha floor.
+ */
+export function reliefWaterOpacity(material: WaterPresentation): number {
+  const floor = material.band === "deep"
+    ? 255
+    : material.band === "channel"
+      ? 248
+      : 236;
+  return integerInRange(
+    Math.max(material.opacity, Math.round(floor * unit(material.visibility))),
+    0,
+    255,
+  );
+}
+
 /** Pure viewport batching for the translucent Relief water sheet. */
 export function buildReliefWaterMaterialBatches(
   grid: TerrainGridView,

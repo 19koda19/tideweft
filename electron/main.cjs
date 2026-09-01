@@ -509,6 +509,7 @@ function rendererProbeScript() {
       : null;
     const interactButton = document.querySelector('.action-button--interact');
     const wayknotButton = document.querySelector('.action-button--wayknot');
+    const braceButton = document.querySelector('.brace-button');
     const wayknotCount = document.querySelector('.field-readout__wayknot-count');
     const wayknotActive = document.querySelector('.field-readout__wayknot-active');
     const scanButton = document.querySelector('.action-button--scan');
@@ -849,6 +850,16 @@ function rendererProbeScript() {
             .every((control) => whollyInsideViewport(control)),
           coreControlsVisibleAndInside: [scanButton, interactButton, wayknotButton]
             .every((control) => visiblyIntersectsViewport(control) && whollyInsideViewport(control)),
+          brace: braceButton
+            ? {
+                visible: visiblyIntersectsViewport(braceButton),
+                insideViewport: whollyInsideViewport(braceButton),
+                rect: rectOf(braceButton),
+                text: braceButton.textContent?.trim() || null,
+                ariaPressed: braceButton.getAttribute('aria-pressed'),
+                ariaLabel: braceButton.getAttribute('aria-label'),
+              }
+            : null,
           labelsInsideControls: actionControls
             .filter((control) => visiblyIntersectsViewport(control))
             .every((control) => Array.from(control.querySelectorAll('.action-button__label')).every((label) => {
@@ -1595,6 +1606,13 @@ function probeHasMobileHudFrame(probe) {
     mobile.actionDock.insideViewport === true &&
     mobile.actionDock.controlsInsideViewport === true &&
     mobile.actionDock.coreControlsVisibleAndInside === true &&
+    mobile.actionDock.brace?.visible === true &&
+    mobile.actionDock.brace.insideViewport === true &&
+    mobile.actionDock.brace.rect?.width >= 44 &&
+    mobile.actionDock.brace.rect?.height >= 44 &&
+    mobile.actionDock.brace.text === 'BRACE' &&
+    mobile.actionDock.brace.ariaPressed === 'false' &&
+    mobile.actionDock.brace.ariaLabel?.includes('Hold to brace') &&
     mobile.actionDock.labelsInsideControls === true &&
     mobile.actionDock.overflowX === false &&
     probeHasSurfaceCurrent(probe),

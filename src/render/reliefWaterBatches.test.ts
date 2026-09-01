@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildReliefWaterMaterialBatches } from "./reliefWaterBatches";
+import {
+  buildReliefWaterMaterialBatches,
+  reliefWaterOpacity,
+} from "./reliefWaterBatches";
 import type { TerrainGridView, TerrainTileView } from "./types";
 
 const climate = {
@@ -90,5 +93,37 @@ describe("Relief water material batches", () => {
     expect(low?.color).not.toBe(high?.color);
     expect(low?.tideLevel).toBe(0);
     expect(high?.tideLevel).toBe(1);
+  });
+
+  it("keeps Relief water dark and makes deeper bands strictly more opaque", () => {
+    const source = grid([
+      tile({ waterDepth: 0.2 }),
+      tile({ waterDepth: 0.5 }),
+      tile({ waterDepth: 0.9 }),
+    ]);
+    const materials = buildReliefWaterMaterialBatches(source, 0.5)
+      .map((batch) => batch.material);
+    const shallow = materials.find((material) => material.band === "shallows");
+    const channel = materials.find((material) => material.band === "channel");
+    const deep = materials.find((material) => material.band === "deep");
+
+    expect(shallow && reliefWaterOpacity(shallow)).toBeGreaterThanOrEqual(236);
+    expect(channel && reliefWaterOpacity(channel)).toBeGreaterThan(reliefWaterOpacity(shallow!));
+    expect(deep && reliefWaterOpacity(deep)).toBeGreaterThan(reliefWaterOpacity(channel!));
+  });
+
+  it("still omits hidden water and bounds the quantized partial-discovery alpha", () => {
+    const barelySeen = buildReliefWaterMaterialBatches(
+      grid([tile({ waterDepth: 0.95, discovered: 0.01 })]),
+      0.5,
+    )[0]?.material;
+    const hidden = buildReliefWaterMaterialBatches(
+      grid([tile({ waterDepth: 0.95, discovered: 0 })]),
+      0.5,
+    );
+
+    expect(barelySeen).toBeDefined();
+    expect(reliefWaterOpacity(barelySeen!)).toBeLessThanOrEqual(60);
+    expect(hidden).toEqual([]);
   });
 });

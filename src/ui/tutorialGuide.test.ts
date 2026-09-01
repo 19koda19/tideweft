@@ -19,7 +19,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(3);
+    expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(4);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
     const contentIds = TUTORIAL_GUIDE_SECTIONS.flatMap((section) => [
@@ -100,7 +100,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileCopy).toContain("PACK / MAKE / MEND");
     expect(mobileCopy).toContain("full Promises sheet");
     expect(mobileCopy).toContain("compact safety line");
-    expect(mobileCopy).toContain("Let movement stop or cancel the destination");
+    expect(mobileCopy).toContain("Press and keep holding BRACE");
+    expect(mobileCopy).toContain("interrupted touch releases it automatically");
     expect(mobileCopy).toContain("dedicated Tutorial control");
     expect(mobileCopy).not.toContain("Shift-click appends");
     expect(mobileCopy).not.toContain("Right-drag or Alt-drag");
@@ -110,6 +111,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileControls.some((control) => control.id === "promises-sheet")).toBe(true);
     expect(mobileControls.some((control) => control.id === "tutorial-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "kit-button")).toBe(true);
+    expect(mobileControls.some((control) => control.id === "brace-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "brace-key")).toBe(false);
   });
 
