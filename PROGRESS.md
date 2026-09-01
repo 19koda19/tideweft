@@ -58,10 +58,10 @@
 
 ## Current checkpoint
 
-Phase 10: Tide Harps are implemented and locally release-verified as an untagged post-alpha preview; publication and remote verification are the active gate.
+Phase 10: Tide Harps are verified and published as an untagged post-alpha preview; the long-running build can move to the next gameplay slice.
 
-- The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; Pages serves the verified untagged Phase 9 hardening checkpoint at `1bc136e` (the Wayknots feature first landed at `eb12db0`). No Phase 10 deployment or new release is claimed yet.
-- The Phase 10 working source derives exact maximum knot-disjoint Tide Harps from compact one-Reed/one-Anchor/one-Wind triangles, adds bounded recharge and four-origin sounding, and projects clear HUD/help plus Chart strings and a Relief bell/cord structure.
+- The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; the tag has not moved. Pages now serves the untagged Phase 10 commit `6f74fe9e016ba566116e2085b05ecf2988213754`.
+- The published Phase 10 source derives exact maximum knot-disjoint Tide Harps from compact one-Reed/one-Anchor/one-Wind triangles, adds bounded recharge and four-origin sounding, and projects clear HUD/help plus Chart strings and a Relief bell/cord structure.
 - The complete local web gate passes 28 test files / 205 checks, and the extended packaged Electron smoke passes deterministic Harp placement/pulse, title paint, dual-view, and 1,440/960/927/700-pixel layout probes. Fresh title and Relief screenshots have been inspected.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
@@ -144,4 +144,10 @@ Phase 10: Tide Harps are implemented and locally release-verified as an untagged
 - Added direct HUD discovery copy for zero-tuned, tuned-but-inactive, and active states, plus Help and a named four-origin success announcement. Unsounded local water still presents the Sound-first explanation before any depth-dependent field guidance.
 - Added persistent bowed strings and stable activity marks to Chart 2D, and a suspended faceted bell, three cords, beads/crown cues, and discovery-safe surface placement to Relief 3D. Reduced motion freezes decorative bob and sway while retaining the complete structure.
 - Passed TypeScript, 28 Vitest files / 205 checks, the production build (`index-CKlzWR1L.css` / `index-D30XtHH3.js`), and the nested `/tideweft/` web smoke. The packaged Electron gate visibly paints the start controls, validates the deterministic R1/A3/W5 fixture through save/reload, proves its remote knot echo and Chart/Relief agreement, and preserves non-overlapping scrollable Promises layouts at 1,440 × 900, 960 × 640, 927 × 640, and 700 × 640 with no renderer warnings or resource failures.
-- Inspected fresh 2,880 × 1,678 title and 2,880 × 1,800 Relief captures: start/continue controls are usable, physical delivery guidance is explicit, and the active Harp's bell, three cords, labels, and HUD copy are visible. `git diff --check` and the scoped source secret scan are clean. Commit, remote CI, Pages deployment, and live-origin verification remain pending; no Phase 10 publication is claimed here.
+- Inspected fresh 2,880 × 1,678 title and 2,880 × 1,800 Relief captures: start/continue controls are usable, physical delivery guidance is explicit, and the active Harp's bell, three cords, labels, and HUD copy are visible. `git diff --check` and the scoped source secret scan are clean.
+
+## 2026-09-01 — Phase 10 Tide Harps preview published
+
+- Pushed exact feature commit `6f74fe9e016ba566116e2085b05ecf2988213754` without moving the Alpha 0.2 tag.
+- Watched GitHub CI run `33494152504` and Pages run `33494152310` succeed for that source.
+- Verified the live HTTPS HTML references `index-CKlzWR1L.css` and `index-D30XtHH3.js`; both exact assets return HTTP 200. Phase 10 is a published untagged preview, not a new tagged release.

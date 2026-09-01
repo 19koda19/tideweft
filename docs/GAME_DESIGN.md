@@ -174,7 +174,7 @@ Quiet Hour pauses immediately, saves, and summarizes duration, distance, deliver
 
 The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. The Tide Harp HUD teaches `Reed + Anchor + Wind in a compact triangle` when none exist, distinguishes tuned-but-inactive from active, and names the +900/three-origin benefit; Help repeats the model, while unsounded local water keeps the first explanatory priority. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. The packaged layout probe now covers 1,440 × 900, 960 × 640, the 927-pixel desktop/tablet boundary, and the 700-pixel compact layout so objective copy and a genuinely scrollable Promises pane do not overlap. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
-Chart 2D represents each instrument with three persistent bowed strings along each edge—nine in all—a written label, and fixed activity marks. Relief 3D uses three surface-rooted cords and a suspended faceted bell rather than a flat icon. Hidden terrain height is never consulted for visible placement, and reduced motion freezes bob/sway while keeping every structural and textual cue. Local packaged inspection now verifies the deterministic Harp, its remote sounding echo, both presentations, visible title controls, and fresh title/game captures. Phase 10 remains an unpublished working preview until exact-commit CI, Pages deployment, and live-origin verification succeed.
+Chart 2D represents each instrument with three persistent bowed strings along each edge—nine in all—a written label, and fixed activity marks. Relief 3D uses three surface-rooted cords and a suspended faceted bell rather than a flat icon. Hidden terrain height is never consulted for visible placement, and reduced motion freezes bob/sway while keeping every structural and textual cue. Packaged inspection verifies the deterministic Harp, its remote sounding echo, both presentations, visible title controls, and fresh title/game captures. Exact-commit CI and Pages deployment also pass, so Phase 10 is now a published untagged preview; Alpha 0.2 remains the latest tag.
 
 The current build has procedural sound but does not yet expose separate volume controls or key remapping.
 
@@ -188,7 +188,7 @@ Implemented now:
 - authoritative active/multi-hop logistics;
 - all five rule-changing civic projects;
 - route reinforcement, topology campaign resolution, and endless continuation;
-- surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, six reusable terrain-bound Wayknots and their Waychords, derived Tide Harps in the untagged Phase 10 working preview, and dual Chart 2D/Relief 3D play;
+- surveyed strands, unique Tide Choir memories, Perlin Wild Reaches, water sounding/sweep recovery, civic field tools, six reusable terrain-bound Wayknots and their Waychords, derived Tide Harps in the published untagged Phase 10 preview, and dual Chart 2D/Relief 3D play;
 - Drift/Weave/Wander plus Quiet Hour;
 - local resume, secure desktop packaging, and static Pages output.
 

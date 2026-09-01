@@ -29,7 +29,7 @@ Alpha 0.1 and Alpha 0.2 are verified and published. Alpha 0.2 was built additive
 - **The Tide Choir** makes route memory truthful, surveying playable, and completed harbor loops capable of awakening one-time communal harmonies.
 - **Wild Reaches** expands new seeds to a 96 × 72 Perlin estuary with meaningful terrain, sounded water, recoverable currents, and civic field tools.
 - **The Estuary in Relief** adds an actual playable p5/WebGL presentation while retaining the complete Chart 2D fallback.
-- **Wayknots** entered the published, untagged Phase 9 preview at `eb12db0` and its hardened live checkpoint is `1bc136e`; the working tree beyond it is now the untagged Phase 10 Tide Harps preview. Local web and packaged Electron verification are complete, while publication, remote CI, and live Pages verification remain pending.
+- **Wayknots** entered the published, untagged Phase 9 preview at `eb12db0` and its hardened checkpoint was `1bc136e`. The untagged Phase 10 Tide Harps preview is now published at `6f74fe9`; its exact-commit CI, Pages deployment, and live assets are verified. Alpha 0.2 remains tagged separately and unchanged.
 - Tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls remain later subphases unless release playtesting promotes them.
 
 ## Phase 0 — Evidence and contract
@@ -227,7 +227,7 @@ Local checkpoint evidence captured 2026-09-01:
 
 ## Phase 10 — Tide Harps
 
-Status: **locally verified implementation preview; publication pending**
+Status: **verified and published untagged preview; Alpha 0.2 tag unchanged**
 
 Purpose: let the fixed Wayknot kit become a small spatial instrument—something the player composes by understanding terrain—without adding a shop, resource, upgrade track, or save migration.
 
@@ -247,7 +247,7 @@ Local release evidence captured 2026-09-01:
 - The packaged Electron smoke visibly paints the title controls; loads one physical cargo promise; validates the deterministic R1/A3/W5 Harp through the production save path; proves the active HUD/projection and remote knot echo; round-trips Chart/Relief; and keeps Promises scrollable without objective overlap at 1,440 × 900, 960 × 640, 927 × 640, and 700 × 640. It reports no renderer warnings or resource failures.
 - Fresh 2,880 × 1,678 title and 2,880 × 1,800 Relief captures show the usable text-first start screen, explicit delivery state, active Harp copy, and actual discovery-safe bell/cord structure.
 
-The final source passes `git diff --check`, and the scoped scan finds no private-key headers, credential-token patterns, credential assignments, credential-bearing URLs, or committed environment files. Before any Phase 10 publication claim, publish the exact reviewed commit and require its remote CI and Pages deployment to succeed. Alpha 0.2 remains tagged at `v0.2.0-alpha.1` throughout this preview.
+The final source passes `git diff --check`, and the scoped scan finds no private-key headers, credential-token patterns, credential assignments, credential-bearing URLs, or committed environment files. Exact commit `6f74fe9e016ba566116e2085b05ecf2988213754` is pushed; CI run `33494152504` and Pages run `33494152310` succeeded; and the live HTTPS origin serves the inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets with HTTP 200 responses. This is an untagged mainline preview: Alpha 0.2 remains `v0.2.0-alpha.1`.
 
 ## Reward-loop acceptance audit
 
