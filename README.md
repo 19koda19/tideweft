@@ -20,7 +20,7 @@ Alpha 0.2 is built in three connected slices:
 
 Playtest fixes also make the HUD lighter, keep the Promises list genuinely scrollable even in shallow windows, stop live contract-card updates from swallowing clicks, state why stability is changing, and put explicit **PICK UP** / **DELIVER** instructions on each physical cargo promise.
 
-Post-alpha development is now in **Phase 9: Wayknots**. The locally verified source preview adds six fixed, reusable field aids—two Reed mats, two Tide anchors, and two Wind knots—which can be bound or reclaimed with **F**. They change the same authoritative movement and pointer-route costs, appear as physical motifs in Chart 2D and low-poly objects in Relief 3D, and can form a small **Waychord** where unlike fields overlap. Pages publication is the active checkpoint; this is not yet a separately tagged release.
+Post-alpha development is now in **Phase 9: Wayknots**. The live mainline preview adds six fixed, reusable field aids—two Reed mats, two Tide anchors, and two Wind knots—which can be bound or reclaimed with **F**. They change the same authoritative movement and pointer-route costs, appear as physical motifs in Chart 2D and low-poly objects in Relief 3D, and can form a small **Waychord** where unlike fields overlap. It is deployed on Pages from commit `eb12db0`; this remains an untagged preview after Alpha 0.2.
 
 ## What is playable
 

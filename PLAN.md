@@ -201,7 +201,7 @@ Local Alpha 0.2 evidence captured 2026-09-01:
 
 ## Phase 9 — Wayknots
 
-Status: **locally verified post-alpha preview; Pages publication pending**
+Status: **published post-alpha preview on `main`**
 
 Purpose: let terrain knowledge become small, reclaimable acts of care in the traveled world rather than another shop, currency, or permanent build menu.
 
@@ -219,7 +219,8 @@ Local checkpoint evidence captured 2026-09-01:
 - TypeScript, 23 Vitest files / 168 checks, the production build, and the nested `/tideweft/` Pages smoke all pass; the final artifact references `index-DFAeV3cN.js` and `index-BVBXIgMF.css`.
 - The packaged Electron 44 smoke walks one tile from Bellwake, binds Reed mat #1 through the real field-action button, and proves the projection, active field, `1 / 6 deployed` HUD, and reclaim control agree in both view modes.
 - A fresh 2,880 × 1,800 Relief screenshot visibly records the woven 3D mat, its world label, active description, explicit cargo destination, and still-scrollable Promises pane.
-- The source scan found no private-key headers, credential tokens, credential assignments, or credential-bearing URLs; Pages publication remains the only open checkpoint gate.
+- The source scan found no private-key headers, credential tokens, credential assignments, or credential-bearing URLs.
+- GitHub CI and Pages repeated every web gate successfully on commit `eb12db0`; the live HTTPS origin serves the exact locally inspected JS/CSS artifacts. This is an untagged mainline preview after Alpha 0.2.
 
 ## Reward-loop acceptance audit
 

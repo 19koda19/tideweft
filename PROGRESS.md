@@ -58,9 +58,9 @@
 
 ## Current checkpoint
 
-Phase 9: the Wayknots post-alpha preview is locally verified; Pages publication is the active gate.
+Phase 9: the Wayknots post-alpha preview is verified and live; refinement is the active gate.
 
-- The public repository and Pages deployment now serve Alpha 0.2 from `d9b8cea` / `v0.2.0-alpha.1`.
+- The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; Pages now also serves the untagged Phase 9 Wayknots preview from `eb12db0`.
 - The complete local web and packaged desktop gates now cover the 96 × 72 Perlin world, real Relief 3D, physical promise pickup, an actually bound 3D Wayknot, explicit delivery guidance, renderer switching, and the shallow-window Promises scroller.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
@@ -117,3 +117,10 @@ Phase 9: the Wayknots post-alpha preview is locally verified; Pages publication 
 - Added an integrated legacy-save assertion proving a published Alpha player snapshot with no Wayknot field receives exactly the six carried fixed-ID pieces without changing the old 64 × 48 world.
 - Extended the packaged smoke harness from HUD inspection to actual play: public pointer routing reaches compatible terrain, the real action button binds the knot, and render/UI projections must agree before evidence capture.
 - Completed the local release-candidate gate with 23 test files / 168 checks, production and nested-path web output, packaged Relief 3D play, screenshot review, dependency inspection, diff validation, and a scoped source secret scan.
+
+## 2026-09-01 — Phase 9 Wayknots preview published
+
+- Published the complete 29-file Wayknots/Relief/save-resilience checkpoint as `eb12db0` without changing the Alpha 0.2 tag or claiming a new packaged release.
+- Watched both exact-commit GitHub CI and Pages workflows pass dependency installation, TypeScript, all 168 checks, production build, nested-path artifact smoke, upload, and deployment.
+- Confirmed the live HTTPS page and the precise `index-DFAeV3cN.js` / `index-BVBXIgMF.css` artifacts return successfully.
+- Kept the long-running build goal active; the next slice begins with save-delete resilience, tide-anchor reload truthfulness, sweep ETA accuracy, and sounded-depth action clarity found during the parallel review.
