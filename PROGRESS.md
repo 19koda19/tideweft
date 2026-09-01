@@ -58,13 +58,13 @@
 
 ## Current checkpoint
 
-Phase 10: Tide Harps and the focused mobile/current hotfix are verified and published as untagged post-alpha previews. Perpetual-world semantics, manual pause removal, the near-monochrome interface, mobile travel redesign, complete field manual, report/cargo separation, visible derived biomes, and pure cargo-environment plus rock/ladder foundations are in the uncommitted working candidate, not yet deployed.
+Phase 10: Tide Harps, the mobile/current hotfix, and the perpetual/mobile/biome checkpoint are verified and published as untagged post-alpha previews.
 
-- The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; the tag has not moved. Pages currently serves the published mobile/current checkpoint `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2`.
+- The public repository retains tagged Alpha 0.2 at `d9b8cea` / `v0.2.0-alpha.1`; the tag has not moved. Pages currently serves `29ea8dc60f309ebc43bcf8c1b567cfacf2bf8f95`.
 - The published Phase 10 source derives exact maximum knot-disjoint Tide Harps from compact one-Reed/one-Anchor/one-Wind triangles, adds bounded recharge and four-origin sounding, and projects clear HUD/help plus Chart strings and a Relief bell/cord structure.
 - The complete local web gate passes 28 test files / 205 checks, and the extended packaged Electron smoke passes deterministic Harp placement/pulse, title paint, dual-view, and 1,440/960/927/700-pixel layout probes. Fresh title and Relief screenshots have been inspected.
 - The published hotfix folds large panels by default on portrait and short-landscape phones while retaining an always-visible route/safety/action strip, makes stability-zero and stamina-zero share recoverable deterministic sweep behavior in water at or above 120,000 depth, and shows current direction only on discovered wet surface without revealing bathymetry.
-- The candidate replaces that phone strip with four explicit translucent vitals plus touch controls, routes a touch harbor selection to the exact center, supplies independently scrollable safe-area sheets, and exposes the complete manual through T or a mobile ?. It also separates stable signed-report controls from physical Promises and projects seven named biomes into Chart and Relief.
+- The newest published checkpoint replaces that phone strip with four explicit translucent vitals plus touch controls, routes a touch harbor selection to the exact center, supplies independently scrollable safe-area sheets, and exposes the complete manual through T or a mobile ?. It also separates stable signed-report controls from physical Promises, projects seven named biomes into Chart and Relief, and shares Chart's depth-based water palette with Relief.
 - Menu-level import/export, visible multiple save slots, key remapping, volume controls, and broader simulation families remain documented follow-up work rather than hidden release claims.
 
 ## 2026-09-01 — Alpha 0.1 verification recovered
@@ -166,7 +166,7 @@ Phase 10: Tide Harps and the focused mobile/current hotfix are verified and publ
 - `git diff --check` and the scoped public-source secret scan are clean. Exact commit `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2` is published; CI run `33503039473` and Pages run `33503039480` succeeded, and the live `index-DTJENodE.css` / `index-CGVn5Ai9.js` assets return HTTP 200.
 - Began the next parallel phase: a restrained near-monochrome title/HUD, perpetual-by-default new worlds with legacy-save compatibility, and a pure deterministic biome/climate foundation for later rain, heat, exposure, magical-water, cargo-material, ecology, infrastructure, and settlement interactions.
 
-## 2026-09-01 — Perpetual field-interface and biome working candidate
+## 2026-09-01 — Perpetual field-interface and biome checkpoint
 
 - Removed the player-facing Drift/Weave 10/25-minute choice. Every new world now uses perpetual `wander` semantics and the same open-ended objective with no timer or quota.
 - Kept the `drift | weave | wander` union and serialized field for compatibility: older values load and re-save unchanged, but no longer restore quota objectives or milestone-completion prompts.
@@ -184,4 +184,5 @@ Phase 10: Tide Harps and the focused mobile/current hotfix are verified and publ
 - Added a separate pure cargo-environment kernel for the five existing cargo properties. Bounded material traits now deterministically evaluate condition loss, contamination, decay, readable cause codes, and signed current/lift force from rain, heat, cold, impact, immersion, and magical-water flux without mutation or hidden world reads.
 - Added a separate pure rock/ladder kernel with stable seeded formations, outcrop severity, blocked/high-risk crossings, deterministic fall-risk/travel-cost signals, and a finite reusable ladder kit with placement/reclaim validation.
 - Kept the cargo-environment and rock/ladder kernels foundation-only: neither enters runtime/player/world state, pointer routing, rendering, UI, or saves. Physical dropping, rock walls and ladders, tumbling/current drift, fall consequences, upgrades, live material-specific weather damage, ecology, infrastructure reactions, and settlement reactions remain planned.
-- The live GitHub Pages checkpoint remains `f8dc848`; this working candidate has no deployment, workflow, commit, or live-asset claim yet.
+- Passed the final gate with 40 test files / 311 checks, TypeScript, the nested `/tideweft/` production smoke, a scoped source-secret scan, runtime-only ASAR inspection, and packaged desktop/mobile smoke with no renderer warnings or resource failures.
+- Published exact commit `29ea8dc60f309ebc43bcf8c1b567cfacf2bf8f95`; CI run `33508654754` and Pages run `33508654540` succeeded, and the live `index-DIX0Efr_.js` / `index-Cc-fErTR.css` assets return HTTP 200.

@@ -35,7 +35,7 @@ The quantum framing is thematic, not a claim about real-world physics. Current p
 
 The tide changes water depth across the map. Water is always physically enterable, but sounded depth, stamina, stability, field tools, and the risk of being swept to a safe bank make route choice legible. Sparse arrows on discovered wet surface show the shared tide/wind current direction before entry; fixed arrow geometry does not encode unsounded bathymetry. Weather changes stamina/load pressure, stability, and whether marginal autonomous corridors remain usable.
 
-The working candidate gives each discovered place one stable derived biome identity and current rainfall, heat, salinity, exposure, and magical-water context. Those signals currently change the map/readout language only. They do not yet accumulate exposure, alter cargo materials, grow ecology, or modify settlement and infrastructure rules; every such consequence must become forecastable and tutorial-visible before activation.
+The published `29ea8dc` checkpoint gives each discovered place one stable derived biome identity and current rainfall, heat, salinity, exposure, and magical-water context. Those signals currently change the map/readout language only. They do not yet accumulate exposure, alter cargo materials, grow ecology, or modify settlement and infrastructure rules; every such consequence must become forecastable and tutorial-visible before activation.
 
 ## Nested reward loops
 
@@ -161,7 +161,7 @@ There is no character death, lost save, currency fine, streak break, or zero-pro
 
 ## Perpetual play and pressure
 
-Every new world in the working candidate is perpetual. The title asks only for seed and pressure posture; it does not prescribe a 10/25-minute shape, delivery count, corridor quota, or forced ending. The regional resilient-weave resolution remains a meaningful systemic achievement, but the estuary stays open afterward.
+Every new world is perpetual. The title asks only for seed and pressure posture; it does not prescribe a 10/25-minute shape, delivery count, corridor quota, or forced ending. The regional resilient-weave resolution remains a meaningful systemic achievement, but the estuary stays open afterward.
 
 Earlier saves may contain `drift`, `weave`, or `wander`. Those values remain valid compatibility data and round-trip safely, but all project the same open-ended objective and none reactivates a timer or milestone-completion prompt.
 

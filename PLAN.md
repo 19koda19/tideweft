@@ -31,7 +31,7 @@ Alpha 0.1 and Alpha 0.2 are verified and published. Alpha 0.2 was built additive
 - **The Estuary in Relief** adds an actual playable p5/WebGL presentation while retaining the complete Chart 2D fallback.
 - **Wayknots** entered the published, untagged Phase 9 preview at `eb12db0` and its hardened checkpoint was `1bc136e`. The untagged Phase 10 Tide Harps preview is now published at `6f74fe9`; its exact-commit CI, Pages deployment, and live assets are verified. Alpha 0.2 remains tagged separately and unchanged.
 - The focused post-Phase-10 mobile/current hotfix is published at `f8dc848`: compact-by-default HUD behavior on portrait and short-landscape phones, discovery-safe surface-current arrows, and deterministic deep-water sweep recovery triggered by either empty stamina or empty stability.
-- The uncommitted working candidate makes new worlds perpetual, removes manual in-play pause, applies a near-monochrome title/HUD pass, rebuilds the mobile travel interface around four vitals and touch actions, adds a complete T/? field manual, separates signed information reports from cargo controls, and projects seven derived biomes into both world views. It also contains pure cargo-environment and rock/ladder foundations that are not wired into play. None of those candidate changes are claimed as live at `f8dc848`.
+- The perpetual/mobile/biome checkpoint is published at `29ea8dc`: new worlds are perpetual, manual in-play pause is gone, the title/HUD is near-monochrome, the mobile travel interface carries four vitals and touch actions, T/? opens a complete field manual, reports are separate from cargo controls, and seven derived biomes plus shared 2D/3D water colors are visible. Pure cargo-environment and rock/ladder foundations remain deliberately unwired.
 - Tideletters, traveling companions, menu-level import/export, multiple visible slots, key remapping, and separate volume controls remain later subphases unless release playtesting promotes them.
 
 ## Phase 0 — Evidence and contract
@@ -267,11 +267,11 @@ Implemented in the current working source:
 
 Verification on 2026-09-01: **31 test files / 221 checks**, TypeScript, production build, nested `/tideweft/` web smoke, scoped public-source secret scan, and the packaged Electron gate all pass. The device gate covers 700 × 640, 390 × 700 portrait, and 844 × 390 landscape; it proves a 44-pixel toggle, scrollable full-width Promises, a separately scrollable inspector sheet, clean safe-area gaps, and zero renderer warnings or resource failures. Exact commit `f8dc8482cbd10df1352f87a3a28bbee4abcf8de2` is live after successful CI `33503039473` and Pages `33503039480`; its exact JS/CSS assets return HTTP 200.
 
-## Perpetual/mobile/biome working candidate and follow-ons
+## Perpetual/mobile/biome checkpoint and follow-ons
 
-Status: **implemented locally; not committed or deployed**
+Status: **implemented, verified, and published at `29ea8dc`**
 
-Implemented in the working candidate:
+Implemented in the published checkpoint:
 
 1. **Perpetual new worlds:** the title no longer offers Drift/Weave 10/25-minute choices; all new worlds use open-ended `wander` semantics. Valid legacy `drift`, `weave`, and `wander` save values remain in the type/save contract and round-trip unchanged, but every value projects the same no-timer/no-quota objective.
 2. **Voluntary stopping, not manual freezing:** the P command and action-dock pause button are removed. Ordinary play advances continuously; Quiet Hour and the title still save and halt both fixed-step clocks until the player continues.
@@ -297,7 +297,7 @@ Planned follow-ons, not current behavior:
 4. **Autonomy — implemented structurally, seed audit pending:** contracts expose consequence/mood; travel supports manual and pointer paths; reports and route tending provide non-contract work.
 5. **Relatedness — implemented:** promises name a requester and arrival copy identifies the person/harbor/project helped.
 6. **Compounding impact — implemented:** deliveries and parts can cross the self-carrying threshold; earlier corridors later carry resident work.
-7. **Voluntary closure — implemented in the working candidate:** new worlds have no timer or quota; Quiet Hour and the title save and safely stop simulation. There is no manual in-play pause or reward for stopping at a prescribed time.
+7. **Voluntary closure — implemented:** new worlds have no timer or quota; Quiet Hour and the title save and safely stop simulation. There is no manual in-play pause or reward for stopping at a prescribed time.
 8. **No coercion — implemented:** no streak, daily reset, paid/random payout, offline loss, or continue bonus.
 9. **Low frustration — implemented:** cargo weathers instead of vanishing; camp, clinic rescue, and harbor handoff preserve progress and knowledge.
 10. **Intrinsic core — qualitative playtest pending:** movement, planning, charting, and observing porters are built to stand without score escalation.
@@ -306,10 +306,10 @@ Planned follow-ons, not current behavior:
 
 The first external Pages playtest promoted mobile obstruction and unreadable current failure above expansion work. The immediate replan order is:
 
-1. verify and publish the perpetual/manual-pause/minimalist mobile/manual/biome candidate without regressing the live `f8dc848` gate;
+1. add deterministic biome materials, gathering, shared pack load, and the mobile-first KIT / make / mend surface;
 2. integrate the pure rock/ladder kernel as procedural traversal and fall rules through shared movement/pathfinding;
-3. add physical cargo and upgrade rules;
-4. integrate the deterministic biome kernel with spatial weather, magical water, ecology, cargo traits, and settlement interactions.
+3. add physical cargo, current drift, impact damage, and condition-sensitive trust/compensation;
+4. integrate spatial weather, magical water, exposure, ecology, upgrades, infrastructure, and settlement interactions.
 
 Continue classifying later feedback into:
 
