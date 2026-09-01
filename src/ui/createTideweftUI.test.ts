@@ -3,15 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import {
   MOBILE_INSPECTOR_PANEL_ID,
   MOBILE_PROMISES_PANEL_ID,
+  SAVE_WARNING_SURFACES,
+  RECOVERY_SEED_REQUIRED_MESSAGE,
+  WORLD_CREATION_BLOCKED_MESSAGE,
   TIDE_HARP_HELP_COPY,
   WAYKNOT_KEY_SHORTCUT,
   handleTideweftUIShortcut,
   mobileHudCopy,
   mobileHudDisclosureState,
+  saveWarningPresentation,
   setProgress,
   shouldRefreshSignedReportActions,
   signedReportActionsSignature,
   tideHarpFieldStatus,
+  titleSeedRequirement,
+  titleWorldCreationState,
   wayknotActionButtonState,
 } from "./createTideweftUI";
 
@@ -197,6 +203,59 @@ describe("Wayknot UI accessibility", () => {
 });
 
 describe("mobile field HUD accessibility", () => {
+  it("requires an explicit recovery seed without exposing the ordinary restart gate", () => {
+    expect(titleSeedRequirement({ hasSave: false, requiresSeed: true }, false)).toEqual({
+      required: true,
+      validationMessage: RECOVERY_SEED_REQUIRED_MESSAGE,
+    });
+    expect(titleSeedRequirement({ hasSave: true }, true)).toEqual({
+      required: true,
+      validationMessage: "Enter a non-empty seed phrase before replacing this estuary.",
+    });
+    expect(titleSeedRequirement({ hasSave: false }, false)).toEqual({
+      required: false,
+      validationMessage: "",
+    });
+  });
+
+  it("disables every world-creation form when storage cannot prove the slot absent", () => {
+    expect(titleWorldCreationState({ worldCreationBlocked: true })).toEqual({
+      blocked: true,
+      reason: WORLD_CREATION_BLOCKED_MESSAGE,
+    });
+    expect(titleWorldCreationState({})).toEqual({ blocked: false, reason: "" });
+  });
+
+  it("keeps persistent save health separate, explicit, and absent by default", () => {
+    expect(SAVE_WARNING_SURFACES).toEqual([
+      "field",
+      "title",
+      "quiet-hour",
+      "tutorial",
+      "patch-notes",
+      "kit",
+    ]);
+    expect(saveWarningPresentation(undefined)).toEqual({
+      hidden: true,
+      id: "",
+      message: "",
+      detail: "",
+      tone: "warning",
+    });
+    expect(saveWarningPresentation({
+      id: "indexeddb-fallback",
+      message: "Saving is using emergency local storage.",
+      detail: "Keep this tab open while storage recovers.",
+      tone: "danger",
+    })).toEqual({
+      hidden: false,
+      id: "indexeddb-fallback",
+      message: "Saving is using emergency local storage.",
+      detail: "Keep this tab open while storage recovers.",
+      tone: "danger",
+    });
+  });
+
   it("synchronously replaces a stale zero value after recovery and immediate re-entry", () => {
     const attributes = new Map<string, string>();
     const progress = {

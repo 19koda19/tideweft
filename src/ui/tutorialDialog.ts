@@ -6,6 +6,7 @@ import {
   type TutorialGuideSection,
   type TutorialSectionId,
 } from "./tutorialGuide";
+import { PATCH_NOTES_DIALOG_ID } from "./patchNotesDialog";
 
 const COMPACT_TUTORIAL_QUERY = "(max-width: 44rem), (max-height: 34rem) and (max-width: 64rem)";
 
@@ -14,10 +15,17 @@ export interface TutorialDialogController {
   readonly open: (trigger?: HTMLElement | null) => void;
   readonly close: (restoreFocus?: boolean) => void;
   readonly toggle: (trigger?: HTMLElement | null) => void;
+  /** Temporarily yields the native top layer while preserving page and origin focus. */
+  readonly suspend: () => void;
+  readonly resume: () => void;
   readonly next: () => void;
   readonly previous: () => void;
   readonly pageId: () => TutorialSectionId;
   readonly destroy: () => void;
+}
+
+export interface TutorialDialogOptions {
+  readonly onOpenPatchNotes: (trigger: HTMLElement) => void;
 }
 
 const element = <K extends keyof HTMLElementTagNameMap>(
@@ -49,7 +57,7 @@ const activeAudience = (): Exclude<TutorialAudience, "all"> => {
  * Builds one modal field manual shared by desktop and mobile. It owns only
  * presentation state: opening it never mutates, pauses, or saves the world.
  */
-export function createTutorialDialog(): TutorialDialogController {
+export function createTutorialDialog(options: TutorialDialogOptions): TutorialDialogController {
   const dialog = element("dialog", "tutorial-dialog estuary-dialog");
   dialog.id = "tideweft-tutorial";
   dialog.setAttribute("aria-labelledby", "tutorial-dialog-heading");
@@ -87,12 +95,22 @@ export function createTutorialDialog(): TutorialDialogController {
   const stepHeading = element("h4", "tutorial-page__section-title", "HOW IT WORKS");
   const stepList = element("ol", "tutorial-step-list");
   const calloutList = element("div", "tutorial-callout-list");
+  const pageAction = button(
+    "tutorial-page__action",
+    "OPEN PATCH NOTES",
+    "Open the offline Patch Notes",
+  );
+  pageAction.dataset.tutorialAction = "open-patch-notes";
+  pageAction.setAttribute("aria-haspopup", "dialog");
+  pageAction.setAttribute("aria-controls", PATCH_NOTES_DIALOG_ID);
+  pageAction.hidden = true;
   const plannedHeading = element("h4", "tutorial-page__section-title", "PLANNED · NOT ACTIVE YET");
   const plannedList = element("ul", "tutorial-planned-list");
   page.append(
     pageMeta,
     pageHeading,
     pageSummary,
+    pageAction,
     controlHeading,
     controlList,
     stepHeading,
@@ -122,6 +140,7 @@ export function createTutorialDialog(): TutorialDialogController {
   let activeIndex = 0;
   let returnFocus: HTMLElement | null = null;
   let destroyed = false;
+  let suspending = false;
 
   const currentSection = (): TutorialGuideSection =>
     sections[activeIndex] ?? sections[0] ?? TIDEWEFT_TUTORIAL_GUIDE.sections[0]!;
@@ -212,6 +231,15 @@ export function createTutorialDialog(): TutorialDialogController {
     plannedList.hidden = !visible;
   };
 
+  const renderAction = (section: TutorialGuideSection): void => {
+    const action = section.action;
+    pageAction.hidden = action?.id !== "open-patch-notes";
+    if (action?.id === "open-patch-notes") {
+      pageAction.textContent = action.label;
+      pageAction.setAttribute("aria-label", action.description);
+    }
+  };
+
   const renderPage = (focusHeading = false): void => {
     const section = currentSection();
     dialog.dataset.tutorialAudience = audience;
@@ -223,6 +251,7 @@ export function createTutorialDialog(): TutorialDialogController {
     renderControls(section);
     renderSteps(section);
     renderCallouts(section);
+    renderAction(section);
     renderPlanned(section);
     previousButton.disabled = activeIndex === 0;
     nextButton.disabled = activeIndex >= sections.length - 1;
@@ -263,6 +292,24 @@ export function createTutorialDialog(): TutorialDialogController {
     if (dialog.open) dialog.close();
   };
 
+  const suspend = (): void => {
+    if (destroyed || !dialog.open) return;
+    suspending = true;
+    dialog.close();
+  };
+
+  const resume = (): void => {
+    if (destroyed || dialog.open) return;
+    refreshAudience();
+    renderPage(false);
+    try {
+      dialog.showModal();
+    } catch {
+      dialog.setAttribute("open", "");
+    }
+    closeButton.focus({ preventScroll: true });
+  };
+
   const toggle = (trigger?: HTMLElement | null): void => {
     if (dialog.open) close();
     else open(trigger);
@@ -270,12 +317,21 @@ export function createTutorialDialog(): TutorialDialogController {
 
   previousButton.addEventListener("click", () => setPage(activeIndex - 1, true));
   nextButton.addEventListener("click", () => setPage(activeIndex + 1, true));
+  pageAction.addEventListener("click", () => {
+    if (currentSection().action?.id === "open-patch-notes") {
+      options.onOpenPatchNotes(pageAction);
+    }
+  });
   closeButton.addEventListener("click", () => close());
   dialog.addEventListener("cancel", (event) => {
     event.preventDefault();
     close();
   });
   dialog.addEventListener("close", () => {
+    if (suspending) {
+      suspending = false;
+      return;
+    }
     const target = returnFocus;
     returnFocus = null;
     if (target?.isConnected) target.focus({ preventScroll: true });
@@ -288,6 +344,8 @@ export function createTutorialDialog(): TutorialDialogController {
     open,
     close,
     toggle,
+    suspend,
+    resume,
     next: () => setPage(activeIndex + 1, true),
     previous: () => setPage(activeIndex - 1, true),
     pageId: () => currentSection().id,

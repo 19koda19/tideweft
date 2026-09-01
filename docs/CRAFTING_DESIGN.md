@@ -10,7 +10,7 @@ Existing live systems remain authoritative while this work lands:
 
 - physical Promises move conserved settlement stock;
 - signed reports move information only and use one document slot;
-- the cargo capacity is 16 legacy load units;
+- the shared cargo-and-KIT capacity is 18 legacy load units (`18_000` milli-load);
 - the player begins with six stable-ID Wayknots—R1, R2, A3, A4, W5, and W6;
 - Tide Harps are derived from valid one-of-each Wayknot triangles;
 - weather, seven biome identities, sounded depth, currents, local saves, and perpetual world ticks already exist.
@@ -148,7 +148,7 @@ There is no partial unit, remote harvesting, animation-timing bonus, or random c
 
 ### Milli-load accounting
 
-The v2 pack has a base capacity of `16_000` milli-load. Existing values convert exactly:
+The v2 pack has a base capacity of `18_000` milli-load. Older Alpha v2 records carrying the former `16_000` capacity migrate to this floor without losing valid contents. Existing legacy values convert exactly:
 
 - legacy cargo weight `n` becomes `n × 1_000` milli-load;
 - the signed report/document slot consumes `1_000` milli-load;
@@ -233,7 +233,7 @@ This structure follows a useful economy lesson described by CD Projekt Red: reci
 
 Condition is visible as a number and text band: sound `750_001..1_000_000`, worn `350_001..750_000`, frail `1..350_000`, broken `0`. An adaptation loses condition only when its named benefit actually changes a resolved cost, exposure, force, or fall risk. Merely walking while equipped causes no wear.
 
-The pure crafting foundation does not yet assign gameplay effect strengths to wearables. Runtime integration must keep the following initial service cadence in one data table, then tune it only with playtest evidence. One qualifying tile-entry event selects the strongest eligible instance per benefit channel, breaking ties by lowest stable item ID:
+The four live traversal wearables already resolve their gameplay effects and service wear through runtime-owned data. Staged shroud, liner, and pannier integrations must use the same rule: one qualifying tile-entry event selects the strongest eligible instance per benefit channel, breaking ties by lowest stable item ID. The initial service cadence is:
 
 - Marsh wraps: `8_000` per aided marsh/flat entry.
 - Float sash: `10_000` per aided wet-tile entry.
@@ -244,7 +244,7 @@ The pure crafting foundation does not yet assign gameplay effect strengths to we
 
 Each event adds the same amount to monotonic `serviceWear` and subtracts it from condition, clamped at zero. A zero-service quote spends zero condition. Resolution uses the item's pre-event condition, then applies wear; an item that reaches zero becomes broken after that resolved event. Positive condition supplies the full named benefit—there is no hidden durability multiplier—except during an explicit setup period.
 
-Broken wearables supply no hazard benefit. If a pannier breaks while its capacity is needed, the pack enters an explicit saved over-capacity grace state: the existing load remains carried, movement and Promise delivery remain legal, but gathering, withdrawing, crafting into the pack, or equipping more load is blocked until repair, dismantling, or a harbor deposit restores ordinary capacity. Nothing is silently deleted or teleported.
+Broken live wearables supply no hazard benefit. **Future pannier contract:** if a pannier breaks while its capacity is needed, the pack must enter an explicit saved over-capacity grace state: the existing load remains carried, movement and Promise delivery remain legal, but gathering, withdrawing, crafting into the pack, or equipping more load is blocked until repair, dismantling, or a harbor deposit restores ordinary capacity. Nothing may be silently deleted or teleported.
 
 A repair command requests a positive fixed-point condition gain. The real restoration is `min(requestedGain, 1_000_000 - currentCondition)`. For every full-repair ingredient with quantity `q`, the exact quote consumes `ceil(q × realRestoration / 1_000_000)`. An oversized request therefore cannot overcharge past the actual deficit. Full-repair ingredient vectors are:
 
@@ -370,14 +370,14 @@ The field manual gains gathering, load, KIT, recipes, wear, repair, lockers, and
 
 ## Save envelope v2
 
-This expansion increments the outer `tideweft-session` envelope from version 1 to version 2. The checksummed simulation-world string remains independently versioned. Version 2 adds canonical ecology deltas and active tick, material/component stacks, adaptation instances and locations, the next stable adaptation ID, settlement lockers, ladder state, over-capacity grace, and Wayknot v2 condition/setup fields. The initial recipe catalog is known from the start, so it needs no unlock or discovery state.
+This expansion increments the outer `tideweft-session` envelope from version 1 to version 2. The checksummed simulation-world string remains independently versioned. The **live** version 2 fields add canonical ecology deltas and active tick, material/component stacks, adaptation instances and locations, the next stable adaptation ID, and Wayknot v2 condition/setup state. Settlement lockers, ladder state, and over-capacity grace remain future schema contracts; they are not fields in the current v2 runtime and will require an explicit later version/migration before they can be called live. The initial recipe catalog is known from the start, so it needs no unlock or discovery state.
 
 The v1 → v2 migration is explicit and idempotent:
 
 1. Deserialize and validate the existing world before deriving any resource node.
 2. Preserve seed, terrain dimensions—including stored 64 × 48 Alpha terrain—world tick, contracts, stocks, routes, residents, choirs, player position, cargo/report, discoveries, soundings, traces, tools, tutorial, session shape, and recap state.
-3. Convert capacity and every existing cargo/report load by exactly `× 1_000`; reject rather than truncate any unsafe numeric value.
-4. Start raw materials, components, adaptations, ladders, and every harbor locker empty; initialize the shared next adaptation ID after the six preserved core Wayknot IDs. The foundation-only ladder fixture was never playable and grants no migrated item.
+3. Convert every existing cargo/report load by exactly `× 1_000`, establish the `18_000` capacity floor, and reject rather than truncate any unsafe numeric value.
+4. Start raw materials, components, and adaptations empty; initialize the shared next adaptation ID after the six preserved core Wayknot IDs. No ladder or harbor-locker field is materialized by live v2, and the foundation-only ladder fixture grants no migrated item.
 5. Start ecology with `activeTick = world.completedTick` and an empty sparse-depletion array, which means full seed-derived nodes without simulating past growth.
 6. Preserve Wayknot IDs, kinds, and valid placements. Set each migrated piece to condition `1_000_000`, service wear `0`, and, when deployed, `readyTick = completedTick` so an old functioning layout resumes fully set. Carried pieces use `readyTick = null`.
 7. Recompute Tide Harps from migrated active Wayknots; do not serialize Harps.

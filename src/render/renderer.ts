@@ -1,5 +1,6 @@
 import { createTideweftReliefRenderer } from "./p5ReliefSketch";
 import { createTideweftRenderer as createTideweftChartRenderer } from "./p5Sketch";
+import { createWorldCompass } from "./worldCompass";
 import type {
   TideweftRendererController,
   TideweftRendererOptions,
@@ -18,6 +19,8 @@ export interface TideweftCompositeRendererController extends TideweftRendererCon
   readonly setMode: (mode: ViewMode) => ViewMode;
   readonly toggleMode: () => ViewMode;
   readonly reliefSupported: () => boolean;
+  readonly isActive: () => boolean;
+  readonly setActive: (active: boolean) => void;
 }
 
 /**
@@ -30,7 +33,9 @@ export function createTideweftRenderer(
 ): TideweftCompositeRendererController {
   let currentMode: ViewMode = "chart-2d";
   let destroyed = false;
+  let active = true;
   let reliefUsable = true;
+  const compass = createWorldCompass(options.mount);
   const chart = createTideweftChartRenderer(options);
   let applyMode: (mode: ViewMode) => ViewMode = () => "chart-2d";
   const relief = createTideweftReliefRenderer({
@@ -48,6 +53,11 @@ export function createTideweftRenderer(
         if (!destroyed) applyMode(currentMode);
       });
     },
+    onOrbitChange: (yaw) => {
+      if (!destroyed && currentMode === "relief-3d") {
+        compass.setHeading("relief-3d", yaw);
+      }
+    },
   });
 
   applyMode = (requested): ViewMode => {
@@ -56,8 +66,10 @@ export function createTideweftRenderer(
       ? "relief-3d"
       : "chart-2d";
     currentMode = next;
-    chart.setActive?.(next === "chart-2d");
-    relief.setActive(next === "relief-3d");
+    chart.setActive?.(active && next === "chart-2d");
+    relief.setActive(active && next === "relief-3d");
+    compass.setActive(active);
+    compass.setHeading(next, next === "relief-3d" ? relief.orbitYaw() : 0);
     options.mount.dataset.viewMode = next;
     options.onModeChange?.(next, reliefAvailable);
     return next;
@@ -84,15 +96,18 @@ export function createTideweftRenderer(
     pulseScan: (point?: WorldPoint) => {
       activeRenderer().pulseScan(point);
     },
-    isActive: () => true,
-    setActive: (active) => {
+    isActive: () => active,
+    setActive: (nextActive) => {
+      active = nextActive;
       chart.setActive?.(active && currentMode === "chart-2d");
       relief.setActive(active && currentMode === "relief-3d");
+      compass.setActive(active);
     },
     destroy: () => {
       destroyed = true;
       chart.destroy();
       relief.destroy();
+      compass.destroy();
       delete options.mount.dataset.viewMode;
     },
   };

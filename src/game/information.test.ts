@@ -56,7 +56,7 @@ describe("information as physical, sourced progress", () => {
     };
     expect(cargoWeight(player)).toBe(1);
 
-    const fullHeavyPromise = { ...offered, resource: "parts" as const, quantity: 8, status: "offered" as const };
+    const fullHeavyPromise = { ...offered, resource: "parts" as const, quantity: 9, status: "offered" as const };
     expect(loadContractCargo(player, fullHeavyPromise)).toBe(false);
     const session = createSessionState(world.meta.seedText);
     session.tutorial.dismissed = true;

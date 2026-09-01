@@ -18,6 +18,7 @@ import type {
   ContractMood,
   ContractUIView,
   KitUIView,
+  SaveWarningUIView,
   SettlementInspectorUIView,
   TideweftUIView,
 } from "../ui/types";
@@ -64,10 +65,14 @@ import {
   wayknotEffectStrength,
   wayknotAtTile,
 } from "./wayknots";
+import { GAMEPLAY_CONTRACT_NAME } from "../content/gameplayContract";
 
 export interface UIProjectionOptions {
   readonly fieldResourceCatalog?: FieldResourceCatalog;
   readonly fieldResourceEcology?: FieldResourceEcologyState;
+  readonly saveWarning?: SaveWarningUIView;
+  readonly requiresSeed?: boolean;
+  readonly worldCreationBlocked?: boolean;
 }
 
 export function projectUIView(
@@ -119,6 +124,9 @@ export function projectUIView(
       session.nextAnnouncementId,
       session.titleVisible,
       session.quietHourVisible,
+      options.saveWarning?.id ?? "save-ok",
+      options.requiresSeed ? "replacement-seed-required" : "ordinary-seed",
+      options.worldCreationBlocked ? "world-creation-blocked" : "world-creation-enabled",
     ].join(":"),
     worldName,
     posture: session.posture,
@@ -179,10 +187,12 @@ export function projectUIView(
     title: {
       visible: session.titleVisible,
       hasSave: session.hasSave,
+      ...(options.worldCreationBlocked ? { worldCreationBlocked: true } : {}),
+      ...(options.requiresSeed ? { requiresSeed: true } : {}),
       worldName,
       ...(session.continueSummary ? { continueSummary: session.continueSummary } : {}),
       suggestedSeed: session.seed,
-      subtitle: "A perpetual, locally saved estuary of promises and paths that learn.",
+      subtitle: `${GAMEPLAY_CONTRACT_NAME} · one perpetual ruleset. Local saves return directly to your saved estuary and history.`,
     },
     ...(session.quietHourVisible
       ? {
@@ -209,6 +219,7 @@ export function projectUIView(
           },
         }
       : {}),
+    ...(options.saveWarning ? { saveWarning: options.saveWarning } : {}),
     controls: {
       canScan: player.mode !== "swept" && player.scanCharge >= 280_000,
       canInteract: player.mode !== "swept" && (localResource !== undefined || playerSettlementId !== null),

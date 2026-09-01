@@ -12,6 +12,7 @@ export const KIT_DIALOG_ID = "tideweft-kit";
 export const KIT_DIALOG_PANEL_ID = "tideweft-kit-panel";
 export const KIT_DIALOG_SCROLL_REGION_ID = "tideweft-kit-scroll-region";
 export const KIT_MINIMUM_TARGET_CSS_PIXELS = 44;
+export const KIT_FALLBACK_CAPACITY_MILLI = 18_000;
 
 export const KIT_TABS = [
   { id: "pack", label: "PACK", description: "Carried cargo, finds, components, and durable gear" },
@@ -587,7 +588,7 @@ export function createKitDialog(options: KitDialogOptions): KitDialogController 
 
   const renderLoad = (): void => {
     const combined = canonicalMilli(view?.combinedLoadMilli ?? 0);
-    const capacity = canonicalMilli(view?.capacityMilli ?? 16_000);
+    const capacity = canonicalMilli(view?.capacityMilli ?? KIT_FALLBACK_CAPACITY_MILLI);
     const transport = canonicalMilli(view?.transportLoadMilli ?? 0);
     const field = Math.max(0, combined - transport);
     const ratio = capacity === 0 ? (combined > 0 ? 1 : 0) : combined / capacity;

@@ -11,3 +11,10 @@ test-results/
 .env
 .env.*
 !.env.example
+
+# Local product roadmaps and implementation ledgers. Player-facing release
+# truth belongs in README.md, CHANGELOG.md, the tutorial, and in-game notes.
+/PLAN.md
+/PROGRESS.md
+/**/*[Rr][Oo][Aa][Dd][Mm][Aa][Pp]*.md
+/docs/LIVING_HAZARDS_DESIGN.md

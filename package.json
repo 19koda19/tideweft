@@ -1,6 +1,6 @@
 {
   "name": "tideweft",
-  "version": "0.3.0-alpha.1",
+  "version": "0.3.1-alpha.0",
   "private": true,
   "description": "A restorative strand-type courier ecology built with p5.js and Electron.",
   "type": "module",
@@ -14,15 +14,19 @@
     "dev": "concurrently -k -n web,electron -c cyan,magenta \"npm:dev:web\" \"npm:dev:electron\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "test:ci": "vitest run",
+    "test:player-facing-sync": "node scripts/check-player-facing-sync.selftest.cjs",
+    "test:ci": "npm run test:player-facing-sync && vitest run",
+    "patch-notes:generate": "node scripts/render-patch-notes.cjs",
+    "patch-notes:check": "node scripts/render-patch-notes.cjs --check",
+    "check:player-facing-sync": "node scripts/check-player-facing-sync.cjs && npm run patch-notes:check",
     "build:web": "npm run typecheck && vite build",
-    "build": "npm run test:ci && npm run build:web",
+    "build": "npm run check:player-facing-sync && npm run test:ci && npm run build:web",
     "preview": "vite preview --host 127.0.0.1",
-    "package:desktop": "electron-forge package",
-    "make:desktop": "electron-forge make",
+    "package:desktop": "npm run check:player-facing-sync && electron-forge package",
+    "make:desktop": "npm run check:player-facing-sync && electron-forge make",
     "smoke:desktop": "node electron/smoke.cjs",
     "smoke:web": "node scripts/web-smoke.cjs",
-    "check": "npm run typecheck && npm run test:ci && npm run build:web && npm run smoke:web"
+    "check": "npm run check:player-facing-sync && npm run typecheck && npm run test:ci && npm run build:web && npm run smoke:web"
   },
   "dependencies": {
     "p5": "2.3.2"

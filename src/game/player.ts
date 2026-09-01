@@ -37,6 +37,8 @@ import {
 export const TILE_UNITS = 1_000;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
 export const PACK_LOAD_MILLI_PER_UNIT = 1_000;
+/** New and migrated porters always receive this much shared transport + kit space. */
+export const BASE_CARGO_CAPACITY = 18;
 
 export type TravelPace = "rest" | "steady" | "swift";
 export type StabilityTrend = "recovering" | "steady" | "falling";
@@ -154,6 +156,17 @@ const PACE_SPEED: Record<TravelPace, number> = {
   swift: 164,
 };
 
+const PACE_STAMINA_DRAIN: Readonly<Record<Exclude<TravelPace, "rest">, number>> = {
+  // At ten fixed steps per second, an empty porter on ordinary meadow can
+  // walk for a little over two minutes. Terrain and water add their own
+  // authoritative costs below rather than being hidden inside this baseline.
+  steady: 500,
+  swift: 4_300,
+};
+
+/** Maximum extra per-step effort from a pack at or beyond its rated capacity. */
+const FULL_LOAD_STAMINA_DRAIN = 2_200;
+
 const TERRAIN_DRAG: Record<WorldView["terrain"]["tiles"][number]["terrain"], number> = {
   "deep-water": 720,
   "tidal-flat": 610,
@@ -193,10 +206,10 @@ export function createPlayer(world: WorldView, startSettlementId?: number): Play
     sweepTotalTicks: 0,
     sweepPath: [],
     sweepSupport: null,
-    cargoCapacity: 16,
+    cargoCapacity: BASE_CARGO_CAPACITY,
     cargo: [],
     report: null,
-    craftingInventory: createCraftingInventory(16 * PACK_LOAD_MILLI_PER_UNIT),
+    craftingInventory: createCraftingInventory(BASE_CARGO_CAPACITY * PACK_LOAD_MILLI_PER_UNIT),
     nextCraftedGearId: 7,
     activeContractId: null,
     discovered,
@@ -330,7 +343,8 @@ export function stepPlayer(
   player.velocityY = velocityY;
   if (velocityX || velocityY) {
     player.facingMilliRadians = approximateAngleMilliRadians(velocityX, velocityY);
-    const paceDrain = player.pace === "swift" ? 4_300 : 1_550;
+    const paceDrain = PACE_STAMINA_DRAIN[player.pace === "swift" ? "swift" : "steady"];
+    const burdenDrain = burdenEffortPerStep(loadRatio);
     const rawTerrainDrain = Math.max(
       0,
       1_000 - TERRAIN_DRAG[priorTile.terrain]
@@ -350,7 +364,7 @@ export function stepPlayer(
     );
     player.stamina = Math.max(
       0,
-      player.stamina - paceDrain - Math.floor(loadRatio / 700) - terrainDrain * 3 - waterDrain,
+      player.stamina - paceDrain - burdenDrain - terrainDrain * 3 - waterDrain,
     );
     // The movement gate below this threshold prevents another step. Collapse
     // the remaining sliver of stamina into the explicit exhausted state so a
@@ -555,6 +569,21 @@ export function stepPlayer(
     sweepSupport,
     settlementId: settlementAtPlayer(player, world),
   };
+}
+
+/**
+ * Extra stamina spent each 100ms movement step by the shared pack load.
+ *
+ * A quadratic curve keeps small forage finds comfortable, while making the
+ * upper half of the pack progressively consequential. Callers supply the
+ * fixed-point ratio so this remains independent from terrain and water.
+ */
+export function burdenEffortPerStep(loadRatio: number): number {
+  const ratio = clamp(Number.isFinite(loadRatio) ? loadRatio : 0, 0, FIXED_POINT);
+  return Math.floor(
+    (ratio * ratio * FULL_LOAD_STAMINA_DRAIN)
+    / (FIXED_POINT * FIXED_POINT),
+  );
 }
 
 export function pulseScan(player: PlayerState, world: WorldView): boolean {

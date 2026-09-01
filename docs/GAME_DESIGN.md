@@ -70,7 +70,7 @@ Tide Harps are spatial understanding, not crafting inventory. The pure selector 
 - Autonomous residents plan across multiple active route legs.
 - Completed projects alter route, recovery, rescue, or information rules.
 - Graph feedback exposes service coverage, bridges, cycle rank, and resilience.
-- The campaign resolves when all seven settlements are served by a sufficiently loopy, low-bridge network. Resolution is a causal achievement, not an infinite level treadmill, and endless tending remains optional.
+- In compatibility region `(0,0)`, the campaign resolves when all currently eligible settlements are served by a sufficiently loopy, low-bridge network. Region expansion must derive the target from the discovered network rather than a literal settlement count. Resolution is a causal achievement, not an infinite level treadmill, and endless tending remains optional.
 
 ## Living-world slice
 
@@ -129,7 +129,7 @@ At a source harbor, the player can witness its specialization count into a singl
 
 Physical jobs appear only in Promises. Reports appear in a separately headed **Signed reports · information only** inspector section whose **Sign info report → [harbor]** control remains stable under live settlement refresh. The distinction must be clear before a click, not explained only after the player has filled the document case.
 
-## Journey play
+## Expedition play
 
 - WASD/arrows and pointer-directed routes share the same continuous travel rules in Chart 2D and Relief 3D.
 - On coarse pointers, tapping a harbor charts to its exact center; after arrival, the contextual touch action performs pickup, delivery, report handoff, or inspection. The tap itself does not open a sheet while the courier is still passing through the interaction tile.
@@ -161,15 +161,11 @@ There is no character death, lost save, currency fine, streak break, or zero-pro
 
 ## Perpetual play and pressure
 
-Every new world is perpetual. The title asks only for seed and pressure posture; it does not prescribe a 10/25-minute shape, delivery count, corridor quota, or forced ending. The regional resilient-weave resolution remains a meaningful systemic achievement, but the estuary stays open afterward.
+Every new world is perpetual. The title asks only for a seed and starts **A CHALLENGING HARD**; it does not offer a difficulty/posture selector or prescribe a 10/25-minute shape, delivery count, corridor quota, or forced ending. The regional resilient-weave resolution remains a meaningful systemic achievement, but the estuary stays open afterward.
 
 Earlier saves may contain `drift`, `weave`, or `wander`. Those values remain valid compatibility data and round-trip safely, but all project the same open-ended objective and none reactivates a timer or milestone-completion prompt.
 
-World posture adjusts pressure without changing reward value:
-
-- **Hearth:** calmer settlement strain and forgiving disruption.
-- **Journey:** intended balance.
-- **Gale:** tighter stores and stronger weather.
+There is exactly one authoritative ruleset. Legacy `hearth`, `journey`, and `gale` values remain readable only for backward compatibility and normalize to the existing `gale`/`wild` pressure implementation on load. Accessibility may improve input, camera, timing presentation, subtitles, sound cues, contrast, remapping, and interface use; it cannot alter hazards, actors, loot, scarcity, rewards, or the economy.
 
 There is no manual in-play pause. Quiet Hour immediately saves, halts the simulation, and summarizes duration, distance, deliveries, reports, strands, discoveries, and up to five causal changes. The title also saves and halts safely. The player may continue or finish from either stopping surface; neither choice creates an expiring task.
 

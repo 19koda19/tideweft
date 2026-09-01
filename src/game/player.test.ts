@@ -14,6 +14,7 @@ import {
   type WorldView,
 } from "../sim/public";
 import {
+  BASE_CARGO_CAPACITY,
   TILE_UNITS,
   cargoWeight,
   createPlayer,
@@ -31,6 +32,7 @@ import {
   waterEffortPerStep,
   type PlayerState,
 } from "./player";
+import { createCraftingInventory } from "./crafting";
 
 const NO_INPUT = { moveX: 0, moveY: 0, brace: false } as const;
 const MOVE_RIGHT = { moveX: 1, moveY: 0, brace: false } as const;
@@ -68,6 +70,34 @@ function placePlayer(player: PlayerState, tileX: number, tileY: number, offsetX 
   player.velocityY = 0;
   player.currentTrace = [tileY * player.worldWidth + tileX];
   player.surveyTrace = [tileY * player.worldWidth + tileX];
+}
+
+function drySteadyEndurance(
+  world: WorldView,
+  driftwoodUnits: number,
+): { readonly steps: number; readonly firstStepDrain: number } {
+  const player = createPlayer(world);
+  placePlayer(player, 48, 36);
+  player.craftingInventory = createCraftingInventory(
+    BASE_CARGO_CAPACITY * 1_000,
+    { driftwood: driftwoodUnits },
+  );
+  let firstStepDrain = 0;
+  for (let step = 0; step < 3_000; step += 1) {
+    const staminaBefore = player.stamina;
+    // Reverse well before either boundary, so every fixed step remains an
+    // actual ordinary-ground movement step rather than accidental recovery.
+    const direction = Math.floor(step / 250) % 2 === 0 ? 1 : -1;
+    const result = stepPlayer(player, world, {
+      moveX: direction,
+      moveY: 0,
+      brace: false,
+    });
+    if (step === 0) firstStepDrain = staminaBefore - player.stamina;
+    if (!result.moved) throw new Error("dry endurance fixture stopped moving before exhaustion");
+    if (result.exhausted) return { steps: step + 1, firstStepDrain };
+  }
+  throw new Error("dry endurance fixture did not exhaust within its measurement window");
 }
 
 function legacySizedWorld(): WorldView {
@@ -204,6 +234,24 @@ describe("player movement", () => {
 });
 
 describe("effort, stability, and discovery", () => {
+  it("gives an empty porter two-plus minutes of dry steady endurance and curves burden near capacity", () => {
+    const world = controlledWorld();
+    const empty = drySteadyEndurance(world, 0);
+    const halfPack = drySteadyEndurance(world, 5); // 9,000 / 18,000 milli-load
+    const fullPack = drySteadyEndurance(world, 10); // 18,000 / 18,000 milli-load
+
+    // Runtime advances this movement kernel ten times per second. Ordinary
+    // empty travel therefore lasts at least two continuous minutes.
+    expect(empty.steps / 10).toBeGreaterThanOrEqual(120);
+    // Equal 9,000-load increments hurt progressively more: the second half of
+    // the pack adds more than twice the first half's per-step burden.
+    expect(fullPack.firstStepDrain - halfPack.firstStepDrain)
+      .toBeGreaterThan((halfPack.firstStepDrain - empty.firstStepDrain) * 2);
+    expect(empty.steps).toBeGreaterThan(halfPack.steps * 1.5);
+    expect(halfPack.steps).toBeGreaterThan(fullPack.steps * 2);
+    expect(fullPack.steps / 10).toBeLessThan(60);
+  });
+
   it("spends more effort at swift pace, enters camp on exhaustion, and recovers while resting", () => {
     const world = controlledWorld();
     const player = createPlayer(world);
@@ -735,7 +783,10 @@ describe("cargo lifecycle and settlement detection", () => {
     const world = controlledWorld();
     const player = createPlayer(world);
     const fragile = offeredContract(world, { id: 91_002, resource: "medicine", quantity: 5 });
-    const overweight = offeredContract(world, { id: 91_003, resource: "parts", quantity: 9 });
+    const overweight = offeredContract(world, { id: 91_003, resource: "parts", quantity: 10 });
+
+    expect(player.cargoCapacity).toBe(BASE_CARGO_CAPACITY);
+    expect(player.craftingInventory.capacityMilliLoad).toBe(18_000);
 
     expect(loadContractCargo(player, fragile)).toBe(true);
     expect(player.activeContractId).toBe(fragile.id);

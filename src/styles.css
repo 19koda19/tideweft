@@ -347,6 +347,73 @@ button:disabled {
   display: none !important;
 }
 
+.world-compass {
+  --world-north-angle: 0deg;
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--ui-gap) + 3.85rem);
+  left: 50%;
+  display: grid;
+  grid-template-columns: auto 1.15rem;
+  align-items: center;
+  min-width: 2.55rem;
+  min-height: 1.65rem;
+  padding: 0.16rem 0.28rem;
+  gap: 0.12rem;
+  color: var(--foam);
+  background: rgb(2 10 11 / 68%);
+  border: 1px solid rgb(236 238 233 / 24%);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 1px 5px #000;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+.world-compass__north {
+  color: var(--foam-muted);
+  font-size: 0.56rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.world-compass__arrow {
+  display: grid;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--gold);
+  font-size: 1.05rem;
+  font-weight: 800;
+  place-items: center;
+  transform: rotate(var(--world-north-angle));
+  transform-origin: center;
+}
+
+@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
+  .world-compass {
+    top: calc(var(--ui-gap) + 4.8rem);
+    right: max(var(--ui-gap), env(safe-area-inset-right));
+    left: auto;
+    grid-template-columns: auto 1rem;
+    min-width: 2.2rem;
+    min-height: 1.45rem;
+    padding: 0.12rem 0.2rem;
+    opacity: 0.86;
+    transform: none;
+  }
+
+  .world-compass__north {
+    font-size: 0.5rem;
+  }
+
+  .world-compass__arrow {
+    width: 1rem;
+    height: 1rem;
+    font-size: 0.92rem;
+  }
+}
+
 .relief-world-label {
   position: absolute;
   max-width: min(17rem, 34vw);
@@ -2068,6 +2135,10 @@ button:focus-visible .keycap {
   border-radius: 0;
 }
 
+.continue-card[hidden] {
+  display: none;
+}
+
 .continue-card:hover {
   background: rgb(88 225 207 / 12%);
   transform: none;
@@ -2099,10 +2170,16 @@ button:focus-visible .keycap {
   font-size: 0.58rem;
 }
 
-.new-world-form {
+.new-world-form,
+.restart-form {
   display: grid;
   margin-top: 0.7rem;
   gap: 0.4rem;
+}
+
+.new-world-form[hidden],
+.restart-form[hidden] {
+  display: none;
 }
 
 .new-world-form__heading {
@@ -2112,6 +2189,29 @@ button:focus-visible .keycap {
   font-weight: 760;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.new-world-form__rules {
+  margin: 0;
+  padding-block: 0.42rem;
+  color: var(--gold);
+  border-block: 1px solid var(--line);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.57rem;
+  font-weight: 760;
+  letter-spacing: 0.075em;
+  line-height: 1.45;
+}
+
+.restart-form__status {
+  margin: 0;
+  color: var(--foam-faint);
+  font-size: 0.57rem;
+  line-height: 1.4;
+}
+
+.restart-form__submit {
+  min-height: 2.75rem;
 }
 
 .field-label,
@@ -2568,8 +2668,8 @@ button:focus-visible .keycap {
     position: absolute;
     z-index: 25;
     top: var(--ui-gap);
-    right: var(--ui-gap);
-    left: var(--ui-gap);
+    right: max(var(--ui-gap), env(safe-area-inset-right));
+    left: max(var(--ui-gap), env(safe-area-inset-left));
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
@@ -2687,9 +2787,9 @@ button:focus-visible .keycap {
     position: absolute;
     z-index: 18;
     top: calc(var(--ui-gap) + 3.55rem);
-    right: var(--ui-gap);
+    right: max(var(--ui-gap), env(safe-area-inset-right));
     bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 3.65rem);
-    left: var(--ui-gap);
+    left: max(var(--ui-gap), env(safe-area-inset-left));
     flex: 1 1 auto;
     width: auto;
     min-height: 0;
@@ -2704,17 +2804,17 @@ button:focus-visible .keycap {
   .settlement-inspector {
     z-index: 15;
     top: calc(var(--ui-gap) + 3.55rem);
-    right: var(--ui-gap);
+    right: max(var(--ui-gap), env(safe-area-inset-right));
     bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 3.65rem);
-    left: var(--ui-gap);
+    left: max(var(--ui-gap), env(safe-area-inset-left));
     width: auto;
     max-height: calc(100% - 10.75rem);
   }
 
   .action-dock {
-    right: var(--ui-gap);
+    right: max(var(--ui-gap), env(safe-area-inset-right));
     bottom: max(0.35rem, env(safe-area-inset-bottom));
-    left: var(--ui-gap);
+    left: max(var(--ui-gap), env(safe-area-inset-left));
     max-width: none;
     min-height: 0;
     padding: 0.18rem;
@@ -2772,6 +2872,11 @@ button:focus-visible .keycap {
   .title-dialog__subtitle {
     margin-block: 0.42rem 0.6rem;
     font-size: 0.65rem;
+  }
+
+  .quiet-dialog .text-button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
   }
 
   .quiet-stats {
@@ -3375,6 +3480,372 @@ body {
   }
 }
 
+/* Canonical offline Patch Notes: one independently scrolling native modal.
+   The title, Quiet Hour, and field manual yield while this top-layer surface
+   is open, then resume exactly where they were. */
+.patch-notes-dialog {
+  width: min(calc(100% - 2rem), 60rem);
+  height: min(calc(100% - 2rem), 50rem);
+  max-width: 60rem;
+  max-height: 50rem;
+  overflow: hidden;
+  background: #080a0a;
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.patch-notes-dialog__content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.patch-notes-dialog__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 0.9rem 1rem 0.78rem;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.patch-notes-dialog__heading-copy,
+.patch-release__heading-copy {
+  min-width: 0;
+}
+
+.patch-notes-dialog__eyebrow,
+.patch-release__meta,
+.patch-category__title {
+  margin: 0;
+  color: var(--gold);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.54rem;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.patch-notes-dialog__title {
+  margin: 0.15rem 0 0;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: clamp(1rem, 2vw, 1.45rem);
+  letter-spacing: 0.17em;
+}
+
+.patch-notes-dialog__subtitle {
+  margin: 0.22rem 0 0;
+  color: var(--foam-faint);
+  font-size: 0.62rem;
+}
+
+.patch-notes-dialog__close {
+  flex: 0 0 auto;
+  width: max(2.75rem, 44px);
+  min-width: max(2.75rem, 44px);
+  height: max(2.75rem, 44px);
+  color: var(--foam);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  font-size: 1.1rem;
+}
+
+.patch-notes-dialog__close:hover,
+.patch-notes-dialog__close:focus-visible {
+  background: rgb(236 238 233 / 8%);
+}
+
+.patch-notes-dialog__scroll {
+  min-height: 0;
+  padding: 0 1rem max(1rem, env(safe-area-inset-bottom));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.patch-release {
+  padding: 1rem 0 1.2rem;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.patch-release:last-child {
+  border-bottom: 0;
+}
+
+.patch-release__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.patch-release__version {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  gap: 0.55rem;
+  font-size: clamp(1.05rem, 2vw, 1.45rem);
+  letter-spacing: 0.035em;
+}
+
+.patch-release__latest {
+  padding: 0.15rem 0.3rem;
+  color: var(--ink-deep);
+  background: var(--tide-bright);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.48rem;
+  letter-spacing: 0.08em;
+}
+
+.patch-release__meta {
+  margin-top: 0.25rem;
+  color: var(--foam-faint);
+  letter-spacing: 0.055em;
+}
+
+.patch-release__summary {
+  max-width: 52rem;
+  margin: 0.6rem 0 0.9rem;
+  color: var(--foam-muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.patch-release__categories {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.patch-category {
+  min-width: 0;
+  padding: 0.7rem;
+  background: #080a0a;
+}
+
+.patch-category__list {
+  margin: 0.42rem 0 0;
+  padding-left: 1rem;
+}
+
+.patch-category__item,
+.patch-category__empty {
+  color: var(--foam-muted);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.patch-category__item + .patch-category__item {
+  margin-top: 0.35rem;
+}
+
+.patch-category__empty {
+  margin: 0.42rem 0 0;
+  font-style: italic;
+}
+
+.patch-notes-trigger,
+.tutorial-page__action {
+  min-height: max(2.75rem, 44px);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.075em;
+}
+
+.tutorial-page__action {
+  width: 100%;
+  margin-top: 0.9rem;
+  color: var(--ink-deep);
+  background: var(--tide-bright);
+  border: 1px solid var(--tide-bright);
+  font-weight: 780;
+}
+
+.tutorial-page__action:hover,
+.tutorial-page__action:focus-visible {
+  background: var(--foam);
+  border-color: var(--foam);
+}
+
+.tutorial-page__action[hidden],
+.save-warning[hidden] {
+  display: none !important;
+}
+
+/* Save health is persistent view state, never borrowed from the transient
+   announcement channel. It cannot intercept movement or touch input. */
+.save-warning {
+  display: grid;
+  padding: 0.48rem 0.65rem;
+  gap: 0.1rem;
+  color: var(--foam);
+  background: rgb(18 13 8 / 94%);
+  border: 1px solid var(--gold);
+  pointer-events: none !important;
+}
+
+.save-warning[data-tone="danger"] {
+  background: rgb(22 8 8 / 96%);
+  border-color: var(--danger);
+}
+
+.save-warning[data-surface="field"] {
+  position: absolute;
+  z-index: 28;
+  top: calc(var(--ui-gap) + 3.8rem);
+  left: 50%;
+  width: min(28rem, calc(100% - 2rem));
+  transform: translateX(-50%);
+}
+
+.save-warning[data-surface="title"] {
+  margin: 0.7rem 0;
+}
+
+.save-warning[data-surface="quiet-hour"] {
+  margin: 0.7rem 0 0.25rem;
+}
+
+.tutorial-dialog__header,
+.patch-notes-dialog__header,
+.kit-dialog__header {
+  flex-wrap: wrap;
+}
+
+.tutorial-dialog__header > .save-warning,
+.patch-notes-dialog__header > .save-warning,
+.kit-dialog__header > .save-warning {
+  order: 3;
+  flex: 1 0 100%;
+  width: 100%;
+  padding-block: 0.38rem;
+}
+
+.save-warning__message {
+  font-size: 0.66rem;
+  line-height: 1.25;
+}
+
+.save-warning__detail {
+  color: var(--foam-muted);
+  font-size: 0.56rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
+  .patch-notes-dialog {
+    width: calc(100% - max(0.5rem, env(safe-area-inset-left)) - max(0.5rem, env(safe-area-inset-right)));
+    height: calc(100dvh - max(0.5rem, env(safe-area-inset-top)) - max(0.5rem, env(safe-area-inset-bottom)));
+    max-width: none;
+    max-height: none;
+    margin: auto;
+  }
+
+  .patch-notes-dialog__header {
+    min-height: 3.8rem;
+    padding: 0.55rem 0.65rem 0.48rem;
+  }
+
+  .patch-notes-dialog__eyebrow {
+    font-size: 0.46rem;
+  }
+
+  .patch-notes-dialog__title {
+    font-size: 0.92rem;
+  }
+
+  .patch-notes-dialog__subtitle {
+    overflow: hidden;
+    font-size: 0.52rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .patch-notes-dialog__scroll {
+    padding: 0 0.65rem max(0.7rem, env(safe-area-inset-bottom));
+    scrollbar-gutter: auto;
+  }
+
+  .patch-release {
+    padding-block: 0.75rem 0.9rem;
+  }
+
+  .patch-release__categories {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .patch-release__summary {
+    font-size: 0.74rem;
+  }
+
+  .patch-category {
+    padding: 0.62rem;
+  }
+
+  .patch-category__item,
+  .patch-category__empty {
+    font-size: 0.63rem;
+  }
+
+  .quiet-dialog .dialog-actions {
+    flex-wrap: wrap;
+  }
+
+  .quiet-dialog .patch-notes-trigger {
+    flex: 1 0 100%;
+  }
+
+  .save-warning[data-surface="field"] {
+    top: calc(var(--ui-gap) + 4.7rem);
+    /* Keep the always-on north instrument legible even while storage health
+       takes visual priority over the field. */
+    right: calc(max(0.5rem, env(safe-area-inset-right)) + 4.3rem);
+    left: max(0.5rem, env(safe-area-inset-left));
+    width: auto;
+    max-height: 3.2rem;
+    padding: 0.35rem 0.48rem;
+    overflow: hidden;
+    transform: none;
+  }
+
+  .save-warning__message,
+  .save-warning__detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .save-warning__message {
+    font-size: 0.57rem;
+  }
+
+  .save-warning__detail {
+    font-size: 0.5rem;
+  }
+
+  .tutorial-dialog__header > .save-warning,
+  .patch-notes-dialog__header > .save-warning,
+  .kit-dialog__header > .save-warning {
+    padding: 0.28rem 0.4rem;
+  }
+}
+
+@media (forced-colors: active) {
+  .patch-notes-dialog,
+  .patch-notes-dialog__close,
+  .patch-notes-trigger,
+  .tutorial-page__action,
+  .save-warning {
+    border: 1px solid CanvasText;
+    forced-color-adjust: auto;
+  }
+}
+
 /* Phase 12 tutorial: one complete field manual, paged on desktop and shaped
    as a safe-area sheet on touch screens. Explanations live here so the field
    HUD can remain an instrument rather than a wall of instructions. */
@@ -3971,12 +4442,13 @@ body {
 }
 
 @media (max-width: 22rem) {
-  .mobile-vital__label {
-    display: none;
+  .mobile-field-strip__vitals {
+    gap: 0.1rem;
   }
 
   .mobile-vital__copy {
-    justify-content: center;
+    gap: 0.04rem;
+    font-size: 0.39rem;
   }
 
   .tutorial-topic-button__label {

@@ -31,6 +31,14 @@ import {
   screenToDiscoveredReliefSurface,
   type ReliefCameraState,
 } from "./reliefCamera";
+import {
+  beginReliefTwist,
+  heldReliefOrbitDelta,
+  updateReliefTwist,
+  wrapReliefOrbitRadians,
+  type ReliefTouchPoint,
+  type ReliefTwistGesture,
+} from "./reliefOrbitControls";
 import { reliefSoundingStyle, type ReliefDepthBand } from "./reliefSounding";
 import {
   createReliefDiscoverySignatureMemo,
@@ -111,6 +119,8 @@ export interface TideweftReliefRendererOptions extends TideweftRendererOptions {
   /** World height represented by a normalized elevation of one. */
   readonly verticalScale?: number;
   readonly onWebGLError?: (reason: string) => void;
+  /** Presentation-only heading used by the shared world compass. */
+  readonly onOrbitChange?: (yaw: number) => void;
 }
 
 export interface TideweftReliefRendererController extends TideweftRendererController {
@@ -119,6 +129,7 @@ export interface TideweftReliefRendererController extends TideweftRendererContro
   readonly setActive: (active: boolean) => void;
   readonly setOrbit: (yaw: number, pitch: number) => void;
   readonly resetOrbit: () => void;
+  readonly orbitYaw: () => number;
 }
 
 interface OrbitRuntime {
@@ -172,10 +183,15 @@ interface AttachedListeners {
   readonly pointerMove: (event: PointerEvent) => void;
   readonly pointerUp: (event: PointerEvent) => void;
   readonly pointerCancel: (event: PointerEvent) => void;
+  readonly lostPointerCapture: (event: PointerEvent) => void;
   readonly contextMenu: (event: MouseEvent) => void;
   readonly keyDown: (event: KeyboardEvent) => void;
   readonly keyUp: (event: KeyboardEvent) => void;
   readonly blur: () => void;
+  readonly windowKeyDown: (event: KeyboardEvent) => void;
+  readonly windowKeyUp: (event: KeyboardEvent) => void;
+  readonly windowBlur: () => void;
+  readonly visibilityChange: () => void;
   readonly wheel: (event: WheelEvent) => void;
   readonly contextLost: (event: Event) => void;
   readonly contextRestored: () => void;
@@ -206,10 +222,15 @@ export function createTideweftReliefRenderer(
   let cached: CachedReliefMesh | null = null;
   let orbitDrag: OrbitDrag | null = null;
   let clickCandidate: ClickCandidate | null = null;
+  let twistGesture: ReliefTwistGesture | null = null;
+  let touchSequenceSuppressed = false;
   let pointerWorld: WorldPoint | null = null;
   let lastMovement = "0,0";
+  let lastOrbitFrameAt: number | undefined;
+  const activeTouchPointers = new Map<number, ReliefTouchPoint>();
   const heldDirections = new Set<string>();
   const heldBraceKeys = new Set<string>();
+  const heldOrbitKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
   const discoverySignatureFor = createReliefDiscoverySignatureMemo();
   const tideHarpGeometryFor = createTideHarpGeometryMemo();
@@ -296,13 +317,42 @@ export function createTideweftReliefRenderer(
     options.dispatch({ type: "movement", vector: { x, y } });
   };
 
+  const setOrbitYaw = (yaw: number): void => {
+    orbit.yaw = wrapReliefOrbitRadians(Number.isFinite(yaw) ? yaw : DEFAULT_YAW);
+    updateMovement();
+    options.onOrbitChange?.(orbit.yaw);
+  };
+
+  const advanceHeldOrbit = (now: number): void => {
+    const previous = lastOrbitFrameAt;
+    lastOrbitFrameAt = now;
+    if (heldOrbitKeys.size === 0) return;
+    if (hasOpenDialog()) {
+      heldOrbitKeys.clear();
+      return;
+    }
+    if (previous === undefined) return;
+    const yawDelta = heldReliefOrbitDelta(heldOrbitKeys, now - previous);
+    if (yawDelta !== 0) setOrbitYaw(orbit.yaw + yawDelta);
+  };
+
   const releaseInput = (): void => {
     heldDirections.clear();
     if (heldBraceKeys.size > 0) options.dispatch({ type: "brace", active: false });
     heldBraceKeys.clear();
+    heldOrbitKeys.clear();
     updateMovement();
     orbitDrag = null;
     clickCandidate = null;
+    twistGesture = null;
+    touchSequenceSuppressed = false;
+    for (const pointerId of activeTouchPointers.keys()) {
+      if (canvasElement?.hasPointerCapture?.(pointerId)) {
+        canvasElement.releasePointerCapture(pointerId);
+      }
+    }
+    activeTouchPointers.clear();
+    lastOrbitFrameAt = undefined;
   };
 
   const currentCameraState = (): ReliefCameraState => {
@@ -572,7 +622,13 @@ export function createTideweftReliefRenderer(
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (!active || contextLost || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!active
+      || contextLost
+      || event.ctrlKey
+      || event.metaKey
+      || event.altKey
+      || isEditingTarget(event.target)
+      || hasOpenDialog()) return;
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
       event.preventDefault();
       const wasBracing = heldBraceKeys.size > 0;
@@ -632,6 +688,25 @@ export function createTideweftReliefRenderer(
     updateMovement();
   };
 
+  const onWindowKeyDown = (event: KeyboardEvent): void => {
+    if (event.code !== "KeyJ" && event.code !== "KeyL") return;
+    if (!active
+      || contextLost
+      || event.ctrlKey
+      || event.metaKey
+      || event.altKey
+      || isEditingTarget(event.target)
+      || hasOpenDialog()) return;
+    event.preventDefault();
+    heldOrbitKeys.add(event.code);
+  };
+
+  const onWindowKeyUp = (event: KeyboardEvent): void => {
+    if (event.code !== "KeyJ" && event.code !== "KeyL") return;
+    if (!heldOrbitKeys.delete(event.code)) return;
+    event.preventDefault();
+  };
+
   const detachCanvasListeners = (): void => {
     if (!attached) return;
     const { element } = attached;
@@ -639,10 +714,15 @@ export function createTideweftReliefRenderer(
     element.removeEventListener("pointermove", attached.pointerMove);
     element.removeEventListener("pointerup", attached.pointerUp);
     element.removeEventListener("pointercancel", attached.pointerCancel);
+    element.removeEventListener("lostpointercapture", attached.lostPointerCapture);
     element.removeEventListener("contextmenu", attached.contextMenu);
     element.removeEventListener("keydown", attached.keyDown);
     element.removeEventListener("keyup", attached.keyUp);
     element.removeEventListener("blur", attached.blur);
+    window.removeEventListener("keydown", attached.windowKeyDown);
+    window.removeEventListener("keyup", attached.windowKeyUp);
+    window.removeEventListener("blur", attached.windowBlur);
+    document.removeEventListener("visibilitychange", attached.visibilityChange);
     element.removeEventListener("wheel", attached.wheel);
     element.removeEventListener("webglcontextlost", attached.contextLost);
     element.removeEventListener("webglcontextrestored", attached.contextRestored);
@@ -651,9 +731,64 @@ export function createTideweftReliefRenderer(
 
   const attachCanvasListeners = (element: HTMLCanvasElement): void => {
     detachCanvasListeners();
+    const releasePointerCapture = (pointerId: number): void => {
+      if (element.hasPointerCapture?.(pointerId)) element.releasePointerCapture(pointerId);
+    };
+    const endTouch = (pointerId: number): void => {
+      activeTouchPointers.delete(pointerId);
+      if (twistGesture?.pointerIds.includes(pointerId)) twistGesture = null;
+      if (activeTouchPointers.size === 0) {
+        twistGesture = null;
+        touchSequenceSuppressed = false;
+      }
+      releasePointerCapture(pointerId);
+    };
+    const dispatchClick = (event: PointerEvent): void => {
+      if (clickCandidate?.pointerId !== event.pointerId) return;
+      const candidate = clickCandidate;
+      clickCandidate = null;
+      const point = pickWorld(localPointer(event));
+      if (!point) return;
+      pointerWorld = point;
+      const target = findSelection(point);
+      const view = latestView;
+      if (view) emit(commandForWorldTap(
+        view,
+        target,
+        point,
+        candidate.coarsePointer,
+        candidate.shiftKey || event.shiftKey,
+      ));
+    };
     const pointerDown = (event: PointerEvent): void => {
       if (!active || contextLost) return;
       element.focus({ preventScroll: true });
+      if (event.pointerType === "touch" && event.button === 0) {
+        activeTouchPointers.set(event.pointerId, {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+        });
+        element.setPointerCapture?.(event.pointerId);
+        if (activeTouchPointers.size >= 2) {
+          twistGesture ??= beginReliefTwist([...activeTouchPointers.values()]);
+          // Once a second finger joins, this entire touch sequence belongs to
+          // camera manipulation and can never leak through as a route click.
+          touchSequenceSuppressed = true;
+          clickCandidate = null;
+          orbitDrag = null;
+        } else if (!touchSequenceSuppressed) {
+          clickCandidate = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            shiftKey: event.shiftKey,
+            coarsePointer: true,
+          };
+        }
+        event.preventDefault();
+        return;
+      }
       const orbiting = event.button === 1 || event.button === 2 || (event.button === 0 && event.altKey);
       if (orbiting) {
         orbitDrag = {
@@ -679,13 +814,35 @@ export function createTideweftReliefRenderer(
       event.preventDefault();
     };
     const pointerMove = (event: PointerEvent): void => {
+      if (event.pointerType === "touch" && activeTouchPointers.has(event.pointerId)) {
+        activeTouchPointers.set(event.pointerId, {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (!twistGesture && activeTouchPointers.size >= 2) {
+          twistGesture = beginReliefTwist([...activeTouchPointers.values()]);
+        }
+        if (twistGesture) {
+          const update = updateReliefTwist(twistGesture, [...activeTouchPointers.values()]);
+          twistGesture = update.gesture;
+          if (update.yawDelta !== 0) setOrbitYaw(orbit.yaw + update.yawDelta);
+          clickCandidate = null;
+          event.preventDefault();
+          return;
+        }
+        if (touchSequenceSuppressed) {
+          clickCandidate = null;
+          event.preventDefault();
+          return;
+        }
+      }
       if (orbitDrag?.pointerId === event.pointerId) {
         const dx = event.clientX - orbitDrag.lastX;
         const dy = event.clientY - orbitDrag.lastY;
         if (Math.abs(dx) + Math.abs(dy) > 0.5) orbitDrag.moved = true;
-        orbit.yaw -= dx * 0.008;
+        setOrbitYaw(orbit.yaw - dx * 0.008);
         orbit.pitch = clamp(orbit.pitch + dy * 0.006, MIN_RELIEF_PITCH, MAX_RELIEF_PITCH);
-        updateMovement();
         orbitDrag.lastX = event.clientX;
         orbitDrag.lastY = event.clientY;
         event.preventDefault();
@@ -699,37 +856,46 @@ export function createTideweftReliefRenderer(
       }
     };
     const pointerUp = (event: PointerEvent): void => {
+      if (event.pointerType === "touch" && activeTouchPointers.has(event.pointerId)) {
+        if (!touchSequenceSuppressed) dispatchClick(event);
+        else if (clickCandidate?.pointerId === event.pointerId) clickCandidate = null;
+        endTouch(event.pointerId);
+        event.preventDefault();
+        return;
+      }
       if (orbitDrag?.pointerId === event.pointerId) {
         const wasRightClick = orbitDrag.button === 2 && !orbitDrag.moved;
         orbitDrag = null;
-        if (element.hasPointerCapture?.(event.pointerId)) element.releasePointerCapture(event.pointerId);
+        releasePointerCapture(event.pointerId);
         if (wasRightClick) emit({ type: "cancel" });
         event.preventDefault();
         return;
       }
       if (clickCandidate?.pointerId !== event.pointerId) return;
-      const candidate = clickCandidate;
-      clickCandidate = null;
-      const point = pickWorld(localPointer(event));
-      if (!point) return;
-      pointerWorld = point;
-      const target = findSelection(point);
-      const view = latestView;
-      if (view) emit(commandForWorldTap(
-        view,
-        target,
-        point,
-        candidate.coarsePointer,
-        candidate.shiftKey || event.shiftKey,
-      ));
+      dispatchClick(event);
       event.preventDefault();
     };
     const pointerCancel = (event: PointerEvent): void => {
       if (orbitDrag?.pointerId === event.pointerId) orbitDrag = null;
       if (clickCandidate?.pointerId === event.pointerId) clickCandidate = null;
+      if (event.pointerType === "touch" && activeTouchPointers.has(event.pointerId)) {
+        endTouch(event.pointerId);
+      }
+    };
+    const lostPointerCapture = (event: PointerEvent): void => {
+      // Mobile browsers may revoke capture during an OS gesture or interruption
+      // without first delivering pointerup/pointercancel. Clear the same
+      // per-pointer state so a stale finger cannot swallow the next route tap.
+      if (orbitDrag?.pointerId === event.pointerId) orbitDrag = null;
+      if (clickCandidate?.pointerId === event.pointerId) clickCandidate = null;
+      if (activeTouchPointers.has(event.pointerId)) endTouch(event.pointerId);
     };
     const contextMenu = (event: MouseEvent): void => event.preventDefault();
     const blur = (): void => releaseInput();
+    const windowBlur = (): void => releaseInput();
+    const visibilityChange = (): void => {
+      if (document.visibilityState === "hidden") releaseInput();
+    };
     const wheel = (event: WheelEvent): void => {
       if (!active || contextLost) return;
       event.preventDefault();
@@ -752,10 +918,15 @@ export function createTideweftReliefRenderer(
     element.addEventListener("pointermove", pointerMove);
     element.addEventListener("pointerup", pointerUp);
     element.addEventListener("pointercancel", pointerCancel);
+    element.addEventListener("lostpointercapture", lostPointerCapture);
     element.addEventListener("contextmenu", contextMenu);
     element.addEventListener("keydown", onKeyDown);
     element.addEventListener("keyup", onKeyUp);
     element.addEventListener("blur", blur);
+    window.addEventListener("keydown", onWindowKeyDown);
+    window.addEventListener("keyup", onWindowKeyUp);
+    window.addEventListener("blur", windowBlur);
+    document.addEventListener("visibilitychange", visibilityChange);
     element.addEventListener("wheel", wheel, { passive: false });
     element.addEventListener("webglcontextlost", contextLostListener);
     element.addEventListener("webglcontextrestored", contextRestored);
@@ -765,10 +936,15 @@ export function createTideweftReliefRenderer(
       pointerMove,
       pointerUp,
       pointerCancel,
+      lostPointerCapture,
       contextMenu,
       keyDown: onKeyDown,
       keyUp: onKeyUp,
       blur,
+      windowKeyDown: onWindowKeyDown,
+      windowKeyUp: onWindowKeyUp,
+      windowBlur,
+      visibilityChange,
       wheel,
       contextLost: contextLostListener,
       contextRestored,
@@ -2074,11 +2250,11 @@ export function createTideweftReliefRenderer(
         canvasElement.setAttribute("role", "application");
         canvasElement.setAttribute(
           "aria-label",
-          "TIDEWEFT relief view. Travel with WASD or arrows. Space sounds the water, E interacts, F ties or tends a Wayknot, T opens the tutorial, Shift braces, wheel zooms, and right-drag orbits the estuary.",
+          "TIDEWEFT relief view. Travel with WASD or arrows. Hold J or L to spin the map; on touch, twist with two fingers. Space sounds the water, E interacts, F ties or tends a Wayknot, T opens the tutorial, Shift braces, wheel zooms, and right-drag also orbits the estuary.",
         );
         canvasElement.setAttribute(
           "aria-keyshortcuts",
-          "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D Shift Space E F T Escape",
+          "ArrowUp ArrowDown ArrowLeft ArrowRight W A S D J L Shift Space E F T Escape",
         );
         labelLayer = document.createElement("div");
         labelLayer.className = "relief-label-layer";
@@ -2103,6 +2279,7 @@ export function createTideweftReliefRenderer(
       p.background(latestView?.weather.kind === "mist" ? RELIEF_PALETTE.horizon : RELIEF_PALETTE.ink);
       if (!latestView) return;
       const mesh = ensureMesh(latestView);
+      advanceHeldOrbit(now);
       updateCamera(latestView, now, mesh.mesh);
       drawScene(latestView, mesh, now);
       syncReliefLabels(latestView, mesh, currentCameraState());
@@ -2162,16 +2339,15 @@ export function createTideweftReliefRenderer(
     },
     pulseScan,
     setOrbit: (yaw, pitch) => {
-      orbit.yaw = Number.isFinite(yaw) ? yaw : DEFAULT_YAW;
+      setOrbitYaw(yaw);
       orbit.pitch = clamp(Number.isFinite(pitch) ? pitch : DEFAULT_PITCH, MIN_RELIEF_PITCH, MAX_RELIEF_PITCH);
-      updateMovement();
     },
     resetOrbit: () => {
-      orbit.yaw = DEFAULT_YAW;
+      setOrbitYaw(DEFAULT_YAW);
       orbit.pitch = DEFAULT_PITCH;
       orbit.manualZoom = 1;
-      updateMovement();
     },
+    orbitYaw: () => wrapReliefOrbitRadians(orbit.yaw),
     destroy,
   };
 
@@ -2186,6 +2362,7 @@ export function createTideweftReliefRenderer(
     reducedMotion = event.matches;
   };
   reducedMotionQuery.addEventListener("change", reducedMotionChangeHandler);
+  options.onOrbitChange?.(orbit.yaw);
 
   try {
     instance = new p5(sketch, options.mount);
@@ -2197,6 +2374,16 @@ export function createTideweftReliefRenderer(
     resizeObserver.observe(options.mount);
   }
   return controller;
+}
+
+function isEditingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.matches("input, textarea, select, [contenteditable]:not([contenteditable='false'])")
+    || target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])") !== null;
+}
+
+function hasOpenDialog(): boolean {
+  return typeof document !== "undefined" && document.querySelector("dialog[open]") !== null;
 }
 
 function detectWebGLSupport(): boolean {

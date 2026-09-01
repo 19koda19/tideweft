@@ -4,7 +4,7 @@ This file records evidence that changes the design. It is not an attempt to summ
 
 ## Long-running implementation
 
-OpenAI's goal workflow recommends one durable objective with a verifiable stopping condition, explicit source material, proof commands/artifacts, checkpoints, and a short progress log. It specifically lists games and prototypes as suitable when the app can be built and behavior verified. That structure is reflected in `PLAN.md` and `PROGRESS.md`.
+OpenAI's goal workflow recommends one durable objective with a verifiable stopping condition, explicit source material, proof commands/artifacts, checkpoints, and a short progress log. It specifically lists games and prototypes as suitable when the app can be built and behavior verified. That structure is maintained in local, ignored execution ledgers; public release truth stays in the README, generated changelog, tutorial, and in-game Patch Notes.
 
 - [OpenAI Docs — Follow a goal](https://learn.chatgpt.com/use-cases/follow-goals)
 
@@ -31,15 +31,15 @@ Research on “juicy” game feedback points toward legible action–outcome bin
 - [How Does Juicy Game Feedback Motivate?](https://people.csail.mit.edu/dkao/pdf/3613904.3642656.pdf)
 - [Self-Determination Theory and the Facilitation of Intrinsic Motivation](https://selfdeterminationtheory.org/SDT/documents/1991_DeciVallerandPelletierRyan_EP.pdf)
 
-### Challenge should be adjustable and multidimensional
+### Challenge should be legible and multidimensional
 
-Studies of game flow support the value of matching challenge to skill, but the evidence is more nuanced than “harder is better.” For an after-work game, the player should control whether a trip emphasizes execution pressure, route planning, discovery, or care. Design implication: Calm/Standard/Wild changes world pressure, while optional objectives create mastery without making basic restoration punishing.
+Studies of game flow support skill–challenge balance, but the evidence is more nuanced than “harder is better.” TIDEWEFT now has one official world ruleset—**A CHALLENGING HARD**—rather than selectable pressure modes or hidden adjustment. Player agency comes from preparation, route choice, recovery, and accessibility settings for input and presentation; those settings never change rewards, hazard probabilities, enemies, loot, or world rules.
 
 - [Skill–challenge balance, expertise, flow, and urge to continue](https://pmc.ncbi.nlm.nih.gov/articles/PMC8943660/)
 
-### “After work” needs a session arc, not endless retention
+### Perpetual play needs a voluntary stopping ritual, not a forced session arc
 
-Post-work play research identifies detachment, relaxation, mastery, and control as useful experiences; a diary study links evening-game mastery with next-morning vigor. Research on disengaging from games also reports that players value transparent session structure, retained progress, closure, and the agency to choose when they leave. Design implication: TIDEWEFT offers Drift, Weave, and Wander session shapes; the director does not introduce a major crisis during a declared closing window; Quiet Hour saves, summarizes causal change, and stops the simulation without offline loss.
+Post-work play research identifies detachment, relaxation, mastery, and control as useful experiences; a diary study links evening-game mastery with next-morning vigor. Research on disengaging from games also reports that players value retained progress, closure, and agency over when they leave. Earlier prototypes exposed Drift, Weave, and Wander session shapes, but that direction is superseded: the live design is one perpetual world and one ruleset. **Quiet Hour** is the voluntary save-and-recap ritual; it stops local simulation without advancing time offline, imposing a timer, or declaring a quota.
 
 - [Digital Games as a Context for Recovery from Work Strain](https://orca.cardiff.ac.uk/id/eprint/131795/)
 - [Evening Gaming, Recovery, and Next-Morning Vigor](https://doi.org/10.1111/apps.12519)

@@ -31,8 +31,17 @@ import {
   type TideweftUIView,
 } from "../ui/types";
 import { TideweftSoundscape } from "../audio/soundscape";
-import { createSaveRepository, type SaveRecord, type SaveRepository } from "../platform/persistence";
 import {
+  ConflictingSaveCopiesError,
+  createSaveRepository,
+  NewerSaveUnavailableError,
+  StaleSaveWriteError,
+  type SaveRecord,
+  type SaveRepository,
+} from "../platform/persistence";
+import { acceptsRestartPhrase } from "./restartPolicy";
+import {
+  BASE_CARGO_CAPACITY,
   FIELD_TOOL_LABELS,
   PACK_LOAD_MILLI_PER_UNIT,
   TILE_UNITS,
@@ -102,6 +111,10 @@ const PLAYER_STEPS_PER_WORLD_TICK = 10;
 const MAX_STEPS_PER_FRAME = 6;
 const AUTOSAVE_INTERVAL_TICKS = 600;
 const AUTOSAVE_SLOT = "autosave";
+const SAVE_RETRY_BASE_DELAY_MS = 2_000;
+const SAVE_RETRY_MAX_DELAY_MS = 30_000;
+const HARD_POSTURE = "gale" as const;
+const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
 const GAME_SAVE_VERSION = 2;
 const LEGACY_GAME_SAVE_VERSION = 1;
@@ -154,13 +167,13 @@ export interface TideweftRuntime {
 export async function createTideweftRuntime(
   repository: SaveRepository = createSaveRepository(),
 ): Promise<TideweftRuntime> {
-  let world = createWorld("quiet-delta", "standard");
+  let world = createWorld("quiet-delta", HARD_PRESSURE_MODE);
   let worldView = createWorldView(world);
   let fieldResourceCatalog = runtimeFieldResourceCatalog(world);
   let fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
   const firstPromise = worldView.contracts.find((contract) => contract.status === "offered");
   let player = createPlayer(worldView, firstPromise?.originSettlementId);
-  let session = createSessionState(world.meta.seedText);
+  let session = createSessionState(world.meta.seedText, HARD_POSTURE);
   let renderView = projectGameView(worldView, player, { paused: true });
   let uiView = projectUIView(worldView, player, session, {
     fieldResourceCatalog,
@@ -194,6 +207,19 @@ export async function createTideweftRuntime(
   let pendingSave: { sequence: number; record: SaveRecord } | undefined;
   let saveWorkerRunning = false;
   let saveSequence = 0;
+  let saveGenerationEra = 0;
+  let saveGeneration = 0;
+  let lastIssuedSaveTimestamp = -1;
+  let saveRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  let saveRetryAttempts = 0;
+  let saveFailureVisible = false;
+  let saveRecoveryBlocked = false;
+  let newerSaveUnavailable = false;
+  let staleSaveDetected = false;
+  let saveReadFailed = false;
+  let recoverableSaveIssue: "corrupt" | "conflict" | null = null;
+  let replacementSeedRequired = false;
+  let destroyed = false;
   const saveWaiters: Array<{
     sequence: number;
     resolve: () => void;
@@ -201,8 +227,91 @@ export async function createTideweftRuntime(
   }> = [];
 
   const loaded = await loadAutosave(repository);
-  if (loaded) {
+  if (loaded?.kind === "read-failed") {
+    saveReadFailed = true;
+    saveRecoveryBlocked = true;
+    saveFailureVisible = true;
+    announce(
+      session,
+      "LOCAL SAVE UNAVAILABLE — Tideweft could not determine whether a durable local save exists. Nothing will be opened or overwritten; reload to retry local storage.",
+      true,
+    );
+  }
+  if (loaded?.kind === "unavailable") {
+    saveGenerationEra = loaded.version.saveGenerationEra;
+    saveGeneration = loaded.version.saveGeneration;
+    lastIssuedSaveTimestamp = loaded.version.updatedAt;
+    saveRecoveryBlocked = true;
+    newerSaveUnavailable = true;
+    saveFailureVisible = true;
+    announce(
+      session,
+      "LOCAL SAVE TEMPORARILY UNAVAILABLE — a newer copy exists, so Tideweft will not open or overwrite an older fallback. Reload when local storage is available again.",
+      true,
+    );
+  }
+  if (loaded?.kind === "conflict") {
+    const recovery = nextSaveGeneration(loaded.version);
+    if (recovery) {
+      saveGenerationEra = recovery.saveGenerationEra;
+      saveGeneration = recovery.saveGeneration;
+      lastIssuedSaveTimestamp = -1;
+      saveFailureVisible = true;
+      recoverableSaveIssue = "conflict";
+      replacementSeedRequired = true;
+      announce(
+        session,
+        "Two conflicting local autosaves claimed the same version. Start a seed to replace both safely; neither copy was chosen behind your back.",
+        true,
+      );
+    } else {
+      saveGenerationEra = Number.MAX_SAFE_INTEGER;
+      saveGeneration = Number.MAX_SAFE_INTEGER;
+      lastIssuedSaveTimestamp = loaded.version.updatedAt;
+      saveRecoveryBlocked = true;
+      saveFailureVisible = true;
+      announce(
+        session,
+        "LOCAL SAVE CONFLICT CANNOT BE REPLACED — its safe replacement counter is exhausted. Clear Tideweft's stored site data, reload, and begin the seed again.",
+        true,
+      );
+    }
+  }
+  if (loaded?.kind === "corrupt") {
+    const recovery = nextSaveGeneration(loaded.version);
+    if (recovery) {
+      saveGenerationEra = recovery.saveGenerationEra;
+      saveGeneration = recovery.saveGeneration;
+      lastIssuedSaveTimestamp = -1;
+      saveFailureVisible = true;
+      recoverableSaveIssue = "corrupt";
+      replacementSeedRequired = true;
+      announce(
+        session,
+        "The previous local autosave could not be read. Start a seed to replace it safely; older tabs cannot restore the damaged copy.",
+        true,
+      );
+    } else {
+      saveGenerationEra = Number.MAX_SAFE_INTEGER;
+      saveGeneration = Number.MAX_SAFE_INTEGER;
+      lastIssuedSaveTimestamp = loaded.version.updatedAt;
+      saveRecoveryBlocked = true;
+      saveFailureVisible = true;
+      announce(
+        session,
+        "LOCAL SAVE CANNOT BE REPLACED — its safe replacement counter is exhausted. Clear Tideweft's stored site data, reload, and begin the seed again.",
+        true,
+      );
+    }
+  }
+  if (loaded?.kind === "loaded") {
+    saveGenerationEra = loaded.saveGenerationEra;
+    saveGeneration = loaded.saveGeneration;
+    lastIssuedSaveTimestamp = loaded.updatedAt;
     world = loaded.world;
+    // Calm/standard remain readable simulation values for old snapshots and
+    // deterministic fixtures, but the playable game now has one ruleset.
+    world.meta.pressureMode = HARD_PRESSURE_MODE;
     worldView = createWorldView(world);
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = canonicalizeFieldResourceState(
@@ -299,8 +408,10 @@ export async function createTideweftRuntime(
       ? player.harborTrail.slice(-8)
       : player.lastHarborId === null ? [] : [player.lastHarborId];
     session = loaded.session;
-    session.paused = true;
-    session.titleVisible = true;
+    session.pressureMode = HARD_PRESSURE_MODE;
+    session.posture = HARD_POSTURE;
+    session.paused = false;
+    session.titleVisible = false;
     session.quietHourVisible = false;
     session.hasSave = true;
     session.sessionPlayMilliseconds = Number.isFinite(session.sessionPlayMilliseconds)
@@ -319,6 +430,8 @@ export async function createTideweftRuntime(
     session.campaignCelebrated = Boolean(session.campaignCelebrated);
     session.continueSummary = continueSummary(worldView, player);
     lastAutosaveTick = world.meta.completedTick;
+    beginSession();
+    announce(session, "Welcome back to the estuary. Nothing changed while you were away.");
     refreshViews();
   }
 
@@ -356,6 +469,38 @@ export async function createTideweftRuntime(
     uiView = projectUIView(worldView, player, session, {
       fieldResourceCatalog,
       fieldResourceEcology,
+      requiresSeed: replacementSeedRequired,
+      worldCreationBlocked: saveRecoveryBlocked,
+      ...(saveFailureVisible
+        ? {
+            saveWarning: {
+              id: `local-save-${recoverableSaveIssue ?? (saveReadFailed ? "read-unavailable" : staleSaveDetected ? "superseded" : newerSaveUnavailable ? "unavailable" : saveRecoveryBlocked ? "blocked" : "failed")}-era-${saveGenerationEra}-generation-${saveGeneration}`,
+              message: recoverableSaveIssue === "corrupt"
+                ? "LOCAL AUTOSAVE UNREADABLE"
+                : recoverableSaveIssue === "conflict"
+                  ? "LOCAL AUTOSAVES CONFLICT"
+                  : saveReadFailed
+                    ? "LOCAL SAVE UNAVAILABLE"
+                  : staleSaveDetected
+                    ? "LOCAL SAVE SUPERSEDED"
+                  : "LOCAL SAVE NOT STORED",
+              detail: recoverableSaveIssue === "corrupt"
+                ? "No damaged data was loaded. Enter a seed to replace that copy safely; this warning remains until the replacement is stored."
+                : recoverableSaveIssue === "conflict"
+                  ? "Neither equal-version copy was chosen. Enter a seed to replace both safely; this warning remains until the replacement is stored."
+                  : saveReadFailed
+                    ? "Tideweft could not prove that local storage is empty. Nothing will be opened, started, or overwritten in this window. Reload to retry local storage."
+                    : staleSaveDetected
+                      ? "Another tab or copy stored a different or newer durable version. This window will not retry or overwrite it. Reload to resolve the copies and continue."
+                      : newerSaveUnavailable
+                        ? "A newer local copy exists but its storage backend is unavailable. Reload; Tideweft will not overwrite it with an older fallback."
+                        : saveRecoveryBlocked
+                          ? "This browser save exhausted its replacement counter. Clear Tideweft's stored site data, reload, and begin the seed again."
+                          : "This estuary currently exists only in this open window. Keep it open while Tideweft retries local storage automatically.",
+              tone: "danger" as const,
+            },
+          }
+        : {}),
     });
   }
 
@@ -513,7 +658,7 @@ export async function createTideweftRuntime(
 
     if (world.meta.completedTick - lastAutosaveTick >= AUTOSAVE_INTERVAL_TICKS) {
       lastAutosaveTick = world.meta.completedTick;
-      void save();
+      saveInBackground();
     }
   }
 
@@ -766,13 +911,58 @@ export async function createTideweftRuntime(
     void soundscape.unlock();
     switch (command.type) {
       case "resume-world":
+        if (saveRecoveryBlocked) {
+          announce(session, blockedWorldCreationMessage("resume"), true);
+          break;
+        }
+        if (!session.titleVisible && !session.paused) break;
         session.titleVisible = false;
         session.paused = false;
         beginSession();
         announce(session, `Welcome back to ${renderView.worldName ?? "the estuary"}. Nothing changed while you were away.`);
         break;
       case "new-world":
-        newWorld(command.seed, command.posture);
+        if (saveRecoveryBlocked) {
+          announce(session, blockedWorldCreationMessage("start"), true);
+          break;
+        }
+        if (replacementSeedRequired && command.seed.trim().length === 0) {
+          announce(
+            session,
+            "The unreadable or conflicting autosave is unchanged. Enter a non-empty seed phrase before replacing it.",
+            true,
+          );
+          break;
+        }
+        if (session.hasSave && !acceptsRestartPhrase(command.restartPhrase ?? "")) {
+          announce(
+            session,
+            "The existing estuary is unchanged. Type restartrestartrestart on the title screen before choosing a new seed.",
+            true,
+          );
+          break;
+        }
+        if (session.hasSave && command.seed.trim().length === 0) {
+          announce(
+            session,
+            "The existing estuary is unchanged. Enter a non-empty seed phrase to confirm its replacement.",
+            true,
+          );
+          break;
+        }
+        if (
+          session.hasSave
+          && saveGenerationEra >= Number.MAX_SAFE_INTEGER
+          && saveGeneration >= Number.MAX_SAFE_INTEGER
+        ) {
+          announce(
+            session,
+            "This save has exhausted its safe replacement counter. Clear Tideweft's stored site data, reload, and begin the seed again.",
+            true,
+          );
+          break;
+        }
+        newWorld(command.seed, session.hasSave);
         break;
       case "scan":
         scan();
@@ -835,18 +1025,40 @@ export async function createTideweftRuntime(
           session.paused = true;
           session.hasSave = true;
           session.continueSummary = continueSummary(worldView, player);
-          void save();
+          saveInBackground();
         }
         break;
       case "open-title":
+        if (saveRecoveryBlocked) {
+          session.paused = true;
+          session.titleVisible = true;
+          session.hasSave = false;
+          announce(session, blockedWorldCreationMessage("resume"), true);
+          break;
+        }
         session.paused = true;
         session.titleVisible = true;
         session.hasSave = true;
         session.continueSummary = continueSummary(worldView, player);
-        void save();
+        saveInBackground();
         break;
     }
     refreshViews();
+  }
+
+  function blockedWorldCreationMessage(action: "resume" | "start"): string {
+    if (saveReadFailed) {
+      return action === "resume"
+        ? "LOCAL SAVE UNAVAILABLE — reload to retry local storage. This window will not open or overwrite an unknown save."
+        : "LOCAL SAVE UNAVAILABLE — no seed was started. Reload to retry local storage without risking an unknown durable save.";
+    }
+    if (staleSaveDetected) {
+      return "LOCAL SAVE SUPERSEDED — reload to resolve the different or newer durable copy before continuing or starting another seed.";
+    }
+    if (newerSaveUnavailable) {
+      return "LOCAL SAVE TEMPORARILY UNAVAILABLE — reload when the newer durable copy's storage backend is available; nothing was opened or replaced.";
+    }
+    return "LOCAL SAVE CANNOT BE REPLACED — clear Tideweft's stored site data, reload, and begin the seed again.";
   }
 
   function availableCraftingInventory(): CraftingInventory | null {
@@ -1038,7 +1250,7 @@ export async function createTideweftRuntime(
       true,
     );
     soundscape.play("deliver", 1);
-    void save();
+    saveInBackground();
   }
 
   function rejectionFor(commandIds: readonly string[]): string | undefined {
@@ -1059,9 +1271,22 @@ export async function createTideweftRuntime(
     if (player.activeContractId === contractId) player.activeContractId = null;
   }
 
-  function newWorld(seed: string, posture: GameSessionState["posture"]): void {
+  function newWorld(seed: string, replacesExistingSave: boolean): void {
     const normalizedSeed = seed.trim().slice(0, 128) || "quiet-delta";
-    session = createSessionState(normalizedSeed, posture, PERPETUAL_SESSION_SHAPE);
+    if (replacesExistingSave) {
+      if (saveGeneration >= Number.MAX_SAFE_INTEGER) {
+        saveGenerationEra += 1;
+        saveGeneration = 0;
+      } else {
+        saveGeneration += 1;
+      }
+      // Generation dominates wall-clock ordering, so a deliberate replacement
+      // can recover even from an imported/future-dated MAX_SAFE timestamp.
+      if (lastIssuedSaveTimestamp >= Number.MAX_SAFE_INTEGER) {
+        lastIssuedSaveTimestamp = -1;
+      }
+    }
+    session = createSessionState(normalizedSeed, HARD_POSTURE, PERPETUAL_SESSION_SHAPE);
     world = createWorld(normalizedSeed, session.pressureMode);
     worldView = createWorldView(world);
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -1070,6 +1295,8 @@ export async function createTideweftRuntime(
     player = createPlayer(worldView, promise?.originSettlementId);
     session.titleVisible = false;
     session.paused = false;
+    session.hasSave = true;
+    replacementSeedRequired = false;
     beginSession();
     commandQueue = [];
     playerStepsSinceWorldTick = 0;
@@ -1085,6 +1312,7 @@ export async function createTideweftRuntime(
     announce(session, "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.");
     soundscape.play("strand", 0.9);
     refreshViews();
+    saveInBackground();
   }
 
   function setAutopilot(point: WorldPoint, additive: boolean): boolean {
@@ -1711,10 +1939,114 @@ export async function createTideweftRuntime(
     session.paused = true;
     session.quietHourVisible = true;
     soundscape.play("rest");
-    void save();
+    saveInBackground();
+  }
+
+  /**
+   * Internal saves must never become unhandled promise rejections. A failed
+   * write leaves the current world authoritative in memory and schedules a
+   * fresh snapshot, so a retry always includes changes made after the failure.
+   */
+  function saveInBackground(): void {
+    void save().catch(() => undefined);
+  }
+
+  function scheduleSaveRetry(): void {
+    if (destroyed || saveRetryTimer !== undefined) return;
+    const delay = Math.min(
+      SAVE_RETRY_MAX_DELAY_MS,
+      SAVE_RETRY_BASE_DELAY_MS * (2 ** Math.min(saveRetryAttempts, 4)),
+    );
+    saveRetryAttempts += 1;
+    saveRetryTimer = setTimeout(() => {
+      saveRetryTimer = undefined;
+      saveInBackground();
+    }, delay);
+  }
+
+  function noteSaveFailure(retryable = true): void {
+    if (destroyed) return;
+    const wasRecoverableIssue = recoverableSaveIssue !== null;
+    recoverableSaveIssue = null;
+    if (!saveFailureVisible || wasRecoverableIssue) {
+      saveFailureVisible = true;
+      announce(
+        session,
+        "LOCAL SAVE FAILED — this estuary remains open in memory but is not durable yet. Keep this window open; Tideweft will retry automatically.",
+        true,
+      );
+      refreshViews();
+    }
+    if (retryable) scheduleSaveRetry();
+  }
+
+  function noteStaleSave(): void {
+    if (destroyed) return;
+    recoverableSaveIssue = null;
+    staleSaveDetected = true;
+    newerSaveUnavailable = false;
+    saveRecoveryBlocked = true;
+    saveFailureVisible = true;
+    session.paused = true;
+    session.titleVisible = true;
+    session.hasSave = false;
+    if (saveRetryTimer !== undefined) {
+      clearTimeout(saveRetryTimer);
+      saveRetryTimer = undefined;
+    }
+    announce(
+      session,
+      "LOCAL SAVE SUPERSEDED — another tab or copy stored a different or newer durable version. This window will not retry or overwrite it; reload to resolve the copies and continue.",
+      true,
+    );
+    refreshViews();
+  }
+
+  function noteSaveSuccess(record: SaveRecord, sequence: number): void {
+    // A replacement world can be created while an older generation's retry is
+    // still inside the repository. That older write may complete successfully,
+    // but it does not make the world currently on screen durable. Leave the
+    // warning and current-generation retry state intact until a covering write
+    // for this generation succeeds.
+    if (
+      (record.saveGenerationEra ?? 0) !== saveGenerationEra
+      || (record.saveGeneration ?? 0) !== saveGeneration
+      || sequence !== saveSequence
+    ) return;
+    saveRetryAttempts = 0;
+    if (saveRetryTimer !== undefined) {
+      clearTimeout(saveRetryTimer);
+      saveRetryTimer = undefined;
+    }
+    if (!saveFailureVisible || destroyed) return;
+    const resolvedRecoverableIssue = recoverableSaveIssue;
+    recoverableSaveIssue = null;
+    saveFailureVisible = false;
+    announce(
+      session,
+      resolvedRecoverableIssue
+        ? "LOCAL SAVE REPLACED — the new estuary is durable and the unreadable or conflicting copy can no longer return."
+        : "LOCAL SAVE RESTORED — the current estuary is durable on this device again.",
+      true,
+    );
+    refreshViews();
   }
 
   async function save(): Promise<void> {
+    if (saveReadFailed) {
+      throw new Error("Local save storage could not be read; reload before starting or saving.");
+    }
+    if (replacementSeedRequired) {
+      throw new Error("Choose a seed before replacing the unreadable or conflicting local autosave.");
+    }
+    if (saveRecoveryBlocked) {
+      noteSaveFailure(false);
+      throw new Error(staleSaveDetected
+        ? "This runtime was superseded by a newer local save; reload before continuing."
+        : newerSaveUnavailable
+          ? "A newer local save is temporarily unavailable."
+          : "The local save replacement counter is exhausted.");
+    }
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     const playerSnapshot = structuredClone(player);
@@ -1735,7 +2067,9 @@ export async function createTideweftRuntime(
       slotId: AUTOSAVE_SLOT,
       label: renderView.worldName ?? "TIDEWEFT estuary",
       seed: world.meta.seedText,
-      updatedAt: Date.now(),
+      ...(saveGenerationEra === 0 ? {} : { saveGenerationEra }),
+      saveGeneration,
+      updatedAt: nextSaveTimestamp(),
       playTicks: world.meta.completedTick,
       settlementCount: world.settlements.length,
       connectedCount: world.routes.filter((route) => route.traceStrength >= 120_000).length,
@@ -1752,6 +2086,18 @@ export async function createTideweftRuntime(
     });
     startSaveWorker();
     return completion;
+  }
+
+  function nextSaveTimestamp(): number {
+    if (lastIssuedSaveTimestamp >= Number.MAX_SAFE_INTEGER) {
+      // A higher play tick can still supersede this pathological same-world
+      // record; deliberate replacement resets the clock inside a new generation.
+      return Number.MAX_SAFE_INTEGER;
+    }
+    const now = Date.now();
+    const safeNow = Number.isSafeInteger(now) && now >= 0 ? now : 0;
+    lastIssuedSaveTimestamp = Math.max(safeNow, lastIssuedSaveTimestamp + 1);
+    return lastIssuedSaveTimestamp;
   }
 
   function startSaveWorker(): void {
@@ -1772,7 +2118,15 @@ export async function createTideweftRuntime(
       try {
         await repository.save(candidate.record);
         settleSaveWaiters(candidate.sequence, false);
+        noteSaveSuccess(candidate.record, candidate.sequence);
       } catch (error) {
+        if (error instanceof StaleSaveWriteError || error instanceof ConflictingSaveCopiesError) {
+          noteStaleSave();
+          pendingSave = undefined;
+          settleSaveWaiters(saveSequence, true, error);
+          break;
+        }
+        noteSaveFailure();
         settleSaveWaiters(candidate.sequence, true, error);
       }
     }
@@ -1816,6 +2170,11 @@ export async function createTideweftRuntime(
   }
 
   function destroy(): void {
+    destroyed = true;
+    if (saveRetryTimer !== undefined) {
+      clearTimeout(saveRetryTimer);
+      saveRetryTimer = undefined;
+    }
     stop();
     soundscape.destroy();
   }
@@ -1837,17 +2196,97 @@ export async function createTideweftRuntime(
   };
 }
 
-async function loadAutosave(
-  repository: SaveRepository,
-): Promise<{
-  world: WorldState;
-  player: PlayerState;
-  session: GameSessionState;
-  fieldResources: FieldResourceEcologyState;
-} | undefined> {
+interface AutosaveVersion {
+  readonly saveGenerationEra: number;
+  readonly saveGeneration: number;
+  readonly updatedAt: number;
+  readonly playTicks: number;
+}
+
+type LoadedAutosave = {
+  readonly kind: "loaded";
+  readonly world: WorldState;
+  readonly player: PlayerState;
+  readonly session: GameSessionState;
+  readonly fieldResources: FieldResourceEcologyState;
+  readonly saveGenerationEra: number;
+  readonly saveGeneration: number;
+  readonly updatedAt: number;
+} | {
+  readonly kind: "corrupt";
+  readonly version: AutosaveVersion;
+} | {
+  readonly kind: "unavailable";
+  readonly version: AutosaveVersion;
+} | {
+  readonly kind: "conflict";
+  readonly version: AutosaveVersion;
+} | {
+  readonly kind: "read-failed";
+};
+
+function nextSaveGeneration(version: AutosaveVersion): {
+  readonly saveGenerationEra: number;
+  readonly saveGeneration: number;
+} | undefined {
+  if (version.saveGeneration < Number.MAX_SAFE_INTEGER) {
+    return {
+      saveGenerationEra: version.saveGenerationEra,
+      saveGeneration: version.saveGeneration + 1,
+    };
+  }
+  if (version.saveGenerationEra < Number.MAX_SAFE_INTEGER) {
+    return {
+      saveGenerationEra: version.saveGenerationEra + 1,
+      saveGeneration: 0,
+    };
+  }
+  return undefined;
+}
+
+async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave | undefined> {
+  let record: SaveRecord | undefined;
   try {
-    const record = await repository.load(AUTOSAVE_SLOT);
-    if (!record) return undefined;
+    record = await repository.load(AUTOSAVE_SLOT);
+  } catch (error) {
+    if (error instanceof NewerSaveUnavailableError) {
+      const latest = error.latestVersion;
+      const version: AutosaveVersion = {
+        saveGenerationEra: latest.saveGenerationEra ?? 0,
+        saveGeneration: latest.saveGeneration ?? 0,
+        updatedAt: latest.updatedAt,
+        playTicks: latest.playTicks,
+      };
+      return { kind: "unavailable", version };
+    }
+    if (error instanceof ConflictingSaveCopiesError) {
+      const latest = error.latestVersion;
+      const version: AutosaveVersion = {
+        saveGenerationEra: latest.saveGenerationEra ?? 0,
+        saveGeneration: latest.saveGeneration ?? 0,
+        updatedAt: latest.updatedAt,
+        playTicks: latest.playTicks,
+      };
+      return { kind: "conflict", version };
+    }
+    return { kind: "read-failed" };
+  }
+  if (!record) return undefined;
+  const version: AutosaveVersion = {
+    saveGenerationEra: record.saveGenerationEra ?? 0,
+    saveGeneration: record.saveGeneration ?? 0,
+    updatedAt: record.updatedAt,
+    playTicks: record.playTicks,
+  };
+  if (
+    !Number.isSafeInteger(version.saveGenerationEra) || version.saveGenerationEra < 0
+    || !Number.isSafeInteger(version.saveGeneration) || version.saveGeneration < 0
+    || !Number.isSafeInteger(version.updatedAt) || version.updatedAt < 0
+    || !Number.isSafeInteger(version.playTicks) || version.playTicks < 0
+  ) {
+    return undefined;
+  }
+  try {
     const decoded = JSON.parse(record.worldJson) as Partial<GameSaveEnvelope>;
     if (
       decoded.format !== "tideweft-session" ||
@@ -1856,9 +2295,19 @@ async function loadAutosave(
       !decoded.player ||
       !decoded.session
     ) {
-      return undefined;
+      throw new Error("Save contains an invalid session envelope");
     }
     const world = deserializeWorld(decoded.world);
+    // Ordering metadata is authoritative only when it describes the payload
+    // being adopted. A lying MAX_SAFE tick must not pin every later save.
+    if (record.playTicks !== world.meta.completedTick) {
+      throw new Error("Save metadata does not match the decoded world tick");
+    }
+    const loadedSession = normalizeLoadedSession(
+      decoded.session,
+      world.meta.seedText,
+      world.choirs.length,
+    );
     normalizePlayerCrafting(decoded.player, decoded.version === LEGACY_GAME_SAVE_VERSION);
     const catalog = runtimeFieldResourceCatalog(world);
     const fieldResources = decoded.version === GAME_SAVE_VERSION
@@ -1869,27 +2318,242 @@ async function loadAutosave(
     // asks playerTileIndex to derive that trace origin.
     decoded.player.worldWidth = world.terrain.width;
     decoded.player.worldHeight = world.terrain.height;
-    const legacyBaseline = decoded.session.sessionBaseline;
+    const legacyBaseline = loadedSession.sessionBaseline;
     if (legacyBaseline && !Number.isFinite(legacyBaseline.awakenedChoirs)) {
       legacyBaseline.awakenedChoirs = world.choirs.length;
     }
-    const repairedContractIds = repairInterruptedPickups(world, decoded.player, decoded.session);
+    const repairedContractIds = repairInterruptedPickups(world, decoded.player, loadedSession);
     if (repairedContractIds.length > 0) {
-      decoded.session.sessionChanges = Array.isArray(decoded.session.sessionChanges)
-        ? [...decoded.session.sessionChanges, "An interrupted cargo pickup was safely reset before any harbor stock moved."]
+      loadedSession.sessionChanges = Array.isArray(loadedSession.sessionChanges)
+        ? [...loadedSession.sessionChanges, "An interrupted cargo pickup was safely reset before any harbor stock moved."]
         : ["An interrupted cargo pickup was safely reset before any harbor stock moved."];
-      decoded.session.trackedContractId = repairedContractIds[0] ?? null;
+      loadedSession.trackedContractId = repairedContractIds[0] ?? null;
     }
     validatePlayer(decoded.player, world);
     return {
+      kind: "loaded",
       world,
       player: decoded.player,
-      session: decoded.session,
+      session: loadedSession,
       fieldResources,
+      saveGenerationEra: version.saveGenerationEra,
+      saveGeneration: version.saveGeneration,
+      updatedAt: record.updatedAt,
     };
   } catch {
-    return undefined;
+    return { kind: "corrupt", version };
   }
+}
+
+function normalizeLoadedSession(
+  value: unknown,
+  worldSeed: string,
+  legacyChoirCount: number,
+): GameSessionState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Save contains invalid session state");
+  }
+  const candidate = value as Partial<GameSessionState>;
+  const fallback = createSessionState(worldSeed, HARD_POSTURE, PERPETUAL_SESSION_SHAPE);
+  const tutorial = normalizeLoadedTutorial(candidate.tutorial);
+  const sessionChanges = candidate.sessionChanges === undefined
+    ? []
+    : Array.isArray(candidate.sessionChanges)
+      && candidate.sessionChanges.every((entry) => typeof entry === "string")
+      ? candidate.sessionChanges.slice(-32)
+      : invalidLoadedSession("changes");
+  const announcement = normalizeLoadedAnnouncement(candidate.announcement);
+  const sessionBaseline = normalizeLoadedBaseline(candidate.sessionBaseline, legacyChoirCount);
+  const posture = candidate.posture === "hearth"
+    || candidate.posture === "journey"
+    || candidate.posture === "gale"
+    ? candidate.posture
+    : candidate.posture === undefined
+      ? fallback.posture
+      : invalidLoadedSession("posture");
+  const sessionShape = candidate.sessionShape === "drift"
+    || candidate.sessionShape === "weave"
+    || candidate.sessionShape === "wander"
+    ? candidate.sessionShape
+    : candidate.sessionShape === undefined
+      ? fallback.sessionShape
+      : invalidLoadedSession("shape");
+  const pressureMode = candidate.pressureMode === "calm"
+    || candidate.pressureMode === "standard"
+    || candidate.pressureMode === "wild"
+    ? candidate.pressureMode
+    : candidate.pressureMode === undefined
+      ? fallback.pressureMode
+      : invalidLoadedSession("pressure");
+
+  return {
+    seed: optionalSessionString(candidate.seed, worldSeed, "seed"),
+    pressureMode,
+    posture,
+    sessionShape,
+    paused: optionalSessionBoolean(candidate.paused, fallback.paused, "paused"),
+    titleVisible: optionalSessionBoolean(candidate.titleVisible, fallback.titleVisible, "title visibility"),
+    quietHourVisible: optionalSessionBoolean(
+      candidate.quietHourVisible,
+      fallback.quietHourVisible,
+      "Quiet Hour visibility",
+    ),
+    selectedSettlementId: optionalSessionId(candidate.selectedSettlementId, "selected settlement"),
+    inspectedContractId: optionalSessionId(candidate.inspectedContractId, "inspected Promise"),
+    trackedContractId: optionalSessionId(candidate.trackedContractId, "tracked Promise"),
+    sessionStartedTick: optionalSessionCount(candidate.sessionStartedTick, 0, "start tick"),
+    sessionPlayMilliseconds: optionalSessionCount(
+      candidate.sessionPlayMilliseconds,
+      0,
+      "play time",
+    ),
+    sessionDistanceUnits: optionalSessionCount(candidate.sessionDistanceUnits, 0, "distance"),
+    sessionDeliveries: optionalSessionCount(candidate.sessionDeliveries, 0, "deliveries"),
+    sessionReportsDelivered: optionalSessionCount(
+      candidate.sessionReportsDelivered,
+      0,
+      "reports",
+    ),
+    sessionStrandsWoven: optionalSessionCount(candidate.sessionStrandsWoven, 0, "strands"),
+    sessionChoirsAwakened: optionalSessionCount(candidate.sessionChoirsAwakened, 0, "choirs"),
+    sessionDiscoveredAtStart: optionalSessionCount(
+      candidate.sessionDiscoveredAtStart,
+      0,
+      "charted marks",
+    ),
+    sessionBaseline,
+    closureOffered: optionalSessionBoolean(candidate.closureOffered, false, "closure"),
+    campaignCelebrated: optionalSessionBoolean(candidate.campaignCelebrated, false, "celebration"),
+    sessionChanges,
+    announcement,
+    nextAnnouncementId: optionalSessionCount(
+      candidate.nextAnnouncementId,
+      Math.max(1, (announcement?.id ?? 0) + 1),
+      "announcement counter",
+      1,
+    ),
+    tutorial,
+    hasSave: optionalSessionBoolean(candidate.hasSave, true, "save presence"),
+    continueSummary: optionalSessionString(candidate.continueSummary, "", "continue summary"),
+  };
+}
+
+function normalizeLoadedTutorial(value: unknown): GameSessionState["tutorial"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Save contains invalid tutorial state");
+  }
+  const candidate = value as Partial<GameSessionState["tutorial"]>;
+  const stages: readonly GameSessionState["tutorial"]["stage"][] = [
+    "move",
+    "scan",
+    "promise",
+    "travel",
+    "witness",
+    "complete",
+  ];
+  if (!stages.includes(candidate.stage as GameSessionState["tutorial"]["stage"])) {
+    throw new Error("Save contains invalid tutorial stage");
+  }
+  return {
+    stage: candidate.stage as GameSessionState["tutorial"]["stage"],
+    scansUsed: requiredSessionCount(candidate.scansUsed, "tutorial scans"),
+    acceptedPromises: requiredSessionCount(candidate.acceptedPromises, "tutorial Promises"),
+    witnessedChanges: requiredSessionCount(candidate.witnessedChanges, "tutorial changes"),
+    dismissed: candidate.dismissed === true
+      ? true
+      : candidate.dismissed === false
+        ? false
+        : invalidLoadedSession("tutorial dismissal"),
+  };
+}
+
+function normalizeLoadedAnnouncement(
+  value: unknown,
+): GameSessionState["announcement"] {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Save contains invalid announcement state");
+  }
+  const candidate = value as Partial<NonNullable<GameSessionState["announcement"]>>;
+  if (
+    !Number.isSafeInteger(candidate.id)
+    || (candidate.id ?? 0) < 1
+    || typeof candidate.message !== "string"
+    || typeof candidate.assertive !== "boolean"
+  ) {
+    throw new Error("Save contains invalid announcement state");
+  }
+  return {
+    id: candidate.id as number,
+    message: candidate.message,
+    assertive: candidate.assertive,
+  };
+}
+
+function normalizeLoadedBaseline(
+  value: unknown,
+  legacyChoirCount: number,
+): GameSessionState["sessionBaseline"] {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Save contains invalid session baseline");
+  }
+  const candidate = value as Partial<NonNullable<GameSessionState["sessionBaseline"]>>;
+  return {
+    completedTick: requiredSessionCount(candidate.completedTick, "baseline tick"),
+    activeRoutes: requiredSessionCount(candidate.activeRoutes, "baseline routes"),
+    resilience: requiredSessionMetric(candidate.resilience, "baseline resilience"),
+    averageStress: requiredSessionMetric(candidate.averageStress, "baseline stress"),
+    averageTrust: requiredSessionMetric(candidate.averageTrust, "baseline trust"),
+    projectProgress: requiredSessionMetric(candidate.projectProgress, "baseline projects"),
+    fulfilledContracts: requiredSessionCount(candidate.fulfilledContracts, "baseline Promises"),
+    awakenedChoirs: candidate.awakenedChoirs === undefined
+      ? legacyChoirCount
+      : requiredSessionCount(candidate.awakenedChoirs, "baseline choirs"),
+  };
+}
+
+function optionalSessionBoolean(value: unknown, fallback: boolean, field: string): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value === "boolean") return value;
+  return invalidLoadedSession(field);
+}
+
+function optionalSessionString(value: unknown, fallback: string, field: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value === "string") return value;
+  return invalidLoadedSession(field);
+}
+
+function optionalSessionId(value: unknown, field: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (Number.isSafeInteger(value) && (value as number) >= 0) return value as number;
+  return invalidLoadedSession(field);
+}
+
+function optionalSessionCount(
+  value: unknown,
+  fallback: number,
+  field: string,
+  minimum = 0,
+): number {
+  if (value === undefined) return fallback;
+  if (Number.isSafeInteger(value) && (value as number) >= minimum) return value as number;
+  return invalidLoadedSession(field);
+}
+
+function requiredSessionCount(value: unknown, field: string): number {
+  if (Number.isSafeInteger(value) && (value as number) >= 0) return value as number;
+  return invalidLoadedSession(field);
+}
+
+function requiredSessionMetric(value: unknown, field: string): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return invalidLoadedSession(field);
+}
+
+function invalidLoadedSession(field: string): never {
+  throw new Error(`Save contains invalid session ${field}`);
 }
 
 /**
@@ -2002,6 +2666,10 @@ function normalizePlayerCrafting(player: PlayerState, allowMissing: boolean): vo
   if (!Number.isSafeInteger(player.cargoCapacity) || player.cargoCapacity <= 0) {
     throw new Error("Save contains invalid pack capacity");
   }
+  // The Alpha pack grew from 16 to 18 shared load units. Raising the saved
+  // floor before rebuilding the structural inventory preserves every valid
+  // old stack/gear item while retaining any future capacity above the base.
+  player.cargoCapacity = Math.max(BASE_CARGO_CAPACITY, player.cargoCapacity);
   const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
   if (!Number.isSafeInteger(capacityMilli)) {
     throw new Error("Save contains invalid pack capacity");

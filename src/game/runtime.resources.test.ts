@@ -22,6 +22,7 @@ import {
   createCraftingInventory,
 } from "./crafting";
 import {
+  BASE_CARGO_CAPACITY,
   PACK_LOAD_MILLI_PER_UNIT,
   TILE_UNITS,
   createPlayer,
@@ -339,19 +340,22 @@ describe("runtime field-resource integration", () => {
     const node = catalog.nodes.find((candidate) => candidate.unitLoadMilli > PACK_LOAD_MILLI_PER_UNIT);
     if (!node) throw new Error("fixture needs a material heavier than one load unit");
     const player = createPlayer(view);
-    player.cargoCapacity = 1;
-    player.craftingInventory = createCraftingInventory(PACK_LOAD_MILLI_PER_UNIT);
+    player.craftingInventory = createCraftingInventory(
+      BASE_CARGO_CAPACITY * PACK_LOAD_MILLI_PER_UNIT,
+      { driftwood: 10 },
+    );
     placePlayerOnNode(player, node);
     const repository = new MemoryRepository(v2SaveRecord(world, player));
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
     const stockBefore = runtime.getRenderView().fieldResources
       .find((resource) => resource.id === node.id)?.stockUnits;
+    const carriedBefore = stackQuantity(runtime, node.material);
     const staminaBefore = runtime.getUIView().player.stamina;
 
     runtime.dispatchRenderer({ type: "interact" });
 
-    expect(stackQuantity(runtime, node.material)).toBe(0);
+    expect(stackQuantity(runtime, node.material)).toBe(carriedBefore);
     expect(runtime.getRenderView().fieldResources
       .find((resource) => resource.id === node.id)?.stockUnits).toBe(stockBefore);
     expect(runtime.getUIView().player.stamina).toBe(staminaBefore);
@@ -437,7 +441,7 @@ describe("runtime field-resource integration", () => {
       ["non-numeric quantity", { ...validCargo, quantity: "not-a-number" }],
       ["negative quantity", { ...validCargo, quantity: -1 }],
       ["fractional quantity", { ...validCargo, quantity: 1.5 }],
-      ["quantity beyond pack bounds", { ...validCargo, quantity: 17 }],
+      ["quantity beyond pack bounds", { ...validCargo, quantity: BASE_CARGO_CAPACITY + 1 }],
       ["negative contract ID", { ...validCargo, contractId: -1 }],
       ["unknown resource", { ...validCargo, resource: "moon-silt" }],
       ["mismatched light property", { ...validCargo, resource: "parts", property: "ordinary" }],
@@ -450,8 +454,19 @@ describe("runtime field-resource integration", () => {
       player.activeContractId = 1;
       const repository = new MemoryRepository(v2SaveRecord(world, player));
       const runtime = await createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning?.message, label).toBe("LOCAL AUTOSAVE UNREADABLE");
+      expect(runtime.getUIView().title.requiresSeed, label).toBe(true);
+      await expect(runtime.save()).rejects.toThrow("Choose a seed before replacing");
+      expect(repository.snapshot().seed, label).toBe(world.meta.seedText);
+      runtime.dispatchUI({
+        type: "new-world",
+        seed: `cargo recovery ${label}`,
+        posture: "gale",
+        sessionShape: "wander",
+      });
       await runtime.save();
-      expect(repository.snapshot().seed, label).toBe("quiet-delta");
+      expect(repository.snapshot().seed, label).toBe(`cargo recovery ${label}`);
+      expect(runtime.getUIView().saveWarning, label).toBeUndefined();
       expect(Number.isFinite(runtime.getUIView().kit?.combinedLoadMilli ?? Number.NaN), label)
         .toBe(true);
       runtime.destroy();
@@ -470,9 +485,19 @@ describe("runtime field-resource integration", () => {
     const repository = new MemoryRepository(v2SaveRecord(world, player));
 
     const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    await expect(runtime.save()).rejects.toThrow("Choose a seed before replacing");
+    expect(repository.snapshot().seed).toBe(world.meta.seedText);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "reserved gear recovery",
+      posture: "gale",
+      sessionShape: "wander",
+    });
     await runtime.save();
 
-    expect(repository.snapshot().seed).toBe("quiet-delta");
+    expect(repository.snapshot().seed).toBe("reserved gear recovery");
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
     expect(runtime.getUIView().kit?.gearRows.some((row) =>
       row.label.includes("Weather cape #6")
     )).toBe(false);
@@ -482,6 +507,7 @@ describe("runtime field-resource integration", () => {
   it("migrates v1 saves to an empty pack and ecology at the current active tick", async () => {
     const world = runTicks(createWorld("the old map wakes without a harvest", "calm"), 37);
     const player = createPlayer(createWorldView(world));
+    player.cargoCapacity = 16;
     const legacyPlayer = structuredClone(player) as Partial<PlayerState>;
     delete legacyPlayer.craftingInventory;
     delete legacyPlayer.nextCraftedGearId;
@@ -503,7 +529,34 @@ describe("runtime field-resource integration", () => {
     expect(Object.values(migrated.player.craftingInventory.stacks)
       .every((quantity) => quantity === 0)).toBe(true);
     expect(migrated.player.craftingInventory.gear).toEqual([]);
+    expect(migrated.player.cargoCapacity).toBe(BASE_CARGO_CAPACITY);
+    expect(migrated.player.craftingInventory.capacityMilliLoad).toBe(18_000);
     expect(migrated.player.nextCraftedGearId).toBe(7);
+    runtime.destroy();
+  });
+
+  it("raises an existing v2 Alpha pack to the new base without losing its contents", async () => {
+    const world = createWorld("the old pack finds two new pockets", "calm");
+    const player = createPlayer(createWorldView(world));
+    player.cargoCapacity = 16;
+    player.craftingInventory = createCraftingInventory(16_000, {
+      cordreed: 2,
+      pitchmoss: 1,
+    });
+    const repository = new MemoryRepository(v2SaveRecord(world, player));
+
+    const runtime = await createTideweftRuntime(repository);
+
+    expect(runtime.getUIView().player.cargoCapacity).toBe(BASE_CARGO_CAPACITY);
+    expect(runtime.getUIView().kit?.capacityMilli).toBe(18_000);
+    expect(stackQuantity(runtime, "cordreed")).toBe(2);
+    expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
+    await runtime.save();
+    const migrated = decodeV2(repository.snapshot());
+    expect(migrated.player.cargoCapacity).toBe(BASE_CARGO_CAPACITY);
+    expect(migrated.player.craftingInventory.capacityMilliLoad).toBe(18_000);
+    expect(migrated.player.craftingInventory.stacks.cordreed).toBe(2);
+    expect(migrated.player.craftingInventory.stacks.pitchmoss).toBe(1);
     runtime.destroy();
   });
 

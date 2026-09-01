@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   TIDEWEFT_TUTORIAL_GUIDE,
+  TUTORIAL_CONTENT_VERSION,
   TUTORIAL_CONTROLS,
   TUTORIAL_CONTROL_IDS,
   TUTORIAL_GUIDE_SECTIONS,
@@ -19,7 +20,8 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(4);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(6);
+    expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
     const contentIds = TUTORIAL_GUIDE_SECTIONS.flatMap((section) => [
@@ -39,6 +41,28 @@ describe("TIDEWEFT field-manual content", () => {
     expect(tutorialPageNumber("missing")).toBe(0);
     expect(tutorialSectionById("promises")?.shortTitle).toBe("Promises");
     expect(tutorialSectionById("missing")).toBeUndefined();
+  });
+
+  it("provides a real What's New action linked to the canonical offline notes", () => {
+    const whatsNew = tutorialSectionById("whats-new");
+    const copy = whatsNew === undefined
+      ? ""
+      : [
+          whatsNew.summary,
+          ...whatsNew.steps.map((step) => step.body),
+          ...whatsNew.callouts.map((callout) => callout.body),
+        ].join(" ");
+
+    expect(whatsNew?.shortTitle).toBe("What's New");
+    expect(whatsNew?.action).toEqual({
+      id: "open-patch-notes",
+      label: "OPEN PATCH NOTES",
+      description: expect.stringContaining("offline Patch Notes"),
+    });
+    expect(copy).toContain("CHANGELOG.md");
+    expect(copy).toContain("A CHALLENGING HARD");
+    expect(copy).toContain("dispatches no simulation or save command");
+    expect(copy).toContain("world continues underneath");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -102,6 +126,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileCopy).toContain("compact safety line");
     expect(mobileCopy).toContain("Press and keep holding BRACE");
     expect(mobileCopy).toContain("interrupted touch releases it automatically");
+    expect(mobileCopy).toContain("place two fingers on the world and twist");
+    expect(mobileCopy).toContain("cannot accidentally set a destination");
+    expect(mobileCopy).toContain("always points toward world north");
     expect(mobileCopy).toContain("dedicated Tutorial control");
     expect(mobileCopy).not.toContain("Shift-click appends");
     expect(mobileCopy).not.toContain("Right-drag or Alt-drag");
@@ -112,7 +139,29 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileControls.some((control) => control.id === "tutorial-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "kit-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "brace-button")).toBe(true);
+    expect(mobileControls.some((control) => control.id === "relief-touch-orbit")).toBe(true);
+    expect(mobileControls.some((control) => control.id === "relief-orbit")).toBe(false);
     expect(mobileControls.some((control) => control.id === "brace-key")).toBe(false);
+  });
+
+  it("teaches smooth desktop orbit and a truthful presentation-only compass", () => {
+    const views = tutorialSectionById("views-and-hud");
+    const copy = views === undefined
+      ? ""
+      : [
+          views.summary,
+          ...views.steps.map((step) => step.body),
+          ...views.callouts.map((callout) => callout.body),
+        ].join(" ");
+    const desktopControls = tutorialControlsForAudience("desktop");
+
+    expect(tutorialControlById("relief-orbit")?.input).toContain("J / L");
+    expect(desktopControls.some((control) => control.id === "relief-orbit")).toBe(true);
+    expect(desktopControls.some((control) => control.id === "relief-touch-orbit")).toBe(false);
+    expect(copy).toContain("Hold J to spin the map left or L to spin it right");
+    expect(copy).toContain("Chart stays north-up");
+    expect(copy).toContain("always points toward world north");
+    expect(copy).toContain("currents and the courier keep their actual simulation directions");
   });
 
   it("teaches reports, stability causes, depth sounding, currents, sweep recovery, and field systems", () => {
@@ -139,6 +188,35 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Tide anchor");
     expect(copy).toContain("Wind knot");
     expect(copy).toContain("Tide Harp");
+  });
+
+  it("teaches hard-only automatic resume and the guarded restart phrase", () => {
+    const saves = tutorialSectionById("saves-and-quiet-hour");
+    const copy = saves?.steps.flatMap((step) => [step.title, step.body]).join(" ") ?? "";
+
+    expect(copy).toContain("enters that same estuary automatically");
+    expect(copy).toContain("no difficulty selector");
+    expect(copy).toContain("A CHALLENGING HARD");
+    expect(copy).toContain("18.000 combined-capacity floor");
+    expect(copy).toContain("restartrestartrestart");
+    expect(copy).toContain("only unlocks the seed field");
+    expect(copy).toContain("non-empty new seed phrase");
+    expect(copy).toContain("blank seed changes nothing");
+    expect(copy).toContain("LOCAL SAVE NOT STORED");
+    expect(copy).toContain("title, Quiet Hour, KIT, tutorial, or Patch Notes");
+    expect(copy).toContain("bounded backoff");
+    expect(copy).toContain("fresh snapshot");
+    expect(copy).toContain("LOCAL SAVE RESTORED");
+    expect(copy).toContain("UNREADABLE or CONFLICT");
+    expect(copy).toContain("enters neither one");
+    expect(copy).toContain("non-empty seed phrase is required");
+    expect(copy).toContain("different or newer durable copy");
+    expect(copy).toContain("blocks writes");
+    expect(copy).toContain("clear Tideweft's stored site data");
+    expect(copy).toContain("either configured storage backend cannot be read");
+    expect(copy).toContain("copy—or absence—is authoritative");
+    expect(copy).toContain("disables Continue, seed creation, and restart");
+    expect(copy).toContain("performs no write");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {

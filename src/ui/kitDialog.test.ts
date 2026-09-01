@@ -4,6 +4,7 @@ import {
   KIT_DIALOG_ID,
   KIT_DIALOG_PANEL_ID,
   KIT_DIALOG_SCROLL_REGION_ID,
+  KIT_FALLBACK_CAPACITY_MILLI,
   KIT_MINIMUM_TARGET_CSS_PIXELS,
   KIT_TABS,
   formatKitMilliLoad,
@@ -83,6 +84,7 @@ describe("KIT dialog presentation contract", () => {
     expect(KIT_DIALOG_PANEL_ID).toBe("tideweft-kit-panel");
     expect(KIT_DIALOG_SCROLL_REGION_ID).toBe("tideweft-kit-scroll-region");
     expect(KIT_MINIMUM_TARGET_CSS_PIXELS).toBe(44);
+    expect(KIT_FALLBACK_CAPACITY_MILLI).toBe(18_000);
   });
 
   it("moves through tabs with wrapping arrows and Home / End", () => {

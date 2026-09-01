@@ -28,7 +28,7 @@ const SMOKE_MINIMUM_VIEWPORT = Object.freeze({ width: 960, height: 640 });
 const SMOKE_RESPONSIVE_VIEWPORT = Object.freeze({ width: 927, height: 640 });
 const SMOKE_PHONE_VIEWPORT = Object.freeze({ width: 700, height: 640 });
 const SMOKE_COMPACT_PHONE_VIEWPORT = Object.freeze({ width: 360, height: 640 });
-const SMOKE_NARROW_PHONE_VIEWPORT = Object.freeze({ width: 390, height: 700 });
+const SMOKE_NARROW_PHONE_VIEWPORT = Object.freeze({ width: 320, height: 640 });
 const SMOKE_LANDSCAPE_PHONE_VIEWPORT = Object.freeze({ width: 844, height: 390 });
 const SMOKE_SCREENSHOT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const SMOKE_REQUESTED =
@@ -376,8 +376,22 @@ function rendererProbeScript() {
     const title = document.querySelector('.title-dialog');
     const titleContent = document.querySelector('.title-dialog__content');
     const titleHeading = document.querySelector('.title-dialog__heading');
+    const restartForm = document.querySelector('.restart-form');
+    const restartInput = document.querySelector('#restart-phrase');
     const newWorldForm = document.querySelector('.new-world-form');
     const beginWorldButton = newWorldForm?.querySelector('button[type="submit"]') || null;
+    const hardRules = newWorldForm?.querySelector('.new-world-form__rules') || null;
+    const continueWorldButton = document.querySelector('.continue-card');
+    const quietDialog = document.querySelector('.quiet-dialog');
+    const quietFinishButton = quietDialog?.querySelector('.text-button--primary') || null;
+    const titlePatchNotesButton = title?.querySelector('.patch-notes-trigger') || null;
+    const quietPatchNotesButton = quietDialog?.querySelector('.patch-notes-trigger') || null;
+    const patchNotesDialog = document.querySelector('.patch-notes-dialog');
+    const patchNotesContent = patchNotesDialog?.querySelector('.patch-notes-dialog__content') || null;
+    const patchNotesScroll = patchNotesDialog?.querySelector('.patch-notes-dialog__scroll') || null;
+    const patchNotesClose = patchNotesDialog?.querySelector('[data-patch-action="close"]') || null;
+    const patchNoteReleases = Array.from(patchNotesDialog?.querySelectorAll('.patch-release') || []);
+    const patchNoteCategories = Array.from(patchNotesDialog?.querySelectorAll('.patch-category') || []);
     const canvases = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'));
     const bridge = window.__TIDEWEFT__;
     const runtime = bridge && bridge.runtime;
@@ -410,6 +424,9 @@ function rendererProbeScript() {
       ? renderer.canvas()
       : null;
     const viewButton = document.querySelector('#view-mode-toggle');
+    const worldCompass = document.querySelector('.world-compass');
+    const worldCompassNorth = worldCompass?.querySelector('.world-compass__north') || null;
+    const worldCompassArrow = worldCompass?.querySelector('.world-compass__arrow') || null;
     const objectivePanel = document.querySelector('.objective-panel');
     const leftRail = document.querySelector('.left-rail');
     const hudBar = document.querySelector('.hud-bar');
@@ -424,8 +441,10 @@ function rendererProbeScript() {
     const mobileActions = document.querySelector('.mobile-field-strip__actions');
     const mobileVitals = Array.from(document.querySelectorAll('.mobile-vital')).map((vital) => {
       const progress = vital.querySelector('progress');
+      const label = vital.querySelector('.mobile-vital__label');
       return {
-        label: vital.querySelector('.mobile-vital__label')?.textContent?.trim() || null,
+        label: label?.textContent?.trim() || null,
+        labelVisible: visiblyIntersectsViewport(label),
         value: vital.querySelector('.mobile-vital__value')?.textContent?.trim() || null,
         visible: visiblyIntersectsViewport(vital),
         insideViewport: whollyInsideViewport(vital),
@@ -445,6 +464,7 @@ function rendererProbeScript() {
     const tutorialPrevious = document.querySelector('[data-tutorial-action="previous"]');
     const tutorialNext = document.querySelector('[data-tutorial-action="next"]');
     const tutorialClose = document.querySelector('[data-tutorial-action="close"]');
+    const tutorialPageAction = document.querySelector('[data-tutorial-action="open-patch-notes"]');
     const mobileKitButton = document.querySelector('.mobile-kit-button');
     const kitDialog = document.querySelector('.kit-dialog');
     const kitContent = document.querySelector('.kit-dialog__content');
@@ -590,23 +610,89 @@ function rendererProbeScript() {
       statusState: status ? status.getAttribute('data-state') : null,
       statusText: status ? status.textContent : null,
       hasRuntime: Boolean(runtime),
+      release: bridge
+        ? {
+            version: bridge.version || null,
+            buildIdentity: bridge.buildIdentity || null,
+            gameplayContract: bridge.gameplayContract || null,
+          }
+        : null,
       uiReady: shell ? shell.getAttribute('data-ready') : null,
       titleOpen: Boolean(title && title.open),
       titleLayout: {
         dialog: rectOf(title),
         content: rectOf(titleContent),
         heading: rectOf(titleHeading),
+        restartForm: rectOf(restartForm),
         form: rectOf(newWorldForm),
         beginButton: rectOf(beginWorldButton),
         contentVisible: visiblyIntersectsViewport(titleContent),
         headingVisible: visiblyIntersectsViewport(titleHeading),
+        restartFormVisible: visiblyIntersectsViewport(restartForm),
+        restartInputVisible: visiblyIntersectsViewport(restartInput),
         formVisible: visiblyIntersectsViewport(newWorldForm),
         beginButtonVisible: visiblyIntersectsViewport(beginWorldButton),
+        continueButtonVisible: visiblyIntersectsViewport(continueWorldButton),
+        hardRulesVisible: visiblyIntersectsViewport(hardRules),
+        hardRulesText: hardRules?.textContent?.trim() || null,
+        patchNotesTrigger: {
+          ...targetProbe(titlePatchNotesButton),
+          text: titlePatchNotesButton?.textContent?.trim() || null,
+          ariaControls: titlePatchNotesButton?.getAttribute('aria-controls') || null,
+          ariaHasPopup: titlePatchNotesButton?.getAttribute('aria-haspopup') || null,
+          focused: document.activeElement === titlePatchNotesButton,
+        },
+        postureSelectorCount: document.querySelectorAll('input[name="posture"]').length,
+        sessionShapeSelectorCount: document.querySelectorAll('input[name="session-shape"]').length,
         clientHeight: title instanceof HTMLElement ? title.clientHeight : null,
         scrollHeight: title instanceof HTMLElement ? title.scrollHeight : null,
         overflowY: title instanceof Element ? getComputedStyle(title).overflowY : null,
       },
       paused: renderView ? Boolean(renderView.paused) : null,
+      quietHour: {
+        open: quietDialog instanceof HTMLDialogElement ? quietDialog.open : null,
+        dialogVisible: visiblyIntersectsViewport(quietDialog),
+        dialogInsideViewport: whollyInsideViewport(quietDialog),
+        finishVisible: visiblyIntersectsViewport(quietFinishButton),
+        finishInsideViewport: whollyInsideViewport(quietFinishButton),
+        finishRect: rectOf(quietFinishButton),
+        finishDisabled: quietFinishButton instanceof HTMLButtonElement
+          ? quietFinishButton.disabled
+          : null,
+        patchNotesTrigger: {
+          ...targetProbe(quietPatchNotesButton),
+          text: quietPatchNotesButton?.textContent?.trim() || null,
+          ariaControls: quietPatchNotesButton?.getAttribute('aria-controls') || null,
+          ariaHasPopup: quietPatchNotesButton?.getAttribute('aria-haspopup') || null,
+        },
+      },
+      patchNotes: {
+        open: patchNotesDialog instanceof HTMLDialogElement ? patchNotesDialog.open : null,
+        source: patchNotesDialog?.getAttribute('data-open-source') || null,
+        latestVersion: patchNotesDialog?.getAttribute('data-latest-version') || null,
+        latestBuild: patchNotesDialog?.getAttribute('data-latest-build') || null,
+        dialog: targetProbe(patchNotesDialog),
+        content: targetProbe(patchNotesContent),
+        close: {
+          ...targetProbe(patchNotesClose),
+          ariaLabel: patchNotesClose?.getAttribute('aria-label') || null,
+        },
+        scroll: {
+          ...targetProbe(patchNotesScroll),
+          ariaLabel: patchNotesScroll?.getAttribute('aria-label') || null,
+          tabIndex: patchNotesScroll instanceof HTMLElement ? patchNotesScroll.tabIndex : null,
+          clientHeight: patchNotesScroll instanceof HTMLElement ? patchNotesScroll.clientHeight : null,
+          scrollHeight: patchNotesScroll instanceof HTMLElement ? patchNotesScroll.scrollHeight : null,
+          scrollTop: patchNotesScroll instanceof HTMLElement ? patchNotesScroll.scrollTop : null,
+          overflowY: patchNotesScroll ? getComputedStyle(patchNotesScroll).overflowY : null,
+        },
+        releaseCount: patchNoteReleases.length,
+        categoryCount: patchNoteCategories.length,
+        newestFirst: patchNoteReleases[0]?.getAttribute('data-latest') === 'true',
+        hasKnownLimitations: patchNoteCategories.some(
+          (category) => category.getAttribute('data-category') === 'knownLimitations'
+        ),
+      },
       tick: renderView && Number.isFinite(renderView.tick) ? renderView.tick : null,
       worldName: renderView ? renderView.worldName : null,
       surfaceCurrent: renderView?.tide?.surfaceCurrent &&
@@ -727,6 +813,20 @@ function rendererProbeScript() {
             disabled: viewButton instanceof HTMLButtonElement ? viewButton.disabled : null,
             current: viewButton.querySelector('[data-view-mode-current]')?.textContent || null,
             next: viewButton.querySelector('[data-view-mode-next]')?.textContent || null,
+          }
+        : null,
+      compass: worldCompass
+        ? {
+            visible: visiblyIntersectsViewport(worldCompass),
+            insideViewport: whollyInsideViewport(worldCompass),
+            rect: rectOf(worldCompass),
+            pointerEvents: getComputedStyle(worldCompass).pointerEvents,
+            viewMode: worldCompass.getAttribute('data-view-mode'),
+            angle: getComputedStyle(worldCompass).getPropertyValue('--world-north-angle').trim(),
+            ariaLabel: worldCompass.getAttribute('aria-label'),
+            role: worldCompass.getAttribute('role'),
+            north: worldCompassNorth?.textContent?.trim() || null,
+            arrow: worldCompassArrow?.textContent?.trim() || null,
           }
         : null,
       promises: {
@@ -922,6 +1022,13 @@ function rendererProbeScript() {
           rect: rectOf(control),
           disabled: control instanceof HTMLButtonElement ? control.disabled : null,
         })),
+        pageAction: {
+          ...targetProbe(tutorialPageAction),
+          text: tutorialPageAction?.textContent?.trim() || null,
+          ariaControls: tutorialPageAction?.getAttribute('aria-controls') || null,
+          ariaHasPopup: tutorialPageAction?.getAttribute('aria-haspopup') || null,
+          focused: document.activeElement === tutorialPageAction,
+        },
       },
       kit: {
         trigger: mobileKitButton
@@ -1059,6 +1166,77 @@ function rendererProbeScript() {
 
 async function readRendererProbe(contents) {
   return contents.executeJavaScript(rendererProbeScript(), true);
+}
+
+function probeHasOpenPatchNotes(probe, source) {
+  const notes = probe?.patchNotes;
+  return Boolean(
+    notes?.open === true &&
+    notes.source === source &&
+    notes.latestVersion === '0.3.1-alpha.0' &&
+    notes.latestBuild === '0.3.1-alpha.0' &&
+    notes.dialog?.visible === true &&
+    notes.dialog.insideViewport === true &&
+    notes.content?.visible === true &&
+    notes.content.insideViewport === true &&
+    notes.close?.visible === true &&
+    notes.close.insideViewport === true &&
+    notes.close.rect?.width >= 44 &&
+    notes.close.rect?.height >= 44 &&
+    notes.close.ariaLabel?.includes('Close Patch Notes') &&
+    notes.scroll?.visible === true &&
+    notes.scroll.insideViewport === true &&
+    notes.scroll.tabIndex === 0 &&
+    notes.scroll.clientHeight >= 96 &&
+    notes.scroll.scrollHeight > notes.scroll.clientHeight &&
+    (notes.scroll.overflowY === 'auto' || notes.scroll.overflowY === 'scroll') &&
+    notes.scroll.ariaLabel?.includes('newest release first') &&
+    notes.releaseCount >= 2 &&
+    notes.categoryCount >= 12 &&
+    notes.newestFirst === true &&
+    notes.hasKnownLimitations === true
+  );
+}
+
+async function verifySmokeTitlePatchNotes(contents) {
+  const opened = await contents.executeJavaScript(`(() => {
+    const title = document.querySelector('.title-dialog');
+    const button = title?.querySelector('.patch-notes-trigger');
+    if (!(title instanceof HTMLDialogElement) || !title.open ||
+        !(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!opened) throw new Error('the title Patch Notes trigger was unavailable');
+  const open = await waitForRenderer(
+    contents,
+    (probe) => probe.titleOpen === false && probeHasOpenPatchNotes(probe, 'title'),
+    SMOKE_TEST.timeoutMs,
+  );
+  const scrolled = await contents.executeJavaScript(`(() => {
+    const scroll = document.querySelector('.patch-notes-dialog__scroll');
+    if (!(scroll instanceof HTMLElement) || scroll.scrollHeight <= scroll.clientHeight) return false;
+    scroll.scrollTop = scroll.scrollHeight;
+    scroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+    return scroll.scrollTop > 0;
+  })()`, true);
+  if (!scrolled) throw new Error('the offline Patch Notes ledger could not scroll');
+  const closed = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('[data-patch-action="close"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!closed) throw new Error('the title Patch Notes dialog could not close');
+  const returned = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === true &&
+      probe.patchNotes?.open === false &&
+      probe.titleLayout?.patchNotesTrigger?.focused === true,
+    SMOKE_TEST.timeoutMs,
+  );
+  return { open, returned };
 }
 
 async function readGpuDiagnostics(contents) {
@@ -1366,19 +1544,70 @@ async function installSmokeTideHarpFixture(contents) {
   await waitForRenderer(
     contents,
     (probe) =>
-      probe.titleOpen === true &&
+      probe.titleOpen === false &&
+      probe.paused === false &&
       probe.worldName === SMOKE_WORLD_NAME &&
       probe.hasRuntime === true &&
       probe.uiReady === 'true',
     SMOKE_TEST.timeoutMs,
   );
-  const continued = await contents.executeJavaScript(`(() => {
-    const button = document.querySelector('.continue-card');
-    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
-    button.click();
+  const openedResetGate = await contents.executeJavaScript(`(() => {
+    const runtime = window.__TIDEWEFT__ && window.__TIDEWEFT__.runtime;
+    if (!runtime || typeof runtime.dispatchUI !== 'function') return false;
+    runtime.dispatchUI({ type: 'open-title' });
     return true;
   })()`, true);
-  if (!continued) throw new Error('the validated Tide Harp fixture did not expose Continue');
+  if (!openedResetGate) throw new Error('the auto-resumed fixture could not open its guarded title');
+  await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === true &&
+      probe.titleLayout?.restartFormVisible === true &&
+      probe.titleLayout?.restartInputVisible === true &&
+      probe.titleLayout?.formVisible === false,
+    SMOKE_TEST.timeoutMs,
+  );
+  const resetGate = await contents.executeJavaScript(`(() => {
+    const restartForm = document.querySelector('.restart-form');
+    const restartInput = document.querySelector('#restart-phrase');
+    const newWorldForm = document.querySelector('.new-world-form');
+    const seedInput = document.querySelector('#world-seed');
+    const title = document.querySelector('.title-dialog');
+    const runtime = window.__TIDEWEFT__?.runtime;
+    if (!(restartForm instanceof HTMLFormElement) ||
+        !(restartInput instanceof HTMLInputElement) ||
+        !(newWorldForm instanceof HTMLFormElement) ||
+        !(seedInput instanceof HTMLInputElement)) return null;
+    restartInput.value = 'restartrestart';
+    restartForm.requestSubmit();
+    const wrongPhraseKeptLocked = newWorldForm.hidden === true;
+    restartInput.value = 'restartrestartrestart';
+    restartForm.requestSubmit();
+    const exactPhraseUnlocked = newWorldForm.hidden === false;
+    const seedRequired = seedInput.required === true;
+    const worldBeforeBlank = runtime?.getRenderView?.()?.worldName;
+    seedInput.value = '';
+    newWorldForm.requestSubmit();
+    const blankSeedRejected =
+      title instanceof HTMLDialogElement &&
+      title.open === true &&
+      newWorldForm.hidden === false &&
+      runtime?.getRenderView?.()?.worldName === worldBeforeBlank;
+    const continued = document.querySelector('.continue-card');
+    if (continued instanceof HTMLButtonElement && !continued.disabled) continued.click();
+    return { wrongPhraseKeptLocked, exactPhraseUnlocked, seedRequired, blankSeedRejected };
+  })()`, true);
+  if (!resetGate?.wrongPhraseKeptLocked ||
+      !resetGate?.exactPhraseUnlocked ||
+      !resetGate?.seedRequired ||
+      !resetGate?.blankSeedRejected) {
+    throw new Error(`saved-world restart gate failed: ${JSON.stringify(resetGate)}`);
+  }
+  await waitForRenderer(
+    contents,
+    (probe) => probe.titleOpen === false && probe.paused === false,
+    SMOKE_TEST.timeoutMs,
+  );
   return fixture;
 }
 
@@ -1500,6 +1729,24 @@ function probeHasActiveRenderer(probe, expectedRenderer) {
     canvas.renderer === expectedRenderer
       ? canvas.active === true && canvas.hidden === false && canvas.clientWidth > 0 && canvas.clientHeight > 0
       : canvas.active === false && canvas.hidden === true,
+  ) && probeHasWorldCompass(probe, expectedRenderer);
+}
+
+function probeHasWorldCompass(probe, expectedMode) {
+  const compass = probe?.compass;
+  const angle = Number.parseFloat(compass?.angle || '');
+  return Boolean(
+    compass &&
+    compass.visible === true &&
+    compass.insideViewport === true &&
+    compass.pointerEvents === 'none' &&
+    compass.viewMode === expectedMode &&
+    compass.role === 'img' &&
+    compass.north === 'N' &&
+    compass.arrow === '↑' &&
+    compass.ariaLabel?.toLowerCase().includes('north') &&
+    Number.isFinite(angle) &&
+    (expectedMode !== 'chart-2d' || Math.abs(angle) < 0.001),
   );
 }
 
@@ -1559,6 +1806,7 @@ function probeHasMobileHudFrame(probe) {
     vitals.every((vital) =>
       vital.visible === true &&
       vital.insideViewport === true &&
+      vital.labelVisible === true &&
       typeof vital.value === 'string' &&
       vital.value.length > 0 &&
       vital.progress &&
@@ -1902,6 +2150,52 @@ async function advanceSmokeTutorial(contents, previousPageId) {
   );
 }
 
+async function verifySmokeTutorialPatchNotes(contents) {
+  const ready = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasOpenMobileTutorial(probe) &&
+      probe.tutorial.pageId === 'whats-new' &&
+      probe.tutorial.pageAction?.visible === true &&
+      probe.tutorial.pageAction.insideViewport === true &&
+      probe.tutorial.pageAction.rect?.width >= 44 &&
+      probe.tutorial.pageAction.rect?.height >= 44 &&
+      probe.tutorial.pageAction.text === 'OPEN PATCH NOTES' &&
+      probe.tutorial.pageAction.ariaControls === 'tideweft-patch-notes' &&
+      probe.tutorial.pageAction.ariaHasPopup === 'dialog',
+    SMOKE_TEST.timeoutMs,
+  );
+  const opened = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('[data-tutorial-action="open-patch-notes"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!opened) throw new Error("the field manual's What's New Patch Notes action was unavailable");
+  const notes = await waitForRenderer(
+    contents,
+    (probe) => probe.tutorial?.open === false && probeHasOpenPatchNotes(probe, 'tutorial'),
+    SMOKE_TEST.timeoutMs,
+  );
+  const closed = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('[data-patch-action="close"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!closed) throw new Error("the field manual's Patch Notes dialog could not close");
+  const returned = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasOpenMobileTutorial(probe) &&
+      probe.tutorial.pageId === 'whats-new' &&
+      probe.patchNotes?.open === false &&
+      probe.tutorial.pageAction?.focused === true,
+    SMOKE_TEST.timeoutMs,
+  );
+  return { ready, notes, returned };
+}
+
 async function closeSmokeTutorialWithKeyboard(contents) {
   const dispatched = await contents.executeJavaScript(`(() => {
     document.dispatchEvent(new KeyboardEvent('keydown', {
@@ -1992,6 +2286,145 @@ async function toggleSmokeView(contents, expectedMode) {
       probeHasViewButtonMode(probe, expectedMode),
     SMOKE_TEST.timeoutMs,
   );
+}
+
+async function rotateSmokeReliefWithKey(contents) {
+  const before = await readRendererProbe(contents);
+  if (!probeHasWorldCompass(before, 'relief-3d')) {
+    throw new Error(`Relief compass was not ready before J/L rotation: ${JSON.stringify(before?.compass)}`);
+  }
+  const beforeAngle = Number.parseFloat(before.compass.angle);
+  const pressed = await contents.executeJavaScript(`(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'l',
+      code: 'KeyL',
+      bubbles: true,
+      cancelable: true,
+    }));
+    return true;
+  })()`, true);
+  if (!pressed) throw new Error('the Relief L rotation key could not be pressed');
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  await contents.executeJavaScript(`(() => {
+    window.dispatchEvent(new KeyboardEvent('keyup', {
+      key: 'l',
+      code: 'KeyL',
+      bubbles: true,
+      cancelable: true,
+    }));
+    return true;
+  })()`, true);
+  return waitForRenderer(
+    contents,
+    (probe) => {
+      const angle = Number.parseFloat(probe?.compass?.angle || '');
+      return probeHasActiveRenderer(probe, 'relief-3d') &&
+        Number.isFinite(angle) &&
+        Math.abs(angle - beforeAngle) >= 1;
+    },
+    SMOKE_TEST.timeoutMs,
+  );
+}
+
+async function verifySmokeMobileQuietHourTitlePath(contents) {
+  const opened = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.quiet-button');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!opened) throw new Error('the compact Quiet Hour control could not be opened');
+  const quiet = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === false &&
+      probe.paused === true &&
+      probe.quietHour?.open === true &&
+      probe.quietHour.dialogVisible === true &&
+      probe.quietHour.dialogInsideViewport === true &&
+      probe.quietHour.finishVisible === true &&
+      probe.quietHour.finishInsideViewport === true &&
+      probe.quietHour.finishRect?.width >= 44 &&
+      probe.quietHour.finishRect?.height >= 44 &&
+      probe.quietHour.finishDisabled === false &&
+      probe.quietHour.patchNotesTrigger?.visible === true &&
+      probe.quietHour.patchNotesTrigger.insideViewport === true &&
+      probe.quietHour.patchNotesTrigger.rect?.width >= 44 &&
+      probe.quietHour.patchNotesTrigger.rect?.height >= 44 &&
+      probe.quietHour.patchNotesTrigger.text === 'PATCH NOTES' &&
+      probe.quietHour.patchNotesTrigger.ariaControls === 'tideweft-patch-notes' &&
+      probe.quietHour.patchNotesTrigger.ariaHasPopup === 'dialog',
+    SMOKE_TEST.timeoutMs,
+  );
+  const openedPatchNotes = await contents.executeJavaScript(`(() => {
+    const dialog = document.querySelector('.quiet-dialog');
+    const button = dialog?.querySelector('.patch-notes-trigger');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!openedPatchNotes) throw new Error('Quiet Hour could not open Patch Notes');
+  const patchNotes = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.paused === true &&
+      probe.quietHour?.open === false &&
+      probeHasOpenPatchNotes(probe, 'quiet-hour'),
+    SMOKE_TEST.timeoutMs,
+  );
+  const closedPatchNotes = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('[data-patch-action="close"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!closedPatchNotes) throw new Error('Quiet Hour Patch Notes could not close');
+  const patchNotesReturned = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.paused === true &&
+      probe.quietHour?.open === true &&
+      probe.patchNotes?.open === false,
+    SMOKE_TEST.timeoutMs,
+  );
+  const finished = await contents.executeJavaScript(`(() => {
+    const dialog = document.querySelector('.quiet-dialog');
+    const button = dialog?.querySelector('.text-button--primary');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!finished) throw new Error('Quiet Hour could not return the compact player to the title');
+  const title = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === true &&
+      probe.paused === true &&
+      probe.quietHour?.open === false &&
+      probe.titleLayout?.contentVisible === true &&
+      probe.titleLayout?.restartFormVisible === true &&
+      probe.titleLayout?.restartInputVisible === true &&
+      probe.titleLayout?.formVisible === false &&
+      probe.titleLayout?.continueButtonVisible === true,
+    SMOKE_TEST.timeoutMs,
+  );
+  const resumed = await contents.executeJavaScript(`(() => {
+    const button = document.querySelector('.continue-card');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+    button.click();
+    return true;
+  })()`, true);
+  if (!resumed) throw new Error('the saved title could not return to the compact world');
+  const returned = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === false &&
+      probe.paused === false &&
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasCollapsedMobileHud(probe),
+    SMOKE_TEST.timeoutMs,
+  );
+  return { quiet, patchNotes, patchNotesReturned, title, returned };
 }
 
 async function resizeSmokeViewport(window, size, predicate) {
@@ -2114,12 +2547,30 @@ async function runProductionSmoke(window) {
   await new Promise((resolve) => setTimeout(resolve, 120));
   const paintedTitleProbe = await readRendererProbe(contents);
   if (
+    paintedTitleProbe.release?.version !== '0.3.1-alpha.0' ||
+    paintedTitleProbe.release?.buildIdentity !== '0.3.1-alpha.0' ||
+    paintedTitleProbe.release?.gameplayContract?.id !== 'challenging-hard' ||
+    paintedTitleProbe.release?.gameplayContract?.name !== 'A CHALLENGING HARD' ||
+    paintedTitleProbe.release?.gameplayContract?.version !== 6 ||
     paintedTitleProbe.titleOpen !== true ||
     paintedTitleProbe.titleLayout?.contentVisible !== true ||
-    paintedTitleProbe.titleLayout?.beginButtonVisible !== true
+    paintedTitleProbe.titleLayout?.beginButtonVisible !== true ||
+    paintedTitleProbe.titleLayout?.continueButtonVisible !== false ||
+    paintedTitleProbe.titleLayout?.hardRulesVisible !== true ||
+    !paintedTitleProbe.titleLayout?.hardRulesText?.includes('ONE RULESET · A CHALLENGING HARD') ||
+    paintedTitleProbe.titleLayout?.patchNotesTrigger?.visible !== true ||
+    paintedTitleProbe.titleLayout?.patchNotesTrigger?.insideViewport !== true ||
+    paintedTitleProbe.titleLayout?.patchNotesTrigger?.rect?.width < 44 ||
+    paintedTitleProbe.titleLayout?.patchNotesTrigger?.rect?.height < 44 ||
+    paintedTitleProbe.titleLayout?.patchNotesTrigger?.text !== 'PATCH NOTES' ||
+    paintedTitleProbe.titleLayout?.patchNotesTrigger?.ariaControls !== 'tideweft-patch-notes' ||
+    paintedTitleProbe.titleLayout?.patchNotesTrigger?.ariaHasPopup !== 'dialog' ||
+    paintedTitleProbe.titleLayout?.postureSelectorCount !== 0 ||
+    paintedTitleProbe.titleLayout?.sessionShapeSelectorCount !== 0
   ) {
     throw new Error(`title screen was not visibly painted: ${JSON.stringify(paintedTitleProbe.titleLayout)}`);
   }
+  const titlePatchNotesProbe = await verifySmokeTitlePatchNotes(contents);
   const titleScreenshot = await captureSmokeEvidence(window, SMOKE_TEST.titleScreenshotPath);
 
   await startSmokeWorld(contents);
@@ -2171,6 +2622,7 @@ async function runProductionSmoke(window) {
 
   const chartProbe = await toggleSmokeView(contents, 'chart-2d');
   const reliefProbe = await toggleSmokeView(contents, 'relief-3d');
+  const reliefKeyRotationProbe = await rotateSmokeReliefWithKey(contents);
 
   const minimumViewportProbe = await resizeSmokeViewport(
     window,
@@ -2239,6 +2691,7 @@ async function runProductionSmoke(window) {
     contents,
     compactTutorialOpenedProbe.tutorial.pageId,
   );
+  const compactTutorialPatchNotesProbe = await verifySmokeTutorialPatchNotes(contents);
   const compactTutorialClosedProbe = await closeSmokeTutorialWithKeyboard(contents);
   const compactKitOpenedProbe = await openSmokeMobileKit(
     contents,
@@ -2260,6 +2713,7 @@ async function runProductionSmoke(window) {
   );
   const narrowPhoneExpandedProbe = await toggleSmokeMobileHud(contents, true);
   const narrowPhoneRecollapsedProbe = await toggleSmokeMobileHud(contents, false);
+  const narrowPhoneQuietHourProbe = await verifySmokeMobileQuietHourTitlePath(contents);
 
   if (!await focusSmokePlayer(contents)) {
     throw new Error('the active mobile renderer could not return its camera to the courier');
@@ -2327,6 +2781,7 @@ async function runProductionSmoke(window) {
   smokeResult(true, {
     entryUrl: PRODUCTION_ENTRY_URL,
     boot: paintedTitleProbe,
+    titlePatchNotes: titlePatchNotesProbe,
     world: worldProbe,
     promisePickup: promisePickupProbe,
     promiseCommit: promiseCommitProbe,
@@ -2340,6 +2795,7 @@ async function runProductionSmoke(window) {
     modeToggle: {
       chart: chartProbe,
       relief: reliefProbe,
+      reliefKeyRotation: reliefKeyRotationProbe,
     },
     minimumViewport: minimumViewportProbe,
     responsiveViewport: responsiveViewportProbe,
@@ -2355,6 +2811,7 @@ async function runProductionSmoke(window) {
       tutorial: {
         opened: compactTutorialOpenedProbe,
         advanced: compactTutorialAdvancedProbe,
+        patchNotes: compactTutorialPatchNotesProbe,
         closed: compactTutorialClosedProbe,
       },
       kit: {
@@ -2368,6 +2825,7 @@ async function runProductionSmoke(window) {
       collapsed: narrowPhoneCollapsedProbe,
       expanded: narrowPhoneExpandedProbe,
       recollapsed: narrowPhoneRecollapsedProbe,
+      quietHourTitlePath: narrowPhoneQuietHourProbe,
     },
     landscapePhoneViewport: {
       collapsed: landscapePhoneCollapsedProbe,

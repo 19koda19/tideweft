@@ -1,16 +1,18 @@
 import type { SettlementStatus, TidePhase, WeatherKind } from "../render/types";
+import { acceptsRestartPhrase, RESTART_PHRASE } from "../game/restartPolicy";
 import {
   PERPETUAL_SESSION_SHAPE,
   type ChronicleEntryUIView,
   type ContractStatus,
   type ContractUIView,
-  type JourneyPosture,
   type KitTabId,
   type SettlementInspectorUIView,
   type TideweftUIController,
   type TideweftUIOptions,
   type TideweftUICommand,
   type TideweftUIView,
+  type SaveWarningUIView,
+  type TitleOverlayUIView,
 } from "./types";
 import {
   KIT_DIALOG_ID,
@@ -19,6 +21,12 @@ import {
 } from "./kitDialog";
 import { bindMobileBraceHold } from "./mobileBrace";
 import { createTutorialDialog, type TutorialDialogController } from "./tutorialDialog";
+import {
+  PATCH_NOTES_DIALOG_ID,
+  createPatchNotesDialog,
+  type PatchNotesDialogController,
+  type PatchNotesOpenSource,
+} from "./patchNotesDialog";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
 export const MOBILE_PROMISES_PANEL_ID = "promises-panel";
@@ -26,6 +34,12 @@ export const MOBILE_INSPECTOR_PANEL_ID = "settlement-inspector";
 const COMPACT_HUD_MEDIA_QUERY = "(max-width: 44rem), (max-height: 34rem) and (max-width: 64rem)";
 export const TIDE_HARP_HELP_COPY =
   "Place one Reed mat, one Tide anchor, and one Wind knot as a compact triangle to tune a Tide Harp. Stand inside its triangle for +900 Loom charge each tick; a Space pulse then sounds from you and all three knots.";
+export const RECOVERY_SEED_REQUIRED_MESSAGE =
+  "Enter a non-empty seed phrase before replacing the unreadable or conflicting local autosave.";
+export const WORLD_CREATION_BLOCKED_MESSAGE =
+  "Reload after local storage is available; this window will not create or replace a world.";
+const RESTART_SEED_REQUIRED_MESSAGE =
+  "Enter a non-empty seed phrase before replacing this estuary.";
 
 export interface MobileHudDisclosureState {
   readonly ariaExpanded: "true" | "false";
@@ -131,6 +145,82 @@ export interface TideHarpFieldStatus {
   readonly active: boolean;
 }
 
+export interface SaveWarningPresentation {
+  readonly hidden: boolean;
+  readonly id: string;
+  readonly message: string;
+  readonly detail: string;
+  readonly tone: "warning" | "danger";
+}
+
+export interface TitleSeedRequirement {
+  readonly required: boolean;
+  readonly validationMessage: string;
+}
+
+export interface TitleWorldCreationState {
+  readonly blocked: boolean;
+  readonly reason: string;
+}
+
+export function titleWorldCreationState(
+  title: Pick<TitleOverlayUIView, "worldCreationBlocked">,
+): TitleWorldCreationState {
+  return title.worldCreationBlocked
+    ? { blocked: true, reason: WORLD_CREATION_BLOCKED_MESSAGE }
+    : { blocked: false, reason: "" };
+}
+
+/**
+ * Keeps native input constraints and submit-time validation on one contract.
+ * Recovery has no Continue/restart gate, but it must never inherit the ordinary
+ * first-launch convenience where a blank phrase selects the default seed.
+ */
+export function titleSeedRequirement(
+  title: Pick<TitleOverlayUIView, "hasSave" | "requiresSeed">,
+  restartUnlocked: boolean,
+): TitleSeedRequirement {
+  if (title.requiresSeed) {
+    return {
+      required: true,
+      validationMessage: RECOVERY_SEED_REQUIRED_MESSAGE,
+    };
+  }
+  if (title.hasSave && restartUnlocked) {
+    return {
+      required: true,
+      validationMessage: RESTART_SEED_REQUIRED_MESSAGE,
+    };
+  }
+  return { required: false, validationMessage: "" };
+}
+
+export const SAVE_WARNING_SURFACES = [
+  "field",
+  "title",
+  "quiet-hour",
+  "tutorial",
+  "patch-notes",
+  "kit",
+] as const;
+type SaveWarningSurface = (typeof SAVE_WARNING_SURFACES)[number];
+
+/** Keeps persistent storage health visibly distinct from transient announcements. */
+export function saveWarningPresentation(
+  warning: SaveWarningUIView | undefined,
+): SaveWarningPresentation {
+  if (!warning) {
+    return { hidden: true, id: "", message: "", detail: "", tone: "warning" };
+  }
+  return {
+    hidden: false,
+    id: warning.id,
+    message: warning.message,
+    detail: warning.detail ?? "Your current session remains playable; keep this page open until storage recovers.",
+    tone: warning.tone ?? "warning",
+  };
+}
+
 /** Keeps the compact field line and its fuller assistive description truthful. */
 export function tideHarpFieldStatus(
   tideHarps: TideweftUIView["field"]["tideHarps"],
@@ -223,6 +313,7 @@ export function handleTideweftUIShortcut(
 
 interface UIRefs {
   shell: HTMLDivElement;
+  saveWarningBanners: readonly SaveWarningBannerRefs[];
   mobileFieldStrip: HTMLElement;
   mobileHudToggle: HTMLButtonElement;
   mobileKitButton: HTMLButtonElement;
@@ -317,9 +408,13 @@ interface UIRefs {
   continueButton: HTMLButtonElement;
   continueName: HTMLSpanElement;
   continueSummary: HTMLSpanElement;
+  restartForm: HTMLFormElement;
+  restartInput: HTMLInputElement;
+  restartButton: HTMLButtonElement;
+  restartStatus: HTMLParagraphElement;
   newWorldForm: HTMLFormElement;
   seedInput: HTMLInputElement;
-  postureInputs: readonly HTMLInputElement[];
+  beginButton: HTMLButtonElement;
   quietDialog: HTMLDialogElement;
   quietTitle: HTMLHeadingElement;
   quietSummary: HTMLParagraphElement;
@@ -331,8 +426,17 @@ interface UIRefs {
   quietQuote: HTMLQuoteElement;
   quietFinish: HTMLButtonElement;
   quietContinue: HTMLButtonElement;
+  titlePatchNotes: HTMLButtonElement;
+  quietPatchNotes: HTMLButtonElement;
   tutorial: TutorialDialogController;
+  patchNotes: PatchNotesDialogController;
   kit: KitDialogController;
+}
+
+interface SaveWarningBannerRefs {
+  readonly element: HTMLDivElement;
+  readonly message: HTMLElement;
+  readonly detail: HTMLSpanElement;
 }
 
 const createElement = <K extends keyof HTMLElementTagNameMap>(
@@ -355,6 +459,20 @@ const createButton = (
   button.type = "button";
   if (accessibleLabel) button.setAttribute("aria-label", accessibleLabel);
   return button;
+};
+
+const createSaveWarningBanner = (surface: SaveWarningSurface): SaveWarningBannerRefs => {
+  const wrapper = createElement("div", "save-warning");
+  wrapper.hidden = true;
+  wrapper.dataset.ui = "save-warning";
+  wrapper.dataset.surface = surface;
+  wrapper.setAttribute("role", "status");
+  wrapper.setAttribute("aria-live", "polite");
+  wrapper.setAttribute("aria-atomic", "true");
+  const message = createElement("strong", "save-warning__message");
+  const detail = createElement("span", "save-warning__detail");
+  wrapper.append(message, detail);
+  return { element: wrapper, message, detail };
 };
 
 const appendTextRow = (
@@ -548,6 +666,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const shell = createElement("div", "ui-layer");
   shell.dataset.mobileHudExpanded = "false";
   shell.dataset.mobileSheet = "promises";
+  const fieldSaveWarning = createSaveWarningBanner("field");
 
   const topbar = createElement("section", "hud-bar glass-panel");
   topbar.setAttribute("aria-label", "World and journey status");
@@ -921,16 +1040,54 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     "title-dialog__subtitle",
     "A perpetual, locally saved estuary of promises and paths that learn.",
   );
+  const titleSaveWarning = createSaveWarningBanner("title");
   const continueButton = createButton("continue-card", "");
   const continueKicker = createElement("span", "continue-card__kicker", "Return to");
   const continueName = createElement("strong", "continue-card__name", "Your estuary");
   const continueSummary = createElement("span", "continue-card__summary", "No offline loss. The tide waits here.");
   continueButton.append(continueKicker, continueName, continueSummary);
 
+  const restartForm = createElement("form", "restart-form");
+  restartForm.setAttribute("aria-label", "Unlock a deliberate world restart");
+  const restartHeading = createElement("h2", "new-world-form__heading", "Begin again");
+  const restartLabel = createElement(
+    "label",
+    "field-label",
+    `Type ${RESTART_PHRASE} to unlock a new seed`,
+  );
+  restartLabel.htmlFor = "restart-phrase";
+  const restartInput = createElement("input", "seed-input restart-input");
+  restartInput.id = "restart-phrase";
+  restartInput.name = "restart-phrase";
+  restartInput.type = "text";
+  restartInput.maxLength = RESTART_PHRASE.length + 8;
+  restartInput.autocomplete = "off";
+  restartInput.spellcheck = false;
+  restartInput.placeholder = "The current estuary stays safe until this matches";
+  const restartStatus = createElement(
+    "p",
+    "restart-form__status",
+    "Unlocking only reveals the seed form; it does not erase anything yet.",
+  );
+  restartStatus.id = "restart-status";
+  restartStatus.setAttribute("aria-live", "polite");
+  restartInput.setAttribute("aria-describedby", restartStatus.id);
+  const restartButton = createButton(
+    "text-button text-button--wide restart-form__submit",
+    "Unlock restart",
+  );
+  restartButton.type = "submit";
+  restartForm.append(restartHeading, restartLabel, restartInput, restartStatus, restartButton);
+
   const newWorldForm = createElement("form", "new-world-form");
   newWorldForm.setAttribute("aria-label", "Begin a new estuary");
-  const newWorldHeading = createElement("h2", "new-world-form__heading", "Begin a new estuary");
-  const seedLabel = createElement("label", "field-label", "World seed");
+  const newWorldHeading = createElement("h2", "new-world-form__heading", "Choose a new seed phrase");
+  const hardRules = createElement(
+    "p",
+    "new-world-form__rules",
+    "ONE RULESET · A CHALLENGING HARD · perpetual tides, scarce finds, careful cargo, local continuity",
+  );
+  const seedLabel = createElement("label", "field-label", "Seed phrase");
   seedLabel.htmlFor = "world-seed";
   const seedInput = createElement("input", "seed-input");
   seedInput.id = "world-seed";
@@ -939,41 +1096,28 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   seedInput.maxLength = 64;
   seedInput.autocomplete = "off";
   seedInput.spellcheck = false;
-  seedInput.placeholder = "Leave blank for a new tide";
+  seedInput.placeholder = "Leave blank for quiet-delta";
 
-  const postureFieldset = createElement("fieldset", "choice-fieldset");
-  postureFieldset.append(createElement("legend", "choice-fieldset__legend", "How should the water meet you?"));
-  const postureInputs: HTMLInputElement[] = [];
-  const postureOptions: ReadonlyArray<[JourneyPosture, string, string]> = [
-    ["hearth", "Hearth", "Forgiving currents and recoverable settlement strain."],
-    ["journey", "Journey", "The intended rhythm of care, weather, and tradeoffs."],
-    ["gale", "Gale", "Tighter forecasts and stronger disruptions."],
-  ];
-  for (const [value, label, description] of postureOptions) {
-    const optionLabel = createElement("label", "choice-card");
-    const input = createElement("input");
-    input.type = "radio";
-    input.name = "posture";
-    input.value = value;
-    if (value === "journey") input.checked = true;
-    postureInputs.push(input);
-    const copy = createElement("span", "choice-card__copy");
-    copy.append(createElement("strong", "choice-card__label", label));
-    copy.append(createElement("span", "choice-card__description", description));
-    optionLabel.append(input, copy);
-    postureFieldset.append(optionLabel);
-  }
-
-  const beginButton = createButton("text-button text-button--primary text-button--wide", "Enter the estuary");
+  const beginButton = createButton("text-button text-button--primary text-button--wide", "Start A CHALLENGING HARD");
   beginButton.type = "submit";
-  newWorldForm.append(newWorldHeading, seedLabel, seedInput, postureFieldset, beginButton);
+  newWorldForm.append(newWorldHeading, hardRules, seedLabel, seedInput, beginButton);
+  const titlePatchNotes = createButton(
+    "text-button text-button--wide patch-notes-trigger",
+    "PATCH NOTES",
+    "Open offline Patch Notes from the title",
+  );
+  titlePatchNotes.setAttribute("aria-haspopup", "dialog");
+  titlePatchNotes.setAttribute("aria-controls", PATCH_NOTES_DIALOG_ID);
   titleContent.append(
     titleKnot,
     titleEyebrow,
     titleHeading,
     titleSubtitle,
+    titleSaveWarning.element,
     continueButton,
+    restartForm,
     newWorldForm,
+    titlePatchNotes,
   );
   titleDialog.append(titleBackdrop, titleContent);
 
@@ -984,6 +1128,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const quietTitle = createElement("h2", "quiet-dialog__title", "Quiet Hour");
   quietTitle.id = "quiet-hour-heading";
   const quietSummary = createElement("p", "quiet-dialog__summary", "The estuary is ready to remember this session.");
+  const quietSaveWarning = createSaveWarningBanner("quiet-hour");
   const quietStats = createElement("dl", "quiet-stats");
   const quietDuration = createElement("span");
   const quietDistance = createElement("span");
@@ -1009,10 +1154,18 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const quietActions = createElement("div", "dialog-actions");
   const quietContinue = createButton("text-button", "One more tide");
   const quietFinish = createButton("text-button text-button--primary", "Rest here");
-  quietActions.append(quietContinue, quietFinish);
+  const quietPatchNotes = createButton(
+    "text-button patch-notes-trigger",
+    "PATCH NOTES",
+    "Open offline Patch Notes from Quiet Hour",
+  );
+  quietPatchNotes.setAttribute("aria-haspopup", "dialog");
+  quietPatchNotes.setAttribute("aria-controls", PATCH_NOTES_DIALOG_ID);
+  quietActions.append(quietPatchNotes, quietContinue, quietFinish);
   quietContent.append(
     quietTitle,
     quietSummary,
+    quietSaveWarning.element,
     quietStats,
     quietChangesHeading,
     quietChanges,
@@ -1021,7 +1174,22 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   );
   quietDialog.append(quietContent);
 
-  const tutorial = createTutorialDialog();
+  let tutorial: TutorialDialogController;
+  const patchNotes = createPatchNotesDialog({
+    beforeOpen: (source) => {
+      if (source === "title") syncDialog(titleDialog, false);
+      if (source === "quiet-hour") syncDialog(quietDialog, false);
+      if (source === "tutorial") tutorial.suspend();
+    },
+    afterClose: (source) => {
+      if (source === "title") syncDialog(titleDialog, true);
+      if (source === "quiet-hour") syncDialog(quietDialog, true);
+      if (source === "tutorial") tutorial.resume();
+    },
+  });
+  tutorial = createTutorialDialog({
+    onOpenPatchNotes: (trigger) => patchNotes.open(trigger, "tutorial"),
+  });
   const kit = createKitDialog({
     dispatch: options.dispatch,
     onOpenChange: (open) => {
@@ -1030,12 +1198,38 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
       mobileKitButton.setAttribute("aria-expanded", expanded);
     },
   });
+  const tutorialSaveWarning = createSaveWarningBanner("tutorial");
+  const patchNotesSaveWarning = createSaveWarningBanner("patch-notes");
+  const kitSaveWarning = createSaveWarningBanner("kit");
+  const modalWarningMounts: ReadonlyArray<[
+    HTMLDialogElement,
+    string,
+    SaveWarningBannerRefs,
+  ]> = [
+    [tutorial.element, ".tutorial-dialog__header", tutorialSaveWarning],
+    [patchNotes.element, ".patch-notes-dialog__header", patchNotesSaveWarning],
+    [kit.element, ".kit-dialog__header", kitSaveWarning],
+  ];
+  for (const [dialog, selector, banner] of modalWarningMounts) {
+    const header = dialog.querySelector<HTMLElement>(selector);
+    if (!header) throw new Error(`TIDEWEFT could not mount save health in ${selector}.`);
+    header.append(banner.element);
+  }
+  const saveWarningBanners = {
+    field: fieldSaveWarning,
+    title: titleSaveWarning,
+    "quiet-hour": quietSaveWarning,
+    tutorial: tutorialSaveWarning,
+    "patch-notes": patchNotesSaveWarning,
+    kit: kitSaveWarning,
+  } as const satisfies Readonly<Record<SaveWarningSurface, SaveWarningBannerRefs>>;
 
   const leftRail = createElement("div", "left-rail");
   leftRail.id = "field-hud-panels";
   leftRail.append(objectivePanel, contractDetails);
 
   shell.append(
+    fieldSaveWarning.element,
     topbar,
     mobileFieldStrip,
     leftRail,
@@ -1045,12 +1239,14 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     titleDialog,
     quietDialog,
     tutorial.element,
+    patchNotes.element,
     kit.element,
   );
   options.root.replaceChildren(shell);
 
   return {
     shell,
+    saveWarningBanners: SAVE_WARNING_SURFACES.map((surface) => saveWarningBanners[surface]),
     mobileFieldStrip,
     mobileHudToggle,
     mobileKitButton,
@@ -1145,9 +1341,13 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     continueButton,
     continueName,
     continueSummary,
+    restartForm,
+    restartInput,
+    restartButton,
+    restartStatus,
     newWorldForm,
     seedInput,
-    postureInputs,
+    beginButton,
     quietDialog,
     quietTitle,
     quietSummary,
@@ -1159,7 +1359,10 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     quietQuote,
     quietFinish,
     quietContinue,
+    titlePatchNotes,
+    quietPatchNotes,
     tutorial,
+    patchNotes,
     kit,
   };
 };
@@ -1188,6 +1391,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let forcedTitle: boolean | null = null;
   let forcedQuietHour: boolean | null = null;
   let titleFormDirty = false;
+  let restartUnlocked = false;
   let contractPointerActive = false;
   let signedReportPointerActive = false;
   let selectedInspectorId: string | null = null;
@@ -1234,7 +1438,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
   const openKit = (tab: KitTabId = "pack", trigger?: HTMLElement | null): void => {
     mobileBrace.release();
-    if (refs.titleDialog.open || refs.quietDialog.open) return;
+    if (refs.titleDialog.open || refs.quietDialog.open || refs.patchNotes.isOpen()) return;
     refs.tutorial.close(false);
     setMobileHudExpanded(false);
     refs.kit.open(tab, trigger);
@@ -1251,6 +1455,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
   const openHelp = (trigger?: HTMLElement | null): void => {
     mobileBrace.release();
+    if (refs.patchNotes.isOpen()) return;
     refs.kit.close(false);
     setMobileHudExpanded(false);
     refs.tutorial.open(trigger);
@@ -1268,6 +1473,36 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     mobileBrace.release();
     refs.kit.close(false);
     refs.tutorial.close(false);
+  };
+
+  const openPatchNotes = (
+    trigger?: HTMLElement | null,
+    source: PatchNotesOpenSource = "field",
+  ): void => {
+    mobileBrace.release();
+    refs.kit.close(false);
+    setMobileHudExpanded(false);
+    const resolvedSource = source !== "field"
+      ? source
+      : refs.titleDialog.open
+        ? "title"
+        : refs.quietDialog.open
+          ? "quiet-hour"
+          : refs.tutorial.element.open
+            ? "tutorial"
+            : "field";
+    refs.patchNotes.open(trigger, resolvedSource);
+  };
+
+  const renderSaveWarning = (warning: SaveWarningUIView | undefined): void => {
+    const presentation = saveWarningPresentation(warning);
+    for (const banner of refs.saveWarningBanners) {
+      banner.element.hidden = presentation.hidden;
+      banner.element.dataset.warningId = presentation.id;
+      banner.element.dataset.tone = presentation.tone;
+      banner.message.textContent = presentation.message;
+      banner.detail.textContent = presentation.detail;
+    }
   };
 
   const renderContracts = (contracts: readonly ContractUIView[]): void => {
@@ -1530,7 +1765,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const renderQuietHour = (view: TideweftUIView): void => {
     const quiet = view.quietHour;
     if (!quiet) {
-      syncDialog(refs.quietDialog, forcedQuietHour ?? false);
+      syncDialog(refs.quietDialog, (forcedQuietHour ?? false) && !refs.patchNotes.isOpen());
       return;
     }
     refs.quietTitle.textContent = quiet.title ?? "Quiet Hour";
@@ -1546,18 +1781,19 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.quietQuote.textContent = quiet.quote ?? "";
     refs.quietQuote.hidden = !quiet.quote;
     refs.quietFinish.disabled = quiet.canFinish === false;
-    syncDialog(refs.quietDialog, forcedQuietHour ?? quiet.visible);
+    syncDialog(refs.quietDialog, (forcedQuietHour ?? quiet.visible) && !refs.patchNotes.isOpen());
   };
 
   const update = (providedView?: TideweftUIView | null): void => {
     const view = providedView === undefined ? options.getView() ?? null : providedView;
     latestView = view;
     refs.kit.update(view?.kit);
+    renderSaveWarning(view?.saveWarning);
     if (!view) {
       mobileBrace.release();
       refs.shell.dataset.ready = "false";
       closeFieldDialogs();
-      syncDialog(refs.titleDialog, forcedTitle ?? true);
+      syncDialog(refs.titleDialog, (forcedTitle ?? true) && !refs.patchNotes.isOpen());
       return;
     }
     refs.shell.dataset.ready = "true";
@@ -1571,14 +1807,17 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     const revision = String(view.revision);
     const isNewRevision = revision !== lastRevision;
     if (!isNewRevision) {
-      syncDialog(refs.titleDialog, forcedTitle ?? view.title.visible);
-      syncDialog(refs.quietDialog, forcedQuietHour ?? view.quietHour?.visible ?? false);
+      syncDialog(refs.titleDialog, (forcedTitle ?? view.title.visible) && !refs.patchNotes.isOpen());
+      syncDialog(
+        refs.quietDialog,
+        (forcedQuietHour ?? view.quietHour?.visible ?? false) && !refs.patchNotes.isOpen(),
+      );
       return;
     }
     lastRevision = revision;
 
     refs.worldName.textContent = view.worldName;
-    refs.location.textContent = view.player.locationLabel ?? `${view.posture} posture · perpetual estuary`;
+    refs.location.textContent = view.player.locationLabel ?? "A CHALLENGING HARD · perpetual";
     refs.clockDay.textContent = view.clock.dayLabel ?? `Day ${view.clock.day}`;
     refs.clockTime.textContent = view.clock.timeLabel;
     refs.tideReadout.dataset.phase = view.tide.phase;
@@ -1734,21 +1973,40 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.mobileFieldStrip.dataset.swept = view.field.swept ? "true" : "false";
     refs.mobileFieldStrip.dataset.stabilityTrend = view.player.stabilityTrend;
     refs.quietButton.disabled = view.controls?.canEndSession === false;
-    if (!titleFormDirty) {
-      const postureInput = refs.postureInputs.find((input) => input.value === view.posture);
-      if (postureInput) postureInput.checked = true;
-      if (view.title.suggestedSeed && document.activeElement !== refs.seedInput) {
-        refs.seedInput.placeholder = view.title.suggestedSeed;
-      }
+    if (!titleFormDirty && view.title.suggestedSeed && document.activeElement !== refs.seedInput) {
+      refs.seedInput.placeholder = view.title.suggestedSeed;
     }
     refs.titleSubtitle.textContent =
       view.title.subtitle ??
       "A perpetual, locally saved estuary of promises and paths that learn.";
     refs.continueButton.hidden = !view.title.hasSave;
+    const seedRequirement = titleSeedRequirement(view.title, restartUnlocked);
+    const worldCreation = titleWorldCreationState(view.title);
+    refs.seedInput.disabled = worldCreation.blocked;
+    refs.beginButton.disabled = worldCreation.blocked;
+    refs.restartInput.disabled = worldCreation.blocked;
+    refs.restartButton.disabled = worldCreation.blocked;
+    refs.continueButton.disabled = worldCreation.blocked;
+    refs.newWorldForm.setAttribute("aria-disabled", String(worldCreation.blocked));
+    refs.restartForm.setAttribute("aria-disabled", String(worldCreation.blocked));
+    if (!view.title.visible) {
+      restartUnlocked = false;
+      refs.restartInput.value = "";
+      refs.seedInput.required = false;
+      refs.seedInput.setCustomValidity("");
+      refs.restartStatus.textContent = "Unlocking only reveals the seed form; it does not erase anything yet.";
+    } else {
+      refs.seedInput.required = seedRequirement.required;
+      if (view.title.requiresSeed && refs.seedInput.value.trim().length === 0) {
+        refs.seedInput.setCustomValidity(seedRequirement.validationMessage);
+      }
+    }
+    refs.restartForm.hidden = !view.title.hasSave || restartUnlocked;
+    refs.newWorldForm.hidden = view.title.hasSave && !restartUnlocked;
     refs.continueName.textContent = view.title.worldName ?? view.worldName;
     refs.continueSummary.textContent =
       view.title.continueSummary ?? "No offline loss. The tide waits exactly where you left it.";
-    syncDialog(refs.titleDialog, forcedTitle ?? view.title.visible);
+    syncDialog(refs.titleDialog, (forcedTitle ?? view.title.visible) && !refs.patchNotes.isOpen());
     renderQuietHour(view);
 
     const mastheadStatus = document.getElementById("connection-status");
@@ -1806,6 +2064,12 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     closeFieldDialogs();
     options.dispatch({ type: "quiet-hour", action: "open" });
   });
+  refs.titlePatchNotes.addEventListener("click", () => {
+    openPatchNotes(refs.titlePatchNotes, "title");
+  });
+  refs.quietPatchNotes.addEventListener("click", () => {
+    openPatchNotes(refs.quietPatchNotes, "quiet-hour");
+  });
   refs.titleButton.addEventListener("click", () => {
     mobileBrace.release();
     closeFieldDialogs();
@@ -1827,22 +2091,83 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     options.dispatch({ type: "settlement", action: "focus", settlementId });
   });
   refs.continueButton.addEventListener("click", () => options.dispatch({ type: "resume-world" }));
+  refs.restartForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const worldCreation = titleWorldCreationState(latestView?.title ?? {});
+    if (worldCreation.blocked) {
+      refs.restartStatus.textContent = worldCreation.reason;
+      announce(worldCreation.reason, true);
+      return;
+    }
+    if (!acceptsRestartPhrase(refs.restartInput.value)) {
+      refs.restartStatus.textContent = `Not unlocked. Type ${RESTART_PHRASE} exactly; the current save is unchanged.`;
+      refs.restartInput.focus({ preventScroll: true });
+      refs.restartInput.select();
+      announce("Restart not unlocked. The current estuary is unchanged.", true);
+      return;
+    }
+    restartUnlocked = true;
+    titleFormDirty = false;
+    refs.restartStatus.textContent = "Restart unlocked. The current save remains until you submit a new seed.";
+    refs.restartForm.hidden = true;
+    refs.newWorldForm.hidden = false;
+    refs.seedInput.value = "";
+    refs.seedInput.required = true;
+    refs.seedInput.setCustomValidity("");
+    refs.seedInput.focus({ preventScroll: true });
+    announce("Restart unlocked. Enter a seed phrase for a new estuary under A CHALLENGING HARD.");
+  });
   refs.newWorldForm.addEventListener("change", () => {
     titleFormDirty = true;
   });
+  refs.seedInput.addEventListener("input", () => {
+    refs.seedInput.setCustomValidity("");
+  });
   refs.newWorldForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const posture = refs.postureInputs.find((input) => input.checked)?.value as JourneyPosture | undefined;
+    const worldCreation = titleWorldCreationState(latestView?.title ?? {});
+    if (worldCreation.blocked) {
+      refs.seedInput.setCustomValidity(worldCreation.reason);
+      announce(worldCreation.reason, true);
+      return;
+    }
+    if (latestView?.title.hasSave && !restartUnlocked) {
+      refs.restartStatus.textContent = `Type ${RESTART_PHRASE} exactly before choosing a new seed.`;
+      refs.restartForm.hidden = false;
+      refs.newWorldForm.hidden = true;
+      refs.restartInput.focus({ preventScroll: true });
+      return;
+    }
+    const seed = refs.seedInput.value.trim();
+    const seedRequirement = titleSeedRequirement(
+      latestView?.title ?? { hasSave: false },
+      restartUnlocked,
+    );
+    if (seedRequirement.required && seed.length === 0) {
+      refs.seedInput.required = true;
+      refs.seedInput.setCustomValidity(seedRequirement.validationMessage);
+      refs.seedInput.reportValidity();
+      announce(
+        latestView?.title.requiresSeed
+          ? "The unreadable or conflicting autosave is unchanged. Enter a non-empty seed phrase to replace it safely."
+          : "The current estuary is unchanged. Enter a new seed phrase to replace it.",
+        true,
+      );
+      return;
+    }
     options.dispatch({
       type: "new-world",
-      seed: refs.seedInput.value.trim(),
-      posture: posture ?? "journey",
+      seed,
+      posture: "gale",
       sessionShape: PERPETUAL_SESSION_SHAPE,
+      ...(latestView?.title.hasSave ? { restartPhrase: RESTART_PHRASE } : {}),
     });
   });
   refs.titleDialog.addEventListener("cancel", (event) => {
-    if (!latestView?.title.hasSave) {
+    const worldCreation = titleWorldCreationState(latestView?.title ?? {});
+    if (!latestView?.title.hasSave || worldCreation.blocked) {
       event.preventDefault();
+      if (worldCreation.blocked) announce(worldCreation.reason, true);
       return;
     }
     event.preventDefault();
@@ -1913,7 +2238,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
         mobileBrace.release();
         refs.kit.close(false);
       }
-      syncDialog(refs.titleDialog, visible);
+      syncDialog(refs.titleDialog, visible && !refs.patchNotes.isOpen());
     },
     setQuietHourVisible: (visible) => {
       forcedQuietHour = visible;
@@ -1921,10 +2246,12 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
         mobileBrace.release();
         refs.kit.close(false);
       }
-      syncDialog(refs.quietDialog, visible);
+      syncDialog(refs.quietDialog, visible && !refs.patchNotes.isOpen());
     },
     openHelp: () => openHelp(),
     closeHelp: () => refs.tutorial.close(),
+    openPatchNotes: () => openPatchNotes(),
+    closePatchNotes: () => refs.patchNotes.close(),
     openKit: (tab = "pack") => openKit(tab),
     closeKit: () => refs.kit.close(),
     destroy: () => {
@@ -1937,6 +2264,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       window.removeEventListener("pointercancel", cancelSignedReportPointer);
       refs.kit.destroy();
       refs.tutorial.destroy();
+      refs.patchNotes.destroy();
       syncDialog(refs.quietDialog, false);
       syncDialog(refs.titleDialog, false);
       options.root.replaceChildren();

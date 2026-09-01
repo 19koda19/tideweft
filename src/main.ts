@@ -1,5 +1,11 @@
 import "./styles.css";
 
+import {
+  GAMEPLAY_CONTRACT_ID,
+  GAMEPLAY_CONTRACT_NAME,
+  GAMEPLAY_CONTRACT_VERSION,
+} from "./content/gameplayContract";
+import { LATEST_PATCH_NOTE } from "./content/patchNotes";
 import { createTideweftRuntime } from "./game/runtime";
 import { createTideweftRenderer } from "./render/renderer";
 import {
@@ -95,7 +101,7 @@ async function boot(): Promise<void> {
   if (status) status.textContent = "The estuary is listening";
 
   const shutdown = (): void => {
-    void runtime.save();
+    void runtime.save().catch(() => undefined);
     // Leaf renderers release held movement/brace state through the runtime.
     // Tear them down before closing audio so that release cannot reopen an
     // AudioContext during pagehide.
@@ -107,7 +113,7 @@ async function boot(): Promise<void> {
   };
   window.addEventListener("pagehide", shutdown, { once: true });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") void runtime.save();
+    if (document.visibilityState === "hidden") void runtime.save().catch(() => undefined);
   });
 
   Object.assign(window, {
@@ -118,7 +124,13 @@ async function boot(): Promise<void> {
       get viewMode() {
         return renderer.mode();
       },
-      version: "0.3.0-alpha.1",
+      version: LATEST_PATCH_NOTE.version,
+      buildIdentity: LATEST_PATCH_NOTE.buildIdentity,
+      gameplayContract: {
+        id: GAMEPLAY_CONTRACT_ID,
+        name: GAMEPLAY_CONTRACT_NAME,
+        version: GAMEPLAY_CONTRACT_VERSION,
+      },
     },
   });
 }

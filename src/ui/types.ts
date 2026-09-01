@@ -271,6 +271,14 @@ export interface ChronicleEntryUIView {
 export interface TitleOverlayUIView {
   readonly visible: boolean;
   readonly hasSave: boolean;
+  /** Storage state is unknown or superseded, so no world may be created. */
+  readonly worldCreationBlocked?: boolean;
+  /**
+   * Recovery mode for an unreadable or conflicting autosave. The ordinary
+   * restart phrase stays hidden, but a deliberate non-empty replacement seed
+   * is mandatory so pressing Enter can never choose the default seed.
+   */
+  readonly requiresSeed?: boolean;
   readonly worldName?: string;
   readonly continueSummary?: string;
   readonly suggestedSeed?: string;
@@ -294,6 +302,14 @@ export interface AnnouncementUIView {
   readonly id: string;
   readonly message: string;
   readonly assertive?: boolean;
+}
+
+/** Persistent storage health is separate from transient gameplay announcements. */
+export interface SaveWarningUIView {
+  readonly id: string;
+  readonly message: string;
+  readonly detail?: string;
+  readonly tone?: "warning" | "danger";
 }
 
 export interface ControlAvailabilityUIView {
@@ -326,6 +342,7 @@ export interface TideweftUIView {
   readonly title: TitleOverlayUIView;
   readonly quietHour?: QuietHourUIView;
   readonly announcement?: AnnouncementUIView;
+  readonly saveWarning?: SaveWarningUIView;
   readonly controls?: ControlAvailabilityUIView;
   /** Additive while the gathering runtime migrates; absent renders an empty KIT. */
   readonly kit?: KitUIView;
@@ -339,6 +356,8 @@ export type TideweftUICommand =
       readonly posture: JourneyPosture;
       /** Retained on the command wire for older hosts; current runtimes use Wander. */
       readonly sessionShape: SessionShape;
+      /** Required by the runtime only when replacing an existing autosave. */
+      readonly restartPhrase?: string;
     }
   | { readonly type: "scan" }
   | { readonly type: "interact" }
@@ -407,6 +426,8 @@ export interface TideweftUIController {
   readonly setQuietHourVisible: (visible: boolean) => void;
   readonly openHelp: () => void;
   readonly closeHelp: () => void;
+  readonly openPatchNotes: () => void;
+  readonly closePatchNotes: () => void;
   readonly openKit: (tab?: KitTabId) => void;
   readonly closeKit: () => void;
 }

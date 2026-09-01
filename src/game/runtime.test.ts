@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SaveRecord, SaveRepository } from "../platform/persistence";
+import {
+  ConflictingSaveCopiesError,
+  NewerSaveUnavailableError,
+  StaleSaveWriteError,
+  createSaveRepository,
+  type SaveRecord,
+  type SaveRepository,
+} from "../platform/persistence";
 import {
   LEGACY_WORLD_HEIGHT,
   LEGACY_WORLD_WIDTH,
@@ -70,6 +77,70 @@ class MemoryRepository implements SaveRepository {
   }
 }
 
+class RuntimeTestStorage implements Storage {
+  private readonly values = new Map<string, string>();
+
+  get length(): number { return this.values.size; }
+  clear(): void { this.values.clear(); }
+  getItem(key: string): string | null { return this.values.get(key) ?? null; }
+  key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
+  removeItem(key: string): void { this.values.delete(key); }
+  setItem(key: string, value: string): void { this.values.set(key, String(value)); }
+}
+
+function saveGenerationOf(record: SaveRecord): number {
+  return record.saveGeneration ?? 0;
+}
+
+function saveGenerationEraOf(record: SaveRecord): number {
+  return record.saveGenerationEra ?? 0;
+}
+
+function isNewerSave(candidate: SaveRecord, reference: SaveRecord): boolean {
+  const candidateEra = saveGenerationEraOf(candidate);
+  const referenceEra = saveGenerationEraOf(reference);
+  if (candidateEra !== referenceEra) {
+    return candidateEra > referenceEra;
+  }
+  const candidateGeneration = saveGenerationOf(candidate);
+  const referenceGeneration = saveGenerationOf(reference);
+  if (candidateGeneration !== referenceGeneration) {
+    return candidateGeneration > referenceGeneration;
+  }
+  return candidate.updatedAt > reference.updatedAt
+    || (candidate.updatedAt === reference.updatedAt && candidate.playTicks > reference.playTicks);
+}
+
+/** Mirrors the browser repositories' compare-before-write behavior. */
+class VersionedMemoryRepository implements SaveRepository {
+  constructor(private record?: SaveRecord) {
+    this.record = record ? structuredClone(record) : undefined;
+  }
+
+  async list() {
+    return [];
+  }
+
+  async load(slotId: string) {
+    return slotId === "autosave" && this.record ? structuredClone(this.record) : undefined;
+  }
+
+  async save(record: SaveRecord) {
+    if (!this.record || !isNewerSave(this.record, record)) {
+      this.record = structuredClone(record);
+    }
+  }
+
+  async remove() {
+    this.record = undefined;
+  }
+
+  snapshot(): SaveRecord {
+    if (!this.record) throw new Error("test repository has no autosave");
+    return structuredClone(this.record);
+  }
+}
+
 class DeferredSaveRepository implements SaveRepository {
   private record: SaveRecord | undefined;
   private readonly pending: Array<{
@@ -78,6 +149,10 @@ class DeferredSaveRepository implements SaveRepository {
     reject: (reason: unknown) => void;
   }> = [];
   readonly started: SaveRecord[] = [];
+
+  constructor(record?: SaveRecord) {
+    this.record = record ? structuredClone(record) : undefined;
+  }
 
   async list() {
     return [];
@@ -138,7 +213,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function decodeGameSave(record: SaveRecord): TestGameSaveEnvelope {
@@ -290,6 +367,7 @@ describe("perpetual new worlds", () => {
   it("creates and persists Wander even when an older caller requests a timed shape", async () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.requiresSeed).toBeUndefined();
 
     runtime.dispatchUI({
       type: "new-world",
@@ -299,9 +377,765 @@ describe("perpetual new worlds", () => {
     });
 
     expect(runtime.getUIView().sessionShape).toBe("wander");
+    expect(runtime.getUIView().posture).toBe("gale");
     expect(runtime.getUIView().title.visible).toBe(false);
     await runtime.save();
-    expect(decodeGameSave(repository.snapshot()).session.sessionShape).toBe("wander");
+    const saved = decodeGameSave(repository.snapshot());
+    expect(saved.session.sessionShape).toBe("wander");
+    expect(saved.session.posture).toBe("gale");
+    expect(saved.session.pressureMode).toBe("wild");
+    expect(deserializeWorld(saved.world).meta.pressureMode).toBe("wild");
+    runtime.destroy();
+  });
+
+  it("auto-resumes old postures into hard mode and refuses an unphrased replacement", async () => {
+    const world = createWorld("auto return ledger", "calm");
+    const session = createSessionState(world.meta.seedText, "hearth");
+    session.titleVisible = true;
+    session.paused = true;
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      createPlayer(createWorldView(world)),
+      session,
+      "Auto return ledger",
+    ));
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.visible).toBe(false);
+    expect(runtime.getUIView().clock.paused).toBe(false);
+    expect(runtime.getUIView().posture).toBe("gale");
+
+    runtime.dispatchUI({ type: "open-title" });
+    const originalWorldName = runtime.getUIView().worldName;
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "must not replace",
+      posture: "hearth",
+      sessionShape: "drift",
+    });
+    expect(runtime.getUIView().worldName).toBe(originalWorldName);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("restartrestartrestart");
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "hard restart accepted",
+      posture: "hearth",
+      sessionShape: "drift",
+      restartPhrase: "restartrestartrestart",
+    });
+    expect(runtime.getUIView().worldName).toContain("Hard Restart Accepted");
+    expect(runtime.getUIView().posture).toBe("gale");
+    expect(runtime.getUIView().sessionShape).toBe("wander");
+    expect(runtime.getUIView().title.visible).toBe(false);
+    await runtime.save();
+    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.pressureMode)
+      .toBe("wild");
+    runtime.destroy();
+  });
+
+  it("persists an exact restart in a new generation when the clock does not advance", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(700);
+    const oldWorld = createWorld("same clock legacy", "calm");
+    const oldSession = createSessionState(oldWorld.meta.seedText, "hearth");
+    oldSession.titleVisible = true;
+    oldSession.paused = true;
+    const legacyRecord = runtimeSaveRecord(
+      oldWorld,
+      createPlayer(createWorldView(oldWorld)),
+      oldSession,
+      "Same clock legacy",
+    );
+    legacyRecord.updatedAt = 700;
+    const repository = new VersionedMemoryRepository(legacyRecord);
+    const runtime = await createTideweftRuntime(repository);
+
+    // A generationless alpha save remains readable and is canonicalized to
+    // generation zero on its next ordinary autosave.
+    await runtime.save();
+    expect(repository.snapshot()).toMatchObject({ saveGeneration: 0, updatedAt: 701 });
+
+    runtime.dispatchUI({ type: "open-title" });
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "padded phrase must fail",
+      posture: "gale",
+      sessionShape: "wander",
+      restartPhrase: " restartrestartrestart",
+    });
+    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
+      .toBe("same clock legacy");
+    expect(runtime.getUIView().title.visible).toBe(true);
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "   ",
+      posture: "gale",
+      sessionShape: "wander",
+      restartPhrase: "restartrestartrestart",
+    });
+    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
+      .toBe("same clock legacy");
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("non-empty seed phrase");
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "same clock replacement",
+      posture: "hearth",
+      sessionShape: "drift",
+      restartPhrase: "restartrestartrestart",
+    });
+    await runtime.save();
+    const replacement = repository.snapshot();
+    expect(replacement.saveGeneration).toBe(1);
+    expect(replacement.updatedAt).toBeGreaterThan(701);
+    expect(deserializeWorld(decodeGameSave(replacement).world).meta.seedText)
+      .toBe("same clock replacement");
+
+    // A callback from the pre-restart tab can have the largest possible clock
+    // and tick values; its older generation must still lose.
+    await repository.save({
+      ...legacyRecord,
+      saveGeneration: 0,
+      updatedAt: Number.MAX_SAFE_INTEGER,
+      playTicks: Number.MAX_SAFE_INTEGER,
+    });
+    expect(repository.snapshot()).toEqual(replacement);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().title.visible).toBe(false);
+    expect(resumed.getUIView().clock.paused).toBe(false);
+    expect(resumed.getUIView().posture).toBe("gale");
+    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
+      .toBe("same clock replacement");
+    await resumed.save();
+    const resumedSave = repository.snapshot();
+    expect(resumedSave.saveGeneration).toBe(1);
+    expect(resumedSave.updatedAt).toBeGreaterThan(replacement.updatedAt);
+    resumed.destroy();
+  });
+
+  it("can replace and reload a future-dated maximum timestamp inside a newer generation", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(812);
+    const oldWorld = createWorld("maximum clock old world", "calm");
+    const oldSession = createSessionState(oldWorld.meta.seedText, "hearth");
+    const record = runtimeSaveRecord(
+      oldWorld,
+      createPlayer(createWorldView(oldWorld)),
+      oldSession,
+      "Maximum clock old world",
+    );
+    record.updatedAt = Number.MAX_SAFE_INTEGER;
+    const repository = new VersionedMemoryRepository(record);
+    const runtime = await createTideweftRuntime(repository);
+
+    runtime.dispatchUI({ type: "open-title" });
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "maximum clock replacement",
+      posture: "hearth",
+      sessionShape: "drift",
+      restartPhrase: "restartrestartrestart",
+    });
+    await runtime.save();
+
+    const replacement = repository.snapshot();
+    expect(replacement.saveGeneration).toBe(1);
+    expect(replacement.updatedAt).toBeGreaterThanOrEqual(812);
+    expect(replacement.updatedAt).toBeLessThan(Number.MAX_SAFE_INTEGER);
+    expect(deserializeWorld(decodeGameSave(replacement).world).meta.seedText)
+      .toBe("maximum clock replacement");
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().title.visible).toBe(false);
+    expect(resumed.getUIView().clock.paused).toBe(false);
+    expect(resumed.getUIView().worldName).toContain("Maximum Clock Replacement");
+    resumed.destroy();
+  });
+
+  it("replaces a malformed saturated autosave with a durable newer generation", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_200);
+    const corruptWorld = createWorld("corrupt saturated autosave", "calm");
+    const corrupt = runtimeSaveRecord(
+      corruptWorld,
+      createPlayer(createWorldView(corruptWorld)),
+      createSessionState(corruptWorld.meta.seedText, "hearth"),
+      "Corrupt saturated autosave",
+    );
+    corrupt.updatedAt = Number.MAX_SAFE_INTEGER;
+    corrupt.playTicks = Number.MAX_SAFE_INTEGER;
+    corrupt.worldJson = "{not-json";
+    const repository = new VersionedMemoryRepository(corrupt);
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().title.requiresSeed).toBe(true);
+    expect(runtime.getUIView().title.worldCreationBlocked).toBeUndefined();
+    expect(runtime.getUIView().announcement?.message).toContain("could not be read");
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "LOCAL AUTOSAVE UNREADABLE",
+      detail: expect.stringContaining("replacement is stored"),
+    });
+    await expect(runtime.save()).rejects.toThrow("Choose a seed before replacing");
+    expect(repository.snapshot()).toEqual(corrupt);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "   ",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    expect(runtime.getUIView().announcement?.message).toContain("Enter a non-empty seed phrase");
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(repository.snapshot()).toEqual(corrupt);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "clean recovery estuary",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await runtime.save();
+
+    const recovered = repository.snapshot();
+    expect(recovered).toMatchObject({
+      saveGeneration: 1,
+      updatedAt: expect.any(Number),
+    });
+    expect(recovered.updatedAt).toBeLessThan(Number.MAX_SAFE_INTEGER);
+    expect(recovered.playTicks).toBe(
+      deserializeWorld(decodeGameSave(recovered).world).meta.completedTick,
+    );
+    expect(deserializeWorld(decodeGameSave(recovered).world).meta.seedText)
+      .toBe("clean recovery estuary");
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    expect(runtime.getUIView().title.requiresSeed).toBeUndefined();
+    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE REPLACED");
+
+    // A callback retaining the corrupt maximum clock still belongs to the old
+    // generation and cannot resurrect it after recovery.
+    await repository.save(corrupt);
+    expect(repository.snapshot()).toEqual(recovered);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().title.visible).toBe(false);
+    expect(resumed.getUIView().worldName).toContain("Clean Recovery Estuary");
+    resumed.destroy();
+  });
+
+  it("recovers the exact malformed MAX record through the production local repository", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+    vi.stubGlobal("localStorage", new RuntimeTestStorage());
+    const repository = createSaveRepository();
+    const corruptWorld = createWorld("production repository corruption", "calm");
+    const corrupt = runtimeSaveRecord(
+      corruptWorld,
+      createPlayer(createWorldView(corruptWorld)),
+      createSessionState("production repository corruption", "hearth"),
+      "Production repository corruption",
+    );
+    corrupt.updatedAt = Number.MAX_SAFE_INTEGER;
+    corrupt.playTicks = Number.MAX_SAFE_INTEGER;
+    corrupt.worldJson = "{";
+    await repository.save(corrupt);
+
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "production repository recovery",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await runtime.save();
+    const recovered = await repository.load("autosave");
+    expect(recovered).toMatchObject({ saveGeneration: 1 });
+    if (!recovered) throw new Error("production repository did not retain recovery");
+    expect(deserializeWorld(decodeGameSave(recovered).world).meta.seedText)
+      .toBe("production repository recovery");
+    await expect(repository.save(corrupt)).rejects.toBeInstanceOf(StaleSaveWriteError);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(createSaveRepository());
+    expect(resumed.getUIView().worldName).toContain("Production Repository Recovery");
+    resumed.destroy();
+  });
+
+  it("rolls a corrupt maximum generation into a new era and blocks stale tabs", async () => {
+    const corruptWorld = createWorld("maximum generation corruption", "calm");
+    const corrupt = runtimeSaveRecord(
+      corruptWorld,
+      createPlayer(createWorldView(corruptWorld)),
+      createSessionState(corruptWorld.meta.seedText, "hearth"),
+      "Maximum generation corruption",
+    );
+    corrupt.saveGeneration = Number.MAX_SAFE_INTEGER;
+    corrupt.updatedAt = Number.MAX_SAFE_INTEGER;
+    corrupt.playTicks = Number.MAX_SAFE_INTEGER;
+    corrupt.worldJson = "not an envelope";
+    const repository = new VersionedMemoryRepository(corrupt);
+    const runtime = await createTideweftRuntime(repository);
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "era rollover recovery",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await runtime.save();
+    const recovered = repository.snapshot();
+    expect(recovered).toMatchObject({ saveGenerationEra: 1, saveGeneration: 0 });
+    expect(deserializeWorld(decodeGameSave(recovered).world).meta.seedText)
+      .toBe("era rollover recovery");
+
+    await repository.save(corrupt);
+    expect(repository.snapshot()).toEqual(recovered);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().worldName).toContain("Era Rollover Recovery");
+    resumed.destroy();
+  });
+
+  it("quarantines a decodable envelope whose outer play tick lies about its world", async () => {
+    const corruptWorld = createWorld("lying save metadata", "calm");
+    const corrupt = runtimeSaveRecord(
+      corruptWorld,
+      createPlayer(createWorldView(corruptWorld)),
+      createSessionState(corruptWorld.meta.seedText, "hearth"),
+      "Lying save metadata",
+    );
+    corrupt.updatedAt = Number.MAX_SAFE_INTEGER;
+    corrupt.playTicks = Number.MAX_SAFE_INTEGER;
+    const repository = new VersionedMemoryRepository(corrupt);
+    const runtime = await createTideweftRuntime(repository);
+
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("could not be read");
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "metadata truthful recovery",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await runtime.save();
+    const recovered = repository.snapshot();
+    expect(recovered.saveGeneration).toBe(1);
+    expect(recovered.playTicks).toBe(
+      deserializeWorld(decodeGameSave(recovered).world).meta.completedTick,
+    );
+    runtime.destroy();
+  });
+
+  it("quarantines a malformed session object before runtime adoption", async () => {
+    const corruptWorld = createWorld("malformed session autosave", "calm");
+    const corrupt = runtimeSaveRecord(
+      corruptWorld,
+      createPlayer(createWorldView(corruptWorld)),
+      createSessionState(corruptWorld.meta.seedText, "hearth"),
+      "Malformed session autosave",
+    );
+    const envelope = decodeGameSave(corrupt);
+    corrupt.saveGeneration = 4;
+    corrupt.worldJson = JSON.stringify({ ...envelope, session: {} });
+    const repository = new VersionedMemoryRepository(corrupt);
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("could not be read");
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "safe session recovery",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await runtime.save();
+    expect(repository.snapshot().saveGeneration).toBe(5);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().worldName).toContain("Safe Session Recovery");
+    resumed.destroy();
+  });
+
+  it("rolls a valid maximum generation into a new era on deliberate restart", async () => {
+    const oldWorld = createWorld("valid maximum generation", "calm");
+    const record = runtimeSaveRecord(
+      oldWorld,
+      createPlayer(createWorldView(oldWorld)),
+      createSessionState(oldWorld.meta.seedText, "hearth"),
+      "Valid maximum generation",
+    );
+    record.saveGeneration = Number.MAX_SAFE_INTEGER;
+    record.updatedAt = Number.MAX_SAFE_INTEGER;
+    const repository = new VersionedMemoryRepository(record);
+    const runtime = await createTideweftRuntime(repository);
+
+    runtime.dispatchUI({ type: "open-title" });
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "valid era restart",
+      posture: "gale",
+      sessionShape: "wander",
+      restartPhrase: "restartrestartrestart",
+    });
+    await runtime.save();
+    expect(repository.snapshot()).toMatchObject({ saveGenerationEra: 1, saveGeneration: 0 });
+    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
+      .toBe("valid era restart");
+    runtime.destroy();
+  });
+
+  it("never wraps or reports durability when both save generation components are exhausted", async () => {
+    const corruptWorld = createWorld("fully saturated corruption", "calm");
+    const corrupt = runtimeSaveRecord(
+      corruptWorld,
+      createPlayer(createWorldView(corruptWorld)),
+      createSessionState(corruptWorld.meta.seedText, "hearth"),
+      "Fully saturated corruption",
+    );
+    corrupt.saveGenerationEra = Number.MAX_SAFE_INTEGER;
+    corrupt.saveGeneration = Number.MAX_SAFE_INTEGER;
+    corrupt.updatedAt = Number.MAX_SAFE_INTEGER;
+    corrupt.playTicks = Number.MAX_SAFE_INTEGER;
+    corrupt.worldJson = "{";
+    const repository = new VersionedMemoryRepository(corrupt);
+    const runtime = await createTideweftRuntime(repository);
+
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "LOCAL SAVE NOT STORED",
+      tone: "danger",
+    });
+    expect(runtime.getUIView().saveWarning?.detail).toContain("Clear Tideweft's stored site data");
+    expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
+    const saturatedWorldName = runtime.getUIView().worldName;
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "must not wrap saturated save",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    runtime.dispatchUI({ type: "resume-world" });
+    expect(runtime.getUIView().worldName).toBe(saturatedWorldName);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("clear Tideweft's stored site data");
+    await expect(runtime.save()).rejects.toThrow("replacement counter is exhausted");
+    expect(repository.snapshot()).toEqual(corrupt);
+    runtime.destroy();
+  });
+
+  it("refuses to overwrite a fenced newer save while its backend is unavailable", async () => {
+    const repository: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => {
+        throw new NewerSaveUnavailableError({
+          slotId: "autosave",
+          saveGenerationEra: 3,
+          saveGeneration: 7,
+          updatedAt: 4_000,
+          playTicks: 900,
+        });
+      }),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    expect(runtime.getUIView().saveWarning?.detail).toContain("newer local copy exists");
+    expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("TEMPORARILY UNAVAILABLE");
+    const unavailableWorldName = runtime.getUIView().worldName;
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "must not replace fenced save",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    runtime.dispatchUI({ type: "resume-world" });
+    expect(runtime.getUIView().worldName).toBe(unavailableWorldName);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("nothing was opened or replaced");
+    await expect(runtime.save()).rejects.toThrow("newer local save is temporarily unavailable");
+    expect(repository.save).not.toHaveBeenCalled();
+    runtime.destroy();
+  });
+
+  it("fails closed when storage cannot prove whether an autosave exists", async () => {
+    vi.useFakeTimers();
+    const latentWorld = createWorld("latent durable save", "calm");
+    const latentRecord = runtimeSaveRecord(
+      latentWorld,
+      createPlayer(createWorldView(latentWorld)),
+      createSessionState(latentWorld.meta.seedText, "hearth"),
+      "Latent durable save",
+    );
+    let readable = false;
+    const repository: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => {
+        if (!readable) throw new Error("transient IndexedDB read failure");
+        return structuredClone(latentRecord);
+      }),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().title.hasSave).toBe(false);
+    expect(runtime.getUIView().title.requiresSeed).toBeUndefined();
+    expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "LOCAL SAVE UNAVAILABLE",
+      detail: expect.stringContaining("could not prove that local storage is empty"),
+    });
+    expect(runtime.getUIView().announcement?.message).toContain("Nothing will be opened or overwritten");
+
+    for (const seed of ["", "   ", "must not replace latent data", "rapid second submission"]) {
+      runtime.dispatchUI({
+        type: "new-world",
+        seed,
+        posture: "gale",
+        sessionShape: "wander",
+      });
+    }
+    runtime.dispatchUI({ type: "resume-world" });
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE UNAVAILABLE");
+    expect(runtime.getUIView().announcement?.message).toContain("will not open or overwrite");
+    await expect(runtime.save()).rejects.toThrow("could not be read");
+    await expect(runtime.save()).rejects.toThrow("could not be read");
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.remove).not.toHaveBeenCalled();
+    runtime.destroy();
+
+    readable = true;
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().worldName).toContain("Latent Durable Save");
+    expect(resumed.getUIView().title.visible).toBe(false);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(repository.save).not.toHaveBeenCalled();
+    resumed.destroy();
+  });
+
+  it("truthfully replaces equal-version conflicting copies in a newer generation", async () => {
+    let conflictPending = true;
+    let stored: SaveRecord | undefined;
+    const repository: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => {
+        if (conflictPending) {
+          conflictPending = false;
+          throw new ConflictingSaveCopiesError({
+            slotId: "autosave",
+            saveGenerationEra: 2,
+            saveGeneration: 7,
+            updatedAt: 5_000,
+            playTicks: 90,
+          });
+        }
+        return stored ? structuredClone(stored) : undefined;
+      }),
+      save: vi.fn(async (record) => { stored = structuredClone(record); }),
+      remove: vi.fn(async () => { stored = undefined; }),
+    };
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().announcement?.message).toContain("conflicting local autosaves");
+    expect(runtime.getUIView().announcement?.message).toContain("Start a seed to replace both safely");
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "LOCAL AUTOSAVES CONFLICT",
+      detail: expect.stringContaining("Neither equal-version copy was chosen"),
+    });
+    expect(runtime.getUIView().title.requiresSeed).toBe(true);
+    expect(runtime.getUIView().title.worldCreationBlocked).toBeUndefined();
+    await expect(runtime.save()).rejects.toThrow("Choose a seed before replacing");
+    expect(repository.save).not.toHaveBeenCalled();
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "conflict recovery seed",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await runtime.save();
+    expect(stored).toMatchObject({ saveGenerationEra: 2, saveGeneration: 8 });
+    if (!stored) throw new Error("conflict recovery was not stored");
+    expect(deserializeWorld(decodeGameSave(stored).world).meta.seedText)
+      .toBe("conflict recovery seed");
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    expect(runtime.getUIView().title.requiresSeed).toBeUndefined();
+    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE REPLACED");
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().worldName).toContain("Conflict Recovery Seed");
+    resumed.destroy();
+  });
+
+  it("blocks and stops retrying when a newer local save supersedes this runtime", async () => {
+    vi.useFakeTimers();
+    const repository: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => undefined),
+      save: vi.fn(async () => {
+        throw new StaleSaveWriteError("autosave");
+      }),
+      remove: vi.fn(async () => undefined),
+    };
+    const runtime = await createTideweftRuntime(repository);
+
+    await expect(runtime.save()).rejects.toBeInstanceOf(StaleSaveWriteError);
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "LOCAL SAVE SUPERSEDED",
+      detail: expect.stringContaining("will not retry or overwrite it"),
+    });
+    expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("reload to resolve the copies");
+    const supersededWorldName = runtime.getUIView().worldName;
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "must not replace superseded save",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    runtime.dispatchUI({ type: "resume-world" });
+    expect(runtime.getUIView().worldName).toBe(supersededWorldName);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("reload to resolve");
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(repository.save).toHaveBeenCalledOnce();
+    await expect(runtime.save()).rejects.toThrow("superseded by a newer local save");
+    expect(repository.save).toHaveBeenCalledOnce();
+    runtime.destroy();
+  });
+
+  it("warns without losing the in-memory restart and retries its newest snapshot after a failed automatic save", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(900);
+    const oldWorld = createWorld("failed restart old world", "calm");
+    const oldSession = createSessionState(oldWorld.meta.seedText, "hearth");
+    const repository = new DeferredSaveRepository(runtimeSaveRecord(
+      oldWorld,
+      createPlayer(createWorldView(oldWorld)),
+      oldSession,
+      "Failed restart old world",
+    ));
+    const runtime = await createTideweftRuntime(repository);
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "retryable replacement",
+      posture: "hearth",
+      sessionShape: "drift",
+      restartPhrase: "restartrestartrestart",
+    });
+    expect(repository.started).toHaveLength(1);
+    expect(repository.started[0]?.saveGeneration).toBe(1);
+
+    repository.rejectNext(new Error("all local save backends unavailable"));
+    await vi.waitFor(() => {
+      expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE FAILED");
+    });
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "LOCAL SAVE NOT STORED",
+      tone: "danger",
+    });
+    expect(runtime.getUIView().saveWarning?.detail).toContain("only in this open window");
+    expect(runtime.getUIView().worldName).toContain("Retryable Replacement");
+    expect(runtime.getUIView().title.visible).toBe(false);
+
+    // The retry snapshots live state instead of replaying a stale failed
+    // record, so changes made while storage is unavailable remain included.
+    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(repository.started).toHaveLength(2);
+    const retryEnvelope = decodeGameSave(repository.started[1] as SaveRecord);
+    expect(deserializeWorld(retryEnvelope.world).meta.seedText).toBe("retryable replacement");
+    expect(retryEnvelope.player.pace).toBe("swift");
+    expect(repository.started[1]?.saveGeneration).toBe(1);
+
+    repository.resolveNext();
+    await vi.waitFor(() => {
+      expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
+    });
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
+      .toBe("retryable replacement");
+    runtime.destroy();
+  });
+
+  it("cancels a failed-save retry when the runtime is destroyed", async () => {
+    vi.useFakeTimers();
+    const repository = new DeferredSaveRepository();
+    const runtime = await createTideweftRuntime(repository);
+    const failedSave = runtime.save();
+    const rejected = expect(failedSave).rejects.toThrow("storage remains unavailable");
+    repository.rejectNext(new Error("storage remains unavailable"));
+    await rejected;
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    expect(repository.started).toHaveLength(1);
+
+    runtime.destroy();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(repository.started).toHaveLength(1);
+  });
+
+  it("keeps the save warning until the world currently on screen is durable", async () => {
+    vi.useFakeTimers();
+    const oldWorld = createWorld("generation race old world", "calm");
+    const repository = new DeferredSaveRepository(runtimeSaveRecord(
+      oldWorld,
+      createPlayer(createWorldView(oldWorld)),
+      createSessionState(oldWorld.meta.seedText, "hearth"),
+      "Generation race old world",
+    ));
+    const runtime = await createTideweftRuntime(repository);
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "generation one",
+      posture: "hearth",
+      sessionShape: "drift",
+      restartPhrase: "restartrestartrestart",
+    });
+    repository.rejectNext(new Error("generation one could not be stored"));
+    await vi.waitFor(() => {
+      expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    });
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(repository.started.at(-1)?.saveGeneration).toBe(1);
+
+    // Replace the in-memory world again while generation one's automatic retry
+    // is still unresolved. Its later success must not clear generation two's
+    // warning or claim that generation two is durable.
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "generation two",
+      posture: "hearth",
+      sessionShape: "drift",
+      restartPhrase: "restartrestartrestart",
+    });
+    expect(runtime.getUIView().worldName).toContain("Generation Two");
+
+    repository.resolveNext();
+    await vi.waitFor(() => {
+      expect(repository.started.at(-1)?.saveGeneration).toBe(2);
+    });
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    expect(runtime.getUIView().announcement?.message).not.toContain("LOCAL SAVE RESTORED");
+
+    repository.resolveNext();
+    await vi.waitFor(() => {
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+    });
+    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
+    expect(repository.snapshot().saveGeneration).toBe(2);
+    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
+      .toBe("generation two");
     runtime.destroy();
   });
 
@@ -963,6 +1797,44 @@ describe("runtime clarity guards", () => {
     repository.resolveNext();
     await recoverySave;
     expect(decodeGameSave(repository.snapshot()).player.pace).toBe("swift");
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
+    runtime.destroy();
+  });
+
+  it("keeps warning when an older same-generation retry succeeds before a newer request", async () => {
+    vi.useFakeTimers();
+    const repository = new DeferredSaveRepository();
+    const runtime = await createTideweftRuntime(repository);
+    const firstSave = runtime.save();
+    const firstFailure = expect(firstSave).rejects.toThrow("initial storage failure");
+    repository.rejectNext(new Error("initial storage failure"));
+    await firstFailure;
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(repository.started).toHaveLength(2);
+    runtime.dispatchUI({ type: "set-pace", pace: "swift" });
+    const newerSave = runtime.save();
+    expect(repository.started).toHaveLength(2);
+
+    repository.resolveNext();
+    await vi.waitFor(() => expect(repository.started).toHaveLength(3));
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    expect(runtime.getUIView().announcement?.message).not.toContain("LOCAL SAVE RESTORED");
+    expect(decodeGameSave(repository.started[2] as SaveRecord).player.pace).toBe("swift");
+
+    const newerFailure = expect(newerSave).rejects.toThrow("newest snapshot failed");
+    repository.rejectNext(new Error("newest snapshot failed"));
+    await newerFailure;
+    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(repository.started).toHaveLength(4);
+    expect(decodeGameSave(repository.started[3] as SaveRecord).player.pace).toBe("swift");
+    repository.resolveNext();
+    await vi.waitFor(() => expect(runtime.getUIView().saveWarning).toBeUndefined());
+    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
     runtime.destroy();
   });
 });

@@ -13,6 +13,7 @@ export type TutorialMechanicStatus = "live" | "planned";
 
 export const TUTORIAL_SECTION_IDS = [
   "welcome",
+  "whats-new",
   "movement",
   "promises",
   "reports",
@@ -51,6 +52,7 @@ export const TUTORIAL_CONTROL_IDS = [
   "view-key",
   "view-button",
   "relief-orbit",
+  "relief-touch-orbit",
   "world-zoom",
   "cancel-destination",
   "promises-sheet",
@@ -85,6 +87,12 @@ export interface TutorialCallout {
   readonly body: string;
 }
 
+export interface TutorialAction {
+  readonly id: "open-patch-notes";
+  readonly label: string;
+  readonly description: string;
+}
+
 export interface TutorialGuideSection {
   readonly id: TutorialSectionId;
   readonly iconText: string;
@@ -95,6 +103,7 @@ export interface TutorialGuideSection {
   readonly controlIds: readonly TutorialControlId[];
   readonly steps: readonly TutorialStep[];
   readonly callouts: readonly TutorialCallout[];
+  readonly action?: TutorialAction;
 }
 
 export interface PlannedMechanic {
@@ -235,8 +244,16 @@ export const TUTORIAL_CONTROLS = [
   {
     id: "relief-orbit",
     audience: "desktop",
-    input: "Right-drag / Alt-drag",
-    action: "Orbit the Relief 3D camera",
+    input: "Hold J / L · Right-drag / Alt-drag",
+    action: "Spin the Relief 3D map left or right",
+    detail: "J and L turn smoothly while held. Releasing either key, leaving the window, or opening a dialog stops keyboard rotation.",
+  },
+  {
+    id: "relief-touch-orbit",
+    audience: "mobile",
+    input: "Two-finger twist",
+    action: "Spin the Relief 3D map",
+    detail: "Twist directly over the world. A recognized two-finger gesture is never also treated as a travel tap.",
   },
   {
     id: "world-zoom",
@@ -373,6 +390,43 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "Stocks, trust, project progress, route condition, weather, and the chronicle explain why the estuary changed.",
       },
     ],
+  },
+  {
+    id: "whats-new",
+    iconText: "NEW",
+    title: "What's new in this build",
+    shortTitle: "What's New",
+    summary: "The same offline release ledger is available from the title, Quiet Hour, and here in the field manual. It separates live changes, migrations, and known limitations.",
+    keywords: ["what's new", "patch notes", "version", "build", "release", "changes", "migration", "limitations"],
+    controlIds: [],
+    steps: [
+      {
+        id: "whats-new-one-source",
+        audience: "all",
+        title: "Read one canonical ledger",
+        body: "Open Patch Notes below for newest-first entries generated from the same structured source as CHANGELOG.md. Each release names its version, date, build identity, A CHALLENGING HARD balance changes, save implications, fixes, interface work, and honest limitations.",
+      },
+      {
+        id: "whats-new-return",
+        audience: "all",
+        title: "Return to the same page",
+        body: "Opening Patch Notes dispatches no simulation or save command. From the active field, the world continues underneath; from the title or Quiet Hour, the existing stopped state is preserved. Close them to return to this exact field-manual page; keyboard and touch use the same release history.",
+      },
+    ],
+    callouts: [
+      {
+        id: "whats-new-not-roadmap",
+        audience: "all",
+        tone: "boundary",
+        title: "Only shipped behavior belongs here",
+        body: "Known limitations may name planned systems, but a patch entry never describes a disconnected kernel or future mechanic as playable.",
+      },
+    ],
+    action: {
+      id: "open-patch-notes",
+      label: "OPEN PATCH NOTES",
+      description: "Open the offline Patch Notes and return to What's New when closed",
+    },
   },
   {
     id: "movement",
@@ -883,8 +937,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     title: "Two views, one simulation",
     shortTitle: "Views & HUD",
     summary: "Chart 2D and Relief 3D read and command the same world state. Switching presentation cannot fork the simulation or reveal undiscovered terrain.",
-    keywords: ["chart", "2d", "relief", "3d", "view", "hud", "promises", "mobile", "inspector", "camera"],
-    controlIds: ["view-key", "view-button", "relief-orbit", "world-zoom", "promises-sheet", "kit-button"],
+    keywords: ["chart", "2d", "relief", "3d", "view", "hud", "promises", "mobile", "inspector", "camera", "compass", "north", "twist", "spin", "j", "l"],
+    controlIds: ["view-key", "view-button", "relief-orbit", "relief-touch-orbit", "world-zoom", "promises-sheet", "kit-button"],
     steps: [
       {
         id: "views-switch",
@@ -897,8 +951,21 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-camera",
         audience: "desktop",
         title: "Read Relief from any angle",
-        body: "Right-drag or Alt-drag to orbit and use the wheel to zoom. Keyboard travel remains screen-relative after the camera turns. V switches views immediately.",
+        body: "Hold J to spin the map left or L to spin it right; the turn is smooth and stops on release. Right-drag or Alt-drag also orbits, and the wheel zooms. Keyboard travel remains screen-relative after the camera turns. V switches views immediately.",
         controlId: "relief-orbit",
+      },
+      {
+        id: "views-touch-camera",
+        audience: "mobile",
+        title: "Twist without charting a route",
+        body: "In Relief 3D, place two fingers on the world and twist to spin the map. Once the second finger lands, that touch sequence is reserved for the camera, so lifting either finger cannot accidentally set a destination. One-finger taps continue to chart travel normally.",
+        controlId: "relief-touch-orbit",
+      },
+      {
+        id: "views-compass",
+        audience: "all",
+        title: "The north arrow tells the truth",
+        body: "The small N compass never changes the world itself. Chart stays north-up; in Relief its arrow turns with camera yaw and always points toward world north, while currents and the courier keep their actual simulation directions.",
       },
       {
         id: "views-mobile-strip",
@@ -930,7 +997,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     title: "Stop safely without ending the world",
     shortTitle: "Saves",
     summary: "The perpetual world autosaves locally and never advances while closed. Quiet Hour is a voluntary recap and stopping surface, not a timer or quota.",
-    keywords: ["save", "autosave", "local", "indexeddb", "offline", "quiet hour", "continue", "seed", "pause"],
+    keywords: ["save", "autosave", "local", "indexeddb", "offline", "quiet hour", "continue", "seed", "pause", "retry", "warning", "capacity"],
     controlIds: ["quiet-hour"],
     steps: [
       {
@@ -942,8 +1009,26 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "saves-no-offline-time",
         audience: "all",
-        title: "Nothing advances behind your back",
-        body: "Closing the page or desktop app does not simulate offline time. Continue returns to the same saved estuary; its seed and accumulated history remain together on this browser profile.",
+        title: "Nothing advances behind your back; return is automatic",
+        body: "Closing the page or desktop app does not simulate offline time. When a valid local save exists, the next launch enters that same estuary automatically with its saved position, inventory, seed, and history. Compatible older saves migrate to A CHALLENGING HARD, preserve their contents, and gain the exact 18.000 combined-capacity floor.",
+      },
+      {
+        id: "saves-visible-failure",
+        audience: "all",
+        title: "Keep the window open when storage needs another try",
+        body: "If every local-storage path rejects an ordinary write, LOCAL SAVE NOT STORED remains visible on the field and whichever top-layer surface is active: title, Quiet Hour, KIT, tutorial, or Patch Notes. The current estuary then exists only in this open window. Tideweft retries automatically with bounded backoff, and every retry takes a fresh snapshot so changes made after the failure are included. Only a durable write of the latest requested snapshot clears the persistent warning and announces LOCAL SAVE RESTORED.",
+      },
+      {
+        id: "saves-damaged-or-forked-copy",
+        audience: "all",
+        title: "A damaged or forked save is never guessed",
+        body: "If a local session is unreadable, or two different copies claim the same save version, Tideweft enters neither one. A visible title warning identifies UNREADABLE or CONFLICT, Continue and the ordinary restart phrase stay hidden, and a non-empty seed phrase is required to create a safe higher-version replacement. A blank phrase changes nothing, and the warning stays visible until that replacement is durable. If either configured storage backend cannot be read, Tideweft cannot safely prove which copy—or absence—is authoritative: LOCAL SAVE UNAVAILABLE disables Continue, seed creation, and restart; this window performs no write, and you should reload when both stores are available. If another tab owns a different or newer durable copy, this window likewise blocks writes and asks you to reload instead of retrying over it. In the deliberately extreme case where both replacement counters are already at their largest safe value, the title refuses to wrap them and tells you to clear Tideweft's stored site data before beginning again.",
+      },
+      {
+        id: "saves-hard-restart",
+        audience: "all",
+        title: "One ruleset; restarting takes two deliberate steps",
+        body: "There is no difficulty selector. Every new and resumed estuary uses the one perpetual ruleset, A CHALLENGING HARD. To replace a save, open the title through Quiet Hour and type restartrestartrestart exactly. That only unlocks the seed field; the existing world remains safe until you submit a non-empty new seed phrase. A blank seed changes nothing.",
       },
       {
         id: "saves-quiet-hour",
@@ -1068,8 +1153,10 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
+export const TUTORIAL_CONTENT_VERSION = 6 as const;
+
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
-  version: 4,
+  version: TUTORIAL_CONTENT_VERSION,
   title: "TIDEWEFT FIELD MANUAL",
   subtitle: "Promises, currents, and the paths that learn",
   sections: TUTORIAL_GUIDE_SECTIONS,
