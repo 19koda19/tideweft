@@ -17,8 +17,8 @@ const SMOKE_REGIONAL_ROWS = 74;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.3';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 12;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.4';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 13;
 const smokeRegionalTileIndex = (compatibilityTileIndex) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -553,6 +553,9 @@ function rendererProbeScript() {
     const tideHarpActive = document.querySelector('.field-readout__tide-harp-active');
     const tideHarpActiveStyle = tideHarpActive ? getComputedStyle(tideHarpActive) : null;
     const reliefLabelLayer = document.querySelector('.relief-label-layer[data-renderer="relief-3d"]');
+    const reliefAdriftLabel = reliefLabelLayer?.querySelector(
+      '.relief-world-label[data-tone="adrift"]',
+    ) || null;
     const activeContracts = uiView && Array.isArray(uiView.contracts)
       ? uiView.contracts.filter((contract) => contract.status === 'accepted' || contract.status === 'tracked')
       : [];
@@ -735,6 +738,41 @@ function rendererProbeScript() {
       contractCount: uiView && Array.isArray(uiView.contracts) ? uiView.contracts.length : null,
       activeContractCount: activeContracts.length,
       playerCargoLoad: renderView && renderView.player ? renderView.player.cargoLoad : null,
+      playerMode: renderView?.player?.mode ?? null,
+      playerStamina: renderView?.player?.stamina ?? null,
+      playerAdrift: renderView?.player?.adrift
+        ? {
+            paddling: renderView.player.adrift.paddling === true,
+            catchingBreath: renderView.player.adrift.catchingBreath === true,
+            canStand: renderView.player.adrift.canStand === true,
+            waterDepth: renderView.player.adrift.waterDepth,
+            currentDirection: renderView.player.adrift.currentDirection
+              ? {
+                  x: renderView.player.adrift.currentDirection.x,
+                  y: renderView.player.adrift.currentDirection.y,
+                }
+              : null,
+          }
+        : null,
+      uiAdrift: uiView?.field?.adrift
+        ? {
+            label: uiView.field.adrift.label,
+            instruction: uiView.field.adrift.instruction,
+            paddling: uiView.field.adrift.paddling === true,
+            catchingBreath: uiView.field.adrift.catchingBreath === true,
+            canStand: uiView.field.adrift.canStand === true,
+            waterDepth: uiView.field.adrift.waterDepth,
+          }
+        : null,
+      reliefAdrift: reliefAdriftLabel
+        ? {
+            visible: visiblyIntersectsViewport(reliefAdriftLabel),
+            insideViewport: whollyInsideViewport(reliefAdriftLabel),
+            text: reliefAdriftLabel.textContent?.trim() || null,
+            tone: reliefAdriftLabel.getAttribute('data-tone'),
+            selected: reliefAdriftLabel.getAttribute('data-selected'),
+          }
+        : null,
       playerBracing: renderView?.player?.bracing === true,
       stabilityBraceFeedback: stabilityDetail
         ? {
@@ -1398,6 +1436,12 @@ async function bindSmokeWayknot(contents) {
         Math.floor(settlement.position.x / terrain.tileSize),
       ),
     );
+    for (const parcel of view.looseCargo || []) {
+      occupied.add(
+        Math.floor(parcel.position.y / terrain.tileSize) * terrain.columns +
+        Math.floor(parcel.position.x / terrain.tileSize),
+      );
+    }
     // These render categories correspond to dry authoritative contexts for a
     // Reed mat or Wind knot. Staying out of live water keeps this smoke path
     // focused on binding and avoids making it depend on a particular tide.
@@ -1766,6 +1810,361 @@ async function installSmokeTideHarpFixture(contents) {
   return fixture;
 }
 
+/**
+ * Installs one sealed v4 deep-water starting posture through the isolated
+ * smoke autosave. The next ordinary movement beat must enter ADRIFT through
+ * production footing rules; no gameplay debug surface is shipped for it.
+ * The exact pre-probe record is returned so the smoke can restore it after
+ * proving held input and release behavior.
+ */
+async function installSmokeAdriftFixture(contents) {
+  const fixture = await contents.executeJavaScript(`(async () => {
+    const runtime = window.__TIDEWEFT__?.runtime;
+    const view = runtime?.getRenderView?.();
+    if (!runtime?.save || !view?.terrain || !view?.player?.position) return null;
+    await runtime.save();
+
+    const openRequest = indexedDB.open('tideweft', 1);
+    const database = await new Promise((resolve, reject) => {
+      openRequest.addEventListener('success', () => resolve(openRequest.result), { once: true });
+      openRequest.addEventListener('error', () => reject(openRequest.error), { once: true });
+    });
+    const readTransaction = database.transaction('saves', 'readonly');
+    const getRequest = readTransaction.objectStore('saves').get('autosave');
+    const record = await new Promise((resolve, reject) => {
+      getRequest.addEventListener('success', () => resolve(getRequest.result), { once: true });
+      getRequest.addEventListener('error', () => reject(getRequest.error), { once: true });
+    });
+    if (!record || typeof record.worldJson !== 'string') {
+      database.close();
+      return null;
+    }
+
+    const backup = JSON.parse(JSON.stringify(record));
+    const envelope = JSON.parse(record.worldJson);
+    const player = envelope?.player;
+    const activeRegion = envelope?.physicalCargo?.activeRegion;
+    const terrain = view.terrain;
+    if (
+      envelope?.format !== 'tideweft-session' ||
+      envelope?.version !== 4 ||
+      record.payloadVersion !== 4 ||
+      typeof envelope.regionalTravel !== 'string' ||
+      !player ||
+      player.worldWidth !== terrain.columns ||
+      player.worldHeight !== terrain.rows ||
+      activeRegion?.x !== 0 ||
+      activeRegion?.y !== 0
+    ) {
+      database.close();
+      return null;
+    }
+
+    const occupied = new Set(
+      view.settlements.map((settlement) =>
+        Math.floor(settlement.position.y / terrain.tileSize) * terrain.columns +
+        Math.floor(settlement.position.x / terrain.tileSize),
+      ),
+    );
+    const playerX = Math.floor(view.player.position.x / terrain.tileSize);
+    const playerY = Math.floor(view.player.position.y / terrain.tileSize);
+    const deepNeighborCount = (index) => {
+      const x = index % terrain.columns;
+      const y = Math.floor(index / terrain.columns);
+      return [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]
+        .filter(([neighborX, neighborY]) =>
+          neighborX >= 0 && neighborX < terrain.columns &&
+          neighborY >= 0 && neighborY < terrain.rows &&
+          (terrain.tiles[neighborY * terrain.columns + neighborX]?.waterDepth ?? 0) >= 0.18,
+        ).length;
+    };
+    const candidates = terrain.tiles.flatMap((tile, index) => {
+      const x = index % terrain.columns;
+      const y = Math.floor(index / terrain.columns);
+      if (
+        !Number.isFinite(tile.waterDepth) ||
+        tile.waterDepth < 0.24 ||
+        x < 3 || x >= terrain.columns - 3 ||
+        y < 3 || y >= terrain.rows - 3 ||
+        occupied.has(index)
+      ) return [];
+      return [{
+        index,
+        x,
+        y,
+        depth: tile.waterDepth,
+        deepNeighbors: deepNeighborCount(index),
+        distance: Math.abs(x - playerX) + Math.abs(y - playerY),
+      }];
+    }).sort((left, right) =>
+      right.deepNeighbors - left.deepNeighbors ||
+      left.distance - right.distance ||
+      left.index - right.index,
+    );
+    const candidate = candidates.find(({ deepNeighbors }) => deepNeighbors === 4) || candidates[0];
+    if (!candidate) {
+      database.close();
+      return null;
+    }
+
+    player.x = candidate.x * 1_000 + 500;
+    player.y = candidate.y * 1_000 + 500;
+    player.previousX = player.x;
+    player.previousY = player.y;
+    player.velocityX = 0;
+    player.velocityY = 0;
+    player.mode = 'foot';
+    player.pace = 'rest';
+    player.stamina = 800_000;
+    player.stability = 0;
+    player.stabilityTrend = 'falling';
+    player.stabilityHint = 'Deep current · one movement beat tests ADRIFT recovery';
+    player.sweepPath = [];
+    player.sweepTicksRemaining = 0;
+    player.sweepTotalTicks = 0;
+    player.sweepSupport = null;
+    player.currentTrace = [candidate.index];
+    player.surveyTrace = [candidate.index];
+
+    const stableStringify = (value) => {
+      if (value === null) return 'null';
+      switch (typeof value) {
+        case 'boolean': return value ? 'true' : 'false';
+        case 'number':
+          if (!Number.isFinite(value)) throw new TypeError('Cannot encode a non-finite number');
+          if (Object.is(value, -0)) return '0';
+          return JSON.stringify(value);
+        case 'string': return JSON.stringify(value);
+        case 'object': {
+          if (Array.isArray(value)) {
+            return '[' + value.map((entry) => stableStringify(entry)).join(',') + ']';
+          }
+          const keys = Object.keys(value).sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+          return '{' + keys.map((key) => {
+            if (value[key] === undefined) throw new TypeError('Cannot encode undefined at key ' + key);
+            return JSON.stringify(key) + ':' + stableStringify(value[key]);
+          }).join(',') + '}';
+        }
+        default: throw new TypeError('Cannot canonically encode ' + typeof value);
+      }
+    };
+    const unsealed = { ...envelope };
+    delete unsealed.integrity;
+    const encoded = stableStringify(unsealed);
+    let high = 0x811c9dc5;
+    let low = 0x9e3779b9;
+    for (let index = 0; index < encoded.length; index += 1) {
+      const code = encoded.charCodeAt(index);
+      high = Math.imul(high ^ code, 0x01000193) >>> 0;
+      low = Math.imul(low ^ code, 0x85ebca6b) >>> 0;
+      low ^= high >>> 13;
+    }
+    envelope.integrity = (high >>> 0).toString(16).padStart(8, '0') +
+      (low >>> 0).toString(16).padStart(8, '0');
+
+    record.worldJson = JSON.stringify(envelope);
+    record.updatedAt = Math.max(Date.now(), Number(record.updatedAt || 0) + 1);
+    const writeTransaction = database.transaction('saves', 'readwrite');
+    writeTransaction.objectStore('saves').put(record);
+    await new Promise((resolve, reject) => {
+      writeTransaction.addEventListener('complete', resolve, { once: true });
+      writeTransaction.addEventListener('abort', () => reject(writeTransaction.error), { once: true });
+      writeTransaction.addEventListener('error', () => reject(writeTransaction.error), { once: true });
+    });
+    database.close();
+
+    runtime.save = async () => {};
+    const backupEnvelope = JSON.parse(backup.worldJson);
+    const backupPlayer = backupEnvelope.player;
+    return {
+      backup,
+      tileIndex: candidate.index,
+      depth: candidate.depth,
+      deepNeighbors: candidate.deepNeighbors,
+      stamina: player.stamina / 1_000_000,
+      restore: {
+        tileIndex: Math.floor(backupPlayer.y / 1_000) * backupPlayer.worldWidth +
+          Math.floor(backupPlayer.x / 1_000),
+        mode: backupPlayer.mode,
+      },
+    };
+  })()`, true);
+
+  if (!fixture?.backup) throw new Error('the smoke-only ADRIFT save fixture could not be installed');
+  await contents.loadURL(PRODUCTION_ENTRY_URL);
+  await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === false &&
+      probe.paused === false &&
+      probe.worldName === SMOKE_WORLD_NAME &&
+      probe.playerMode === 'foot' &&
+      probe.playerTileIndex === fixture.tileIndex &&
+      probe.playerAdrift === null &&
+      probe.uiAdrift === null &&
+      probeHasActiveRenderer(probe, 'relief-3d'),
+    SMOKE_TEST.timeoutMs,
+  );
+  return fixture;
+}
+
+function smokeAdriftEvidence(probe) {
+  return {
+    tick: probe?.tick ?? null,
+    mode: probe?.playerMode ?? null,
+    position: probe?.playerPosition ?? null,
+    velocity: probe?.playerVelocity ?? null,
+    stamina: probe?.playerStamina ?? null,
+    render: probe?.playerAdrift ?? null,
+    ui: probe?.uiAdrift ?? null,
+    reliefLabel: probe?.reliefAdrift ?? null,
+    interact: probe?.interact ?? null,
+  };
+}
+
+async function verifySmokeAdrift(contents, fixture) {
+  if (!await focusSmokePlayer(contents)) {
+    throw new Error('the ADRIFT fixture could not focus the production courier');
+  }
+  const pressed = await contents.executeJavaScript(`(() => {
+    const canvas = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'))
+      .find((candidate) => !candidate.hidden && candidate.dataset.renderer === 'relief-3d');
+    if (!(canvas instanceof HTMLCanvasElement)) return null;
+    canvas.focus();
+    const event = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      bubbles: true,
+      cancelable: true,
+    });
+    return {
+      consumed: canvas.dispatchEvent(event) === false,
+      focused: document.activeElement === canvas,
+    };
+  })()`, true);
+  if (pressed?.consumed !== true || pressed?.focused !== true) {
+    throw new Error(`the packaged ADRIFT paddle key was not accepted: ${JSON.stringify(pressed)}`);
+  }
+
+  const paddling = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probe.playerMode === 'swept' &&
+      probe.playerTileIndex === fixture.tileIndex &&
+      probe.playerStamina < fixture.stamina &&
+      probe.playerAdrift?.paddling === true &&
+      probe.playerAdrift?.catchingBreath === false &&
+      probe.playerAdrift?.waterDepth >= 0.12 &&
+      probe.uiAdrift?.paddling === true &&
+      probe.uiAdrift?.catchingBreath === false &&
+      probe.uiAdrift?.label === 'PADDLING' &&
+      probe.uiAdrift?.instruction === 'PADDLE TOWARD SHALLOW WATER' &&
+      probe.interact?.label === 'ADRIFT · paddle / float' &&
+      probe.interact?.disabled === true &&
+      probe.reliefAdrift?.visible === true &&
+      probe.reliefAdrift?.insideViewport === true &&
+      probe.reliefAdrift?.tone === 'adrift' &&
+      probe.reliefAdrift?.selected === 'true' &&
+      probe.reliefAdrift?.text === 'PADDLING · PADDLE TOWARD SHALLOW WATER',
+    SMOKE_TEST.timeoutMs,
+  );
+
+  const released = await contents.executeJavaScript(`(() => {
+    const canvas = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'))
+      .find((candidate) => !candidate.hidden && candidate.dataset.renderer === 'relief-3d');
+    if (!(canvas instanceof HTMLCanvasElement)) return null;
+    const event = new KeyboardEvent('keyup', {
+      key: 'w',
+      code: 'KeyW',
+      bubbles: true,
+      cancelable: true,
+    });
+    const consumed = canvas.dispatchEvent(event) === false;
+    return {
+      consumed,
+      staminaAtRelease: window.__TIDEWEFT__?.runtime?.getRenderView?.()?.player?.stamina ?? null,
+    };
+  })()`, true);
+  if (released?.consumed !== true) {
+    throw new Error(`the packaged ADRIFT paddle release was not accepted: ${JSON.stringify(released)}`);
+  }
+
+  const floating = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probe.tick > paddling.tick &&
+      probe.playerMode === 'swept' &&
+      probe.playerAdrift?.paddling === false &&
+      probe.playerAdrift?.catchingBreath === true &&
+      probe.uiAdrift?.paddling === false &&
+      probe.uiAdrift?.catchingBreath === true &&
+      probe.uiAdrift?.label === 'CATCHING BREATH' &&
+      probe.uiAdrift?.instruction === 'FLOAT · LET STAMINA RETURN' &&
+      Number.isFinite(released.staminaAtRelease) &&
+      probe.playerStamina > released.staminaAtRelease &&
+      probe.reliefAdrift?.visible === true &&
+      probe.reliefAdrift?.insideViewport === true &&
+      probe.reliefAdrift?.text === 'CATCHING BREATH · FLOAT · LET STAMINA RETURN',
+    SMOKE_TEST.timeoutMs,
+  );
+
+  return {
+    input: { pressed, released },
+    paddling: smokeAdriftEvidence(paddling),
+    floating: smokeAdriftEvidence(floating),
+  };
+}
+
+async function restoreSmokeAdriftFixture(contents, fixture) {
+  const encodedBackup = Buffer.from(JSON.stringify(fixture.backup), 'utf8').toString('base64');
+  const written = await contents.executeJavaScript(`(async () => {
+    const runtime = window.__TIDEWEFT__?.runtime;
+    if (!runtime) return null;
+    runtime.dispatchRenderer?.({ type: 'movement', vector: { x: 0, y: 0 } });
+    runtime.save = async () => {};
+    const bytes = Uint8Array.from(atob('${encodedBackup}'), (character) => character.charCodeAt(0));
+    const record = JSON.parse(new TextDecoder().decode(bytes));
+    record.updatedAt = Math.max(Date.now(), Number(record.updatedAt || 0) + 1);
+    const openRequest = indexedDB.open('tideweft', 1);
+    const database = await new Promise((resolve, reject) => {
+      openRequest.addEventListener('success', () => resolve(openRequest.result), { once: true });
+      openRequest.addEventListener('error', () => reject(openRequest.error), { once: true });
+    });
+    const transaction = database.transaction('saves', 'readwrite');
+    transaction.objectStore('saves').put(record);
+    await new Promise((resolve, reject) => {
+      transaction.addEventListener('complete', resolve, { once: true });
+      transaction.addEventListener('abort', () => reject(transaction.error), { once: true });
+      transaction.addEventListener('error', () => reject(transaction.error), { once: true });
+    });
+    database.close();
+    return { payloadVersion: record.payloadVersion, seed: record.seed };
+  })()`, true);
+  if (written?.payloadVersion !== 4 || written?.seed !== SMOKE_WORLD_SEED) {
+    throw new Error(`the ADRIFT smoke fixture backup was not restored: ${JSON.stringify(written)}`);
+  }
+
+  await contents.loadURL(PRODUCTION_ENTRY_URL);
+  const restored = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.titleOpen === false &&
+      probe.paused === false &&
+      probe.worldName === SMOKE_WORLD_NAME &&
+      probe.playerMode === fixture.restore.mode &&
+      probe.playerTileIndex === fixture.restore.tileIndex &&
+      probe.playerAdrift === null &&
+      probe.uiAdrift === null &&
+      probe.reliefAdrift === null &&
+      probeHasPlayableTideHarp(probe) &&
+      probeHasActiveRenderer(probe, 'relief-3d'),
+    SMOKE_TEST.timeoutMs,
+  );
+  return smokeAdriftEvidence(restored);
+}
+
 function probeHasPlayableTideHarp(probe) {
   const projected = probe?.tideHarps?.projected;
   const harp = Array.isArray(projected)
@@ -1923,8 +2322,9 @@ function probeHasSurfaceCurrent(probe) {
   const current = probe?.surfaceCurrent;
   return Boolean(
     current &&
-    (current.x === -1 || current.x === 1) &&
-    (current.y === -1 || current.y === 0 || current.y === 1),
+    (current.x === -1_000_000 || current.x === 1_000_000) &&
+    Number.isFinite(current.y) &&
+    Math.abs(current.y) <= 1_000_000,
   );
 }
 
@@ -1952,7 +2352,7 @@ function probeHasMobileHudFrame(probe) {
     mobile.compactCopy.objective?.includes('DELIVER') &&
     mobile.compactCopy.safety?.includes('STAM') &&
     mobile.compactCopy.safety?.includes('STAB') &&
-    mobile.compactCopy.safety?.includes('DEEP: STAM/STAB 0 → SWEPT') &&
+    mobile.compactCopy.safety?.includes('DEEP: STAM/STAB 0 → ADRIFT') &&
     /^(?:WATER|GROUND) · /u.test(mobile.compactCopy.terrain || '') &&
     mobile.compactCopy.terrain.split(' · ').length >= 4 &&
     Array.isArray(vitals) &&
@@ -3253,6 +3653,14 @@ async function runProductionSmoke(window) {
   await new Promise((resolve) => setTimeout(resolve, 750));
   const screenshot = await captureSmokeEvidence(window, SMOKE_TEST.screenshotPath);
 
+  // Prove the packaged production input, projection, UI, and Relief label for
+  // the controllable-water slice, then put the exact pre-probe autosave back.
+  // Existing screenshot evidence therefore remains the normal expedition and
+  // every later smoke check starts from the same stable foot state.
+  const adriftFixture = await installSmokeAdriftFixture(contents);
+  const adriftProbe = await verifySmokeAdrift(contents, adriftFixture);
+  const adriftRestored = await restoreSmokeAdriftFixture(contents, adriftFixture);
+
   if (resourceFailures.length > 0) {
     throw new Error(`production resources failed to load: ${JSON.stringify(resourceFailures)}`);
   }
@@ -3275,6 +3683,16 @@ async function runProductionSmoke(window) {
       tuned: tideHarpProbe.tuned,
       echoed: tideHarpProbe.echoed,
       expectedEcho: tideHarpProbe.expectedEcho,
+    },
+    adrift: {
+      fixture: {
+        tileIndex: adriftFixture.tileIndex,
+        depth: adriftFixture.depth,
+        deepNeighbors: adriftFixture.deepNeighbors,
+        restore: adriftFixture.restore,
+      },
+      ...adriftProbe,
+      restored: adriftRestored,
     },
     modeToggle: {
       chart: chartProbe,

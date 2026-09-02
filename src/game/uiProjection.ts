@@ -16,6 +16,7 @@ import {
   type FieldResourceNode,
 } from "../sim/fieldResources";
 import type {
+  AdriftFieldUIView,
   ChronicleEntryUIView,
   ContractMood,
   ContractUIView,
@@ -25,6 +26,7 @@ import type {
   SettlementInspectorUIView,
   TideweftUIView,
 } from "../ui/types";
+import { adriftPresentation } from "../render/adriftPresentation";
 import {
   FIELD_TOOL_LABELS,
   PACK_LOAD_MILLI_PER_UNIT,
@@ -84,7 +86,12 @@ import {
   regionalWorldCenter,
 } from "./regionalWorldView";
 import { VISIBILITY_DIRECT, type PerceptionResult } from "./perception";
-import { isCurrentPerceptionSnapshot, projectPerception } from "./projection";
+import {
+  isCurrentPerceptionSnapshot,
+  projectAdriftView,
+  projectPerception,
+  type AdriftProjectionControl,
+} from "./projection";
 import type { TraversalFeedbackState } from "./traversalFeedback";
 import { eventSettlementLocusIds } from "./eventObservation";
 
@@ -104,6 +111,8 @@ export interface UIProjectionOptions {
   readonly inactiveLooseCargoWorlds?: readonly LooseCargoWorldState[];
   /** Authoritative momentary hold state shared by Shift and touch. */
   readonly bracing?: boolean;
+  /** Optional live movement intent used only to label an ADRIFT stroke. */
+  readonly adriftControl?: AdriftProjectionControl;
   /** The same disclosure snapshot used by both renderers this refresh. */
   readonly perception?: PerceptionResult;
   /** Direct physical feedback becomes an observed system entry, not overhead prose. */
@@ -128,6 +137,7 @@ export function projectUIView(
     )
     ? options.perception
     : currentPerception;
+  const adrift = projectAdriftFieldView(world, player, options.adriftControl);
   const selectedSettlementCandidate = session.selectedSettlementId === null
     ? undefined
     : economy.settlements.find((settlement) => settlement.id === session.selectedSettlementId);
@@ -250,7 +260,7 @@ export function projectUIView(
           }
         : { locationLabel: settlementName(economy, playerSettlementId) }),
     },
-    field: projectFieldReadout(world, player),
+    field: projectFieldReadout(world, player, adrift),
     kit: projectKit(world, player, options.looseCargoCarrier),
     choir: projectChoir(economy, player),
     ...(activeContract
@@ -326,7 +336,7 @@ export function projectUIView(
       canInteract: player.mode !== "swept"
         && (nearbyParcel !== undefined || localResource !== undefined || playerSettlementId !== null),
       interactLabel: player.mode === "swept"
-        ? "Current has helm"
+        ? "ADRIFT · paddle / float"
         : nearbyParcel
           ? "Recover parcel"
         : localResource
@@ -339,7 +349,7 @@ export function projectUIView(
             ? "Pick up cargo"
             : "Inspect harbor",
       interactHint: player.mode === "swept"
-        ? "Harbor actions return after the safe bank catches you."
+        ? "MOVE / TAP to paddle toward shallow water · release movement to catch your breath."
         : nearbyParcel
           ? `A physical ${nearbyParcel.payload.kind === "promise" ? "Promise parcel" : "field item"} is within reach. Desktop: press E. Mobile: tap the parcel.`
         : localResource
@@ -745,7 +755,11 @@ function gearPurpose(kind: string): string {
   }
 }
 
-function projectFieldReadout(world: WorldView, player: PlayerState) {
+function projectFieldReadout(
+  world: WorldView,
+  player: PlayerState,
+  adrift: AdriftFieldUIView | undefined,
+) {
   const index = playerTileIndex(player);
   const tile = world.terrain.tiles[index];
   const settlement = world.settlements.find((candidate) => candidate.tileIndex === index);
@@ -782,7 +796,7 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
           ? "High water drain"
           : "Severe water drain";
   const hint = player.mode === "swept"
-    ? `Current has the helm · ${Math.round(sweptProgress * 100)}% toward a safe bank. Steering and sounding return ashore; cargo remains physical, and anything separated stays recoverable.`
+    ? `${adrift?.label ?? "ADRIFT"} · ${adrift?.instruction ?? "MOVE / TAP TO PADDLE · RELEASE TO BREATHE"}. Loose cargo follows its own current.`
     : depth > 20_000 && !depthKnown
       ? "Sound this water first (Space). Depth changes stamina use and whether flooded ground takes a Reed mat or Tide anchor."
     : activeTideHarp
@@ -821,6 +835,34 @@ function projectFieldReadout(world: WorldView, player: PlayerState) {
     },
     swept: player.mode === "swept",
     sweptProgress,
+    ...(adrift ? { adrift } : {}),
+  };
+}
+
+function projectAdriftFieldView(
+  world: WorldView,
+  player: PlayerState,
+  control: AdriftProjectionControl | undefined,
+): AdriftFieldUIView | undefined {
+  const physical = projectAdriftView(world, player, control);
+  if (!physical) return undefined;
+  const presentation = adriftPresentation({
+    modeActive: true,
+    paddling: physical.paddling,
+    catchingBreath: physical.catchingBreath,
+    canStand: physical.canStand,
+    stamina: Math.max(0, Math.min(1, player.stamina / FIXED_POINT)),
+    velocity: {
+      x: Number.isFinite(player.velocityX) ? player.velocityX / TILE_UNITS : 0,
+      y: Number.isFinite(player.velocityY) ? player.velocityY / TILE_UNITS : 0,
+    },
+    currentDirection: physical.currentDirection,
+  });
+  if (!presentation) return undefined;
+  return {
+    ...physical,
+    label: presentation.label,
+    instruction: presentation.instruction,
   };
 }
 

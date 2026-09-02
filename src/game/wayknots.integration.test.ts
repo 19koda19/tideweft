@@ -294,7 +294,7 @@ describe("Wayknots game wiring", () => {
     expect(playerTileIndex(aided)).toBe(marsh.tileIndex);
   });
 
-  it("makes a Tide anchor lower water effort and shorten a generated deep-water sweep", () => {
+  it("makes a Tide anchor lower water effort and weaken ADRIFT current without auto-rescuing", () => {
     const world = generatedWorld();
     const water = longSweepAnchorContext(world);
     const tile = world.terrain.tiles[water.tileIndex];
@@ -329,14 +329,22 @@ describe("Wayknots game wiring", () => {
       manhattanTileDistance(water.tileIndex, index, world.terrain) > 2
     )).toBe(true);
 
-    const plainEstimate = baseline.sweepTotalTicks;
-    const anchoredEstimate = anchored.sweepTotalTicks;
+    const plainBefore = { x: baseline.x, y: baseline.y };
+    const anchoredBefore = { x: anchored.x, y: anchored.y };
+    expect(stepPlayer(baseline, world, NO_INPUT).swept).toBe(true);
+    expect(stepPlayer(anchored, world, NO_INPUT).swept).toBe(true);
+    const plainDrift = Math.hypot(baseline.x - plainBefore.x, baseline.y - plainBefore.y);
+    const anchoredDrift = Math.hypot(anchored.x - anchoredBefore.x, anchored.y - anchoredBefore.y);
+    expect(anchoredDrift).toBeGreaterThan(0);
+    expect(anchoredDrift).toBeLessThan(plainDrift);
+
     const plainActual = ticksUntilAshore(baseline, world);
     const anchoredActual = ticksUntilAshore(anchored, world);
 
-    expect(plainActual).toBe(plainEstimate);
-    expect(anchoredActual).toBe(anchoredEstimate);
-    expect(anchoredActual).toBeLessThan(plainActual);
+    expect(plainActual).toBeGreaterThan(0);
+    expect(anchoredActual).toBeGreaterThan(0);
+    expect(baseline.mode).not.toBe("swept");
+    expect(anchored.mode).not.toBe("swept");
   });
 
   it("makes a Wind knot reduce gust-driven stability loss on generated exposed ground", () => {

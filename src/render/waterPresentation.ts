@@ -20,6 +20,8 @@ export const WATER_PRESENTATION_PALETTE = {
 export interface WaterPresentation {
   /** Discovery-masked depth. This must never expose a hidden sounding. */
   readonly depth: number;
+  /** True only when current detail perception or a durable sounding reveals depth. */
+  readonly depthDisclosed: boolean;
   readonly band: WaterDepthBand;
   readonly visibility: number;
   readonly biome?: BiomeId;
@@ -67,13 +69,15 @@ export function visibleWaterPresentation(
     : Math.min(eligibleVisibility, unit(options.visibilityCap));
   if (visibility <= 0) return undefined;
 
-  const actualDepth = unit(tile.waterDepth, options.derivedDepth);
+  const depthDisclosed = isWaterDepthDisclosed(tile);
+  const actualDepth = visibleWaterDepth(tile, options.derivedDepth);
   const depth = actualDepth * Math.pow(visibility, 0.72);
   if (depth <= 0.015) return undefined;
 
   const biome = visibleBiomePresentation(tile);
   return composeWaterPresentation({
     depth,
+    depthDisclosed,
     visibility,
     environment: biome ? biomeEnvironmentalEmphasis(tile) : 0.5,
     tideLevel: unit(options.tideLevel),
@@ -100,6 +104,7 @@ export function quantizeWaterPresentation(
     Math.round(unit(value) * safeSteps) / safeSteps;
   return composeWaterPresentation({
     depth: Math.max(1 / safeSteps, quantize(presentation.depth)),
+    depthDisclosed: presentation.depthDisclosed,
     visibility: quantize(presentation.visibility),
     environment: quantize(presentation.environment),
     tideLevel: quantize(presentation.tideLevel),
@@ -111,6 +116,7 @@ export function quantizeWaterPresentation(
 
 interface WaterSignals {
   readonly depth: number;
+  readonly depthDisclosed: boolean;
   readonly visibility: number;
   readonly environment: number;
   readonly tideLevel: number;
@@ -134,6 +140,7 @@ function composeWaterPresentation(signals: WaterSignals): WaterPresentation {
   const color = mixHexColors(biomeConditioned, signals.accentColor, tideLift);
   return {
     depth,
+    depthDisclosed: signals.depthDisclosed,
     band,
     visibility,
     ...(signals.biome ? { biome: signals.biome } : {}),
@@ -148,6 +155,30 @@ function composeWaterPresentation(signals: WaterSignals): WaterPresentation {
     opacity: Math.round((50 + depth * 150) * visibility),
     accentOpacity: Math.round((28 + depth * 45) * visibility),
   };
+}
+
+/**
+ * Returns the only water depth a renderer may consume. Broad terrain sight can
+ * reveal that a surface is wet, but exact bathymetry remains neutral until the
+ * shorter detail field reaches it or the player has deliberately sounded it.
+ * Missing detail metadata preserves the fully-visible legacy view contract.
+ */
+export function visibleWaterDepth(
+  tile: TerrainTileView | undefined,
+  derivedDepth = 0,
+): number {
+  if (!tile) return 0;
+  const actualDepth = unit(tile.waterDepth, derivedDepth);
+  if (actualDepth <= 0 || isWaterDepthDisclosed(tile)) return actualDepth;
+  return 0.5;
+}
+
+export function isWaterDepthDisclosed(tile: TerrainTileView | undefined): boolean {
+  if (!tile) return false;
+  if (unit(tile.depthKnown) > 0) return true;
+  if (tile.currentDetailVisibility === undefined) return true;
+  return Number.isFinite(tile.currentDetailVisibility)
+    && tile.currentDetailVisibility >= 1;
 }
 
 function waterDepthBand(depth: number): WaterDepthBand {

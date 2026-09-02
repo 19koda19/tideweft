@@ -75,6 +75,55 @@ describe("regional player floating-origin travel", () => {
     expect(player.sweepPath.every((index) => index >= 0 && index < player.worldWidth * player.worldHeight)).toBe(true);
   });
 
+  it("preserves a corner-crossing ADRIFT player when their stale guide escapes another halo", () => {
+    const { world, player } = fixture("adrift against the northwest seam");
+    const state = migratePlayerToRegionalTravel(world.meta.rootSeed, player);
+    const eastHaloGuide = Math.floor(REGIONAL_TRAVEL_ROWS / 2) * REGIONAL_TRAVEL_COLUMNS
+      + REGIONAL_TRAVEL_COLUMNS - 1;
+    expect(state.window.addresses[eastHaloGuide]?.region).toEqual({ x: 1, y: 0 });
+
+    // The derived guide still aims through the east halo, but a real paddle
+    // stroke has carried the authoritative position through the perpendicular
+    // northwest corner into signed region -1,-1.
+    player.mode = "swept";
+    player.sweepPath = [eastHaloGuide];
+    player.sweepTicksRemaining = 77;
+    player.sweepTotalTicks = 88;
+    player.x = 500;
+    player.y = 500;
+    player.previousX = 611;
+    player.previousY = 733;
+
+    let crossed: ReturnType<typeof recenterRegionalPlayer> | undefined;
+    expect(() => {
+      crossed = recenterRegionalPlayer(world.meta.rootSeed, state, player);
+    }).not.toThrow();
+    expect(crossed).toBeDefined();
+    if (!crossed) throw new Error("Expected the corner ADRIFT transition to complete");
+
+    expect(crossed).toMatchObject({
+      crossed: true,
+      from: { x: 0, y: 0 },
+      to: { x: -1, y: -1 },
+    });
+    expect(player).toMatchObject({
+      x: (WORLD_WIDTH + 1) * TILE_UNITS - 500,
+      y: (WORLD_HEIGHT + 1) * TILE_UNITS - 500,
+      previousX: (WORLD_WIDTH + 1) * TILE_UNITS - 389,
+      previousY: (WORLD_HEIGHT + 1) * TILE_UNITS - 267,
+      mode: "swept",
+      sweepPath: [],
+      // One remaining beat gives stepSweptPlayer a deterministic opportunity
+      // to derive a fresh reachable-bank guide from the exact recentered tile.
+      sweepTicksRemaining: 1,
+      sweepTotalTicks: 88,
+    });
+    expect(player.x % TILE_UNITS).toBe(500);
+    expect(player.y % TILE_UNITS).toBe(500);
+    expect(player.previousX % TILE_UNITS).toBe(611);
+    expect(player.previousY % TILE_UNITS).toBe(733);
+  });
+
   it("persists and restores the exact window, chart, signed center, and transition ordinal", () => {
     const { world, player } = fixture("signed folio roundtrip");
     let state = migratePlayerToRegionalTravel(world.meta.rootSeed, player);

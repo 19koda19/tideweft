@@ -298,7 +298,7 @@ describe("Chart spatial epoch gate", () => {
     renderer.destroy();
   });
 
-  it("releases an epoch-invalidated touch sequence and keeps cancel or blur releases inert", () => {
+  it("releases an epoch-invalidated touch sequence and explicitly clears runtime input on blur", () => {
     let current = view("r:0:0");
     const commands: RendererCommand[] = [];
     const renderer = createTideweftRenderer({
@@ -320,7 +320,10 @@ describe("Chart spatial epoch gate", () => {
     canvas.emit("blur", { pointerId: 23 });
     canvas.emit("pointerup", { pointerId: 23 });
 
-    expect(commands).toEqual([]);
+    expect(commands).toEqual([{
+      type: "movement",
+      vector: { x: 0, y: 0 },
+    }]);
     renderer.destroy();
   });
 
@@ -379,15 +382,21 @@ describe("Chart spatial epoch gate", () => {
     current = view("r:-7:9", { x: -360, y: 640 });
     renderer.setActive?.(true);
     canvas.emit("pointerup", { pointerId: 51 });
-    expect(commands).toEqual([]);
+    expect(commands).toEqual([{
+      type: "movement",
+      vector: { x: 0, y: 0 },
+    }]);
 
     canvas.emit("pointerdown", { pointerId: 52 });
     canvas.emit("pointerup", { pointerId: 52 });
-    expect(commands).toEqual([{
-      type: "move-target",
-      point: { x: -360, y: 640 },
-      additive: false,
-    }]);
+    expect(commands).toEqual([
+      { type: "movement", vector: { x: 0, y: 0 } },
+      {
+        type: "move-target",
+        point: { x: -360, y: 640 },
+        additive: false,
+      },
+    ]);
     renderer.destroy();
   });
 });
@@ -477,7 +486,10 @@ describe("Chart presentation-only pointer drift", () => {
     renderer.destroy();
     expect(canvas.listenerCount("pointermove")).toBe(0);
     expect(p5Harness.instance?.remove).toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "movement",
+      vector: { x: 0, y: 0 },
+    });
   });
 
   it("eases a world label toward its new projected camera position", () => {
@@ -544,6 +556,77 @@ describe("Chart wind production path", () => {
     draw();
     expect(bezier).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
+    renderer.destroy();
+  });
+});
+
+describe("Chart ADRIFT presentation path", () => {
+  it("uses live optional facts for bounded panel-free paddle copy, color, wake, and pose", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("adrift-chart", { x: 20, y: 30 });
+    const legacySwept: TideweftView = {
+      ...base,
+      player: {
+        ...base.player,
+        mode: "swept",
+        balanceState: "swept",
+        sweptProgress: 0.99,
+        stamina: 0.72,
+        velocity: { x: 0.8, y: -0.2 },
+      },
+    };
+    let current = legacySwept;
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+
+    const p = p5Harness.instance;
+    const text = p?.text as ReturnType<typeof vi.fn>;
+    const line = p?.line as ReturnType<typeof vi.fn>;
+    const rect = p?.rect as ReturnType<typeof vi.fn>;
+    const color = p?.color as ReturnType<typeof vi.fn>;
+    const legacyLineCount = line.mock.calls.length;
+    const legacyRectCount = rect.mock.calls.length;
+    expect(text.mock.calls.flat().map(String)).not.toContain("ADRIFT");
+    text.mockClear();
+    line.mockClear();
+    rect.mockClear();
+    color.mockClear();
+
+    current = {
+      ...legacySwept,
+      player: {
+        ...legacySwept.player,
+        adrift: {
+          paddling: true,
+          catchingBreath: false,
+          canStand: false,
+          waterDepth: 0.78,
+          currentDirection: { x: 1, y: 0 },
+        },
+      },
+    };
+    draw();
+
+    const label = text.mock.calls.find(([copy]) => copy === "PADDLING");
+    const instruction = text.mock.calls.find(([copy]) => copy === "PADDLE TOWARD SHALLOW WATER");
+    const syllable = text.mock.calls.find(([copy]) => copy === "WHHSH");
+    for (const call of [label, instruction, syllable]) {
+      expect(call).toBeDefined();
+      expect(Number(call?.[1])).toBeGreaterThanOrEqual(0);
+      expect(Number(call?.[1])).toBeLessThanOrEqual(200);
+      expect(Number(call?.[2])).toBeGreaterThanOrEqual(0);
+      expect(Number(call?.[2])).toBeLessThanOrEqual(100);
+    }
+    const renderedCopy = text.mock.calls.map(([copy]) => String(copy)).join(" ");
+    expect(renderedCopy).not.toMatch(/ashore|arrived|\bETA\b|\d+(?:\.\d+)?\s*%|percent/iu);
+    expect(color).toHaveBeenCalledWith("#61e6d2");
+    expect(color).toHaveBeenCalledWith("#edfff9");
+    expect(line).toHaveBeenCalledTimes(legacyLineCount + 1);
+    expect(rect).toHaveBeenCalledTimes(legacyRectCount);
     renderer.destroy();
   });
 });

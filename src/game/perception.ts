@@ -40,7 +40,11 @@ export interface PerceptionRangeOverrides {
 
 export const DEFAULT_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.freeze({
   closePeripheralRange: 5,
-  directSightRange: 20,
+  // Terrain is readable well beyond the range at which an individual item or
+  // actor can be identified. The long axis is deliberately forward-only: it
+  // gives route-scale context without turning the player's rear awareness into
+  // an omnidirectional reveal.
+  directSightRange: 30,
   forwardConeRadians: (5 * Math.PI) / 6,
 });
 
@@ -56,7 +60,7 @@ export const DEFAULT_DETAIL_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Obje
 });
 
 /** Soft outer terrain band; detail disclosure remains crisp and shorter. */
-export const TERRAIN_SIGHT_DISTANCE_FEATHER = 8 as const;
+export const TERRAIN_SIGHT_DISTANCE_FEATHER = 12 as const;
 export const TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS = Math.PI / 6;
 export const TERRAIN_CLOSE_DISTANCE_FEATHER = 2 as const;
 export const TERRAIN_OCCLUSION_FRONTIER_FEATHER = 3 as const;

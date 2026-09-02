@@ -1,6 +1,7 @@
 import type { TerrainGridView, TerrainTileView, WorldPoint } from "./types";
 import { sampleTerrainMeshLandHeightAt } from "./terrainMesh";
 import { currentTerrainVisibility } from "./perceptionPresentation";
+import { visibleWaterDepth } from "./waterPresentation";
 
 export type DiscoverySignature = (grid: TerrainGridView) => string;
 
@@ -23,7 +24,7 @@ export function maskReliefTileForDiscovery(tile: TerrainTileView): TerrainTileVi
   return {
     ...tile,
     elevation: unit(tile.elevation) * visibility,
-    waterDepth: unit(tile.waterDepth) * visibility,
+    waterDepth: visibleWaterDepth(tile) * visibility,
   };
 }
 
@@ -60,7 +61,7 @@ export function discoveredReliefSurfaceHeightAt(
   const tile = grid.tiles[row * grid.columns + column];
   if (!tile) return landHeight;
   const visibility = reliefDiscoveryVisibility(tile);
-  const visibleDepth = unit(tile.waterDepth) * visibility;
+  const visibleDepth = visibleWaterDepth(tile) * visibility;
   if (
     visibility <= MIN_RENDERED_WATER_VISIBILITY
     || visibleDepth <= MIN_RENDERED_WATER_DEPTH
@@ -116,7 +117,7 @@ export function perceivedReliefSurfaceHeightAt(
   const scale = Math.max(0, finite(verticalScale, 0));
   const landHeight = sampleTerrainMeshLandHeightAt(grid, point, scale);
   if (!includeWater) return landHeight;
-  const visibleDepth = unit(tile.waterDepth);
+  const visibleDepth = visibleWaterDepth(tile);
   if (visibleDepth <= MIN_RENDERED_WATER_DEPTH) return landHeight;
   const waterCenter = {
     x: grid.origin.x + (column + 0.5) * grid.tileSize,

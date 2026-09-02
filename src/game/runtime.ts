@@ -307,6 +307,10 @@ export async function createTideweftRuntime(
   let commandQueue: SimCommand[] = [];
   let playerStepsSinceWorldTick = 0;
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
+  let adriftTapControl: PlayerControl | null = null;
+  let adriftTapTicksRemaining = 0;
+  let lastAdriftControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
+  let lastAdriftPaddleSoundMs = Number.NEGATIVE_INFINITY;
   let autopilotPath: number[] = [];
   let pendingGatherNodeId: string | null = null;
   let pendingParcelTargetId: string | null = null;
@@ -517,6 +521,7 @@ export async function createTideweftRuntime(
       traversalFeedback,
       looseCargoWorld: physicalCargo.looseWorld,
       bracing: manualControl.brace,
+      adriftControl: lastAdriftControl,
       perception,
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
@@ -528,6 +533,7 @@ export async function createTideweftRuntime(
       looseCargoWorld: physicalCargo.looseWorld,
       inactiveLooseCargoWorlds: physicalCargo.inactiveWorlds.map(({ world: cargoWorld }) => cargoWorld),
       bracing: manualControl.brace,
+      adriftControl: lastAdriftControl,
       traversalFeedback,
       perception,
       requiresSeed: replacementSeedRequired,
@@ -592,6 +598,13 @@ export async function createTideweftRuntime(
   }
 
   function currentControl(): PlayerControl {
+    if (player.mode === "swept") {
+      if (manualControl.moveX || manualControl.moveY) return manualControl;
+      if (adriftTapControl && adriftTapTicksRemaining > 0) {
+        return { ...adriftTapControl, brace: manualControl.brace };
+      }
+      return { moveX: 0, moveY: 0, brace: manualControl.brace };
+    }
     if (physicalReceiptPending()) {
       return { moveX: 0, moveY: 0, brace: manualControl.brace };
     }
@@ -714,7 +727,11 @@ export async function createTideweftRuntime(
     advancePendingParcelTarget();
     const beforeX = player.x;
     const beforeY = player.y;
-    const result = stepPlayer(player, worldView, currentControl(), {
+    const acceptedControl = currentControl();
+    lastAdriftControl = player.mode === "swept"
+      ? { ...acceptedControl }
+      : { moveX: 0, moveY: 0, brace: acceptedControl.brace };
+    const result = stepPlayer(player, worldView, acceptedControl, {
       seed: world.meta.rootSeed,
       actorId: 0,
       feedback: traversalFeedback,
@@ -768,6 +785,11 @@ export async function createTideweftRuntime(
       );
       soundscape.play("strand", 0.28, regionalTravel.stream.transitionOrdinal);
     }
+    if (adriftTapTicksRemaining > 0) adriftTapTicksRemaining -= 1;
+    if (adriftTapTicksRemaining <= 0 || player.mode !== "swept") {
+      adriftTapControl = null;
+      adriftTapTicksRemaining = 0;
+    }
     applyPlayerStepToPhysicalCargo(result, incidentPosition);
     if (result.enteredTile !== null && result.settlementId !== null) {
       recordHarborArrival(result.settlementId);
@@ -810,13 +832,21 @@ export async function createTideweftRuntime(
       }
     }
 
-    if (result.moved) soundscape.play("step", player.pace === "swift" ? 0.8 : 0.42);
+    if (result.moved && player.mode !== "swept") {
+      soundscape.play("step", player.pace === "swift" ? 0.8 : 0.42);
+    }
+    if (
+      result.adriftPaddling === true
+      && session.sessionPlayMilliseconds - lastAdriftPaddleSoundMs >= 360
+    ) {
+      lastAdriftPaddleSoundMs = session.sessionPlayMilliseconds;
+      soundscape.play("paddle", 0.48);
+    }
     if (result.becameSwept) {
       autopilotPath = [];
       pendingGatherNodeId = null;
       pendingParcelTargetId = null;
       pendingParcelRecoverOnArrival = false;
-      manualControl = { ...manualControl, moveX: 0, moveY: 0 };
       const collapse = result.sweepCause === "stability"
         ? {
             change: "Deep-water instability became a recoverable sweep; the cargo stayed accountable and weathered once.",
@@ -827,13 +857,13 @@ export async function createTideweftRuntime(
             warning: "STAMINA EMPTY IN DEEP WATER — SWEPT.",
           };
       const support = result.sweepSupport === "ferry"
-        ? " A connected ferry crew has shortened the drift."
-        : " The current is carrying you toward the nearest safe bank.";
+        ? " A connected ferry crew is helping without removing the current."
+        : " Float to recover stamina; paddle toward visible shallow water.";
       session.sessionChanges.push(collapse.change);
       if (result.traversalIncident?.kind !== "sweep") {
         announce(
           session,
-          `${collapse.warning} Steering is temporarily lost; cargo remains physical, and anything separated stays recoverable.${support}`,
+          `${collapse.warning} ADRIFT — use movement keys or tap toward shallow water. The current remains stronger than you; cargo stays physical, and anything separated stays recoverable.${support}`,
           true,
         );
         soundscape.play("warning", 0.82);
@@ -851,13 +881,13 @@ export async function createTideweftRuntime(
     if (result.washedAshore) {
       const support = result.sweepSupport
         ? `${result.sweepSupport === "clinic" ? "Clinic" : "Ferry"} support brought you in sooner.`
-        : "The nearest safe bank caught you.";
+        : "You reached water shallow enough to stand.";
       session.sessionChanges.push(
-        `You washed ashore; cargo quantity stayed accountable, and any separated parcel remains recoverable. ${support}`,
+        `You rose from the current; cargo quantity stayed accountable, and any separated parcel remains recoverable. ${support}`,
       );
       announce(
         session,
-        `ASHORE — ${support} Staying still restored enough stamina to continue; check RECOVER for any separated cargo.`,
+        `ASHORE — ${support} You recovered enough stamina to rise; check RECOVER for any separated cargo.`,
         true,
       );
       soundscape.play("rest", 0.9);
@@ -1130,6 +1160,28 @@ export async function createTideweftRuntime(
     void soundscape.unlock();
     const perceivedCommand = validatePerceivedEntityCommand(renderView, command);
     if (!perceivedCommand) return;
+    if (player.mode === "swept") {
+      const adriftPoint = (() => {
+        switch (perceivedCommand.type) {
+          case "move-target":
+          case "resource-target":
+            return perceivedCommand.point;
+          case "parcel-target":
+            return renderView.looseCargo?.find(
+              (parcel) => parcel.id === perceivedCommand.parcelId,
+            )?.position;
+          case "select":
+            return perceivedCommand.point;
+          default:
+            return undefined;
+        }
+      })();
+      if (adriftPoint) {
+        beginAdriftTap(adriftPoint);
+        refreshViews();
+        return;
+      }
+    }
     switch (perceivedCommand.type) {
       case "movement":
         manualControl = {
@@ -1137,6 +1189,10 @@ export async function createTideweftRuntime(
           moveY: signControl(perceivedCommand.vector.y),
           brace: manualControl.brace,
         };
+        // A release/focus-loss movement command cancels a bounded touch
+        // stroke too. Keyboard input otherwise takes immediate precedence.
+        adriftTapControl = null;
+        adriftTapTicksRemaining = 0;
         if (manualControl.moveX || manualControl.moveY) {
           autopilotPath = [];
           pendingGatherNodeId = null;
@@ -1183,6 +1239,8 @@ export async function createTideweftRuntime(
         break;
       case "cancel":
         autopilotPath = [];
+        adriftTapControl = null;
+        adriftTapTicksRemaining = 0;
         pendingGatherNodeId = null;
         pendingParcelTargetId = null;
         pendingParcelRecoverOnArrival = false;
@@ -1190,6 +1248,22 @@ export async function createTideweftRuntime(
         refreshViews();
         break;
     }
+  }
+
+  function beginAdriftTap(point: WorldPoint): void {
+    const dx = point.x - renderView.player.position.x;
+    const dy = point.y - renderView.player.position.y;
+    const moveX = signControl(dx);
+    const moveY = signControl(dy);
+    if (moveX === 0 && moveY === 0) return;
+    adriftTapControl = { moveX, moveY, brace: manualControl.brace };
+    // Eight fixed beats make a coarse mobile tap meaningful without creating
+    // sticky virtual movement or a hidden autopilot.
+    adriftTapTicksRemaining = 8;
+    autopilotPath = [];
+    pendingGatherNodeId = null;
+    pendingParcelTargetId = null;
+    pendingParcelRecoverOnArrival = false;
   }
 
   function dispatchUI(command: TideweftUICommand): void {
@@ -1407,7 +1481,13 @@ export async function createTideweftRuntime(
       return true;
     }
     if (player.mode !== "swept" && player.mode !== "rescued") return false;
-    announce(session, "Secure your footing before making or mending field gear.", true);
+    announce(
+      session,
+      player.mode === "swept"
+        ? "Both hands are keeping you afloat. Make or mend field gear after you rise from shallow water."
+        : "Secure your footing before making or mending field gear.",
+      true,
+    );
     soundscape.play("warning", 0.3);
     return true;
   }
@@ -1862,6 +1942,10 @@ export async function createTideweftRuntime(
     commandQueue = [];
     playerStepsSinceWorldTick = 0;
     autopilotPath = [];
+    adriftTapControl = null;
+    adriftTapTicksRemaining = 0;
+    lastAdriftControl = { moveX: 0, moveY: 0, brace: false };
+    lastAdriftPaddleSoundMs = Number.NEGATIVE_INFINITY;
     pendingGatherNodeId = null;
     pendingParcelTargetId = null;
     pendingParcelRecoverOnArrival = false;
@@ -1880,7 +1964,7 @@ export async function createTideweftRuntime(
 
   function setAutopilot(point: WorldPoint, additive: boolean, announcePath = true): boolean {
     if (player.mode === "swept") {
-      if (announcePath) announce(session, "The current has the helm until you reach a safe bank.", true);
+      if (announcePath) announce(session, "ADRIFT — tap toward visible shallow water to make a short paddle stroke.", true);
       return false;
     }
     const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, worldView.terrain.width - 1);
@@ -2143,7 +2227,7 @@ export async function createTideweftRuntime(
   function targetFieldResource(nodeId: string, gatherOnArrival: boolean): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
     if (player.mode === "swept" || player.mode === "rescued") {
-      announce(session, "The current has the helm. Gather after the shore gives your footing back.", true);
+      announce(session, "ADRIFT — paddle or float for shallows. Gathering waits until you have footing.", true);
       soundscape.play("warning", 0.3);
       refreshViews();
       return;
@@ -2298,7 +2382,7 @@ export async function createTideweftRuntime(
   function scan(): void {
     if (session.paused || session.titleVisible) return;
     if (player.mode === "swept") {
-      announce(session, "The current has the helm until you reach a safe bank. The sounding line is secured during the drift.", true);
+      announce(session, "ADRIFT — the sounding line stays secured while both hands paddle. Read visible shallows and float when stamina is low.", true);
       soundscape.play("warning", 0.3);
       refreshViews();
       return;
@@ -2318,7 +2402,7 @@ export async function createTideweftRuntime(
   function toggleWayknot(): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
     if (player.mode === "swept") {
-      announce(session, "The current has the helm. Reclaim or bind a Wayknot after the safe bank catches you.", true);
+      announce(session, "ADRIFT — reclaim or bind a Wayknot after you reach shallow water and stand.", true);
       soundscape.play("warning", 0.3);
       refreshViews();
       return;
@@ -2404,6 +2488,12 @@ export async function createTideweftRuntime(
       refreshViews();
       return;
     }
+    if (player.mode === "swept") {
+      announce(session, "ADRIFT — nothing loose is within arm's reach. Paddle for shallows; harbor and gathering work needs footing.", true);
+      soundscape.play("warning", 0.3);
+      refreshViews();
+      return;
+    }
     const resource = regionalFieldResourceAtViewTile(
       fieldResourceProjection,
       playerTileIndex(player),
@@ -2469,6 +2559,11 @@ export async function createTideweftRuntime(
     if (action === "track") {
       session.trackedContractId = contractId;
       focusContractTarget(contract);
+      return;
+    }
+    if (player.mode === "swept" && (action === "accept" || action === "renegotiate")) {
+      announce(session, "ADRIFT — you can read and track a Promise, but its physical handoff waits until you have footing.", true);
+      soundscape.play("warning", 0.3);
       return;
     }
     if (action === "renegotiate") {
@@ -3191,6 +3286,9 @@ export async function createTideweftRuntime(
       lastAutosaveTick = prior.lastAutosaveTick;
       lastCargoDamageNoticeMs = prior.lastCargoDamageNoticeMs;
       manualControl = { moveX: 0, moveY: 0, brace: false };
+      adriftTapControl = null;
+      adriftTapTicksRemaining = 0;
+      lastAdriftControl = { moveX: 0, moveY: 0, brace: false };
       rebuildRegionalWorldView();
       runtimeIntegrityFailure = `INTEGRITY HALT — ${errorMessage(error)}.`;
       session.paused = true;

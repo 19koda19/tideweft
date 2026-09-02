@@ -313,7 +313,7 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     id: "planned-magic-water-cargo",
     status: "planned",
     title: "Magic-water and weather reactions by cargo material",
-    clarification: "Depth, current, and a one-time sweep penalty are live. Rain, heat, immersion, salinity, and magical water do not yet transform specific cargo materials.",
+    clarification: "Depth, magnitude-scaled current, controllable ADRIFT recovery, and a one-time sweep penalty are live. Rain, heat, immersion, salinity, and magical water do not yet transform specific cargo materials.",
     keywords: ["magic water", "cargo material", "rain", "immersion", "salinity"],
   },
   {
@@ -622,10 +622,10 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   {
     id: "water-and-meters",
     iconText: "05",
-    title: "Read the water before it takes the helm",
+    title: "Read the water before it takes your footing",
     shortTitle: "Water & safety",
     summary: "Stamina pays for movement; stability measures control of body and load. Terrain, grade, roughness, moisture, water, current, wind, turning, load, footwear, and BRACE explain every change.",
-    keywords: ["stamina", "stability", "water", "depth", "scan", "sounding", "current", "swept", "arrow", "fall", "stumble", "pace"],
+    keywords: ["stamina", "stability", "water", "depth", "scan", "sounding", "current", "swept", "adrift", "paddle", "float", "arrow", "fall", "stumble", "pace"],
     controlIds: ["brace-key", "brace-button", "scan-key", "scan-button"],
     steps: [
       {
@@ -651,7 +651,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-derived-pace",
         audience: "all",
         title: "Pace follows the ground",
-        body: "Pace has no selector. REST means you are still, exhausted, swept, or physically recovering; STEADY is ordinary controlled travel; SWIFT appears automatically when gravity carries you downhill or a deep current carries you with its flow. The same deterministic rule applies on keyboard and touch.",
+        body: "Pace has no selector. REST means you are still, exhausted, floating ADRIFT, or physically recovering; STEADY covers ordinary controlled travel and an active paddle stroke; SWIFT appears automatically when gravity carries you downhill. The same deterministic rule applies on keyboard and touch.",
       },
       {
         id: "meters-brace-desktop",
@@ -670,8 +670,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "meters-sweep",
         audience: "all",
-        title: "Zero in deep water means swept",
-        body: "In current water at or above the deep-water threshold, stamina or stability reaching zero gives control to a deterministic drift toward a safe bank. Ordinary steering and scanning return only after reaching shore. Cargo stays physically accounted for, but the fall can damage one exact lot and separate recoverable parcels that keep drifting with the water. Player-controlled ADRIFT paddling is planned, not live in this build.",
+        title: "Zero in deep water means ADRIFT",
+        body: "In current water at or above the deep-water threshold, stamina or stability reaching zero puts you into a floating ADRIFT movement state. The current always moves you. On desktop, use WASD or arrows to paddle across it; on touch, tap toward visible shallow water for a short stroke. Release movement to float and recover stamina. A full pack weakens your stroke, and fighting directly upstream can slow the current but cannot reverse it forever. You rise only after reaching water no deeper than the standable threshold with enough stamina. Scanning and harbor work wait until then. Cargo stays physically accounted for, while a fall can damage one exact lot and separate parcels that continue under their own physics.",
       },
       {
         id: "meters-fall-feedback",
@@ -686,7 +686,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         tone: "safety",
         title: "Dry exhaustion is different",
-        body: "Empty stamina on dry or shallow ground makes camp instead of triggering a current sweep. A connected clinic can intercept exhaustion; ferries, Storm kites, and nearby Tide anchors can shorten or soften water recovery.",
+        body: "Empty stamina on dry or ordinary shallow ground makes camp instead of triggering a current sweep. During ADRIFT, shallow water becomes a recovery place: float until you can stand even if a key is still held. A connected clinic can intercept exhaustion before a sweep; ferry response, Storm kites, Tide sails, and nearby Tide anchors provide bounded help without deleting the physical current.",
       },
     ],
   },
@@ -1027,7 +1027,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-perception",
         audience: "all",
         title: "The field shows what you can presently perceive",
-        body: "Terrain shape now reaches much farther ahead than exact detail: in clear air the broad field extends about twenty tiles through a 150-degree cone, with a soft outer band and close awareness around the body. People, cargo, resources, current arrows, names, live status, and actions use a shorter eight-tile, 120-degree field. Ridges and severe weather shorten both. Uncharted ground and ordinary water can be seen while you face them without becoming permanent Chart memory; turning changes attention, not the saved world.",
+        body: "Terrain shape reaches much farther ahead than exact detail: in clear air the broad field extends thirty tiles through a 150-degree cone. It stays clear through eighteen tiles, then eases across a twelve-tile atmospheric horizon; close terrain awareness still surrounds the body. People, cargo, resources, current arrows, names, live status, and actions use a shorter eight-tile, 120-degree field with two-tile close awareness. Ridges and severe weather shorten both. Uncharted ground and ordinary water can be seen while you face them without becoming permanent Chart memory; turning changes attention, not the saved world.",
       },
       {
         id: "views-events",
@@ -1226,7 +1226,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, screen-space Relief rain, readable wind threads, separate broad-terrain and short-detail perception fog, transient uncharted sight, dim explored memory, witnessed EVENTS, signed coordinates, measured FPS, discovery, depth sounding, current arrows and deterministic sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
+        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, screen-space Relief rain, readable magnitude-scaled currents, separate broad-terrain and short-detail perception fog, transient uncharted sight, dim explored memory, witnessed EVENTS, signed coordinates, measured FPS, discovery, depth sounding, current arrows, player-controlled ADRIFT recovery, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1253,7 +1253,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 13 as const;
+export const TUTORIAL_CONTENT_VERSION = 14 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

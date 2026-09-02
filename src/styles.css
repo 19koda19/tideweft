@@ -448,6 +448,25 @@ button:disabled {
   box-shadow: 0 0 0 1px rgb(241 198 111 / 34%), 0 0 1rem rgb(241 198 111 / 16%);
 }
 
+.relief-world-label[data-tone="adrift"] {
+  max-width: min(24rem, 76vw);
+  padding: 0;
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  letter-spacing: 0.07em;
+}
+
+.relief-world-label[data-tone="sound"] {
+  color: var(--tide-bright);
+  background: transparent;
+  border: 0;
+  font-size: 0.54rem;
+  font-style: italic;
+  letter-spacing: 0.12em;
+}
+
 .canvas-mount canvas:focus-visible {
   outline-offset: -0.32rem;
 }

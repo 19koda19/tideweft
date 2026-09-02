@@ -176,4 +176,23 @@ describe("Relief water material batches", () => {
     expect(seen.flatMap((batch) => batch.cells)).toEqual([{ column: 0, row: 0 }]);
     expect(seen[0]?.material.visibility).toBe(1);
   });
+
+  it("batches remote unsounded water identically across raw depth mutations", () => {
+    const remoteMaterial = (waterDepth: number, depthKnown = 0) =>
+      buildReliefWaterMaterialBatches(grid([tile({
+        waterDepth,
+        depthKnown,
+        currentVisibility: 1,
+        currentDetailVisibility: 0,
+      })]), 0.5)[0]?.material;
+
+    expect(remoteMaterial(0.08)).toEqual(remoteMaterial(0.96));
+    expect(remoteMaterial(0.08)).toMatchObject({
+      depth: 0.5,
+      depthDisclosed: false,
+      band: "channel",
+    });
+    expect(remoteMaterial(0.08, 1)?.band).toBe("shallows");
+    expect(remoteMaterial(0.96, 1)?.band).toBe("deep");
+  });
 });

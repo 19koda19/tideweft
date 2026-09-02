@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TideweftView } from "./types";
@@ -451,6 +453,10 @@ describe("Relief spatial epoch release gate", () => {
     harness.canvas.fire("blur");
     harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 41 }));
     expect(harness.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "move-target" }));
+    expect(harness.dispatch).toHaveBeenCalledWith({
+      type: "movement",
+      vector: { x: 0, y: 0 },
+    });
     harness.draw();
     expect(harness.camera.mock.calls.at(-1)?.[3]).toBe(72);
     expect(harness.camera.mock.calls.at(-1)?.[5]).toBe(20);
@@ -465,6 +471,10 @@ describe("Relief spatial epoch release gate", () => {
       pointerType: "touch",
     }));
     harness.renderer.setActive(false);
+    expect(harness.dispatch).toHaveBeenCalledWith({
+      type: "movement",
+      vector: { x: 0, y: 0 },
+    });
     harness.setView(view("r:6:-2", { x: 84, y: 24 }));
     harness.setView(view("r:-9:11", { x: 16, y: 80 }));
     harness.renderer.setActive(true);
@@ -655,6 +665,113 @@ describe("Relief presentation-only pointer and label motion", () => {
     );
     if (!replacement) throw new Error("expected replacement Relief label");
     expect(Number.parseFloat(String(replacement.style.left))).toBeCloseTo(231.2, 1);
+    harness.renderer.destroy();
+  });
+});
+
+describe("Relief ADRIFT presentation path", () => {
+  it("keeps the ADRIFT DOM label visually panel-free", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    const rule = styles.match(/\.relief-world-label\[data-tone="adrift"\]\s*\{([^}]*)\}/u)?.[1];
+    expect(rule).toBeDefined();
+    expect(rule).toMatch(/padding:\s*0\s*;/u);
+    expect(rule).toMatch(/background:\s*transparent\s*;/u);
+    expect(rule).toMatch(/border:\s*0\s*;/u);
+    expect(rule).toMatch(/box-shadow:\s*none\s*;/u);
+  });
+
+  it("renders truthful bounded floating and paddle facts, then removes optional state cleanly", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("adrift-relief", { x: 48, y: 48 });
+    const legacySwept: TideweftView = {
+      ...base,
+      player: {
+        ...base.player,
+        mode: "swept",
+        balanceState: "swept",
+        sweptProgress: 0.99,
+        stamina: 0.72,
+        velocity: { x: 0.8, y: -0.2 },
+      },
+    };
+    const harness = renderHarness(legacySwept);
+    const line = harness.instance.line as ReturnType<typeof vi.fn>;
+    const stroke = harness.instance.stroke as ReturnType<typeof vi.fn>;
+    const emissiveMaterial = harness.instance.emissiveMaterial as ReturnType<typeof vi.fn>;
+    harness.draw();
+    const legacyLineCount = line.mock.calls.length;
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    expect(layer?.children.some((child) => child.dataset.tone === "adrift" && !child.removed))
+      .toBe(false);
+
+    line.mockClear();
+    stroke.mockClear();
+    emissiveMaterial.mockClear();
+    const floating: TideweftView = {
+      ...legacySwept,
+      player: {
+        ...legacySwept.player,
+        adrift: {
+          paddling: false,
+          catchingBreath: false,
+          canStand: false,
+          waterDepth: 0.78,
+          currentDirection: { x: 1, y: 0 },
+        },
+      },
+    };
+    harness.setView(floating);
+    harness.draw();
+    const floatingLabel = layer?.children.find((child) =>
+      child.textContent === "ADRIFT · STEER ACROSS THE CURRENT" && !child.removed);
+    if (!floatingLabel) throw new Error("expected floating ADRIFT label");
+    expect(floatingLabel.className).toBe("relief-world-label");
+    expect(floatingLabel.dataset).toMatchObject({ tone: "adrift", selected: "true" });
+    // The adrift label uses a 76vw maximum width, so its complete instruction
+    // is clamped as a wider envelope than ordinary world labels.
+    expect(Number.parseFloat(floatingLabel.style.left ?? "NaN")).toBeGreaterThanOrEqual(133.6);
+    expect(Number.parseFloat(floatingLabel.style.left ?? "NaN")).toBeLessThanOrEqual(186.4);
+    expect(Number.parseFloat(floatingLabel.style.top ?? "NaN")).toBeGreaterThanOrEqual(62);
+    expect(Number.parseFloat(floatingLabel.style.top ?? "NaN")).toBeLessThanOrEqual(206);
+    expect(emissiveMaterial).toHaveBeenCalledWith("#55c7dc");
+    expect(stroke.mock.calls.some(([value]) =>
+      value === "#e5fbff"
+        || (value as { value?: unknown } | undefined)?.value === "#e5fbff"
+    )).toBe(true);
+    expect(line).toHaveBeenCalledTimes(legacyLineCount);
+
+    line.mockClear();
+    stroke.mockClear();
+    emissiveMaterial.mockClear();
+    harness.setView({
+      ...floating,
+      player: {
+        ...floating.player,
+        adrift: { ...floating.player.adrift!, paddling: true },
+      },
+    });
+    harness.draw();
+    const paddleLabel = layer?.children.find((child) =>
+      child.textContent === "PADDLING · PADDLE TOWARD SHALLOW WATER" && !child.removed);
+    if (!paddleLabel) throw new Error("expected paddling ADRIFT label");
+    const renderedCopy = layer?.children
+      .filter((child) => !child.removed)
+      .map((child) => child.textContent ?? "")
+      .join(" ") ?? "";
+    expect(renderedCopy).not.toMatch(/ashore|arrived|\bETA\b|\d+(?:\.\d+)?\s*%|percent/iu);
+    expect(emissiveMaterial).toHaveBeenCalledWith("#61e6d2");
+    expect(stroke.mock.calls.some(([value]) =>
+      value === "#edfff9"
+        || (value as { value?: unknown } | undefined)?.value === "#edfff9"
+    )).toBe(true);
+    expect(line).toHaveBeenCalledTimes(legacyLineCount + 1);
+    expect(line).toHaveBeenCalledWith(0, 0, 0, 11.52, 3.84, 5.76);
+
+    harness.setView(legacySwept);
+    harness.draw();
+    expect(paddleLabel.removed).toBe(true);
+    expect(layer?.children.some((child) => child.dataset.tone === "adrift" && !child.removed))
+      .toBe(false);
     harness.renderer.destroy();
   });
 });

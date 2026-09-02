@@ -458,4 +458,93 @@ describe("world tap intent", () => {
     expect(usesCoarseWorldPointer("mouse", false)).toBe(false);
     expect(usesCoarseWorldPointer("pen", false)).toBe(false);
   });
+
+  it("keeps ADRIFT touch targets finite and stable for bounded runtime steering", () => {
+    const base = perceivedView();
+    const adriftView: TideweftView = {
+      ...base,
+      player: {
+        ...base.player,
+        mode: "swept",
+        balanceState: "swept",
+        adrift: {
+          paddling: false,
+          catchingBreath: false,
+          canStand: false,
+          waterDepth: 0.8,
+          currentDirection: { x: 1, y: 0 },
+        },
+      },
+    };
+    const worldTarget = commandForWorldTap(
+      adriftView,
+      null,
+      { x: 36, y: -8 },
+      true,
+    );
+    const settlementTarget = commandForWorldTap(
+      adriftView,
+      { entity: "settlement", id: "harbor-7" },
+      { x: 4, y: 4 },
+      true,
+    );
+    const resourceTarget = commandForWorldTap(
+      adriftView,
+      { entity: "resource", id: "field-v1:reed" },
+      { x: 14, y: 5 },
+      true,
+    );
+    const porterTarget = commandForWorldTap(
+      adriftView,
+      { entity: "porter", id: "porter-1" },
+      { x: 25, y: 5 },
+      true,
+    );
+    expect(worldTarget).toEqual({
+      type: "move-target",
+      point: { x: 36, y: -8 },
+      additive: false,
+    });
+    expect(settlementTarget).toEqual({
+      type: "move-target",
+      point: { x: 5, y: 5 },
+      additive: false,
+    });
+    expect(resourceTarget).toEqual({
+      type: "resource-target",
+      nodeId: "field-v1:reed",
+      point: { x: 15, y: 5 },
+      gatherOnArrival: true,
+    });
+    expect(porterTarget).toEqual({
+      type: "select",
+      entity: "porter",
+      id: "porter-1",
+      point: { x: 25, y: 5 },
+    });
+
+    for (const command of [worldTarget, settlementTarget, resourceTarget, porterTarget]) {
+      if (!("point" in command)) throw new Error("ADRIFT target lost its physical point");
+      expect(Number.isFinite(command.point.x)).toBe(true);
+      expect(Number.isFinite(command.point.y)).toBe(true);
+      const moveX = Math.sign(command.point.x - adriftView.player.position.x);
+      const moveY = Math.sign(command.point.y - adriftView.player.position.y);
+      expect([-1, 0, 1]).toContain(moveX);
+      expect([-1, 0, 1]).toContain(moveY);
+    }
+
+    const parcelTarget = validatePerceivedEntityCommand(adriftView, {
+      type: "parcel-target",
+      parcelId: "parcel-1",
+      recoverOnArrival: true,
+    });
+    expect(parcelTarget).toEqual({
+      type: "parcel-target",
+      parcelId: "parcel-1",
+      recoverOnArrival: true,
+    });
+    const parcel = adriftView.looseCargo?.find(({ id }) => id === "parcel-1");
+    expect(Number.isFinite(parcel?.position.x)).toBe(true);
+    expect(Number.isFinite(parcel?.position.y)).toBe(true);
+  });
 });

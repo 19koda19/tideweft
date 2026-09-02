@@ -99,6 +99,10 @@ import {
   type PlayerBalancePresentation,
 } from "./playerPresentation";
 import {
+  adriftPresentation,
+  type AdriftPresentation,
+} from "./adriftPresentation";
+import {
   advancePointerParallax,
   createPointerParallaxState,
   easeWorldLabelPoint,
@@ -429,7 +433,11 @@ export function createTideweftReliefRenderer(
     if (heldBraceKeys.size > 0) options.dispatch({ type: "brace", active: false });
     heldBraceKeys.clear();
     heldOrbitKeys.clear();
-    updateMovement();
+    // A touch ADRIFT stroke is held by the runtime, not heldDirections. Every
+    // blur, visibility loss, context loss, destroy, or view switch must send a
+    // real zero even when the keyboard signature was already idle.
+    lastMovement = "0,0";
+    options.dispatch({ type: "movement", vector: { x: 0, y: 0 } });
     orbitDrag = null;
     clickCandidate = null;
     parcelPress = null;
@@ -642,7 +650,7 @@ export function createTideweftReliefRenderer(
       text: string,
       point: WorldPoint,
       height: number,
-      tone: "harbor" | "destination" | "wayknot",
+      tone: "harbor" | "destination" | "wayknot" | "adrift" | "sound",
       selected = false,
     ): void => {
       const projected = projectReliefPoint(
@@ -665,17 +673,72 @@ export function createTideweftReliefRenderer(
       );
       labelPositions.set(id, eased);
       const viewportWidth = instance?.width ?? 1;
-      const labelHalfWidth = Math.min(144, Math.max(48, viewportWidth * 0.24));
+      const viewportHeight = instance?.height ?? 1;
+      // ADRIFT copy may use the wider 24rem / 76vw panel-free rule. Clamp its
+      // full CSS envelope rather than the ordinary 18rem label envelope so a
+      // long recovery instruction cannot be cut off near either screen edge.
+      const labelHalfWidth = tone === "adrift"
+        ? Math.min(192, Math.max(48, viewportWidth * 0.38))
+        : Math.min(144, Math.max(48, viewportWidth * 0.24));
       const labelX = clamp(
         eased.x,
         12 + labelHalfWidth,
         Math.max(12 + labelHalfWidth, viewportWidth - 12 - labelHalfWidth),
       );
+      const labelY = clamp(
+        eased.y,
+        tone === "adrift" ? 62 : 28,
+        Math.max(tone === "adrift" ? 62 : 28, viewportHeight - 34),
+      );
       node.dataset.tone = tone;
       node.dataset.selected = selected ? "true" : "false";
       node.style.left = `${labelX.toFixed(1)}px`;
-      node.style.top = `${eased.y.toFixed(1)}px`;
+      node.style.top = `${labelY.toFixed(1)}px`;
     };
+
+    const adrift = view.player.adrift
+      ? adriftPresentation({
+          modeActive: view.player.mode === "swept",
+          paddling: view.player.adrift.paddling,
+          catchingBreath: view.player.adrift.catchingBreath,
+          canStand: view.player.adrift.canStand,
+          stamina: view.player.stamina,
+          velocity: view.player.velocity,
+          currentDirection: view.player.adrift.currentDirection,
+        })
+      : undefined;
+    if (adrift) {
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        view.player.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      place(
+        "player-adrift",
+        `${adrift.label} · ${adrift.instruction}`,
+        view.player.position,
+        surface + tileSize * 1.26,
+        "adrift",
+        true,
+      );
+      if (
+        adrift.soundSyllable
+        && Math.floor(now / (reducedMotion ? 900 : 560)) % 3 === 0
+      ) {
+        const soundPoint = {
+          x: view.player.position.x + tileSize * 0.72,
+          y: view.player.position.y - tileSize * 0.18,
+        };
+        place(
+          "player-adrift-sound",
+          adrift.soundSyllable,
+          soundPoint,
+          surface + tileSize * 0.66,
+          "sound",
+        );
+      }
+    }
 
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
@@ -2923,7 +2986,21 @@ export function createTideweftReliefRenderer(
 
     const drawPlayer = (view: TideweftView, cache: CachedReliefMesh): void => {
       const player = view.player;
-      const presentation = playerBalancePresentation(player.balanceState);
+      const adrift = player.adrift
+        ? adriftPresentation({
+            modeActive: player.mode === "swept",
+            paddling: player.adrift.paddling,
+            catchingBreath: player.adrift.catchingBreath,
+            canStand: player.adrift.canStand,
+            stamina: player.stamina,
+            velocity: player.velocity,
+            currentDirection: player.adrift.currentDirection,
+          })
+        : undefined;
+      const basePresentation = playerBalancePresentation(player.balanceState);
+      const presentation: PlayerBalancePresentation = adrift
+        ? { ...basePresentation, fill: adrift.bodyColor, outline: adrift.edgeColor }
+        : basePresentation;
       const size = view.terrain.tileSize;
       const surface = discoveredReliefSurfaceHeightAt(
         view.terrain,
@@ -2973,10 +3050,18 @@ export function createTideweftReliefRenderer(
       );
       p.push();
       p.noStroke();
-      const bodyLift = size * (0.08 + presentation.heightScale * 0.26);
+      const adriftBob = adrift && !reducedMotion
+        ? Math.sin(p.millis() * 0.0042) * size * adrift.bobIntensity * 0.04
+        : 0;
+      const bodyLift = size * (0.08 + presentation.heightScale * 0.26) + adriftBob;
       p.translate(player.position.x, -surface - bodyLift, player.position.y);
       p.rotateY(-player.facing);
-      p.rotateZ(presentation.leanRadians);
+      p.rotateZ(
+        presentation.leanRadians
+          + (adrift && !reducedMotion
+            ? Math.sin(p.millis() * 0.006) * adrift.leanIntensity * 0.12
+            : 0),
+      );
       p.emissiveMaterial(playerColor);
       const silhouetteScale = reliefSilhouetteScale(presentation);
       p.scale(...silhouetteScale);
@@ -2984,6 +3069,13 @@ export function createTideweftReliefRenderer(
         p.scale(1.45, 0.55, 0.8);
       }
       p.sphere(size * 0.26, 10, 7);
+      if (adrift?.pose === "stroke" || adrift?.pose === "reach") {
+        const reach = adrift.pose === "reach" ? 0.66 : 0.48;
+        p.stroke(withAlpha(adrift.edgeColor, 235));
+        p.strokeWeight(2);
+        p.line(0, 0, 0, size * reach, size * 0.16, size * 0.24);
+        p.noStroke();
+      }
       p.pop();
 
       p.push();
@@ -3256,7 +3348,7 @@ export function createTideweftReliefRenderer(
         canvasElement.setAttribute("role", "application");
         canvasElement.setAttribute(
           "aria-label",
-          "TIDEWEFT relief view. Travel with WASD or arrows. Hold J or L to spin the map; on touch, twist with two fingers and tap a visible parcel to approach and recover it. Space sounds the water, E interacts or recovers a nearby parcel, F ties or tends a Wayknot, T opens the tutorial, Shift braces, wheel zooms, and right-drag also orbits the estuary.",
+          "TIDEWEFT relief view. Travel with WASD or arrows; while ADRIFT they paddle, and releasing them floats to recover stamina. Hold J or L to spin the map; on touch, twist with two fingers or tap toward shallow water to paddle while ADRIFT. Space sounds the water, E interacts or recovers a nearby parcel, F ties or tends a Wayknot, T opens the tutorial, Shift braces, wheel zooms, and right-drag also orbits the estuary.",
         );
         canvasElement.setAttribute(
           "aria-keyshortcuts",

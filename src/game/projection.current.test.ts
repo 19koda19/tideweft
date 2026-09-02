@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createWorld, createWorldView } from "../sim/public";
+import { createWorld, createWorldView, FIXED_POINT } from "../sim/public";
 import { createPlayer } from "./player";
 import { projectGameView } from "./projection";
 
@@ -19,8 +19,8 @@ describe("surface current projection", () => {
     };
 
     expect(projectGameView(flood, createPlayer(flood)).tide.surfaceCurrent)
-      .toEqual({ x: -1, y: -1 });
+      .toEqual({ x: -FIXED_POINT, y: -240_000 });
     expect(projectGameView(ebb, createPlayer(ebb)).tide.surfaceCurrent)
-      .toEqual({ x: 1, y: 0 });
+      .toEqual({ x: FIXED_POINT, y: 0 });
   });
 });

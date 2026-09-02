@@ -5,6 +5,7 @@ import {
 } from "./biomePresentation";
 import { reliefDiscoveryVisibility } from "./reliefTerrain";
 import { currentTerrainVisibility } from "./perceptionPresentation";
+import { isWaterDepthDisclosed } from "./waterPresentation";
 import type { BiomeId, TerrainGridView, TerrainKind } from "./types";
 
 export interface ReliefMaterialBatch {
@@ -57,9 +58,10 @@ export function buildReliefMaterialBatches(
 
     const biome = visibleBiomePresentation(source)?.id;
     const environment = Math.round(biomeEnvironmentalEmphasis(source) * 4) / 4;
-    const groupKey = `${tile.kind}:${biome ?? "legacy"}:${environment}:${visibility}`;
+    const kind = visibleTerrainKind(tile.kind, source);
+    const groupKey = `${kind}:${biome ?? "legacy"}:${environment}:${visibility}`;
     const group = groups.get(groupKey) ?? {
-      kind: tile.kind,
+      kind,
       ...(biome ? { biome } : {}),
       environment,
       visibility,
@@ -116,9 +118,10 @@ export function buildReliefPerceptionMaterialBatches(
     ) continue;
     const biome = visibleBiomePresentation(source)?.id;
     const environment = Math.round(biomeEnvironmentalEmphasis(source) * 4) / 4;
-    const key = `${tile.kind}:${biome ?? "legacy"}:${environment}:${visibility}:${current}`;
+    const kind = visibleTerrainKind(tile.kind, source);
+    const key = `${kind}:${biome ?? "legacy"}:${environment}:${visibility}:${current}`;
     const group = groups.get(key) ?? {
-      kind: tile.kind,
+      kind,
       ...(biome ? { biome } : {}),
       environment,
       visibility,
@@ -134,4 +137,12 @@ export function buildReliefPerceptionMaterialBatches(
       || left.environment - right.environment
       || left.visibility - right.visibility
   );
+}
+
+function visibleTerrainKind(
+  fallback: TerrainKind,
+  source: TerrainGridView["tiles"][number] | undefined,
+): TerrainKind {
+  const wet = Number.isFinite(source?.waterDepth) && (source?.waterDepth ?? 0) > 0;
+  return wet && !isWaterDepthDisclosed(source) ? "channel" : fallback;
 }

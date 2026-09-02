@@ -150,9 +150,9 @@ export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
     .replace(/\s*·\s*hold Shift to brace.*$/iu, "")
     .replace(/\s*·\s*Shift trades speed for control.*$/iu, "")
     .trim() || "STABLE";
-  const sweepRule = "DEEP: STAM/STAB 0 → SWEPT";
+  const sweepRule = "DEEP: STAM/STAB 0 → ADRIFT";
   const safety = input.swept
-    ? `SWEPT · ${input.fieldHint} · STAM ${stamina}% · STAB ${stability}%`
+    ? `ADRIFT · ${input.fieldHint} · STAM ${stamina}% · STAB ${stability}%`
     : `${input.bracing ? "BRACING · " : ""}${stabilityCause} · ${sweepRule}`;
   const terrain = `${input.isWater ? "WATER" : "GROUND"} · ${input.terrain} · ${input.depth} · ${input.effort}`;
   const actions = [
@@ -1218,7 +1218,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   fieldTideHarps.setAttribute("role", "group");
   fieldTideHarps.append(fieldTideHarpCount, fieldTideHarpActive);
   const fieldHint = createElement("span", "field-readout__hint", "Pulse Space to sound nearby water.");
-  const fieldSweep = makeProgress("Progress toward a safe bank while swept");
+  const fieldSweep = makeProgress("Legacy swept phase");
   fieldSweep.classList.add("field-readout__sweep");
   fieldSweep.hidden = true;
   fieldReadout.append(
@@ -2332,8 +2332,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.fieldTideHarps.title = tideHarpStatus.accessible;
     refs.fieldHint.textContent = view.field.hint;
     refs.fieldReadout.dataset.swept = view.field.swept ? "true" : "false";
-    refs.fieldSweep.hidden = !view.field.swept;
-    setProgress(refs.fieldSweep, view.field.sweptProgress, `${Math.round(view.field.sweptProgress * 100)} percent toward shore`);
+    // Free ADRIFT steering makes the old precomputed-bank percentage false.
+    // Categorical text above and below the playfield now reports only live
+    // physical facts (paddling, breath recovery, depth, and readiness).
+    refs.fieldSweep.hidden = true;
 
     renderContracts(view.contracts);
     renderInspector(view.selectedSettlement);

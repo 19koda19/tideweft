@@ -11,6 +11,7 @@ export type SoundCue =
   | "fall"
   | "impact"
   | "sweep"
+  | "paddle"
   | "recover"
   | "title"
   | "ui";
@@ -131,6 +132,10 @@ export class TideweftSoundscape {
       fall: incidentSoundPattern("fall", variantSeed),
       impact: incidentSoundPattern("impact", variantSeed),
       sweep: incidentSoundPattern("sweep", variantSeed),
+      paddle: [
+        toneStep(210, 0, "triangle", 0.055),
+        toneStep(164, 0.045, "sine", 0.095),
+      ],
       recover: incidentSoundPattern("recover", variantSeed),
       title: titleCrescendoPattern(),
       ui: [toneStep(520, 0, "sine", 0.055)],

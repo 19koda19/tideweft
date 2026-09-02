@@ -134,6 +134,52 @@ describe("Relief terrain material batches", () => {
     expect(new Set(sensory.map((batch) => batch.currentVisibility))).toEqual(new Set([0.5, 1]));
   });
 
+  it("uses one neutral Relief under-material for terrain-visible unsounded water", () => {
+    const tiles: readonly TerrainTileView[] = [
+      {
+        kind: "shallows",
+        elevation: 0.2,
+        waterDepth: 0.08,
+        discovered: 1,
+        depthKnown: 0,
+        currentVisibility: 1,
+        currentDetailVisibility: 0,
+      },
+      {
+        kind: "deep-water",
+        elevation: 0.2,
+        waterDepth: 0.96,
+        discovered: 1,
+        depthKnown: 0,
+        currentVisibility: 1,
+        currentDetailVisibility: 0.5,
+      },
+    ];
+    const hiddenDepth: TerrainGridView = {
+      columns: 2,
+      rows: 1,
+      tileSize: 24,
+      origin: { x: 0, y: 0 },
+      tiles,
+      revision: "neutral-water-underlay",
+    };
+    const chunk = buildTerrainMesh(hiddenDepth, { chunkSize: 2 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+
+    expect(new Set(buildReliefMaterialBatches(chunk, hiddenDepth).map(({ kind }) => kind)))
+      .toEqual(new Set(["channel"]));
+    expect(new Set(
+      buildReliefPerceptionMaterialBatches(chunk, hiddenDepth).map(({ kind }) => kind),
+    )).toEqual(new Set(["channel"]));
+
+    const sounded: TerrainGridView = {
+      ...hiddenDepth,
+      tiles: hiddenDepth.tiles.map((tile) => ({ ...tile, depthKnown: 1 })),
+    };
+    expect(new Set(buildReliefMaterialBatches(chunk, sounded).map(({ kind }) => kind)))
+      .toEqual(new Set(["shallows", "deep-water"]));
+  });
+
   it("quantizes eased terrain strength into bounded monotone material bands", () => {
     const source = grid(4, 1, [0, 0, 0, 0]);
     const perceived: TerrainGridView = {

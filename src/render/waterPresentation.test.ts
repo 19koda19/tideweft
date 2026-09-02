@@ -95,6 +95,48 @@ describe("shared visible-water presentation", () => {
     expect(visibleWaterPresentation(uncharted, { tideLevel: 0.5 })).toBeUndefined();
   });
 
+  it("keeps terrain-visible unsounded water depth-neutral until detail or a sounding reveals it", () => {
+    const distant = (waterDepth: number) => visibleWaterPresentation(waterTile(waterDepth, {
+      discovered: 0,
+      depthKnown: 0,
+      currentVisibility: 1,
+      currentDetailVisibility: 0,
+    }), {
+      tideLevel: 0.5,
+      transientVisibility: 1,
+    });
+    const distantShallows = distant(0.08);
+    const distantDepth = distant(0.96);
+
+    expect(distantShallows).toEqual(distantDepth);
+    expect(distantShallows).toMatchObject({
+      depth: 0.5,
+      depthDisclosed: false,
+      band: "channel",
+    });
+
+    const soundedShallows = visibleWaterPresentation(waterTile(0.08, {
+      depthKnown: 1,
+      currentDetailVisibility: 0,
+    }));
+    const soundedDepth = visibleWaterPresentation(waterTile(0.96, {
+      depthKnown: 1,
+      currentDetailVisibility: 0,
+    }));
+    expect(soundedShallows).toMatchObject({ depth: 0.08, depthDisclosed: true });
+    expect(soundedDepth).toMatchObject({ depth: 0.96, depthDisclosed: true });
+    expect(soundedShallows?.band).not.toBe(soundedDepth?.band);
+
+    expect(visibleWaterPresentation(waterTile(0.08, {
+      depthKnown: 0,
+      currentDetailVisibility: 0.5,
+    }))).toMatchObject({ depth: 0.5, depthDisclosed: false });
+    expect(visibleWaterPresentation(waterTile(0.08, {
+      depthKnown: 0,
+      currentDetailVisibility: 1,
+    }))?.depthDisclosed).toBe(true);
+  });
+
   it("can cap an explored water surface to the current atmospheric horizon", () => {
     const visible = visibleWaterPresentation(waterTile(0.7), {
       transientVisibility: 0.18,

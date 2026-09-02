@@ -183,6 +183,20 @@ export interface PlayerIncidentView {
   readonly variantSeed: number;
 }
 
+/**
+ * Current physical ADRIFT facts. This object is absent outside swept mode so
+ * legacy render fixtures remain valid. Shore distance is intentionally
+ * optional: free steering can invalidate a planned-bank estimate immediately.
+ */
+export interface AdriftView {
+  readonly paddling: boolean;
+  readonly catchingBreath: boolean;
+  readonly canStand: boolean;
+  readonly waterDepth: number;
+  readonly currentDirection: WorldPoint;
+  readonly shoreDistance?: number;
+}
+
 export interface PlayerView {
   readonly position: WorldPoint;
   readonly velocity: WorldPoint;
@@ -191,8 +205,10 @@ export interface PlayerView {
   readonly stability: number;
   readonly scanCharge: number;
   readonly scanProgress?: number;
-  /** 0 at the start of an involuntary current drift, 1 on reaching shore. */
+  /** Legacy visual phase estimate, capped below 1 while ADRIFT; never a distance or ETA. */
   readonly sweptProgress?: number;
+  /** Live controllable-water facts; absent for older views and non-ADRIFT modes. */
+  readonly adrift?: AdriftView;
   readonly cargoLoad: number;
   readonly cargoCapacity: number;
   readonly cargo: readonly CargoStackView[];

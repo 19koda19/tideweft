@@ -279,15 +279,27 @@ export function recenterRegionalPlayer(
   const position = pointInWindow(window, priorPosition);
   if (!position) throw new RangeError("Crossed player position is absent from the recentered window");
   const previous = pointInWindow(window, priorPrevious) ?? position;
-  const mappedSweepPath = sweepAddresses.map((address) => {
+  // ADRIFT steering can cross a different halo from the route that was a
+  // useful downstream guide one fixed step earlier. That guide is derived,
+  // not an authoritative position: if any remaining address falls outside
+  // the recentered cross, discard it and let the next water step replan from
+  // the porter's exact new position. Throwing here would turn a legitimate
+  // perpendicular paddle stroke into a broken save/runtime transition.
+  const mappedSweepPath: number[] = [];
+  let sweepGuideFitsWindow = true;
+  for (const address of sweepAddresses) {
     const mapped = regionTileIndexToWindowIndex(
       window.center,
       address.region,
       address.localY * WORLD_WIDTH + address.localX,
     );
-    if (mapped === null) throw new RangeError("A live sweep path escaped the recentered window");
-    return mapped;
-  });
+    if (mapped === null) {
+      sweepGuideFitsWindow = false;
+      break;
+    }
+    mappedSweepPath.push(mapped);
+  }
+  if (!sweepGuideFitsWindow) mappedSweepPath.length = 0;
   const knowledge = projectRegionalCartographyWindow(cartography, window);
   player.x = position.x;
   player.y = position.y;
@@ -300,6 +312,26 @@ export function recenterRegionalPlayer(
   player.currentTrace = [currentIndex];
   player.surveyTrace = [currentIndex];
   player.sweepPath = mappedSweepPath;
+  if (player.mode === "swept") {
+    let priorSweepIndex = currentIndex;
+    for (const sweepIndex of player.sweepPath) {
+      const priorSweepTile = window.terrain.tiles[priorSweepIndex];
+      const sweepTile = window.terrain.tiles[sweepIndex];
+      if (
+        !priorSweepTile
+        || !sweepTile
+        || Math.abs(priorSweepTile.x - sweepTile.x) + Math.abs(priorSweepTile.y - sweepTile.y) !== 1
+      ) {
+        player.sweepPath = [];
+        break;
+      }
+      priorSweepIndex = sweepIndex;
+    }
+  }
+  if (player.mode === "swept" && player.sweepPath.length === 0) {
+    player.sweepTicksRemaining = 1;
+    player.sweepTotalTicks = Math.max(2, player.sweepTotalTicks);
+  }
 
   return deepFreeze({
     state: sealState({

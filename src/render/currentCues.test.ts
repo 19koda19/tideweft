@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { FIXED_POINT } from "../sim/types";
+import { surfaceCurrentDirection } from "../game/currentDirection";
 import type { TerrainGridView, TerrainTileView } from "./types";
 import { MAX_SURFACE_CURRENT_CUES, buildSurfaceCurrentCues } from "./currentCues";
 
@@ -93,6 +95,28 @@ describe("surface current cue geometry", () => {
     const movingEarly = buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, { timeMs: 0 })[0];
     const movingLate = buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, { timeMs: 1_000 })[0];
     expect(movingLate?.center).not.toEqual(movingEarly?.center);
+  });
+
+  it("normalizes the shared vector without turning a tiny crosswind diagonal", () => {
+    const terrain = grid(1, 1, [tile()]);
+    const cue = (windY: number) => buildSurfaceCurrentCues(
+      terrain,
+      surfaceCurrentDirection(-1, windY),
+      { reducedMotion: true },
+    )[0];
+    const tiny = cue(1);
+    const moderate = cue(240_000);
+    const maximum = cue(FIXED_POINT);
+    const mirrored = cue(-240_000);
+    if (!tiny || !moderate || !maximum || !mirrored) throw new Error("wet fixture lost its cue");
+
+    expect(tiny.direction.x).toBeGreaterThan(0.999_999);
+    expect(tiny.direction.y).toBeGreaterThan(0);
+    expect(Math.abs(tiny.direction.y)).toBeLessThan(Math.abs(moderate.direction.y));
+    expect(Math.abs(moderate.direction.y)).toBeLessThan(Math.abs(maximum.direction.y));
+    expect(maximum.direction.x).toBeCloseTo(maximum.direction.y, 12);
+    expect(mirrored.direction.x).toBeCloseTo(moderate.direction.x, 12);
+    expect(mirrored.direction.y).toBeCloseTo(-moderate.direction.y, 12);
   });
 
   it("returns no cue for a missing or zero-length current", () => {

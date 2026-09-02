@@ -248,8 +248,8 @@ export function sampleLooseCargoEnvironment(
         heat,
         cold,
         immersion: waterDepth,
-        currentX: currentDirection.x * currentStrength,
-        currentY: currentDirection.y * currentStrength,
+        currentX: multiplySignedUnit(currentDirection.x, currentStrength),
+        currentY: multiplySignedUnit(currentDirection.y, currentStrength),
         magicalWaterFlux,
         impact: 0,
       },
@@ -334,6 +334,11 @@ function tileIndexAt(x: number, y: number, width: number, height: number): numbe
 
 function multiplyUnit(left: number, right: number): number {
   return Math.trunc((unit(left) * unit(right)) / FIXED_POINT);
+}
+
+function multiplySignedUnit(direction: number, strength: number): number {
+  const boundedDirection = Math.max(-FIXED_POINT, Math.min(FIXED_POINT, Math.trunc(direction)));
+  return Math.trunc((boundedDirection * unit(strength)) / FIXED_POINT);
 }
 
 function unit(value: number): number {

@@ -1,4 +1,5 @@
 import type {
+  AdriftView,
   TerrainClimateView,
   TideHarpView,
   TideweftView,
@@ -31,9 +32,15 @@ import {
   TILE_UNITS,
   activeTideHarpAtPlayer,
   cargoWeight,
+  playerTileIndex,
   wayknotEffectsAt,
   type PlayerState,
 } from "./player";
+import {
+  ADRIFT_MIN_STROKE_STAMINA,
+  ADRIFT_STAND_DEPTH,
+  ADRIFT_STAND_STAMINA,
+} from "./adrift";
 import type { TideHarp } from "./tideHarps";
 import { surfaceCurrentDirection } from "./currentDirection";
 import { WAYKNOT_LABELS, WAYKNOT_RADII } from "./wayknots";
@@ -125,8 +132,48 @@ export interface ProjectionOptions {
   looseCargoWorld?: LooseCargoWorldState;
   /** Authoritative momentary hold state, independent from derived pace. */
   bracing?: boolean;
+  /** Optional live movement intent used only to label an ADRIFT stroke. */
+  adriftControl?: AdriftProjectionControl;
   /** Shared current perception snapshot; production computes it once per refresh. */
   perception?: PerceptionResult;
+}
+
+export interface AdriftProjectionControl {
+  readonly moveX: number;
+  readonly moveY: number;
+}
+
+/**
+ * Projects only current physical facts. Planned-bank distance is deliberately
+ * absent because a free stroke can invalidate it before the next fixed step.
+ */
+export function projectAdriftView(
+  world: WorldView,
+  player: PlayerState,
+  control?: AdriftProjectionControl,
+): AdriftView | undefined {
+  if (player.mode !== "swept") return undefined;
+  const tile = world.terrain.tiles[playerTileIndex(player)];
+  const waterDepthFixed = fixedUnit(tile?.waterDepth, FIXED_POINT);
+  const staminaFixed = fixedUnit(player.stamina, 0);
+  const requestedStroke = control === undefined
+    ? player.pace === "steady"
+      && (finiteNonZero(player.velocityX) || finiteNonZero(player.velocityY))
+    : finiteNonZero(control.moveX) || finiteNonZero(control.moveY);
+  const waitingToRise = waterDepthFixed <= ADRIFT_STAND_DEPTH
+    && staminaFixed < ADRIFT_STAND_STAMINA;
+  const paddling = requestedStroke
+    && !waitingToRise
+    && staminaFixed >= ADRIFT_MIN_STROKE_STAMINA;
+
+  return {
+    paddling,
+    catchingBreath: !paddling && staminaFixed < FIXED_POINT,
+    canStand: waterDepthFixed <= ADRIFT_STAND_DEPTH
+      && staminaFixed >= ADRIFT_STAND_STAMINA,
+    waterDepth: waterDepthFixed / FIXED_POINT,
+    currentDirection: surfaceCurrentDirection(world.tide.direction, world.weather.windY),
+  };
 }
 
 /**
@@ -190,6 +237,7 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
+  const adrift = projectAdriftView(world, player, options.adriftControl);
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const suppliedPerception = options.perception;
   const expectedPerceptionCells = world.terrain.width * world.terrain.height;
@@ -504,9 +552,8 @@ export function projectGameView(
       stability: player.stability / FIXED_POINT,
       scanCharge: player.scanCharge / FIXED_POINT,
       scanProgress: player.scanPulse / FIXED_POINT,
-      sweptProgress: player.mode === "swept"
-        ? 1 - player.sweepTicksRemaining / Math.max(1, player.sweepTotalTicks)
-        : 0,
+      sweptProgress: legacySweptProgress(player),
+      ...(adrift ? { adrift } : {}),
       cargoLoad: cargoWeight(player),
       cargoCapacity: player.cargoCapacity,
       cargo: [
@@ -610,6 +657,29 @@ export function projectGameView(
     },
     ...(options.paused === undefined ? {} : { paused: options.paused }),
   };
+}
+
+function legacySweptProgress(player: PlayerState): number {
+  if (player.mode !== "swept") return 0;
+  const total = Number.isFinite(player.sweepTotalTicks)
+    ? Math.max(1, Math.floor(player.sweepTotalTicks))
+    : 1;
+  const remaining = Number.isFinite(player.sweepTicksRemaining)
+    ? Math.max(0, Math.floor(player.sweepTicksRemaining))
+    : total;
+  // This is retained for old renderers only. It is not a distance or ETA and
+  // can never announce completion while ADRIFT remains authoritative.
+  return Math.max(0, Math.min(0.99, 1 - remaining / total));
+}
+
+function fixedUnit(value: number | undefined, fallback: number): number {
+  return Number.isFinite(value)
+    ? Math.max(0, Math.min(FIXED_POINT, Math.trunc(value ?? fallback)))
+    : fallback;
+}
+
+function finiteNonZero(value: number | undefined): boolean {
+  return Number.isFinite(value) && value !== 0;
 }
 
 export function isCurrentPerceptionSnapshot(

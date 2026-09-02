@@ -167,8 +167,12 @@ describe("information as physical, sourced progress", () => {
     expect(projected.controls?.canInteract).toBe(false);
     expect(projected.field.swept).toBe(true);
     expect(projected.field.sweptProgress).toBeLessThan(1);
-    expect(projected.field.hint).toContain("Current has the helm");
-    expect(projected.field.hint).toContain("Steering and sounding return ashore");
+    expect(projected.field.adrift).toMatchObject({
+      canStand: true,
+      label: "SHALLOW · READY TO RISE",
+    });
+    expect(projected.field.hint).toContain("RISE WITH STEADY FOOTING");
+    expect(projected.field.hint).not.toMatch(/ashore|100%/iu);
     expect(projected.field.hint).not.toContain("Pace");
   });
 

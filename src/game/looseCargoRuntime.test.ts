@@ -153,6 +153,31 @@ describe("compatibility-region parcel environment", () => {
     expect(stepped.events[0]?.moved).toBe(true);
   });
 
+  it("scales the shared fixed-point current without amplifying crosswind", () => {
+    const base = worldView("parcel current keeps wind magnitude");
+    const deepest = [...base.terrain.tiles]
+      .sort((left, right) => right.waterDepth - left.waterDepth || left.index - right.index)[0];
+    if (!deepest || deepest.waterDepth <= 35_000) throw new Error("deep-water fixture missing");
+    const cargo = oneParcelAtTile(base, deepest.index);
+    const sample = (windY: number) => sampleLooseCargoEnvironment({
+      ...base,
+      weather: { ...base.weather, windY },
+    }, cargo)[0]?.environment;
+    const calm = sample(0);
+    const moderate = sample(240_000);
+    const maximum = sample(FIXED_POINT);
+    const mirrored = sample(-240_000);
+    if (!calm || !moderate || !maximum || !mirrored) throw new Error("current sample missing");
+
+    const strength = Math.abs(calm.currentX);
+    expect(strength).toBeGreaterThan(0);
+    expect(moderate.currentX).toBe(calm.currentX);
+    expect(maximum.currentX).toBe(calm.currentX);
+    expect(moderate.currentY).toBe(Math.trunc((strength * 240_000) / FIXED_POINT));
+    expect(maximum.currentY).toBe(strength);
+    expect(mirrored.currentY).toBe(-moderate.currentY);
+  });
+
   it("combines live storm, biome magic, rock, mangrove, and bramble signals", () => {
     const base = worldView("glimmer parcel signals");
     const wettest = [...base.terrain.tiles]

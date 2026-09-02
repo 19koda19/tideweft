@@ -84,60 +84,95 @@ describe("deterministic visual perception", () => {
 
   it("reveals broad terrain shape ahead while keeping distant detail undisclosed", () => {
     const result = evaluatePerception({
-      columns: 31,
+      columns: 65,
       rows: 1,
-      cells: flatCells(31),
-      playerTileIndex: 15,
+      cells: flatCells(65),
+      playerTileIndex: 32,
       facingRadians: 0,
       weatherVisibility: 1,
     });
 
+    // The earlier authored horizon was 20 tiles. Route-scale terrain is now
+    // still legible beyond it, while exact entity knowledge remains local.
+    expect(DEFAULT_PERCEPTION_RANGES.directSightRange).toBeGreaterThan(20);
     expect(DEFAULT_PERCEPTION_RANGES.directSightRange)
       .toBeGreaterThan(DEFAULT_DETAIL_PERCEPTION_RANGES.directSightRange);
     expect(DEFAULT_PERCEPTION_RANGES.forwardConeRadians)
       .toBeGreaterThan(DEFAULT_DETAIL_PERCEPTION_RANGES.forwardConeRadians);
-    expect(result.visibilityGrades[29]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.detailVisibilityGrades[29]).toBe(VISIBILITY_HIDDEN);
-    expect(result.detailVisibilityGrades[22]).toBe(VISIBILITY_DIRECT);
-    expect(result.visibilityGrades[12]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.detailVisibilityGrades[12]).toBe(VISIBILITY_HIDDEN);
-    expect(result.detailVisibilityGrades[13]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[32 + 24]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.terrainVisibilityStrengths[32 + 24]).toBeGreaterThan(0);
+    expect(result.detailVisibilityGrades[32 + 24]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[32 + 7]).toBe(VISIBILITY_DIRECT);
+
+    // Rear and side awareness stays short rather than inheriting the longer
+    // terrain horizon.
+    expect(result.visibilityGrades[32 - 4]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[32 - 6]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[32 - 4]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[32 - 2]).toBe(VISIBILITY_PERIPHERAL);
     expect(result.visibleTileIndices.length).toBeGreaterThan(result.detailVisibleTileIndices.length);
     expect(result.detailVisibleTileIndices.every(
       (index) => result.visibilityGrades[index] !== VISIBILITY_HIDDEN,
     )).toBe(true);
   });
 
-  it("feathers the authored terrain horizon without extending exact detail", () => {
+  it("keeps rear and side terrain awareness inside the short peripheral field", () => {
+    const columns = 15;
+    const playerX = 7;
+    const playerY = 7;
+    const indexAt = (x: number, y: number): number => y * columns + x;
     const result = evaluatePerception({
-      columns: 45,
-      rows: 1,
-      cells: flatCells(45),
-      playerTileIndex: 22,
+      columns,
+      rows: 15,
+      cells: flatCells(columns * 15),
+      playerTileIndex: indexAt(playerX, playerY),
       facingRadians: 0,
       weatherVisibility: 1,
     });
 
-    expect(result.visibilityGrades[34]).toBe(VISIBILITY_DIRECT); // 12 tiles
-    expect(result.visibilityGrades[35]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.visibilityGrades[41]).toBe(VISIBILITY_PERIPHERAL); // 19 tiles
-    expect(result.visibilityGrades[42]).toBe(VISIBILITY_HIDDEN); // zero-strength edge
-    expect(result.visibilityGrades[43]).toBe(VISIBILITY_HIDDEN);
-    expect(result.terrainVisibilityStrengths[34]).toBe(255);
-    expect(result.terrainVisibilityStrengths[35]).toBeGreaterThan(
-      result.terrainVisibilityStrengths[38] ?? 0,
+    const rearNear = indexAt(playerX - 4, playerY);
+    const rearFar = indexAt(playerX - 6, playerY);
+    const sideNear = indexAt(playerX, playerY - 4);
+    const sideFar = indexAt(playerX, playerY - 6);
+    expect(result.visibilityGrades[rearNear]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[sideNear]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[rearFar]).toBe(VISIBILITY_HIDDEN);
+    expect(result.visibilityGrades[sideFar]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[rearNear]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[sideNear]).toBe(VISIBILITY_HIDDEN);
+  });
+
+  it("feathers the authored terrain horizon without extending exact detail", () => {
+    const result = evaluatePerception({
+      columns: 69,
+      rows: 1,
+      cells: flatCells(69),
+      playerTileIndex: 34,
+      facingRadians: 0,
+      weatherVisibility: 1,
+    });
+
+    const strengthAtDistance = (distance: number): number => (
+      result.terrainVisibilityStrengths[34 + distance] ?? 0
     );
-    expect(result.terrainVisibilityStrengths[38]).toBeGreaterThan(
-      result.terrainVisibilityStrengths[40] ?? 0,
-    );
-    expect(result.terrainVisibilityStrengths[40]).toBeGreaterThan(
-      result.terrainVisibilityStrengths[41] ?? 0,
-    );
-    expect(result.terrainVisibilityStrengths[41]).toBeGreaterThan(0);
-    expect(result.terrainVisibilityStrengths[42]).toBe(0);
-    expect(result.terrainVisibilityStrengths[43]).toBe(0);
-    expect(result.detailVisibilityGrades[30]).toBe(VISIBILITY_DIRECT);
-    expect(result.detailVisibilityGrades[31]).toBe(VISIBILITY_HIDDEN);
+    const easedDistances = [18, 20, 22, 24, 26, 28, 29];
+    const easedStrengths = easedDistances.map(strengthAtDistance);
+
+    expect(result.visibilityGrades[34 + 18]).toBe(VISIBILITY_DIRECT);
+    expect(result.visibilityGrades[34 + 19]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[34 + 29]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[34 + 30]).toBe(VISIBILITY_HIDDEN);
+    expect(result.visibilityGrades[34 + 31]).toBe(VISIBILITY_HIDDEN);
+    expect(strengthAtDistance(18)).toBe(255);
+    expect(easedStrengths.every((strength, index) => (
+      index === 0 || strength < (easedStrengths[index - 1] ?? 0)
+    ))).toBe(true);
+    expect(strengthAtDistance(29)).toBeGreaterThan(0);
+    expect(strengthAtDistance(30)).toBe(0);
+    expect(strengthAtDistance(31)).toBe(0);
+    expect(result.detailVisibilityGrades[34 + 8]).toBe(VISIBILITY_DIRECT);
+    expect(result.detailVisibilityGrades[34 + 9]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[34 + 24]).toBe(VISIBILITY_HIDDEN);
   });
 
   it("eases terrain strength across the forward angle without revealing detail", () => {

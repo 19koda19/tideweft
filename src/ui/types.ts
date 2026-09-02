@@ -1,4 +1,5 @@
 import type {
+  AdriftView,
   CargoProperty,
   PaceView,
   SettlementStatus,
@@ -257,6 +258,12 @@ export interface TideHarpFieldUIView {
   readonly benefitLabel: string;
 }
 
+/** Accessible ADRIFT copy paired with the same physical facts as the renderer. */
+export interface AdriftFieldUIView extends AdriftView {
+  readonly label: string;
+  readonly instruction: string;
+}
+
 export interface FieldReadoutUIView {
   readonly isWater: boolean;
   readonly terrainLabel: string;
@@ -270,7 +277,10 @@ export interface FieldReadoutUIView {
   readonly activeWayknotLabels: readonly string[];
   readonly tideHarps: TideHarpFieldUIView;
   readonly swept: boolean;
+  /** Legacy compatibility phase only; player-facing ADRIFT copy does not quote it. */
   readonly sweptProgress: number;
+  /** Absent outside ADRIFT and on legacy projections. */
+  readonly adrift?: AdriftFieldUIView;
 }
 
 export interface SettlementInspectorUIView {

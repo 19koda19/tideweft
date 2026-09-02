@@ -59,6 +59,11 @@ import {
 } from "../sim/rockTraversal";
 import { promiseCargoLoadMilli } from "./looseCargo";
 import { regionalWindowForWorld } from "./regionalWorldView";
+import {
+  ADRIFT_STAND_DEPTH,
+  ADRIFT_STAND_STAMINA,
+  evaluateAdriftMotion,
+} from "./adrift";
 
 export const TILE_UNITS = 1_000;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
@@ -86,7 +91,7 @@ const TOOL_FOR_PROJECT: Readonly<Partial<Record<ProjectKind, FieldToolKind>>> = 
 };
 
 const SWEEP_DEPTH_THRESHOLD = 120_000;
-const SAFE_BANK_DEPTH = 55_000;
+const SAFE_BANK_DEPTH = ADRIFT_STAND_DEPTH;
 
 export interface PlayerCargo {
   contractId: number;
@@ -181,6 +186,10 @@ export interface PlayerStepResult {
   becameSwept: boolean;
   swept: boolean;
   washedAshore: boolean;
+  /** Live ADRIFT posture facts; absent on ordinary land/water movement. */
+  adriftPaddling?: boolean;
+  adriftCatchingBreath?: boolean;
+  adriftCanStand?: boolean;
   /** Present only on the fixed step where control is first lost to the current. */
   sweepCause: "stamina" | "stability" | null;
   sweepSupport: SweepSupport;
@@ -325,12 +334,12 @@ export function stepPlayer(
     player.scanCharge = Math.min(FIXED_POINT, player.scanCharge + tideHarpRecharge);
   }
 
-  // The adjacent bank path, not an estimate, is authoritative. A sweep may
-  // begin between tile centers and need one more interpolation step than its
-  // display budget predicts; never return control until the path is complete.
+  // The courier's position, current, stamina, and live input are authoritative.
+  // The adjacent bank path is only an obstacle-safe guide and may be replaced
+  // after a paddle stroke or tide change; never infer recovery from its ETA.
   if (player.mode === "swept") {
     return {
-      ...stepSweptPlayer(player, world, priorTileIndex),
+      ...stepSweptPlayer(player, world, priorTileIndex, control),
       traversalFeedback,
       traversalIncident,
       fallEvaluation,
@@ -850,7 +859,7 @@ export function stepPlayer(
       // infrastructure support. Previously the first estimate was calculated
       // before ferry support reached player state, so its ETA was pessimistic.
       player.sweepSupport = sweepSupport;
-      player.sweepPath = findSweepPath(world, currentTileIndex);
+      player.sweepPath = findSweepPath(world, currentTileIndex, effectiveControl);
       player.sweepTotalTicks = estimateSweepTicks(player, world, player.sweepPath);
       player.sweepTicksRemaining = player.sweepTotalTicks;
       player.mode = "swept";
@@ -966,7 +975,10 @@ function footingCurrentVector(
   const magnitude = Math.trunc(
     (base * clamp(gearPermille, 0, 1_000) * sailPermille) / 1_000_000,
   );
-  return { x: direction.x * magnitude, y: direction.y * magnitude };
+  return {
+    x: Math.trunc((direction.x * magnitude) / FIXED_POINT),
+    y: Math.trunc((direction.y * magnitude) / FIXED_POINT),
+  };
 }
 
 function footingWindVector(
@@ -1220,9 +1232,13 @@ export function pulseScan(player: PlayerState, world: WorldView): boolean {
 }
 
 /**
- * Rebuilds a safe, adjacent drift after loading a save. Sweep paths are
- * derived state: trusting arbitrary saved indices could make the porter cut
- * across the map or report a completed recovery while still in deep water.
+ * Validates or reconstructs an ADRIFT route after loading a save.
+ *
+ * A current save may capture the porter between tile centres after a real
+ * paddle stroke. Position, stamina, velocity, support, and the remaining
+ * adjacent route are authoritative at that point and must survive reload
+ * byte-for-byte. Older saves without a usable route are repaired
+ * deterministically from their physical position.
  */
 export function restoreSweptPlayer(player: PlayerState, world: WorldView): boolean {
   if (player.mode !== "swept") {
@@ -1234,7 +1250,18 @@ export function restoreSweptPlayer(player: PlayerState, world: WorldView): boole
   }
   const startIndex = playerTileIndex(player);
   const startTile = world.terrain.tiles[startIndex];
-  if (!startTile || startTile.waterDepth <= SAFE_BANK_DEPTH) return false;
+  if (!startTile) return false;
+  if (canonicalAdriftRoute(player, world, startIndex)) return true;
+
+  // Shallow-water recovery is a legitimate active ADRIFT state. A tired
+  // porter stays afloat in place until enough stamina exists to stand.
+  if (startTile.waterDepth <= SAFE_BANK_DEPTH) {
+    player.sweepPath = [];
+    player.sweepTicksRemaining = 1;
+    player.sweepTotalTicks = Math.max(2, player.sweepTotalTicks);
+    player.pace = "rest";
+    return true;
+  }
   player.sweepSupport = sweepSupportAtTile(world, startIndex);
   const path = findSweepPath(world, startIndex);
   if (path.length === 0) return false;
@@ -1244,6 +1271,28 @@ export function restoreSweptPlayer(player: PlayerState, world: WorldView): boole
   player.velocityY = 0;
   player.sweepTotalTicks = estimateSweepTicks(player, world, path);
   player.sweepTicksRemaining = player.sweepTotalTicks;
+  return true;
+}
+
+function canonicalAdriftRoute(
+  player: PlayerState,
+  world: WorldView,
+  startIndex: number,
+): boolean {
+  if (
+    player.sweepTicksRemaining < 1
+    || player.sweepTotalTicks < player.sweepTicksRemaining
+    || player.sweepPath.length > world.terrain.tiles.length
+  ) return false;
+  let prior = startIndex;
+  for (const index of player.sweepPath) {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= world.terrain.tiles.length) return false;
+    const priorTile = world.terrain.tiles[prior];
+    const tile = world.terrain.tiles[index];
+    if (!priorTile || !tile) return false;
+    if (Math.abs(priorTile.x - tile.x) + Math.abs(priorTile.y - tile.y) !== 1) return false;
+    prior = index;
+  }
   return true;
 }
 
@@ -1491,6 +1540,7 @@ function stepSweptPlayer(
   player: PlayerState,
   world: WorldView,
   priorTileIndex: number,
+  control: PlayerControl,
 ): Omit<
   PlayerStepResult,
   | "traversalFeedback"
@@ -1500,46 +1550,73 @@ function stepSweptPlayer(
   | "footing"
   | "footingEvaluations"
 > {
+  const priorTile = world.terrain.tiles[priorTileIndex];
   const targetIndex = player.sweepPath[0];
   const target = targetIndex === undefined ? undefined : world.terrain.tiles[targetIndex];
   const support = player.sweepSupport;
   let enteredTile: number | null = null;
-
-  if (target) {
-    const targetX = target.x * TILE_UNITS + TILE_UNITS / 2;
-    const targetY = target.y * TILE_UNITS + TILE_UNITS / 2;
-    const dx = targetX - player.x;
-    const dy = targetY - player.y;
-    const distance = Math.max(1, Math.hypot(dx, dy));
-    const speed = Math.min(distance, sweepStepSpeed(player, world));
-    player.velocityX = Math.round((dx / distance) * speed);
-    player.velocityY = Math.round((dy / distance) * speed);
-    player.x = clamp(
-      player.x + player.velocityX,
-      TILE_UNITS / 2,
-      world.terrain.width * TILE_UNITS - TILE_UNITS / 2,
-    );
-    player.y = clamp(
-      player.y + player.velocityY,
-      TILE_UNITS / 2,
-      world.terrain.height * TILE_UNITS - TILE_UNITS / 2,
-    );
+  const targetX = target ? target.x * TILE_UNITS + TILE_UNITS / 2 : player.x;
+  const targetY = target ? target.y * TILE_UNITS + TILE_UNITS / 2 : player.y;
+  const currentEffects = wayknotEffectsAt(player, world, priorTileIndex);
+  const loadRatioFixed = Math.min(
+    FIXED_POINT,
+    Math.floor(
+      (cargoWeightMilli(player) * FIXED_POINT)
+      / Math.max(PACK_LOAD_MILLI_PER_UNIT, player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT),
+    ),
+  );
+  const restingInShallows = (priorTile?.waterDepth ?? FIXED_POINT) <= ADRIFT_STAND_DEPTH
+    && player.stamina < ADRIFT_STAND_STAMINA;
+  const motion = evaluateAdriftMotion({
+    current: surfaceCurrentDirection(world.tide.direction, world.weather.windY),
+    ...(target
+      ? { guideDirection: { x: targetX - player.x, y: targetY - player.y } }
+      : {}),
+    // Once hands or knees can find bottom, standing takes precedence over
+    // another stroke. This prevents a held key/touch from spending each tiny
+    // recovered reserve forever below the get-up threshold.
+    control: restingInShallows
+      ? { x: 0, y: 0 }
+      : { x: control.moveX, y: control.moveY },
+    stamina: player.stamina,
+    waterDepth: priorTile?.waterDepth ?? FIXED_POINT,
+    loadRatioFixed,
+    currentMitigationPermille: Math.min(
+      1_000,
+      Math.max(
+        0,
+        WAYKNOT_PERMILLE - currentEffects.sweepRiskPermille
+          + (hasFieldTool(player, "storm-kite") ? 80 : 0),
+      ),
+    ),
+    paddleAssistPermille: hasFieldTool(player, "tide-sail") ? 320 : 0,
+    support: support === "ferry" ? "ferry" : null,
+  });
+  player.velocityX = motion.velocity.x;
+  player.velocityY = motion.velocity.y;
+  player.x = clamp(
+    player.x + player.velocityX,
+    TILE_UNITS / 2,
+    world.terrain.width * TILE_UNITS - TILE_UNITS / 2,
+  );
+  player.y = clamp(
+    player.y + player.velocityY,
+    TILE_UNITS / 2,
+    world.terrain.height * TILE_UNITS - TILE_UNITS / 2,
+  );
+  player.stamina = clamp(player.stamina + motion.staminaDelta, 0, FIXED_POINT);
+  player.pace = motion.paddling ? "steady" : "rest";
+  if (player.velocityX !== 0 || player.velocityY !== 0) {
     player.facingMilliRadians = approximateAngleMilliRadians(player.velocityX, player.velocityY);
-
-    if (distance <= speed) {
-      player.x = targetX;
-      player.y = targetY;
-      player.sweepPath.shift();
-    }
-  } else {
-    player.velocityX = 0;
-    player.velocityY = 0;
   }
 
   player.sweepTicksRemaining = Math.max(0, player.sweepTicksRemaining - 1);
-  player.stability = Math.max(0, player.stability - 1_200);
   player.stabilityTrend = "falling";
-  player.stabilityHint = `Swept by ${world.tide.direction > 0 ? "flood" : "ebb"} current${support ? ` · ${support} response inbound` : " · following the nearest safe bank"}`;
+  player.stabilityHint = motion.paddling
+    ? `ADRIFT · paddling across the ${world.tide.direction > 0 ? "flood" : "ebb"} current`
+    : motion.catchingBreath
+      ? "ADRIFT · float to catch your breath, then paddle toward shallow water"
+      : `ADRIFT · ${world.tide.direction > 0 ? "flood" : "ebb"} current carrying you${support ? ` · ${support} response nearby` : ""}`;
 
   const currentTileIndex = playerTileIndex(player);
   if (currentTileIndex !== priorTileIndex) {
@@ -1551,13 +1628,13 @@ function stepSweptPlayer(
   }
 
   const currentTile = world.terrain.tiles[currentTileIndex];
-  const reachedBank = player.sweepPath.length === 0
-    && (currentTile?.waterDepth ?? FIXED_POINT) <= SAFE_BANK_DEPTH;
-  if (!reachedBank && player.sweepPath.length === 0) {
+  const inShallows = (currentTile?.waterDepth ?? FIXED_POINT) <= ADRIFT_STAND_DEPTH;
+  const reachedBank = inShallows && player.stamina >= ADRIFT_STAND_STAMINA;
+  if (!reachedBank && !inShallows && (enteredTile !== null || player.sweepPath.length === 0)) {
     // Tide is live while the courier drifts. A bank that was safe when the
-    // sweep began may flood before arrival, so an exhausted course must be
-    // replanned from the actual current tile rather than declared ashore.
-    const replanned = findSweepPath(world, currentTileIndex);
+    // sweep began may flood before arrival. Replan from each newly entered
+    // water tile so a real paddle stroke can select another reachable bank.
+    const replanned = findSweepPath(world, currentTileIndex, control);
     if (replanned.length > 0) {
       const additionalTicks = estimateSweepTicks(player, world, replanned);
       player.sweepPath = replanned;
@@ -1566,15 +1643,26 @@ function stepSweptPlayer(
         player.sweepTicksRemaining,
         player.sweepTotalTicks + additionalTicks,
       );
-      player.stabilityHint = "The first bank flooded · current replotted toward the next safe shore";
+      if (!motion.paddling) {
+        player.stabilityHint = "ADRIFT · current course updated toward reachable shallow water";
+      }
     } else {
       // This should be vanishingly rare on generated worlds, but remaining in
       // the recoverable state is safer and more truthful than restoring control
       // in deep water. The next fixed step tries again against the live tide.
       player.sweepTicksRemaining = 1;
       player.sweepTotalTicks = Math.max(2, player.sweepTotalTicks);
-      player.stabilityHint = "No bank is currently dry enough · holding with the tide until a safe shore opens";
+      player.stabilityHint = "ADRIFT · no local bank is dry enough; the current continues across the horizon";
     }
+  }
+  if (!reachedBank && inShallows) {
+    // Shallow water is physical progress, not immediate rescue. A fully spent
+    // porter floats for a few seconds until there is enough reserve to rise.
+    player.sweepPath = [];
+    player.sweepTicksRemaining = 1;
+    player.sweepTotalTicks = Math.max(2, player.sweepTotalTicks);
+    player.stabilityTrend = "recovering";
+    player.stabilityHint = "Shallow water · float until you have enough stamina to stand";
   }
   // The estimate is presentation state; the adjacent path remains
   // authoritative. Never let the HUD reach 100% while drift is still active.
@@ -1611,6 +1699,9 @@ function stepSweptPlayer(
       becameSwept: false,
       swept: false,
       washedAshore: true,
+      adriftPaddling: motion.paddling,
+      adriftCatchingBreath: motion.catchingBreath,
+      adriftCanStand: true,
       sweepCause: null,
       sweepSupport: support,
       settlementId: harborId,
@@ -1626,14 +1717,13 @@ function stepSweptPlayer(
     becameSwept: false,
     swept: true,
     washedAshore: false,
+    adriftPaddling: motion.paddling,
+    adriftCatchingBreath: motion.catchingBreath,
+    adriftCanStand: motion.canStand || reachedBank,
     sweepCause: null,
     sweepSupport: support,
     settlementId: null,
   };
-}
-
-function sweepStepSpeed(player: PlayerState, world: WorldView): number {
-  return sweepStepSpeedAtTile(player, world, playerTileIndex(player));
 }
 
 function sweepStepSpeedAtTile(
@@ -1711,7 +1801,11 @@ function sweepSupportAtTile(world: WorldView, tileIndex: number): SweepSupport {
 }
 
 /** Deterministic adjacent BFS to the nearest currently safe bank. */
-function findSweepPath(world: WorldView, startIndex: number): number[] {
+function findSweepPath(
+  world: WorldView,
+  startIndex: number,
+  steering: Pick<PlayerControl, "moveX" | "moveY"> = { moveX: 0, moveY: 0 },
+): number[] {
   const count = world.terrain.tiles.length;
   const previous = new Int32Array(count);
   previous.fill(-1);
@@ -1733,7 +1827,7 @@ function findSweepPath(world: WorldView, startIndex: number): number[] {
       bankIndex = index;
       break;
     }
-    for (const neighbor of sweepNeighbors(world, index)) {
+    for (const neighbor of sweepNeighbors(world, index, steering)) {
       if (visited[neighbor] === 1) continue;
       visited[neighbor] = 1;
       previous[neighbor] = index;
@@ -1747,7 +1841,7 @@ function findSweepPath(world: WorldView, startIndex: number): number[] {
     // "wait forever". Follow the public current to one reachable outer tile;
     // the runtime recenters there and the next fixed step replans against the
     // newly materialized region.
-    bankIndex = regionalSweepContinuationTarget(world, startIndex, visited);
+    bankIndex = regionalSweepContinuationTarget(world, startIndex, visited, steering);
   }
   if (bankIndex < 0) return [];
   const reversed: number[] = [];
@@ -1764,6 +1858,7 @@ function regionalSweepContinuationTarget(
   world: WorldView,
   startIndex: number,
   visited: Uint8Array,
+  steering: Pick<PlayerControl, "moveX" | "moveY">,
 ): number {
   const start = world.terrain.tiles[startIndex];
   if (!start) return -1;
@@ -1784,7 +1879,10 @@ function regionalSweepContinuationTarget(
     ) continue;
     const dx = tile.x - start.x;
     const dy = tile.y - start.y;
-    const progress = dx * current.x + dy * current.y;
+    // Steering chooses among reachable horizon continuations without erasing
+    // the current. A zero input retains the historical downstream ordering.
+    const progress = dx * current.x + dy * current.y
+      + (dx * steering.moveX + dy * steering.moveY) * FIXED_POINT;
     const distance = Math.abs(dx) + Math.abs(dy);
     if (
       progress > selectedProgress
@@ -1799,7 +1897,11 @@ function regionalSweepContinuationTarget(
   return selected;
 }
 
-function sweepNeighbors(world: WorldView, index: number): number[] {
+function sweepNeighbors(
+  world: WorldView,
+  index: number,
+  steering: Pick<PlayerControl, "moveX" | "moveY">,
+): number[] {
   const tile = world.terrain.tiles[index];
   if (!tile) return [];
   const candidates: number[] = [];
@@ -1812,9 +1914,14 @@ function sweepNeighbors(world: WorldView, index: number): number[] {
     const left = world.terrain.tiles[leftIndex];
     const right = world.terrain.tiles[rightIndex];
     if (!left || !right) return leftIndex - rightIndex;
+    const leftSteering = (left.x - tile.x) * steering.moveX + (left.y - tile.y) * steering.moveY;
+    const rightSteering = (right.x - tile.x) * steering.moveX + (right.y - tile.y) * steering.moveY;
     const leftCurrent = (left.x - tile.x) * desired.x + (left.y - tile.y) * desired.y;
     const rightCurrent = (right.x - tile.x) * desired.x + (right.y - tile.y) * desired.y;
-    return rightCurrent - leftCurrent || left.waterDepth - right.waterDepth || leftIndex - rightIndex;
+    return rightSteering - leftSteering
+      || rightCurrent - leftCurrent
+      || left.waterDepth - right.waterDepth
+      || leftIndex - rightIndex;
   });
 }
 

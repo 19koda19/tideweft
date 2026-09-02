@@ -4,6 +4,56 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.4 — 2026-09-01
+
+Build: `0.3.3-alpha.4` · Gameplay contract: 13 · Tutorial: 14
+
+A lost river crossing is now something the courier survives moment by moment: float, read the current, paddle toward shallows, recover enough breath to rise, and keep every separated parcel in the same physical world.
+
+### Gameplay
+
+- Deep-water stamina or stability collapse now enters a player-controlled ADRIFT state. Current keeps carrying the courier while WASD or arrows provide a held paddle stroke, a touch tap provides one bounded stroke toward that point, and releasing movement floats to recover stamina.
+- Reaching standable shallows is physical progress rather than instant ejection. The courier floats there until at least 100,000 stamina is available, then rises; scanning, gathering, harbor work, Promise changes, and other grounded actions wait until footing returns.
+- Clear-air terrain now carries thirty tiles ahead through the same 150-degree field. It remains fully legible through eighteen tiles and eases across a twelve-tile atmospheric horizon, while people, cargo, resources, labels, current detail, and actions remain inside the shorter eight-tile detail field.
+- Public current direction now preserves wind magnitude instead of turning every nonzero crosswind into a full diagonal. The same fixed-point vector drives footing, loose parcels, current cues, and ADRIFT motion.
+
+### Fixes
+
+- A movement key already held when footing gives way now becomes the first paddle stroke instead of being discarded. Releasing it floats immediately, and touch steering expires after eight fixed beats or cancels on focus loss.
+- Held input can no longer spend every tiny stamina recovery forever in shallow water. Standing takes precedence once the water is shallow enough, so recovery reaches a bounded exit.
+- Paddling and maximum support can bend or slow a current but cannot turn direct upstream input into a permanent upstream motor; the downstream physical component remains authoritative.
+- Current version-4 saves preserve an in-progress ADRIFT position, previous position, velocity, stamina, support, traversal evidence, cargo manifest, and valid adjacent guide exactly. Invalid legacy guides repair deterministically without moving the courier.
+- Crossing a signed regional boundary while ADRIFT no longer crashes when a one-beat-old guide leaves the recentered five-region window. The disposable guide clears and replans from the exact preserved position.
+- ADRIFT uses its own bounded paddle sound instead of land footsteps. OHM, WHHSH, and HUP remain separate from complete system explanations, and both views clamp the panel-free state copy inside the playable aperture.
+- Tiny crosswind now remains tiny for player footing and parcel drift instead of receiving the same lateral force as a maximum crosswind; malformed and extreme vectors clamp safely.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. ADRIFT adds skillful recovery control rather than weaker water: tide, current, water depth, stamina, carried load, Tide anchors, Tide sails, Storm kites, and ferry support still determine what one stroke can accomplish.
+- Floating restores 2,800 stamina per fixed beat; an exhausted attempted stroke restores less. A loaded pack weakens steering, and no legitimate combination of assistance erases the downstream current.
+- The longer terrain horizon reveals ground shape only. Rear awareness remains five tiles, and exact detail remains two tiles around the courier or eight tiles inside its narrower forward field, so distant terrain never becomes loot or actor radar.
+- ADRIFT no longer displays a fabricated percentage, distance, or arrival time. Live tide and free steering can invalidate an old bank estimate, so the interface reports only current physical state.
+
+### Interface
+
+- Chart 2D and Relief 3D now show a floating, paddling, breath-catching, or ready-to-rise pose with restrained color, wake, and separate Atari-like water syllables. No pane was added.
+- The field and touch action copy now says ADRIFT and teaches MOVE / TAP TO PADDLE and RELEASE TO BREATHE. Canvas accessibility descriptions expose the same keyboard, touch, and recovery behavior.
+- The terrain horizon fades monotonically from full clarity to darkness rather than ending in a hard ring; ridge occlusion and weather still contract the same shared Chart and Relief perception snapshot.
+- The version-14 T and question-mark field manual teaches controllable ADRIFT, shallow-water standing, physical cargo consequences, magnitude-scaled currents, and the thirty-tile terrain versus eight-tile exact-detail boundary.
+
+### Save changes
+
+- Save version remains 4 and requires no migration. Held keys and touch pulses are transient input, while the physical ADRIFT state and all cargo custody remain inside the existing sealed session.
+- Reloading an in-progress river incident cannot reroll its position, stamina, support, traversal result, damaged lot, or separated parcel state. Derived bank guides may be repaired but never replace those authoritative facts.
+- The wider terrain falloff and current-vector projection are derived from existing world, weather, player, and perception state; neither adds serialized fog or presentation caches.
+
+### Known limitations
+
+- The complete health, injury, cold, wetness, drowning, incapacitation, rescue, and incident-site system is not live; ADRIFT currently recovers through stamina and shallows rather than an HP or exposure model.
+- All ordinary water still uses the existing physical and magical-water climate signals; the planned all-water Possibility State, personal-history drift, and transactional reality shifts are not live.
+- Universal generated NPC identities, ABOUT inspection, actor emotion and deterrence, dogs, wildlife, audible actor contacts, and generated regional settlements remain future complete vertical slices.
+- Autonomous loose-parcel drift across a regional seam remains unfinished; a parcel stays conserved in the signed region where it stopped until that region is active again.
+
 ## 0.3.3-alpha.3 — 2026-09-01
 
 Build: `0.3.3-alpha.3` · Gameplay contract: 12 · Tutorial: 13

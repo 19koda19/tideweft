@@ -55,6 +55,10 @@ import {
   type PlayerBalancePresentation,
 } from "./playerPresentation";
 import {
+  adriftPresentation,
+  type AdriftPresentation,
+} from "./adriftPresentation";
+import {
   advancePointerParallax,
   createPointerParallaxState,
   easeWorldLabelPoint,
@@ -847,7 +851,11 @@ export function createTideweftRenderer(
       heldDirections.clear();
       if (heldBraceKeys.size > 0) emit({ type: "brace", active: false });
       heldBraceKeys.clear();
-      updateMovement();
+      // A touch ADRIFT stroke lives in the runtime rather than this keyboard
+      // signature. Always send an explicit zero on focus loss so that bounded
+      // pulse cannot keep paddling after the player leaves the field.
+      lastMovement = "0,0";
+      emit({ type: "movement", vector: { x: 0, y: 0 } });
       clearPointer();
       releaseLooseCargoPointerCaptures(element, touchSequence.activePointerIds);
       touchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
@@ -1196,10 +1204,6 @@ export function createTideweftRenderer(
             p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
             continue;
           }
-          const sensoryStrength = Math.pow(currentVisibility, 1.08);
-          p.fill(p.lerpColor(p.color(PALETTE.ink), terrainColor(tile), sensoryStrength));
-          p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
-
           const derivedDepth = clamp(view.tide.level * 0.82 - unit(tile.elevation), 0, 1);
           const waterDepth = unit(tile.waterDepth, derivedDepth);
           const water = visibleWaterPresentation(tile, {
@@ -1207,10 +1211,24 @@ export function createTideweftRenderer(
             tideLevel: view.tide.level,
             transientVisibility: currentVisibility,
           });
+          const sensoryStrength = Math.pow(currentVisibility, 1.08);
+          // Distant unsounded water gets one neutral under-surface as well as
+          // one neutral water material. Otherwise translucent water can reveal
+          // raw channel/shallows/deep terrain colors underneath it.
+          const visibleTerrainColor = water && !water.depthDisclosed
+            ? p.color(TERRAIN_COLORS.channel)
+            : terrainColor(tile);
+          p.fill(p.lerpColor(p.color(PALETTE.ink), visibleTerrainColor, sensoryStrength));
+          p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
+
           if (water) {
             p.fill(withAlpha(water.color, water.opacity * sensoryStrength));
             p.rect(x, y, tileSize + 0.4 / camera.zoom, tileSize + 0.4 / camera.zoom);
-            if ((column + row) % 3 === 0 && waterDepth < 0.74) {
+            if (
+              water.depthDisclosed
+              && (column + row) % 3 === 0
+              && waterDepth < 0.74
+            ) {
               p.stroke(withAlpha(water.accentColor, water.accentOpacity));
               p.strokeWeight(0.55 / camera.zoom);
               const inset = tileSize * (0.2 + hash01(column, row, 7) * 0.24);
@@ -2614,11 +2632,14 @@ export function createTideweftRenderer(
       p.pop();
     };
 
-    const drawSweptCurrent = (view: TideweftView, radius: number): void => {
+    const drawSweptCurrent = (
+      view: TideweftView,
+      radius: number,
+      wakeIntensity: number,
+    ): void => {
       const player = view.player;
       if (player.mode !== "swept") return;
-      const progress = unit(player.sweptProgress);
-      const wakeLength = radius * (3.1 + progress * 1.25);
+      const wakeLength = radius * (3.1 + unit(wakeIntensity) * 1.25);
       p.push();
       p.translate(player.position.x, player.position.y);
       p.rotate(player.facing);
@@ -2638,6 +2659,44 @@ export function createTideweftRenderer(
       p.line(-radius * 0.9, radius * 0.5, -wakeLength, radius * 1.15);
       p.line(-wakeLength * 0.72, -radius * 0.9, -wakeLength * 0.9, 0);
       p.line(-wakeLength * 0.72, radius * 0.9, -wakeLength * 0.9, 0);
+      p.pop();
+    };
+
+    const drawAdriftText = (
+      view: TideweftView,
+      presentation: AdriftPresentation,
+      now: number,
+    ): void => {
+      const anchor = worldLabelScreen("player-adrift", view.player.position, now);
+      const compact = p.width <= 704 || p.height <= 544;
+      const x = clamp(anchor.x, compact ? 104 : 136, p.width - (compact ? 104 : 136));
+      const y = clamp(anchor.y - (compact ? 30 : 38), compact ? 70 : 62, p.height - 86);
+      const context = p.drawingContext as CanvasRenderingContext2D;
+      p.push();
+      p.resetMatrix();
+      p.textAlign(p.CENTER, p.CENTER);
+      p.noStroke();
+      context.save();
+      context.shadowColor = "rgba(0, 0, 0, 0.96)";
+      context.shadowBlur = 5;
+      p.textStyle(p.BOLD);
+      p.textSize(compact ? 11 : 12);
+      p.fill(presentation.edgeColor);
+      p.text(presentation.label, x, y);
+      p.textStyle(p.NORMAL);
+      p.textSize(compact ? 8.5 : 9.5);
+      p.fill(withAlpha(PALETTE.foam, 238));
+      p.text(presentation.instruction, x, y + (compact ? 13 : 15));
+      if (
+        presentation.soundSyllable
+        && Math.floor(now / (reducedMotion ? 900 : 560)) % 3 === 0
+      ) {
+        p.textStyle(p.BOLD);
+        p.textSize(compact ? 8 : 9);
+        p.fill(withAlpha(presentation.bodyColor, 210));
+        p.text(presentation.soundSyllable, x + (compact ? 76 : 96), y + 5);
+      }
+      context.restore();
       p.pop();
     };
 
@@ -2787,7 +2846,21 @@ export function createTideweftRenderer(
 
     const drawPlayer = (view: TideweftView, now: number): void => {
       const player = view.player;
-      const presentation = playerBalancePresentation(player.balanceState);
+      const adrift = player.adrift
+        ? adriftPresentation({
+            modeActive: player.mode === "swept",
+            paddling: player.adrift.paddling,
+            catchingBreath: player.adrift.catchingBreath,
+            canStand: player.adrift.canStand,
+            stamina: player.stamina,
+            velocity: player.velocity,
+            currentDirection: player.adrift.currentDirection,
+          })
+        : undefined;
+      const basePresentation = playerBalancePresentation(player.balanceState);
+      const presentation: PlayerBalancePresentation = adrift
+        ? { ...basePresentation, fill: adrift.bodyColor, outline: adrift.edgeColor }
+        : basePresentation;
       const position = player.position;
       const radius = 7.2 / camera.zoom;
       const stability = unit(player.stability, 1);
@@ -2801,9 +2874,12 @@ export function createTideweftRenderer(
       const context = p.drawingContext as CanvasRenderingContext2D;
 
       drawDestination(view, now);
-      drawSweptCurrent(view, radius);
+      drawSweptCurrent(view, radius, adrift?.wakeIntensity ?? 0.4);
       p.push();
-      p.translate(position.x, position.y);
+      const adriftBob = adrift && !reducedMotion
+        ? Math.sin(now * 0.0042) * radius * adrift.bobIntensity * 0.22
+        : 0;
+      p.translate(position.x, position.y + adriftBob);
       p.rotate(bodyRotation);
 
       context.save();
@@ -2836,6 +2912,18 @@ export function createTideweftRenderer(
       }
 
       drawPlayerSilhouette(presentation, player, radius);
+      if (adrift?.pose === "stroke" || adrift?.pose === "reach") {
+        const strokeSide = Math.sin(now * 0.012) >= 0 ? 1 : -1;
+        p.noFill();
+        p.stroke(withAlpha(adrift.edgeColor, 242));
+        p.strokeWeight(1.35 / camera.zoom);
+        p.line(
+          -radius * 0.15,
+          strokeSide * radius * 0.18,
+          radius * (adrift.pose === "reach" ? 1.85 : 1.35),
+          strokeSide * radius * (adrift.pose === "reach" ? 0.42 : 0.9),
+        );
+      }
       if (player.bracing === true && player.mode !== "swept") {
         // A held brace is a planted physical pose, not merely a recolor. The
         // four feet remain legible against every biome and at low contrast.
@@ -2867,6 +2955,8 @@ export function createTideweftRenderer(
       p.strokeWeight(1.8 / camera.zoom);
       p.arc(0, 0, radius * 3.3, radius * 3.3, -p.HALF_PI, -p.HALF_PI + p.TWO_PI * unit(player.stamina));
       p.pop();
+
+      if (adrift) drawAdriftText(view, adrift, now);
 
       if (player.scanProgress !== undefined && player.scanProgress > 0.001) {
         drawScanRing(position, unit(player.scanProgress), 220);
@@ -3134,7 +3224,7 @@ export function createTideweftRenderer(
       canvasElement.setAttribute("role", "application");
       canvasElement.setAttribute(
         "aria-label",
-        "TIDEWEFT estuary. Use WASD or arrow keys to travel, Space to scan, E to interact or recover a nearby parcel, F to tie or tend a Wayknot, T for the tutorial, and Escape to cancel. On touch, tap a visible parcel to approach and recover it.",
+        "TIDEWEFT estuary. Use WASD or arrow keys to travel and to paddle while ADRIFT; release movement to float and recover stamina. Space scans, E interacts or recovers a nearby parcel, F ties or tends a Wayknot, T opens the tutorial, and Escape cancels. On touch, tap toward shallow water to paddle while ADRIFT.",
       );
       canvasElement.setAttribute(
         "aria-keyshortcuts",
@@ -3243,10 +3333,9 @@ export function createTideweftRenderer(
         heldDirections.clear();
         if (heldBraceKeys.size > 0) options.dispatch({ type: "brace", active: false });
         heldBraceKeys.clear();
-        if (lastMovement !== "0,0") {
-          lastMovement = "0,0";
-          options.dispatch({ type: "movement", vector: { x: 0, y: 0 } });
-        }
+        // Also cancels a runtime-owned ADRIFT touch pulse when switching view.
+        lastMovement = "0,0";
+        options.dispatch({ type: "movement", vector: { x: 0, y: 0 } });
         resetPointerParallax(pointerParallax, true);
         labelPositions.clear();
       }

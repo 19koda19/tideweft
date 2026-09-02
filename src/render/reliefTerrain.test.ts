@@ -130,6 +130,32 @@ describe("discovery-masked Relief surfaces", () => {
     expect(seen.tiles[0]?.discovered).toBe(0);
   });
 
+  it("uses one neutral Relief water surface beyond direct detail unless it was sounded", () => {
+    const remoteSurface = (waterDepth: number, depthKnown = 0, detail = 0) => grid([tile({
+      elevation: 0.2,
+      waterDepth,
+      discovered: 1,
+      depthKnown,
+      currentVisibility: 1,
+      currentDetailVisibility: detail as 0 | 0.5 | 1,
+    })]);
+    const point = { x: 5, y: 5 };
+
+    expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08), point, 100, true))
+      .toBe(perceivedReliefSurfaceHeightAt(remoteSurface(0.96), point, 100, true));
+    expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08, 0, 0.5), point, 100, true))
+      .toBe(perceivedReliefSurfaceHeightAt(remoteSurface(0.96, 0, 0.5), point, 100, true));
+    expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08), point, 100, true))
+      .toBeCloseTo(70, 12);
+
+    expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08, 1), point, 100, true))
+      .toBeCloseTo(28, 12);
+    expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.96, 1), point, 100, true))
+      .toBeCloseTo(116, 12);
+    expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08, 0, 1), point, 100, true))
+      .toBeCloseTo(28, 12);
+  });
+
   it("uses the same partial-discovery values for mesh tiles and surface anchors", () => {
     const source = tile({ elevation: 0.8, waterDepth: 0.2, discovered: 0.25 });
     const masked = maskReliefTileForDiscovery(source);

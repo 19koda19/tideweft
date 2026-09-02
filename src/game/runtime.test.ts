@@ -1436,7 +1436,9 @@ describe("runtime clarity guards", () => {
     expect(runtime.getRenderView().player.stamina).toBe(0);
     expect(runtime.getUIView().player.stamina).toBe(0);
 
-    for (let step = 0; step < 20 && runtime.getRenderView().player.mode === "swept"; step += 1) {
+    // Reaching shallow water is no longer enough by itself: the porter must
+    // also float long enough to rebuild the authoritative standing reserve.
+    for (let step = 0; step < 80 && runtime.getRenderView().player.mode === "swept"; step += 1) {
       advancePlayerSteps(runtime, 1);
       expect(runtime.getUIView().player.stamina).toBe(runtime.getRenderView().player.stamina);
     }
@@ -1503,7 +1505,188 @@ describe("runtime clarity guards", () => {
     runtime.destroy();
   });
 
-  it("explains current control and ignores scan and pace commands while swept", async () => {
+  it("reloads a current v4 ADRIFT save without moving the porter or changing physical cargo", async () => {
+    const repository = new MemoryRepository();
+    const setup = await createTideweftRuntime(repository);
+    setup.dispatchUI({ type: "resume-world" });
+    const offer = setup.getUIView().contracts.find((contract) =>
+      contract.actionLabel === "Pick up cargo here");
+    if (!offer) throw new Error("fixture did not begin beside physical Promise cargo");
+    setup.dispatchUI({ type: "contract", action: "accept", contractId: offer.id });
+    advancePlayerSteps(setup, 10);
+    await setup.save();
+    setup.destroy();
+
+    // Begin from a real, sealed v4 save with an authoritative physical cargo
+    // manifest. The fixture then makes the compatibility region one broad
+    // channel and removes stability so the next ordinary movement beat enters
+    // ADRIFT through the production transition.
+    const preparedRecord = repository.snapshot();
+    const prepared = decodeGameSave(preparedRecord);
+    expect(prepared.version).toBe(4);
+    expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
+    const preparedWorld = deserializeWorld(prepared.world);
+    for (const tile of preparedWorld.terrain.tiles) {
+      tile.elevation = 0;
+      tile.moisture = 1_000_000;
+      tile.roughness = 0;
+      tile.terrain = "deep-water";
+      tile.baseTravelCost = 1_100;
+    }
+    prepared.world = serializeWorld(preparedWorld);
+    prepared.player.mode = "foot";
+    prepared.player.pace = "steady";
+    prepared.player.stability = 0;
+    prepared.player.stamina = 800_000;
+    prepared.player.velocityX = 0;
+    prepared.player.velocityY = 0;
+    prepared.player.sweepPath = [];
+    prepared.player.sweepTicksRemaining = 0;
+    prepared.player.sweepTotalTicks = 0;
+    prepared.player.sweepSupport = null;
+    prepared.traversalFeedback = createTraversalFeedbackState();
+    resealGameSave(prepared);
+    repository.replace({
+      ...preparedRecord,
+      worldJson: JSON.stringify(prepared),
+    });
+
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    const tileSize = runtime.getRenderView().terrain.tileSize;
+
+    // This movement command models a held keyboard direction. It is sent while
+    // still standing, creates the sweep on the first tick, and must remain the
+    // accepted paddle input on the next ADRIFT tick without another keydown.
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 1 } });
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().player.mode).toBe("swept");
+    expect(runtime.getRenderView().player.incident?.kind).toBe("sweep");
+    const sweepEntryPosition = runtime.getRenderView().player.position;
+    const staminaAtSweep = runtime.getRenderView().player.stamina;
+
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().player.adrift).toMatchObject({
+      paddling: true,
+      catchingBreath: false,
+    });
+    expect(runtime.getRenderView().player.stamina).toBeLessThan(staminaAtSweep);
+
+    // Keyup is the zero vector. The next fixed beat floats and recovers rather
+    // than inheriting a hidden stroke from the transition.
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    const staminaBeforeReleaseBeat = runtime.getRenderView().player.stamina;
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().player.adrift).toMatchObject({
+      paddling: false,
+      catchingBreath: true,
+    });
+    expect(runtime.getRenderView().player.stamina).toBeGreaterThan(staminaBeforeReleaseBeat);
+
+    // Blur/view-deactivation is projected as an explicit zero movement command.
+    // It must cancel a runtime-owned touch stroke even though no keyboard key
+    // was ever held.
+    const beforeTap = runtime.getRenderView().player.position;
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: { x: beforeTap.x, y: beforeTap.y + tileSize },
+      additive: false,
+    });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    const staminaBeforeCancelledTap = runtime.getRenderView().player.stamina;
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().player.adrift).toMatchObject({
+      paddling: false,
+      catchingBreath: true,
+    });
+    expect(runtime.getRenderView().player.stamina).toBeGreaterThan(staminaBeforeCancelledTap);
+
+    // A nearby mobile move target supplies exactly the same directional verb
+    // for a bounded eight-beat stroke. One later beat proves it cannot become
+    // sticky touch autopilot.
+    const secondTap = runtime.getRenderView().player.position;
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: { x: secondTap.x, y: secondTap.y + tileSize },
+      additive: false,
+    });
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().player.adrift?.paddling).toBe(true);
+    advancePlayerSteps(runtime, 8);
+    expect(runtime.getRenderView().player.adrift).toMatchObject({
+      paddling: false,
+      catchingBreath: true,
+    });
+
+    const entryTile = {
+      x: Math.floor(sweepEntryPosition.x / tileSize),
+      y: Math.floor(sweepEntryPosition.y / tileSize),
+    };
+    let afterMovement = runtime.getRenderView().player.position;
+    for (let step = 0; step < 48; step += 1) {
+      const currentTile = {
+        x: Math.floor(afterMovement.x / tileSize),
+        y: Math.floor(afterMovement.y / tileSize),
+      };
+      if (currentTile.x !== entryTile.x || currentTile.y !== entryTile.y) break;
+      advancePlayerSteps(runtime, 1);
+      afterMovement = runtime.getRenderView().player.position;
+    }
+    expect({
+      x: Math.floor(afterMovement.x / tileSize),
+      y: Math.floor(afterMovement.y / tileSize),
+    }).not.toEqual(entryTile);
+    expect(runtime.getRenderView().player.mode).toBe("swept");
+    expect(runtime.getRenderView().player.incident?.kind).toBe("sweep");
+
+    await runtime.save();
+    const durableRecord = repository.snapshot();
+    const durable = decodeGameSave(durableRecord);
+    if (!durable.physicalCargo || !durable.traversalFeedback) {
+      throw new Error("current ADRIFT save omitted authoritative sidecars");
+    }
+    expect(durable.version).toBe(4);
+    expect(durableRecord.payloadVersion).toBe(4);
+    expect(durable.player.mode).toBe("swept");
+    expect(durable.player.sweepSupport).toBeNull();
+    expect(durable.traversalFeedback.incident?.kind).toBe("sweep");
+    const positionAtSave = { x: durable.player.x, y: durable.player.y };
+    const priorPositionAtSave = {
+      x: durable.player.previousX,
+      y: durable.player.previousY,
+    };
+    const staminaAtSave = durable.player.stamina;
+    const supportAtSave = durable.player.sweepSupport;
+    const incidentAtSave = structuredClone(durable.traversalFeedback);
+    const cargoAtSave = structuredClone(durable.physicalCargo);
+    const renderAtSave = structuredClone(runtime.getRenderView().player);
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getRenderView().player).toMatchObject({
+      position: renderAtSave.position,
+      velocity: renderAtSave.velocity,
+      stamina: renderAtSave.stamina,
+      mode: "swept",
+      incident: renderAtSave.incident,
+    });
+    await resumed.save();
+    const reloaded = decodeGameSave(repository.snapshot());
+    expect({ x: reloaded.player.x, y: reloaded.player.y }).toEqual(positionAtSave);
+    expect({
+      x: reloaded.player.previousX,
+      y: reloaded.player.previousY,
+    }).toEqual(priorPositionAtSave);
+    expect(reloaded.player.stamina).toBe(staminaAtSave);
+    expect(reloaded.player.mode).toBe("swept");
+    expect(reloaded.player.sweepSupport).toBe(supportAtSave);
+    expect(reloaded.traversalFeedback).toEqual(incidentAtSave);
+    expect(reloaded.physicalCargo?.expectedManifest).toEqual(cargoAtSave.expectedManifest);
+    expect(reloaded.physicalCargo).toEqual(cargoAtSave);
+    resumed.destroy();
+  });
+
+  it("explains ADRIFT control and ignores scan and pace commands while swept", async () => {
     const world = createWorld("runtime swept guard", "calm");
     const view = createWorldView(world);
     const deepTile = view.terrain.tiles.find((tile) => tile.waterDepth >= 120_000);
@@ -1541,8 +1724,8 @@ describe("runtime clarity guards", () => {
 
     expect(runtime.getUIView().field.swept).toBe(true);
     runtime.dispatchUI({ type: "scan" });
-    expect(runtime.getUIView().announcement?.message).toContain("current has the helm");
-    expect(runtime.getUIView().announcement?.message).toContain("sounding line is secured");
+    expect(runtime.getUIView().announcement?.message).toContain("ADRIFT");
+    expect(runtime.getUIView().announcement?.message).toContain("sounding line stays secured");
     expect(runtime.getUIView().player.pace).toBe("rest");
     runtime.destroy();
   });

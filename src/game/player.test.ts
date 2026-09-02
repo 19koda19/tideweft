@@ -958,7 +958,7 @@ describe("effort, stability, and discovery", () => {
     expect(player.stabilityHint).toContain("Recovering");
   });
 
-  it("rebuilds a saved sweep as an adjacent route with an honest fresh estimate", () => {
+  it("rebuilds a legacy sweep as an adjacent ADRIFT guide with bounded recovery state", () => {
     const startIndex = 10 * WORLD_WIDTH + 10;
     const world = controlledWorld((tiles) => {
       const water = tiles[startIndex];
@@ -981,6 +981,31 @@ describe("effort, stability, and discovery", () => {
     expect(player.sweepTicksRemaining).toBeGreaterThan(0);
   });
 
+  it("preserves an already-canonical mid-ADRIFT snapshot byte for byte", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const world = controlledWorld((tiles) => {
+      for (let x = 8; x <= 16; x += 1) {
+        const index = 10 * WORLD_WIDTH + x;
+        const tile = tiles[index];
+        if (!tile) continue;
+        tiles[index] = { ...tile, terrain: "deep-water", waterDepth: 520_000 };
+      }
+    });
+    const player = createPlayer(world);
+    placePlayer(player, 10, 10);
+    player.stamina = 16_000;
+    expect(stepPlayer(player, world, MOVE_RIGHT).becameSwept).toBe(true);
+    for (let tick = 0; tick < 9; tick += 1) {
+      stepPlayer(player, world, tick < 4 ? MOVE_RIGHT : NO_INPUT);
+    }
+    expect(player.mode).toBe("swept");
+    expect(playerTileIndex(player)).not.toBe(startIndex);
+    const saved = structuredClone(player);
+
+    expect(restoreSweptPlayer(player, world)).toBe(true);
+    expect(player).toEqual(saved);
+  });
+
   it("replots instead of declaring an unsafe bank when the tide floods the target", () => {
     const startIndex = 10 * WORLD_WIDTH + 10;
     const world = controlledWorld((tiles) => {
@@ -1001,19 +1026,80 @@ describe("effort, stability, and discovery", () => {
     floodedBank.terrain = "deep-water";
     floodedBank.waterDepth = 520_000;
 
-    let visitedFloodedBankWhileSwept = false;
-    for (let tick = 0; tick < 120 && player.mode === "swept"; tick += 1) {
+    let replottedAwayFromFloodedBank = false;
+    let falselyWashedAshore = false;
+    for (let tick = 0; tick < 600 && player.mode === "swept"; tick += 1) {
       const result = stepPlayer(player, world, NO_INPUT);
-      if (playerTileIndex(player) === floodedBankIndex) {
-        visitedFloodedBankWhileSwept ||= result.swept;
-        expect(result.washedAshore).toBe(false);
-      }
+      replottedAwayFromFloodedBank ||= !player.sweepPath.includes(floodedBankIndex);
+      if (playerTileIndex(player) === floodedBankIndex) falselyWashedAshore ||= result.washedAshore;
     }
 
-    expect(visitedFloodedBankWhileSwept).toBe(true);
+    expect(replottedAwayFromFloodedBank).toBe(true);
+    expect(falselyWashedAshore).toBe(false);
     expect(player.mode).toBe("camp");
     expect(playerTileIndex(player)).not.toBe(floodedBankIndex);
     expect(world.terrain.tiles[playerTileIndex(player)]?.waterDepth).toBeLessThanOrEqual(55_000);
+  });
+
+  it("lets real paddle input bend an ADRIFT course while current remains authoritative", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const world = controlledWorld((tiles) => {
+      for (let y = 6; y <= 14; y += 1) {
+        for (let x = 6; x <= 14; x += 1) {
+          const index = y * WORLD_WIDTH + x;
+          const tile = tiles[index];
+          if (!tile) continue;
+          tiles[index] = { ...tile, terrain: "deep-water", waterDepth: 520_000 };
+        }
+      }
+    });
+    const makePlayer = () => {
+      const player = createPlayer(world);
+      placePlayer(player, 10, 10);
+      player.pace = "swift";
+      player.stamina = 16_000;
+      expect(stepPlayer(player, world, MOVE_RIGHT).becameSwept).toBe(true);
+      expect(playerTileIndex(player)).toBe(startIndex);
+      return player;
+    };
+    const floating = makePlayer();
+    const steering = makePlayer();
+    for (let tick = 0; tick < 12; tick += 1) {
+      stepPlayer(floating, world, NO_INPUT);
+      stepPlayer(steering, world, { moveX: 0, moveY: -1, brace: false });
+    }
+    expect(steering.y).toBeLessThan(floating.y);
+    const startX = 10 * TILE_UNITS + TILE_UNITS / 2;
+    const downstreamSign = Math.sign(floating.x - startX);
+    expect(downstreamSign).not.toBe(0);
+    expect((steering.x - startX) * downstreamSign).toBeGreaterThan(0);
+    expect(steering.mode).toBe("swept");
+  });
+
+  it("recovers enough stamina to rise from shallows even while movement stays held", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const world = controlledWorld((tiles) => {
+      const tile = tiles[startIndex];
+      if (!tile) throw new Error("fixture tile missing");
+      tiles[startIndex] = { ...tile, terrain: "tidal-flat", waterDepth: 55_000 };
+    });
+    for (const stamina of [0, 99_999]) {
+      const player = createPlayer(world);
+      placePlayer(player, 10, 10);
+      player.mode = "swept";
+      player.pace = "rest";
+      player.stamina = stamina;
+      player.sweepPath = [];
+      player.sweepTicksRemaining = 1;
+      player.sweepTotalTicks = 2;
+      let ticks = 0;
+      while (player.mode === "swept" && ticks < 48) {
+        stepPlayer(player, world, { moveX: 1, moveY: -1, brace: false });
+        ticks += 1;
+      }
+      expect(player.mode).toBe("camp");
+      expect(ticks).toBeLessThanOrEqual(37);
+    }
   });
 
   it("lets a completed clinic on an active strand rescue exhaustion before a sweep begins", () => {

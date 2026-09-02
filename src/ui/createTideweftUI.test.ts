@@ -560,7 +560,7 @@ describe("mobile field HUD accessibility", () => {
 
     expect(copy.objective).toContain("PICKUP: Reedwake · DELIVERY: Latchmere");
     expect(copy.objective).toContain("then deliver to Latchmere");
-    expect(copy.safety).toBe("↓ exposed to cross-current · DEEP: STAM/STAB 0 → SWEPT");
+    expect(copy.safety).toBe("↓ exposed to cross-current · DEEP: STAM/STAB 0 → ADRIFT");
     expect(copy.terrain).toBe("WATER · Tidal channel · Deep water · Heavy stamina use");
     expect(copy.actions).toBe("Pick up cargo here · Sound / Scan · Lay Tide anchor");
   });
@@ -585,7 +585,7 @@ describe("mobile field HUD accessibility", () => {
     });
 
     expect(copy.objective).toContain("PICKUP cargo → DELIVER cargo");
-    expect(copy.safety).toContain("SWEPT · Brace toward the lit bank.");
+    expect(copy.safety).toContain("ADRIFT · Brace toward the lit bank.");
     expect(copy.safety).toContain("STAM 0% · STAB 0%");
     expect(copy.terrain).toContain("Chest deep");
     expect(copy.actions).toContain("Scan recharging");
@@ -611,7 +611,7 @@ describe("mobile field HUD accessibility", () => {
     });
 
     expect(copy.terrain).toBe("GROUND · Bellwake harbor decking · Dry footing · Normal stamina use");
-    expect(copy.safety).toBe("STABLE · DEEP: STAM/STAB 0 → SWEPT");
+    expect(copy.safety).toBe("STABLE · DEEP: STAM/STAB 0 → ADRIFT");
     expect(copy.safety).not.toMatch(/Shift|WASD|keyboard/iu);
   });
 });
