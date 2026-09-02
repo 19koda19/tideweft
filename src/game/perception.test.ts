@@ -79,15 +79,15 @@ describe("deterministic visual perception", () => {
     expect(result.terrainVisibilityStrengths).toBeInstanceOf(Uint8Array);
     expect([...result.terrainVisibilityStrengths]).toEqual([255]);
     expect([...result.detailVisibilityGrades]).toEqual([VISIBILITY_DIRECT]);
-    expect(result.signature).toMatch(/^perception-v2:[0-9a-f]{8}$/);
+    expect(result.signature).toMatch(/^perception-v3:[0-9a-f]{8}$/);
   });
 
   it("reveals broad terrain shape ahead while keeping distant detail undisclosed", () => {
     const result = evaluatePerception({
-      columns: 65,
+      columns: 91,
       rows: 1,
-      cells: flatCells(65),
-      playerTileIndex: 32,
+      cells: flatCells(91),
+      playerTileIndex: 45,
       facingRadians: 0,
       weatherVisibility: 1,
     });
@@ -99,17 +99,18 @@ describe("deterministic visual perception", () => {
       .toBeGreaterThan(DEFAULT_DETAIL_PERCEPTION_RANGES.directSightRange);
     expect(DEFAULT_PERCEPTION_RANGES.forwardConeRadians)
       .toBeGreaterThan(DEFAULT_DETAIL_PERCEPTION_RANGES.forwardConeRadians);
-    expect(result.visibilityGrades[32 + 24]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.terrainVisibilityStrengths[32 + 24]).toBeGreaterThan(0);
-    expect(result.detailVisibilityGrades[32 + 24]).toBe(VISIBILITY_HIDDEN);
-    expect(result.detailVisibilityGrades[32 + 7]).toBe(VISIBILITY_DIRECT);
+    expect(DEFAULT_PERCEPTION_RANGES.directSightRange).toBeGreaterThanOrEqual(40);
+    expect(result.visibilityGrades[45 + 34]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.terrainVisibilityStrengths[45 + 34]).toBeGreaterThan(0);
+    expect(result.detailVisibilityGrades[45 + 34]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[45 + 9]).toBe(VISIBILITY_DIRECT);
 
     // Rear and side awareness stays short rather than inheriting the longer
     // terrain horizon.
-    expect(result.visibilityGrades[32 - 4]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.visibilityGrades[32 - 6]).toBe(VISIBILITY_HIDDEN);
-    expect(result.detailVisibilityGrades[32 - 4]).toBe(VISIBILITY_HIDDEN);
-    expect(result.detailVisibilityGrades[32 - 2]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[45 - 5]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[45 - 7]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[45 - 4]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[45 - 2]).toBe(VISIBILITY_PERIPHERAL);
     expect(result.visibleTileIndices.length).toBeGreaterThan(result.detailVisibleTileIndices.length);
     expect(result.detailVisibleTileIndices.every(
       (index) => result.visibilityGrades[index] !== VISIBILITY_HIDDEN,
@@ -130,10 +131,10 @@ describe("deterministic visual perception", () => {
       weatherVisibility: 1,
     });
 
-    const rearNear = indexAt(playerX - 4, playerY);
-    const rearFar = indexAt(playerX - 6, playerY);
-    const sideNear = indexAt(playerX, playerY - 4);
-    const sideFar = indexAt(playerX, playerY - 6);
+    const rearNear = indexAt(playerX - 5, playerY);
+    const rearFar = indexAt(playerX - 7, playerY);
+    const sideNear = indexAt(playerX, playerY - 5);
+    const sideFar = indexAt(playerX, playerY - 7);
     expect(result.visibilityGrades[rearNear]).toBe(VISIBILITY_PERIPHERAL);
     expect(result.visibilityGrades[sideNear]).toBe(VISIBILITY_PERIPHERAL);
     expect(result.visibilityGrades[rearFar]).toBe(VISIBILITY_HIDDEN);
@@ -144,35 +145,35 @@ describe("deterministic visual perception", () => {
 
   it("feathers the authored terrain horizon without extending exact detail", () => {
     const result = evaluatePerception({
-      columns: 69,
+      columns: 95,
       rows: 1,
-      cells: flatCells(69),
-      playerTileIndex: 34,
+      cells: flatCells(95),
+      playerTileIndex: 47,
       facingRadians: 0,
       weatherVisibility: 1,
     });
 
     const strengthAtDistance = (distance: number): number => (
-      result.terrainVisibilityStrengths[34 + distance] ?? 0
+      result.terrainVisibilityStrengths[47 + distance] ?? 0
     );
-    const easedDistances = [18, 20, 22, 24, 26, 28, 29];
+    const easedDistances = [26, 29, 32, 35, 38, 40, 41];
     const easedStrengths = easedDistances.map(strengthAtDistance);
 
-    expect(result.visibilityGrades[34 + 18]).toBe(VISIBILITY_DIRECT);
-    expect(result.visibilityGrades[34 + 19]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.visibilityGrades[34 + 29]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.visibilityGrades[34 + 30]).toBe(VISIBILITY_HIDDEN);
-    expect(result.visibilityGrades[34 + 31]).toBe(VISIBILITY_HIDDEN);
-    expect(strengthAtDistance(18)).toBe(255);
+    expect(result.visibilityGrades[47 + 26]).toBe(VISIBILITY_DIRECT);
+    expect(result.visibilityGrades[47 + 27]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[47 + 40]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[47 + 42]).toBe(VISIBILITY_HIDDEN);
+    expect(result.visibilityGrades[47 + 43]).toBe(VISIBILITY_HIDDEN);
+    expect(strengthAtDistance(26)).toBe(255);
     expect(easedStrengths.every((strength, index) => (
       index === 0 || strength < (easedStrengths[index - 1] ?? 0)
     ))).toBe(true);
-    expect(strengthAtDistance(29)).toBeGreaterThan(0);
-    expect(strengthAtDistance(30)).toBe(0);
-    expect(strengthAtDistance(31)).toBe(0);
-    expect(result.detailVisibilityGrades[34 + 8]).toBe(VISIBILITY_DIRECT);
-    expect(result.detailVisibilityGrades[34 + 9]).toBe(VISIBILITY_HIDDEN);
-    expect(result.detailVisibilityGrades[34 + 24]).toBe(VISIBILITY_HIDDEN);
+    expect(strengthAtDistance(40)).toBeGreaterThan(0);
+    expect(strengthAtDistance(42)).toBe(0);
+    expect(strengthAtDistance(43)).toBe(0);
+    expect(result.detailVisibilityGrades[47 + 10]).toBe(VISIBILITY_DIRECT);
+    expect(result.detailVisibilityGrades[47 + 11]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[47 + 34]).toBe(VISIBILITY_HIDDEN);
   });
 
   it("eases terrain strength across the forward angle without revealing detail", () => {
@@ -188,7 +189,7 @@ describe("deterministic visual perception", () => {
       facingRadians: 0,
       weatherVisibility: 1,
     });
-    const center = indexAt(playerX + 10, playerY);
+    const center = indexAt(playerX + 12, playerY);
     const innerFeather = indexAt(playerX + 5, playerY + 10);
     const outerFeather = indexAt(playerX + 3, playerY + 9);
     const outside = indexAt(playerX + 2, playerY + 10);
@@ -207,7 +208,7 @@ describe("deterministic visual perception", () => {
 
   it("eases the visible side of an occlusion frontier without disclosing behind it", () => {
     const cells = flatCells(45);
-    cells[30] = { elevation: 0, obstruction: 1 };
+    cells[30] = { elevation: 1, obstruction: 1 };
     const result = evaluatePerception({
       columns: 45,
       rows: 1,
@@ -351,7 +352,7 @@ describe("deterministic visual perception", () => {
     expect(poor.visibleTileIndices.length).toBeGreaterThan(blind.visibleTileIndices.length);
   });
 
-  it("shows an obstructing tile but deterministically hides every tile behind it", () => {
+  it("keeps terrain silhouettes beyond cover while exact detail stays occluded", () => {
     const cells = flatCells(6);
     cells[2] = { elevation: 0, obstruction: 0.5 };
     const result = evaluatePerception(sightInput(6, 1, 0, {
@@ -363,11 +364,90 @@ describe("deterministic visual perception", () => {
       },
     }));
 
-    expect([...result.visibilityGrades]).toEqual([2, 2, 2, 0, 0, 0]);
-    expect(result.visibleTileIndices).toEqual([0, 1, 2]);
-    expect(result.visibleTileIndices).not.toContain(3);
-    expect(result.terrainVisibilityStrengths[3]).toBe(0);
+    expect([...result.visibilityGrades]).toEqual([2, 2, 2, 2, 2, 2]);
+    expect(result.visibleTileIndices).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(result.terrainVisibilityStrengths[3]).toBeGreaterThan(0);
     expect([...result.detailVisibilityGrades]).toEqual([2, 2, 2, 0, 0, 0]);
+  });
+
+  it("keeps broad terrain legible beyond low opaque cover without leaking detail", () => {
+    const openCells = flatCells(9);
+    const exactRanges = {
+      closePeripheralRange: 0,
+      directSightRange: 8,
+      forwardConeRadians: Math.PI / 2,
+    } as const;
+    const open = evaluatePerception(sightInput(9, 1, 0, {
+      cells: openCells,
+      rangeOverrides: exactRanges,
+      detailRangeOverrides: exactRanges,
+    }));
+
+    for (const obstruction of [0.5, 1]) {
+      const coveredCells = openCells.map((cell) => ({ ...cell }));
+      // Zero elevation makes this low cover rather than a terrain horizon;
+      // obstruction at or above the blocking threshold is opaque to exact
+      // actor/item knowledge.
+      coveredCells[2] = { elevation: 0, obstruction };
+      const covered = evaluatePerception(sightInput(9, 1, 0, {
+        cells: coveredCells,
+        rangeOverrides: exactRanges,
+        detailRangeOverrides: exactRanges,
+      }));
+
+      expect(covered.terrainVisibilityStrengths).toEqual(open.terrainVisibilityStrengths);
+      expect(covered.visibilityGrades).toEqual(open.visibilityGrades);
+      expect(covered.visibilityGrades[8]).toBe(VISIBILITY_DIRECT);
+      expect(covered.terrainVisibilityStrengths[8]).toBeGreaterThan(0);
+      expect(covered.detailVisibilityGrades[2]).toBe(VISIBILITY_DIRECT);
+      expect(covered.detailVisibilityGrades[3]).toBe(VISIBILITY_HIDDEN);
+      expect(covered.detailVisibilityGrades[8]).toBe(VISIBILITY_HIDDEN);
+      expect(open.detailVisibilityGrades[8]).toBe(VISIBILITY_DIRECT);
+    }
+  });
+
+  it("does not disclose exact detail through a closed diagonal corner", () => {
+    const columns = 3;
+    const cells = flatCells(columns * columns);
+    cells[1] = { elevation: 0, obstruction: 1 };
+    cells[columns] = { elevation: 0, obstruction: 1 };
+    const result = evaluatePerception(sightInput(columns, columns, 0, {
+      cells,
+      facingRadians: Math.PI / 4,
+      rangeOverrides: {
+        closePeripheralRange: 0,
+        directSightRange: 3,
+        forwardConeRadians: Math.PI / 2,
+      },
+      detailRangeOverrides: {
+        closePeripheralRange: 0,
+        directSightRange: 3,
+        forwardConeRadians: Math.PI / 2,
+      },
+    }));
+
+    expect(result.detailVisibilityGrades[columns + 1]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[columns * 2 + 2]).toBe(VISIBILITY_HIDDEN);
+    // Low cover still does not erase the larger ground form behind it.
+    expect(result.visibilityGrades[columns * 2 + 2]).toBe(VISIBILITY_DIRECT);
+
+    const oneOpenFlank = cells.map((cell) => ({ ...cell }));
+    oneOpenFlank[columns] = { elevation: 0, obstruction: 0 };
+    const aroundEdge = evaluatePerception(sightInput(columns, columns, 0, {
+      cells: oneOpenFlank,
+      facingRadians: Math.PI / 4,
+      rangeOverrides: {
+        closePeripheralRange: 0,
+        directSightRange: 3,
+        forwardConeRadians: Math.PI / 2,
+      },
+      detailRangeOverrides: {
+        closePeripheralRange: 0,
+        directSightRange: 3,
+        forwardConeRadians: Math.PI / 2,
+      },
+    }));
+    expect(aroundEdge.detailVisibilityGrades[columns + 1]).toBe(VISIBILITY_DIRECT);
   });
 
   it("uses intermediate elevation as a Bresenham terrain horizon", () => {
@@ -385,6 +465,109 @@ describe("deterministic visual perception", () => {
     expect(result.valid).toBe(true);
     expect(result.visibleTileIndices).toEqual([0, 1, 2]);
     expect([...result.visibilityGrades]).toEqual([2, 2, 2, 0, 0]);
+  });
+
+  it("keeps a real elevation horizon authoritative for terrain and detail", () => {
+    const cells = flatCells(9);
+    cells[3] = { elevation: 0.5, obstruction: 0 };
+    const exactRanges = {
+      closePeripheralRange: 0,
+      directSightRange: 8,
+      forwardConeRadians: Math.PI / 2,
+    } as const;
+    const result = evaluatePerception(sightInput(9, 1, 0, {
+      cells,
+      rangeOverrides: exactRanges,
+      detailRangeOverrides: exactRanges,
+    }));
+
+    // The ridge face is visible, but its physical elevation—not an obstruction
+    // flag—forms a deterministic horizon for both disclosure fields.
+    expect(result.visibilityGrades[3]).toBe(VISIBILITY_DIRECT);
+    expect(result.detailVisibilityGrades[3]).toBe(VISIBILITY_DIRECT);
+    for (const index of [4, 5, 6, 7, 8]) {
+      expect(result.terrainVisibilityStrengths[index]).toBe(0);
+      expect(result.visibilityGrades[index]).toBe(VISIBILITY_HIDDEN);
+      expect(result.detailVisibilityGrades[index]).toBe(VISIBILITY_HIDDEN);
+    }
+    expect(evaluatePerception(sightInput(9, 1, 0, {
+      cells,
+      rangeOverrides: exactRanges,
+      detailRangeOverrides: exactRanges,
+    }))).toEqual(result);
+  });
+
+  it("weather monotonically shrinks both production visibility fields", () => {
+    const columns = 121;
+    const playerTileIndex = 60;
+    const input = {
+      columns,
+      rows: 1,
+      cells: flatCells(columns),
+      playerTileIndex,
+      facingRadians: 0,
+    } as const;
+    const clear = evaluatePerception({ ...input, weatherVisibility: 1 });
+    const poor = evaluatePerception({ ...input, weatherVisibility: 0.5 });
+    const blind = evaluatePerception({ ...input, weatherVisibility: 0 });
+
+    expect(poor.visibleTileIndices.length).toBeLessThan(clear.visibleTileIndices.length);
+    expect(blind.visibleTileIndices.length).toBeLessThan(poor.visibleTileIndices.length);
+    expect(poor.detailVisibleTileIndices.length).toBeLessThan(
+      clear.detailVisibleTileIndices.length,
+    );
+    expect(blind.detailVisibleTileIndices.length).toBeLessThan(
+      poor.detailVisibleTileIndices.length,
+    );
+    for (let index = 0; index < columns; index += 1) {
+      expect(poor.terrainVisibilityStrengths[index] ?? 0).toBeLessThanOrEqual(
+        clear.terrainVisibilityStrengths[index] ?? 0,
+      );
+      expect(blind.terrainVisibilityStrengths[index] ?? 0).toBeLessThanOrEqual(
+        poor.terrainVisibilityStrengths[index] ?? 0,
+      );
+      expect(poor.detailVisibilityGrades[index] ?? VISIBILITY_HIDDEN).toBeLessThanOrEqual(
+        clear.detailVisibilityGrades[index] ?? VISIBILITY_HIDDEN,
+      );
+      expect(blind.detailVisibilityGrades[index] ?? VISIBILITY_HIDDEN).toBeLessThanOrEqual(
+        poor.detailVisibilityGrades[index] ?? VISIBILITY_HIDDEN,
+      );
+    }
+    expect(poor.visibleTileIndices.every((index) => clear.visibleTileIndices.includes(index)))
+      .toBe(true);
+    expect(poor.detailVisibleTileIndices.every(
+      (index) => clear.detailVisibleTileIndices.includes(index),
+    )).toBe(true);
+  });
+
+  it("keeps the production terrain horizon materially longer than exact detail", () => {
+    const columns = 141;
+    const playerTileIndex = 70;
+    const result = evaluatePerception({
+      columns,
+      rows: 1,
+      cells: flatCells(columns),
+      playerTileIndex,
+      facingRadians: 0,
+      weatherVisibility: 1,
+    });
+    const furthestForward = (indices: readonly number[]): number => Math.max(
+      0,
+      ...indices.filter((index) => index > playerTileIndex).map(
+        (index) => index - playerTileIndex,
+      ),
+    );
+    const terrainHorizon = furthestForward(result.visibleTileIndices);
+    const detailHorizon = furthestForward(result.detailVisibleTileIndices);
+
+    expect(DEFAULT_PERCEPTION_RANGES.directSightRange)
+      .toBeGreaterThanOrEqual(DEFAULT_DETAIL_PERCEPTION_RANGES.directSightRange * 4);
+    expect(terrainHorizon).toBeGreaterThanOrEqual(detailHorizon * 4);
+    expect(terrainHorizon - detailHorizon).toBeGreaterThanOrEqual(30);
+    expect(result.terrainVisibilityStrengths[playerTileIndex + terrainHorizon])
+      .toBeGreaterThan(0);
+    expect(result.detailVisibilityGrades[playerTileIndex + terrainHorizon])
+      .toBe(VISIBILITY_HIDDEN);
   });
 
   it("fails the whole snapshot closed for malformed dimensions, cells, player, angles, or ranges", () => {
@@ -444,7 +627,7 @@ describe("deterministic visual perception", () => {
 
   it("does not encode occluded cell values in the disclosed result signature", () => {
     const firstCells = flatCells(5);
-    firstCells[1] = { elevation: 0, obstruction: 1 };
+    firstCells[1] = { elevation: 1, obstruction: 1 };
     const changedHiddenCells = firstCells.map((cell) => ({ ...cell }));
     changedHiddenCells[3] = { elevation: 1, obstruction: 1 };
     changedHiddenCells[4] = { elevation: 0.75, obstruction: 0.9 };

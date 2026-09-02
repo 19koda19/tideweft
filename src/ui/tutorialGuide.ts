@@ -1027,7 +1027,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-perception",
         audience: "all",
         title: "The field shows what you can presently perceive",
-        body: "Terrain shape reaches much farther ahead than exact detail: in clear air the broad field extends thirty tiles through a 150-degree cone. It stays clear through eighteen tiles, then eases across a twelve-tile atmospheric horizon; close terrain awareness still surrounds the body. People, cargo, resources, current arrows, names, live status, and actions use a shorter eight-tile, 120-degree field with two-tile close awareness. Ridges and severe weather shorten both. Uncharted ground and ordinary water can be seen while you face them without becoming permanent Chart memory; turning changes attention, not the saved world.",
+        body: "Terrain shape reaches much farther ahead than exact detail: in clear air the broad field reaches toward forty-two tiles through a 160-degree cone. It stays clear through twenty-six tiles, then eases across a sixteen-tile atmospheric horizon; six-tile close terrain awareness still surrounds the body. People, cargo, resources, current arrows, names, live status, and actions use a shorter ten-tile, 100-degree field with two-tile close awareness. Substantial cover and structures can conceal those exact details without erasing the larger shoreline or ridge silhouette behind them; terrain elevation and severe weather still shorten both fields. Uncharted ground and ordinary water can be seen while you face them without becoming permanent Chart memory; turning changes attention, not the saved world.",
       },
       {
         id: "views-events",
@@ -1253,7 +1253,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 14 as const;
+export const TUTORIAL_CONTENT_VERSION = 15 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

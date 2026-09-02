@@ -67,6 +67,7 @@ import {
   VISIBILITY_HIDDEN,
   VISIBILITY_PERIPHERAL,
   evaluatePerception,
+  hasValidPerceptionSignature,
   type PerceptionCell,
   type PerceptionResult,
 } from "./perception";
@@ -212,7 +213,11 @@ export function projectPerception(
     player.facingMilliRadians,
     weatherVisibility,
   ].join(":");
-  if (cached.resultKey === resultKey && cached.result) return cached.result;
+  if (
+    cached.resultKey === resultKey
+    && cached.result
+    && hasValidPerceptionSignature(cached.result, world.terrain.width, world.terrain.height)
+  ) return cached.result;
   const result = evaluatePerception({
     columns: world.terrain.width,
     rows: world.terrain.height,
@@ -240,12 +245,12 @@ export function projectGameView(
   const adrift = projectAdriftView(world, player, options.adriftControl);
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const suppliedPerception = options.perception;
-  const expectedPerceptionCells = world.terrain.width * world.terrain.height;
   const currentPerception = projectPerception(world, player);
   const perception = isCurrentPerceptionSnapshot(
     suppliedPerception,
     currentPerception,
-    expectedPerceptionCells,
+    world.terrain.width,
+    world.terrain.height,
   )
     ? suppliedPerception
     : currentPerception;
@@ -685,8 +690,10 @@ function finiteNonZero(value: number | undefined): boolean {
 export function isCurrentPerceptionSnapshot(
   candidate: PerceptionResult | undefined,
   current: PerceptionResult,
-  expectedCells: number,
+  columns: number,
+  rows: number,
 ): candidate is PerceptionResult {
+  const expectedCells = columns * rows;
   if (
     candidate?.valid !== true
     || candidate.version !== PERCEPTION_VERSION
@@ -698,6 +705,19 @@ export function isCurrentPerceptionSnapshot(
     || candidate.terrainVisibilityStrengths.length !== expectedCells
     || !(candidate.detailVisibilityGrades instanceof Uint8Array)
     || candidate.detailVisibilityGrades.length !== expectedCells
+    || !hasValidPerceptionSignature(candidate, columns, rows)
+  ) return false;
+
+  if (
+    !sameBytes(candidate.visibilityGrades, current.visibilityGrades)
+    || !sameBytes(candidate.terrainVisibilityStrengths, current.terrainVisibilityStrengths)
+    || !sameBytes(candidate.detailVisibilityGrades, current.detailVisibilityGrades)
+    || !sameIndices(candidate.visibleTileIndices, current.visibleTileIndices)
+    || !sameIndices(candidate.directTileIndices, current.directTileIndices)
+    || !sameIndices(candidate.peripheralTileIndices, current.peripheralTileIndices)
+    || !sameIndices(candidate.detailVisibleTileIndices, current.detailVisibleTileIndices)
+    || !sameIndices(candidate.detailDirectTileIndices, current.detailDirectTileIndices)
+    || !sameIndices(candidate.detailPeripheralTileIndices, current.detailPeripheralTileIndices)
   ) return false;
 
   for (let index = 0; index < expectedCells; index += 1) {
@@ -718,6 +738,24 @@ export function isCurrentPerceptionSnapshot(
   return candidate.visibilityGrades[current.playerTileIndex] === VISIBILITY_DIRECT
     && candidate.terrainVisibilityStrengths[current.playerTileIndex] === 255
     && candidate.detailVisibilityGrades[current.playerTileIndex] === VISIBILITY_DIRECT;
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function sameIndices(left: readonly number[], right: readonly number[]): boolean {
+  if (left === right) return true;
+  if (!Array.isArray(left) || left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 function projectFieldResources(

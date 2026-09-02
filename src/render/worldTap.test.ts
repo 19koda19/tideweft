@@ -260,6 +260,13 @@ describe("world tap intent", () => {
       resourceVisibility: 1,
     });
 
+    expect(terrainAhead.terrain.tiles.slice(1).every(({ currentVisibility }) =>
+      currentVisibility === 1
+    )).toBe(true);
+    expect(terrainAhead.terrain.tiles.slice(1).every(({ currentDetailVisibility }) =>
+      currentDetailVisibility === 0
+    )).toBe(true);
+
     expect(commandForWorldTap(
       terrainAhead,
       { entity: "resource", id: "field-v1:reed" },
@@ -271,10 +278,21 @@ describe("world tap intent", () => {
       additive: false,
     });
     expect(validatePerceivedEntityCommand(terrainAhead, {
+      type: "resource-target",
+      nodeId: "field-v1:reed",
+      point: { x: 15, y: 5 },
+      gatherOnArrival: true,
+    })).toBeNull();
+    expect(validatePerceivedEntityCommand(terrainAhead, {
       type: "select",
       entity: "porter",
       id: "porter-1",
       point: { x: 25, y: 5 },
+    })).toBeNull();
+    expect(validatePerceivedEntityCommand(terrainAhead, {
+      type: "parcel-target",
+      parcelId: "parcel-1",
+      recoverOnArrival: true,
     })).toBeNull();
 
     const hiddenRoutePoint = { x: 15, y: 5 };

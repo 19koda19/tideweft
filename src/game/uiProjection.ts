@@ -133,7 +133,8 @@ export function projectUIView(
     && isCurrentPerceptionSnapshot(
       options.perception,
       currentPerception,
-      world.terrain.width * world.terrain.height,
+      world.terrain.width,
+      world.terrain.height,
     )
     ? options.perception
     : currentPerception;

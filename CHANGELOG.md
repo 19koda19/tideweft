@@ -4,6 +4,54 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.5 — 2026-09-01
+
+Build: `0.3.3-alpha.5` · Gameplay contract: 14 · Tutorial: 15
+
+The courier now reads a wider, softer landscape ahead without gaining impossible knowledge of every person, parcel, or resource standing in it.
+
+### Gameplay
+
+- Clear-air terrain sight now reaches toward forty-two tiles through a 160-degree forward field with six-tile close awareness. The landscape remains fully legible through twenty-six tiles, then eases across a sixteen-tile atmospheric horizon.
+- People, porters, loose cargo, field resources, names, current detail, live state, labels, and actions remain inside a short ten-tile, 100-degree exact-detail field with two-tile close awareness.
+- Terrain and exact detail now use separate occlusion questions: substantial cover and structures can conceal an actor or item without erasing the larger terrain silhouette behind them, while actual elevation still creates a physical horizon.
+
+### Fixes
+
+- A rough meadow cell, harbor structure, or band of cover no longer cuts an implausible wall of blackness through every shoreline and ridge behind it.
+- Two opaque cells touching at a diagonal now close that zero-width crack to exact sight, so an actor or parcel cannot be identified through a sealed corner; one genuinely open flank still permits a view around the edge.
+- Widening terrain sight does not widen exact knowledge. Porters, parcels, resources, labels, and release-frame interactions still fail closed unless their current tile is directly visible in the short detail field.
+- A supplied perception snapshot must now match every authoritative visibility byte and derived tile partition, not merely repeat the current signature; forged or mutated same-signature detail masks fail closed.
+- Cached sight now verifies its own disclosure digest before reuse. If an internal typed visibility byte is altered, the cache is discarded and rebuilt from terrain, facing, and weather before render or interaction projection.
+- The perception contract is now version 3, so a stale version-2 projection cannot be reused after the new range or occlusion rules take effect.
+- Chart 2D and Relief 3D consume the same eased terrain strengths and the same conservative detail mask; turning or changing weather cannot make the two views disagree.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. This changes readable terrain information, not current force, stability, stamina, cargo loss, rewards, scarcity, actor behavior, or world outcomes.
+- Weather still contracts terrain and detail together. Bad visibility can reduce the long horizon to a short local read without granting compensating item or actor detection.
+- Hidden actors and items remain persistent simulation objects. Leaving exact sight removes them from draw and hit-test work; it never despawns, rerolls, duplicates, or relocates them.
+
+### Interface
+
+- The forward landscape now fades by distance, angle, and true terrain horizon instead of behaving like a short tiled flashlight. No pane, meter, outline, or radar marker was added.
+- Relief's transient sight overlay now uses eight smooth visibility bands and canonical biome-or-terrain materials with a tested per-chunk batch ceiling. Durable terrain keeps its full climate material detail while the wider horizon submits substantially fewer 3D draw batches.
+- Anonymous sound remains directional uncertainty only: hearing something outside sight does not reveal its identity, exact coordinate, inventory, or interaction target.
+- The version-15 T and question-mark field manual explains the forty-two-tile terrain field, short ten-tile detail field, physical elevation horizon, cover, weather, and transient sight versus durable Chart memory.
+
+### Save changes
+
+- Save version remains 4 and requires no migration. Perception masks, eased strengths, and visibility signatures are derived from current terrain, facing, and weather rather than serialized.
+- Existing exploration, soundings, actor identities, cargo custody, depletion, Promise state, and regional coordinates are unchanged by the wider view.
+- Reloading cannot reroll sight or reveal hidden contents: the same world state, facing, weather, and perception version reproduce the same disclosure.
+
+### Known limitations
+
+- Universal generated NPC identities, ABOUT inspection, state speech, actor emotions and deterrence, dogs, wildlife, and generated regional settlement ecology remain future complete vertical slices.
+- The complete health, injury, exposure, drowning, incapacitation, rescue, death, and incident-site system is not live.
+- All ordinary water still uses the existing physical and magical-water climate signals; the planned all-water Possibility State and transactional reality shifts are not live.
+- The anonymous nearby sound-contact kernel is not connected to generated humans or wildlife yet; this release preserves its no-god's-ear information boundary.
+
 ## 0.3.3-alpha.4 — 2026-09-01
 
 Build: `0.3.3-alpha.4` · Gameplay contract: 13 · Tutorial: 14

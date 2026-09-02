@@ -6,7 +6,7 @@
  * floating-point values in the inclusive 0..1 range.
  */
 
-export const PERCEPTION_VERSION = 2 as const;
+export const PERCEPTION_VERSION = 3 as const;
 export const MAX_PERCEPTION_GRID_CELLS = 1_048_576;
 
 export const VISIBILITY_HIDDEN = 0 as const;
@@ -39,13 +39,13 @@ export interface PerceptionRangeOverrides {
 }
 
 export const DEFAULT_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.freeze({
-  closePeripheralRange: 5,
+  closePeripheralRange: 6,
   // Terrain is readable well beyond the range at which an individual item or
   // actor can be identified. The long axis is deliberately forward-only: it
   // gives route-scale context without turning the player's rear awareness into
   // an omnidirectional reveal.
-  directSightRange: 30,
-  forwardConeRadians: (5 * Math.PI) / 6,
+  directSightRange: 42,
+  forwardConeRadians: (8 * Math.PI) / 9,
 });
 
 /**
@@ -55,13 +55,13 @@ export const DEFAULT_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.free
  */
 export const DEFAULT_DETAIL_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.freeze({
   closePeripheralRange: 2,
-  directSightRange: 8,
-  forwardConeRadians: (2 * Math.PI) / 3,
+  directSightRange: 10,
+  forwardConeRadians: (5 * Math.PI) / 9,
 });
 
 /** Soft outer terrain band; detail disclosure remains crisp and shorter. */
-export const TERRAIN_SIGHT_DISTANCE_FEATHER = 12 as const;
-export const TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS = Math.PI / 6;
+export const TERRAIN_SIGHT_DISTANCE_FEATHER = 16 as const;
+export const TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS = Math.PI / 9;
 export const TERRAIN_CLOSE_DISTANCE_FEATHER = 2 as const;
 export const TERRAIN_OCCLUSION_FRONTIER_FEATHER = 3 as const;
 export const MAX_TERRAIN_VISIBILITY_STRENGTH = 255 as const;
@@ -434,18 +434,18 @@ function createResult(
       detailDirectTileIndices.push(index);
     }
   }
-  return {
+  const result: PerceptionResult = {
     version: PERCEPTION_VERSION,
     valid,
     visibilityGrades: terrainVisibility,
     terrainVisibilityStrengths,
-    visibleTileIndices,
-    directTileIndices,
-    peripheralTileIndices,
+    visibleTileIndices: Object.freeze(visibleTileIndices),
+    directTileIndices: Object.freeze(directTileIndices),
+    peripheralTileIndices: Object.freeze(peripheralTileIndices),
     detailVisibilityGrades: detailVisibility,
-    detailVisibleTileIndices,
-    detailDirectTileIndices,
-    detailPeripheralTileIndices,
+    detailVisibleTileIndices: Object.freeze(detailVisibleTileIndices),
+    detailDirectTileIndices: Object.freeze(detailDirectTileIndices),
+    detailPeripheralTileIndices: Object.freeze(detailPeripheralTileIndices),
     playerTileIndex,
     signature: visibilitySignature(
       valid,
@@ -457,6 +457,39 @@ function createResult(
       detailVisibility,
     ),
   };
+  return Object.freeze(result);
+}
+
+/**
+ * Verifies the sealed disclosure bytes against their stored digest. This is
+ * intentionally a predicate rather than a signature generator: callers can
+ * reject or repair mutated cached state without gaining a second authority.
+ */
+export function hasValidPerceptionSignature(
+  result: PerceptionResult,
+  columns: number,
+  rows: number,
+): boolean {
+  const dimensions = validatedDimensions(columns, rows);
+  if (
+    !dimensions
+    || result.version !== PERCEPTION_VERSION
+    || !(result.visibilityGrades instanceof Uint8Array)
+    || result.visibilityGrades.length !== dimensions.count
+    || !(result.terrainVisibilityStrengths instanceof Uint8Array)
+    || result.terrainVisibilityStrengths.length !== dimensions.count
+    || !(result.detailVisibilityGrades instanceof Uint8Array)
+    || result.detailVisibilityGrades.length !== dimensions.count
+  ) return false;
+  return result.signature === visibilitySignature(
+    result.valid,
+    dimensions.columns,
+    dimensions.rows,
+    result.playerTileIndex,
+    result.visibilityGrades,
+    result.terrainVisibilityStrengths,
+    result.detailVisibilityGrades,
+  );
 }
 
 function failedResult(
@@ -485,6 +518,7 @@ function hasLineOfSight(
   grid: ValidatedGrid,
   fromIndex: number,
   toIndex: number,
+  blockOnObstruction: boolean,
 ): boolean {
   const fromX = fromIndex % grid.columns;
   const fromY = Math.floor(fromIndex / grid.columns);
@@ -507,23 +541,41 @@ function hasLineOfSight(
   const stepY = fromY < toY ? 1 : -1;
   let error = deltaX + deltaY;
 
+  const cellBlocksRay = (cellX: number, cellY: number): boolean => {
+    const cell = grid.cells[cellY * grid.columns + cellX];
+    if (!cell) return true;
+    if (blockOnObstruction && cell.obstruction >= OBSTRUCTION_BLOCKING_THRESHOLD) return true;
+    const traveled = Math.hypot(cellX - fromX, cellY - fromY);
+    const rayHeight = originEye + (targetEye - originEye) * (traveled / totalDistance);
+    return cell.elevation >= rayHeight - LINE_OF_SIGHT_EPSILON;
+  };
+
   while (x !== toX || y !== toY) {
     const doubledError = 2 * error;
-    if (doubledError >= deltaY) {
+    const moveX = doubledError >= deltaY;
+    const moveY = doubledError <= deltaX;
+    const previousX = x;
+    const previousY = y;
+    if (moveX) {
       error += deltaY;
       x += stepX;
     }
-    if (doubledError <= deltaX) {
+    if (moveY) {
       error += deltaX;
       y += stepY;
     }
+    // A diagonal ray cannot see through the zero-width crack where two closed
+    // flanks meet. One open flank still permits a glance around an edge, while
+    // two opaque/elevated flanks form conservative supercover for both terrain
+    // and detail disclosure.
+    if (
+      moveX
+      && moveY
+      && cellBlocksRay(x, previousY)
+      && cellBlocksRay(previousX, y)
+    ) return false;
     if (x === toX && y === toY) return true;
-
-    const cell = grid.cells[y * grid.columns + x];
-    if (!cell || cell.obstruction >= OBSTRUCTION_BLOCKING_THRESHOLD) return false;
-    const traveled = Math.hypot(x - fromX, y - fromY);
-    const rayHeight = originEye + (targetEye - originEye) * (traveled / totalDistance);
-    if (cell.elevation >= rayHeight - LINE_OF_SIGHT_EPSILON) return false;
+    if (cellBlocksRay(x, y)) return false;
   }
   return true;
 }
@@ -630,7 +682,11 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     const inForwardCone = bearingDistance <= halfCone + LINE_OF_SIGHT_EPSILON;
     const direct = inDirectRange && inForwardCone;
     if (!direct && !inPeripheralRange) continue;
-    if (!hasLineOfSight(grid, playerTileIndex, index)) continue;
+    // Broad sight aims at the terrain surface itself. Substantial cover and
+    // built structures can conceal a person or parcel without erasing the larger ridge,
+    // shoreline, or route shape behind it; elevation still creates a true
+    // terrain horizon for both fields.
+    if (!hasLineOfSight(grid, playerTileIndex, index, false)) continue;
     const inSoftTerrainEdge = featherTerrainEdge
       && direct
       && (
@@ -662,7 +718,11 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     const detailInDirectRange = distance <= detailDirectRange;
     const detailInForwardCone = bearingDistance <= detailHalfCone + LINE_OF_SIGHT_EPSILON;
     const detailDirect = detailInDirectRange && detailInForwardCone;
-    if (terrainStrength > 0 && (detailDirect || detailInPeripheralRange)) {
+    if (
+      terrainStrength > 0
+      && (detailDirect || detailInPeripheralRange)
+      && hasLineOfSight(grid, playerTileIndex, index, true)
+    ) {
       detailVisibility[index] = detailDirect
         ? VISIBILITY_DIRECT
         : VISIBILITY_PERIPHERAL;

@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_RELIEF_PERCEPTION_MATERIAL_BATCHES_PER_CHUNK,
+  RELIEF_PERCEPTION_VISIBILITY_BANDS,
   buildReliefMaterialBatches,
   buildReliefPerceptionMaterialBatches,
 } from "./reliefTerrainBatches";
 import { buildTerrainMesh } from "./terrainMesh";
-import type { TerrainGridView, TerrainTileView } from "./types";
+import type {
+  BiomeId,
+  TerrainGridView,
+  TerrainKind,
+  TerrainTileView,
+} from "./types";
 
 function grid(columns: number, rows: number, discovered: readonly number[]): TerrainGridView {
   const tiles: TerrainTileView[] = Array.from({ length: columns * rows }, (_, index) => ({
@@ -186,7 +193,7 @@ describe("Relief terrain material batches", () => {
       ...source,
       tiles: source.tiles.map((tile, index) => ({
         ...tile,
-        currentVisibility: [0.04, 0.2, 0.71, 1][index] ?? 0,
+        currentVisibility: [0.07, 0.2, 0.71, 1][index] ?? 0,
       })),
     };
     const chunk = buildTerrainMesh(perceived, { chunkSize: 4 }).chunks[0];
@@ -194,24 +201,116 @@ describe("Relief terrain material batches", () => {
     const strengths = buildReliefPerceptionMaterialBatches(chunk, perceived)
       .map((batch) => batch.currentVisibility)
       .sort((left, right) => left - right);
-    expect(strengths).toEqual([1 / 16, 3 / 16, 11 / 16, 1]);
+    expect(strengths).toEqual([1 / 8, 2 / 8, 6 / 8, 1]);
   });
 
   it("omits sub-band sensory geometry and retains monotone RGB-fade bands", () => {
-    const source = grid(4, 1, [0, 0, 0, 0]);
+    const source = grid(5, 1, [0, 0, 0, 0, 0]);
     const perceived: TerrainGridView = {
       ...source,
       tiles: source.tiles.map((tile, index) => ({
         ...tile,
-        currentVisibility: [0.01, 0.04, 0.5, 1][index] ?? 0,
+        currentVisibility: [0.01, 0.04, 0.07, 0.5, 1][index] ?? 0,
       })),
     };
-    const chunk = buildTerrainMesh(perceived, { chunkSize: 4 }).chunks[0];
+    const chunk = buildTerrainMesh(perceived, { chunkSize: 5 }).chunks[0];
     if (!chunk) throw new Error("fixture did not create a terrain chunk");
     const batches = buildReliefPerceptionMaterialBatches(chunk, perceived);
     const strengths = batches.map((batch) => batch.currentVisibility);
 
     expect(batches.flatMap((batch) => batch.indices)).toHaveLength(18);
-    expect(strengths).toEqual([1 / 16, 0.5, 1]);
+    expect(strengths).toEqual([1 / 8, 0.5, 1]);
+  });
+
+  it("uses one neutral transient material for a biome across kind and climate variation", () => {
+    const source = grid(2, 1, [1, 1]);
+    const perceived: TerrainGridView = {
+      ...source,
+      tiles: source.tiles.map((tile, index) => ({
+        ...tile,
+        biome: "rain-meadow" as const,
+        climate: {
+          rainfall: index,
+          heat: 0.5,
+          salinity: 0.5,
+          exposure: 0.5,
+          magicalWater: 0.5,
+        },
+        currentVisibility: 0.5,
+      })),
+    };
+    const chunk = buildTerrainMesh(perceived, { chunkSize: 2 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+
+    const batches = buildReliefPerceptionMaterialBatches(chunk, perceived);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toMatchObject({
+      biome: "rain-meadow",
+      environment: 0.5,
+      currentVisibility: 0.5,
+    });
+    expect(batches[0]?.indices).toHaveLength(12);
+  });
+
+  it("hard-caps a chunk at one batch per transient identity and visibility band", () => {
+    const kinds: readonly TerrainKind[] = [
+      "deep-water",
+      "channel",
+      "shallows",
+      "mudflat",
+      "sandbar",
+      "salt-marsh",
+      "meadow",
+      "scrub",
+      "ridge",
+      "built",
+    ];
+    const biomes: readonly BiomeId[] = [
+      "tide-channel",
+      "brine-flat",
+      "reed-marsh",
+      "rain-meadow",
+      "sun-meadow",
+      "wind-ridge",
+      "glimmerfen",
+    ];
+    const identities: readonly Pick<TerrainTileView, "kind" | "biome" | "discovered">[] = [
+      ...kinds.map((kind) => ({ kind, discovered: 0 })),
+      ...biomes.map((biome) => ({ kind: "meadow" as const, biome, discovered: 1 })),
+    ];
+    const columns = identities.length;
+    const rows = RELIEF_PERCEPTION_VISIBILITY_BANDS;
+    const tiles: TerrainTileView[] = Array.from(
+      { length: columns * rows },
+      (_, index) => {
+        const row = Math.floor(index / columns);
+        const identity = identities[index % columns];
+        if (!identity) throw new Error("fixture lost a material identity");
+        return {
+          ...identity,
+          elevation: 0.2,
+          waterDepth: 0,
+          currentVisibility: (row + 1) / RELIEF_PERCEPTION_VISIBILITY_BANDS,
+        };
+      },
+    );
+    const perceived: TerrainGridView = {
+      columns,
+      rows,
+      tileSize: 24,
+      origin: { x: 0, y: 0 },
+      tiles,
+      revision: "transient-material-ceiling",
+    };
+    const chunk = buildTerrainMesh(perceived, { chunkSize: columns }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+
+    const batches = buildReliefPerceptionMaterialBatches(chunk, perceived);
+    expect(batches).toHaveLength(MAX_RELIEF_PERCEPTION_MATERIAL_BATCHES_PER_CHUNK);
+    expect(batches.length).toBeLessThanOrEqual(
+      MAX_RELIEF_PERCEPTION_MATERIAL_BATCHES_PER_CHUNK,
+    );
+    expect(batches.flatMap((batch) => batch.indices)).toHaveLength(tiles.length * 6);
+    expect(batches.every((batch) => batch.environment === 0.5)).toBe(true);
   });
 });

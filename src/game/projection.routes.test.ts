@@ -1,47 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { PERCEPTION_VERSION, type PerceptionResult } from "./perception";
-import { createPlayer, type PlayerState } from "./player";
+import { VISIBILITY_DIRECT } from "./perception";
+import { TILE_UNITS, createPlayer, type PlayerState } from "./player";
 import { projectGameView, projectPerception } from "./projection";
 import { createWorld, createWorldView, FIXED_POINT, type WorldView } from "../sim/public";
 import { STRAND_AUTOMATION_THRESHOLD } from "../sim/types";
 
-function perception(
+function placePlayerAtTile(
   world: WorldView,
   player: PlayerState,
-  directIndices: readonly number[] = [],
-  peripheralIndices: readonly number[] = [],
-): PerceptionResult {
-  const count = world.terrain.tiles.length;
-  const authoritative = projectPerception(world, player);
-  const direct = [...new Set([authoritative.playerTileIndex, ...directIndices])];
-  const visibilityGrades = new Uint8Array(count);
-  const terrainVisibilityStrengths = new Uint8Array(count);
-  const detailVisibilityGrades = new Uint8Array(count);
-  for (const index of peripheralIndices) {
-    visibilityGrades[index] = 1;
-    terrainVisibilityStrengths[index] = 128;
-  }
-  for (const index of direct) {
-    visibilityGrades[index] = 2;
-    terrainVisibilityStrengths[index] = 255;
-    detailVisibilityGrades[index] = 2;
-  }
-  return {
-    version: PERCEPTION_VERSION,
-    valid: true,
-    visibilityGrades,
-    terrainVisibilityStrengths,
-    detailVisibilityGrades,
-    visibleTileIndices: [...new Set([...peripheralIndices, ...direct])],
-    directTileIndices: direct,
-    peripheralTileIndices: peripheralIndices.filter((index) => !direct.includes(index)),
-    detailVisibleTileIndices: direct,
-    detailDirectTileIndices: direct,
-    detailPeripheralTileIndices: [],
-    playerTileIndex: authoritative.playerTileIndex,
-    signature: authoritative.signature,
-  };
+  tileIndex: number,
+): void {
+  const tile = world.terrain.tiles[tileIndex];
+  if (!tile) throw new Error("fixture lost its observer tile");
+  player.x = tile.x * TILE_UNITS + TILE_UNITS / 2;
+  player.y = tile.y * TILE_UNITS + TILE_UNITS / 2;
 }
 
 describe("route perception projection", () => {
@@ -55,9 +28,22 @@ describe("route perception projection", () => {
     if (!from || !to) throw new Error("route endpoints must exist");
     player.discovered[from.tileIndex] = FIXED_POINT;
     player.discovered[to.tileIndex] = FIXED_POINT;
+    const routeTiles = route.path.flatMap((index) => {
+      const tile = world.terrain.tiles[index];
+      return tile ? [tile] : [];
+    });
+    const observerTile = world.terrain.tiles.find((tile) =>
+      routeTiles.every((routeTile) => Math.hypot(tile.x - routeTile.x, tile.y - routeTile.y) > 12)
+    );
+    if (!observerTile) throw new Error("fixture needs a viewpoint beyond route-detail range");
+    placePlayerAtTile(world, player, observerTile.index);
+    const authoritativePerception = projectPerception(world, player);
+    expect(route.path.every((index) =>
+      authoritativePerception.detailVisibilityGrades[index] !== VISIBILITY_DIRECT
+    )).toBe(true);
 
     const projected = projectGameView(world, player, {
-      perception: perception(world, player, [], route.path),
+      perception: authoritativePerception,
     }).routes.find((candidate) => candidate.id === String(route.id));
 
     expect(projected).toBeDefined();
@@ -82,21 +68,50 @@ describe("route perception projection", () => {
     if (!from || !to) throw new Error("route endpoints must exist");
     player.discovered[from.tileIndex] = FIXED_POINT;
     player.discovered[to.tileIndex] = FIXED_POINT;
-    const direct = route.path.slice(0, 2);
+    const pairStart = route.path.findIndex((tileIndex, index) =>
+      index > 0
+      && index + 1 < route.path.length
+      && route.path[index + 1] !== tileIndex
+    );
+    if (pairStart < 0) throw new Error("fixture needs adjacent distinct route points");
+    const startIndex = route.path[pairStart];
+    const nextIndex = route.path[pairStart + 1];
+    if (startIndex === undefined || nextIndex === undefined) {
+      throw new Error("fixture lost its route pair");
+    }
+    const startTile = world.terrain.tiles[startIndex];
+    const nextTile = world.terrain.tiles[nextIndex];
+    if (!startTile || !nextTile) throw new Error("fixture lost route terrain");
+    placePlayerAtTile(world, player, startIndex);
+    player.facingMilliRadians = Math.round(
+      Math.atan2(nextTile.y - startTile.y, nextTile.x - startTile.x) * 1_000,
+    );
+    const authoritativePerception = projectPerception(world, player);
+    expect(authoritativePerception.detailVisibilityGrades[startIndex]).toBe(VISIBILITY_DIRECT);
+    expect(authoritativePerception.detailVisibilityGrades[nextIndex]).toBe(VISIBILITY_DIRECT);
 
     const projected = projectGameView(world, player, {
-      perception: perception(world, player, direct),
+      perception: authoritativePerception,
     }).routes.find((candidate) => candidate.id === String(route.id));
 
     expect(projected?.kind).toBe("remembered");
-    expect(projected?.observedRuns).toHaveLength(1);
-    expect(projected?.observedRuns?.[0]).toMatchObject({
+    const startPoint = projected?.points[pairStart];
+    const nextPoint = projected?.points[pairStart + 1];
+    const observedRun = projected?.observedRuns?.find(({ points }) =>
+      points.some((point, index) =>
+        point.x === startPoint?.x
+        && point.y === startPoint?.y
+        && points[index + 1]?.x === nextPoint?.x
+        && points[index + 1]?.y === nextPoint?.y
+      )
+    );
+    expect(observedRun).toMatchObject({
       kind: route.traceStrength >= STRAND_AUTOMATION_THRESHOLD ? "strand" : "footpath",
       strength: route.traceStrength / FIXED_POINT,
       condition: route.condition / FIXED_POINT,
       reliability: route.reliability / FIXED_POINT,
       traffic: Math.min(1, route.traffic / 20),
     });
-    expect(projected?.observedRuns?.[0]?.points).toHaveLength(2);
+    expect(observedRun?.points.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -24,6 +24,17 @@ export interface ReliefPerceptionMaterialBatch extends ReliefMaterialBatch {
   readonly currentVisibility: number;
 }
 
+/** Transient sight uses a small, visibly smooth set of lightness steps. */
+export const RELIEF_PERCEPTION_VISIBILITY_BANDS = 8 as const;
+
+/**
+ * One transient batch for every possible visible material identity and lightness
+ * band: ten TerrainKind values plus seven BiomeId values, across eight bands.
+ * Durable terrain keeps its finer environmental material identity.
+ */
+export const MAX_RELIEF_PERCEPTION_MATERIAL_BATCHES_PER_CHUNK =
+  RELIEF_PERCEPTION_VISIBILITY_BANDS * 17;
+
 /**
  * Groups one chunk's triangles by material without ever drawing uncharted land.
  * Keeping this pure makes the index-locality and discovery boundary testable
@@ -101,9 +112,10 @@ export function buildReliefPerceptionMaterialBatches(
     const source = grid.tiles[tile.row * grid.columns + tile.column];
     const rawCurrent = currentTerrainVisibility(source, true);
     if (rawCurrent <= 0) continue;
-    // Sixteen bounded material levels preserve the smooth horizon without
+    // Eight bounded material levels preserve the smooth horizon without
     // turning every tile into a separate WebGL draw call.
-    const current = Math.round(rawCurrent * 16) / 16;
+    const current = Math.round(rawCurrent * RELIEF_PERCEPTION_VISIBILITY_BANDS)
+      / RELIEF_PERCEPTION_VISIBILITY_BANDS;
     if (current <= 0) continue;
     // Current sight and durable chart knowledge are deliberately independent.
     // The sensory mesh may show an uncharted ridge while it is in view, then
@@ -116,10 +128,18 @@ export function buildReliefPerceptionMaterialBatches(
         !Number.isSafeInteger(index) || index < 0 || index >= chunk.vertices.length
       )
     ) continue;
-    const biome = visibleBiomePresentation(source)?.id;
-    const environment = Math.round(biomeEnvironmentalEmphasis(source) * 4) / 4;
     const kind = visibleTerrainKind(tile.kind, source);
-    const key = `${kind}:${biome ?? "legacy"}:${environment}:${visibility}:${current}`;
+    const visibleBiome = visibleBiomePresentation(source)?.id;
+    // A built material ignores biome color in Relief. Every other discovered
+    // biome is already the complete color identity; its underlying terrain
+    // kind does not change materialColor's result.
+    const biome = kind === "built" ? undefined : visibleBiome;
+    // Current sight is a short-lived lightness overlay. Climate nuance remains
+    // in the durable terrain underneath, while one neutral transient emphasis
+    // prevents live perception from multiplying draw calls by climate bucket.
+    const environment = 0.5;
+    const materialIdentity = biome ? `biome:${biome}` : `kind:${kind}`;
+    const key = `${materialIdentity}:${current}`;
     const group = groups.get(key) ?? {
       kind,
       ...(biome ? { biome } : {}),
