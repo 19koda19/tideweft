@@ -281,7 +281,8 @@ describe("player-facing release invariants", () => {
     const source = readFileSync(new URL("../ui/createTideweftUI.ts", import.meta.url), "utf8");
     expect(source).toMatch(/setProgress\(refs\.stability,\s*view\.player\.stability\)/u);
     expect(source).toMatch(/setProgress\(refs\.mobileStability,\s*view\.player\.stability/u);
-    expect(source).toMatch(/terrain:\s*view\.field\.terrainLabel/u);
+    expect(source).toMatch(/terrainLabel:\s*view\.field\.terrainLabel/u);
+    expect(source).toMatch(/terrain:\s*presentedTerrainLabel/u);
     expect(source).toMatch(/depth:\s*view\.field\.depthLabel/u);
     expect(source).toMatch(/effort:\s*view\.field\.effortLabel/u);
     expect(source).toMatch(/navigationTelemetryCopy\(view\.navigation,\s*telemetry,\s*true\)/u);

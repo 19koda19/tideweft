@@ -7,6 +7,7 @@ import {
   type ContractStatus,
   type ContractUIView,
   type KitTabId,
+  type ResidentAboutUIView,
   type SettlementInspectorUIView,
   type TideweftUIController,
   type TideweftUIOptions,
@@ -46,6 +47,39 @@ export const TITLE_SURFACE_COPY = {
   start: "START",
   patchNotes: "PATCH NOTES",
 } as const;
+
+export interface ResidentAboutSurfaceState {
+  readonly hidden: boolean;
+  readonly modal: false;
+  readonly pausesGameplay: false;
+}
+
+/** ABOUT is resident field feedback, never a modal or a simulation pause. */
+export function residentAboutSurfaceState(
+  resident: ResidentAboutUIView | undefined,
+): ResidentAboutSurfaceState {
+  return { hidden: !resident, modal: false, pausesGameplay: false };
+}
+
+export interface ResidentAboutActionPresentation {
+  readonly hidden: boolean;
+  readonly disabled: boolean;
+  readonly label: string;
+  readonly hint: string;
+}
+
+/** Missing actions stay missing; an acquainted actor never regains a dead GREET button. */
+export function residentAboutActionPresentation(
+  resident: ResidentAboutUIView,
+): ResidentAboutActionPresentation {
+  const hidden = resident.actionLabel === undefined;
+  return {
+    hidden,
+    disabled: hidden || Boolean(resident.actionDisabled),
+    label: resident.actionLabel ?? "",
+    hint: resident.actionHint ?? "",
+  };
+}
 
 const signedAxis = (value: number): string => {
   const integer = Number.isFinite(value) ? Math.trunc(value) : 0;
@@ -105,6 +139,91 @@ export interface MobileHudCopy {
   readonly safety: string;
   readonly terrain: string;
   readonly actions: string;
+}
+
+export interface UnderfootTerrainSample {
+  readonly terrainLabel: string;
+  readonly isWater: boolean;
+  readonly swept: boolean;
+}
+
+export interface UnderfootTerrainStabilizer {
+  /**
+   * Returns the terrain name that should be painted for this sample. Water and
+   * ADRIFT boundaries remain immediate; ordinary neighboring terrain has to be
+   * observed twice so a one-step diagonal correction cannot flash the HUD.
+   */
+  readonly present: (sample: UnderfootTerrainSample) => string;
+  readonly reset: () => void;
+}
+
+const UNDERFOOT_TERRAIN_CONFIRMATIONS = 2;
+
+/**
+ * Presentation-only hysteresis for the prose name under the courier's feet.
+ *
+ * It does not alter simulation, collision, water state, depth, effort, current,
+ * or safety copy. Entering/leaving water and entering/leaving ADRIFT therefore
+ * remain truthful on the first sample, while ordinary biome seams no longer
+ * alternate text during a single-tick path correction.
+ */
+export function createUnderfootTerrainStabilizer(
+  confirmations = UNDERFOOT_TERRAIN_CONFIRMATIONS,
+): UnderfootTerrainStabilizer {
+  const required = Math.max(1, Math.trunc(Number.isFinite(confirmations) ? confirmations : 1));
+  let committed: UnderfootTerrainSample | null = null;
+  let candidate: UnderfootTerrainSample | null = null;
+  let candidateCount = 0;
+
+  const commit = (sample: UnderfootTerrainSample): string => {
+    committed = sample;
+    candidate = null;
+    candidateCount = 0;
+    return sample.terrainLabel;
+  };
+
+  return {
+    present(sample) {
+      if (committed === null) return commit(sample);
+      if (
+        sample.isWater !== committed.isWater
+        || sample.swept !== committed.swept
+      ) {
+        return commit(sample);
+      }
+      if (sample.terrainLabel === committed.terrainLabel) {
+        candidate = null;
+        candidateCount = 0;
+        return committed.terrainLabel;
+      }
+      if (
+        candidate?.terrainLabel === sample.terrainLabel
+        && candidate.isWater === sample.isWater
+        && candidate.swept === sample.swept
+      ) {
+        candidateCount += 1;
+      } else {
+        candidate = sample;
+        candidateCount = 1;
+      }
+      return candidateCount >= required ? commit(sample) : committed.terrainLabel;
+    },
+    reset() {
+      committed = null;
+      candidate = null;
+      candidateCount = 0;
+    },
+  };
+}
+
+/** Avoids replacing a stable text node every fixed simulation step. */
+export function syncTextContent(
+  target: { textContent: string | null },
+  next: string,
+): boolean {
+  if (target.textContent === next) return false;
+  target.textContent = next;
+  return true;
 }
 
 /** Native disclosure copy stays synchronized without becoming saved game state. */
@@ -657,6 +776,18 @@ export function handleTideweftUIShortcut(
   return true;
 }
 
+/** Escape cancels the non-modal resident disclosure before other HUD shortcuts. */
+export function handleResidentAboutEscape(
+  event: Pick<UIShortcutEvent, "key" | "defaultPrevented" | "preventDefault">,
+  residentId: string | undefined,
+  dispatch: (command: TideweftUICommand) => void,
+): boolean {
+  if (event.defaultPrevented || event.key !== "Escape" || !residentId) return false;
+  event.preventDefault();
+  dispatch({ type: "resident", action: "close", residentId });
+  return true;
+}
+
 interface UIRefs {
   shell: HTMLDivElement;
   saveWarningBanners: readonly SaveWarningBannerRefs[];
@@ -742,6 +873,17 @@ interface UIRefs {
   inspectorReports: HTMLUListElement;
   inspectorFocus: HTMLButtonElement;
   inspectorClose: HTMLButtonElement;
+  residentAbout: HTMLElement;
+  residentAboutTitle: HTMLHeadingElement;
+  residentAboutIdentity: HTMLParagraphElement;
+  residentAboutBody: HTMLDivElement;
+  residentAboutKnowledge: HTMLSpanElement;
+  residentAboutObserved: HTMLDListElement;
+  residentAboutKnown: HTMLDListElement;
+  residentAboutClose: HTMLButtonElement;
+  residentAboutActions: HTMLDivElement;
+  residentAboutGreet: HTMLButtonElement;
+  residentAboutActionHint: HTMLParagraphElement;
   chronicleDetails: HTMLDetailsElement;
   chronicleSummary: HTMLElement;
   chronicleCount: HTMLSpanElement;
@@ -1350,6 +1492,52 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     inspectorFocus,
   );
 
+  const residentAbout = createElement("aside", "resident-about");
+  residentAbout.hidden = true;
+  residentAbout.setAttribute("role", "region");
+  residentAbout.setAttribute("aria-labelledby", "resident-about-title");
+  residentAbout.setAttribute("aria-describedby", "resident-about-identity");
+  const residentAboutHeader = createElement("header", "resident-about__header");
+  const residentAboutHeading = createElement("div", "resident-about__heading");
+  residentAboutHeading.append(createElement("p", "resident-about__eyebrow", "ABOUT"));
+  const residentAboutTitle = createElement("h2", "resident-about__title", "Someone nearby");
+  residentAboutTitle.id = "resident-about-title";
+  const residentAboutIdentity = createElement("p", "resident-about__identity");
+  residentAboutIdentity.id = "resident-about-identity";
+  residentAboutHeading.append(residentAboutTitle, residentAboutIdentity);
+  const residentAboutClose = createButton(
+    "resident-about__close",
+    "×",
+    "Close resident details",
+  );
+  residentAboutHeader.append(residentAboutHeading, residentAboutClose);
+  const residentAboutBody = createElement("div", "resident-about__body");
+  residentAboutBody.tabIndex = 0;
+  residentAboutBody.setAttribute("aria-label", "Scrollable resident details");
+  const residentAboutKnowledge = createElement("span", "resident-about__knowledge", "Unfamiliar");
+  const residentObservedHeading = createElement("h3", "resident-about__section-title", "OBSERVED");
+  const residentAboutObserved = createElement("dl", "resident-about__facts");
+  const residentKnownHeading = createElement("h3", "resident-about__section-title", "KNOWN");
+  const residentAboutKnown = createElement("dl", "resident-about__facts");
+  const residentAboutActions = createElement("div", "resident-about__actions");
+  const residentAboutGreet = createButton("resident-about__greet", "GREET");
+  const residentAboutActionHint = createElement("p", "resident-about__action-hint");
+  residentAboutActionHint.id = "resident-about-action-hint";
+  residentAboutActionHint.hidden = true;
+  residentAboutActions.append(residentAboutActionHint, residentAboutGreet);
+  residentAboutBody.append(
+    residentAboutKnowledge,
+    residentObservedHeading,
+    residentAboutObserved,
+    residentKnownHeading,
+    residentAboutKnown,
+  );
+  residentAbout.append(
+    residentAboutHeader,
+    residentAboutBody,
+    residentAboutActions,
+  );
+
   const chronicleDetails = createElement("details", "chronicle-panel glass-panel");
   const chronicleSummary = createElement("summary", "panel-summary");
   chronicleSummary.append(createElement("span", "panel-summary__title", "EVENTS"));
@@ -1633,6 +1821,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     mobileFieldStrip,
     leftRail,
     inspector,
+    residentAbout,
     chronicleDetails,
     actionDock,
     titleDialog,
@@ -1728,6 +1917,17 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     inspectorReports,
     inspectorFocus,
     inspectorClose,
+    residentAbout,
+    residentAboutTitle,
+    residentAboutIdentity,
+    residentAboutBody,
+    residentAboutKnowledge,
+    residentAboutObserved,
+    residentAboutKnown,
+    residentAboutClose,
+    residentAboutActions,
+    residentAboutGreet,
+    residentAboutActionHint,
     chronicleDetails,
     chronicleSummary,
     chronicleCount,
@@ -1794,17 +1994,22 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let lastContracts = "";
   let lastSignedReportActions = "";
   let lastChronicle = "";
+  let lastResidentAbout = "__unrendered__";
   let lastAnnouncement = "";
   let lastNavigationCopy = "";
   let lastMobileNavigationCopy = "";
   let lastNavigationTitle = "";
+  let lastUnderfootWorldName = "";
   let forcedTitle: boolean | null = null;
   let forcedQuietHour: boolean | null = null;
   let contractPointerActive = false;
   let signedReportPointerActive = false;
   let selectedInspectorId: string | null = null;
+  let selectedResidentId: string | null = null;
+  let residentReturnFocus: HTMLElement | null = null;
   let running = false;
   let frameHandle: number | null = null;
+  const underfootTerrain = createUnderfootTerrainStabilizer();
 
   const releaseContractPointer = (): void => {
     window.setTimeout(() => {
@@ -2170,6 +2375,89 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
   };
 
+  const renderResidentAbout = (resident: ResidentAboutUIView | undefined): void => {
+    const signature = resident ? JSON.stringify(resident) : "";
+    if (signature === lastResidentAbout) return;
+    lastResidentAbout = signature;
+    const surface = residentAboutSurfaceState(resident);
+    refs.residentAbout.hidden = surface.hidden;
+    refs.residentAbout.dataset.modal = String(surface.modal);
+    refs.residentAbout.dataset.pausesGameplay = String(surface.pausesGameplay);
+    refs.shell.dataset.residentAboutOpen = resident ? "true" : "false";
+    if (!resident) return;
+    const residentChanged = refs.residentAbout.dataset.residentId !== resident.id;
+    refs.residentAbout.dataset.residentId = resident.id;
+    if (residentChanged) refs.residentAboutBody.scrollTop = 0;
+    refs.residentAboutTitle.textContent = resident.heading;
+    refs.residentAboutIdentity.textContent = resident.identityLine;
+    refs.residentAboutKnowledge.textContent = resident.knowledgeLabel;
+    refs.residentAboutKnowledge.dataset.knowledge = resident.knowledgeLabel.toLocaleLowerCase();
+    const renderFacts = (
+      target: HTMLDListElement,
+      facts: ResidentAboutUIView["observed"],
+    ): void => {
+      target.replaceChildren();
+      for (const fact of facts) {
+        const row = createElement("div", "resident-about__fact");
+        row.dataset.tone = fact.tone ?? "neutral";
+        row.append(
+          createElement("dt", "resident-about__fact-label", fact.label),
+          createElement("dd", "resident-about__fact-value", fact.value),
+        );
+        target.append(row);
+      }
+    };
+    renderFacts(refs.residentAboutObserved, resident.observed);
+    renderFacts(refs.residentAboutKnown, resident.known);
+    const action = residentAboutActionPresentation(resident);
+    refs.residentAboutActions.hidden = action.hidden;
+    refs.residentAboutGreet.hidden = action.hidden;
+    refs.residentAboutGreet.textContent = action.label;
+    refs.residentAboutGreet.disabled = action.disabled;
+    refs.residentAboutGreet.title = action.hint;
+    const showDisabledReason = action.disabled && action.hint.length > 0;
+    refs.residentAboutActionHint.hidden = !showDisabledReason;
+    refs.residentAboutActionHint.textContent = showDisabledReason ? action.hint : "";
+    if (showDisabledReason) {
+      refs.residentAboutGreet.setAttribute("aria-describedby", refs.residentAboutActionHint.id);
+    } else {
+      refs.residentAboutGreet.removeAttribute("aria-describedby");
+    }
+  };
+
+  const restoreResidentAboutFocus = (): void => {
+    const target = residentReturnFocus;
+    residentReturnFocus = null;
+    const activeElement = document.activeElement;
+    if (
+      target?.isConnected
+      && activeElement instanceof Node
+      && refs.residentAbout.contains(activeElement)
+    ) {
+      target.focus({ preventScroll: true });
+    }
+  };
+
+  const syncResidentAboutFocus = (resident: ResidentAboutUIView | undefined): void => {
+    const nextId = resident?.id ?? null;
+    if (nextId === selectedResidentId) return;
+    selectedResidentId = nextId;
+    if (nextId) {
+      announce(`${resident?.heading ?? "Resident"}. ABOUT details available.`);
+    } else {
+      restoreResidentAboutFocus();
+    }
+  };
+
+  const onResidentAboutFocusIn = (event: FocusEvent): void => {
+    if (residentReturnFocus) return;
+    const previous = event.relatedTarget;
+    if (previous instanceof HTMLElement && !refs.residentAbout.contains(previous)) {
+      residentReturnFocus = previous;
+    }
+  };
+  refs.residentAbout.addEventListener("focusin", onResidentAboutFocusIn);
+
   const renderChronicle = (entries: readonly ChronicleEntryUIView[]): void => {
     const signature = chronicleSignature(entries);
     if (signature === lastChronicle) return;
@@ -2229,8 +2517,12 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     latestView = view;
     refs.kit.update(view?.kit);
     renderSaveWarning(view?.saveWarning);
+    syncResidentAboutFocus(view?.selectedResident);
+    renderResidentAbout(view?.selectedResident);
     if (!view) {
       mobileBrace.release();
+      underfootTerrain.reset();
+      lastUnderfootWorldName = "";
       refs.shell.dataset.ready = "false";
       closeFieldDialogs();
       const titlePresented = forcedTitle ?? true;
@@ -2281,6 +2573,15 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       return;
     }
     lastRevision = revision;
+    if (lastUnderfootWorldName !== view.worldName) {
+      underfootTerrain.reset();
+      lastUnderfootWorldName = view.worldName;
+    }
+    const presentedTerrainLabel = underfootTerrain.present({
+      terrainLabel: view.field.terrainLabel,
+      isWater: view.field.isWater,
+      swept: view.field.swept,
+    });
 
     refs.worldName.textContent = view.worldName;
     refs.location.textContent = view.player.locationLabel ?? "Between harbors";
@@ -2327,10 +2628,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     setProgress(refs.choirProgress, view.choir.progress, `${Math.round(view.choir.progress * 100)} percent of a harbor phrase`);
     refs.choirHint.textContent = view.choir.hint;
     refs.choirReadout.dataset.awake = view.choir.awakenedCount > 0 ? "true" : "false";
-    refs.fieldTerrain.textContent = view.field.terrainLabel;
-    refs.fieldDepth.textContent = view.field.depthLabel;
+    syncTextContent(refs.fieldTerrain, presentedTerrainLabel);
+    syncTextContent(refs.fieldDepth, view.field.depthLabel);
     refs.fieldDepth.dataset.known = view.field.depthKnown ? "true" : "false";
-    refs.fieldEffort.textContent = view.field.effortLabel;
+    syncTextContent(refs.fieldEffort, view.field.effortLabel);
     refs.fieldTools.textContent = `FIELD KIT · ${view.field.toolLabels.join(" · ")}`;
     const activeWayknotLabels = view.field.activeWayknotLabels;
     const wayknotStatus = activeWayknotLabels.length === 0
@@ -2409,7 +2710,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       stabilityHint: view.player.stabilityHint,
       bracing: view.player.bracing === true,
       isWater: view.field.isWater,
-      terrain: view.field.terrainLabel,
+      terrain: presentedTerrainLabel,
       depth: view.field.depthLabel,
       effort: view.field.effortLabel,
       swept: view.field.swept,
@@ -2422,9 +2723,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.mobileObjective.title = compactHud.objective;
     refs.mobileSafety.textContent = compactHud.safety;
     refs.mobileSafety.title = compactHud.safety;
-    refs.mobileTerrain.textContent = compactHud.terrain;
+    syncTextContent(refs.mobileTerrain, compactHud.terrain);
     refs.mobileTerrain.title = compactHud.terrain;
-    refs.desktopFieldTerrain.textContent = compactHud.terrain;
+    syncTextContent(refs.desktopFieldTerrain, compactHud.terrain);
     refs.desktopFieldTerrain.title = compactHud.terrain;
     refs.desktopFieldSafety.textContent = compactHud.safety;
     refs.desktopFieldSafety.title = compactHud.safety;
@@ -2544,6 +2845,17 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       ...(latestView?.selectedSettlement ? { settlementId: latestView.selectedSettlement.id } : {}),
     });
   });
+  const closeResidentAbout = (): void => {
+    const residentId = latestView?.selectedResident?.id;
+    if (!residentId) return;
+    options.dispatch({ type: "resident", action: "close", residentId });
+  };
+  refs.residentAboutClose.addEventListener("click", closeResidentAbout);
+  refs.residentAboutGreet.addEventListener("click", () => {
+    const residentId = latestView?.selectedResident?.id;
+    if (!residentId) return;
+    options.dispatch({ type: "resident", action: "greet", residentId });
+  });
   refs.inspectorFocus.addEventListener("click", () => {
     const settlementId = latestView?.selectedSettlement?.id;
     if (!settlementId) return;
@@ -2572,6 +2884,13 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   });
 
   const onGlobalKeyDown = (event: KeyboardEvent): void => {
+    if (handleResidentAboutEscape(
+      event,
+      latestView?.selectedResident?.id,
+      options.dispatch,
+    )) {
+      return;
+    }
     const target = event.target;
     if (
       target instanceof HTMLInputElement ||
@@ -2649,9 +2968,11 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     closeKit: () => refs.kit.close(),
     destroy: () => {
       stop();
+      restoreResidentAboutFocus();
       mobileBrace.destroy();
       restartFlow.destroy();
       titleAtmosphere.destroy();
+      refs.residentAbout.removeEventListener("focusin", onResidentAboutFocusIn);
       document.removeEventListener("keydown", onGlobalKeyDown);
       window.removeEventListener("pointerup", releaseContractPointer);
       window.removeEventListener("pointercancel", cancelContractPointer);

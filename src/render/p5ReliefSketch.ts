@@ -20,6 +20,7 @@ import {
 import {
   buildReliefWaterMaterialBatches,
   reliefWaterOpacity,
+  reliefWaterSurfaceColor,
 } from "./reliefWaterBatches";
 import {
   MAX_RELIEF_PITCH,
@@ -104,6 +105,12 @@ import {
   type PlayerBalancePresentation,
 } from "./playerPresentation";
 import {
+  clampPorterSpeechPlacement,
+  porterAppearancePresentation,
+  porterQuickLabel,
+  wrapPorterSpeech,
+} from "./porterPresentation";
+import {
   adriftPresentation,
   type AdriftPresentation,
 } from "./adriftPresentation";
@@ -162,6 +169,8 @@ const RELIEF_PALETTE = {
 const DEFAULT_YAW = -0.36;
 const DEFAULT_PITCH = Math.PI * 0.29;
 const DEFAULT_FOV = Math.PI / 3.5;
+export const MIN_RELIEF_MANUAL_ZOOM = 0.38;
+export const MAX_RELIEF_MANUAL_ZOOM = 3.2;
 
 export interface TideweftReliefRendererOptions extends TideweftRendererOptions {
   /** Starts the expensive WEBGL draw loop stopped when false. */
@@ -302,6 +311,7 @@ export function createTideweftReliefRenderer(
   let touchSequenceSuppressed = false;
   let pointerWorld: WorldPoint | null = null;
   let hoverParcelId: string | null = null;
+  let hoverTarget: { entity: "settlement" | "porter" | "route" | "resource"; id: string } | null = null;
   let hasObservedSpatialEpoch = false;
   let observedSpatialEpoch: TideweftView["spatialEpoch"];
   const ownsTerrainPerceptionMemory = options.terrainPerceptionMemory === undefined;
@@ -439,6 +449,7 @@ export function createTideweftReliefRenderer(
     clickCandidate = null;
     parcelPress = null;
     hoverParcelId = null;
+    hoverTarget = null;
     twistGesture = null;
     touchSequenceSuppressed = false;
     releaseLooseCargoPointerCaptures(canvasElement, [...activeTouchPointers.keys()]);
@@ -467,6 +478,7 @@ export function createTideweftReliefRenderer(
     activeTouchPointers.clear();
     pointerWorld = null;
     hoverParcelId = null;
+    hoverTarget = null;
     orbit.focusPoint = undefined;
     orbit.focusUntil = 0;
     ripples.length = 0;
@@ -648,7 +660,7 @@ export function createTideweftReliefRenderer(
       text: string,
       point: WorldPoint,
       height: number,
-      tone: "harbor" | "destination" | "wayknot" | "adrift" | "sound",
+      tone: "harbor" | "destination" | "wayknot" | "porter" | "porter-emotion" | "adrift" | "sound",
       selected = false,
     ): void => {
       const projected = projectReliefPoint(
@@ -796,6 +808,88 @@ export function createTideweftReliefRenderer(
         isDestination ? "destination" : "harbor",
         Boolean(settlement.selected),
       );
+    }
+    for (const porter of view.porters) {
+      if (
+        view.perception
+        && !isDirectlyDetailPerceived(view.terrain, porter.position, true)
+      ) continue;
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        porter.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      const highlighted = Boolean(
+        porter.selected
+        || (hoverTarget?.entity === "porter" && hoverTarget.id === porter.id),
+      );
+      const quickLabel = porterQuickLabel(porter, highlighted && !porter.speech);
+      if (quickLabel) {
+        place(
+          `porter-${porter.id}`,
+          quickLabel,
+          porter.position,
+          surface + tileSize * 0.72,
+          "porter",
+          highlighted,
+        );
+      }
+      if (porter.speech) {
+        const viewportWidth = instance?.width ?? 1;
+        const charactersPerLine = Math.max(
+          8,
+          Math.min(viewportWidth < 440 ? 22 : 30, Math.floor((viewportWidth - 32) / 6.5)),
+        );
+        const lines = [
+          ...(porter.emotionMark ? [porter.emotionMark] : []),
+          ...wrapPorterSpeech(porter.speech, charactersPerLine),
+        ];
+        const id = `porter-speech-${porter.id}`;
+        const projected = projectReliefPoint(
+          porter.position,
+          surface + tileSize * 0.96,
+          camera,
+          { width: instance?.width ?? 1, height: instance?.height ?? 1 },
+        );
+        const node = labelNode(id, lines.join("\n"));
+        node.dataset.tone = "porter-speech";
+        node.dataset.selected = highlighted ? "true" : "false";
+        node.hidden = !projected.visible;
+        if (!projected.visible) {
+          labelPositions.delete(id);
+          continue;
+        }
+        const eased = easeWorldLabelPoint(labelPositions.get(id), projected, now, reducedMotion);
+        labelPositions.set(id, eased);
+        const viewport = { width: instance?.width ?? 1, height: instance?.height ?? 1 };
+        const width = Math.max(
+          1,
+          Math.min(
+            viewport.width - 16,
+            Math.max(64, Math.max(...lines.map((line) => line.length)) * 6.4 + 16),
+          ),
+        );
+        const height = lines.length * 13 + 10;
+        const placement = clampPorterSpeechPlacement(
+          eased,
+          { width, height },
+          viewport,
+          18,
+          8,
+        );
+        node.style.width = `${width.toFixed(1)}px`;
+        node.style.left = `${placement.x.toFixed(1)}px`;
+        node.style.top = `${placement.y.toFixed(1)}px`;
+      } else if (porter.emotionMark) {
+        place(
+          `porter-emotion-${porter.id}`,
+          porter.emotionMark,
+          porter.position,
+          surface + tileSize * 0.96,
+          "porter-emotion",
+        );
+      }
     }
     if (destination && !view.settlements.some(
       (settlement) => settlement.discovered !== false
@@ -1035,7 +1129,7 @@ export function createTideweftReliefRenderer(
         distance: resourceHit.distanceSquared,
       };
     }
-    const porterRadius = Math.max(view.terrain.tileSize * 0.35, unitsPerPixel() * 12);
+    const porterRadius = Math.max(view.terrain.tileSize * 0.35, unitsPerPixel() * 22);
     for (const porter of view.porters) {
       if (!isDirectlyDetailPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
       const distance = distanceSquared(point, porter.position);
@@ -1365,6 +1459,7 @@ export function createTideweftReliefRenderer(
       hoverParcelId = event.pointerType === "touch"
         ? null
         : parcelHitAt(local, coarsePointer)?.parcel.id ?? null;
+      hoverTarget = pointerWorld && !hoverParcelId ? findSelection(pointerWorld) : null;
       if (clickCandidate?.pointerId === event.pointerId) {
         const maximumTravel = clickCandidate.coarsePointer ? 18 : 7;
         parcelPress = moveLooseCargoPointerPress(
@@ -1423,6 +1518,7 @@ export function createTideweftReliefRenderer(
     const pointerLeave = (): void => {
       pointerWorld = null;
       hoverParcelId = null;
+      hoverTarget = null;
       resetPointerParallax(pointerParallax, false);
     };
     const contextMenu = (event: MouseEvent): void => {
@@ -1447,7 +1543,11 @@ export function createTideweftReliefRenderer(
       refreshLatestView();
       if (!active || contextLost) return;
       event.preventDefault();
-      orbit.manualZoom = clamp(orbit.manualZoom * Math.exp(-event.deltaY * 0.0012), 0.38, 3.2);
+      orbit.manualZoom = clamp(
+        orbit.manualZoom * Math.exp(-event.deltaY * 0.0012),
+        MIN_RELIEF_MANUAL_ZOOM,
+        MAX_RELIEF_MANUAL_ZOOM,
+      );
     };
     const contextLostListener = (event: Event): void => {
       event.preventDefault();
@@ -1828,43 +1928,62 @@ export function createTideweftReliefRenderer(
       const startRow = clampInteger(Math.floor((orbit.y - reach - grid.origin.y) / tileSize), 0, grid.rows - 1);
       const endRow = clampInteger(Math.ceil((orbit.y + reach - grid.origin.y) / tileSize), 0, grid.rows - 1);
       const gl = p.drawingContext as WebGLRenderingContext | WebGL2RenderingContext;
-      gl.depthMask(false);
-      p.noStroke();
-      const waterBatches = buildReliefWaterMaterialBatches(grid, view.tide.level, {
-        firstColumn: startColumn,
-        lastColumn: endColumn,
-        firstRow: startRow,
-        lastRow: endRow,
-      });
-      for (const batch of waterBatches) {
-        // Emissive here means "use the authored dark surface color unchanged,"
-        // not "glow": low-valued palette colors remain dark instead of being
-        // lifted toward the pale terrain by WebGL's directional lights.
-        p.emissiveMaterial(withAlpha(batch.material.color, reliefWaterOpacity(batch.material)));
-        p.beginShape(p.TRIANGLES);
-        for (const cell of batch.cells) {
-          const { column, row } = cell;
-          const x0 = grid.origin.x + column * tileSize;
-          const x1 = x0 + tileSize;
-          const z0 = grid.origin.y + row * tileSize;
-          const z1 = z0 + tileSize;
-          const surface = perceivedReliefSurfaceHeightAt(
-            grid,
-            { x: x0 + tileSize / 2, y: z0 + tileSize / 2 },
-            cache.mesh.verticalScale,
-            true,
-          ) + 0.45;
-          p.normal(0, -1, 0);
-          p.vertex(x0, -surface, z0);
-          p.vertex(x1, -surface, z0);
-          p.vertex(x1, -surface, z1);
-          p.vertex(x0, -surface, z0);
-          p.vertex(x1, -surface, z1);
-          p.vertex(x0, -surface, z1);
-        }
-        p.endShape();
-      }
+      const depthWriteWasEnabled = Boolean(gl.getParameter(gl.DEPTH_WRITEMASK));
+      // The Relief sheet is fully opaque. Writing its depth removes the old
+      // material-batch-order dependency where far cells could blend over near
+      // cells while the camera looked along a river.
       gl.depthMask(true);
+      p.push();
+      try {
+        p.noStroke();
+        const waterBatches = buildReliefWaterMaterialBatches(grid, view.tide.level, {
+          firstColumn: startColumn,
+          lastColumn: endColumn,
+          firstRow: startRow,
+          lastRow: endRow,
+        });
+        for (const batch of waterBatches) {
+          const opacity = reliefWaterOpacity(batch.material);
+          // p5's emissiveMaterial does not replace its base fill or ambient
+          // material, and fragment alpha comes from that base fill. Bind all
+          // three explicitly: otherwise the last camera-culled terrain batch
+          // leaks its warm biome color/alpha into water when yaw or zoom moves.
+          p.fill(0, 0, 0, opacity);
+          p.ambientMaterial(0, 0, 0);
+          // Emissive here is an unlit albedo, not a glow. The blue-only Relief
+          // palette remains independent of fog and directional lighting.
+          p.emissiveMaterial(reliefWaterSurfaceColor(batch.material));
+          p.beginShape(p.TRIANGLES);
+          for (const cell of batch.cells) {
+            const { column, row } = cell;
+            const x0 = grid.origin.x + column * tileSize;
+            const x1 = x0 + tileSize;
+            const z0 = grid.origin.y + row * tileSize;
+            const z1 = z0 + tileSize;
+            const surface = perceivedReliefSurfaceHeightAt(
+              grid,
+              { x: x0 + tileSize / 2, y: z0 + tileSize / 2 },
+              cache.mesh.verticalScale,
+              true,
+            ) + 0.45;
+            p.normal(0, -1, 0);
+            p.vertex(x0, -surface, z0);
+            p.vertex(x1, -surface, z0);
+            p.vertex(x1, -surface, z1);
+            p.vertex(x0, -surface, z0);
+            p.vertex(x1, -surface, z1);
+            p.vertex(x0, -surface, z1);
+          }
+          p.endShape();
+        }
+      } finally {
+        // p5 retains emissive state across later draws and frames. Restore a
+        // non-emissive baseline even when a WebGL call throws so water cannot
+        // tint land or actors rendered afterward.
+        p.emissiveMaterial(0, 0, 0);
+        p.pop();
+        gl.depthMask(depthWriteWasEnabled);
+      }
     };
 
     const drawSurfaceCurrents = (
@@ -2932,7 +3051,7 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
-    const porterColor = (porter: PorterView): string => {
+    const porterStateColor = (porter: PorterView): string => {
       if (porter.state === "stranded") return RELIEF_PALETTE.danger;
       if (porter.state === "helping") return RELIEF_PALETTE.tide;
       if (porter.state === "waiting") return RELIEF_PALETTE.amber;
@@ -2946,6 +3065,7 @@ export function createTideweftReliefRenderer(
           view.perception
           && !isDirectlyDetailPerceived(view.terrain, porter.position, true)
         ) continue;
+        const appearance = porterAppearancePresentation(porter);
         const surface = discoveredReliefSurfaceHeightAt(
           view.terrain,
           porter.position,
@@ -2954,12 +3074,40 @@ export function createTideweftReliefRenderer(
         );
         p.push();
         p.noStroke();
-        p.translate(porter.position.x, -surface - size * 0.23, porter.position.y);
-        p.emissiveMaterial(porterColor(porter));
-        p.sphere(size * (porter.selected ? 0.18 : 0.13), 7, 5);
-        p.ambientMaterial(porter.cargoColor ?? RELIEF_PALETTE.amber);
+        const highlighted = Boolean(
+          porter.selected
+          || (hoverTarget?.entity === "porter" && hoverTarget.id === porter.id),
+        );
+        const baseRadius = size * (highlighted ? 0.16 : 0.13);
+        p.translate(
+          porter.position.x,
+          -surface - baseRadius * appearance.heightScale,
+          porter.position.y,
+        );
+        p.emissiveMaterial(appearance.color);
+        p.ellipsoid(
+          baseRadius * appearance.widthScale,
+          baseRadius * appearance.heightScale,
+          baseRadius * appearance.widthScale,
+          7,
+          5,
+        );
+        if (appearance.wetness > 0.02) {
+          p.noFill();
+          p.stroke(RELIEF_PALETTE.water);
+          p.strokeWeight(0.5 + appearance.wetness * 1.2);
+          p.ellipsoid(
+            baseRadius * appearance.widthScale * 1.13,
+            baseRadius * appearance.heightScale * 1.13,
+            baseRadius * appearance.widthScale * 1.13,
+            7,
+            5,
+          );
+          p.noStroke();
+        }
+        p.ambientMaterial(porter.cargoColor ?? porterStateColor(porter));
         p.translate(-Math.cos(porter.facing) * size * 0.18, size * 0.05, -Math.sin(porter.facing) * size * 0.18);
-        p.box(size * 0.16);
+        p.box(size * 0.16 * appearance.widthScale);
         p.pop();
       }
     };
@@ -3532,7 +3680,9 @@ export function createTideweftReliefRenderer(
       refreshLatestView();
       orbit.focusPoint = { ...point };
       orbit.focusUntil = performance.now() + (reducedMotion ? 1 : 1_800);
-      if (zoom !== undefined) orbit.manualZoom = clamp(zoom, 0.38, 3.2);
+      if (zoom !== undefined) {
+        orbit.manualZoom = clamp(zoom, MIN_RELIEF_MANUAL_ZOOM, MAX_RELIEF_MANUAL_ZOOM);
+      }
     },
     pulseScan,
     setOrbit: (yaw, pitch) => {

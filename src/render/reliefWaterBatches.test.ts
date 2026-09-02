@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  RELIEF_WATER_PALETTE,
   buildReliefWaterMaterialBatches,
   reliefWaterOpacity,
+  reliefWaterSurfaceColor,
 } from "./reliefWaterBatches";
-import type { TerrainGridView, TerrainTileView } from "./types";
+import type { BiomeId, TerrainGridView, TerrainTileView } from "./types";
 
 const climate = {
   rainfall: 0.65,
@@ -33,6 +35,25 @@ function tile(changes: Partial<TerrainTileView> = {}): TerrainTileView {
     discovered: 1,
     ...changes,
   };
+}
+
+function rgb(hex: string): readonly [number, number, number] {
+  return [
+    Number.parseInt(hex.slice(1, 3), 16),
+    Number.parseInt(hex.slice(3, 5), 16),
+    Number.parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function brightness(hex: string): number {
+  const [red, green, blue] = rgb(hex);
+  return red + green + blue;
+}
+
+function expectRecognizablyBlue(hex: string, context: string): void {
+  const [red, green, blue] = rgb(hex);
+  expect(blue - green, `${context}: blue/green separation for ${hex}`).toBeGreaterThanOrEqual(14);
+  expect(green - red, `${context}: green/red separation for ${hex}`).toBeGreaterThanOrEqual(12);
 }
 
 describe("Relief water material batches", () => {
@@ -95,7 +116,7 @@ describe("Relief water material batches", () => {
     expect(high?.tideLevel).toBe(15 / 16);
   });
 
-  it("keeps Relief water dark and makes deeper bands strictly more opaque", () => {
+  it("keeps Relief water opaque over warm ground and makes depth bands distinct blue shades", () => {
     const source = grid([
       tile({ waterDepth: 0.2 }),
       tile({ waterDepth: 0.5 }),
@@ -107,9 +128,18 @@ describe("Relief water material batches", () => {
     const channel = materials.find((material) => material.band === "channel");
     const deep = materials.find((material) => material.band === "deep");
 
-    expect(shallow && reliefWaterOpacity(shallow)).toBeGreaterThanOrEqual(236);
-    expect(channel && reliefWaterOpacity(channel)).toBeGreaterThan(reliefWaterOpacity(shallow!));
-    expect(deep && reliefWaterOpacity(deep)).toBeGreaterThan(reliefWaterOpacity(channel!));
+    expect(reliefWaterOpacity(shallow!)).toBe(255);
+    expect(reliefWaterOpacity(channel!)).toBe(255);
+    expect(reliefWaterOpacity(deep!)).toBe(255);
+    const shallowBlue = reliefWaterSurfaceColor(shallow!);
+    const channelBlue = reliefWaterSurfaceColor(channel!);
+    const deepBlue = reliefWaterSurfaceColor(deep!);
+    expect(new Set([shallowBlue, channelBlue, deepBlue]).size).toBe(3);
+    expect(brightness(shallowBlue)).toBeGreaterThan(brightness(channelBlue));
+    expect(brightness(channelBlue)).toBeGreaterThan(brightness(deepBlue));
+    expectRecognizablyBlue(shallowBlue, "shallows");
+    expectRecognizablyBlue(channelBlue, "channel");
+    expectRecognizablyBlue(deepBlue, "deep");
   });
 
   it("still omits hidden water and bounds the quantized partial-discovery alpha", () => {
@@ -127,7 +157,10 @@ describe("Relief water material batches", () => {
     );
 
     expect(barelySeen).toBeDefined();
-    expect(reliefWaterOpacity(barelySeen!)).toBeLessThanOrEqual(60);
+    expect(reliefWaterOpacity(barelySeen!)).toBe(255);
+    expect(brightness(reliefWaterSurfaceColor(barelySeen!))).toBeLessThan(
+      brightness(RELIEF_WATER_PALETTE.deep),
+    );
     expect(subBand).toEqual([]);
     expect(hidden).toEqual([]);
   });
@@ -159,12 +192,16 @@ describe("Relief water material batches", () => {
     expect(byColumn.get(1)?.visibility).toBe(5 / 16);
     expect(byColumn.get(2)?.visibility).toBe(12 / 16);
     expect(byColumn.get(3)?.visibility).toBe(1);
-    expect(reliefWaterOpacity(byColumn.get(0)!)).toBeLessThan(
-      reliefWaterOpacity(byColumn.get(1)!),
+    const colors = [0, 1, 2, 3].map((column) =>
+      reliefWaterSurfaceColor(byColumn.get(column)!)
     );
-    expect(reliefWaterOpacity(byColumn.get(1)!)).toBeLessThan(
-      reliefWaterOpacity(byColumn.get(2)!),
-    );
+    expect(colors.every((color, index) => {
+      expectRecognizablyBlue(color, `sensory band ${index}`);
+      return true;
+    })).toBe(true);
+    expect(brightness(colors[0]!)).toBeLessThan(brightness(colors[1]!));
+    expect(brightness(colors[1]!)).toBeLessThan(brightness(colors[2]!));
+    expect(brightness(colors[2]!)).toBeLessThan(brightness(colors[3]!));
   });
 
   it("renders currently seen uncharted water without retaining it outside sight", () => {
@@ -194,5 +231,66 @@ describe("Relief water material batches", () => {
     });
     expect(remoteMaterial(0.08, 1)?.band).toBe("shallows");
     expect(remoteMaterial(0.96, 1)?.band).toBe("deep");
+  });
+
+  it("keeps every biome, climate extreme, tide, and sensory band in the blue family", () => {
+    const biomes: readonly BiomeId[] = [
+      "tide-channel",
+      "brine-flat",
+      "reed-marsh",
+      "rain-meadow",
+      "sun-meadow",
+      "wind-ridge",
+      "glimmerfen",
+    ];
+    const climates = [
+      { rainfall: 0, heat: 0, salinity: 0, exposure: 0, magicalWater: 0 },
+      { rainfall: 1, heat: 1, salinity: 1, exposure: 1, magicalWater: 1 },
+    ] as const;
+    const depths = [0.2, 0.5, 0.9] as const;
+    const visibilityBands = [1 / 16, 0.25, 0.5, 0.75, 1] as const;
+    const tides = [0, 0.5, 1] as const;
+
+    for (const biome of biomes) {
+      for (const biomeClimate of climates) {
+        for (const waterDepth of depths) {
+          for (const currentVisibility of visibilityBands) {
+            for (const tide of tides) {
+              const material = buildReliefWaterMaterialBatches(grid([tile({
+                biome,
+                climate: biomeClimate,
+                waterDepth,
+                currentVisibility,
+                currentDetailVisibility: 1,
+              })]), tide)[0]?.material;
+              if (!material) throw new Error("visible water fixture produced no material");
+              const color = reliefWaterSurfaceColor(material);
+              expectRecognizablyBlue(
+                color,
+                `${biome} depth ${waterDepth} visibility ${currentVisibility} tide ${tide}`,
+              );
+              expect(reliefWaterOpacity(material)).toBe(255);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("uses the same neutral blue for unsounded biome water regardless of raw depth", () => {
+    const color = (waterDepth: number) => {
+      const material = buildReliefWaterMaterialBatches(grid([tile({
+        biome: "sun-meadow",
+        climate,
+        waterDepth,
+        currentVisibility: 1,
+        currentDetailVisibility: 0,
+        depthKnown: 0,
+      })]), 0.5)[0]?.material;
+      if (!material) throw new Error("unsounded water fixture produced no material");
+      return reliefWaterSurfaceColor(material);
+    };
+    expect(color(0.05)).toBe(color(0.98));
+    expectRecognizablyBlue(color(0.05), "unsounded neutral water");
   });
 });

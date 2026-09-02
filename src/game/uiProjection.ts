@@ -3,9 +3,11 @@ import {
   STRAND_AUTOMATION_THRESHOLD,
   WORLD_WIDTH,
   type ContractState,
+  type ResidentState,
   type SimEvent,
   type WorldView,
 } from "../sim/types";
+import { residentKnowsFact } from "../sim/npcIdentity";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
 import { regionLocalToGlobalTile } from "../sim/regions";
@@ -22,6 +24,7 @@ import type {
   ContractUIView,
   KitUIView,
   NavigationUIView,
+  ResidentAboutUIView,
   SaveWarningUIView,
   SettlementInspectorUIView,
   TideweftUIView,
@@ -90,6 +93,9 @@ import {
   isCurrentPerceptionSnapshot,
   projectAdriftView,
   projectPerception,
+  projectResidentRoutePosition,
+  projectResidentWorldPosition,
+  RESIDENT_CONVERSATION_RANGE_TILES,
   type AdriftProjectionControl,
 } from "./projection";
 import type { TraversalFeedbackState } from "./traversalFeedback";
@@ -98,6 +104,7 @@ import { eventSettlementLocusIds } from "./eventObservation";
 export interface UIProjectionOptions {
   /** Full compatibility economy used for names, Promises, people, routes, and events. */
   readonly economyWorld?: WorldView;
+  readonly selectedResidentId?: number | null;
   readonly fieldResourceCatalog?: FieldResourceCatalog;
   readonly fieldResourceEcology?: FieldResourceEcologyState;
   readonly saveWarning?: SaveWarningUIView;
@@ -117,6 +124,112 @@ export interface UIProjectionOptions {
   readonly perception?: PerceptionResult;
   /** Direct physical feedback becomes an observed system entry, not overhead prose. */
   readonly traversalFeedback?: TraversalFeedbackState;
+}
+
+function residentConditionLabels(resident: ResidentState): string[] {
+  const labels: string[] = [];
+  if (resident.condition.wetness >= 660_000) labels.push("Soaked");
+  else if (resident.condition.wetness >= 260_000) labels.push("Wet");
+  if (resident.condition.coldStress >= 660_000) labels.push("Cold");
+  else if (resident.condition.coldStress >= 300_000) labels.push("Cool");
+  if (resident.condition.exhaustion >= 680_000) labels.push("Tired");
+  if (resident.condition.sheltering) labels.push("Holding for weather");
+  if (labels.length === 0) labels.push("Physically steady");
+  return labels;
+}
+
+function observableResidentEmotion(resident: ResidentState): string {
+  switch (resident.condition.emotion) {
+    case "afraid": return "Appears frightened";
+    case "worried": return "Appears worried";
+    case "tired": return "Appears tired";
+    case "relieved": return "Appears relieved";
+    case "focused": return "Appears focused";
+    case "content": return "Appears calm";
+  }
+}
+
+function projectResidentAbout(
+  spatialWorld: WorldView,
+  economyWorld: WorldView,
+  player: PlayerState,
+  perception: PerceptionResult | undefined,
+  residentId: number | null | undefined,
+): ResidentAboutUIView | undefined {
+  if (residentId === null || residentId === undefined) return undefined;
+  const resident = economyWorld.residents.find((candidate) => candidate.id === residentId);
+  if (!resident) return undefined;
+  const route = projectResidentWorldPosition(spatialWorld, resident, TILE_UNITS);
+  if (!route) return undefined;
+  if (perception && perception.detailVisibilityGrades[route.tileIndex] !== VISIBILITY_DIRECT) return undefined;
+
+  const knowsName = residentKnowsFact(resident.playerKnowledge, "name");
+  const known = [] as ResidentAboutUIView["known"][number][];
+  if (knowsName) known.push({ label: "Name", value: resident.name });
+  if (residentKnowsFact(resident.playerKnowledge, "occupation")) {
+    known.push({ label: "Occupation", value: titleCase(resident.role) });
+  }
+  if (residentKnowsFact(resident.playerKnowledge, "home")) {
+    known.push({
+      label: "Home",
+      value: economyWorld.settlements.find((settlement) => settlement.id === resident.homeSettlementId)?.name
+        ?? "An unknown settlement",
+    });
+  }
+
+  const mark = resident.identity.appearance.mark;
+  const visibleGear = resident.identity.visibleGear.map((gear) => titleCase(gear.replaceAll("-", " "))).join(", ");
+  const distance = Math.hypot(player.x - route.position.x, player.y - route.position.y);
+  const closeEnoughToGreet = distance <= RESIDENT_CONVERSATION_RANGE_TILES * TILE_UNITS;
+  const canGreet = closeEnoughToGreet && player.mode !== "swept";
+  const age = resident.identity.age === "young-adult"
+    ? "Young adult"
+    : resident.identity.age === "older-adult"
+      ? "Older adult"
+      : "Adult";
+  const observed: ResidentAboutUIView["observed"][number][] = [
+    { label: "Height", value: `Approx. ${Math.round(resident.identity.heightCm / 5) * 5} cm` },
+    { label: "Build", value: titleCase(resident.identity.build) },
+    { label: "Current state", value: residentConditionLabels(resident).join(" · "), tone: resident.condition.coldStress >= 660_000 ? "warning" : "neutral" },
+    { label: "Emotion", value: observableResidentEmotion(resident) },
+    {
+      label: "Behavior",
+      value: resident.condition.sheltering
+        ? "Holding position in unsafe weather"
+        : resident.activeContractId !== null
+          ? "Carrying a Promise"
+          : resident.location.kind === "route"
+            ? "Traveling nearby"
+            : "Waiting nearby",
+    },
+  ];
+  if (mark !== "none") observed.splice(2, 0, { label: "Distinguishing mark", value: titleCase(mark.replaceAll("-", " ")) });
+  if (visibleGear) observed.push({ label: "Visible gear", value: visibleGear });
+
+  const level = resident.playerKnowledge.level;
+  return {
+    id: String(resident.id),
+    heading: knowsName
+      ? resident.name
+      : resident.location.kind === "route"
+        ? "UNKNOWN PORTER"
+        : "UNKNOWN RESIDENT",
+    identityLine: `Human · ${age}`,
+    knowledgeLabel: level === "acquainted" ? "Acquainted" : level === "recognized" ? "Recognized" : "Unfamiliar",
+    observed,
+    known,
+    ...(level === "acquainted"
+      ? {}
+      : {
+          actionLabel: "GREET" as const,
+          actionDisabled: !canGreet,
+          actionHint: player.mode === "swept"
+            ? "Reach footing before speaking."
+            : canGreet
+              ? "Speak without pausing the world."
+              : `Move within ${RESIDENT_CONVERSATION_RANGE_TILES} tiles to speak.`,
+        }),
+  };
 }
 
 export function projectUIView(
@@ -150,6 +263,13 @@ export function projectUIView(
     )
     ? selectedSettlementCandidate
     : undefined;
+  const selectedResident = projectResidentAbout(
+    world,
+    economy,
+    player,
+    perception,
+    options.selectedResidentId,
+  );
   const playerSettlementId = settlementAtPlayer(player, world);
   const localOffers = playerSettlementId === null
     ? []
@@ -205,6 +325,7 @@ export function projectUIView(
       player.pace,
       options.bracing === true,
       session.selectedSettlementId ?? "none",
+      options.selectedResidentId ?? "no-resident",
       session.trackedContractId ?? "none",
       session.nextAnnouncementId,
       session.titleVisible,
@@ -296,6 +417,7 @@ export function projectUIView(
           ),
         }
       : {}),
+    ...(selectedResident ? { selectedResident } : {}),
     chronicle: projectObservedChronicle(economy, world, player, session, options, perception),
     title: {
       visible: session.titleVisible,
@@ -1002,7 +1124,13 @@ function projectContract(
   return {
     id: String(contract.id),
     title: `${contract.quantity} ${titleCase(contract.resource)} · ${origin} → ${destination}`,
-    ...(requester ? { requester: `Requested by ${requester.name} · ${titleCase(requester.role)}` } : {}),
+    ...(requester
+      ? {
+          requester: residentKnowsFact(requester.playerKnowledge, "name")
+            ? `Requested by ${requester.name} · ${titleCase(requester.role)}`
+            : "Requested by a local resident",
+        }
+      : {}),
     summary: `${destination} reports a real shortage; ${origin} can spare ${contract.quantity}.`,
     origin,
     destination,
@@ -1402,9 +1530,16 @@ function projectSettlement(
     })),
     residents: residents.slice(0, 8).map((resident) => ({
       id: String(resident.id),
-      name: resident.name,
-      role: titleCase(resident.role),
-      state: titleCase(resident.intention),
+      name: residentKnowsFact(resident.playerKnowledge, "name")
+        ? resident.name
+        : "Unknown resident",
+      role: residentKnowsFact(resident.playerKnowledge, "occupation")
+        ? titleCase(resident.role)
+        : "Unintroduced",
+      ...(resident.location.kind === "settlement"
+        && resident.location.settlementId === settlement.id
+        ? { state: "Present" }
+        : {}),
     })),
     connections: connectionTrust.map((trust) => {
       const route = world.routes.find(
@@ -1564,7 +1699,7 @@ function projectObservedChronicle(
   }
 
   const perceivedEvents = economy.events
-    .filter((event) => eventWasObserved(event, economy, localWorld, player, perception))
+    .filter((event) => eventWasObserved(event, economy, player, perception))
     .slice(-24)
     .reverse()
     .map((event) => projectChronicle(event, economy));
@@ -1615,13 +1750,13 @@ function projectSystemAnnouncement(
 function eventWasObserved(
   event: SimEvent,
   economy: WorldView,
-  localWorld: WorldView,
   player: PlayerState,
   perception: PerceptionResult | undefined,
 ): boolean {
   // Legacy projections intentionally preserve the historical full ledger.
   if (!perception) return true;
   if (event.type === "world-created" || event.type === "weather-changed") return true;
+  if (event.data.playerObserved === true) return true;
 
   const commandId = event.data.commandId;
   if (typeof commandId === "string" && commandId.startsWith("player-")) return true;
@@ -1635,9 +1770,45 @@ function eventWasObserved(
     && economy.contracts.find((contract) => contract.id === event.subjectId)?.carrierKind === "player"
   ) return true;
 
+  return false;
+}
+
+/**
+ * Tests a newly emitted event at its event-time locus. The runtime persists
+ * the resulting observation bit immediately, so history is never inferred
+ * later from wherever an actor happens to stand.
+ */
+export function eventIsDirectlyObservableAtLocus(
+  event: SimEvent,
+  economy: WorldView,
+  localWorld: WorldView,
+  perception: PerceptionResult,
+): boolean {
+  const routeId = event.data.eventRouteId;
+  const routeProgress = event.data.eventRouteProgress;
+  if (
+    event.subjectId !== null
+    && typeof routeId === "number"
+    && Number.isSafeInteger(routeId)
+    && typeof routeProgress === "number"
+    && Number.isSafeInteger(routeProgress)
+  ) {
+    const resident = economy.residents.find((candidate) => candidate.id === event.subjectId);
+    if (resident) {
+      const atEvent = {
+        ...resident,
+        location: { kind: "route" as const, routeId, progress: routeProgress },
+      };
+      const route = projectResidentRoutePosition(localWorld, atEvent, TILE_UNITS);
+      if (route && perception.detailVisibilityGrades[route.tileIndex] === VISIBILITY_DIRECT) {
+        return true;
+      }
+    }
+  }
+
   for (const settlementId of eventSettlementLocusIds(event, economy)) {
-    const localSettlement = localWorld.settlements.find((settlement) => settlement.id === settlementId);
-    if (localSettlement && perception.detailVisibilityGrades[localSettlement.tileIndex] === VISIBILITY_DIRECT) {
+    const settlement = localWorld.settlements.find((candidate) => candidate.id === settlementId);
+    if (settlement && perception.detailVisibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT) {
       return true;
     }
   }
@@ -1693,6 +1864,10 @@ function eventTitle(type: SimEvent["type"]): string {
     case "project-completed": return "Civic work complete";
     case "weather-changed": return "The weather turns";
     case "knowledge-shared": return "Knowledge carried";
+    case "resident-observed": return "A traveler noticed";
+    case "resident-introduced": return "Names exchanged";
+    case "resident-sheltered": return "A porter holds the route";
+    case "resident-resumed": return "A porter moves again";
     case "command-rejected": return "The world answered clearly";
   }
 }
@@ -1720,7 +1895,10 @@ function eventDetail(event: SimEvent, world: WorldView): string {
       return `${numberData("quantity") ?? contract?.quantity ?? 0} ${titleCase(String(event.data.resource ?? contract?.resource ?? "supplies"))} left ${settlement("originSettlementId")} in trusted hands.`;
     case "contract-departed": {
       const residentId = numberData("residentId");
-      const porter = world.residents.find((resident) => resident.id === residentId)?.name ?? "A local porter";
+      const resident = world.residents.find((candidate) => candidate.id === residentId);
+      const porter = resident && residentKnowsFact(resident.playerKnowledge, "name")
+        ? resident.name
+        : "A local porter";
       const routeHops = numberData("routeHops") ?? contract?.porterRouteIds.length ?? 1;
       const origin = contract ? settlementName(world, contract.originSettlementId) : "the origin harbor";
       const destination = contract ? settlementName(world, contract.destinationSettlementId) : "the receiving harbor";
@@ -1730,7 +1908,10 @@ function eventDetail(event: SimEvent, world: WorldView): string {
     }
     case "contract-fulfilled": {
       const beneficiaryId = numberData("beneficiaryResidentId");
-      const beneficiary = world.residents.find((resident) => resident.id === beneficiaryId)?.name ?? "People there";
+      const resident = world.residents.find((candidate) => candidate.id === beneficiaryId);
+      const beneficiary = resident && residentKnowsFact(resident.playerKnowledge, "name")
+        ? resident.name
+        : "People there";
       const destination = settlement("destinationSettlementId");
       const contribution = numberData("projectContribution") ?? 0;
       const grade = titleCase(String(event.data.grade ?? contract?.deliveryGrade ?? "arrived"));
@@ -1774,6 +1955,34 @@ function eventDetail(event: SimEvent, world: WorldView): string {
       return fromId === subjectId
         ? `${from} sent its sourced ${resource} count to ${to}. The report arrived ${age}m old with its origin still attached.`
         : `${from} relayed ${subject}'s sourced ${resource} count to ${to}. Another hop kept the original subject attached instead of turning the fact into an anonymous rumor.`;
+    }
+    case "resident-observed":
+      return "You noticed an individual porter nearby. What can be seen is separate from what they have told you.";
+    case "resident-introduced": {
+      const resident = event.subjectId === null
+        ? undefined
+        : world.residents.find((candidate) => candidate.id === event.subjectId);
+      return resident
+        ? `${resident.name} introduced themself; their name, work, and home are now remembered.`
+        : "A nearby porter introduced themself.";
+    }
+    case "resident-sheltered": {
+      const resident = event.subjectId === null
+        ? undefined
+        : world.residents.find((candidate) => candidate.id === event.subjectId);
+      const subject = resident && residentKnowsFact(resident.playerKnowledge, "name")
+        ? resident.name
+        : "The porter";
+      return `${subject} held position because the live weather became unsafe for their condition and equipment.`;
+    }
+    case "resident-resumed": {
+      const resident = event.subjectId === null
+        ? undefined
+        : world.residents.find((candidate) => candidate.id === event.subjectId);
+      const subject = resident && residentKnowsFact(resident.playerKnowledge, "name")
+        ? resident.name
+        : "The porter";
+      return `${subject} moved again after the weather and cold pressure eased.`;
     }
     case "command-rejected":
       return `Nothing was silently lost: ${String(event.data.reason ?? "that action no longer fit the world state")}.`;

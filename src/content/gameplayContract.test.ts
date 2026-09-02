@@ -13,7 +13,7 @@ describe("the authoritative TIDEWEFT gameplay contract", () => {
     expect(GAMEPLAY_CONTRACT_ID).toBe("challenging-hard");
     expect(GAMEPLAY_CONTRACT_NAME).toBe("A CHALLENGING HARD");
     expect(GAMEPLAY_CONTRACT.difficultyCount).toBe(1);
-    expect(GAMEPLAY_CONTRACT_VERSION).toBe(15);
+    expect(GAMEPLAY_CONTRACT_VERSION).toBe(16);
   });
 
   it("keeps accessibility out of simulation and reward semantics", () => {
@@ -38,6 +38,10 @@ describe("the authoritative TIDEWEFT gameplay contract", () => {
       "weather",
       "combat",
       "wildlife",
+      "npcs",
+      "identity",
+      "inspection",
+      "knowledge",
       "region-travel",
       "saving",
       "routes",

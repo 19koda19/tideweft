@@ -81,9 +81,22 @@ function fulfillmentEvent(world: WorldState, contractId: number) {
   );
 }
 
+function stripLegacyNpcFields(world: Record<string, unknown>): void {
+  const settlements = world.settlements as Array<Record<string, unknown>>;
+  const residents = world.residents as Array<Record<string, unknown>>;
+  for (const settlement of settlements) delete settlement.originKey;
+  for (const resident of residents) {
+    delete resident.identity;
+    delete resident.condition;
+    delete resident.playerKnowledge;
+    delete resident.memories;
+  }
+}
+
 function alphaSaveText(world: WorldState): string {
   const legacyWorld = structuredClone(world) as unknown as Record<string, unknown>;
   delete legacyWorld.choirs;
+  stripLegacyNpcFields(legacyWorld);
   const meta = legacyWorld.meta as Record<string, unknown>;
   meta.saveFormatVersion = 1;
   meta.rulesVersion = "tideweft-sim/2";
@@ -97,9 +110,11 @@ function alphaSaveText(world: WorldState): string {
 }
 
 function choirRulesSaveText(world: WorldState): string {
-  const priorWorld = structuredClone(world);
-  priorWorld.meta.saveFormatVersion = 2;
-  priorWorld.meta.rulesVersion = "tideweft-sim/3";
+  const priorWorld = structuredClone(world) as unknown as Record<string, unknown>;
+  stripLegacyNpcFields(priorWorld);
+  const priorMeta = priorWorld.meta as Record<string, unknown>;
+  priorMeta.saveFormatVersion = 2;
+  priorMeta.rulesVersion = "tideweft-sim/3";
   return JSON.stringify({
     format: "tideweft-world",
     saveFormatVersion: 2,

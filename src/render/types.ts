@@ -401,9 +401,22 @@ export type PorterState = "traveling" | "resting" | "helping" | "waiting" | "str
 export interface PorterView {
   readonly id: string;
   readonly name?: string;
+  /** Always observable at direct-detail range; never substitutes for a learned name. */
+  readonly quickLabel?: string;
   readonly position: WorldPoint;
   readonly facing: number;
   readonly state: PorterState;
+  readonly appearance?: {
+    readonly heightScale: number;
+    readonly build: "slight" | "lean" | "average" | "broad" | "stocky";
+    readonly palette: "silt" | "reed" | "tide" | "ember" | "lichen" | "storm";
+    readonly wetness: number;
+  };
+  readonly conditionLabels?: readonly string[];
+  /** Restrained, directly observable emotion punctuation; never a raw meter. */
+  readonly emotionMark?: ":)" | ":|" | ":S" | ":[" | "=]";
+  /** Directly witnessed state speech only; absent actors never emit this view data. */
+  readonly speech?: string;
   readonly progress?: number;
   readonly destinationId?: string;
   readonly cargoColor?: string;

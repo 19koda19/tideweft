@@ -223,6 +223,25 @@ export interface ResidentSummaryUIView {
   readonly state?: string;
 }
 
+export interface ResidentAboutFactUIView {
+  readonly label: string;
+  readonly value: string;
+  readonly tone?: "neutral" | "warning" | "danger" | "good";
+}
+
+/** A compact, non-pausing, pane-free disclosure of witnessed/learned facts. */
+export interface ResidentAboutUIView {
+  readonly id: string;
+  readonly heading: string;
+  readonly identityLine: string;
+  readonly knowledgeLabel: "Unfamiliar" | "Recognized" | "Acquainted";
+  readonly observed: readonly ResidentAboutFactUIView[];
+  readonly known: readonly ResidentAboutFactUIView[];
+  readonly actionLabel?: "GREET";
+  readonly actionDisabled?: boolean;
+  readonly actionHint?: string;
+}
+
 export interface ConnectionUIView {
   readonly id: string;
   readonly routeId?: string;
@@ -377,6 +396,7 @@ export interface TideweftUIView {
   readonly objective?: ObjectiveUIView;
   readonly contracts: readonly ContractUIView[];
   readonly selectedSettlement?: SettlementInspectorUIView;
+  readonly selectedResident?: ResidentAboutUIView;
   readonly chronicle: readonly ChronicleEntryUIView[];
   readonly title: TitleOverlayUIView;
   readonly quietHour?: QuietHourUIView;
@@ -411,6 +431,11 @@ export type TideweftUICommand =
       readonly type: "settlement";
       readonly action: "focus" | "close";
       readonly settlementId?: string;
+    }
+  | {
+      readonly type: "resident";
+      readonly action: "greet" | "close";
+      readonly residentId?: string;
     }
   | { readonly type: "quiet-hour"; readonly action: "open" | "continue" | "finish" }
   | { readonly type: "open-title" }

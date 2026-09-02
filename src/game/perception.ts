@@ -44,7 +44,10 @@ export const DEFAULT_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.free
   // actor can be identified. The long axis is deliberately forward-only: it
   // gives route-scale context without turning the player's rear awareness into
   // an omnidirectional reveal.
-  directSightRange: 42,
+  // The floating regional window is roughly 82x50 tiles. Fifty-two tiles lets
+  // an unobstructed forward view carry terrain shape cleanly to that window's
+  // horizon from ordinary play positions, while weather still contracts it.
+  directSightRange: 52,
   forwardConeRadians: (8 * Math.PI) / 9,
 });
 
@@ -60,7 +63,7 @@ export const DEFAULT_DETAIL_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Obje
 });
 
 /** Soft outer terrain band; detail disclosure remains crisp and shorter. */
-export const TERRAIN_SIGHT_DISTANCE_FEATHER = 16 as const;
+export const TERRAIN_SIGHT_DISTANCE_FEATHER = 18 as const;
 export const TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS = Math.PI / 9;
 export const TERRAIN_CLOSE_DISTANCE_FEATHER = 2 as const;
 export const TERRAIN_OCCLUSION_FRONTIER_FEATHER = 3 as const;

@@ -80,13 +80,13 @@ Each seed creates:
 
 - A 96 × 72 seeded multi-octave gradient Perlin elevation/moisture/roughness field with five authoritative terrain families, tidal water depth, and seven derived regional identities: Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen. Stored Alpha 0.1 worlds retain their original 64 × 48 serialized field.
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
-- 42 named residents with a role, resolve/empathy/curiosity traits, food/rest/belonging needs, local relationships, an intention, and a world location.
+- 42 compatibility-region human residents with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, an intention, and a world location.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
 - Potential routes between every settlement pair, with only sufficiently strong and sound corridors active for automation.
 
-This is selective simulation. A resident detail earns its place by changing a visible intention, contract, porter choice, settlement state, or story fact.
+This is selective simulation. A resident detail earns its place by changing a visible intention, contract, porter choice, settlement state, or story fact. The player does not receive those facts automatically: direct sight exposes only reasonable physical observation, while a nearby GREET adds name, occupation, and home to persistent knowledge.
 
 ## Autonomous strand network
 
@@ -142,7 +142,11 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 - Perishable food loses freshness gently during travel; a completed cache suspends that decay while the player is sheltered at its harbor.
 - A charge-gated Loom pulse reveals nearby permanent chart information and bathymetry; sounded depth also informs pointer-path cost.
 - Directly perceived or discovered wet surface shows sparse streamlines, foam, and local water voice in both Chart and Relief. SOUND / SCAN adds current-direction arrowheads and records bathymetry; ordinary surface character can read calm or rough without revealing the exact unsounded depth or effort value.
+- In clear air, route-scale terrain reaches toward 52 tiles, remains fully legible through 34, and feathers across the final 18. Exact people, parcels, resources, labels, water detail, actions, and hit targets stay inside the 10-tile detail field.
 - Turning away does not make terrain snap to black like an instantaneous memory loss. A brief terrain-only impression eases into dim durable Chart memory, or into darkness where the ground was never charted, and follows a quick Chart/Relief switch. People, parcels, wildlife, resources, exact water detail, labels, actions, and hit targets leave immediately with live perception; the impression never becomes saved knowledge or an interaction shortcut.
+- Clicking or tapping a directly visible compatibility-region person opens non-pausing ABOUT text. OBSERVED summarizes approximate body, visible gear, condition, behavior, and apparent emotion; KNOWN contains only learned facts. A close, grounded GREET records one introduction rather than revealing hidden scores or farming repeated relationship progress.
+- Weather can make an assigned porter wet, cold, exhausted, worried, afraid, or temporarily hold position. Small text emoticons, state speech, and behavior communicate those changes; exact emotion values remain private and do not modify the player's difficulty.
+- Player-facing EVENTS includes resident events only when the player caused them or could directly observe their event-time locus. The authoritative history remains complete without granting later knowledge of distant activity.
 - Pointer paths price the same Wayknot fields as manual travel. The placed aids persist in saves and can always be reclaimed; they never become an upgrade currency or upkeep chore.
 - An active Tide Harp adds its three knot-centered echoes without changing cargo, settlement stock, route history, or the simulation ledger. Overlapping selected triangles still grant only one Harp recharge benefit at the courier's tile.
 - The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
@@ -175,7 +179,7 @@ There is no manual in-play pause. Quiet Hour immediately saves, halts the simula
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same sixteen-topic source covering every current control, physical Promises and parcels, information-only reports, terrain-responsive footing/falls, sweep recovery, cargo care, biomes/tools, Wayknots/Harps, routes/projects, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same eighteen-topic source covering every current control, physical Promises and parcels, information-only reports, terrain-responsive footing/falls, sweep recovery, cargo care, biomes/tools, Wayknots/Harps, routes/projects, people/ABOUT, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
 
 The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
@@ -190,6 +194,7 @@ The current build has procedural sound but does not yet expose separate volume c
 Implemented now:
 
 - the seven-settlement/42-resident deterministic world;
+- stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, direct-sight selection, and non-pausing ABOUT for those 42 compatibility-region humans;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;
 - authoritative active/multi-hop logistics;
@@ -207,6 +212,7 @@ Implemented now:
 
 Expansion runway, not current behavior:
 
+- universal procedural humans beyond region `(0,0)`; NPC promotion and coarse streaming; dogs, bears, birds, deer, ownership, companions, social networks, physical NPC inventory, negotiation, deterrence, and actor-to-actor ecology;
 - runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
 - regional streaming and distant simulation for physical parcels beyond compatibility region `(0,0)`, plus living mangrove/bramble snag integration and delivery compensation that prices recovered condition;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;

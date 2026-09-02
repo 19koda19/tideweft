@@ -400,6 +400,47 @@ function alphaWorldSaveText(world: WorldState): string {
 }
 
 describe("perpetual new worlds", () => {
+  it("opens a directly selected resident ABOUT and completes GREET without pausing play", async () => {
+    const runtime = await createTideweftRuntime(new MemoryRepository());
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "resident interaction runtime",
+      posture: "journey",
+      sessionShape: "wander",
+    });
+
+    const porter = runtime.getRenderView().porters[0];
+    expect(porter).toBeDefined();
+    if (!porter) throw new Error("starting harbor should expose a resident in direct sight");
+
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "porter",
+      id: porter.id,
+      point: porter.position,
+    });
+
+    expect(runtime.getUIView().selectedResident).toMatchObject({
+      id: porter.id,
+      knowledgeLabel: "Unfamiliar",
+      actionLabel: "GREET",
+    });
+    expect(runtime.getRenderView().paused).toBe(false);
+
+    advancePlayerSteps(runtime, 10);
+    expect(runtime.getUIView().selectedResident?.knowledgeLabel).toBe("Recognized");
+    runtime.dispatchUI({ type: "resident", action: "greet", residentId: porter.id });
+    advancePlayerSteps(runtime, 10);
+
+    expect(runtime.getUIView().selectedResident).toMatchObject({
+      id: porter.id,
+      knowledgeLabel: "Acquainted",
+    });
+    expect(runtime.getUIView().selectedResident?.actionLabel).toBeUndefined();
+    expect(runtime.getRenderView().paused).toBe(false);
+    runtime.destroy();
+  });
+
   it("routes the title flourish through the runtime-owned soundscape", async () => {
     const runtime = await createTideweftRuntime(new MemoryRepository());
 
@@ -2260,6 +2301,11 @@ describe("runtime clarity guards", () => {
     const carriedWorld = deserializeWorld(carriedSave.world);
     const carriedContract = carriedWorld.contracts.find((contract) => contract.id === contractId);
     if (!carriedContract) throw new Error("retried contract disappeared");
+    const unknownRequester = carriedWorld.residents.find(
+      ({ id }) => id === carriedContract.requesterResidentId,
+    );
+    if (!unknownRequester) throw new Error("retried contract requester disappeared");
+    expect(unknownRequester.playerKnowledge.level).toBe("unfamiliar");
     expect(carriedContract.status).toBe("in-transit");
     expect(carriedContract.carrierKind).toBe("player");
     expect(carriedContract.cargoQuantity).toBe(carriedContract.quantity);
@@ -2306,9 +2352,12 @@ describe("runtime clarity guards", () => {
     expect(atDestination.getUIView().announcement?.message).toContain("receiving the cargo");
     advancePlayerSteps(atDestination, 10);
     expect(atDestination.getUIView().player.cargoLoad).toBe(0);
+    expect(atDestination.getUIView().announcement?.message).not.toContain(unknownRequester.name);
     await atDestination.save();
-    const deliveredWorld = deserializeWorld(decodeGameSave(repository.snapshot()).world);
+    const deliveredSave = decodeGameSave(repository.snapshot());
+    const deliveredWorld = deserializeWorld(deliveredSave.world);
     expect(deliveredWorld.contracts.find((contract) => contract.id === contractId)?.status).toBe("fulfilled");
+    expect(deliveredSave.session.sessionChanges.join("\n")).not.toContain(unknownRequester.name);
     expectConserved(deliveredWorld);
     atDestination.destroy();
   });

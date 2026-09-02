@@ -176,6 +176,52 @@ describe("deterministic headless world", () => {
     assertWorldInvariants(world);
   });
 
+  it("hands a delivery to someone physically present instead of feeding its absent requester", () => {
+    const world = createWorld("a promise waits even when its requester travels");
+    const contract = requireContract(world);
+    const origin = world.settlements.find(({ id }) => id === contract.originSettlementId);
+    const destination = world.settlements.find(({ id }) => id === contract.destinationSettlementId);
+    const route = world.routes.find(({ id }) => id === contract.routeId);
+    const requester = world.residents.find(({ id }) => id === contract.requesterResidentId);
+    if (!origin || !destination || !route || !requester) throw new Error("broken requester fixture");
+    requester.location = { kind: "route", routeId: route.id, progress: FIXED_POINT / 2 };
+    const requesterNeedsBefore = structuredClone(requester.needs);
+    const totalsBefore = totalsIncludingCargo(world);
+
+    stepWorld(world, [{
+      id: "accept-with-requester-away",
+      type: "accept-contract",
+      carrier: "player",
+      contractId: contract.id,
+    }]);
+    stepWorld(world, [{
+      id: "pickup-with-requester-away",
+      type: "pickup-contract",
+      contractId: contract.id,
+      originSettlementId: origin.id,
+    }]);
+    const trace = route.fromSettlementId === origin.id ? [...route.path] : [...route.path].reverse();
+    stepWorld(world, [{
+      id: "deliver-with-requester-away",
+      type: "deliver-contract",
+      contractId: contract.id,
+      destinationSettlementId: destination.id,
+      condition: 800_000,
+      trace,
+    }]);
+
+    const event = [...world.events].reverse().find(
+      ({ type, subjectId }) => type === "contract-fulfilled" && subjectId === contract.id,
+    );
+    const beneficiary = world.residents.find(({ id }) => id === event?.data.beneficiaryResidentId);
+    expect(contract.status).toBe("fulfilled");
+    expect(beneficiary?.id).not.toBe(requester.id);
+    expect(beneficiary?.location).toEqual({ kind: "settlement", settlementId: destination.id });
+    expect(requester.needs).toEqual(requesterNeedsBefore);
+    expect(totalsIncludingCargo(world)).toEqual(totalsBefore);
+    assertWorldInvariants(world);
+  });
+
   it("delivers exact cargo after a regional detour without inventing route credit", () => {
     const world = createWorld("regional detour delivery");
     const contract = requireContract(world);

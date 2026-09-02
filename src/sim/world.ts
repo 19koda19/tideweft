@@ -27,6 +27,16 @@ import {
   type WorldState,
 } from "./types";
 import { clampInteger, copyInventory, createEmptyInventory, sumInventories } from "./util";
+import { stableRegionObjectId } from "./regions";
+import {
+  createResidentCondition,
+  createResidentPlayerKnowledge,
+  generateResidentDisplayName,
+  generateResidentIdentity,
+  generateResidentNeeds,
+  generateResidentTraits,
+  residentRelationshipTrust,
+} from "./npcIdentity";
 
 const SETTLEMENT_NAMES = [
   "Latchmere",
@@ -36,64 +46,6 @@ const SETTLEMENT_NAMES = [
   "North Loom",
   "Reedspire",
   "Low Lantern",
-];
-const GIVEN_NAMES = [
-  "Ari",
-  "Bela",
-  "Caro",
-  "Deni",
-  "Edda",
-  "Fenn",
-  "Gale",
-  "Hollis",
-  "Iona",
-  "Jori",
-  "Kest",
-  "Lio",
-  "Mara",
-  "Nell",
-  "Orin",
-  "Pia",
-  "Quill",
-  "Rhea",
-  "Sami",
-  "Tavi",
-  "Una",
-  "Venn",
-  "Wren",
-  "Xara",
-  "Yori",
-  "Zev",
-  "Aster",
-  "Brin",
-  "Celyn",
-  "Dara",
-  "Elian",
-  "Farrow",
-  "Gilda",
-  "Hesper",
-  "Isen",
-  "Junia",
-  "Kel",
-  "Lumen",
-  "Mica",
-  "Nori",
-  "Oriel",
-  "Perri",
-];
-const FAMILY_NAMES = [
-  "Alder",
-  "Brack",
-  "Current",
-  "Dunlin",
-  "Ebb",
-  "Flint",
-  "Gannet",
-  "Heron",
-  "Islet",
-  "Jetty",
-  "Kelp",
-  "Lantern",
 ];
 const ROLES: readonly ResidentRole[] = [
   "fisher",
@@ -264,38 +216,30 @@ function makeResidents(
     const settlement = settlements[settlementIndex];
     if (settlement === undefined) continue;
     for (let localIndex = 0; localIndex < 6; localIndex += 1) {
-      const residentIndex = settlementIndex * 6 + localIndex;
       const id = allocateId(allocator);
-      const givenName = GIVEN_NAMES[residentIndex];
-      const familyIndex = keyedRandomInt(
-        seed,
-        GENERATION_DOMAIN,
-        0,
-        id,
-        12,
-        0,
-        FAMILY_NAMES.length - 1,
-      );
-      const familyName = FAMILY_NAMES[familyIndex];
       const role = ROLES[(localIndex + settlementIndex) % ROLES.length];
-      if (givenName === undefined || familyName === undefined || role === undefined) {
+      if (role === undefined) {
         throw new Error("Missing resident generation template");
       }
+      const identityInput = {
+        seed,
+        originSettlementId: settlement.id,
+        originSettlementKey: settlement.originKey,
+        originActorOrdinal: localIndex,
+        role,
+        originRegion: { x: 0, y: 0 },
+      } as const;
       const resident: ResidentState = {
         id,
-        name: `${givenName} ${familyName}`,
+        name: generateResidentDisplayName(identityInput),
         homeSettlementId: settlement.id,
         role,
-        traits: {
-          resolve: keyedRandomInt(seed, GENERATION_DOMAIN, 0, id, 21, 180_000, 900_000),
-          empathy: keyedRandomInt(seed, GENERATION_DOMAIN, 0, id, 22, 180_000, 900_000),
-          curiosity: keyedRandomInt(seed, GENERATION_DOMAIN, 0, id, 23, 180_000, 900_000),
-        },
-        needs: {
-          food: keyedRandomInt(seed, GENERATION_DOMAIN, 0, id, 31, 120_000, 420_000),
-          rest: keyedRandomInt(seed, GENERATION_DOMAIN, 0, id, 32, 100_000, 460_000),
-          belonging: keyedRandomInt(seed, GENERATION_DOMAIN, 0, id, 33, 80_000, 400_000),
-        },
+        identity: generateResidentIdentity(identityInput),
+        condition: createResidentCondition(identityInput),
+        playerKnowledge: createResidentPlayerKnowledge(),
+        memories: [],
+        traits: generateResidentTraits(identityInput),
+        needs: generateResidentNeeds(identityInput),
         relationships: [],
         intention: "work",
         location: { kind: "settlement", settlementId: settlement.id },
@@ -316,7 +260,18 @@ function makeResidents(
       if (resident === undefined || previousId === undefined || nextId === undefined) continue;
       const relatedIds = previousId === nextId ? [previousId] : [previousId, nextId];
       resident.relationships = relatedIds
-        .map((residentId) => ({ residentId, trust: pairTrust(seed, resident.id, residentId, 44) }))
+        .map((residentId) => {
+          const related = residents.find((candidate) => candidate.id === residentId);
+          if (related === undefined) throw new Error("Missing resident relationship target");
+          return {
+            residentId,
+            trust: residentRelationshipTrust(
+              seed,
+              resident.identity.stableId,
+              related.identity.stableId,
+            ),
+          };
+        })
         .sort((left, right) => left.residentId - right.residentId);
     }
   }
@@ -388,6 +343,7 @@ export function createInitialWorld(seedText: string, pressureMode: PressureMode)
     const recipe = makeRecipe(allocateId(allocator), specialization, index);
     settlements.push({
       id,
+      originKey: stableRegionObjectId(rootSeed, { x: 0, y: 0 }, "settlement", index),
       name,
       tileIndex,
       specialization,

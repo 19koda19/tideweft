@@ -69,11 +69,23 @@ The playable slice uses:
 
 - A 96 × 72 tile field for new worlds, generated from seeded gradient Perlin/fBm elevation, moisture, channel meander, and roughness. It carries authoritative terrain, live tidal water depth, traversal cost, trace strength, player discovery, and a separate bathymetry mask. Migrated Alpha 0.1 saves preserve their serialized 64 × 48 field.
 - Seven specialized settlements with five-resource inventories, recipes, stress, inter-settlement trust, sourced knowledge, and one civic project each.
-- 42 named residents with roles, traits, needs, relationships, intention, location, and optional active contract.
+- 42 compatibility-region human residents with immutable semantic origin identity, deterministic display identity, roles, traits, needs, relationships, condition, bounded memories, player knowledge, intention, location, and optional active contract.
 - Shortage-derived contracts with a named requester, real origin stock, destination need, due tick, carrier, cargo conservation, condition grade, and traveled trace cost.
 - A complete set of potential inter-settlement corridors. Only routes above the strand-strength and condition threshold participate in autonomous service.
 
 Presented prose is derived from structured facts. UI copy may explain a cause, but it cannot invent stock, a person, a project contribution, or a route event that the simulation did not record.
+
+## Compatibility human identity and ABOUT boundary
+
+`src/sim/npcIdentity.ts` generates the current human slice from root seed, signed origin region, immutable settlement origin key, immutable actor ordinal, and origin role. A person's stable ID and display identity deliberately exclude the monotonic runtime entity ID and current household-array position. Generation-v1 freezes 226 normalized given names and 206 normalized family names behind deterministic golden tests; later dictionary changes require a new generation version, while already persisted people retain their exact identity. Curated temperament pairs avoid simple contradictions, while occupation-shaped gear and skills, age, height, build, appearance, and one or two background facts provide bounded variation.
+
+The simulation persists three separate layers: immutable identity, dynamic condition, and player knowledge. Traveling humans accumulate wetness, cold pressure, and exhaustion from live weather, gear, and relevant skills. Event-caused emotion can delay an assigned route through a weather hold; the hold is not yet physical shelter pathfinding. `observe-resident` moves a stranger only to recognized. `greet-resident` requires the exact prior observation tick and records one bounded memory before revealing only name, occupation, and home. Numeric entity IDs and raw need, skill, temperament, or emotion values never enter ordinary ABOUT copy.
+
+The game projection places residents on non-deep tiles around their current compatibility settlement and interpolates assigned porters along their real route. Both positions pass through the same ten-tile exact-detail perception mask before rendering, hit testing, ABOUT, or greeting. Chart and Relief emit the same typed resident command and maintain a minimum 44-pixel selection diameter. ABOUT is a pointer-local, non-modal DOM region: it never pauses the simulation, disappears when exact sight is lost, and leaves transparent space available to the world canvas.
+
+Actor events are stamped at emission time only when their recorded route/settlement locus was directly observable. That persisted observation fact, player-caused commands, and a very small global-event allowlist feed the player chronicle. A porter walking into view later cannot reveal an unwitnessed historical event retroactively. Full causal events remain in authoritative simulation state.
+
+This is not the universal NPC architecture yet. Generated people beyond compatibility region `(0,0)`, persistence promotion tiers, dogs, bears, birds, deer, ownership and social networks, physical NPC inventory, actor-to-actor perception, negotiation, deterrence, and companion behavior remain explicit later slices.
 
 ## Derived biome/climate projection
 
@@ -158,7 +170,7 @@ The candidate presents these jobs separately from physical Promises. Report cont
 
 There are two nested versions:
 
-1. `tideweft-world` contains the save-format version, rules version, checksum, and canonical `WorldState`. Deserialization checks shape, version, checksum, and every invariant.
+1. `tideweft-world` contains the save-format version, rules version, checksum, and canonical `WorldState`. The identity slice uses embedded simulation format 3 and `tideweft-sim/5`; checksum-first migrations from supported format-1 and format-2 worlds add deterministic resident identity, condition, knowledge, and memory fields before current invariants run.
 2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart/Wayknot state, tutorial state, chosen posture, a legacy-compatible session-shape field, and recap history. It does not serialize derived Tide Harps or biome profiles.
 
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
@@ -175,7 +187,7 @@ Unsupported simulation versions fail rather than being guessed into a current wo
 
 Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean, the shared surface-current direction, projected roughness, and derived per-tile biome/climate views. Chart 2D keeps color-independent terrain/biome motifs and draws bounded streamlines plus foam over perceived water, adding arrowheads only while SOUND / SCAN is active. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and biome-aware material references, resets persistent emissive state before every ground batch, draws the same flow vocabulary over live water, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active.
 
-The composite renderer owns one disposable terrain-perception-memory store shared by Chart and Relief. It retains only a capped `98 × 74` scalar visibility array and eases lost terrain strength to its durable map baseline over 900 milliseconds; eight quantized Relief bands keep rebatching bounded. It never retains projected terrain objects, entity/detail masks, labels, actions, hit targets, or save state. Exact water presentation, actors, parcels, resources, and interaction routing continue to consume the raw current-detail field and fail closed immediately. World/geometry identity changes, spatial epochs, clock/tick regression, reload/destruction, and reduced-motion presentation rebase or settle the buffer without changing authoritative perception.
+The composite renderer owns one disposable terrain-perception-memory store shared by Chart and Relief. It retains only a capped `98 × 74` scalar visibility array and eases lost terrain strength to its durable map baseline over 900 milliseconds; eight quantized Relief bands keep rebatching bounded. Clear-air terrain reaches at most 52 tiles, remains fully legible through 34, and uses an 18-tile distance feather; the exact-detail field remains 10 tiles. The buffer never retains projected terrain objects, entity/detail masks, labels, actions, hit targets, or save state. Exact water presentation, actors, parcels, resources, and interaction routing continue to consume the raw current-detail field and fail closed immediately. World/geometry identity changes, spatial epochs, clock/tick regression, reload/destruction, and reduced-motion presentation rebase or settle the buffer without changing authoritative perception.
 
 Relief cord roots and bell/label placement sample the discovery-masked surface rather than authoritative hidden elevation. Reduced-motion mode sets decorative bell bob and sway to zero but leaves cords, bell, labels, crown, and active words intact. Geometry memoization keys immutable projected Harp data, keeping these derived strings/cords out of the fixed-step rules.
 
@@ -189,7 +201,7 @@ The candidate's final CSS layer intentionally narrows the title and field palett
 
 ## Versioned field manual
 
-`src/ui/tutorialGuide.ts` is platform-neutral data with a guide version, stable section/control IDs, audience filters, and explicit live/planned status. Its thirteen topics cover premise, movement, Promises, carried reports, water/meters, cargo care, terrain/tools, Wayknots/Harps, routes/settlements, views/HUD, saves/Quiet Hour, accessibility, and build boundaries. Every completed feature phase must update this source and its focused tests before the mechanic can be considered explained.
+`src/ui/tutorialGuide.ts` is platform-neutral data with a guide version, stable section/control IDs, audience filters, and explicit live/planned status. Its eighteen topics now include the compatibility-human identity, OBSERVED-versus-KNOWN, GREET, and non-pausing ABOUT contract alongside premise, movement, Promises, reports, traversal, fieldcraft, routes, views/HUD, saves/Quiet Hour, accessibility, and build boundaries. Every completed feature phase must update this source and its focused tests before the mechanic can be considered explained.
 
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 

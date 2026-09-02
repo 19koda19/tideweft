@@ -8,6 +8,7 @@ import {
   type ContractStatus,
   type DeliveryGrade,
   type PressureMode,
+  type ResidentMemory,
   type ResidentState,
   type ResourceKind,
   type RouteState,
@@ -20,6 +21,11 @@ import {
 import { clampInteger, compareText } from "./util";
 import { createInitialWorld, findRouteBetween, pressureMultiplier } from "./world";
 import { findAutonomousRoutePlan } from "./network";
+import {
+  MAX_RESIDENT_MEMORIES,
+  residentRainProtection,
+  residentSkillAptitude,
+} from "./npcIdentity";
 
 const WEATHER_DOMAIN = 0x5745_4154;
 const MAX_EVENT_HISTORY = 512;
@@ -105,12 +111,73 @@ function contractById(world: WorldState, id: number) {
   return world.contracts.find((contract) => contract.id === id);
 }
 
+function appendResidentMemory(resident: ResidentState, memory: ResidentMemory): void {
+  if (resident.memories.some(({ id }) => id === memory.id)) return;
+  resident.memories.push(memory);
+  resident.memories.sort((left, right) => left.tick - right.tick || compareText(left.id, right.id));
+  if (resident.memories.length > MAX_RESIDENT_MEMORIES) {
+    resident.memories.splice(0, resident.memories.length - MAX_RESIDENT_MEMORIES);
+  }
+}
+
+function observeResident(
+  world: WorldState,
+  residentId: number,
+  tick: number,
+  commandId: string,
+): string | null {
+  const resident = residentById(world, residentId);
+  if (!resident) return "resident does not exist";
+  if (resident.playerKnowledge.firstObservedTick === null) {
+    resident.playerKnowledge.firstObservedTick = tick;
+    resident.playerKnowledge.level = "recognized";
+    emitEvent(world, tick, "resident-observed", resident.id, {
+      commandId,
+      knowledgeLevel: resident.playerKnowledge.level,
+    });
+  }
+  return null;
+}
+
+function greetResident(
+  world: WorldState,
+  residentId: number,
+  tick: number,
+  commandId: string,
+  observedTick: number,
+): string | null {
+  const resident = residentById(world, residentId);
+  if (!resident) return "resident does not exist";
+  if (resident.playerKnowledge.firstObservedTick === null) return "resident has not been observed";
+  if (resident.playerKnowledge.firstObservedTick !== observedTick) return "resident observation proof is stale";
+  if (resident.playerKnowledge.introducedTick === null) {
+    resident.playerKnowledge.level = "acquainted";
+    resident.playerKnowledge.introducedTick = tick;
+    resident.playerKnowledge.facts = ["name", "occupation", "home"];
+    appendResidentMemory(resident, {
+      id: `${resident.identity.stableId}:met-player`,
+      kind: "met-player",
+      tick,
+      cause: "PLAYER_GREETING",
+    });
+    emitEvent(world, tick, "resident-introduced", resident.id, {
+      commandId,
+      knowledgeLevel: resident.playerKnowledge.level,
+      homeSettlementId: resident.homeSettlementId,
+    });
+  }
+  return null;
+}
+
 function releaseResident(world: WorldState, contract: ContractState): void {
   if (contract.assignedResidentId === null) return;
   const resident = residentById(world, contract.assignedResidentId);
   if (resident !== undefined) {
     resident.activeContractId = null;
     resident.intention = "work";
+    resident.condition.sheltering = false;
+    resident.condition.emotion = "content";
+    resident.condition.emotionCause = "ROUTINE_SAFE";
     if (resident.location.kind === "route") {
       resident.location = { kind: "settlement", settlementId: contract.originSettlementId };
     }
@@ -139,6 +206,10 @@ function acceptContract(
   contract.porterSettlementIds = [...routePlan.settlementIds];
   resident.activeContractId = contract.id;
   resident.intention = "carry";
+  resident.condition.sheltering = false;
+  resident.condition.routeDelayTicks = 0;
+  resident.condition.emotion = "focused";
+  resident.condition.emotionCause = "PROMISE_IN_PROGRESS";
   emitEvent(world, tick, "contract-accepted", contract.id, {
     residentId: resident.id,
     carrier: "resident",
@@ -657,6 +728,12 @@ function applyCommands(world: WorldState, commands: readonly SimCommand[], tick:
       case "share-knowledge":
         error = shareKnowledge(world, command, tick);
         break;
+      case "observe-resident":
+        error = observeResident(world, command.residentId, tick, command.id);
+        break;
+      case "greet-resident":
+        error = greetResident(world, command.residentId, tick, command.id, command.observedTick);
+        break;
     }
     if (error !== null) rejectCommand(world, tick, command, error);
   }
@@ -701,6 +778,160 @@ function updateWeather(world: WorldState, tick: number): void {
   emitEvent(world, tick, "weather-changed", null, { kind, intensity: world.weather.intensity });
 }
 
+function activeContractForResident(world: WorldState, resident: ResidentState): ContractState | undefined {
+  if (resident.activeContractId === null) return undefined;
+  return world.contracts.find((contract) =>
+    contract.id === resident.activeContractId
+    && contract.assignedResidentId === resident.id
+    && (contract.status === "accepted" || contract.status === "in-transit")
+  );
+}
+
+function residentRouteEventLocus(resident: ResidentState): Record<string, SimEventDatum> {
+  return resident.location.kind === "route"
+    ? {
+        eventRouteId: resident.location.routeId,
+        eventRouteProgress: resident.location.progress,
+      }
+    : {};
+}
+
+function residentShelterThreshold(resident: ResidentState): number {
+  let threshold = 610_000;
+  if (resident.identity.temperament.includes("cautious")) threshold -= 90_000;
+  if (resident.identity.temperament.includes("nervous")) threshold -= 55_000;
+  if (resident.identity.temperament.includes("bold")) threshold += 75_000;
+  if (resident.identity.temperament.includes("stubborn")) threshold += 45_000;
+  // Weather knowledge makes a courier act on legible warning signs sooner.
+  threshold -= Math.trunc(residentSkillAptitude(resident.identity, "weather-knowledge") / 12);
+  return clampInteger(threshold, 360_000, 760_000);
+}
+
+function updateResidentConditions(world: WorldState, tick: number): void {
+  const raining = world.weather.kind === "rain" || world.weather.kind === "storm";
+  const stormBonus = world.weather.kind === "storm" ? 180_000 : 0;
+  const windPressure = Math.trunc((Math.abs(world.weather.windX) + Math.abs(world.weather.windY)) / 2);
+
+  for (const resident of world.residents) {
+    const condition = resident.condition;
+    const contract = activeContractForResident(world, resident);
+    const onRoute = resident.location.kind === "route";
+
+    if (condition.sheltering && contract?.status === "in-transit" && onRoute) {
+      const weatherStillUnsafe = raining
+        && (world.weather.intensity + stormBonus + windPressure / 2 >= 360_000);
+      if (weatherStillUnsafe) {
+        const exposure = Math.max(0, FIXED_POINT - residentRainProtection(resident.identity));
+        condition.wetness = clampInteger(
+          condition.wetness + Math.max(200, Math.trunc((world.weather.intensity * exposure) / FIXED_POINT / 72)),
+        );
+        condition.coldStress = clampInteger(
+          condition.coldStress + Math.max(100, Math.trunc((windPressure * exposure) / FIXED_POINT / 90)),
+        );
+        condition.exhaustion = Math.max(0, condition.exhaustion - 1_000);
+      } else {
+        condition.wetness = Math.max(0, condition.wetness - 22_000);
+        condition.coldStress = Math.max(0, condition.coldStress - 16_000);
+        condition.exhaustion = Math.max(0, condition.exhaustion - 5_000);
+      }
+      if (!weatherStillUnsafe && condition.coldStress < 320_000) {
+        condition.sheltering = false;
+        condition.emotion = "relieved";
+        condition.emotionCause = "SHELTER_REACHED";
+        emitEvent(world, tick, "resident-resumed", resident.id, {
+          contractId: contract.id,
+          routeDelayTicks: condition.routeDelayTicks,
+          ...residentRouteEventLocus(resident),
+        });
+      } else {
+        condition.routeDelayTicks += 1;
+        if (contract.arrivalTick !== null) contract.arrivalTick += 1;
+      }
+      continue;
+    }
+
+    if (condition.sheltering) condition.sheltering = false;
+    if (raining && onRoute) {
+      const protection = residentRainProtection(resident.identity);
+      const exposure = Math.max(0, FIXED_POINT - protection);
+      const precipitation = Math.min(FIXED_POINT, world.weather.intensity + stormBonus);
+      const wetGain = Math.max(500, Math.trunc((precipitation * exposure) / FIXED_POINT / 18));
+      condition.wetness = clampInteger(condition.wetness + wetGain);
+      const coldInput = Math.trunc(
+        (condition.wetness + precipitation + windPressure) / 3,
+      );
+      const coldGain = Math.max(250, Math.trunc((coldInput * exposure) / FIXED_POINT / 28));
+      condition.coldStress = clampInteger(condition.coldStress + coldGain);
+      const navigation = residentSkillAptitude(resident.identity, "navigation");
+      condition.exhaustion = clampInteger(
+        condition.exhaustion + Math.max(400, 2_800 - Math.trunc(navigation / 500)),
+      );
+      const dangerPressure = Math.min(
+        FIXED_POINT,
+        precipitation + Math.trunc(condition.wetness / 3) + Math.trunc(condition.coldStress / 2),
+      );
+      condition.emotion = dangerPressure >= 760_000 ? "afraid" : "worried";
+      condition.emotionCause = "WEATHER_EXPOSURE";
+
+      if (
+        contract?.status === "in-transit"
+        && dangerPressure >= residentShelterThreshold(resident)
+      ) {
+        condition.sheltering = true;
+        condition.routeDelayTicks += 1;
+        if (contract.arrivalTick !== null) contract.arrivalTick += 1;
+        const memory: ResidentMemory = {
+          id: `${resident.identity.stableId}:weather-shelter:${tick}`,
+          kind: "weather-shelter",
+          tick,
+          cause: "SEVERE_WEATHER",
+        };
+        appendResidentMemory(resident, memory);
+        emitEvent(world, tick, "resident-sheltered", resident.id, {
+          contractId: contract.id,
+          weather: world.weather.kind,
+          intensity: world.weather.intensity,
+          routeDelayTicks: condition.routeDelayTicks,
+          ...residentRouteEventLocus(resident),
+        });
+      }
+      continue;
+    }
+
+    if (onRoute) {
+      const protection = residentRainProtection(resident.identity);
+      const exposure = Math.max(0, FIXED_POINT - protection);
+      const windChillInput = Math.max(0, windPressure - 260_000)
+        + Math.trunc(condition.wetness / 4);
+      condition.wetness = Math.max(0, condition.wetness - 7_000);
+      condition.coldStress = windChillInput > 0
+        ? clampInteger(
+            condition.coldStress
+              + Math.max(100, Math.trunc((windChillInput * exposure) / FIXED_POINT / 75)),
+          )
+        : Math.max(0, condition.coldStress - 3_000);
+      const navigation = residentSkillAptitude(resident.identity, "navigation");
+      condition.exhaustion = clampInteger(
+        condition.exhaustion + Math.max(350, 1_900 - Math.trunc(navigation / 700)),
+      );
+    } else {
+      condition.wetness = Math.max(0, condition.wetness - 28_000);
+      condition.coldStress = Math.max(0, condition.coldStress - 20_000);
+      condition.exhaustion = Math.max(0, condition.exhaustion - 2_500);
+    }
+    if (condition.exhaustion >= 720_000) {
+      condition.emotion = "tired";
+      condition.emotionCause = "NEED_REST";
+    } else if (contract !== undefined) {
+      condition.emotion = "focused";
+      condition.emotionCause = "PROMISE_IN_PROGRESS";
+    } else {
+      condition.emotion = "content";
+      condition.emotionCause = "ROUTINE_SAFE";
+    }
+  }
+}
+
 function canRunRecipe(world: WorldState, settlementId: number, inputs: readonly { resource: ResourceKind; amount: number }[]): boolean {
   const settlement = settlementById(world, settlementId);
   return settlement !== undefined && inputs.every((input) => settlement.inventory[input.resource] >= input.amount);
@@ -732,12 +963,22 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
   const isRestPeriod = dayPhase < 360 || dayPhase >= 1_200;
 
   for (const settlement of world.settlements) {
-    const residents = settlement.residentIds
-      .map((id) => residentById(world, id))
-      .filter((resident): resident is ResidentState => resident !== undefined);
-    const ration = Math.max(1, Math.ceil(residents.length / 3));
-    const foodServed = settlement.inventory.food >= ration;
-    const waterServed = settlement.inventory.freshWater >= ration;
+    // Presence, not home ownership, determines who can eat, rest, and think at
+    // this settlement. Delivered porters remain independent visitors rather
+    // than vanishing from the needs simulation at their destination.
+    const residents = world.residents
+      .filter((resident) =>
+        resident.location.kind === "settlement"
+        && resident.location.settlementId === settlement.id
+      )
+      .sort((left, right) => left.identity.stableId < right.identity.stableId
+        ? -1
+        : left.identity.stableId > right.identity.stableId
+          ? 1
+          : 0);
+    const ration = residents.length === 0 ? 0 : Math.max(1, Math.ceil(residents.length / 3));
+    const foodServed = ration > 0 && settlement.inventory.food >= ration;
+    const waterServed = ration > 0 && settlement.inventory.freshWater >= ration;
     if (foodServed) {
       settlement.inventory.food -= ration;
       world.ledger.consumed.food += ration;
@@ -766,6 +1007,16 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
     const needStress = residents.length === 0 ? 0 : Math.trunc(totalNeed / (residents.length * 3));
     const shortageKinds = RESOURCE_KINDS.filter((resource) => settlement.inventory[resource] < 20).length;
     settlement.stress = clampInteger(Math.trunc(needStress / 2) + shortageKinds * 85_000);
+  }
+
+  for (const resident of world.residents) {
+    if (resident.location.kind !== "route") continue;
+    resident.needs.food = clampInteger(
+      resident.needs.food + Math.trunc((34_000 * pressure) / FIXED_POINT),
+    );
+    resident.needs.rest = clampInteger(resident.needs.rest + (isRestPeriod ? -18_000 : 24_000));
+    resident.intention = resident.activeContractId !== null ? "carry" : "work";
+    resident.nextThinkTick = tick + 15 + (resident.identity.originActorOrdinal % 31);
   }
 }
 
@@ -905,7 +1156,7 @@ export function generateDemandContracts(world: WorldState, tick: number): void {
       origin.inventory[resource] - CONTRACT_DONOR_RESERVE,
     );
     if (quantity <= 0) continue;
-    const requester = beneficiaryForDelivery(world, destination.id, resource);
+    const requester = beneficiaryForDelivery(world, destination.id, resource, true);
     if (requester === undefined) continue;
 
     const contract: ContractState = {
@@ -957,7 +1208,20 @@ function chooseCourier(world: WorldState, contract: ContractState): ResidentStat
         resident.location.kind === "settlement" &&
         resident.location.settlementId === contract.originSettlementId,
     )
-    .sort((left, right) => (left.role === "navigator" ? -1 : 0) - (right.role === "navigator" ? -1 : 0) || left.id - right.id)[0];
+    .sort((left, right) => {
+      const suitability = (resident: ResidentState): number => {
+        const navigation = residentSkillAptitude(resident.identity, "navigation");
+        const weather = residentSkillAptitude(resident.identity, "weather-knowledge");
+        const practical = resident.identity.temperament.includes("practical") ? 90_000 : 0;
+        const patient = resident.identity.temperament.includes("patient") ? 55_000 : 0;
+        const weatherFit = world.weather.kind === "rain" || world.weather.kind === "storm"
+          ? weather + Math.trunc(residentRainProtection(resident.identity) / 2)
+          : 0;
+        return navigation + Math.trunc(weather / 3) + practical + patient + weatherFit
+          - Math.trunc(resident.condition.exhaustion / 2);
+      };
+      return suitability(right) - suitability(left) || left.id - right.id;
+    })[0];
 }
 
 function changeSettlementTrust(world: WorldState, leftId: number, rightId: number, amount: number): void {
@@ -991,6 +1255,7 @@ function beneficiaryForDelivery(
   world: WorldState,
   settlementId: number,
   resource: ResourceKind,
+  localOnly = false,
 ): ResidentState | undefined {
   const settlement = settlementById(world, settlementId);
   if (settlement === undefined) return undefined;
@@ -1003,9 +1268,12 @@ function beneficiaryForDelivery(
         : resource === "freshWater"
           ? "steward"
           : "fisher";
-  const residents = settlement.residentIds
-    .map((id) => residentById(world, id))
-    .filter((resident): resident is ResidentState => resident !== undefined)
+  const residents = world.residents
+    .filter((resident) =>
+      resident.location.kind === "settlement"
+      && resident.location.settlementId === settlement.id
+      && (!localOnly || resident.homeSettlementId === settlement.id)
+    )
     .sort((left, right) => {
       const leftPreferred = left.role === preferredRole ? 0 : 1;
       const rightPreferred = right.role === preferredRole ? 0 : 1;
@@ -1045,8 +1313,10 @@ function updatePorterLocation(world: WorldState, contract: ContractState, tick: 
   if (routes.length === 0) return;
   const weights = routes.map((route) => Math.max(1, route.baseTravelTicks));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-  const duration = Math.max(1, contract.arrivalTick - contract.departedTick);
-  const elapsedWeight = Math.min(totalWeight, Math.max(0, ((tick - contract.departedTick) * totalWeight) / duration));
+  const delay = Math.max(0, resident.condition.routeDelayTicks);
+  const duration = Math.max(1, contract.arrivalTick - contract.departedTick - delay);
+  const effectiveElapsedTicks = Math.max(0, tick - contract.departedTick - delay);
+  const elapsedWeight = Math.min(totalWeight, (effectiveElapsedTicks * totalWeight) / duration);
   let accumulated = 0;
   let legIndex = routes.length - 1;
   for (let index = 0; index < weights.length; index += 1) {
@@ -1124,6 +1394,9 @@ function completeContract(
     resident.location = { kind: "settlement", settlementId: destination.id };
     resident.activeContractId = null;
     resident.intention = "work";
+    resident.condition.sheltering = false;
+    resident.condition.emotion = "relieved";
+    resident.condition.emotionCause = "PROMISE_DELIVERED";
     resident.needs.belonging = clampInteger(resident.needs.belonging - 45_000);
   }
   const tracedTiles = playerTrace ?? porterTrace(world, contract);
@@ -1165,8 +1438,11 @@ function completeContract(
   );
   refreshKnowledge(world, contract.originSettlementId, contract.destinationSettlementId, contract.resource);
   refreshKnowledge(world, contract.destinationSettlementId, contract.originSettlementId, contract.resource);
-  const beneficiary = residentById(world, contract.requesterResidentId)
-    ?? beneficiaryForDelivery(world, contract.destinationSettlementId, contract.resource);
+  const requester = residentById(world, contract.requesterResidentId);
+  const beneficiary = requester?.location.kind === "settlement"
+    && requester.location.settlementId === contract.destinationSettlementId
+    ? requester
+    : beneficiaryForDelivery(world, contract.destinationSettlementId, contract.resource);
   if (beneficiary !== undefined) {
     beneficiary.needs.belonging = Math.max(0, beneficiary.needs.belonging - 24_000);
     if (contract.resource === "food" || contract.resource === "freshWater") {
@@ -1238,6 +1514,10 @@ function advanceContracts(world: WorldState, tick: number): void {
         contract.departedTick = tick;
         const tidePenalty = world.tide.level > 470_000 ? Math.trunc(routePlan.travelTicks / 5) : 0;
         contract.arrivalTick = tick + routePlan.travelTicks + tidePenalty;
+        resident.condition.routeDelayTicks = 0;
+        resident.condition.sheltering = false;
+        resident.condition.emotion = "focused";
+        resident.condition.emotionCause = "PROMISE_IN_PROGRESS";
         resident.location = {
           kind: "route",
           routeId: firstRoute.id,
@@ -1321,6 +1601,7 @@ export function stepWorld(world: WorldState, commands: readonly SimCommand[] = [
   applyCommands(world, commands, tick);
   world.tide = tideAtTick(tick);
   updateWeather(world, tick);
+  updateResidentConditions(world, tick);
   ageKnowledge(world, tick);
   runProduction(world, tick);
   updateResidentNeeds(world, tick);

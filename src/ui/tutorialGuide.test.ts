@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(17);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(18);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -299,6 +299,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(TUTORIAL_PLANNED_MECHANICS.every((mechanic) => mechanic.status === "planned")).toBe(true);
     expect(TUTORIAL_PLANNED_MECHANICS.map((mechanic) => mechanic.id)).toEqual([
       "planned-regional-settlements",
+      "planned-universal-npcs",
       "planned-regional-biomes",
       "planned-magic-water-cargo",
       "planned-rocks-and-ladders",
@@ -309,12 +310,37 @@ describe("TIDEWEFT field-manual content", () => {
       .map((mechanic) => `${mechanic.title} ${mechanic.clarification}`)
       .join(" ");
     expect(plannedCopy).toContain("Seven stable visual biomes");
+    expect(plannedCopy).toContain("Dogs, bears, birds, deer");
+    expect(plannedCopy).toContain("complete NPC promotion/streaming ecology remain planned");
     expect(plannedCopy).toContain("do not affect the courier or cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
     expect(plannedCopy).toContain("not implemented yet");
     expect(plannedCopy).toContain("do not become deployable Wayknots yet");
     expect(plannedCopy).toContain("harbor locker storage");
     expect(plannedCopy).toContain("not yet a trust-money wallet");
+  });
+
+  it("teaches the limited persistent-human ABOUT slice without claiming universal NPC ecology", () => {
+    const people = tutorialSectionById("people-and-about");
+    const copy = people === undefined
+      ? ""
+      : [
+          people.summary,
+          ...people.steps.flatMap((step) => [step.title, step.body]),
+          ...people.callouts.flatMap((callout) => [callout.title, callout.body]),
+        ].join(" ");
+
+    expect(tutorialControlById("inspect-person")).toMatchObject({
+      input: "Click / tap a visible person",
+      audience: "all",
+    });
+    expect(copy).toContain("OBSERVED");
+    expect(copy).toContain("GREET");
+    expect(copy).toContain("name, occupation, and home");
+    expect(copy).toContain("never pauses");
+    expect(copy).toContain("42 humans");
+    expect(copy).toContain("not live yet");
+    expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
   it("supports stable lookup and deterministic topic search", () => {

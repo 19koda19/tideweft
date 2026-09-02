@@ -4,6 +4,51 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.8 — 2026-09-02
+
+Build: `0.3.3-alpha.8` · Gameplay contract: 16 · Tutorial: 18
+
+The compatibility estuary's human residents are now persistent individuals you meet in the field: observe what is visible, exchange names at speaking distance, and watch weather alter their condition without gaining impossible knowledge.
+
+### Gameplay
+
+- The existing 42 compatibility-region humans now receive deterministic semantic identities with stable generated names drawn from 226 given names and 206 family names, age bands, height, build, distinguishing marks, visible occupation-shaped gear, coherent temperament pairs, useful skills, and a bounded generated background history. Their identity derives from world seed plus immutable origin settlement and actor ordinal rather than current array order or a disposable runtime ID.
+- Residents now appear as physical people around their home settlements as well as porters on active routes. Directly visible people can be selected in Chart or Relief; leaving the short exact-detail field immediately removes their label, hit target, and ABOUT disclosure.
+- Traveling residents accumulate wetness, cold pressure, and exhaustion according to live rain, wind, gear, temperament, and skills. Unsafe weather can make an assigned porter hold position and delay the same physical Promise, then resume when conditions ease; event-caused worried, afraid, tired, focused, content, and relieved states remain separate from player difficulty.
+- A close GREET records one bounded met-player memory and reveals that person's name, occupation, and home. Observation must occur first, speaking is unavailable while the courier is ADRIFT, and repeated greetings cannot farm facts or rewards.
+
+### Fixes
+
+- Relief water no longer inherits the last visible terrain material or composites far river cells over nearer ones when the camera faces along a channel. Its opaque, depth-writing 3D surface now remains in bounded blue depth shades through every zoom, view direction, biome, tide, and weather state; unsounded water stays one neutral channel blue until direct detail or a sounding discloses more.
+- The underfoot terrain name now confirms an ordinary land or biome seam before changing, and unchanged field text is no longer rewritten every movement step. Entering water, leaving water, and becoming ADRIFT still update immediately, and desktop and mobile consume the same stabilized wording.
+- Promise cards no longer disclose an unknown requester's name or occupation before the player has learned it; they say only that a local resident requested the work.
+- Resident selection and greeting now fail closed against stale or remote observation. The simulation requires the exact prior observation tick, so a UI command cannot manufacture acquaintance with somebody the player never saw.
+- The EVENTS feed now stamps actor events only when they were directly observable at their event-time location. A distant route event cannot become retroactive god's-ear knowledge after its porter later walks into view.
+- ABOUT no longer exposes internal stable IDs, recreates its facts every animation frame, blocks world input through transparent space, or leaves a dead GREET control after introduction.
+
+### Balancing
+
+- The clear-air terrain field now reaches toward fifty-two tiles, staying fully legible through thirty-four before an eighteen-tile atmospheric feather. Exact people, items, labels, live water detail, and actions remain constrained to the existing ten-tile field, so route-scale terrain context does not become actor or loot radar.
+- A CHALLENGING HARD remains the only ruleset. ABOUT, generated identity, emotion marks, and event filtering reveal no exact hidden needs, temperament scores, skill values, or easier actor behavior.
+
+### Interface
+
+- Click or tap a directly visible person to open a compact pane-free ABOUT view. OBSERVED lists approximate physical and behavioral cues; KNOWN contains only facts learned through interaction. The view does not pause currents, weather, travel, or actors, and closes when sight is lost.
+- Human states use restrained floating text faces such as :S, :\[, :|, =\], and :) alongside posture, short speech, and condition text. Wrapped overhead copy is clamped to the visible field without placing system explanations in a speech bubble.
+- Chart and Relief use the same minimum 44-pixel person target on touch, the same disclosure rules, and the same non-blocking ABOUT actions.
+
+### Save changes
+
+- The outer game save remains version 4. Its embedded simulation snapshot advances to format 3 and tideweft-sim/5; compatible format-1 and format-2 snapshots migrate the existing 42 residents into deterministic identities, condition, knowledge, and bounded memory only after their old checksum is verified.
+- Each identity stores immutable origin settlement key, origin actor ordinal, origin role, and generation version. Reordering a settlement population or moving a resident later cannot silently rename or replace that established person.
+- Learned names, introduction facts, weather condition, route delays, resident memories, and event-time observation evidence persist through save/load without rerolling.
+
+### Known limitations
+
+- This is a deliberately limited human vertical slice for the seven compatibility-region settlements and their 42 residents. Universal generated humans beyond region 0,0, dogs, bears, birds, deer, companions, ownership, social networks, physical NPC inventories, and cross-species ecology are not live yet.
+- Relationship knowledge currently stops at recognition and acquaintance: GREET reveals name, occupation, and home, but full conversation, negotiation, trust history, religion/language disclosure, intimidation, deterrence, and companion relationships remain planned.
+- Weather-aware porters can hold and resume an assigned route, but they do not yet pathfind into a physical shelter. Anonymous sound-aware NPC contacts, actor-to-actor perception, regional NPC promotion/streaming, and complete needs-driven survival remain unfinished.
+
 ## 0.3.3-alpha.7 — 2026-09-02
 
 Build: `0.3.3-alpha.7` · Gameplay contract: 15 · Tutorial: 17

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TideweftView } from "./types";
+import type { TideweftView, WeatherView } from "./types";
 
 const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
@@ -14,6 +14,11 @@ const p5Harness = vi.hoisted(() => ({
     yx: 0,
     yy: 1,
   },
+  materialTrace: [] as Array<{
+    readonly method: "fill" | "ambientMaterial" | "emissiveMaterial";
+    readonly args: readonly unknown[];
+  }>,
+  initialDepthWriteEnabled: false,
 }));
 
 function projectOverlayLocalToScreen(x: number, y: number): { readonly x: number; readonly y: number } {
@@ -29,9 +34,18 @@ vi.mock("p5", () => {
     constructor(sketch: (instance: Record<string, unknown>) => void) {
       const camera = vi.fn();
       const methods = new Map<PropertyKey, ReturnType<typeof vi.fn>>();
+      let depthWriteEnabled = p5Harness.initialDepthWriteEnabled;
+      const depthMask = vi.fn((enabled: boolean) => {
+        depthWriteEnabled = enabled;
+      });
       const color = (value: unknown) => ({
         value,
         setAlpha: vi.fn(),
+      });
+      const tracedMaterial = (
+        method: "fill" | "ambientMaterial" | "emissiveMaterial",
+      ) => vi.fn((...args: unknown[]) => {
+        p5Harness.materialTrace.push({ method, args });
       });
       const target: Record<PropertyKey, unknown> = {
         width: 320,
@@ -42,14 +56,17 @@ vi.mock("p5", () => {
         drawingContext: {
           DEPTH_TEST: 0x0b71,
           DEPTH_WRITEMASK: 0x0b72,
-          depthMask: vi.fn(),
-          getParameter: vi.fn(() => false),
+          depthMask,
+          getParameter: vi.fn(() => depthWriteEnabled),
           isEnabled: vi.fn(() => true),
           disable: vi.fn(),
           enable: vi.fn(),
         },
         camera,
         color,
+        fill: tracedMaterial("fill"),
+        ambientMaterial: tracedMaterial("ambientMaterial"),
+        emissiveMaterial: tracedMaterial("emissiveMaterial"),
         lerpColor: (_left: unknown, right: unknown) => right,
         worldToScreen: (x: number, y: number) => projectOverlayLocalToScreen(x, y),
         createCanvas: () => ({ elt: p5Harness.canvasFactory?.() }),
@@ -91,7 +108,11 @@ vi.mock("./reliefCamera", async (importOriginal) => {
   };
 });
 
-import { createTideweftReliefRenderer } from "./p5ReliefSketch";
+import {
+  MAX_RELIEF_MANUAL_ZOOM,
+  MIN_RELIEF_MANUAL_ZOOM,
+  createTideweftReliefRenderer,
+} from "./p5ReliefSketch";
 
 type Listener = (event: Record<string, unknown>) => void;
 
@@ -271,6 +292,38 @@ function view(
   };
 }
 
+function warmWaterView(spatialEpoch = "warm-water"): TideweftView {
+  const base = view(spatialEpoch, { x: 48, y: 48 });
+  return {
+    ...base,
+    terrain: {
+      ...base.terrain,
+      revision: "warm-biome-water",
+      tiles: base.terrain.tiles.map((_, index) => ({
+        kind: index % 3 === 0
+          ? "shallows" as const
+          : index % 3 === 1
+            ? "channel" as const
+            : "deep-water" as const,
+        biome: index % 2 === 0 ? "sun-meadow" as const : "brine-flat" as const,
+        climate: {
+          rainfall: 1,
+          heat: 1,
+          salinity: 1,
+          exposure: 1,
+          magicalWater: 1,
+        },
+        elevation: 0.08,
+        waterDepth: index % 3 === 0 ? 0.2 : index % 3 === 1 ? 0.5 : 0.9,
+        discovered: 1,
+        currentVisibility: 1,
+        currentDetailVisibility: 1 as const,
+      })),
+    },
+    tide: { ...base.tide, level: 0.9 },
+  };
+}
+
 function pointer(
   canvas: FakeCanvas,
   changes: Partial<Record<string, unknown>> = {},
@@ -328,6 +381,8 @@ beforeEach(() => {
   p5Harness.instances.length = 0;
   p5Harness.projectionShiftX = 0;
   p5Harness.overlayProjection = { xx: 1, xy: 0, yx: 0, yy: 1 };
+  p5Harness.materialTrace.length = 0;
+  p5Harness.initialDepthWriteEnabled = false;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -778,6 +833,88 @@ describe("Relief presentation-only pointer and label motion", () => {
     if (!replacement) throw new Error("expected replacement Relief label");
     expect(Number.parseFloat(String(replacement.style.left))).toBeCloseTo(231.2, 1);
     harness.renderer.destroy();
+  });
+});
+
+describe("Relief water camera invariant", () => {
+  it("keeps water blue while facing the river at every yaw and zoom bound in every weather", () => {
+    const waterView = warmWaterView("water-camera-invariant");
+    const harness = renderHarness(waterView);
+    const zooms = [MIN_RELIEF_MANUAL_ZOOM, 1, MAX_RELIEF_MANUAL_ZOOM] as const;
+    const yaws = [-Math.PI, -Math.PI / 2, 0, Math.PI / 2, Math.PI] as const;
+    const weather: readonly WeatherView[] = [
+      { kind: "clear", intensity: 0, wind: { x: 0, y: 0 } },
+      { kind: "mist", intensity: 1, visibility: 0.2, wind: { x: 0.2, y: 0.1 } },
+      { kind: "drizzle", intensity: 1, wind: { x: -0.4, y: 0.2 } },
+      { kind: "rain", intensity: 1, wind: { x: 0.7, y: 0.4 } },
+      { kind: "squall", intensity: 1, wind: { x: 1, y: -1 } },
+      { kind: "aurora", intensity: 1, wind: { x: -0.1, y: 0.3 } },
+    ];
+
+    for (const currentWeather of weather) {
+      harness.setView({ ...waterView, weather: currentWeather });
+      for (const zoom of zooms) {
+        harness.renderer.focusWorld(waterView.player.position, zoom);
+        for (const yaw of yaws) {
+          p5Harness.materialTrace.length = 0;
+          harness.renderer.setOrbit(yaw, Math.PI * 0.29);
+          harness.draw();
+          const waterSteps = p5Harness.materialTrace.flatMap((entry, index) => {
+            const ambient = p5Harness.materialTrace[index + 1];
+            const emissive = p5Harness.materialTrace[index + 2];
+            return entry.method === "fill"
+              && entry.args.join(",") === "0,0,0,255"
+              && ambient?.method === "ambientMaterial"
+              && ambient.args.join(",") === "0,0,0"
+              && emissive?.method === "emissiveMaterial"
+              && typeof emissive.args[0] === "string"
+              ? [{ index, color: emissive.args[0] }]
+              : [];
+          });
+          expect(waterSteps.length, `${currentWeather.kind}, zoom ${zoom}, yaw ${yaw}`)
+            .toBeGreaterThan(0);
+          for (const { color: waterColor } of waterSteps) {
+            const red = Number.parseInt(waterColor.slice(1, 3), 16);
+            const green = Number.parseInt(waterColor.slice(3, 5), 16);
+            const blue = Number.parseInt(waterColor.slice(5, 7), 16);
+            expect(blue - green, `${currentWeather.kind}, zoom ${zoom}, yaw ${yaw}: ${waterColor}`)
+              .toBeGreaterThanOrEqual(14);
+            expect(green - red, `${currentWeather.kind}, zoom ${zoom}, yaw ${yaw}: ${waterColor}`)
+              .toBeGreaterThanOrEqual(12);
+          }
+          const lastWater = waterSteps.at(-1);
+          expect(p5Harness.materialTrace[lastWater!.index + 3]).toEqual({
+            method: "emissiveMaterial",
+            args: [0, 0, 0],
+          });
+        }
+      }
+    }
+    harness.renderer.destroy();
+  });
+
+  it("writes opaque water depth and restores either prior depth-write state", () => {
+    for (const initialDepthWriteEnabled of [false, true]) {
+      p5Harness.initialDepthWriteEnabled = initialDepthWriteEnabled;
+      const harness = renderHarness(warmWaterView(`water-depth-${initialDepthWriteEnabled}`));
+      const drawingContext = harness.instance.drawingContext as {
+        DEPTH_WRITEMASK: number;
+        depthMask: ReturnType<typeof vi.fn>;
+        getParameter: ReturnType<typeof vi.fn>;
+      };
+      drawingContext.depthMask.mockClear();
+      drawingContext.getParameter.mockClear();
+      harness.draw();
+
+      expect(drawingContext.getParameter).toHaveBeenCalledWith(
+        drawingContext.DEPTH_WRITEMASK,
+      );
+      expect(drawingContext.depthMask.mock.calls[0]).toEqual([true]);
+      expect(drawingContext.depthMask.mock.calls.at(-1)).toEqual([
+        initialDepthWriteEnabled,
+      ]);
+      harness.renderer.destroy();
+    }
   });
 });
 

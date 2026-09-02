@@ -5,8 +5,8 @@ export const LEGACY_WORLD_HEIGHT = 48;
 export const MIN_SETTLEMENT_MANHATTAN_DISTANCE = 14;
 export const FIXED_POINT = 1_000_000;
 export const STRAND_AUTOMATION_THRESHOLD = 32_000;
-export const SAVE_FORMAT_VERSION = 2;
-export const RULES_VERSION = "tideweft-sim/4";
+export const SAVE_FORMAT_VERSION = 3;
+export const RULES_VERSION = "tideweft-sim/5";
 
 export const RESOURCE_KINDS = [
   "food",
@@ -106,6 +106,8 @@ export interface KnowledgeRecord {
 
 export interface SettlementState {
   id: EntityId;
+  /** Immutable generation identity; display names may change without rerolling residents. */
+  originKey: string;
   name: string;
   tileIndex: number;
   specialization: ResourceKind;
@@ -143,6 +145,138 @@ export type ResidentRole =
   | "navigator"
   | "steward";
 
+/**
+ * Stable, versioned human identity shared by simulation, projection, and save
+ * migration. Numeric entity IDs remain the economy's referential keys; this
+ * actor ID is derived from world/region/origin inputs and never from array
+ * position or load order.
+ */
+export interface ResidentIdentity {
+  stableId: string;
+  generationVersion: number;
+  species: "human";
+  originRegion: { x: number; y: number };
+  /** Immutable semantic settlement identity; current home may change later. */
+  originSettlementKey: string;
+  /** Immutable generation slot inside the semantic origin population. */
+  originActorOrdinal: number;
+  originSettlementId: EntityId;
+  /** Occupation used to derive this generation's baseline skills and gear. */
+  originRole: ResidentRole;
+  age: "young-adult" | "adult" | "older-adult";
+  heightCm: number;
+  build: "slight" | "lean" | "average" | "broad" | "stocky";
+  appearance: {
+    hair: "black" | "brown" | "auburn" | "gray" | "silver" | "cropped" | "covered";
+    mark: "none" | "freckles" | "weathered" | "brow-scar" | "hand-scar" | "round-glasses";
+    palette: "silt" | "reed" | "tide" | "ember" | "lichen" | "storm";
+  };
+  temperament: ResidentTemperament[];
+  skills: ResidentSkill[];
+  visibleGear: ResidentVisibleGear[];
+  history: ResidentHistoryEvent[];
+}
+
+export type ResidentTemperament =
+  | "calm"
+  | "nervous"
+  | "bold"
+  | "cautious"
+  | "curious"
+  | "reserved"
+  | "patient"
+  | "practical"
+  | "protective"
+  | "social"
+  | "stubborn"
+  | "optimistic";
+
+export type ResidentSkillKind =
+  | "navigation"
+  | "first-aid"
+  | "swimming"
+  | "weather-knowledge"
+  | "rope-work"
+  | "animal-handling"
+  | "repair"
+  | "foraging";
+
+export interface ResidentSkill {
+  kind: ResidentSkillKind;
+  aptitude: number;
+}
+
+export type ResidentVisibleGear =
+  | "waterproof-pack"
+  | "walking-pole"
+  | "rain-shell"
+  | "rope-coil"
+  | "map-case"
+  | "medical-satchel"
+  | "tool-roll"
+  | "reed-hat";
+
+export type ResidentHistoryKind =
+  | "survived-storm"
+  | "worked-another-route"
+  | "rescued-traveler"
+  | "lost-equipment"
+  | "learned-trade"
+  | "migrated-settlement";
+
+export interface ResidentHistoryEvent {
+  kind: ResidentHistoryKind;
+  worldDay: number;
+}
+
+export type ResidentEmotion =
+  | "content"
+  | "focused"
+  | "worried"
+  | "afraid"
+  | "tired"
+  | "relieved";
+
+export type ResidentEmotionCause =
+  | "ROUTINE_SAFE"
+  | "PROMISE_IN_PROGRESS"
+  | "WEATHER_EXPOSURE"
+  | "NEED_REST"
+  | "NEED_FOOD"
+  | "SHELTER_REACHED"
+  | "PROMISE_DELIVERED";
+
+export interface ResidentCondition {
+  wetness: number;
+  coldStress: number;
+  exhaustion: number;
+  emotion: ResidentEmotion;
+  emotionCause: ResidentEmotionCause;
+  sheltering: boolean;
+  /** Persistent accumulated pause used by real route progress and ETA. */
+  routeDelayTicks: number;
+}
+
+export type ResidentKnowledgeLevel = "unfamiliar" | "recognized" | "acquainted";
+export type ResidentKnownFact = "name" | "occupation" | "home";
+
+/** Single-player knowledge about this actor; hidden traits never leak here. */
+export interface ResidentPlayerKnowledge {
+  level: ResidentKnowledgeLevel;
+  firstObservedTick: Tick | null;
+  introducedTick: Tick | null;
+  facts: ResidentKnownFact[];
+}
+
+export type ResidentMemoryKind = "met-player" | "weather-shelter";
+
+export interface ResidentMemory {
+  id: string;
+  kind: ResidentMemoryKind;
+  tick: Tick;
+  cause: "PLAYER_GREETING" | "SEVERE_WEATHER";
+}
+
 export type ResidentIntention =
   | "rest"
   | "eat"
@@ -159,6 +293,10 @@ export interface ResidentState {
   name: string;
   homeSettlementId: EntityId;
   role: ResidentRole;
+  identity: ResidentIdentity;
+  condition: ResidentCondition;
+  playerKnowledge: ResidentPlayerKnowledge;
+  memories: ResidentMemory[];
   traits: ResidentTraits;
   needs: ResidentNeeds;
   relationships: ResidentRelationship[];
@@ -252,7 +390,11 @@ export type SimEventType =
   | "tide-choir-awakened"
   | "project-completed"
   | "weather-changed"
-  | "knowledge-shared";
+  | "knowledge-shared"
+  | "resident-observed"
+  | "resident-introduced"
+  | "resident-sheltered"
+  | "resident-resumed";
 
 export type SimEventDatum = string | number | boolean | null;
 
@@ -358,6 +500,18 @@ export interface AwakenTideChoirCommand extends CommandBase {
   routeIds: readonly EntityId[];
 }
 
+export interface ObserveResidentCommand extends CommandBase {
+  type: "observe-resident";
+  residentId: EntityId;
+}
+
+export interface GreetResidentCommand extends CommandBase {
+  type: "greet-resident";
+  residentId: EntityId;
+  /** Must match a prior observation; greeting cannot create remote knowledge. */
+  observedTick: Tick;
+}
+
 export type SimCommand =
   | AcceptContractCommand
   | PickupContractCommand
@@ -365,7 +519,9 @@ export type SimCommand =
   | CancelContractCommand
   | ReinforceRouteCommand
   | ShareKnowledgeCommand
-  | AwakenTideChoirCommand;
+  | AwakenTideChoirCommand
+  | ObserveResidentCommand
+  | GreetResidentCommand;
 
 export type CommandsByTick =
   | ReadonlyMap<number, readonly SimCommand[]>

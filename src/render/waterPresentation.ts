@@ -7,8 +7,9 @@ import type { BiomeId, TerrainTileView } from "./types";
 export type WaterDepthBand = "shallows" | "channel" | "deep";
 
 /**
- * One water language shared by Chart and Relief. These are the established
- * Chart colors rather than a second, brighter WebGL-only palette.
+ * Shared water semantics and the authored Chart palette. Relief consumes the
+ * same discovery-safe bands/signals, then maps them to its own unlit blue
+ * albedo so WebGL lighting and the warm terrain bed cannot change their hue.
  */
 export const WATER_PRESENTATION_PALETTE = {
   deep: "#08252e",
@@ -32,7 +33,7 @@ export interface WaterPresentation {
   readonly accentColor: string;
   readonly biomeBlend: number;
   readonly tideLift: number;
-  /** Fully composed water color consumed unchanged by both renderers. */
+  /** Fully composed Chart color; Relief retains the signals but uses unlit albedo. */
   readonly color: string;
   readonly opacity: number;
   readonly accentOpacity: number;
@@ -93,7 +94,7 @@ export function visibleWaterPresentation(
 
 /**
  * Relief batches quantize live signals to keep WebGL draw calls bounded. The
- * resulting material retains the exact same palette/composition as Chart.
+ * resulting material retains the same discovery and depth semantics as Chart.
  */
 export function quantizeWaterPresentation(
   presentation: WaterPresentation,

@@ -25,6 +25,7 @@ export const TUTORIAL_SECTION_IDS = [
   "pack-and-crafting",
   "wayknots-and-harps",
   "routes-and-settlements",
+  "people-and-about",
   "views-and-hud",
   "saves-and-quiet-hour",
   "accessibility",
@@ -54,6 +55,7 @@ export const TUTORIAL_CONTROL_IDS = [
   "relief-orbit",
   "relief-touch-orbit",
   "world-zoom",
+  "inspect-person",
   "cancel-destination",
   "promises-sheet",
   "tutorial-key",
@@ -256,6 +258,13 @@ export const TUTORIAL_CONTROLS = [
     action: "Zoom the active world view",
   },
   {
+    id: "inspect-person",
+    audience: "all",
+    input: "Click / tap a visible person",
+    action: "Open their live ABOUT view",
+    detail: "ABOUT shows only what is observable or already learned. It does not pause danger or preserve a target after sight is lost.",
+  },
+  {
     id: "cancel-destination",
     audience: "desktop",
     input: "Escape / right click",
@@ -301,6 +310,13 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     title: "Regional settlements and living opportunities",
     clarification: "Signed terrain now generates and streams continuously beyond region 0,0. Authored harbors, their Promise economy, and natural material patches remain in compatibility region 0,0. Generated settlements, actors, causal finds, and extension of the running settlement network are planned rather than cloned into empty country.",
     keywords: ["procedural generation", "world seed", "region", "reseed", "harbor", "settlement"],
+  },
+  {
+    id: "planned-universal-npcs",
+    status: "planned",
+    title: "Universal people, dogs, and wildlife",
+    clarification: "The 42 compatibility-region humans now have persistent generated identities, weather-responsive condition, limited event-led emotion, and ABOUT inspection. Dogs, bears, birds, deer, generated regional populations, ownership, companions, cross-species perception, and the complete NPC promotion/streaming ecology remain planned.",
+    keywords: ["npc", "dog", "bear", "bird", "wildlife", "companion", "identity", "about", "ecology"],
   },
   {
     id: "planned-regional-biomes",
@@ -1008,8 +1024,66 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     ],
   },
   {
-    id: "views-and-hud",
+    id: "people-and-about",
     iconText: "12",
+    title: "Meet people as individuals",
+    shortTitle: "People & ABOUT",
+    summary: "Compatibility-region residents and route porters are visible people with persistent identities, changing conditions, bounded memories, and information you learn rather than receive for free.",
+    keywords: ["person", "resident", "porter", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather"],
+    controlIds: ["inspect-person"],
+    steps: [
+      {
+        id: "people-select",
+        audience: "all",
+        title: "Inspect somebody you can actually see",
+        body: "Click or tap a directly visible resident near a compatibility-region settlement or a porter traveling an active route. ABOUT closes if that person leaves exact sight; it is a live field observation, not a remote tracker.",
+        controlId: "inspect-person",
+      },
+      {
+        id: "people-observed-known",
+        audience: "all",
+        title: "Observed is not the same as known",
+        body: "OBSERVED contains readable physical facts such as approximate height, build, distinguishing marks, visible gear, condition, behavior, and apparent emotion. A stranger's hidden name, work, home, exact internal values, and stable database identity are not exposed by a click.",
+      },
+      {
+        id: "people-greet",
+        audience: "all",
+        title: "Get close enough to exchange names",
+        body: "Before an introduction, move within speaking distance and choose GREET. The simulation keeps running, and you must regain footing before speaking while ADRIFT. A successful greeting remembers that person's name, occupation, and home; repeated greetings do not farm new facts.",
+      },
+      {
+        id: "people-weather-emotion",
+        audience: "all",
+        title: "Weather reaches other travelers too",
+        body: "Rain protection, wetness, cold pressure, exhaustion, current work, and unsafe weather can change a person's visible condition and route behavior. Restrained text faces such as :S, :[, :|, =], and :) punctuate readable emotion; posture, speech, and behavior remain the explanation rather than a hidden percentage meter.",
+      },
+      {
+        id: "people-events",
+        audience: "all",
+        title: "You hear only the part of the world you witnessed",
+        body: "Resident introductions and route changes can enter EVENTS when you directly caused or observed them. A distant actor event is not revealed later merely because that person walks into view; the full simulation history remains authoritative without becoming the player's god's-ear feed.",
+      },
+    ],
+    callouts: [
+      {
+        id: "people-danger-live",
+        audience: "all",
+        tone: "safety",
+        title: "ABOUT never freezes danger",
+        body: "The compact, pane-free ABOUT text stays out of the main controls and never pauses travel, weather, currents, or actors. Close it with its button or Escape; if conditions become dangerous, act first.",
+      },
+      {
+        id: "people-slice-boundary",
+        audience: "all",
+        tone: "boundary",
+        title: "This is the first human slice",
+        body: "These rules currently cover the 42 humans attached to the seven compatibility-region settlements. Universal regional human generation, dogs, wildlife, ownership, companions, negotiation, deterrence, and full actor-to-actor ecology are not live yet.",
+      },
+    ],
+  },
+  {
+    id: "views-and-hud",
+    iconText: "13",
     title: "Two views, one simulation",
     shortTitle: "Views & HUD",
     summary: "Chart 2D and Relief 3D read and command the same world state. Switching presentation cannot fork the simulation or turn momentary sight into permanent map knowledge.",
@@ -1027,7 +1101,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-perception",
         audience: "all",
         title: "The field shows what you can presently perceive",
-        body: "Terrain shape reaches much farther ahead than exact detail: in clear air the broad field reaches toward forty-two tiles through a 160-degree cone. It stays clear through twenty-six tiles, then eases across a sixteen-tile atmospheric horizon; six-tile close terrain awareness still surrounds the body. People, cargo, resources, exact water detail, names, live status, and actions use a shorter ten-tile, 100-degree field with two-tile close awareness. Substantial cover and structures can conceal those exact details without erasing the larger shoreline or ridge silhouette behind them; terrain elevation and severe weather still shorten both fields. When terrain leaves broad sight, a brief presentation-only impression eases into dim durable Chart memory—or darkness if it was never charted—instead of snapping black. Exact people, parcels, resources, labels, actions, and hit targets disappear immediately. Chart and Relief share the same impression, reduced motion settles it without a delayed fade, and none of it is saved or changes world knowledge.",
+        body: "Terrain shape reaches much farther ahead than exact detail: in clear air the broad field reaches toward fifty-two tiles through a 160-degree cone. It stays clear through thirty-four tiles, then eases across an eighteen-tile atmospheric horizon; six-tile close terrain awareness still surrounds the body. People, cargo, resources, exact water detail, names, live status, and actions use a shorter ten-tile, 100-degree field with two-tile close awareness. Substantial cover and structures can conceal those exact details without erasing the larger shoreline or ridge silhouette behind them; terrain elevation and severe weather still shorten both fields. When terrain leaves broad sight, a brief presentation-only impression eases into dim durable Chart memory—or darkness if it was never charted—instead of snapping black. Exact people, parcels, resources, labels, actions, and hit targets disappear immediately. Chart and Relief share the same impression, reduced motion settles it without a delayed fade, and none of it is saved or changes world knowledge.",
       },
       {
         id: "views-events",
@@ -1093,7 +1167,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
   {
     id: "saves-and-quiet-hour",
-    iconText: "13",
+    iconText: "14",
     title: "Stop safely without ending the world",
     shortTitle: "Saves",
     summary: "The perpetual world autosaves locally and never advances while closed. Quiet Hour is a voluntary recap and stopping surface, not a timer or quota.",
@@ -1156,7 +1230,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
   {
     id: "accessibility",
-    iconText: "14",
+    iconText: "15",
     title: "The estuary should explain itself",
     shortTitle: "Accessibility",
     summary: "Actions, hazards, availability, and progress use words and structure in addition to color, with keyboard, touch, reduced-motion, and assistive announcements supported.",
@@ -1215,7 +1289,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
   {
     id: "build-boundaries",
-    iconText: "15",
+    iconText: "16",
     title: "What is live, and what comes next",
     shortTitle: "Build status",
     summary: "The field manual describes only mechanics that affect this build. Requested simulation phases are listed plainly so absence never feels like a secret rule.",
@@ -1226,7 +1300,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, witnessed EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
+        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, regional physical cargo custody, region-0 settlements, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, and ABOUT inspection for the compatibility world's 42 humans are active. The outer game save remains version 4; embedded simulation snapshots migrate to identity-aware format 3 and rules 5. Perpetual play remains active.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1253,7 +1327,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 17 as const;
+export const TUTORIAL_CONTENT_VERSION = 18 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

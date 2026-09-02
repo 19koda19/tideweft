@@ -62,6 +62,23 @@ export type {
   HarborBootstrapEvaluation,
 } from "./fieldResources";
 export { createWorldView } from "./view";
+export {
+  MAX_RESIDENT_MEMORIES,
+  NPC_GENERATION_VERSION,
+  createResidentCondition,
+  createResidentPlayerKnowledge,
+  generateResidentDisplayName,
+  generateResidentIdentity,
+  generateResidentNeeds,
+  generateResidentTraits,
+  residentKnowsFact,
+  residentRainProtection,
+  residentRelationshipTrust,
+  residentSkillAptitude,
+  stableResidentId,
+  stableResidentIdForGeneration,
+} from "./npcIdentity";
+export type { ResidentIdentityGenerationInput } from "./npcIdentity";
 export { calculateNetworkMetrics, findAutonomousRoutePlan, routeCapacity, routeIsActive } from "./network";
 export type { AutonomousRoutePlan, NetworkMetrics } from "./network";
 export * from "./types";

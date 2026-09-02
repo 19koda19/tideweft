@@ -15,7 +15,7 @@ import {
   type TraversalFeedbackState,
   type TraversalIncident,
 } from "./traversalFeedback";
-import { projectUIView } from "./uiProjection";
+import { eventIsDirectlyObservableAtLocus, projectUIView } from "./uiProjection";
 
 function perceptionWithDirectTiles(
   world: WorldView,
@@ -156,7 +156,12 @@ describe("observed event projection", () => {
         sequence: 991,
         type: "route-reinforced",
         subjectId: null,
-        data: { settlementId: directSettlement.id, parts: 1, traceStrength: 40_000 },
+        data: {
+          settlementId: directSettlement.id,
+          parts: 1,
+          traceStrength: 40_000,
+          playerObserved: true,
+        },
       },
       {
         tick: 13,
@@ -192,6 +197,7 @@ describe("observed event projection", () => {
           originSettlementId: directSettlement.id,
           destinationSettlementId: remoteSettlement.id,
           carrier: "porter",
+          playerObserved: true,
         },
       },
     ];
@@ -207,6 +213,9 @@ describe("observed event projection", () => {
       [remoteSettlement.tileIndex],
     );
 
+    expect(eventIsDirectlyObservableAtLocus(additions[0]!, base, world, perception)).toBe(true);
+    expect(eventIsDirectlyObservableAtLocus(additions[1]!, base, world, perception)).toBe(false);
+
     const observedIds = projectUIView(world, player, session, { perception })
       .chronicle.map(({ id }) => id);
     expect(observedIds).toContain("991");
@@ -220,5 +229,43 @@ describe("observed event projection", () => {
     expect(legacyIds).toContain("991");
     expect(legacyIds).toContain("992");
     expect(legacyIds).toContain("993");
+  });
+
+  it("evaluates porter history at the event locus rather than the porter's later position", () => {
+    const state = createWorld("history stays where it happened");
+    const initial = createWorldView(state);
+    const player = createPlayer(initial);
+    const directIndex = playerTileIndex(player);
+    const directTile = initial.terrain.tiles[directIndex];
+    const remoteIndex = initial.terrain.tiles.findIndex((tile) =>
+      directTile !== undefined && Math.hypot(tile.x - directTile.x, tile.y - directTile.y) > 20
+    );
+    const route = state.routes[0];
+    const resident = state.residents[0];
+    if (!route || !resident || remoteIndex < 0) throw new Error("fixture needs a remote route point");
+    route.path = [directIndex, remoteIndex];
+    resident.location = { kind: "route", routeId: route.id, progress: 0 };
+    const world = createWorldView(state);
+    const perception = perceptionWithDirectTiles(world, directIndex, [directIndex]);
+
+    const happenedRemotely: SimEvent = {
+      tick: 4,
+      sequence: 1_001,
+      type: "resident-sheltered",
+      subjectId: resident.id,
+      data: { eventRouteId: route.id, eventRouteProgress: 1_000_000 },
+    };
+    const happenedHere: SimEvent = {
+      ...happenedRemotely,
+      sequence: 1_002,
+      data: { eventRouteId: route.id, eventRouteProgress: 0 },
+    };
+
+    expect(eventIsDirectlyObservableAtLocus(happenedRemotely, world, world, perception))
+      .toBe(false);
+    resident.location = { kind: "route", routeId: route.id, progress: 1_000_000 };
+    const movedWorld = createWorldView(state);
+    expect(eventIsDirectlyObservableAtLocus(happenedHere, movedWorld, movedWorld, perception))
+      .toBe(true);
   });
 });

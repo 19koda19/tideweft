@@ -41,6 +41,10 @@ export function eventSettlementLocusIds(
     case "world-created":
     case "weather-changed":
     case "tide-choir-awakened":
+    case "resident-observed":
+    case "resident-introduced":
+    case "resident-sheltered":
+    case "resident-resumed":
     case "command-rejected":
       return [];
   }

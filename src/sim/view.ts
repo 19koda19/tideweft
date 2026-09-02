@@ -38,6 +38,21 @@ export function createWorldView(world: WorldState): WorldView {
     })),
     residents: world.residents.map((resident) => ({
       ...resident,
+      identity: {
+        ...resident.identity,
+        originRegion: { ...resident.identity.originRegion },
+        appearance: { ...resident.identity.appearance },
+        temperament: [...resident.identity.temperament],
+        skills: resident.identity.skills.map((skill) => ({ ...skill })),
+        visibleGear: [...resident.identity.visibleGear],
+        history: resident.identity.history.map((event) => ({ ...event })),
+      },
+      condition: { ...resident.condition },
+      playerKnowledge: {
+        ...resident.playerKnowledge,
+        facts: [...resident.playerKnowledge.facts],
+      },
+      memories: resident.memories.map((memory) => ({ ...memory })),
       traits: { ...resident.traits },
       needs: { ...resident.needs },
       relationships: resident.relationships.map((relationship) => ({ ...relationship })),

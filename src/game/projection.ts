@@ -1,5 +1,6 @@
 import type {
   AdriftView,
+  PorterView,
   TerrainClimateView,
   TideHarpView,
   TideweftView,
@@ -27,7 +28,14 @@ import {
   type FieldResourceEcologyState,
 } from "../sim/fieldResources";
 import { regionKey } from "../sim/regions";
-import { FIXED_POINT, STRAND_AUTOMATION_THRESHOLD, type TerrainTileView, type WorldView } from "../sim/types";
+import {
+  FIXED_POINT,
+  STRAND_AUTOMATION_THRESHOLD,
+  type ResidentState,
+  type TerrainTileView,
+  type WorldView,
+} from "../sim/types";
+import { residentKnowsFact } from "../sim/npcIdentity";
 import {
   TILE_UNITS,
   activeTideHarpAtPlayer,
@@ -118,6 +126,8 @@ const terrainKindCode: Readonly<Record<TerrainTileView["terrain"], number>> = {
 
 export interface ProjectionOptions {
   selectedSettlementId?: number | null;
+  selectedResidentId?: number | null;
+  residentSpeech?: ReadonlyMap<number, string>;
   selectedRouteId?: number | null;
   destinationSettlementId?: number | null;
   destinationKind?: "pickup" | "delivery" | "report";
@@ -142,6 +152,193 @@ export interface ProjectionOptions {
 export interface AdriftProjectionControl {
   readonly moveX: number;
   readonly moveY: number;
+}
+
+export const RESIDENT_CONVERSATION_RANGE_TILES = 3;
+
+export interface ResidentRouteProjection {
+  readonly tileIndex: number;
+  readonly position: { readonly x: number; readonly y: number };
+  readonly facing: number;
+  readonly progress: number;
+}
+
+const SETTLEMENT_RESIDENT_OFFSETS = [
+  [1, 0], [0, 1], [-1, 0], [0, -1],
+  [1, 1], [-1, 1], [-1, -1], [1, -1],
+  [2, 0], [0, 2], [-2, 0], [0, -2],
+] as const;
+
+function settlementResidentSlot(
+  world: WorldView,
+  center: { readonly x: number; readonly y: number },
+  ordinal: number,
+): { readonly tileIndex: number; readonly dx: number; readonly dy: number } | undefined {
+  const viable: { tileIndex: number; dx: number; dy: number }[] = [];
+  const seen = new Set<string>();
+  const consider = (dx: number, dy: number): boolean => {
+    const key = `${dx},${dy}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    const x = center.x + dx;
+    const y = center.y + dy;
+    if (x < 0 || y < 0 || x >= world.terrain.width || y >= world.terrain.height) return false;
+    const tileIndex = y * world.terrain.width + x;
+    const tile = world.terrain.tiles[tileIndex];
+    if (!tile || tile.terrain === "deep-water") return false;
+    viable.push({ tileIndex, dx, dy });
+    return viable.length > ordinal;
+  };
+
+  // Preserve the familiar compact harbor arrangement for ordinary crowds.
+  for (const [dx, dy] of SETTLEMENT_RESIDENT_OFFSETS) {
+    if (consider(dx, dy)) return viable[ordinal];
+  }
+
+  // Deliveries can legitimately gather more than twelve visitors at one
+  // harbor. Expand deterministically through square rings instead of wrapping
+  // modulo and placing two persistent people on the same hit target.
+  const maximumRadius = Math.max(world.terrain.width, world.terrain.height);
+  for (let radius = 1; radius <= maximumRadius; radius += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      if (consider(dx, -radius)) return viable[ordinal];
+    }
+    for (let dy = -radius + 1; dy <= radius; dy += 1) {
+      if (consider(radius, dy)) return viable[ordinal];
+    }
+    for (let dx = radius - 1; dx >= -radius; dx -= 1) {
+      if (consider(dx, radius)) return viable[ordinal];
+    }
+    for (let dy = radius - 1; dy >= -radius + 1; dy -= 1) {
+      if (consider(-radius, dy)) return viable[ordinal];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolves a simulated route resident into the current floating view. A route
+ * outside the loaded regional window produces no actor rather than a cloned or
+ * teleported compatibility porter.
+ */
+export function projectResidentRoutePosition(
+  world: WorldView,
+  resident: ResidentState,
+  tileSize = 24,
+): ResidentRouteProjection | null {
+  if (resident.location.kind !== "route") return null;
+  const location = resident.location;
+  const route = world.routes.find((candidate) => candidate.id === location.routeId);
+  if (!route || route.path.length === 0) return null;
+  const progress = Math.max(0, Math.min(1, location.progress / FIXED_POINT));
+  const scaled = progress * Math.max(0, route.path.length - 1);
+  const fromOffset = Math.min(route.path.length - 1, Math.floor(scaled));
+  const toOffset = Math.min(route.path.length - 1, fromOffset + 1);
+  const fromIndex = route.path[fromOffset];
+  const toIndex = route.path[toOffset];
+  if (fromIndex === undefined || toIndex === undefined) return null;
+  const from = tilePoint(fromIndex, world.terrain.width, tileSize);
+  const to = tilePoint(toIndex, world.terrain.width, tileSize);
+  const local = scaled - fromOffset;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  return {
+    tileIndex: local < 0.5 ? fromIndex : toIndex,
+    position: {
+      x: from.x + dx * local,
+      y: from.y + dy * local,
+    },
+    facing: dx === 0 && dy === 0 ? 0 : Math.atan2(dy, dx),
+    progress,
+  };
+}
+
+/**
+ * Compatibility residents become physical, inspectable people at home as well
+ * as on a route. Settlement placement uses a stable ordering of everyone
+ * physically present, including visiting porters; identity never depends on
+ * household-array order.
+ */
+export function projectResidentWorldPosition(
+  world: WorldView,
+  resident: ResidentState,
+  tileSize = 24,
+): ResidentRouteProjection | null {
+  const route = projectResidentRoutePosition(world, resident, tileSize);
+  if (route) return route;
+  const location = resident.location;
+  if (location.kind !== "settlement") return null;
+  const settlement = world.settlements.find(({ id }) => id === location.settlementId);
+  if (!settlement) return null;
+  const settlementTile = world.terrain.tiles[settlement.tileIndex];
+  if (!settlementTile) return null;
+  const presentResidents = world.residents
+    .filter((candidate) =>
+      candidate.location.kind === "settlement"
+      && candidate.location.settlementId === settlement.id
+    )
+    .sort((left, right) => left.identity.stableId < right.identity.stableId
+      ? -1
+      : left.identity.stableId > right.identity.stableId
+        ? 1
+        : 0);
+  const currentOrdinal = presentResidents.findIndex((candidate) => candidate.id === resident.id);
+  if (currentOrdinal < 0) return null;
+  const chosen = settlementResidentSlot(world, settlementTile, currentOrdinal);
+  if (!chosen) {
+    return {
+      tileIndex: settlement.tileIndex,
+      position: tilePoint(settlement.tileIndex, world.terrain.width, tileSize),
+      facing: 0,
+      progress: 0,
+    };
+  }
+  return {
+    tileIndex: chosen.tileIndex,
+    position: tilePoint(chosen.tileIndex, world.terrain.width, tileSize),
+    facing: Math.atan2(-chosen.dy, -chosen.dx),
+    progress: 0,
+  };
+}
+
+function porterConditionLabels(resident: ResidentState): string[] {
+  const labels: string[] = [];
+  if (resident.condition.wetness >= 660_000) labels.push("Soaked");
+  else if (resident.condition.wetness >= 260_000) labels.push("Wet");
+  if (resident.condition.coldStress >= 660_000) labels.push("Cold");
+  else if (resident.condition.coldStress >= 300_000) labels.push("Cool");
+  if (resident.condition.exhaustion >= 680_000) labels.push("Tired");
+  if (resident.condition.sheltering) labels.push("Holding for weather");
+  return labels;
+}
+
+function porterEmotionMark(
+  resident: ResidentState,
+  selected: boolean,
+): NonNullable<PorterView["emotionMark"]> | undefined {
+  switch (resident.condition.emotion) {
+    case "afraid": return ":[";
+    case "worried": return ":S";
+    case "tired": return ":|";
+    case "relieved": return "=]";
+    case "content": return selected ? ":)" : undefined;
+    case "focused": return selected ? ":|" : undefined;
+  }
+}
+
+function porterStateSpeech(resident: ResidentState, tick: number, selected: boolean): string | undefined {
+  // Strong state becomes briefly audible at a deterministic cadence. Because
+  // callers project only direct-detail actors, this can never become a global
+  // transcript or off-screen identity leak.
+  const ambientWindow = (tick + resident.id * 17) % 180 < 14;
+  if (!selected && !ambientWindow) return undefined;
+  if (resident.condition.sheltering) return "Holding here until this eases.";
+  if (resident.condition.coldStress >= 720_000) return "This cold bites.";
+  if (resident.condition.wetness >= 700_000) return "Soaked through.";
+  if (resident.condition.exhaustion >= 720_000) return "Need a moment.";
+  if (resident.needs.food >= 760_000) return "Need food soon.";
+  if (resident.activeContractId !== null) return "Still carrying this promise.";
+  return selected ? "Keeping an eye on the weather." : undefined;
 }
 
 /**
@@ -426,7 +623,8 @@ export function projectGameView(
     const belongsToPlayer = explicitlyObservedEventIds.has(event.sequence)
       || (typeof commandId === "string" && commandId.startsWith("player-"))
       || event.data.carrier === "player";
-    const directlyObserved = settlement !== undefined
+    const directlyObserved = event.data.playerObserved === true
+      && settlement !== undefined
       && perception.detailVisibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT;
     if (!directlyObserved && !belongsToPlayer) {
       // An unlocated simulation event cannot become visual knowledge merely by
@@ -629,22 +827,41 @@ export function projectGameView(
     choirs,
     traces,
     porters: world.residents.flatMap((resident) => {
-      const location = resident.location;
-      if (location.kind !== "route") return [];
-      const route = world.routes.find((candidate) => candidate.id === location.routeId);
-      if (!route || route.path.length === 0) return [];
-      const progress = location.progress / FIXED_POINT;
-      const pathPosition = Math.min(route.path.length - 1, Math.floor(progress * route.path.length));
-      const porterTileIndex = route.path[pathPosition] ?? route.path[0] ?? 0;
-      if (perception.detailVisibilityGrades[porterTileIndex] !== VISIBILITY_DIRECT) return [];
+      const routeProjection = projectResidentWorldPosition(world, resident, tileSize);
+      if (!routeProjection) return [];
+      if (perception.detailVisibilityGrades[routeProjection.tileIndex] !== VISIBILITY_DIRECT) return [];
+      const selected = options.selectedResidentId === resident.id;
+      const knowsName = residentKnowsFact(resident.playerKnowledge, "name");
+      const speech = options.residentSpeech?.get(resident.id)
+        ?? porterStateSpeech(resident, world.completedTick, selected);
+      const emotionMark = porterEmotionMark(resident, selected);
       return [
         {
           id: String(resident.id),
-          name: resident.name,
-          position: tilePoint(porterTileIndex, world.terrain.width, tileSize),
-          facing: 0,
-          state: (resident.intention === "carry" ? "traveling" : "waiting") as "traveling" | "waiting",
-          progress,
+          ...(knowsName ? { name: resident.name } : {}),
+          quickLabel: knowsName
+            ? resident.name
+            : resident.location.kind === "route"
+              ? "Unknown porter"
+              : "Unknown resident",
+          position: routeProjection.position,
+          facing: routeProjection.facing,
+          state: resident.condition.sheltering
+            ? "resting" as const
+            : resident.intention === "carry"
+              ? "traveling" as const
+              : "waiting" as const,
+          appearance: {
+            heightScale: resident.identity.heightCm / 171,
+            build: resident.identity.build,
+            palette: resident.identity.appearance.palette,
+            wetness: resident.condition.wetness / FIXED_POINT,
+          },
+          conditionLabels: porterConditionLabels(resident),
+          ...(emotionMark ? { emotionMark } : {}),
+          ...(speech ? { speech } : {}),
+          progress: routeProjection.progress,
+          selected,
         },
       ];
     }),

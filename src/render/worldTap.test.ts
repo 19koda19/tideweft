@@ -358,6 +358,17 @@ describe("world tap intent", () => {
       id: "porter-1",
       point: { x: 25, y: 5 },
     });
+    expect(commandForWorldTap(
+      direct,
+      { entity: "porter", id: "porter-1" },
+      { x: 25, y: 5 },
+      true,
+    )).toEqual({
+      type: "select",
+      entity: "porter",
+      id: "porter-1",
+      point: { x: 25, y: 5 },
+    });
   });
 
   it("fails closed when an entity claims visibility on an obscured tile", () => {

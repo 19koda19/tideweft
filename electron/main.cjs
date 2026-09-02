@@ -17,8 +17,8 @@ const SMOKE_REGIONAL_ROWS = 74;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.7';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 15;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.8';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 16;
 const smokeRegionalTileIndex = (compatibilityTileIndex) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -537,6 +537,24 @@ function rendererProbeScript() {
     const contractActionControls = Array.from(document.querySelectorAll('.contract-card__action'));
     const settlementInspector = document.querySelector('.settlement-inspector');
     const reportActionControls = Array.from(document.querySelectorAll('.report-item__action'));
+    const residentAbout = document.querySelector('.resident-about');
+    const residentAboutHeader = residentAbout?.querySelector('.resident-about__header') || null;
+    const residentAboutTitle = residentAbout?.querySelector('.resident-about__title') || null;
+    const residentAboutIdentity = residentAbout?.querySelector('.resident-about__identity') || null;
+    const residentAboutBody = residentAbout?.querySelector('.resident-about__body') || null;
+    const residentAboutKnowledge = residentAbout?.querySelector('.resident-about__knowledge') || null;
+    const residentAboutObserved = residentAbout?.querySelector('.resident-about__facts') || null;
+    const residentAboutKnown = residentAbout?.querySelectorAll('.resident-about__facts')?.[1] || null;
+    const residentAboutClose = residentAbout?.querySelector('.resident-about__close') || null;
+    const residentAboutActions = residentAbout?.querySelector('.resident-about__actions') || null;
+    const residentAboutGreet = residentAbout?.querySelector('.resident-about__greet') || null;
+    const residentAboutActionHint = residentAbout?.querySelector('.resident-about__action-hint') || null;
+    const chroniclePanel = document.querySelector('.chronicle-panel');
+    const residentAboutStyle = residentAbout ? getComputedStyle(residentAbout) : null;
+    const residentAboutBodyStyle = residentAboutBody ? getComputedStyle(residentAboutBody) : null;
+    const residentFactRows = residentAbout
+      ? Array.from(residentAbout.querySelectorAll('.resident-about__fact'))
+      : [];
     const contractStyle = contractList ? getComputedStyle(contractList) : null;
     const contractClientHeight = contractList ? contractList.clientHeight : null;
     const contractScrollHeight = contractList ? contractList.scrollHeight : null;
@@ -931,6 +949,93 @@ function rendererProbeScript() {
           return rect.width >= 44 && rect.height >= 44;
         }),
       },
+      residentAbout: {
+        selectedId: uiView?.selectedResident?.id || null,
+        open: residentAbout instanceof HTMLElement ? !residentAbout.hidden : null,
+        visible: visiblyIntersectsViewport(residentAbout),
+        insideViewport: whollyInsideViewport(residentAbout),
+        rect: rectOf(residentAbout),
+        role: residentAbout?.getAttribute('role') || null,
+        modal: residentAbout?.getAttribute('data-modal') || null,
+        pausesGameplay: residentAbout?.getAttribute('data-pauses-gameplay') || null,
+        pointerEvents: residentAbout ? getComputedStyle(residentAbout).pointerEvents : null,
+        paneFree: residentAboutStyle
+          ? residentAboutStyle.backgroundColor === 'rgba(0, 0, 0, 0)' &&
+            residentAboutStyle.backgroundImage === 'none' &&
+            Number.parseFloat(residentAboutStyle.borderTopWidth || '0') === 0 &&
+            residentAboutStyle.boxShadow === 'none' &&
+            residentAboutStyle.backdropFilter === 'none'
+          : null,
+        heading: residentAboutTitle?.textContent?.trim() || null,
+        identity: residentAboutIdentity?.textContent?.trim() || null,
+        knowledge: residentAboutKnowledge?.textContent?.trim() || null,
+        observedFactCount: residentAboutObserved?.querySelectorAll('.resident-about__fact').length ?? null,
+        knownFactCount: residentAboutKnown?.querySelectorAll('.resident-about__fact').length ?? null,
+        header: {
+          visible: visiblyIntersectsViewport(residentAboutHeader),
+          insideViewport: whollyInsideViewport(residentAboutHeader),
+          rect: rectOf(residentAboutHeader),
+          pointerEvents: residentAboutHeader ? getComputedStyle(residentAboutHeader).pointerEvents : null,
+        },
+        body: {
+          visible: visiblyIntersectsViewport(residentAboutBody),
+          insideViewport: whollyInsideViewport(residentAboutBody),
+          rect: rectOf(residentAboutBody),
+          pointerEvents: residentAboutBodyStyle?.pointerEvents || null,
+          overflowX: residentAboutBodyStyle?.overflowX || null,
+          overflowY: residentAboutBodyStyle?.overflowY || null,
+          overscrollBehavior: residentAboutBodyStyle?.overscrollBehavior || null,
+          tabIndex: residentAboutBody instanceof HTMLElement ? residentAboutBody.tabIndex : null,
+          ariaLabel: residentAboutBody?.getAttribute('aria-label') || null,
+          clientWidth: residentAboutBody instanceof HTMLElement ? residentAboutBody.clientWidth : null,
+          scrollWidth: residentAboutBody instanceof HTMLElement ? residentAboutBody.scrollWidth : null,
+          clientHeight: residentAboutBody instanceof HTMLElement ? residentAboutBody.clientHeight : null,
+          scrollHeight: residentAboutBody instanceof HTMLElement ? residentAboutBody.scrollHeight : null,
+          scrollTop: residentAboutBody instanceof HTMLElement ? residentAboutBody.scrollTop : null,
+          hasVerticalOverflow: residentAboutBody instanceof HTMLElement
+            ? residentAboutBody.scrollHeight > residentAboutBody.clientHeight + 1
+            : null,
+          hasHorizontalOverflow: residentAboutBody instanceof HTMLElement
+            ? residentAboutBody.scrollWidth > residentAboutBody.clientWidth + 1
+            : null,
+          factsInsideWidth: residentAboutBody instanceof HTMLElement
+            ? residentFactRows.every((row) => {
+                const rowRect = row.getBoundingClientRect();
+                const bodyRect = residentAboutBody.getBoundingClientRect();
+                return rowRect.left >= bodyRect.left - 1 && rowRect.right <= bodyRect.right + 1;
+              })
+            : null,
+        },
+        actions: {
+          visible: visiblyIntersectsViewport(residentAboutActions),
+          insideViewport: whollyInsideViewport(residentAboutActions),
+          rect: rectOf(residentAboutActions),
+          pointerEvents: residentAboutActions ? getComputedStyle(residentAboutActions).pointerEvents : null,
+        },
+        overlapsTopHud: elementsOverlap(
+          residentAbout,
+          visiblyIntersectsViewport(mobileFieldStrip) ? mobileFieldStrip : hudBar,
+        ),
+        overlapsActionDock: elementsOverlap(residentAbout, actionDock),
+        close: {
+          ...targetProbe(residentAboutClose),
+          pointerEvents: residentAboutClose ? getComputedStyle(residentAboutClose).pointerEvents : null,
+          ariaLabel: residentAboutClose?.getAttribute('aria-label') || null,
+        },
+        greet: {
+          ...targetProbe(residentAboutGreet),
+          pointerEvents: residentAboutGreet ? getComputedStyle(residentAboutGreet).pointerEvents : null,
+          text: residentAboutGreet?.textContent?.trim() || null,
+          ariaDescribedBy: residentAboutGreet?.getAttribute('aria-describedby') || null,
+        },
+        actionHint: {
+          visible: visiblyIntersectsViewport(residentAboutActionHint),
+          insideViewport: whollyInsideViewport(residentAboutActionHint),
+          id: residentAboutActionHint?.id || null,
+          text: residentAboutActionHint?.textContent?.trim() || null,
+        },
+        chronicleVisible: visiblyIntersectsViewport(chroniclePanel),
+      },
       mobileHud: {
         breakpointActive: window.matchMedia(
           '(max-width: 44rem), (max-height: 34rem) and (max-width: 64rem)',
@@ -1278,6 +1383,238 @@ function probeHasOpenPatchNotes(probe, source) {
     notes.newestFirst === true &&
     notes.hasKnownLimitations === true
   );
+}
+
+function probeHasResidentAbout(probe, acquainted) {
+  const about = probe?.residentAbout;
+  const known = acquainted === true;
+  return Boolean(
+    probe?.paused === false &&
+    about?.selectedId &&
+    about.open === true &&
+    about.visible === true &&
+    about.insideViewport === true &&
+    about.role === 'region' &&
+    about.modal === 'false' &&
+    about.pausesGameplay === 'false' &&
+    about.pointerEvents === 'none' &&
+    about.paneFree === true &&
+    about.overlapsTopHud === false &&
+    about.overlapsActionDock === false &&
+    about.observedFactCount >= 5 &&
+    about.chronicleVisible === false &&
+    about.header?.visible === true &&
+    about.header.insideViewport === true &&
+    about.header.pointerEvents === 'none' &&
+    about.body?.visible === true &&
+    about.body.insideViewport === true &&
+    about.body.pointerEvents === 'auto' &&
+    about.body.overflowX === 'hidden' &&
+    (about.body.overflowY === 'auto' || about.body.overflowY === 'scroll') &&
+    about.body.overscrollBehavior === 'contain' &&
+    about.body.tabIndex === 0 &&
+    about.body.ariaLabel?.toLowerCase().includes('scrollable resident details') &&
+    about.body.clientHeight > 0 &&
+    about.body.scrollHeight >= about.body.clientHeight &&
+    about.body.hasHorizontalOverflow === false &&
+    about.body.factsInsideWidth === true &&
+    about.close?.visible === true &&
+    about.close.insideViewport === true &&
+    about.close.rect?.width >= 44 &&
+    about.close.rect?.height >= 44 &&
+    about.close.pointerEvents === 'auto' &&
+    about.close.ariaLabel?.toLowerCase().includes('close resident') &&
+    (known
+      ? about.knowledge === 'Acquainted' &&
+        about.heading !== 'UNKNOWN RESIDENT' &&
+        about.heading !== 'UNKNOWN PORTER' &&
+        about.knownFactCount === 3 &&
+        about.greet.visible === false
+      : (about.knowledge === 'Unfamiliar' || about.knowledge === 'Recognized') &&
+        (about.heading === 'UNKNOWN RESIDENT' || about.heading === 'UNKNOWN PORTER') &&
+        about.knownFactCount === 0 &&
+        about.greet.visible === true &&
+        about.greet.insideViewport === true &&
+        about.greet.rect?.width >= 44 &&
+        about.greet.rect?.height >= 44 &&
+        about.greet.pointerEvents === 'auto' &&
+        about.greet.disabled === false &&
+        about.greet.text === 'GREET' &&
+        !about.greet.ariaDescribedBy &&
+        about.actionHint?.visible === false)
+  );
+}
+
+async function sendPhysicalLeftClick(contents, rect, label) {
+  if (
+    !rect ||
+    !Number.isFinite(rect.left) ||
+    !Number.isFinite(rect.top) ||
+    !Number.isFinite(rect.width) ||
+    !Number.isFinite(rect.height) ||
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    throw new Error(`${label} did not expose a physical click rectangle`);
+  }
+  const x = Math.round(rect.left + rect.width / 2);
+  const y = Math.round(rect.top + rect.height / 2);
+  contents.sendInputEvent({ type: 'mouseMove', x, y, movementX: 0, movementY: 0 });
+  contents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+  contents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+  await new Promise((resolve) => setTimeout(resolve, 90));
+  return { x, y };
+}
+
+async function exerciseResidentAboutPhysicalScroll(contents, probe) {
+  const body = probe?.residentAbout?.body;
+  if (!body?.hasVerticalOverflow) {
+    return {
+      required: false,
+      initialScrollTop: body?.scrollTop ?? null,
+      finalScrollTop: body?.scrollTop ?? null,
+    };
+  }
+  const rect = body.rect;
+  if (!rect || rect.width <= 0 || rect.height <= 0) {
+    throw new Error('resident ABOUT overflow existed without a physical scroll rectangle');
+  }
+  const x = Math.round(rect.left + rect.width / 2);
+  const y = Math.round(rect.top + rect.height / 2);
+  const initialScrollTop = body.scrollTop;
+  contents.sendInputEvent({ type: 'mouseMove', x, y, movementX: 0, movementY: 0 });
+  for (const deltaY of [240, -240]) {
+    contents.sendInputEvent({
+      type: 'mouseWheel',
+      x,
+      y,
+      deltaX: 0,
+      deltaY,
+      canScroll: true,
+      hasPreciseScrollingDeltas: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 140));
+    const moved = await readRendererProbe(contents);
+    if ((moved.residentAbout?.body?.scrollTop ?? 0) > initialScrollTop + 1) {
+      return {
+        required: true,
+        point: { x, y },
+        initialScrollTop,
+        finalScrollTop: moved.residentAbout.body.scrollTop,
+        maxScrollTop: moved.residentAbout.body.scrollHeight - moved.residentAbout.body.clientHeight,
+      };
+    }
+  }
+  throw new Error('resident ABOUT facts overflowed but physical wheel input did not scroll them');
+}
+
+async function exerciseSmokeResidentAbout(
+  contents,
+  excludedResidentIds = [],
+  captureOpenState = null,
+) {
+  const exclusions = (Array.isArray(excludedResidentIds) ? excludedResidentIds : [excludedResidentIds])
+    .filter((id) => id !== null && id !== undefined)
+    .map(String);
+  const target = await contents.executeJavaScript(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const runtime = bridge?.runtime;
+    const renderer = bridge?.renderer;
+    const view = runtime?.getRenderView?.();
+    if (!renderer?.setMode || !renderer?.focusWorld || !view?.player?.position || !Array.isArray(view.porters)) {
+      return null;
+    }
+    const candidates = view.porters
+      .filter((porter) => !${JSON.stringify(exclusions)}.includes(String(porter?.id)) && porter?.position)
+      .map((porter) => ({
+        porter,
+        distance: Math.hypot(
+          porter.position.x - view.player.position.x,
+          porter.position.y - view.player.position.y,
+        ),
+      }))
+      .filter(({ distance }) => distance <= 70)
+      .sort((left, right) => {
+        const leftWaiting = left.porter.state === 'waiting' ? 0 : 1;
+        const rightWaiting = right.porter.state === 'waiting' ? 0 : 1;
+        return leftWaiting - rightWaiting || left.distance - right.distance ||
+          String(left.porter.id).localeCompare(String(right.porter.id));
+      });
+    const chosen = candidates[0];
+    if (!chosen) return null;
+    const previousMode = renderer.mode();
+    renderer.setMode('chart-2d');
+    renderer.focusWorld(chosen.porter.position, 1.65);
+    return { id: chosen.porter.id, previousMode, distance: chosen.distance };
+  })()`, true);
+  if (!target?.id) throw new Error('no nearby resident was available for a physical Chart selection');
+  await waitForRenderer(
+    contents,
+    (probe) => probeHasActiveRenderer(probe, 'chart-2d'),
+    SMOKE_TEST.timeoutMs,
+  );
+  // focusWorld keeps this resident at Chart center for 1.8 seconds. Give the
+  // eased camera enough time to settle before the OS-level pointer click.
+  await new Promise((resolve) => setTimeout(resolve, 760));
+  const chartTarget = await contents.executeJavaScript(`(() => {
+    const canvas = document.querySelector('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])');
+    if (!(canvas instanceof HTMLCanvasElement)) return null;
+    const rect = canvas.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  })()`, true);
+  const canvasPoint = await sendPhysicalLeftClick(contents, chartTarget, 'resident Chart target');
+
+  const opened = await waitForRenderer(
+    contents,
+    (probe) => probe.residentAbout?.selectedId === target.id && probeHasResidentAbout(probe, false),
+    SMOKE_TEST.timeoutMs,
+  );
+  const greetPoint = await sendPhysicalLeftClick(
+    contents,
+    opened.residentAbout.greet.rect,
+    'resident GREET',
+  );
+  const acquainted = await waitForRenderer(
+    contents,
+    (probe) => probe.residentAbout?.selectedId === target.id && probeHasResidentAbout(probe, true),
+    SMOKE_TEST.timeoutMs,
+  );
+  if (target.previousMode !== 'chart-2d') {
+    await contents.executeJavaScript(`(() => {
+      const renderer = window.__TIDEWEFT__?.renderer;
+      return renderer?.setMode?.(${JSON.stringify(target.previousMode)}) ?? null;
+    })()`, true);
+    await waitForRenderer(
+      contents,
+      (probe) => probeHasActiveRenderer(probe, target.previousMode),
+      SMOKE_TEST.timeoutMs,
+    );
+  }
+  const screenshot = typeof captureOpenState === 'function'
+    ? await captureOpenState()
+    : null;
+  const scroll = await exerciseResidentAboutPhysicalScroll(contents, acquainted);
+  const beforeClose = await readRendererProbe(contents);
+  const closePoint = await sendPhysicalLeftClick(
+    contents,
+    beforeClose.residentAbout.close.rect,
+    'resident ABOUT close',
+  );
+  const closed = await waitForRenderer(
+    contents,
+    (probe) => probe.residentAbout?.open === false && probe.residentAbout?.selectedId === null,
+    SMOKE_TEST.timeoutMs,
+  );
+  return {
+    id: target.id,
+    distance: target.distance,
+    input: { canvasPoint, greetPoint, closePoint },
+    opened,
+    acquainted,
+    scroll,
+    closed,
+    screenshot,
+  };
 }
 
 async function verifySmokeTitlePatchNotes(contents) {
@@ -3583,6 +3920,7 @@ async function runProductionSmoke(window) {
     SMOKE_TEST.timeoutMs,
   );
   const desktopBraceProbe = await verifySmokeDesktopGlobalBrace(contents);
+  const desktopResidentProbe = await exerciseSmokeResidentAbout(contents);
 
   // Exercise the exact UI path that previously lost clicks during live card
   // refreshes. The deterministic smoke seed begins beside an offered cargo
@@ -3601,6 +3939,36 @@ async function runProductionSmoke(window) {
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasLandscapeMobileFrame(probe) &&
       probeHasCollapsedMobileHud(probe),
+  );
+  const mobileScreenshotParts = SMOKE_TEST.mobileScreenshotPath
+    ? path.parse(SMOKE_TEST.mobileScreenshotPath)
+    : null;
+  const residentAboutScreenshotPath = mobileScreenshotParts
+    ? path.join(
+        mobileScreenshotParts.dir,
+        `${mobileScreenshotParts.name}-resident-about${mobileScreenshotParts.ext || '.png'}`,
+      )
+    : '';
+  const landscapeResidentProbe = await exerciseSmokeResidentAbout(
+    contents,
+    [desktopResidentProbe.id],
+    async () => {
+      const landscapeScreenshot = await captureSmokeEvidence(window, residentAboutScreenshotPath);
+      const portraitOpen = await resizeSmokeViewport(
+        window,
+        SMOKE_NARROW_PHONE_VIEWPORT,
+        (probe) => probeHasActiveRenderer(probe, 'relief-3d') && probeHasResidentAbout(probe, true),
+      );
+      const landscapeRestored = await resizeSmokeViewport(
+        window,
+        SMOKE_LANDSCAPE_PHONE_VIEWPORT,
+        (probe) =>
+          probeHasActiveRenderer(probe, 'relief-3d') &&
+          probeHasLandscapeMobileFrame(probe) &&
+          probeHasResidentAbout(probe, true),
+      );
+      return { landscapeScreenshot, portraitOpen, landscapeRestored };
+    },
   );
   const landscapeInspectorProbe = await openSmokeMobileInspector(contents);
   const landscapeInspectorClosedProbe = await toggleSmokeMobileHud(contents, false);
@@ -3809,6 +4177,11 @@ async function runProductionSmoke(window) {
     titlePatchNotes: titlePatchNotesProbe,
     world: worldProbe,
     desktopBrace: desktopBraceProbe,
+    residentAbout: {
+      desktop: desktopResidentProbe,
+      portraitTouchLayout: landscapeResidentProbe.screenshot?.portraitOpen ?? null,
+      landscapeTouchLayout: landscapeResidentProbe,
+    },
     hybridBrace: hybridBraceProbe,
     promisePickup: promisePickupProbe,
     promiseCommit: promiseCommitProbe,

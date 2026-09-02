@@ -5,6 +5,7 @@ import {
   createWorldView,
   deserializeWorld,
   FIXED_POINT,
+  residentKnowsFact,
   serializeWorld,
   STRAND_AUTOMATION_THRESHOLD,
   WORLD_HEIGHT,
@@ -110,7 +111,11 @@ import {
   type WayknotKind,
   type WayknotPlacementReason,
 } from "./wayknots";
-import { projectGameView, projectPerception } from "./projection";
+import {
+  projectGameView,
+  projectPerception,
+  RESIDENT_CONVERSATION_RANGE_TILES,
+} from "./projection";
 import { VISIBILITY_DIRECT } from "./perception";
 import {
   announce,
@@ -120,7 +125,7 @@ import {
 } from "./sessionTypes";
 import { updateTutorial } from "./tutorial";
 import { appendSurveyedHarborLeg, assessHarborLeg, type TideChoirCycle } from "./tideChoir";
-import { projectUIView } from "./uiProjection";
+import { eventIsDirectlyObservableAtLocus, projectUIView } from "./uiProjection";
 import {
   addLooseCargoStack,
   consumeLooseCargoStack,
@@ -328,6 +333,11 @@ export async function createTideweftRuntime(
   let pendingRenegotiation: { contractId: number; settlementId: number; commandId: string } | null = null;
   let pendingReportDelivery: { commandId: string; targetSettlementId: number } | null = null;
   let pendingChoir: { commandId: string; cycle: TideChoirCycle } | null = null;
+  let selectedResidentId: number | null = null;
+  let pendingResidentObservation: { residentId: number; commandId: string } | null = null;
+  let pendingResidentGreeting: { residentId: number; commandId: string } | null = null;
+  let eventObservationCursor = 0;
+  const residentSpeech = new Map<number, { text: string; untilSessionMs: number }>();
   let lastAutosaveTick = 0;
   let lastCargoDamageNoticeMs = Number.NEGATIVE_INFINITY;
   let pendingSave: { sequence: number; record: SaveRecord } | undefined;
@@ -436,6 +446,9 @@ export async function createTideweftRuntime(
     saveGeneration = loaded.saveGeneration;
     lastIssuedSaveTimestamp = loaded.updatedAt;
     world = loaded.world;
+    // Historical events without an explicit observation bit are not
+    // retroactively revealed merely because the player now visits their locus.
+    eventObservationCursor = Math.max(0, world.meta.nextEventSequence - 1);
     // Calm/standard remain readable simulation values for old snapshots and
     // deterministic fixtures, but the playable game now has one ruleset.
     world.meta.pressureMode = HARD_PRESSURE_MODE;
@@ -492,6 +505,7 @@ export async function createTideweftRuntime(
 
   function refreshViews(): void {
     perception = projectPerception(worldView, player);
+    captureNewlyObservedEvents();
     const activeContract = player.activeContractId === null
       ? undefined
       : economyView.contracts.find((contract) => contract.id === player.activeContractId);
@@ -515,6 +529,8 @@ export async function createTideweftRuntime(
           : undefined;
     renderView = projectGameView(worldView, player, {
       selectedSettlementId: session.selectedSettlementId,
+      selectedResidentId,
+      residentSpeech: activeResidentSpeech(),
       selectedRouteId: objectiveContract?.routeId ?? null,
       destinationSettlementId: destinationSettlementId ?? null,
       ...(destinationKind ? { destinationKind } : {}),
@@ -527,8 +543,18 @@ export async function createTideweftRuntime(
       perception,
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
+    // ABOUT is a live sensory affordance, not a durable remote tracker. Once
+    // the selected person leaves direct detail perception, that selection is
+    // discarded and cannot silently reappear after a region or camera change.
+    if (
+      selectedResidentId !== null
+      && !renderView.porters.some((porter) => Number(porter.id) === selectedResidentId)
+    ) {
+      selectedResidentId = null;
+    }
     uiView = projectUIView(worldView, player, session, {
       economyWorld: economyView,
+      selectedResidentId,
       fieldResourceCatalog: fieldResourceProjection.catalog,
       fieldResourceEcology,
       looseCargoCarrier: physicalCargo.carrier,
@@ -582,10 +608,36 @@ export async function createTideweftRuntime(
     });
   }
 
+  function captureNewlyObservedEvents(): void {
+    let nextCursor = eventObservationCursor;
+    for (const event of economyView.events) {
+      if (event.sequence <= eventObservationCursor) continue;
+      nextCursor = Math.max(nextCursor, event.sequence);
+      if (!eventIsDirectlyObservableAtLocus(event, economyView, worldView, perception)) continue;
+      for (const events of [world.events, economyView.events, worldView.events]) {
+        const match = events.find((candidate) => candidate.sequence === event.sequence);
+        if (match) match.data.playerObserved = true;
+      }
+    }
+    eventObservationCursor = nextCursor;
+  }
+
   function commandId(kind: string): string {
     const id = `player-${kind}-${world.meta.completedTick + 1}-${commandSequence}`;
     commandSequence += 1;
     return id;
+  }
+
+  function activeResidentSpeech(): ReadonlyMap<number, string> {
+    const active = new Map<number, string>();
+    for (const [residentId, speech] of residentSpeech) {
+      if (speech.untilSessionMs <= session.sessionPlayMilliseconds) {
+        residentSpeech.delete(residentId);
+        continue;
+      }
+      active.set(residentId, speech.text);
+    }
+    return active;
   }
 
   function queue(command: SimCommand): void {
@@ -926,6 +978,7 @@ export async function createTideweftRuntime(
       }
     }
     if (worldAdvanced) {
+      reconcileResidentInteractions();
       reconcileContract();
       checkCampaignResolution();
     }
@@ -997,7 +1050,16 @@ export async function createTideweftRuntime(
         session.tutorial.witnessedChanges += 1;
         const destination = settlementName(economyView, delivered.destinationSettlementId);
         const grade = delivered.deliveryGrade ?? "arrived";
-        const requester = economyView.residents.find((resident) => resident.id === delivered.requesterResidentId)?.name;
+        const requesterResident = economyView.residents.find(
+          (resident) =>
+            resident.id === delivered.requesterResidentId
+            && resident.location.kind === "settlement"
+            && resident.location.settlementId === delivered.destinationSettlementId,
+        );
+        const requester = requesterResident
+          && residentKnowsFact(requesterResident.playerKnowledge, "name")
+          ? requesterResident.name
+          : undefined;
         const route = economyView.routes.find((candidate) => candidate.id === delivered.routeId);
         const newlyAutomated = !deliveryWasAutomated
           && (route?.traceStrength ?? 0) >= STRAND_AUTOMATION_THRESHOLD;
@@ -1159,6 +1221,42 @@ export async function createTideweftRuntime(
     }
   }
 
+  function reconcileResidentInteractions(): void {
+    if (pendingResidentObservation !== null) {
+      const resident = economyView.residents.find(
+        (candidate) => candidate.id === pendingResidentObservation?.residentId,
+      );
+      const rejected = rejectionFor([pendingResidentObservation.commandId]);
+      if (resident?.playerKnowledge.firstObservedTick !== null || rejected) {
+        pendingResidentObservation = null;
+      }
+    }
+
+    if (pendingResidentGreeting !== null) {
+      const pending = pendingResidentGreeting;
+      const resident = economyView.residents.find((candidate) => candidate.id === pending.residentId);
+      const rejected = rejectionFor([pending.commandId]);
+      if (resident?.playerKnowledge.level === "acquainted") {
+        const home = economyView.settlements.find(
+          (settlement) => settlement.id === resident.homeSettlementId,
+        )?.name ?? "the estuary";
+        residentSpeech.set(resident.id, {
+          text: `${resident.name}. ${titleCaseWord(resident.role)}, out of ${home}.`,
+          untilSessionMs: session.sessionPlayMilliseconds + 5_600,
+        });
+        pendingResidentGreeting = null;
+        soundscape.play("ui", 0.6);
+        saveInBackground();
+      } else if (rejected || !resident) {
+        pendingResidentGreeting = null;
+        if (rejected) {
+          announce(session, `That greeting did not become part of the world: ${rejected}.`, true);
+          soundscape.play("warning", 0.28);
+        }
+      }
+    }
+  }
+
   function dispatchRenderer(command: RendererCommand): void {
     void soundscape.unlock();
     const perceivedCommand = validatePerceivedEntityCommand(renderView, command);
@@ -1235,8 +1333,32 @@ export async function createTideweftRuntime(
       case "select":
         if (perceivedCommand.entity === "settlement" && perceivedCommand.id) {
           session.selectedSettlementId = Number(perceivedCommand.id);
+          selectedResidentId = null;
+        } else if (perceivedCommand.entity === "porter" && perceivedCommand.id) {
+          const residentId = Number(perceivedCommand.id);
+          const visiblePorter = renderView.porters.find((porter) => porter.id === perceivedCommand.id);
+          const resident = economyView.residents.find((candidate) => candidate.id === residentId);
+          if (visiblePorter && resident) {
+            selectedResidentId = residentId;
+            session.selectedSettlementId = null;
+            if (
+              resident.playerKnowledge.firstObservedTick === null
+              && pendingResidentObservation?.residentId !== residentId
+            ) {
+              const observationCommandId = commandId("observe-resident");
+              queue({
+                id: observationCommandId,
+                type: "observe-resident",
+                residentId,
+                sourceId: 0,
+                sequence: commandSequence,
+              });
+              pendingResidentObservation = { residentId, commandId: observationCommandId };
+            }
+          }
         } else if (perceivedCommand.entity === "world") {
           session.selectedSettlementId = null;
+          selectedResidentId = null;
         }
         refreshViews();
         break;
@@ -1248,6 +1370,7 @@ export async function createTideweftRuntime(
         pendingParcelTargetId = null;
         pendingParcelRecoverOnArrival = false;
         session.selectedSettlementId = null;
+        selectedResidentId = null;
         refreshViews();
         break;
     }
@@ -1267,6 +1390,52 @@ export async function createTideweftRuntime(
     pendingGatherNodeId = null;
     pendingParcelTargetId = null;
     pendingParcelRecoverOnArrival = false;
+  }
+
+  function greetSelectedResident(residentId: number): void {
+    if (
+      !Number.isSafeInteger(residentId)
+      || selectedResidentId !== residentId
+      || pendingResidentGreeting !== null
+      || session.paused
+      || session.titleVisible
+      || session.quietHourVisible
+    ) return;
+
+    const porter = renderView.porters.find((candidate) => Number(candidate.id) === residentId);
+    const resident = economyView.residents.find((candidate) => candidate.id === residentId);
+    if (!porter || !resident) {
+      selectedResidentId = null;
+      return;
+    }
+    if (resident.playerKnowledge.level === "acquainted") return;
+    if (player.mode === "swept") {
+      announce(session, "ADRIFT — reach footing before trying to hold a conversation.", true);
+      soundscape.play("warning", 0.28);
+      return;
+    }
+    const distance = Math.hypot(
+      renderView.player.position.x - porter.position.x,
+      renderView.player.position.y - porter.position.y,
+    );
+    if (distance > RESIDENT_CONVERSATION_RANGE_TILES * RENDER_TILE_SIZE) {
+      announce(session, `Move within ${RESIDENT_CONVERSATION_RANGE_TILES} tiles to greet this porter.`);
+      return;
+    }
+
+    const greetingCommandId = commandId("greet-resident");
+    queue({
+      id: greetingCommandId,
+      type: "greet-resident",
+      residentId,
+      observedTick: resident.playerKnowledge.firstObservedTick
+        ?? (pendingResidentObservation?.residentId === residentId
+          ? world.meta.completedTick + 1
+          : world.meta.completedTick),
+      sourceId: 0,
+      sequence: commandSequence,
+    });
+    pendingResidentGreeting = { residentId, commandId: greetingCommandId };
   }
 
   function dispatchUI(command: TideweftUICommand): void {
@@ -1361,11 +1530,19 @@ export async function createTideweftRuntime(
         } else if (command.settlementId) {
           const id = Number(command.settlementId);
           session.selectedSettlementId = id;
+          selectedResidentId = null;
           const settlement = worldView.settlements.find((candidate) => candidate.id === id);
           if (settlement) {
             const tile = worldView.terrain.tiles[settlement.tileIndex];
             if (tile) focusHandler?.({ x: (tile.x + 0.5) * RENDER_TILE_SIZE, y: (tile.y + 0.5) * RENDER_TILE_SIZE }, 1.3);
           }
+        }
+        break;
+      case "resident":
+        if (command.action === "close") {
+          selectedResidentId = null;
+        } else if (command.residentId) {
+          greetSelectedResident(Number(command.residentId));
         }
         break;
       case "quiet-hour":
@@ -1923,6 +2100,7 @@ export async function createTideweftRuntime(
     }
     session = createSessionState(normalizedSeed, HARD_POSTURE, PERPETUAL_SESSION_SHAPE);
     world = createWorld(normalizedSeed, session.pressureMode);
+    eventObservationCursor = 0;
     economyView = createWorldView(world);
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
@@ -1958,6 +2136,10 @@ export async function createTideweftRuntime(
     pendingRenegotiation = null;
     pendingReportDelivery = null;
     pendingChoir = null;
+    selectedResidentId = null;
+    pendingResidentObservation = null;
+    pendingResidentGreeting = null;
+    residentSpeech.clear();
     lastAutosaveTick = 0;
     announce(session, "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.");
     soundscape.play("strand", 0.9);
@@ -3254,6 +3436,11 @@ export async function createTideweftRuntime(
       pendingRenegotiation: structuredClone(pendingRenegotiation),
       pendingReportDelivery: structuredClone(pendingReportDelivery),
       pendingChoir: structuredClone(pendingChoir),
+      selectedResidentId,
+      eventObservationCursor,
+      pendingResidentObservation: structuredClone(pendingResidentObservation),
+      pendingResidentGreeting: structuredClone(pendingResidentGreeting),
+      residentSpeech: new Map(residentSpeech),
       autopilotPath: [...autopilotPath],
       lastAutosaveTick,
       lastCargoDamageNoticeMs,
@@ -3285,6 +3472,14 @@ export async function createTideweftRuntime(
       pendingRenegotiation = prior.pendingRenegotiation;
       pendingReportDelivery = prior.pendingReportDelivery;
       pendingChoir = prior.pendingChoir;
+      selectedResidentId = prior.selectedResidentId;
+      eventObservationCursor = prior.eventObservationCursor;
+      pendingResidentObservation = prior.pendingResidentObservation;
+      pendingResidentGreeting = prior.pendingResidentGreeting;
+      residentSpeech.clear();
+      for (const [residentId, speech] of prior.residentSpeech) {
+        residentSpeech.set(residentId, speech);
+      }
       autopilotPath = prior.autopilotPath;
       lastAutosaveTick = prior.lastAutosaveTick;
       lastCargoDamageNoticeMs = prior.lastCargoDamageNoticeMs;

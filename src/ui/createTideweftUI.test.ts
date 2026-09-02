@@ -10,14 +10,19 @@ import {
   TITLE_SURFACE_COPY,
   WAYKNOT_KEY_SHORTCUT,
   bindTitleRestartFlow,
+  createUnderfootTerrainStabilizer,
+  handleResidentAboutEscape,
   handleTideweftUIShortcut,
   mobileHudCopy,
   mobileHudDisclosureState,
   navigationTelemetryCopy,
+  residentAboutActionPresentation,
+  residentAboutSurfaceState,
   saveWarningPresentation,
   setProgress,
   shouldRefreshSignedReportActions,
   signedReportActionsSignature,
+  syncTextContent,
   tideHarpFieldStatus,
   titleSeedRequirement,
   titleWorldCreationState,
@@ -129,6 +134,64 @@ describe("minimal title surface", () => {
       patchNotes: "PATCH NOTES",
     });
     expect(Object.values(TITLE_SURFACE_COPY).join(" ")).not.toMatch(/challenging|ruleset|perpetual/iu);
+  });
+});
+
+describe("underfoot terrain presentation", () => {
+  const meadow = {
+    terrainLabel: "Rain meadow · Salt meadow",
+    isWater: false,
+    swept: false,
+  } as const;
+  const ridge = {
+    terrainLabel: "Wind ridge · Shell ridge",
+    isWater: false,
+    swept: false,
+  } as const;
+
+  it("ignores a one-step ordinary terrain seam and commits a sustained change", () => {
+    const terrain = createUnderfootTerrainStabilizer();
+    expect(terrain.present(meadow)).toBe(meadow.terrainLabel);
+    expect(terrain.present(ridge)).toBe(meadow.terrainLabel);
+    expect(terrain.present(meadow)).toBe(meadow.terrainLabel);
+    expect(terrain.present(ridge)).toBe(meadow.terrainLabel);
+    expect(terrain.present(ridge)).toBe(ridge.terrainLabel);
+  });
+
+  it("never delays water or ADRIFT boundary warnings", () => {
+    const terrain = createUnderfootTerrainStabilizer();
+    expect(terrain.present(meadow)).toBe(meadow.terrainLabel);
+
+    const water = {
+      terrainLabel: "Tide channel · Tidal channel",
+      isWater: true,
+      swept: false,
+    } as const;
+    expect(terrain.present(water)).toBe(water.terrainLabel);
+    expect(terrain.present({ ...water, terrainLabel: "Glimmerfen · Tidal channel" }))
+      .toBe(water.terrainLabel);
+
+    const swept = { ...water, terrainLabel: "Tide channel · Fast water", swept: true } as const;
+    expect(terrain.present(swept)).toBe(swept.terrainLabel);
+    expect(terrain.present(meadow)).toBe(meadow.terrainLabel);
+  });
+
+  it("does not replace an unchanged DOM text node every movement revision", () => {
+    let value: string | null = meadow.terrainLabel;
+    let writes = 0;
+    const target = Object.defineProperty({}, "textContent", {
+      get: () => value,
+      set: (next: string | null) => {
+        value = next;
+        writes += 1;
+      },
+    }) as { textContent: string | null };
+
+    expect(syncTextContent(target, meadow.terrainLabel)).toBe(false);
+    expect(writes).toBe(0);
+    expect(syncTextContent(target, ridge.terrainLabel)).toBe(true);
+    expect(writes).toBe(1);
+    expect(value).toBe(ridge.terrainLabel);
   });
 });
 
@@ -669,5 +732,56 @@ describe("signed information report controls", () => {
     expect(occupied).not.toBe(before);
     expect(shouldRefreshSignedReportActions(before, occupied, true)).toBe(false);
     expect(shouldRefreshSignedReportActions(before, occupied, false)).toBe(true);
+  });
+});
+
+describe("resident ABOUT behavior", () => {
+  it("is explicitly non-modal and leaves gameplay/charging unpaused", () => {
+    const open = residentAboutSurfaceState({
+      id: "porter-4",
+      heading: "Reed-cloaked porter",
+      identityLine: "A broad porter carrying an amber bale",
+      knowledgeLabel: "Unfamiliar",
+      observed: [],
+      known: [],
+      actionLabel: "GREET",
+    });
+    expect(open).toEqual({ hidden: false, modal: false, pausesGameplay: false });
+    expect(residentAboutSurfaceState(undefined).hidden).toBe(true);
+  });
+
+  it("removes the greeting action after acquaintance instead of rendering a live-looking no-op", () => {
+    const action = residentAboutActionPresentation({
+      id: "porter-4",
+      heading: "Mara Velo",
+      identityLine: "Human · Adult",
+      knowledgeLabel: "Acquainted",
+      observed: [],
+      known: [{ label: "Name", value: "Mara Velo" }],
+    });
+
+    expect(action).toEqual({ hidden: true, disabled: true, label: "", hint: "" });
+  });
+
+  it("cancels cleanly on Escape and consumes no unrelated key", () => {
+    const dispatch = vi.fn();
+    const escape = {
+      key: "Escape",
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+    expect(handleResidentAboutEscape(escape, "porter-4", dispatch)).toBe(true);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "resident",
+      action: "close",
+      residentId: "porter-4",
+    });
+
+    expect(handleResidentAboutEscape(
+      { ...escape, key: "Enter", preventDefault: vi.fn() },
+      "porter-4",
+      dispatch,
+    )).toBe(false);
   });
 });

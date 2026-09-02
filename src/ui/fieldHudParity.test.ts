@@ -31,8 +31,9 @@ describe("desktop/mobile authoritative field parity", () => {
     expect(copy.safety).toContain("cross-current and soft footing");
     expect(copy.safety).toContain("STAB 51%");
     expect(copy.safety).toContain("DEEP: STAM/STAB 0 → ADRIFT");
-    expect(source).toContain("refs.mobileTerrain.textContent = compactHud.terrain");
-    expect(source).toContain("refs.desktopFieldTerrain.textContent = compactHud.terrain");
+    expect(source).toContain("terrain: presentedTerrainLabel");
+    expect(source).toContain("syncTextContent(refs.mobileTerrain, compactHud.terrain)");
+    expect(source).toContain("syncTextContent(refs.desktopFieldTerrain, compactHud.terrain)");
     expect(source).toContain("refs.mobileSafety.textContent = compactHud.safety");
     expect(source).toContain("refs.desktopFieldSafety.textContent = compactHud.safety");
   });

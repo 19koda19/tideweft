@@ -12,6 +12,11 @@ import {
   type WorldState,
 } from "./types";
 import { currentInventoryTotals } from "./world";
+import {
+  MAX_RESIDENT_MEMORIES,
+  stableResidentIdForGeneration,
+} from "./npcIdentity";
+import { stableRegionObjectId } from "./regions";
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`World invariant failed: ${message}`);
@@ -159,8 +164,23 @@ export function assertWorldInvariants(world: WorldState): void {
     invariant(!entityIds.has(id), `${path} duplicates entity ID ${id}`);
     entityIds.add(id);
   };
-  for (const settlement of world.settlements) {
+  const settlementOriginKeys = new Set<string>();
+  for (let settlementOrdinal = 0; settlementOrdinal < world.settlements.length; settlementOrdinal += 1) {
+    const settlement = world.settlements[settlementOrdinal];
+    invariant(settlement !== undefined, `settlement ${settlementOrdinal} is missing`);
     claimId(settlement.id, `settlement ${settlement.id}`);
+    invariant(settlement.name.length > 0, `settlement ${settlement.id} is unnamed`);
+    invariant(
+      settlement.originKey === stableRegionObjectId(
+        world.meta.rootSeed,
+        { x: 0, y: 0 },
+        "settlement",
+        settlementOrdinal,
+      ),
+      `settlement ${settlement.id} origin key is invalid`,
+    );
+    invariant(!settlementOriginKeys.has(settlement.originKey), `settlement origin key ${settlement.originKey} is duplicated`);
+    settlementOriginKeys.add(settlement.originKey);
     invariant(world.terrain.tiles[settlement.tileIndex] !== undefined, `settlement ${settlement.id} tile is invalid`);
     for (const resource of RESOURCE_KINDS) {
       invariant(settlement.inventory[resource] >= 0, `settlement ${settlement.id} has negative ${resource}`);
@@ -205,10 +225,189 @@ export function assertWorldInvariants(world: WorldState): void {
     }
   }
 
+  const stableResidentIds = new Set<string>();
+  const residentMemoryIds = new Set<string>();
+  const validTemperaments = new Set([
+    "calm", "nervous", "bold", "cautious", "curious", "reserved", "patient", "practical",
+    "protective", "social", "stubborn", "optimistic",
+  ]);
+  const incompatibleTemperamentPairs = new Set([
+    "bold|cautious",
+    "calm|nervous",
+    "reserved|social",
+  ]);
+  const validSkillKinds = new Set([
+    "navigation", "first-aid", "swimming", "weather-knowledge", "rope-work", "animal-handling",
+    "repair", "foraging",
+  ]);
+  const validGear = new Set([
+    "waterproof-pack", "walking-pole", "rain-shell", "rope-coil", "map-case", "medical-satchel",
+    "tool-roll", "reed-hat",
+  ]);
+  const validEmotions = new Set(["content", "focused", "worried", "afraid", "tired", "relieved"]);
+  const validEmotionCauses = new Set([
+    "ROUTINE_SAFE", "PROMISE_IN_PROGRESS", "WEATHER_EXPOSURE", "NEED_REST", "NEED_FOOD",
+    "SHELTER_REACHED", "PROMISE_DELIVERED",
+  ]);
+  const validRoles = new Set(["fisher", "harvester", "medic", "mechanic", "navigator", "steward"]);
+  const validIntentions = new Set(["rest", "eat", "connect", "work", "carry"]);
+  const validAges = new Set(["young-adult", "adult", "older-adult"]);
+  const validBuilds = new Set(["slight", "lean", "average", "broad", "stocky"]);
+  const validHair = new Set(["black", "brown", "auburn", "gray", "silver", "cropped", "covered"]);
+  const validMarks = new Set(["none", "freckles", "weathered", "brow-scar", "hand-scar", "round-glasses"]);
+  const validPalettes = new Set(["silt", "reed", "tide", "ember", "lichen", "storm"]);
+  const validHistoryKinds = new Set([
+    "survived-storm", "worked-another-route", "rescued-traveler", "lost-equipment", "learned-trade",
+    "migrated-settlement",
+  ]);
   for (const resident of world.residents) {
     claimId(resident.id, `resident ${resident.id}`);
     invariant(resident.name.length > 0, `resident ${resident.id} is unnamed`);
+    invariant(validRoles.has(resident.role), `resident ${resident.id} role is invalid`);
+    invariant(validIntentions.has(resident.intention), `resident ${resident.id} intention is invalid`);
     invariant(settlementIds.has(resident.homeSettlementId), `resident ${resident.id} home is invalid`);
+    const home = world.settlements.find(({ id }) => id === resident.homeSettlementId);
+    invariant(home?.residentIds.includes(resident.id) === true, `resident ${resident.id} is absent from current home`);
+    invariant(resident.identity.species === "human", `resident ${resident.id} species is invalid`);
+    invariant(
+      Number.isSafeInteger(resident.identity.generationVersion)
+        && resident.identity.generationVersion > 0,
+      `resident ${resident.id} generation version is invalid`,
+    );
+    invariant(
+      resident.identity.originRegion.x === 0 && resident.identity.originRegion.y === 0,
+      `resident ${resident.id} compatibility origin is invalid`,
+    );
+    const origin = world.settlements.find(({ id }) => id === resident.identity.originSettlementId);
+    invariant(origin !== undefined, `resident ${resident.id} origin settlement is invalid`);
+    invariant(
+      resident.identity.originSettlementKey.length > 0
+        && resident.identity.originSettlementKey === origin?.originKey,
+      `resident ${resident.id} semantic origin is invalid`,
+    );
+    invariant(
+      Number.isSafeInteger(resident.identity.originActorOrdinal)
+        && resident.identity.originActorOrdinal >= 0,
+      `resident ${resident.id} origin actor ordinal is invalid`,
+    );
+    invariant(validRoles.has(resident.identity.originRole), `resident ${resident.id} origin role is invalid`);
+    invariant(!stableResidentIds.has(resident.identity.stableId), `resident stable ID ${resident.identity.stableId} is duplicated`);
+    stableResidentIds.add(resident.identity.stableId);
+    invariant(
+      resident.identity.stableId === stableResidentIdForGeneration(
+        {
+          seed: world.meta.rootSeed,
+          originSettlementId: resident.identity.originSettlementId,
+          originSettlementKey: resident.identity.originSettlementKey,
+          originActorOrdinal: resident.identity.originActorOrdinal,
+          role: resident.identity.originRole,
+          originRegion: resident.identity.originRegion,
+        },
+        resident.identity.generationVersion,
+      ),
+      `resident ${resident.id} stable ID does not match its semantic origin`,
+    );
+    invariant(
+      resident.identity.heightCm >= 145 && resident.identity.heightCm <= 200,
+      `resident ${resident.id} height is invalid`,
+    );
+    invariant(validAges.has(resident.identity.age), `resident ${resident.id} age is invalid`);
+    invariant(validBuilds.has(resident.identity.build), `resident ${resident.id} build is invalid`);
+    invariant(validHair.has(resident.identity.appearance.hair), `resident ${resident.id} hair is invalid`);
+    invariant(validMarks.has(resident.identity.appearance.mark), `resident ${resident.id} mark is invalid`);
+    invariant(validPalettes.has(resident.identity.appearance.palette), `resident ${resident.id} palette is invalid`);
+    invariant(
+      resident.identity.temperament.length === 2
+        && new Set(resident.identity.temperament).size === resident.identity.temperament.length,
+      `resident ${resident.id} temperament is incoherent`,
+    );
+    for (const temperament of resident.identity.temperament) {
+      invariant(validTemperaments.has(temperament), `resident ${resident.id} temperament is invalid`);
+    }
+    invariant(
+      !incompatibleTemperamentPairs.has([...resident.identity.temperament].sort().join("|")),
+      `resident ${resident.id} temperament pair is contradictory`,
+    );
+    invariant(
+      resident.identity.skills.length === 2
+        && new Set(resident.identity.skills.map(({ kind }) => kind)).size === resident.identity.skills.length,
+      `resident ${resident.id} skills are incoherent`,
+    );
+    for (const skill of resident.identity.skills) {
+      invariant(validSkillKinds.has(skill.kind), `resident ${resident.id} skill is invalid`);
+      assertFixed(skill.aptitude, `resident ${resident.id}.${skill.kind}`);
+    }
+    invariant(
+      new Set(resident.identity.visibleGear).size === resident.identity.visibleGear.length,
+      `resident ${resident.id} visible gear is duplicated`,
+    );
+    for (const gear of resident.identity.visibleGear) {
+      invariant(validGear.has(gear), `resident ${resident.id} visible gear is invalid`);
+    }
+    invariant(resident.identity.history.length <= 2, `resident ${resident.id} history is unbounded`);
+    for (const event of resident.identity.history) {
+      invariant(validHistoryKinds.has(event.kind), `resident ${resident.id} history kind is invalid`);
+      invariant(event.worldDay > 0, `resident ${resident.id} history day is invalid`);
+    }
+    assertFixed(resident.condition.wetness, `resident ${resident.id}.wetness`);
+    assertFixed(resident.condition.coldStress, `resident ${resident.id}.coldStress`);
+    assertFixed(resident.condition.exhaustion, `resident ${resident.id}.exhaustion`);
+    invariant(validEmotions.has(resident.condition.emotion), `resident ${resident.id} emotion is invalid`);
+    invariant(validEmotionCauses.has(resident.condition.emotionCause), `resident ${resident.id} emotion cause is invalid`);
+    invariant(typeof resident.condition.sheltering === "boolean", `resident ${resident.id} shelter state is invalid`);
+    invariant(resident.condition.routeDelayTicks >= 0, `resident ${resident.id} route delay is invalid`);
+    invariant(
+      !resident.condition.sheltering || resident.location.kind === "route",
+      `resident ${resident.id} shelters outside a route`,
+    );
+    invariant(resident.memories.length <= MAX_RESIDENT_MEMORIES, `resident ${resident.id} memories are unbounded`);
+    for (const memory of resident.memories) {
+      invariant(memory.id.length > 0 && !residentMemoryIds.has(memory.id), `resident memory ${memory.id} is duplicated`);
+      residentMemoryIds.add(memory.id);
+      invariant(memory.tick >= 0 && memory.tick <= world.meta.completedTick, `resident memory ${memory.id} tick is invalid`);
+      invariant(
+        (memory.kind === "met-player" && memory.cause === "PLAYER_GREETING")
+          || (memory.kind === "weather-shelter" && memory.cause === "SEVERE_WEATHER"),
+        `resident memory ${memory.id} cause is invalid`,
+      );
+    }
+    invariant(
+      new Set(resident.playerKnowledge.facts).size === resident.playerKnowledge.facts.length,
+      `resident ${resident.id} known facts are duplicated`,
+    );
+    for (const fact of resident.playerKnowledge.facts) {
+      invariant(fact === "name" || fact === "occupation" || fact === "home", `resident ${resident.id} known fact is invalid`);
+    }
+    if (resident.playerKnowledge.level === "unfamiliar") {
+      invariant(resident.playerKnowledge.firstObservedTick === null, `resident ${resident.id} is secretly observed`);
+      invariant(resident.playerKnowledge.introducedTick === null, `resident ${resident.id} is secretly introduced`);
+      invariant(resident.playerKnowledge.facts.length === 0, `resident ${resident.id} leaks unknown facts`);
+    } else {
+      invariant(
+        resident.playerKnowledge.firstObservedTick !== null
+          && resident.playerKnowledge.firstObservedTick <= world.meta.completedTick,
+        `resident ${resident.id} observation tick is invalid`,
+      );
+      if (resident.playerKnowledge.level === "acquainted") {
+        invariant(
+          resident.playerKnowledge.introducedTick !== null
+            && resident.playerKnowledge.introducedTick <= world.meta.completedTick
+            && resident.playerKnowledge.introducedTick >= resident.playerKnowledge.firstObservedTick,
+          `resident ${resident.id} introduction tick is invalid`,
+        );
+        invariant(
+          resident.playerKnowledge.facts.length === 3
+            && resident.playerKnowledge.facts[0] === "name"
+            && resident.playerKnowledge.facts[1] === "occupation"
+            && resident.playerKnowledge.facts[2] === "home",
+          `resident ${resident.id} introduction facts are incomplete`,
+        );
+      } else {
+        invariant(resident.playerKnowledge.level === "recognized", `resident ${resident.id} knowledge level is invalid`);
+        invariant(resident.playerKnowledge.introducedTick === null, `resident ${resident.id} is introduced too early`);
+        invariant(resident.playerKnowledge.facts.length === 0, `resident ${resident.id} recognized facts leak identity`);
+      }
+    }
     assertFixed(resident.traits.resolve, `resident ${resident.id}.resolve`);
     assertFixed(resident.traits.empathy, `resident ${resident.id}.empathy`);
     assertFixed(resident.traits.curiosity, `resident ${resident.id}.curiosity`);

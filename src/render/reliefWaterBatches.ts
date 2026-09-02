@@ -24,24 +24,52 @@ export interface ReliefWaterBatchBounds {
 }
 
 /**
- * Relief water sits over a lit terrain mesh, so Chart's translucent alpha can
- * wash out into pale ground. Keep the shared RGB language unchanged while
- * giving each discovery-masked depth band a stronger, monotone alpha floor.
+ * Relief's water sheet is a presentation material, not a lit copy of the
+ * biome underneath it. These deliberately blue, discrete bands keep water
+ * legible from an oblique camera without pretending that color is an exact
+ * sounding. Unsounded water is already normalized to the channel band by the
+ * shared discovery contract before it reaches this palette.
+ */
+export const RELIEF_WATER_PALETTE = {
+  deep: "#0b3768",
+  channel: "#175d8d",
+  shallows: "#2f88b5",
+  horizon: "#061729",
+  tideGlint: "#78bce3",
+} as const;
+
+/**
+ * Relief water sits over a warm lit terrain mesh. Any translucency lets that
+ * yellow/green under-material change the apparent water hue as camera angle
+ * and zoom alter how much bed is visible. Current sensory falloff therefore
+ * lives in the authored RGB (toward a blue-black horizon), while submitted
+ * water remains opaque and cannot inherit the biome below it.
  */
 export function reliefWaterOpacity(material: WaterPresentation): number {
-  const floor = material.band === "deep"
-    ? 255
-    : material.band === "channel"
-      ? 248
-      : 236;
-  return integerInRange(
-    Math.max(material.opacity, Math.round(floor * unit(material.visibility))),
-    0,
-    255,
+  return material.visibility > 0 ? 255 : 0;
+}
+
+/**
+ * Returns the complete unlit Relief albedo. Biome colors, biome accents,
+ * directional lights and fog never enter this function; tide contributes only
+ * a restrained blue glint. The three bands are qualitative hints. The HUD and
+ * a deliberate sounding remain authoritative for actual depth.
+ */
+export function reliefWaterSurfaceColor(material: WaterPresentation): string {
+  const depthBlue = RELIEF_WATER_PALETTE[material.band];
+  const tideBlue = mixHex(
+    depthBlue,
+    RELIEF_WATER_PALETTE.tideGlint,
+    0.015 + unit(material.tideLevel) * 0.035,
+  );
+  return mixHex(
+    RELIEF_WATER_PALETTE.horizon,
+    tideBlue,
+    Math.pow(unit(material.visibility), 0.72),
   );
 }
 
-/** Pure viewport batching for the translucent Relief water sheet. */
+/** Pure viewport batching for the opaque, discovery-masked Relief water sheet. */
 export function buildReliefWaterMaterialBatches(
   grid: TerrainGridView,
   tideLevel: number,
@@ -105,4 +133,23 @@ function integerInRange(value: number, low: number, high: number): number {
 function unit(value: number | undefined): number {
   const finite = Number.isFinite(value) ? value! : 0;
   return Math.max(0, Math.min(1, finite));
+}
+
+function mixHex(left: string, right: string, amount: number): string {
+  const first = parseHex(left);
+  const second = parseHex(right);
+  const blend = unit(amount);
+  const channel = (index: number): string => Math.round(
+    (first[index] ?? 0) + ((second[index] ?? 0) - (first[index] ?? 0)) * blend,
+  ).toString(16).padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
+
+function parseHex(value: string): readonly number[] {
+  const hex = /^#[0-9a-f]{6}$/iu.test(value) ? value.slice(1) : "000000";
+  return [
+    Number.parseInt(hex.slice(0, 2), 16),
+    Number.parseInt(hex.slice(2, 4), 16),
+    Number.parseInt(hex.slice(4, 6), 16),
+  ];
 }

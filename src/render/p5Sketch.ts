@@ -61,6 +61,12 @@ import {
   type PlayerBalancePresentation,
 } from "./playerPresentation";
 import {
+  clampPorterSpeechPlacement,
+  porterAppearancePresentation,
+  porterQuickLabel,
+  wrapPorterSpeech,
+} from "./porterPresentation";
+import {
   adriftPresentation,
   type AdriftPresentation,
 } from "./adriftPresentation";
@@ -530,7 +536,7 @@ export function createTideweftRenderer(
       };
     }
 
-    const porterRadius = 16 / Math.max(camera.zoom, 0.01);
+    const porterRadius = 22 / Math.max(camera.zoom, 0.01);
     for (const porter of view.porters) {
       if (!isDirectlyDetailPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
       const distance = distanceSquared(point, porter.position);
@@ -2602,7 +2608,7 @@ export function createTideweftRenderer(
       clearDash();
     };
 
-    const porterColor = (porter: PorterView): string => {
+    const porterStateColor = (porter: PorterView): string => {
       switch (porter.state) {
         case "helping":
           return PALETTE.tide;
@@ -2624,35 +2630,93 @@ export function createTideweftRenderer(
           latestView?.perception
           && !isDirectlyDetailPerceived(latestView.terrain, porter.position, true)
         ) continue;
-        const color = porterColor(porter);
+        const appearance = porterAppearancePresentation(porter);
+        const stateColor = porterStateColor(porter);
         const hovered = hoverTarget?.entity === "porter" && hoverTarget.id === porter.id;
         const radius = (porter.selected || hovered ? 6.2 : 4.8) / camera.zoom;
+        const length = radius * appearance.heightScale;
+        const breadth = radius * appearance.widthScale;
         p.push();
         p.translate(porter.position.x, porter.position.y);
         p.rotate(porter.facing);
         p.noStroke();
         p.fill(withAlpha(PALETTE.ink, 220));
-        p.circle(0, 0, radius * 3);
-        p.fill(color);
-        p.triangle(radius * 1.2, 0, -radius * 0.75, -radius * 0.72, -radius * 0.75, radius * 0.72);
-        p.fill(withAlpha(porter.cargoColor ?? PALETTE.amber, 220));
+        p.ellipse(0, 0, length * 3, breadth * 3);
+        if (appearance.wetness > 0.02) {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.tide, 45 + appearance.wetness * 150));
+          p.strokeWeight((0.7 + appearance.wetness * 0.9) / camera.zoom);
+          p.ellipse(0, 0, length * 3.45, breadth * 3.45);
+          p.noStroke();
+        }
+        p.fill(appearance.color);
+        p.triangle(length * 1.2, 0, -length * 0.75, -breadth * 0.72, -length * 0.75, breadth * 0.72);
+        p.fill(withAlpha(porter.cargoColor ?? stateColor, 220));
         p.rectMode(p.CENTER);
-        p.rect(-radius * 0.9, 0, radius * 0.72, radius * 0.88, radius * 0.12);
+        p.rect(-length * 0.9, 0, length * 0.72, breadth * 0.88, radius * 0.12);
         p.pop();
 
-        if ((porter.selected || hovered) && porter.name) {
+        const quickLabel = porterQuickLabel(
+          porter,
+          Boolean((porter.selected || hovered) && !porter.speech),
+        );
+        if (quickLabel || porter.speech || porter.emotionMark) {
           const screen = worldLabelScreen(`porter-${porter.id}`, porter.position, now);
           p.push();
           p.resetMatrix();
           p.textAlign(p.CENTER, p.CENTER);
           p.textSize(10.5);
           p.noStroke();
-          p.fill(withAlpha(PALETTE.ink, 214));
-          const width = p.textWidth(porter.name) + 12;
-          p.rectMode(p.CENTER);
-          p.rect(screen.x, screen.y + 20, width, 18, 7);
-          p.fill(PALETTE.foam);
-          p.text(porter.name, screen.x, screen.y + 19.5);
+          if (porter.speech) {
+            const charactersPerLine = Math.max(
+              8,
+              Math.min(p.width < 440 ? 22 : 30, Math.floor((p.width - 32) / 6.5)),
+            );
+            const lines = [
+              ...(porter.emotionMark ? [porter.emotionMark] : []),
+              ...wrapPorterSpeech(porter.speech, charactersPerLine),
+            ];
+            const lineHeight = 13;
+            const width = Math.min(
+              Math.max(1, p.width - 16),
+              Math.max(1, ...lines.map((line) => p.textWidth(line))) + 14,
+            );
+            const height = lines.length * lineHeight + 10;
+            const placement = clampPorterSpeechPlacement(
+              screen,
+              { width, height },
+              { width: p.width, height: p.height },
+              18,
+              8,
+            );
+            const textX = placement.x + width / 2;
+            const textTop = placement.y + 5 + lineHeight / 2;
+            for (let index = 0; index < lines.length; index += 1) {
+              const line = lines[index];
+              if (line === undefined) continue;
+              const textY = textTop + index * lineHeight;
+              p.fill(withAlpha(PALETTE.ink, 235));
+              p.text(line, textX + 1, textY + 1);
+              p.fill(PALETTE.foam);
+              p.text(line, textX, textY);
+            }
+          } else if (porter.emotionMark) {
+            const emotionX = clamp(screen.x, 8, Math.max(8, p.width - 8));
+            const emotionY = clamp(screen.y - 20, 10, Math.max(10, p.height - 10));
+            p.fill(withAlpha(PALETTE.ink, 235));
+            p.text(porter.emotionMark, emotionX + 1, emotionY + 1);
+            p.fill(PALETTE.foam);
+            p.text(porter.emotionMark, emotionX, emotionY);
+          }
+          if (quickLabel) {
+            const width = Math.min(p.width - 16, p.textWidth(quickLabel) + 12);
+            const labelX = clamp(screen.x, 8 + width / 2, Math.max(8 + width / 2, p.width - 8 - width / 2));
+            const labelY = clamp(screen.y + 20, 11, Math.max(11, p.height - 11));
+            p.fill(withAlpha(PALETTE.ink, 235));
+            p.text(quickLabel, labelX + 1, labelY + 0.5);
+            p.fill(PALETTE.foam);
+            p.text(quickLabel, labelX, labelY - 0.5);
+          }
           p.pop();
         }
       }
@@ -3115,13 +3179,33 @@ export function createTideweftRenderer(
         p.textAlign(p.CENTER, p.CENTER);
         p.textSize(event.emphasis === "strong" ? 13 : 11);
         p.textStyle(event.emphasis === "strong" ? p.BOLD : p.NORMAL);
-        const width = Math.min(260, p.textWidth(event.label) + 18);
+        const charactersPerLine = Math.max(12, Math.min(36, Math.floor((p.width - 24) / 7)));
+        const lines = wrapPorterSpeech(event.label, charactersPerLine);
+        const lineHeight = event.emphasis === "strong" ? 15 : 13;
+        const width = Math.min(
+          Math.max(1, p.width - 16),
+          Math.max(1, ...lines.map((line) => p.textWidth(line))) + 12,
+        );
+        const height = lines.length * lineHeight + 6;
+        const placement = clampPorterSpeechPlacement(
+          { x: screen.x, y: screen.y - rise },
+          { width, height },
+          { width: p.width, height: p.height },
+          18,
+          8,
+        );
+        const textX = placement.x + width / 2;
+        const textTop = placement.y + 3 + lineHeight / 2;
         p.noStroke();
-        p.fill(withAlpha(PALETTE.ink, alpha * 0.84));
-        p.rectMode(p.CENTER);
-        p.rect(screen.x, screen.y - 24 - rise, width, 23, 9);
-        p.fill(withAlpha(eventColor(event), alpha));
-        p.text(event.label, screen.x, screen.y - 25 - rise, width - 10, 21);
+        for (let index = 0; index < lines.length; index += 1) {
+          const line = lines[index];
+          if (line === undefined) continue;
+          const textY = textTop + index * lineHeight;
+          p.fill(withAlpha(PALETTE.ink, alpha * 0.94));
+          p.text(line, textX + 1, textY + 1);
+          p.fill(withAlpha(eventColor(event), alpha));
+          p.text(line, textX, textY);
+        }
         p.pop();
       }
     };

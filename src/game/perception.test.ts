@@ -99,8 +99,8 @@ describe("deterministic visual perception", () => {
       .toBeGreaterThan(DEFAULT_DETAIL_PERCEPTION_RANGES.directSightRange);
     expect(DEFAULT_PERCEPTION_RANGES.forwardConeRadians)
       .toBeGreaterThan(DEFAULT_DETAIL_PERCEPTION_RANGES.forwardConeRadians);
-    expect(DEFAULT_PERCEPTION_RANGES.directSightRange).toBeGreaterThanOrEqual(40);
-    expect(result.visibilityGrades[45 + 34]).toBe(VISIBILITY_PERIPHERAL);
+    expect(DEFAULT_PERCEPTION_RANGES.directSightRange).toBeGreaterThanOrEqual(50);
+    expect(result.visibilityGrades[45 + 34]).toBe(VISIBILITY_DIRECT);
     expect(result.terrainVisibilityStrengths[45 + 34]).toBeGreaterThan(0);
     expect(result.detailVisibilityGrades[45 + 34]).toBe(VISIBILITY_HIDDEN);
     expect(result.detailVisibilityGrades[45 + 9]).toBe(VISIBILITY_DIRECT);
@@ -145,35 +145,35 @@ describe("deterministic visual perception", () => {
 
   it("feathers the authored terrain horizon without extending exact detail", () => {
     const result = evaluatePerception({
-      columns: 95,
+      columns: 121,
       rows: 1,
-      cells: flatCells(95),
-      playerTileIndex: 47,
+      cells: flatCells(121),
+      playerTileIndex: 60,
       facingRadians: 0,
       weatherVisibility: 1,
     });
 
     const strengthAtDistance = (distance: number): number => (
-      result.terrainVisibilityStrengths[47 + distance] ?? 0
+      result.terrainVisibilityStrengths[60 + distance] ?? 0
     );
-    const easedDistances = [26, 29, 32, 35, 38, 40, 41];
+    const easedDistances = [34, 37, 40, 43, 46, 49, 51];
     const easedStrengths = easedDistances.map(strengthAtDistance);
 
-    expect(result.visibilityGrades[47 + 26]).toBe(VISIBILITY_DIRECT);
-    expect(result.visibilityGrades[47 + 27]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.visibilityGrades[47 + 40]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.visibilityGrades[47 + 42]).toBe(VISIBILITY_HIDDEN);
-    expect(result.visibilityGrades[47 + 43]).toBe(VISIBILITY_HIDDEN);
-    expect(strengthAtDistance(26)).toBe(255);
+    expect(result.visibilityGrades[60 + 34]).toBe(VISIBILITY_DIRECT);
+    expect(result.visibilityGrades[60 + 35]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[60 + 50]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[60 + 52]).toBe(VISIBILITY_HIDDEN);
+    expect(result.visibilityGrades[60 + 53]).toBe(VISIBILITY_HIDDEN);
+    expect(strengthAtDistance(34)).toBe(255);
     expect(easedStrengths.every((strength, index) => (
       index === 0 || strength < (easedStrengths[index - 1] ?? 0)
     ))).toBe(true);
-    expect(strengthAtDistance(40)).toBeGreaterThan(0);
-    expect(strengthAtDistance(42)).toBe(0);
-    expect(strengthAtDistance(43)).toBe(0);
-    expect(result.detailVisibilityGrades[47 + 10]).toBe(VISIBILITY_DIRECT);
-    expect(result.detailVisibilityGrades[47 + 11]).toBe(VISIBILITY_HIDDEN);
-    expect(result.detailVisibilityGrades[47 + 34]).toBe(VISIBILITY_HIDDEN);
+    expect(strengthAtDistance(50)).toBeGreaterThan(0);
+    expect(strengthAtDistance(52)).toBe(0);
+    expect(strengthAtDistance(53)).toBe(0);
+    expect(result.detailVisibilityGrades[60 + 10]).toBe(VISIBILITY_DIRECT);
+    expect(result.detailVisibilityGrades[60 + 11]).toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[60 + 40]).toBe(VISIBILITY_HIDDEN);
   });
 
   it("eases terrain strength across the forward angle without revealing detail", () => {
