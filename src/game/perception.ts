@@ -6,7 +6,7 @@
  * floating-point values in the inclusive 0..1 range.
  */
 
-export const PERCEPTION_VERSION = 1 as const;
+export const PERCEPTION_VERSION = 2 as const;
 export const MAX_PERCEPTION_GRID_CELLS = 1_048_576;
 
 export const VISIBILITY_HIDDEN = 0 as const;
@@ -39,10 +39,28 @@ export interface PerceptionRangeOverrides {
 }
 
 export const DEFAULT_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.freeze({
+  closePeripheralRange: 5,
+  directSightRange: 20,
+  forwardConeRadians: (5 * Math.PI) / 6,
+});
+
+/**
+ * Actor, item, label, and interaction disclosure intentionally has a shorter,
+ * narrower envelope than terrain shape. Seeing the ground ahead must not grant
+ * exact knowledge of everything standing on it.
+ */
+export const DEFAULT_DETAIL_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.freeze({
   closePeripheralRange: 2,
   directSightRange: 8,
   forwardConeRadians: (2 * Math.PI) / 3,
 });
+
+/** Soft outer terrain band; detail disclosure remains crisp and shorter. */
+export const TERRAIN_SIGHT_DISTANCE_FEATHER = 8 as const;
+export const TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS = Math.PI / 6;
+export const TERRAIN_CLOSE_DISTANCE_FEATHER = 2 as const;
+export const TERRAIN_OCCLUSION_FRONTIER_FEATHER = 3 as const;
+export const MAX_TERRAIN_VISIBILITY_STRENGTH = 255 as const;
 
 export interface PerceptionInput {
   readonly columns: number;
@@ -51,7 +69,10 @@ export interface PerceptionInput {
   readonly playerTileIndex: number;
   readonly facingRadians: number;
   readonly weatherVisibility: number;
+  /** Terrain/shape visibility overrides. */
   readonly rangeOverrides?: PerceptionRangeOverrides;
+  /** Actor/item/label/interaction visibility overrides. */
+  readonly detailRangeOverrides?: PerceptionRangeOverrides;
 }
 
 export interface PerceptionResult {
@@ -60,9 +81,22 @@ export interface PerceptionResult {
   readonly valid: boolean;
   /** Row-major visibility grades: 0 hidden, 1 peripheral, and 2 direct. */
   readonly visibilityGrades: Uint8Array;
+  /**
+   * Eased terrain disclosure from 0 (hidden) through 255 (fully visible).
+   * Renderers use this for a graceful horizon without gaining entity detail.
+   */
+  readonly terrainVisibilityStrengths: Uint8Array;
   readonly visibleTileIndices: readonly number[];
   readonly directTileIndices: readonly number[];
   readonly peripheralTileIndices: readonly number[];
+  /**
+   * A conservative subset used for actors, items, labels, and interactions.
+   * Terrain may remain visible where these grades are hidden.
+   */
+  readonly detailVisibilityGrades: Uint8Array;
+  readonly detailVisibleTileIndices: readonly number[];
+  readonly detailDirectTileIndices: readonly number[];
+  readonly detailPeripheralTileIndices: readonly number[];
   /** -1 only when no valid in-bounds player index was supplied. */
   readonly playerTileIndex: number;
   /** Stable digest of disclosed result data only; hidden cell data is excluded. */
@@ -159,6 +193,74 @@ function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function smoothstepUnit(value: number): number {
+  const clamped = clampUnit(value);
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+function featheredStrength(
+  value: number,
+  fullStrengthThrough: number,
+  visibleThrough: number,
+): number {
+  if (value > visibleThrough + LINE_OF_SIGHT_EPSILON) return 0;
+  if (visibleThrough <= fullStrengthThrough + LINE_OF_SIGHT_EPSILON) return 1;
+  if (value <= fullStrengthThrough + LINE_OF_SIGHT_EPSILON) return 1;
+  const progress = (value - fullStrengthThrough) / (visibleThrough - fullStrengthThrough);
+  return 1 - smoothstepUnit(progress);
+}
+
+function quantizeTerrainStrength(strength: number): number {
+  if (!Number.isFinite(strength) || strength <= 0) return 0;
+  return Math.min(MAX_TERRAIN_VISIBILITY_STRENGTH, Math.round(
+    clampUnit(strength) * MAX_TERRAIN_VISIBILITY_STRENGTH,
+  ));
+}
+
+/**
+ * Softens the visible side of every binary LOS frontier. It reads only the
+ * disclosed mask, never hidden terrain values, and is bounded by the tiny
+ * authored sight footprint rather than becoming another world simulation.
+ */
+function featherTerrainVisibilityFrontier(
+  strengths: Uint8Array,
+  columns: number,
+  rows: number,
+  playerTileIndex: number,
+): void {
+  const source = strengths.slice();
+  const radius = TERRAIN_OCCLUSION_FRONTIER_FEATHER;
+  for (let index = 0; index < source.length; index += 1) {
+    const sourceStrength = source[index] ?? 0;
+    if (sourceStrength <= 0 || index === playerTileIndex) continue;
+    const x = index % columns;
+    const y = Math.floor(index / columns);
+    let nearestHiddenDistance = Number.POSITIVE_INFINITY;
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        if (offsetX === 0 && offsetY === 0) continue;
+        const distance = Math.hypot(offsetX, offsetY);
+        if (distance > radius || distance >= nearestHiddenDistance) continue;
+        const neighborX = x + offsetX;
+        const neighborY = y + offsetY;
+        if (
+          neighborX < 0
+          || neighborX >= columns
+          || neighborY < 0
+          || neighborY >= rows
+        ) continue;
+        const hidden = (source[neighborY * columns + neighborX] ?? 0) === 0;
+        if (hidden) nearestHiddenDistance = distance;
+      }
+    }
+    if (!Number.isFinite(nearestHiddenDistance)) continue;
+    const frontier = smoothstepUnit(nearestHiddenDistance / (radius + 1));
+    strengths[index] = quantizeTerrainStrength(
+      (sourceStrength / MAX_TERRAIN_VISIBILITY_STRENGTH) * frontier,
+    );
+  }
+}
+
 function validatedDimensions(
   columnsValue: unknown,
   rowsValue: unknown,
@@ -199,20 +301,23 @@ function validateGrid(
   };
 }
 
-function validateRanges(raw: unknown): PerceptionRanges | null {
+function validateRanges(
+  raw: unknown,
+  defaults: Readonly<PerceptionRanges> = DEFAULT_PERCEPTION_RANGES,
+): PerceptionRanges | null {
   if (raw !== undefined && !isRecord(raw)) return null;
   const overrides = raw as Record<string, unknown> | undefined;
   const rawCloseRange = overrides?.closePeripheralRange;
   const rawDirectRange = overrides?.directSightRange;
   const rawCone = overrides?.forwardConeRadians;
   const closePeripheralRange = rawCloseRange === undefined
-    ? DEFAULT_PERCEPTION_RANGES.closePeripheralRange
+    ? defaults.closePeripheralRange
     : rawCloseRange;
   const directSightRange = rawDirectRange === undefined
-    ? DEFAULT_PERCEPTION_RANGES.directSightRange
+    ? defaults.directSightRange
     : rawDirectRange;
   const forwardConeRadians = rawCone === undefined
-    ? DEFAULT_PERCEPTION_RANGES.forwardConeRadians
+    ? defaults.forwardConeRadians
     : rawCone;
 
   if (
@@ -223,6 +328,34 @@ function validateRanges(raw: unknown): PerceptionRanges | null {
     || forwardConeRadians > TAU
   ) return null;
   return { closePeripheralRange, directSightRange, forwardConeRadians };
+}
+
+function validateDetailRanges(
+  raw: unknown,
+  terrainRanges: PerceptionRanges,
+): PerceptionRanges | null {
+  const defaults = {
+    closePeripheralRange: Math.min(
+      DEFAULT_DETAIL_PERCEPTION_RANGES.closePeripheralRange,
+      terrainRanges.closePeripheralRange,
+    ),
+    directSightRange: Math.min(
+      DEFAULT_DETAIL_PERCEPTION_RANGES.directSightRange,
+      terrainRanges.directSightRange,
+    ),
+    forwardConeRadians: Math.min(
+      DEFAULT_DETAIL_PERCEPTION_RANGES.forwardConeRadians,
+      terrainRanges.forwardConeRadians,
+    ),
+  } satisfies PerceptionRanges;
+  const detailRanges = validateRanges(raw, defaults);
+  if (
+    !detailRanges
+    || detailRanges.closePeripheralRange > terrainRanges.closePeripheralRange
+    || detailRanges.directSightRange > terrainRanges.directSightRange
+    || detailRanges.forwardConeRadians > terrainRanges.forwardConeRadians
+  ) return null;
+  return detailRanges;
 }
 
 function appendUint32(hash: number, value: number): number {
@@ -239,7 +372,9 @@ function visibilitySignature(
   columns: number,
   rows: number,
   playerTileIndex: number,
-  visibility: Uint8Array,
+  terrainVisibility: Uint8Array,
+  terrainVisibilityStrengths: Uint8Array,
+  detailVisibility: Uint8Array,
 ): string {
   let hash = FNV_OFFSET_BASIS;
   hash = appendUint32(hash, PERCEPTION_VERSION);
@@ -247,8 +382,16 @@ function visibilitySignature(
   hash = appendUint32(hash, columns);
   hash = appendUint32(hash, rows);
   hash = appendUint32(hash, playerTileIndex);
-  hash = appendUint32(hash, visibility.length);
-  for (const grade of visibility) {
+  hash = appendUint32(hash, terrainVisibility.length);
+  for (const grade of terrainVisibility) {
+    hash = Math.imul(hash ^ grade, FNV_PRIME) >>> 0;
+  }
+  hash = appendUint32(hash, terrainVisibilityStrengths.length);
+  for (const strength of terrainVisibilityStrengths) {
+    hash = Math.imul(hash ^ strength, FNV_PRIME) >>> 0;
+  }
+  hash = appendUint32(hash, detailVisibility.length);
+  for (const grade of detailVisibility) {
     hash = Math.imul(hash ^ grade, FNV_PRIME) >>> 0;
   }
   return `${RESULT_SIGNATURE_PREFIX}:${hash.toString(16).padStart(8, "0")}`;
@@ -259,13 +402,18 @@ function createResult(
   columns: number,
   rows: number,
   playerTileIndex: number,
-  visibility: Uint8Array,
+  terrainVisibility: Uint8Array,
+  terrainVisibilityStrengths: Uint8Array,
+  detailVisibility: Uint8Array,
 ): PerceptionResult {
   const visibleTileIndices: number[] = [];
   const directTileIndices: number[] = [];
   const peripheralTileIndices: number[] = [];
-  for (let index = 0; index < visibility.length; index += 1) {
-    const grade = visibility[index];
+  const detailVisibleTileIndices: number[] = [];
+  const detailDirectTileIndices: number[] = [];
+  const detailPeripheralTileIndices: number[] = [];
+  for (let index = 0; index < terrainVisibility.length; index += 1) {
+    const grade = terrainVisibility[index];
     if (grade === VISIBILITY_PERIPHERAL) {
       visibleTileIndices.push(index);
       peripheralTileIndices.push(index);
@@ -273,16 +421,37 @@ function createResult(
       visibleTileIndices.push(index);
       directTileIndices.push(index);
     }
+    const detailGrade = detailVisibility[index];
+    if (detailGrade === VISIBILITY_PERIPHERAL) {
+      detailVisibleTileIndices.push(index);
+      detailPeripheralTileIndices.push(index);
+    } else if (detailGrade === VISIBILITY_DIRECT) {
+      detailVisibleTileIndices.push(index);
+      detailDirectTileIndices.push(index);
+    }
   }
   return {
     version: PERCEPTION_VERSION,
     valid,
-    visibilityGrades: visibility,
+    visibilityGrades: terrainVisibility,
+    terrainVisibilityStrengths,
     visibleTileIndices,
     directTileIndices,
     peripheralTileIndices,
+    detailVisibilityGrades: detailVisibility,
+    detailVisibleTileIndices,
+    detailDirectTileIndices,
+    detailPeripheralTileIndices,
     playerTileIndex,
-    signature: visibilitySignature(valid, columns, rows, playerTileIndex, visibility),
+    signature: visibilitySignature(
+      valid,
+      columns,
+      rows,
+      playerTileIndex,
+      terrainVisibility,
+      terrainVisibilityStrengths,
+      detailVisibility,
+    ),
   };
 }
 
@@ -292,7 +461,15 @@ function failedResult(
   count: number,
   playerTileIndex: number,
 ): PerceptionResult {
-  return createResult(false, columns, rows, playerTileIndex, new Uint8Array(count));
+  return createResult(
+    false,
+    columns,
+    rows,
+    playerTileIndex,
+    new Uint8Array(count),
+    new Uint8Array(count),
+    new Uint8Array(count),
+  );
 }
 
 /**
@@ -367,6 +544,9 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
 
   const grid = validateGrid(rawInput, dimensions);
   const ranges = validateRanges(rawInput.rangeOverrides);
+  const detailRanges = ranges
+    ? validateDetailRanges(rawInput.detailRangeOverrides, ranges)
+    : null;
   const facingRadians = rawInput.facingRadians;
   const weatherVisibility = rawInput.weatherVisibility;
   if (
@@ -376,6 +556,7 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     || !Number.isFinite(facingRadians)
     || !isUnit(weatherVisibility)
     || !ranges
+    || !detailRanges
   ) {
     return failedResult(
       dimensions.columns,
@@ -386,7 +567,11 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
   }
 
   const visibility = new Uint8Array(dimensions.count);
+  const terrainVisibilityStrengths = new Uint8Array(dimensions.count);
+  const detailVisibility = new Uint8Array(dimensions.count);
   visibility[playerTileIndex] = VISIBILITY_DIRECT;
+  terrainVisibilityStrengths[playerTileIndex] = MAX_TERRAIN_VISIBILITY_STRENGTH;
+  detailVisibility[playerTileIndex] = VISIBILITY_DIRECT;
   const playerX = playerTileIndex % dimensions.columns;
   const playerY = Math.floor(playerTileIndex / dimensions.columns);
   const maximumGridDistance = Math.hypot(dimensions.columns - 1, dimensions.rows - 1);
@@ -398,8 +583,32 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     maximumGridDistance,
     ranges.directSightRange * weatherVisibility,
   );
+  const detailPeripheralRange = Math.min(
+    maximumGridDistance,
+    detailRanges.closePeripheralRange * weatherVisibility,
+  );
+  const detailDirectRange = Math.min(
+    maximumGridDistance,
+    detailRanges.directSightRange * weatherVisibility,
+  );
   const halfCone = ranges.forwardConeRadians / 2;
+  const detailHalfCone = detailRanges.forwardConeRadians / 2;
   const normalizedFacing = normalizeAngle(facingRadians);
+  // Explicit overrides are an exact deterministic test/tool contract. The
+  // authored default field uses a softer outer band for ordinary play.
+  const featherTerrainEdge = rawInput.rangeOverrides === undefined;
+  const distanceFeatherStart = Math.max(
+    peripheralRange,
+    directRange - TERRAIN_SIGHT_DISTANCE_FEATHER * weatherVisibility,
+  );
+  const angularFeatherStart = Math.max(
+    0,
+    halfCone - TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS,
+  );
+  const closeFeatherStart = Math.max(
+    0,
+    peripheralRange - TERRAIN_CLOSE_DISTANCE_FEATHER * weatherVisibility,
+  );
 
   for (let index = 0; index < dimensions.count; index += 1) {
     if (index === playerTileIndex) continue;
@@ -413,12 +622,61 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     if (!inPeripheralRange && !inDirectRange) continue;
 
     const bearing = Math.atan2(deltaY, deltaX);
-    const inForwardCone = angleDistance(bearing, normalizedFacing)
-      <= halfCone + LINE_OF_SIGHT_EPSILON;
+    const bearingDistance = angleDistance(bearing, normalizedFacing);
+    const inForwardCone = bearingDistance <= halfCone + LINE_OF_SIGHT_EPSILON;
     const direct = inDirectRange && inForwardCone;
     if (!direct && !inPeripheralRange) continue;
     if (!hasLineOfSight(grid, playerTileIndex, index)) continue;
-    visibility[index] = direct ? VISIBILITY_DIRECT : VISIBILITY_PERIPHERAL;
+    const inSoftTerrainEdge = featherTerrainEdge
+      && direct
+      && (
+        distance > distanceFeatherStart + LINE_OF_SIGHT_EPSILON
+        || bearingDistance > angularFeatherStart + LINE_OF_SIGHT_EPSILON
+      );
+    const closeStrength = inPeripheralRange
+      ? featheredStrength(distance, closeFeatherStart, peripheralRange)
+      : 0;
+    const forwardStrength = direct
+      ? featheredStrength(distance, distanceFeatherStart, directRange)
+        * featheredStrength(bearingDistance, angularFeatherStart, halfCone)
+      : 0;
+    let terrainStrength = quantizeTerrainStrength(
+      Math.max(closeStrength, forwardStrength),
+    );
+    // Explicit range overrides are an inclusive deterministic test/tool
+    // contract. Production's authored feather is allowed to reach true zero
+    // at its visual boundary; exact override boundaries retain one least unit.
+    if (!featherTerrainEdge && terrainStrength === 0) terrainStrength = 1;
+    terrainVisibilityStrengths[index] = terrainStrength;
+    if (terrainStrength > 0) {
+      visibility[index] = direct && !inSoftTerrainEdge
+        ? VISIBILITY_DIRECT
+        : VISIBILITY_PERIPHERAL;
+    }
+
+    const detailInPeripheralRange = distance <= detailPeripheralRange;
+    const detailInDirectRange = distance <= detailDirectRange;
+    const detailInForwardCone = bearingDistance <= detailHalfCone + LINE_OF_SIGHT_EPSILON;
+    const detailDirect = detailInDirectRange && detailInForwardCone;
+    if (terrainStrength > 0 && (detailDirect || detailInPeripheralRange)) {
+      detailVisibility[index] = detailDirect
+        ? VISIBILITY_DIRECT
+        : VISIBILITY_PERIPHERAL;
+    }
+  }
+
+  if (featherTerrainEdge) {
+    featherTerrainVisibilityFrontier(
+      terrainVisibilityStrengths,
+      dimensions.columns,
+      dimensions.rows,
+      playerTileIndex,
+    );
+    for (let index = 0; index < dimensions.count; index += 1) {
+      if (terrainVisibilityStrengths[index] !== 0) continue;
+      visibility[index] = VISIBILITY_HIDDEN;
+      detailVisibility[index] = VISIBILITY_HIDDEN;
+    }
   }
 
   return createResult(
@@ -427,6 +685,8 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     dimensions.rows,
     playerTileIndex,
     visibility,
+    terrainVisibilityStrengths,
+    detailVisibility,
   );
 }
 

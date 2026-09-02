@@ -416,9 +416,10 @@ button:disabled {
 
 .relief-world-label {
   position: absolute;
-  max-width: min(17rem, 34vw);
+  max-width: min(18rem, 48vw);
   padding: 0.2rem 0.42rem;
-  overflow: hidden;
+  overflow: visible;
+  overflow-wrap: anywhere;
   color: var(--foam);
   background: rgb(2 14 16 / 78%);
   border-left: 2px solid var(--tide);
@@ -426,11 +427,13 @@ button:disabled {
   font-weight: 780;
   letter-spacing: 0.045em;
   line-height: 1.15;
-  text-overflow: ellipsis;
+  text-align: center;
+  text-overflow: clip;
   text-shadow: 0 1px 5px #000;
   text-transform: uppercase;
   transform: translate(-50%, -100%);
-  white-space: nowrap;
+  text-wrap: balance;
+  white-space: normal;
 }
 
 .relief-world-label[data-selected="true"] {

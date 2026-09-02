@@ -76,6 +76,34 @@ describe("shared visible-water presentation", () => {
     expect(barelySeen?.opacity).toBeLessThan(2);
   });
 
+  it("can show an uncharted water surface transiently without changing chart memory", () => {
+    const uncharted = {
+      ...biomeWater("glimmerfen"),
+      discovered: 0,
+      currentVisibility: 1 as const,
+    };
+    const visible = visibleWaterPresentation(uncharted, {
+      tideLevel: 0.5,
+      transientVisibility: uncharted.currentVisibility,
+    });
+
+    expect(visible).toBeDefined();
+    expect(visible?.visibility).toBe(1);
+    // Biome identity remains chart-gated even though ordinary water is seen.
+    expect(visible?.biome).toBeUndefined();
+    expect(uncharted.discovered).toBe(0);
+    expect(visibleWaterPresentation(uncharted, { tideLevel: 0.5 })).toBeUndefined();
+  });
+
+  it("can cap an explored water surface to the current atmospheric horizon", () => {
+    const visible = visibleWaterPresentation(waterTile(0.7), {
+      transientVisibility: 0.18,
+      visibilityCap: 0.18,
+    });
+    expect(visible?.visibility).toBeCloseTo(0.18);
+    expect(visible?.opacity).toBeLessThan(40);
+  });
+
   it("uses the live tide fallback only when projected depth is absent", () => {
     const missing: TerrainTileView = {
       kind: "channel",

@@ -3,16 +3,23 @@ import { describe, expect, it } from "vitest";
 import type { TerrainGridView, TerrainTileView } from "./types";
 import {
   currentSettlementVisibility,
+  currentTerrainDetailVisibility,
   currentTerrainVisibility,
+  detailPerceptionVisibilityAt,
+  isDirectlyDetailPerceived,
   isDirectlyPerceived,
   isCurrentlyPerceived,
   perceptionVisibilityAt,
 } from "./perceptionPresentation";
 
-const tile = (currentVisibility?: 0 | 0.5 | 1): TerrainTileView => ({
+const tile = (
+  currentVisibility?: 0 | 0.5 | 1,
+  currentDetailVisibility?: 0 | 0.5 | 1,
+): TerrainTileView => ({
   kind: "meadow",
   elevation: 0.2,
   ...(currentVisibility === undefined ? {} : { currentVisibility }),
+  ...(currentDetailVisibility === undefined ? {} : { currentDetailVisibility }),
 });
 
 const grid = (tiles: readonly TerrainTileView[]): TerrainGridView => ({
@@ -42,6 +49,26 @@ describe("perception presentation boundary", () => {
       stress: 0,
       currentVisibility: 0,
     })).toBe(0);
+  });
+
+  it("keeps broad terrain form independent from the shorter exact-detail field", () => {
+    const view = grid([
+      tile(1, 0),
+      tile(1, 0.5),
+      tile(1, 1),
+      tile(0.5, 0),
+    ]);
+    const terrainOnly = { x: -5, y: 25 };
+    const directDetail = { x: -5, y: 35 };
+
+    expect(perceptionVisibilityAt(view, terrainOnly, true)).toBe(1);
+    expect(detailPerceptionVisibilityAt(view, terrainOnly, true)).toBe(0);
+    expect(isDirectlyPerceived(view, terrainOnly, true)).toBe(true);
+    expect(isDirectlyDetailPerceived(view, terrainOnly, true)).toBe(false);
+    expect(isDirectlyDetailPerceived(view, directDetail, true)).toBe(true);
+
+    expect(currentTerrainDetailVisibility(tile(1), true)).toBe(0);
+    expect(detailPerceptionVisibilityAt(view, { x: Number.NaN, y: 25 }, true)).toBe(0);
   });
 
   it("samples signed-origin tiles and fails out-of-grid or malformed points closed", () => {

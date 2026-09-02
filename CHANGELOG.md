@@ -4,6 +4,52 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.3 — 2026-09-01
+
+Build: `0.3.3-alpha.3` · Gameplay contract: 12 · Tutorial: 13
+
+The horizon now breathes at two scales: terrain carries far enough ahead to plan a route, while people, cargo, labels, live conditions, and actions resolve only inside a shorter exact-detail field.
+
+### Gameplay
+
+- Clear-weather terrain sight now reaches about twenty tiles through a 150-degree forward field with five-tile close awareness; actors, cargo, resources, names, live status, current arrows, events, and exact interactions remain inside a shorter eight-tile, 120-degree detail field with two-tile close awareness.
+- Ridges, substantial structures, and weather occlude or contract both fields deterministically. A 256-step distance-and-angle falloff eases the eight-tile outer terrain band into translucent darkness, while a bounded atmospheric frontier softens earlier ridge and obstruction cutoffs instead of ending at a hard tiled flashlight edge.
+- Uncharted land and ordinary water can appear transiently while they are in the broad terrain field. Looking does not silently chart them: turning away restores darkness unless the courier physically explored or sounded the place.
+
+### Fixes
+
+- Relief 3D now draws current uncharted terrain from a separately cached sensory height field instead of flattening it through durable Chart discovery; turning changes only bounded material batches rather than rebuilding terrain geometry.
+- Known harbor, Wayknot, and Tide-Harp names no longer remain readable outside exact detail. Neutral mapped silhouettes may persist without exposing live population, status, activity, or Promise badges.
+- Loose cargo, porters, resources, particles, witnessed event markers, live route runs, and release-frame hit validation all consume the shorter detail mask, so widening terrain sight cannot restore distant labels or stale actions.
+- Transiently visible water uses the established dark water language and the same eased horizon in Chart and Relief while hidden bathymetry, soundings, biome identity, and current arrows remain undisclosed.
+- Hidden parcels no longer steer the Loom from live unseen coordinates, remembered routes cannot be selected through fog, and remote route strength cannot change local ambience.
+- World events now use their typed physical locus: an origin departure cannot appear merely because its destination is visible, and unrelated numeric IDs cannot masquerade as settlement locations.
+- Field-resource actors now leave the renderer entirely outside exact detail, reducing remote draw work and preventing hidden depletion from changing a remembered marker.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. The broader horizon changes readable terrain information, not current strength, stability pressure, cargo physics, loot, Promise rewards, actor behavior, or save outcomes.
+- Bad weather still shortens sight substantially. Terrain remains readable farther than exact objects, so route planning improves without turning the fog into remote inventory or NPC radar.
+- Hidden actors, items, resources, and cargo keep their persistent identities and continue authoritative simulation; leaving the detail field never despawns, rerolls, duplicates, or deletes them.
+
+### Interface
+
+- Chart 2D and Relief 3D now present the same broad-terrain and short-detail authority, including the graduated peripheral horizon, transient uncharted surfaces, fogged labels, and weather pressure.
+- Relief labels now wrap instead of ellipsizing and clamp inside the playable aperture on compact screens, keeping their complete text visible without adding panes.
+- The version-13 T and question-mark field manual explains the two perception scales, approximate clear-weather reach, occlusion, transient sight versus permanent map memory, and the exact kinds of information that remain close-range.
+
+### Save changes
+
+- Save version remains 4 and requires no migration. Both perception masks, the transient sensory mesh, and renderer caches are derived from the current world and are not serialized.
+- Durable exploration, depth soundings, regional cartography, cargo custody, resource depletion, actor identity, and Promise state remain unchanged by momentary line of sight.
+
+### Known limitations
+
+- The floating regional presentation window still carries a one-tile seam halo; the wider visual horizon can contract briefly at an uncrossed regional edge before the ordinary floating-origin recenter completes.
+- Swept movement still follows a deterministic bank path rather than the planned player-controlled ADRIFT paddling state; ordinary steering returns only after reaching shore.
+- The anonymous nearby sound-contact kernel is not yet connected to generated humans or wildlife because those living actor systems are not live yet.
+- Universal generated NPC identities, ABOUT inspection, actor emotion and deterrence, dog relationships, health and rescue, all-water possibility drift, and generated settlements remain future complete vertical slices.
+
 ## 0.3.3-alpha.2 — 2026-09-01
 
 Build: `0.3.3-alpha.2` · Gameplay contract: 11 · Tutorial: 12

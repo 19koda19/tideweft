@@ -114,4 +114,58 @@ describe("Relief terrain material batches", () => {
     if (!legacyChunk) throw new Error("fixture did not create a legacy chunk");
     expect(buildReliefPerceptionMaterialBatches(legacyChunk, source)).toEqual([]);
   });
+
+  it("shows currently seen uncharted terrain without promoting it into durable chart memory", () => {
+    const source = grid(3, 1, [0, 0, 0]);
+    const perceived: TerrainGridView = {
+      ...source,
+      tiles: source.tiles.map((tile, index) => ({
+        ...tile,
+        currentVisibility: index === 0 ? 0 : index === 1 ? 0.5 : 1,
+      })),
+    };
+    const chunk = buildTerrainMesh(perceived, { chunkSize: 3 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+
+    expect(buildReliefMaterialBatches(chunk, perceived)).toEqual([]);
+    const sensory = buildReliefPerceptionMaterialBatches(chunk, perceived);
+    expect(sensory.reduce((count, batch) => count + batch.indices.length, 0)).toBe(12);
+    expect(new Set(sensory.map((batch) => batch.visibility))).toEqual(new Set([0.5, 1]));
+    expect(new Set(sensory.map((batch) => batch.currentVisibility))).toEqual(new Set([0.5, 1]));
+  });
+
+  it("quantizes eased terrain strength into bounded monotone material bands", () => {
+    const source = grid(4, 1, [0, 0, 0, 0]);
+    const perceived: TerrainGridView = {
+      ...source,
+      tiles: source.tiles.map((tile, index) => ({
+        ...tile,
+        currentVisibility: [0.04, 0.2, 0.71, 1][index] ?? 0,
+      })),
+    };
+    const chunk = buildTerrainMesh(perceived, { chunkSize: 4 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+    const strengths = buildReliefPerceptionMaterialBatches(chunk, perceived)
+      .map((batch) => batch.currentVisibility)
+      .sort((left, right) => left - right);
+    expect(strengths).toEqual([1 / 16, 3 / 16, 11 / 16, 1]);
+  });
+
+  it("omits sub-band sensory geometry and retains monotone RGB-fade bands", () => {
+    const source = grid(4, 1, [0, 0, 0, 0]);
+    const perceived: TerrainGridView = {
+      ...source,
+      tiles: source.tiles.map((tile, index) => ({
+        ...tile,
+        currentVisibility: [0.01, 0.04, 0.5, 1][index] ?? 0,
+      })),
+    };
+    const chunk = buildTerrainMesh(perceived, { chunkSize: 4 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+    const batches = buildReliefPerceptionMaterialBatches(chunk, perceived);
+    const strengths = batches.map((batch) => batch.currentVisibility);
+
+    expect(batches.flatMap((batch) => batch.indices)).toHaveLength(18);
+    expect(strengths).toEqual([1 / 16, 0.5, 1]);
+  });
 });

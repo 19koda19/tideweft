@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { TideweftView } from "./types";
 import {
   commandForWorldTap,
+  routePointerTargetIsDirectlyPerceived,
   usesCoarseWorldPointer,
   validatePerceivedEntityCommand,
 } from "./worldTap";
@@ -28,6 +29,7 @@ const view = {
 
 interface PerceivedViewOptions {
   readonly tileVisibility?: readonly (0 | 0.5 | 1)[];
+  readonly detailVisibility?: readonly (0 | 0.5 | 1)[];
   readonly settlementVisibility?: 0 | 0.5 | 1;
   readonly resourceVisibility?: 0 | 0.5 | 1;
   readonly destination?: { readonly x: number; readonly y: number };
@@ -37,6 +39,7 @@ interface PerceivedViewOptions {
 
 const perceivedView = ({
   tileVisibility = [1, 1, 1, 1],
+  detailVisibility = tileVisibility,
   settlementVisibility = 1,
   resourceVisibility = 1,
   destination,
@@ -57,6 +60,7 @@ const perceivedView = ({
       elevation: 0.4,
       discovered: 1,
       currentVisibility: tileVisibility[index] ?? 0,
+      currentDetailVisibility: detailVisibility[index] ?? 0,
     })),
   },
   tide: { phase: "low", level: 0.2, progress: 0.3 },
@@ -247,6 +251,69 @@ describe("world tap intent", () => {
       point: { x: 14, y: 5 },
       additive: false,
     });
+  });
+
+  it("allows broad terrain travel while withholding exact targets beyond detail sight", () => {
+    const terrainAhead = perceivedView({
+      tileVisibility: [1, 1, 1, 1],
+      detailVisibility: [1, 0, 0, 0],
+      resourceVisibility: 1,
+    });
+
+    expect(commandForWorldTap(
+      terrainAhead,
+      { entity: "resource", id: "field-v1:reed" },
+      { x: 15, y: 5 },
+      false,
+    )).toEqual({
+      type: "move-target",
+      point: { x: 15, y: 5 },
+      additive: false,
+    });
+    expect(validatePerceivedEntityCommand(terrainAhead, {
+      type: "select",
+      entity: "porter",
+      id: "porter-1",
+      point: { x: 25, y: 5 },
+    })).toBeNull();
+
+    const hiddenRoutePoint = { x: 15, y: 5 };
+    expect(routePointerTargetIsDirectlyPerceived(terrainAhead, hiddenRoutePoint)).toBe(false);
+    expect(commandForWorldTap(
+      terrainAhead,
+      { entity: "route", id: "route-1" },
+      hiddenRoutePoint,
+      false,
+    )).toEqual({
+      type: "move-target",
+      point: hiddenRoutePoint,
+      additive: false,
+    });
+    expect(validatePerceivedEntityCommand(terrainAhead, {
+      type: "select",
+      entity: "route",
+      id: "route-1",
+      point: hiddenRoutePoint,
+    })).toBeNull();
+  });
+
+  it("keeps remembered route geometry selectable only at a release-frame detail point", () => {
+    const direct = perceivedView();
+    const routePoint = { x: 15, y: 5 };
+    const command = {
+      type: "select" as const,
+      entity: "route" as const,
+      id: "route-1",
+      point: routePoint,
+    };
+    expect(routePointerTargetIsDirectlyPerceived(direct, routePoint)).toBe(true);
+    expect(validatePerceivedEntityCommand(direct, command)).toEqual(command);
+
+    const hiddenAtRelease = perceivedView({
+      tileVisibility: [1, 1, 1, 1],
+      detailVisibility: [1, 0, 1, 1],
+    });
+    expect(validatePerceivedEntityCommand(hiddenAtRelease, command)).toBeNull();
   });
 
   it("keeps directly perceived settlement and porter selection available", () => {

@@ -91,8 +91,8 @@ describe("Relief water material batches", () => {
     const low = buildReliefWaterMaterialBatches(source, 0.05)[0]?.material;
     const high = buildReliefWaterMaterialBatches(source, 0.95)[0]?.material;
     expect(low?.color).not.toBe(high?.color);
-    expect(low?.tideLevel).toBe(0);
-    expect(high?.tideLevel).toBe(1);
+    expect(low?.tideLevel).toBe(1 / 16);
+    expect(high?.tideLevel).toBe(15 / 16);
   });
 
   it("keeps Relief water dark and makes deeper bands strictly more opaque", () => {
@@ -114,9 +114,13 @@ describe("Relief water material batches", () => {
 
   it("still omits hidden water and bounds the quantized partial-discovery alpha", () => {
     const barelySeen = buildReliefWaterMaterialBatches(
-      grid([tile({ waterDepth: 0.95, discovered: 0.01 })]),
+      grid([tile({ waterDepth: 0.95, discovered: 0.04 })]),
       0.5,
     )[0]?.material;
+    const subBand = buildReliefWaterMaterialBatches(
+      grid([tile({ waterDepth: 0.95, discovered: 0.01 })]),
+      0.5,
+    );
     const hidden = buildReliefWaterMaterialBatches(
       grid([tile({ waterDepth: 0.95, discovered: 0 })]),
       0.5,
@@ -124,6 +128,7 @@ describe("Relief water material batches", () => {
 
     expect(barelySeen).toBeDefined();
     expect(reliefWaterOpacity(barelySeen!)).toBeLessThanOrEqual(60);
+    expect(subBand).toEqual([]);
     expect(hidden).toEqual([]);
   });
 
@@ -133,9 +138,42 @@ describe("Relief water material batches", () => {
       tile({ currentVisibility: 0.5 }),
       tile({ currentVisibility: 1 }),
     ]), 0.5);
-    expect(batches.flatMap((batch) => batch.cells)).toEqual([
+    expect(batches.flatMap((batch) => batch.cells).sort((left, right) => left.column - right.column))
+      .toEqual([
       { column: 1, row: 0 },
       { column: 2, row: 0 },
-    ]);
+      ]);
+  });
+
+  it("fades explored water through the same bounded sensory bands as terrain", () => {
+    const batches = buildReliefWaterMaterialBatches(grid([
+      tile({ currentVisibility: 0.06 }),
+      tile({ currentVisibility: 0.3 }),
+      tile({ currentVisibility: 0.74 }),
+      tile({ currentVisibility: 1 }),
+    ]), 0.5);
+    const byColumn = new Map(
+      batches.flatMap((batch) => batch.cells.map((cell) => [cell.column, batch.material] as const)),
+    );
+    expect(byColumn.get(0)?.visibility).toBe(1 / 16);
+    expect(byColumn.get(1)?.visibility).toBe(5 / 16);
+    expect(byColumn.get(2)?.visibility).toBe(12 / 16);
+    expect(byColumn.get(3)?.visibility).toBe(1);
+    expect(reliefWaterOpacity(byColumn.get(0)!)).toBeLessThan(
+      reliefWaterOpacity(byColumn.get(1)!),
+    );
+    expect(reliefWaterOpacity(byColumn.get(1)!)).toBeLessThan(
+      reliefWaterOpacity(byColumn.get(2)!),
+    );
+  });
+
+  it("renders currently seen uncharted water without retaining it outside sight", () => {
+    const seen = buildReliefWaterMaterialBatches(grid([
+      tile({ discovered: 0, currentVisibility: 1, waterDepth: 0.5 }),
+      tile({ discovered: 0, currentVisibility: 0, waterDepth: 0.5 }),
+    ]), 0.5);
+
+    expect(seen.flatMap((batch) => batch.cells)).toEqual([{ column: 0, row: 0 }]);
+    expect(seen[0]?.material.visibility).toBe(1);
   });
 });

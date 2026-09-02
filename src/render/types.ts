@@ -61,11 +61,19 @@ export interface TerrainTileView {
   /** 0 is hidden, 1 is fully charted. */
   readonly discovered?: number;
   /**
-   * Present-tense perception, independent from durable Chart memory.
-   * 0 is outside current perception, 0.5 is close peripheral awareness, and
-   * 1 is direct line of sight. Missing legacy values remain fully visible.
+   * Broad present-tense terrain perception, independent from durable Chart memory.
+   * 0 is outside current perception and 1 is fully legible. Intermediate
+   * values are a presentation-only atmospheric falloff inside the authoritative
+   * terrain field. This wider field reveals terrain form only;
+   * exact actors, items, labels, and actions use currentDetailVisibility.
+   * Missing legacy values remain fully visible.
    */
-  readonly currentVisibility?: 0 | 0.5 | 1;
+  readonly currentVisibility?: number;
+  /**
+   * Shorter present-tense detail perception. Exact entities and interactions
+   * must fail closed unless this is direct (1) when a perception view exists.
+   */
+  readonly currentDetailVisibility?: 0 | 0.5 | 1;
   /** Strength of incidental foot/wake traffic through this tile. */
   readonly trace?: number;
   readonly shelter?: number;
@@ -272,8 +280,8 @@ export type FieldMaterialView =
 export type FieldResourceRarityView = "common" | "secondary" | "rare";
 
 /**
- * A gatherable natural material that is already part of the courier's public
- * map knowledge. Hidden catalog nodes never enter the renderer contract.
+ * A gatherable natural material inside the courier's current exact-detail
+ * field. Hidden catalog nodes never enter the renderer contract.
  */
 export interface FieldResourceNodeView {
   readonly id: string;
@@ -287,7 +295,7 @@ export interface FieldResourceNodeView {
   readonly rarity?: FieldResourceRarityView;
   /** Exact harvestable stock, excluding the living reserve; absent until sounded. */
   readonly stockUnits?: number;
-  /** Current sensory grade; durable Chart memory survives when this is zero. */
+  /** Current exact-detail grade. Projected resource actors are direct-only. */
   readonly currentVisibility?: 0 | 0.5 | 1;
 }
 
@@ -423,6 +431,9 @@ export interface PerceptionView {
   readonly visibleTileCount: number;
   readonly directTileCount: number;
   readonly peripheralTileCount: number;
+  readonly detailVisibleTileCount?: number;
+  readonly detailDirectTileCount?: number;
+  readonly detailPeripheralTileCount?: number;
 }
 
 export interface TideweftView {

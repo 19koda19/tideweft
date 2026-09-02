@@ -84,7 +84,9 @@ import {
   regionalWorldCenter,
 } from "./regionalWorldView";
 import { VISIBILITY_DIRECT, type PerceptionResult } from "./perception";
+import { isCurrentPerceptionSnapshot, projectPerception } from "./projection";
 import type { TraversalFeedbackState } from "./traversalFeedback";
+import { eventSettlementLocusIds } from "./eventObservation";
 
 export interface UIProjectionOptions {
   /** Full compatibility economy used for names, Promises, people, routes, and events. */
@@ -115,6 +117,17 @@ export function projectUIView(
   options: UIProjectionOptions = {},
 ): TideweftUIView {
   const economy = options.economyWorld ?? world;
+  const currentPerception = options.perception === undefined
+    ? undefined
+    : projectPerception(world, player);
+  const perception = currentPerception
+    && isCurrentPerceptionSnapshot(
+      options.perception,
+      currentPerception,
+      world.terrain.width * world.terrain.height,
+    )
+    ? options.perception
+    : currentPerception;
   const selectedSettlementCandidate = session.selectedSettlementId === null
     ? undefined
     : economy.settlements.find((settlement) => settlement.id === session.selectedSettlementId);
@@ -122,7 +135,7 @@ export function projectUIView(
     && settlementIsDirectlyObserved(
       selectedSettlementCandidate.id,
       world,
-      options.perception,
+      perception,
     )
     ? selectedSettlementCandidate
     : undefined;
@@ -261,8 +274,18 @@ export function projectUIView(
         session,
         contract.id === activeContract?.id ? activeCustody : undefined,
       )),
-    ...(selectedSettlement ? { selectedSettlement: projectSettlement(selectedSettlement, economy, playerSettlementId, player) } : {}),
-    chronicle: projectObservedChronicle(economy, world, player, session, options),
+    ...(selectedSettlement
+      ? {
+          selectedSettlement: projectSettlement(
+            selectedSettlement,
+            economy,
+            playerSettlementId,
+            player,
+            perception !== undefined,
+          ),
+        }
+      : {}),
+    chronicle: projectObservedChronicle(economy, world, player, session, options, perception),
     title: {
       visible: session.titleVisible,
       hasSave: session.hasSave,
@@ -1274,8 +1297,14 @@ function projectSettlement(
   world: WorldView,
   playerSettlementId: number | null,
   player: PlayerState,
+  directlyObserved: boolean,
 ): SettlementInspectorUIView {
-  const verifiedLocally = playerSettlementId === settlement.id || (player.discovered[settlement.tileIndex] ?? 0) > 0;
+  // A production inspector exists only for a detail-direct settlement. Durable
+  // discovery is map memory, not a perpetual live feed. Legacy projections
+  // without a perception snapshot retain their sourced-information behavior.
+  const verifiedLocally = playerSettlementId === settlement.id
+    || directlyObserved
+    || (player.discovered[settlement.tileIndex] ?? 0) > 0 && !directlyObserved;
   const allResidents = world.residents.filter((resident) => resident.homeSettlementId === settlement.id);
   const knownRequesterIds = new Set(
     world.contracts
@@ -1310,7 +1339,9 @@ function projectSettlement(
         label: "Pressure",
         value: verifiedLocally ? settlement.stress / FIXED_POINT : 0,
         valueLabel: verifiedLocally ? `${Math.round((settlement.stress / FIXED_POINT) * 100)}%` : "Unknown",
-        tone: settlement.stress > 700_000 ? "danger" : settlement.stress > 480_000 ? "warning" : "good",
+        tone: verifiedLocally
+          ? settlement.stress > 700_000 ? "danger" : settlement.stress > 480_000 ? "warning" : "good"
+          : "neutral",
       },
       {
         label: "Project",
@@ -1463,6 +1494,7 @@ function projectObservedChronicle(
   player: PlayerState,
   session: GameSessionState,
   options: UIProjectionOptions,
+  perception: PerceptionResult | undefined,
 ): readonly ChronicleEntryUIView[] {
   const entries: ChronicleEntryUIView[] = [];
   const incident = options.traversalFeedback?.incident ?? null;
@@ -1489,7 +1521,7 @@ function projectObservedChronicle(
   }
 
   const perceivedEvents = economy.events
-    .filter((event) => eventWasObserved(event, economy, localWorld, player, options.perception))
+    .filter((event) => eventWasObserved(event, economy, localWorld, player, perception))
     .slice(-24)
     .reverse()
     .map((event) => projectChronicle(event, economy));
@@ -1505,7 +1537,7 @@ function settlementIsDirectlyObserved(
   const settlement = localWorld.settlements.find((candidate) => candidate.id === settlementId);
   return Boolean(
     settlement
-    && perception.visibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT,
+    && perception.detailVisibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT,
   );
 }
 
@@ -1560,26 +1592,13 @@ function eventWasObserved(
     && economy.contracts.find((contract) => contract.id === event.subjectId)?.carrierKind === "player"
   ) return true;
 
-  for (const settlementId of eventSettlementIds(event)) {
+  for (const settlementId of eventSettlementLocusIds(event, economy)) {
     const localSettlement = localWorld.settlements.find((settlement) => settlement.id === settlementId);
-    if (localSettlement && perception.visibilityGrades[localSettlement.tileIndex] === VISIBILITY_DIRECT) {
+    if (localSettlement && perception.detailVisibilityGrades[localSettlement.tileIndex] === VISIBILITY_DIRECT) {
       return true;
     }
   }
   return false;
-}
-
-function eventSettlementIds(event: SimEvent): readonly number[] {
-  const ids = [
-    event.data.originSettlementId,
-    event.data.destinationSettlementId,
-    event.data.settlementId,
-    event.data.returnSettlementId,
-    event.data.fromSettlementId,
-    event.data.toSettlementId,
-    event.data.subjectSettlementId,
-  ].filter((value): value is number => typeof value === "number" && Number.isSafeInteger(value));
-  return [...new Set(ids)];
 }
 
 function splitIncidentLabel(label: string): readonly [string, string?] {

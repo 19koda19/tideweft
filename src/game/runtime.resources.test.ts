@@ -293,8 +293,10 @@ describe("runtime field-resource integration", () => {
     const firstResources = first.getRenderView().fieldResources;
     const secondResources = second.getRenderView().fieldResources;
     expect(firstResources).toEqual(secondResources);
-    expect(firstResources.map((node) => node.id)).toEqual(catalog.nodes.map((node) => node.id));
-    expect(firstResources.length).toBeGreaterThan(1_000);
+    expect(firstResources.length).toBeGreaterThan(0);
+    expect(firstResources.length).toBeLessThan(catalog.nodes.length);
+    expect(firstResources.every((node) => catalog.nodes.some((candidate) => candidate.id === node.id)))
+      .toBe(true);
     expect(firstResources.every((node) => node.knowledge === "sounded")).toBe(true);
 
     first.destroy();

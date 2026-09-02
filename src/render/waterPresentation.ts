@@ -41,6 +41,13 @@ export interface WaterPresentationOptions {
   readonly derivedDepth?: number;
   /** Public tide level, used for a restrained global surface tint. */
   readonly tideLevel?: number;
+  /**
+   * Momentary terrain sight. This can reveal a water surface while it is in
+   * view, but it never changes the tile's durable chart confidence.
+   */
+  readonly transientVisibility?: number;
+  /** Optional outer sensory fade applied after durable/transient eligibility. */
+  readonly visibilityCap?: number;
 }
 
 /**
@@ -53,7 +60,11 @@ export function visibleWaterPresentation(
   options: WaterPresentationOptions = {},
 ): WaterPresentation | undefined {
   if (!tile) return undefined;
-  const visibility = tile.discovered === undefined ? 1 : unit(tile.discovered);
+  const chartedVisibility = tile.discovered === undefined ? 1 : unit(tile.discovered);
+  const eligibleVisibility = Math.max(chartedVisibility, unit(options.transientVisibility));
+  const visibility = options.visibilityCap === undefined
+    ? eligibleVisibility
+    : Math.min(eligibleVisibility, unit(options.visibilityCap));
   if (visibility <= 0) return undefined;
 
   const actualDepth = unit(tile.waterDepth, options.derivedDepth);
@@ -82,14 +93,14 @@ export function visibleWaterPresentation(
  */
 export function quantizeWaterPresentation(
   presentation: WaterPresentation,
-  steps = 4,
+  steps = 16,
 ): WaterPresentation {
   const safeSteps = Math.max(1, Math.min(16, Math.round(steps)));
   const quantize = (value: number): number =>
     Math.round(unit(value) * safeSteps) / safeSteps;
   return composeWaterPresentation({
     depth: Math.max(1 / safeSteps, quantize(presentation.depth)),
-    visibility: Math.max(1 / safeSteps, quantize(presentation.visibility)),
+    visibility: quantize(presentation.visibility),
     environment: quantize(presentation.environment),
     tideLevel: quantize(presentation.tideLevel),
     ...(presentation.biome ? { biome: presentation.biome } : {}),

@@ -27,6 +27,7 @@ describe("information as physical, sourced progress", () => {
     expect(uncertain?.lastVerified).toContain("Unverified");
     expect(uncertain?.stocks.every((stock) => stock.amountLabel === "Unverified")).toBe(true);
     expect(uncertain?.metrics.every((metric) => metric.valueLabel === "Unknown" || metric.valueLabel === "Unverified")).toBe(true);
+    expect(uncertain?.metrics.every((metric) => metric.tone === "neutral")).toBe(true);
 
     const remoteTile = view.terrain.tiles[remote.tileIndex];
     if (!remoteTile) throw new Error("missing remote tile");

@@ -4,6 +4,7 @@ import {
   createReliefDiscoverySignatureMemo,
   discoveredReliefSurfaceHeightAt,
   maskReliefTileForDiscovery,
+  perceivedReliefSurfaceHeightAt,
   reliefDiscoveryVisibility,
   reliefDiscoverySignature,
 } from "./reliefTerrain";
@@ -107,6 +108,26 @@ describe("discovery-masked Relief surfaces", () => {
 
     expect(discoveredReliefSurfaceHeightAt(hiddenLow, { x: 5, y: 5 }, 100, true)).toBe(0);
     expect(discoveredReliefSurfaceHeightAt(hiddenHigh, { x: 5, y: 5 }, 100, true)).toBe(0);
+  });
+
+  it("reveals real uncharted surface only while the broad terrain field reaches it", () => {
+    const hidden = grid([tile({
+      elevation: 0.82,
+      waterDepth: 0.13,
+      discovered: 0,
+      currentVisibility: 0,
+    })]);
+    const seen: TerrainGridView = {
+      ...hidden,
+      tiles: hidden.tiles.map((entry) => ({ ...entry, currentVisibility: 1 })),
+    };
+
+    expect(perceivedReliefSurfaceHeightAt(hidden, { x: 5, y: 5 }, 100, true)).toBe(0);
+    expect(perceivedReliefSurfaceHeightAt(seen, { x: 5, y: 5 }, 100, false))
+      .toBeCloseTo(82, 12);
+    expect(perceivedReliefSurfaceHeightAt(seen, { x: 5, y: 5 }, 100, true))
+      .toBeCloseTo(95, 12);
+    expect(seen.tiles[0]?.discovered).toBe(0);
   });
 
   it("uses the same partial-discovery values for mesh tiles and surface anchors", () => {

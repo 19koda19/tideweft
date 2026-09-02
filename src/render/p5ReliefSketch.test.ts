@@ -315,6 +315,19 @@ beforeEach(() => {
 });
 
 describe("Relief spatial epoch release gate", () => {
+  it("binds the same terrain color to diffuse fill and ambient reflection", () => {
+    const harness = renderHarness(view("r:0:0", { x: 8, y: 8 }));
+    const fill = harness.instance.fill as ReturnType<typeof vi.fn>;
+    const ambientMaterial = harness.instance.ambientMaterial as ReturnType<typeof vi.fn>;
+    harness.draw();
+
+    expect(ambientMaterial).toHaveBeenCalled();
+    expect(fill.mock.calls.some(([fillColor]) =>
+      ambientMaterial.mock.calls.some(([ambientColor]) => ambientColor === fillColor)
+    )).toBe(true);
+    harness.renderer.destroy();
+  });
+
   it("initializes quietly, preserves an unchanged epoch, and accepts legacy epoch transitions", () => {
     const harness = renderHarness(view(undefined, { x: 8, y: 8 }));
     harness.draw();
@@ -623,8 +636,8 @@ describe("Relief presentation-only pointer and label motion", () => {
     now = 16;
     harness.draw();
     const easedLeft = Number.parseFloat(String(first.style.left));
-    expect(easedLeft).toBeGreaterThan(initialLeft + 88);
-    expect(easedLeft).toBeLessThan(initialLeft + 100);
+    expect(easedLeft).toBeGreaterThan(initialLeft);
+    expect(easedLeft).toBeCloseTo(231.2, 1);
 
     current = { ...base, settlements: [] };
     harness.setView(current);
@@ -641,7 +654,7 @@ describe("Relief presentation-only pointer and label motion", () => {
       (child: FakeElement) => child.textContent === "Harbor Label" && !child.removed,
     );
     if (!replacement) throw new Error("expected replacement Relief label");
-    expect(Number.parseFloat(String(replacement.style.left))).toBeCloseTo(initialLeft + 150, 1);
+    expect(Number.parseFloat(String(replacement.style.left))).toBeCloseTo(231.2, 1);
     harness.renderer.destroy();
   });
 });

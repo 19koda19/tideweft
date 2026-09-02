@@ -9,7 +9,7 @@ import type {
 } from "./types";
 import {
   currentSettlementVisibility,
-  isDirectlyPerceived,
+  isDirectlyDetailPerceived,
 } from "./perceptionPresentation";
 
 export interface WorldTapTarget {
@@ -31,8 +31,21 @@ const directlyPerceivedPoint = (view: TideweftView, point: WorldPoint): boolean 
   view.perception === undefined
     || (
       view.perception.valid === true
-      && isDirectlyPerceived(view.terrain, point, true)
+      && isDirectlyDetailPerceived(view.terrain, point, true)
     );
+
+/**
+ * Remembered route geometry remains useful beyond immediate sight, but it is
+ * not an exact pointer target there. Keeping this check shared by both
+ * renderers and the release-frame validator prevents a stale hover/click from
+ * selecting a route after the short detail field moves away.
+ */
+export function routePointerTargetIsDirectlyPerceived(
+  view: TideweftView,
+  point: WorldPoint,
+): boolean {
+  return finitePoint(point) && directlyPerceivedPoint(view, point);
+}
 
 const directlyPerceivedSettlement = (
   view: TideweftView,
@@ -40,7 +53,7 @@ const directlyPerceivedSettlement = (
 ): boolean => view.perception === undefined || (
   view.perception.valid === true
   && currentSettlementVisibility(settlement, true) >= 1
-  && isDirectlyPerceived(view.terrain, settlement.position, true)
+  && isDirectlyDetailPerceived(view.terrain, settlement.position, true)
 );
 
 const directlyPerceivedResource = (
@@ -49,7 +62,7 @@ const directlyPerceivedResource = (
 ): boolean => view.perception === undefined || (
   view.perception.valid === true
   && node.currentVisibility === 1
-  && isDirectlyPerceived(view.terrain, node.position, true)
+  && isDirectlyDetailPerceived(view.terrain, node.position, true)
 );
 
 const directlyPerceivedPorter = (
@@ -92,7 +105,11 @@ export function validatePerceivedEntityCommand(
       if (command.entity === "world") return command;
       if (!command.id) return null;
       if (command.entity === "route") {
-        return view.routes.some((route) => route.id === command.id) ? command : null;
+        return finitePoint(command.point)
+          && routePointerTargetIsDirectlyPerceived(view, command.point)
+          && view.routes.some((route) => route.id === command.id)
+          ? command
+          : null;
       }
       if (command.entity === "settlement") {
         const settlement = view.settlements.find((candidate) => candidate.id === command.id);

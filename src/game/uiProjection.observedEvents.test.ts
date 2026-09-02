@@ -9,6 +9,7 @@ import {
 } from "./perception";
 import { TILE_UNITS, createPlayer, playerTileIndex } from "./player";
 import { createSessionState } from "./sessionTypes";
+import { projectPerception } from "./projection";
 import {
   TRAVERSAL_FEEDBACK_VERSION,
   type TraversalFeedbackState,
@@ -20,19 +21,40 @@ function perceptionWithDirectTiles(
   world: WorldView,
   playerIndex: number,
   directTileIndices: readonly number[],
+  terrainOnlyDirectTileIndices: readonly number[] = [],
 ): PerceptionResult {
   const visibilityGrades = new Uint8Array(world.terrain.tiles.length);
+  const terrainVisibilityStrengths = new Uint8Array(world.terrain.tiles.length);
+  const detailVisibilityGrades = new Uint8Array(world.terrain.tiles.length);
   const direct = [...new Set([playerIndex, ...directTileIndices])];
-  for (const index of direct) visibilityGrades[index] = VISIBILITY_DIRECT;
+  for (const index of direct) {
+    visibilityGrades[index] = VISIBILITY_DIRECT;
+    terrainVisibilityStrengths[index] = 255;
+    detailVisibilityGrades[index] = VISIBILITY_DIRECT;
+  }
+  for (const index of terrainOnlyDirectTileIndices) {
+    visibilityGrades[index] = VISIBILITY_DIRECT;
+    terrainVisibilityStrengths[index] = 255;
+  }
+  const terrainDirect = [...new Set([...direct, ...terrainOnlyDirectTileIndices])];
   return {
     version: PERCEPTION_VERSION,
     valid: true,
     visibilityGrades,
-    visibleTileIndices: direct,
-    directTileIndices: direct,
+    terrainVisibilityStrengths,
+    detailVisibilityGrades,
+    visibleTileIndices: terrainDirect,
+    directTileIndices: terrainDirect,
     peripheralTileIndices: [],
+    detailVisibleTileIndices: direct,
+    detailDirectTileIndices: direct,
+    detailPeripheralTileIndices: [],
     playerTileIndex: playerIndex,
-    signature: `observed-events:${direct.join(",")}`,
+    signature: projectPerception(world, {
+      ...createPlayer(world),
+      x: world.terrain.tiles[playerIndex]!.x * TILE_UNITS + TILE_UNITS / 2,
+      y: world.terrain.tiles[playerIndex]!.y * TILE_UNITS + TILE_UNITS / 2,
+    }).signature,
   };
 }
 
@@ -47,6 +69,33 @@ function traversalFeedbackFor(incident: TraversalIncident): TraversalFeedbackSta
 }
 
 describe("observed event projection", () => {
+  it("rejects a forged remote-detail snapshot before opening a live inspector", () => {
+    const world = createWorldView(createWorld("a remembered harbor is not live telemetry"));
+    const player = createPlayer(world);
+    const playerIndex = playerTileIndex(player);
+    const playerTile = world.terrain.tiles[playerIndex];
+    if (!playerTile) throw new Error("fixture needs a player tile");
+    const remote = world.settlements
+      .filter((settlement) => settlement.tileIndex !== playerIndex)
+      .sort((left, right) => {
+        const leftTile = world.terrain.tiles[left.tileIndex]!;
+        const rightTile = world.terrain.tiles[right.tileIndex]!;
+        return Math.hypot(rightTile.x - playerTile.x, rightTile.y - playerTile.y)
+          - Math.hypot(leftTile.x - playerTile.x, leftTile.y - playerTile.y);
+      })[0];
+    if (!remote) throw new Error("fixture needs a remote settlement");
+    player.discovered[remote.tileIndex] = 1_000_000;
+    const session = createSessionState(world.seedText);
+    session.selectedSettlementId = remote.id;
+    const forged = {
+      ...perceptionWithDirectTiles(world, playerIndex, [remote.tileIndex]),
+      signature: "forged-stale-sight",
+    };
+
+    expect(projectUIView(world, player, session, { perception: forged }).selectedSettlement)
+      .toBeUndefined();
+  });
+
   it("moves the full player-caused traversal explanation into one event-feed entry", () => {
     const world = createWorldView(createWorld("observed traversal event feed"));
     const player = createPlayer(world);
@@ -123,6 +172,28 @@ describe("observed event projection", () => {
         subjectId: null,
         data: { commandId: "player-observed-event-test", reason: "the parcel stayed put" },
       },
+      {
+        tick: 14,
+        sequence: 994,
+        type: "contract-accepted",
+        subjectId: null,
+        data: {
+          originSettlementId: remoteSettlement.id,
+          destinationSettlementId: directSettlement.id,
+          carrier: "porter",
+        },
+      },
+      {
+        tick: 14,
+        sequence: 995,
+        type: "contract-accepted",
+        subjectId: null,
+        data: {
+          originSettlementId: directSettlement.id,
+          destinationSettlementId: remoteSettlement.id,
+          carrier: "porter",
+        },
+      },
     ];
     const world: WorldView = {
       ...base,
@@ -133,13 +204,16 @@ describe("observed event projection", () => {
       world,
       playerTileIndex(player),
       [directSettlement.tileIndex],
+      [remoteSettlement.tileIndex],
     );
 
     const observedIds = projectUIView(world, player, session, { perception })
       .chronicle.map(({ id }) => id);
     expect(observedIds).toContain("991");
     expect(observedIds).toContain("993");
+    expect(observedIds).toContain("995");
     expect(observedIds).not.toContain("992");
+    expect(observedIds).not.toContain("994");
 
     // Callers without the new snapshot retain the historical complete ledger.
     const legacyIds = projectUIView(world, player, session).chronicle.map(({ id }) => id);

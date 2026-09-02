@@ -1,4 +1,5 @@
 import type { RendererCommand, TideweftView, WorldPoint } from "../render/types";
+import { validatePerceivedEntityCommand } from "../render/worldTap";
 import {
   createWorld,
   createWorldView,
@@ -108,6 +109,7 @@ import {
   type WayknotPlacementReason,
 } from "./wayknots";
 import { projectGameView, projectPerception } from "./projection";
+import { VISIBILITY_DIRECT } from "./perception";
 import {
   announce,
   captureSessionBaseline,
@@ -900,10 +902,11 @@ export async function createTideweftRuntime(
       announce(session, tutorialAdvanceMessage(session.tutorial.stage));
       soundscape.play("strand", 0.45);
     }
+    const ambiencePerception = projectPerception(worldView, player);
     soundscape.updateAmbience(
       worldView.tide.level / 1_000_000,
       worldView.weather.intensity / 1_000_000,
-      averageRouteStrength(worldView),
+      averageObservedRouteStrength(worldView, ambiencePerception.detailVisibilityGrades),
     );
     refreshViews();
 
@@ -1125,11 +1128,13 @@ export async function createTideweftRuntime(
 
   function dispatchRenderer(command: RendererCommand): void {
     void soundscape.unlock();
-    switch (command.type) {
+    const perceivedCommand = validatePerceivedEntityCommand(renderView, command);
+    if (!perceivedCommand) return;
+    switch (perceivedCommand.type) {
       case "movement":
         manualControl = {
-          moveX: signControl(command.vector.x),
-          moveY: signControl(command.vector.y),
+          moveX: signControl(perceivedCommand.vector.x),
+          moveY: signControl(perceivedCommand.vector.y),
           brace: manualControl.brace,
         };
         if (manualControl.moveX || manualControl.moveY) {
@@ -1140,7 +1145,7 @@ export async function createTideweftRuntime(
         }
         break;
       case "brace":
-        manualControl = { ...manualControl, brace: command.active };
+        manualControl = { ...manualControl, brace: perceivedCommand.active };
         // Brace is a momentary safety control. Project it immediately so the
         // player sees a planted pose before the next fixed movement beat.
         refreshViews();
@@ -1149,15 +1154,15 @@ export async function createTideweftRuntime(
         pendingGatherNodeId = null;
         pendingParcelTargetId = null;
         pendingParcelRecoverOnArrival = false;
-        setAutopilot(command.point, command.additive);
+        setAutopilot(perceivedCommand.point, perceivedCommand.additive);
         break;
       case "resource-target":
         pendingParcelTargetId = null;
         pendingParcelRecoverOnArrival = false;
-        targetFieldResource(command.nodeId, command.gatherOnArrival);
+        targetFieldResource(perceivedCommand.nodeId, perceivedCommand.gatherOnArrival);
         break;
       case "parcel-target":
-        targetPhysicalParcel(command.parcelId, command.recoverOnArrival);
+        targetPhysicalParcel(perceivedCommand.parcelId, perceivedCommand.recoverOnArrival);
         break;
       case "scan":
         scan();
@@ -1169,9 +1174,9 @@ export async function createTideweftRuntime(
         toggleWayknot();
         break;
       case "select":
-        if (command.entity === "settlement" && command.id) {
-          session.selectedSettlementId = Number(command.id);
-        } else if (command.entity === "world") {
+        if (perceivedCommand.entity === "settlement" && perceivedCommand.id) {
+          session.selectedSettlementId = Number(perceivedCommand.id);
+        } else if (perceivedCommand.entity === "world") {
           session.selectedSettlementId = null;
         }
         refreshViews();
@@ -1978,6 +1983,22 @@ export async function createTideweftRuntime(
     };
   }
 
+  function parcelPositionIsDirectlyObserved(point: WorldPoint): boolean {
+    if (!perception.valid) return false;
+    const column = Math.floor(point.x / RENDER_TILE_SIZE);
+    const row = Math.floor(point.y / RENDER_TILE_SIZE);
+    if (
+      !Number.isSafeInteger(column)
+      || !Number.isSafeInteger(row)
+      || column < 0
+      || column >= worldView.terrain.width
+      || row < 0
+      || row >= worldView.terrain.height
+    ) return false;
+    return perception.detailVisibilityGrades[row * worldView.terrain.width + column]
+      === VISIBILITY_DIRECT;
+  }
+
   function recoverPhysicalParcel(parcelId: string, announceFailure = true): boolean {
     if (physicalReceiptPending()) {
       if (announceFailure) {
@@ -2023,10 +2044,10 @@ export async function createTideweftRuntime(
   function targetPhysicalParcel(parcelId: string, recoverOnArrival: boolean): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
     const point = physicalParcelPosition(parcelId);
-    if (!point) {
+    if (!point || !parcelPositionIsDirectlyObserved(point)) {
       pendingParcelTargetId = null;
       pendingParcelRecoverOnArrival = false;
-      announce(session, "That parcel is no longer in the loaded landscape.", true);
+      announce(session, "That parcel is no longer in exact sight. Its last observed place remains yours to search.", true);
       return;
     }
     if (recoverPhysicalParcel(parcelId, false)) {
@@ -2063,6 +2084,10 @@ export async function createTideweftRuntime(
       announce(session, "The marked parcel left the loaded scene; no other object was targeted in its place.", true);
       return;
     }
+    // Keep walking toward the last observed point, but never steer from the
+    // parcel's hidden live coordinates. Reacquiring direct detail sight lets
+    // the target update again.
+    if (!parcelPositionIsDirectlyObserved(point)) return;
     if (recoverPhysicalParcel(parcelId, false)) return;
     if (!setAutopilot(point, false, false)) {
       pendingParcelTargetId = null;
@@ -4335,9 +4360,18 @@ function isTerminal(status: ContractState["status"]): boolean {
   return status === "fulfilled" || status === "expired" || status === "cancelled";
 }
 
-function averageRouteStrength(world: WorldView): number {
-  if (world.routes.length === 0) return 0;
-  return world.routes.reduce((sum, route) => sum + route.traceStrength, 0) / world.routes.length / 1_000_000;
+export function averageObservedRouteStrength(
+  world: WorldView,
+  detailVisibilityGrades: Uint8Array,
+): number {
+  if (detailVisibilityGrades.length !== world.terrain.tiles.length) return 0;
+  const observed = world.routes.filter((route) => route.path.some(
+    (tileIndex) => detailVisibilityGrades[tileIndex] === VISIBILITY_DIRECT,
+  ));
+  if (observed.length === 0) return 0;
+  return observed.reduce((sum, route) => sum + route.traceStrength, 0)
+    / observed.length
+    / 1_000_000;
 }
 
 function discoveredCount(player: PlayerState): number {

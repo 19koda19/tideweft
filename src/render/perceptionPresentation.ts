@@ -12,6 +12,25 @@ export function currentTerrainVisibility(
   return Math.max(0, Math.min(1, value));
 }
 
+/**
+ * Exact-detail disclosure is intentionally shorter than terrain sight. A
+ * production perception view always supplies this field. Requiring disclosure
+ * fails closed for malformed or stale views instead of borrowing the broader
+ * terrain mask.
+ */
+export function currentTerrainDetailVisibility(
+  tile: TerrainTileView | undefined,
+  requireDisclosure = false,
+): number {
+  if (!tile) return 0;
+  const value = tile.currentDetailVisibility;
+  if (value === undefined) {
+    return requireDisclosure ? 0 : currentTerrainVisibility(tile, false);
+  }
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
 export function currentSettlementVisibility(
   settlement: SettlementView,
   requireDisclosure = false,
@@ -44,6 +63,28 @@ export function perceptionVisibilityAt(
   return currentTerrainVisibility(grid.tiles[row * grid.columns + column], requireDisclosure);
 }
 
+/** Samples the short exact-detail field; malformed points fail closed. */
+export function detailPerceptionVisibilityAt(
+  grid: TerrainGridView,
+  point: WorldPoint,
+  requireDisclosure = false,
+): number {
+  if (
+    !Number.isFinite(point.x)
+    || !Number.isFinite(point.y)
+    || !Number.isFinite(grid.tileSize)
+    || grid.tileSize <= 0
+    || !Number.isSafeInteger(grid.columns)
+    || !Number.isSafeInteger(grid.rows)
+    || grid.columns <= 0
+    || grid.rows <= 0
+  ) return 0;
+  const column = Math.floor((point.x - grid.origin.x) / grid.tileSize);
+  const row = Math.floor((point.y - grid.origin.y) / grid.tileSize);
+  if (column < 0 || column >= grid.columns || row < 0 || row >= grid.rows) return 0;
+  return currentTerrainDetailVisibility(grid.tiles[row * grid.columns + column], requireDisclosure);
+}
+
 export function isCurrentlyPerceived(
   grid: TerrainGridView,
   point: WorldPoint,
@@ -58,4 +99,20 @@ export function isDirectlyPerceived(
   requireDisclosure = false,
 ): boolean {
   return perceptionVisibilityAt(grid, point, requireDisclosure) >= 1;
+}
+
+export function isCurrentlyDetailPerceived(
+  grid: TerrainGridView,
+  point: WorldPoint,
+  requireDisclosure = false,
+): boolean {
+  return detailPerceptionVisibilityAt(grid, point, requireDisclosure) > 0;
+}
+
+export function isDirectlyDetailPerceived(
+  grid: TerrainGridView,
+  point: WorldPoint,
+  requireDisclosure = false,
+): boolean {
+  return detailPerceptionVisibilityAt(grid, point, requireDisclosure) >= 1;
 }

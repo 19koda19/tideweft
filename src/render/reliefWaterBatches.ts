@@ -61,9 +61,18 @@ export function buildReliefWaterMaterialBatches(
       if (!tile) continue;
       if (currentTerrainVisibility(tile) <= 0) continue;
       const derivedDepth = unit(tideLevel) * 0.82 - unit(tile.elevation);
-      const visible = visibleWaterPresentation(tile, { derivedDepth, tideLevel });
+      const visible = visibleWaterPresentation(tile, {
+        derivedDepth,
+        tideLevel,
+        // Missing values are legacy views, where discovery already defaults
+        // to visible. Only an explicit present-tense grade can reveal an
+        // otherwise uncharted water surface.
+        transientVisibility: tile.currentVisibility ?? 0,
+        visibilityCap: currentTerrainVisibility(tile),
+      });
       if (!visible) continue;
       const material = quantizeWaterPresentation(visible);
+      if (material.visibility <= 0) continue;
       const key = [
         material.band,
         material.biome ?? "legacy",

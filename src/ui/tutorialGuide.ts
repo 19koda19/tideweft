@@ -1012,7 +1012,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "12",
     title: "Two views, one simulation",
     shortTitle: "Views & HUD",
-    summary: "Chart 2D and Relief 3D read and command the same world state. Switching presentation cannot fork the simulation or reveal undiscovered terrain.",
+    summary: "Chart 2D and Relief 3D read and command the same world state. Switching presentation cannot fork the simulation or turn momentary sight into permanent map knowledge.",
     keywords: ["chart", "2d", "relief", "3d", "view", "hud", "promises", "mobile", "inspector", "camera", "compass", "north", "twist", "spin", "j", "l"],
     controlIds: ["view-key", "view-button", "relief-orbit", "relief-touch-orbit", "world-zoom", "promises-sheet", "kit-button"],
     steps: [
@@ -1027,7 +1027,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-perception",
         audience: "all",
         title: "The field shows what you can presently perceive",
-        body: "Direct sight extends ahead of the courier while close peripheral awareness remains around the body. Terrain obstruction and severe weather shorten that view. Explored geography stays as dim Chart memory, but hidden cargo, people, resource stock, currents, particles, live settlement state, labels, and exact actions do not appear through fog. Turning changes attention, not the saved world.",
+        body: "Terrain shape now reaches much farther ahead than exact detail: in clear air the broad field extends about twenty tiles through a 150-degree cone, with a soft outer band and close awareness around the body. People, cargo, resources, current arrows, names, live status, and actions use a shorter eight-tile, 120-degree field. Ridges and severe weather shorten both. Uncharted ground and ordinary water can be seen while you face them without becoming permanent Chart memory; turning changes attention, not the saved world.",
       },
       {
         id: "views-events",
@@ -1226,7 +1226,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, screen-space Relief rain, readable wind threads, forward and peripheral perception fog, dim explored memory, witnessed EVENTS, signed coordinates, measured FPS, discovery, depth sounding, current arrows and deterministic sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
+        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, screen-space Relief rain, readable wind threads, separate broad-terrain and short-detail perception fog, transient uncharted sight, dim explored memory, witnessed EVENTS, signed coordinates, measured FPS, discovery, depth sounding, current arrows and deterministic sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1253,7 +1253,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 12 as const;
+export const TUTORIAL_CONTENT_VERSION = 13 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

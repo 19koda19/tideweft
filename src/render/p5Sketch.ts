@@ -17,11 +17,13 @@ import {
 } from "./routePresentation";
 import {
   currentSettlementVisibility,
+  currentTerrainDetailVisibility,
   currentTerrainVisibility,
-  isDirectlyPerceived,
+  isDirectlyDetailPerceived,
 } from "./perceptionPresentation";
 import {
   commandForWorldTap,
+  routePointerTargetIsDirectlyPerceived,
   usesCoarseWorldPointer,
   validatePerceivedEntityCommand,
 } from "./worldTap";
@@ -396,7 +398,7 @@ export function createTideweftRenderer(
     const view = latestView;
     const parcels = safeLooseCargoViews(view?.looseCargo ?? []);
     if (!view?.perception) return parcels;
-    return parcels.filter((parcel) => isDirectlyPerceived(view.terrain, parcel.position, true));
+    return parcels.filter((parcel) => isDirectlyDetailPerceived(view.terrain, parcel.position, true));
   };
 
   const releaseActiveTouchPointerCaptures = (): void => {
@@ -515,18 +517,20 @@ export function createTideweftRenderer(
 
     const porterRadius = 16 / Math.max(camera.zoom, 0.01);
     for (const porter of view.porters) {
-      if (!isDirectlyPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
+      if (!isDirectlyDetailPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
       const distance = distanceSquared(point, porter.position);
       if (distance <= porterRadius * porterRadius && (!nearest || distance < nearest.distance)) {
         nearest = { target: { entity: "porter", id: porter.id }, distance };
       }
     }
 
-    const routeRadius = 10 / Math.max(camera.zoom, 0.01);
-    for (const route of view.routes) {
-      const distance = routeDistanceSquared(point, route);
-      if (distance <= routeRadius * routeRadius && (!nearest || distance < nearest.distance)) {
-        nearest = { target: { entity: "route", id: route.id }, distance };
+    if (routePointerTargetIsDirectlyPerceived(view, point)) {
+      const routeRadius = 10 / Math.max(camera.zoom, 0.01);
+      for (const route of view.routes) {
+        const distance = routeDistanceSquared(point, route);
+        if (distance <= routeRadius * routeRadius && (!nearest || distance < nearest.distance)) {
+          nearest = { target: { entity: "route", id: route.id }, distance };
+        }
       }
     }
     return nearest?.target ?? null;
@@ -1176,15 +1180,15 @@ export function createTideweftRenderer(
           const x = grid.origin.x + column * tileSize;
           const y = grid.origin.y + row * tileSize;
           const discovered = unit(tile.discovered, 1);
-          if (discovered <= 0) {
-            p.fill(PALETTE.ink);
-            p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
-            continue;
-          }
           const currentVisibility = currentTerrainVisibility(
             tile,
             view.perception !== undefined,
           );
+          if (discovered <= 0 && currentVisibility <= 0) {
+            p.fill(PALETTE.ink);
+            p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
+            continue;
+          }
           if (currentVisibility <= 0) {
             // The Chart retains only a dim geographic memory. Live water,
             // climate, surface texture, and status cues never leak through it.
@@ -1192,7 +1196,7 @@ export function createTideweftRenderer(
             p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
             continue;
           }
-          const sensoryStrength = currentVisibility < 1 ? 0.42 : 1;
+          const sensoryStrength = Math.pow(currentVisibility, 1.08);
           p.fill(p.lerpColor(p.color(PALETTE.ink), terrainColor(tile), sensoryStrength));
           p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
 
@@ -1201,6 +1205,7 @@ export function createTideweftRenderer(
           const water = visibleWaterPresentation(tile, {
             derivedDepth,
             tideLevel: view.tide.level,
+            transientVisibility: currentVisibility,
           });
           if (water) {
             p.fill(withAlpha(water.color, water.opacity * sensoryStrength));
@@ -1218,13 +1223,17 @@ export function createTideweftRenderer(
             p.circle(x + tileSize * 0.34, y + tileSize * 0.39, fleck);
           }
 
-          if (currentVisibility >= 1) {
+          const detailVisibility = currentTerrainDetailVisibility(
+            tile,
+            view.perception !== undefined,
+          );
+          if (detailVisibility >= 1) {
             drawTerrainTexture(tile, column, row, x, y, tileSize, waterDepth);
             drawBiomeAccent(tile, column, row, x, y, tileSize);
           }
 
           const trace = unit(tile.trace);
-          if (trace > 0.02) {
+          if (trace > 0.02 && detailVisibility >= 1) {
             p.stroke(withAlpha(PALETTE.amber, 24 + trace * 72));
             p.strokeWeight((0.45 + trace * 1.2) / camera.zoom);
             p.line(x + tileSize * 0.12, y + tileSize * 0.78, x + tileSize * 0.88, y + tileSize * 0.22);
@@ -1239,8 +1248,9 @@ export function createTideweftRenderer(
             p.noStroke();
           }
 
-          if (discovered < 0.995) {
-            p.fill(withAlpha(PALETTE.ink, (1 - discovered) * 238));
+          const presentationConfidence = Math.max(discovered, currentVisibility);
+          if (presentationConfidence < 0.995) {
+            p.fill(withAlpha(PALETTE.ink, (1 - presentationConfidence) * 238));
             p.rect(x, y, tileSize + 0.4 / camera.zoom, tileSize + 0.4 / camera.zoom);
           }
         }
@@ -1265,6 +1275,7 @@ export function createTideweftRenderer(
         timeMs: now,
         reducedMotion,
         maxCues: 220,
+        requireDetailDisclosure: view.perception !== undefined,
       });
       if (cues.length === 0) return;
 
@@ -1876,7 +1887,7 @@ export function createTideweftRenderer(
 
     const drawLooseCargo = (view: TideweftView, now: number): void => {
       const parcels = safeLooseCargoViews(view.looseCargo ?? []).filter((parcel) =>
-        !view.perception || isDirectlyPerceived(view.terrain, parcel.position, true)
+        !view.perception || isDirectlyDetailPerceived(view.terrain, parcel.position, true)
       );
       if (parcels.length === 0) return;
       const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
@@ -2157,6 +2168,10 @@ export function createTideweftRenderer(
         }
         p.pop();
 
+        if (
+          view.perception
+          && !isDirectlyDetailPerceived(view.terrain, harp.center, true)
+        ) continue;
         const labelScreen = worldLabelScreen(
           `tide-harp-${harp.id}`,
           { x: harp.center.x, y: harp.center.y + noteSize * 2.15 },
@@ -2341,6 +2356,10 @@ export function createTideweftRenderer(
       drawWaychords(view);
       for (const wayknot of view.wayknots) {
         drawWayknotMotif(wayknot, view.terrain.tileSize, now);
+        if (
+          view.perception
+          && !isDirectlyDetailPerceived(view.terrain, wayknot.position, true)
+        ) continue;
         const size = view.terrain.tileSize * (wayknot.active ? 0.68 : 0.58);
         const screen = worldLabelScreen(
           `wayknot-${wayknot.id}`,
@@ -2477,6 +2496,9 @@ export function createTideweftRenderer(
         drawSettlementGlyph(directlyVisible ? settlement.glyph ?? "hearth" : "hearth", radius);
         p.pop();
 
+        // The glyph is durable geographic memory; its name and live Promise
+        // badge require the shorter exact-detail field.
+        if (!directlyVisible) continue;
         const screen = worldLabelScreen(`settlement-${settlement.id}`, settlement.position, now);
         const labelY = screen.y + radius * camera.zoom + 15;
         p.push();
@@ -2520,7 +2542,7 @@ export function createTideweftRenderer(
       for (const porter of porters) {
         if (
           latestView?.perception
-          && !isDirectlyPerceived(latestView.terrain, porter.position, true)
+          && !isDirectlyDetailPerceived(latestView.terrain, porter.position, true)
         ) continue;
         const color = porterColor(porter);
         const hovered = hoverTarget?.entity === "porter" && hoverTarget.id === porter.id;
@@ -2884,7 +2906,7 @@ export function createTideweftRenderer(
       for (const particle of particles) {
         if (
           latestView?.perception
-          && !isDirectlyPerceived(latestView.terrain, particle.position, true)
+          && !isDirectlyDetailPerceived(latestView.terrain, particle.position, true)
         ) continue;
         const life = unit(particle.life, 1);
         const radius = (particle.radius ?? 2.4) / camera.zoom;
@@ -2931,7 +2953,7 @@ export function createTideweftRenderer(
         if (!event.position || event.progress >= 1) continue;
         if (
           latestView?.perception
-          && !isDirectlyPerceived(latestView.terrain, event.position, true)
+          && !isDirectlyDetailPerceived(latestView.terrain, event.position, true)
         ) continue;
         const screen = worldLabelScreen(`event-${event.id}`, event.position, now);
         const rise = reducedMotion ? 0 : unit(event.progress) * 20;

@@ -53,8 +53,11 @@ import {
 } from "./traversalFeedback";
 import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
 import type { LooseCargoWorldState } from "./looseCargo";
+import { eventSettlementLocusIds } from "./eventObservation";
 import {
+  PERCEPTION_VERSION,
   VISIBILITY_DIRECT,
+  VISIBILITY_HIDDEN,
   VISIBILITY_PERIPHERAL,
   evaluatePerception,
   type PerceptionCell,
@@ -189,10 +192,15 @@ export function projectGameView(
   const playerY = (player.y / TILE_UNITS) * tileSize;
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const suppliedPerception = options.perception;
-  const perception = suppliedPerception?.valid === true
-    && suppliedPerception.visibilityGrades.length === world.terrain.width * world.terrain.height
+  const expectedPerceptionCells = world.terrain.width * world.terrain.height;
+  const currentPerception = projectPerception(world, player);
+  const perception = isCurrentPerceptionSnapshot(
+    suppliedPerception,
+    currentPerception,
+    expectedPerceptionCells,
+  )
     ? suppliedPerception
-    : projectPerception(world, player);
+    : currentPerception;
   const currentPlayerTileIndex = perception.playerTileIndex;
   const playerAddress = regionalAddressAt(
     world,
@@ -222,7 +230,7 @@ export function projectGameView(
       world.terrain.width,
       world.terrain.height,
       tileSize,
-      perception.visibilityGrades,
+      perception.detailVisibilityGrades,
     )
   );
   const traversalIncident = projectTraversalIncident(options.traversalFeedback?.incident ?? null);
@@ -249,7 +257,7 @@ export function projectGameView(
     options.fieldResourceCatalog,
     options.fieldResourceEcology,
     tileSize,
-    perception.visibilityGrades,
+    perception.detailVisibilityGrades,
   );
   const biomeCache = stableBiomeTerrain(world);
   const projectedBiomes = weatherAdjustedBiomeTiles(biomeCache.tiles, world.weather);
@@ -294,7 +302,7 @@ export function projectGameView(
       : ("footpath" as const);
     const observedRuns = directPolylineRuns(
       points,
-      route.path.map((index) => perception.visibilityGrades[index] === VISIBILITY_DIRECT),
+      route.path.map((index) => perception.detailVisibilityGrades[index] === VISIBILITY_DIRECT),
     ).map((run) => {
       const bounds = polylineBounds(run);
       return {
@@ -336,7 +344,7 @@ export function projectGameView(
         : [];
     });
     const directlyObserved = discoveredSettlements.some(
-      (settlement) => perception.visibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT,
+      (settlement) => perception.detailVisibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT,
     );
     return {
       id: String(choir.id),
@@ -355,43 +363,37 @@ export function projectGameView(
     };
   });
 
+  const explicitlyObservedEventIds = new Set(options.recentEventIds ?? []);
   const latestEvents = world.events.slice(-12).flatMap((event) => {
-    const settlementCandidates = event.type === "contract-offered"
-      ? [
-          event.data.originSettlementId,
-          event.data.settlementId,
-          event.data.destinationSettlementId,
-          event.subjectId,
-        ]
-      : [
-          event.data.destinationSettlementId,
-          event.data.settlementId,
-          event.data.returnSettlementId,
-          event.data.originSettlementId,
-          event.subjectId,
-        ];
-    const eventSettlementId = settlementCandidates.find((value): value is number =>
-      typeof value === "number" && world.settlements.some((candidate) => candidate.id === value),
-    );
-    const settlement = eventSettlementId === undefined
-      ? undefined
-      : world.settlements.find((candidate) => candidate.id === eventSettlementId);
+    const settlement = eventSettlementLocusIds(event, world)
+      .map((settlementId) => world.settlements.find((candidate) => candidate.id === settlementId))
+      .find((candidate) => candidate !== undefined);
     const detail = typeof event.data.reason === "string" ? event.data.reason : undefined;
-    if (
-      settlement
-      && perception.visibilityGrades[settlement.tileIndex] !== VISIBILITY_DIRECT
-    ) return [];
+    const commandId = event.data.commandId;
+    const belongsToPlayer = explicitlyObservedEventIds.has(event.sequence)
+      || (typeof commandId === "string" && commandId.startsWith("player-"))
+      || event.data.carrier === "player";
+    const directlyObserved = settlement !== undefined
+      && perception.detailVisibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT;
+    if (!directlyObserved && !belongsToPlayer) {
+      // An unlocated simulation event cannot become visual knowledge merely by
+      // entering the global ledger. Player-caused/explicitly witnessed events
+      // remain available without granting a remote god's-ear marker.
+      return [];
+    }
     return [{
       id: `event-${event.sequence}`,
       kind: eventKind(event.type),
-      label: event.type === "contract-offered" && settlement
+      label: event.type === "contract-offered" && settlement && directlyObserved
         ? `Cargo pickup at ${settlement.name}`
         : eventLabel(event.type),
       progress: Math.max(0, Math.min(1, (world.completedTick - event.tick) / 180)),
       emphasis: event.type === "project-completed" || event.type === "contract-fulfilled"
         ? ("strong" as const)
         : ("normal" as const),
-      ...(settlement ? { position: tilePoint(settlement.tileIndex, world.terrain.width, tileSize) } : {}),
+      ...(settlement && directlyObserved
+        ? { position: tilePoint(settlement.tileIndex, world.terrain.width, tileSize) }
+        : {}),
       ...(detail ? { detail } : {}),
     }];
   });
@@ -424,7 +426,10 @@ export function projectGameView(
           waterDepth: tile.waterDepth / FIXED_POINT,
           depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
           discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
-          currentVisibility: visibilityGradeValue(perception.visibilityGrades[index]),
+          currentVisibility: terrainVisibilityStrengthValue(
+            perception.terrainVisibilityStrengths[index],
+          ),
+          currentDetailVisibility: visibilityGradeValue(perception.detailVisibilityGrades[index]),
           trace: tile.traceStrength / FIXED_POINT,
           shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
           blocked: false,
@@ -457,6 +462,9 @@ export function projectGameView(
       visibleTileCount: perception.visibleTileIndices.length,
       directTileCount: perception.directTileIndices.length,
       peripheralTileCount: perception.peripheralTileIndices.length,
+      detailVisibleTileCount: perception.detailVisibleTileIndices.length,
+      detailDirectTileCount: perception.detailDirectTileIndices.length,
+      detailPeripheralTileCount: perception.detailPeripheralTileIndices.length,
     },
     settlements: world.settlements.map((settlement) => ({
       id: String(settlement.id),
@@ -479,7 +487,7 @@ export function projectGameView(
         ? `${Math.floor(average(settlement.knowledge.map((knowledge) => knowledge.ageTicks)) / 60)}h old`
         : "local",
       discovered: (player.discovered[settlement.tileIndex] ?? 0) > 0,
-      currentVisibility: visibilityGradeValue(perception.visibilityGrades[settlement.tileIndex]),
+      currentVisibility: visibilityGradeValue(perception.detailVisibilityGrades[settlement.tileIndex]),
       selected: options.selectedSettlementId === settlement.id,
       label: settlement.project.status === "complete"
         ? `${settlement.specialization} · ${settlement.project.kind} online`
@@ -575,7 +583,7 @@ export function projectGameView(
       const progress = location.progress / FIXED_POINT;
       const pathPosition = Math.min(route.path.length - 1, Math.floor(progress * route.path.length));
       const porterTileIndex = route.path[pathPosition] ?? route.path[0] ?? 0;
-      if (perception.visibilityGrades[porterTileIndex] !== VISIBILITY_DIRECT) return [];
+      if (perception.detailVisibilityGrades[porterTileIndex] !== VISIBILITY_DIRECT) return [];
       return [
         {
           id: String(resident.id),
@@ -602,6 +610,44 @@ export function projectGameView(
     },
     ...(options.paused === undefined ? {} : { paused: options.paused }),
   };
+}
+
+export function isCurrentPerceptionSnapshot(
+  candidate: PerceptionResult | undefined,
+  current: PerceptionResult,
+  expectedCells: number,
+): candidate is PerceptionResult {
+  if (
+    candidate?.valid !== true
+    || candidate.version !== PERCEPTION_VERSION
+    || candidate.playerTileIndex !== current.playerTileIndex
+    || candidate.signature !== current.signature
+    || !(candidate.visibilityGrades instanceof Uint8Array)
+    || candidate.visibilityGrades.length !== expectedCells
+    || !(candidate.terrainVisibilityStrengths instanceof Uint8Array)
+    || candidate.terrainVisibilityStrengths.length !== expectedCells
+    || !(candidate.detailVisibilityGrades instanceof Uint8Array)
+    || candidate.detailVisibilityGrades.length !== expectedCells
+  ) return false;
+
+  for (let index = 0; index < expectedCells; index += 1) {
+    const terrain = candidate.visibilityGrades[index];
+    const strength = candidate.terrainVisibilityStrengths[index];
+    const detail = candidate.detailVisibilityGrades[index];
+    if (
+      (terrain !== VISIBILITY_HIDDEN
+        && terrain !== VISIBILITY_PERIPHERAL
+        && terrain !== VISIBILITY_DIRECT)
+      || (detail !== VISIBILITY_HIDDEN
+        && detail !== VISIBILITY_PERIPHERAL
+        && detail !== VISIBILITY_DIRECT)
+      || (terrain === VISIBILITY_HIDDEN) !== (strength === 0)
+      || (detail !== VISIBILITY_HIDDEN && terrain === VISIBILITY_HIDDEN)
+    ) return false;
+  }
+  return candidate.visibilityGrades[current.playerTileIndex] === VISIBILITY_DIRECT
+    && candidate.terrainVisibilityStrengths[current.playerTileIndex] === 255
+    && candidate.detailVisibilityGrades[current.playerTileIndex] === VISIBILITY_DIRECT;
 }
 
 function projectFieldResources(
@@ -635,6 +681,7 @@ function projectFieldResources(
       || seenTiles.has(node.tileIndex)
       || settlementTiles.has(node.tileIndex)
       || (player.discovered[node.tileIndex] ?? 0) <= 0
+      || visibilityGrades[node.tileIndex] !== VISIBILITY_DIRECT
       || !Number.isSafeInteger(node.capacityUnits)
       || node.capacityUnits <= FIELD_RESOURCE_LIVING_RESERVE_UNITS
     ) continue;
@@ -653,10 +700,8 @@ function projectFieldResources(
       label: titleCase(node.material),
       position: tilePoint(node.tileIndex, world.terrain.width, tileSize),
       knowledge: sounded ? "sounded" : "charted",
-      currentVisibility: visibilityGradeValue(visibilityGrades[node.tileIndex]),
-      ...(sounded && visibilityGrades[node.tileIndex] === VISIBILITY_DIRECT
-        ? { rarity: node.rarity, stockUnits: harvestableStock }
-        : {}),
+      currentVisibility: 1,
+      ...(sounded ? { rarity: node.rarity, stockUnits: harvestableStock } : {}),
       tileIndex: node.tileIndex,
     });
   }
@@ -670,6 +715,11 @@ function visibilityGradeValue(grade: number | undefined): 0 | 0.5 | 1 {
   if (grade === VISIBILITY_DIRECT) return 1;
   if (grade === VISIBILITY_PERIPHERAL) return 0.5;
   return 0;
+}
+
+function terrainVisibilityStrengthValue(strength: number | undefined): number {
+  if (!Number.isFinite(strength)) return 0;
+  return Math.max(0, Math.min(1, (strength as number) / 255));
 }
 
 function perceivedWorldPoint(

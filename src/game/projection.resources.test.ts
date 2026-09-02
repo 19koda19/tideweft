@@ -42,9 +42,17 @@ describe("field-resource projection", () => {
     }).fieldResources).toEqual([]);
   });
 
-  it("shows a charted material silhouette but withholds rarity and stock until sounded", () => {
+  it("shows a material only in exact sight and withholds rarity and stock until sounded", () => {
     const { world, player, catalog, ecology, node } = setup();
     player.discovered[node.tileIndex] = 1;
+    const hiddenMemory = projectGameView(world, player, {
+      fieldResourceCatalog: catalog,
+      fieldResourceEcology: ecology,
+    }).fieldResources;
+    expect(hiddenMemory).toEqual([]);
+
+    player.x = (node.tileIndex % world.terrain.width) * TILE_UNITS;
+    player.y = Math.floor(node.tileIndex / world.terrain.width) * TILE_UNITS;
     const charted = projectGameView(world, player, {
       fieldResourceCatalog: catalog,
       fieldResourceEcology: ecology,
@@ -60,14 +68,12 @@ describe("field-resource projection", () => {
         y: Math.floor(node.tileIndex / world.terrain.width) * 24 + 12,
       },
       knowledge: "charted",
-      currentVisibility: 0,
+      currentVisibility: 1,
     });
     expect(charted[0]).not.toHaveProperty("rarity");
     expect(charted[0]).not.toHaveProperty("stockUnits");
 
     player.depthSoundings[node.tileIndex] = 1;
-    player.x = (node.tileIndex % world.terrain.width) * TILE_UNITS;
-    player.y = Math.floor(node.tileIndex / world.terrain.width) * TILE_UNITS;
     const sounded = projectGameView(world, player, {
       fieldResourceCatalog: catalog,
       fieldResourceEcology: ecology,

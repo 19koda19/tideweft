@@ -103,11 +103,27 @@ describe("surface current cue geometry", () => {
 
   it("never leaks live current direction through hidden or peripheral tiles", () => {
     const terrain = grid(3, 1, [
-      tile({ currentVisibility: 0 }),
-      tile({ currentVisibility: 0.5 }),
-      tile({ currentVisibility: 1 }),
+      tile({ currentVisibility: 1, currentDetailVisibility: 0 }),
+      tile({ currentVisibility: 1, currentDetailVisibility: 0.5 }),
+      tile({ currentVisibility: 1, currentDetailVisibility: 1 }),
     ]);
     expect(buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }).map((cue) => cue.tileIndex))
       .toEqual([2]);
+  });
+
+  it("fails closed on a missing detail field in a perception-enabled view", () => {
+    const malformed = grid(1, 1, [tile({ currentVisibility: 1 })]);
+    expect(buildSurfaceCurrentCues(malformed, { x: 1, y: 0 }, {
+      requireDetailDisclosure: true,
+    })).toEqual([]);
+
+    // Missing disclosure fields remain compatible only for explicit legacy
+    // callers that have no perception snapshot.
+    expect(buildSurfaceCurrentCues(malformed, { x: 1, y: 0 })).toHaveLength(1);
+    expect(buildSurfaceCurrentCues(
+      grid(1, 1, [tile({ currentVisibility: 1, currentDetailVisibility: 1 })]),
+      { x: 1, y: 0 },
+      { requireDetailDisclosure: true },
+    )).toHaveLength(1);
   });
 });

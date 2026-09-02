@@ -19,8 +19,8 @@ export interface ReliefMaterialBatch {
 }
 
 export interface ReliefPerceptionMaterialBatch extends ReliefMaterialBatch {
-  /** Exact current sensory grade. This is never folded into the durable mesh key. */
-  readonly currentVisibility: 0.5 | 1;
+  /** Eased current sensory strength. This is never folded into the durable mesh key. */
+  readonly currentVisibility: number;
 }
 
 /**
@@ -91,16 +91,22 @@ export function buildReliefPerceptionMaterialBatches(
     biome?: BiomeId;
     environment: number;
     visibility: number;
-    currentVisibility: 0.5 | 1;
+    currentVisibility: number;
     indices: number[];
   }>();
 
   for (const tile of chunk.tiles) {
     const source = grid.tiles[tile.row * grid.columns + tile.column];
-    const current = currentTerrainVisibility(source, true);
-    if (current !== 0.5 && current !== 1) continue;
-    const discovery = Math.round(reliefDiscoveryVisibility(source) * 4) / 4;
-    if (discovery <= 0) continue;
+    const rawCurrent = currentTerrainVisibility(source, true);
+    if (rawCurrent <= 0) continue;
+    // Sixteen bounded material levels preserve the smooth horizon without
+    // turning every tile into a separate WebGL draw call.
+    const current = Math.round(rawCurrent * 16) / 16;
+    if (current <= 0) continue;
+    // Current sight and durable chart knowledge are deliberately independent.
+    // The sensory mesh may show an uncharted ridge while it is in view, then
+    // return it to possibility-darkness without writing new map memory.
+    const visibility = current;
     const tileIndices = chunk.indices.slice(tile.indexOffset, tile.indexOffset + 6);
     if (
       tileIndices.length !== 6
@@ -110,12 +116,12 @@ export function buildReliefPerceptionMaterialBatches(
     ) continue;
     const biome = visibleBiomePresentation(source)?.id;
     const environment = Math.round(biomeEnvironmentalEmphasis(source) * 4) / 4;
-    const key = `${tile.kind}:${biome ?? "legacy"}:${environment}:${discovery}:${current}`;
+    const key = `${tile.kind}:${biome ?? "legacy"}:${environment}:${visibility}:${current}`;
     const group = groups.get(key) ?? {
       kind: tile.kind,
       ...(biome ? { biome } : {}),
       environment,
-      visibility: discovery,
+      visibility,
       currentVisibility: current,
       indices: [],
     };

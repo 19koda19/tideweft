@@ -1,5 +1,6 @@
 import type { TerrainGridView, TerrainTileView, WorldPoint } from "./types";
 import { sampleTerrainMeshLandHeightAt } from "./terrainMesh";
+import { currentTerrainVisibility } from "./perceptionPresentation";
 
 export type DiscoverySignature = (grid: TerrainGridView) => string;
 
@@ -81,6 +82,48 @@ export function discoveredReliefSurfaceHeightAt(
     scale,
     maskedElevation,
   ) + visibleDepth * scale;
+  return Math.max(landHeight, waterHeight);
+}
+
+/**
+ * Samples real surface shape only where the terrain perception field currently
+ * reaches. This is presentation-only sight: it does not promote the tile into
+ * durable Chart memory, and a hidden uncharted tile still resolves to the
+ * discovery-masked surface.
+ */
+export function perceivedReliefSurfaceHeightAt(
+  grid: TerrainGridView,
+  point: WorldPoint,
+  verticalScale: number,
+  includeWater: boolean,
+): number {
+  if (grid.columns < 1 || grid.rows < 1 || grid.tileSize <= 0) return 0;
+  const column = clampInteger(
+    Math.floor((point.x - grid.origin.x) / grid.tileSize),
+    0,
+    grid.columns - 1,
+  );
+  const row = clampInteger(
+    Math.floor((point.y - grid.origin.y) / grid.tileSize),
+    0,
+    grid.rows - 1,
+  );
+  const tile = grid.tiles[row * grid.columns + column];
+  if (!tile || currentTerrainVisibility(tile, true) <= 0) {
+    return discoveredReliefSurfaceHeightAt(grid, point, verticalScale, includeWater);
+  }
+
+  const scale = Math.max(0, finite(verticalScale, 0));
+  const landHeight = sampleTerrainMeshLandHeightAt(grid, point, scale);
+  if (!includeWater) return landHeight;
+  const visibleDepth = unit(tile.waterDepth);
+  if (visibleDepth <= MIN_RENDERED_WATER_DEPTH) return landHeight;
+  const waterCenter = {
+    x: grid.origin.x + (column + 0.5) * grid.tileSize,
+    y: grid.origin.y + (row + 0.5) * grid.tileSize,
+  };
+  const waterHeight = sampleTerrainMeshLandHeightAt(grid, waterCenter, scale)
+    + visibleDepth * scale;
   return Math.max(landHeight, waterHeight);
 }
 

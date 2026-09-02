@@ -1,5 +1,5 @@
 import type { TerrainGridView, TerrainTileView, WorldPoint } from "./types";
-import { currentTerrainVisibility } from "./perceptionPresentation";
+import { currentTerrainDetailVisibility } from "./perceptionPresentation";
 
 export const MAX_SURFACE_CURRENT_CUES = 280;
 
@@ -17,6 +17,8 @@ export interface SurfaceCurrentCueOptions {
   readonly timeMs?: number;
   readonly reducedMotion?: boolean;
   readonly maxCues?: number;
+  /** Perception-enabled views fail closed when the short detail field is absent. */
+  readonly requireDetailDisclosure?: boolean;
 }
 
 /** Fixed-size arrow geometry. Presence says only "charted water flows this way." */
@@ -62,9 +64,10 @@ function normalizedDirection(direction: WorldPoint | undefined): WorldPoint | nu
 function chartedWater(
   tile: TerrainTileView | undefined,
   tideLevel: number,
+  requireDetailDisclosure: boolean,
 ): boolean {
   if (!tile || unit(tile.discovered, 1) <= 0.08) return false;
-  if (currentTerrainVisibility(tile) < 1) return false;
+  if (currentTerrainDetailVisibility(tile, requireDetailDisclosure) < 1) return false;
   const derivedDepth = clamp(unit(tideLevel) * 0.82 - unit(tile.elevation), 0, 1);
   // Depth is used only as the same wet/dry mask already drawn by each view.
   // Cue density, length, motion, and opacity never depend on its magnitude.
@@ -173,7 +176,11 @@ export function buildSurfaceCurrentCues(
       for (let row = Math.max(firstRow, blockRow); row <= Math.min(lastRow, blockRow + 1); row += 1) {
         for (let column = Math.max(firstColumn, blockColumn); column <= Math.min(lastColumn, blockColumn + 1); column += 1) {
           const tileIndex = row * columns + column;
-          if (!chartedWater(grid.tiles[tileIndex], options.tideLevel ?? 0)) continue;
+          if (!chartedWater(
+            grid.tiles[tileIndex],
+            options.tideLevel ?? 0,
+            options.requireDetailDisclosure ?? false,
+          )) continue;
           const candidate = {
             tileIndex,
             column,
