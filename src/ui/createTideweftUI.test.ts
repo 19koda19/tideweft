@@ -13,6 +13,7 @@ import {
   handleTideweftUIShortcut,
   mobileHudCopy,
   mobileHudDisclosureState,
+  navigationTelemetryCopy,
   saveWarningPresentation,
   setProgress,
   shouldRefreshSignedReportActions,
@@ -128,6 +129,42 @@ describe("minimal title surface", () => {
       patchNotes: "PATCH NOTES",
     });
     expect(Object.values(TITLE_SURFACE_COPY).join(" ")).not.toMatch(/challenging|ruleset|perpetual/iu);
+  });
+});
+
+describe("navigation and renderer telemetry copy", () => {
+  it("shows signed region/global coordinates and measured renderer FPS", () => {
+    expect(navigationTelemetryCopy({
+      regionX: -304,
+      regionY: 719,
+      localX: 17,
+      localY: 4,
+      globalX: -29_775,
+      globalY: 52_984,
+    }, {
+      fps: 59.6,
+      frameTimeMs: 16.78,
+      frameCount: 120,
+      active: true,
+    })).toBe("REGION -304,+719 · LOCAL 17,4 · GLOBAL -29775,+52984 · 60 FPS");
+  });
+
+  it("keeps compact mobile copy terse and refuses an unmeasured FPS guess", () => {
+    expect(navigationTelemetryCopy({
+      regionX: 0,
+      regionY: -2,
+      localX: 0,
+      localY: 73,
+      globalX: 0,
+      globalY: -73,
+    }, {
+      fps: 144,
+      frameTimeMs: 6.94,
+      frameCount: 1,
+      active: true,
+    }, true)).toBe("R 0,-2 · G 0,-73 · FPS —");
+    expect(navigationTelemetryCopy(undefined, undefined, true))
+      .toBe("R ?,? · G ?,? · FPS —");
   });
 });
 

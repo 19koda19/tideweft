@@ -13,7 +13,9 @@ import {
 } from "./terrainMesh";
 import {
   buildReliefMaterialBatches,
+  buildReliefPerceptionMaterialBatches,
   type ReliefMaterialBatch,
+  type ReliefPerceptionMaterialBatch,
 } from "./reliefTerrainBatches";
 import {
   buildReliefWaterMaterialBatches,
@@ -55,7 +57,22 @@ import {
 } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
-import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
+import { createRendererTelemetry } from "./rendererTelemetry";
+import {
+  clipPolylineToBounds,
+  polylineBounds,
+  worldBoundsOverlap,
+} from "./routePresentation";
+import {
+  currentSettlementVisibility,
+  currentTerrainVisibility,
+  isDirectlyPerceived,
+} from "./perceptionPresentation";
+import {
+  commandForWorldTap,
+  usesCoarseWorldPointer,
+  validatePerceivedEntityCommand,
+} from "./worldTap";
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
 import {
@@ -104,6 +121,7 @@ import type {
   WayknotKind,
   WayknotView,
   WeatherView,
+  WorldBounds,
   WorldPoint,
 } from "./types";
 
@@ -190,6 +208,16 @@ interface CachedReliefMesh {
   readonly chunks: readonly ReliefChunkBatch[];
 }
 
+interface ReliefPerceptionChunkBatch {
+  readonly chunk: TerrainMeshChunk;
+  readonly materials: readonly ReliefPerceptionMaterialBatch[];
+}
+
+interface CachedReliefPerception {
+  readonly key: string;
+  readonly chunks: readonly ReliefPerceptionChunkBatch[];
+}
+
 interface ScanRipple {
   readonly point: WorldPoint;
   readonly startedAt: number;
@@ -256,6 +284,7 @@ export function createTideweftReliefRenderer(
   let active = options.initiallyActive ?? true;
   let latestView: TideweftView | null = null;
   let cached: CachedReliefMesh | null = null;
+  let cachedPerception: CachedReliefPerception | null = null;
   let orbitDrag: OrbitDrag | null = null;
   let clickCandidate: ClickCandidate | null = null;
   let parcelPress: LooseCargoPointerPress | null = null;
@@ -273,6 +302,8 @@ export function createTideweftReliefRenderer(
   const heldOrbitKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
   const pointerParallax = createPointerParallaxState();
+  const telemetry = createRendererTelemetry();
+  telemetry.setActive(active && webglSupported);
   const discoverySignatureFor = createReliefDiscoverySignatureMemo();
   const tideHarpGeometryFor = createTideHarpGeometryMemo();
   const orbit: OrbitRuntime = {
@@ -289,7 +320,11 @@ export function createTideweftReliefRenderer(
   };
 
   const emit = (command: RendererCommand): void => {
-    if (active && !contextLost) options.dispatch(command);
+    if (!active || contextLost) return;
+    const validated = latestView
+      ? validatePerceivedEntityCommand(latestView, command)
+      : command;
+    if (validated) options.dispatch(validated);
   };
 
   const getCanvasSize = (): { width: number; height: number } => {
@@ -419,6 +454,7 @@ export function createTideweftReliefRenderer(
     orbit.focusUntil = 0;
     ripples.length = 0;
     cached = null;
+    cachedPerception = null;
     for (const node of labelNodes.values()) node.remove();
     labelNodes.clear();
     labelPositions.clear();
@@ -505,8 +541,12 @@ export function createTideweftReliefRenderer(
     };
   };
 
-  const looseCargoViews = (): readonly LooseCargoView[] =>
-    safeLooseCargoViews(latestView?.looseCargo ?? []);
+  const looseCargoViews = (): readonly LooseCargoView[] => {
+    const view = latestView;
+    const parcels = safeLooseCargoViews(view?.looseCargo ?? []);
+    if (!view?.perception) return parcels;
+    return parcels.filter((parcel) => isDirectlyPerceived(view.terrain, parcel.position, true));
+  };
 
   const projectParcelScreen = (parcel: LooseCargoView): WorldPoint | null => {
     const view = latestView;
@@ -620,14 +660,18 @@ export function createTideweftReliefRenderer(
 
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
+      const isDestination = Boolean(
+        destination && distanceSquared(destination, settlement.position) <= tileSize * tileSize * 0.25,
+      );
+      if (
+        currentSettlementVisibility(settlement, view.perception !== undefined) < 1
+        && !isDestination
+      ) continue;
       const surface = discoveredReliefSurfaceHeightAt(
         view.terrain,
         settlement.position,
         cache.mesh.verticalScale,
         true,
-      );
-      const isDestination = Boolean(
-        destination && distanceSquared(destination, settlement.position) <= tileSize * tileSize * 0.25,
       );
       place(
         `settlement-${settlement.id}`,
@@ -681,7 +725,9 @@ export function createTideweftReliefRenderer(
     }
     if (pointerWorld && !hoverParcelId) {
       const resourceHit = hitTestFieldResource(
-        view.fieldResources,
+        view.fieldResources.filter((node) =>
+          !view.perception || node.currentVisibility === 1
+        ),
         pointerWorld,
         Math.max(tileSize * 0.58, unitsPerPixel() * 22),
       );
@@ -769,9 +815,7 @@ export function createTideweftReliefRenderer(
     if (incident && typeof incident.id === "string" && incident.id.length > 0) {
       const compact = instance.width <= 704
         || (instance.height <= 544 && instance.width <= 1_024);
-      const text = compact || !incident.detail
-        ? incident.label
-        : `${incident.label} · ${incident.detail}`;
+      const text = incident.label;
       const node = labelNode(`player-incident-${incident.id}`, text);
       const playerSurface = discoveredReliefSurfaceHeightAt(
         view.terrain,
@@ -849,13 +893,20 @@ export function createTideweftReliefRenderer(
     const settlementRadius = Math.max(view.terrain.tileSize * 0.55, unitsPerPixel() * 18);
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
+      if (currentSettlementVisibility(settlement, view.perception !== undefined) < 1) continue;
       const distance = distanceSquared(point, settlement.position);
       if (distance <= settlementRadius ** 2 && (!nearest || distance < nearest.distance)) {
         nearest = { entity: "settlement", id: settlement.id, distance };
       }
     }
     const resourceRadius = Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22);
-    const resourceHit = hitTestFieldResource(view.fieldResources, point, resourceRadius);
+    const resourceHit = hitTestFieldResource(
+      view.fieldResources.filter((node) =>
+        !view.perception || node.currentVisibility === 1
+      ),
+      point,
+      resourceRadius,
+    );
     if (resourceHit && (!nearest || resourceHit.distanceSquared < nearest.distance)) {
       nearest = {
         entity: "resource",
@@ -865,6 +916,7 @@ export function createTideweftReliefRenderer(
     }
     const porterRadius = Math.max(view.terrain.tileSize * 0.35, unitsPerPixel() * 12);
     for (const porter of view.porters) {
+      if (!isDirectlyPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
       const distance = distanceSquared(point, porter.position);
       if (distance <= porterRadius ** 2 && (!nearest || distance < nearest.distance)) {
         nearest = { entity: "porter", id: porter.id, distance };
@@ -1277,13 +1329,16 @@ export function createTideweftReliefRenderer(
     const contextLostListener = (event: Event): void => {
       event.preventDefault();
       contextLost = true;
+      telemetry.setActive(false);
       releaseInput();
       instance?.noLoop();
       options.onWebGLError?.("The 3D graphics context was lost. Chart view is active; reload to retry Relief 3D.");
     };
     const contextRestored = (): void => {
       contextLost = false;
+      telemetry.setActive(active && webglSupported);
       cached = null;
+      cachedPerception = null;
       refreshLatestView();
       if (active) instance?.loop();
     };
@@ -1363,6 +1418,23 @@ export function createTideweftReliefRenderer(
     return cached;
   };
 
+  const ensurePerceptionSurface = (
+    view: TideweftView,
+    mesh: CachedReliefMesh,
+  ): CachedReliefPerception | null => {
+    if (!view.perception) return null;
+    const key = `${mesh.key}:perception:${view.perception.signature}`;
+    if (cachedPerception?.key === key) return cachedPerception;
+    cachedPerception = {
+      key,
+      chunks: mesh.mesh.chunks.map((chunk) => ({
+        chunk,
+        materials: buildReliefPerceptionMaterialBatches(chunk, view.terrain),
+      })),
+    };
+    return cachedPerception;
+  };
+
   const updateCamera = (view: TideweftView, now: number, mesh: TerrainMesh): void => {
     const projected = view.camera.followPlayer ? view.player.position : view.camera.center;
     const focusActive = orbit.focusPoint !== undefined && now < orbit.focusUntil;
@@ -1407,7 +1479,12 @@ export function createTideweftReliefRenderer(
       return color;
     };
 
-    const materialColor = (material: ReliefMaterialBatch, fog: number): p5.Color => {
+    const materialColor = (
+      material: ReliefMaterialBatch,
+      fog: number,
+      memoryOnly = false,
+      currentVisibility = 1,
+    ): p5.Color => {
       const biome = material.kind === "built" || material.biome === undefined
         ? undefined
         : BIOME_PRESENTATION[material.biome];
@@ -1422,7 +1499,15 @@ export function createTideweftReliefRenderer(
         conditioned,
         Math.pow(unit(material.visibility), 0.72),
       );
-      return p.lerpColor(revealed, p.color(RELIEF_PALETTE.horizon), clamp(fog * 0.5, 0, 0.58));
+      const atmospheric = p.lerpColor(
+        revealed,
+        p.color(RELIEF_PALETTE.horizon),
+        clamp(fog * 0.5, 0, 0.58),
+      );
+      if (memoryOnly) return p.lerpColor(p.color(RELIEF_PALETTE.ink), atmospheric, 0.13);
+      return currentVisibility < 1
+        ? p.lerpColor(p.color(RELIEF_PALETTE.ink), atmospheric, 0.4)
+        : atmospheric;
     };
 
     const setCamera = (state: ReliefCameraState): void => {
@@ -1444,13 +1529,33 @@ export function createTideweftReliefRenderer(
         if (!reliefBoundsVisible(batch.chunk.bounds, camera, viewport, view.terrain.tileSize * 2)) continue;
         const fog = reliefFogAmount(batch.chunk.bounds, camera, viewport, fogStart, fogEnd);
         for (const material of batch.materials) {
-          p.ambientMaterial(materialColor(material, fog));
+          p.ambientMaterial(materialColor(material, fog, view.perception !== undefined));
           p.beginShape(p.TRIANGLES);
           for (const index of material.indices) {
             const vertex = batch.chunk.vertices[index];
             if (!vertex) continue;
             p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
             p.vertex(vertex.x, -vertex.z, vertex.y);
+          }
+          p.endShape();
+        }
+      }
+
+      const perception = ensurePerceptionSurface(view, cache);
+      if (!perception) return;
+      // Re-light only the small current sensory footprint. This overlay is
+      // cached by perception signature and never invalidates the durable mesh.
+      for (const batch of perception.chunks) {
+        if (!reliefBoundsVisible(batch.chunk.bounds, camera, viewport, view.terrain.tileSize * 2)) continue;
+        const fog = reliefFogAmount(batch.chunk.bounds, camera, viewport, fogStart, fogEnd);
+        for (const material of batch.materials) {
+          p.ambientMaterial(materialColor(material, fog, false, material.currentVisibility));
+          p.beginShape(p.TRIANGLES);
+          for (const index of material.indices) {
+            const vertex = batch.chunk.vertices[index];
+            if (!vertex) continue;
+            p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
+            p.vertex(vertex.x, -vertex.z - 0.12, vertex.y);
           }
           p.endShape();
         }
@@ -1476,7 +1581,13 @@ export function createTideweftReliefRenderer(
           const tile = grid.tiles[row * grid.columns + column];
           const visibility = reliefDiscoveryVisibility(tile);
           const presentation = visibleBiomePresentation(tile);
-          if (!tile || tile.kind === "built" || !presentation || visibility < 0.3) continue;
+          if (
+            !tile
+            || tile.kind === "built"
+            || !presentation
+            || visibility < 0.3
+            || currentTerrainVisibility(tile, view.perception !== undefined) < 1
+          ) continue;
           const variant = reliefTileHash01(column, row, 0x6269_6f6d);
           if (variant < detailThreshold) continue;
 
@@ -1644,20 +1755,27 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
-    const drawRoute = (view: TideweftView, route: RouteView, cache: CachedReliefMesh): void => {
-      if (route.points.length < 2) return;
-      const color = route.selected
+    const drawRouteRun = (
+      view: TideweftView,
+      points: readonly WorldPoint[],
+      cache: CachedReliefMesh,
+      style: Pick<RouteView, "kind" | "strength">,
+      selected: boolean,
+    ): void => {
+      if (points.length < 2) return;
+      const remembered = style.kind === "remembered";
+      const color = selected
         ? RELIEF_PALETTE.amber
-        : route.kind === "wake"
+        : style.kind === "wake"
           ? RELIEF_PALETTE.water
-          : route.kind === "crossing"
+          : style.kind === "crossing"
             ? RELIEF_PALETTE.coral
             : RELIEF_PALETTE.foam;
       p.noFill();
-      p.stroke(withAlpha(color, 115 + unit(route.strength) * 125));
-      p.strokeWeight(route.selected ? 3 : 1.45 + unit(route.strength));
+      p.stroke(withAlpha(color, remembered ? (selected ? 178 : 66) : 115 + unit(style.strength) * 125));
+      p.strokeWeight(selected ? 3 : remembered ? 0.9 : 1.45 + unit(style.strength));
       p.beginShape();
-      for (const point of route.points) {
+      for (const point of points) {
         const height = discoveredReliefSurfaceHeightAt(
           view.terrain,
           point,
@@ -1669,25 +1787,75 @@ export function createTideweftReliefRenderer(
       p.endShape();
     };
 
-    const drawRoutes = (view: TideweftView, cache: CachedReliefMesh): void => {
-      for (const route of view.routes) drawRoute(view, route, cache);
+    const drawRoutes = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      camera: ReliefCameraState,
+    ): void => {
+      const reach = orbit.distance * 1.45;
+      const viewportBounds: WorldBounds = {
+        minX: camera.target.x - reach,
+        minY: camera.target.y - reach,
+        maxX: camera.target.x + reach,
+        maxY: camera.target.y + reach,
+      };
+      const viewport = { width: p.width, height: p.height };
+      const routeBoundsVisible = (bounds: WorldBounds | null): boolean => {
+        if (!bounds || !worldBoundsOverlap(bounds, viewportBounds)) return false;
+        return reliefBoundsVisible({
+          min: { x: bounds.minX, y: bounds.minY, z: 0 },
+          max: {
+            x: bounds.maxX,
+            y: bounds.maxY,
+            z: cache.mesh.verticalScale + view.terrain.tileSize * 0.25,
+          },
+        }, camera, viewport, view.terrain.tileSize * 2);
+      };
+      const visibleRuns = (
+        points: readonly WorldPoint[],
+        knownBounds: WorldBounds | null,
+      ): readonly (readonly WorldPoint[])[] => routeBoundsVisible(knownBounds)
+        ? clipPolylineToBounds(points, viewportBounds)
+        : [];
+
+      for (const route of view.routes) {
+        const memoryRuns = visibleRuns(route.points, route.bounds ?? polylineBounds(route.points));
+        for (const run of memoryRuns) drawRouteRun(view, run, cache, route, route.selected === true);
+        for (const observation of route.observedRuns ?? []) {
+          const observedRuns = visibleRuns(
+            observation.points,
+            observation.bounds ?? polylineBounds(observation.points),
+          );
+          for (const run of observedRuns) {
+            drawRouteRun(view, run, cache, observation, route.selected === true);
+          }
+        }
+      }
       const pulse = reducedMotion ? 0.72 : 0.65 + Math.sin(performance.now() * 0.002) * 0.15;
       p.noFill();
       p.stroke(withAlpha(RELIEF_PALETTE.violet, 150 * pulse));
       p.strokeWeight(2.2);
       for (const choir of view.choirs) {
-        for (const path of choir.routePaths) {
-          p.beginShape();
-          for (const point of path) {
-            const height = discoveredReliefSurfaceHeightAt(
-              view.terrain,
-              point,
-              cache.mesh.verticalScale,
-              true,
-            ) + 4;
-            p.vertex(point.x, -height, point.y);
+        for (let pathIndex = 0; pathIndex < choir.routePaths.length; pathIndex += 1) {
+          const path = choir.routePaths[pathIndex];
+          if (!path) continue;
+          const runs = visibleRuns(
+            path,
+            choir.routePathBounds?.[pathIndex] ?? polylineBounds(path),
+          );
+          for (const run of runs) {
+            p.beginShape();
+            for (const point of run) {
+              const height = discoveredReliefSurfaceHeightAt(
+                view.terrain,
+                point,
+                cache.mesh.verticalScale,
+                true,
+              ) + 4;
+              p.vertex(point.x, -height, point.y);
+            }
+            p.endShape();
           }
-          p.endShape();
         }
       }
     };
@@ -1877,6 +2045,7 @@ export function createTideweftReliefRenderer(
     ): void => {
       const reachSquared = (orbit.distance * 1.18) ** 2;
       const visible = view.fieldResources
+        .filter((node) => !view.perception || node.currentVisibility === 1)
         .map((node) => ({
           node,
           distance: distanceSquared(node.position, { x: orbit.x, y: orbit.y }),
@@ -1887,7 +2056,7 @@ export function createTideweftReliefRenderer(
         .slice(0, 220);
       const hoveredId = pointerWorld
         ? hitTestFieldResource(
-            view.fieldResources,
+            view.fieldResources.filter((node) => !view.perception || node.currentVisibility === 1),
             pointerWorld,
             Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22),
           )?.node.id
@@ -1947,7 +2116,9 @@ export function createTideweftReliefRenderer(
       cache: CachedReliefMesh,
       now: number,
     ): void => {
-      const parcels = safeLooseCargoViews(view.looseCargo ?? []);
+      const parcels = safeLooseCargoViews(view.looseCargo ?? []).filter((parcel) =>
+        !view.perception || isDirectlyPerceived(view.terrain, parcel.position, true)
+      );
       if (parcels.length === 0) return;
       const nearby = nearestRecoverableLooseCargo(
         parcels,
@@ -2540,6 +2711,10 @@ export function createTideweftReliefRenderer(
       settlement: SettlementView,
     ): void => {
       if (settlement.discovered === false) return;
+      const currentVisibility = currentSettlementVisibility(
+        settlement,
+        view.perception !== undefined,
+      );
       const tileSize = view.terrain.tileSize;
       const surface = discoveredReliefSurfaceHeightAt(
         view.terrain,
@@ -2547,23 +2722,32 @@ export function createTideweftReliefRenderer(
         cache.mesh.verticalScale,
         true,
       );
-      const towerHeight = tileSize * clamp(0.52 + Math.log2(Math.max(1, settlement.population)) * 0.055, 0.56, 1.18);
-      const color = settlementColor(settlement.status);
-      drawGroundRing(
-        view,
-        cache,
-        settlement.position,
-        tileSize * (settlement.selected ? 0.72 : 0.56),
-        color,
-        settlement.selected ? 235 : 155,
-      );
+      const directlyVisible = currentVisibility >= 1;
+      // Remote Relief structures are geographic memory only. Keep their
+      // silhouette fixed so live population changes cannot be read through
+      // fog simply by comparing tower height.
+      const towerHeight = directlyVisible
+        ? tileSize * clamp(0.52 + Math.log2(Math.max(1, settlement.population)) * 0.055, 0.56, 1.18)
+        : tileSize * 0.64;
+      const color = directlyVisible ? settlementColor(settlement.status) : RELIEF_PALETTE.ink;
+      if (directlyVisible) {
+        drawGroundRing(
+          view,
+          cache,
+          settlement.position,
+          tileSize * (settlement.selected ? 0.72 : 0.56),
+          color,
+          settlement.selected ? 235 : 155,
+        );
+      }
       p.push();
       p.noStroke();
       p.translate(settlement.position.x, -surface - towerHeight / 2 - 1, settlement.position.y);
-      p.ambientMaterial(RELIEF_PALETTE.built);
+      p.ambientMaterial(directlyVisible ? RELIEF_PALETTE.built : RELIEF_PALETTE.ink);
       p.box(tileSize * 0.48, towerHeight, tileSize * 0.48);
       p.translate(0, -towerHeight * 0.58, 0);
-      p.emissiveMaterial(color);
+      if (directlyVisible) p.emissiveMaterial(color);
+      else p.ambientMaterial(RELIEF_PALETTE.ink);
       p.cone(tileSize * 0.38, tileSize * 0.42, 5, 1);
       p.pop();
     };
@@ -2578,6 +2762,10 @@ export function createTideweftReliefRenderer(
     const drawPorters = (view: TideweftView, cache: CachedReliefMesh): void => {
       const size = view.terrain.tileSize;
       for (const porter of view.porters) {
+        if (
+          view.perception
+          && !isDirectlyPerceived(view.terrain, porter.position, true)
+        ) continue;
         const surface = discoveredReliefSurfaceHeightAt(
           view.terrain,
           porter.position,
@@ -2782,7 +2970,11 @@ export function createTideweftReliefRenderer(
         for (let column = startColumn; column <= endColumn && shown < 220; column += 1) {
           const tile = grid.tiles[row * grid.columns + column];
           const known = unit(tile?.depthKnown);
-          if (!tile || known <= 0.002) continue;
+          if (
+            !tile
+            || known <= 0.002
+            || currentTerrainVisibility(tile, view.perception !== undefined) < 1
+          ) continue;
           const depth = unit(tile.waterDepth);
           if (depth <= 0.035) continue;
           const style = reliefSoundingStyle(depth);
@@ -2871,7 +3063,10 @@ export function createTideweftReliefRenderer(
       p.push();
       try {
         p.camera(0, 0, 1, 0, 0, 0, 0, 1, 0);
-        p.ortho(-p.width / 2, p.width / 2, p.height / 2, -p.height / 2, 0, 2);
+        // p5's WEBGL camera/projection path already converts its y-up camera
+        // space into the canvas' y-down screen space. Reversing bottom/top a
+        // second time made both falling rain and wind rise on screen.
+        p.ortho(-p.width / 2, p.width / 2, -p.height / 2, p.height / 2, 0, 2);
         p.resetMatrix();
         p.noFill();
         const first = streaks[0]!;
@@ -2926,7 +3121,7 @@ export function createTideweftReliefRenderer(
       p.push();
       try {
         p.camera(0, 0, 1, 0, 0, 0, 0, 1, 0);
-        p.ortho(-p.width / 2, p.width / 2, p.height / 2, -p.height / 2, 0, 2);
+        p.ortho(-p.width / 2, p.width / 2, -p.height / 2, p.height / 2, 0, 2);
         p.resetMatrix();
         p.noFill();
         p.stroke(withAlpha(RELIEF_PALETTE.foam, first.alpha));
@@ -2972,7 +3167,7 @@ export function createTideweftReliefRenderer(
       drawFieldResources(view, cache);
       drawSurfaceCurrents(view, cache, now);
       drawLooseCargo(view, cache, now);
-      drawRoutes(view, cache);
+      drawRoutes(view, cache, camera);
       drawSoundings(view, cache);
       drawTideHarps(view, cache, now);
       drawWayknots(view, cache, now);
@@ -3021,6 +3216,7 @@ export function createTideweftReliefRenderer(
       if (!active || contextLost || !webglSupported) return;
       refreshLatestView();
       const now = performance.now();
+      telemetry.recordFrame(now);
       advancePointerParallax(pointerParallax, now, reducedMotion);
       p.background(latestView?.weather.kind === "mist" ? RELIEF_PALETTE.horizon : RELIEF_PALETTE.ink);
       if (!latestView) return;
@@ -3033,6 +3229,7 @@ export function createTideweftReliefRenderer(
   };
 
   const destroy = (): void => {
+    telemetry.setActive(false);
     releaseInput();
     detachCanvasListeners();
     resizeObserver?.disconnect();
@@ -3053,6 +3250,7 @@ export function createTideweftReliefRenderer(
     resetPointerParallax(pointerParallax, true);
     delete options.mount.dataset.reliefFailure;
     cached = null;
+    cachedPerception = null;
   };
 
   const setActive = (nextActive: boolean): void => {
@@ -3061,6 +3259,7 @@ export function createTideweftReliefRenderer(
       return;
     }
     active = nextActive;
+    telemetry.setActive(active && !contextLost && webglSupported);
     syncActivePresentation();
     if (!active) {
       releaseInput();
@@ -3073,6 +3272,7 @@ export function createTideweftReliefRenderer(
 
   const controller: TideweftReliefRendererController = {
     canvas: () => canvasElement,
+    telemetry: telemetry.getSnapshot,
     supported: () => webglSupported,
     isActive: () => active,
     setActive,

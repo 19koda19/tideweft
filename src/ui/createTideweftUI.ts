@@ -1,4 +1,5 @@
 import type { SettlementStatus, TidePhase, WeatherKind } from "../render/types";
+import type { RendererTelemetrySnapshot } from "../render/rendererTelemetry";
 import { acceptsRestartPhrase, RESTART_PHRASE } from "../game/restartPolicy";
 import {
   PERPETUAL_SESSION_SHAPE,
@@ -45,6 +46,29 @@ export const TITLE_SURFACE_COPY = {
   start: "START",
   patchNotes: "PATCH NOTES",
 } as const;
+
+const signedAxis = (value: number): string => {
+  const integer = Number.isFinite(value) ? Math.trunc(value) : 0;
+  return integer > 0 ? `+${integer}` : String(integer);
+};
+
+/** Floating navigation copy stays terse, signed, and useful in bug reports. */
+export function navigationTelemetryCopy(
+  navigation: TideweftUIView["navigation"],
+  telemetry: RendererTelemetrySnapshot | undefined,
+  compact = false,
+): string {
+  const fps = telemetry?.active && telemetry.frameCount >= 2 && telemetry.fps > 0
+    ? `${Math.round(telemetry.fps)} FPS`
+    : "FPS —";
+  if (!navigation) return compact ? `R ?,? · G ?,? · ${fps}` : `REGION ?,? · GLOBAL ?,? · ${fps}`;
+  const region = `${signedAxis(navigation.regionX)},${signedAxis(navigation.regionY)}`;
+  const local = `${navigation.localX},${navigation.localY}`;
+  const global = `${signedAxis(navigation.globalX)},${signedAxis(navigation.globalY)}`;
+  return compact
+    ? `R ${region} · G ${global} · ${fps}`
+    : `REGION ${region} · LOCAL ${local} · GLOBAL ${global} · ${fps}`;
+}
 const RESTART_SEED_REQUIRED_MESSAGE =
   "Enter a non-empty seed phrase before replacing this estuary.";
 
@@ -649,6 +673,7 @@ interface UIRefs {
   mobileSafety: HTMLSpanElement;
   mobileTerrain: HTMLSpanElement;
   mobileActions: HTMLSpanElement;
+  mobileNavigation: HTMLSpanElement;
   worldName: HTMLParagraphElement;
   clockDay: HTMLSpanElement;
   clockTime: HTMLSpanElement;
@@ -662,6 +687,7 @@ interface UIRefs {
   weatherLabel: HTMLSpanElement;
   weatherForecast: HTMLSpanElement;
   location: HTMLParagraphElement;
+  navigation: HTMLParagraphElement;
   stamina: HTMLProgressElement;
   stability: HTMLProgressElement;
   stabilityDetail: HTMLSpanElement;
@@ -713,6 +739,7 @@ interface UIRefs {
   chronicleDetails: HTMLDetailsElement;
   chronicleSummary: HTMLElement;
   chronicleCount: HTMLSpanElement;
+  chroniclePreview: HTMLSpanElement;
   chronicleList: HTMLOListElement;
   scanButton: HTMLButtonElement;
   interactButton: HTMLButtonElement;
@@ -995,7 +1022,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const identity = createElement("div", "hud-identity");
   const worldName = createElement("p", "hud-identity__world", "Uncharted estuary");
   const location = createElement("p", "hud-identity__location", "Listening for a shore…");
-  identity.append(worldName, location);
+  const navigation = createElement(
+    "p",
+    "hud-identity__navigation",
+    "REGION ?,? · GLOBAL ?,? · FPS —",
+  );
+  identity.append(worldName, location, navigation);
 
   const clock = createElement("div", "clock-readout");
   clock.setAttribute("aria-label", "Estuary time");
@@ -1114,7 +1146,19 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     "mobile-field-strip__line mobile-field-strip__actions",
     "Sound / Scan · Interact · Place Wayknot",
   );
-  mobileFieldCopy.append(mobileObjective, mobileVitals, mobileSafety, mobileTerrain, mobileActions);
+  const mobileNavigation = createElement(
+    "span",
+    "mobile-field-strip__line mobile-field-strip__navigation",
+    "R ?,? · G ?,? · FPS —",
+  );
+  mobileFieldCopy.append(
+    mobileObjective,
+    mobileVitals,
+    mobileSafety,
+    mobileTerrain,
+    mobileNavigation,
+    mobileActions,
+  );
   mobileFieldStrip.append(mobileHudToggle, mobileKitButton, mobileFieldCopy);
 
   const objectivePanel = createElement("aside", "objective-panel glass-panel");
@@ -1280,11 +1324,13 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
 
   const chronicleDetails = createElement("details", "chronicle-panel glass-panel");
   const chronicleSummary = createElement("summary", "panel-summary");
-  chronicleSummary.append(createElement("span", "panel-summary__title", "The water remembers"));
+  chronicleSummary.append(createElement("span", "panel-summary__title", "EVENTS"));
   const chronicleCount = createElement("span", "panel-summary__count", "0");
   chronicleSummary.append(chronicleCount);
+  const chroniclePreview = createElement("span", "chronicle-preview", "Nothing seen or heard yet.");
+  chronicleSummary.append(chroniclePreview);
   const chronicleList = createElement("ol", "chronicle-list");
-  chronicleList.setAttribute("aria-label", "Recent world events");
+  chronicleList.setAttribute("aria-label", "Events the courier saw, heard, or directly caused");
   chronicleDetails.append(chronicleSummary, chronicleList);
 
   const actionDock = createElement("nav", "action-dock glass-panel");
@@ -1586,6 +1632,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     mobileSafety,
     mobileTerrain,
     mobileActions,
+    mobileNavigation,
     worldName,
     clockDay,
     clockTime,
@@ -1599,6 +1646,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     weatherLabel: weatherLabelElement,
     weatherForecast,
     location,
+    navigation,
     stamina,
     stability,
     stabilityDetail,
@@ -1650,6 +1698,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     chronicleDetails,
     chronicleSummary,
     chronicleCount,
+    chroniclePreview,
     chronicleList,
     scanButton,
     interactButton,
@@ -1713,6 +1762,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let lastSignedReportActions = "";
   let lastChronicle = "";
   let lastAnnouncement = "";
+  let lastNavigationCopy = "";
+  let lastMobileNavigationCopy = "";
+  let lastNavigationTitle = "";
   let forcedTitle: boolean | null = null;
   let forcedQuietHour: boolean | null = null;
   let contractPointerActive = false;
@@ -2091,9 +2143,13 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     lastChronicle = signature;
     refs.chronicleList.replaceChildren();
     refs.chronicleCount.textContent = String(entries.length);
+    const latest = entries[0];
+    refs.chroniclePreview.textContent = latest
+      ? `${latest.title} · ${latest.detail}`
+      : "Nothing seen or heard yet.";
     refs.chronicleSummary.setAttribute(
       "aria-label",
-      `${entries.length} recent ${entries.length === 1 ? "memory" : "memories"}`,
+      `${entries.length} observed ${entries.length === 1 ? "event" : "events"}`,
     );
     for (const entry of entries.slice(0, 8)) {
       const item = createElement("li", "chronicle-entry");
@@ -2108,7 +2164,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
     if (entries.length === 0) {
       refs.chronicleList.append(
-        createElement("li", "empty-state empty-state--compact", "The first memory has not formed yet."),
+        createElement("li", "empty-state empty-state--compact", "Nothing seen or heard yet."),
       );
     }
   };
@@ -2150,6 +2206,25 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       return;
     }
     refs.shell.dataset.ready = "true";
+    const telemetry = options.getRendererTelemetry?.();
+    const navigationCopy = navigationTelemetryCopy(view.navigation, telemetry);
+    const mobileNavigationCopy = navigationTelemetryCopy(view.navigation, telemetry, true);
+    const navigationTitle = telemetry?.active && telemetry.frameTimeMs > 0
+      ? `Actual renderer frame time ${telemetry.frameTimeMs.toFixed(1)} milliseconds`
+      : "Renderer cadence is not available yet";
+    if (navigationCopy !== lastNavigationCopy) {
+      lastNavigationCopy = navigationCopy;
+      refs.navigation.textContent = navigationCopy;
+    }
+    if (mobileNavigationCopy !== lastMobileNavigationCopy) {
+      lastMobileNavigationCopy = mobileNavigationCopy;
+      refs.mobileNavigation.textContent = mobileNavigationCopy;
+    }
+    if (navigationTitle !== lastNavigationTitle) {
+      lastNavigationTitle = navigationTitle;
+      refs.navigation.title = navigationTitle;
+      refs.mobileNavigation.title = navigationTitle;
+    }
     const titlePresented = forcedTitle ?? view.title.visible;
     restartFlow.sync(view.title, titlePresented);
     titleAtmosphere.sync(titlePresented, titlePresented && !refs.patchNotes.isOpen());

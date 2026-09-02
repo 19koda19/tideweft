@@ -51,7 +51,15 @@ import {
   projectTraversalIncident,
   type TraversalFeedbackState,
 } from "./traversalFeedback";
+import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
 import type { LooseCargoWorldState } from "./looseCargo";
+import {
+  VISIBILITY_DIRECT,
+  VISIBILITY_PERIPHERAL,
+  evaluatePerception,
+  type PerceptionCell,
+  type PerceptionResult,
+} from "./perception";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
 const MAX_BIOME_CACHE_ENTRIES = 4;
@@ -83,6 +91,12 @@ const liveBiomeCache = new WeakMap<readonly CachedBiomeTile[], {
   readonly weatherKey: string;
   readonly tiles: readonly ProjectedBiomeTile[];
 }>();
+const perceptionCache = new WeakMap<readonly TerrainTileView[], {
+  readonly settlementKey: string;
+  readonly cells: readonly PerceptionCell[];
+  resultKey?: string;
+  result?: PerceptionResult;
+}>();
 const terrainKindCode: Readonly<Record<TerrainTileView["terrain"], number>> = {
   "deep-water": 1,
   "tidal-flat": 2,
@@ -108,6 +122,61 @@ export interface ProjectionOptions {
   looseCargoWorld?: LooseCargoWorldState;
   /** Authoritative momentary hold state, independent from derived pace. */
   bracing?: boolean;
+  /** Shared current perception snapshot; production computes it once per refresh. */
+  perception?: PerceptionResult;
+}
+
+/**
+ * Builds the one authoritative sensory disclosure shared by render and UI
+ * projections. Keeping this public prevents the event feed from inventing a
+ * second, subtly different notion of what the courier could observe.
+ */
+export function projectPerception(
+  world: WorldView,
+  player: PlayerState,
+): PerceptionResult {
+  const currentPlayerTileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
+    + Math.floor(player.x / TILE_UNITS);
+  const settlementKey = world.settlements
+    .map((settlement) => settlement.tileIndex)
+    .sort((left, right) => left - right)
+    .join(",");
+  let cached = perceptionCache.get(world.terrain.tiles);
+  if (!cached || cached.settlementKey !== settlementKey) {
+    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+    cached = {
+      settlementKey,
+      cells: world.terrain.tiles.map((tile, index) => ({
+        elevation: Math.max(0, Math.min(1, tile.elevation / FIXED_POINT)),
+        obstruction: perceptionObstruction(tile, settlementTiles.has(index)),
+      })),
+    };
+    perceptionCache.set(world.terrain.tiles, cached);
+  }
+  const weatherVisibility = Math.max(
+    0,
+    Math.min(1, 1 - (world.weather.intensity / FIXED_POINT) * 0.52),
+  );
+  const resultKey = [
+    currentPlayerTileIndex,
+    player.facingMilliRadians,
+    weatherVisibility,
+  ].join(":");
+  if (cached.resultKey === resultKey && cached.result) return cached.result;
+  const result = evaluatePerception({
+    columns: world.terrain.width,
+    rows: world.terrain.height,
+    cells: cached.cells,
+    playerTileIndex: currentPlayerTileIndex,
+    facingRadians: player.facingMilliRadians / 1_000,
+    weatherVisibility: Math.max(
+      0,
+      Math.min(1, 1 - (world.weather.intensity / FIXED_POINT) * 0.52),
+    ),
+  });
+  cached.resultKey = resultKey;
+  cached.result = result;
+  return result;
 }
 
 export function projectGameView(
@@ -118,6 +187,13 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
+  const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+  const suppliedPerception = options.perception;
+  const perception = suppliedPerception?.valid === true
+    && suppliedPerception.visibilityGrades.length === world.terrain.width * world.terrain.height
+    ? suppliedPerception
+    : projectPerception(world, player);
+  const currentPlayerTileIndex = perception.playerTileIndex;
   const playerAddress = regionalAddressAt(
     world,
     Math.floor(player.y / TILE_UNITS) * world.terrain.width + Math.floor(player.x / TILE_UNITS),
@@ -126,7 +202,7 @@ export function projectGameView(
     ? regionalTileIndexInView(world, options.looseCargoWorld.region, 0)
     : null;
   const cargoOriginTile = cargoOriginIndex === null ? undefined : world.terrain.tiles[cargoOriginIndex];
-  const looseCargo = options.looseCargoWorld && playerAddress && cargoOriginTile
+  const projectedLooseCargo = options.looseCargoWorld && playerAddress && cargoOriginTile
     ? projectLooseCargoWorld(options.looseCargoWorld, {
         worldOrigin: { x: cargoOriginTile.x * tileSize, y: cargoOriginTile.y * tileSize },
         worldUnitsPerTile: tileSize,
@@ -140,9 +216,16 @@ export function projectGameView(
         },
       })
     : [];
+  const looseCargo = projectedLooseCargo.filter((parcel) =>
+    perceivedWorldPoint(
+      parcel.position,
+      world.terrain.width,
+      world.terrain.height,
+      tileSize,
+      perception.visibilityGrades,
+    )
+  );
   const traversalIncident = projectTraversalIncident(options.traversalFeedback?.incident ?? null);
-  const currentPlayerTileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
-    + Math.floor(player.x / TILE_UNITS);
   const activeWayknotIds = new Set(
     wayknotEffectsAt(player, world, currentPlayerTileIndex)
       .influences
@@ -159,7 +242,6 @@ export function projectGameView(
     );
     return projected ? [projected] : [];
   });
-  const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const fieldResources = projectFieldResources(
     world,
     player,
@@ -167,6 +249,7 @@ export function projectGameView(
     options.fieldResourceCatalog,
     options.fieldResourceEcology,
     tileSize,
+    perception.visibilityGrades,
   );
   const biomeCache = stableBiomeTerrain(world);
   const projectedBiomes = weatherAdjustedBiomeTiles(biomeCache.tiles, world.weather);
@@ -192,8 +275,87 @@ export function projectGameView(
     },
     undefined,
   );
+  const knownRoutes = world.routes.filter((route) => {
+    if (options.selectedRouteId === route.id) return true;
+    const from = world.settlements.find((settlement) => settlement.id === route.fromSettlementId);
+    const to = world.settlements.find((settlement) => settlement.id === route.toSettlementId);
+    return Boolean(
+      from
+      && to
+      && (player.discovered[from.tileIndex] ?? 0) > 0
+      && (player.discovered[to.tileIndex] ?? 0) > 0,
+    );
+  });
+  const knownRouteIds = new Set(knownRoutes.map((route) => route.id));
+  const routes = knownRoutes.map((route) => {
+    const points = route.path.map((index) => tilePoint(index, world.terrain.width, tileSize));
+    const kind = route.traceStrength >= STRAND_AUTOMATION_THRESHOLD
+      ? ("strand" as const)
+      : ("footpath" as const);
+    const observedRuns = directPolylineRuns(
+      points,
+      route.path.map((index) => perception.visibilityGrades[index] === VISIBILITY_DIRECT),
+    ).map((run) => {
+      const bounds = polylineBounds(run);
+      return {
+        points: run,
+        ...(bounds ? { bounds } : {}),
+        kind,
+        strength: route.traceStrength / FIXED_POINT,
+        condition: route.condition / FIXED_POINT,
+        reliability: route.reliability / FIXED_POINT,
+        traffic: Math.min(1, route.traffic / 20),
+      };
+    });
+    const bounds = polylineBounds(points);
+    return {
+      id: String(route.id),
+      // The whole line is durable chart memory. Present-tense values exist
+      // only on observedRuns, so changes behind fog cannot restyle the map.
+      kind: "remembered" as const,
+      points,
+      ...(bounds ? { bounds } : {}),
+      observedRuns,
+      strength: 0,
+      condition: 0,
+      reliability: 0,
+      selected: options.selectedRouteId === route.id,
+    };
+  });
+  const choirs = world.choirs.map((choir) => {
+    const age = Math.max(0, world.completedTick - choir.awakenedTick);
+    const discoveredSettlements = choir.settlementIds.flatMap((settlementId) => {
+      const settlement = world.settlements.find((candidate) => candidate.id === settlementId);
+      return settlement && (player.discovered[settlement.tileIndex] ?? 0) > 0 ? [settlement] : [];
+    });
+    const routePaths = choir.routeIds.flatMap((routeId) => {
+      if (!knownRouteIds.has(routeId)) return [];
+      const route = world.routes.find((candidate) => candidate.id === routeId);
+      return route
+        ? [route.path.map((index) => tilePoint(index, world.terrain.width, tileSize))]
+        : [];
+    });
+    const directlyObserved = discoveredSettlements.some(
+      (settlement) => perception.visibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT,
+    );
+    return {
+      id: String(choir.id),
+      routePaths,
+      routePathBounds: routePaths.map(polylineBounds),
+      harborPoints: discoveredSettlements.map(
+        (settlement) => tilePoint(settlement.tileIndex, world.terrain.width, tileSize),
+      ),
+      age,
+      emphasis: directlyObserved && newestChoir?.id === choir.id && age < CHOIR_HIGHLIGHT_TICKS
+        ? ("strong" as const)
+        : ("normal" as const),
+      label: discoveredSettlements.length > 0
+        ? `Tide Choir · ${discoveredSettlements.map((settlement) => settlement.name).join(" · ")}`
+        : "Tide Choir",
+    };
+  });
 
-  const latestEvents = world.events.slice(-12).map((event) => {
+  const latestEvents = world.events.slice(-12).flatMap((event) => {
     const settlementCandidates = event.type === "contract-offered"
       ? [
           event.data.originSettlementId,
@@ -215,7 +377,11 @@ export function projectGameView(
       ? undefined
       : world.settlements.find((candidate) => candidate.id === eventSettlementId);
     const detail = typeof event.data.reason === "string" ? event.data.reason : undefined;
-    return {
+    if (
+      settlement
+      && perception.visibilityGrades[settlement.tileIndex] !== VISIBILITY_DIRECT
+    ) return [];
+    return [{
       id: `event-${event.sequence}`,
       kind: eventKind(event.type),
       label: event.type === "contract-offered" && settlement
@@ -227,7 +393,7 @@ export function projectGameView(
         : ("normal" as const),
       ...(settlement ? { position: tilePoint(settlement.tileIndex, world.terrain.width, tileSize) } : {}),
       ...(detail ? { detail } : {}),
-    };
+    }];
   });
 
   return {
@@ -258,6 +424,7 @@ export function projectGameView(
           waterDepth: tile.waterDepth / FIXED_POINT,
           depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
           discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
+          currentVisibility: visibilityGradeValue(perception.visibilityGrades[index]),
           trace: tile.traceStrength / FIXED_POINT,
           shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
           blocked: false,
@@ -283,6 +450,14 @@ export function projectGameView(
       label: titleCase(world.weather.kind),
       forecast: `Next front in ${Math.max(0, world.weather.nextChangeTick - world.completedTick)} ticks`,
     },
+    perception: {
+      version: perception.version,
+      signature: perception.signature,
+      valid: perception.valid,
+      visibleTileCount: perception.visibleTileIndices.length,
+      directTileCount: perception.directTileIndices.length,
+      peripheralTileCount: perception.peripheralTileIndices.length,
+    },
     settlements: world.settlements.map((settlement) => ({
       id: String(settlement.id),
       name: settlement.name,
@@ -304,6 +479,7 @@ export function projectGameView(
         ? `${Math.floor(average(settlement.knowledge.map((knowledge) => knowledge.ageTicks)) / 60)}h old`
         : "local",
       discovered: (player.discovered[settlement.tileIndex] ?? 0) > 0,
+      currentVisibility: visibilityGradeValue(perception.visibilityGrades[settlement.tileIndex]),
       selected: options.selectedSettlementId === settlement.id,
       label: settlement.project.status === "complete"
         ? `${settlement.specialization} · ${settlement.project.kind} online`
@@ -388,57 +564,8 @@ export function projectGameView(
     tideHarps,
     fieldResources,
     looseCargo,
-    routes: world.routes
-      .filter((route) => {
-        if (options.selectedRouteId === route.id) return true;
-        const from = world.settlements.find((settlement) => settlement.id === route.fromSettlementId);
-        const to = world.settlements.find((settlement) => settlement.id === route.toSettlementId);
-        return Boolean(
-          from
-          && to
-          && (player.discovered[from.tileIndex] ?? 0) > 0
-          && (player.discovered[to.tileIndex] ?? 0) > 0,
-        );
-      })
-      .map((route) => ({
-      id: String(route.id),
-      kind: route.traceStrength >= STRAND_AUTOMATION_THRESHOLD ? ("strand" as const) : ("footpath" as const),
-      points: route.path.map((index) => tilePoint(index, world.terrain.width, tileSize)),
-      strength: route.traceStrength / FIXED_POINT,
-      condition: route.condition / FIXED_POINT,
-      reliability: route.reliability / FIXED_POINT,
-      traffic: Math.min(1, route.traffic / 20),
-      selected: options.selectedRouteId === route.id,
-      })),
-    choirs: world.choirs.map((choir) => {
-      const age = Math.max(0, world.completedTick - choir.awakenedTick);
-      const harborNames = choir.settlementIds.flatMap((settlementId) => {
-        const settlement = world.settlements.find((candidate) => candidate.id === settlementId);
-        return settlement ? [settlement.name] : [];
-      });
-      return {
-        id: String(choir.id),
-        routePaths: choir.routeIds.flatMap((routeId) => {
-          const route = world.routes.find((candidate) => candidate.id === routeId);
-          return route
-            ? [route.path.map((index) => tilePoint(index, world.terrain.width, tileSize))]
-            : [];
-        }),
-        harborPoints: choir.settlementIds.flatMap((settlementId) => {
-          const settlement = world.settlements.find((candidate) => candidate.id === settlementId);
-          return settlement
-            ? [tilePoint(settlement.tileIndex, world.terrain.width, tileSize)]
-            : [];
-        }),
-        age,
-        emphasis: newestChoir?.id === choir.id && age < CHOIR_HIGHLIGHT_TICKS
-          ? ("strong" as const)
-          : ("normal" as const),
-        label: harborNames.length > 0
-          ? `Tide Choir · ${harborNames.join(" · ")}`
-          : "Tide Choir",
-      };
-    }),
+    routes,
+    choirs,
     traces,
     porters: world.residents.flatMap((resident) => {
       const location = resident.location;
@@ -448,7 +575,7 @@ export function projectGameView(
       const progress = location.progress / FIXED_POINT;
       const pathPosition = Math.min(route.path.length - 1, Math.floor(progress * route.path.length));
       const porterTileIndex = route.path[pathPosition] ?? route.path[0] ?? 0;
-      if ((player.discovered[porterTileIndex] ?? 0) <= 0) return [];
+      if (perception.visibilityGrades[porterTileIndex] !== VISIBILITY_DIRECT) return [];
       return [
         {
           id: String(resident.id),
@@ -484,6 +611,7 @@ function projectFieldResources(
   catalog: FieldResourceCatalog | undefined,
   ecology: FieldResourceEcologyState | undefined,
   tileSize: number,
+  visibilityGrades: Uint8Array,
 ): TideweftView["fieldResources"] {
   if (
     !catalog
@@ -525,7 +653,10 @@ function projectFieldResources(
       label: titleCase(node.material),
       position: tilePoint(node.tileIndex, world.terrain.width, tileSize),
       knowledge: sounded ? "sounded" : "charted",
-      ...(sounded ? { rarity: node.rarity, stockUnits: harvestableStock } : {}),
+      currentVisibility: visibilityGradeValue(visibilityGrades[node.tileIndex]),
+      ...(sounded && visibilityGrades[node.tileIndex] === VISIBILITY_DIRECT
+        ? { rarity: node.rarity, stockUnits: harvestableStock }
+        : {}),
       tileIndex: node.tileIndex,
     });
   }
@@ -533,6 +664,40 @@ function projectFieldResources(
   visible.sort((left, right) => left.tileIndex - right.tileIndex
     || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
   return visible.map(({ tileIndex: _tileIndex, ...node }) => node);
+}
+
+function visibilityGradeValue(grade: number | undefined): 0 | 0.5 | 1 {
+  if (grade === VISIBILITY_DIRECT) return 1;
+  if (grade === VISIBILITY_PERIPHERAL) return 0.5;
+  return 0;
+}
+
+function perceivedWorldPoint(
+  point: { readonly x: number; readonly y: number },
+  columns: number,
+  rows: number,
+  tileSize: number,
+  visibilityGrades: Uint8Array,
+): boolean {
+  if (
+    !Number.isFinite(point.x)
+    || !Number.isFinite(point.y)
+    || !Number.isFinite(tileSize)
+    || tileSize <= 0
+  ) return false;
+  const column = Math.floor(point.x / tileSize);
+  const row = Math.floor(point.y / tileSize);
+  if (column < 0 || column >= columns || row < 0 || row >= rows) return false;
+  return visibilityGrades[row * columns + column] === VISIBILITY_DIRECT;
+}
+
+/** Terrain and substantial structures can block sight; rough ground alone does not. */
+function perceptionObstruction(tile: TerrainTileView, occupied: boolean): number {
+  if (occupied) return 0.72;
+  if (tile.terrain === "ridge") return 0.76;
+  if (tile.terrain === "marsh") return 0.34;
+  if (tile.terrain === "meadow" && tile.roughness >= 880_000) return 0.5;
+  return 0;
 }
 
 function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {

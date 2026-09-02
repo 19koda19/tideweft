@@ -464,8 +464,9 @@ describe("production terrain fall and physical cargo", () => {
     const cueCountBeforeReload = incidentCueCalls(incident.cue);
     const resumed = await createTideweftRuntime(repository);
     expect(incidentCueCalls(incident.cue)).toBe(cueCountBeforeReload);
-    expect(resumed.getRenderView().looseCargo?.map(({ id }) => id).sort())
-      .toEqual([...parcelIds].sort());
+    // Reload preserves every parcel in authoritative custody, but a remote
+    // accident site is no longer rendered through the current perception fog.
+    expect(resumed.getRenderView().looseCargo).toEqual([]);
     expect(resumed.getUIView().objective?.id).toBe(`recover-${fixture.contractId}`);
     await resumed.save();
     const roundTripped = decodeV4(repository.snapshot());

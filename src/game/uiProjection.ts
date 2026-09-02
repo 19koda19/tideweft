@@ -20,6 +20,7 @@ import type {
   ContractMood,
   ContractUIView,
   KitUIView,
+  NavigationUIView,
   SaveWarningUIView,
   SettlementInspectorUIView,
   TideweftUIView,
@@ -82,6 +83,8 @@ import {
   regionalTileIndexInView,
   regionalWorldCenter,
 } from "./regionalWorldView";
+import { VISIBILITY_DIRECT, type PerceptionResult } from "./perception";
+import type { TraversalFeedbackState } from "./traversalFeedback";
 
 export interface UIProjectionOptions {
   /** Full compatibility economy used for names, Promises, people, routes, and events. */
@@ -99,6 +102,10 @@ export interface UIProjectionOptions {
   readonly inactiveLooseCargoWorlds?: readonly LooseCargoWorldState[];
   /** Authoritative momentary hold state shared by Shift and touch. */
   readonly bracing?: boolean;
+  /** The same disclosure snapshot used by both renderers this refresh. */
+  readonly perception?: PerceptionResult;
+  /** Direct physical feedback becomes an observed system entry, not overhead prose. */
+  readonly traversalFeedback?: TraversalFeedbackState;
 }
 
 export function projectUIView(
@@ -108,9 +115,17 @@ export function projectUIView(
   options: UIProjectionOptions = {},
 ): TideweftUIView {
   const economy = options.economyWorld ?? world;
-  const selectedSettlement = session.selectedSettlementId === null
+  const selectedSettlementCandidate = session.selectedSettlementId === null
     ? undefined
     : economy.settlements.find((settlement) => settlement.id === session.selectedSettlementId);
+  const selectedSettlement = selectedSettlementCandidate
+    && settlementIsDirectlyObserved(
+      selectedSettlementCandidate.id,
+      world,
+      options.perception,
+    )
+    ? selectedSettlementCandidate
+    : undefined;
   const playerSettlementId = settlementAtPlayer(player, world);
   const localOffers = playerSettlementId === null
     ? []
@@ -126,6 +141,7 @@ export function projectUIView(
   const tutorial = tutorialObjective(session.tutorial, player);
   const report = reportObjective(economy, world, player);
   const spatialCenter = regionalWorldCenter(world);
+  const navigation = projectNavigationCoordinates(world, player);
   const minute = world.completedTick % 1_440;
   const day = Math.floor(world.completedTick / 1_440) + 1;
   const hour = Math.floor(minute / 60);
@@ -197,6 +213,7 @@ export function projectUIView(
       forecast: `Front update in ${Math.max(0, world.weather.nextChangeTick - world.completedTick)}m`,
       intensity: world.weather.intensity / FIXED_POINT,
     },
+    navigation,
     player: {
       stamina: player.stamina / FIXED_POINT,
       stability: player.stability / FIXED_POINT,
@@ -245,7 +262,7 @@ export function projectUIView(
         contract.id === activeContract?.id ? activeCustody : undefined,
       )),
     ...(selectedSettlement ? { selectedSettlement: projectSettlement(selectedSettlement, economy, playerSettlementId, player) } : {}),
-    chronicle: economy.events.slice(-24).reverse().map((event) => projectChronicle(event, economy)),
+    chronicle: projectObservedChronicle(economy, world, player, session, options),
     title: {
       visible: session.titleVisible,
       hasSave: session.hasSave,
@@ -320,6 +337,43 @@ export function projectUIView(
       wayknotHint: wayknotControl.hint,
       canEndSession: !session.titleVisible,
     },
+  };
+}
+
+/**
+ * Resolves the courier's signed persistent address without exposing the
+ * floating render-window coordinates as if they were global world position.
+ */
+export function projectNavigationCoordinates(
+  world: WorldView,
+  player: PlayerState,
+): NavigationUIView {
+  const localWindowX = Math.floor(player.x / TILE_UNITS);
+  const localWindowY = Math.floor(player.y / TILE_UNITS);
+  const index = localWindowY * world.terrain.width + localWindowX;
+  const address = regionalAddressAt(world, index);
+  if (!address) {
+    return {
+      regionX: 0,
+      regionY: 0,
+      localX: 0,
+      localY: 0,
+      globalX: 0,
+      globalY: 0,
+    };
+  }
+  const global = regionLocalToGlobalTile(
+    address.region,
+    address.localX,
+    address.localY,
+  );
+  return {
+    regionX: address.region.x,
+    regionY: address.region.y,
+    localX: address.localX,
+    localY: address.localY,
+    globalX: global.x,
+    globalY: global.y,
   };
 }
 
@@ -1403,10 +1457,150 @@ function projectFieldGift(
   }
 }
 
+function projectObservedChronicle(
+  economy: WorldView,
+  localWorld: WorldView,
+  player: PlayerState,
+  session: GameSessionState,
+  options: UIProjectionOptions,
+): readonly ChronicleEntryUIView[] {
+  const entries: ChronicleEntryUIView[] = [];
+  const incident = options.traversalFeedback?.incident ?? null;
+  const announcementMatchesIncident = Boolean(
+    incident && session.announcement?.message.startsWith(incident.label),
+  );
+
+  if (session.announcement) {
+    entries.push(projectSystemAnnouncement(
+      session.announcement,
+      localWorld.completedTick,
+    ));
+  }
+  if (incident && !announcementMatchesIncident) {
+    const [, cause = "Footing changed"] = splitIncidentLabel(incident.label);
+    entries.push({
+      id: `incident-${incident.id}`,
+      timeLabel: eventTimeLabel(localWorld.completedTick),
+      title: titleCase(cause),
+      detail: incident.detail,
+      kind: incident.kind === "sweep" ? "weather" : "memory",
+      new: true,
+    });
+  }
+
+  const perceivedEvents = economy.events
+    .filter((event) => eventWasObserved(event, economy, localWorld, player, options.perception))
+    .slice(-24)
+    .reverse()
+    .map((event) => projectChronicle(event, economy));
+  return [...entries, ...perceivedEvents].slice(0, 24);
+}
+
+function settlementIsDirectlyObserved(
+  settlementId: number,
+  localWorld: WorldView,
+  perception: PerceptionResult | undefined,
+): boolean {
+  if (!perception) return true;
+  const settlement = localWorld.settlements.find((candidate) => candidate.id === settlementId);
+  return Boolean(
+    settlement
+    && perception.visibilityGrades[settlement.tileIndex] === VISIBILITY_DIRECT,
+  );
+}
+
+function projectSystemAnnouncement(
+  announcement: NonNullable<GameSessionState["announcement"]>,
+  tick: number,
+): ChronicleEntryUIView {
+  const [leading, trailing] = splitOnce(announcement.message, " — ");
+  const [, incidentCause] = splitIncidentLabel(leading);
+  const cargo = /cargo|load|parcel|pack|promise/i.test(announcement.message);
+  const water = /water|current|swept|ashore|river/i.test(announcement.message);
+  const footing = /brace|stability|footing|fall|stumble|jolt|rock|slope/i.test(announcement.message);
+  const title = incidentCause
+    ? titleCase(incidentCause)
+    : cargo
+      ? "Cargo"
+      : water
+        ? "Current"
+        : footing
+          ? "Footing"
+          : "Observed";
+  return {
+    id: `system-${announcement.id}`,
+    timeLabel: eventTimeLabel(tick),
+    title,
+    detail: trailing || leading,
+    kind: water ? "weather" : cargo ? "material" : "memory",
+    new: true,
+  };
+}
+
+function eventWasObserved(
+  event: SimEvent,
+  economy: WorldView,
+  localWorld: WorldView,
+  player: PlayerState,
+  perception: PerceptionResult | undefined,
+): boolean {
+  // Legacy projections intentionally preserve the historical full ledger.
+  if (!perception) return true;
+  if (event.type === "world-created" || event.type === "weather-changed") return true;
+
+  const commandId = event.data.commandId;
+  if (typeof commandId === "string" && commandId.startsWith("player-")) return true;
+  if (event.data.carrier === "player") return true;
+  if (
+    player.activeContractId !== null
+    && event.subjectId === player.activeContractId
+  ) return true;
+  if (
+    event.subjectId !== null
+    && economy.contracts.find((contract) => contract.id === event.subjectId)?.carrierKind === "player"
+  ) return true;
+
+  for (const settlementId of eventSettlementIds(event)) {
+    const localSettlement = localWorld.settlements.find((settlement) => settlement.id === settlementId);
+    if (localSettlement && perception.visibilityGrades[localSettlement.tileIndex] === VISIBILITY_DIRECT) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function eventSettlementIds(event: SimEvent): readonly number[] {
+  const ids = [
+    event.data.originSettlementId,
+    event.data.destinationSettlementId,
+    event.data.settlementId,
+    event.data.returnSettlementId,
+    event.data.fromSettlementId,
+    event.data.toSettlementId,
+    event.data.subjectSettlementId,
+  ].filter((value): value is number => typeof value === "number" && Number.isSafeInteger(value));
+  return [...new Set(ids)];
+}
+
+function splitIncidentLabel(label: string): readonly [string, string?] {
+  return splitOnce(label, " · ");
+}
+
+function splitOnce(value: string, separator: string): readonly [string, string?] {
+  const index = value.indexOf(separator);
+  return index < 0
+    ? [value]
+    : [value.slice(0, index), value.slice(index + separator.length)];
+}
+
+function eventTimeLabel(tick: number): string {
+  return `D${Math.floor(tick / 1_440) + 1} ${String(Math.floor(tick % 1_440 / 60)).padStart(2, "0")}:${String(tick % 60).padStart(2, "0")}`;
+}
+
 function projectChronicle(event: SimEvent, world: WorldView): ChronicleEntryUIView {
   return {
     id: String(event.sequence),
-    timeLabel: `D${Math.floor(event.tick / 1_440) + 1} ${String(Math.floor(event.tick % 1_440 / 60)).padStart(2, "0")}:${String(event.tick % 60).padStart(2, "0")}`,
+    timeLabel: eventTimeLabel(event.tick),
     title: eventTitle(event.type),
     detail: eventDetail(event, world),
     kind: event.type.includes("weather")

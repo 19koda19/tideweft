@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildReliefMaterialBatches } from "./reliefTerrainBatches";
+import {
+  buildReliefMaterialBatches,
+  buildReliefPerceptionMaterialBatches,
+} from "./reliefTerrainBatches";
 import { buildTerrainMesh } from "./terrainMesh";
 import type { TerrainGridView, TerrainTileView } from "./types";
 
@@ -90,5 +93,25 @@ describe("Relief terrain material batches", () => {
     );
     expect(batches.reduce((count, batch) => count + batch.indices.length, 0)).toBe(2 * 6);
     expect(batches.every((batch) => batch.environment >= 0 && batch.environment <= 1)).toBe(true);
+  });
+
+  it("builds a momentary overlay without submitting hidden or malformed disclosure", () => {
+    const source = grid(3, 1, [1, 1, 1]);
+    const perceived: TerrainGridView = {
+      ...source,
+      tiles: source.tiles.map((tile, index) => ({
+        ...tile,
+        currentVisibility: index === 0 ? 0 : index === 1 ? 0.5 : 1,
+      })),
+    };
+    const chunk = buildTerrainMesh(perceived, { chunkSize: 3 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+    const batches = buildReliefPerceptionMaterialBatches(chunk, perceived);
+    expect(batches.reduce((count, batch) => count + batch.indices.length, 0)).toBe(12);
+    expect(new Set(batches.map((batch) => batch.currentVisibility))).toEqual(new Set([0.5, 1]));
+
+    const legacyChunk = buildTerrainMesh(source, { chunkSize: 3 }).chunks[0];
+    if (!legacyChunk) throw new Error("fixture did not create a legacy chunk");
+    expect(buildReliefPerceptionMaterialBatches(legacyChunk, source)).toEqual([]);
   });
 });

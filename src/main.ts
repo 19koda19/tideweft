@@ -106,6 +106,7 @@ async function boot(): Promise<void> {
   const ui = createTideweftUI({
     root: uiRoot,
     getView: runtime.getUIView,
+    getRendererTelemetry: renderer.telemetry,
     setBrace: (active) => braceSources.set("touch", active),
     playTitleCrescendo: runtime.playTitleCrescendo,
     dispatch: (command) => {

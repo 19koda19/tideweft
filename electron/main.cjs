@@ -17,8 +17,8 @@ const SMOKE_REGIONAL_ROWS = 74;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.1';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 10;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.2';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 11;
 const smokeRegionalTileIndex = (compatibilityTileIndex) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -2266,7 +2266,9 @@ async function toggleSmokeMobileHud(contents, expanded) {
 async function openSmokeMobileInspector(contents) {
   const opened = await contents.executeJavaScript(`(() => {
     const runtime = window.__TIDEWEFT__?.runtime;
-    const settlement = runtime?.getRenderView?.()?.settlements?.[0];
+    const settlement = runtime?.getRenderView?.()?.settlements?.find(
+      (candidate) => candidate?.currentVisibility === 1,
+    );
     if (!runtime?.dispatchUI || !settlement?.id) return false;
     runtime.dispatchUI({
       type: 'settlement',
@@ -3055,6 +3057,29 @@ async function runProductionSmoke(window) {
   // and replace PICK UP guidance with an explicit DELIVER marker.
   const promisePickupProbe = await acceptSmokePromise(contents);
 
+  // Perception now correctly refuses a remote inspector. Exercise the mobile
+  // inspector while the deterministic smoke courier is still standing beside
+  // the directly observed origin harbor, before the Harp fixture relocates the
+  // courier into an intentionally settlement-free field position.
+  await resizeSmokeViewport(
+    window,
+    SMOKE_LANDSCAPE_PHONE_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasLandscapeMobileFrame(probe) &&
+      probeHasCollapsedMobileHud(probe),
+  );
+  const landscapeInspectorProbe = await openSmokeMobileInspector(contents);
+  const landscapeInspectorClosedProbe = await toggleSmokeMobileHud(contents, false);
+  await resizeSmokeViewport(
+    window,
+    SMOKE_SCREENSHOT_VIEWPORT,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasViewButtonMode(probe, 'relief-3d') &&
+      probe.terrainTileCount === SMOKE_WORLD_TILE_COUNT,
+  );
+
   // Walk out of the harbor through the public pointer-routing command, then
   // use the real field-kit button. The resulting object must exist in the
   // renderer projection and agree with the HUD's deployed/active accounting.
@@ -3209,9 +3234,6 @@ async function runProductionSmoke(window) {
       probeHasCollapsedMobileHud(probe),
     SMOKE_TEST.timeoutMs,
   );
-  const landscapeInspectorProbe = await openSmokeMobileInspector(contents);
-  const landscapeInspectorClosedProbe = await toggleSmokeMobileHud(contents, false);
-
   const screenshotViewportProbe = await resizeSmokeViewport(
     window,
     SMOKE_SCREENSHOT_VIEWPORT,

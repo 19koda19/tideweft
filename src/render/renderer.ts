@@ -82,6 +82,7 @@ export function createTideweftRenderer(
 
   return {
     canvas: () => activeRenderer().canvas(),
+    telemetry: () => activeRenderer().telemetry(),
     mode: () => currentMode,
     setMode: applyMode,
     toggleMode: () => applyMode(currentMode === "chart-2d" ? "relief-3d" : "chart-2d"),

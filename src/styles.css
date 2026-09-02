@@ -6162,6 +6162,91 @@ body {
   }
 }
 
+/* Signed navigation and actual renderer cadence remain floating type, never a
+   telemetry pane. The compact line stays legible in both portrait and
+   landscape without stealing a touch target. */
+.hud-identity__navigation {
+  margin: 0.08rem 0 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--foam-muted) 82%, var(--tide-bright));
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.46rem;
+  letter-spacing: 0.025em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-field-strip__navigation {
+  color: color-mix(in srgb, var(--foam-muted) 72%, var(--tide-bright));
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.42rem;
+  letter-spacing: 0.025em;
+}
+
+/* The collapsed EVENTS readout carries the latest observed system message.
+   Full history remains available when expanded, while mobile keeps the same
+   information as floating type above the controls rather than a pane. */
+.chronicle-panel > .panel-summary {
+  display: grid;
+  grid-template-columns: 1rem auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.25rem;
+}
+
+.chronicle-preview {
+  grid-column: 2 / -1;
+  margin-top: 0.12rem;
+  overflow-wrap: anywhere;
+  color: var(--foam-muted);
+  font-size: 0.52rem;
+  font-weight: 560;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+
+.chronicle-panel[open] .chronicle-preview {
+  display: none;
+}
+
+@media (max-width: 58rem) {
+  #game-ui .chronicle-panel {
+    right: 0.55rem;
+    bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 4.35rem);
+    display: block;
+    width: min(18rem, calc(100% - 1.1rem));
+    max-height: none;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  #game-ui .chronicle-panel > .panel-summary {
+    min-height: 0;
+    padding: 0.18rem 0;
+  }
+
+  #game-ui .chronicle-panel > .panel-summary::before,
+  #game-ui .chronicle-panel > .panel-summary > .panel-summary__title,
+  #game-ui .chronicle-panel > .panel-summary > .panel-summary__count,
+  #game-ui .chronicle-panel > .chronicle-list {
+    display: none;
+  }
+
+  #game-ui .chronicle-preview {
+    grid-column: 1 / -1;
+    justify-self: end;
+    max-width: 100%;
+    overflow: visible;
+    color: var(--foam);
+    font-size: 0.54rem;
+    line-height: 1.35;
+    text-align: right;
+    text-shadow: var(--floating-type-shadow);
+    white-space: normal;
+  }
+}
+
 /* High-contrast mode keeps the same pane-free geometry. Forced colors is the
    intentional exception: native structural borders make invisible hit areas,
    scroll regions, and modal boundaries discoverable. */

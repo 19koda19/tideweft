@@ -9,7 +9,22 @@ import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
-import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
+import { createRendererTelemetry } from "./rendererTelemetry";
+import {
+  clipPolylineToBounds,
+  polylineBounds,
+  worldBoundsOverlap,
+} from "./routePresentation";
+import {
+  currentSettlementVisibility,
+  currentTerrainVisibility,
+  isDirectlyPerceived,
+} from "./perceptionPresentation";
+import {
+  commandForWorldTap,
+  usesCoarseWorldPointer,
+  validatePerceivedEntityCommand,
+} from "./worldTap";
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
 import {
@@ -298,6 +313,7 @@ export function createTideweftRenderer(
   const heldBraceKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
   const pointerParallax = createPointerParallaxState();
+  const telemetry = createRendererTelemetry();
   const labelPositions = new Map<string, EasedScreenPoint>();
   const usedLabelPositions = new Set<string>();
   const tideHarpGeometryFor = createTideHarpGeometryMemo();
@@ -312,7 +328,11 @@ export function createTideweftRenderer(
   };
 
   const emit = (command: RendererCommand): void => {
-    if (active) options.dispatch(command);
+    if (!active) return;
+    const validated = latestView
+      ? validatePerceivedEntityCommand(latestView, command)
+      : command;
+    if (validated) options.dispatch(validated);
   };
 
   const syncActivePresentation = (): void => {
@@ -372,8 +392,12 @@ export function createTideweftRenderer(
     };
   };
 
-  const looseCargoViews = (): readonly LooseCargoView[] =>
-    safeLooseCargoViews(latestView?.looseCargo ?? []);
+  const looseCargoViews = (): readonly LooseCargoView[] => {
+    const view = latestView;
+    const parcels = safeLooseCargoViews(view?.looseCargo ?? []);
+    if (!view?.perception) return parcels;
+    return parcels.filter((parcel) => isDirectlyPerceived(view.terrain, parcel.position, true));
+  };
 
   const releaseActiveTouchPointerCaptures = (): void => {
     releaseLooseCargoPointerCaptures(canvasElement, touchSequence.activePointerIds);
@@ -461,6 +485,7 @@ export function createTideweftRenderer(
 
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
+      if (currentSettlementVisibility(settlement, view.perception !== undefined) < 1) continue;
       const distance = distanceSquared(point, settlement.position);
       if (distance <= settlementRadius * settlementRadius && (!nearest || distance < nearest.distance)) {
         nearest = {
@@ -474,7 +499,13 @@ export function createTideweftRenderer(
       view.terrain.tileSize * 0.58,
       22 / Math.max(camera.zoom, 0.01),
     );
-    const resourceHit = hitTestFieldResource(view.fieldResources, point, resourceRadius);
+    const resourceHit = hitTestFieldResource(
+      view.fieldResources.filter((node) =>
+        !view.perception || node.currentVisibility === 1
+      ),
+      point,
+      resourceRadius,
+    );
     if (resourceHit && (!nearest || resourceHit.distanceSquared < nearest.distance)) {
       nearest = {
         target: { entity: "resource", id: resourceHit.node.id },
@@ -484,6 +515,7 @@ export function createTideweftRenderer(
 
     const porterRadius = 16 / Math.max(camera.zoom, 0.01);
     for (const porter of view.porters) {
+      if (!isDirectlyPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
       const distance = distanceSquared(point, porter.position);
       if (distance <= porterRadius * porterRadius && (!nearest || distance < nearest.distance)) {
         nearest = { target: { entity: "porter", id: porter.id }, distance };
@@ -1149,7 +1181,19 @@ export function createTideweftRenderer(
             p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
             continue;
           }
-          p.fill(terrainColor(tile));
+          const currentVisibility = currentTerrainVisibility(
+            tile,
+            view.perception !== undefined,
+          );
+          if (currentVisibility <= 0) {
+            // The Chart retains only a dim geographic memory. Live water,
+            // climate, surface texture, and status cues never leak through it.
+            p.fill(p.lerpColor(p.color(PALETTE.ink), terrainColor(tile), 0.1 * discovered));
+            p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
+            continue;
+          }
+          const sensoryStrength = currentVisibility < 1 ? 0.42 : 1;
+          p.fill(p.lerpColor(p.color(PALETTE.ink), terrainColor(tile), sensoryStrength));
           p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
 
           const derivedDepth = clamp(view.tide.level * 0.82 - unit(tile.elevation), 0, 1);
@@ -1159,7 +1203,7 @@ export function createTideweftRenderer(
             tideLevel: view.tide.level,
           });
           if (water) {
-            p.fill(withAlpha(water.color, water.opacity));
+            p.fill(withAlpha(water.color, water.opacity * sensoryStrength));
             p.rect(x, y, tileSize + 0.4 / camera.zoom, tileSize + 0.4 / camera.zoom);
             if ((column + row) % 3 === 0 && waterDepth < 0.74) {
               p.stroke(withAlpha(water.accentColor, water.accentOpacity));
@@ -1174,8 +1218,10 @@ export function createTideweftRenderer(
             p.circle(x + tileSize * 0.34, y + tileSize * 0.39, fleck);
           }
 
-          drawTerrainTexture(tile, column, row, x, y, tileSize, waterDepth);
-          drawBiomeAccent(tile, column, row, x, y, tileSize);
+          if (currentVisibility >= 1) {
+            drawTerrainTexture(tile, column, row, x, y, tileSize, waterDepth);
+            drawBiomeAccent(tile, column, row, x, y, tileSize);
+          }
 
           const trace = unit(tile.trace);
           if (trace > 0.02) {
@@ -1332,8 +1378,10 @@ export function createTideweftRenderer(
       }
     };
 
-    const routeColor = (route: RouteView): string => {
+  const routeColor = (route: RouteView): string => {
       switch (route.kind) {
+        case "remembered":
+          return PALETTE.foam;
         case "footpath":
           return PALETTE.amber;
         case "wake":
@@ -1343,6 +1391,28 @@ export function createTideweftRenderer(
         case "crossing":
           return PALETTE.coral;
       }
+    };
+
+    const chartViewportBounds = (marginPixels = 54) => {
+      const zoom = Math.max(camera.zoom, 0.01);
+      const margin = Math.max(0, marginPixels) / zoom;
+      const centerX = camera.x - pointerParallax.current.x / zoom;
+      const centerY = camera.y - pointerParallax.current.y / zoom;
+      return {
+        minX: centerX - p.width / (2 * zoom) - margin,
+        minY: centerY - p.height / (2 * zoom) - margin,
+        maxX: centerX + p.width / (2 * zoom) + margin,
+        maxY: centerY + p.height / (2 * zoom) + margin,
+      };
+    };
+
+    const routeRunsInViewport = (
+      points: readonly WorldPoint[],
+      bounds: ReturnType<typeof polylineBounds>,
+      viewport: ReturnType<typeof chartViewportBounds>,
+    ): readonly (readonly WorldPoint[])[] => {
+      if (bounds && !worldBoundsOverlap(bounds, viewport)) return [];
+      return clipPolylineToBounds(points, viewport);
     };
 
     const drawTraces = (traces: readonly TraceView[], now: number): void => {
@@ -1365,38 +1435,77 @@ export function createTideweftRenderer(
 
     const drawRoutes = (routes: readonly RouteView[], now: number): void => {
       const context = p.drawingContext as CanvasRenderingContext2D;
+      const viewport = chartViewportBounds();
       p.noFill();
       for (const route of routes) {
         if (route.points.length < 2) continue;
+        const memoryRuns = routeRunsInViewport(
+          route.points,
+          route.bounds ?? polylineBounds(route.points),
+          viewport,
+        );
+        if (memoryRuns.length === 0) continue;
         const color = routeColor(route);
         const condition = unit(route.condition, 1);
         const strength = unit(route.strength);
         const selected = route.selected || (hoverTarget?.entity === "route" && hoverTarget.id === route.id);
+        const remembered = route.kind === "remembered";
 
         context.save();
         context.shadowColor = color;
-        context.shadowBlur = selected ? 18 : 6 + strength * 8;
+        context.shadowBlur = selected ? 18 : remembered ? 2 : 6 + strength * 8;
         p.stroke(withAlpha(PALETTE.ink, 170));
-        p.strokeWeight((4.8 + strength * 2.5) / camera.zoom);
+        p.strokeWeight((remembered ? 3.3 : 4.8 + strength * 2.5) / camera.zoom);
         clearDash();
-        drawPolyline(route.points);
+        for (const run of memoryRuns) drawPolyline(run);
 
-        p.stroke(withAlpha(color, 90 + condition * 150));
-        p.strokeWeight((1.15 + strength * 2.15 + (selected ? 0.7 : 0)) / camera.zoom);
+        p.stroke(withAlpha(color, remembered ? (selected ? 180 : 70) : 90 + condition * 150));
+        p.strokeWeight((remembered ? 0.9 + (selected ? 0.7 : 0) : 1.15 + strength * 2.15 + (selected ? 0.7 : 0)) / camera.zoom);
         const reliability = unit(route.reliability, 1);
-        if (reliability < 0.82 || route.kind === "wake") {
+        if (!remembered && (reliability < 0.82 || route.kind === "wake")) {
           const dash = Math.max(2.5, 7 * reliability) / camera.zoom;
           setDash([dash, (3 + (1 - reliability) * 7) / camera.zoom], reducedMotion ? 0 : -now * 0.015);
+        } else if (remembered) {
+          setDash([2.2 / camera.zoom, 5.2 / camera.zoom], 0);
         } else {
           clearDash();
         }
-        drawPolyline(route.points);
+        for (const run of memoryRuns) drawPolyline(run);
         context.restore();
 
-        if (route.directional && route.points.length > 1) {
-          const middleIndex = Math.max(1, Math.floor(route.points.length / 2));
-          const start = route.points[middleIndex - 1];
-          const end = route.points[middleIndex];
+        // Current route values are overlaid only where adjacent path points
+        // are directly visible. The remembered line never inherits them.
+        for (const observation of route.observedRuns ?? []) {
+          const visibleRuns = routeRunsInViewport(
+            observation.points,
+            observation.bounds ?? polylineBounds(observation.points),
+            viewport,
+          );
+          if (visibleRuns.length === 0) continue;
+          const observedColor = routeColor({ ...route, kind: observation.kind });
+          const observedStrength = unit(observation.strength);
+          const observedCondition = unit(observation.condition, 1);
+          const observedReliability = unit(observation.reliability, 1);
+          context.save();
+          context.shadowColor = observedColor;
+          context.shadowBlur = selected ? 18 : 6 + observedStrength * 8;
+          p.stroke(withAlpha(observedColor, 90 + observedCondition * 150));
+          p.strokeWeight((1.15 + observedStrength * 2.15 + (selected ? 0.7 : 0)) / camera.zoom);
+          if (observedReliability < 0.82 || observation.kind === "wake") {
+            const dash = Math.max(2.5, 7 * observedReliability) / camera.zoom;
+            setDash([dash, (3 + (1 - observedReliability) * 7) / camera.zoom], reducedMotion ? 0 : -now * 0.015);
+          } else {
+            clearDash();
+          }
+          for (const run of visibleRuns) drawPolyline(run);
+          context.restore();
+        }
+
+        const directionalRun = memoryRuns[Math.floor(memoryRuns.length / 2)];
+        if (route.directional && directionalRun && directionalRun.length > 1) {
+          const middleIndex = Math.max(1, Math.floor(directionalRun.length / 2));
+          const start = directionalRun[middleIndex - 1];
+          const end = directionalRun[middleIndex];
           if (!start || !end) continue;
           const angle = Math.atan2(end.y - start.y, end.x - start.x);
           const x = (start.x + end.x) / 2;
@@ -1416,18 +1525,26 @@ export function createTideweftRenderer(
 
     const drawChoirs = (choirs: readonly TideChoirMemoryView[], now: number): void => {
       const context = p.drawingContext as CanvasRenderingContext2D;
+      const viewport = chartViewportBounds(72);
       for (const choir of choirs) {
         if (choir.routePaths.length === 0 && choir.harborPoints.length === 0) continue;
         const strong = choir.emphasis === "strong";
         const quiet = choir.emphasis === "quiet";
         const alpha = quiet ? 48 : strong ? 168 : 88;
         const salt = stringHash(choir.id);
+        const visibleRoutePaths = choir.routePaths.flatMap((path, routeIndex) => {
+          if (!path || path.length < 2) return [];
+          const runs = routeRunsInViewport(
+            path,
+            choir.routePathBounds?.[routeIndex] ?? polylineBounds(path),
+            viewport,
+          );
+          return runs.length > 0 ? [{ runs }] : [];
+        });
 
         // The parallel outline, fixed dotted phrase, and diamond notes preserve
         // the loop's meaning without asking color alone to carry it.
-        for (let routeIndex = 0; routeIndex < choir.routePaths.length; routeIndex += 1) {
-          const path = choir.routePaths[routeIndex];
-          if (!path || path.length < 2) continue;
+        for (const visiblePath of visibleRoutePaths) {
           context.save();
           context.shadowColor = PALETTE.violet;
           context.shadowBlur = strong ? 13 : 5;
@@ -1435,15 +1552,18 @@ export function createTideweftRenderer(
           clearDash();
           p.stroke(withAlpha(PALETTE.foam, alpha * 0.34));
           p.strokeWeight((strong ? 7.4 : 5.6) / camera.zoom);
-          drawPolyline(path);
+          for (const run of visiblePath.runs) drawPolyline(run);
           p.stroke(withAlpha(PALETTE.violet, alpha));
           p.strokeWeight((strong ? 2.15 : 1.45) / camera.zoom);
           setDash([1.2 / camera.zoom, 5.4 / camera.zoom], 0);
-          drawPolyline(path);
+          for (const run of visiblePath.runs) drawPolyline(run);
           clearDash();
           context.restore();
 
-          const note = samplePath(path, 0.5);
+          const note = samplePath(
+            visiblePath.runs[Math.floor(visiblePath.runs.length / 2)] ?? [],
+            0.5,
+          );
           if (!note) continue;
           const noteSize = (strong ? 4.4 : 3.5) / camera.zoom;
           p.push();
@@ -1458,7 +1578,13 @@ export function createTideweftRenderer(
           p.pop();
         }
 
-        for (const harbor of choir.harborPoints) {
+        const visibleHarbors = choir.harborPoints.filter((harbor) =>
+          harbor.x >= viewport.minX
+          && harbor.x <= viewport.maxX
+          && harbor.y >= viewport.minY
+          && harbor.y <= viewport.maxY
+        );
+        for (const harbor of visibleHarbors) {
           const radius = (strong ? 15 : 12) / camera.zoom;
           p.push();
           p.translate(harbor.x, harbor.y);
@@ -1485,10 +1611,11 @@ export function createTideweftRenderer(
 
         // Motion is entirely optional decoration. Reduced-motion retains the
         // fixed double halo and note glyphs above, with no clock-derived state.
-        if (!reducedMotion && choir.routePaths.length > 0) {
-          const mothCount = Math.min(2, choir.routePaths.length);
+        const visibleMotePaths = visibleRoutePaths.flatMap(({ runs }) => runs);
+        if (!reducedMotion && visibleMotePaths.length > 0) {
+          const mothCount = Math.min(2, visibleMotePaths.length);
           for (let moteIndex = 0; moteIndex < mothCount; moteIndex += 1) {
-            const path = choir.routePaths[(salt + moteIndex) % choir.routePaths.length];
+            const path = visibleMotePaths[(salt + moteIndex) % visibleMotePaths.length];
             if (!path) continue;
             const seed = hash01(salt, moteIndex, 0x63686f69);
             const progress = (seed + now * (0.000018 + moteIndex * 0.000004)) % 1;
@@ -1512,9 +1639,9 @@ export function createTideweftRenderer(
             p.pop();
           }
 
-          if (strong && choir.harborPoints.length > 0) {
+          if (strong && visibleHarbors.length > 0) {
             const signalStep = Math.floor(now / 1_500);
-            const harbor = choir.harborPoints[(salt + signalStep) % choir.harborPoints.length];
+            const harbor = visibleHarbors[(salt + signalStep) % visibleHarbors.length];
             if (harbor) {
               const progress = (now % 1_500) / 1_500;
               const radius = (5 + progress * 12) / camera.zoom;
@@ -1529,14 +1656,14 @@ export function createTideweftRenderer(
           }
         }
 
-        if (strong && choir.harborPoints.length > 0) {
-          const total = choir.harborPoints.reduce(
+        if (strong && visibleHarbors.length > 0) {
+          const total = visibleHarbors.reduce(
             (total, point) => ({ x: total.x + point.x, y: total.y + point.y }),
             { x: 0, y: 0 },
           );
           const center = {
-            x: total.x / choir.harborPoints.length,
-            y: total.y / choir.harborPoints.length,
+            x: total.x / visibleHarbors.length,
+            y: total.y / visibleHarbors.length,
           };
           const screen = worldLabelScreen(`choir-${choir.id}`, center, now);
           p.push();
@@ -1681,12 +1808,25 @@ export function createTideweftRenderer(
     const drawFieldResources = (view: TideweftView, now: number): void => {
       const baseSize = Math.max(view.terrain.tileSize * 0.38, 5.5 / camera.zoom);
       for (const node of view.fieldResources) {
+        const direct = !view.perception || node.currentVisibility === 1;
         const projectedScreen = worldToScreen(node.position);
-        const hovered = hoverTarget?.entity === "resource" && hoverTarget.id === node.id;
+        const hovered = direct && hoverTarget?.entity === "resource" && hoverTarget.id === node.id;
         const screen = hovered
           ? worldLabelScreen(`resource-${node.id}`, node.position, now)
           : projectedScreen;
         if (projectedScreen.x < -40 || projectedScreen.y < -40 || projectedScreen.x > p.width + 40 || projectedScreen.y > p.height + 40) {
+          continue;
+        }
+        if (!direct) {
+          // A learned Chart mark persists, but it carries no current stock,
+          // interaction halo, or species-specific live silhouette.
+          p.push();
+          p.translate(node.position.x, node.position.y);
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.foam, node.currentVisibility === 0.5 ? 70 : 28));
+          p.strokeWeight(0.65 / camera.zoom);
+          p.circle(0, 0, baseSize * 0.8);
+          p.pop();
           continue;
         }
         if (node.knowledge === "sounded" || hovered) {
@@ -1735,7 +1875,9 @@ export function createTideweftRenderer(
     };
 
     const drawLooseCargo = (view: TideweftView, now: number): void => {
-      const parcels = safeLooseCargoViews(view.looseCargo ?? []);
+      const parcels = safeLooseCargoViews(view.looseCargo ?? []).filter((parcel) =>
+        !view.perception || isDirectlyPerceived(view.terrain, parcel.position, true)
+      );
       if (parcels.length === 0) return;
       const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
       const nearby = nearestRecoverableLooseCargo(
@@ -2275,39 +2417,64 @@ export function createTideweftRenderer(
       const context = p.drawingContext as CanvasRenderingContext2D;
       for (const settlement of settlements) {
         if (settlement.discovered === false) continue;
-        const hovered = hoverTarget?.entity === "settlement" && hoverTarget.id === settlement.id;
-        const selected = Boolean(settlement.selected || hovered);
-        const statusColor = settlementStatusColor(settlement.status);
-        const radius = (8.5 + Math.sqrt(Math.max(0, settlement.population)) * 0.5) / camera.zoom;
+        const currentVisibility = currentSettlementVisibility(
+          settlement,
+          latestView?.perception !== undefined,
+        );
+        const directlyVisible = currentVisibility >= 1;
+        const hovered = directlyVisible
+          && hoverTarget?.entity === "settlement"
+          && hoverTarget.id === settlement.id;
+        // Selection is a live interaction state. A settlement remembered on
+        // the Chart must not keep pulsing as selected after it leaves direct
+        // perception, because that leaks both focus and current status.
+        const selected = directlyVisible && Boolean(settlement.selected || hovered);
+        const statusColor = directlyVisible
+          ? settlementStatusColor(settlement.status)
+          : PALETTE.foam;
+        const radius = (
+          directlyVisible
+            ? 8.5 + Math.sqrt(Math.max(0, settlement.population)) * 0.5
+            : 9.5
+        ) / camera.zoom;
         const pulse = reducedMotion ? 0 : Math.sin(now * 0.0023 + settlement.position.x) * 0.5 + 0.5;
-        const halo = radius * (2.7 + pulse * unit(settlement.connection) * 0.35);
+        const halo = radius * (
+          directlyVisible
+            ? 2.7 + pulse * unit(settlement.connection) * 0.35
+            : 2.35
+        );
 
         p.push();
         p.translate(settlement.position.x, settlement.position.y);
         p.noStroke();
-        p.fill(withAlpha(statusColor, 12 + unit(settlement.connection) * 28));
+        p.fill(withAlpha(
+          statusColor,
+          directlyVisible ? 12 + unit(settlement.connection) * 28 : currentVisibility > 0 ? 8 : 3,
+        ));
         p.circle(0, 0, halo * 2);
 
         context.save();
         context.shadowColor = statusColor;
         context.shadowBlur = selected ? 20 : 10;
         p.fill(withAlpha(PALETTE.ink, 238));
-        p.stroke(withAlpha(PALETTE.foam, 225));
+        p.stroke(withAlpha(PALETTE.foam, directlyVisible ? 225 : currentVisibility > 0 ? 90 : 36));
         p.strokeWeight((selected ? 2.2 : 1.25) / camera.zoom);
         p.circle(0, 0, radius * 2.1);
         context.restore();
 
-        p.noFill();
-        p.stroke(withAlpha(statusColor, 235));
-        p.strokeWeight(1.7 / camera.zoom);
-        setDash(lineDashForStatus(settlement.status, 1 / camera.zoom), reducedMotion ? 0 : -now * 0.008);
-        p.circle(0, 0, radius * 2.95);
-        clearDash();
+        if (directlyVisible) {
+          p.noFill();
+          p.stroke(withAlpha(statusColor, 235));
+          p.strokeWeight(1.7 / camera.zoom);
+          setDash(lineDashForStatus(settlement.status, 1 / camera.zoom), reducedMotion ? 0 : -now * 0.008);
+          p.circle(0, 0, radius * 2.95);
+          clearDash();
+        }
 
         p.stroke(withAlpha(PALETTE.foam, 235));
         p.strokeWeight(1.15 / camera.zoom);
         p.noFill();
-        drawSettlementGlyph(settlement.glyph ?? "hearth", radius);
+        drawSettlementGlyph(directlyVisible ? settlement.glyph ?? "hearth" : "hearth", radius);
         p.pop();
 
         const screen = worldLabelScreen(`settlement-${settlement.id}`, settlement.position, now);
@@ -2319,12 +2486,12 @@ export function createTideweftRenderer(
         p.textStyle(selected ? p.BOLD : p.NORMAL);
         const nameWidth = p.textWidth(settlement.name) + 16;
         p.noStroke();
-        p.fill(withAlpha(PALETTE.ink, selected ? 232 : 198));
+        p.fill(withAlpha(PALETTE.ink, directlyVisible ? (selected ? 232 : 198) : 116));
         p.rectMode(p.CENTER);
         p.rect(screen.x, labelY, nameWidth, 21, 8);
-        p.fill(PALETTE.foam);
+        p.fill(withAlpha(PALETTE.foam, directlyVisible ? 255 : 96));
         p.text(settlement.name, screen.x, labelY - 0.5);
-        if (settlement.promiseCount && settlement.promiseCount > 0) {
+        if (directlyVisible && settlement.promiseCount && settlement.promiseCount > 0) {
           p.fill(statusColor);
           p.circle(screen.x + nameWidth / 2 - 3, labelY - 8, 7);
         }
@@ -2351,6 +2518,10 @@ export function createTideweftRenderer(
 
     const drawPorters = (porters: readonly PorterView[], now: number): void => {
       for (const porter of porters) {
+        if (
+          latestView?.perception
+          && !isDirectlyPerceived(latestView.terrain, porter.position, true)
+        ) continue;
         const color = porterColor(porter);
         const hovered = hoverTarget?.entity === "porter" && hoverTarget.id === porter.id;
         const radius = (porter.selected || hovered ? 6.2 : 4.8) / camera.zoom;
@@ -2552,14 +2723,12 @@ export function createTideweftRenderer(
       const incident = view.player.incident;
       if (!incident || typeof incident.id !== "string" || incident.id.length === 0) return;
       const presentation = playerBalancePresentation(view.player.balanceState);
-      const compact = p.width <= 704 || (p.height <= 544 && p.width <= 1_024);
       const variant = Number.isSafeInteger(incident.variantSeed)
         ? ((incident.variantSeed % 3) + 3) % 3 - 1
         : 0;
       const courier = worldLabelScreen(`incident-${incident.id}`, view.player.position, now);
-      const label = compact || !incident.detail
-        ? incident.label
-        : `${incident.label} · ${incident.detail}`;
+      const compact = p.width <= 704 || (p.height <= 544 && p.width <= 1_024);
+      const label = incident.label;
       p.push();
       p.resetMatrix();
       p.textAlign(p.CENTER, p.CENTER);
@@ -2713,6 +2882,10 @@ export function createTideweftRenderer(
     const drawParticles = (particles: readonly ParticleView[]): void => {
       p.noStroke();
       for (const particle of particles) {
+        if (
+          latestView?.perception
+          && !isDirectlyPerceived(latestView.terrain, particle.position, true)
+        ) continue;
         const life = unit(particle.life, 1);
         const radius = (particle.radius ?? 2.4) / camera.zoom;
         const color = particle.color ?? (particle.kind === "splash" ? PALETTE.sky : PALETTE.tide);
@@ -2756,6 +2929,10 @@ export function createTideweftRenderer(
     const drawEvents = (events: readonly WorldEventView[], now: number): void => {
       for (const event of events) {
         if (!event.position || event.progress >= 1) continue;
+        if (
+          latestView?.perception
+          && !isDirectlyPerceived(latestView.terrain, event.position, true)
+        ) continue;
         const screen = worldLabelScreen(`event-${event.id}`, event.position, now);
         const rise = reducedMotion ? 0 : unit(event.progress) * 20;
         const alpha = 255 * (1 - Math.pow(unit(event.progress), 2));
@@ -2954,6 +3131,7 @@ export function createTideweftRenderer(
     p.draw = (): void => {
       if (!active) return;
       const now = performance.now();
+      telemetry.recordFrame(now);
       advancePointerParallax(pointerParallax, now, reducedMotion);
       usedLabelPositions.clear();
       latestView = options.getView() ?? null;
@@ -3027,6 +3205,7 @@ export function createTideweftRenderer(
 
   return {
     canvas: () => canvasElement,
+    telemetry: telemetry.getSnapshot,
     isActive: () => active,
     setActive: (nextActive) => {
       if (nextActive) observeCurrentSpatialEpoch();
@@ -3050,6 +3229,7 @@ export function createTideweftRenderer(
         labelPositions.clear();
       }
       active = nextActive;
+      telemetry.setActive(active);
       syncActivePresentation();
       if (active) instance?.loop();
       else instance?.noLoop();
@@ -3067,6 +3247,7 @@ export function createTideweftRenderer(
     },
     pulseScan,
     destroy: () => {
+      telemetry.setActive(false);
       releaseActiveTouchPointerCaptures();
       clickCandidate = null;
       parcelPress = null;

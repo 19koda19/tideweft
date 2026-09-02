@@ -98,7 +98,7 @@ describe("active Promise recovery guidance", () => {
     expect(objective?.description).toContain("tap its parcel marker on mobile");
   });
 
-  it("connects active-contract focus to the production render projection without changing identity", () => {
+  it("keeps remote active-contract identity and recovery guidance without rendering unseen cargo", () => {
     const world = createWorldView(createWorld("focused Promise presentation"));
     const contract = world.contracts.find(({ status }) => status === "offered");
     if (!contract) throw new Error("missing Promise fixture");
@@ -131,7 +131,7 @@ describe("active Promise recovery guidance", () => {
     expect(projectGameView(world, player, { looseCargoWorld: dropped.world }).looseCargo).toEqual([]);
     player.activeContractId = contract.id;
     const projected = projectGameView(world, player, { looseCargoWorld: dropped.world }).looseCargo;
-    expect(projected?.map(({ id }) => id)).toEqual([dropped.entity.id]);
+    expect(projected).toEqual([]);
     expect(dropped.world.entities.map(({ id }) => id)).toEqual([dropped.entity.id]);
 
     const session = createSessionState(world.seedText);

@@ -5,6 +5,7 @@ import type {
   TidePhase,
   WeatherKind,
 } from "../render/types";
+import type { RendererTelemetrySnapshot } from "../render/rendererTelemetry";
 
 export type SessionShape = "drift" | "weave" | "wander";
 /**
@@ -152,6 +153,16 @@ export interface PlayerUIView {
   /** Live hold state shared by desktop Shift and the touch BRACE control. */
   readonly bracing?: boolean;
   readonly locationLabel?: string;
+}
+
+/** Exact signed tile address used for navigation and reproducible bug reports. */
+export interface NavigationUIView {
+  readonly regionX: number;
+  readonly regionY: number;
+  readonly localX: number;
+  readonly localY: number;
+  readonly globalX: number;
+  readonly globalY: number;
 }
 
 export interface ObjectiveUIView {
@@ -349,6 +360,8 @@ export interface TideweftUIView {
   readonly tide: TideUIView;
   readonly weather: WeatherUIView;
   readonly player: PlayerUIView;
+  /** Production projections provide this; optional only for legacy/test view fixtures. */
+  readonly navigation?: NavigationUIView;
   readonly field: FieldReadoutUIView;
   readonly choir: TideChoirUIView;
   readonly objective?: ObjectiveUIView;
@@ -431,6 +444,8 @@ export type TideweftUICommand =
 export interface TideweftUIOptions {
   readonly root: HTMLElement;
   readonly getView: () => TideweftUIView | null | undefined;
+  /** Live renderer instrumentation; intentionally excluded from saved/view revision state. */
+  readonly getRendererTelemetry?: () => RendererTelemetrySnapshot;
   readonly dispatch: (command: TideweftUICommand) => void;
   /** Feeds the touch hold control into the same brace bit as desktop Shift. */
   readonly setBrace: (active: boolean) => void;

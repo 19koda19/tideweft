@@ -1,5 +1,7 @@
 /** Presentation-only contracts consumed by the p5 renderer. */
 
+import type { RendererTelemetrySnapshot } from "./rendererTelemetry";
+
 export interface WorldPoint {
   readonly x: number;
   readonly y: number;
@@ -58,6 +60,12 @@ export interface TerrainTileView {
   readonly depthKnown?: number;
   /** 0 is hidden, 1 is fully charted. */
   readonly discovered?: number;
+  /**
+   * Present-tense perception, independent from durable Chart memory.
+   * 0 is outside current perception, 0.5 is close peripheral awareness, and
+   * 1 is direct line of sight. Missing legacy values remain fully visible.
+   */
+  readonly currentVisibility?: 0 | 0.5 | 1;
   /** Strength of incidental foot/wake traffic through this tile. */
   readonly trace?: number;
   readonly shelter?: number;
@@ -129,6 +137,8 @@ export interface SettlementView {
   readonly promiseCount?: number;
   readonly lastVerified?: string;
   readonly discovered?: boolean;
+  /** Current perception grade; a discovered harbor may remain as stale Chart memory at zero. */
+  readonly currentVisibility?: 0 | 0.5 | 1;
   readonly selected?: boolean;
   readonly label?: string;
 }
@@ -191,12 +201,26 @@ export interface PlayerView {
   readonly active?: boolean;
 }
 
-export type RouteKind = "footpath" | "wake" | "strand" | "crossing";
+export type RouteKind = "remembered" | "footpath" | "wake" | "strand" | "crossing";
+
+/** Live route styling is supplied only for contiguous directly observed runs. */
+export interface ObservedRouteRunView {
+  readonly points: readonly WorldPoint[];
+  readonly bounds?: WorldBounds;
+  readonly kind: Exclude<RouteKind, "remembered">;
+  readonly strength: number;
+  readonly condition: number;
+  readonly reliability: number;
+  readonly traffic?: number;
+}
 
 export interface RouteView {
   readonly id: string;
+  /** `remembered` is stable geometry only and carries no live route state. */
   readonly kind: RouteKind;
   readonly points: readonly WorldPoint[];
+  readonly bounds?: WorldBounds;
+  readonly observedRuns?: readonly ObservedRouteRunView[];
   readonly strength: number;
   readonly condition: number;
   readonly reliability: number;
@@ -211,6 +235,8 @@ export interface TideChoirMemoryView {
   readonly id: string;
   /** Every member corridor, in its authoritative route direction. */
   readonly routePaths: readonly (readonly WorldPoint[])[];
+  /** Bounds correspond by index with routePaths and permit draw-call culling. */
+  readonly routePathBounds?: readonly (WorldBounds | null)[];
   /** Harbors participating in the loop. */
   readonly harborPoints: readonly WorldPoint[];
   /** Whole simulation ticks elapsed since the choir awakened. */
@@ -261,6 +287,8 @@ export interface FieldResourceNodeView {
   readonly rarity?: FieldResourceRarityView;
   /** Exact harvestable stock, excluding the living reserve; absent until sounded. */
   readonly stockUnits?: number;
+  /** Current sensory grade; durable Chart memory survives when this is zero. */
+  readonly currentVisibility?: 0 | 0.5 | 1;
 }
 
 export type LooseCargoContentKindView = "raw-material" | "component" | "gear" | "promise";
@@ -387,6 +415,16 @@ export interface CameraView {
   readonly shake?: number;
 }
 
+/** Present-tense disclosure summary; tile grades live beside their terrain cells. */
+export interface PerceptionView {
+  readonly version: number;
+  readonly signature: string;
+  readonly valid: boolean;
+  readonly visibleTileCount: number;
+  readonly directTileCount: number;
+  readonly peripheralTileCount: number;
+}
+
 export interface TideweftView {
   readonly revision: number | string;
   /** Changes only when floating-origin coordinates are reinterpreted. */
@@ -396,6 +434,8 @@ export interface TideweftView {
   readonly terrain: TerrainGridView;
   readonly tide: TideView;
   readonly weather: WeatherView;
+  /** Production projections provide this; absent legacy fixtures imply fully visible. */
+  readonly perception?: PerceptionView;
   readonly settlements: readonly SettlementView[];
   readonly player: PlayerView;
   readonly routes: readonly RouteView[];
@@ -455,6 +495,8 @@ export interface TideweftRendererController {
   readonly resize: () => void;
   readonly focusWorld: (point: WorldPoint, zoom?: number) => void;
   readonly pulseScan: (point?: WorldPoint) => void;
+  /** Actual frames produced by this renderer, never simulation-tick estimates. */
+  readonly telemetry: () => RendererTelemetrySnapshot;
   /** Optional on leaf renderers; the composed renderer uses it to stop hidden draw loops. */
   readonly isActive?: () => boolean;
   readonly setActive?: (active: boolean) => void;

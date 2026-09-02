@@ -163,10 +163,13 @@ export function projectTraversalIncident(
   incident: TraversalIncident | null,
 ): PlayerIncidentView | undefined {
   if (!incident) return undefined;
+  const separator = incident.label.indexOf(" · ");
   return {
     id: incident.id,
     kind: incident.kind,
-    label: incident.label,
+    // Overhead belongs to the actor: keep only the short voiced/sound cue.
+    // Cause and cargo guidance are projected into the observed EVENTS feed.
+    label: separator < 0 ? incident.label : incident.label.slice(0, separator),
     detail: incident.detail,
     progress: 1 - incident.remainingSteps / Math.max(1, incident.totalSteps),
     variantSeed: incident.variantSeed,

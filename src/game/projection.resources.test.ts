@@ -8,7 +8,7 @@ import {
   type FieldResourceCatalog,
 } from "../sim/fieldResources";
 import { createWorld, createWorldView } from "../sim/public";
-import { createPlayer } from "./player";
+import { createPlayer, TILE_UNITS } from "./player";
 import { projectGameView } from "./projection";
 
 function setup() {
@@ -60,17 +60,21 @@ describe("field-resource projection", () => {
         y: Math.floor(node.tileIndex / world.terrain.width) * 24 + 12,
       },
       knowledge: "charted",
+      currentVisibility: 0,
     });
     expect(charted[0]).not.toHaveProperty("rarity");
     expect(charted[0]).not.toHaveProperty("stockUnits");
 
     player.depthSoundings[node.tileIndex] = 1;
+    player.x = (node.tileIndex % world.terrain.width) * TILE_UNITS;
+    player.y = Math.floor(node.tileIndex / world.terrain.width) * TILE_UNITS;
     const sounded = projectGameView(world, player, {
       fieldResourceCatalog: catalog,
       fieldResourceEcology: ecology,
     }).fieldResources;
     expect(sounded[0]).toMatchObject({
       knowledge: "sounded",
+      currentVisibility: 1,
       rarity: node.rarity,
       stockUnits: node.capacityUnits - FIELD_RESOURCE_LIVING_RESERVE_UNITS,
     });

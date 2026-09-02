@@ -4,6 +4,7 @@ import {
   type WaterPresentation,
 } from "./waterPresentation";
 import type { TerrainGridView } from "./types";
+import { currentTerrainVisibility } from "./perceptionPresentation";
 
 export interface ReliefWaterCell {
   readonly column: number;
@@ -58,6 +59,7 @@ export function buildReliefWaterMaterialBatches(
     for (let column = firstColumn; column <= lastColumn; column += 1) {
       const tile = grid.tiles[row * grid.columns + column];
       if (!tile) continue;
+      if (currentTerrainVisibility(tile) <= 0) continue;
       const derivedDepth = unit(tideLevel) * 0.82 - unit(tile.elevation);
       const visible = visibleWaterPresentation(tile, { derivedDepth, tideLevel });
       if (!visible) continue;

@@ -107,7 +107,7 @@ import {
   type WayknotKind,
   type WayknotPlacementReason,
 } from "./wayknots";
-import { projectGameView } from "./projection";
+import { projectGameView, projectPerception } from "./projection";
 import {
   announce,
   captureSessionBaseline,
@@ -278,10 +278,12 @@ export async function createTideweftRuntime(
     projectCompatibilityFieldResources(fieldResourceCatalog, worldView);
   let promiseJourney = createRegionalPromiseJourney();
   let session = createSessionState(world.meta.seedText, HARD_POSTURE);
+  let perception = projectPerception(worldView, player);
   let renderView = projectGameView(worldView, player, {
     paused: true,
     traversalFeedback,
     looseCargoWorld: physicalCargo.looseWorld,
+    perception,
   });
   let uiView = projectUIView(worldView, player, session, {
     economyWorld: economyView,
@@ -290,6 +292,8 @@ export async function createTideweftRuntime(
     looseCargoCarrier: physicalCargo.carrier,
     looseCargoWorld: physicalCargo.looseWorld,
     inactiveLooseCargoWorlds: [],
+    traversalFeedback,
+    perception,
   });
   const soundscape = new TideweftSoundscape();
   let focusHandler: ((point: WorldPoint, zoom?: number) => void) | undefined;
@@ -479,6 +483,7 @@ export async function createTideweftRuntime(
   }
 
   function refreshViews(): void {
+    perception = projectPerception(worldView, player);
     const activeContract = player.activeContractId === null
       ? undefined
       : economyView.contracts.find((contract) => contract.id === player.activeContractId);
@@ -510,6 +515,7 @@ export async function createTideweftRuntime(
       traversalFeedback,
       looseCargoWorld: physicalCargo.looseWorld,
       bracing: manualControl.brace,
+      perception,
       paused: session.paused || session.titleVisible || session.quietHourVisible,
     });
     uiView = projectUIView(worldView, player, session, {
@@ -520,6 +526,8 @@ export async function createTideweftRuntime(
       looseCargoWorld: physicalCargo.looseWorld,
       inactiveLooseCargoWorlds: physicalCargo.inactiveWorlds.map(({ world: cargoWorld }) => cargoWorld),
       bracing: manualControl.brace,
+      traversalFeedback,
+      perception,
       requiresSeed: replacementSeedRequired,
       worldCreationBlocked: saveRecoveryBlocked,
       ...(runtimeIntegrityFailure

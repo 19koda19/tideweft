@@ -671,7 +671,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-sweep",
         audience: "all",
         title: "Zero in deep water means swept",
-        body: "In current water at or above the deep-water threshold, stamina or stability reaching zero gives steering to a deterministic drift toward a safe bank. Steering and scanning return ashore. Cargo stays physically accounted for, but the fall can damage one exact lot and separate recoverable parcels that keep drifting with the water.",
+        body: "In current water at or above the deep-water threshold, stamina or stability reaching zero gives control to a deterministic drift toward a safe bank. Ordinary steering and scanning return only after reaching shore. Cargo stays physically accounted for, but the fall can damage one exact lot and separate recoverable parcels that keep drifting with the water. Player-controlled ADRIFT paddling is planned, not live in this build.",
       },
       {
         id: "meters-fall-feedback",
@@ -1020,8 +1020,26 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-switch",
         audience: "all",
         title: "Switch without changing the rules",
-        body: "Use the header view control to swap Chart 2D and Relief 3D. Chart is the calmer, reduced-motion-friendly map; Relief presents the same terrain as a lit height field. Both views now show the same authoritative drizzle, rain, or squall and the same world-space wind direction.",
+        body: "Use the header view control to swap Chart 2D and Relief 3D. Chart is the calmer, reduced-motion-friendly map; Relief presents the same terrain as a lit height field. Both use one perception snapshot and show the same authoritative drizzle, rain, squall, and world-space wind direction. Relief draws weather as a bounded screen-space layer so rain remains legible without filling the 3D world with particles.",
         controlId: "view-button",
+      },
+      {
+        id: "views-perception",
+        audience: "all",
+        title: "The field shows what you can presently perceive",
+        body: "Direct sight extends ahead of the courier while close peripheral awareness remains around the body. Terrain obstruction and severe weather shorten that view. Explored geography stays as dim Chart memory, but hidden cargo, people, resource stock, currents, particles, live settlement state, labels, and exact actions do not appear through fog. Turning changes attention, not the saved world.",
+      },
+      {
+        id: "views-events",
+        audience: "all",
+        title: "Actor sounds and system causes stay separate",
+        body: "A stumble, fall, or sweep puts only its small voiced sound above the courier. The floating EVENTS readout carries the complete cause and cargo consequence. It includes events you directly caused or could observe; it is not a god's-ear report of distant settlements.",
+      },
+      {
+        id: "views-coordinates-fps",
+        audience: "all",
+        title: "Use coordinates and FPS for field reports",
+        body: "The navigation line shows signed region, local, and global tile coordinates. Its FPS value comes from actual active renderer callbacks rather than the simulation clock, making screenshots and performance reports easier to reproduce.",
       },
       {
         id: "views-camera",
@@ -1182,7 +1200,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "accessibility-announcements",
         audience: "all",
         title: "Consequences are announced",
-        body: "Live status announcements describe successful pickup, delivery, sounding, field work, weathered cargo, recovery, and rejected actions. The chronicle keeps durable causal history.",
+        body: "Live status announcements describe successful pickup, delivery, sounding, field work, weathered cargo, recovery, and rejected actions. EVENTS presents the latest witnessed or player-caused consequence without exposing distant activity, while the durable simulation keeps its full causal history.",
       },
     ],
     callouts: [
@@ -1208,7 +1226,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, visible rain in Chart and Relief, readable wind threads, discovery, depth sounding, current arrows and sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
+        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, screen-space Relief rain, readable wind threads, forward and peripheral perception fog, dim explored memory, witnessed EVENTS, signed coordinates, measured FPS, discovery, depth sounding, current arrows and deterministic sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1235,7 +1253,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 11 as const;
+export const TUTORIAL_CONTENT_VERSION = 12 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

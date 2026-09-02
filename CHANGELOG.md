@@ -4,6 +4,51 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.2 — 2026-09-01
+
+Build: `0.3.3-alpha.2` · Gameplay contract: 11 · Tutorial: 12
+
+The field now reveals only what the courier can actually perceive: explored ground remains as quiet memory while unseen live detail, stale actions, remote events, and off-screen route work leave the draw path.
+
+### Gameplay
+
+- Chart 2D and Relief 3D now consume one shared cached perception snapshot: a forward direct-sight cone carries exact detail and actions, close peripheral awareness carries only coarse form, and terrain plus weather can occlude or shorten sight.
+- Previously explored geography remains as dim cartographic memory, but unseen actors, loose cargo, resource detail, currents, particles, event callouts, and other changing field state are neither drawn nor targetable until directly perceived again.
+- Tracked Promise destinations retain coarse navigation guidance without granting remote inspection, pickup, delivery, stock knowledge, or other exact interactions through fog.
+
+### Fixes
+
+- Observed EVENTS no longer grant a god's-ear account of remote incidents. The feed admits directly perceived events and events involving the courier or their active Promise, while hidden positions and unrelated distant details remain undisclosed.
+- Short OOP, THUD, WHHSH, and similar actor sounds remain above the courier while the full cargo, footing, or recovery explanation appears in EVENTS; both Chart and Relief clamp overhead copy inside the usable viewport.
+- Release-frame interaction validation now re-resolves settlements, resources, porters, and parcels against current perception, so turning away, weather occlusion, region motion, or a stale pointer target cannot execute a hidden exact action.
+- Relief 3D precipitation now falls downward in a bounded final screen-space pass, and wind uses the same inexpensive two-dimensional presentation over the three-dimensional field.
+- Known routes retain durable map geometry without revealing hidden live traffic or condition, and route work outside the visible field is clipped before drawing.
+
+### Balancing
+
+- Fog changes knowledge, interaction, and rendering only. It does not weaken hazards, alter rewards, reroll loot, regenerate resources, erase cargo, or create another difficulty beside A CHALLENGING HARD.
+- Unseen persistent objects and regional state continue their authoritative simulation and return with the same identities and history when the courier can perceive them again.
+- Bad weather can reduce direct visual reach, but close peripheral awareness remains available; exact actions still require direct perception rather than a hidden probability roll.
+
+### Interface
+
+- The frameless field now carries signed region, local, and global coordinates plus smoothed FPS measured from the active renderer rather than an invented timer.
+- The bottom-right EVENTS typography replaces the old water-memory framing, shows the latest complete observed explanation on compact screens without clipping, and leaves character vocalizations physically near their source.
+- Relief weather remains a resource-bounded screen-space weather pass, so rain and wind stay readable without filling the three-dimensional scene with persistent particle objects.
+- The version-12 T and question-mark field manual explains direct sight, peripheral awareness, fogged map memory, hidden actions, event provenance, signed coordinates, measured FPS, and the current deterministic sweep behavior.
+
+### Save changes
+
+- Save version remains 4 and requires no migration. Perception snapshots and renderer telemetry are derived presentation state and are never written as new world truth.
+- Exploration, stable identities, physical cargo custody, collected-resource depletion, regional manifests, and active Promise recovery remain authoritative across fog, unload, save, and reload.
+
+### Known limitations
+
+- Swept movement still follows a deterministic bank path rather than the planned player-controlled ADRIFT paddling state; ordinary steering returns only after reaching shore.
+- The anonymous nearby sound-contact kernel is not yet connected to generated humans or wildlife because those living actor systems are not live yet.
+- Universal generated NPC identities, ABOUT inspection, actor emotion and deterrence, dog relationships, health and rescue, all-water possibility drift, and generated settlements remain future complete vertical slices.
+- Weather now has bounded cross-view presentation and perception pressure, but the complete systemic language for every weather state—including exposure, fire, ecology, and actor responses—remains unfinished.
+
 ## 0.3.3-alpha.1 — 2026-09-01
 
 Build: `0.3.3-alpha.1` · Gameplay contract: 10 · Tutorial: 11

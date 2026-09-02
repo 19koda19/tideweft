@@ -126,4 +126,16 @@ describe("Relief water material batches", () => {
     expect(reliefWaterOpacity(barelySeen!)).toBeLessThanOrEqual(60);
     expect(hidden).toEqual([]);
   });
+
+  it("does not render live water outside the current sensory footprint", () => {
+    const batches = buildReliefWaterMaterialBatches(grid([
+      tile({ currentVisibility: 0 }),
+      tile({ currentVisibility: 0.5 }),
+      tile({ currentVisibility: 1 }),
+    ]), 0.5);
+    expect(batches.flatMap((batch) => batch.cells)).toEqual([
+      { column: 1, row: 0 },
+      { column: 2, row: 0 },
+    ]);
+  });
 });

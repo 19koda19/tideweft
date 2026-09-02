@@ -100,4 +100,14 @@ describe("surface current cue geometry", () => {
     expect(buildSurfaceCurrentCues(terrain, undefined)).toEqual([]);
     expect(buildSurfaceCurrentCues(terrain, { x: 0, y: 0 })).toEqual([]);
   });
+
+  it("never leaks live current direction through hidden or peripheral tiles", () => {
+    const terrain = grid(3, 1, [
+      tile({ currentVisibility: 0 }),
+      tile({ currentVisibility: 0.5 }),
+      tile({ currentVisibility: 1 }),
+    ]);
+    expect(buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }).map((cue) => cue.tileIndex))
+      .toEqual([2]);
+  });
 });

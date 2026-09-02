@@ -1,4 +1,5 @@
 import type { TerrainGridView, TerrainTileView, WorldPoint } from "./types";
+import { currentTerrainVisibility } from "./perceptionPresentation";
 
 export const MAX_SURFACE_CURRENT_CUES = 280;
 
@@ -63,6 +64,7 @@ function chartedWater(
   tideLevel: number,
 ): boolean {
   if (!tile || unit(tile.discovered, 1) <= 0.08) return false;
+  if (currentTerrainVisibility(tile) < 1) return false;
   const derivedDepth = clamp(unit(tideLevel) * 0.82 - unit(tile.elevation), 0, 1);
   // Depth is used only as the same wet/dry mask already drawn by each view.
   // Cue density, length, motion, and opacity never depend on its magnitude.

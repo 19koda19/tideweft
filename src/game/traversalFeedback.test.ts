@@ -58,6 +58,21 @@ describe("persistent traversal feedback", () => {
     expect(accepted.state.nextTraversalOrdinal).toBe(1);
   });
 
+  it("keeps actor-overhead copy to the short utterance while retaining explanation separately", () => {
+    const accepted = acceptFallFeedback(
+      createTraversalFeedbackState(),
+      evaluateFallRiskOnEntry(FALL_INPUT),
+      0,
+      { x: 5_500, y: 4_500 },
+    );
+    const projected = projectTraversalIncident(accepted.incident);
+
+    expect(projected?.label).toMatch(/^(?:THUD|WHK|WHHSH!|oop|nnf|hup|skk)$/u);
+    expect(projected?.label).not.toContain("·");
+    expect(projected?.label).not.toMatch(/cargo|brace|footing|balance|rock|drop/iu);
+    expect(projected?.detail).toBe("Cargo can separate; regain your feet before moving.");
+  });
+
   it("claims one sound exactly once across repeated refreshes", () => {
     const accepted = acceptFallFeedback(
       createTraversalFeedbackState(),

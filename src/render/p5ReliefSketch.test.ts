@@ -498,7 +498,8 @@ describe("Relief weather production path", () => {
     expect(line.mock.calls.length - dryLineCount).toBe(37 * 2);
     const firstRainLine = line.mock.calls.at(-37 * 2);
     expect(Number(firstRainLine?.[3]) - Number(firstRainLine?.[0])).toBeGreaterThan(0);
-    expect(ortho).toHaveBeenCalled();
+    expect(Number(firstRainLine?.[4]) - Number(firstRainLine?.[1])).toBeGreaterThan(0);
+    expect(ortho).toHaveBeenLastCalledWith(-160, 160, -120, 120, 0, 2);
     expect(drawingContext.disable).toHaveBeenCalledWith(0x0b71);
     expect(drawingContext.depthMask).toHaveBeenCalledWith(false);
     expect(drawingContext.depthMask).toHaveBeenLastCalledWith(false);

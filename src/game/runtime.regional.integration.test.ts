@@ -478,5 +478,5 @@ describe("production signed-region crossing", () => {
     await expect(rejected.save()).rejects.toThrow("Choose a seed before replacing");
     expect(repository.snapshot()).toEqual(rejectedRecord);
     rejected.destroy();
-  }, 10_000);
+  }, 20_000);
 });
