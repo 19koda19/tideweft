@@ -187,6 +187,61 @@ describe("Relief terrain material batches", () => {
       .toEqual(new Set(["shallows", "deep-water"]));
   });
 
+  it("keeps flooded land earthy while transient uncharted sight retains its biome material", () => {
+    const tiles: readonly TerrainTileView[] = [
+      {
+        kind: "salt-marsh",
+        biome: "brine-flat",
+        elevation: 0.18,
+        waterDepth: 0.46,
+        discovered: 0,
+        depthKnown: 0,
+        currentVisibility: 1,
+        currentDetailVisibility: 0,
+      },
+      {
+        kind: "meadow",
+        biome: "rain-meadow",
+        elevation: 0.24,
+        waterDepth: 0.2,
+        discovered: 0,
+        depthKnown: 0,
+        currentVisibility: 1,
+        currentDetailVisibility: 0,
+      },
+      {
+        kind: "deep-water",
+        biome: "tide-channel",
+        elevation: 0.05,
+        waterDepth: 0.9,
+        discovered: 0,
+        depthKnown: 0,
+        currentVisibility: 1,
+        currentDetailVisibility: 0,
+      },
+    ];
+    const source: TerrainGridView = {
+      columns: 3,
+      rows: 1,
+      tileSize: 24,
+      origin: { x: 0, y: 0 },
+      tiles,
+      revision: "earth-under-water",
+    };
+    const chunk = buildTerrainMesh(source, { chunkSize: 3 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+
+    const batches = buildReliefPerceptionMaterialBatches(chunk, source);
+    expect(batches.map(({ kind, biome }) => ({ kind, biome }))).toEqual([
+      { kind: "salt-marsh", biome: "brine-flat" },
+      { kind: "meadow", biome: "rain-meadow" },
+      { kind: "channel", biome: "tide-channel" },
+    ]);
+    expect(batches.filter(({ biome }) => biome !== "tide-channel").every(
+      ({ kind }) => kind !== "channel" && kind !== "deep-water" && kind !== "shallows",
+    )).toBe(true);
+  });
+
   it("quantizes eased terrain strength into bounded monotone material bands", () => {
     const source = grid(4, 1, [0, 0, 0, 0]);
     const perceived: TerrainGridView = {

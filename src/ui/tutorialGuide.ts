@@ -1020,7 +1020,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-switch",
         audience: "all",
         title: "Switch without changing the rules",
-        body: "Use the header view control to swap Chart 2D and Relief 3D. Chart is the calmer, reduced-motion-friendly map; Relief presents the same terrain as a lit height field. Both use one perception snapshot and show the same authoritative drizzle, rain, squall, and world-space wind direction. Relief draws weather as a bounded screen-space layer so rain remains legible without filling the 3D world with particles.",
+        body: "Use the header view control to swap Chart 2D and Relief 3D. Chart is the calmer, reduced-motion-friendly map; Relief presents the same terrain as a lit height field. Both use one perception snapshot and show the same authoritative drizzle, rain, squall, and world-space wind direction. In Relief, flooded marsh and meadow keep their earthy ground material beneath a separate blue water sheet. Relief draws weather as a bounded screen-space layer so rain remains legible without filling the 3D world with particles.",
         controlId: "view-button",
       },
       {
@@ -1253,7 +1253,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 15 as const;
+export const TUTORIAL_CONTENT_VERSION = 16 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

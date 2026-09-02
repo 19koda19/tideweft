@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.5",
-      buildIdentity: "0.3.3-alpha.5",
+      version: "0.3.3-alpha.6",
+      buildIdentity: "0.3.3-alpha.6",
       gameplayContractVersion: 14,
-      tutorialVersion: 15,
+      tutorialVersion: 16,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,

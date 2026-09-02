@@ -129,7 +129,11 @@ export function buildReliefPerceptionMaterialBatches(
       )
     ) continue;
     const kind = visibleTerrainKind(tile.kind, source);
-    const visibleBiome = visibleBiomePresentation(source)?.id;
+    // Present-tense sight may show a projected biome without writing durable
+    // chart memory. Using only visibleBiomePresentation here drops the biome
+    // on undiscovered flooded land and incorrectly feeds a blue channel base
+    // into Relief until the tile is charted.
+    const visibleBiome = source?.biome;
     // A built material ignores biome color in Relief. Every other discovered
     // biome is already the complete color identity; its underlying terrain
     // kind does not change materialColor's result.
@@ -164,5 +168,6 @@ function visibleTerrainKind(
   source: TerrainGridView["tiles"][number] | undefined,
 ): TerrainKind {
   const wet = Number.isFinite(source?.waterDepth) && (source?.waterDepth ?? 0) > 0;
-  return wet && !isWaterDepthDisclosed(source) ? "channel" : fallback;
+  const waterTerrain = fallback === "deep-water" || fallback === "channel" || fallback === "shallows";
+  return wet && waterTerrain && !isWaterDepthDisclosed(source) ? "channel" : fallback;
 }

@@ -4,6 +4,37 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.6 — 2026-09-02
+
+Build: `0.3.3-alpha.6` · Gameplay contract: 14 · Tutorial: 16
+
+Relief 3D once again keeps flooded land earthy beneath its clearly separate water surface.
+
+### Gameplay
+
+- Terrain sight still reaches forty-two tiles through its forward field while exact people, parcels, resources, labels, and interactions remain inside the short ten-tile detail field.
+
+### Fixes
+
+- Newly visible but not-yet-charted flooded marsh and meadow tiles no longer lose their biome identity and become blue channel ground in Relief 3D.
+- Unsounded water neutralization now applies only to terrain that is physically a water kind; wet land keeps its earthy material beneath the separate rendered water sheet.
+
+### Balancing
+
+- A CHALLENGING HARD remains unchanged. Current force, footing, stability, stamina, exposure, cargo behavior, scarcity, and rewards are identical to the prior build.
+
+### Interface
+
+- Relief 3D now gives land and water distinct, readable layers during transient line of sight instead of washing the terrain silhouette into a continuous blue field.
+
+### Save changes
+
+- Save version remains 4 and requires no migration; this correction changes only material classification in the 3D presentation.
+
+### Known limitations
+
+- Universal generated NPC identities, ABOUT inspection, state speech, actor emotions and deterrence, dogs, wildlife, health, all-water Possibility State, and generated regional settlement ecology are not live in this hotfix.
+
 ## 0.3.3-alpha.5 — 2026-09-01
 
 Build: `0.3.3-alpha.5` · Gameplay contract: 14 · Tutorial: 15
