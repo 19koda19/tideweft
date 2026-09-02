@@ -26,7 +26,7 @@ const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "src/content/gameplayContract.json"), "utf8"));
 const patchNotes = JSON.parse(fs.readFileSync(path.join(root, "src/content/patchNotes.json"), "utf8"));
 const packageDocument = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-const tutorialSource = "export const TUTORIAL_CONTENT_VERSION = 16 as const;";
+const tutorialSource = "export const TUTORIAL_CONTENT_VERSION = 17 as const;";
 
 let assertions = 0;
 function test(name, body) {
@@ -119,7 +119,7 @@ test("the explicit tutorial constant is parsed without matching unrelated versio
 test("current content contracts agree", () => {
   const result = validateContentDocuments({ manifest, tutorialSource, patchNotes, packageDocument });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.tutorialVersion, 16);
+  assert.equal(result.tutorialVersion, 17);
 });
 
 test("the first explicit tutorial contract advances the legacy v5 guide", () => {

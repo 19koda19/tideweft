@@ -308,8 +308,8 @@ describe("player movement", () => {
       tiles[finalIndex] = {
         ...final,
         terrain: "deep-water",
-        waterDepth: 520_000,
-        roughness: 0,
+        waterDepth: FIXED_POINT,
+        roughness: FIXED_POINT,
       };
     });
     const world: WorldView = {
@@ -346,7 +346,7 @@ describe("player movement", () => {
     placePlayer(player, 10, 10, 950);
     player.y = 10 * TILE_UNITS + 950;
     player.previousY = player.y;
-    player.stability = 0;
+    player.stability = FIXED_POINT;
     const result = stepPlayer(
       player,
       world,
@@ -373,7 +373,7 @@ describe("player movement", () => {
     expect(playerTileIndex(player)).toBe(finalIndex);
   });
 
-  it("stops a diagonal after an X-edge fall without entering or assigning Y", () => {
+  it("stops a diagonal after a live X-edge fall without entering or assigning Y", () => {
     const startIndex = 10 * WORLD_WIDTH + 10;
     const xEdgeIndex = startIndex + 1;
     const finalIndex = xEdgeIndex + WORLD_WIDTH;
@@ -381,14 +381,15 @@ describe("player movement", () => {
       const xEdge = tiles[xEdgeIndex];
       const final = tiles[finalIndex];
       if (!xEdge || !final) throw new Error("diagonal stop fixture missing");
-      tiles[xEdgeIndex] = { ...xEdge, terrain: "ridge", roughness: FIXED_POINT };
+      tiles[startIndex] = { ...tiles[startIndex]!, elevation: FIXED_POINT };
+      tiles[xEdgeIndex] = { ...xEdge, terrain: "ridge", roughness: FIXED_POINT, elevation: 0 };
       tiles[finalIndex] = { ...final, terrain: "deep-water", waterDepth: 520_000 };
     });
     const player = createPlayer(world);
     placePlayer(player, 10, 10, 950);
     player.y = 10 * TILE_UNITS + 950;
     player.previousY = player.y;
-    player.stability = 0;
+    player.stability = FIXED_POINT;
     const result = stepPlayer(
       player,
       world,
@@ -416,7 +417,10 @@ describe("player movement", () => {
     const world = controlledWorld((tiles) => {
       const ridge = tiles[ridgeIndex];
       if (!ridge) throw new Error("replay fixture missing");
-      tiles[ridgeIndex] = { ...ridge, terrain: "ridge", roughness: FIXED_POINT };
+      const origin = tiles[ridgeIndex - 1];
+      if (!origin) throw new Error("recovery origin fixture missing");
+      tiles[ridgeIndex - 1] = { ...origin, elevation: FIXED_POINT };
+      tiles[ridgeIndex] = { ...ridge, terrain: "ridge", roughness: FIXED_POINT, elevation: 0 };
     });
     const before = createPlayer(world);
     placePlayer(before, 10, 10, 950);
@@ -473,11 +477,14 @@ describe("player movement", () => {
     const world = controlledWorld((tiles) => {
       const ridge = tiles[ridgeIndex];
       if (!ridge) throw new Error("recovery fixture missing");
-      tiles[ridgeIndex] = { ...ridge, terrain: "ridge", roughness: FIXED_POINT };
+      const origin = tiles[ridgeIndex - 1];
+      if (!origin) throw new Error("recovery origin fixture missing");
+      tiles[ridgeIndex - 1] = { ...origin, elevation: FIXED_POINT };
+      tiles[ridgeIndex] = { ...ridge, terrain: "ridge", roughness: FIXED_POINT, elevation: 0 };
     });
     const player = createPlayer(world);
     placePlayer(player, 10, 10, 950);
-    player.stability = 0;
+    player.stability = FIXED_POINT;
     const first = stepPlayer(player, world, MOVE_RIGHT, {
       seed: seedFromText("recovery lock fixture"),
       actorId: 0,
@@ -545,13 +552,22 @@ describe("effort, stability, and discovery", () => {
   });
 
   it("lets active bracing trade speed for stability and fragile-cargo protection", () => {
-    const world = controlledWorld();
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const calm = controlledWorld((tiles) => {
+      const tile = tiles[startIndex];
+      if (!tile) throw new Error("handling fixture missing");
+      tiles[startIndex] = { ...tile, terrain: "tidal-flat", moisture: FIXED_POINT };
+    });
+    const world: WorldView = {
+      ...calm,
+      weather: { ...calm.weather, kind: "storm", intensity: FIXED_POINT, windX: 0, windY: FIXED_POINT },
+    };
     const player = createPlayer(world);
     placePlayer(player, 10, 10);
     const contract = offeredContract(world, { id: 91_001, resource: "medicine", quantity: 4 });
     expect(loadContractCargo(player, contract)).toBe(true);
     player.pace = "swift";
-    player.stability = 50_000;
+    player.stability = FIXED_POINT;
 
     const roughStep = stepPlayer(player, world, MOVE_RIGHT);
     expect(roughStep.damagedCargo).toBe(true);
@@ -562,12 +578,12 @@ describe("effort, stability, and discovery", () => {
     const bracedStep = stepPlayer(player, world, { moveX: 1, moveY: 0, brace: true });
     expect(bracedStep.moved).toBe(true);
     expect(Math.abs(player.velocityX)).toBeLessThan(unbracedSpeed);
-    expect(player.stability).toBeGreaterThan(44_400);
+    expect(player.stability).toBeGreaterThan(roughStep.footing?.stabilityTarget ?? 0);
     expect(player.cargo[0]?.condition).toBe(wornCondition);
     expect(bracedStep.damagedCargo).toBe(false);
   });
 
-  it("names live footing causes and makes brace mitigate rather than erase a strong current", () => {
+  it("names live footing causes and makes brace prevent a strong-current loss of control", () => {
     const roughIndex = 10 * WORLD_WIDTH + 10;
     const world = controlledWorld((tiles) => {
       const rough = tiles[roughIndex];
@@ -575,35 +591,61 @@ describe("effort, stability, and discovery", () => {
       tiles[roughIndex] = {
         ...rough,
         terrain: "deep-water",
-        roughness: 900_000,
-        waterDepth: 520_000,
+        roughness: FIXED_POINT,
+        waterDepth: FIXED_POINT,
       };
     });
-    const player = createPlayer(world);
-    placePlayer(player, 10, 10);
-    player.pace = "swift";
-    player.stability = 600_000;
+    const unbraced = createPlayer(world);
+    const braced = createPlayer(world);
+    placePlayer(unbraced, 10, 10);
+    placePlayer(braced, 10, 10);
 
-    const beforeUnbraced = player.stability;
-    stepPlayer(player, world, MOVE_RIGHT);
-    const unbracedLoss = beforeUnbraced - player.stability;
-    expect(player.stabilityTrend).toBe("falling");
-    expect(player.stabilityHint).toContain("Footing falling:");
-    expect(player.stabilityHint).toContain("deep water");
-    expect(player.stabilityHint).toContain("cross-current");
-    expect(player.stabilityHint).toContain("BRACE or find support");
+    const unbracedStep = stepPlayer(unbraced, world, MOVE_RIGHT);
+    const bracedStep = stepPlayer(braced, world, { moveX: 1, moveY: 0, brace: true });
+    expect(unbracedStep.footing?.causes.map(({ code }) => code)).toEqual(expect.arrayContaining([
+      "deep-water",
+      "cross-current",
+    ]));
+    expect(bracedStep.footing?.stabilityTarget)
+      .toBeGreaterThan(unbracedStep.footing?.stabilityTarget ?? FIXED_POINT);
+    expect(unbracedStep.becameSwept).toBe(true);
+    expect(bracedStep.becameSwept).toBe(false);
+    expect(braced.stabilityHint).toContain("deep water");
+  });
 
-    const beforeBraced = player.stability;
-    stepPlayer(player, world, { moveX: 1, moveY: 0, brace: true });
-    const bracedLoss = beforeBraced - player.stability;
-    expect(player.stabilityTrend).toBe("falling");
-    expect(bracedLoss).toBeGreaterThan(0);
-    expect(bracedLoss).toBeLessThan(unbracedLoss);
-    expect(player.stabilityHint).toContain("deep water");
+  it("uses local bed roughness in the shared hydrology profile", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const makeWorld = (roughness: number) => controlledWorld((tiles) => {
+      const tile = tiles[startIndex];
+      if (!tile) throw new Error("hydrology fixture missing");
+      tiles[startIndex] = { ...tile, terrain: "deep-water", waterDepth: 520_000, roughness };
+    });
+    const calmWorld = makeWorld(0);
+    const roughWorld = makeWorld(FIXED_POINT);
+    const calmPlayer = createPlayer(calmWorld);
+    const roughPlayer = createPlayer(roughWorld);
+    placePlayer(calmPlayer, 10, 10);
+    placePlayer(roughPlayer, 10, 10);
+
+    const calm = stepPlayer(calmPlayer, calmWorld, { moveX: 1, moveY: 0, brace: true });
+    const rough = stepPlayer(roughPlayer, roughWorld, { moveX: 1, moveY: 0, brace: true });
+    expect(rough.footing?.stabilityTarget).toBeLessThan(calm.footing?.stabilityTarget ?? 0);
+    const currentPenalty = (step: typeof calm) =>
+      step.footing?.causes.find(({ code }) => code === "cross-current")?.contribution ?? 0;
+    expect(currentPenalty(rough)).toBeGreaterThan(currentPenalty(calm));
   });
 
   it("makes fragile loads shock-sensitive while heavy loads resist the same handling", () => {
-    const world = controlledWorld();
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const calm = controlledWorld((tiles) => {
+      const tile = tiles[startIndex];
+      if (!tile) throw new Error("cargo handling fixture missing");
+      tiles[startIndex] = { ...tile, terrain: "tidal-flat", moisture: FIXED_POINT };
+    });
+    const world: WorldView = {
+      ...calm,
+      weather: { ...calm.weather, kind: "storm", intensity: FIXED_POINT, windX: 0, windY: FIXED_POINT },
+    };
     const fragilePlayer = createPlayer(world);
     const heavyPlayer = createPlayer(world);
     placePlayer(fragilePlayer, 10, 10);
@@ -618,8 +660,8 @@ describe("effort, stability, and discovery", () => {
       resource: "parts",
       quantity: 4,
     }))).toBe(true);
-    fragilePlayer.stability = 400_000;
-    heavyPlayer.stability = 400_000;
+    fragilePlayer.stability = FIXED_POINT;
+    heavyPlayer.stability = FIXED_POINT;
 
     expect(stepPlayer(fragilePlayer, world, MOVE_RIGHT).damagedCargo).toBe(true);
     expect(stepPlayer(heavyPlayer, world, MOVE_RIGHT).damagedCargo).toBe(false);
@@ -868,7 +910,7 @@ describe("effort, stability, and discovery", () => {
     });
   });
 
-  it("cannot cancel an already-zero deep-water stability failure with same-step stillness recovery", () => {
+  it("recomputes stale zero from live deep-water footing instead of forcing a sweep", () => {
     const startIndex = 10 * WORLD_WIDTH + 10;
     const world = controlledWorld((tiles) => {
       const water = tiles[startIndex];
@@ -883,10 +925,11 @@ describe("effort, stability, and discovery", () => {
     const swept = stepPlayer(player, world, NO_INPUT);
 
     expect(swept.exhausted).toBe(false);
-    expect(swept.becameSwept).toBe(true);
-    expect(swept.sweepCause).toBe("stability");
-    expect(player.mode).toBe("swept");
-    expect(player.stability).toBe(0);
+    expect(swept.becameSwept).toBe(false);
+    expect(swept.sweepCause).toBeNull();
+    expect(player.mode).not.toBe("swept");
+    expect(player.stability).toBeGreaterThan(0);
+    expect(swept.footing?.stabilityAfter).toBe(swept.footing?.stabilityTarget);
   });
 
   it("lets zero stability recover on dry ground while shallow current remains escapable", () => {
@@ -913,13 +956,9 @@ describe("effort, stability, and discovery", () => {
       expect(recovering.swept).toBe(false);
       expect(recovering.sweepCause).toBeNull();
       expect(player.mode).not.toBe("swept");
-      if (waterDepth === 0) {
-        expect(player.stability).toBeGreaterThan(0);
-        expect(player.stabilityTrend).toBe("recovering");
-      } else {
-        expect(player.stability).toBe(0);
-        expect(stepPlayer(player, world, MOVE_RIGHT).moved).toBe(true);
-      }
+      expect(player.stability).toBeGreaterThan(0);
+      expect(player.stabilityTrend).toBe("recovering");
+      if (waterDepth > 0) expect(stepPlayer(player, world, MOVE_RIGHT).moved).toBe(true);
     }
   });
 
@@ -955,7 +994,7 @@ describe("effort, stability, and discovery", () => {
     expect(player.mode).toBe("foot");
     expect(player.stability).toBeGreaterThan(0);
     expect(player.stabilityTrend).toBe("recovering");
-    expect(player.stabilityHint).toContain("Recovering");
+    expect(player.stabilityHint).toContain("stronger footing");
   });
 
   it("rebuilds a legacy sweep as an adjacent ADRIFT guide with bounded recovery state", () => {

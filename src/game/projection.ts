@@ -476,6 +476,7 @@ export function projectGameView(
           ...(biome ? { biome: biome.id, climate: biome.climate } : {}),
           elevation: tile.elevation / FIXED_POINT,
           moisture: tile.moisture / FIXED_POINT,
+          roughness: tile.roughness / FIXED_POINT,
           waterDepth: tile.waterDepth / FIXED_POINT,
           depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
           discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
@@ -658,7 +659,8 @@ export function projectGameView(
         maxY: world.terrain.height * tileSize,
       },
       followPlayer: true,
-      shake: world.weather.kind === "storm" ? world.weather.intensity / FIXED_POINT / 2 : 0,
+      // Weather moves water, wind, rain, and environment; never the camera.
+      shake: 0,
     },
     ...(options.paused === undefined ? {} : { paused: options.paused }),
   };

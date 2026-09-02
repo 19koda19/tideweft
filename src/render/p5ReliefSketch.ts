@@ -1,11 +1,11 @@
 import p5 from "p5";
 
 import {
-  BIOME_PRESENTATION,
   biomeEnvironmentalEmphasis,
   visibleBiomePresentation,
 } from "./biomePresentation";
-import { buildSurfaceCurrentCues } from "./currentCues";
+import { reliefSurfaceMaterialColor } from "./reliefMaterialPresentation";
+import { buildSurfaceCurrentCues, buildWaterVoiceLabels } from "./currentCues";
 import {
   buildTerrainMesh,
   type TerrainMesh,
@@ -59,6 +59,11 @@ import {
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
+import {
+  createTerrainPerceptionMemoryStore,
+  type TerrainPerceptionMemoryState,
+  type TerrainPerceptionMemoryStore,
+} from "./terrainPerceptionMemory";
 import {
   clipPolylineToBounds,
   polylineBounds,
@@ -153,19 +158,6 @@ const RELIEF_PALETTE = {
   violet: "#bea9ff",
   danger: "#ff796c",
 } as const;
-
-const TERRAIN_COLORS: Readonly<Record<TerrainKind, string>> = {
-  "deep-water": RELIEF_PALETTE.deep,
-  channel: RELIEF_PALETTE.channel,
-  shallows: RELIEF_PALETTE.shallows,
-  mudflat: RELIEF_PALETTE.mud,
-  sandbar: RELIEF_PALETTE.sand,
-  "salt-marsh": RELIEF_PALETTE.marsh,
-  meadow: RELIEF_PALETTE.meadow,
-  scrub: RELIEF_PALETTE.scrub,
-  ridge: RELIEF_PALETTE.ridge,
-  built: RELIEF_PALETTE.built,
-};
 
 const DEFAULT_YAW = -0.36;
 const DEFAULT_PITCH = Math.PI * 0.29;
@@ -281,7 +273,9 @@ interface AttachedListeners {
  * between them without forking simulation state.
  */
 export function createTideweftReliefRenderer(
-  options: TideweftReliefRendererOptions,
+  options: TideweftReliefRendererOptions & {
+    readonly terrainPerceptionMemory?: TerrainPerceptionMemoryStore;
+  },
 ): TideweftReliefRendererController {
   let instance: p5 | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
@@ -310,6 +304,9 @@ export function createTideweftReliefRenderer(
   let hoverParcelId: string | null = null;
   let hasObservedSpatialEpoch = false;
   let observedSpatialEpoch: TideweftView["spatialEpoch"];
+  const ownsTerrainPerceptionMemory = options.terrainPerceptionMemory === undefined;
+  const terrainPerceptionMemory = options.terrainPerceptionMemory
+    ?? createTerrainPerceptionMemoryStore();
   let lastMovement = "0,0";
   let lastOrbitFrameAt: number | undefined;
   const activeTouchPointers = new Map<number, ReliefTouchPoint>();
@@ -474,6 +471,7 @@ export function createTideweftReliefRenderer(
     orbit.focusUntil = 0;
     ripples.length = 0;
     cached = null;
+    cachedPerceptionMesh = null;
     cachedPerception = null;
     for (const node of labelNodes.values()) node.remove();
     labelNodes.clear();
@@ -738,6 +736,39 @@ export function createTideweftReliefRenderer(
           "sound",
         );
       }
+    }
+
+    const currentReach = orbit.distance * 1.45;
+    const currentCues = buildSurfaceCurrentCues(view.terrain, view.tide.surfaceCurrent, {
+      analytical: (view.player.scanProgress ?? 0) > 0.001,
+      bounds: {
+        firstColumn: Math.floor((orbit.x - currentReach - view.terrain.origin.x) / tileSize),
+        lastColumn: Math.ceil((orbit.x + currentReach - view.terrain.origin.x) / tileSize),
+        firstRow: Math.floor((orbit.y - currentReach - view.terrain.origin.y) / tileSize),
+        lastRow: Math.ceil((orbit.y + currentReach - view.terrain.origin.y) / tileSize),
+      },
+      focus: { x: orbit.x, y: orbit.y },
+      tideLevel: view.tide.level,
+      weatherIntensity: view.weather.intensity,
+      timeMs: now,
+      reducedMotion,
+      maxCues: 120,
+      requireDetailDisclosure: view.perception !== undefined,
+    });
+    for (const voice of buildWaterVoiceLabels(currentCues, now, reducedMotion, 3)) {
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        voice.point,
+        cache.mesh.verticalScale,
+        true,
+      );
+      place(
+        voice.id,
+        voice.text,
+        voice.point,
+        surface + tileSize * 0.28,
+        "sound",
+      );
     }
 
     for (const settlement of view.settlements) {
@@ -1481,7 +1512,11 @@ export function createTideweftReliefRenderer(
   const ensureMesh = (view: TideweftView): CachedReliefMesh => {
     const scale = reliefScale(view.terrain);
     const discoveryKey = discoverySignatureFor(view.terrain);
-    const key = [
+    const spatialIdentity = view.spatialEpoch === undefined
+      ? null
+      : [typeof view.spatialEpoch, String(view.spatialEpoch)];
+    const key = JSON.stringify([
+      spatialIdentity,
       typeof view.terrain.revision,
       String(view.terrain.revision),
       discoveryKey,
@@ -1490,7 +1525,7 @@ export function createTideweftReliefRenderer(
       view.terrain.tileSize,
       options.chunkSize ?? 16,
       scale,
-    ].join(":");
+    ]);
     if (cached?.key === key) return cached;
     const maskedTerrain: TerrainGridView = {
       ...view.terrain,
@@ -1506,7 +1541,8 @@ export function createTideweftReliefRenderer(
     // Durable discovery can change every travel step. The unmasked height
     // field cannot, so retain it independently and rebuild only when the
     // authoritative terrain revision or mesh configuration changes.
-    const perceptionMeshKey = [
+    const perceptionMeshKey = JSON.stringify([
+      spatialIdentity,
       typeof view.terrain.revision,
       String(view.terrain.revision),
       view.terrain.columns,
@@ -1514,7 +1550,7 @@ export function createTideweftReliefRenderer(
       view.terrain.tileSize,
       options.chunkSize ?? 16,
       scale,
-    ].join(":");
+    ]);
     if (cachedPerceptionMesh?.key !== perceptionMeshKey) {
       cachedPerceptionMesh = {
         key: perceptionMeshKey,
@@ -1536,15 +1572,25 @@ export function createTideweftReliefRenderer(
   const ensurePerceptionSurface = (
     view: TideweftView,
     mesh: CachedReliefMesh,
+    terrainMemory: TerrainPerceptionMemoryState,
   ): CachedReliefPerception | null => {
     if (!view.perception) return null;
-    const key = `${mesh.key}:perception:${view.perception.signature}`;
+    const key = JSON.stringify([
+      mesh.key,
+      "perception",
+      view.perception.signature,
+      terrainMemory.signature,
+    ]);
     if (cachedPerception?.key === key) return cachedPerception;
     cachedPerception = {
       key,
       chunks: mesh.perceptionMesh.chunks.map((chunk) => ({
         chunk,
-        materials: buildReliefPerceptionMaterialBatches(chunk, view.terrain),
+        materials: buildReliefPerceptionMaterialBatches(
+          chunk,
+          view.terrain,
+          terrainMemory.values,
+        ),
       })),
     };
     return cachedPerception;
@@ -1600,33 +1646,15 @@ export function createTideweftReliefRenderer(
       memoryOnly = false,
       currentVisibility = 1,
     ): p5.Color => {
-      const biome = material.kind === "built" || material.biome === undefined
-        ? undefined
-        : BIOME_PRESENTATION[material.biome];
-      const base = p.color(biome?.reliefColor ?? TERRAIN_COLORS[material.kind]);
-      const conditioned = p.lerpColor(
-        base,
-        p.color(biome?.accentColor ?? RELIEF_PALETTE.foam),
-        biome ? clamp(0.07 + material.environment * 0.15, 0.07, 0.22) : 0.04,
-      );
-      const revealed = p.lerpColor(
-        p.color(RELIEF_PALETTE.ink),
-        conditioned,
-        Math.pow(unit(material.visibility), 0.72),
-      );
-      const atmospheric = p.lerpColor(
-        revealed,
-        p.color(RELIEF_PALETTE.horizon),
-        clamp(fog * 0.5, 0, 0.58),
-      );
-      if (memoryOnly) return p.lerpColor(p.color(RELIEF_PALETTE.ink), atmospheric, 0.13);
-      return currentVisibility < 1
-        ? p.lerpColor(
-            p.color(RELIEF_PALETTE.ink),
-            atmospheric,
-            Math.pow(unit(currentVisibility), 1.15),
-          )
-        : atmospheric;
+      return p.color(reliefSurfaceMaterialColor({
+        kind: material.kind,
+        ...(material.biome ? { biome: material.biome } : {}),
+        environment: material.environment,
+        visibility: material.visibility,
+        fog,
+        memoryOnly,
+        currentVisibility,
+      }));
     };
 
     const setCamera = (state: ReliefCameraState): void => {
@@ -1639,7 +1667,12 @@ export function createTideweftReliefRenderer(
       );
     };
 
-    const drawTerrain = (view: TideweftView, cache: CachedReliefMesh, camera: ReliefCameraState): void => {
+    const drawTerrain = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      camera: ReliefCameraState,
+      terrainMemory: TerrainPerceptionMemoryState,
+    ): void => {
       const viewport = { width: p.width, height: p.height };
       const fogStart = orbit.distance * 0.55;
       const fogEnd = orbit.distance * 1.7;
@@ -1649,6 +1682,10 @@ export function createTideweftReliefRenderer(
         const fog = reliefFogAmount(batch.chunk.bounds, camera, viewport, fogStart, fogEnd);
         for (const material of batch.materials) {
           const surfaceColor = materialColor(material, fog, view.perception !== undefined);
+          // emissiveMaterial survives across p5 draw calls and frames. Water,
+          // actors, or markers drawn last frame must never tint this frame's
+          // land cyan before ambientMaterial binds its authored earthy color.
+          p.emissiveMaterial(0, 0, 0);
           // p5 keeps directional diffuse fill separate from ambient material.
           // Bind both or its default white fill washes dark terrain toward cyan.
           p.fill(surfaceColor);
@@ -1664,7 +1701,7 @@ export function createTideweftReliefRenderer(
         }
       }
 
-      const perception = ensurePerceptionSurface(view, cache);
+      const perception = ensurePerceptionSurface(view, cache, terrainMemory);
       if (!perception) return;
       // Re-light only the small current sensory footprint. This overlay is
       // cached by perception signature and never invalidates the durable mesh.
@@ -1676,6 +1713,7 @@ export function createTideweftReliefRenderer(
         const fog = reliefFogAmount(batch.chunk.bounds, camera, viewport, fogStart, fogEnd);
         for (const material of batch.materials) {
           const surfaceColor = materialColor(material, fog, false, material.currentVisibility);
+          p.emissiveMaterial(0, 0, 0);
           p.fill(surfaceColor);
           p.ambientMaterial(surfaceColor);
           p.beginShape(p.TRIANGLES);
@@ -1844,9 +1882,11 @@ export function createTideweftReliefRenderer(
         lastRow: Math.ceil((orbit.y + reach - grid.origin.y) / tileSize),
       };
       const cues = buildSurfaceCurrentCues(grid, view.tide.surfaceCurrent, {
+        analytical: (view.player.scanProgress ?? 0) > 0.001,
         bounds,
         focus: { x: orbit.x, y: orbit.y },
         tideLevel: view.tide.level,
+        weatherIntensity: view.weather.intensity,
         timeMs: now,
         reducedMotion,
         maxCues: 220,
@@ -1861,25 +1901,36 @@ export function createTideweftReliefRenderer(
         true,
       ) + 1.25);
       const strokeCue = (cue: (typeof cues)[number], surface: number): void => {
-        p.line(cue.tail.x, -surface, cue.tail.y, cue.tip.x, -surface, cue.tip.y);
-        p.line(cue.tip.x, -surface, cue.tip.y, cue.headLeft.x, -surface, cue.headLeft.y);
-        p.line(cue.tip.x, -surface, cue.tip.y, cue.headRight.x, -surface, cue.headRight.y);
+        const [start, controlA, controlB, end] = cue.streamline;
+        p.line(start.x, -surface, start.y, controlA.x, -surface, controlA.y);
+        p.line(controlA.x, -surface, controlA.y, controlB.x, -surface, controlB.y);
+        p.line(controlB.x, -surface, controlB.y, end.x, -surface, end.y);
+        if (cue.analytical) {
+          p.line(cue.tip.x, -surface, cue.tip.y, cue.headLeft.x, -surface, cue.headLeft.y);
+          p.line(cue.tip.x, -surface, cue.tip.y, cue.headRight.x, -surface, cue.headRight.y);
+        }
       };
       p.push();
       p.noFill();
-      p.stroke(withAlpha(RELIEF_PALETTE.ink, 210));
-      p.strokeWeight(3.7);
       for (let index = 0; index < cues.length; index += 1) {
         const cue = cues[index];
         const surface = heights[index];
-        if (cue && surface !== undefined) strokeCue(cue, surface);
+        if (cue && surface !== undefined) {
+          p.stroke(withAlpha(RELIEF_PALETTE.ink, 145 + cue.strength * 80));
+          p.strokeWeight(2.8 + cue.turbulence * 1.5);
+          strokeCue(cue, surface);
+        }
       }
-      p.stroke(withAlpha(RELIEF_PALETTE.foam, 220));
-      p.strokeWeight(1.35);
       for (let index = 0; index < cues.length; index += 1) {
         const cue = cues[index];
         const surface = heights[index];
-        if (cue && surface !== undefined) strokeCue(cue, surface);
+        if (cue && surface !== undefined) {
+          p.stroke(withAlpha(RELIEF_PALETTE.foam, 110 + cue.strength * 115));
+          p.strokeWeight(0.8 + cue.strength * 0.9);
+          strokeCue(cue, surface);
+          p.strokeWeight(1.2 + cue.turbulence * 2.2);
+          for (const fleck of cue.foam) p.point(fleck.x, -surface, fleck.y);
+        }
       }
       p.pop();
     };
@@ -3221,34 +3272,62 @@ export function createTideweftReliefRenderer(
       p.push();
       try {
         p.camera(0, 0, 1, 0, 0, 0, 0, 1, 0);
-        // p5's WEBGL camera/projection path already converts its y-up camera
-        // space into the canvas' y-down screen space. Reversing bottom/top a
-        // second time made both falling rain and wind rise on screen.
         p.ortho(-p.width / 2, p.width / 2, -p.height / 2, p.height / 2, 0, 2);
         p.resetMatrix();
+        // Rain is authored in final canvas coordinates (positive y is down),
+        // while p5's WEBGL local y direction depends on the active camera /
+        // projection pair. Sample that exact affine projection and invert it
+        // instead of assuming either handedness. This keeps both the streak
+        // heading and its frame-to-frame travel downward on the final canvas.
+        const projectedOrigin = p.worldToScreen(0, 0, 0);
+        const projectedLocalX = p.worldToScreen(1, 0, 0);
+        const projectedLocalY = p.worldToScreen(0, 1, 0);
+        const basisXX = projectedLocalX.x - projectedOrigin.x;
+        const basisXY = projectedLocalX.y - projectedOrigin.y;
+        const basisYX = projectedLocalY.x - projectedOrigin.x;
+        const basisYY = projectedLocalY.y - projectedOrigin.y;
+        const determinant = basisXX * basisYY - basisYX * basisXY;
+        const screenToOverlayLocal = (x: number, y: number): WorldPoint => {
+          const screenX = x - projectedOrigin.x;
+          const screenY = y - projectedOrigin.y;
+          if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-8) {
+            // The configured orthographic overlay is nondegenerate; this
+            // deterministic fallback preserves the old centered mapping if a
+            // renderer reports unusable projection samples.
+            return { x: x - p.width / 2, y: y - p.height / 2 };
+          }
+          return {
+            x: (screenX * basisYY - screenY * basisYX) / determinant,
+            y: (basisXX * screenY - basisXY * screenX) / determinant,
+          };
+        };
         p.noFill();
         const first = streaks[0]!;
         p.stroke(withAlpha(RELIEF_PALETTE.ink, Math.min(150, first.alpha * 0.7)));
         p.strokeWeight(first.width + 1.7);
         for (const streak of streaks) {
+          const start = screenToOverlayLocal(streak.x, streak.y);
+          const end = screenToOverlayLocal(streak.x + streak.dx, streak.y + streak.dy);
           p.line(
-            streak.x - p.width / 2,
-            streak.y - p.height / 2,
+            start.x,
+            start.y,
             0,
-            streak.x + streak.dx - p.width / 2,
-            streak.y + streak.dy - p.height / 2,
+            end.x,
+            end.y,
             0,
           );
         }
         p.stroke(withAlpha("#e5fbff", first.alpha));
         p.strokeWeight(first.width);
         for (const streak of streaks) {
+          const start = screenToOverlayLocal(streak.x, streak.y);
+          const end = screenToOverlayLocal(streak.x + streak.dx, streak.y + streak.dy);
           p.line(
-            streak.x - p.width / 2,
-            streak.y - p.height / 2,
+            start.x,
+            start.y,
             0,
-            streak.x + streak.dx - p.width / 2,
-            streak.y + streak.dy - p.height / 2,
+            end.x,
+            end.y,
             0,
           );
         }
@@ -3303,23 +3382,20 @@ export function createTideweftReliefRenderer(
       }
     };
 
-    const drawScene = (view: TideweftView, cache: CachedReliefMesh, now: number): void => {
+    const drawScene = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      terrainMemory: TerrainPerceptionMemoryState,
+      now: number,
+    ): void => {
       const camera = currentCameraState();
       setCamera(camera);
-      const storm = view.weather.kind === "squall" ? unit(view.weather.intensity) : 0;
-      if (!reducedMotion && storm > 0.02) {
-        p.translate(
-          Math.sin(now * 0.046) * storm * 2.5,
-          Math.cos(now * 0.039) * storm * 1.5,
-          0,
-        );
-      }
       // A warm neutral key and restrained cool fill preserve material identity;
       // the former cyan-heavy rig flattened water, land, and finds together.
-      p.ambientLight(94, 91, 82);
-      p.directionalLight(224, 207, 174, -0.55, 0.9, -0.35);
-      p.directionalLight(66, 105, 126, 0.65, 0.2, 0.7);
-      drawTerrain(view, cache, camera);
+      p.ambientLight(90, 82, 68);
+      p.directionalLight(210, 184, 142, -0.55, 0.9, -0.35);
+      p.directionalLight(24, 34, 40, 0.65, 0.2, 0.7);
+      drawTerrain(view, cache, camera, terrainMemory);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
       drawFieldResources(view, cache);
@@ -3378,10 +3454,21 @@ export function createTideweftReliefRenderer(
       advancePointerParallax(pointerParallax, now, reducedMotion);
       p.background(latestView?.weather.kind === "mist" ? RELIEF_PALETTE.horizon : RELIEF_PALETTE.ink);
       if (!latestView) return;
+      const terrainMemory = terrainPerceptionMemory.sample({
+        terrain: latestView.terrain,
+        ...(latestView.spatialEpoch === undefined
+          ? {}
+          : { spatialEpoch: latestView.spatialEpoch }),
+        ...(latestView.worldName === undefined ? {} : { worldName: latestView.worldName }),
+        tick: latestView.tick,
+        timeMs: now,
+        perceptionEnabled: latestView.perception !== undefined,
+        reducedMotion,
+      });
       const mesh = ensureMesh(latestView);
       advanceHeldOrbit(now);
       updateCamera(latestView, now, mesh.mesh);
-      drawScene(latestView, mesh, now);
+      drawScene(latestView, mesh, terrainMemory, now);
       syncReliefLabels(latestView, mesh, currentCameraState(), now);
     };
   };
@@ -3410,6 +3497,7 @@ export function createTideweftReliefRenderer(
     cached = null;
     cachedPerceptionMesh = null;
     cachedPerception = null;
+    if (ownsTerrainPerceptionMemory) terrainPerceptionMemory.reset();
   };
 
   const setActive = (nextActive: boolean): void => {

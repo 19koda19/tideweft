@@ -64,6 +64,7 @@ import {
   ADRIFT_STAND_STAMINA,
   evaluateAdriftMotion,
 } from "./adrift";
+import { deriveWaterFlowProfile } from "./waterFlow";
 
 export const TILE_UNITS = 1_000;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
@@ -305,11 +306,7 @@ export function stepPlayer(
   const footingEvaluations: FootingEvaluation[] = [];
   const priorVelocityX = player.velocityX;
   const priorVelocityY = player.velocityY;
-  // A loaded or live player who has already lost all stability in the current
-  // cannot cancel that failure by releasing input and receiving the ordinary
-  // stillness recovery later in this same fixed step.
   const staminaDepletedAtStepStart = player.stamina === 0;
-  const stabilityDepletedAtStepStart = player.stability === 0;
   player.previousX = player.x;
   player.previousY = player.y;
   player.scanPulse = Math.max(0, player.scanPulse - 24_000);
@@ -474,9 +471,11 @@ export function stepPlayer(
     });
     const originWayknots = wayknotEffectsAt(player, world, edgeOrigin.index);
     const destinationWayknots = wayknotEffectsAt(player, world, edgeDestination.index);
+    const rockPressure = (effect?.fallRiskPermille ?? 0) * 1_000;
     const current = footingCurrentVector(
       world,
       contactDepth,
+      Math.max(edgeOrigin.roughness, edgeDestination.roughness, rockPressure),
       gear.currentForcePermille,
       hasFieldTool(player, "tide-sail"),
     );
@@ -496,10 +495,10 @@ export function stepPlayer(
       edgeOrigin.terrain,
       edgeDestination.terrain,
     );
-    const rockPressure = (effect?.fallRiskPermille ?? 0) * 1_000;
     const evaluation = evaluateFooting({
       stability: workingStability,
       moving: velocityX !== 0 || velocityY !== 0,
+      speed: normalizedFootingSpeed(velocityX, velocityY),
       surface: footingSurfaceFor(edgeOrigin, edgeDestination, rockPressure > 0),
       elevationDelta: clamp(edgeDestination.elevation - edgeOrigin.elevation, -FIXED_POINT, FIXED_POINT),
       roughness: Math.max(edgeOrigin.roughness, edgeDestination.roughness, rockPressure),
@@ -554,7 +553,7 @@ export function stepPlayer(
       traversal
       && traversalFeedback
       && contact.contactDepth >= SWEEP_DEPTH_THRESHOLD
-      && (stabilityDepletedAtStepStart || workingStability === 0)
+      && workingStability === 0
     ) {
       const hazards = fallHazardsForEntry(priorTile, priorTile, contact.current, null);
       fallEvaluation = evaluateFallRiskOnEntry({
@@ -745,14 +744,14 @@ export function stepPlayer(
   if (footing && stabilityDelta > 0) {
     player.stabilityTrend = "recovering";
     player.stabilityHint = completedProject === "cache"
-      ? "Recovering on dependable cache decking"
+      ? "Dependable cache decking supports firm footing"
       : effectiveControl.brace && hasInput
-        ? "Recovering while braced · Shift trades speed for control"
-        : "Recovering while still or on sound footing";
+        ? "BRACED · Shift trades speed for a stronger physical stance"
+        : "Sounder ground supports stronger footing";
   } else if (footing && stabilityDelta < 0) {
     const causes = footing.causes.map(({ label }) => label);
     player.stabilityTrend = "falling";
-    player.stabilityHint = `Footing falling: ${causes.join(" + ")} · BRACE or find support`;
+    player.stabilityHint = `Footing strained by ${causes.join(" + ")} · BRACE or find support`;
   } else if (footing) {
     player.stabilityTrend = "steady";
     player.stabilityHint = footing.causes.length > 0
@@ -847,7 +846,10 @@ export function stepPlayer(
   // current taking control on the next fixed step.
   const exhausted = player.stamina === 0 || (inSweepWater && staminaDepletedAtStepStart);
   const destabilizedInCurrent = inSweepWater
-    && (stabilityDepletedAtStepStart || player.stability === 0);
+    && (
+      player.stability === 0
+      || fallEvaluation?.fell === true
+    );
   let rescued = false;
   let becameSwept = false;
   let sweepCause: PlayerStepResult["sweepCause"] = null;
@@ -949,6 +951,15 @@ function normalizedFootingVector(x: number, y: number): { readonly x: number; re
   };
 }
 
+function normalizedFootingSpeed(x: number, y: number): number {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+  return clamp(
+    Math.trunc((Math.hypot(x, y) * FIXED_POINT) / PACE_SPEED.swift),
+    0,
+    FIXED_POINT,
+  );
+}
+
 function traversalTurnPressure(
   priorX: number,
   priorY: number,
@@ -965,15 +976,21 @@ function traversalTurnPressure(
 function footingCurrentVector(
   world: WorldView,
   waterDepth: number,
+  bedRoughness: number,
   gearPermille: number,
   hasTideSail: boolean,
 ): { readonly x: number; readonly y: number } {
   if (waterDepth <= 35_000) return { x: 0, y: 0 };
   const direction = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
-  const base = clamp(260_000 + Math.trunc(world.tide.level * 0.55), 0, FIXED_POINT);
+  const profile = deriveWaterFlowProfile({
+    waterDepth,
+    bedRoughness,
+    tideLevel: world.tide.level,
+    weatherIntensity: world.weather.intensity,
+  });
   const sailPermille = hasTideSail && waterDepth > 180_000 ? 600 : 1_000;
   const magnitude = Math.trunc(
-    (base * clamp(gearPermille, 0, 1_000) * sailPermille) / 1_000_000,
+    (profile.strength * clamp(gearPermille, 0, 1_000) * sailPermille) / 1_000_000,
   );
   return {
     x: Math.trunc((direction.x * magnitude) / FIXED_POINT),

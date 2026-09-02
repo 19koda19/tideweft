@@ -8,7 +8,21 @@ const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
   instances: [] as Array<Record<string, unknown>>,
   projectionShiftX: 0,
+  overlayProjection: {
+    xx: 1,
+    xy: 0,
+    yx: 0,
+    yy: 1,
+  },
 }));
+
+function projectOverlayLocalToScreen(x: number, y: number): { readonly x: number; readonly y: number } {
+  const basis = p5Harness.overlayProjection;
+  return {
+    x: 160 + x * basis.xx + y * basis.yx,
+    y: 120 + x * basis.xy + y * basis.yy,
+  };
+}
 
 vi.mock("p5", () => {
   class FakeP5 {
@@ -37,6 +51,7 @@ vi.mock("p5", () => {
         camera,
         color,
         lerpColor: (_left: unknown, right: unknown) => right,
+        worldToScreen: (x: number, y: number) => projectOverlayLocalToScreen(x, y),
         createCanvas: () => ({ elt: p5Harness.canvasFactory?.() }),
         resizeCanvas: vi.fn(),
         noLoop: vi.fn(),
@@ -312,6 +327,7 @@ beforeEach(() => {
   p5Harness.canvasFactory = null;
   p5Harness.instances.length = 0;
   p5Harness.projectionShiftX = 0;
+  p5Harness.overlayProjection = { xx: 1, xy: 0, yx: 0, yy: 1 };
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -350,6 +366,49 @@ describe("Relief spatial epoch release gate", () => {
     harness.setView(view(undefined, { x: 8, y: 8 }));
     harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 3 }));
     expect(harness.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "move-target" }));
+    harness.renderer.destroy();
+  });
+
+  it("rebuilds durable and perception geometry when a new region reuses the same local revision", () => {
+    const perceivedRegion = (spatialEpoch: string, elevation: number): TideweftView => {
+      const base = view(spatialEpoch, { x: 48, y: 48 });
+      return {
+        ...base,
+        perception: {
+          version: 3,
+          signature: "same-local-mask",
+          valid: true,
+          visibleTileCount: 16,
+          directTileCount: 16,
+          peripheralTileCount: 0,
+        },
+        terrain: {
+          ...base.terrain,
+          revision: "same-local-terrain-revision",
+          tiles: base.terrain.tiles.map((tile) => ({
+            ...tile,
+            elevation,
+            currentVisibility: 1,
+            currentDetailVisibility: 1 as const,
+          })),
+        },
+      };
+    };
+
+    const harness = renderHarness(perceivedRegion("r:0:0", 0.2));
+    const vertex = harness.instance.vertex as ReturnType<typeof vi.fn>;
+    harness.draw();
+    expect(vertex.mock.calls.length).toBeGreaterThan(0);
+    expect(Math.min(...vertex.mock.calls.map((call) => Number(call[1])))).toBeGreaterThan(-20);
+
+    vertex.mockClear();
+    harness.setView(perceivedRegion("r:1:0", 0.8));
+    harness.draw();
+    const transitionedHeights = vertex.mock.calls.map((call) => Number(call[1]));
+    expect(transitionedHeights.length).toBeGreaterThan(0);
+    // Both the durable terrain and its transient perception overlay must come
+    // from the new region. A stale overlay would leave vertices near -14 here.
+    expect(Math.max(...transitionedHeights)).toBeLessThan(-40);
     harness.renderer.destroy();
   });
 
@@ -532,6 +591,59 @@ describe("Relief weather production path", () => {
     harness.setView(dry);
     harness.draw();
     expect(line).toHaveBeenCalledTimes(dryLineCount);
+    harness.renderer.destroy();
+  });
+
+  it("keeps rain moving downward after the final WEBGL camera projection", () => {
+    let now = 0;
+    vi.stubGlobal("performance", { now: () => now });
+    // Exercise the release-blocking case explicitly: local +y projects upward,
+    // with a little camera-axis shear. A model-space `dy > 0` assertion would
+    // fail to prove (or fix) the direction visible on the final canvas.
+    p5Harness.overlayProjection = {
+      xx: 1.15,
+      xy: 0.08,
+      yx: 0.12,
+      yy: -0.9,
+    };
+    const base = view("rain-projection", { x: 8, y: 8 });
+    const rainy: TideweftView = {
+      ...base,
+      weather: {
+        kind: "rain",
+        intensity: 0.75,
+        wind: { x: -0.8, y: 0.25 },
+      },
+    };
+    const harness = renderHarness(rainy);
+    harness.renderer.setOrbit(Math.PI, Math.PI * 0.29);
+    const line = harness.instance.line as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    const firstFrameRain = line.mock.calls.slice(-37 * 2);
+    const firstStroke = firstFrameRain[0];
+    if (!firstStroke) throw new Error("expected projected rain stroke");
+    const firstStart = projectOverlayLocalToScreen(
+      Number(firstStroke[0]),
+      Number(firstStroke[1]),
+    );
+    const firstEnd = projectOverlayLocalToScreen(
+      Number(firstStroke[3]),
+      Number(firstStroke[4]),
+    );
+    expect(firstEnd.y).toBeGreaterThan(firstStart.y);
+
+    line.mockClear();
+    now = 16;
+    harness.draw();
+    const nextFrameRain = line.mock.calls.slice(-37 * 2);
+    const nextStroke = nextFrameRain[0];
+    if (!nextStroke) throw new Error("expected next projected rain stroke");
+    const nextStart = projectOverlayLocalToScreen(
+      Number(nextStroke[0]),
+      Number(nextStroke[1]),
+    );
+    expect(nextStart.y).toBeGreaterThan(firstStart.y);
     harness.renderer.destroy();
   });
 

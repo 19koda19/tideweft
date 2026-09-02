@@ -1,3 +1,5 @@
+import type { WaterFlowVoice } from "../game/waterFlow";
+
 export type SoundCue =
   | "step"
   | "scan"
@@ -30,6 +32,45 @@ export interface AudioSettings {
   effects: number;
 }
 
+export interface WaterAmbienceState {
+  readonly strength: number;
+  readonly turbulence: number;
+  readonly pan: number;
+  readonly voice: WaterFlowVoice;
+}
+
+export interface AmbienceParameters {
+  readonly frequency: number;
+  readonly resonance: number;
+  readonly levelScale: number;
+  readonly pan: number;
+}
+
+/** Pure mapping used by the looping noise graph and presentation tests. */
+export function ambienceParameters(
+  tide: number,
+  storm: number,
+  network: number,
+  water?: WaterAmbienceState,
+): AmbienceParameters {
+  const strength = clamp01(water?.strength ?? 0);
+  const turbulence = clamp01(water?.turbulence ?? 0);
+  const whissh = water?.voice === "whissh" ? 1 : 0;
+  return {
+    frequency: 170
+      + clamp01(tide) * 520
+      + clamp01(network) * 260
+      + strength * 460
+      + turbulence * (420 + whissh * 620),
+    resonance: 0.22 + clamp01(storm) * 1.25 + turbulence * (0.7 + whissh * 1.2),
+    levelScale: 0.012
+      + clamp01(storm) * 0.016
+      + strength * 0.028
+      + turbulence * 0.035,
+    pan: Math.max(-1, Math.min(1, Number.isFinite(water?.pan) ? water!.pan : 0)),
+  };
+}
+
 const DEFAULT_SETTINGS: AudioSettings = {
   enabled: true,
   master: 0.7,
@@ -43,6 +84,7 @@ export class TideweftSoundscape {
   private ambienceGain: GainNode | undefined;
   private effectsGain: GainNode | undefined;
   private tideFilter: BiquadFilterNode | undefined;
+  private waterPanner: StereoPannerNode | undefined;
   private noise: AudioBufferSourceNode | undefined;
   private settings: AudioSettings;
   private lastStep = 0;
@@ -72,13 +114,20 @@ export class TideweftSoundscape {
     return { ...this.settings };
   }
 
-  updateAmbience(tide: number, storm: number, network: number): void {
+  updateAmbience(
+    tide: number,
+    storm: number,
+    network: number,
+    water?: WaterAmbienceState,
+  ): void {
     if (!this.context || !this.tideFilter || !this.ambienceGain) return;
     const now = this.context.currentTime;
-    this.tideFilter.frequency.setTargetAtTime(180 + clamp01(tide) * 760 + clamp01(network) * 420, now, 0.8);
-    this.tideFilter.Q.setTargetAtTime(0.25 + clamp01(storm) * 3.5, now, 0.8);
+    const parameters = ambienceParameters(tide, storm, network, water);
+    this.tideFilter.frequency.setTargetAtTime(parameters.frequency, now, 0.8);
+    this.tideFilter.Q.setTargetAtTime(parameters.resonance, now, 0.8);
+    this.waterPanner?.pan.setTargetAtTime(parameters.pan, now, 0.8);
     const level = this.settings.enabled
-      ? this.settings.ambience * (0.026 + clamp01(storm) * 0.034)
+      ? this.settings.ambience * parameters.levelScale
       : 0;
     this.ambienceGain.gain.setTargetAtTime(level, now, 0.9);
   }
@@ -162,6 +211,7 @@ export class TideweftSoundscape {
     this.ambienceGain = this.context.createGain();
     this.effectsGain = this.context.createGain();
     this.tideFilter = this.context.createBiquadFilter();
+    this.waterPanner = this.context.createStereoPanner();
     this.tideFilter.type = "lowpass";
     this.tideFilter.frequency.value = 480;
     this.master.connect(this.context.destination);
@@ -181,7 +231,8 @@ export class TideweftSoundscape {
     this.noise.buffer = buffer;
     this.noise.loop = true;
     this.noise.connect(this.tideFilter);
-    this.tideFilter.connect(this.ambienceGain);
+    this.tideFilter.connect(this.waterPanner);
+    this.waterPanner.connect(this.ambienceGain);
     this.noise.start();
     this.applyLevels(0);
   }

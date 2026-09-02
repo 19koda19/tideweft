@@ -1,6 +1,7 @@
 import { createTideweftReliefRenderer } from "./p5ReliefSketch";
 import { createTideweftRenderer as createTideweftChartRenderer } from "./p5Sketch";
 import { createWorldCompass } from "./worldCompass";
+import { createTerrainPerceptionMemoryStore } from "./terrainPerceptionMemory";
 import type {
   TideweftRendererController,
   TideweftRendererOptions,
@@ -35,11 +36,13 @@ export function createTideweftRenderer(
   let destroyed = false;
   let active = true;
   let reliefUsable = true;
+  const terrainPerceptionMemory = createTerrainPerceptionMemoryStore();
   const compass = createWorldCompass(options.mount);
-  const chart = createTideweftChartRenderer(options);
+  const chart = createTideweftChartRenderer({ ...options, terrainPerceptionMemory });
   let applyMode: (mode: ViewMode) => ViewMode = () => "chart-2d";
   const relief = createTideweftReliefRenderer({
     ...options,
+    terrainPerceptionMemory,
     initiallyActive: false,
     onWebGLError: (reason) => {
       reliefUsable = false;
@@ -108,6 +111,7 @@ export function createTideweftRenderer(
       destroyed = true;
       chart.destroy();
       relief.destroy();
+      terrainPerceptionMemory.reset();
       compass.destroy();
       delete options.mount.dataset.viewMode;
     },

@@ -54,6 +54,8 @@ export interface TerrainTileView {
   /** Normalized height, where 0 is the estuary floor and 1 is high ground. */
   readonly elevation: number;
   readonly moisture?: number;
+  /** Normalized physical bed roughness used by shared local water flow. */
+  readonly roughness?: number;
   /** Current normalized water depth. If omitted, the renderer derives it from tide/elevation. */
   readonly waterDepth?: number;
   /** Confidence from physical sounding, where 0 is unknown and 1 is freshly measured. */

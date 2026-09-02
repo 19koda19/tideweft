@@ -501,7 +501,7 @@ describe("production terrain fall and physical cargo", () => {
     const repository = new MemoryRepository();
     const fixture = await createV4Fixture(
       repository,
-      "empty porter fall vertical slice",
+      "fall cargo exact test",
       false,
     );
     soundscapePlay.mockClear();

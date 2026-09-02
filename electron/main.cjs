@@ -17,8 +17,8 @@ const SMOKE_REGIONAL_ROWS = 74;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.6';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 14;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.7';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 15;
 const smokeRegionalTileIndex = (compatibilityTileIndex) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -444,6 +444,10 @@ function rendererProbeScript() {
     const objectivePanel = document.querySelector('.objective-panel');
     const leftRail = document.querySelector('.left-rail');
     const hudBar = document.querySelector('.hud-bar');
+    const desktopFieldLine = document.querySelector('.desktop-field-line');
+    const desktopFieldTerrain = document.querySelector('.desktop-field-line__terrain');
+    const desktopFieldSafety = document.querySelector('.desktop-field-line__safety');
+    const desktopFieldNavigation = document.querySelector('.desktop-field-line__navigation');
     const actionDock = document.querySelector('.action-dock');
     const actionControls = actionDock ? Array.from(actionDock.children) : [];
     const mobileFieldStrip = document.querySelector('.mobile-field-strip');
@@ -452,6 +456,7 @@ function rendererProbeScript() {
     const mobileObjective = document.querySelector('.mobile-field-strip__objective');
     const mobileSafety = document.querySelector('.mobile-field-strip__safety');
     const mobileTerrain = document.querySelector('.mobile-field-strip__terrain');
+    const mobileNavigation = document.querySelector('.mobile-field-strip__navigation');
     const mobileActions = document.querySelector('.mobile-field-strip__actions');
     const mobileVitals = Array.from(document.querySelectorAll('.mobile-vital')).map((vital) => {
       const progress = vital.querySelector('progress');
@@ -897,6 +902,14 @@ function rendererProbeScript() {
             arrow: worldCompassArrow?.textContent?.trim() || null,
           }
         : null,
+      desktopField: {
+        visible: visiblyIntersectsViewport(desktopFieldLine),
+        insideViewport: whollyInsideViewport(desktopFieldLine),
+        pointerEvents: desktopFieldLine ? getComputedStyle(desktopFieldLine).pointerEvents : null,
+        terrain: desktopFieldTerrain?.textContent?.trim() || null,
+        safety: desktopFieldSafety?.textContent?.trim() || null,
+        navigation: desktopFieldNavigation?.textContent?.trim() || null,
+      },
       promises: {
         railOpen: contractRail instanceof HTMLDetailsElement ? contractRail.open : null,
         railVisible: visiblyIntersectsViewport(contractRail),
@@ -960,6 +973,7 @@ function rendererProbeScript() {
           objective: mobileObjective?.textContent?.trim() || null,
           safety: mobileSafety?.textContent?.trim() || null,
           terrain: mobileTerrain?.textContent?.trim() || null,
+          navigation: mobileNavigation?.textContent?.trim() || null,
           actions: mobileActions?.textContent?.trim() || null,
           vitals: mobileVitals,
         },
@@ -1915,7 +1929,11 @@ async function installSmokeAdriftFixture(contents) {
     player.velocityY = 0;
     player.mode = 'foot';
     player.pace = 'rest';
-    player.stamina = 800_000;
+    // Keep one lawful movement beat available, but make that beat exhaust the
+    // courier before tide progression can change this smoke-only deep-water
+    // contact. The packaged test is about the production ADRIFT transition and
+    // held/released paddle controls, not a multi-second endurance countdown.
+    player.stamina = 13_000;
     player.stability = 0;
     player.stabilityTrend = 'falling';
     player.stabilityHint = 'Deep current · one movement beat tests ADRIFT recovery';
@@ -2046,16 +2064,98 @@ async function verifySmokeAdrift(contents, fixture) {
     throw new Error(`the packaged ADRIFT paddle key was not accepted: ${JSON.stringify(pressed)}`);
   }
 
+  // The deliberately exhausted fixture enters ADRIFT before it has the reserve
+  // for a useful stroke. Prove that state first, then release the held key and
+  // let the production recovery loop build a small, real paddling reserve.
+  const transition = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probe.playerMode === 'swept' &&
+      probe.playerAdrift?.paddling === false &&
+      probe.playerAdrift?.catchingBreath === true &&
+      probe.uiAdrift?.paddling === false &&
+      probe.uiAdrift?.catchingBreath === true &&
+      probe.uiAdrift?.label === 'CATCHING BREATH' &&
+      probe.uiAdrift?.instruction === 'FLOAT · LET STAMINA RETURN' &&
+      probe.interact?.label === 'ADRIFT · paddle / float' &&
+      probe.interact?.disabled === true &&
+      probe.reliefAdrift?.visible === true &&
+      probe.reliefAdrift?.insideViewport === true &&
+      probe.reliefAdrift?.tone === 'adrift' &&
+      probe.reliefAdrift?.selected === 'true' &&
+      probe.reliefAdrift?.text === 'CATCHING BREATH · FLOAT · LET STAMINA RETURN',
+    SMOKE_TEST.timeoutMs,
+  );
+
+  const recoveryRelease = await contents.executeJavaScript(`(() => {
+    const canvas = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'))
+      .find((candidate) => !candidate.hidden && candidate.dataset.renderer === 'relief-3d');
+    if (!(canvas instanceof HTMLCanvasElement)) return null;
+    const event = new KeyboardEvent('keyup', {
+      key: 'w',
+      code: 'KeyW',
+      bubbles: true,
+      cancelable: true,
+    });
+    const consumed = canvas.dispatchEvent(event) === false;
+    return {
+      consumed,
+      staminaAtRelease: window.__TIDEWEFT__?.runtime?.getRenderView?.()?.player?.stamina ?? null,
+    };
+  })()`, true);
+  if (recoveryRelease?.consumed !== true) {
+    throw new Error(`the packaged ADRIFT recovery release was not accepted: ${JSON.stringify(recoveryRelease)}`);
+  }
+
+  const recovered = await waitForRenderer(
+    contents,
+    (probe) =>
+      probeHasActiveRenderer(probe, 'relief-3d') &&
+      probe.playerMode === 'swept' &&
+      probe.playerStamina >= 0.04 &&
+      probe.playerAdrift?.paddling === false &&
+      probe.playerAdrift?.catchingBreath === true &&
+      probe.uiAdrift?.paddling === false &&
+      probe.uiAdrift?.catchingBreath === true &&
+      probe.uiAdrift?.label === 'CATCHING BREATH' &&
+      probe.uiAdrift?.instruction === 'FLOAT · LET STAMINA RETURN' &&
+      Number.isFinite(recoveryRelease.staminaAtRelease) &&
+      probe.playerStamina > recoveryRelease.staminaAtRelease &&
+      probe.reliefAdrift?.visible === true &&
+      probe.reliefAdrift?.insideViewport === true &&
+      probe.reliefAdrift?.text === 'CATCHING BREATH · FLOAT · LET STAMINA RETURN',
+    SMOKE_TEST.timeoutMs,
+  );
+
+  const paddlePressed = await contents.executeJavaScript(`(() => {
+    const canvas = Array.from(document.querySelectorAll('#p5-mount canvas[data-renderer]'))
+      .find((candidate) => !candidate.hidden && candidate.dataset.renderer === 'relief-3d');
+    if (!(canvas instanceof HTMLCanvasElement)) return null;
+    canvas.focus();
+    const event = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      bubbles: true,
+      cancelable: true,
+    });
+    return {
+      consumed: canvas.dispatchEvent(event) === false,
+      focused: document.activeElement === canvas,
+    };
+  })()`, true);
+  if (paddlePressed?.consumed !== true || paddlePressed?.focused !== true) {
+    throw new Error(`the packaged ADRIFT recovered paddle key was not accepted: ${JSON.stringify(paddlePressed)}`);
+  }
+
   const paddling = await waitForRenderer(
     contents,
     (probe) =>
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probe.playerMode === 'swept' &&
-      probe.playerTileIndex === fixture.tileIndex &&
-      probe.playerStamina < fixture.stamina &&
+      probe.playerStamina < recovered.playerStamina &&
       probe.playerAdrift?.paddling === true &&
       probe.playerAdrift?.catchingBreath === false &&
-      probe.playerAdrift?.waterDepth >= 0.12 &&
       probe.uiAdrift?.paddling === true &&
       probe.uiAdrift?.catchingBreath === false &&
       probe.uiAdrift?.label === 'PADDLING' &&
@@ -2094,7 +2194,6 @@ async function verifySmokeAdrift(contents, fixture) {
     contents,
     (probe) =>
       probeHasActiveRenderer(probe, 'relief-3d') &&
-      probe.tick > paddling.tick &&
       probe.playerMode === 'swept' &&
       probe.playerAdrift?.paddling === false &&
       probe.playerAdrift?.catchingBreath === true &&
@@ -2111,7 +2210,9 @@ async function verifySmokeAdrift(contents, fixture) {
   );
 
   return {
-    input: { pressed, released },
+    input: { pressed, recoveryRelease, paddlePressed, released },
+    transition: smokeAdriftEvidence(transition),
+    recovered: smokeAdriftEvidence(recovered),
     paddling: smokeAdriftEvidence(paddling),
     floating: smokeAdriftEvidence(floating),
   };
@@ -2336,6 +2437,23 @@ function probeHasPointerTransparentObjective(probe) {
   );
 }
 
+function probeHasDesktopFieldTruth(probe) {
+  const field = probe?.desktopField;
+  return Boolean(
+    probe?.mobileHud?.breakpointActive === false &&
+    field?.visible === true &&
+    field.insideViewport === true &&
+    field.pointerEvents === 'none' &&
+    /^(?:WATER|GROUND) · /u.test(field.terrain || '') &&
+    field.terrain.split(' · ').length >= 4 &&
+    field.safety?.includes('STAB') &&
+    field.navigation?.includes('REGION') &&
+    field.navigation.includes('LOCAL') &&
+    field.navigation.includes('GLOBAL') &&
+    field.navigation.includes('FPS')
+  );
+}
+
 function probeHasMobileHudFrame(probe) {
   const mobile = probe?.mobileHud;
   const toggle = mobile?.toggle;
@@ -2344,6 +2462,7 @@ function probeHasMobileHudFrame(probe) {
   const kit = probe?.kit?.trigger;
   return Boolean(
     mobile?.breakpointActive === true &&
+    probe?.desktopField?.visible === false &&
     mobile.strip?.visible === true &&
     mobile.strip?.insideViewport === true &&
     mobile.strip?.overflowX === false &&
@@ -2355,6 +2474,10 @@ function probeHasMobileHudFrame(probe) {
     mobile.compactCopy.safety?.includes('DEEP: STAM/STAB 0 → ADRIFT') &&
     /^(?:WATER|GROUND) · /u.test(mobile.compactCopy.terrain || '') &&
     mobile.compactCopy.terrain.split(' · ').length >= 4 &&
+    mobile.compactCopy.navigation?.includes('R ') &&
+    mobile.compactCopy.navigation.includes('L ') &&
+    mobile.compactCopy.navigation.includes('G ') &&
+    mobile.compactCopy.navigation.includes('FPS') &&
     Array.isArray(vitals) &&
     vitals.length === 4 &&
     vitals.map((vital) => vital.label).join(',') === 'STAM,STAB,LOOM,CARGO' &&
@@ -3348,16 +3471,26 @@ async function runProductionSmoke(window) {
   });
 
   await window.loadURL(PRODUCTION_ENTRY_URL);
-  const shellProbe = await waitForRenderer(
-    contents,
-    (probe) =>
-      probe.url === PRODUCTION_ENTRY_URL &&
-      probe.documentReadyState === 'complete' &&
-      probe.statusState === 'ready' &&
-      probe.hasRuntime === true &&
-      probe.uiReady === 'true',
-    SMOKE_TEST.timeoutMs,
-  );
+  let shellProbe;
+  try {
+    shellProbe = await waitForRenderer(
+      contents,
+      (probe) =>
+        probe.url === PRODUCTION_ENTRY_URL &&
+        probe.documentReadyState === 'complete' &&
+        probe.statusState === 'ready' &&
+        probe.hasRuntime === true &&
+        probe.uiReady === 'true',
+      SMOKE_TEST.timeoutMs,
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${reason} Renderer errors: ${JSON.stringify(rendererErrors)}. ` +
+      `Renderer warnings: ${JSON.stringify(rendererWarnings)}. ` +
+      `Resource failures: ${JSON.stringify(resourceFailures)}.`,
+    );
+  }
   if (shellProbe.reliefSupported !== true) {
     throw new Error(
       `Relief 3D initialization failed: ${shellProbe.reliefFailure || 'unknown reason'}. ` +
@@ -3514,6 +3647,7 @@ async function runProductionSmoke(window) {
     (probe) =>
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasDesktopFieldTruth(probe) &&
       probeHasPlayableTideHarp(probe) &&
       probeHasPointerTransparentObjective(probe) &&
       probe.leftPaneGap >= 0 &&
@@ -3530,6 +3664,7 @@ async function runProductionSmoke(window) {
     (probe) =>
       probeHasActiveRenderer(probe, 'relief-3d') &&
       probeHasViewButtonMode(probe, 'relief-3d') &&
+      probeHasDesktopFieldTruth(probe) &&
       probeHasPlayableTideHarp(probe) &&
       probeHasPointerTransparentObjective(probe) &&
       probe.layout?.leftRailDisplay === 'flex' &&

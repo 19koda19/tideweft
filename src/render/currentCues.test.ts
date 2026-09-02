@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { FIXED_POINT } from "../sim/types";
 import { surfaceCurrentDirection } from "../game/currentDirection";
 import type { TerrainGridView, TerrainTileView } from "./types";
-import { MAX_SURFACE_CURRENT_CUES, buildSurfaceCurrentCues } from "./currentCues";
+import {
+  MAX_SURFACE_CURRENT_CUES,
+  MAX_WATER_VOICE_LABELS,
+  buildSurfaceCurrentCues,
+  buildWaterVoiceLabels,
+} from "./currentCues";
 
 const tile = (overrides: Partial<TerrainTileView> = {}): TerrainTileView => ({
   kind: "channel",
@@ -33,15 +38,22 @@ describe("surface current cue geometry", () => {
   it("uses one fixed-size arrow per wet 2x2 block and caps the overlay", () => {
     const terrain = grid(4, 4, Array.from({ length: 16 }, () => tile()));
     const cues = buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, {
+      analytical: false,
       reducedMotion: true,
     });
 
     expect(cues).toHaveLength(4);
     expect(new Set(cues.map((cue) => `${Math.floor(cue.column / 2)},${Math.floor(cue.row / 2)}`)).size).toBe(4);
-    expect(buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, { maxCues: 2 })).toHaveLength(2);
+    expect(buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, {
+      analytical: false,
+      maxCues: 2,
+    })).toHaveLength(2);
 
     const large = grid(80, 80, Array.from({ length: 6_400 }, () => tile()));
-    expect(buildSurfaceCurrentCues(large, { x: 1, y: 0 }, { maxCues: 99_999 }))
+    expect(buildSurfaceCurrentCues(large, { x: 1, y: 0 }, {
+      analytical: false,
+      maxCues: 99_999,
+    }))
       .toHaveLength(MAX_SURFACE_CURRENT_CUES);
   });
 
@@ -62,26 +74,32 @@ describe("surface current cue geometry", () => {
       tile({ waterDepth: 0 }),
     ]);
 
-    expect(() => buildSurfaceCurrentCues(terrain, { x: 1, y: 0 })).not.toThrow();
-    expect(buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }).map((cue) => cue.tileIndex)).toEqual([0]);
+    expect(() => buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }, { analytical: false })).not.toThrow();
+    expect(buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }, { analytical: false })
+      .map((cue) => cue.tileIndex)).toEqual([0]);
   });
 
-  it("does not encode unknown depth magnitude in arrow placement or shape", () => {
+  it("uses the shared profile so local depth and roughness change visible flow energy", () => {
     const shallow = grid(1, 1, [tile({ waterDepth: 0.08, depthKnown: 0 })]);
-    const deep = grid(1, 1, [tile({ waterDepth: 0.92, depthKnown: 0 })]);
-    const options = { reducedMotion: true, timeMs: 99_999 } as const;
+    const deep = grid(1, 1, [tile({ waterDepth: 0.92, roughness: 0.9, depthKnown: 0 })]);
+    const options = { analytical: false, reducedMotion: true, timeMs: 99_999 } as const;
 
-    expect(buildSurfaceCurrentCues(shallow, { x: 1, y: -1 }, options))
-      .toEqual(buildSurfaceCurrentCues(deep, { x: 1, y: -1 }, options));
+    const calm = buildSurfaceCurrentCues(shallow, { x: 1, y: -1 }, options)[0];
+    const rough = buildSurfaceCurrentCues(deep, { x: 1, y: -1 }, options)[0];
+    expect(rough?.strength).toBeGreaterThan(calm?.strength ?? 1);
+    expect(rough?.turbulence).toBeGreaterThan(calm?.turbulence ?? 1);
+    expect(rough?.foam.length).toBeGreaterThan(calm?.foam.length ?? 4);
   });
 
   it("normalizes heading, points the arrow downstream, and freezes reduced motion", () => {
     const terrain = grid(1, 1, [tile()]);
     const frozenEarly = buildSurfaceCurrentCues(terrain, { x: -8, y: 8 }, {
+      analytical: false,
       timeMs: 0,
       reducedMotion: true,
     })[0];
     const frozenLate = buildSurfaceCurrentCues(terrain, { x: -8, y: 8 }, {
+      analytical: false,
       timeMs: 50_000,
       reducedMotion: true,
     })[0];
@@ -92,8 +110,14 @@ describe("surface current cue geometry", () => {
     expect(frozenEarly.tip.x).toBeLessThan(frozenEarly.tail.x);
     expect(frozenEarly.tip.y).toBeGreaterThan(frozenEarly.tail.y);
 
-    const movingEarly = buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, { timeMs: 0 })[0];
-    const movingLate = buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, { timeMs: 1_000 })[0];
+    const movingEarly = buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, {
+      analytical: false,
+      timeMs: 0,
+    })[0];
+    const movingLate = buildSurfaceCurrentCues(terrain, { x: -1, y: 1 }, {
+      analytical: false,
+      timeMs: 1_000,
+    })[0];
     expect(movingLate?.center).not.toEqual(movingEarly?.center);
   });
 
@@ -102,7 +126,7 @@ describe("surface current cue geometry", () => {
     const cue = (windY: number) => buildSurfaceCurrentCues(
       terrain,
       surfaceCurrentDirection(-1, windY),
-      { reducedMotion: true },
+      { analytical: false, reducedMotion: true },
     )[0];
     const tiny = cue(1);
     const moderate = cue(240_000);
@@ -121,8 +145,8 @@ describe("surface current cue geometry", () => {
 
   it("returns no cue for a missing or zero-length current", () => {
     const terrain = grid(1, 1, [tile()]);
-    expect(buildSurfaceCurrentCues(terrain, undefined)).toEqual([]);
-    expect(buildSurfaceCurrentCues(terrain, { x: 0, y: 0 })).toEqual([]);
+    expect(buildSurfaceCurrentCues(terrain, undefined, { analytical: false })).toEqual([]);
+    expect(buildSurfaceCurrentCues(terrain, { x: 0, y: 0 }, { analytical: false })).toEqual([]);
   });
 
   it("never leaks live current direction through hidden or peripheral tiles", () => {
@@ -131,23 +155,88 @@ describe("surface current cue geometry", () => {
       tile({ currentVisibility: 1, currentDetailVisibility: 0.5 }),
       tile({ currentVisibility: 1, currentDetailVisibility: 1 }),
     ]);
-    expect(buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }).map((cue) => cue.tileIndex))
+    expect(buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }, { analytical: false })
+      .map((cue) => cue.tileIndex))
       .toEqual([2]);
+  });
+
+  it("shows transient directly perceived water without charting or labeling its depth", () => {
+    const terrain = grid(2, 1, [
+      tile({ discovered: 0, currentVisibility: 1, currentDetailVisibility: 1 }),
+      tile({ discovered: 0, currentVisibility: 1, currentDetailVisibility: 0 }),
+    ]);
+    const discoveryBefore = terrain.tiles.map(({ discovered }) => discovered);
+    const visible = buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }, {
+      analytical: false,
+      requireDetailDisclosure: true,
+    });
+    expect(visible.map(({ tileIndex }) => tileIndex)).toEqual([0]);
+    expect(visible.every((cue) => !("depth" in cue))).toBe(true);
+    expect(terrain.tiles.map(({ discovered }) => discovered)).toEqual(discoveryBefore);
+
+    const turnedAway = {
+      ...terrain,
+      tiles: terrain.tiles.map((candidate) => ({
+        ...candidate,
+        currentDetailVisibility: 0 as const,
+      })),
+    };
+    expect(buildSurfaceCurrentCues(turnedAway, { x: 1, y: 0 }, {
+      analytical: false,
+      requireDetailDisclosure: true,
+    })).toEqual([]);
   });
 
   it("fails closed on a missing detail field in a perception-enabled view", () => {
     const malformed = grid(1, 1, [tile({ currentVisibility: 1 })]);
     expect(buildSurfaceCurrentCues(malformed, { x: 1, y: 0 }, {
+      analytical: false,
       requireDetailDisclosure: true,
     })).toEqual([]);
 
     // Missing disclosure fields remain compatible only for explicit legacy
     // callers that have no perception snapshot.
-    expect(buildSurfaceCurrentCues(malformed, { x: 1, y: 0 })).toHaveLength(1);
+    expect(buildSurfaceCurrentCues(malformed, { x: 1, y: 0 }, {
+      analytical: false,
+    })).toHaveLength(1);
     expect(buildSurfaceCurrentCues(
       grid(1, 1, [tile({ currentVisibility: 1, currentDetailVisibility: 1 })]),
       { x: 1, y: 0 },
-      { requireDetailDisclosure: true },
+      { analytical: false, requireDetailDisclosure: true },
     )).toHaveLength(1);
+  });
+
+  it("marks arrowheads analytical only and bounds sparse water syllables", () => {
+    const terrain = grid(8, 8, Array.from({ length: 64 }, (_, index) => tile({
+      roughness: index % 2 ? 0.05 : 0.95,
+      waterDepth: index % 2 ? 0.12 : 0.9,
+    })));
+    const ordinary = buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }, {
+      analytical: false,
+      timeMs: 0,
+      reducedMotion: true,
+    });
+    const scanned = buildSurfaceCurrentCues(terrain, { x: 1, y: 0 }, {
+      analytical: true,
+      timeMs: 0,
+      reducedMotion: true,
+    });
+    expect(ordinary.every((cue) => !cue.analytical)).toBe(true);
+    expect(scanned.every((cue) => cue.analytical)).toBe(true);
+    expect(ordinary.every((cue) =>
+      cue.headLeft.x === cue.tip.x
+      && cue.headLeft.y === cue.tip.y
+      && cue.headRight.x === cue.tip.x
+      && cue.headRight.y === cue.tip.y
+    )).toBe(true);
+    expect(scanned.every((cue) =>
+      cue.headLeft.x !== cue.tip.x || cue.headLeft.y !== cue.tip.y
+    )).toBe(true);
+    expect(new Set(ordinary.map((cue) => cue.voice))).toEqual(new Set(["ohm", "whissh"]));
+
+    const visible = buildWaterVoiceLabels(ordinary, 0, false, 99);
+    expect(visible.length).toBeLessThanOrEqual(MAX_WATER_VOICE_LABELS);
+    expect(visible.every(({ text }) => text === "ohm" || text === "whissh")).toBe(true);
+    expect(buildWaterVoiceLabels(ordinary, 1_500, false)).toEqual([]);
   });
 });

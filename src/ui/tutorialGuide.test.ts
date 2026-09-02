@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(16);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(17);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -194,9 +194,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("one-slot information journey");
     expect(copy).toContain("Signed reports · information only");
     expect(copy).toContain("disabled button says why");
-    expect(copy).toContain("Stability is footing, not a second stamina bar");
+    expect(copy).toContain("not stored stamina and not a gauge that keeps draining");
     expect(copy).toContain("Pace has no selector");
-    expect(copy).toContain("Sparse arrows");
+    expect(copy).toContain("Sparse streamlines, foam, and real water ambience");
     expect(copy).toContain("stamina or stability reaching zero");
     expect(copy).toContain("durable traversal ordinal");
     expect(copy).toContain("changes the courier's color and silhouette");

@@ -9,6 +9,7 @@ import {
   type SaveRepository,
 } from "../platform/persistence";
 import {
+  FIXED_POINT,
   LEGACY_WORLD_HEIGHT,
   LEGACY_WORLD_WIDTH,
   RESOURCE_KINDS,
@@ -55,6 +56,11 @@ import {
   REGIONAL_TRAVEL_HALO_TILES,
   REGIONAL_TRAVEL_ROWS,
 } from "./regionalTravel";
+import {
+  capturePlayerRegionalTravel,
+  restorePlayerRegionalTravel,
+  serializePlayerRegionalTravel,
+} from "./regionalPlayerTravel";
 import type { RegionalPromiseJourneyState } from "./regionalPromiseJourney";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
@@ -1479,12 +1485,26 @@ describe("runtime clarity guards", () => {
 
   it("announces stability loss, rather than stamina loss, when deep water takes control", async () => {
     const world = createWorld("runtime stability sweep", "calm");
+    const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
+    const deepTile = world.terrain.tiles.find((tile) => !occupied.has(tile.index));
+    if (!deepTile) throw new Error("fixture did not provide an open water test tile");
+    deepTile.terrain = "deep-water";
+    deepTile.roughness = FIXED_POINT;
+    deepTile.elevation = 0;
+    runTicks(world, 360);
+    world.weather = {
+      kind: "storm",
+      intensity: FIXED_POINT,
+      windX: FIXED_POINT,
+      windY: -FIXED_POINT,
+      nextChangeTick: world.meta.completedTick + 1_000,
+    };
     const view = createWorldView(world);
-    const deepTile = view.terrain.tiles.find((tile) => tile.waterDepth >= 120_000);
-    if (!deepTile) throw new Error("fixture did not generate deep water");
+    const liveDeepTile = view.terrain.tiles[deepTile.index];
+    if (!liveDeepTile) throw new Error("fixture lost deep water in projection");
     const player = createPlayer(view);
-    placePlayerOnTile(player, deepTile);
-    player.stability = 0;
+    placePlayerOnTile(player, liveDeepTile);
+    player.stability = FIXED_POINT;
     player.stamina = 800_000;
     const repository = new MemoryRepository(runtimeSaveRecord(
       world,
@@ -1495,6 +1515,7 @@ describe("runtime clarity guards", () => {
 
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
     advancePlayerSteps(runtime, 1);
 
     expect(runtime.getRenderView().player.mode).toBe("swept");
@@ -1518,36 +1539,76 @@ describe("runtime clarity guards", () => {
     setup.destroy();
 
     // Begin from a real, sealed v4 save with an authoritative physical cargo
-    // manifest. The fixture then makes the compatibility region one broad
-    // channel and removes stability so the next ordinary movement beat enters
-    // ADRIFT through the production transition.
+    // manifest. Choose the strongest real wet contact in its persisted region
+    // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
     expect(prepared.version).toBe(4);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
-    for (const tile of preparedWorld.terrain.tiles) {
-      tile.elevation = 0;
-      tile.moisture = 1_000_000;
-      tile.roughness = 0;
-      tile.terrain = "deep-water";
-      tile.baseTravelCost = 1_100;
-    }
+    const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
+    runTicks(preparedWorld, ticksToHighTide);
+    preparedWorld.weather = {
+      kind: "storm",
+      intensity: FIXED_POINT,
+      windX: FIXED_POINT,
+      windY: -FIXED_POINT,
+      nextChangeTick: preparedWorld.meta.completedTick + 1_000,
+    };
+    const preparedRegional = restorePlayerRegionalTravel(
+      preparedWorld.meta.rootSeed,
+      prepared.player,
+      prepared.regionalTravel ?? "",
+    );
+    if (!preparedRegional) throw new Error("fixture lost its sealed regional stream");
+    const exposedChannelTile = [...preparedRegional.window.terrain.tiles]
+      .filter((tile) => tile.x > 1
+        && tile.y > 1
+        && tile.x < REGIONAL_TRAVEL_COLUMNS - 2
+        && tile.y < REGIONAL_TRAVEL_ROWS - 2
+        && preparedWorld.tide.level - tile.elevation >= 120_000)
+      .sort((left, right) => (
+        (preparedWorld.tide.level - right.elevation) * 2 + right.roughness
+      ) - (
+        (preparedWorld.tide.level - left.elevation) * 2 + left.roughness
+      ))[0];
+    if (!exposedChannelTile) throw new Error("fixture did not provide an exposed channel tile");
     prepared.world = serializeWorld(preparedWorld);
+    const regionalX = exposedChannelTile.x;
+    const regionalY = exposedChannelTile.y;
+    const regionalTileIndex = regionalY * REGIONAL_TRAVEL_COLUMNS + regionalX;
+    prepared.player.x = regionalX * TILE_UNITS + TILE_UNITS / 2;
+    prepared.player.y = regionalY * TILE_UNITS + TILE_UNITS / 2;
+    prepared.player.previousX = prepared.player.x;
+    prepared.player.previousY = prepared.player.y;
+    prepared.player.currentTrace = [regionalTileIndex];
+    prepared.player.surveyTrace = [regionalTileIndex];
     prepared.player.mode = "foot";
     prepared.player.pace = "steady";
-    prepared.player.stability = 0;
+    prepared.player.stability = FIXED_POINT;
     prepared.player.stamina = 800_000;
     prepared.player.velocityX = 0;
-    prepared.player.velocityY = 0;
+    prepared.player.velocityY = -100;
     prepared.player.sweepPath = [];
     prepared.player.sweepTicksRemaining = 0;
     prepared.player.sweepTotalTicks = 0;
     prepared.player.sweepSupport = null;
+    prepared.regionalTravel = serializePlayerRegionalTravel(
+      capturePlayerRegionalTravel(preparedRegional, prepared.player),
+    );
+    prepared.promiseJourney = prepared.player.activeContractId === null
+      ? { version: 1, contractId: null, detoured: false, compatibilityTrace: [] }
+      : {
+          version: 1,
+          contractId: prepared.player.activeContractId,
+          detoured: true,
+          compatibilityTrace: [],
+        };
     prepared.traversalFeedback = createTraversalFeedbackState();
     resealGameSave(prepared);
     repository.replace({
       ...preparedRecord,
+      playTicks: preparedWorld.meta.completedTick,
       worldJson: JSON.stringify(prepared),
     });
 
@@ -1642,14 +1703,16 @@ describe("runtime clarity guards", () => {
     await runtime.save();
     const durableRecord = repository.snapshot();
     const durable = decodeGameSave(durableRecord);
-    if (!durable.physicalCargo || !durable.traversalFeedback) {
+    const durableCargo = durable.physicalCargo;
+    const durableTraversal = durable.traversalFeedback;
+    if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
     expect(durable.version).toBe(4);
     expect(durableRecord.payloadVersion).toBe(4);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
-    expect(durable.traversalFeedback.incident?.kind).toBe("sweep");
+    expect(durableTraversal.incident?.kind).toBe("sweep");
     const positionAtSave = { x: durable.player.x, y: durable.player.y };
     const priorPositionAtSave = {
       x: durable.player.previousX,
@@ -1657,8 +1720,8 @@ describe("runtime clarity guards", () => {
     };
     const staminaAtSave = durable.player.stamina;
     const supportAtSave = durable.player.sweepSupport;
-    const incidentAtSave = structuredClone(durable.traversalFeedback);
-    const cargoAtSave = structuredClone(durable.physicalCargo);
+    const incidentAtSave = structuredClone(durableTraversal);
+    const cargoAtSave = structuredClone(durableCargo);
     const renderAtSave = structuredClone(runtime.getRenderView().player);
     runtime.destroy();
 

@@ -34,7 +34,7 @@ import {
   type TideweftUICommand,
   type TideweftUIView,
 } from "../ui/types";
-import { TideweftSoundscape } from "../audio/soundscape";
+import { TideweftSoundscape, type WaterAmbienceState } from "../audio/soundscape";
 import {
   ConflictingSaveCopiesError,
   createSaveRepository,
@@ -45,6 +45,8 @@ import {
   type SaveRepository,
 } from "../platform/persistence";
 import { acceptsRestartPhrase } from "./restartPolicy";
+import { surfaceCurrentDirection } from "./currentDirection";
+import { deriveWaterFlowProfile } from "./waterFlow";
 import {
   smoothAutopilotPath,
   steerAutopilotToPoint,
@@ -849,8 +851,8 @@ export async function createTideweftRuntime(
       pendingParcelRecoverOnArrival = false;
       const collapse = result.sweepCause === "stability"
         ? {
-            change: "Deep-water instability became a recoverable sweep; the cargo stayed accountable and weathered once.",
-            warning: "STABILITY EMPTY IN DEEP WATER — SWEPT.",
+            change: "Deep-water footing failed under the live conditions; the recoverable sweep kept cargo accountable and weathered it once.",
+            warning: "CURRENT FOOTING FAILED IN DEEP WATER — SWEPT.",
           }
         : {
             change: "Deep-water exhaustion became a recoverable sweep; the cargo stayed accountable and weathered once.",
@@ -937,6 +939,7 @@ export async function createTideweftRuntime(
       worldView.tide.level / 1_000_000,
       worldView.weather.intensity / 1_000_000,
       averageObservedRouteStrength(worldView, ambiencePerception.detailVisibilityGrades),
+      localWaterAmbience(worldView, player),
     );
     refreshViews();
 
@@ -4456,6 +4459,57 @@ function wayknotFailureMessage(
 
 function isTerminal(status: ContractState["status"]): boolean {
   return status === "fulfilled" || status === "expired" || status === "cancelled";
+}
+
+/** The looping noise graph listens to one bounded, distance-softened local wet tile. */
+export function localWaterAmbience(
+  world: WorldView,
+  player: PlayerState,
+): WaterAmbienceState {
+  const centerIndex = playerTileIndex(player);
+  const centerColumn = centerIndex % world.terrain.width;
+  const centerRow = Math.floor(centerIndex / world.terrain.width);
+  const radius = 6;
+  let strongest: {
+    readonly profile: ReturnType<typeof deriveWaterFlowProfile>;
+    readonly attenuation: number;
+    readonly dx: number;
+    readonly score: number;
+  } | undefined;
+  for (let row = Math.max(0, centerRow - radius); row <= Math.min(world.terrain.height - 1, centerRow + radius); row += 1) {
+    for (let column = Math.max(0, centerColumn - radius); column <= Math.min(world.terrain.width - 1, centerColumn + radius); column += 1) {
+      const dx = column - centerColumn;
+      const dy = row - centerRow;
+      const distance = Math.hypot(dx, dy);
+      if (distance > radius) continue;
+      const tile = world.terrain.tiles[row * world.terrain.width + column];
+      if (!tile) continue;
+      const profile = deriveWaterFlowProfile({
+        waterDepth: tile.waterDepth,
+        bedRoughness: tile.roughness,
+        tideLevel: world.tide.level,
+        weatherIntensity: world.weather.intensity,
+      });
+      if (profile.voice === "silent") continue;
+      const attenuation = 1 / (1 + distance * 0.7);
+      const score = (profile.strength + profile.turbulence * 0.55) * attenuation;
+      if (!strongest || score > strongest.score) {
+        strongest = { profile, attenuation, dx, score };
+      }
+    }
+  }
+  if (!strongest) return { strength: 0, turbulence: 0, voice: "silent", pan: 0 };
+  const direction = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+  const spatialPan = strongest.dx === 0 ? 0 : Math.sign(strongest.dx) * 0.68;
+  const flowPan = (direction.x * 0.18 + direction.y * 0.06) / FIXED_POINT;
+  return {
+    strength: strongest.profile.strength / FIXED_POINT * strongest.attenuation,
+    turbulence: strongest.profile.turbulence / FIXED_POINT * strongest.attenuation,
+    voice: strongest.profile.voice,
+    // A bank-side source stays perceptually on its physical side; flow adds a
+    // smaller directional drift without pulling it across the listener.
+    pan: Math.max(-1, Math.min(1, spatialPan + flowPan)),
+  };
 }
 
 export function averageObservedRouteStrength(

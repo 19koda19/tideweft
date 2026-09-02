@@ -61,12 +61,14 @@ export function navigationTelemetryCopy(
   const fps = telemetry?.active && telemetry.frameCount >= 2 && telemetry.fps > 0
     ? `${Math.round(telemetry.fps)} FPS`
     : "FPS —";
-  if (!navigation) return compact ? `R ?,? · G ?,? · ${fps}` : `REGION ?,? · GLOBAL ?,? · ${fps}`;
+  if (!navigation) return compact
+    ? `R ?,? · L ?,? · G ?,? · ${fps}`
+    : `REGION ?,? · LOCAL ?,? · GLOBAL ?,? · ${fps}`;
   const region = `${signedAxis(navigation.regionX)},${signedAxis(navigation.regionY)}`;
   const local = `${navigation.localX},${navigation.localY}`;
   const global = `${signedAxis(navigation.globalX)},${signedAxis(navigation.globalY)}`;
   return compact
-    ? `R ${region} · G ${global} · ${fps}`
+    ? `R ${region} · L ${local} · G ${global} · ${fps}`
     : `REGION ${region} · LOCAL ${local} · GLOBAL ${global} · ${fps}`;
 }
 const RESTART_SEED_REQUIRED_MESSAGE =
@@ -153,7 +155,7 @@ export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
   const sweepRule = "DEEP: STAM/STAB 0 → ADRIFT";
   const safety = input.swept
     ? `ADRIFT · ${input.fieldHint} · STAM ${stamina}% · STAB ${stability}%`
-    : `${input.bracing ? "BRACING · " : ""}${stabilityCause} · ${sweepRule}`;
+    : `${input.bracing ? "BRACING · " : ""}${stabilityCause} · STAB ${stability}% · ${sweepRule}`;
   const terrain = `${input.isWater ? "WATER" : "GROUND"} · ${input.terrain} · ${input.depth} · ${input.effort}`;
   const actions = [
     input.interactLabel?.trim() || "Interact",
@@ -674,6 +676,10 @@ interface UIRefs {
   mobileTerrain: HTMLSpanElement;
   mobileActions: HTMLSpanElement;
   mobileNavigation: HTMLSpanElement;
+  desktopFieldLine: HTMLElement;
+  desktopFieldTerrain: HTMLSpanElement;
+  desktopFieldSafety: HTMLSpanElement;
+  desktopFieldNavigation: HTMLSpanElement;
   worldName: HTMLParagraphElement;
   clockDay: HTMLSpanElement;
   clockTime: HTMLSpanElement;
@@ -1074,6 +1080,28 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   cargoWrapper.append(cargoLabel);
   vitals.append(staminaWrapper, stabilityWrapper, scanWrapper, cargoWrapper);
   topbar.append(identity, clock, tideReadout, weatherReadout, vitals);
+
+  const desktopFieldLine = createElement("section", "desktop-field-line");
+  desktopFieldLine.setAttribute(
+    "aria-label",
+    "Current terrain, depth or ground, effort, stability cause, signed coordinates, and renderer cadence",
+  );
+  const desktopFieldTerrain = createElement(
+    "span",
+    "desktop-field-line__terrain",
+    "GROUND · Uncharted ground · Dry footing · Normal stamina use",
+  );
+  const desktopFieldSafety = createElement(
+    "span",
+    "desktop-field-line__safety",
+    "STABLE · DEEP: STAM/STAB 0 → ADRIFT",
+  );
+  const desktopFieldNavigation = createElement(
+    "span",
+    "desktop-field-line__navigation",
+    "REGION ?,? · LOCAL ?,? · GLOBAL ?,? · FPS —",
+  );
+  desktopFieldLine.append(desktopFieldTerrain, desktopFieldSafety, desktopFieldNavigation);
 
   const mobileFieldStrip = createElement("section", "mobile-field-strip glass-panel");
   mobileFieldStrip.setAttribute("aria-label", "Compact field status");
@@ -1601,6 +1629,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   shell.append(
     fieldSaveWarning.element,
     topbar,
+    desktopFieldLine,
     mobileFieldStrip,
     leftRail,
     inspector,
@@ -1633,6 +1662,10 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     mobileTerrain,
     mobileActions,
     mobileNavigation,
+    desktopFieldLine,
+    desktopFieldTerrain,
+    desktopFieldSafety,
+    desktopFieldNavigation,
     worldName,
     clockDay,
     clockTime,
@@ -2215,6 +2248,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     if (navigationCopy !== lastNavigationCopy) {
       lastNavigationCopy = navigationCopy;
       refs.navigation.textContent = navigationCopy;
+      refs.desktopFieldNavigation.textContent = navigationCopy;
     }
     if (mobileNavigationCopy !== lastMobileNavigationCopy) {
       lastMobileNavigationCopy = mobileNavigationCopy;
@@ -2223,6 +2257,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     if (navigationTitle !== lastNavigationTitle) {
       lastNavigationTitle = navigationTitle;
       refs.navigation.title = navigationTitle;
+      refs.desktopFieldNavigation.title = navigationTitle;
       refs.mobileNavigation.title = navigationTitle;
     }
     const titlePresented = forcedTitle ?? view.title.visible;
@@ -2389,6 +2424,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.mobileSafety.title = compactHud.safety;
     refs.mobileTerrain.textContent = compactHud.terrain;
     refs.mobileTerrain.title = compactHud.terrain;
+    refs.desktopFieldTerrain.textContent = compactHud.terrain;
+    refs.desktopFieldTerrain.title = compactHud.terrain;
+    refs.desktopFieldSafety.textContent = compactHud.safety;
+    refs.desktopFieldSafety.title = compactHud.safety;
     refs.mobileActions.textContent = compactHud.actions;
     refs.mobileActions.title = compactHud.actions;
     setProgress(refs.mobileStamina, view.player.stamina, `Stamina ${Math.round(view.player.stamina * 100)} percent`);

@@ -7,6 +7,7 @@ import {
   buildReliefPerceptionMaterialBatches,
 } from "./reliefTerrainBatches";
 import { buildTerrainMesh } from "./terrainMesh";
+import { currentTerrainDetailVisibility } from "./perceptionPresentation";
 import type {
   BiomeId,
   TerrainGridView,
@@ -120,6 +121,27 @@ describe("Relief terrain material batches", () => {
     const legacyChunk = buildTerrainMesh(source, { chunkSize: 3 }).chunks[0];
     if (!legacyChunk) throw new Error("fixture did not create a legacy chunk");
     expect(buildReliefPerceptionMaterialBatches(legacyChunk, source)).toEqual([]);
+  });
+
+  it("uses shared terrain memory for surface light only while exact detail stays live-closed", () => {
+    const source = grid(1, 1, [1]);
+    const hidden: TerrainGridView = {
+      ...source,
+      tiles: [{
+        ...source.tiles[0]!,
+        currentVisibility: 0,
+        currentDetailVisibility: 0,
+      }],
+    };
+    const chunk = buildTerrainMesh(hidden, { chunkSize: 1 }).chunks[0];
+    if (!chunk) throw new Error("fixture did not create a terrain chunk");
+    const remembered = new Float32Array([0.63]);
+    const batches = buildReliefPerceptionMaterialBatches(chunk, hidden, remembered);
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.currentVisibility).toBe(5 / 8);
+    expect(currentTerrainDetailVisibility(hidden.tiles[0], true)).toBe(0);
+    expect(remembered[0]).toBeCloseTo(0.63, 6);
   });
 
   it("shows currently seen uncharted terrain without promoting it into durable chart memory", () => {

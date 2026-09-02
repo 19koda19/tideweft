@@ -560,6 +560,80 @@ describe("Chart wind production path", () => {
   });
 });
 
+describe("Chart sounding disclosure", () => {
+  it("cuts exact depth labels immediately even while terrain memory is fading", () => {
+    vi.stubGlobal("performance", { now: () => 100 });
+    const base = view("sounding-detail", { x: 12, y: 12 });
+    const terrainTiles = Array.from({ length: 16 }, (_, index) => ({
+      kind: "channel" as const,
+      elevation: 0,
+      waterDepth: index === 2 ? 1 : 0,
+      discovered: 1,
+      depthKnown: index === 2 ? 1 : 0,
+      currentVisibility: index === 2 ? 1 : 0,
+      currentDetailVisibility: index === 2 ? 1 as const : 0 as const,
+    }));
+    let current: TideweftView = {
+      ...base,
+      perception: {
+        version: 3,
+        signature: "sounding-visible",
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+      },
+      terrain: {
+        columns: 4,
+        rows: 4,
+        tileSize: 24,
+        origin: { x: 0, y: 0 },
+        revision: "sounding-detail",
+        tiles: terrainTiles,
+      },
+      player: { ...base.player, position: { x: 12, y: 12 }, scanProgress: 1 },
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+    const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
+    expect(text.mock.calls.some(([copy]) => copy === "9 deep")).toBe(true);
+
+    text.mockClear();
+    current = {
+      ...current,
+      perception: { ...current.perception!, signature: "sounding-hidden" },
+      terrain: {
+        ...current.terrain,
+        tiles: current.terrain.tiles.map((candidate, index) => index === 2
+          ? { ...candidate, currentVisibility: 0, currentDetailVisibility: 0 as const }
+          : candidate),
+      },
+    };
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "9 deep")).toBe(false);
+
+    text.mockClear();
+    current = {
+      ...current,
+      terrain: {
+        ...current.terrain,
+        tiles: current.terrain.tiles.map((candidate, index) => {
+          if (index !== 2) return candidate;
+          const { depthKnown: _omitted, ...withoutDepthKnown } = candidate;
+          return { ...withoutDepthKnown, currentDetailVisibility: 1 as const };
+        }),
+      },
+    };
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "9 deep")).toBe(false);
+    renderer.destroy();
+  });
+});
+
 describe("Chart ADRIFT presentation path", () => {
   it("uses live optional facts for bounded panel-free paddle copy, color, wake, and pose", () => {
     vi.stubGlobal("performance", { now: () => 0 });

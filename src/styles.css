@@ -5728,7 +5728,7 @@ body {
 }
 
 .world-compass {
-  top: calc(var(--masthead-offset) + var(--ui-gap) + 3.85rem);
+  top: calc(var(--masthead-offset) + var(--ui-gap) + 6.25rem);
 }
 
 .ui-layer::before {
@@ -6204,6 +6204,54 @@ body {
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 0.42rem;
   letter-spacing: 0.025em;
+}
+
+/* Always-present desktop field truth. It shares mobile copy but remains
+   floating type so an absent objective can never hide terrain or stability. */
+#game-ui .desktop-field-line {
+  position: absolute;
+  z-index: 7;
+  top: calc(var(--masthead-offset) + var(--ui-gap) + 3.65rem);
+  left: 50%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: min(58rem, calc(100% - 26rem));
+  gap: 0.18rem 0.75rem;
+  padding: 0;
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  pointer-events: none;
+  text-align: center;
+  text-shadow: var(--floating-type-shadow);
+  transform: translateX(-50%);
+}
+
+#game-ui .desktop-field-line > span {
+  overflow-wrap: anywhere;
+  font-size: 0.52rem;
+  font-weight: 680;
+  letter-spacing: 0.025em;
+  line-height: 1.25;
+}
+
+#game-ui .desktop-field-line__terrain {
+  color: var(--gold);
+}
+
+#game-ui .desktop-field-line__navigation {
+  flex-basis: 100%;
+  color: var(--foam-muted);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.46rem;
+}
+
+@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
+  #game-ui .desktop-field-line {
+    display: none;
+  }
 }
 
 /* The collapsed EVENTS readout carries the latest observed system message.

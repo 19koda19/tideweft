@@ -2,6 +2,47 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.7",
+      "releaseDate": "2026-09-02",
+      "buildIdentity": "0.3.3-alpha.7",
+      "summary": "Footing is now a live physical percentage, rivers visibly carry their own calm or rough character, and Relief keeps dry ground earthy on every frame.",
+      "gameplayContractVersion": 15,
+      "tutorialVersion": 17,
+      "categories": {
+        "gameplay": [
+          "Stability now resolves directly to the percentage of balance supported by current speed, turning, grade, roughness, moisture, depth, local current, wind, load, cargo shift, footwear, fixtures, posture, and BRACE. Identical conditions hold one value instead of draining it again each fixed step.",
+          "Each wet tile now derives one deterministic local strength and turbulence profile from physical depth, bed roughness, tide, and weather. The same profile drives player footing, visible surface character, foam, and the river's restrained OHM or WHISSH voice.",
+          "Deep-water loss of control still occurs only when stamina or the current stability percentage reaches zero. The existing controllable ADRIFT state, physical cargo consequences, and shallow-water recovery remain authoritative."
+        ],
+        "fixes": [
+          "Relief now resets persistent WebGL emissive material state before every land batch. Water or actors from a prior frame can no longer tint later dry ground cyan after the correct first frame flashes by.",
+          "The Relief light rig now preserves warm mudflat, sandbar, marsh, meadow, ridge, and built materials while keeping actual channel, shallows, and deep water visibly separate and blue.",
+          "Rain and squalls no longer translate the Chart camera or the entire Relief world. Weather moves its screen-space precipitation, surface water, wind cues, and environmental effects without making the land shake.",
+          "Leaving a river recalculates stability immediately from the bank's support, so a remaining crosswind cannot keep the courier trapped at a depleted water value."
+        ],
+        "balancing": [
+          "BRACE raises the currently supported stability percentage and reduces travel speed rather than slowing an inevitable repeated drain. Calm crossings can remain controllable; sufficiently rough unbraced water can still reduce current balance to zero.",
+          "A CHALLENGING HARD remains the only ruleset. Accessibility can steady presentation, but it does not change river force, stability calculation, cargo risk, rewards, scarcity, or ADRIFT recovery."
+        ],
+        "interface": [
+          "Ordinary water uses moving streamlines and sparse foam instead of arrow carpets. SOUND / SCAN adds analytical arrowheads; surface character can communicate calm or rough flow without revealing an exact unsounded depth or effort value.",
+          "Desktop and compact mobile layouts now expose the same pane-free field facts: terrain and biome, WATER or GROUND and known depth, effort, live stability percentage and cause, signed region/local/global coordinates, and measured FPS.",
+          "Terrain that leaves the broad sight field now eases through a brief visual impression into dim Chart memory or uncharted darkness instead of snapping black. Chart and Relief share that terrain-only fade; people, parcels, resources, exact water detail, labels, actions, and hit targets still disappear immediately.",
+          "Relief precipitation remains a bounded two-dimensional screen-space effect over the 3D field and always travels downward."
+        ],
+        "saves": [
+          "Save version remains 4 and requires no migration. Existing numeric stamina and stability fields remain valid; the next physical contact deterministically recalculates stability from current conditions instead of replaying accumulated footing drain.",
+          "Local river character is derived from existing terrain, tide, and weather, so save/reload and region revisit reproduce the same physical profile without storing or rerolling a new river object.",
+          "The short terrain impression is one bounded presentation buffer, never save data or world knowledge. It clears on reload, world replacement, spatial recentering, and incompatible grid changes, and cannot preserve hidden actors or interactions."
+        ],
+        "knownLimitations": [
+          "Universal generated NPC identities, ABOUT inspection, state speech, actor emotions and deterrence, dogs, wildlife, health, all-water Possibility State, and generated regional settlement ecology are not live in this release.",
+          "Surface water now has shared deterministic strength, turbulence, visual motion, and textual voice, but a complete continuous natural-water audio field for every hydrological scale remains an ongoing sound-design pass.",
+          "Autonomous loose-parcel drift across a regional seam remains unfinished; a conserved parcel stays in the signed region where it stopped until that region becomes active again."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.6",
       "releaseDate": "2026-09-02",
       "buildIdentity": "0.3.3-alpha.6",

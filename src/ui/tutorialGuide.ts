@@ -624,7 +624,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "05",
     title: "Read the water before it takes your footing",
     shortTitle: "Water & safety",
-    summary: "Stamina pays for movement; stability measures control of body and load. Terrain, grade, roughness, moisture, water, current, wind, turning, load, footwear, and BRACE explain every change.",
+    summary: "Stamina pays for movement; stability is the current percentage of physical control supported by terrain, speed, water, weather, load, equipment, and BRACE.",
     keywords: ["stamina", "stability", "water", "depth", "scan", "sounding", "current", "swept", "adrift", "paddle", "float", "arrow", "fall", "stumble", "pace"],
     controlIds: ["brace-key", "brace-button", "scan-key", "scan-button"],
     steps: [
@@ -638,14 +638,14 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "meters-read-current",
         audience: "all",
-        title: "Read the surface arrows",
-        body: "Sparse arrows on already discovered wet tiles show which way the surface is moving before entry. Their size and spacing do not reveal hidden depth or current strength; sound the water for that missing risk information.",
+        title: "Read the moving surface",
+        body: "Sparse streamlines, foam, and real water ambience show which way discovered water is moving and whether its surface is calm or rough. Calm reaches occasionally breathe OHM; harder water says WHISSH. A SOUND / SCAN pulse adds analytical arrowheads and records exact bathymetry. Surface character never supplies the exact unsounded depth or water-effort value.",
       },
       {
         id: "meters-stability",
         audience: "all",
-        title: "Stability always names its cause",
-        body: "Stability is footing, not a second stamina bar. Sound ground can hold or restore it; steep grade, loose rock, slick moisture, deep water, cross-current, wind, sharp turns, and a shifting load can pull it down. The HUD names the active causes. Once you reach a dry bank, plant your feet: corrective recovery now works against crosswind instead of leaving you locked at zero. Deep water remains pure-loss footing until you reach support.",
+        title: "Stability is a live percentage",
+        body: "Stability is footing, not stored stamina and not a gauge that keeps draining under unchanged conditions. Each physical contact calculates one current 0–100% balance from actual speed, acceleration and turning, grade, roughness, moisture, water depth and local current, wind, carried load and cargo shift, footwear, fixtures, posture, and BRACE. Repeating the same conditions holds the same percentage. Reaching a safer bank recalculates promptly even when crosswind remains, and the HUD shows the percentage with its strongest causes.",
       },
       {
         id: "meters-derived-pace",
@@ -657,14 +657,14 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-brace-desktop",
         audience: "desktop",
         title: "Brace through a difficult patch",
-        body: "Hold either Shift key while moving to trade speed for substantially stronger footing resistance and fragile-cargo protection. It works when the world, document body, or a HUD control owns focus, except while typing in a field or using a modal. The safety readout says BRACING immediately and both views draw an amber planted-foot marker. Release it after the hazard. BRACE buys meaningful crossing distance, but deep water still drains stability and an unsupported edge remains unsafe.",
+        body: "Hold either Shift key while moving to trade speed for a substantially higher supported-stability percentage and fragile-cargo protection. It works when the world, document body, or a HUD control owns focus, except while typing in a field or using a modal. The safety readout says BRACING immediately and both views draw an amber planted-foot marker. Release it after the hazard. BRACE can make a prepared crossing controllable, but it cannot erase an unsupported edge or every severe current.",
         controlId: "brace-key",
       },
       {
         id: "meters-brace-mobile",
         audience: "mobile",
         title: "Hold BRACE through a risky patch",
-        body: "Press and keep holding BRACE while a charted touch route crosses rough or wet ground. It feeds the same bracing rule as desktop Shift: travel slows, stability recovers, and fragile cargo gets more protection. The compact safety line keeps the live stability cause visible. Release the button after the hazard; any interrupted touch releases it automatically so it cannot stick.",
+        body: "Press and keep holding BRACE while a charted touch route crosses rough or wet ground. It feeds the same rule as desktop Shift: travel slows, the supported-stability percentage rises, and fragile cargo gets more protection. The compact safety line keeps the live percentage and cause visible. Release after the hazard; any interrupted touch releases it automatically so it cannot stick.",
         controlId: "brace-button",
       },
       {
@@ -1027,7 +1027,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-perception",
         audience: "all",
         title: "The field shows what you can presently perceive",
-        body: "Terrain shape reaches much farther ahead than exact detail: in clear air the broad field reaches toward forty-two tiles through a 160-degree cone. It stays clear through twenty-six tiles, then eases across a sixteen-tile atmospheric horizon; six-tile close terrain awareness still surrounds the body. People, cargo, resources, current arrows, names, live status, and actions use a shorter ten-tile, 100-degree field with two-tile close awareness. Substantial cover and structures can conceal those exact details without erasing the larger shoreline or ridge silhouette behind them; terrain elevation and severe weather still shorten both fields. Uncharted ground and ordinary water can be seen while you face them without becoming permanent Chart memory; turning changes attention, not the saved world.",
+        body: "Terrain shape reaches much farther ahead than exact detail: in clear air the broad field reaches toward forty-two tiles through a 160-degree cone. It stays clear through twenty-six tiles, then eases across a sixteen-tile atmospheric horizon; six-tile close terrain awareness still surrounds the body. People, cargo, resources, exact water detail, names, live status, and actions use a shorter ten-tile, 100-degree field with two-tile close awareness. Substantial cover and structures can conceal those exact details without erasing the larger shoreline or ridge silhouette behind them; terrain elevation and severe weather still shorten both fields. When terrain leaves broad sight, a brief presentation-only impression eases into dim durable Chart memory—or darkness if it was never charted—instead of snapping black. Exact people, parcels, resources, labels, actions, and hit targets disappear immediately. Chart and Relief share the same impression, reduced motion settles it without a delayed fade, and none of it is saved or changes world knowledge.",
       },
       {
         id: "views-events",
@@ -1039,7 +1039,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-coordinates-fps",
         audience: "all",
         title: "Use coordinates and FPS for field reports",
-        body: "The navigation line shows signed region, local, and global tile coordinates. Its FPS value comes from actual active renderer callbacks rather than the simulation clock, making screenshots and performance reports easier to reproduce.",
+        body: "Desktop and compact phone layouts expose the same facts without panes: terrain and biome, WATER or GROUND and known depth, effort, live stability percentage and cause, signed region/local/global tile coordinates, and FPS. The FPS value comes from actual active renderer callbacks rather than the simulation clock, making screenshots and performance reports easier to reproduce.",
       },
       {
         id: "views-camera",
@@ -1226,7 +1226,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, screen-space Relief rain, readable magnitude-scaled currents, separate broad-terrain and short-detail perception fog, transient uncharted sight, dim explored memory, witnessed EVENTS, signed coordinates, measured FPS, discovery, depth sounding, current arrows, player-controlled ADRIFT recovery, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
+        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, witnessed EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1253,7 +1253,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 16 as const;
+export const TUTORIAL_CONTENT_VERSION = 17 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

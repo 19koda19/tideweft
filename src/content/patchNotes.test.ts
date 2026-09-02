@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.6",
-      buildIdentity: "0.3.3-alpha.6",
-      gameplayContractVersion: 14,
-      tutorialVersion: 16,
+      version: "0.3.3-alpha.7",
+      buildIdentity: "0.3.3-alpha.7",
+      gameplayContractVersion: 15,
+      tutorialVersion: 17,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -82,9 +82,9 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/infinite region streaming|wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("forty-two tiles");
-    expect(activeCopy).toContain("short ten-tile");
-    expect(activeCopy).toContain("terrain silhouette");
+    expect(activeCopy).toContain("Stability now resolves directly");
+    expect(activeCopy).toContain("same pane-free field facts");
+    expect(activeCopy).toContain("WebGL emissive material state");
     expect(allCategoryCopy("fixes")).toContain("separately cached sensory height field");
     expect(allCategoryCopy("interface")).toContain("signed region, local, and global coordinates");
     expect(allCategoryCopy("interface")).toContain("screen-space weather pass");

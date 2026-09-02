@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TerrainPerceptionMemoryStore } from "./terrainPerceptionMemory";
 
 const leaf = vi.hoisted(() => ({
   reliefSupported: true,
@@ -12,6 +13,8 @@ const leaf = vi.hoisted(() => ({
   compassSetHeading: vi.fn(),
   compassSetActive: vi.fn(),
   compassDestroy: vi.fn(),
+  chartMemory: undefined as TerrainPerceptionMemoryStore | undefined,
+  reliefMemory: undefined as TerrainPerceptionMemoryStore | undefined,
 }));
 
 vi.mock("./worldCompass", () => ({
@@ -24,23 +27,28 @@ vi.mock("./worldCompass", () => ({
 }));
 
 vi.mock("./p5Sketch", () => ({
-  createTideweftRenderer: () => ({
+  createTideweftRenderer: (options: { terrainPerceptionMemory?: TerrainPerceptionMemoryStore }) => {
+    leaf.chartMemory = options.terrainPerceptionMemory;
+    return ({
     canvas: () => null,
     resize: vi.fn(),
     focusWorld: vi.fn(),
     pulseScan: vi.fn(),
     setActive: leaf.chartSetActive,
     destroy: leaf.chartDestroy,
-  }),
+    });
+  },
 }));
 
 vi.mock("./p5ReliefSketch", () => ({
   createTideweftReliefRenderer: (options: {
     onWebGLError?: (reason: string) => void;
     onOrbitChange?: (yaw: number) => void;
+    terrainPerceptionMemory?: TerrainPerceptionMemoryStore;
   }) => {
     leaf.reliefError = options.onWebGLError ?? null;
     leaf.reliefOrbitChange = options.onOrbitChange ?? null;
+    leaf.reliefMemory = options.terrainPerceptionMemory;
     return {
       canvas: () => null,
       resize: vi.fn(),
@@ -64,6 +72,8 @@ beforeEach(() => {
   leaf.reliefError = null;
   leaf.reliefOrbitChange = null;
   leaf.reliefYaw = -0.36;
+  leaf.chartMemory = undefined;
+  leaf.reliefMemory = undefined;
   vi.clearAllMocks();
 });
 
@@ -77,6 +87,42 @@ function options(onModeChange: (mode: string, reliefAvailable: boolean) => void)
 }
 
 describe("composite renderer fallback", () => {
+  it("shares one bounded terrain impression across quick view toggles and clears it only on destroy", () => {
+    const renderer = createTideweftRenderer(options(vi.fn()));
+    expect(leaf.chartMemory).toBeDefined();
+    expect(leaf.reliefMemory).toBe(leaf.chartMemory);
+    const memory = leaf.chartMemory!;
+    memory.sample({
+      terrain: {
+        columns: 1,
+        rows: 1,
+        tileSize: 24,
+        origin: { x: 0, y: 0 },
+        revision: "quick-toggle",
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      spatialEpoch: "r:0:0",
+      worldName: "Toggle Estuary",
+      tick: 1,
+      timeMs: 100,
+      perceptionEnabled: true,
+      reducedMotion: false,
+    });
+
+    expect(renderer.toggleMode()).toBe("relief-3d");
+    expect(memory.current()?.values[0]).toBe(1);
+    expect(renderer.toggleMode()).toBe("chart-2d");
+    expect(memory.current()?.values[0]).toBe(1);
+    renderer.destroy();
+    expect(memory.current()).toBeUndefined();
+  });
+
   it("falls back from active Relief and disables it after a context failure", async () => {
     const changes: Array<[string, boolean]> = [];
     const renderer = createTideweftRenderer({

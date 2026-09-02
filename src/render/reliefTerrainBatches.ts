@@ -4,6 +4,7 @@ import {
   visibleBiomePresentation,
 } from "./biomePresentation";
 import { reliefDiscoveryVisibility } from "./reliefTerrain";
+import { TERRAIN_PERCEPTION_MEMORY_BANDS } from "./terrainPerceptionMemory";
 import { currentTerrainVisibility } from "./perceptionPresentation";
 import { isWaterDepthDisclosed } from "./waterPresentation";
 import type { BiomeId, TerrainGridView, TerrainKind } from "./types";
@@ -25,7 +26,7 @@ export interface ReliefPerceptionMaterialBatch extends ReliefMaterialBatch {
 }
 
 /** Transient sight uses a small, visibly smooth set of lightness steps. */
-export const RELIEF_PERCEPTION_VISIBILITY_BANDS = 8 as const;
+export const RELIEF_PERCEPTION_VISIBILITY_BANDS = TERRAIN_PERCEPTION_MEMORY_BANDS;
 
 /**
  * One transient batch for every possible visible material identity and lightness
@@ -98,6 +99,7 @@ export function buildReliefMaterialBatches(
 export function buildReliefPerceptionMaterialBatches(
   chunk: TerrainMeshChunk,
   grid: TerrainGridView,
+  rememberedVisibility?: ArrayLike<number>,
 ): readonly ReliefPerceptionMaterialBatch[] {
   const groups = new Map<string, {
     kind: TerrainKind;
@@ -110,7 +112,11 @@ export function buildReliefPerceptionMaterialBatches(
 
   for (const tile of chunk.tiles) {
     const source = grid.tiles[tile.row * grid.columns + tile.column];
-    const rawCurrent = currentTerrainVisibility(source, true);
+    const tileIndex = tile.row * grid.columns + tile.column;
+    const remembered = rememberedVisibility?.[tileIndex];
+    const rawCurrent = remembered === undefined
+      ? currentTerrainVisibility(source, true)
+      : Math.max(0, Math.min(1, Number.isFinite(remembered) ? remembered : 0));
     if (rawCurrent <= 0) continue;
     // Eight bounded material levels preserve the smooth horizon without
     // turning every tile into a separate WebGL draw call.

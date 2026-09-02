@@ -162,9 +162,9 @@ describe("navigation and renderer telemetry copy", () => {
       frameTimeMs: 6.94,
       frameCount: 1,
       active: true,
-    }, true)).toBe("R 0,-2 · G 0,-73 · FPS —");
+    }, true)).toBe("R 0,-2 · L 0,73 · G 0,-73 · FPS —");
     expect(navigationTelemetryCopy(undefined, undefined, true))
-      .toBe("R ?,? · G ?,? · FPS —");
+      .toBe("R ?,? · L ?,? · G ?,? · FPS —");
   });
 });
 
@@ -560,7 +560,7 @@ describe("mobile field HUD accessibility", () => {
 
     expect(copy.objective).toContain("PICKUP: Reedwake · DELIVERY: Latchmere");
     expect(copy.objective).toContain("then deliver to Latchmere");
-    expect(copy.safety).toBe("↓ exposed to cross-current · DEEP: STAM/STAB 0 → ADRIFT");
+    expect(copy.safety).toBe("↓ exposed to cross-current · STAB 63% · DEEP: STAM/STAB 0 → ADRIFT");
     expect(copy.terrain).toBe("WATER · Tidal channel · Deep water · Heavy stamina use");
     expect(copy.actions).toBe("Pick up cargo here · Sound / Scan · Lay Tide anchor");
   });
@@ -611,7 +611,7 @@ describe("mobile field HUD accessibility", () => {
     });
 
     expect(copy.terrain).toBe("GROUND · Bellwake harbor decking · Dry footing · Normal stamina use");
-    expect(copy.safety).toBe("STABLE · DEEP: STAM/STAB 0 → ADRIFT");
+    expect(copy.safety).toBe("STABLE · STAB 100% · DEEP: STAM/STAB 0 → ADRIFT");
     expect(copy.safety).not.toMatch(/Shift|WASD|keyboard/iu);
   });
 });

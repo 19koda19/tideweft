@@ -4,12 +4,18 @@ import {
   biomeEnvironmentalEmphasis,
   visibleBiomePresentation,
 } from "./biomePresentation";
-import { buildSurfaceCurrentCues } from "./currentCues";
+import { buildSurfaceCurrentCues, buildWaterVoiceLabels } from "./currentCues";
 import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
+import {
+  createTerrainPerceptionMemoryStore,
+  rememberedTerrainVisibilityAt,
+  type TerrainPerceptionMemoryState,
+  type TerrainPerceptionMemoryStore,
+} from "./terrainPerceptionMemory";
 import {
   clipPolylineToBounds,
   polylineBounds,
@@ -297,7 +303,9 @@ const lineDashForStatus = (status: SettlementStatus, scale: number): number[] =>
  * all local state here is cosmetic camera/input state and can be discarded safely.
  */
 export function createTideweftRenderer(
-  options: TideweftRendererOptions,
+  options: TideweftRendererOptions & {
+    readonly terrainPerceptionMemory?: TerrainPerceptionMemoryStore;
+  },
 ): TideweftRendererController {
   let instance: p5 | null = null;
   let resizeObserver: ResizeObserver | null = null;
@@ -314,6 +322,9 @@ export function createTideweftRenderer(
   let touchSequence: LooseCargoTouchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
   let hasObservedSpatialEpoch = false;
   let observedSpatialEpoch: number | string | undefined;
+  const ownsTerrainPerceptionMemory = options.terrainPerceptionMemory === undefined;
+  const terrainPerceptionMemory = options.terrainPerceptionMemory
+    ?? createTerrainPerceptionMemoryStore();
   let lastMovement = "0,0";
   const heldDirections = new Set<string>();
   const heldBraceKeys = new Set<string>();
@@ -1154,7 +1165,10 @@ export function createTideweftRenderer(
       p.noStroke();
     };
 
-    const drawTerrain = (view: TideweftView): void => {
+    const drawTerrain = (
+      view: TideweftView,
+      terrainMemory: TerrainPerceptionMemoryState,
+    ): void => {
       const grid = view.terrain;
       const tileSize = Math.max(0.1, grid.tileSize);
       const halfWidth = p.width / (2 * camera.zoom);
@@ -1188,9 +1202,13 @@ export function createTideweftRenderer(
           const x = grid.origin.x + column * tileSize;
           const y = grid.origin.y + row * tileSize;
           const discovered = unit(tile.discovered, 1);
-          const currentVisibility = currentTerrainVisibility(
+          const liveCurrentVisibility = currentTerrainVisibility(
             tile,
             view.perception !== undefined,
+          );
+          const currentVisibility = rememberedTerrainVisibilityAt(
+            terrainMemory,
+            row * grid.columns + column,
           );
           if (discovered <= 0 && currentVisibility <= 0) {
             p.fill(PALETTE.ink);
@@ -1206,23 +1224,29 @@ export function createTideweftRenderer(
           }
           const derivedDepth = clamp(view.tide.level * 0.82 - unit(tile.elevation), 0, 1);
           const waterDepth = unit(tile.waterDepth, derivedDepth);
-          const water = visibleWaterPresentation(tile, {
+          const rememberedWater = visibleWaterPresentation(tile, {
             derivedDepth,
             tideLevel: view.tide.level,
             transientVisibility: currentVisibility,
+          });
+          const water = visibleWaterPresentation(tile, {
+            derivedDepth,
+            tideLevel: view.tide.level,
+            transientVisibility: liveCurrentVisibility,
           });
           const sensoryStrength = Math.pow(currentVisibility, 1.08);
           // Distant unsounded water gets one neutral under-surface as well as
           // one neutral water material. Otherwise translucent water can reveal
           // raw channel/shallows/deep terrain colors underneath it.
-          const visibleTerrainColor = water && !water.depthDisclosed
+          const visibleTerrainColor = rememberedWater && !rememberedWater.depthDisclosed
             ? p.color(TERRAIN_COLORS.channel)
             : terrainColor(tile);
           p.fill(p.lerpColor(p.color(PALETTE.ink), visibleTerrainColor, sensoryStrength));
           p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
 
           if (water) {
-            p.fill(withAlpha(water.color, water.opacity * sensoryStrength));
+            const liveSensoryStrength = Math.pow(liveCurrentVisibility, 1.08);
+            p.fill(withAlpha(water.color, water.opacity * liveSensoryStrength));
             p.rect(x, y, tileSize + 0.4 / camera.zoom, tileSize + 0.4 / camera.zoom);
             if (
               water.depthDisclosed
@@ -1235,7 +1259,7 @@ export function createTideweftRenderer(
               p.line(x + inset, y + tileSize * 0.66, x + tileSize - inset * 0.4, y + tileSize * 0.66);
               p.noStroke();
             }
-          } else if (hash01(column, row, 13) > 0.78) {
+          } else if (liveCurrentVisibility > 0 && hash01(column, row, 13) > 0.78) {
             p.fill(withAlpha(PALETTE.foam, 14 + unit(tile.shelter) * 12));
             const fleck = Math.max(tileSize * 0.08, 0.5 / camera.zoom);
             p.circle(x + tileSize * 0.34, y + tileSize * 0.39, fleck);
@@ -1258,7 +1282,7 @@ export function createTideweftRenderer(
             p.noStroke();
           }
 
-          if (tile.blocked) {
+          if (tile.blocked && liveCurrentVisibility > 0) {
             p.stroke(withAlpha(PALETTE.ink, 80));
             p.strokeWeight(0.75 / camera.zoom);
             p.line(x + tileSize * 0.18, y + tileSize * 0.18, x + tileSize * 0.82, y + tileSize * 0.82);
@@ -1287,9 +1311,11 @@ export function createTideweftRenderer(
         lastRow: Math.ceil((camera.y + halfHeight - grid.origin.y) / tileSize) + 1,
       };
       const cues = buildSurfaceCurrentCues(grid, view.tide.surfaceCurrent, {
+        analytical: (view.player.scanProgress ?? 0) > 0.001,
         bounds,
         focus: { x: camera.x, y: camera.y },
         tideLevel: view.tide.level,
+        weatherIntensity: view.weather.intensity,
         timeMs: now,
         reducedMotion,
         maxCues: 220,
@@ -1298,19 +1324,43 @@ export function createTideweftRenderer(
       if (cues.length === 0) return;
 
       const strokeCue = (cue: (typeof cues)[number]): void => {
-        p.line(cue.tail.x, cue.tail.y, cue.tip.x, cue.tip.y);
-        p.line(cue.tip.x, cue.tip.y, cue.headLeft.x, cue.headLeft.y);
-        p.line(cue.tip.x, cue.tip.y, cue.headRight.x, cue.headRight.y);
+        const [start, controlA, controlB, end] = cue.streamline;
+        p.bezier(
+          start.x, start.y,
+          controlA.x, controlA.y,
+          controlB.x, controlB.y,
+          end.x, end.y,
+        );
+        if (cue.analytical) {
+          p.line(cue.tip.x, cue.tip.y, cue.headLeft.x, cue.headLeft.y);
+          p.line(cue.tip.x, cue.tip.y, cue.headRight.x, cue.headRight.y);
+        }
       };
       p.push();
       p.noFill();
       clearDash();
-      p.stroke(withAlpha(PALETTE.ink, 186));
-      p.strokeWeight(3.2 / camera.zoom);
-      for (const cue of cues) strokeCue(cue);
-      p.stroke(withAlpha(PALETTE.foam, 198));
-      p.strokeWeight(1.15 / camera.zoom);
-      for (const cue of cues) strokeCue(cue);
+      for (const cue of cues) {
+        p.stroke(withAlpha(PALETTE.ink, 130 + cue.strength * 90));
+        p.strokeWeight((2.5 + cue.turbulence * 1.3) / camera.zoom);
+        strokeCue(cue);
+      }
+      for (const cue of cues) {
+        p.stroke(withAlpha(PALETTE.foam, 105 + cue.strength * 120));
+        p.strokeWeight((0.7 + cue.strength * 0.8) / camera.zoom);
+        strokeCue(cue);
+        p.strokeWeight((1.2 + cue.turbulence * 1.8) / camera.zoom);
+        for (const fleck of cue.foam) p.point(fleck.x, fleck.y);
+      }
+      const voices = buildWaterVoiceLabels(cues, now, reducedMotion, 4);
+      p.textAlign(p.CENTER, p.CENTER);
+      p.textSize(9 / camera.zoom);
+      p.noStroke();
+      for (const voice of voices) {
+        p.fill(withAlpha(PALETTE.ink, 220));
+        p.text(voice.text, voice.point.x + 0.8 / camera.zoom, voice.point.y + 0.8 / camera.zoom);
+        p.fill(withAlpha(PALETTE.foam, 180));
+        p.text(voice.text, voice.point.x, voice.point.y);
+      }
       p.pop();
     };
 
@@ -1337,7 +1387,19 @@ export function createTideweftRenderer(
           if (distance > radiusTiles * radiusTiles || distance < 1.15) continue;
           const tile = grid.tiles[row * grid.columns + column];
           if (!tile || unit(tile.discovered, 1) <= 0.08) continue;
-          if (unit(tile.depthKnown, unit(tile.discovered, 1)) <= 0.08) continue;
+          // Production views must never turn missing sounding metadata or a
+          // fading terrain impression into exact bathymetry. Legacy fixtures
+          // retain their historical discovered fallback only without a
+          // perception contract.
+          const known = unit(
+            tile.depthKnown,
+            view.perception ? 0 : unit(tile.discovered, 1),
+          );
+          if (known <= 0.08) continue;
+          if (
+            view.perception
+            && currentTerrainDetailVisibility(tile, true) < 1
+          ) continue;
           const derivedDepth = clamp(view.tide.level * 0.82 - unit(tile.elevation), 0, 1);
           const depth = unit(tile.waterDepth, derivedDepth);
           if (depth <= 0.035) continue;
@@ -3255,18 +3317,26 @@ export function createTideweftRenderer(
 
       const spatialEpochChanged = observeSpatialEpoch(latestView);
       if (!spatialEpochChanged) updateCamera(latestView, now);
+      const terrainMemory = terrainPerceptionMemory.sample({
+        terrain: latestView.terrain,
+        ...(latestView.spatialEpoch === undefined
+          ? {}
+          : { spatialEpoch: latestView.spatialEpoch }),
+        ...(latestView.worldName === undefined ? {} : { worldName: latestView.worldName }),
+        tick: latestView.tick,
+        timeMs: now,
+        perceptionEnabled: latestView.perception !== undefined,
+        reducedMotion,
+      });
       p.background(PALETTE.ink);
       p.push();
-      const shake = reducedMotion ? 0 : unit(latestView.camera.shake) * 3;
-      const shakeX = shake ? Math.sin(now * 0.051) * shake : 0;
-      const shakeY = shake ? Math.cos(now * 0.043) * shake : 0;
       p.translate(
-        p.width / 2 + shakeX + pointerParallax.current.x,
-        p.height / 2 + shakeY + pointerParallax.current.y,
+        p.width / 2 + pointerParallax.current.x,
+        p.height / 2 + pointerParallax.current.y,
       );
       p.scale(camera.zoom);
       p.translate(-camera.x, -camera.y);
-      drawTerrain(latestView);
+      drawTerrain(latestView, terrainMemory);
       drawSurfaceCurrents(latestView, now);
       drawTraces(latestView.traces, now);
       drawRoutes(latestView.routes, now);
@@ -3379,6 +3449,7 @@ export function createTideweftRenderer(
       instance?.remove();
       instance = null;
       canvasElement = null;
+      if (ownsTerrainPerceptionMemory) terrainPerceptionMemory.reset();
     },
   };
 }

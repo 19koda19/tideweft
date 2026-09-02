@@ -4,7 +4,7 @@ import { FIXED_POINT, createWorld, createWorldView } from "../sim/public";
 import { TILE_UNITS, createPlayer, stepPlayer } from "./player";
 
 describe("civic projects change journey rules", () => {
-  it("makes a completed cache accelerate both stamina and load recovery", () => {
+  it("makes a completed cache restore stamina on dependable footing", () => {
     const world = createWorld("cache shelter");
     const cache = world.settlements.find((settlement) => settlement.project.kind === "cache");
     if (!cache) throw new Error("missing cache");
@@ -18,7 +18,9 @@ describe("civic projects change journey rules", () => {
     const result = stepPlayer(player, view, { moveX: 0, moveY: 0, brace: false });
     expect(result.rescued).toBe(false);
     expect(player.stamina).toBe(13_200);
-    expect(player.stability).toBe(121_000);
+    expect(player.stability).toBeGreaterThan(990_000);
+    expect(player.stability).toBeLessThanOrEqual(FIXED_POINT);
+    expect(result.footing?.stabilityAfter).toBe(result.footing?.stabilityTarget);
   });
 
   it("turns exhaustion on a clinic-covered active route into named mutual-aid rescue", () => {

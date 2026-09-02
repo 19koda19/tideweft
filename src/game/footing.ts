@@ -1,7 +1,6 @@
 import { FIXED_POINT } from "../sim/types";
 
-export const FOOTING_VERSION = 1 as const;
-export const MAX_FOOTING_LOSS_PER_STEP = 120_000;
+export const FOOTING_VERSION = 2 as const;
 
 export const FOOTING_CAUSE_ORDER = [
   "unsupported-edge",
@@ -33,6 +32,8 @@ export interface FootingVector {
 export interface FootingInput {
   readonly stability: number;
   readonly moving: boolean;
+  /** Actual movement speed normalized to fixed-point 0..1. */
+  readonly speed: number;
   readonly surface: FootingSurface;
   /** Destination elevation minus origin elevation, signed fixed point. */
   readonly elevationDelta: number;
@@ -82,6 +83,8 @@ export interface FootingEvaluation {
   readonly version: typeof FOOTING_VERSION;
   readonly stabilityBefore: number;
   readonly stabilityAfter: number;
+  /** Direct physical balance supported by the current contact state. */
+  readonly stabilityTarget: number;
   /** Signed stability change. Negative is loss; positive is recovery. */
   readonly delta: number;
   readonly trend: FootingTrend;
@@ -96,7 +99,7 @@ interface Candidate {
   readonly code: FootingCauseCode;
   readonly label: string;
   readonly pressure: number;
-  /** Maximum stability loss contributed in one 100ms fixed step. */
+  /** Maximum direct stability-target penalty contributed by this condition. */
   readonly weight: number;
   readonly surfaceMitigated?: boolean;
 }
@@ -122,11 +125,6 @@ function multiplyFixed(left: number, right: number): number {
 
 function unionFixed(left: number, right: number): number {
   return FIXED_POINT - multiplyFixed(FIXED_POINT - clampUnit(left), FIXED_POINT - clampUnit(right));
-}
-
-function pacePressure(pace: FootingPace): number {
-  if (pace === "swift") return FIXED_POINT;
-  return 0;
 }
 
 function vectorMagnitude(vector: FootingVector): number {
@@ -164,26 +162,10 @@ function surface(value: FootingInput["surface"]): FootingSurface {
   return value === "soft" || value === "rock" || value === "water" ? value : "firm";
 }
 
-function pace(value: FootingInput["pace"]): FootingPace {
-  return value === "rest" || value === "swift" ? value : "steady";
-}
-
-function recoveryPerStep(input: FootingInput, environmentalPressure: number): number {
-  if (environmentalPressure > 120_000) return 0;
-  if (!input.moving) {
-    if (input.reliableGround) return Math.min(
-      MAX_FOOTING_LOSS_PER_STEP,
-      18_000 + clampUnit(input.recoveryBonus ?? 0),
-    );
-    return input.brace ? 10_000 : 6_000;
-  }
-  if (surface(input.surface) === "firm" && pace(input.pace) === "steady") return 1_800;
-  return 0;
-}
-
 /**
- * Resolves physical balance for one fixed movement/contact step. Stamina is
- * deliberately absent: exertion and footing are separate authoritative axes.
+ * Resolves the balance supported by the current physical contact state.
+ * Stability is not accumulated damage or a second stamina meter: identical
+ * conditions always converge to the same target in one fixed step.
  */
 export function evaluateFooting(input: FootingInput): FootingEvaluation {
   const stabilityBefore = clampUnit(input.stability);
@@ -195,10 +177,14 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
   const roughness = clampUnit(input.roughness);
   const moisture = clampUnit(input.moisture);
   const depth = clampUnit(input.waterDepth);
-  const currentPressure = multiplyFixed(
+  const relativeCurrent = multiplyFixed(
     transverseForce(input.current, input.movement, moving),
     depth,
   );
+  const brokenBedPressure = footingSurface === "water"
+    ? multiplyFixed(multiplyFixed(roughness, depth), 550_000)
+    : 0;
+  const currentPressure = unionFixed(relativeCurrent, brokenBedPressure);
   const windPressure = multiplyFixed(
     transverseForce(input.wind, input.movement, moving),
     clampUnit(input.weatherIntensity),
@@ -209,78 +195,78 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
       code: "unsupported-edge",
       label: "unsupported edge",
       pressure: clampUnit(input.unsupportedEdge),
-      weight: 115_000,
+      weight: FIXED_POINT,
       surfaceMitigated: true,
     },
     {
       code: "downhill-acceleration",
       label: "downhill acceleration",
       pressure: moving ? downhill : 0,
-      weight: 42_000,
+      weight: 400_000,
       surfaceMitigated: true,
     },
     {
       code: "steep-grade",
       label: "steep grade",
       pressure: moving ? grade : 0,
-      weight: 34_000,
+      weight: 300_000,
       surfaceMitigated: true,
     },
     {
       code: "loose-rock",
       label: "loose rock",
       pressure: moving && footingSurface === "rock" ? roughness : 0,
-      weight: 30_000,
+      weight: 300_000,
       surfaceMitigated: true,
     },
     {
       code: "mud-shear",
       label: "mud shear",
       pressure: moving && footingSurface === "soft" ? multiplyFixed(moisture, 850_000) : 0,
-      weight: 24_000,
+      weight: 260_000,
       surfaceMitigated: true,
     },
     {
       code: "cross-current",
       label: "cross-current",
       pressure: currentPressure,
-      weight: 46_000,
+      weight: FIXED_POINT,
     },
     {
       code: "deep-water",
       label: "deep water",
       pressure: depth > 35_000 ? depth - 35_000 : 0,
-      weight: 32_000,
+      weight: FIXED_POINT,
     },
     {
       code: "crosswind",
       label: "crosswind",
       pressure: windPressure,
-      weight: 24_000,
+      weight: 600_000,
     },
     {
       code: "sharp-turn",
       label: "sharp turn",
       pressure: moving ? clampUnit(input.turnPressure) : 0,
-      weight: 28_000,
+      weight: 320_000,
     },
     {
       code: "load-shift",
       label: "load shift",
       pressure: clampUnit(input.cargoShift),
-      weight: 52_000,
+      weight: 500_000,
     },
     {
       code: "heavy-load",
       label: "high load",
       pressure: moving ? loadPressure : 0,
-      weight: 26_000,
+      weight: 250_000,
     },
     {
       code: "swift-motion",
       label: "swift motion",
-      pressure: moving ? pacePressure(pace(input.pace)) : 0,
-      weight: 22_000,
+      pressure: moving ? clampUnit(input.speed) : 0,
+      weight: 120_000,
     },
   ];
 
@@ -304,11 +290,8 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
   );
 
   const rawStress = causes.reduce((sum, cause) => Math.min(FIXED_POINT, sum + cause.contribution), 0);
-  // BRACE must buy meaningful *distance* through a hazard, not merely make
-  // the same inevitable collapse happen a fraction later. Movement already
-  // slows to 62% while braced, so a 62% pressure reduction makes the planted
-  // stance clearly useful without erasing deep water, unsupported edges, or
-  // the separate deterministic fall evaluation.
+  // BRACE both slows actual movement (therefore lowering speed pressure) and
+  // plants the porter against the remaining physical forces.
   const braceMitigation = input.brace ? 620_000 : 0;
   const footwearMitigation = multiplyFixed(footwearGrip, 180_000);
   const fixtureMitigation = multiplyFixed(clampUnit(input.fixtureSupport), 560_000);
@@ -316,26 +299,18 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
     braceMitigation,
     unionFixed(footwearMitigation, fixtureMitigation),
   );
-  const tolerance = moving && footingSurface === "firm" ? 3_000 : 1_000;
-  const loss = Math.min(
-    MAX_FOOTING_LOSS_PER_STEP,
-    multiplyFixed(Math.max(0, rawStress - tolerance), FIXED_POINT - mitigationTotal),
-  );
-  // Balance is not a second stamina bar. On dry support the porter keeps
-  // making small corrective movements while resisting a gust, so recovery
-  // and pressure can coexist and the stronger one determines the trend.
-  // Water and unsupported edges deliberately remain pure-loss contacts.
-  const canCorrectFooting = footingSurface !== "water"
-    && clampUnit(input.unsupportedEdge) === 0;
-  const recovery = canCorrectFooting || loss === 0
-    ? recoveryPerStep(input, rawStress)
+  const effectiveStress = multiplyFixed(rawStress, FIXED_POINT - mitigationTotal);
+  const dependableSupport = input.reliableGround
+    ? Math.min(30_000, clampUnit(input.recoveryBonus ?? 0))
     : 0;
-  const stabilityAfter = Math.max(0, Math.min(FIXED_POINT, stabilityBefore - loss + recovery));
+  const stabilityTarget = clampUnit(FIXED_POINT - effectiveStress + dependableSupport);
+  const stabilityAfter = stabilityTarget;
   const delta = stabilityAfter - stabilityBefore;
   return {
     version: FOOTING_VERSION,
     stabilityBefore,
     stabilityAfter,
+    stabilityTarget,
     delta,
     trend: delta > 0 ? "recovering" : delta < 0 ? "falling" : "steady",
     causes,
@@ -346,6 +321,6 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
       fixture: fixtureMitigation,
       total: mitigationTotal,
     },
-    hazardPressure: clampUnit(Math.trunc(rawStress * 7)),
+    hazardPressure: rawStress,
   };
 }
