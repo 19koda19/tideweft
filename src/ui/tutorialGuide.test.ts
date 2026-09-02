@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(10);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(11);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -164,6 +164,20 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Chart stays north-up");
     expect(copy).toContain("always points toward world north");
     expect(copy).toContain("currents and the courier keep their actual simulation directions");
+    expect(copy).toContain("few eased pixels of visual depth");
+    expect(copy).toContain("changes neither the world nor where a click lands");
+    expect(copy).toContain("Drizzle, rain, and squall");
+    expect(copy).toContain("Sparse wind threads");
+    expect(copy).toContain("regional fronts");
+  });
+
+  it("teaches smoothed pointer travel without promising hazard shortcuts", () => {
+    const movement = tutorialSectionById("movement");
+    const copy = movement?.steps.flatMap((step) => [step.title, step.body]).join(" ") ?? "";
+
+    expect(copy).toContain("steady diagonal heading");
+    expect(copy).toContain("never cut through");
+    expect(copy).toContain("without skipping a hazardous tile or corner");
   });
 
   it("teaches reports, stability causes, depth sounding, currents, sweep recovery, and field systems", () => {
@@ -207,6 +221,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("only unlocks the seed field");
     expect(copy).toContain("non-empty new seed phrase");
     expect(copy).toContain("blank seed changes nothing");
+    expect(copy).toContain("deterministic tide field");
+    expect(copy).toContain("waits for your first tap or key");
     expect(copy).toContain("LOCAL SAVE NOT STORED");
     expect(copy).toContain("title, Quiet Hour, KIT, tutorial, or Patch Notes");
     expect(copy).toContain("bounded backoff");

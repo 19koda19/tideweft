@@ -40,6 +40,7 @@ import {
   type ReliefTwistGesture,
 } from "./reliefOrbitControls";
 import { reliefSoundingStyle, type ReliefDepthBand } from "./reliefSounding";
+import { buildReliefRainFrame } from "./reliefWeather";
 import {
   createReliefDiscoverySignatureMemo,
   discoveredReliefSurfaceHeightAt,
@@ -53,6 +54,7 @@ import {
   tideHarpRootLift,
 } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
+import { buildWindThreadFrame } from "./windPresentation";
 import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
@@ -76,6 +78,16 @@ import {
   playerBalancePresentation,
   type PlayerBalancePresentation,
 } from "./playerPresentation";
+import {
+  advancePointerParallax,
+  createPointerParallaxState,
+  easeWorldLabelPoint,
+  normalizedPresentationPointer,
+  presentationParallaxTarget,
+  resetPointerParallax,
+  setPointerParallaxTarget,
+  type EasedScreenPoint,
+} from "./presentationMotion";
 import type {
   FieldResourceNodeView,
   LooseCargoView,
@@ -91,6 +103,7 @@ import type {
   TideweftView,
   WayknotKind,
   WayknotView,
+  WeatherView,
   WorldPoint,
 } from "./types";
 
@@ -205,6 +218,7 @@ interface AttachedListeners {
   readonly pointerUp: (event: PointerEvent) => void;
   readonly pointerCancel: (event: PointerEvent) => void;
   readonly lostPointerCapture: (event: PointerEvent) => void;
+  readonly pointerLeave: () => void;
   readonly contextMenu: (event: MouseEvent) => void;
   readonly keyDown: (event: KeyboardEvent) => void;
   readonly keyUp: (event: KeyboardEvent) => void;
@@ -236,6 +250,7 @@ export function createTideweftReliefRenderer(
   let notice: HTMLDivElement | null = null;
   let labelLayer: HTMLDivElement | null = null;
   const labelNodes = new Map<string, HTMLSpanElement>();
+  const labelPositions = new Map<string, EasedScreenPoint>();
   let webglSupported = detectWebGLSupport();
   let contextLost = false;
   let active = options.initiallyActive ?? true;
@@ -257,6 +272,7 @@ export function createTideweftReliefRenderer(
   const heldBraceKeys = new Set<string>();
   const heldOrbitKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
+  const pointerParallax = createPointerParallaxState();
   const discoverySignatureFor = createReliefDiscoverySignatureMemo();
   const tideHarpGeometryFor = createTideHarpGeometryMemo();
   const orbit: OrbitRuntime = {
@@ -376,6 +392,8 @@ export function createTideweftReliefRenderer(
     releaseLooseCargoPointerCaptures(canvasElement, [...activeTouchPointers.keys()]);
     activeTouchPointers.clear();
     lastOrbitFrameAt = undefined;
+    resetPointerParallax(pointerParallax, true);
+    labelPositions.clear();
   };
 
   /**
@@ -403,6 +421,8 @@ export function createTideweftReliefRenderer(
     cached = null;
     for (const node of labelNodes.values()) node.remove();
     labelNodes.clear();
+    labelPositions.clear();
+    resetPointerParallax(pointerParallax, true);
   };
 
   const snapCameraToView = (view: TideweftView): void => {
@@ -457,8 +477,16 @@ export function createTideweftReliefRenderer(
     const view = latestView;
     const worldWidth = view ? view.terrain.columns * view.terrain.tileSize : 2_400;
     const worldHeight = view ? view.terrain.rows * view.terrain.tileSize : 1_800;
+    const units = (2 * orbit.distance * Math.tan(DEFAULT_FOV / 2))
+      / Math.max(1, instance?.height ?? 1);
+    const screenX = -pointerParallax.current.x * units;
+    const screenY = -pointerParallax.current.y * units;
+    const cosine = Math.cos(orbit.yaw);
+    const sine = Math.sin(orbit.yaw);
+    const parallaxX = screenX * cosine + screenY * sine;
+    const parallaxY = -screenX * sine + screenY * cosine;
     return normalizeReliefCamera({
-      target: { x: orbit.x, y: orbit.y },
+      target: { x: orbit.x + parallaxX, y: orbit.y + parallaxY },
       targetHeight: orbit.height,
       yaw: orbit.yaw,
       pitch: orbit.pitch,
@@ -539,6 +567,7 @@ export function createTideweftReliefRenderer(
     view: TideweftView,
     cache: CachedReliefMesh,
     camera: ReliefCameraState,
+    now: number,
   ): void => {
     if (!labelLayer || !instance) return;
     const used = new Set<string>();
@@ -572,11 +601,21 @@ export function createTideweftReliefRenderer(
       );
       const node = labelNode(id, text);
       node.hidden = !projected.visible;
-      if (!projected.visible) return;
+      if (!projected.visible) {
+        labelPositions.delete(id);
+        return;
+      }
+      const eased = easeWorldLabelPoint(
+        labelPositions.get(id),
+        projected,
+        now,
+        reducedMotion,
+      );
+      labelPositions.set(id, eased);
       node.dataset.tone = tone;
       node.dataset.selected = selected ? "true" : "false";
-      node.style.left = `${projected.x.toFixed(1)}px`;
-      node.style.top = `${projected.y.toFixed(1)}px`;
+      node.style.left = `${eased.x.toFixed(1)}px`;
+      node.style.top = `${eased.y.toFixed(1)}px`;
     };
 
     for (const settlement of view.settlements) {
@@ -756,8 +795,15 @@ export function createTideweftReliefRenderer(
           compact ? 226 : 310,
           Math.max(86, text.length * (compact ? 5.8 : 6.4) + 22),
         );
+        const eased = easeWorldLabelPoint(
+          labelPositions.get(`player-incident-${incident.id}`),
+          projected,
+          now,
+          reducedMotion,
+        );
+        labelPositions.set(`player-incident-${incident.id}`, eased);
         const placed = placeIncidentCallout(
-          { x: projected.x + variant * 3, y: projected.y },
+          { x: eased.x + variant * 3, y: eased.y },
           desiredWidth,
           {
             width: instance.width,
@@ -782,12 +828,15 @@ export function createTideweftReliefRenderer(
         node.style.boxShadow = `0 0 0 1px ${presentation.fill}55`;
         node.style.opacity = `${(0.98 - progress * 0.14).toFixed(3)}`;
         node.style.transform = "translate(-50%, -50%)";
+      } else {
+        labelPositions.delete(`player-incident-${incident.id}`);
       }
     }
     for (const [id, node] of labelNodes) {
       if (used.has(id)) continue;
       node.remove();
       labelNodes.delete(id);
+      labelPositions.delete(id);
     }
   };
 
@@ -939,6 +988,7 @@ export function createTideweftReliefRenderer(
     element.removeEventListener("pointerup", attached.pointerUp);
     element.removeEventListener("pointercancel", attached.pointerCancel);
     element.removeEventListener("lostpointercapture", attached.lostPointerCapture);
+    element.removeEventListener("pointerleave", attached.pointerLeave);
     element.removeEventListener("contextmenu", attached.contextMenu);
     element.removeEventListener("keydown", attached.keyDown);
     element.removeEventListener("keyup", attached.keyUp);
@@ -1006,6 +1056,7 @@ export function createTideweftReliefRenderer(
       if (!active || contextLost) return;
       element.focus({ preventScroll: true });
       if (event.pointerType === "touch" && event.button === 0) {
+        resetPointerParallax(pointerParallax, true);
         activeTouchPointers.set(event.pointerId, {
           pointerId: event.pointerId,
           x: event.clientX,
@@ -1107,6 +1158,7 @@ export function createTideweftReliefRenderer(
         }
       }
       if (orbitDrag?.pointerId === event.pointerId) {
+        resetPointerParallax(pointerParallax, true);
         const dx = event.clientX - orbitDrag.lastX;
         const dy = event.clientY - orbitDrag.lastY;
         if (Math.abs(dx) + Math.abs(dy) > 0.5) orbitDrag.moved = true;
@@ -1119,12 +1171,25 @@ export function createTideweftReliefRenderer(
         return;
       }
       const local = localPointer(event);
-      pointerWorld = pickWorld(local);
       const coarsePointer = usesCoarseWorldPointer(
         event.pointerType,
         window.matchMedia?.("(pointer: coarse)").matches ?? false,
       );
-      hoverParcelId = parcelHitAt(local, coarsePointer)?.parcel.id ?? null;
+      if (event.pointerType === "touch" || coarsePointer || reducedMotion) {
+        resetPointerParallax(pointerParallax, true);
+      } else {
+        setPointerParallaxTarget(
+          pointerParallax,
+          presentationParallaxTarget(normalizedPresentationPointer(
+            local,
+            { width: instance?.width ?? 1, height: instance?.height ?? 1 },
+          ), 3.2),
+        );
+      }
+      pointerWorld = event.pointerType === "touch" ? null : pickWorld(local);
+      hoverParcelId = event.pointerType === "touch"
+        ? null
+        : parcelHitAt(local, coarsePointer)?.parcel.id ?? null;
       if (clickCandidate?.pointerId === event.pointerId) {
         const maximumTravel = clickCandidate.coarsePointer ? 18 : 7;
         parcelPress = moveLooseCargoPointerPress(
@@ -1180,6 +1245,11 @@ export function createTideweftReliefRenderer(
       parcelPress = cancelLooseCargoPointerPress(parcelPress, event.pointerId);
       if (activeTouchPointers.has(event.pointerId)) endTouch(event.pointerId);
     };
+    const pointerLeave = (): void => {
+      pointerWorld = null;
+      hoverParcelId = null;
+      resetPointerParallax(pointerParallax, false);
+    };
     const contextMenu = (event: MouseEvent): void => {
       refreshLatestView();
       event.preventDefault();
@@ -1223,6 +1293,7 @@ export function createTideweftReliefRenderer(
     element.addEventListener("pointerup", pointerUp);
     element.addEventListener("pointercancel", pointerCancel);
     element.addEventListener("lostpointercapture", lostPointerCapture);
+    element.addEventListener("pointerleave", pointerLeave);
     element.addEventListener("contextmenu", contextMenu);
     element.addEventListener("keydown", onKeyDown);
     element.addEventListener("keyup", onKeyUp);
@@ -1241,6 +1312,7 @@ export function createTideweftReliefRenderer(
       pointerUp,
       pointerCancel,
       lostPointerCapture,
+      pointerLeave,
       contextMenu,
       keyDown: onKeyDown,
       keyUp: onKeyUp,
@@ -2776,6 +2848,108 @@ export function createTideweftReliefRenderer(
       }
     };
 
+    const drawRain = (weather: WeatherView, now: number): void => {
+      const streaks = buildReliefRainFrame(weather, {
+        width: p.width,
+        height: p.height,
+        now,
+        reducedMotion,
+        yaw: orbit.yaw,
+      });
+      if (streaks.length === 0) return;
+
+      // A dark key under a pale face keeps rain readable over both foam/water
+      // and the ink-dark ridges. This is a final screen-space pass so terrain
+      // depth cannot swallow precipitation as it did in the old 3D path.
+      const gl = p.drawingContext as WebGLRenderingContext | WebGL2RenderingContext;
+      const depthWasEnabled = gl.isEnabled(gl.DEPTH_TEST);
+      const depthWriteWasEnabled = typeof gl.getParameter === "function"
+        ? Boolean(gl.getParameter(gl.DEPTH_WRITEMASK))
+        : true;
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+      p.push();
+      try {
+        p.camera(0, 0, 1, 0, 0, 0, 0, 1, 0);
+        p.ortho(-p.width / 2, p.width / 2, p.height / 2, -p.height / 2, 0, 2);
+        p.resetMatrix();
+        p.noFill();
+        const first = streaks[0]!;
+        p.stroke(withAlpha(RELIEF_PALETTE.ink, Math.min(150, first.alpha * 0.7)));
+        p.strokeWeight(first.width + 1.7);
+        for (const streak of streaks) {
+          p.line(
+            streak.x - p.width / 2,
+            streak.y - p.height / 2,
+            0,
+            streak.x + streak.dx - p.width / 2,
+            streak.y + streak.dy - p.height / 2,
+            0,
+          );
+        }
+        p.stroke(withAlpha("#e5fbff", first.alpha));
+        p.strokeWeight(first.width);
+        for (const streak of streaks) {
+          p.line(
+            streak.x - p.width / 2,
+            streak.y - p.height / 2,
+            0,
+            streak.x + streak.dx - p.width / 2,
+            streak.y + streak.dy - p.height / 2,
+            0,
+          );
+        }
+      } finally {
+        p.pop();
+        gl.depthMask(depthWriteWasEnabled);
+        if (depthWasEnabled) gl.enable(gl.DEPTH_TEST);
+      }
+    };
+
+    const drawWind = (weather: WeatherView, now: number): void => {
+      const threads = buildWindThreadFrame(weather, {
+        width: p.width,
+        height: p.height,
+        now,
+        reducedMotion,
+        yaw: orbit.yaw,
+      });
+      const first = threads[0];
+      if (!first) return;
+      const gl = p.drawingContext as WebGLRenderingContext | WebGL2RenderingContext;
+      const depthWasEnabled = gl.isEnabled(gl.DEPTH_TEST);
+      const depthWriteWasEnabled = typeof gl.getParameter === "function"
+        ? Boolean(gl.getParameter(gl.DEPTH_WRITEMASK))
+        : true;
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+      p.push();
+      try {
+        p.camera(0, 0, 1, 0, 0, 0, 0, 1, 0);
+        p.ortho(-p.width / 2, p.width / 2, p.height / 2, -p.height / 2, 0, 2);
+        p.resetMatrix();
+        p.noFill();
+        p.stroke(withAlpha(RELIEF_PALETTE.foam, first.alpha));
+        p.strokeWeight(first.width);
+        for (const thread of threads) {
+          p.bezier(
+            thread.start.x - p.width / 2,
+            thread.start.y - p.height / 2,
+            thread.controlA.x - p.width / 2,
+            thread.controlA.y - p.height / 2,
+            thread.controlB.x - p.width / 2,
+            thread.controlB.y - p.height / 2,
+            thread.end.x - p.width / 2,
+            thread.end.y - p.height / 2,
+          );
+        }
+      } finally {
+        p.pop();
+        gl.depthMask(depthWriteWasEnabled);
+        if (depthWasEnabled) gl.enable(gl.DEPTH_TEST);
+      }
+    };
+
     const drawScene = (view: TideweftView, cache: CachedReliefMesh, now: number): void => {
       const camera = currentCameraState();
       setCamera(camera);
@@ -2806,6 +2980,8 @@ export function createTideweftReliefRenderer(
       drawPorters(view, cache);
       drawPlayer(view, cache);
       drawScanRipples(view, cache, now);
+      drawWind(view.weather, now);
+      drawRain(view.weather, now);
     };
 
     p.setup = (): void => {
@@ -2845,13 +3021,14 @@ export function createTideweftReliefRenderer(
       if (!active || contextLost || !webglSupported) return;
       refreshLatestView();
       const now = performance.now();
+      advancePointerParallax(pointerParallax, now, reducedMotion);
       p.background(latestView?.weather.kind === "mist" ? RELIEF_PALETTE.horizon : RELIEF_PALETTE.ink);
       if (!latestView) return;
       const mesh = ensureMesh(latestView);
       advanceHeldOrbit(now);
       updateCamera(latestView, now, mesh.mesh);
       drawScene(latestView, mesh, now);
-      syncReliefLabels(latestView, mesh, currentCameraState());
+      syncReliefLabels(latestView, mesh, currentCameraState(), now);
     };
   };
 
@@ -2872,6 +3049,8 @@ export function createTideweftReliefRenderer(
     labelLayer?.remove();
     labelLayer = null;
     labelNodes.clear();
+    labelPositions.clear();
+    resetPointerParallax(pointerParallax, true);
     delete options.mount.dataset.reliefFailure;
     cached = null;
   };
@@ -2931,6 +3110,10 @@ export function createTideweftReliefRenderer(
   reducedMotion = reducedMotionQuery.matches;
   reducedMotionChangeHandler = (event: MediaQueryListEvent): void => {
     reducedMotion = event.matches;
+    if (reducedMotion) {
+      resetPointerParallax(pointerParallax, true);
+      labelPositions.clear();
+    }
   };
   reducedMotionQuery.addEventListener("change", reducedMotionChangeHandler);
   options.onOrbitChange?.(orbit.yaw);

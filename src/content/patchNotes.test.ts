@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.0",
-      buildIdentity: "0.3.3-alpha.0",
-      gameplayContractVersion: 9,
-      tutorialVersion: 10,
+      version: "0.3.3-alpha.1",
+      buildIdentity: "0.3.3-alpha.1",
+      gameplayContractVersion: 10,
+      tutorialVersion: 11,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -73,12 +73,26 @@ describe("canonical offline patch notes", () => {
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
+    const horizonRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.0",
+    );
+    const horizonCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => horizonRelease?.categories[category] ?? [])
+      .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/infinite region streaming|wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("cross regional horizons");
-    expect(activeCopy).toContain("Bounded five-region streaming");
+    expect(activeCopy).toContain("meaningfully planted crossing window");
+    expect(activeCopy).toContain("source-subject-recipient identity");
+    expect(activeCopy).toContain("bounded deterministic lookahead");
+    expect(activeCopy).toContain("full-viewport, frameless deterministic tide field");
+    expect(activeCopy).toContain("Sparse deterministic wind threads");
+    expect(activeCopy).toContain("same authoritative drizzle, rain, and squall state");
+    expect(horizonCopy).toContain("cross regional horizons");
+    expect(horizonCopy).toContain("Bounded five-region streaming");
     expect(limitations).toContain("not live");
     expect(limitations).toContain("infinite streaming");
+    expect(limitations).toContain("complete distinct systemic language");
   });
 
   it("states the non-pausing field behavior without claiming a hidden time stop", () => {

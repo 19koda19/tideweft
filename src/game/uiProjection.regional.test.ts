@@ -16,7 +16,7 @@ import {
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
 import { createSessionState, type GameSessionState } from "./sessionTypes";
-import { projectUIView } from "./uiProjection";
+import { projectUIView, signedReportJobId } from "./uiProjection";
 
 interface RegionalObjectiveFixture {
   readonly economy: WorldView;
@@ -93,6 +93,49 @@ function visibleDistance(label: string | undefined): number {
 }
 
 describe("regional Promise objective guidance", () => {
+  it("keeps remote-region report jobs stable, distinct, and source-disabled", () => {
+    const { economy, spatial, player, session } = objectiveFixture(
+      "remote reports keep their accountable route",
+      createRegionCoord(1, -1),
+    );
+    const source = economy.settlements[0];
+    if (!source) throw new Error("regional report fixture lost its source");
+    session.selectedSettlementId = source.id;
+    const beforeEconomy = structuredClone(economy);
+    const remoteReports = projectUIView(spatial, player, session, { economyWorld: economy })
+      .selectedSettlement?.connections
+      .filter((connection) => connection.settlementId && connection.reportActionLabel) ?? [];
+    const remoteIds = remoteReports.map((connection) => signedReportJobId(
+      Number(connection.settlementId),
+      source.id,
+      Number(connection.id),
+    ));
+
+    const localPlayer = createPlayer(economy, source.id);
+    const localSession = createSessionState(economy.seedText);
+    localSession.tutorial.dismissed = true;
+    localSession.selectedSettlementId = source.id;
+    const localReports = projectUIView(economy, localPlayer, localSession).selectedSettlement
+      ?.connections.filter((connection) => connection.settlementId && connection.reportActionLabel) ?? [];
+    const localIds = localReports.map((connection) => signedReportJobId(
+      Number(connection.settlementId),
+      source.id,
+      Number(connection.id),
+    ));
+
+    expect(remoteIds).toEqual(localIds);
+    expect(new Set(remoteIds).size).toBe(remoteIds.length);
+    expect(remoteReports.every(({ reportActionDisabled }) => reportActionDisabled)).toBe(true);
+    for (const report of remoteReports) {
+      expect(report.reportActionLabel).toContain(`At ${source.name}: sign`);
+      expect(report.reportActionLabel).toContain(report.settlementName);
+      expect(report.reportActionHint).toContain(`Subject: ${source.name}'s`);
+      expect(report.reportActionHint).toContain(`Recipient: ${report.settlementName}`);
+      expect(report.reportActionHint).toContain("remote inspection cannot create");
+    }
+    expect(economy).toEqual(beforeEconomy);
+  });
+
   it("keeps economy names and a nonzero west bearing for remote pickup, delivery, and report loops", () => {
     const fixture = objectiveFixture(
       "the westward Promise remains named",

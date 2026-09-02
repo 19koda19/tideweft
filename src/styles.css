@@ -2208,11 +2208,19 @@ button:focus-visible .keycap {
   line-height: 1.45;
 }
 
-.restart-form__status {
+.restart-form__status,
+.new-world-form__status {
   margin: 0;
   color: var(--foam-faint);
   font-size: 0.57rem;
   line-height: 1.4;
+}
+
+.restart-form__status[aria-live="assertive"],
+.new-world-form__status[aria-live="assertive"],
+.restart-input[aria-invalid="true"] + .restart-form__status,
+.seed-input[aria-invalid="true"] + .new-world-form__status {
+  color: var(--gold);
 }
 
 .restart-form__submit {
@@ -3487,6 +3495,309 @@ body {
 
   .weft-progress {
     border: 1px solid CanvasText;
+  }
+}
+
+/* Frameless field language. Information remains semantically grouped and the
+   Promises/inspector surfaces still scroll, but they no longer sit inside
+   opaque cards. A single continuous edge falloff supplies contrast over the
+   world; type, spacing, symbols, and restrained rules carry hierarchy. */
+.ui-layer::before {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(2 5 6 / 88%) 0, rgb(2 5 6 / 50%) 10rem, transparent 25rem),
+    linear-gradient(270deg, rgb(2 5 6 / 76%) 0, rgb(2 5 6 / 30%) 9rem, transparent 22rem),
+    linear-gradient(0deg, rgb(2 5 6 / 86%) 0, rgb(2 5 6 / 26%) 4rem, transparent 10rem),
+    linear-gradient(180deg, rgb(2 5 6 / 82%) 0, rgb(2 5 6 / 24%) 4.6rem, transparent 9rem);
+}
+
+.ui-layer > * {
+  z-index: 1;
+}
+
+.app-masthead,
+.hud-bar.glass-panel,
+.mobile-field-strip.glass-panel,
+.objective-panel.glass-panel,
+.contract-rail,
+.settlement-inspector,
+.chronicle-panel,
+.action-dock.glass-panel {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.app-masthead {
+  background: linear-gradient(180deg, rgb(3 5 5 / 86%), rgb(3 5 5 / 24%) 72%, transparent);
+}
+
+.hud-bar.glass-panel,
+.mobile-field-strip.glass-panel {
+  text-shadow:
+    0 1px 2px #000,
+    0 2px 9px rgb(0 0 0 / 92%);
+}
+
+.objective-panel.glass-panel,
+.contract-rail,
+.settlement-inspector,
+.chronicle-panel {
+  text-shadow:
+    0 1px 2px #000,
+    0 2px 7px rgb(0 0 0 / 96%);
+}
+
+.objective-panel {
+  padding-left: 0.38rem;
+}
+
+.objective-panel__why,
+.field-readout,
+.choir-readout,
+.contract-rail__guide,
+.stock-item,
+.resident-item,
+.connection-item,
+.report-item,
+.chronicle-entry,
+.contract-card__forecast,
+.control-grid__row,
+.metric {
+  background: transparent;
+  border: 0;
+}
+
+.objective-panel__why,
+.contract-card__consequence {
+  padding-left: 0;
+  border: 0;
+  font-style: italic;
+}
+
+.panel-summary {
+  padding-inline: 0.18rem 0.32rem;
+}
+
+.panel-summary__count,
+.property-chip,
+.fact-chip,
+.status-chip,
+.resident-item__initial,
+.condition-readout__symbol,
+.keycap {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.condition-readout__symbol {
+  width: 1rem;
+}
+
+.contract-list,
+.chronicle-list {
+  padding-inline: 0.08rem 0.3rem;
+}
+
+.contract-list__item + .contract-list__item {
+  margin-top: 0.75rem;
+}
+
+.contract-card {
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.contract-card::before {
+  display: inline-block;
+  width: 0.8rem;
+  margin-right: 0.12rem;
+  color: var(--tide);
+  content: "◇";
+  font-size: 0.52rem;
+  translate: 0 0.12rem;
+}
+
+.contract-card[data-mood="gentle"]::before {
+  color: var(--good);
+  content: "○";
+}
+
+.contract-card[data-mood="daring"]::before {
+  color: var(--coral);
+  content: "▲";
+}
+
+.contract-card[data-mood="social"]::before {
+  color: var(--mauve);
+  content: "⌘";
+}
+
+.contract-card__inspect {
+  margin-top: -0.9rem;
+  padding: 0 0 0 0.92rem;
+}
+
+.contract-card:hover,
+.contract-card:focus-within,
+.contract-card[data-selected="true"] {
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-shadow:
+    0 1px 2px #000,
+    0 0 0.85rem rgb(173 216 204 / 28%);
+}
+
+.contract-card[data-selected="true"]::before {
+  color: var(--gold);
+  content: "◆";
+}
+
+.contract-card__action,
+.report-item__action,
+.connection-item__action,
+.kit-action,
+.text-button,
+.action-button,
+.pace-button,
+.icon-button,
+.mobile-field-toggle,
+.mobile-kit-button {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-shadow: 0 1px 5px #000;
+}
+
+.contract-card__action,
+.report-item__action,
+.connection-item__action,
+.kit-action,
+.text-button {
+  text-decoration: underline;
+  text-decoration-color: rgb(236 238 233 / 24%);
+  text-underline-offset: 0.25rem;
+}
+
+/* Primary text buttons used to rely on a pale filled rectangle and therefore
+   carried dark ink. Once the fill is removed, restore luminous type so START
+   and other primary actions cannot disappear into the field. */
+.text-button--primary,
+.text-button--primary:hover:not(:disabled) {
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-decoration-color: var(--gold);
+}
+
+.contract-card__action:hover:not(:disabled),
+.report-item__action:hover:not(:disabled),
+.connection-item__action:hover:not(:disabled),
+.kit-action:hover:not(:disabled),
+.text-button:hover:not(:disabled),
+.action-button:hover:not(:disabled),
+.pace-button:hover:not(:disabled),
+.icon-button:hover:not(:disabled),
+.mobile-field-toggle:hover,
+.mobile-kit-button:hover {
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  text-decoration-color: currentColor;
+  text-shadow:
+    0 1px 4px #000,
+    0 0 0.8rem rgb(173 216 204 / 40%);
+}
+
+.action-dock {
+  gap: clamp(0.15rem, 0.8vw, 0.75rem);
+}
+
+.action-dock > * + * {
+  border: 0;
+}
+
+.weft-progress,
+.weft-progress::-webkit-progress-bar {
+  background: rgb(236 238 233 / 11%);
+  box-shadow: none;
+}
+
+.relief-world-label,
+.relief-world-label[data-selected="true"],
+.relief-world-label[data-tone="destination"] {
+  padding: 0.14rem 0.2rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-shadow:
+    0 1px 2px #000,
+    1px 0 0 #000,
+    -1px 0 0 #000,
+    0 -1px 0 #000;
+}
+
+@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
+  .ui-layer::before {
+    background:
+      linear-gradient(180deg, rgb(2 5 6 / 92%) 0, rgb(2 5 6 / 34%) 7rem, transparent 12rem),
+      linear-gradient(0deg, rgb(2 5 6 / 92%) 0, rgb(2 5 6 / 34%) 5.2rem, transparent 10rem),
+      linear-gradient(90deg, rgb(2 5 6 / 58%), transparent 55%);
+  }
+
+  .mobile-field-strip {
+    background: transparent;
+    border: 0;
+    backdrop-filter: none;
+  }
+
+  .ui-layer[data-mobile-hud-expanded="true"] .contract-rail,
+  .ui-layer[data-mobile-hud-expanded="true"] .settlement-inspector {
+    background: linear-gradient(90deg, rgb(2 5 6 / 96%) 0, rgb(2 5 6 / 78%) 72%, transparent);
+  }
+
+  .mobile-field-toggle,
+  .mobile-kit-button {
+    border: 0;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .ui-layer::before {
+    opacity: 1;
+    background:
+      linear-gradient(90deg, rgb(0 0 0 / 96%), transparent 28rem),
+      linear-gradient(270deg, rgb(0 0 0 / 92%), transparent 24rem),
+      linear-gradient(0deg, rgb(0 0 0 / 94%), transparent 11rem),
+      linear-gradient(180deg, rgb(0 0 0 / 94%), transparent 10rem);
+  }
+}
+
+@media (forced-colors: active) {
+  .ui-layer::before {
+    display: none;
+  }
+
+  .contract-card,
+  .contract-card__action,
+  .report-item__action,
+  .connection-item__action,
+  .action-button,
+  .icon-button,
+  .mobile-field-toggle,
+  .mobile-kit-button {
+    border: 1px solid ButtonText;
   }
 }
 
@@ -5115,6 +5426,820 @@ body {
   .kit-action,
   .mobile-kit-button,
   .kit-tab[aria-selected="true"] {
+    border: 1px solid CanvasText;
+    forced-color-adjust: auto;
+  }
+}
+
+/* The title is a full-screen tide field, not another interface pane. Its
+   semantic dialog and compact control column remain intact while this
+   noninteractive layer gives the surrounding top-layer viewport room to
+   breathe. */
+.title-dialog {
+  box-sizing: border-box;
+  display: none;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding:
+    max(0.55rem, env(safe-area-inset-top))
+    max(0.55rem, env(safe-area-inset-right))
+    max(0.55rem, env(safe-area-inset-bottom))
+    max(0.55rem, env(safe-area-inset-left));
+  overflow: hidden;
+  isolation: isolate;
+  background: #030707;
+  border: 0;
+  box-shadow: none;
+  inset: 0;
+}
+
+.title-dialog[open] {
+  display: grid;
+  place-items: center;
+}
+
+.title-dialog::backdrop {
+  background: #030707;
+  backdrop-filter: none;
+}
+
+.title-dialog__backdrop {
+  position: absolute;
+  z-index: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgb(126 185 171 / 8%), transparent 34%),
+    radial-gradient(circle at 82% 72%, rgb(173 216 204 / 6%), transparent 38%),
+    linear-gradient(155deg, #020606, #061011 52%, #020606);
+}
+
+.title-atmosphere {
+  position: absolute;
+  display: block;
+  max-width: none;
+  max-height: none;
+  opacity: 0.94;
+  pointer-events: none;
+  contain: strict;
+  inset: 0;
+}
+
+.title-dialog__content {
+  position: relative;
+  z-index: 1;
+  width: min(38rem, calc(100vw - 1.5rem));
+  max-width: 38rem;
+  max-height: calc(100dvh - max(1.1rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  margin: 0;
+  padding: clamp(0.9rem, 3vw, 1.35rem);
+  overflow: auto;
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.title-dialog__content::before {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(2 7 8 / 91%) 0%,
+    rgb(2 7 8 / 72%) 43%,
+    rgb(2 7 8 / 28%) 64%,
+    transparent 78%
+  );
+}
+
+.title-dialog[open] .title-dialog__content {
+  animation: tideweft-title-arrive 1.25s cubic-bezier(0.16, 0.8, 0.22, 1) both;
+}
+
+.title-dialog__heading {
+  text-shadow: 0 0 1.4rem rgb(173 216 204 / 18%);
+}
+
+.title-dialog .seed-input {
+  background: rgb(2 7 8 / 34%);
+  text-shadow: 0 1px 0 #000;
+}
+
+@keyframes tideweft-title-arrive {
+  0% {
+    opacity: 0.16;
+    filter: blur(2px);
+    transform: translateY(0.55rem) scale(0.992);
+  }
+
+  58% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(-0.08rem) scale(1.002);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
+  .title-dialog {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+  }
+
+  .title-dialog__content {
+    width: min(38rem, calc(100vw - 0.7rem));
+    max-height: calc(100dvh - max(0.7rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+    padding: 0.8rem;
+    scrollbar-gutter: auto;
+  }
+
+}
+
+@media (prefers-contrast: more) {
+  .title-atmosphere {
+    opacity: 0.5;
+  }
+
+  .title-dialog__content::before {
+    background: radial-gradient(ellipse at center, rgb(2 7 8 / 98%) 0%, rgb(2 7 8 / 86%) 58%, transparent 82%);
+  }
+}
+
+@media (forced-colors: active) {
+  .title-dialog__backdrop,
+  .title-atmosphere,
+  .title-dialog__content::before {
+    display: none;
+  }
+
+  .title-dialog {
+    color: CanvasText;
+    background: Canvas;
+    forced-color-adjust: auto;
+  }
+}
+
+/* Keep the final mobile-specific declarations from reintroducing field boxes
+   after the frameless rules above. These controls retain their 44px hit areas;
+   only their painted rectangles disappear into the continuous edge fade. */
+@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
+  .mobile-field-strip,
+  .mobile-field-strip.glass-panel {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .mobile-field-toggle,
+  .mobile-kit-button,
+  .mobile-field-toggle:hover,
+  .mobile-field-toggle:focus-visible,
+  .mobile-kit-button:hover,
+  .mobile-kit-button:focus-visible {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+}
+
+/* This must remain after the mobile frameless cascade: forced-colors users
+   need native structural boundaries even when the ordinary visual language
+   intentionally removes painted control boxes. */
+@media (forced-colors: active) {
+  .contract-card,
+  .contract-card__action,
+  .report-item__action,
+  .connection-item__action,
+  .action-button,
+  .icon-button,
+  .mobile-field-toggle,
+  .mobile-kit-button {
+    border: 1px solid ButtonText;
+  }
+}
+
+/* True pane-free presentation. This is deliberately the final ordinary-color
+   cascade: later feature sections above may define their own desktop, compact,
+   hover, or selected surfaces, but the field itself is always only world,
+   floating type, glyphs, and meters. Native focus outlines and the final
+   forced-colors block below remain structural exceptions. */
+:root {
+  --masthead-h: max(2.75rem, 44px);
+  --masthead-offset: calc(var(--masthead-h) + max(0px, env(safe-area-inset-top)));
+  --floating-type-shadow:
+    0 1px 1px rgb(0 0 0 / 96%),
+    0 2px 0.48rem rgb(0 0 0 / 88%);
+}
+
+#app.app-shell {
+  position: relative;
+  display: block;
+}
+
+#app > .game-shell {
+  height: 100%;
+}
+
+#app > .app-masthead {
+  position: absolute;
+  z-index: 30;
+  top: max(0px, env(safe-area-inset-top));
+  right: 0;
+  left: 0;
+  min-height: var(--masthead-h);
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  pointer-events: none;
+  text-shadow: var(--floating-type-shadow);
+}
+
+#app > .app-masthead > * {
+  pointer-events: auto;
+}
+
+#app .view-mode-toggle,
+#app .view-mode-toggle:hover,
+#app .view-mode-toggle:focus-visible {
+  min-height: max(2.75rem, 44px);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.viewport-vignette {
+  box-shadow: none;
+}
+
+.world-compass,
+.relief-world-label,
+.relief-world-label[data-selected="true"],
+.relief-world-label[data-tone="destination"] {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-shadow:
+    0 1px 1px #000,
+    1px 0 0 rgb(0 0 0 / 88%),
+    -1px 0 0 rgb(0 0 0 / 88%),
+    0 -1px 0 rgb(0 0 0 / 88%);
+}
+
+.world-compass {
+  top: calc(var(--masthead-offset) + var(--ui-gap) + 3.85rem);
+}
+
+.ui-layer::before {
+  display: none;
+  background: none;
+  content: none;
+}
+
+#game-ui :is(
+  .glass-panel,
+  .hud-bar,
+  .mobile-field-strip,
+  .objective-panel,
+  .contract-rail,
+  .settlement-inspector,
+  .chronicle-panel,
+  .action-dock
+) {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+#game-ui :is(
+  .hud-bar,
+  .mobile-field-strip,
+  .objective-panel,
+  .contract-rail,
+  .settlement-inspector,
+  .chronicle-panel,
+  .action-dock,
+  .save-warning
+) {
+  text-shadow: var(--floating-type-shadow);
+}
+
+#game-ui .hud-bar {
+  top: calc(var(--masthead-offset) + var(--ui-gap));
+}
+
+#game-ui .left-rail,
+#game-ui .settlement-inspector {
+  top: calc(var(--masthead-offset) + var(--ui-gap) + 3.75rem);
+}
+
+#game-ui :is(
+  .objective-panel__why,
+  .field-readout,
+  .choir-readout,
+  .field-readout__wayknots,
+  .field-readout__tide-harps,
+  .contract-rail__guide,
+  .panel-summary__count,
+  .contract-card,
+  .contract-card__inspect,
+  .contract-card__forecast,
+  .contract-card__consequence,
+  .property-chip,
+  .fact-chip,
+  .status-chip,
+  .metric,
+  .stock-item,
+  .resident-item,
+  .resident-item__initial,
+  .connection-item,
+  .report-item,
+  .chronicle-entry,
+  .keycap,
+  .pace-control,
+  .save-warning
+) {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+}
+
+#game-ui :is(
+  .contract-card:hover,
+  .contract-card:focus-within,
+  .contract-card[data-selected="true"],
+  .field-readout__wayknots[data-waychord="true"],
+  .field-readout__tide-harps[data-active="true"],
+  .chronicle-entry[data-new="true"],
+  .save-warning[data-tone="danger"]
+) {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+}
+
+#game-ui :is(
+  .action-button,
+  .pace-button,
+  .icon-button,
+  .text-button,
+  .mobile-field-toggle,
+  .mobile-kit-button,
+  .kit-action,
+  .kit-tab,
+  .tutorial-topic-button,
+  .tutorial-page-button,
+  .tutorial-page__action,
+  .patch-notes-dialog__close,
+  .tutorial-dialog__close,
+  .kit-dialog__close,
+  .continue-card
+) {
+  min-height: max(2.75rem, 44px);
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+  transform: none;
+  text-shadow: var(--floating-type-shadow);
+}
+
+#game-ui button:hover:not(:disabled),
+#game-ui button:focus-visible,
+#game-ui .contract-card:hover,
+#game-ui .contract-card:focus-within {
+  background: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+  text-shadow:
+    0 1px 1px #000,
+    0 0 0.62rem rgb(173 216 204 / 42%);
+}
+
+#game-ui :is(
+  .pace-button[aria-pressed="true"],
+  .brace-button[aria-pressed="true"],
+  .kit-tab[aria-selected="true"],
+  .tutorial-topic-button[aria-current="page"]
+) {
+  color: var(--gold);
+  background: transparent;
+  border: 0;
+  box-shadow: inset 0 -2px currentcolor;
+}
+
+#game-ui :is(.text-button--primary, .tutorial-page__action),
+#game-ui :is(.text-button--primary, .tutorial-page__action):hover:not(:disabled),
+#game-ui :is(.text-button--primary, .tutorial-page__action):focus-visible {
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-weight: 820;
+  text-decoration: underline;
+  text-decoration-color: var(--gold);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.28rem;
+  text-shadow:
+    0 1px 1px #000,
+    0 0 0.55rem rgb(0 0 0 / 92%);
+}
+
+#game-ui :is(.text-button--primary, .tutorial-page__action):disabled {
+  color: var(--foam-muted);
+  opacity: 0.72;
+  text-decoration-color: var(--foam-faint);
+}
+
+#game-ui :is(.panel-summary, .text-button, .action-button, .pace-button, .icon-button) {
+  min-height: max(2.75rem, 44px);
+}
+
+/* An expanded compact workspace keeps its native scrolling geometry but does
+   not paint a replacement sheet over the estuary. */
+#game-ui .ui-layer[data-mobile-hud-expanded="true"] :is(.contract-rail, .settlement-inspector) {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* Every non-title native modal occupies the field instead of becoming a card.
+   Its ::backdrop is the one uniform dim layer; all readable structure above it
+   is transparent typography, spacing, and single divider rules. */
+#game-ui :is(
+  .quiet-dialog,
+  .help-dialog,
+  .patch-notes-dialog,
+  .tutorial-dialog,
+  .kit-dialog
+) {
+  position: fixed;
+  box-sizing: border-box;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding:
+    max(0.55rem, env(safe-area-inset-top))
+    max(0.55rem, env(safe-area-inset-right))
+    max(0.55rem, env(safe-area-inset-bottom))
+    max(0.55rem, env(safe-area-inset-left));
+  color: var(--foam);
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+  inset: 0;
+}
+
+#game-ui .estuary-dialog::backdrop {
+  background: rgb(1 4 4 / 86%);
+  backdrop-filter: none;
+}
+
+#game-ui :is(.quiet-dialog, .help-dialog)[open] {
+  display: grid;
+  place-items: center;
+}
+
+#game-ui :is(.quiet-dialog__content, .help-dialog__content) {
+  width: min(44rem, 100%);
+  max-height: 100%;
+  margin: auto;
+  overflow: auto;
+}
+
+#game-ui :is(
+  .patch-notes-dialog__content,
+  .tutorial-dialog__content,
+  .kit-dialog__content
+) {
+  width: min(64rem, 100%);
+  margin-inline: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+#game-ui :is(
+  .quiet-stats,
+  .quiet-stat,
+  .quiet-dialog__quote,
+  .help-dialog__note--wayknots,
+  .patch-release__latest,
+  .patch-release__categories,
+  .patch-category,
+  .tutorial-control-list,
+  .tutorial-control,
+  .tutorial-callout,
+  .tutorial-planned-list,
+  .tutorial-planned-item,
+  .kit-load__split,
+  .kit-load__pair,
+  .kit-section__body,
+  .kit-row,
+  .kit-recipe,
+  .kit-empty
+) {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+}
+
+#game-ui :is(
+  .patch-release__categories,
+  .tutorial-control-list,
+  .tutorial-planned-list,
+  .kit-load__split,
+  .kit-section__body
+) {
+  gap: 0.65rem;
+}
+
+#game-ui :is(.patch-category, .tutorial-control, .tutorial-planned-item, .kit-row, .kit-recipe) {
+  border-top: 1px solid var(--line);
+}
+
+#game-ui :is(
+  .choice-card__copy,
+  .choice-card input:checked + .choice-card__copy,
+  .segmented-choice,
+  .segmented-choice__copy,
+  .segmented-choice__option input:checked + .segmented-choice__copy
+) {
+  background: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+}
+
+#game-ui .segmented-choice__option input:checked + .segmented-choice__copy {
+  color: var(--gold);
+  box-shadow: inset 0 -2px currentcolor;
+}
+
+/* The title atmosphere remains full-field. The content column has no radial
+   mask or seed-input fill, so START reads as luminous type rather than a pale
+   button pasted onto a hidden card. */
+#game-ui .title-dialog,
+#game-ui .title-dialog::backdrop,
+#game-ui .title-dialog__backdrop {
+  background: #030707;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+}
+
+#game-ui .title-dialog__content {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+#game-ui .title-dialog__content::before {
+  display: none;
+  background: none;
+  content: none;
+}
+
+#game-ui .title-dialog .seed-input {
+  min-height: max(2.75rem, 44px);
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  box-shadow: none;
+  text-shadow: var(--floating-type-shadow);
+}
+
+#game-ui .title-dialog :is(.text-button--primary, .patch-notes-trigger, .continue-card) {
+  color: var(--foam);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
+  .world-compass {
+    top: calc(var(--masthead-offset) + var(--ui-gap) + 5.4rem);
+  }
+
+  #game-ui .mobile-field-strip {
+    top: calc(var(--masthead-offset) + var(--ui-gap));
+  }
+
+  #game-ui :is(.left-rail > .contract-rail, .settlement-inspector) {
+    top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem);
+  }
+
+  #game-ui .save-warning[data-surface="field"] {
+    top: calc(var(--masthead-offset) + var(--ui-gap) + 4.7rem);
+  }
+
+  /* Quiet Hour must fit its complete baseline action set at the 320 x 640
+     release floor. Longer dynamic change lists still scroll as one semantic
+     column; the ordinary case keeps all three 44px actions in view. */
+  #game-ui .quiet-dialog__content {
+    box-sizing: border-box;
+    width: min(38rem, 100%);
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    padding: 0.35rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: auto;
+  }
+
+  #game-ui .quiet-dialog__content > .panel-eyebrow {
+    margin-bottom: 0.08rem;
+    font-size: 0.46rem;
+    line-height: 1.2;
+  }
+
+  #game-ui .quiet-dialog__title {
+    margin: 0;
+    font-size: clamp(1.25rem, 7vw, 1.55rem);
+    line-height: 1.15;
+  }
+
+  #game-ui .quiet-dialog__summary {
+    margin: 0.12rem 0 0;
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+  #game-ui .quiet-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0.45rem 0;
+    gap: 0.16rem;
+  }
+
+  #game-ui .quiet-stat {
+    min-height: 3.1rem;
+    padding: 0.22rem 0.1rem;
+  }
+
+  #game-ui .quiet-stat__label {
+    font-size: 0.41rem;
+    line-height: 1.15;
+  }
+
+  #game-ui .quiet-stat__value {
+    margin-top: 0.08rem;
+    font-size: 0.78rem;
+    line-height: 1.1;
+  }
+
+  #game-ui .quiet-dialog__changes-heading {
+    font-size: 0.54rem;
+    line-height: 1.2;
+  }
+
+  #game-ui .quiet-change-list {
+    margin-top: 0.22rem;
+  }
+
+  #game-ui .quiet-change-list__item {
+    padding: 0.22rem 0 0.22rem 0.9rem;
+    font-size: 0.58rem;
+    line-height: 1.35;
+  }
+
+  #game-ui .quiet-dialog__quote {
+    margin-top: 0.42rem;
+    padding: 0.3rem 0;
+    font-size: 0.66rem;
+    line-height: 1.35;
+  }
+
+  #game-ui .quiet-dialog .dialog-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 0.45rem;
+    gap: 0.2rem;
+  }
+
+  #game-ui .quiet-dialog .dialog-actions > .text-button,
+  #game-ui .quiet-dialog .patch-notes-trigger {
+    width: 100%;
+    min-width: 0;
+    min-height: max(2.75rem, 44px);
+    padding-inline: 0.22rem;
+    font-size: 0.52rem;
+    letter-spacing: 0.04em;
+    line-height: 1.15;
+  }
+}
+
+/* High-contrast mode keeps the same pane-free geometry. Forced colors is the
+   intentional exception: native structural borders make invisible hit areas,
+   scroll regions, and modal boundaries discoverable. */
+@media (prefers-contrast: more) {
+  .ui-layer::before {
+    display: none;
+    background: none;
+    content: none;
+  }
+
+  #game-ui .title-dialog__content::before {
+    display: none;
+    background: none;
+    content: none;
+  }
+}
+
+@media (forced-colors: active) {
+  #app > .app-masthead {
+    background: transparent;
+    border-bottom: 1px solid CanvasText;
+  }
+
+  #app .view-mode-toggle,
+  #app .view-mode-toggle:hover,
+  #app .view-mode-toggle:focus-visible {
+    color: ButtonText;
+    background: ButtonFace;
+    border: 1px solid ButtonText;
+  }
+
+  #game-ui :is(
+    .hud-bar,
+    .mobile-field-strip,
+    .objective-panel,
+    .contract-rail,
+    .settlement-inspector,
+    .chronicle-panel,
+    .action-dock
+  ) {
+    border: 1px solid CanvasText;
+  }
+
+  #game-ui :is(
+    .quiet-dialog,
+    .help-dialog,
+    .patch-notes-dialog,
+    .tutorial-dialog,
+    .kit-dialog,
+    .title-dialog
+  ) {
+    color: CanvasText;
+    background: Canvas;
+    border: 0;
+    forced-color-adjust: auto;
+  }
+
+  #game-ui button,
+  #game-ui button:hover:not(:disabled),
+  #game-ui button:focus-visible,
+  #game-ui .contract-card,
+  #game-ui .seed-input {
+    color: ButtonText;
+    background: ButtonFace;
+    border: 1px solid ButtonText;
+    forced-color-adjust: auto;
+  }
+
+  #game-ui :focus-visible,
+  #app :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .world-compass,
+  .relief-world-label {
+    color: CanvasText;
+    background: Canvas;
     border: 1px solid CanvasText;
     forced-color-adjust: auto;
   }

@@ -434,6 +434,8 @@ export interface TideweftUIOptions {
   readonly dispatch: (command: TideweftUICommand) => void;
   /** Feeds the touch hold control into the same brace bit as desktop Shift. */
   readonly setBrace: (active: boolean) => void;
+  /** Autoplay-safe title cue; the UI invokes it only from an armed user gesture. */
+  readonly playTitleCrescendo?: (openingOrdinal: number) => void | Promise<void>;
   readonly announcer?: HTMLElement;
   /** Defaults to true. When false, the host calls update itself. */
   readonly autoStart?: boolean;

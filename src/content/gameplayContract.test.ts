@@ -13,7 +13,7 @@ describe("the authoritative TIDEWEFT gameplay contract", () => {
     expect(GAMEPLAY_CONTRACT_ID).toBe("challenging-hard");
     expect(GAMEPLAY_CONTRACT_NAME).toBe("A CHALLENGING HARD");
     expect(GAMEPLAY_CONTRACT.difficultyCount).toBe(1);
-    expect(GAMEPLAY_CONTRACT_VERSION).toBe(9);
+    expect(GAMEPLAY_CONTRACT_VERSION).toBe(10);
   });
 
   it("keeps accessibility out of simulation and reward semantics", () => {

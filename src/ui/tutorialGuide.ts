@@ -435,14 +435,14 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "movement-pointer",
         audience: "desktop",
         title: "Chart a destination",
-        body: "Click open terrain to ask the Loom for a route. Shift-click appends another leg. Escape or right click clears the route.",
+        body: "Click open terrain to ask the Loom for a route. On safe ground, the porter pulls the route's cardinal steps into a steady diagonal heading instead of seesawing between axes; named hazards, impassable edges, and costlier terrain are never cut through by that smoothing. Shift-click appends another leg. Escape or right click clears the route.",
         controlId: "set-destination",
       },
       {
         id: "movement-touch",
         audience: "mobile",
         title: "Tap to travel",
-        body: "Tap open terrain in Chart or Relief to set a destination. Tapping a harbor charts to its exact center so pickup and delivery cannot miss. Tapping a visible field resource charts within reach and gathers it automatically on arrival. The porter follows the line until arrival, danger, or a new destination.",
+        body: "Tap open terrain in Chart or Relief to set a destination. Tapping a harbor charts to its exact center so pickup and delivery cannot miss. Tapping a visible field resource charts within reach and gathers it automatically on arrival. Safe diagonal legs steer smoothly without skipping a hazardous tile or corner. The porter follows the line until arrival, danger, or a new destination.",
         controlId: "set-destination",
       },
       {
@@ -599,7 +599,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "reports-collect",
         audience: "all",
         title: "Choose a named recipient",
-        body: "Use “Sign info report → [harbor].” The case records the source harbor's specialization stock, quantity, and in-world observation time. It uses one document slot, but it does not move supplies or accept a cargo promise. Physical cargo jobs live only in Promises.",
+        body: "Each row names one distinct source fact and recipient: “Sign [source]'s current [stock] count → [recipient].” Exact duplicate source-subject-recipient records collapse to one stable action. The case records quantity and in-world observation time, uses one document slot, and moves no supplies; physical cargo jobs live only in Promises.",
       },
       {
         id: "reports-deliver",
@@ -645,7 +645,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-stability",
         audience: "all",
         title: "Stability always names its cause",
-        body: "Stability is footing, not a second stamina bar. Sound ground can hold or restore it; steep grade, loose rock, slick moisture, deep water, cross-current, wind, sharp turns, and a shifting load can pull it down. The HUD names the active causes, while standing still or holding BRACE on a supported line recovers control.",
+        body: "Stability is footing, not a second stamina bar. Sound ground can hold or restore it; steep grade, loose rock, slick moisture, deep water, cross-current, wind, sharp turns, and a shifting load can pull it down. The HUD names the active causes. Once you reach a dry bank, plant your feet: corrective recovery now works against crosswind instead of leaving you locked at zero. Deep water remains pure-loss footing until you reach support.",
       },
       {
         id: "meters-derived-pace",
@@ -657,7 +657,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-brace-desktop",
         audience: "desktop",
         title: "Brace through a difficult patch",
-        body: "Hold either Shift key while moving to trade speed for stability and fragile-cargo protection. It works when the world, document body, or a HUD control owns focus, except while typing in a field or using a modal. The safety readout says BRACING immediately and both views draw an amber planted-foot marker. Release it after the hazard. BRACE cannot erase an unsupported edge, but it can turn a prepared crossing into a controlled one.",
+        body: "Hold either Shift key while moving to trade speed for substantially stronger footing resistance and fragile-cargo protection. It works when the world, document body, or a HUD control owns focus, except while typing in a field or using a modal. The safety readout says BRACING immediately and both views draw an amber planted-foot marker. Release it after the hazard. BRACE buys meaningful crossing distance, but deep water still drains stability and an unsupported edge remains unsafe.",
         controlId: "brace-key",
       },
       {
@@ -1020,14 +1020,14 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-switch",
         audience: "all",
         title: "Switch without changing the rules",
-        body: "Use the header view control to swap Chart 2D and Relief 3D. Chart is the calmer, reduced-motion-friendly map; Relief presents the same terrain as a lit height field.",
+        body: "Use the header view control to swap Chart 2D and Relief 3D. Chart is the calmer, reduced-motion-friendly map; Relief presents the same terrain as a lit height field. Both views now show the same authoritative drizzle, rain, or squall and the same world-space wind direction.",
         controlId: "view-button",
       },
       {
         id: "views-camera",
         audience: "desktop",
         title: "Read Relief from any angle",
-        body: "Hold J to spin the map left or L to spin it right; the turn is smooth and stops on release. Right-drag or Alt-drag also orbits, and the wheel zooms. Keyboard travel remains screen-relative after the camera turns. V switches views immediately.",
+        body: "Hold J to spin the map left or L to spin it right; the turn is smooth and stops on release. Right-drag or Alt-drag also orbits, and the wheel zooms. A fine-pointer mouse adds only a few eased pixels of visual depth: it changes neither the world nor where a click lands. Keyboard travel remains screen-relative after the camera turns. V switches views immediately.",
         controlId: "relief-orbit",
       },
       {
@@ -1044,10 +1044,16 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "The small N compass never changes the world itself. Chart stays north-up; in Relief its arrow turns with camera yaw and always points toward world north, while currents and the courier keep their actual simulation directions.",
       },
       {
+        id: "views-weather",
+        audience: "all",
+        title: "Read rain and wind in either view",
+        body: "Drizzle, rain, and squall draw a bounded precipitation field over Chart and Relief. Sparse wind threads show direction and relative strength even under a clear sky; Relief turns those threads with the camera while the compass preserves world north. These marks expose the current global weather honestly, but regional fronts and complete cold, fire, ecology, cargo, wildlife, and human consequences are not live yet.",
+      },
+      {
         id: "views-mobile-strip",
         audience: "mobile",
         title: "The compact strip is the travel HUD",
-        body: "Its translucent overlay keeps the active PICK UP / DELIVER route plus labeled Stamina, Stability, Loom, and Cargo meters above the map. The terrain line names the biome, depth, effort, and current risk; the large touch dock below supplies the contextual action, hold-to-BRACE, Scan, and Wayknot controls without keyboard-instruction clutter.",
+        body: "Its floating overlay keeps the active PICK UP / DELIVER route plus labeled Stamina, Stability, Loom, and Cargo meters directly above the map without a card or edge shelf. The terrain line names the biome, depth, effort, and current risk; the large touch dock below supplies the contextual action, hold-to-BRACE, Scan, and Wayknot controls without keyboard-instruction clutter.",
       },
       {
         id: "views-mobile-sheets",
@@ -1104,7 +1110,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-hard-restart",
         audience: "all",
         title: "One ruleset; restarting takes two deliberate steps",
-        body: "There is no difficulty selector. The first-launch title stays deliberately quiet—TIDEWEFT, Seed phrase, START, and PATCH NOTES—while this manual records the single A CHALLENGING HARD rules contract. To replace a save, open the title through Quiet Hour and type restartrestartrestart exactly. That only unlocks the seed field; the existing world remains safe until you submit a non-empty new seed phrase. A blank seed changes nothing.",
+        body: "There is no difficulty selector. The first-launch title stays deliberately quiet—TIDEWEFT, Seed phrase, START, and PATCH NOTES—over a deterministic tide field. Its short opening crescendo waits for your first tap or key because browsers do not permit unsolicited sound, and it plays only once for that genuine opening. This manual records the single A CHALLENGING HARD rules contract. To replace a healthy save, open the title through Quiet Hour, type restartrestartrestart exactly in Begin again, then choose Unlock restart. This only unlocks the seed field; it does not touch storage. Touch-keyboard blur and ordinary field refreshes keep that temporary step intact, while closing the title cancels it. START with a non-empty new seed phrase replaces the world once. A wrong phrase or repeated tap changes nothing. A blank seed changes nothing.",
       },
       {
         id: "saves-quiet-hour",
@@ -1170,7 +1176,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "accessibility-motion",
         audience: "all",
         title: "Reduced motion is honored",
-        body: "A reduced-motion preference freezes decorative animation and starts new users in Chart 2D unless they deliberately chose Relief before. The view control remains available.",
+        body: "A reduced-motion preference freezes decorative title animation, wind and rain motion, pointer parallax, and delayed label travel, and starts new users in Chart 2D unless they deliberately chose Relief before. Touch and coarse-pointer play also keeps the camera steady. The view control and truthful static weather marks remain available.",
       },
       {
         id: "accessibility-announcements",
@@ -1202,7 +1208,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather and wind, discovery, depth sounding, current arrows and sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
+        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, visible rain in Chart and Relief, readable wind threads, discovery, depth sounding, current arrows and sweeps, regional physical cargo custody, region-0 settlements, promises, reports, routes, porters, projects, version-4 saves, and perpetual play are active systems.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1229,7 +1235,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 10 as const;
+export const TUTORIAL_CONTENT_VERSION = 11 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

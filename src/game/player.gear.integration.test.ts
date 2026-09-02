@@ -219,6 +219,11 @@ describe("crafted carried gear in player movement", () => {
     const sheltered = createPlayer(world);
     placePlayer(bare);
     placePlayer(sheltered);
+    // Measure the cape below the ceiling: dry-ground corrective recovery can
+    // legitimately leave both porters at full Stability under this moderate
+    // gust, masking the cape's smaller authoritative pressure.
+    bare.stability = 800_000;
+    sheltered.stability = 800_000;
     sheltered.craftingInventory = craftedGearInventory("weather-cape", 71);
 
     stepPlayer(bare, world, MOVE_RIGHT);

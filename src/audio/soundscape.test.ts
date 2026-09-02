@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { incidentSoundPattern } from "./soundscape";
+import { incidentSoundPattern, titleCrescendoPattern } from "./soundscape";
+
+describe("title crescendo", () => {
+  it("is a deterministic short low-to-glass chord", () => {
+    const pattern = titleCrescendoPattern();
+    expect(pattern).toEqual(titleCrescendoPattern());
+    expect(pattern).toHaveLength(5);
+    expect(pattern[0]?.frequency).toBeLessThan(pattern.at(-1)?.frequency ?? 0);
+    expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(1.3);
+  });
+});
 
 describe("traversal incident sound patterns", () => {
   it("is byte-identical for the same persisted variant seed", () => {

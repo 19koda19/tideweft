@@ -1231,6 +1231,7 @@ function projectSettlement(
   const residents = verifiedLocally
     ? allResidents
     : allResidents.filter((resident) => knownRequesterIds.has(resident.id));
+  const connectionTrust = canonicalReportTrust(settlement);
   return {
     id: String(settlement.id),
     name: settlement.name,
@@ -1277,7 +1278,7 @@ function projectSettlement(
       role: titleCase(resident.role),
       state: titleCase(resident.intention),
     })),
-    connections: settlement.trust.map((trust) => {
+    connections: connectionTrust.map((trust) => {
       const route = world.routes.find(
         (candidate) =>
           (candidate.fromSettlementId === settlement.id && candidate.toSettlementId === trust.settlementId)
@@ -1296,11 +1297,17 @@ function projectSettlement(
       const surveyed = route !== undefined && player.surveyedRouteIds.includes(route.id);
       const choirMember = route !== undefined && world.choirs.some((choir) => choir.routeIds.includes(route.id));
       const weaveProgress = Math.min(100, Math.round(((route?.traceStrength ?? 0) / STRAND_AUTOMATION_THRESHOLD) * 100));
+      const recipientName = settlementName(world, trust.settlementId);
+      const subjectName = `${settlement.name}'s current ${titleCase(settlement.specialization)} count`;
+      const subjectDestination = `${subjectName} → ${recipientName}`;
+      const carriedSubject = player.report === null
+        ? null
+        : `${settlementName(world, player.report.sourceSettlementId)}'s ${titleCase(player.report.resource)} count for ${settlementName(world, player.report.targetSettlementId)}`;
       return {
         id: String(trust.settlementId),
         ...(route ? { routeId: String(route.id) } : {}),
         settlementId: String(settlement.id),
-        settlementName: settlementName(world, trust.settlementId),
+        settlementName: recipientName,
         conditionLabel: `${choirMember ? "Choir loop · " : surveyed ? "Surveyed · " : "Unsurveyed · "}${automated
           ? "self-carrying strand"
           : `faint trace · ${weaveProgress}% woven`}`,
@@ -1316,31 +1323,70 @@ function projectSettlement(
                   ? "Spend 1 part to repair route"
                   : "Spend 1 part to strengthen route",
               actionHint: !surveyed
-                ? `Travel from ${settlement.name} to ${settlementName(world, trust.settlementId)} along this corridor first. Surveying proves which physical path the work will improve.`
+                ? `Travel from ${settlement.name} to ${recipientName} along this corridor first. Surveying proves which physical path the work will improve.`
                 : automated
                   ? `Uses 1 part from ${settlement.name}'s shared stores. Permanently improves this self-carrying route's strength and weather condition.`
                   : `Uses 1 part from ${settlement.name}'s shared stores. Permanently raises strand strength and condition; at 100% woven, resident porters can carry promises here automatically.`,
               actionDisabled: !isHere || !partsAvailable || !surveyed,
-              reportActionLabel: player.report === null
-                ? !isHere
-                  ? `Reach ${settlement.name} to sign`
-                  : reportPackFull
-                    ? "Need 1 document slot"
-                    : `Sign info report → ${settlementName(world, trust.settlementId)}`
-                : "Document case already occupied",
-              reportActionHint: player.report !== null
-                ? "Deliver the report already in your document case before collecting another."
+              reportActionLabel: player.report !== null
+                ? `Case occupied · ${subjectDestination}`
                 : !isHere
-                  ? `Travel onto ${settlement.name}'s harbor mark first. A report must be witnessed and signed at its source; remote inspection cannot create one.`
+                  ? `At ${settlement.name}: sign ${subjectDestination}`
                   : reportPackFull
-                    ? "Free 1 load slot before signing. The report moves no cargo or supplies, but its document case must be carried physically."
-                    : `Records ${settlement.name}'s current ${titleCase(settlement.specialization)} count. This uses 1 document slot and moves no cargo or supplies; carry the signed fact to ${settlementName(world, trust.settlementId)}, arrive and press E / Enter or Deliver report.`,
+                    ? `Need 1 document slot · ${subjectDestination}`
+                    : `Sign ${subjectDestination}`,
+              reportActionHint: player.report !== null
+                ? `Your document case already holds ${carriedSubject}. Deliver it before signing ${subjectDestination}.`
+                : !isHere
+                  ? `Subject: ${subjectName}. Recipient: ${recipientName}. Travel onto ${settlement.name}'s harbor mark first; remote inspection cannot create one.`
+                  : reportPackFull
+                    ? `Subject: ${subjectName}. Recipient: ${recipientName}. Free 1 load slot before signing; the report moves no cargo or supplies, but its document case must be carried physically.`
+                    : `Subject: ${subjectName}. Recipient: ${recipientName}. This uses 1 document slot and moves no cargo or supplies; carry the signed fact there, arrive and press E / Enter or Deliver report.`,
               reportActionDisabled: !isHere || player.report !== null || reportPackFull,
             }
           : {}),
       };
     }),
   };
+}
+
+/** Stable identity for one authoritative signed-report job. */
+export function signedReportJobId(
+  sourceSettlementId: number,
+  subjectSettlementId: number,
+  recipientSettlementId: number,
+): string {
+  return `signed-report:${sourceSettlementId}:subject:${subjectSettlementId}:recipient:${recipientSettlementId}`;
+}
+
+/**
+ * A signed stock count is currently witnessed by and about the selected
+ * source settlement. Canonicalizing by the full source/subject/recipient
+ * identity prevents duplicate trust input or input reordering from minting
+ * duplicate-looking actions. The strongest duplicate trust value is selected
+ * deterministically without mutating the simulation view.
+ */
+function canonicalReportTrust(
+  settlement: WorldView["settlements"][number],
+): readonly WorldView["settlements"][number]["trust"][number][] {
+  const byJobId = new Map<
+    string,
+    WorldView["settlements"][number]["trust"][number]
+  >();
+  for (const trust of settlement.trust) {
+    const jobId = signedReportJobId(
+      settlement.id,
+      settlement.id,
+      trust.settlementId,
+    );
+    const prior = byJobId.get(jobId);
+    if (!prior || trust.value > prior.value) {
+      byJobId.set(jobId, { ...trust });
+    }
+  }
+  return [...byJobId.values()].sort((left, right) =>
+    left.settlementId - right.settlementId
+  );
 }
 
 function projectFieldGift(

@@ -27,6 +27,7 @@ import {
   type PatchNotesDialogController,
   type PatchNotesOpenSource,
 } from "./patchNotesDialog";
+import { bindTitleAtmosphere } from "./titleAtmosphere";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
 export const MOBILE_PROMISES_PANEL_ID = "promises-panel";
@@ -200,6 +201,318 @@ export function titleSeedRequirement(
     };
   }
   return { required: false, validationMessage: "" };
+}
+
+const RESTART_LOCKED_STATUS =
+  "Your current save stays intact. This only unlocks the required new-seed step.";
+const RESTART_UNLOCKED_STATUS =
+  "Restart unlocked. Enter a non-empty new seed, then choose START. Your current save remains intact until then.";
+
+export interface TitleRestartFlowElements {
+  readonly restartForm: HTMLFormElement;
+  readonly restartInput: HTMLInputElement;
+  readonly restartButton: HTMLButtonElement;
+  readonly restartStatus: HTMLElement;
+  readonly newWorldForm: HTMLFormElement;
+  readonly seedInput: HTMLInputElement;
+  readonly seedStatus: HTMLElement;
+  readonly beginButton: HTMLButtonElement;
+}
+
+export interface TitleRestartFlowController {
+  readonly unlocked: boolean;
+  readonly seedDirty: boolean;
+  readonly submitting: boolean;
+  /** Reconciles local form state with the currently presented title surface. */
+  readonly sync: (title: TitleOverlayUIView, presented: boolean) => void;
+  readonly destroy: () => void;
+}
+
+interface TitleRestartFlowOptions {
+  readonly elements: TitleRestartFlowElements;
+  readonly getTitle: () => TitleOverlayUIView | null;
+  readonly dispatch: (command: TideweftUICommand) => void;
+  readonly announce: (message: string, assertive?: boolean) => void;
+}
+
+/**
+ * Owns the two-stage saved-world restart form at the actual DOM boundary.
+ *
+ * The state deliberately lives outside the view projection: routine paused
+ * renders must not relock a phrase that the player has just confirmed, while
+ * closing the title always discards the temporary authorization. Native form
+ * `invalid` is handled as well as `submit`, because mobile browsers can stop a
+ * required blank seed before a submit listener ever runs.
+ */
+export function bindTitleRestartFlow(
+  options: TitleRestartFlowOptions,
+): TitleRestartFlowController {
+  const elements = options.elements;
+  let unlocked = false;
+  let seedDirty = false;
+  let submitting = false;
+  let awaitingResult = false;
+  let presentedPreviously = false;
+  let priorMode = "";
+  let blockedValidityApplied = false;
+
+  const setInvalid = (input: HTMLInputElement, invalid: boolean): void => {
+    input.setAttribute("aria-invalid", invalid ? "true" : "false");
+  };
+
+  const focusControl = (input: HTMLInputElement, select = false): void => {
+    input.focus({ preventScroll: true });
+    if (select) input.select();
+    input.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  };
+
+  const reset = (): void => {
+    unlocked = false;
+    seedDirty = false;
+    submitting = false;
+    awaitingResult = false;
+    blockedValidityApplied = false;
+    elements.restartInput.value = "";
+    elements.seedInput.value = "";
+    elements.seedInput.required = false;
+    elements.seedInput.setCustomValidity("");
+    setInvalid(elements.restartInput, false);
+    setInvalid(elements.seedInput, false);
+    elements.restartStatus.textContent = RESTART_LOCKED_STATUS;
+    elements.seedStatus.textContent = "";
+    elements.seedStatus.hidden = true;
+  };
+
+  const sync = (title: TitleOverlayUIView, presented: boolean): void => {
+    const mode = `${title.hasSave ? "saved" : "new"}:${title.requiresSeed ? "recovery" : "healthy"}`;
+    const opening = presented && !presentedPreviously;
+    const modeChanged = presented && priorMode !== "" && mode !== priorMode;
+
+    if (!presented) {
+      if (presentedPreviously || unlocked || submitting || elements.restartInput.value.length > 0) {
+        reset();
+      }
+    } else if (opening || modeChanged) {
+      reset();
+    } else if (awaitingResult) {
+      // The runtime has rendered another title state instead of closing it, so
+      // the guarded replacement was rejected. Permit a deliberate retry, but
+      // never a second command from the original double tap.
+      awaitingResult = false;
+      submitting = false;
+      elements.seedStatus.hidden = false;
+      elements.seedStatus.textContent =
+        "The replacement was not accepted. No stored world was replaced; review the message and try again.";
+    }
+
+    presentedPreviously = presented;
+    priorMode = presented ? mode : "";
+
+    const worldCreation = titleWorldCreationState(title);
+    const seedRequirement = titleSeedRequirement(title, unlocked);
+    elements.restartForm.hidden = !title.hasSave || unlocked;
+    elements.newWorldForm.hidden = title.hasSave && !unlocked;
+    elements.seedInput.required = seedRequirement.required;
+    elements.seedInput.disabled = worldCreation.blocked || submitting;
+    elements.beginButton.disabled = worldCreation.blocked || submitting;
+    elements.restartInput.disabled = worldCreation.blocked || submitting;
+    elements.restartButton.disabled = worldCreation.blocked || submitting;
+    elements.newWorldForm.setAttribute("aria-disabled", String(worldCreation.blocked || submitting));
+    elements.restartForm.setAttribute("aria-disabled", String(worldCreation.blocked || submitting));
+    elements.newWorldForm.setAttribute("aria-busy", String(submitting));
+    if (worldCreation.blocked) {
+      elements.seedInput.setCustomValidity(worldCreation.reason);
+      blockedValidityApplied = true;
+    } else if (blockedValidityApplied) {
+      elements.seedInput.setCustomValidity("");
+      blockedValidityApplied = false;
+    }
+    if (title.requiresSeed && !unlocked && elements.seedStatus.textContent.length === 0) {
+      elements.seedInput.placeholder = "Required: enter a recovery seed phrase";
+      elements.seedStatus.hidden = false;
+      elements.seedStatus.textContent =
+        "Enter a non-empty recovery seed. The unreadable or conflicting save remains untouched until START succeeds.";
+    }
+  };
+
+  const rejectBlankSeed = (title: TitleOverlayUIView): void => {
+    const requirement = titleSeedRequirement(title, unlocked);
+    const message = requirement.validationMessage || RESTART_SEED_REQUIRED_MESSAGE;
+    elements.seedInput.required = true;
+    elements.seedInput.setCustomValidity(message);
+    setInvalid(elements.seedInput, true);
+    elements.seedStatus.hidden = false;
+    elements.seedStatus.textContent = `${message} Your current save is unchanged.`;
+    focusControl(elements.seedInput);
+    options.announce(
+      title.requiresSeed
+        ? "The unreadable or conflicting autosave is unchanged. Enter a non-empty seed phrase to replace it safely."
+        : "The current estuary is unchanged. Enter a new seed phrase to replace it.",
+      true,
+    );
+  };
+
+  const onRestartInput = (): void => {
+    setInvalid(elements.restartInput, false);
+    elements.restartStatus.textContent = RESTART_LOCKED_STATUS;
+  };
+
+  const unlockRestart = (): void => {
+    if (unlocked) return;
+    unlocked = true;
+    seedDirty = false;
+    setInvalid(elements.restartInput, false);
+    elements.restartStatus.textContent = "Restart unlocked. Your current save is still intact.";
+    elements.restartForm.hidden = true;
+    elements.newWorldForm.hidden = false;
+    elements.seedInput.value = "";
+    elements.seedInput.placeholder = "Required: enter a new seed phrase";
+    elements.seedInput.required = true;
+    elements.seedInput.setCustomValidity("");
+    setInvalid(elements.seedInput, false);
+    elements.seedStatus.hidden = false;
+    elements.seedStatus.textContent = RESTART_UNLOCKED_STATUS;
+    focusControl(elements.seedInput);
+    options.announce("Restart unlocked. Enter a non-empty new seed, then choose START.");
+  };
+
+  const onRestartChange = (): void => {
+    const title = options.getTitle();
+    if (
+      !title
+      || !presentedPreviously
+      || !title.hasSave
+      || submitting
+      || titleWorldCreationState(title).blocked
+      || !acceptsRestartPhrase(elements.restartInput.value)
+    ) {
+      return;
+    }
+    // Mobile virtual keyboards may commit a field with Done/change while the
+    // submit control is below the reduced visual viewport. Exact confirmation
+    // may reveal the seed step, but it still cannot replace a save by itself.
+    unlockRestart();
+  };
+
+  const onRestartSubmit = (event: Event): void => {
+    event.preventDefault();
+    const title = options.getTitle();
+    if (!title || !presentedPreviously || submitting) return;
+    const worldCreation = titleWorldCreationState(title);
+    if (worldCreation.blocked) {
+      elements.restartStatus.textContent = worldCreation.reason;
+      options.announce(worldCreation.reason, true);
+      return;
+    }
+    if (!acceptsRestartPhrase(elements.restartInput.value)) {
+      setInvalid(elements.restartInput, true);
+      elements.restartStatus.textContent =
+        `Not unlocked. Type ${RESTART_PHRASE} exactly; your current save is unchanged.`;
+      focusControl(elements.restartInput, true);
+      options.announce("Restart not unlocked. The current estuary is unchanged.", true);
+      return;
+    }
+    unlockRestart();
+  };
+
+  const onSeedInput = (): void => {
+    seedDirty = true;
+    elements.seedInput.setCustomValidity("");
+    setInvalid(elements.seedInput, false);
+    if (unlocked) {
+      elements.seedStatus.hidden = false;
+      elements.seedStatus.textContent = RESTART_UNLOCKED_STATUS;
+    }
+  };
+
+  const onSeedInvalid = (event: Event): void => {
+    event.preventDefault();
+    const title = options.getTitle();
+    if (!title || !presentedPreviously || submitting) return;
+    rejectBlankSeed(title);
+  };
+
+  const onNewWorldSubmit = (event: Event): void => {
+    event.preventDefault();
+    const title = options.getTitle();
+    if (!title || !presentedPreviously || submitting) return;
+    const worldCreation = titleWorldCreationState(title);
+    if (worldCreation.blocked) {
+      elements.seedInput.setCustomValidity(worldCreation.reason);
+      setInvalid(elements.seedInput, true);
+      elements.seedStatus.hidden = false;
+      elements.seedStatus.textContent = worldCreation.reason;
+      options.announce(worldCreation.reason, true);
+      return;
+    }
+    if (title.hasSave && !unlocked) {
+      elements.restartStatus.textContent = `Type ${RESTART_PHRASE} exactly before choosing a new seed.`;
+      elements.restartForm.hidden = false;
+      elements.newWorldForm.hidden = true;
+      focusControl(elements.restartInput);
+      return;
+    }
+    const seed = elements.seedInput.value.trim();
+    const seedRequirement = titleSeedRequirement(title, unlocked);
+    if (seedRequirement.required && seed.length === 0) {
+      rejectBlankSeed(title);
+      return;
+    }
+
+    submitting = true;
+    awaitingResult = true;
+    elements.seedInput.disabled = true;
+    elements.beginButton.disabled = true;
+    elements.newWorldForm.setAttribute("aria-busy", "true");
+    elements.seedStatus.hidden = false;
+    elements.seedStatus.textContent = "Starting this seed once…";
+    try {
+      options.dispatch({
+        type: "new-world",
+        seed,
+        posture: "gale",
+        sessionShape: PERPETUAL_SESSION_SHAPE,
+        ...(title.hasSave ? { restartPhrase: RESTART_PHRASE } : {}),
+      });
+    } catch (error) {
+      submitting = false;
+      awaitingResult = false;
+      elements.seedInput.disabled = false;
+      elements.beginButton.disabled = false;
+      elements.newWorldForm.setAttribute("aria-busy", "false");
+      elements.seedStatus.textContent =
+        "The replacement could not start. Your current save is unchanged; try again.";
+      throw error;
+    }
+  };
+
+  elements.restartInput.addEventListener("input", onRestartInput);
+  elements.restartInput.addEventListener("change", onRestartChange);
+  elements.restartForm.addEventListener("submit", onRestartSubmit);
+  elements.seedInput.addEventListener("input", onSeedInput);
+  elements.seedInput.addEventListener("invalid", onSeedInvalid);
+  elements.newWorldForm.addEventListener("submit", onNewWorldSubmit);
+
+  return {
+    get unlocked() {
+      return unlocked;
+    },
+    get seedDirty() {
+      return seedDirty;
+    },
+    get submitting() {
+      return submitting;
+    },
+    sync,
+    destroy: () => {
+      elements.restartInput.removeEventListener("input", onRestartInput);
+      elements.restartInput.removeEventListener("change", onRestartChange);
+      elements.restartForm.removeEventListener("submit", onRestartSubmit);
+      elements.seedInput.removeEventListener("input", onSeedInput);
+      elements.seedInput.removeEventListener("invalid", onSeedInvalid);
+      elements.newWorldForm.removeEventListener("submit", onNewWorldSubmit);
+    },
+  };
 }
 
 export const SAVE_WARNING_SURFACES = [
@@ -411,6 +724,7 @@ interface UIRefs {
   titleButton: HTMLButtonElement;
   helpButton: HTMLButtonElement;
   titleDialog: HTMLDialogElement;
+  titleAtmosphereCanvas: HTMLCanvasElement;
   continueButton: HTMLButtonElement;
   continueName: HTMLSpanElement;
   continueSummary: HTMLSpanElement;
@@ -420,6 +734,7 @@ interface UIRefs {
   restartStatus: HTMLParagraphElement;
   newWorldForm: HTMLFormElement;
   seedInput: HTMLInputElement;
+  seedStatus: HTMLParagraphElement;
   beginButton: HTMLButtonElement;
   quietDialog: HTMLDialogElement;
   quietTitle: HTMLHeadingElement;
@@ -1035,6 +1350,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   titleDialog.setAttribute("aria-labelledby", "title-dialog-heading");
   const titleBackdrop = createElement("div", "title-dialog__backdrop");
   titleBackdrop.setAttribute("aria-hidden", "true");
+  const titleAtmosphereCanvas = createElement("canvas", "title-atmosphere");
+  titleBackdrop.append(titleAtmosphereCanvas);
   const titleContent = createElement("div", "title-dialog__content");
   const titleHeading = createElement("h1", "title-dialog__heading", TITLE_SURFACE_COPY.heading);
   titleHeading.id = "title-dialog-heading";
@@ -1061,14 +1378,20 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   restartInput.maxLength = RESTART_PHRASE.length + 8;
   restartInput.autocomplete = "off";
   restartInput.spellcheck = false;
+  restartInput.setAttribute("autocapitalize", "none");
+  restartInput.setAttribute("autocorrect", "off");
+  restartInput.setAttribute("enterkeyhint", "next");
+  restartInput.setAttribute("aria-invalid", "false");
   restartInput.placeholder = "The current estuary stays safe until this matches";
   const restartStatus = createElement(
     "p",
     "restart-form__status",
-    "Unlocking only reveals the seed form; it does not erase anything yet.",
+    RESTART_LOCKED_STATUS,
   );
   restartStatus.id = "restart-status";
+  restartStatus.setAttribute("role", "status");
   restartStatus.setAttribute("aria-live", "polite");
+  restartStatus.setAttribute("aria-atomic", "true");
   restartInput.setAttribute("aria-describedby", restartStatus.id);
   const restartButton = createButton(
     "text-button text-button--wide restart-form__submit",
@@ -1088,11 +1411,23 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   seedInput.maxLength = 64;
   seedInput.autocomplete = "off";
   seedInput.spellcheck = false;
+  seedInput.setAttribute("autocapitalize", "none");
+  seedInput.setAttribute("autocorrect", "off");
+  seedInput.setAttribute("enterkeyhint", "go");
+  seedInput.setAttribute("aria-invalid", "false");
   seedInput.placeholder = "Leave blank for quiet-delta";
+
+  const seedStatus = createElement("p", "new-world-form__status");
+  seedStatus.id = "world-seed-status";
+  seedStatus.hidden = true;
+  seedStatus.setAttribute("role", "status");
+  seedStatus.setAttribute("aria-live", "polite");
+  seedStatus.setAttribute("aria-atomic", "true");
+  seedInput.setAttribute("aria-describedby", seedStatus.id);
 
   const beginButton = createButton("text-button text-button--primary text-button--wide", TITLE_SURFACE_COPY.start);
   beginButton.type = "submit";
-  newWorldForm.append(seedLabel, seedInput, beginButton);
+  newWorldForm.append(seedLabel, seedInput, seedStatus, beginButton);
   const titlePatchNotes = createButton(
     "text-button text-button--wide patch-notes-trigger",
     TITLE_SURFACE_COPY.patchNotes,
@@ -1326,6 +1661,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     titleButton,
     helpButton,
     titleDialog,
+    titleAtmosphereCanvas,
     continueButton,
     continueName,
     continueSummary,
@@ -1335,6 +1671,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     restartStatus,
     newWorldForm,
     seedInput,
+    seedStatus,
     beginButton,
     quietDialog,
     quietTitle,
@@ -1378,8 +1715,6 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let lastAnnouncement = "";
   let forcedTitle: boolean | null = null;
   let forcedQuietHour: boolean | null = null;
-  let titleFormDirty = false;
-  let restartUnlocked = false;
   let contractPointerActive = false;
   let signedReportPointerActive = false;
   let selectedInspectorId: string | null = null;
@@ -1413,6 +1748,30 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       announcer.textContent = message;
     }, 20);
   };
+
+  const titleAtmosphere = bindTitleAtmosphere({
+    canvas: refs.titleAtmosphereCanvas,
+    host: refs.titleDialog,
+    ...(options.playTitleCrescendo
+      ? { playCrescendo: options.playTitleCrescendo }
+      : {}),
+  });
+
+  const restartFlow = bindTitleRestartFlow({
+    elements: {
+      restartForm: refs.restartForm,
+      restartInput: refs.restartInput,
+      restartButton: refs.restartButton,
+      restartStatus: refs.restartStatus,
+      newWorldForm: refs.newWorldForm,
+      seedInput: refs.seedInput,
+      seedStatus: refs.seedStatus,
+      beginButton: refs.beginButton,
+    },
+    getTitle: () => latestView?.title ?? null,
+    dispatch: options.dispatch,
+    announce,
+  });
 
   const setMobileHudExpanded = (expanded: boolean): void => {
     const sheet = refs.shell.dataset.mobileSheet === "inspector" ? "inspector" : "promises";
@@ -1470,6 +1829,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     mobileBrace.release();
     refs.kit.close(false);
     setMobileHudExpanded(false);
+    const titlePresented = latestView
+      ? forcedTitle ?? latestView.title.visible
+      : forcedTitle ?? false;
+    titleAtmosphere.sync(titlePresented, false);
     const resolvedSource = source !== "field"
       ? source
       : refs.titleDialog.open
@@ -1781,12 +2144,17 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       mobileBrace.release();
       refs.shell.dataset.ready = "false";
       closeFieldDialogs();
+      const titlePresented = forcedTitle ?? true;
+      titleAtmosphere.sync(titlePresented, titlePresented && !refs.patchNotes.isOpen());
       syncDialog(refs.titleDialog, (forcedTitle ?? true) && !refs.patchNotes.isOpen());
       return;
     }
     refs.shell.dataset.ready = "true";
+    const titlePresented = forcedTitle ?? view.title.visible;
+    restartFlow.sync(view.title, titlePresented);
+    titleAtmosphere.sync(titlePresented, titlePresented && !refs.patchNotes.isOpen());
     if (
-      (forcedTitle ?? view.title.visible)
+      titlePresented
       || (forcedQuietHour ?? view.quietHour?.visible ?? false)
     ) {
       mobileBrace.release();
@@ -1795,7 +2163,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     const revision = String(view.revision);
     const isNewRevision = revision !== lastRevision;
     if (!isNewRevision) {
-      syncDialog(refs.titleDialog, (forcedTitle ?? view.title.visible) && !refs.patchNotes.isOpen());
+      syncDialog(refs.titleDialog, titlePresented && !refs.patchNotes.isOpen());
       syncDialog(
         refs.quietDialog,
         (forcedQuietHour ?? view.quietHour?.visible ?? false) && !refs.patchNotes.isOpen(),
@@ -1966,37 +2334,22 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.mobileFieldStrip.dataset.bracing = view.player.bracing ? "true" : "false";
     refs.mobileFieldStrip.dataset.stabilityTrend = view.player.stabilityTrend;
     refs.quietButton.disabled = view.controls?.canEndSession === false;
-    if (!titleFormDirty && view.title.suggestedSeed && document.activeElement !== refs.seedInput) {
+    if (
+      !restartFlow.seedDirty
+      && !restartFlow.unlocked
+      && !view.title.requiresSeed
+      && view.title.suggestedSeed
+      && document.activeElement !== refs.seedInput
+    ) {
       refs.seedInput.placeholder = view.title.suggestedSeed;
     }
     refs.continueButton.hidden = !view.title.hasSave;
-    const seedRequirement = titleSeedRequirement(view.title, restartUnlocked);
     const worldCreation = titleWorldCreationState(view.title);
-    refs.seedInput.disabled = worldCreation.blocked;
-    refs.beginButton.disabled = worldCreation.blocked;
-    refs.restartInput.disabled = worldCreation.blocked;
-    refs.restartButton.disabled = worldCreation.blocked;
     refs.continueButton.disabled = worldCreation.blocked;
-    refs.newWorldForm.setAttribute("aria-disabled", String(worldCreation.blocked));
-    refs.restartForm.setAttribute("aria-disabled", String(worldCreation.blocked));
-    if (!view.title.visible) {
-      restartUnlocked = false;
-      refs.restartInput.value = "";
-      refs.seedInput.required = false;
-      refs.seedInput.setCustomValidity("");
-      refs.restartStatus.textContent = "Unlocking only reveals the seed form; it does not erase anything yet.";
-    } else {
-      refs.seedInput.required = seedRequirement.required;
-      if (view.title.requiresSeed && refs.seedInput.value.trim().length === 0) {
-        refs.seedInput.setCustomValidity(seedRequirement.validationMessage);
-      }
-    }
-    refs.restartForm.hidden = !view.title.hasSave || restartUnlocked;
-    refs.newWorldForm.hidden = view.title.hasSave && !restartUnlocked;
     refs.continueName.textContent = view.title.worldName ?? view.worldName;
     refs.continueSummary.textContent =
       view.title.continueSummary ?? "No offline loss. The tide waits exactly where you left it.";
-    syncDialog(refs.titleDialog, (forcedTitle ?? view.title.visible) && !refs.patchNotes.isOpen());
+    syncDialog(refs.titleDialog, titlePresented && !refs.patchNotes.isOpen());
     renderQuietHour(view);
 
     const mastheadStatus = document.getElementById("connection-status");
@@ -2081,78 +2434,6 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     options.dispatch({ type: "settlement", action: "focus", settlementId });
   });
   refs.continueButton.addEventListener("click", () => options.dispatch({ type: "resume-world" }));
-  refs.restartForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const worldCreation = titleWorldCreationState(latestView?.title ?? {});
-    if (worldCreation.blocked) {
-      refs.restartStatus.textContent = worldCreation.reason;
-      announce(worldCreation.reason, true);
-      return;
-    }
-    if (!acceptsRestartPhrase(refs.restartInput.value)) {
-      refs.restartStatus.textContent = `Not unlocked. Type ${RESTART_PHRASE} exactly; the current save is unchanged.`;
-      refs.restartInput.focus({ preventScroll: true });
-      refs.restartInput.select();
-      announce("Restart not unlocked. The current estuary is unchanged.", true);
-      return;
-    }
-    restartUnlocked = true;
-    titleFormDirty = false;
-    refs.restartStatus.textContent = "Restart unlocked. The current save remains until you submit a new seed.";
-    refs.restartForm.hidden = true;
-    refs.newWorldForm.hidden = false;
-    refs.seedInput.value = "";
-    refs.seedInput.required = true;
-    refs.seedInput.setCustomValidity("");
-    refs.seedInput.focus({ preventScroll: true });
-    announce("Restart unlocked. Enter a seed phrase for a new estuary under A CHALLENGING HARD.");
-  });
-  refs.newWorldForm.addEventListener("change", () => {
-    titleFormDirty = true;
-  });
-  refs.seedInput.addEventListener("input", () => {
-    refs.seedInput.setCustomValidity("");
-  });
-  refs.newWorldForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const worldCreation = titleWorldCreationState(latestView?.title ?? {});
-    if (worldCreation.blocked) {
-      refs.seedInput.setCustomValidity(worldCreation.reason);
-      announce(worldCreation.reason, true);
-      return;
-    }
-    if (latestView?.title.hasSave && !restartUnlocked) {
-      refs.restartStatus.textContent = `Type ${RESTART_PHRASE} exactly before choosing a new seed.`;
-      refs.restartForm.hidden = false;
-      refs.newWorldForm.hidden = true;
-      refs.restartInput.focus({ preventScroll: true });
-      return;
-    }
-    const seed = refs.seedInput.value.trim();
-    const seedRequirement = titleSeedRequirement(
-      latestView?.title ?? { hasSave: false },
-      restartUnlocked,
-    );
-    if (seedRequirement.required && seed.length === 0) {
-      refs.seedInput.required = true;
-      refs.seedInput.setCustomValidity(seedRequirement.validationMessage);
-      refs.seedInput.reportValidity();
-      announce(
-        latestView?.title.requiresSeed
-          ? "The unreadable or conflicting autosave is unchanged. Enter a non-empty seed phrase to replace it safely."
-          : "The current estuary is unchanged. Enter a new seed phrase to replace it.",
-        true,
-      );
-      return;
-    }
-    options.dispatch({
-      type: "new-world",
-      seed,
-      posture: "gale",
-      sessionShape: PERPETUAL_SESSION_SHAPE,
-      ...(latestView?.title.hasSave ? { restartPhrase: RESTART_PHRASE } : {}),
-    });
-  });
   refs.titleDialog.addEventListener("cancel", (event) => {
     const worldCreation = titleWorldCreationState(latestView?.title ?? {});
     if (!latestView?.title.hasSave || worldCreation.blocked) {
@@ -2209,6 +2490,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
   const stop = (): void => {
     mobileBrace.release();
+    const titlePresented = latestView
+      ? forcedTitle ?? latestView.title.visible
+      : forcedTitle ?? false;
+    titleAtmosphere.sync(titlePresented, false);
     running = false;
     if (frameHandle !== null) window.cancelAnimationFrame(frameHandle);
     frameHandle = null;
@@ -2224,6 +2509,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     announce,
     setTitleVisible: (visible) => {
       forcedTitle = visible;
+      if (latestView) restartFlow.sync(latestView.title, visible);
+      titleAtmosphere.sync(visible, visible && !refs.patchNotes.isOpen());
       if (visible) {
         mobileBrace.release();
         refs.kit.close(false);
@@ -2247,6 +2534,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     destroy: () => {
       stop();
       mobileBrace.destroy();
+      restartFlow.destroy();
+      titleAtmosphere.destroy();
       document.removeEventListener("keydown", onGlobalKeyDown);
       window.removeEventListener("pointerup", releaseContractPointer);
       window.removeEventListener("pointercancel", cancelContractPointer);

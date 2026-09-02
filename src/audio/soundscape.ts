@@ -12,6 +12,7 @@ export type SoundCue =
   | "impact"
   | "sweep"
   | "recover"
+  | "title"
   | "ui";
 
 export interface SoundToneStep {
@@ -131,11 +132,15 @@ export class TideweftSoundscape {
       impact: incidentSoundPattern("impact", variantSeed),
       sweep: incidentSoundPattern("sweep", variantSeed),
       recover: incidentSoundPattern("recover", variantSeed),
+      title: titleCrescendoPattern(),
       ui: [toneStep(520, 0, "sine", 0.055)],
     };
 
     for (const { frequency, delay, type, duration } of patterns[cue]) {
       this.tone(frequency, now + delay, duration, type, (0.025 + duration * 0.035) * strength);
+    }
+    if (cue === "title") {
+      this.noiseBurst(now + 0.06, 0.72, 720, 0.0038 * strength);
     }
   }
 
@@ -253,6 +258,17 @@ export class TideweftSoundscape {
     envelope.connect(this.effectsGain);
     source.start(start);
   }
+}
+
+/** A short low-tide-to-glass chord used once per deliberately opened title. */
+export function titleCrescendoPattern(): readonly SoundToneStep[] {
+  return [
+    toneStep(110, 0, "sine", 0.68),
+    toneStep(164.81, 0.12, "sine", 0.76),
+    toneStep(220, 0.29, "triangle", 0.72),
+    toneStep(329.63, 0.51, "sine", 0.66),
+    toneStep(659.25, 0.78, "triangle", 0.48),
+  ];
 }
 
 /** A tiny, deterministic Atari-like voice for a persisted traversal incident. */

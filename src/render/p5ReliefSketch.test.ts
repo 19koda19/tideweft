@@ -5,6 +5,7 @@ import type { TideweftView } from "./types";
 const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
   instances: [] as Array<Record<string, unknown>>,
+  projectionShiftX: 0,
 }));
 
 vi.mock("p5", () => {
@@ -22,7 +23,15 @@ vi.mock("p5", () => {
         WEBGL: "webgl",
         TRIANGLES: "triangles",
         HALF_PI: Math.PI / 2,
-        drawingContext: { depthMask: vi.fn() },
+        drawingContext: {
+          DEPTH_TEST: 0x0b71,
+          DEPTH_WRITEMASK: 0x0b72,
+          depthMask: vi.fn(),
+          getParameter: vi.fn(() => false),
+          isEnabled: vi.fn(() => true),
+          disable: vi.fn(),
+          enable: vi.fn(),
+        },
         camera,
         color,
         lerpColor: (_left: unknown, right: unknown) => right,
@@ -58,6 +67,10 @@ vi.mock("./reliefCamera", async (importOriginal) => {
   return {
     ...actual,
     screenToDiscoveredReliefSurface: () => ({ x: 12, y: 12 }),
+    projectReliefPoint: (...args: Parameters<typeof actual.projectReliefPoint>) => {
+      const projected = actual.projectReliefPoint(...args);
+      return { ...projected, x: projected.x + p5Harness.projectionShiftX };
+    },
   };
 });
 
@@ -286,6 +299,8 @@ function renderHarness(initial: TideweftView) {
     dispatch,
     draw,
     camera,
+    instance,
+    mount,
     renderer,
     setView: (next: TideweftView) => { current = next; },
   };
@@ -294,6 +309,7 @@ function renderHarness(initial: TideweftView) {
 beforeEach(() => {
   p5Harness.canvasFactory = null;
   p5Harness.instances.length = 0;
+  p5Harness.projectionShiftX = 0;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -447,6 +463,184 @@ describe("Relief spatial epoch release gate", () => {
     harness.draw();
     expect(harness.camera.mock.calls.at(-1)?.[3]).toBe(16);
     expect(harness.camera.mock.calls.at(-1)?.[5]).toBe(80);
+    harness.renderer.destroy();
+  });
+});
+
+describe("Relief weather production path", () => {
+  it("draws bounded dual-contrast rain from the live view and draws none when dry", () => {
+    const dry = view("r:0:0", { x: 8, y: 8 });
+    const harness = renderHarness(dry);
+    const line = harness.instance.line as ReturnType<typeof vi.fn>;
+    const ortho = harness.instance.ortho as ReturnType<typeof vi.fn>;
+    const drawingContext = harness.instance.drawingContext as {
+      depthMask: ReturnType<typeof vi.fn>;
+      disable: ReturnType<typeof vi.fn>;
+      enable: ReturnType<typeof vi.fn>;
+    };
+
+    harness.draw();
+    const dryLineCount = line.mock.calls.length;
+    line.mockClear();
+
+    harness.setView({
+      ...dry,
+      weather: {
+        kind: "rain",
+        intensity: 0.75,
+        wind: { x: -0.8, y: 0.25 },
+      },
+    });
+    harness.renderer.setOrbit(Math.PI, Math.PI * 0.29);
+    harness.draw();
+    // 320x240 uses the 52-mark mobile budget. At 0.75 rain this is 37
+    // transient streaks, each keyed dark and faced pale.
+    expect(line.mock.calls.length - dryLineCount).toBe(37 * 2);
+    const firstRainLine = line.mock.calls.at(-37 * 2);
+    expect(Number(firstRainLine?.[3]) - Number(firstRainLine?.[0])).toBeGreaterThan(0);
+    expect(ortho).toHaveBeenCalled();
+    expect(drawingContext.disable).toHaveBeenCalledWith(0x0b71);
+    expect(drawingContext.depthMask).toHaveBeenCalledWith(false);
+    expect(drawingContext.depthMask).toHaveBeenLastCalledWith(false);
+    expect(drawingContext.enable).toHaveBeenCalledWith(0x0b71);
+
+    line.mockClear();
+    harness.setView(dry);
+    harness.draw();
+    expect(line).toHaveBeenCalledTimes(dryLineCount);
+    harness.renderer.destroy();
+  });
+
+  it("draws yaw-aware wind threads in clear weather and none when calm", () => {
+    const calm = view("r:0:0", { x: 8, y: 8 });
+    const windy: TideweftView = {
+      ...calm,
+      weather: { kind: "clear", intensity: 0, wind: { x: 0.7, y: 0.15 } },
+    };
+    const harness = renderHarness(windy);
+    harness.renderer.setOrbit(Math.PI / 2, Math.PI * 0.29);
+    harness.draw();
+    const bezier = harness.instance.bezier as ReturnType<typeof vi.fn>;
+    expect(bezier.mock.calls.length).toBeGreaterThan(0);
+    expect(bezier.mock.calls.length).toBeLessThanOrEqual(16);
+    const first = bezier.mock.calls[0];
+    expect(Number(first?.[7]) - Number(first?.[1])).toBeGreaterThan(0);
+
+    bezier.mockClear();
+    harness.setView(calm);
+    harness.draw();
+    expect(bezier).not.toHaveBeenCalled();
+    expect(harness.dispatch).not.toHaveBeenCalled();
+    harness.renderer.destroy();
+  });
+});
+
+describe("Relief presentation-only pointer and label motion", () => {
+  it("eases mouse parallax into the camera, recenters on leave, and keeps touch inert", () => {
+    let now = 0;
+    vi.stubGlobal("performance", { now: () => now });
+    const initial = view("r:0:0", { x: 48, y: 48 });
+    const harness = renderHarness(initial);
+    harness.draw();
+    const baseline = harness.camera.mock.calls.at(-1);
+    harness.camera.mockClear();
+
+    harness.canvas.fire("pointermove", pointer(harness.canvas, {
+      clientX: 320,
+      clientY: 240,
+      pointerType: "mouse",
+    }));
+    now = 120;
+    harness.draw();
+    const drifted = harness.camera.mock.calls.at(-1);
+    expect(drifted?.[3]).not.toBeCloseTo(Number(baseline?.[3]), 6);
+    expect(drifted?.[5]).not.toBeCloseTo(Number(baseline?.[5]), 6);
+    expect(harness.dispatch).not.toHaveBeenCalled();
+
+    harness.canvas.fire("pointerleave");
+    harness.camera.mockClear();
+    now = 240;
+    harness.draw();
+    const returning = harness.camera.mock.calls.at(-1);
+    expect(Math.abs(Number(returning?.[3]) - Number(baseline?.[3])))
+      .toBeLessThan(Math.abs(Number(drifted?.[3]) - Number(baseline?.[3])));
+
+    harness.canvas.fire("pointermove", pointer(harness.canvas, {
+      clientX: 320,
+      clientY: 240,
+      pointerType: "touch",
+    }));
+    harness.camera.mockClear();
+    now = 360;
+    harness.draw();
+    const touch = harness.camera.mock.calls.at(-1);
+    expect(touch?.[3]).toBeCloseTo(Number(baseline?.[3]), 8);
+    expect(touch?.[5]).toBeCloseTo(Number(baseline?.[5]), 8);
+
+    harness.canvas.fire("pointermove", pointer(harness.canvas, {
+      clientX: 320,
+      clientY: 240,
+      pointerType: "mouse",
+    }));
+    harness.setView(view("r:1:0", { x: 80, y: 72 }));
+    harness.camera.mockClear();
+    now = 480;
+    harness.draw();
+    const recentered = harness.camera.mock.calls.at(-1);
+    expect(recentered?.[3]).toBeCloseTo(80, 8);
+    expect(recentered?.[5]).toBeCloseTo(72, 8);
+
+    harness.renderer.setActive(false);
+    expect(harness.instance.noLoop).toHaveBeenCalled();
+    harness.renderer.destroy();
+    expect(harness.canvas.listeners.get("pointermove")?.size ?? 0).toBe(0);
+  });
+
+  it("eases projected DOM labels, removes stale state, and snaps reintroduced labels", () => {
+    let now = 0;
+    vi.stubGlobal("performance", { now: () => now });
+    const base = view("r:0:0", { x: 48, y: 48 });
+    const settlement = {
+      id: "harbor-label",
+      name: "Harbor Label",
+      position: { x: 48, y: 48 },
+      population: 20,
+      status: "steady" as const,
+      connection: 1,
+      stress: 0,
+      discovered: true,
+    };
+    let current: TideweftView = { ...base, settlements: [settlement] };
+    const harness = renderHarness(current);
+    harness.draw();
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const first = layer?.children.find((child) => child.textContent === "Harbor Label");
+    if (!first) throw new Error("expected Relief label");
+    const initialLeft = Number.parseFloat(String(first.style.left));
+
+    p5Harness.projectionShiftX = 100;
+    now = 16;
+    harness.draw();
+    const easedLeft = Number.parseFloat(String(first.style.left));
+    expect(easedLeft).toBeGreaterThan(initialLeft + 88);
+    expect(easedLeft).toBeLessThan(initialLeft + 100);
+
+    current = { ...base, settlements: [] };
+    harness.setView(current);
+    now = 32;
+    harness.draw();
+    expect(first.removed).toBe(true);
+
+    p5Harness.projectionShiftX = 150;
+    current = { ...base, settlements: [settlement] };
+    harness.setView(current);
+    now = 48;
+    harness.draw();
+    const replacement = [...(layer?.children ?? [])].reverse().find(
+      (child: FakeElement) => child.textContent === "Harbor Label" && !child.removed,
+    );
+    if (!replacement) throw new Error("expected replacement Relief label");
+    expect(Number.parseFloat(String(replacement.style.left))).toBeCloseTo(initialLeft + 150, 1);
     harness.renderer.destroy();
   });
 });

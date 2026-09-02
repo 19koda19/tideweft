@@ -8,6 +8,7 @@ import { buildSurfaceCurrentCues } from "./currentCues";
 import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
+import { buildWindThreadFrame } from "./windPresentation";
 import { commandForWorldTap, usesCoarseWorldPointer } from "./worldTap";
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
@@ -36,6 +37,16 @@ import {
   playerBalancePresentation,
   type PlayerBalancePresentation,
 } from "./playerPresentation";
+import {
+  advancePointerParallax,
+  createPointerParallaxState,
+  easeWorldLabelPoint,
+  normalizedPresentationPointer,
+  presentationParallaxTarget,
+  resetPointerParallax,
+  setPointerParallaxTarget,
+  type EasedScreenPoint,
+} from "./presentationMotion";
 
 import type {
   CameraView,
@@ -286,6 +297,9 @@ export function createTideweftRenderer(
   const heldDirections = new Set<string>();
   const heldBraceKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
+  const pointerParallax = createPointerParallaxState();
+  const labelPositions = new Map<string, EasedScreenPoint>();
+  const usedLabelPositions = new Set<string>();
   const tideHarpGeometryFor = createTideHarpGeometryMemo();
   const camera: RuntimeCamera = {
     x: 0,
@@ -335,8 +349,8 @@ export function createTideweftRenderer(
   };
 
   const worldToScreen = (point: WorldPoint): WorldPoint => ({
-    x: (point.x - camera.x) * camera.zoom + (instance?.width ?? 0) / 2,
-    y: (point.y - camera.y) * camera.zoom + (instance?.height ?? 0) / 2,
+    x: (point.x - camera.x) * camera.zoom + (instance?.width ?? 0) / 2 + pointerParallax.current.x,
+    y: (point.y - camera.y) * camera.zoom + (instance?.height ?? 0) / 2 + pointerParallax.current.y,
   });
 
   const clientToWorld = (clientX: number, clientY: number): WorldPoint => {
@@ -345,8 +359,8 @@ export function createTideweftRenderer(
     const localX = clientX - rectangle.left;
     const localY = clientY - rectangle.top;
     return {
-      x: (localX - rectangle.width / 2) / camera.zoom + camera.x,
-      y: (localY - rectangle.height / 2) / camera.zoom + camera.y,
+      x: (localX - rectangle.width / 2 - pointerParallax.current.x) / camera.zoom + camera.x,
+      y: (localY - rectangle.height / 2 - pointerParallax.current.y) / camera.zoom + camera.y,
     };
   };
 
@@ -378,6 +392,8 @@ export function createTideweftRenderer(
     ripples.length = 0;
     camera.focusPoint = undefined;
     camera.focusUntil = 0;
+    resetPointerParallax(pointerParallax, true);
+    labelPositions.clear();
     if (canvasElement) delete canvasElement.dataset.hoverEntity;
   };
 
@@ -613,6 +629,7 @@ export function createTideweftRenderer(
       observeCurrentSpatialEpoch();
       element.focus({ preventScroll: true });
       if (event.pointerType === "touch") {
+        resetPointerParallax(pointerParallax, true);
         touchSequence = beginLooseCargoTouch(touchSequence, event.pointerId);
         element.setPointerCapture?.(event.pointerId);
         if (touchSequence.suppressed) {
@@ -658,16 +675,36 @@ export function createTideweftRenderer(
         event.preventDefault();
         return;
       }
-      pointerWorld = clientToWorld(event.clientX, event.clientY);
       const coarsePointer = usesCoarseWorldPointer(
         event.pointerType,
         window.matchMedia?.("(pointer: coarse)").matches ?? false,
       );
+      if (event.pointerType === "touch" || coarsePointer || reducedMotion) {
+        resetPointerParallax(pointerParallax, true);
+      } else {
+        setPointerParallaxTarget(
+          pointerParallax,
+          presentationParallaxTarget(normalizedPresentationPointer(
+            clientToScreen(event.clientX, event.clientY),
+            {
+              width: element.clientWidth || instance?.width || 1,
+              height: element.clientHeight || instance?.height || 1,
+            },
+          )),
+        );
+      }
       const parcelHit = parcelHitAt(clientToScreen(event.clientX, event.clientY), coarsePointer);
-      hoverTarget = parcelHit
-        ? { entity: "parcel", id: parcelHit.parcel.id }
-        : findHoverTarget(pointerWorld);
-      element.dataset.hoverEntity = hoverTarget?.entity ?? "world";
+      if (event.pointerType === "touch") {
+        pointerWorld = null;
+        hoverTarget = null;
+        delete element.dataset.hoverEntity;
+      } else {
+        pointerWorld = clientToWorld(event.clientX, event.clientY);
+        hoverTarget = parcelHit
+          ? { entity: "parcel", id: parcelHit.parcel.id }
+          : findHoverTarget(pointerWorld);
+        element.dataset.hoverEntity = hoverTarget?.entity ?? "world";
+      }
       if (clickCandidate?.pointerId === event.pointerId) {
         const maximumTravel = clickCandidate.coarsePointer ? 18 : 7;
         parcelPress = moveLooseCargoPointerPress(
@@ -759,6 +796,7 @@ export function createTideweftRenderer(
       hoverTarget = null;
       pointerWorld = null;
       delete element.dataset.hoverEntity;
+      resetPointerParallax(pointerParallax, false);
     };
 
     const contextMenu = (event: MouseEvent): void => {
@@ -777,6 +815,8 @@ export function createTideweftRenderer(
       clearPointer();
       releaseLooseCargoPointerCaptures(element, touchSequence.activePointerIds);
       touchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
+      resetPointerParallax(pointerParallax, true);
+      labelPositions.clear();
     };
 
     const windowBlur = (): void => blur();
@@ -847,6 +887,24 @@ export function createTideweftRenderer(
       const context = p.drawingContext as CanvasRenderingContext2D;
       context.setLineDash([...values]);
       context.lineDashOffset = offset;
+    };
+
+    const worldLabelScreen = (id: string, point: WorldPoint, now: number): WorldPoint => {
+      usedLabelPositions.add(id);
+      const eased = easeWorldLabelPoint(
+        labelPositions.get(id),
+        worldToScreen(point),
+        now,
+        reducedMotion,
+      );
+      labelPositions.set(id, eased);
+      return eased;
+    };
+
+    const cleanupWorldLabelPositions = (): void => {
+      for (const id of labelPositions.keys()) {
+        if (!usedLabelPositions.has(id)) labelPositions.delete(id);
+      }
     };
 
     const clearDash = (): void => setDash([]);
@@ -1181,7 +1239,7 @@ export function createTideweftRenderer(
       p.pop();
     };
 
-    const drawDepthSoundings = (view: TideweftView): void => {
+    const drawDepthSoundings = (view: TideweftView, now: number): void => {
       const scanProgress = view.player.scanProgress;
       if (scanProgress === undefined || scanProgress <= 0.001) return;
       const grid = view.terrain;
@@ -1252,7 +1310,11 @@ export function createTideweftRenderer(
         p.circle(0, shaft / 2, 2.8 / camera.zoom);
         p.pop();
 
-        const screen = worldToScreen(sounding.point);
+        const screen = worldLabelScreen(
+          `sounding-${sounding.point.x.toFixed(3)}-${sounding.point.y.toFixed(3)}`,
+          sounding.point,
+          now,
+        );
         const label = `${depthRank} ${quality}`;
         p.push();
         p.resetMatrix();
@@ -1476,7 +1538,7 @@ export function createTideweftRenderer(
             x: total.x / choir.harborPoints.length,
             y: total.y / choir.harborPoints.length,
           };
-          const screen = worldToScreen(center);
+          const screen = worldLabelScreen(`choir-${choir.id}`, center, now);
           p.push();
           p.resetMatrix();
           p.textAlign(p.CENTER, p.CENTER);
@@ -1616,14 +1678,17 @@ export function createTideweftRenderer(
       p.pop();
     };
 
-    const drawFieldResources = (view: TideweftView): void => {
+    const drawFieldResources = (view: TideweftView, now: number): void => {
       const baseSize = Math.max(view.terrain.tileSize * 0.38, 5.5 / camera.zoom);
       for (const node of view.fieldResources) {
-        const screen = worldToScreen(node.position);
-        if (screen.x < -40 || screen.y < -40 || screen.x > p.width + 40 || screen.y > p.height + 40) {
+        const projectedScreen = worldToScreen(node.position);
+        const hovered = hoverTarget?.entity === "resource" && hoverTarget.id === node.id;
+        const screen = hovered
+          ? worldLabelScreen(`resource-${node.id}`, node.position, now)
+          : projectedScreen;
+        if (projectedScreen.x < -40 || projectedScreen.y < -40 || projectedScreen.x > p.width + 40 || projectedScreen.y > p.height + 40) {
           continue;
         }
-        const hovered = hoverTarget?.entity === "resource" && hoverTarget.id === node.id;
         if (node.knowledge === "sounded" || hovered) {
           p.push();
           p.translate(node.position.x, node.position.y);
@@ -1681,14 +1746,17 @@ export function createTideweftRenderer(
       const size = Math.max(view.terrain.tileSize * 0.31, 6.5 / camera.zoom);
 
       for (const parcel of parcels) {
-        const screen = worldToScreen(parcel.position);
-        if (screen.x < -50 || screen.y < -50 || screen.x > p.width + 50 || screen.y > p.height + 50) {
+        const projectedScreen = worldToScreen(parcel.position);
+        if (projectedScreen.x < -50 || projectedScreen.y < -50 || projectedScreen.x > p.width + 50 || projectedScreen.y > p.height + 50) {
           continue;
         }
         const visual = looseCargoVisual(parcel);
         const hovered = hoverTarget?.entity === "parcel" && hoverTarget.id === parcel.id;
         const recoveryFocus = nearby?.id === parcel.id;
         const highlighted = hovered || recoveryFocus;
+        const screen = highlighted
+          ? worldLabelScreen(`parcel-${parcel.id}`, parcel.position, now)
+          : projectedScreen;
         const tumble = visual.motionMark === "tumble" && !reducedMotion
           ? now * 0.004 + visual.orientationRadians
           : visual.orientationRadians * 0.22;
@@ -1869,7 +1937,7 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawTideHarps = (view: TideweftView): void => {
+    const drawTideHarps = (view: TideweftView, now: number): void => {
       const tileSize = view.terrain.tileSize;
       const geometry = tideHarpGeometryFor(
         view.tideHarps,
@@ -1947,18 +2015,23 @@ export function createTideweftRenderer(
         }
         p.pop();
 
+        const labelScreen = worldLabelScreen(
+          `tide-harp-${harp.id}`,
+          { x: harp.center.x, y: harp.center.y + noteSize * 2.15 },
+          now,
+        );
         p.push();
-        p.translate(harp.center.x, harp.center.y + noteSize * 2.15);
+        p.resetMatrix();
         p.textAlign(p.CENTER, p.CENTER);
         p.textStyle(p.BOLD);
-        p.textSize(8 / camera.zoom);
-        const labelWidth = p.textWidth(harp.label) + 10 / camera.zoom;
+        p.textSize(8);
+        const labelWidth = p.textWidth(harp.label) + 10;
         p.noStroke();
         p.rectMode(p.CENTER);
         p.fill(withAlpha(PALETTE.ink, 218));
-        p.rect(0, 0, labelWidth, 13 / camera.zoom, 4 / camera.zoom);
+        p.rect(labelScreen.x, labelScreen.y, labelWidth, 13, 4);
         p.fill(withAlpha(PALETTE.foam, harp.active ? 245 : 184));
-        p.text(harp.label, 0, -0.2 / camera.zoom);
+        p.text(harp.label, labelScreen.x, labelScreen.y - 0.2);
         p.pop();
       }
       clearDash();
@@ -2120,26 +2193,32 @@ export function createTideweftRenderer(
       }
       p.pop();
 
-      const labelSize = 8.5 / camera.zoom;
-      p.push();
-      p.translate(wayknot.position.x, wayknot.position.y + size * 0.78 + 8 / camera.zoom);
-      p.textAlign(p.CENTER, p.CENTER);
-      p.textStyle(p.BOLD);
-      p.textSize(labelSize);
-      const width = p.textWidth(wayknot.label) + 9 / camera.zoom;
-      p.noStroke();
-      p.rectMode(p.CENTER);
-      p.fill(withAlpha(PALETTE.ink, wayknot.active ? 220 : 205));
-      p.rect(0, 0, width, 13 / camera.zoom, 4 / camera.zoom);
-      p.fill(withAlpha(color, wayknot.active ? 245 : 210));
-      p.text(wayknot.label, 0, -0.25 / camera.zoom);
-      p.pop();
     };
 
     const drawWayknots = (view: TideweftView, now: number): void => {
       drawWaychords(view);
       for (const wayknot of view.wayknots) {
         drawWayknotMotif(wayknot, view.terrain.tileSize, now);
+        const size = view.terrain.tileSize * (wayknot.active ? 0.68 : 0.58);
+        const screen = worldLabelScreen(
+          `wayknot-${wayknot.id}`,
+          { x: wayknot.position.x, y: wayknot.position.y + size * 0.78 + 8 / camera.zoom },
+          now,
+        );
+        const color = wayknotColor(wayknot.kind);
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textStyle(p.BOLD);
+        p.textSize(8.5);
+        const width = p.textWidth(wayknot.label) + 9;
+        p.noStroke();
+        p.rectMode(p.CENTER);
+        p.fill(withAlpha(PALETTE.ink, wayknot.active ? 220 : 205));
+        p.rect(screen.x, screen.y, width, 13, 4);
+        p.fill(withAlpha(color, wayknot.active ? 245 : 210));
+        p.text(wayknot.label, screen.x, screen.y - 0.25);
+        p.pop();
       }
     };
 
@@ -2231,7 +2310,7 @@ export function createTideweftRenderer(
         drawSettlementGlyph(settlement.glyph ?? "hearth", radius);
         p.pop();
 
-        const screen = worldToScreen(settlement.position);
+        const screen = worldLabelScreen(`settlement-${settlement.id}`, settlement.position, now);
         const labelY = screen.y + radius * camera.zoom + 15;
         p.push();
         p.resetMatrix();
@@ -2270,7 +2349,7 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawPorters = (porters: readonly PorterView[]): void => {
+    const drawPorters = (porters: readonly PorterView[], now: number): void => {
       for (const porter of porters) {
         const color = porterColor(porter);
         const hovered = hoverTarget?.entity === "porter" && hoverTarget.id === porter.id;
@@ -2289,7 +2368,7 @@ export function createTideweftRenderer(
         p.pop();
 
         if ((porter.selected || hovered) && porter.name) {
-          const screen = worldToScreen(porter.position);
+          const screen = worldLabelScreen(`porter-${porter.id}`, porter.position, now);
           p.push();
           p.resetMatrix();
           p.textAlign(p.CENTER, p.CENTER);
@@ -2322,18 +2401,22 @@ export function createTideweftRenderer(
       p.line(0, -radius, 0, radius);
       if (view.player.destinationLabel) {
         const label = view.player.destinationLabel;
+        const screen = worldLabelScreen("journey-destination", destination, now);
+        p.push();
+        p.resetMatrix();
         p.textAlign(p.CENTER, p.CENTER);
         p.textStyle(p.BOLD);
-        p.textSize(10 / camera.zoom);
-        const labelWidth = p.textWidth(label) + 14 / camera.zoom;
-        const labelY = -radius * 2.45;
+        p.textSize(10);
+        const labelWidth = p.textWidth(label) + 14;
+        const labelY = screen.y - radius * camera.zoom * 2.45;
         p.noStroke();
         p.fill(withAlpha(PALETTE.ink, 224));
         p.rectMode(p.CENTER);
-        p.rect(0, labelY, labelWidth, 18 / camera.zoom, 5 / camera.zoom);
+        p.rect(screen.x, labelY, labelWidth, 18, 5);
         p.fill(withAlpha(PALETTE.amber, 246));
-        p.text(label, 0, labelY + 0.2 / camera.zoom);
+        p.text(label, screen.x, labelY + 0.2);
         p.rectMode(p.CORNER);
+        p.pop();
       }
       p.pop();
     };
@@ -2465,7 +2548,7 @@ export function createTideweftRenderer(
       drawPlayerBalanceMark(presentation, radius);
     };
 
-    const drawPlayerIncident = (view: TideweftView): void => {
+    const drawPlayerIncident = (view: TideweftView, now: number): void => {
       const incident = view.player.incident;
       if (!incident || typeof incident.id !== "string" || incident.id.length === 0) return;
       const presentation = playerBalancePresentation(view.player.balanceState);
@@ -2473,7 +2556,7 @@ export function createTideweftRenderer(
       const variant = Number.isSafeInteger(incident.variantSeed)
         ? ((incident.variantSeed % 3) + 3) % 3 - 1
         : 0;
-      const courier = worldToScreen(view.player.position);
+      const courier = worldLabelScreen(`incident-${incident.id}`, view.player.position, now);
       const label = compact || !incident.detail
         ? incident.label
         : `${incident.label} · ${incident.detail}`;
@@ -2670,10 +2753,10 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawEvents = (events: readonly WorldEventView[]): void => {
+    const drawEvents = (events: readonly WorldEventView[], now: number): void => {
       for (const event of events) {
         if (!event.position || event.progress >= 1) continue;
-        const screen = worldToScreen(event.position);
+        const screen = worldLabelScreen(`event-${event.id}`, event.position, now);
         const rise = reducedMotion ? 0 : unit(event.progress) * 20;
         const alpha = 255 * (1 - Math.pow(unit(event.progress), 2));
         p.push();
@@ -2721,6 +2804,35 @@ export function createTideweftRenderer(
           p.vertex(x, y);
         }
         p.endShape();
+      }
+      p.pop();
+    };
+
+    const drawWind = (weather: WeatherView, now: number): void => {
+      const threads = buildWindThreadFrame(weather, {
+        width: p.width,
+        height: p.height,
+        now,
+        reducedMotion,
+      });
+      const first = threads[0];
+      if (!first) return;
+      p.push();
+      p.resetMatrix();
+      p.noFill();
+      p.stroke(withAlpha(PALETTE.foam, first.alpha));
+      p.strokeWeight(first.width);
+      for (const thread of threads) {
+        p.bezier(
+          thread.start.x,
+          thread.start.y,
+          thread.controlA.x,
+          thread.controlA.y,
+          thread.controlB.x,
+          thread.controlB.y,
+          thread.end.x,
+          thread.end.y,
+        );
       }
       p.pop();
     };
@@ -2842,8 +2954,11 @@ export function createTideweftRenderer(
     p.draw = (): void => {
       if (!active) return;
       const now = performance.now();
+      advancePointerParallax(pointerParallax, now, reducedMotion);
+      usedLabelPositions.clear();
       latestView = options.getView() ?? null;
       if (!latestView) {
+        labelPositions.clear();
         drawEmptyEstuary(now);
         return;
       }
@@ -2855,7 +2970,10 @@ export function createTideweftRenderer(
       const shake = reducedMotion ? 0 : unit(latestView.camera.shake) * 3;
       const shakeX = shake ? Math.sin(now * 0.051) * shake : 0;
       const shakeY = shake ? Math.cos(now * 0.043) * shake : 0;
-      p.translate(p.width / 2 + shakeX, p.height / 2 + shakeY);
+      p.translate(
+        p.width / 2 + shakeX + pointerParallax.current.x,
+        p.height / 2 + shakeY + pointerParallax.current.y,
+      );
       p.scale(camera.zoom);
       p.translate(-camera.x, -camera.y);
       drawTerrain(latestView);
@@ -2863,22 +2981,24 @@ export function createTideweftRenderer(
       drawTraces(latestView.traces, now);
       drawRoutes(latestView.routes, now);
       drawChoirs(latestView.choirs, now);
-      drawDepthSoundings(latestView);
-      drawFieldResources(latestView);
+      drawDepthSoundings(latestView, now);
+      drawFieldResources(latestView, now);
       drawLooseCargo(latestView, now);
-      drawTideHarps(latestView);
+      drawTideHarps(latestView, now);
       drawWayknots(latestView, now);
       drawSettlements(latestView.settlements, now);
-      drawPorters(latestView.porters);
+      drawPorters(latestView.porters, now);
       drawParticles(latestView.particles ?? []);
       drawPlayer(latestView, now);
       drawRipples(now);
       drawPointerTarget();
       p.pop();
-      drawEvents(latestView.events ?? []);
+      drawEvents(latestView.events ?? [], now);
+      drawWind(latestView.weather, now);
       drawWeather(latestView.weather, now);
-      drawPlayerIncident(latestView);
+      drawPlayerIncident(latestView, now);
       if (latestView.paused) drawPausedVeil();
+      cleanupWorldLabelPositions();
     };
   };
 
@@ -2886,6 +3006,10 @@ export function createTideweftRenderer(
   reducedMotion = reducedMotionQuery.matches;
   const onReducedMotionChange = (event: MediaQueryListEvent): void => {
     reducedMotion = event.matches;
+    if (reducedMotion) {
+      resetPointerParallax(pointerParallax, true);
+      labelPositions.clear();
+    }
   };
   reducedMotionQuery.addEventListener("change", onReducedMotionChange);
 
@@ -2922,6 +3046,8 @@ export function createTideweftRenderer(
           lastMovement = "0,0";
           options.dispatch({ type: "movement", vector: { x: 0, y: 0 } });
         }
+        resetPointerParallax(pointerParallax, true);
+        labelPositions.clear();
       }
       active = nextActive;
       syncActivePresentation();
@@ -2949,6 +3075,8 @@ export function createTideweftRenderer(
       if (heldBraceKeys.size > 0) emit({ type: "brace", active: false });
       heldBraceKeys.clear();
       updateMovement();
+      resetPointerParallax(pointerParallax, true);
+      labelPositions.clear();
       detachCanvasListeners();
       resizeObserver?.disconnect();
       resizeObserver = null;

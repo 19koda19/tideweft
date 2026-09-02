@@ -17,8 +17,8 @@ const SMOKE_REGIONAL_ROWS = 74;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.0';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 9;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.1';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 10;
 const smokeRegionalTileIndex = (compatibilityTileIndex) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -654,6 +654,9 @@ function rendererProbeScript() {
         formVisible: visiblyIntersectsViewport(newWorldForm),
         beginButtonVisible: visiblyIntersectsViewport(beginWorldButton),
         beginButtonText: beginWorldButton?.textContent?.trim() || null,
+        beginButtonColor: beginWorldButton instanceof Element
+          ? getComputedStyle(beginWorldButton).color
+          : null,
         continueButtonVisible: visiblyIntersectsViewport(continueWorldButton),
         patchNotesTrigger: {
           ...targetProbe(titlePatchNotesButton),
@@ -1663,42 +1666,98 @@ async function installSmokeTideHarpFixture(contents) {
       probe.titleLayout?.formVisible === false,
     SMOKE_TEST.timeoutMs,
   );
-  const resetGate = await contents.executeJavaScript(`(() => {
+  const wrongRestartDraft = await contents.executeJavaScript(`(async () => {
     const restartForm = document.querySelector('.restart-form');
     const restartInput = document.querySelector('#restart-phrase');
+    const newWorldForm = document.querySelector('.new-world-form');
+    if (!(restartForm instanceof HTMLFormElement) ||
+        !(restartInput instanceof HTMLInputElement) ||
+        !(newWorldForm instanceof HTMLFormElement)) return null;
+    restartInput.value = 'restartrestart';
+    restartInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    restartInput.focus();
+    restartInput.blur();
+    restartInput.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return {
+      value: restartInput.value,
+      locked: newWorldForm.hidden === true,
+      autocapitalize: restartInput.getAttribute('autocapitalize'),
+      autocorrect: restartInput.getAttribute('autocorrect'),
+      enterkeyhint: restartInput.getAttribute('enterkeyhint'),
+    };
+  })()`, true);
+  if (wrongRestartDraft?.value !== 'restartrestart' ||
+      wrongRestartDraft?.locked !== true ||
+      wrongRestartDraft?.autocapitalize !== 'none' ||
+      wrongRestartDraft?.autocorrect !== 'off' ||
+      wrongRestartDraft?.enterkeyhint !== 'next') {
+    throw new Error(`saved-world restart mobile draft failed: ${JSON.stringify(wrongRestartDraft)}`);
+  }
+  const wrongRestartSubmit = await contents.executeJavaScript(`(async () => {
+    const restartForm = document.querySelector('.restart-form');
+    const newWorldForm = document.querySelector('.new-world-form');
+    if (!(restartForm instanceof HTMLFormElement) || !(newWorldForm instanceof HTMLFormElement)) return null;
+    restartForm.requestSubmit();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    return { locked: newWorldForm.hidden === true };
+  })()`, true);
+  if (wrongRestartSubmit?.locked !== true) {
+    throw new Error(`saved-world wrong restart phrase unlocked: ${JSON.stringify(wrongRestartSubmit)}`);
+  }
+  const exactRestartCommit = await contents.executeJavaScript(`(async () => {
+    const restartInput = document.querySelector('#restart-phrase');
+    const newWorldForm = document.querySelector('.new-world-form');
+    const seedInput = document.querySelector('#world-seed');
+    if (!(restartInput instanceof HTMLInputElement) ||
+        !(newWorldForm instanceof HTMLFormElement) ||
+        !(seedInput instanceof HTMLInputElement)) return null;
+    restartInput.value = 'restartrestartrestart';
+    restartInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+    restartInput.focus();
+    restartInput.blur();
+    restartInput.dispatchEvent(new Event('change', { bubbles: true }));
+    // Deliberately cross UI animation frames before inspecting the later seed
+    // step. The old smoke submitted in one task and could not reproduce the
+    // phone blur/re-render race reported by playtesters.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return {
+      unlocked: newWorldForm.hidden === false,
+      seedRequired: seedInput.required === true,
+      seedFocused: document.activeElement === seedInput,
+    };
+  })()`, true);
+  if (exactRestartCommit?.unlocked !== true ||
+      exactRestartCommit?.seedRequired !== true ||
+      exactRestartCommit?.seedFocused !== true) {
+    throw new Error(`saved-world exact restart phrase failed: ${JSON.stringify(exactRestartCommit)}`);
+  }
+  const blankRestartSeed = await contents.executeJavaScript(`(async () => {
     const newWorldForm = document.querySelector('.new-world-form');
     const seedInput = document.querySelector('#world-seed');
     const title = document.querySelector('.title-dialog');
     const runtime = window.__TIDEWEFT__?.runtime;
-    if (!(restartForm instanceof HTMLFormElement) ||
-        !(restartInput instanceof HTMLInputElement) ||
-        !(newWorldForm instanceof HTMLFormElement) ||
+    if (!(newWorldForm instanceof HTMLFormElement) ||
         !(seedInput instanceof HTMLInputElement)) return null;
-    restartInput.value = 'restartrestart';
-    restartForm.requestSubmit();
-    const wrongPhraseKeptLocked = newWorldForm.hidden === true;
-    restartInput.value = 'restartrestartrestart';
-    restartForm.requestSubmit();
-    const exactPhraseUnlocked = newWorldForm.hidden === false;
-    const seedRequired = seedInput.required === true;
     const worldBeforeBlank = runtime?.getRenderView?.()?.worldName;
     seedInput.value = '';
+    seedInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
     newWorldForm.requestSubmit();
-    const blankSeedRejected =
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const rejected =
       title instanceof HTMLDialogElement &&
       title.open === true &&
       newWorldForm.hidden === false &&
       runtime?.getRenderView?.()?.worldName === worldBeforeBlank;
+    return { rejected, worldBeforeBlank, worldAfterBlank: runtime?.getRenderView?.()?.worldName };
+  })()`, true);
+  if (blankRestartSeed?.rejected !== true || blankRestartSeed?.worldAfterBlank !== SMOKE_WORLD_NAME) {
+    throw new Error(`saved-world blank restart seed changed the world: ${JSON.stringify(blankRestartSeed)}`);
+  }
+  await contents.executeJavaScript(`(() => {
     const continued = document.querySelector('.continue-card');
     if (continued instanceof HTMLButtonElement && !continued.disabled) continued.click();
-    return { wrongPhraseKeptLocked, exactPhraseUnlocked, seedRequired, blankSeedRejected };
   })()`, true);
-  if (!resetGate?.wrongPhraseKeptLocked ||
-      !resetGate?.exactPhraseUnlocked ||
-      !resetGate?.seedRequired ||
-      !resetGate?.blankSeedRejected) {
-    throw new Error(`saved-world restart gate failed: ${JSON.stringify(resetGate)}`);
-  }
   await waitForRenderer(
     contents,
     (probe) => probe.titleOpen === false && probe.paused === false,
@@ -2931,7 +2990,10 @@ async function runProductionSmoke(window) {
   await contents.executeJavaScript(`new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
   })`, true);
-  await new Promise((resolve) => setTimeout(resolve, 120));
+  // Capture the title after its 1.25 s opening flourish has fully settled;
+  // an early-frame screenshot can make readable controls look artificially
+  // dim even though the animation resolves correctly for a player.
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
   const paintedTitleProbe = await readRendererProbe(contents);
   if (
     paintedTitleProbe.release?.version !== SMOKE_EXPECTED_RELEASE_VERSION ||
@@ -2948,6 +3010,7 @@ async function runProductionSmoke(window) {
     paintedTitleProbe.titleLayout?.seedInputVisible !== true ||
     paintedTitleProbe.titleLayout?.beginButtonVisible !== true ||
     paintedTitleProbe.titleLayout?.beginButtonText !== 'START' ||
+    paintedTitleProbe.titleLayout?.beginButtonColor !== 'rgb(236, 238, 233)' ||
     paintedTitleProbe.titleLayout?.continueButtonVisible !== false ||
     paintedTitleProbe.titleLayout?.patchNotesTrigger?.visible !== true ||
     paintedTitleProbe.titleLayout?.patchNotesTrigger?.insideViewport !== true ||
@@ -2962,6 +3025,10 @@ async function runProductionSmoke(window) {
     throw new Error(`title screen was not visibly painted: ${JSON.stringify(paintedTitleProbe.titleLayout)}`);
   }
   const titlePatchNotesProbe = await verifySmokeTitlePatchNotes(contents);
+  // Closing Patch Notes reopens the semantic title dialog and intentionally
+  // replays its CSS arrival without rearming the audio opening. Let that
+  // return flourish settle before recording the title evidence too.
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
   const titleScreenshot = await captureSmokeEvidence(window, SMOKE_TEST.titleScreenshotPath);
 
   await startSmokeWorld(contents);

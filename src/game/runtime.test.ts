@@ -394,6 +394,16 @@ function alphaWorldSaveText(world: WorldState): string {
 }
 
 describe("perpetual new worlds", () => {
+  it("routes the title flourish through the runtime-owned soundscape", async () => {
+    const runtime = await createTideweftRuntime(new MemoryRepository());
+
+    await runtime.playTitleCrescendo(3);
+
+    expect(soundscapePlay).toHaveBeenCalledOnce();
+    expect(soundscapePlay).toHaveBeenCalledWith("title", 0.72, 3);
+    runtime.destroy();
+  });
+
   it("creates and persists Wander even when an older caller requests a timed shape", async () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
@@ -1260,6 +1270,123 @@ describe("runtime clarity guards", () => {
     expect(runtime.getRenderView().player.bracing).toBe(false);
     expect(runtime.getUIView().player.bracing).toBe(false);
     runtime.destroy();
+  });
+
+  it("holds a coherent clicked diagonal, stops without bounce, and keeps routes transient", async () => {
+    const world = createWorld("the loom walks one clean diagonal", "calm");
+    for (const tile of world.terrain.tiles) {
+      tile.elevation = 900_000;
+      tile.moisture = 100_000;
+      tile.roughness = 0;
+      tile.terrain = "meadow";
+      tile.baseTravelCost = 100;
+    }
+    world.weather.kind = "clear";
+    world.weather.intensity = 0;
+    world.weather.windX = 0;
+    world.weather.windY = 0;
+    world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+    const view = createWorldView(world);
+    const startTile = view.terrain.tiles.find((tile) => tile.x === 24 && tile.y === 24);
+    if (!startTile) throw new Error("fixture could not find its interior start tile");
+    const player = createPlayer(view);
+    placePlayerOnTile(player, startTile);
+    player.stamina = 1_000_000;
+    player.stability = 1_000_000;
+    const repository = new MemoryRepository(runtimeSaveRecord(
+      world,
+      player,
+      createSessionState(world.meta.seedText),
+      "Coherent diagonal",
+    ));
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    const tileSize = runtime.getRenderView().terrain.tileSize;
+    const start = runtime.getRenderView().player.position;
+    const target = {
+      x: start.x + tileSize * 8,
+      y: start.y + tileSize * 8,
+    };
+    runtime.dispatchRenderer({ type: "move-target", point: target, additive: false });
+
+    const movingVelocities: Array<{ x: number; y: number }> = [];
+    for (let step = 0; step < 120; step += 1) {
+      advancePlayerSteps(runtime, 1);
+      const velocity = runtime.getRenderView().player.velocity;
+      if (velocity.x !== 0 || velocity.y !== 0) movingVelocities.push({ ...velocity });
+      const position = runtime.getRenderView().player.position;
+      if (
+        velocity.x === 0
+        && velocity.y === 0
+        && Math.hypot(target.x - position.x, target.y - position.y) < tileSize / 2
+      ) break;
+    }
+
+    expect(movingVelocities.length).toBeGreaterThan(30);
+    expect(movingVelocities.every(({ x, y }) => x > 0 && y > 0)).toBe(true);
+    const arrived = runtime.getRenderView().player.position;
+    expect(Math.hypot(target.x - arrived.x, target.y - arrived.y)).toBeLessThan(2.1);
+    advancePlayerSteps(runtime, 4);
+    expect(runtime.getRenderView().player.position).toEqual(arrived);
+    expect(runtime.getRenderView().player.velocity).toEqual({ x: 0, y: 0 });
+
+    // Replacing a destination changes heading immediately, while explicit
+    // cancellation never leaves a stale waypoint able to pull the player.
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: { x: arrived.x + tileSize * 4, y: arrived.y },
+      additive: false,
+    });
+    advancePlayerSteps(runtime, 2);
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: {
+        x: runtime.getRenderView().player.position.x - tileSize * 4,
+        y: runtime.getRenderView().player.position.y - tileSize * 4,
+      },
+      additive: false,
+    });
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().player.velocity.x).toBeLessThan(0);
+    expect(runtime.getRenderView().player.velocity.y).toBeLessThan(0);
+    runtime.dispatchRenderer({ type: "cancel" });
+    const cancelled = runtime.getRenderView().player.position;
+    advancePlayerSteps(runtime, 3);
+    expect(runtime.getRenderView().player.position).toEqual(cancelled);
+
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: { x: cancelled.x + tileSize * 4, y: cancelled.y + tileSize * 4 },
+      additive: false,
+    });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().player.velocity.x).toBeLessThan(0);
+    expect(runtime.getRenderView().player.velocity.y).toBe(0);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    const manuallyCancelled = runtime.getRenderView().player.position;
+    advancePlayerSteps(runtime, 2);
+    expect(runtime.getRenderView().player.position).toEqual(manuallyCancelled);
+
+    // Autopilot is intentionally transient: saving during a fresh route must
+    // never reconstruct a stale click after reload.
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: {
+        x: manuallyCancelled.x + tileSize * 5,
+        y: manuallyCancelled.y + tileSize * 2,
+      },
+      additive: false,
+    });
+    await runtime.save();
+    runtime.destroy();
+    const resumed = await createTideweftRuntime(repository);
+    resumed.dispatchUI({ type: "resume-world" });
+    const reloadedPosition = resumed.getRenderView().player.position;
+    advancePlayerSteps(resumed, 3);
+    expect(resumed.getRenderView().player.position).toEqual(reloadedPosition);
+    resumed.destroy();
   });
 
   it("projects every stamina change through sweep recovery and immediate water re-entry", async () => {

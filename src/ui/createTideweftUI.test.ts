@@ -9,6 +9,7 @@ import {
   TIDE_HARP_HELP_COPY,
   TITLE_SURFACE_COPY,
   WAYKNOT_KEY_SHORTCUT,
+  bindTitleRestartFlow,
   handleTideweftUIShortcut,
   mobileHudCopy,
   mobileHudDisclosureState,
@@ -22,6 +23,102 @@ import {
   wayknotActionButtonState,
 } from "./createTideweftUI";
 
+class FakeForm extends EventTarget {
+  hidden = false;
+  readonly attributes = new Map<string, string>();
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+}
+
+class FakeInput extends EventTarget {
+  value = "";
+  placeholder = "Leave blank for quiet-delta";
+  required = false;
+  disabled = false;
+  validationMessage = "";
+  readonly attributes = new Map<string, string>();
+  readonly focus = vi.fn();
+  readonly select = vi.fn();
+  readonly scrollIntoView = vi.fn();
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  setCustomValidity(message: string): void {
+    this.validationMessage = message;
+  }
+}
+
+class FakeButton {
+  disabled = false;
+}
+
+class FakeStatus {
+  hidden = false;
+  textContent = "";
+}
+
+function restartFlowHarness() {
+  const restartForm = new FakeForm();
+  const restartInput = new FakeInput();
+  const restartButton = new FakeButton();
+  const restartStatus = new FakeStatus();
+  const newWorldForm = new FakeForm();
+  const seedInput = new FakeInput();
+  const seedStatus = new FakeStatus();
+  const beginButton = new FakeButton();
+  const dispatch = vi.fn();
+  const announce = vi.fn();
+  let title = {
+    visible: false,
+    hasSave: true,
+    worldName: "Old estuary",
+  };
+  const flow = bindTitleRestartFlow({
+    elements: {
+      restartForm: restartForm as unknown as HTMLFormElement,
+      restartInput: restartInput as unknown as HTMLInputElement,
+      restartButton: restartButton as unknown as HTMLButtonElement,
+      restartStatus: restartStatus as unknown as HTMLElement,
+      newWorldForm: newWorldForm as unknown as HTMLFormElement,
+      seedInput: seedInput as unknown as HTMLInputElement,
+      seedStatus: seedStatus as unknown as HTMLElement,
+      beginButton: beginButton as unknown as HTMLButtonElement,
+    },
+    getTitle: () => title,
+    dispatch,
+    announce,
+  });
+  return {
+    flow,
+    restartForm,
+    restartInput,
+    restartButton,
+    restartStatus,
+    newWorldForm,
+    seedInput,
+    seedStatus,
+    beginButton,
+    dispatch,
+    announce,
+    setTitle(next: typeof title) {
+      title = next;
+    },
+    title: () => title,
+  };
+}
+
 describe("minimal title surface", () => {
   it("keeps only the useful first-launch copy and no difficulty slogan", () => {
     expect(TITLE_SURFACE_COPY).toEqual({
@@ -31,6 +128,100 @@ describe("minimal title surface", () => {
       patchNotes: "PATCH NOTES",
     });
     expect(Object.values(TITLE_SURFACE_COPY).join(" ")).not.toMatch(/challenging|ruleset|perpetual/iu);
+  });
+});
+
+describe("saved-world restart DOM flow", () => {
+  it("preserves a forced-open mobile draft across refresh and unlocks on virtual-keyboard commit", () => {
+    const harness = restartFlowHarness();
+
+    // Auto-resume keeps the authoritative title false; a host-forced title is
+    // nevertheless logically open and must not have its draft cleared by rAF.
+    harness.flow.sync(harness.title(), true);
+    harness.restartInput.value = "restartrestartrestart";
+    harness.restartInput.dispatchEvent(new Event("input"));
+    harness.flow.sync({ ...harness.title() }, true);
+    expect(harness.restartInput.value).toBe("restartrestartrestart");
+
+    // Mobile Done/blur commits `change` even when the button is below the
+    // shrunken visual viewport. This unlocks UI only; it cannot replace data.
+    harness.restartInput.dispatchEvent(new Event("change"));
+    expect(harness.flow.unlocked).toBe(true);
+    expect(harness.restartForm.hidden).toBe(true);
+    expect(harness.newWorldForm.hidden).toBe(false);
+    expect(harness.seedInput.required).toBe(true);
+    expect(harness.seedInput.placeholder).toBe("Required: enter a new seed phrase");
+    expect(harness.seedInput.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(harness.seedInput.getAttribute("aria-invalid")).toBe("false");
+    expect(harness.seedStatus.hidden).toBe(false);
+    expect(harness.seedStatus.textContent).toContain("non-empty new seed");
+    expect(harness.dispatch).not.toHaveBeenCalled();
+
+    // A benign revision remains unlocked. A logical close and reopen does not.
+    harness.flow.sync({ ...harness.title() }, true);
+    expect(harness.flow.unlocked).toBe(true);
+    harness.flow.sync(harness.title(), false);
+    expect(harness.restartInput.value).toBe("");
+    expect(harness.seedInput.value).toBe("");
+    harness.flow.sync(harness.title(), true);
+    expect(harness.flow.unlocked).toBe(false);
+    expect(harness.restartForm.hidden).toBe(false);
+    expect(harness.newWorldForm.hidden).toBe(true);
+  });
+
+  it("keeps wrong confirmation and both blank-seed event paths visibly safe", () => {
+    const harness = restartFlowHarness();
+    harness.flow.sync(harness.title(), true);
+
+    harness.restartInput.value = "restartrestart";
+    const wrongSubmit = new Event("submit", { cancelable: true });
+    harness.restartForm.dispatchEvent(wrongSubmit);
+    expect(wrongSubmit.defaultPrevented).toBe(true);
+    expect(harness.flow.unlocked).toBe(false);
+    expect(harness.restartInput.getAttribute("aria-invalid")).toBe("true");
+    expect(harness.restartInput.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(harness.restartInput.select).toHaveBeenCalledOnce();
+    expect(harness.restartStatus.textContent).toContain("current save is unchanged");
+    expect(harness.dispatch).not.toHaveBeenCalled();
+
+    harness.restartInput.value = "restartrestartrestart";
+    harness.restartInput.dispatchEvent(new Event("change"));
+    const nativeInvalid = new Event("invalid", { cancelable: true });
+    harness.seedInput.dispatchEvent(nativeInvalid);
+    expect(nativeInvalid.defaultPrevented).toBe(true);
+    expect(harness.seedInput.getAttribute("aria-invalid")).toBe("true");
+    expect(harness.seedInput.validationMessage).toContain("non-empty seed phrase");
+    expect(harness.seedStatus.textContent).toContain("current save is unchanged");
+    expect(harness.dispatch).not.toHaveBeenCalled();
+
+    harness.seedInput.value = "   ";
+    harness.newWorldForm.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(harness.dispatch).not.toHaveBeenCalled();
+    expect(harness.seedInput.focus).toHaveBeenCalled();
+  });
+
+  it("dispatches exactly one guarded replacement for a rapid double activation", () => {
+    const harness = restartFlowHarness();
+    harness.flow.sync(harness.title(), true);
+    harness.restartInput.value = "restartrestartrestart";
+    harness.restartForm.dispatchEvent(new Event("submit", { cancelable: true }));
+    harness.seedInput.value = "  glass mangrove  ";
+    harness.seedInput.dispatchEvent(new Event("input"));
+
+    harness.newWorldForm.dispatchEvent(new Event("submit", { cancelable: true }));
+    harness.newWorldForm.dispatchEvent(new Event("submit", { cancelable: true }));
+
+    expect(harness.dispatch).toHaveBeenCalledOnce();
+    expect(harness.dispatch).toHaveBeenCalledWith({
+      type: "new-world",
+      seed: "glass mangrove",
+      posture: "gale",
+      sessionShape: "wander",
+      restartPhrase: "restartrestartrestart",
+    });
+    expect(harness.flow.submitting).toBe(true);
+    expect(harness.beginButton.disabled).toBe(true);
+    expect(harness.newWorldForm.getAttribute("aria-busy")).toBe("true");
   });
 });
 

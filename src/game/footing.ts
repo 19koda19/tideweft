@@ -304,7 +304,12 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
   );
 
   const rawStress = causes.reduce((sum, cause) => Math.min(FIXED_POINT, sum + cause.contribution), 0);
-  const braceMitigation = input.brace ? 460_000 : 0;
+  // BRACE must buy meaningful *distance* through a hazard, not merely make
+  // the same inevitable collapse happen a fraction later. Movement already
+  // slows to 62% while braced, so a 62% pressure reduction makes the planted
+  // stance clearly useful without erasing deep water, unsupported edges, or
+  // the separate deterministic fall evaluation.
+  const braceMitigation = input.brace ? 620_000 : 0;
   const footwearMitigation = multiplyFixed(footwearGrip, 180_000);
   const fixtureMitigation = multiplyFixed(clampUnit(input.fixtureSupport), 560_000);
   const mitigationTotal = unionFixed(
@@ -316,7 +321,15 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
     MAX_FOOTING_LOSS_PER_STEP,
     multiplyFixed(Math.max(0, rawStress - tolerance), FIXED_POINT - mitigationTotal),
   );
-  const recovery = loss === 0 ? recoveryPerStep(input, rawStress) : 0;
+  // Balance is not a second stamina bar. On dry support the porter keeps
+  // making small corrective movements while resisting a gust, so recovery
+  // and pressure can coexist and the stronger one determines the trend.
+  // Water and unsupported edges deliberately remain pure-loss contacts.
+  const canCorrectFooting = footingSurface !== "water"
+    && clampUnit(input.unsupportedEdge) === 0;
+  const recovery = canCorrectFooting || loss === 0
+    ? recoveryPerStep(input, rawStress)
+    : 0;
   const stabilityAfter = Math.max(0, Math.min(FIXED_POINT, stabilityBefore - loss + recovery));
   const delta = stabilityAfter - stabilityBefore;
   return {

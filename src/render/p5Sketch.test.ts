@@ -111,6 +111,10 @@ class MockCanvas {
     return event;
   }
 
+  listenerCount(type: string): number {
+    return this.listeners.get(type)?.size ?? 0;
+  }
+
   focus(): void {}
 
   getBoundingClientRect(): DOMRect {
@@ -384,6 +388,162 @@ describe("Chart spatial epoch gate", () => {
       point: { x: -360, y: 640 },
       additive: false,
     }]);
+    renderer.destroy();
+  });
+});
+
+describe("Chart presentation-only pointer drift", () => {
+  it("eases a clamped mouse drift and inverts it for accurate world clicks", () => {
+    let now = 0;
+    vi.stubGlobal("performance", { now: () => now });
+    const commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => view("stable"),
+      dispatch: (command) => commands.push(command),
+    });
+    draw();
+    const translate = p5Harness.instance?.translate as ReturnType<typeof vi.fn>;
+    translate.mockClear();
+
+    canvas.emit("pointermove", { clientX: 200, clientY: 100, pointerType: "mouse" });
+    now = 120;
+    draw();
+    const sceneTranslation = translate.mock.calls[0];
+    expect(sceneTranslation?.[0]).toBeGreaterThanOrEqual(96.5);
+    expect(sceneTranslation?.[0]).toBeLessThan(100);
+    expect(sceneTranslation?.[1]).toBeGreaterThanOrEqual(46.5);
+    expect(sceneTranslation?.[1]).toBeLessThan(50);
+    const driftX = Number(sceneTranslation?.[0]) - 100;
+    const driftY = Number(sceneTranslation?.[1]) - 50;
+
+    canvas.emit("pointerdown", { clientX: 100, clientY: 50, pointerId: 77 });
+    canvas.emit("pointerup", { clientX: 100, clientY: 50, pointerId: 77 });
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({ type: "move-target", additive: false });
+    if (commands[0]?.type !== "move-target") throw new Error("expected move target");
+    expect(commands[0].point.x).toBeCloseTo(20 - driftX, 8);
+    expect(commands[0].point.y).toBeCloseTo(30 - driftY, 8);
+    renderer.destroy();
+  });
+
+  it("recenters on leave, disables touch hover, and cleans up on inactive/destroy", () => {
+    let now = 0;
+    vi.stubGlobal("performance", { now: () => now });
+    let current = view("west");
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+    const translate = p5Harness.instance?.translate as ReturnType<typeof vi.fn>;
+    translate.mockClear();
+    canvas.emit("pointermove", { clientX: 200, clientY: 100 });
+    now = 100;
+    draw();
+    const drifted = Number(translate.mock.calls[0]?.[0]);
+
+    canvas.emit("pointerleave");
+    translate.mockClear();
+    now = 200;
+    draw();
+    expect(Math.abs(Number(translate.mock.calls[0]?.[0]) - 100)).toBeLessThan(Math.abs(drifted - 100));
+
+    canvas.emit("pointermove", { clientX: 200, clientY: 100, pointerType: "touch" });
+    translate.mockClear();
+    now = 300;
+    draw();
+    expect(translate.mock.calls[0]?.[0]).toBe(100);
+    expect(translate.mock.calls[0]?.[1]).toBe(50);
+
+    canvas.emit("pointermove", { clientX: 200, clientY: 100 });
+    current = view("east", { x: 600, y: 600 });
+    translate.mockClear();
+    now = 400;
+    draw();
+    expect(translate.mock.calls[0]?.[0]).toBe(100);
+    expect(translate.mock.calls[0]?.[1]).toBe(50);
+
+    renderer.setActive?.(false);
+    expect(p5Harness.instance?.noLoop).toHaveBeenCalled();
+    renderer.setActive?.(true);
+    translate.mockClear();
+    now = 500;
+    draw();
+    expect(translate.mock.calls[0]?.[0]).toBe(100);
+    expect(canvas.listenerCount("pointermove")).toBe(1);
+    renderer.destroy();
+    expect(canvas.listenerCount("pointermove")).toBe(0);
+    expect(p5Harness.instance?.remove).toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("eases a world label toward its new projected camera position", () => {
+    let now = 0;
+    vi.stubGlobal("performance", { now: () => now });
+    const base = view("label-stable");
+    const settlement = {
+      id: "chart-label",
+      name: "Chart Label",
+      position: { x: 20, y: 30 },
+      population: 10,
+      status: "steady" as const,
+      connection: 1,
+      stress: 0,
+      discovered: true,
+    };
+    let current: TideweftView = { ...base, settlements: [settlement] };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+    const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
+    const initial = text.mock.calls.find((call) => call[0] === "Chart Label");
+    expect(initial?.[1]).toBe(100);
+
+    text.mockClear();
+    current = view(
+      "label-stable",
+      { x: 20, y: 30 },
+      { center: { x: 120, y: 30 }, followPlayer: false },
+    );
+    current = { ...current, settlements: [settlement] };
+    now = 16;
+    draw();
+    const eased = text.mock.calls.find((call) => call[0] === "Chart Label");
+    expect(Number(eased?.[1])).toBeGreaterThan(90.5);
+    expect(Number(eased?.[1])).toBeLessThan(100);
+    renderer.destroy();
+  });
+});
+
+describe("Chart wind production path", () => {
+  it("draws sparse wind threads for clear wind, none when calm, and emits no command", () => {
+    const base = view("wind-stable");
+    let current: TideweftView = {
+      ...base,
+      weather: { kind: "clear", intensity: 0, wind: { x: 0.65, y: -0.2 } },
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+    const bezier = p5Harness.instance?.bezier as ReturnType<typeof vi.fn>;
+    expect(bezier.mock.calls.length).toBeGreaterThan(0);
+    expect(bezier.mock.calls.length).toBeLessThanOrEqual(16);
+
+    bezier.mockClear();
+    current = { ...base, weather: { kind: "clear", intensity: 0, wind: { x: 0, y: 0 } } };
+    draw();
+    expect(bezier).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
     renderer.destroy();
   });
 });

@@ -10,6 +10,11 @@ const { listPackage } = require('@electron/asar');
 const projectRoot = path.resolve(__dirname, '..');
 const releaseRoot = path.join(projectRoot, 'release');
 const resultPrefix = 'TIDEWEFT_SMOKE_RESULT ';
+// The smoke exercises several independently bounded desktop/mobile/dialog
+// transitions and captures three full-resolution images. Keep the process
+// watchdog above the sum of normal work so an inner 30 s assertion can report
+// the actual failing surface instead of being pre-empted by the parent.
+const processTimeoutMs = 120_000;
 const ALLOWED_ASAR_ENTRY = /^\/(?:package\.json|electron|electron\/main\.cjs|dist(?:\/.*)?)$/u;
 const SECRET_LIKE_ASAR_ENTRY = /(?:^|\/)(?:\.env(?:\.|$)|\.npmrc$|artifacts(?:\/|$)|.*(?:secret|credential|private[-_.]?key).*)/iu;
 
@@ -207,7 +212,7 @@ async function runPackagedApp(
   const timeout = setTimeout(() => {
     timedOut = true;
     child.kill('SIGTERM');
-  }, 45_000);
+  }, processTimeoutMs);
 
   const result = await new Promise((resolve, reject) => {
     child.once('error', reject);
@@ -215,7 +220,9 @@ async function runPackagedApp(
   });
   clearTimeout(timeout);
 
-  if (timedOut) throw new Error('The packaged desktop smoke test exceeded 45 seconds.');
+  if (timedOut) {
+    throw new Error(`The packaged desktop smoke test exceeded ${processTimeoutMs / 1_000} seconds.`);
+  }
   const payload = parseSmokeResult(output);
   if (!payload) {
     throw new Error(

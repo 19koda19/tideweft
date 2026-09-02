@@ -2,6 +2,54 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.1",
+      "releaseDate": "2026-09-01",
+      "buildIdentity": "0.3.3-alpha.1",
+      "summary": "A fairer footing pass makes BRACE matter through a river and restores control on a windy bank, deliberate restart and signed information jobs survive the phone interactions that obscured them, and the frameless field now carries visible rain, wind, eased depth, and a living Tideweft title.",
+      "gameplayContractVersion": 10,
+      "tutorialVersion": 11,
+      "categories": {
+        "gameplay": [
+          "BRACE now provides a meaningfully planted crossing window: the same held Shift or touch input still slows travel, protects fragile cargo, and resists footing pressure without making deep water or unsupported edges safe.",
+          "Dry supported footing can perform corrective recovery while resisting crosswind, so leaving a river creates a real route back from zero Stability instead of another hidden endurance drain.",
+          "Each signed information action now has one stable source-subject-recipient identity and names both the exact stock fact and its recipient."
+        ],
+        "fixes": [
+          "The exact restartrestartrestart phrase now survives touch-keyboard blur, ordinary title refreshes, and a later tap of Unlock restart; the temporary authorization clears only when the title actually closes or changes recovery mode.",
+          "Blank replacement seeds remain rejected before dispatch, rapid repeated START input can issue at most one replacement command, and a failed runtime replacement returns the form to a safe retry state without changing the current save.",
+          "Duplicate trust or fact ordering can no longer create duplicate-looking signed-report actions; projection selects one deterministic entry per source, subject, and recipient without mutating the simulation.",
+          "A severe crosswind on a dry bank no longer prevents every point of Stability recovery while the courier is planted.",
+          "Relief 3D now renders the same authoritative drizzle, rain, and squall state already visible in Chart 2D; a bounded dual-contrast precipitation pass remains legible over pale water and dark terrain.",
+          "Pointer travel on safe diagonal ground now follows a bounded deterministic lookahead instead of alternating visibly between cardinal steps. It retains every named hazard contact, rejects blocked corners and costlier shortcuts, and settles inside a fixed deadzone without reversing past the target."
+        ],
+        "balancing": [
+          "Held BRACE footing-pressure mitigation rises from 46 percent to 62 percent. Its 62 percent travel-speed multiplier remains, so preparation and time still carry a cost while the control now buys substantially more crossing distance.",
+          "Deep water and unsupported edges do not receive the new dry-ground corrective recovery. Continued deep-current exposure can still exhaust even a braced courier, and terrain, current direction, load, tools, and route choice remain decisive.",
+          "A CHALLENGING HARD remains the only ruleset; no loot, Promise reward, cargo condition, encounter, or save rule changes with player performance."
+        ],
+        "interface": [
+          "The saved-world title now gives separate persistent status for restart unlocking and the required new seed, uses phone-safe text-input hints, and keeps the current save consequence visible at every step.",
+          "Signed-report rows spell out Subject and Recipient in both their action and explanation, so several legitimate destinations no longer resemble repeated generic document quests.",
+          "The title is now a full-viewport, frameless deterministic tide field with a bounded opening bloom. Its short synthesized crescendo waits for the first lawful tap or key, plays at most once per genuine opening, and shares the existing audio graph.",
+          "Opaque field panes, edge shelves, and boxed controls are gone: the HUD, compass, Promises, inspector, and actions now float as readable typography, hairlines, and restrained symbols directly above the unobstructed world, while desktop and touch scrolling semantics remain intact.",
+          "Sparse deterministic wind threads expose authoritative direction and relative strength in clear weather as well as storms. Relief rotates the visual vector with camera orbit while preserving world-north compass truth.",
+          "Mouse position now supplies at most a few pixels of presentation-only eased depth, and world text follows camera motion with bounded easing. Touch, coarse pointers, and reduced-motion users receive a stable view, while inverse projection keeps targets exact.",
+          "The version-11 T and question-mark field manual documents windy-bank recovery, visible weather and wind, the frameless title and HUD, the stronger but finite BRACE window, unique report identities, and the exact two-stage desktop and touch restart flow."
+        ],
+        "saves": [
+          "Save version remains 4 and requires no migration. Existing region, cargo, cartography, Wayknot, Promise, report, and history records remain byte-compatible.",
+          "Unlocking restart remains temporary UI state and performs no storage write. Only one accepted non-empty seed command can create the higher-generation replacement; rejected phrases, blank seeds, blur, and double taps leave the durable world intact."
+        ],
+        "knownLimitations": [
+          "Swept movement still follows a deterministic bank path rather than the planned player-controlled ADRIFT paddling state; cargo remains physical and recoverable under the current system.",
+          "Current visibility is still discovery-based rather than the planned facing, occlusion, and sound-contact perception budget; the coordinate and smoothed FPS overlay is not live in this hotfix.",
+          "Distant humans, wildlife, emotion, deterrence, aftermath, dog relationships, survival ecology, and generated settlements are not live yet.",
+          "Rain and wind now have cross-view presentation, but the complete distinct systemic language for clear, mist, drizzle, rain, squall, and aurora—including local fronts, exposure, fire, ecology, and actor responses—remains a future series of connected slices.",
+          "Autonomous loose-parcel drift across a regional seam, procedural ravines, ropes, ladders, living mangrove catches, bramble, and regional weather fronts remain future complete vertical slices."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.0",
       "releaseDate": "2026-09-01",
       "buildIdentity": "0.3.3-alpha.0",

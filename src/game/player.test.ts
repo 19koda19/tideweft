@@ -923,6 +923,41 @@ describe("effort, stability, and discovery", () => {
     }
   });
 
+  it("rebuilds stability on a dry riverbank under crosswind instead of entering a permanent lock", () => {
+    const startIndex = 10 * WORLD_WIDTH + 10;
+    const calm = controlledWorld((tiles) => {
+      const bank = tiles[startIndex];
+      if (!bank) throw new Error("fixture tile missing");
+      tiles[startIndex] = {
+        ...bank,
+        terrain: "tidal-flat",
+        waterDepth: 0,
+        moisture: FIXED_POINT,
+      };
+    });
+    const world: WorldView = {
+      ...calm,
+      weather: {
+        ...calm.weather,
+        kind: "storm",
+        intensity: FIXED_POINT,
+        windX: 0,
+        windY: 500_000,
+      },
+    };
+    const player = createPlayer(world);
+    placePlayer(player, 10, 10);
+    player.stability = 0;
+
+    const recovered = stepPlayer(player, world, NO_INPUT);
+
+    expect(recovered.becameSwept).toBe(false);
+    expect(player.mode).toBe("foot");
+    expect(player.stability).toBeGreaterThan(0);
+    expect(player.stabilityTrend).toBe("recovering");
+    expect(player.stabilityHint).toContain("Recovering");
+  });
+
   it("rebuilds a saved sweep as an adjacent route with an honest fresh estimate", () => {
     const startIndex = 10 * WORLD_WIDTH + 10;
     const world = controlledWorld((tiles) => {

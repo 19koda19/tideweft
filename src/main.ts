@@ -107,6 +107,7 @@ async function boot(): Promise<void> {
     root: uiRoot,
     getView: runtime.getUIView,
     setBrace: (active) => braceSources.set("touch", active),
+    playTitleCrescendo: runtime.playTitleCrescendo,
     dispatch: (command) => {
       runtime.dispatchUI(command);
       const returnsToPlay = command.type === "resume-world"

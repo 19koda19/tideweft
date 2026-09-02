@@ -66,6 +66,46 @@ describe("terrain-reactive footing", () => {
     });
   });
 
+  it("lets a planted porter rebuild footing after leaving water even in a severe crosswind", () => {
+    const bank = evaluate({
+      stability: 0,
+      moving: false,
+      pace: "rest",
+      surface: "soft",
+      brace: true,
+      wind: { x: 0, y: FIXED_POINT },
+      weatherIntensity: FIXED_POINT,
+    });
+
+    expect(bank.causes.some(({ code }) => code === "crosswind")).toBe(true);
+    expect(bank.stabilityAfter).toBeGreaterThan(0);
+    expect(bank.delta).toBeGreaterThan(0);
+    expect(bank.trend).toBe("recovering");
+  });
+
+  it("makes bracing buy a meaningful crossing window without making deep water safe", () => {
+    const crossing = (brace: boolean): number => {
+      let stability = FIXED_POINT;
+      for (let step = 0; step < 60; step += 1) {
+        stability = evaluate({
+          stability,
+          moving: true,
+          surface: "water",
+          waterDepth: 520_000,
+          movement: { x: FIXED_POINT, y: 0 },
+          current: { x: 0, y: 535_000 },
+          wind: { x: 0, y: 300_000 },
+          weatherIntensity: 400_000,
+          brace,
+        }).stabilityAfter;
+      }
+      return stability;
+    };
+
+    expect(crossing(false)).toBe(0);
+    expect(crossing(true)).toBeGreaterThan(200_000);
+  });
+
   it("applies a bounded explicit civic recovery bonus only on reliable rest ground", () => {
     const supported = evaluate({
       stability: 100_000,

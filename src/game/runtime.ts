@@ -45,6 +45,10 @@ import {
 } from "../platform/persistence";
 import { acceptsRestartPhrase } from "./restartPolicy";
 import {
+  smoothAutopilotPath,
+  steerAutopilotToPoint,
+} from "./autopilotPath";
+import {
   BASE_CARGO_CAPACITY,
   FIELD_TOOL_LABELS,
   PACK_LOAD_MILLI_PER_UNIT,
@@ -243,6 +247,8 @@ export interface TideweftRuntime {
   readonly getUIView: () => TideweftUIView;
   readonly dispatchRenderer: (command: RendererCommand) => void;
   readonly dispatchUI: (command: TideweftUICommand) => void;
+  /** Called from the title's armed user gesture; shares the gameplay graph. */
+  readonly playTitleCrescendo: (openingOrdinal: number) => Promise<void>;
   readonly save: () => Promise<void>;
   readonly setFocusHandler: (handler: ((point: WorldPoint, zoom?: number) => void) | undefined) => void;
 }
@@ -592,13 +598,14 @@ export async function createTideweftRuntime(
     const targetY = tile.y * TILE_UNITS + TILE_UNITS / 2;
     const dx = targetX - player.x;
     const dy = targetY - player.y;
-    if (Math.abs(dx) < 85 && Math.abs(dy) < 85) {
+    const steering = steerAutopilotToPoint(dx, dy);
+    if (steering.arrived) {
       autopilotPath.shift();
       return currentControl();
     }
     return {
-      moveX: signControl(dx),
-      moveY: signControl(dy),
+      moveX: steering.moveX,
+      moveY: steering.moveY,
       brace: manualControl.brace,
     };
   }
@@ -1304,6 +1311,15 @@ export async function createTideweftRuntime(
     refreshViews();
   }
 
+  async function playTitleCrescendo(openingOrdinal: number): Promise<void> {
+    await soundscape.unlock();
+    soundscape.play(
+      "title",
+      0.72,
+      Number.isSafeInteger(openingOrdinal) ? openingOrdinal : 0,
+    );
+  }
+
   function blockedWorldCreationMessage(action: "resume" | "start"): string {
     if (saveReadFailed) {
       return action === "resume"
@@ -1892,16 +1908,48 @@ export async function createTideweftRuntime(
       }
       return false;
     }
-    const next = path.slice(1);
+    const severeWind = Math.trunc(
+      (Math.max(Math.abs(worldView.weather.windX), Math.abs(worldView.weather.windY))
+        * worldView.weather.intensity) / FIXED_POINT,
+    ) >= 400_000;
+    const hazardousTile = (tileIndex: number): boolean => {
+      const tile = worldView.terrain.tiles[tileIndex];
+      return !tile
+        || tile.waterDepth > 55_000
+        || tile.terrain !== "meadow"
+        || tile.roughness >= 650_000;
+    };
+    const hazardousEdge = (fromTileIndex: number, toTileIndex: number): boolean => {
+      const from = worldView.terrain.tiles[fromTileIndex];
+      const to = worldView.terrain.tiles[toTileIndex];
+      return !from
+        || !to
+        || severeWind
+        || hazardousTile(fromTileIndex)
+        || hazardousTile(toTileIndex)
+        || Math.abs(to.elevation - from.elevation) >= 180_000;
+    };
+    const smoothed = smoothAutopilotPath(traversalTerrain, path, {
+      edgePassable: (fromTileIndex, toTileIndex) => {
+        const from = worldView.terrain.tiles[fromTileIndex];
+        const to = worldView.terrain.tiles[toTileIndex];
+        if (!from || !to) return false;
+        return Math.abs(from.x - to.x) + Math.abs(from.y - to.y) === 1;
+      },
+      hazardousTile,
+      hazardousEdge,
+    });
+    const route = path.slice(1);
+    const next = smoothed.slice(1);
     autopilotPath = additive ? [...autopilotPath, ...next] : next;
-    const unknownWater = next.filter(
+    const unknownWater = route.filter(
       (index) => (worldView.terrain.tiles[index]?.waterDepth ?? 0) > 40_000
         && (player.depthSoundings[index] ?? 0) <= 0,
     ).length;
     if (announcePath) {
       announce(
         session,
-        `Loom path set across ${next.length} terrain marks${unknownWater > 0 ? `, including ${unknownWater} unsounded water marks` : " using sounded depth and your field tools"}.`,
+        `Loom path set across ${route.length} terrain marks${unknownWater > 0 ? `, including ${unknownWater} unsounded water marks` : " using sounded depth and your field tools"}.`,
       );
     }
     return true;
@@ -3169,6 +3217,7 @@ export async function createTideweftRuntime(
     getUIView: () => uiView,
     dispatchRenderer,
     dispatchUI,
+    playTitleCrescendo,
     save,
     setFocusHandler: (handler) => {
       focusHandler = handler;
