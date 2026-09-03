@@ -18,3 +18,17 @@ test-results/
 /PROGRESS.md
 /**/*[Rr][Oo][Aa][Dd][Mm][Aa][Pp]*.md
 /docs/LIVING_HAZARDS_DESIGN.md
+
+# Private operator instructions and design-governance material must never be
+# staged or published. Public gameplay truth stays in the existing reviewed
+# design documents, tutorial, patch notes, and release evidence.
+/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+/**/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+/.agents/
+/.codex/
+/.private/
+/docs/directives/
+/docs/private/
+/docs/FEATURE_REGISTRY.json
+/*_PRIVATE.md
+/*_INTERNAL.md

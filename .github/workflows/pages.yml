@@ -44,6 +44,9 @@ jobs:
           TIDEWEFT_SYNC_HEAD: ${{ github.sha }}
         run: npm run check:player-facing-sync
 
+      - name: Check public/private file boundary
+        run: npm run check:public-boundary
+
       - name: Type-check
         run: npm run typecheck
 
