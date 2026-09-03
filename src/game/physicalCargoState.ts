@@ -4,22 +4,32 @@ import {
   cargoWeightMilli,
   type PlayerState,
 } from "./player";
+import { createCraftingInventory } from "./crafting";
 import {
+  LOOSE_CARGO_MAX_ATOMIC_REGIONS,
+  LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES,
   createLooseCargoCarrier,
   createLooseCargoExpectedManifest,
   createLooseCargoMultiWorldExpectedManifest,
   createLooseCargoWorld,
   inspectLooseCargoMultiWorldConservation,
   looseCargoRegionKey,
+  stepLooseCargoAcrossRegions,
   validateLooseCargoCarrier,
   validateLooseCargoExpectedManifest,
   validateLooseCargoMultiWorldExpectedManifest,
   validateLooseCargoWorld,
   looseCargoCarrierLoadMilli,
+  looseCargoPayloadLoadMilli,
   type LooseCargoCarrierState,
+  type LooseCargoEntity,
   type LooseCargoExpectedManifest,
   type LooseCargoPayload,
+  type LooseCargoRegionHandoff,
   type LooseCargoRegionAddress,
+  type LooseCargoRegionalStepEvent,
+  type LooseCargoRegionalStepInput,
+  type LooseCargoRegionalStepReason,
   type LooseCargoWorldState,
 } from "./looseCargo";
 import { projectLooseCargoCarrierToPlayer } from "./looseCargoRuntime";
@@ -35,7 +45,13 @@ const MAX_SOURCE_LABEL_LENGTH = 96;
 const MAX_SOURCE_LOT_ID_LENGTH = 160;
 const TRUSTED_PHYSICAL_CARGO_STATES = new WeakSet<object>();
 const TRUSTED_INACTIVE_WORLDS = new WeakSet<object>();
-const INACTIVE_COLLECTION_BYTES = new WeakMap<object, number>();
+interface CachedCargoCollectionMetadata {
+  readonly serializedBytes: number;
+  readonly integrity: string;
+}
+
+const EXPECTED_MANIFEST_METADATA = new WeakMap<object, CachedCargoCollectionMetadata>();
+const CARRIER_METADATA = new WeakMap<object, CachedCargoCollectionMetadata>();
 const UTF8_ENCODER = new TextEncoder();
 
 export interface PhysicalCargoInactiveWorld {
@@ -43,6 +59,26 @@ export interface PhysicalCargoInactiveWorld {
   readonly world: LooseCargoWorldState;
   /** Inner seal lets active commits hash bounded metadata instead of every unloaded history. */
   readonly integrity: string;
+}
+
+interface PhysicalCargoInactiveNode {
+  readonly entry: PhysicalCargoInactiveWorld;
+  readonly left: PhysicalCargoInactiveNode | null;
+  readonly right: PhysicalCargoInactiveNode | null;
+  readonly height: number;
+  readonly size: number;
+  readonly entriesSerializedBytes: number;
+  readonly integrity: string;
+}
+
+interface PhysicalCargoInactiveIndex {
+  readonly kind: "physical-cargo-inactive-avl-v1";
+  readonly root: PhysicalCargoInactiveNode | null;
+  readonly size: number;
+  /** Shape-aware Merkle root; every update recalculates only one AVL path. */
+  readonly integrity: string;
+  /** Exact byte size of the canonical flat-array save representation. */
+  readonly serializedBytes: number;
 }
 
 export interface PhysicalCargoState {
@@ -53,10 +89,24 @@ export interface PhysicalCargoState {
   readonly activeRegionKey: string;
   readonly looseWorld: LooseCargoWorldState;
   /** Strictly sorted, touched-only worlds. Generated empty worlds are reproducible and omitted. */
-  readonly inactiveWorlds: readonly PhysicalCargoInactiveWorld[];
+  /** Runtime-only immutable persistent index; saves flatten it canonically. */
+  readonly inactiveWorldIndex: PhysicalCargoInactiveIndex;
   readonly carrier: LooseCargoCarrierState;
   readonly expectedManifest: LooseCargoExpectedManifest;
   /** Canonical integrity for this sidecar; the save envelope adds a second outer seal. */
+  readonly integrity: string;
+}
+
+/** Stable v2 wire shape retained for existing saves and public persistence. */
+export interface SerializedPhysicalCargoState {
+  readonly version: typeof PHYSICAL_CARGO_STATE_VERSION;
+  readonly lastSourceOrdinal: number;
+  readonly activeRegion: LooseCargoRegionAddress;
+  readonly activeRegionKey: string;
+  readonly looseWorld: LooseCargoWorldState;
+  readonly inactiveWorlds: readonly PhysicalCargoInactiveWorld[];
+  readonly carrier: LooseCargoCarrierState;
+  readonly expectedManifest: LooseCargoExpectedManifest;
   readonly integrity: string;
 }
 
@@ -101,6 +151,36 @@ export interface PhysicalCargoValidation {
   readonly state: PhysicalCargoState | null;
 }
 
+export interface PhysicalCargoRegionalStepResult {
+  readonly ok: boolean;
+  readonly reason: LooseCargoRegionalStepReason | "invalid-state" | "manifest-mismatch";
+  readonly state: PhysicalCargoState;
+  readonly events: readonly LooseCargoRegionalStepEvent[];
+  readonly handoffs: readonly LooseCargoRegionHandoff[];
+}
+
+/** Bounded spatial query diagnostics make accidental whole-save scans testable. */
+export interface PhysicalCargoPartitionQuery {
+  readonly worlds: readonly LooseCargoWorldState[];
+  readonly requestedRegionCount: number;
+  readonly inactiveProbeCount: number;
+}
+
+export interface PhysicalCargoPromiseCustody {
+  readonly carriedQuantity: number;
+  readonly looseQuantity: number;
+  readonly condition: number;
+}
+
+export interface PhysicalCargoPartitionIndexAudit {
+  readonly valid: boolean;
+  readonly size: number;
+  readonly height: number;
+  readonly maximumBalance: number;
+  readonly inactiveSerializedBytes: number;
+  readonly sidecarSerializedBytes: number;
+}
+
 /** Build a new v2 custody sidecar without inventing or deleting inventory. */
 export function createPhysicalCargoStateFromPlayer(
   player: PlayerState,
@@ -120,7 +200,7 @@ export function createPhysicalCargoStateFromPlayer(
     activeRegion: looseWorld.region,
     activeRegionKey: looseCargoRegionKey(looseWorld.region),
     looseWorld,
-    inactiveWorlds: canonicalInactiveCollection([]),
+    inactiveWorldIndex: createInactiveWorldIndex([]),
     carrier,
     expectedManifest: createLooseCargoMultiWorldExpectedManifest([looseWorld], carrier),
   });
@@ -198,24 +278,21 @@ export function commitPhysicalCargoState(
   ) {
     throw new RangeError("Physical cargo source ordinal cannot advance without a physical mutation");
   }
-  const regionalWorlds = [
-    looseWorld,
-    ...canonicalPrior.inactiveWorlds.map(({ world }) => world),
-  ];
-  const expectedManifest = createLooseCargoMultiWorldExpectedManifest(regionalWorlds, carrier);
-  if (
-    authorization.kind === "conserved"
-    && stableStringify(expectedManifest) !== stableStringify(canonicalPrior.expectedManifest)
-  ) {
-    throw new RangeError("A conserved physical cargo commit changed the global expected manifest");
-  }
+  // `actualDelta` above proves the complete active-world/carrier mutation.
+  // Inactive owners are immutable and shared by reference, so rebuilding the
+  // global manifest from every region here adds no safety. Conserved actions
+  // retain the exact trusted manifest; authorized deltas update only their
+  // declared structural entries.
+  const expectedManifest = authorization.kind === "conserved"
+    ? canonicalPrior.expectedManifest
+    : applyExpectedManifestAuthorization(canonicalPrior.expectedManifest, authorization);
   return sealPhysicalCargoState({
     version: PHYSICAL_CARGO_STATE_VERSION,
     lastSourceOrdinal: ordinal,
     activeRegion: canonicalPrior.activeRegion,
     activeRegionKey: canonicalPrior.activeRegionKey,
     looseWorld,
-    inactiveWorlds: canonicalPrior.inactiveWorlds,
+    inactiveWorldIndex: canonicalPrior.inactiveWorldIndex,
     carrier,
     expectedManifest,
   });
@@ -246,43 +323,433 @@ export function transitionPhysicalCargoRegion(
     return canonicalPrior;
   }
 
-  const targetIndex = findInactiveWorldIndex(canonicalPrior.inactiveWorlds, targetKey);
-  const storedTarget = targetIndex < 0
-    ? null
-    : canonicalPrior.inactiveWorlds[targetIndex]!;
+  const storedTarget = inactiveIndexGet(canonicalPrior.inactiveWorldIndex, targetKey);
   const looseWorld = storedTarget?.world ?? emptyTarget;
   if (looseWorld.width !== width || looseWorld.height !== height) {
     throw new RangeError("Stored physical cargo region dimensions do not match the generated target");
   }
 
-  const inactiveWorlds = canonicalPrior.inactiveWorlds.filter((_, index) => index !== targetIndex);
+  let inactiveWorldIndex = inactiveIndexDelete(canonicalPrior.inactiveWorldIndex, targetKey);
   if (isTouchedLooseCargoWorld(canonicalPrior.looseWorld)) {
-    inactiveWorlds.push(sealInactiveWorld(canonicalPrior.looseWorld));
+    inactiveWorldIndex = inactiveIndexSet(
+      inactiveWorldIndex,
+      sealInactiveWorld(canonicalPrior.looseWorld),
+    );
   }
-  if (inactiveWorlds.length > PHYSICAL_CARGO_MAX_INACTIVE_WORLDS) {
+  if (inactiveWorldIndex.size > PHYSICAL_CARGO_MAX_INACTIVE_WORLDS) {
     throw new RangeError("Physical cargo inactive-region capacity exhausted");
   }
-  inactiveWorlds.sort(compareInactiveWorlds);
-  const canonicalInactive = canonicalInactiveCollection(inactiveWorlds);
-  const regionalWorlds = [looseWorld, ...canonicalInactive.map(({ world }) => world)];
-  const expectedManifest = createLooseCargoMultiWorldExpectedManifest(
-    regionalWorlds,
-    canonicalPrior.carrier,
-  );
-  if (stableStringify(expectedManifest) !== stableStringify(canonicalPrior.expectedManifest)) {
-    throw new RangeError("A region transition cannot alter the global physical cargo manifest");
-  }
-
   return sealPhysicalCargoState({
     version: PHYSICAL_CARGO_STATE_VERSION,
     lastSourceOrdinal: canonicalPrior.lastSourceOrdinal,
     activeRegion: looseWorld.region,
     activeRegionKey: targetKey,
     looseWorld,
-    inactiveWorlds: canonicalInactive,
+    inactiveWorldIndex,
     carrier: canonicalPrior.carrier,
     expectedManifest: canonicalPrior.expectedManifest,
   });
+}
+
+/**
+ * Canonical snapshot of every touched storage owner. Region-key order is
+ * stable and independent of which region currently contains the player.
+ */
+export function physicalCargoWorlds(
+  state: PhysicalCargoState,
+): readonly LooseCargoWorldState[] {
+  const canonical = validatePhysicalCargoInternals(state);
+  if (!canonical) throw new RangeError("Cannot inspect an invalid physical cargo sidecar");
+  return [
+    canonical.looseWorld,
+    ...inactiveIndexEntries(canonical.inactiveWorldIndex).map(({ world }) => world),
+  ].sort(compareLooseCargoWorlds);
+}
+
+/** Explicit O(N) inspection/save helper. Never use from a fixed-step path. */
+export function physicalCargoInactiveWorlds(
+  state: PhysicalCargoState,
+): readonly PhysicalCargoInactiveWorld[] {
+  const canonical = validatePhysicalCargoInternals(state);
+  if (!canonical) throw new RangeError("Cannot inspect an invalid physical cargo sidecar");
+  return inactiveIndexEntries(canonical.inactiveWorldIndex);
+}
+
+/** Flatten the persistent runtime index only at a persistence/debug boundary. */
+export function snapshotPhysicalCargoState(
+  state: PhysicalCargoState,
+): SerializedPhysicalCargoState {
+  const canonical = validatePhysicalCargoInternals(state);
+  if (!canonical) throw new RangeError("Cannot snapshot an invalid physical cargo sidecar");
+  const unsealed: Omit<SerializedPhysicalCargoState, "integrity"> = {
+    version: canonical.version,
+    lastSourceOrdinal: canonical.lastSourceOrdinal,
+    activeRegion: canonical.activeRegion,
+    activeRegionKey: canonical.activeRegionKey,
+    looseWorld: canonical.looseWorld,
+    inactiveWorlds: inactiveIndexEntries(canonical.inactiveWorldIndex),
+    carrier: canonical.carrier,
+    expectedManifest: canonical.expectedManifest,
+  };
+  return Object.freeze({
+    ...unsealed,
+    integrity: serializedPhysicalCargoIntegrity(unsealed),
+  });
+}
+
+/** Deliberately O(N) development/audit surface; fixed-step code must not call it. */
+export function inspectPhysicalCargoPartitionIndex(
+  state: PhysicalCargoState,
+): PhysicalCargoPartitionIndexAudit {
+  const canonical = validatePhysicalCargoInternals(state);
+  if (!canonical) throw new RangeError("Cannot audit an invalid physical cargo sidecar");
+  interface NodeAudit {
+    readonly valid: boolean;
+    readonly size: number;
+    readonly height: number;
+    readonly entriesSerializedBytes: number;
+    readonly maximumBalance: number;
+    readonly minimumKey: string | null;
+    readonly maximumKey: string | null;
+  }
+  const visit = (node: PhysicalCargoInactiveNode | null): NodeAudit => {
+    if (!node) return {
+      valid: true,
+      size: 0,
+      height: 0,
+      entriesSerializedBytes: 0,
+      maximumBalance: 0,
+      minimumKey: null,
+      maximumKey: null,
+    };
+    const left = visit(node.left);
+    const right = visit(node.right);
+    const height = 1 + Math.max(left.height, right.height);
+    const size = 1 + left.size + right.size;
+    const entriesSerializedBytes = inactiveEntrySerializedBytes(node.entry)
+      + left.entriesSerializedBytes
+      + right.entriesSerializedBytes;
+    const balance = left.height - right.height;
+    const integrity = hashCanonical({
+      key: node.entry.regionKey,
+      entryIntegrity: node.entry.integrity,
+      left: node.left?.integrity ?? null,
+      right: node.right?.integrity ?? null,
+      height,
+      size,
+    });
+    return {
+      valid: left.valid
+        && right.valid
+        && Math.abs(balance) <= 1
+        && (left.maximumKey === null || left.maximumKey < node.entry.regionKey)
+        && (right.minimumKey === null || node.entry.regionKey < right.minimumKey)
+        && node.height === height
+        && node.size === size
+        && node.entriesSerializedBytes === entriesSerializedBytes
+        && node.integrity === integrity,
+      size,
+      height,
+      entriesSerializedBytes,
+      maximumBalance: Math.max(Math.abs(balance), left.maximumBalance, right.maximumBalance),
+      minimumKey: left.minimumKey ?? node.entry.regionKey,
+      maximumKey: right.maximumKey ?? node.entry.regionKey,
+    };
+  };
+  const tree = visit(canonical.inactiveWorldIndex.root);
+  return Object.freeze({
+    valid: tree.valid
+      && tree.size === canonical.inactiveWorldIndex.size
+      && canonical.inactiveWorldIndex.integrity
+        === (canonical.inactiveWorldIndex.root?.integrity ?? hashCanonical([]))
+      && canonical.inactiveWorldIndex.serializedBytes
+        === (tree.size === 0 ? 2 : 2 + tree.entriesSerializedBytes + tree.size - 1),
+    size: tree.size,
+    height: tree.height,
+    maximumBalance: tree.maximumBalance,
+    inactiveSerializedBytes: canonical.inactiveWorldIndex.serializedBytes,
+    sidecarSerializedBytes: physicalCargoSerializedBytes(canonical),
+  });
+}
+
+/**
+ * Resolve only explicitly requested storage owners. The inactive collection is
+ * canonical and sorted, so each lookup is logarithmic and never walks the
+ * player's lifetime cargo history. Callers must supply a bounded live spatial
+ * neighborhood rather than an arbitrary save-sized region list.
+ */
+export function queryPhysicalCargoPartitions(
+  state: PhysicalCargoState,
+  regions: readonly LooseCargoRegionAddress[],
+): PhysicalCargoPartitionQuery {
+  const canonical = validatePhysicalCargoInternals(state);
+  if (!canonical) throw new RangeError("Cannot inspect an invalid physical cargo sidecar");
+  if (!Array.isArray(regions) || regions.length > LOOSE_CARGO_MAX_ATOMIC_REGIONS) {
+    throw new RangeError("Physical cargo partition query exceeds the bounded live neighborhood");
+  }
+  const keys = new Set<string>();
+  const worlds: LooseCargoWorldState[] = [];
+  const audit = { probes: 0 };
+  for (const region of regions) {
+    const key = looseCargoRegionKey(region);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    if (key === canonical.activeRegionKey) {
+      worlds.push(canonical.looseWorld);
+      continue;
+    }
+    const inactive = inactiveIndexGet(canonical.inactiveWorldIndex, key, audit);
+    if (inactive) worlds.push(inactive.world);
+  }
+  worlds.sort(compareLooseCargoWorlds);
+  return Object.freeze({
+    worlds: Object.freeze(worlds),
+    requestedRegionCount: keys.size,
+    inactiveProbeCount: audit.probes,
+  });
+}
+
+/** Global Promise quantities come from the conserved manifest, not a region scan. */
+export function physicalCargoPromiseCustody(
+  state: PhysicalCargoState,
+  contractId: number,
+): PhysicalCargoPromiseCustody {
+  const canonical = validatePhysicalCargoInternals(state);
+  if (!canonical) throw new RangeError("Cannot inspect an invalid physical cargo sidecar");
+  if (!Number.isSafeInteger(contractId) || contractId < 0) {
+    throw new RangeError("Promise contract identity must be a non-negative safe integer");
+  }
+  const carried = canonical.carrier.lots.filter((lot) =>
+    lot.payload.kind === "promise" && lot.payload.contractId === contractId);
+  const carriedQuantity = carried.reduce((total, lot) =>
+    total + (lot.payload.kind === "promise" ? lot.payload.quantity : 0), 0);
+  const prefix = `promise:${contractId}:`;
+  const entries = canonical.expectedManifest.entries;
+  let low = 0;
+  let high = entries.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (entries[middle]!.payloadKey < prefix) low = middle + 1;
+    else high = middle;
+  }
+  let totalQuantity = 0;
+  for (let index = low; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (!entry.payloadKey.startsWith(prefix)) break;
+    totalQuantity += entry.quantity;
+  }
+  if (totalQuantity < carriedQuantity) {
+    throw new RangeError("Physical Promise manifest contains less cargo than its carrier");
+  }
+  const weightedCondition = carried.reduce((total, lot) =>
+    total + (lot.payload.kind === "promise"
+      ? lot.payload.quantity * lot.materialState.condition
+      : 0), 0);
+  return Object.freeze({
+    carriedQuantity,
+    looseQuantity: totalQuantity - carriedQuantity,
+    condition: carriedQuantity > 0 ? Math.trunc(weightedCondition / carriedQuantity) : 0,
+  });
+}
+
+/** Return a touched regional world without changing active player ownership. */
+export function physicalCargoWorldAt(
+  state: PhysicalCargoState,
+  region: LooseCargoRegionAddress,
+): LooseCargoWorldState | null {
+  const canonical = validatePhysicalCargoInternals(state);
+  if (!canonical) throw new RangeError("Cannot inspect an invalid physical cargo sidecar");
+  const key = looseCargoRegionKey(region);
+  if (key === canonical.activeRegionKey) return canonical.looseWorld;
+  return inactiveIndexGet(canonical.inactiveWorldIndex, key)?.world ?? null;
+}
+
+/** Locate one parcel without assuming that the player's storage owner owns it. */
+export function locatePhysicalCargoEntity(
+  state: PhysicalCargoState,
+  entityId: string,
+): { readonly world: LooseCargoWorldState; readonly entity: LooseCargoEntity } | null {
+  for (const world of physicalCargoWorlds(state)) {
+    const entity = world.entities.find(({ id }) => id === entityId);
+    if (entity) return { world, entity };
+  }
+  return null;
+}
+
+/**
+ * Commit a drop/pickup/material mutation against any visible storage owner and
+ * restore the player's original active owner before returning. The intermediate
+ * owner exchange is never observable or persisted, so the final sidecar is one
+ * atomic transaction with the same conservation and forward-history checks as
+ * an ordinary active-world commit.
+ */
+export function commitPhysicalCargoRegionalMutation(
+  prior: PhysicalCargoState,
+  update: {
+    readonly looseWorld: LooseCargoWorldState;
+    readonly carrier: LooseCargoCarrierState;
+    readonly committedSourceOrdinal?: number;
+  },
+  authorization: PhysicalCargoCommitAuthorization,
+): PhysicalCargoState {
+  const canonical = validatePhysicalCargoInternals(prior);
+  if (!canonical) throw new RangeError("Cannot commit from an invalid physical cargo sidecar");
+  const target = update.looseWorld.region;
+  if (looseCargoRegionKey(target) === canonical.activeRegionKey) {
+    return commitPhysicalCargoState(canonical, update, authorization);
+  }
+  const activated = transitionPhysicalCargoRegion(
+    canonical,
+    target,
+    canonical.looseWorld.width,
+    canonical.looseWorld.height,
+  );
+  const committed = commitPhysicalCargoState(activated, update, authorization);
+  return transitionPhysicalCargoRegion(
+    committed,
+    canonical.activeRegion,
+    canonical.looseWorld.width,
+    canonical.looseWorld.height,
+  );
+}
+
+/**
+ * Advance visible/relevant parcels across any touched storage regions as one
+ * sealed custody transaction. All eight possible neighbor owners are loaded
+ * before stepping, so an inbound parcel can never overwrite a persisted but
+ * currently inactive destination. Any stale input, capacity failure, invalid
+ * coordinate, or conservation mismatch returns the exact prior state.
+ */
+export function stepPhysicalCargoAcrossRegions(
+  prior: PhysicalCargoState,
+  inputs: readonly LooseCargoRegionalStepInput[],
+): PhysicalCargoRegionalStepResult {
+  const canonicalPrior = validatePhysicalCargoInternals(prior);
+  if (!canonicalPrior) {
+    return {
+      ok: false,
+      reason: "invalid-state",
+      state: prior,
+      events: [],
+      handoffs: [],
+    };
+  }
+  if (
+    !Array.isArray(inputs)
+    || inputs.length < 1
+    || inputs.length > LOOSE_CARGO_MAX_ATOMIC_REGIONS
+  ) {
+    return failedPhysicalRegionalStep("invalid-sample", prior);
+  }
+  const participating = new Map<string, LooseCargoWorldState>();
+  for (const input of inputs) {
+    let sourceKey: string;
+    try {
+      sourceKey = looseCargoRegionKey(input.region);
+    } catch {
+      return failedPhysicalRegionalStep("invalid-sample", prior);
+    }
+    const source = physicalCargoWorldAtCanonicalState(canonicalPrior, sourceKey);
+    if (!source) return failedPhysicalRegionalStep("invalid-world-set", prior);
+    participating.set(sourceKey, source);
+    for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+      for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+        const neighborX = input.region.x + offsetX;
+        const neighborY = input.region.y + offsetY;
+        if (!Number.isSafeInteger(neighborX) || !Number.isSafeInteger(neighborY)) continue;
+        const neighborKey = looseCargoRegionKey({
+          x: Object.is(neighborX, -0) ? 0 : neighborX,
+          y: Object.is(neighborY, -0) ? 0 : neighborY,
+        });
+        const neighbor = physicalCargoWorldAtCanonicalState(canonicalPrior, neighborKey);
+        if (neighbor) participating.set(neighborKey, neighbor);
+      }
+    }
+  }
+  const stepped = stepLooseCargoAcrossRegions([...participating.values()], inputs);
+  if (!stepped.ok) {
+    return {
+      ok: false,
+      reason: stepped.reason,
+      state: prior,
+      events: [],
+      handoffs: [],
+    };
+  }
+  try {
+    const emptyCarrier = createLooseCargoCarrier(
+      { kind: "unclaimed" },
+      createCraftingInventory(0),
+    );
+    const beforeManifest = createLooseCargoMultiWorldExpectedManifest(
+      [...participating.values()],
+      emptyCarrier,
+    );
+    const afterManifest = createLooseCargoMultiWorldExpectedManifest(
+      stepped.worlds,
+      emptyCarrier,
+    );
+    if (stableStringify(beforeManifest) !== stableStringify(afterManifest)) {
+      return failedPhysicalRegionalStep("manifest-mismatch", prior);
+    }
+  } catch {
+    return failedPhysicalRegionalStep("manifest-mismatch", prior);
+  }
+
+  let looseWorld = canonicalPrior.looseWorld;
+  const inactiveUpdates = new Map<string, PhysicalCargoInactiveWorld | null>();
+  for (const world of stepped.worlds) {
+    const key = looseCargoRegionKey(world.region);
+    if (key === canonicalPrior.activeRegionKey) {
+      looseWorld = world;
+      continue;
+    }
+    const priorEntry = inactiveIndexGet(canonicalPrior.inactiveWorldIndex, key);
+    if (!isTouchedLooseCargoWorld(world)) {
+      if (priorEntry) inactiveUpdates.set(key, null);
+      continue;
+    }
+    if (priorEntry?.world !== world) inactiveUpdates.set(key, sealInactiveWorld(world));
+  }
+  let inactiveWorldIndex: PhysicalCargoInactiveIndex;
+  try {
+    inactiveWorldIndex = applyInactiveWorldUpdates(
+      canonicalPrior.inactiveWorldIndex,
+      inactiveUpdates,
+    );
+  } catch {
+    return failedPhysicalRegionalStep("invalid-world-set", prior);
+  }
+
+  let state: PhysicalCargoState;
+  try {
+    state = sealPhysicalCargoState({
+      version: PHYSICAL_CARGO_STATE_VERSION,
+      lastSourceOrdinal: canonicalPrior.lastSourceOrdinal,
+      activeRegion: canonicalPrior.activeRegion,
+      activeRegionKey: canonicalPrior.activeRegionKey,
+      looseWorld,
+      inactiveWorldIndex,
+      carrier: canonicalPrior.carrier,
+      expectedManifest: canonicalPrior.expectedManifest,
+    });
+  } catch {
+    return failedPhysicalRegionalStep("invalid-world-set", prior);
+  }
+  return {
+    ok: true,
+    reason: "advanced",
+    state,
+    events: stepped.events,
+    handoffs: stepped.handoffs,
+  };
+}
+
+function failedPhysicalRegionalStep(
+  reason: PhysicalCargoRegionalStepResult["reason"],
+  state: PhysicalCargoState,
+): PhysicalCargoRegionalStepResult {
+  return { ok: false, reason, state, events: [], handoffs: [] };
 }
 
 /**
@@ -637,7 +1104,7 @@ export function adoptPhysicalCargoStateV1(
     activeRegion: legacy.looseWorld.region,
     activeRegionKey: looseCargoRegionKey(legacy.looseWorld.region),
     looseWorld: legacy.looseWorld,
-    inactiveWorlds: canonicalInactiveCollection([]),
+    inactiveWorldIndex: createInactiveWorldIndex([]),
     carrier: legacy.carrier,
     expectedManifest: createLooseCargoMultiWorldExpectedManifest(
       [legacy.looseWorld],
@@ -700,16 +1167,40 @@ function sealPhysicalCargoState(
 }
 
 /**
- * The active world and carrier are covered directly. Inactive worlds are
- * covered through their canonical inner seals so a live environment step has
- * bounded hashing work even after a long expedition.
+ * The bounded active world is covered directly. The immutable carrier,
+ * manifest, and inactive AVL are covered through cached seals so a live
+ * environment step never re-hashes lifetime custody history.
  */
-function physicalCargoIntegrity(value: Readonly<Record<string, unknown>> | Omit<PhysicalCargoState, "integrity">): string {
-  const inactive = Array.isArray(value.inactiveWorlds)
-    ? value.inactiveWorlds.map((entry) => isRecord(entry)
-      ? { regionKey: entry.regionKey, integrity: entry.integrity }
-      : entry)
-    : value.inactiveWorlds;
+function physicalCargoIntegrity(value: Omit<PhysicalCargoState, "integrity">): string {
+  const expectedManifest = {
+    integrity: expectedManifestMetadata(value.expectedManifest).integrity,
+  };
+  return hashCanonical({
+    version: value.version,
+    lastSourceOrdinal: value.lastSourceOrdinal,
+    activeRegion: value.activeRegion,
+    activeRegionKey: value.activeRegionKey,
+    looseWorld: value.looseWorld,
+    inactiveWorldIndex: {
+      size: value.inactiveWorldIndex.size,
+      integrity: value.inactiveWorldIndex.integrity,
+      serializedBytes: value.inactiveWorldIndex.serializedBytes,
+    },
+    carrier: { integrity: carrierMetadata(value.carrier).integrity },
+    expectedManifest,
+  });
+}
+
+function serializedPhysicalCargoIntegrity(
+  value: Omit<SerializedPhysicalCargoState, "integrity">,
+): string {
+  const inactive = {
+    count: value.inactiveWorlds.length,
+    integrity: hashCanonical(value.inactiveWorlds.map(({ regionKey, integrity }) => ({
+      regionKey,
+      integrity,
+    }))),
+  };
   return hashCanonical({
     version: value.version,
     lastSourceOrdinal: value.lastSourceOrdinal,
@@ -718,11 +1209,35 @@ function physicalCargoIntegrity(value: Readonly<Record<string, unknown>> | Omit<
     looseWorld: value.looseWorld,
     inactiveWorlds: inactive,
     carrier: value.carrier,
-    expectedManifest: value.expectedManifest,
+    expectedManifest: { integrity: hashCanonical(value.expectedManifest) },
   });
 }
 
+/** Accept v2 saves written before cached collection seals were introduced. */
+function legacySerializedPhysicalCargoIntegrity(
+  value: Omit<SerializedPhysicalCargoState, "integrity">,
+): string {
+  return hashCanonical({
+    ...value,
+    inactiveWorlds: value.inactiveWorlds.map(({ regionKey, integrity }) => ({
+      regionKey,
+      integrity,
+    })),
+  });
+}
+
+function matchesSerializedPhysicalCargoIntegrity(
+  integrity: string,
+  value: Omit<SerializedPhysicalCargoState, "integrity">,
+): boolean {
+  return integrity === serializedPhysicalCargoIntegrity(value)
+    || integrity === legacySerializedPhysicalCargoIntegrity(value);
+}
+
 function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | null {
+  if (typeof value === "object" && value !== null && TRUSTED_PHYSICAL_CARGO_STATES.has(value)) {
+    return value as PhysicalCargoState;
+  }
   if (!isRecord(value)
     || !hasExactKeys(value, [
       "version",
@@ -743,11 +1258,11 @@ function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | nu
     || value.inactiveWorlds.length > PHYSICAL_CARGO_MAX_INACTIVE_WORLDS
     || typeof value.integrity !== "string"
     || !/^[0-9a-f]{16}$/u.test(value.integrity)) return null;
-  if (TRUSTED_PHYSICAL_CARGO_STATES.has(value)) {
-    return value as unknown as PhysicalCargoState;
-  }
   const unsealed = unsealPhysicalCargo(value);
-  if (value.integrity !== physicalCargoIntegrity(unsealed)) return null;
+  if (!matchesSerializedPhysicalCargoIntegrity(
+    value.integrity,
+    unsealed as unknown as Omit<SerializedPhysicalCargoState, "integrity">,
+  )) return null;
   const worldValidation = validateLooseCargoWorld(value.looseWorld);
   const carrierValidation = validateLooseCargoCarrier(value.carrier);
   if (!worldValidation.valid || !worldValidation.state
@@ -780,10 +1295,10 @@ function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | nu
     previousKey = inactive.regionKey;
     inactiveWorlds.push(inactive);
   }
-  const canonicalInactive = canonicalInactiveCollection(inactiveWorlds);
+  const inactiveWorldIndex = createInactiveWorldIndex(inactiveWorlds);
   const regionalWorlds = [
     worldValidation.state,
-    ...canonicalInactive.map(({ world }) => world),
+    ...inactiveWorlds.map(({ world }) => world),
   ];
   const manifest = validateLooseCargoMultiWorldExpectedManifest(
     value.expectedManifest,
@@ -792,19 +1307,20 @@ function validatePhysicalCargoInternals(value: unknown): PhysicalCargoState | nu
   );
   if (!manifest.valid || !manifest.actual) return null;
   if (stableStringify(manifest.actual) !== stableStringify(value.expectedManifest)) return null;
-  const state: PhysicalCargoState = {
-    version: PHYSICAL_CARGO_STATE_VERSION,
-    lastSourceOrdinal: value.lastSourceOrdinal as number,
-    activeRegion: worldValidation.state.region,
-    activeRegionKey,
-    looseWorld: worldValidation.state,
-    inactiveWorlds: canonicalInactive,
-    carrier: carrierValidation.carrier,
-    expectedManifest: manifest.actual,
-    integrity: value.integrity,
-  };
-  if (physicalCargoSerializedBytes(state) > PHYSICAL_CARGO_MAX_SERIALIZED_BYTES) return null;
-  return trustPhysicalCargoState(state);
+  try {
+    return sealPhysicalCargoState({
+      version: PHYSICAL_CARGO_STATE_VERSION,
+      lastSourceOrdinal: value.lastSourceOrdinal as number,
+      activeRegion: worldValidation.state.region,
+      activeRegionKey,
+      looseWorld: worldValidation.state,
+      inactiveWorldIndex,
+      carrier: carrierValidation.carrier,
+      expectedManifest: manifest.actual,
+    });
+  } catch {
+    return null;
+  }
 }
 
 function trustPhysicalCargoState(state: PhysicalCargoState): PhysicalCargoState {
@@ -951,12 +1467,219 @@ function trustInactiveWorld(value: PhysicalCargoInactiveWorld): PhysicalCargoIna
   return value;
 }
 
-function canonicalInactiveCollection(
+const INACTIVE_ENTRY_BYTES = new WeakMap<object, number>();
+
+function inactiveEntrySerializedBytes(entry: PhysicalCargoInactiveWorld): number {
+  const cached = INACTIVE_ENTRY_BYTES.get(entry as object);
+  if (cached !== undefined) return cached;
+  const bytes = serializedBytes(entry);
+  INACTIVE_ENTRY_BYTES.set(entry as object, bytes);
+  return bytes;
+}
+
+function createInactiveNode(
+  entry: PhysicalCargoInactiveWorld,
+  left: PhysicalCargoInactiveNode | null,
+  right: PhysicalCargoInactiveNode | null,
+): PhysicalCargoInactiveNode {
+  const height = 1 + Math.max(left?.height ?? 0, right?.height ?? 0);
+  const size = 1 + (left?.size ?? 0) + (right?.size ?? 0);
+  const entriesSerializedBytes = inactiveEntrySerializedBytes(entry)
+    + (left?.entriesSerializedBytes ?? 0)
+    + (right?.entriesSerializedBytes ?? 0);
+  return Object.freeze({
+    entry,
+    left,
+    right,
+    height,
+    size,
+    entriesSerializedBytes,
+    integrity: hashCanonical({
+      key: entry.regionKey,
+      entryIntegrity: entry.integrity,
+      left: left?.integrity ?? null,
+      right: right?.integrity ?? null,
+      height,
+      size,
+    }),
+  });
+}
+
+function inactiveIndexFromRoot(root: PhysicalCargoInactiveNode | null): PhysicalCargoInactiveIndex {
+  const size = root?.size ?? 0;
+  return Object.freeze({
+    kind: "physical-cargo-inactive-avl-v1" as const,
+    root,
+    size,
+    integrity: root?.integrity ?? hashCanonical([]),
+    serializedBytes: size === 0
+      ? 2
+      : 2 + root!.entriesSerializedBytes + size - 1,
+  });
+}
+
+function createInactiveWorldIndex(
   values: readonly PhysicalCargoInactiveWorld[],
+): PhysicalCargoInactiveIndex {
+  const build = (start: number, end: number): PhysicalCargoInactiveNode | null => {
+    if (start >= end) return null;
+    const middle = start + Math.floor((end - start) / 2);
+    return createInactiveNode(values[middle]!, build(start, middle), build(middle + 1, end));
+  };
+  return inactiveIndexFromRoot(build(0, values.length));
+}
+
+function inactiveIndexEntries(
+  index: PhysicalCargoInactiveIndex,
 ): readonly PhysicalCargoInactiveWorld[] {
-  const collection = Object.freeze([...values]);
-  INACTIVE_COLLECTION_BYTES.set(collection, serializedBytes(collection));
-  return collection;
+  const result: PhysicalCargoInactiveWorld[] = [];
+  const visit = (node: PhysicalCargoInactiveNode | null): void => {
+    if (!node) return;
+    visit(node.left);
+    result.push(node.entry);
+    visit(node.right);
+  };
+  visit(index.root);
+  return Object.freeze(result);
+}
+
+function inactiveIndexGet(
+  index: PhysicalCargoInactiveIndex,
+  targetKey: string,
+  audit?: { probes: number },
+): PhysicalCargoInactiveWorld | null {
+  let node = index.root;
+  while (node) {
+    if (audit) audit.probes += 1;
+    if (targetKey === node.entry.regionKey) return node.entry;
+    node = targetKey < node.entry.regionKey ? node.left : node.right;
+  }
+  return null;
+}
+
+function inactiveNodeBalance(node: PhysicalCargoInactiveNode): number {
+  return (node.left?.height ?? 0) - (node.right?.height ?? 0);
+}
+
+function rotateInactiveRight(node: PhysicalCargoInactiveNode): PhysicalCargoInactiveNode {
+  const pivot = node.left;
+  if (!pivot) return node;
+  const right = createInactiveNode(node.entry, pivot.right, node.right);
+  return createInactiveNode(pivot.entry, pivot.left, right);
+}
+
+function rotateInactiveLeft(node: PhysicalCargoInactiveNode): PhysicalCargoInactiveNode {
+  const pivot = node.right;
+  if (!pivot) return node;
+  const left = createInactiveNode(node.entry, node.left, pivot.left);
+  return createInactiveNode(pivot.entry, left, pivot.right);
+}
+
+function balanceInactiveNode(node: PhysicalCargoInactiveNode): PhysicalCargoInactiveNode {
+  const balance = inactiveNodeBalance(node);
+  if (balance > 1) {
+    const left = node.left!;
+    const adjusted = inactiveNodeBalance(left) < 0
+      ? createInactiveNode(node.entry, rotateInactiveLeft(left), node.right)
+      : node;
+    return rotateInactiveRight(adjusted);
+  }
+  if (balance < -1) {
+    const right = node.right!;
+    const adjusted = inactiveNodeBalance(right) > 0
+      ? createInactiveNode(node.entry, node.left, rotateInactiveRight(right))
+      : node;
+    return rotateInactiveLeft(adjusted);
+  }
+  return node;
+}
+
+function setInactiveNode(
+  node: PhysicalCargoInactiveNode | null,
+  entry: PhysicalCargoInactiveWorld,
+): PhysicalCargoInactiveNode {
+  if (!node) return createInactiveNode(entry, null, null);
+  if (entry.regionKey === node.entry.regionKey) {
+    return entry === node.entry ? node : createInactiveNode(entry, node.left, node.right);
+  }
+  if (entry.regionKey < node.entry.regionKey) {
+    const left = setInactiveNode(node.left, entry);
+    return left === node.left ? node : balanceInactiveNode(createInactiveNode(node.entry, left, node.right));
+  }
+  const right = setInactiveNode(node.right, entry);
+  return right === node.right ? node : balanceInactiveNode(createInactiveNode(node.entry, node.left, right));
+}
+
+function removeMinimumInactiveNode(
+  node: PhysicalCargoInactiveNode,
+): { readonly minimum: PhysicalCargoInactiveWorld; readonly root: PhysicalCargoInactiveNode | null } {
+  if (!node.left) return { minimum: node.entry, root: node.right };
+  const removed = removeMinimumInactiveNode(node.left);
+  return {
+    minimum: removed.minimum,
+    root: balanceInactiveNode(createInactiveNode(node.entry, removed.root, node.right)),
+  };
+}
+
+function deleteInactiveNode(
+  node: PhysicalCargoInactiveNode | null,
+  targetKey: string,
+): PhysicalCargoInactiveNode | null {
+  if (!node) return null;
+  if (targetKey < node.entry.regionKey) {
+    const left = deleteInactiveNode(node.left, targetKey);
+    return left === node.left ? node : balanceInactiveNode(createInactiveNode(node.entry, left, node.right));
+  }
+  if (node.entry.regionKey < targetKey) {
+    const right = deleteInactiveNode(node.right, targetKey);
+    return right === node.right ? node : balanceInactiveNode(createInactiveNode(node.entry, node.left, right));
+  }
+  if (!node.left) return node.right;
+  if (!node.right) return node.left;
+  const removed = removeMinimumInactiveNode(node.right);
+  return balanceInactiveNode(createInactiveNode(removed.minimum, node.left, removed.root));
+}
+
+function inactiveIndexSet(
+  prior: PhysicalCargoInactiveIndex,
+  entry: PhysicalCargoInactiveWorld,
+): PhysicalCargoInactiveIndex {
+  const existing = inactiveIndexGet(prior, entry.regionKey);
+  if (!existing && prior.size >= PHYSICAL_CARGO_MAX_INACTIVE_WORLDS) {
+    throw new RangeError("Physical cargo inactive-region capacity exhausted");
+  }
+  const root = setInactiveNode(prior.root, entry);
+  return root === prior.root ? prior : inactiveIndexFromRoot(root);
+}
+
+function inactiveIndexDelete(
+  prior: PhysicalCargoInactiveIndex,
+  targetKey: string,
+): PhysicalCargoInactiveIndex {
+  const root = deleteInactiveNode(prior.root, targetKey);
+  return root === prior.root ? prior : inactiveIndexFromRoot(root);
+}
+
+function expectedManifestMetadata(value: object): CachedCargoCollectionMetadata {
+  const cached = EXPECTED_MANIFEST_METADATA.get(value);
+  if (cached) return cached;
+  const metadata = Object.freeze({
+    serializedBytes: serializedBytes(value),
+    integrity: hashCanonical(value),
+  });
+  EXPECTED_MANIFEST_METADATA.set(value, metadata);
+  return metadata;
+}
+
+function carrierMetadata(value: LooseCargoCarrierState): CachedCargoCollectionMetadata {
+  const cached = CARRIER_METADATA.get(value as object);
+  if (cached) return cached;
+  const metadata = Object.freeze({
+    serializedBytes: serializedBytes(value),
+    integrity: hashCanonical(value),
+  });
+  CARRIER_METADATA.set(value as object, metadata);
+  return metadata;
 }
 
 function isTouchedLooseCargoWorld(world: LooseCargoWorldState): boolean {
@@ -970,38 +1693,57 @@ function isTouchedLooseCargoWorld(world: LooseCargoWorldState): boolean {
     || world.history.length !== 0;
 }
 
-function compareInactiveWorlds(
-  left: PhysicalCargoInactiveWorld,
-  right: PhysicalCargoInactiveWorld,
+function compareLooseCargoWorlds(
+  left: LooseCargoWorldState,
+  right: LooseCargoWorldState,
 ): number {
-  return left.regionKey < right.regionKey ? -1 : left.regionKey > right.regionKey ? 1 : 0;
+  const leftKey = looseCargoRegionKey(left.region);
+  const rightKey = looseCargoRegionKey(right.region);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
 }
 
-function findInactiveWorldIndex(
-  worlds: readonly PhysicalCargoInactiveWorld[],
-  targetKey: string,
-): number {
-  let low = 0;
-  let high = worlds.length - 1;
-  while (low <= high) {
-    const middle = low + Math.floor((high - low) / 2);
-    const key = worlds[middle]!.regionKey;
-    if (key === targetKey) return middle;
-    if (key < targetKey) low = middle + 1;
-    else high = middle - 1;
+function physicalCargoWorldAtCanonicalState(
+  state: PhysicalCargoState,
+  regionKey: string,
+): LooseCargoWorldState | null {
+  if (regionKey === state.activeRegionKey) return state.looseWorld;
+  return inactiveIndexGet(state.inactiveWorldIndex, regionKey)?.world ?? null;
+}
+
+/** Apply only the bounded regional step's changed owners; unchanged entries
+ * retain their trusted seals instead of being validated and re-sealed. */
+function applyInactiveWorldUpdates(
+  prior: PhysicalCargoInactiveIndex,
+  updates: ReadonlyMap<string, PhysicalCargoInactiveWorld | null>,
+): PhysicalCargoInactiveIndex {
+  if (updates.size === 0) return prior;
+  const orderedUpdates = [...updates].sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0);
+  let next = prior;
+  for (const [regionKey, entry] of orderedUpdates) {
+    next = entry ? inactiveIndexSet(next, entry) : inactiveIndexDelete(next, regionKey);
   }
-  return -1;
+  return next;
 }
 
 function physicalCargoSerializedBytes(state: PhysicalCargoState): number {
-  let inactiveBytes = INACTIVE_COLLECTION_BYTES.get(state.inactiveWorlds as object);
-  if (inactiveBytes === undefined) {
-    inactiveBytes = serializedBytes(state.inactiveWorlds);
-    INACTIVE_COLLECTION_BYTES.set(state.inactiveWorlds as object, inactiveBytes);
-  }
-  const shellBytes = serializedBytes({ ...state, inactiveWorlds: [] });
-  // The canonical JSON shell already contains the two bytes for `[]`.
-  return shellBytes - 2 + inactiveBytes;
+  const inactiveBytes = state.inactiveWorldIndex.serializedBytes;
+  const manifestBytes = expectedManifestMetadata(state.expectedManifest).serializedBytes;
+  const carrierBytes = carrierMetadata(state.carrier).serializedBytes;
+  const shellBytes = serializedBytes({
+    version: state.version,
+    lastSourceOrdinal: state.lastSourceOrdinal,
+    activeRegion: state.activeRegion,
+    activeRegionKey: state.activeRegionKey,
+    looseWorld: state.looseWorld,
+    inactiveWorlds: null,
+    carrier: null,
+    expectedManifest: null,
+    integrity: "0000000000000000",
+  });
+  // Replacing the three canonical `null` values preserves property
+  // punctuation, so subtracting their four bytes yields the exact wire size.
+  return shellBytes - 12 + inactiveBytes + manifestBytes + carrierBytes;
 }
 
 function serializedBytes(value: unknown): number {
@@ -1047,7 +1789,10 @@ function diagnosePhysicalCargoState(
   if (value.inactiveWorlds.length > PHYSICAL_CARGO_MAX_INACTIVE_WORLDS) {
     return "invalid-inactive-worlds";
   }
-  if (value.integrity !== physicalCargoIntegrity(unsealPhysicalCargo(value))) {
+  if (!matchesSerializedPhysicalCargoIntegrity(
+    value.integrity,
+    unsealPhysicalCargo(value) as unknown as Omit<SerializedPhysicalCargoState, "integrity">,
+  )) {
     return "invalid-integrity";
   }
   const worldValidation = validateLooseCargoWorld(value.looseWorld);
@@ -1099,7 +1844,7 @@ function diagnosePhysicalCargoState(
     activeRegion: worldValidation.state.region,
     activeRegionKey: activeKey,
     looseWorld: worldValidation.state,
-    inactiveWorlds: canonicalInactiveCollection(inactiveWorlds),
+    inactiveWorldIndex: createInactiveWorldIndex(inactiveWorlds),
     carrier: carrierValidation.carrier,
     expectedManifest: manifest.actual,
     integrity: value.integrity,
@@ -1173,6 +1918,72 @@ function substanceLedgerFromPayloads(payloads: readonly LooseCargoPayload[]): Ma
     entries.set(key, total);
   }
   return new Map([...entries].sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function structuralPayloadKey(payload: LooseCargoPayload): string {
+  switch (payload.kind) {
+    case "stack": return `stack:${payload.item}`;
+    case "gear": return `gear:${payload.gearId}:${payload.gearKind}`;
+    case "promise": return `promise:${payload.contractId}:${payload.resource}:${payload.property}`;
+  }
+}
+
+function applyExpectedManifestAuthorization(
+  prior: LooseCargoExpectedManifest,
+  authorization: Extract<PhysicalCargoCommitAuthorization, { readonly kind: "delta" }>,
+): LooseCargoExpectedManifest {
+  const changes = new Map<string, { quantity: number; loadMilli: number }>();
+  const addChange = (payload: LooseCargoPayload, direction: -1 | 1): void => {
+    const key = structuralPayloadKey(payload);
+    const quantity = payload.kind === "gear" ? 1 : payload.quantity;
+    const loadMilli = looseCargoPayloadLoadMilli(payload);
+    const current = changes.get(key) ?? { quantity: 0, loadMilli: 0 };
+    const nextQuantity = current.quantity + direction * quantity;
+    const nextLoadMilli = current.loadMilli + direction * loadMilli;
+    if (!Number.isSafeInteger(nextQuantity) || !Number.isSafeInteger(nextLoadMilli)) {
+      throw new RangeError("Physical cargo expected-manifest delta overflowed");
+    }
+    changes.set(key, { quantity: nextQuantity, loadMilli: nextLoadMilli });
+  };
+  for (const payload of authorization.removed) addChange(payload, -1);
+  for (const payload of authorization.added) addChange(payload, 1);
+
+  const priorEntries = new Map(prior.entries.map((entry) => [entry.payloadKey, entry]));
+  for (const [payloadKey, delta] of changes) {
+    const entry = priorEntries.get(payloadKey);
+    const quantity = (entry?.quantity ?? 0) + delta.quantity;
+    const loadMilli = (entry?.loadMilli ?? 0) + delta.loadMilli;
+    if (
+      !Number.isSafeInteger(quantity)
+      || !Number.isSafeInteger(loadMilli)
+      || quantity < 0
+      || loadMilli < 0
+      || (quantity === 0) !== (loadMilli === 0)
+    ) throw new RangeError("Physical cargo authorization contradicts its expected manifest");
+    if (quantity === 0) priorEntries.delete(payloadKey);
+    else priorEntries.set(payloadKey, { payloadKey, quantity, loadMilli });
+  }
+  if (priorEntries.size > LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES) {
+    throw new RangeError("Physical cargo expected manifest exceeds its entry budget");
+  }
+  const entries = [...priorEntries.values()].sort((left, right) =>
+    left.payloadKey < right.payloadKey ? -1 : left.payloadKey > right.payloadKey ? 1 : 0);
+  let totalQuantity = 0;
+  let totalLoadMilli = 0;
+  for (const entry of entries) {
+    totalQuantity += entry.quantity;
+    totalLoadMilli += entry.loadMilli;
+    if (!Number.isSafeInteger(totalQuantity) || !Number.isSafeInteger(totalLoadMilli)) {
+      throw new RangeError("Physical cargo expected manifest totals overflowed");
+    }
+  }
+  return {
+    version: prior.version,
+    entries,
+    totalQuantity,
+    totalLoadMilli,
+    fingerprint: stableStringify(entries),
+  };
 }
 
 function subtractSubstanceLedgers(

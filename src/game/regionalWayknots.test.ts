@@ -1,14 +1,15 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { FIXED_POINT, createWorld, createWorldView, type WorldView } from "../sim/public";
-import { WORLD_WIDTH } from "../sim/types";
-import type { RegionCoord } from "../sim/regions";
+import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
+import type { GlobalTileCoord, RegionCoord } from "../sim/regions";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import { createRegionalTerrainWindow } from "./regionalTravel";
 import {
   createRegionalWorldView,
   regionalTileIndexInView,
+  regionalWindowForWorld,
 } from "./regionalWorldView";
 import {
   regionalTideHarpsAt,
@@ -24,19 +25,22 @@ import {
   WAYKNOT_LABELS,
   contextualWayknotKind,
   createWayknotState,
+  normalizeWayknotState,
   type WayknotKind,
   type WayknotState,
 } from "./wayknots";
 
 const SEED = "regional wayknots do not forget where they were tied";
 
-function regionalView(center: RegionCoord): WorldView {
+function regionalView(center: RegionCoord, origin?: GlobalTileCoord): WorldView {
   const compatibility = createWorldView(createWorld(SEED, "wild"));
   const stream = createTerrainRegionStreamingState({
     rootSeed: compatibility.rootSeed!,
     center,
   });
-  const window = createRegionalTerrainWindow(compatibility.rootSeed!, stream);
+  const window = origin === undefined
+    ? createRegionalTerrainWindow(compatibility.rootSeed!, stream)
+    : createRegionalTerrainWindow(compatibility.rootSeed!, stream, origin);
   return createRegionalWorldView(
     compatibility,
     window,
@@ -45,6 +49,24 @@ function regionalView(center: RegionCoord): WorldView {
       window,
     ),
   );
+}
+
+function requiredTile(
+  world: WorldView,
+  region: RegionCoord,
+  localX: number,
+  localY: number,
+): number {
+  const index = regionalTileIndexInView(world, region, localY * WORLD_WIDTH + localX);
+  if (index === null) throw new Error("Stable Wayknot address left the test frame");
+  return index;
+}
+
+function makeDeepWater(world: WorldView, tileIndex: number): void {
+  const tile = world.terrain.tiles[tileIndex];
+  if (!tile) throw new Error("Wayknot influence fixture lost its target tile");
+  (tile as { terrain: "deep-water" }).terrain = "deep-water";
+  (tile as { waterDepth: number }).waterDepth = 260_000;
 }
 
 function deploy(
@@ -125,7 +147,7 @@ describe("regional Wayknot production callers", () => {
     negative = regionalView({ x: -4, y: -3 });
   });
 
-  it("applies effects only from the exact signed region even when local indexes collide", () => {
+  it("ignores distant equal local indexes without aliasing stable Wayknot IDs", () => {
     for (const [world, region, remote] of [
       [east, { x: 1, y: 0 }, { x: 2, y: 0 }],
       [negative, { x: -4, y: -3 }, { x: 4, y: 3 }],
@@ -153,6 +175,88 @@ describe("regional Wayknot production callers", () => {
         .toEqual([localId]);
       expect(JSON.stringify(state)).toBe(before);
     }
+  });
+
+  it("carries physical influence across cardinal and corner storage seams exactly once", () => {
+    const world = regionalView({ x: 0, y: 0 });
+    const cardinalTarget = requiredTile(world, { x: 1, y: 0 }, 0, 36);
+    const cornerTarget = requiredTile(world, { x: 0, y: 0 }, 0, 0);
+    makeDeepWater(world, cardinalTarget);
+    makeDeepWater(world, cornerTarget);
+    const state = deploy([
+      { id: 3, region: { x: 0, y: 0 }, tileIndex: 36 * WORLD_WIDTH + WORLD_WIDTH - 1 },
+      { id: 4, region: { x: -1, y: -1 }, tileIndex: WORLD_WIDTH * WORLD_HEIGHT - 1 },
+    ]);
+    const before = JSON.stringify(state);
+
+    const cardinal = regionalWayknotEffectsAt(state, world, cardinalTarget, world.completedTick);
+    const corner = regionalWayknotEffectsAt(state, world, cornerTarget, world.completedTick);
+
+    expect(cardinal.influences).toEqual([
+      expect.objectContaining({ id: 3, kind: "tide-anchor", distance: 1 }),
+    ]);
+    expect(corner.influences).toEqual([
+      expect.objectContaining({ id: 4, kind: "tide-anchor", distance: 2 }),
+    ]);
+    expect(new Set(cardinal.influences.map(({ id }) => id)).size)
+      .toBe(cardinal.influences.length);
+    expect(new Set(corner.influences.map(({ id }) => id)).size)
+      .toBe(corner.influences.length);
+
+    const player = createRegionalPlayer(world);
+    player.wayknots = state;
+    placePlayerAt(player, world, cardinalTarget);
+    expect(wayknotEffectsAt(player, world, cardinalTarget).influences.map(({ id }) => id))
+      .toEqual([3]);
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("keeps one stable deployment through frame rebase, storage handoff, reload, and backtrack", () => {
+    const initial = regionalView({ x: 0, y: 0 });
+    const initialWindow = regionalWindowForWorld(initial);
+    if (!initialWindow) throw new Error("Regional fixture lost its spatial frame");
+    const region = { x: 0, y: 0 } as const;
+    const localTileIndex = 30 * WORLD_WIDTH + 40;
+    const state = deploy([{ id: 1, region, tileIndex: localTileIndex }]);
+    const initialIndex = requiredTile(initial, region, 40, 30);
+    const shiftedOrigin = { x: initialWindow.origin.x + 16, y: initialWindow.origin.y };
+    const shifted = regionalView({ x: 0, y: 0 }, shiftedOrigin);
+    const crossed = regionalView({ x: 1, y: 0 }, shiftedOrigin);
+    const backtracked = regionalView({ x: 0, y: 0 }, initialWindow.origin);
+    const shiftedIndex = requiredTile(shifted, region, 40, 30);
+    const crossedIndex = requiredTile(crossed, region, 40, 30);
+    const backtrackedIndex = requiredTile(backtracked, region, 40, 30);
+    const restored = normalizeWayknotState(JSON.parse(JSON.stringify(state)), {
+      tileCount: WORLD_WIDTH * WORLD_HEIGHT,
+      contextRegion: { x: 1, y: 0 },
+      contextAt: () => undefined,
+    });
+
+    expect(shiftedIndex).toBe(initialIndex - 16);
+    expect(crossedIndex).toBe(shiftedIndex);
+    expect(backtrackedIndex).toBe(initialIndex);
+    for (const [world, index] of [
+      [initial, initialIndex],
+      [shifted, shiftedIndex],
+      [crossed, crossedIndex],
+      [backtracked, backtrackedIndex],
+    ] as const) {
+      const context = regionalWayknotContextAt(world, index);
+      expect(context).toMatchObject({
+        region,
+        localTileIndex,
+        viewTileIndex: index,
+      });
+      expect(regionalTileIndexInView(world, region, restored.wayknots[0]!.tileIndex!))
+        .toBe(index);
+    }
+    expect(restored.wayknots).toHaveLength(6);
+    expect(restored.wayknots.filter(({ region: owner }) => owner !== null)).toEqual([
+      expect.objectContaining({ id: 1, region, tileIndex: localTileIndex }),
+    ]);
+    expect(JSON.stringify(state)).toBe(JSON.stringify(deploy([
+      { id: 1, region, tileIndex: localTileIndex },
+    ])));
   });
 
   it("maps local markers into Chart space, excludes distant aliases, and keeps UI actions local", () => {
@@ -204,7 +308,7 @@ describe("regional Wayknot production callers", () => {
     expect(remoteControl?.canWayknot).toBe(true);
   });
 
-  it("derives, activates, and projects Harps within one region but never across a seam", () => {
+  it("keeps derived Harp membership within one stable ownership region", () => {
     const region = { x: -4, y: -3 } as const;
     const reed = 10 * WORLD_WIDTH + 10;
     const anchor = 10 * WORLD_WIDTH + 11;
@@ -224,7 +328,9 @@ describe("regional Wayknot production callers", () => {
     expect(regionalTideHarpsAt(sameRegion, negative, playerIndex)).toHaveLength(1);
     expect(tunedTideHarps(player, negative)).toHaveLength(1);
     const projected = projectGameView(negative, player);
-    expect(projected.spatialEpoch).toBe("r:-4:-3");
+    const window = regionalWindowForWorld(negative);
+    if (!window) throw new Error("Negative Harp fixture lost its spatial frame");
+    expect(projected.spatialEpoch).toBe(`g:${window.origin.x}:${window.origin.y}`);
     expect(projected.tideHarps).toHaveLength(1);
     expect(projected.tideHarps[0]).toMatchObject({
       id: "tide-harp:r:-4:-3:r1-a3-w5",

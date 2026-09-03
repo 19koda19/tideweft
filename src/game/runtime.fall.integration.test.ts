@@ -1,25 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { deserializeWorld } from "../sim/public";
+import { deserializeWorld, serializeWorld } from "../sim/public";
+import {
+  createRegionCoord,
+  regionLocalToGlobalTile,
+} from "../sim/regions";
+import type { RootSeed } from "../sim/rng";
 import { FIXED_POINT, type WorldState } from "../sim/types";
 import type { FieldResourceEcologyState } from "../sim/fieldResources";
 import type { TideweftView } from "../render/types";
 import { TILE_UNITS, type PlayerState } from "./player";
 import {
   gameSaveEnvelopeIntegrity,
-  type PhysicalCargoState,
+  type SerializedPhysicalCargoState,
 } from "./physicalCargoState";
 import {
   capturePlayerRegionalTravel,
+  recenterRegionalPlayer,
   restorePlayerRegionalTravel,
   serializePlayerRegionalTravel,
+  type RegionalPlayerTravelState,
 } from "./regionalPlayerTravel";
 import type { RegionalPromiseJourneyState } from "./regionalPromiseJourney";
 import {
   REGIONAL_TRAVEL_COLUMNS,
-  REGIONAL_TRAVEL_HALO_TILES,
   REGIONAL_TRAVEL_ROWS,
+  REGIONAL_TRAVEL_SAFE_MAX_X,
+  REGIONAL_TRAVEL_SAFE_MAX_Y,
+  REGIONAL_TRAVEL_SAFE_MIN_X,
+  REGIONAL_TRAVEL_SAFE_MIN_Y,
+  regionLocalToWindowTile,
+  regionTileIndexToWindowIndex,
+  shiftedRegionalFrameOrigin,
+  type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { GameSessionState } from "./sessionTypes";
@@ -43,7 +57,7 @@ interface V4GameSaveEnvelope {
   readonly session: GameSessionState;
   readonly fieldResources: FieldResourceEcologyState;
   readonly traversalFeedback: TraversalFeedbackState;
-  readonly physicalCargo: PhysicalCargoState;
+  readonly physicalCargo: SerializedPhysicalCargoState;
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly integrity: string;
@@ -151,7 +165,7 @@ function replaceEnvelope(
   });
 }
 
-function findRidgeCorner(world: WorldState): RidgeCorner {
+function findRidgeCorner(world: WorldState, window: RegionalTerrainWindow): RidgeCorner {
   const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
   const { width, height, tiles } = world.terrain;
   for (let y = 1; y < height - 1; y += 1) {
@@ -171,17 +185,79 @@ function findRidgeCorner(world: WorldState): RidgeCorner {
         || occupied.has(ridgeTileIndex)
         || occupied.has(diagonalTileIndex)
       ) continue;
+      const point = regionLocalToWindowTile(
+        window,
+        createRegionCoord(0, 0),
+        x,
+        y,
+      );
+      if (point === null) continue;
+      const alignedOrigin = shiftedRegionalFrameOrigin(window, point.x, point.y);
+      const global = regionLocalToGlobalTile(createRegionCoord(0, 0), x, y);
+      const alignedX = global.x - alignedOrigin.x;
+      const alignedY = global.y - alignedOrigin.y;
+      if (
+        alignedX < REGIONAL_TRAVEL_SAFE_MIN_X
+        || alignedX >= REGIONAL_TRAVEL_SAFE_MAX_X
+        || alignedY < REGIONAL_TRAVEL_SAFE_MIN_Y
+        || alignedY >= REGIONAL_TRAVEL_SAFE_MAX_Y
+      ) continue;
       return { startTileIndex, ridgeTileIndex, diagonalTileIndex, x, y };
     }
   }
   throw new Error("generated world did not contain an unoccupied diagonal ridge corner");
 }
 
+function moveFixtureFrameToCompatibilityTile(
+  rootSeed: RootSeed,
+  initial: RegionalPlayerTravelState,
+  player: PlayerState,
+  localX: number,
+  localY: number,
+): RegionalPlayerTravelState {
+  const region = createRegionCoord(0, 0);
+  const target = regionLocalToGlobalTile(region, localX, localY);
+  let state = initial;
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const point = regionLocalToWindowTile(state.window, region, localX, localY);
+    if (point !== null) {
+      player.x = point.x * TILE_UNITS + TILE_UNITS / 2;
+      player.y = point.y * TILE_UNITS + TILE_UNITS / 2;
+      player.previousX = player.x;
+      player.previousY = player.y;
+      const index = point.y * REGIONAL_TRAVEL_COLUMNS + point.x;
+      player.currentTrace = [index];
+      player.surveyTrace = [index];
+      return recenterRegionalPlayer(rootSeed, state, player).state;
+    }
+    const currentX = Math.floor(player.x / TILE_UNITS);
+    const currentY = Math.floor(player.y / TILE_UNITS);
+    const triggerX = target.x < state.window.origin.x
+      ? REGIONAL_TRAVEL_SAFE_MIN_X - 1
+      : target.x > state.window.origin.x + REGIONAL_TRAVEL_COLUMNS - 1
+        ? REGIONAL_TRAVEL_SAFE_MAX_X + 1
+        : Math.min(REGIONAL_TRAVEL_SAFE_MAX_X, Math.max(REGIONAL_TRAVEL_SAFE_MIN_X, currentX));
+    const triggerY = target.y < state.window.origin.y
+      ? REGIONAL_TRAVEL_SAFE_MIN_Y - 1
+      : target.y > state.window.origin.y + REGIONAL_TRAVEL_ROWS - 1
+        ? REGIONAL_TRAVEL_SAFE_MAX_Y + 1
+        : Math.min(REGIONAL_TRAVEL_SAFE_MAX_Y, Math.max(REGIONAL_TRAVEL_SAFE_MIN_Y, currentY));
+    player.x = triggerX * TILE_UNITS + TILE_UNITS / 2;
+    player.y = triggerY * TILE_UNITS + TILE_UNITS / 2;
+    player.previousX = player.x;
+    player.previousY = player.y;
+    const triggerIndex = triggerY * REGIONAL_TRAVEL_COLUMNS + triggerX;
+    player.currentTrace = [triggerIndex];
+    player.surveyTrace = [triggerIndex];
+    state = recenterRegionalPlayer(rootSeed, state, player).state;
+  }
+  throw new Error("fixture could not align its frame with the ridge");
+}
+
 function relocateToRidgeAtZeroStability(
   envelope: V4GameSaveEnvelope,
 ): { readonly envelope: V4GameSaveEnvelope; readonly corner: RidgeCorner } {
   const world = deserializeWorld(envelope.world);
-  const corner = findRidgeCorner(world);
   const regionalTravel = restorePlayerRegionalTravel(
     world.meta.rootSeed,
     envelope.player,
@@ -190,12 +266,41 @@ function relocateToRidgeAtZeroStability(
   if (!regionalTravel) {
     throw new Error("fixture started with an invalid v4 regional-travel sidecar");
   }
+  const corner = findRidgeCorner(world, regionalTravel.window);
+  const startTerrain = world.terrain.tiles[corner.startTileIndex];
+  const ridgeTerrain = world.terrain.tiles[corner.ridgeTileIndex];
+  if (!startTerrain || !ridgeTerrain) throw new Error("ridge fixture lost its terrain pair");
+  // Make the selected natural ridge a deterministic serious downhill contact.
+  // The stability model is percentage-derived from present conditions, so a
+  // stale saved value alone must not force a fall.
+  startTerrain.elevation = FIXED_POINT;
+  startTerrain.roughness = 0;
+  ridgeTerrain.elevation = 400_000;
+  ridgeTerrain.roughness = FIXED_POINT;
+  ridgeTerrain.terrain = "ridge";
+  world.weather = {
+    kind: "storm",
+    intensity: FIXED_POINT,
+    windX: -FIXED_POINT,
+    windY: FIXED_POINT,
+    nextChangeTick: world.meta.completedTick + 10_000,
+  };
   const player = structuredClone(envelope.player);
+  const alignedTravel = moveFixtureFrameToCompatibilityTile(
+    world.meta.rootSeed,
+    regionalTravel,
+    player,
+    corner.x,
+    corner.y,
+  );
   const regionalTileIndex = (compatibilityTileIndex: number): number => {
-    const localX = compatibilityTileIndex % world.terrain.width;
-    const localY = Math.floor(compatibilityTileIndex / world.terrain.width);
-    return (localY + REGIONAL_TRAVEL_HALO_TILES) * REGIONAL_TRAVEL_COLUMNS
-      + localX + REGIONAL_TRAVEL_HALO_TILES;
+    const mapped = regionTileIndexToWindowIndex(
+      alignedTravel.window,
+      createRegionCoord(0, 0),
+      compatibilityTileIndex,
+    );
+    if (mapped === null) throw new Error("ridge fixture is outside its spatial frame");
+    return mapped;
   };
   const startTileIndex = regionalTileIndex(corner.startTileIndex);
   const ridgeTileIndex = regionalTileIndex(corner.ridgeTileIndex);
@@ -203,8 +308,8 @@ function relocateToRidgeAtZeroStability(
   // Even a full pack retains a bounded minimum movement speed. One unit from
   // each boundary guarantees that the shared diagonal command crosses both
   // axes this step without changing speed/load rules for the fixture.
-  player.x = (corner.x + REGIONAL_TRAVEL_HALO_TILES) * TILE_UNITS + 999;
-  player.y = (corner.y + REGIONAL_TRAVEL_HALO_TILES) * TILE_UNITS + 999;
+  player.x = (startTileIndex % REGIONAL_TRAVEL_COLUMNS) * TILE_UNITS + 999;
+  player.y = Math.floor(startTileIndex / REGIONAL_TRAVEL_COLUMNS) * TILE_UNITS + 999;
   player.previousX = player.x;
   player.previousY = player.y;
   player.velocityX = 0;
@@ -224,7 +329,7 @@ function relocateToRidgeAtZeroStability(
   player.discovered[startTileIndex] = FIXED_POINT;
   player.discovered[ridgeTileIndex] = FIXED_POINT;
   player.discovered[diagonalTileIndex] = FIXED_POINT;
-  const capturedTravel = capturePlayerRegionalTravel(regionalTravel, player);
+  const capturedTravel = capturePlayerRegionalTravel(alignedTravel, player);
   const regionalTravelText = serializePlayerRegionalTravel(capturedTravel);
   const promiseJourney: RegionalPromiseJourneyState = player.activeContractId === null
     ? { version: 1, contractId: null, detoured: false, compatibilityTrace: [] }
@@ -240,6 +345,7 @@ function relocateToRidgeAtZeroStability(
   return {
     envelope: {
       ...envelope,
+      world: serializeWorld(world),
       player,
       regionalTravel: regionalTravelText,
       promiseJourney,
@@ -313,7 +419,7 @@ async function createV4Fixture(
   };
 }
 
-function promiseQuantity(state: PhysicalCargoState, contractId: number): number {
+function promiseQuantity(state: SerializedPhysicalCargoState, contractId: number): number {
   return [
     ...state.carrier.lots.map(({ payload }) => payload),
     ...state.looseWorld.entities.map(({ payload }) => payload),
@@ -459,14 +565,15 @@ describe("production terrain fall and physical cargo", () => {
     if (sourceOccurrences === 0) {
       expect(fallenSave.physicalCargo.carrier.retiredLotIds).toContain(fixture.sourceLotId);
     }
+    const visibleParcelIds = (runtime.getRenderView().looseCargo ?? []).map(({ id }) => id);
     runtime.destroy();
 
     const cueCountBeforeReload = incidentCueCalls(incident.cue);
     const resumed = await createTideweftRuntime(repository);
     expect(incidentCueCalls(incident.cue)).toBe(cueCountBeforeReload);
-    // Reload preserves every parcel in authoritative custody, but a remote
-    // accident site is no longer rendered through the current perception fog.
-    expect(resumed.getRenderView().looseCargo).toEqual([]);
+    // Reload recomputes the same direct perception at the same physical locus:
+    // visible parcels stay visible, while anything beyond sight remains absent.
+    expect((resumed.getRenderView().looseCargo ?? []).map(({ id }) => id)).toEqual(visibleParcelIds);
     expect(resumed.getUIView().objective?.id).toBe(`recover-${fixture.contractId}`);
     await resumed.save();
     const roundTripped = decodeV4(repository.snapshot());

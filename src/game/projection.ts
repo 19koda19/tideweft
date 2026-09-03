@@ -27,10 +27,11 @@ import {
   type FieldResourceCatalog,
   type FieldResourceEcologyState,
 } from "../sim/fieldResources";
-import { regionKey } from "../sim/regions";
+import { regionKey, regionLocalToGlobalTile } from "../sim/regions";
 import {
   FIXED_POINT,
   STRAND_AUTOMATION_THRESHOLD,
+  WORLD_HEIGHT,
   type ResidentState,
   type TerrainTileView,
   type WorldView,
@@ -57,8 +58,8 @@ import {
   visibleRegionalTideHarps,
 } from "./regionalWayknots";
 import {
-  regionalAddressAt,
-  regionalTileIndexInView,
+  regionalGlobalTileAt,
+  regionalWindowForWorld,
   regionalWorldCenter,
 } from "./regionalWorldView";
 import {
@@ -67,7 +68,10 @@ import {
   type TraversalFeedbackState,
 } from "./traversalFeedback";
 import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
-import type { LooseCargoWorldState } from "./looseCargo";
+import {
+  LOOSE_CARGO_MAX_ENTITIES,
+  type LooseCargoWorldState,
+} from "./looseCargo";
 import { eventSettlementLocusIds } from "./eventObservation";
 import {
   PERCEPTION_VERSION,
@@ -99,6 +103,8 @@ interface BiomeTerrainCache {
   readonly seedKey: string;
   readonly width: number;
   readonly height: number;
+  readonly globalOriginX: number;
+  readonly globalOriginY: number;
   readonly numericIdentity: Int32Array;
   readonly terrainIdentity: Uint8Array;
   readonly tiles: readonly CachedBiomeTile[];
@@ -141,6 +147,12 @@ export interface ProjectionOptions {
   traversalFeedback?: TraversalFeedbackState;
   /** Validated loaded-region parcels. Production always supplies this sidecar. */
   looseCargoWorld?: LooseCargoWorldState;
+  /**
+   * Every physical parcel world that may intersect the bounded spatial frame.
+   * When supplied, this replaces looseCargoWorld; the singular field remains a
+   * compatibility seam for finite fixtures and older runtime callers.
+   */
+  looseCargoWorlds?: readonly LooseCargoWorldState[];
   /** Authoritative momentary hold state, independent from derived pace. */
   bracing?: boolean;
   /** Optional live movement intent used only to label an ADRIFT stroke. */
@@ -452,37 +464,34 @@ export function projectGameView(
     ? suppliedPerception
     : currentPerception;
   const currentPlayerTileIndex = perception.playerTileIndex;
-  const playerAddress = regionalAddressAt(
+  const cargoWorlds = options.looseCargoWorlds
+    ?? (options.looseCargoWorld ? [options.looseCargoWorld] : []);
+  const projectedLooseCargo = projectRegionalLooseCargo(
     world,
-    Math.floor(player.y / TILE_UNITS) * world.terrain.width + Math.floor(player.x / TILE_UNITS),
+    cargoWorlds,
+    { x: playerX, y: playerY },
+    player.activeContractId,
+    tileSize,
   );
-  const cargoOriginIndex = options.looseCargoWorld
-    ? regionalTileIndexInView(world, options.looseCargoWorld.region, 0)
-    : null;
-  const cargoOriginTile = cargoOriginIndex === null ? undefined : world.terrain.tiles[cargoOriginIndex];
-  const projectedLooseCargo = options.looseCargoWorld && playerAddress && cargoOriginTile
-    ? projectLooseCargoWorld(options.looseCargoWorld, {
-        worldOrigin: { x: cargoOriginTile.x * tileSize, y: cargoOriginTile.y * tileSize },
-        worldUnitsPerTile: tileSize,
-        renderDistance: tileSize * LOOSE_CARGO_RENDER_RADIUS_TILES,
-        focusedPromiseContractId: player.activeContractId,
-        viewerOwner: { kind: "player", id: "local-porter" },
-        player: {
-          region: playerAddress.region,
-          position: { x: playerX, y: playerY },
-          recoveryReach: tileSize * 2,
-        },
-      })
-    : [];
-  const looseCargo = projectedLooseCargo.filter((parcel) =>
-    perceivedWorldPoint(
-      parcel.position,
-      world.terrain.width,
-      world.terrain.height,
-      tileSize,
-      perception.detailVisibilityGrades,
+  const looseCargo = projectedLooseCargo
+    .filter((parcel) =>
+      perceivedWorldPoint(
+        parcel.position,
+        world.terrain.width,
+        world.terrain.height,
+        tileSize,
+        perception.detailVisibilityGrades,
+      )
     )
-  );
+    .sort((left, right) => {
+      const leftFocused = left.promiseContractId === player.activeContractId ? 1 : 0;
+      const rightFocused = right.promiseContractId === player.activeContractId ? 1 : 0;
+      if (leftFocused !== rightFocused) return rightFocused - leftFocused;
+      const leftDistance = squaredPointDistance(left.position, { x: playerX, y: playerY });
+      const rightDistance = squaredPointDistance(right.position, { x: playerX, y: playerY });
+      return leftDistance - rightDistance || left.id.localeCompare(right.id);
+    })
+    .slice(0, LOOSE_CARGO_MAX_ENTITIES);
   const traversalIncident = projectTraversalIncident(options.traversalFeedback?.incident ?? null);
   const activeWayknotIds = new Set(
     wayknotEffectsAt(player, world, currentPlayerTileIndex)
@@ -511,6 +520,8 @@ export function projectGameView(
   );
   const biomeCache = stableBiomeTerrain(world);
   const projectedBiomes = weatherAdjustedBiomeTiles(biomeCache.tiles, world.weather);
+  const regionalWindow = regionalWindowForWorld(world);
+  const worldTileOrigin = regionalWindow?.origin ?? regionalGlobalTileAt(world, 0);
   const traces = player.currentTrace.length > 1
     ? [
         {
@@ -651,7 +662,9 @@ export function projectGameView(
 
   return {
     revision: world.completedTick,
-    spatialEpoch: regionKey(regionalWorldCenter(world)),
+    spatialEpoch: regionalWindow
+      ? `g:${regionalWindow.origin.x}:${regionalWindow.origin.y}`
+      : regionKey(regionalWorldCenter(world)),
     tick: world.completedTick,
     worldName: `The ${titleCase(world.seedText)} Estuary`,
     terrain: {
@@ -659,6 +672,7 @@ export function projectGameView(
       rows: world.terrain.height,
       tileSize,
       origin: { x: 0, y: 0 },
+      ...(worldTileOrigin ? { worldTileOrigin } : {}),
       revision: [
         world.seedText,
         world.completedTick >> 7,
@@ -883,6 +897,64 @@ export function projectGameView(
   };
 }
 
+/**
+ * Place storage-owned parcel worlds into the independent global spatial frame.
+ * A region's local tile 0 does not need to be visible: a parcel can sit inside
+ * the visible slice of an adjacent region while that region's origin remains
+ * beyond the frame. Passing the parcel's own region to the presentation kernel
+ * deliberately enables its existing distance/reach checks; both compared
+ * points have already been transformed into the same frame coordinates.
+ */
+function projectRegionalLooseCargo(
+  world: WorldView,
+  cargoWorlds: readonly LooseCargoWorldState[],
+  playerPosition: { readonly x: number; readonly y: number },
+  focusedPromiseContractId: number | null,
+  tileSize: number,
+): readonly NonNullable<TideweftView["looseCargo"]>[number][] {
+  const frameOrigin = regionalWindowForWorld(world)?.origin ?? regionalGlobalTileAt(world, 0);
+  if (!frameOrigin) return [];
+
+  const projected: NonNullable<TideweftView["looseCargo"]>[number][] = [];
+  const ids = new Set<string>();
+  for (const cargoWorld of cargoWorlds) {
+    const cargoOrigin = regionLocalToGlobalTile(cargoWorld.region, 0, 0);
+    const parcels = projectLooseCargoWorld(cargoWorld, {
+      worldOrigin: {
+        x: (cargoOrigin.x - frameOrigin.x) * tileSize,
+        y: (cargoOrigin.y - frameOrigin.y) * tileSize,
+      },
+      worldUnitsPerTile: tileSize,
+      renderDistance: tileSize * LOOSE_CARGO_RENDER_RADIUS_TILES,
+      focusedPromiseContractId,
+      viewerOwner: { kind: "player", id: "local-porter" },
+      player: {
+        region: cargoWorld.region,
+        position: playerPosition,
+        recoveryReach: tileSize * 2,
+      },
+    });
+    for (const parcel of parcels) {
+      // A corrupt multi-world manifest must never render two physical copies
+      // of one stable item. Authoritative validation reports the fault; this
+      // presentation boundary fails the duplicate closed.
+      if (ids.has(parcel.id)) return [];
+      ids.add(parcel.id);
+      projected.push(parcel);
+    }
+  }
+  return projected;
+}
+
+function squaredPointDistance(
+  left: { readonly x: number; readonly y: number },
+  right: { readonly x: number; readonly y: number },
+): number {
+  const dx = left.x - right.x;
+  const dy = left.y - right.y;
+  return dx * dx + dy * dy;
+}
+
 function legacySweptProgress(player: PlayerState): number {
   if (player.mode !== "swept") return 0;
   const total = Number.isFinite(player.sweepTotalTicks)
@@ -1080,12 +1152,17 @@ function perceptionObstruction(tile: TerrainTileView, occupied: boolean): number
 function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {
   const seed = world.rootSeed ?? seedFromText(world.seedText);
   const seedKey = seed.join(",");
+  const globalOrigin = regionalWindowForWorld(world)?.origin
+    ?? regionalGlobalTileAt(world, 0)
+    ?? { x: 0, y: 0 };
   const identityCached = biomeCacheByTerrainArray.get(world.terrain.tiles);
   if (
     identityCached
     && identityCached.seedKey === seedKey
     && identityCached.width === world.terrain.width
     && identityCached.height === world.terrain.height
+    && identityCached.globalOriginX === globalOrigin.x
+    && identityCached.globalOriginY === globalOrigin.y
   ) return identityCached;
 
   const cachedIndex = biomeTerrainCaches.findIndex((candidate) =>
@@ -1093,6 +1170,8 @@ function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {
       && candidate.seedKey === seedKey
       && candidate.width === world.terrain.width
       && candidate.height === world.terrain.height
+      && candidate.globalOriginX === globalOrigin.x
+      && candidate.globalOriginY === globalOrigin.y
       && terrainIdentityMatches(candidate, world.terrain.tiles)
   );
   if (cachedIndex >= 0) {
@@ -1108,12 +1187,14 @@ function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {
   const terrainIdentity = new Uint8Array(world.terrain.tiles.length);
   const tiles = world.terrain.tiles.map((tile, index): CachedBiomeTile => {
     writeTerrainIdentity(numericIdentity, terrainIdentity, tile, index);
-    const magicalWater = deriveMagicalWaterInfluence(seed, tile);
+    const globalTile = regionalGlobalTileAt(world, index) ?? { x: tile.x, y: tile.y };
+    const magicalWater = deriveMagicalWaterInfluence(seed, tile, globalTile);
     const baseline = deriveBaselineBiomeClimate(
       seed,
       tile,
-      world.terrain.height,
+      WORLD_HEIGHT,
       magicalWater,
+      globalTile,
     );
     return {
       id: classifyBiome(tile.terrain, baseline),
@@ -1125,6 +1206,8 @@ function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {
     seedKey,
     width: world.terrain.width,
     height: world.terrain.height,
+    globalOriginX: globalOrigin.x,
+    globalOriginY: globalOrigin.y,
     numericIdentity,
     terrainIdentity,
     tiles,

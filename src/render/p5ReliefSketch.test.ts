@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TideweftView, WeatherView } from "./types";
+import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 
 const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
@@ -388,6 +389,16 @@ beforeEach(() => {
 });
 
 describe("Relief spatial epoch release gate", () => {
+  it("draws one bounded screen-space atmosphere instead of mesh-chunk fog blocks", () => {
+    const harness = renderHarness(view("atmosphere", { x: 48, y: 48 }));
+    const quad = harness.instance.quad as ReturnType<typeof vi.fn>;
+    harness.draw();
+    expect(quad).toHaveBeenCalledTimes(RELIEF_ATMOSPHERE_BAND_COUNT);
+    harness.draw();
+    expect(quad).toHaveBeenCalledTimes(RELIEF_ATMOSPHERE_BAND_COUNT * 2);
+    harness.renderer.destroy();
+  });
+
   it("binds the same terrain color to diffuse fill and ambient reflection", () => {
     const harness = renderHarness(view("r:0:0", { x: 8, y: 8 }));
     const fill = harness.instance.fill as ReturnType<typeof vi.fn>;
@@ -421,6 +432,79 @@ describe("Relief spatial epoch release gate", () => {
     harness.setView(view(undefined, { x: 8, y: 8 }));
     harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 3 }));
     expect(harness.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "move-target" }));
+    harness.renderer.destroy();
+  });
+
+  it("rebases from absolute tile origins while preserving an in-flight touch", () => {
+    const framedView = (
+      spatialEpoch: string,
+      position: { readonly x: number; readonly y: number },
+      worldTileOrigin: { readonly x: number; readonly y: number },
+    ): TideweftView => {
+      const base = view(spatialEpoch, position);
+      return {
+        ...base,
+        terrain: { ...base.terrain, worldTileOrigin },
+      };
+    };
+    const harness = renderHarness(framedView(
+      "frame-a",
+      { x: 48, y: 48 },
+      { x: -200, y: 300 },
+    ));
+    harness.draw();
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 72,
+      pointerType: "touch",
+    }));
+
+    // The frame moves one tile left in local coordinates while the player also
+    // walks six units. Relief must preserve the touch and ease only those six
+    // units after applying the exact -24-unit frame translation.
+    harness.setView(framedView(
+      "frame-b",
+      { x: 30, y: 48 },
+      { x: -199, y: 300 },
+    ));
+    harness.draw();
+
+    expect(harness.camera.mock.calls.at(-1)?.[3]).toBeCloseTo(24.54, 6);
+    expect(harness.camera.mock.calls.at(-1)?.[5]).toBeCloseTo(48, 6);
+    expect(harness.canvas.captures.has(72)).toBe(true);
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 72,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "move-target" }));
+    harness.renderer.destroy();
+  });
+
+  it("invalidates an in-flight touch when a replacement world reuses the same frame", () => {
+    const inWorld = (worldName: string, position: { x: number; y: number }): TideweftView => {
+      const base = view("g:-8:14", position);
+      return {
+        ...base,
+        worldName,
+        terrain: { ...base.terrain, worldTileOrigin: { x: -8, y: 14 } },
+      };
+    };
+    const harness = renderHarness(inWorld("First Estuary", { x: 48, y: 48 }));
+    harness.draw();
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 73,
+      pointerType: "touch",
+    }));
+
+    harness.setView(inWorld("Replacement Estuary", { x: 72, y: 20 }));
+    harness.draw();
+
+    expect(harness.canvas.captures.has(73)).toBe(false);
+    expect(harness.canvas.released).toContain(73);
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 73,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "move-target" }));
     harness.renderer.destroy();
   });
 

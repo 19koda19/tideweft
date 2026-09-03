@@ -2,14 +2,22 @@ import { deriveBiomeProfile, deriveMagicalWaterInfluence } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
 import { surfaceCurrentDirection } from "./currentDirection";
-import { regionalAddressAt, regionalTileIndexInView } from "./regionalWorldView";
+import {
+  regionalAddressAt,
+  regionalGlobalTileAt,
+  regionalStorageRegionsInView,
+  regionalTileIndexInView,
+} from "./regionalWorldView";
 import {
   LOOSE_CARGO_TILE_UNITS,
   looseCargoCarrierLoadMilli,
+  looseCargoRegionKey,
   projectLooseCargoCarrier,
   stepLooseCargo,
   type LooseCargoCarrierState,
+  type LooseCargoEntity,
   type LooseCargoPosition,
+  type LooseCargoRegionalStepInput,
   type LooseCargoStepResult,
   type LooseCargoStepSample,
   type LooseCargoWorldState,
@@ -198,69 +206,75 @@ export function sampleLooseCargoEnvironment(
   const rootSeed = validRootSeed(world.rootSeed) ? world.rootSeed : seedFromText(world.seedText);
   const currentDirection = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
 
-  return cargo.entities.map((entity): LooseCargoStepSample => {
-    const tileIndex = tileIndexAt(entity.x, entity.y, cargo.width, cargo.height);
-    const viewTileIndex = cargoTileIndexInView(world, cargo, tileIndex);
-    const tile = viewTileIndex === null ? undefined : world.terrain.tiles[viewTileIndex];
-    if (!tile) throw new RangeError(`Loose cargo ${entity.id} is outside the active terrain`);
-    const biome = deriveBiomeProfile({
-      seed: rootSeed,
-      tile,
-      gridHeight: cargo.height,
-      weather: world.weather,
-      magicalWaterInfluence: deriveMagicalWaterInfluence(rootSeed, tile),
-    });
-    const waterDepth = unit(tile.waterDepth);
-    const currentStrength = waterDepth <= 35_000
-      ? 0
-      : unit((waterDepth - 35_000) * 2 + Math.trunc(world.weather.intensity / 3));
-    const downhill = downhillVector(world, cargo, tileIndex);
-    const rain = world.weather.kind === "rain" || world.weather.kind === "storm"
-      ? unit(world.weather.intensity)
-      : 0;
-    const heat = unit(biome.interaction.heatLoad);
-    const cold = world.weather.kind === "mist" || world.weather.kind === "storm"
-      ? unit(Math.max(0, 420_000 - biome.climate.heat) + Math.trunc(world.weather.intensity / 4))
-      : unit(Math.max(0, 180_000 - biome.climate.heat));
-    const magicalWaterFlux = multiplyUnit(waterDepth, biome.climate.magicalWater);
-    const rockImpact = landscapeSignal(landscape.rockImpactAtTile, tileIndex, "rock impact");
-    const mangroveSnag = landscapeSignal(landscape.mangroveSnagAtTile, tileIndex, "mangrove snag");
-    const brambleSnag = landscapeSignal(landscape.brambleSnagAtTile, tileIndex, "bramble snag");
-    const terrainImpact = tile.terrain === "ridge"
-      ? Math.trunc(tile.roughness / 2)
-      : Math.trunc(tile.roughness / 8);
-    const parcelAlreadyMoving = entity.velocityX !== 0
-      || entity.velocityY !== 0
-      || entity.motion === "drifting"
-      || entity.motion === "tumbling";
-    const forcedToMove = currentStrength > 0 || downhill.x !== 0 || downhill.y !== 0;
-    // Rough ground is not a damage-over-time aura. It can strike a moving or
-    // newly forced parcel, but a dry parcel that has settled on level ground
-    // retains its exact condition indefinitely.
-    const activeImpact = parcelAlreadyMoving || forcedToMove
-      ? Math.max(terrainImpact, rockImpact)
-      : 0;
+  return cargo.entities.map((entity) => sampleLooseCargoEntityEnvironment(
+    world,
+    cargo,
+    entity,
+    landscape,
+    rootSeed,
+    currentDirection,
+  ));
+}
 
-    return {
-      entityId: entity.id,
-      environment: {
-        rain,
-        heat,
-        cold,
-        immersion: waterDepth,
-        currentX: multiplySignedUnit(currentDirection.x, currentStrength),
-        currentY: multiplySignedUnit(currentDirection.y, currentStrength),
-        magicalWaterFlux,
-        impact: 0,
-      },
-      waterDepth,
-      downhillX: downhill.x,
-      downhillY: downhill.y,
-      tumbleImpact: activeImpact,
-      mangroveSnag,
-      brambleSnag,
-    };
+/**
+ * Sample every loose parcel whose exact region-local tile is inside the live
+ * floating terrain window. Grouping by source world and revision produces the
+ * optimistic inputs consumed by `stepPhysicalCargoAcrossRegions`; distant
+ * persisted parcels remain frozen instead of receiving invented off-screen
+ * terrain samples.
+ */
+export function sampleLooseCargoRegionalNeighborhood(
+  world: WorldView,
+  cargoWorlds: readonly LooseCargoWorldState[],
+  landscape: LooseCargoLandscapeSignals = {},
+): readonly LooseCargoRegionalStepInput[] {
+  const rootSeed = validRootSeed(world.rootSeed) ? world.rootSeed : seedFromText(world.seedText);
+  const currentDirection = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+  const visibleRegions = [...regionalStorageRegionsInView(world)].sort((left, right) => {
+    const leftKey = looseCargoRegionKey(left);
+    const rightKey = looseCargoRegionKey(right);
+    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
   });
+  if (cargoWorlds.length > visibleRegions.length) {
+    throw new RangeError("Loose cargo sampling requires a prefiltered live-region partition set");
+  }
+  const visibleKeys = new Set(visibleRegions.map(looseCargoRegionKey));
+  const cargoByRegion = new Map<string, LooseCargoWorldState>();
+  for (const cargo of cargoWorlds) {
+    const key = looseCargoRegionKey(cargo.region);
+    if (
+      !visibleKeys.has(key)
+      || cargoByRegion.has(key)
+      || cargo.width !== WORLD_WIDTH
+      || cargo.height !== WORLD_HEIGHT
+    ) throw new RangeError("Loose cargo sampling received an invalid live-region partition set");
+    cargoByRegion.set(key, cargo);
+  }
+  const inputs: LooseCargoRegionalStepInput[] = [];
+  for (const region of visibleRegions) {
+    const cargo = cargoByRegion.get(looseCargoRegionKey(region));
+    if (!cargo) continue;
+    const samples = cargo.entities.flatMap((entity) => {
+      const tileIndex = tileIndexAt(entity.x, entity.y, cargo.width, cargo.height);
+      if (cargoTileIndexInView(world, cargo, tileIndex) === null) return [];
+      return [sampleLooseCargoEntityEnvironment(
+        world,
+        cargo,
+        entity,
+        landscape,
+        rootSeed,
+        currentDirection,
+      )];
+    });
+    if (samples.length > 0) {
+      inputs.push({
+        region: cargo.region,
+        expectedRevision: cargo.revision,
+        samples,
+      });
+    }
+  }
+  return inputs;
 }
 
 export function stepLooseCargoInCompatibilityWorld(
@@ -278,29 +292,104 @@ export function stepLooseCargoInCompatibilityWorld(
 /** Same authoritative kernel; the historical name remains as a compatible alias. */
 export const stepLooseCargoInRegionalWorld = stepLooseCargoInCompatibilityWorld;
 
+function sampleLooseCargoEntityEnvironment(
+  world: WorldView,
+  cargo: LooseCargoWorldState,
+  entity: LooseCargoEntity,
+  landscape: LooseCargoLandscapeSignals,
+  rootSeed: NonNullable<WorldView["rootSeed"]>,
+  currentDirection: ReturnType<typeof surfaceCurrentDirection>,
+): LooseCargoStepSample {
+  const tileIndex = tileIndexAt(entity.x, entity.y, cargo.width, cargo.height);
+  const viewTileIndex = cargoTileIndexInView(world, cargo, tileIndex);
+  const tile = viewTileIndex === null ? undefined : world.terrain.tiles[viewTileIndex];
+  if (viewTileIndex === null || !tile) {
+    throw new RangeError(`Loose cargo ${entity.id} is outside the active terrain`);
+  }
+  const globalTile = regionalGlobalTileAt(world, viewTileIndex) ?? { x: tile.x, y: tile.y };
+  const biome = deriveBiomeProfile({
+    seed: rootSeed,
+    tile,
+    gridHeight: WORLD_HEIGHT,
+    globalTile,
+    weather: world.weather,
+    magicalWaterInfluence: deriveMagicalWaterInfluence(rootSeed, tile, globalTile),
+  });
+  const waterDepth = unit(tile.waterDepth);
+  const currentStrength = waterDepth <= 35_000
+    ? 0
+    : unit((waterDepth - 35_000) * 2 + Math.trunc(world.weather.intensity / 3));
+  const downhill = downhillVector(world, cargo, tileIndex);
+  const rain = world.weather.kind === "rain" || world.weather.kind === "storm"
+    ? unit(world.weather.intensity)
+    : 0;
+  const heat = unit(biome.interaction.heatLoad);
+  const cold = world.weather.kind === "mist" || world.weather.kind === "storm"
+    ? unit(Math.max(0, 420_000 - biome.climate.heat) + Math.trunc(world.weather.intensity / 4))
+    : unit(Math.max(0, 180_000 - biome.climate.heat));
+  const magicalWaterFlux = multiplyUnit(waterDepth, biome.climate.magicalWater);
+  const rockImpact = landscapeSignal(landscape.rockImpactAtTile, tileIndex, "rock impact");
+  const mangroveSnag = landscapeSignal(landscape.mangroveSnagAtTile, tileIndex, "mangrove snag");
+  const brambleSnag = landscapeSignal(landscape.brambleSnagAtTile, tileIndex, "bramble snag");
+  const terrainImpact = tile.terrain === "ridge"
+    ? Math.trunc(tile.roughness / 2)
+    : Math.trunc(tile.roughness / 8);
+  const parcelAlreadyMoving = entity.velocityX !== 0
+    || entity.velocityY !== 0
+    || entity.motion === "drifting"
+    || entity.motion === "tumbling";
+  const forcedToMove = currentStrength > 0 || downhill.x !== 0 || downhill.y !== 0;
+  // Rough ground is not a damage-over-time aura. It can strike a moving or
+  // newly forced parcel, but a dry parcel that has settled on level ground
+  // retains its exact condition indefinitely.
+  const activeImpact = parcelAlreadyMoving || forcedToMove
+    ? Math.max(terrainImpact, rockImpact)
+    : 0;
+
+  return {
+    entityId: entity.id,
+    environment: {
+      rain,
+      heat,
+      cold,
+      immersion: waterDepth,
+      currentX: multiplySignedUnit(currentDirection.x, currentStrength),
+      currentY: multiplySignedUnit(currentDirection.y, currentStrength),
+      magicalWaterFlux,
+      impact: 0,
+    },
+    waterDepth,
+    downhillX: downhill.x,
+    downhillY: downhill.y,
+    tumbleImpact: activeImpact,
+    mangroveSnag,
+    brambleSnag,
+  };
+}
+
 function downhillVector(
   world: WorldView,
   cargo: LooseCargoWorldState,
   tileIndex: number,
 ): { readonly x: number; readonly y: number } {
   const originViewIndex = cargoTileIndexInView(world, cargo, tileIndex);
-  const origin = originViewIndex === null ? undefined : world.terrain.tiles[originViewIndex];
+  if (originViewIndex === null) return { x: 0, y: 0 };
+  const origin = world.terrain.tiles[originViewIndex];
   if (!origin) return { x: 0, y: 0 };
-  const localX = tileIndex % cargo.width;
-  const localY = Math.floor(tileIndex / cargo.width);
+  const viewX = originViewIndex % world.terrain.width;
+  const viewY = Math.floor(originViewIndex / world.terrain.width);
   const candidates = [
-    { x: 0, y: -1, index: tileIndex - cargo.width },
-    { x: 1, y: 0, index: tileIndex + 1 },
-    { x: 0, y: 1, index: tileIndex + cargo.width },
-    { x: -1, y: 0, index: tileIndex - 1 },
-  ].filter(({ x, y, index }) => localX + x >= 0 && localX + x < cargo.width
-    && localY + y >= 0 && localY + y < cargo.height
-    && index >= 0 && index < cargo.width * cargo.height);
+    { x: 0, y: -1, index: originViewIndex - world.terrain.width },
+    { x: 1, y: 0, index: originViewIndex + 1 },
+    { x: 0, y: 1, index: originViewIndex + world.terrain.width },
+    { x: -1, y: 0, index: originViewIndex - 1 },
+  ].filter(({ x, y, index }) => viewX + x >= 0 && viewX + x < world.terrain.width
+    && viewY + y >= 0 && viewY + y < world.terrain.height
+    && index >= 0 && index < world.terrain.tiles.length);
   let selected: (typeof candidates)[number] | undefined;
   let drop = 0;
   for (const candidate of candidates) {
-    const candidateViewIndex = cargoTileIndexInView(world, cargo, candidate.index);
-    const tile = candidateViewIndex === null ? undefined : world.terrain.tiles[candidateViewIndex];
+    const tile = world.terrain.tiles[candidate.index];
     if (!tile) continue;
     const candidateDrop = origin.elevation - tile.elevation;
     if (candidateDrop > drop) {

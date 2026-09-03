@@ -24,6 +24,7 @@ export {
 } from "./biomes";
 export type {
   BiomeClimate,
+  BiomeGlobalTile,
   BiomeId,
   BiomeInteraction,
   BiomeProfile,

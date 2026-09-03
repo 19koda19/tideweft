@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   FIELD_RESOURCE_CATALOG_VERSION,
+  canonicalizeFieldResourceState,
   createFieldResourceEcologyState,
   fieldResourceStockUnits,
   harvestFieldResource,
@@ -11,6 +12,7 @@ import {
 import {
   REGION_COORD_LIMIT,
   createRegionCoord,
+  type GlobalTileCoord,
   type RegionCoord,
   type RegionTileAddress,
 } from "../sim/regions";
@@ -24,6 +26,7 @@ import {
 import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
+  defaultRegionalFrameOrigin,
   regionalWindowTileAddress,
   type RegionalTerrainWindow,
 } from "./regionalTravel";
@@ -32,7 +35,10 @@ import {
   regionalFieldResourceAtViewTile,
   regionalFieldResourceById,
 } from "./regionalFieldResources";
-import { createRegionalWorldView } from "./regionalWorldView";
+import {
+  createRegionalWorldView,
+  regionalTileIndexInView,
+} from "./regionalWorldView";
 
 function resourceNode(
   id: string,
@@ -72,8 +78,13 @@ function compatibilityWorld(seed = "the compatibility garden"): WorldView {
 }
 
 /** Fast exact-address fixture; production creates the same WeakMap-backed view. */
-function floatingWorld(compatibility: WorldView, centerInput: RegionCoord): WorldView {
+function floatingWorld(
+  compatibility: WorldView,
+  centerInput: RegionCoord,
+  originInput?: GlobalTileCoord,
+): WorldView {
   const center = createRegionCoord(centerInput.x, centerInput.y);
+  const origin = originInput ?? defaultRegionalFrameOrigin(center);
   const template = compatibility.terrain.tiles[0];
   if (!template) throw new Error("compatibility world needs a terrain tile");
   const tiles: TerrainState["tiles"][number][] = [];
@@ -82,11 +93,12 @@ function floatingWorld(compatibility: WorldView, centerInput: RegionCoord): Worl
     for (let x = 0; x < REGIONAL_TRAVEL_COLUMNS; x += 1) {
       const index = y * REGIONAL_TRAVEL_COLUMNS + x;
       tiles.push({ ...template, index, x, y });
-      addresses.push(regionalWindowTileAddress(center, x, y));
+      addresses.push(regionalWindowTileAddress(origin, x, y));
     }
   }
   const window: RegionalTerrainWindow = {
     center,
+    origin,
     terrain: {
       width: REGIONAL_TRAVEL_COLUMNS,
       height: REGIONAL_TRAVEL_ROWS,
@@ -99,6 +111,21 @@ function floatingWorld(compatibility: WorldView, centerInput: RegionCoord): Worl
     discovered: Array.from({ length: count }, () => 0),
     depthSoundings: Array.from({ length: count }, () => 0),
   });
+}
+
+function requiredRegionTileInView(
+  world: WorldView,
+  region: RegionCoord,
+  localX: number,
+  localY: number,
+): number {
+  const index = regionalTileIndexInView(
+    world,
+    createRegionCoord(region.x, region.y),
+    localY * WORLD_WIDTH + localX,
+  );
+  if (index === null) throw new Error("fixture source tile is outside its spatial frame");
+  return index;
 }
 
 function finiteLegacyWorld(compatibility: WorldView, width: number, height: number): WorldView {
@@ -119,7 +146,7 @@ function finiteLegacyWorld(compatibility: WorldView, width: number, height: numb
 }
 
 describe("regional compatibility field resources", () => {
-  it("projects region 0 through its center and four cardinal halo seams only", () => {
+  it("projects region 0 through centered and neighboring sliding frames", () => {
     const compatibility = compatibilityWorld("resources touch every seam");
     const west = resourceNode("field:west", 0, 35);
     const east = resourceNode("field:east", WORLD_WIDTH - 1, 34);
@@ -128,10 +155,8 @@ describe("regional compatibility field resources", () => {
     const interior = resourceNode("field:interior", 40, 30);
     const catalog = resourceCatalog([south, interior, west, north, east]);
 
-    const centered = projectCompatibilityFieldResources(
-      catalog,
-      floatingWorld(compatibility, { x: 0, y: 0 }),
-    );
+    const centeredView = floatingWorld(compatibility, { x: 0, y: 0 });
+    const centered = projectCompatibilityFieldResources(catalog, centeredView);
     expect(centered.mappings.map(({ source }) => source.id)).toEqual([
       north.id,
       interior.id,
@@ -141,31 +166,37 @@ describe("regional compatibility field resources", () => {
     ].sort((left, right) => {
       const leftNode = catalog.nodes.find(({ id }) => id === left)!;
       const rightNode = catalog.nodes.find(({ id }) => id === right)!;
-      const leftIndex = (leftNode.y + 1) * REGIONAL_TRAVEL_COLUMNS + leftNode.x + 1;
-      const rightIndex = (rightNode.y + 1) * REGIONAL_TRAVEL_COLUMNS + rightNode.x + 1;
+      const leftIndex = requiredRegionTileInView(
+        centeredView,
+        createRegionCoord(0, 0),
+        leftNode.x,
+        leftNode.y,
+      );
+      const rightIndex = requiredRegionTileInView(
+        centeredView,
+        createRegionCoord(0, 0),
+        rightNode.x,
+        rightNode.y,
+      );
       return leftIndex - rightIndex || left.localeCompare(right);
     }));
 
     const cases = [
-      [
-        { x: -1, y: 0 },
-        west.id,
-        (west.y + 1) * REGIONAL_TRAVEL_COLUMNS + REGIONAL_TRAVEL_COLUMNS - 1,
-      ],
-      [{ x: 1, y: 0 }, east.id, (east.y + 1) * REGIONAL_TRAVEL_COLUMNS],
-      [
-        { x: 0, y: -1 },
-        north.id,
-        (REGIONAL_TRAVEL_ROWS - 1) * REGIONAL_TRAVEL_COLUMNS + north.x + 1,
-      ],
-      [{ x: 0, y: 1 }, south.id, south.x + 1],
+      [{ x: -1, y: 0 }, west],
+      [{ x: 1, y: 0 }, east],
+      [{ x: 0, y: -1 }, north],
+      [{ x: 0, y: 1 }, south],
     ] as const;
-    for (const [center, expectedId, expectedViewTileIndex] of cases) {
-      const projection = projectCompatibilityFieldResources(
-        catalog,
-        floatingWorld(compatibility, center),
+    for (const [center, expectedNode] of cases) {
+      const view = floatingWorld(compatibility, center);
+      const projection = projectCompatibilityFieldResources(catalog, view);
+      const expectedViewTileIndex = requiredRegionTileInView(
+        view,
+        createRegionCoord(0, 0),
+        expectedNode.x,
+        expectedNode.y,
       );
-      expect(projection.mappings.map(({ source }) => source.id)).toEqual([expectedId]);
+      expect(projection.mappings.map(({ source }) => source.id)).toEqual([expectedNode.id]);
       expect(projection.mappings[0]?.viewTileIndex).toBe(expectedViewTileIndex);
       expect(projection.catalog.nodes[0]).toMatchObject({
         tileIndex: expectedViewTileIndex,
@@ -176,7 +207,12 @@ describe("regional compatibility field resources", () => {
 
     const eastView = floatingWorld(compatibility, { x: 1, y: 0 });
     const eastProjection = projectCompatibilityFieldResources(catalog, eastView);
-    const activeRegionSameLocalIndex = (east.y + 1) * REGIONAL_TRAVEL_COLUMNS + east.x + 1;
+    const activeRegionSameLocalIndex = requiredRegionTileInView(
+      eastView,
+      createRegionCoord(1, 0),
+      east.x,
+      east.y,
+    );
     expect(eastProjection.mappings[0]?.viewTileIndex).not.toBe(activeRegionSameLocalIndex);
     expect(regionalFieldResourceAtViewTile(eastProjection, activeRegionSameLocalIndex))
       .toBeUndefined();
@@ -203,11 +239,12 @@ describe("regional compatibility field resources", () => {
     ];
 
     for (const center of centers) {
+      const view = floatingWorld(compatibility, center);
       const projection = projectCompatibilityFieldResources(
         catalog,
-        floatingWorld(compatibility, center),
+        view,
       );
-      const sameLocalViewIndex = (node.y + 1) * REGIONAL_TRAVEL_COLUMNS + node.x + 1;
+      const sameLocalViewIndex = requiredRegionTileInView(view, center, node.x, node.y);
       expect(projection.catalog.nodes).toEqual([]);
       expect(regionalFieldResourceById(projection, node.id)).toBeUndefined();
       expect(regionalFieldResourceAtViewTile(projection, sameLocalViewIndex)).toBeUndefined();
@@ -221,24 +258,35 @@ describe("regional compatibility field resources", () => {
     const node = resourceNode("field:legacy-edge", width - 1, height - 1, width);
     const catalog = resourceCatalog([node], width, height);
 
-    const floating = projectCompatibilityFieldResources(
-      catalog,
-      floatingWorld(compatibility, { x: 0, y: 0 }),
+    const floatingView = floatingWorld(compatibility, { x: 0, y: 0 });
+    const floating = projectCompatibilityFieldResources(catalog, floatingView);
+    const expectedFloatingIndex = requiredRegionTileInView(
+      floatingView,
+      createRegionCoord(0, 0),
+      node.x,
+      node.y,
     );
-    const expectedFloatingIndex = height * REGIONAL_TRAVEL_COLUMNS + width;
-    expect(floating.mappings[0]).toEqual({ source: node, viewTileIndex: expectedFloatingIndex });
+    expect(floating.mappings[0]).toEqual({
+      source: node,
+      address: { region: { x: 0, y: 0 }, localX: node.x, localY: node.y },
+      viewTileIndex: expectedFloatingIndex,
+    });
     expect(floating.catalog.nodes[0]).toMatchObject({
       id: node.id,
       tileIndex: expectedFloatingIndex,
-      x: width,
-      y: height,
+      x: expectedFloatingIndex % REGIONAL_TRAVEL_COLUMNS,
+      y: Math.floor(expectedFloatingIndex / REGIONAL_TRAVEL_COLUMNS),
     });
 
     const legacy = projectCompatibilityFieldResources(
       catalog,
       finiteLegacyWorld(compatibility, width, height),
     );
-    expect(legacy.mappings[0]).toEqual({ source: node, viewTileIndex: node.tileIndex });
+    expect(legacy.mappings[0]).toEqual({
+      source: node,
+      address: { region: { x: 0, y: 0 }, localX: node.x, localY: node.y },
+      viewTileIndex: node.tileIndex,
+    });
     expect(legacy.catalog.nodes[0]).toMatchObject({
       id: node.id,
       tileIndex: node.tileIndex,
@@ -319,6 +367,72 @@ describe("regional compatibility field resources", () => {
     expect(fieldResourceStockUnits(returned.catalog, harvested.state, node.id)).toBe(4);
   });
 
+  it("preserves one owned node through rebase, storage handoff, diagonal negative travel, save, and backtrack", () => {
+    const compatibility = compatibilityWorld("one rooted patch under a sliding horizon");
+    const node = resourceNode("field:continuous-root", 40, 30);
+    const catalog = resourceCatalog([node]);
+    const initialOrigin = defaultRegionalFrameOrigin(createRegionCoord(0, 0));
+    const shiftedOrigin = { x: initialOrigin.x + 16, y: initialOrigin.y };
+    const initialView = floatingWorld(compatibility, { x: 0, y: 0 }, initialOrigin);
+    const shiftedView = floatingWorld(compatibility, { x: 0, y: 0 }, shiftedOrigin);
+    const crossedView = floatingWorld(compatibility, { x: 1, y: 0 }, shiftedOrigin);
+    const diagonalView = floatingWorld(
+      compatibility,
+      { x: -1, y: -1 },
+      { x: -60, y: -60 },
+    );
+    const backtrackedView = floatingWorld(compatibility, { x: 0, y: 0 }, initialOrigin);
+    const projections = [
+      projectCompatibilityFieldResources(catalog, initialView),
+      projectCompatibilityFieldResources(catalog, shiftedView),
+      projectCompatibilityFieldResources(catalog, crossedView),
+      projectCompatibilityFieldResources(catalog, diagonalView),
+      projectCompatibilityFieldResources(catalog, backtrackedView),
+    ];
+    const harvested = harvestFieldResource(
+      catalog,
+      createFieldResourceEcologyState(19),
+      node.id,
+      2,
+    );
+    const restoredEcology = canonicalizeFieldResourceState(
+      catalog,
+      JSON.parse(JSON.stringify(harvested.state)),
+    );
+
+    expect(harvested.ok).toBe(true);
+    expect(projections[1]?.mappings[0]?.viewTileIndex)
+      .toBe((projections[0]?.mappings[0]?.viewTileIndex ?? 0) - 16);
+    expect(projections[2]?.mappings[0]?.viewTileIndex)
+      .toBe(projections[1]?.mappings[0]?.viewTileIndex);
+    expect(projections[4]?.mappings[0]?.viewTileIndex)
+      .toBe(projections[0]?.mappings[0]?.viewTileIndex);
+    for (const projection of projections) {
+      expect(projection.mappings).toHaveLength(1);
+      expect(projection.catalog.nodes).toHaveLength(1);
+      expect(projection.mappings[0]).toMatchObject({
+        source: { id: node.id, tileIndex: node.tileIndex, x: node.x, y: node.y },
+        address: {
+          region: { x: 0, y: 0 },
+          localX: node.x,
+          localY: node.y,
+        },
+      });
+      expect(new Set(projection.mappings.map(({ source }) => source.id)).size).toBe(1);
+      expect(fieldResourceStockUnits(projection.catalog, restoredEcology, node.id)).toBe(4);
+      expect(Object.isFrozen(projection.mappings[0]?.address)).toBe(true);
+      expect(Object.isFrozen(projection.mappings[0]?.address.region)).toBe(true);
+    }
+
+    const absent = projectCompatibilityFieldResources(
+      catalog,
+      floatingWorld(compatibility, { x: 2, y: -2 }),
+    );
+    expect(absent.mappings).toEqual([]);
+    expect(absent.catalog.nodes).toEqual([]);
+    expect(fieldResourceStockUnits(catalog, restoredEcology, node.id)).toBe(4);
+  });
+
   it("fails closed on lost floating metadata, aliases, malformed addresses, and excess work", () => {
     const compatibility = compatibilityWorld("bad resource addresses stay dark");
     const view = floatingWorld(compatibility, { x: 4, y: -3 });
@@ -328,7 +442,12 @@ describe("regional compatibility field resources", () => {
     expect(() => projectCompatibilityFieldResources(catalog, structuredClone(view)))
       .toThrow(/dimensions/);
     const malformedCoordinates = floatingWorld(compatibility, { x: 0, y: 0 });
-    const mappedIndex = (node.y + 1) * REGIONAL_TRAVEL_COLUMNS + node.x + 1;
+    const mappedIndex = requiredRegionTileInView(
+      malformedCoordinates,
+      createRegionCoord(0, 0),
+      node.x,
+      node.y,
+    );
     const mappedTile = malformedCoordinates.terrain.tiles[mappedIndex];
     if (!mappedTile) throw new Error("malformed-coordinate fixture lost its mapped tile");
     (mappedTile as { x: number }).x += 1;

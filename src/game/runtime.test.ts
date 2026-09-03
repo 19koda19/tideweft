@@ -13,6 +13,7 @@ import {
   LEGACY_WORLD_HEIGHT,
   LEGACY_WORLD_WIDTH,
   RESOURCE_KINDS,
+  WORLD_WIDTH,
   assertWorldInvariants,
   createWorld,
   createWorldView,
@@ -24,6 +25,12 @@ import {
 } from "../sim/public";
 import { tideAtTick } from "../sim/terrain";
 import { hashCanonical } from "../sim/util";
+import {
+  createRegionCoord,
+  regionLocalToGlobalTile,
+  type RegionCoord,
+} from "../sim/regions";
+import type { RootSeed } from "../sim/rng";
 import {
   createFieldResourceEcologyState,
   type FieldResourceEcologyState,
@@ -49,17 +56,24 @@ import {
 } from "./traversalFeedback";
 import {
   gameSaveEnvelopeIntegrity,
-  type PhysicalCargoState,
+  type SerializedPhysicalCargoState,
 } from "./physicalCargoState";
 import {
   REGIONAL_TRAVEL_COLUMNS,
-  REGIONAL_TRAVEL_HALO_TILES,
   REGIONAL_TRAVEL_ROWS,
+  REGIONAL_TRAVEL_SAFE_MAX_X,
+  REGIONAL_TRAVEL_SAFE_MAX_Y,
+  REGIONAL_TRAVEL_SAFE_MIN_X,
+  REGIONAL_TRAVEL_SAFE_MIN_Y,
+  regionLocalToWindowTile,
+  regionTileIndexToWindowIndex,
 } from "./regionalTravel";
 import {
   capturePlayerRegionalTravel,
+  recenterRegionalPlayer,
   restorePlayerRegionalTravel,
   serializePlayerRegionalTravel,
+  type RegionalPlayerTravelState,
 } from "./regionalPlayerTravel";
 import type { RegionalPromiseJourneyState } from "./regionalPromiseJourney";
 
@@ -226,7 +240,7 @@ interface TestGameSaveEnvelope {
   session: GameSessionState;
   fieldResources?: FieldResourceEcologyState;
   traversalFeedback?: TraversalFeedbackState;
-  physicalCargo?: PhysicalCargoState;
+  physicalCargo?: SerializedPhysicalCargoState;
   regionalTravel?: string;
   promiseJourney?: RegionalPromiseJourneyState;
   integrity?: string;
@@ -292,6 +306,53 @@ function placePlayerOnTile(player: PlayerState, tile: { x: number; y: number; in
   player.velocityY = 0;
   player.currentTrace = [tile.index];
   player.surveyTrace = [tile.index];
+}
+
+function moveRegionalFixtureToAddress(
+  rootSeed: RootSeed,
+  initial: RegionalPlayerTravelState,
+  player: PlayerState,
+  targetRegion: RegionCoord,
+  localX: number,
+  localY: number,
+): RegionalPlayerTravelState {
+  const target = regionLocalToGlobalTile(targetRegion, localX, localY);
+  let state = initial;
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const point = regionLocalToWindowTile(state.window, targetRegion, localX, localY);
+    if (point !== null) {
+      player.x = point.x * TILE_UNITS + TILE_UNITS / 2;
+      player.y = point.y * TILE_UNITS + TILE_UNITS / 2;
+      player.previousX = player.x;
+      player.previousY = player.y;
+      const index = point.y * REGIONAL_TRAVEL_COLUMNS + point.x;
+      player.currentTrace = [index];
+      player.surveyTrace = [index];
+      return recenterRegionalPlayer(rootSeed, state, player).state;
+    }
+
+    const currentX = Math.floor(player.x / TILE_UNITS);
+    const currentY = Math.floor(player.y / TILE_UNITS);
+    const triggerX = target.x < state.window.origin.x
+      ? REGIONAL_TRAVEL_SAFE_MIN_X - 1
+      : target.x > state.window.origin.x + REGIONAL_TRAVEL_COLUMNS - 1
+        ? REGIONAL_TRAVEL_SAFE_MAX_X + 1
+        : Math.min(REGIONAL_TRAVEL_SAFE_MAX_X, Math.max(REGIONAL_TRAVEL_SAFE_MIN_X, currentX));
+    const triggerY = target.y < state.window.origin.y
+      ? REGIONAL_TRAVEL_SAFE_MIN_Y - 1
+      : target.y > state.window.origin.y + REGIONAL_TRAVEL_ROWS - 1
+        ? REGIONAL_TRAVEL_SAFE_MAX_Y + 1
+        : Math.min(REGIONAL_TRAVEL_SAFE_MAX_Y, Math.max(REGIONAL_TRAVEL_SAFE_MIN_Y, currentY));
+    player.x = triggerX * TILE_UNITS + TILE_UNITS / 2;
+    player.y = triggerY * TILE_UNITS + TILE_UNITS / 2;
+    player.previousX = player.x;
+    player.previousY = player.y;
+    const triggerIndex = triggerY * REGIONAL_TRAVEL_COLUMNS + triggerX;
+    player.currentTrace = [triggerIndex];
+    player.surveyTrace = [triggerIndex];
+    state = recenterRegionalPlayer(rootSeed, state, player).state;
+  }
+  throw new Error("fixture could not move its spatial frame to the requested address");
 }
 
 function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
@@ -1351,8 +1412,8 @@ describe("runtime clarity guards", () => {
     const tileSize = runtime.getRenderView().terrain.tileSize;
     const start = runtime.getRenderView().player.position;
     const target = {
-      x: start.x + tileSize * 8,
-      y: start.y + tileSize * 8,
+      x: start.x + tileSize * 6,
+      y: start.y + tileSize * 6,
     };
     runtime.dispatchRenderer({ type: "move-target", point: target, additive: false });
 
@@ -1372,7 +1433,7 @@ describe("runtime clarity guards", () => {
     expect(movingVelocities.length).toBeGreaterThan(30);
     expect(movingVelocities.every(({ x, y }) => x > 0 && y > 0)).toBe(true);
     const arrived = runtime.getRenderView().player.position;
-    expect(Math.hypot(target.x - arrived.x, target.y - arrived.y)).toBeLessThan(2.1);
+    expect(Math.hypot(target.x - arrived.x, target.y - arrived.y)).toBeLessThan(tileSize / 8);
     advancePlayerSteps(runtime, 4);
     expect(runtime.getRenderView().player.position).toEqual(arrived);
     expect(runtime.getRenderView().player.velocity).toEqual({ x: 0, y: 0 });
@@ -1475,6 +1536,7 @@ describe("runtime clarity guards", () => {
     ));
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
+    const channelTarget = structuredClone(runtime.getRenderView().player.position);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
     advancePlayerSteps(runtime, 1);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
@@ -1499,10 +1561,8 @@ describe("runtime clarity guards", () => {
     runtime.dispatchRenderer({
       type: "move-target",
       point: {
-        x: (channel.x + REGIONAL_TRAVEL_HALO_TILES + 0.5)
-          * runtime.getRenderView().terrain.tileSize,
-        y: (channel.y + REGIONAL_TRAVEL_HALO_TILES + 0.5)
-          * runtime.getRenderView().terrain.tileSize,
+        x: channelTarget.x,
+        y: channelTarget.y,
       },
       additive: false,
     });
@@ -1603,20 +1663,46 @@ describe("runtime clarity guards", () => {
     );
     if (!preparedRegional) throw new Error("fixture lost its sealed regional stream");
     const exposedChannelTile = [...preparedRegional.window.terrain.tiles]
-      .filter((tile) => tile.x > 1
-        && tile.y > 1
-        && tile.x < REGIONAL_TRAVEL_COLUMNS - 2
-        && tile.y < REGIONAL_TRAVEL_ROWS - 2
-        && preparedWorld.tide.level - tile.elevation >= 120_000)
+      .filter((tile) => {
+        const address = preparedRegional.window.addresses[tile.index];
+        return address?.region.x === 0
+          && address.region.y === 0
+          && preparedWorld.tide.level - tile.elevation >= 120_000;
+      })
       .sort((left, right) => (
         (preparedWorld.tide.level - right.elevation) * 2 + right.roughness
       ) - (
         (preparedWorld.tide.level - left.elevation) * 2 + left.roughness
       ))[0];
     if (!exposedChannelTile) throw new Error("fixture did not provide an exposed channel tile");
+    const exposedAddress = preparedRegional.window.addresses[exposedChannelTile.index];
+    if (!exposedAddress) throw new Error("fixture channel lost its stable address");
+    const compatibilityChannel = preparedWorld.terrain.tiles[
+      exposedAddress.localY * preparedWorld.terrain.width + exposedAddress.localX
+    ];
+    if (!compatibilityChannel) throw new Error("fixture channel left the compatibility terrain");
+    compatibilityChannel.elevation = 0;
+    compatibilityChannel.terrain = "deep-water";
+    compatibilityChannel.roughness = FIXED_POINT;
+    compatibilityChannel.baseTravelCost = 520;
+    const positionedRegional = moveRegionalFixtureToAddress(
+      preparedWorld.meta.rootSeed,
+      preparedRegional,
+      prepared.player,
+      exposedAddress.region,
+      exposedAddress.localX,
+      exposedAddress.localY,
+    );
+    const positionedChannel = regionLocalToWindowTile(
+      positionedRegional.window,
+      exposedAddress.region,
+      exposedAddress.localX,
+      exposedAddress.localY,
+    );
+    if (positionedChannel === null) throw new Error("fixture channel left its aligned frame");
     prepared.world = serializeWorld(preparedWorld);
-    const regionalX = exposedChannelTile.x;
-    const regionalY = exposedChannelTile.y;
+    const regionalX = positionedChannel.x;
+    const regionalY = positionedChannel.y;
     const regionalTileIndex = regionalY * REGIONAL_TRAVEL_COLUMNS + regionalX;
     prepared.player.x = regionalX * TILE_UNITS + TILE_UNITS / 2;
     prepared.player.y = regionalY * TILE_UNITS + TILE_UNITS / 2;
@@ -1635,7 +1721,7 @@ describe("runtime clarity guards", () => {
     prepared.player.sweepTotalTicks = 0;
     prepared.player.sweepSupport = null;
     prepared.regionalTravel = serializePlayerRegionalTravel(
-      capturePlayerRegionalTravel(preparedRegional, prepared.player),
+      capturePlayerRegionalTravel(positionedRegional, prepared.player),
     );
     prepared.promiseJourney = prepared.player.activeContractId === null
       ? { version: 1, contractId: null, detoured: false, compatibilityTrace: [] }
@@ -2182,10 +2268,20 @@ describe("runtime clarity guards", () => {
     if (repairedOrigin === undefined) throw new Error("legacy Promise origin disappeared");
     const repairedOriginX = repairedOrigin % LEGACY_WORLD_WIDTH;
     const repairedOriginY = Math.floor(repairedOrigin / LEGACY_WORLD_WIDTH);
-    expect(repaired.player.currentTrace).toEqual([
-      (repairedOriginY + REGIONAL_TRAVEL_HALO_TILES) * REGIONAL_TRAVEL_COLUMNS
-        + repairedOriginX + REGIONAL_TRAVEL_HALO_TILES,
-    ]);
+    if (!repaired.regionalTravel) throw new Error("repaired save omitted regional travel");
+    const repairedTravel = restorePlayerRegionalTravel(
+      repairedWorld.meta.rootSeed,
+      repaired.player,
+      repaired.regionalTravel,
+    );
+    if (!repairedTravel) throw new Error("repaired regional travel did not restore");
+    const repairedTraceIndex = regionTileIndexToWindowIndex(
+      repairedTravel.window,
+      createRegionCoord(0, 0),
+      repairedOriginY * WORLD_WIDTH + repairedOriginX,
+    );
+    if (repairedTraceIndex === null) throw new Error("repaired origin is outside its spatial frame");
+    expect(repaired.player.currentTrace).toEqual([repairedTraceIndex]);
     expect(repaired.player.currentTrace.every(Number.isSafeInteger)).toBe(true);
     expect(repaired.player.wayknots.capacity).toBe(6);
     expect(repaired.player.wayknots.wayknots).toHaveLength(6);
@@ -2321,18 +2417,24 @@ describe("runtime clarity guards", () => {
     const trace = route.fromSettlementId === carriedContract.originSettlementId
       ? [...route.path]
       : [...route.path].reverse();
-    carriedSave.player.x = (destinationTile.x + REGIONAL_TRAVEL_HALO_TILES) * TILE_UNITS
-      + TILE_UNITS / 2;
-    carriedSave.player.y = (destinationTile.y + REGIONAL_TRAVEL_HALO_TILES) * TILE_UNITS
-      + TILE_UNITS / 2;
-    carriedSave.player.previousX = carriedSave.player.x;
-    carriedSave.player.previousY = carriedSave.player.y;
-    carriedSave.player.currentTrace = trace.map((tileIndex) => {
-      const x = tileIndex % carriedWorld.terrain.width;
-      const y = Math.floor(tileIndex / carriedWorld.terrain.width);
-      return (y + REGIONAL_TRAVEL_HALO_TILES) * REGIONAL_TRAVEL_COLUMNS
-        + x + REGIONAL_TRAVEL_HALO_TILES;
-    });
+    if (!carriedSave.regionalTravel) throw new Error("carried save omitted regional travel");
+    const carriedTravel = restorePlayerRegionalTravel(
+      carriedWorld.meta.rootSeed,
+      carriedSave.player,
+      carriedSave.regionalTravel,
+    );
+    if (!carriedTravel) throw new Error("carried save regional travel did not restore");
+    const positionedTravel = moveRegionalFixtureToAddress(
+      carriedWorld.meta.rootSeed,
+      carriedTravel,
+      carriedSave.player,
+      createRegionCoord(0, 0),
+      destinationTile.x,
+      destinationTile.y,
+    );
+    carriedSave.regionalTravel = serializePlayerRegionalTravel(
+      capturePlayerRegionalTravel(positionedTravel, carriedSave.player),
+    );
     carriedSave.promiseJourney = {
       version: 1,
       contractId,

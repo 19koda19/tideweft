@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(18);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(19);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -168,7 +168,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("changes neither the world nor where a click lands");
     expect(copy).toContain("Drizzle, rain, and squall");
     expect(copy).toContain("Sparse wind threads");
-    expect(copy).toContain("regional fronts");
+    expect(copy).toContain("traveling fronts");
   });
 
   it("teaches smoothed pointer travel without promising hazard shortcuts", () => {
@@ -264,7 +264,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(tutorialControlById("make-key")).toMatchObject({ input: "C", audience: "desktop" });
   });
 
-  it("describes signed seeded terrain without hard-coding a settlement count or faking regional economies", () => {
+  it("describes one continuous seeded world without exposing storage partitions", () => {
     const tutorialCopy = JSON.stringify(TIDEWEFT_TUTORIAL_GUIDE);
     const welcome = tutorialSectionById("welcome");
     const welcomeCopy = welcome === undefined
@@ -283,15 +283,16 @@ describe("TIDEWEFT field-manual content", () => {
         ].join(" ");
 
     expect(tutorialCopy).not.toMatch(/\b(?:seven|7)\s+settlements?\b/iu);
-    expect(welcomeCopy).toContain("continuous signed terrain in every direction");
-    expect(welcomeCopy).toContain("Compatibility region 0,0");
-    expect(horizonCopy).toContain("there is no authored outer wall");
-    expect(horizonCopy).toContain("R +1,0");
-    expect(horizonCopy).toContain("regional detour");
-    expect(horizonCopy).toContain("do not yet drift across a seam");
-    expect(expansion?.clarification).toContain("Signed terrain now generates and streams continuously");
-    expect(expansion?.clarification).toContain("compatibility region 0,0");
-    expect(expansion?.clarification).toContain("extension of the running settlement network");
+    expect(welcomeCopy).toContain("one continuous world in every direction");
+    expect(welcomeCopy).toContain("original harbor country");
+    expect(horizonCopy).toContain("No prompt, banner, loading screen, or second click");
+    expect(horizonCopy).toContain("continuous E and N coordinates");
+    expect(horizonCopy).toContain("off-network detour");
+    expect(horizonCopy).toContain("same recoverable object");
+    expect(horizonCopy).not.toMatch(/\bregion\b|\bchunk\b|\brecenter/u);
+    expect(expansion?.clarification).toContain("continues seamlessly");
+    expect(expansion?.clarification).toContain("original harbor country");
+    expect(expansion?.clarification).toContain("extension of the living network");
     expect(expansion?.clarification).toContain("planned rather than cloned");
   });
 
@@ -311,8 +312,8 @@ describe("TIDEWEFT field-manual content", () => {
       .join(" ");
     expect(plannedCopy).toContain("Seven stable visual biomes");
     expect(plannedCopy).toContain("Dogs, bears, birds, deer");
-    expect(plannedCopy).toContain("complete NPC promotion/streaming ecology remain planned");
-    expect(plannedCopy).toContain("do not affect the courier or cargo yet");
+    expect(plannedCopy).toContain("complete NPC promotion ecology remain planned");
+    expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
     expect(plannedCopy).toContain("not implemented yet");
     expect(plannedCopy).toContain("do not become deployable Wayknots yet");

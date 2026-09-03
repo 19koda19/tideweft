@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REGION_COORD_LIMIT } from "../sim/regions";
+import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 
 import {
   DEFAULT_WAYKNOT_CAPACITY,
@@ -594,6 +595,41 @@ describe("region-addressed wayknot persistence", () => {
       readyTick: 321,
       serviceWearRemainder: 98_765,
     });
+  });
+
+  it("preserves a strict deployment in the active storage region when its tile is off-frame", () => {
+    const activeRegion = { x: -12, y: 8 } as const;
+    const source = {
+      version: 3,
+      capacity: 6,
+      wayknots: [{
+        id: 3,
+        kind: "tide-anchor",
+        region: activeRegion,
+        tileIndex: (WORLD_HEIGHT - 1) * WORLD_WIDTH + WORLD_WIDTH - 1,
+        condition: 543_210,
+        readyTick: 987,
+        serviceWearRemainder: 12_345,
+      }],
+    };
+
+    const restored = normalizeWayknotState(JSON.parse(JSON.stringify(source)), {
+      tileCount: 96 * 72,
+      contextRegion: activeRegion,
+      // Undefined means the bounded sliding frame cannot currently inspect
+      // the tile. It is not evidence that the physical deployment vanished.
+      contextAt: () => undefined,
+    });
+
+    expect(restored.wayknots).toEqual([{
+      id: 3,
+      kind: "tide-anchor",
+      region: activeRegion,
+      tileIndex: 71 * 96 + 95,
+      condition: 543_210,
+      readyTick: 987,
+      serviceWearRemainder: 12_345,
+    }]);
   });
 
   it("drops malformed or colliding v3 evidence instead of minting carried gear", () => {

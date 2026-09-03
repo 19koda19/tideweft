@@ -36,6 +36,7 @@ import {
   serializeLooseCargoCarrier,
   serializeLooseCargoExpectedManifest,
   serializeLooseCargoWorld,
+  stepLooseCargoAcrossRegions,
   stepLooseCargo,
   setLooseCargoGearCondition,
   setLooseCargoLotMaterialState,
@@ -1226,4 +1227,218 @@ describe("save authority, global addresses, and bounded soak", () => {
     expect(elapsed).toBeLessThan(10_000);
     expect(validateLooseCargoWorld(world).valid).toBe(true);
   }, 20_000);
+});
+
+describe("seamless regional parcel ownership", () => {
+  it("hands a moving parcel east without collision, identity replacement, or substance loss", () => {
+    const source = createLooseCargoWorld(4, 3, { x: 0, y: 0 });
+    const scattered = scatterLooseCargo(source, carrier(), {
+      lotId: "crafting-stack:cordreed",
+      x: 4 * LOOSE_CARGO_TILE_UNITS - 10_000,
+      y: 1_500_000,
+      parts: [{ quantity: 1, velocityX: LOOSE_CARGO_MAX_VELOCITY, velocityY: 0 }],
+      cause: "fall-separation",
+    });
+    if (!scattered.ok || !scattered.entities[0]) throw new Error(scattered.message);
+    const original = scattered.entities[0];
+    const east = createLooseCargoWorld(4, 3, { x: 1, y: 0 });
+    const before = inspectLooseCargoMultiWorldConservation(
+      [scattered.world, east],
+      scattered.carrier,
+    );
+    const result = stepLooseCargoAcrossRegions(
+      [east, scattered.world],
+      [{
+        region: source.region,
+        expectedRevision: scattered.world.revision,
+        samples: [sample(original.id)],
+      }],
+    );
+    expect(result.ok).toBe(true);
+    expect(result.handoffs).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
+      entityId: original.id,
+      crossedRegion: true,
+      boundaryCollision: false,
+    });
+    const nextSource = result.worlds.find(({ region }) => region.x === 0 && region.y === 0);
+    const nextEast = result.worlds.find(({ region }) => region.x === 1 && region.y === 0);
+    expect(nextSource?.entities).toEqual([]);
+    const moved = nextEast?.entities[0];
+    expect(moved).toMatchObject({
+      id: original.id,
+      origin: original.origin,
+      owner: original.owner,
+      payload: original.payload,
+      materialState: original.materialState,
+      motion: "tumbling",
+    });
+    expect(moved?.velocityX).toBeGreaterThan(0);
+    expect(moved?.x).toBeGreaterThanOrEqual(0);
+    expect(moved?.x).toBeLessThan(LOOSE_CARGO_TILE_UNITS);
+    expect(nextSource?.history.at(-1)).toMatchObject({
+      kind: "handoff",
+      entityIds: [original.id],
+      to: null,
+    });
+    expect(nextEast?.history.at(-1)).toMatchObject({
+      kind: "handoff",
+      entityIds: [original.id],
+      from: null,
+    });
+    const after = inspectLooseCargoMultiWorldConservation(result.worlds, scattered.carrier);
+    expect(after).toEqual(before);
+
+    const stale = stepLooseCargoAcrossRegions(result.worlds, [{
+      region: source.region,
+      expectedRevision: scattered.world.revision,
+      samples: [sample(original.id)],
+    }]);
+    expect(stale).toMatchObject({ ok: false, reason: "stale-step", events: [], handoffs: [] });
+    expect(stale.worlds).toBe(result.worlds);
+  });
+
+  it("normalizes a north-west corner handoff correctly at negative coordinates", () => {
+    const region = { x: -7, y: -11 } as const;
+    const scattered = scatterLooseCargo(
+      createLooseCargoWorld(4, 3, region),
+      carrier(),
+      {
+        lotId: "crafting-stack:cordreed",
+        x: 10_000,
+        y: 10_000,
+        parts: [{
+          quantity: 1,
+          velocityX: -LOOSE_CARGO_MAX_VELOCITY,
+          velocityY: -LOOSE_CARGO_MAX_VELOCITY,
+        }],
+        cause: "forced-release",
+      },
+    );
+    const entity = scattered.entities[0];
+    if (!scattered.ok || !entity) throw new Error(scattered.message);
+    const result = stepLooseCargoAcrossRegions([scattered.world], [{
+      region,
+      expectedRevision: scattered.world.revision,
+      samples: [sample(entity.id)],
+    }]);
+    expect(result.ok).toBe(true);
+    expect(result.handoffs[0]).toMatchObject({
+      entityId: entity.id,
+      from: { region },
+      to: { region: { x: -8, y: -12 } },
+    });
+    const destination = result.worlds.find(({ region: candidate }) =>
+      candidate.x === -8 && candidate.y === -12);
+    expect(destination?.entities[0]).toMatchObject({
+      id: entity.id,
+      origin: entity.origin,
+      velocityX: expect.any(Number),
+      velocityY: expect.any(Number),
+    });
+    expect(destination?.entities[0]?.x).toBeGreaterThan(3 * LOOSE_CARGO_TILE_UNITS);
+    expect(destination?.entities[0]?.y).toBeGreaterThan(2 * LOOSE_CARGO_TILE_UNITS);
+    expect(deserializeLooseCargoWorld(serializeLooseCargoWorld(destination!))).toEqual(destination);
+  });
+
+  it("conserves one identity while current oscillates it back and forth across a seam", () => {
+    const scattered = scatterLooseCargo(
+      createLooseCargoWorld(2, 2, { x: -1, y: 4 }),
+      carrier(),
+      {
+        lotId: "crafting-stack:cordreed",
+        x: 2 * LOOSE_CARGO_TILE_UNITS - 1,
+        y: LOOSE_CARGO_TILE_UNITS,
+        parts: [{ quantity: 1, velocityX: 0, velocityY: 0 }],
+        cause: "forced-release",
+      },
+    );
+    const original = scattered.entities[0];
+    if (!scattered.ok || !original) throw new Error(scattered.message);
+    let worlds: readonly LooseCargoWorldState[] = [
+      scattered.world,
+      createLooseCargoWorld(2, 2, { x: 0, y: 4 }),
+    ];
+    const expected = createLooseCargoMultiWorldExpectedManifest(worlds, scattered.carrier);
+    const owners: string[] = [];
+    for (const currentX of [FIXED_POINT, -FIXED_POINT, -FIXED_POINT, FIXED_POINT, FIXED_POINT]) {
+      const owner = worlds.find((world) =>
+        world.entities.some(({ id }) => id === original.id));
+      if (!owner) throw new Error("oscillating parcel lost its owner");
+      const result = stepLooseCargoAcrossRegions(worlds, [{
+        region: owner.region,
+        expectedRevision: owner.revision,
+        samples: [sample(original.id, {
+          environment: { ...CALM, immersion: FIXED_POINT, currentX },
+          waterDepth: FIXED_POINT,
+        })],
+      }]);
+      if (!result.ok) throw new Error(`oscillating seam step failed: ${result.reason}`);
+      worlds = result.worlds;
+      const nextOwner = worlds.find((world) =>
+        world.entities.some(({ id }) => id === original.id));
+      if (!nextOwner) throw new Error("oscillating parcel disappeared after step");
+      owners.push(looseCargoRegionKey(nextOwner.region));
+      expect(worlds.flatMap(({ entities }) => entities)
+        .filter(({ id }) => id === original.id)).toHaveLength(1);
+      expect(validateLooseCargoMultiWorldExpectedManifest(
+        expected,
+        worlds,
+        scattered.carrier,
+      ).reason).toBe("valid");
+    }
+    expect(owners).toEqual(["r:0:4", "r:0:4", "r:-1:4", "r:-1:4", "r:0:4"]);
+    const final = worlds.flatMap(({ entities }) => entities)
+      .find(({ id }) => id === original.id);
+    expect(final).toMatchObject({ id: original.id, origin: original.origin, payload: original.payload });
+  });
+
+  it("fails the whole step when a destination has no authoritative parcel slot", () => {
+    const pack = carrier(1_000_000);
+    const sourceDrop = scatterLooseCargo(createLooseCargoWorld(2, 2), pack, {
+      lotId: "crafting-stack:cordreed",
+      x: 2 * LOOSE_CARGO_TILE_UNITS - 1,
+      y: LOOSE_CARGO_TILE_UNITS,
+      parts: [{ quantity: 1, velocityX: LOOSE_CARGO_MAX_VELOCITY, velocityY: 0 }],
+      cause: "forced-release",
+    });
+    const crossing = sourceDrop.entities[0];
+    if (!sourceDrop.ok || !crossing) throw new Error(sourceDrop.message);
+    const fullTemplate = drop(
+      createLooseCargoWorld(2, 2, { x: 1, y: 0 }),
+      sourceDrop.carrier,
+      {
+        lotId: "crafting-stack:pitchcloth",
+        quantity: 1,
+        x: 500_000,
+        y: 500_000,
+      },
+    ).world;
+    const template = fullTemplate.entities[0]!;
+    const fullDestination = validateLooseCargoWorld({
+      ...fullTemplate,
+      entities: Array.from({ length: LOOSE_CARGO_MAX_ENTITIES }, (_, index) => ({
+        ...template,
+        id: looseCargoEntityId({ x: 100 + index, y: 0 }, 1),
+        origin: { region: { x: 100 + index, y: 0 }, ordinal: 1 },
+      })),
+    }).state;
+    if (!fullDestination) throw new Error("destination capacity fixture invalid");
+    const result = stepLooseCargoAcrossRegions(
+      [sourceDrop.world, fullDestination],
+      [{
+        region: { x: 0, y: 0 },
+        expectedRevision: sourceDrop.world.revision,
+        samples: [sample(crossing.id)],
+      }],
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "entity-capacity-exceeded",
+      events: [],
+      handoffs: [],
+    });
+    expect(result.worlds[0]).toBe(sourceDrop.world);
+    expect(result.worlds[1]).toBe(fullDestination);
+  });
 });

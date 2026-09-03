@@ -307,22 +307,22 @@ export const TUTORIAL_PLANNED_MECHANICS = [
   {
     id: "planned-regional-settlements",
     status: "planned",
-    title: "Regional settlements and living opportunities",
-    clarification: "Signed terrain now generates and streams continuously beyond region 0,0. Authored harbors, their Promise economy, and natural material patches remain in compatibility region 0,0. Generated settlements, actors, causal finds, and extension of the running settlement network are planned rather than cloned into empty country.",
-    keywords: ["procedural generation", "world seed", "region", "reseed", "harbor", "settlement"],
+    title: "Distant settlements and living opportunities",
+    clarification: "Terrain now continues seamlessly beyond the original harbor country. Its authored harbors, Promise economy, and natural material patches remain local to that known estuary. Generated distant settlements, actors, causal finds, and extension of the living network are planned rather than cloned into empty country.",
+    keywords: ["procedural generation", "world seed", "distance", "reseed", "harbor", "settlement"],
   },
   {
     id: "planned-universal-npcs",
     status: "planned",
     title: "Universal people, dogs, and wildlife",
-    clarification: "The 42 compatibility-region humans now have persistent generated identities, weather-responsive condition, limited event-led emotion, and ABOUT inspection. Dogs, bears, birds, deer, generated regional populations, ownership, companions, cross-species perception, and the complete NPC promotion/streaming ecology remain planned.",
+    clarification: "The original harbor country's 42 humans have persistent generated identities, weather-responsive condition, limited event-led emotion, and ABOUT inspection. Dogs, bears, birds, deer, generated distant populations, ownership, companions, cross-species perception, and the complete NPC promotion ecology remain planned.",
     keywords: ["npc", "dog", "bear", "bird", "wildlife", "companion", "identity", "about", "ecology"],
   },
   {
     id: "planned-regional-biomes",
     status: "planned",
-    title: "Biome ecology and local exposure consequences",
-    clarification: "Seven stable visual biomes and bounded local climate signals are live. Regional ecology, accumulated rain, heat stress, and exposure do not affect the courier or cargo yet.",
+    title: "Biome ecology and exposure consequences",
+    clarification: "Seven stable visual biomes and bounded local climate signals are live. Full ecology, accumulated rain, heat stress, and exposure do not affect the courier or carried cargo yet.",
     keywords: ["biome", "rain", "weather", "temperature", "heat", "exposure"],
   },
   {
@@ -369,7 +369,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "welcome-read-world",
         audience: "all",
         title: "Needs cause promises",
-        body: "Each estuary uses one world seed to reproduce continuous signed terrain in every direction. Compatibility region 0,0 preserves its original biome pattern and harbor sites; those settlements produce, consume, build civic projects, and experience shortages, so Promise cards come from simulated needs rather than a disconnected quest table.",
+        body: "Each estuary uses one world seed to reproduce one continuous world in every direction. The original harbor country preserves its biome pattern and harbor sites; those settlements produce, consume, build civic projects, and experience shortages, so Promise cards come from simulated needs rather than a disconnected quest table.",
       },
       {
         id: "welcome-leave-strands",
@@ -381,7 +381,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "welcome-no-quota",
         audience: "all",
         title: "The world is open-ended",
-        body: "There is no ten- or twenty-five-minute quota. A resilient regional weave is a milestone, not an ending; continue tending the same locally saved world for as long as you like.",
+        body: "There is no ten- or twenty-five-minute quota. A resilient route weave is a milestone, not an ending; continue tending the same locally saved world for as long as you like.",
       },
     ],
     callouts: [
@@ -481,41 +481,41 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   {
     id: "signed-regions",
     iconText: "∞",
-    title: "Cross a horizon; keep the same world",
-    shortTitle: "Horizons",
-    summary: "The terrain continues through signed regions. Crossing an edge recenters the floating chart without resetting your courier, cargo, discoveries, or placed field kit.",
-    keywords: ["region", "horizon", "infinite", "signed", "negative", "boundary", "floating origin", "recenter", "return"],
+    title: "The world keeps going",
+    shortTitle: "Unbroken world",
+    summary: "Walk in any direction and the same world continues. There is no map-edge action, transition, or reset for your courier, route, cargo, discoveries, or field kit.",
+    keywords: ["world", "distance", "infinite", "continuous", "coordinates", "travel", "return"],
     controlIds: ["move-keys", "set-destination", "world-zoom"],
     steps: [
       {
         id: "regions-cross",
         audience: "all",
-        title: "Travel through the edge",
-        body: "Walk to a Chart or Relief edge, or tap a route to its visible edge on touch. Entering the one-tile horizon recenters the same continuous terrain and announces its signed address, such as R +1,0 or R -1,+2. Continue from the new edge; there is no authored outer wall.",
+        title: "Just keep walking",
+        body: "Walk or chart a route toward any visible ground in Chart or Relief. Terrain is prepared ahead while movement, footsteps, weather, water, and the camera continue normally. No prompt, banner, loading screen, or second click marks progress into new country.",
       },
       {
         id: "regions-read-address",
         audience: "all",
-        title: "Use the address and compass",
-        body: "Outside the original harbor country, the quiet location line shows R x,y. The N compass remains world-north, and a remote PICK UP, DELIVER, report, or lost Promise objective keeps its true global distance and bearing instead of pretending the target is nearby.",
+        title: "Use one world address and compass",
+        body: "The quiet location line reports continuous E and N coordinates. The compass remains world-north, and a remote PICK UP, DELIVER, report, or lost Promise objective keeps its true global distance and bearing instead of pretending the target is nearby.",
       },
       {
         id: "regions-persist",
         audience: "all",
-        title: "The horizon does not reset things",
-        body: "The local save records the signed center, chart marks, soundings, deployed Wayknots, carried lot identities, and touched parcel worlds. Returning regenerates deterministic terrain and restores durable changes; a collected compatibility resource never reappears just because its region unloaded.",
+        title: "Distance does not reset things",
+        body: "The local save records your exact world position, chart marks, soundings, deployed Wayknots, carried lot identities, and touched parcels. Returning regenerates deterministic terrain and restores durable changes; a collected resource never reappears merely because you traveled far away.",
       },
       {
         id: "regions-promise-detour",
         audience: "all",
         title: "A detour remains an honest delivery",
-        body: "You may carry Promise cargo beyond region 0,0 and return. The physical delivery still counts, but leaving the authored route network permanently marks that journey as a regional detour, so it cannot invent finite-route reinforcement credit.",
+        body: "You may carry Promise cargo beyond the original route network and return. The physical delivery still counts, but an off-network detour cannot invent route-reinforcement credit for paths that do not exist.",
       },
       {
         id: "regions-current-boundary",
         audience: "all",
         title: "Read the current frontier honestly",
-        body: "Procedural terrain, water, weather exposure, footing, Wayknots, carried cargo, and local saves work across horizons. Generated settlements, wildlife, humans, causal wilderness finds, and natural material patches outside region 0,0 are not live yet. Loose parcels stay persistent in the region where they stop, but they do not yet drift across a seam without the player.",
+        body: "Procedural terrain, water, weather, footing, Wayknots, carried cargo, loose-parcel drift, and local saves continue beyond the old map extent. Currents and terrain carry the same recoverable object onward without changing its identity, condition, momentum, history, or Promise custody. Generated distant settlements, wildlife, humans, causal wilderness finds, and natural material patches are not live yet; the country beyond the original estuary can therefore be genuinely empty.",
       },
     ],
     callouts: [
@@ -524,14 +524,14 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         tone: "boundary",
         title: "Infinite ground is not infinite easy loot",
-        body: "An equal local coordinate in another signed region is a different place. Tideweft never clones region 0,0's resource patch or harbor merely because the numbers inside the new region match.",
+        body: "Traveling into new country does not clone the original estuary's harbors, resources, people, or easy finds. Empty distance is still a distinct deterministic place, not another roll of the starting map.",
       },
       {
         id: "regions-camera-snap",
         audience: "all",
         tone: "note",
-        title: "A clean camera handoff",
-        body: "Chart drags, Relief orbit/twist gestures, and stale pointer captures cancel at the spatial handoff so a finger or mouse held across a recenter cannot chart an accidental route in the new frame.",
+        title: "A steady point of view",
+        body: "Chart drags, Relief orbit/twist gestures, pointer positions, and an active route remain attached to the same world locations as the nearby view shifts with the journey. Ordinary travel does not snap the camera or cancel the route.",
       },
     ],
   },
@@ -765,8 +765,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "cargo-physics-boundary",
         audience: "all",
         tone: "boundary",
-        title: "Regional custody; seam drift later",
-        body: "Loose cargo drops, takes impact, drifts, tumbles on grade, and remains the same recoverable object in the signed region where it stops across unload, revisit, save, and reload. Autonomous drift does not yet transfer a parcel across a regional seam. Mangrove and bramble snag callbacks exist only in the simulation kernel until living ecology is connected, so the field manual does not claim those catches yet.",
+        title: "One parcel, however far it drifts",
+        body: "Loose cargo drops, takes impact, drifts with current, tumbles on grade, and remains the same recoverable object while traveling beyond the old map extent. Identity, condition, momentum, history, Promise custody, save, and reload remain intact. Mangrove and bramble snag callbacks exist only in the simulation kernel until living ecology is connected, so the field manual does not claim those catches yet.",
       },
     ],
   },
@@ -775,7 +775,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "07",
     title: "Let civic work change the journey",
     shortTitle: "Terrain & tools",
-    summary: "Seven seeded biomes give channels, flats, marsh, meadow, ridges, and glimmering water a stable regional identity. Completed settlement projects can entrust you with permanent field benefits.",
+    summary: "Seven seeded biomes give channels, flats, marsh, meadow, ridges, and glimmering water a stable local identity. Completed settlement projects can entrust you with permanent field benefits.",
     keywords: ["terrain", "biome", "channel", "marsh", "mudflat", "ridge", "glimmerfen", "tool", "stilts", "sail", "kite", "clinic", "cache"],
     controlIds: ["scan-key", "scan-button", "set-destination"],
     steps: [
@@ -1010,7 +1010,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "routes-weather",
         audience: "all",
         title: "Weather is already systemic",
-        body: "The global front, wind, tide, shortages, route closures, congestion, and porter plans continue to change while you play. Forecast text and the chronicle expose those changes; regional heat, exposure, and material reactions are not live yet.",
+        body: "The global front, wind, tide, shortages, route closures, congestion, and porter plans continue to change while you play. Forecast text and the chronicle expose those changes; accumulated heat, exposure, and material reactions are not live yet.",
       },
     ],
     callouts: [
@@ -1028,7 +1028,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "12",
     title: "Meet people as individuals",
     shortTitle: "People & ABOUT",
-    summary: "Compatibility-region residents and route porters are visible people with persistent identities, changing conditions, bounded memories, and information you learn rather than receive for free.",
+    summary: "Residents of the original harbor country and its route porters are visible people with persistent identities, changing conditions, bounded memories, and information you learn rather than receive for free.",
     keywords: ["person", "resident", "porter", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather"],
     controlIds: ["inspect-person"],
     steps: [
@@ -1036,7 +1036,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "people-select",
         audience: "all",
         title: "Inspect somebody you can actually see",
-        body: "Click or tap a directly visible resident near a compatibility-region settlement or a porter traveling an active route. ABOUT closes if that person leaves exact sight; it is a live field observation, not a remote tracker.",
+        body: "Click or tap a directly visible resident near an original harbor or a porter traveling an active route. ABOUT closes if that person leaves exact sight; it is a live field observation, not a remote tracker.",
         controlId: "inspect-person",
       },
       {
@@ -1077,7 +1077,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         tone: "boundary",
         title: "This is the first human slice",
-        body: "These rules currently cover the 42 humans attached to the seven compatibility-region settlements. Universal regional human generation, dogs, wildlife, ownership, companions, negotiation, deterrence, and full actor-to-actor ecology are not live yet.",
+        body: "These rules currently cover the 42 humans attached to the original harbor settlements. Universal distant human generation, dogs, wildlife, ownership, companions, negotiation, deterrence, and full actor-to-actor ecology are not live yet.",
       },
     ],
   },
@@ -1113,7 +1113,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-coordinates-fps",
         audience: "all",
         title: "Use coordinates and FPS for field reports",
-        body: "Desktop and compact phone layouts expose the same facts without panes: terrain and biome, WATER or GROUND and known depth, effort, live stability percentage and cause, signed region/local/global tile coordinates, and FPS. The FPS value comes from actual active renderer callbacks rather than the simulation clock, making screenshots and performance reports easier to reproduce.",
+        body: "Desktop and compact phone layouts expose the same facts without panes: terrain and biome, WATER or GROUND and known depth, effort, live stability percentage and cause, continuous E/N world coordinates, and FPS. The FPS value comes from actual active renderer callbacks rather than the simulation clock, making screenshots and performance reports easier to reproduce.",
       },
       {
         id: "views-camera",
@@ -1139,7 +1139,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-weather",
         audience: "all",
         title: "Read rain and wind in either view",
-        body: "Drizzle, rain, and squall draw a bounded precipitation field over Chart and Relief. Sparse wind threads show direction and relative strength even under a clear sky; Relief turns those threads with the camera while the compass preserves world north. These marks expose the current global weather honestly, but regional fronts and complete cold, fire, ecology, cargo, wildlife, and human consequences are not live yet.",
+        body: "Drizzle, rain, and squall draw a bounded precipitation field over Chart and Relief. Sparse wind threads show direction and relative strength even under a clear sky; Relief turns those threads with the camera while the compass preserves world north. These marks expose the current global weather honestly, but traveling fronts and complete cold, fire, ecology, cargo, wildlife, and human consequences are not live yet.",
       },
       {
         id: "views-mobile-strip",
@@ -1184,7 +1184,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-no-offline-time",
         audience: "all",
         title: "Nothing advances behind your back; return is automatic",
-        body: "Closing the page or desktop app does not simulate offline time. When a valid local save exists, the next launch enters that same estuary automatically with its signed region, local position, inventory, seed, and history. Compatible older finite saves migrate into region 0,0 under A CHALLENGING HARD, preserve their contents, and gain the exact 18.000 combined-capacity floor.",
+        body: "Closing the page or desktop app does not simulate offline time. When a valid local save exists, the next launch enters that same estuary automatically with its exact world position, inventory, seed, and history. Compatible older finite saves keep their original estuary intact inside the continuous world under A CHALLENGING HARD, preserve their contents, and gain the exact 18.000 combined-capacity floor.",
       },
       {
         id: "saves-visible-failure",
@@ -1300,7 +1300,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "Continuous signed terrain, bounded five-region streaming, floating-origin travel, negative coordinates, seven visual biomes, deterministic region-0 field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, signed persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, regional physical cargo custody, region-0 settlements, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, and ABOUT inspection for the compatibility world's 42 humans are active. The outer game save remains version 4; embedded simulation snapshots migrate to identity-aware format 3 and rules 5. Perpetual play remains active.",
+        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, and ABOUT inspection for the original harbor country's 42 humans are active. The outer game save remains version 4; embedded simulation snapshots use identity-aware format 3 and rules 5. Perpetual play remains active.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1312,7 +1312,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-planned-physics",
         audience: "all",
         title: "Planned traversal and economy phase",
-        body: "Physical loose cargo, terrain-driven stumbles and falls, drift, grade tumble, impact damage, region-specific unload/revisit custody, and recovery are live. Autonomous parcel drift across a regional seam, ladder-gated formations, living mangrove or bramble catches, the remaining crafted-gear and locker bridges, trust-money rewards, and an anywhere upgrade system are planned and are not currently available actions.",
+        body: "Physical loose cargo, terrain-driven stumbles and falls, continuous current drift, grade tumble, impact damage, distance-safe custody, and recovery are live. Ladder-gated formations, living mangrove or bramble catches, the remaining crafted-gear and locker bridges, trust-money rewards, and an anywhere upgrade system are planned and are not currently available actions.",
       },
     ],
     callouts: [
@@ -1327,7 +1327,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 18 as const;
+export const TUTORIAL_CONTENT_VERSION = 19 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

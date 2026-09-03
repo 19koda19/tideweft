@@ -297,9 +297,17 @@ export function normalizeWayknotState(
       && sameRegion(region, contextRegion)
     ) {
       const context = options.contextAt(tileIndex, region);
-      if (
-        !context
-        || context.tileIndex !== tileIndex
+      if (context === undefined) {
+        // A sliding presentation frame does not necessarily contain every
+        // tile in its current storage region. Absence is not evidence that a
+        // strict deployed address became invalid, so preserve it for a later
+        // revisit. Legacy records retain their established carried salvage.
+        if (!strictAddress) {
+          region = null;
+          tileIndex = null;
+        }
+      } else if (
+        context.tileIndex !== tileIndex
         || !isValidTileContext(context)
         || context.occupied
         || !supportsWayknot(kind, context)

@@ -12,30 +12,50 @@ const PRODUCTION_ENTRY_URL = `${APP_ORIGIN}/index.html`;
 const DEV_ORIGIN = 'http://127.0.0.1:5173';
 const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
 const SMOKE_COMPATIBILITY_COLUMNS = 96;
-const SMOKE_REGIONAL_COLUMNS = 98;
-const SMOKE_REGIONAL_ROWS = 74;
+const SMOKE_REGIONAL_COLUMNS = 120;
+const SMOKE_REGIONAL_ROWS = 120;
+// The deterministic smoke seed starts at compatibility tile 32,68. Its
+// player-centered 120×120 frame initially projects compatibility 0,0 at
+// 28,-8. Installing the proven Harp fixture at 62,30 then makes the production
+// loader perform the expected two-quanta frame rebase, after which the same
+// compatibility origin projects at -4,24.
+const SMOKE_FIXTURE_COMPATIBILITY_OFFSET_X = 28;
+const SMOKE_FIXTURE_COMPATIBILITY_OFFSET_Y = -8;
+const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_X = -4;
+const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.8';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 16;
-const smokeRegionalTileIndex = (compatibilityTileIndex) => {
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.9';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 17;
+const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
-  return (y + 1) * SMOKE_REGIONAL_COLUMNS + x + 1;
+  return (y + offsetY) * SMOKE_REGIONAL_COLUMNS + x + offsetX;
 };
+const smokeFixtureTileIndex = (compatibilityTileIndex) => smokeRegionalTileIndex(
+  compatibilityTileIndex,
+  SMOKE_FIXTURE_COMPATIBILITY_OFFSET_X,
+  SMOKE_FIXTURE_COMPATIBILITY_OFFSET_Y,
+);
+const smokeProjectedTileIndex = (compatibilityTileIndex) => smokeRegionalTileIndex(
+  compatibilityTileIndex,
+  SMOKE_PROJECTED_COMPATIBILITY_OFFSET_X,
+  SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y,
+);
 const SMOKE_TIDE_HARP = Object.freeze({
   id: 'tide-harp:r1-a3-w5',
   label: 'Glass-Ebb Tide Harp · R1 · A3 · W5',
   reedLocalTileIndex: 2_942,
   anchorLocalTileIndex: 3_230,
   windLocalTileIndex: 2_751,
-  reedTileIndex: smokeRegionalTileIndex(2_942),
-  anchorTileIndex: smokeRegionalTileIndex(3_230),
-  windTileIndex: smokeRegionalTileIndex(2_751),
+  fixturePlayerTileIndex: smokeFixtureTileIndex(2_942),
+  reedTileIndex: smokeProjectedTileIndex(2_942),
+  anchorTileIndex: smokeProjectedTileIndex(3_230),
+  windTileIndex: smokeProjectedTileIndex(2_751),
   // Six tiles south of A3, but nine tiles from the player at R1. The normal
   // radius-8 pulse cannot reach it; the anchor's radius-6 echo can.
-  remoteEchoTileIndex: smokeRegionalTileIndex(3_806),
+  remoteEchoTileIndex: smokeProjectedTileIndex(3_806),
 });
 const SMOKE_MINIMUM_VIEWPORT = Object.freeze({ width: 960, height: 640 });
 const SMOKE_RESPONSIVE_VIEWPORT = Object.freeze({ width: 927, height: 640 });
@@ -1935,7 +1955,7 @@ async function installSmokeTideHarpFixture(contents) {
 
     // Player coordinates are fixed-point tile units in the persisted format.
     const columns = player.worldWidth;
-    const tileIndex = ${SMOKE_TIDE_HARP.reedTileIndex};
+    const tileIndex = ${SMOKE_TIDE_HARP.fixturePlayerTileIndex};
     if (!Number.isSafeInteger(columns) || columns !== ${SMOKE_REGIONAL_COLUMNS}) {
       database.close();
       return null;
@@ -2784,10 +2804,8 @@ function probeHasDesktopFieldTruth(probe) {
     /^(?:WATER|GROUND) · /u.test(field.terrain || '') &&
     field.terrain.split(' · ').length >= 4 &&
     field.safety?.includes('STAB') &&
-    field.navigation?.includes('REGION') &&
-    field.navigation.includes('LOCAL') &&
-    field.navigation.includes('GLOBAL') &&
-    field.navigation.includes('FPS')
+    /^E\s*[+-]?\d+\s*·\s*N\s*[+-]?\d+\s*·\s*\d+\s+FPS$/u.test(field.navigation || '') &&
+    !/REGION|LOCAL|GLOBAL/u.test(field.navigation || '')
   );
 }
 
@@ -2811,10 +2829,8 @@ function probeHasMobileHudFrame(probe) {
     mobile.compactCopy.safety?.includes('DEEP: STAM/STAB 0 → ADRIFT') &&
     /^(?:WATER|GROUND) · /u.test(mobile.compactCopy.terrain || '') &&
     mobile.compactCopy.terrain.split(' · ').length >= 4 &&
-    mobile.compactCopy.navigation?.includes('R ') &&
-    mobile.compactCopy.navigation.includes('L ') &&
-    mobile.compactCopy.navigation.includes('G ') &&
-    mobile.compactCopy.navigation.includes('FPS') &&
+    /^E[+-]?\d+\s*·\s*N[+-]?\d+\s*·\s*\d+\s+FPS$/u.test(mobile.compactCopy.navigation || '') &&
+    !/REGION|LOCAL|GLOBAL/u.test(mobile.compactCopy.navigation || '') &&
     Array.isArray(vitals) &&
     vitals.length === 4 &&
     vitals.map((vital) => vital.label).join(',') === 'STAM,STAB,LOOM,CARGO' &&

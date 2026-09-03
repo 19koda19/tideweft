@@ -7,6 +7,8 @@ import {
   collectStreamingRegionIdentity,
   commitStreamingRegionModification,
   createRegionStreamingState,
+  createTerrainRegionGenerator,
+  createTerrainRegionPrefetchJob,
   createTerrainRegionStreamingState,
   desiredRegionCoords,
   DESKTOP_REGION_STREAMING_CONFIG,
@@ -81,6 +83,60 @@ function regionRecord<T>(state: RegionStreamingState<T>, coord: RegionCoord) {
 }
 
 describe("bounded deterministic region streaming", () => {
+  it("reuses a bounded immutable terrain generator cache across stream transitions", () => {
+    const seed = seedFromText("the prefetched ground is still the same ground");
+    const first = createTerrainRegionGenerator(seed);
+    const second = createTerrainRegionGenerator([...seed] as RootSeed);
+    const coord = { x: 2, y: -3 } as const;
+    const generated = first(coord);
+
+    expect(second).toBe(first);
+    expect(second(coord)).toBe(generated);
+    expect(Object.isFrozen(generated)).toBe(true);
+    expect(Object.isFrozen(generated.value)).toBe(true);
+    expect(generated.contentHash).toBe(generateRegionTerrainBundle(seed, coord).manifest.terrainHash);
+  });
+
+  it("prefetches terrain in bounded deterministic slices and shares the completed bundle", () => {
+    const seed = seedFromText("the horizon arrives before the porter");
+    const coord = { x: 11, y: -7 } as const;
+    const job = createTerrainRegionPrefetchJob(seed, coord);
+    expect(createTerrainRegionPrefetchJob(seed, coord)).toBe(job);
+    expect(job.complete).toBe(false);
+    expect(job.completedTiles).toBe(0);
+    expect(() => job.step(0)).toThrow(/positive safe integer/u);
+
+    let calls = 0;
+    while (!job.step(257)) calls += 1;
+    expect(calls).toBeGreaterThan(0);
+    expect(job.complete).toBe(true);
+    expect(job.completedTiles).toBe(job.totalTiles);
+
+    const cached = createTerrainRegionGenerator(seed)(coord);
+    expect(cached.contentHash).toBe(generateRegionTerrainBundle(seed, coord).manifest.terrainHash);
+    expect(createTerrainRegionPrefetchJob(seed, coord).complete).toBe(true);
+  });
+
+  it("cancels only ephemeral prefetch work and cannot reroll regenerated ground", () => {
+    const seed = seedFromText("turning around does not cancel the world");
+    const coord = { x: -31, y: 22 } as const;
+    const abandoned = createTerrainRegionPrefetchJob(seed, coord);
+    expect(abandoned.step(311)).toBe(false);
+    expect(abandoned.completedTiles).toBe(311);
+    abandoned.cancel();
+    expect(abandoned.cancelled).toBe(true);
+    expect(() => abandoned.step(1)).toThrow(/cancelled/ui);
+
+    const restarted = createTerrainRegionPrefetchJob(seed, coord);
+    expect(restarted).not.toBe(abandoned);
+    while (!restarted.step(509)) {
+      // Deterministic bounded slices intentionally restart from tile zero.
+    }
+    const generated = createTerrainRegionGenerator(seed)(coord);
+    expect(generated.contentHash).toBe(generateRegionTerrainBundle(seed, coord).manifest.terrainHash);
+    expect(restarted.cancelled).toBe(false);
+  });
+
   it("chooses desktop nine and mobile center-plus-cardinal five deterministically", () => {
     expect(desiredRegionCoords({ x: 0, y: 0 }, DESKTOP_REGION_STREAMING_CONFIG).map(regionKey))
       .toEqual([

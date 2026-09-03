@@ -225,6 +225,79 @@ describe("procedural biome climate", () => {
     expectFixedClimate(climate);
     expect(climate.magicalWater).toBe(0);
   });
+
+  it("preserves region-zero climate exactly when an explicit global address is supplied", () => {
+    const seed = seedFromText("the first estuary keeps its weather");
+    const tile = terrainInput("marsh", {
+      index: 2_947,
+      x: 67,
+      y: 30,
+      moisture: 723_456,
+    });
+    const globalTile = { x: tile.x, y: tile.y };
+    const legacyMagic = deriveMagicalWaterInfluence(seed, tile);
+    const addressedMagic = deriveMagicalWaterInfluence(seed, tile, globalTile);
+
+    expect(addressedMagic).toBe(legacyMagic);
+    expect(deriveBaselineBiomeClimate(seed, tile, 72, legacyMagic, globalTile)).toEqual(
+      deriveBaselineBiomeClimate(seed, tile, 72, legacyMagic),
+    );
+  });
+
+  it("uses the full signed safe global address independently of floating local coordinates", () => {
+    const seed = seedFromText("climate beyond every remembered chart");
+    const globalTile = {
+      x: -8_000_000_000_000_000,
+      y: 7_999_999_999_999_900,
+    };
+    const westLocal = terrainInput("deep-water", { x: 97, y: 24, moisture: 844_000 });
+    const eastLocal = { ...westLocal, index: 1, x: 1 };
+    const magic = deriveMagicalWaterInfluence(seed, westLocal, globalTile);
+    const west = deriveBiomeProfile({
+      seed,
+      tile: westLocal,
+      gridHeight: 72,
+      globalTile,
+      magicalWaterInfluence: magic,
+    });
+    const east = deriveBiomeProfile({
+      seed,
+      tile: eastLocal,
+      gridHeight: 72,
+      globalTile,
+      magicalWaterInfluence: deriveMagicalWaterInfluence(seed, eastLocal, globalTile),
+    });
+    const adjacent = deriveBiomeProfile({
+      seed,
+      tile: eastLocal,
+      gridHeight: 72,
+      globalTile: { ...globalTile, x: globalTile.x + 1 },
+      magicalWaterInfluence: deriveMagicalWaterInfluence(
+        seed,
+        eastLocal,
+        { ...globalTile, x: globalTile.x + 1 },
+      ),
+    });
+
+    expect(east).toEqual(west);
+    expect(adjacent.climate).not.toEqual(west.climate);
+    expectFixedClimate(west.climate);
+    expectFixedClimate(adjacent.climate);
+  });
+
+  it("does not extend the legacy 4,096-wide climate packing into distant positive space", () => {
+    const seed = seedFromText("the climate never folds into a diagonal copy");
+    const tile = terrainInput("deep-water", { x: 0, y: 0, moisture: 800_000 });
+    // Under the finite compatibility packing these two magic-noise lattice
+    // addresses collapse to the same scalar key: (4097 * 4096) and
+    // (4096 * 4096 + 4096). Globally addressed climate must keep them apart.
+    const first = { x: 0, y: 4_097 * 18 };
+    const second = { x: 4_096 * 18, y: 4_096 * 18 };
+
+    expect(deriveMagicalWaterInfluence(seed, tile, first)).not.toBe(
+      deriveMagicalWaterInfluence(seed, tile, second),
+    );
+  });
 });
 
 describe("biome classification boundaries", () => {

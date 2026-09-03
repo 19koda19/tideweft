@@ -1,7 +1,8 @@
 import type { RootSeed } from "../sim/rng";
 import {
-  generateRegionTerrainBundle,
+  createRegionTerrainBundleSource,
   type GeneratedRegionTerrain,
+  type RegionTerrainBundleSource,
 } from "../sim/regionTerrain";
 import {
   REGION_COORD_LIMIT,
@@ -49,6 +50,9 @@ const REGION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,191}$/;
 const TRUSTED_STREAMS = new WeakSet<object>();
 const TRUSTED_GENERATED_REGIONS = new WeakSet<object>();
 const UTF8_ENCODER = new TextEncoder();
+const TERRAIN_GENERATOR_SEED_CACHE_LIMIT = 2;
+const TERRAIN_GENERATOR_REGION_CACHE_LIMIT = 12;
+const TERRAIN_GENERATORS = new Map<string, TerrainGeneratorCacheEntry>();
 
 export interface RegionStreamingConfig {
   readonly radius: number;
@@ -65,6 +69,28 @@ export interface GeneratedStreamRegion<T> {
 }
 
 export type RegionStreamGenerator<T> = (coord: RegionCoord) => GeneratedStreamRegion<T>;
+
+/** Ephemeral bounded work; no cursor or partial job enters authoritative saves. */
+export interface TerrainRegionPrefetchJob {
+  readonly coord: RegionCoord;
+  readonly key: string;
+  readonly totalTiles: number;
+  readonly completedTiles: number;
+  readonly complete: boolean;
+  readonly cancelled: boolean;
+  /** Returns true once the exact immutable region is in the shared cache. */
+  readonly step: (tileBudget: number) => boolean;
+  /** Drops only ephemeral work. A later request deterministically starts again. */
+  readonly cancel: () => void;
+}
+
+interface TerrainGeneratorCacheEntry {
+  readonly seed: RootSeed;
+  readonly source: RegionTerrainBundleSource;
+  readonly regionCache: Map<string, GeneratedStreamRegion<TerrainState>>;
+  readonly pending: Map<string, TerrainRegionPrefetchJob>;
+  readonly generator: RegionStreamGenerator<TerrainState>;
+}
 
 export interface LoadedRegion<T> {
   readonly coord: RegionCoord;
@@ -138,25 +164,169 @@ export function regionStreamContentHash(value: unknown): string {
 }
 
 export function createTerrainRegionGenerator(rootSeed: RootSeed): RegionStreamGenerator<TerrainState> {
+  return terrainGeneratorEntry(rootSeed).generator;
+}
+
+/**
+ * Prepare an immutable region in deterministic tile slices before physics can
+ * reach it. Re-requesting the same coordinate shares work and completed data.
+ */
+export function createTerrainRegionPrefetchJob(
+  rootSeed: RootSeed,
+  coord: RegionCoord,
+): TerrainRegionPrefetchJob {
+  const entry = terrainGeneratorEntry(rootSeed);
+  const canonical = canonicalCoord(coord);
+  const key = regionKey(canonical);
+  const existing = entry.pending.get(key);
+  if (existing) return existing;
+  const cached = entry.regionCache.get(key);
+  if (cached) {
+    touchTerrainRegionCache(entry, key, cached);
+    return completedTerrainPrefetchJob(canonical, key, cached.value.tiles.length);
+  }
+
+  const sourceJob = entry.source.createJob(canonical);
+  let finished = false;
+  let cancelled = false;
+  let job: TerrainRegionPrefetchJob;
+  job = Object.freeze({
+    coord: canonical,
+    key,
+    totalTiles: sourceJob.totalTiles,
+    get completedTiles(): number {
+      return sourceJob.completedTiles;
+    },
+    get complete(): boolean {
+      return finished;
+    },
+    get cancelled(): boolean {
+      return cancelled;
+    },
+    step: (tileBudget: number): boolean => {
+      if (!Number.isSafeInteger(tileBudget) || tileBudget <= 0) {
+        throw new RangeError("Region terrain job tile budget must be a positive safe integer");
+      }
+      if (cancelled) throw new RangeError("Cancelled terrain prefetch work cannot be resumed");
+      if (finished) return true;
+      const alreadyCached = entry.regionCache.get(key);
+      if (alreadyCached) {
+        touchTerrainRegionCache(entry, key, alreadyCached);
+        entry.pending.delete(key);
+        finished = true;
+        return true;
+      }
+      const bundle = sourceJob.step(tileBudget);
+      if (!bundle) return false;
+      cacheTerrainBundle(entry, canonical, bundle);
+      entry.pending.delete(key);
+      finished = true;
+      return true;
+    },
+    cancel: (): void => {
+      if (finished || cancelled) return;
+      if (entry.pending.get(key) === job) entry.pending.delete(key);
+      cancelled = true;
+    },
+  });
+  entry.pending.set(key, job);
+  return job;
+}
+
+function terrainGeneratorEntry(rootSeed: RootSeed): TerrainGeneratorCacheEntry {
   const seed = canonicalRootSeed(rootSeed);
-  return (coord: RegionCoord): GeneratedStreamRegion<TerrainState> => {
-    const bundle: GeneratedRegionTerrain = generateRegionTerrainBundle(seed, coord);
-    if (bundle.manifest.regionId !== stableRegionId(seed, coord)) {
-      throw new Error("Generated region terrain returned a mismatched stable identity");
+  const seedKey = seed.map((word) => word.toString(16).padStart(8, "0")).join("");
+  const cachedGenerator = TERRAIN_GENERATORS.get(seedKey);
+  if (cachedGenerator) {
+    TERRAIN_GENERATORS.delete(seedKey);
+    TERRAIN_GENERATORS.set(seedKey, cachedGenerator);
+    return cachedGenerator;
+  }
+  const source = createRegionTerrainBundleSource(seed);
+  const regionCache = new Map<string, GeneratedStreamRegion<TerrainState>>();
+  const pending = new Map<string, TerrainRegionPrefetchJob>();
+  let entry: TerrainGeneratorCacheEntry;
+  const generator = (coord: RegionCoord): GeneratedStreamRegion<TerrainState> => {
+    const key = regionKey(coord);
+    const cached = regionCache.get(key);
+    if (cached) {
+      touchTerrainRegionCache(entry, key, cached);
+      return cached;
     }
-    const generated: GeneratedStreamRegion<TerrainState> = deepFreeze({
-      coord: bundle.manifest.coord,
-      key: bundle.manifest.key,
-      regionId: bundle.manifest.regionId,
-      contentHash: bundle.manifest.terrainHash,
-      value: bundle.terrain,
-    });
-    // This object came directly from the production generator in this call;
-    // its terrain hash was already computed there, so avoid hashing thousands
-    // of tiles a second time on the main thread.
-    TRUSTED_GENERATED_REGIONS.add(generated);
-    return generated;
+    const pendingJob = pending.get(key);
+    if (pendingJob) {
+      pendingJob.step(pendingJob.totalTiles);
+      const completed = regionCache.get(key);
+      if (!completed) throw new Error("Terrain prefetch completion lost its generated region");
+      return completed;
+    }
+    return cacheTerrainBundle(entry, coord, source.generate(coord));
   };
+  entry = { seed, source, regionCache, pending, generator };
+  TERRAIN_GENERATORS.set(seedKey, entry);
+  while (TERRAIN_GENERATORS.size > TERRAIN_GENERATOR_SEED_CACHE_LIMIT) {
+    const oldest = TERRAIN_GENERATORS.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    TERRAIN_GENERATORS.delete(oldest);
+  }
+  return entry;
+}
+
+function cacheTerrainBundle(
+  entry: TerrainGeneratorCacheEntry,
+  coord: RegionCoord,
+  bundle: GeneratedRegionTerrain,
+): GeneratedStreamRegion<TerrainState> {
+  if (bundle.manifest.regionId !== stableRegionId(entry.seed, coord)) {
+    throw new Error("Generated region terrain returned a mismatched stable identity");
+  }
+  const generated: GeneratedStreamRegion<TerrainState> = deepFreeze({
+    coord: bundle.manifest.coord,
+    key: bundle.manifest.key,
+    regionId: bundle.manifest.regionId,
+    contentHash: bundle.manifest.terrainHash,
+    value: bundle.terrain,
+  });
+  // Production generation already computed this exact terrain hash.
+  TRUSTED_GENERATED_REGIONS.add(generated);
+  touchTerrainRegionCache(entry, bundle.manifest.key, generated);
+  return generated;
+}
+
+function touchTerrainRegionCache(
+  entry: TerrainGeneratorCacheEntry,
+  key: string,
+  region: GeneratedStreamRegion<TerrainState>,
+): void {
+  entry.regionCache.delete(key);
+  entry.regionCache.set(key, region);
+  while (entry.regionCache.size > TERRAIN_GENERATOR_REGION_CACHE_LIMIT) {
+    const oldest = entry.regionCache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    entry.regionCache.delete(oldest);
+  }
+}
+
+function completedTerrainPrefetchJob(
+  coord: RegionCoord,
+  key: string,
+  totalTiles: number,
+): TerrainRegionPrefetchJob {
+  return Object.freeze({
+    coord,
+    key,
+    totalTiles,
+    completedTiles: totalTiles,
+    complete: true,
+    cancelled: false,
+    step: (tileBudget: number): boolean => {
+      if (!Number.isSafeInteger(tileBudget) || tileBudget <= 0) {
+        throw new RangeError("Region terrain job tile budget must be a positive safe integer");
+      }
+      return true;
+    },
+    cancel: (): void => undefined,
+  });
 }
 
 export function createTerrainRegionStreamingState(options: {

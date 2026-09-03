@@ -10,7 +10,7 @@ import {
   type FieldResourceRarity,
 } from "../sim/fieldResources";
 import { BIOME_IDS } from "../sim/biomes";
-import { createRegionCoord } from "../sim/regions";
+import { createRegionCoord, type RegionTileAddress } from "../sim/regions";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
 import {
   regionalTileIndexInView,
@@ -60,7 +60,9 @@ const NODE_KEYS = [
 export interface RegionalFieldResourceMapping {
   /** Frozen snapshot. Resolve authoritative mutations against the source ID. */
   readonly source: FieldResourceNode;
-  /** Ephemeral index in the current floating 98 x 74 traversal view. */
+  /** Stable compatibility-region ownership; never a floating view address. */
+  readonly address: RegionTileAddress;
+  /** Ephemeral index in the current bounded sliding traversal view. */
   readonly viewTileIndex: number;
 }
 
@@ -86,7 +88,7 @@ export function projectCompatibilityFieldResources(
   const window = regionalWindowForWorld(world);
   if (window === null) {
     // Metadata-less views are accepted only as the finite compatibility grid.
-    // In particular, a cloned 98 x 74 floating view must not silently become
+    // In particular, a cloned bounded floating view must not silently become
     // region 0,0 after its WeakMap address metadata has been lost.
     if (world.terrain.width !== source.width || world.terrain.height !== source.height) {
       throw new RangeError("Finite field resource view does not match its catalog dimensions");
@@ -152,7 +154,12 @@ export function projectCompatibilityFieldResources(
     }
     seenViewTiles.add(viewTileIndex);
     const sourceSnapshot = copyNode(node, node.tileIndex, node.x, node.y);
-    mappings.push(Object.freeze({ source: sourceSnapshot, viewTileIndex }));
+    const address = Object.freeze({
+      region: COMPATIBILITY_REGION,
+      localX: node.x,
+      localY: node.y,
+    });
+    mappings.push(Object.freeze({ source: sourceSnapshot, address, viewTileIndex }));
     projectedNodes.push(copyNode(
       node,
       viewTileIndex,

@@ -87,6 +87,12 @@ export interface TerrainGridView {
   readonly rows: number;
   readonly tileSize: number;
   readonly origin: WorldPoint;
+  /**
+   * Stable signed global tile represented by row 0, column 0. Floating-origin
+   * renderers use this for place-bound detail; omitted finite fixtures retain
+   * their original local-coordinate behavior.
+   */
+  readonly worldTileOrigin?: WorldPoint;
   /** Row-major cells: index = row * columns + column. */
   readonly tiles: readonly TerrainTileView[];
   /** Changes whenever static terrain art should be reconsidered. */

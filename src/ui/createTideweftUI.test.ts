@@ -196,7 +196,7 @@ describe("underfoot terrain presentation", () => {
 });
 
 describe("navigation and renderer telemetry copy", () => {
-  it("shows signed region/global coordinates and measured renderer FPS", () => {
+  it("shows one continuous world address and measured renderer FPS", () => {
     expect(navigationTelemetryCopy({
       regionX: -304,
       regionY: 719,
@@ -209,7 +209,7 @@ describe("navigation and renderer telemetry copy", () => {
       frameTimeMs: 16.78,
       frameCount: 120,
       active: true,
-    })).toBe("REGION -304,+719 · LOCAL 17,4 · GLOBAL -29775,+52984 · 60 FPS");
+    })).toBe("E -29775 · N +52984 · 60 FPS");
   });
 
   it("keeps compact mobile copy terse and refuses an unmeasured FPS guess", () => {
@@ -225,9 +225,9 @@ describe("navigation and renderer telemetry copy", () => {
       frameTimeMs: 6.94,
       frameCount: 1,
       active: true,
-    }, true)).toBe("R 0,-2 · L 0,73 · G 0,-73 · FPS —");
+    }, true)).toBe("E0 · N-73 · FPS —");
     expect(navigationTelemetryCopy(undefined, undefined, true))
-      .toBe("R ?,? · L ?,? · G ?,? · FPS —");
+      .toBe("E ? · N ? · FPS —");
   });
 });
 

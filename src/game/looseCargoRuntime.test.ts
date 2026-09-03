@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { createWorld, createWorldView, FIXED_POINT, type WorldView } from "../sim/public";
+import {
+  createWorld,
+  createWorldView,
+  FIXED_POINT,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+  type WorldView,
+} from "../sim/public";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence } from "../sim/biomes";
 import { createCraftingInventory } from "./crafting";
 import {
@@ -20,12 +27,17 @@ import {
   playerPositionAtRegionalLooseCargo,
   projectLooseCargoCarrierToPlayer,
   sampleLooseCargoEnvironment,
+  sampleLooseCargoRegionalNeighborhood,
   stepLooseCargoInCompatibilityWorld,
 } from "./looseCargoRuntime";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import { createRegionalTerrainWindow } from "./regionalTravel";
-import { createRegionalWorldView, regionalTileIndexInView } from "./regionalWorldView";
+import {
+  createRegionalWorldView,
+  regionalAddressAt,
+  regionalTileIndexInView,
+} from "./regionalWorldView";
 
 const OWNER = { kind: "player", id: "local-porter" } as const;
 
@@ -367,5 +379,61 @@ describe("signed-region parcel runtime", () => {
     const sample = sampleLooseCargoEnvironment(view, dropped.world)[0];
     expect(sample?.waterDepth).toBe(mapped.tile.waterDepth);
     expect(stepLooseCargoInCompatibilityWorld(view, dropped.world).ok).toBe(true);
+  });
+
+  it("samples a visible parcel from a partially visible neighboring storage owner", () => {
+    const world = createWorld("partial regional parcel neighborhood", "wild");
+    const compatibility = createWorldView(world);
+    const stream = createTerrainRegionStreamingState({
+      rootSeed: world.meta.rootSeed,
+      center: { x: 0, y: 0 },
+    });
+    const window = createRegionalTerrainWindow(world.meta.rootSeed, stream);
+    const view = createRegionalWorldView(
+      compatibility,
+      window,
+      projectRegionalCartographyWindow(createRegionalCartography(world.meta.rootSeed), window),
+    );
+    const regions = new Map<string, { region: { x: number; y: number }; indices: number[] }>();
+    window.addresses.forEach((address, index) => {
+      const key = `${address.region.x}:${address.region.y}`;
+      const entry = regions.get(key) ?? { region: address.region, indices: [] as number[] };
+      entry.indices.push(index);
+      regions.set(key, entry);
+    });
+    const partial = [...regions.values()]
+      .filter(({ indices }) => indices.length < WORLD_WIDTH * WORLD_HEIGHT)
+      .sort((left, right) => left.indices.length - right.indices.length)[0];
+    if (!partial) throw new Error("sliding window fixture has no partial storage owner");
+    const viewIndex = partial.indices[Math.floor(partial.indices.length / 2)];
+    const address = viewIndex === undefined ? undefined : regionalAddressAt(view, viewIndex);
+    if (!address) throw new Error("partial storage tile address missing");
+    const carrier = createLooseCargoCarrier(
+      OWNER,
+      createCraftingInventory(18_000, { cordreed: 1 }),
+    );
+    const dropped = dropLooseCargo(
+      createLooseCargoWorld(WORLD_WIDTH, WORLD_HEIGHT, partial.region),
+      carrier,
+      {
+        lotId: "crafting-stack:cordreed",
+        quantity: 1,
+        x: address.localX * FIXED_POINT + FIXED_POINT / 2,
+        y: address.localY * FIXED_POINT + FIXED_POINT / 2,
+      },
+    );
+    if (!dropped.ok || !dropped.entity) throw new Error(dropped.message);
+    expect(() => sampleLooseCargoEnvironment(view, dropped.world)).toThrow(/active terrain/u);
+    const inputs = sampleLooseCargoRegionalNeighborhood(view, [dropped.world]);
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]).toMatchObject({
+      region: partial.region,
+      expectedRevision: dropped.world.revision,
+      samples: [{ entityId: dropped.entity.id }],
+    });
+    expect(() => sampleLooseCargoRegionalNeighborhood(
+      view,
+      Array.from({ length: 2_048 }, () => dropped.world),
+    )).toThrow(/prefiltered live-region partition set/u);
   });
 });

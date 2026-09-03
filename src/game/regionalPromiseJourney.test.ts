@@ -4,7 +4,6 @@ import { TILE_UNITS, createPlayer } from "./player";
 import { migratePlayerToRegionalTravel } from "./regionalPlayerTravel";
 import {
   REGIONAL_TRAVEL_COLUMNS,
-  REGIONAL_TRAVEL_ROWS,
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
 import {
@@ -50,8 +49,11 @@ describe("regional Promise journey evidence", () => {
       travel.window,
       { discovered: player.discovered, depthSoundings: player.depthSoundings },
     );
-    player.x = (REGIONAL_TRAVEL_COLUMNS - 0.5) * TILE_UNITS;
-    player.y = Math.floor(REGIONAL_TRAVEL_ROWS / 2) * TILE_UNITS + TILE_UNITS / 2;
+    const outsideIndex = travel.window.addresses.findIndex(({ region }) =>
+      region.x !== 0 || region.y !== 0);
+    expect(outsideIndex).toBeGreaterThanOrEqual(0);
+    player.x = (outsideIndex % REGIONAL_TRAVEL_COLUMNS + 0.5) * TILE_UNITS;
+    player.y = (Math.floor(outsideIndex / REGIONAL_TRAVEL_COLUMNS) + 0.5) * TILE_UNITS;
     const detoured = advanceRegionalPromiseJourney(
       beginRegionalPromiseJourney(contract, economy),
       player,

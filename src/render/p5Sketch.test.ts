@@ -267,6 +267,72 @@ describe("Chart spatial epoch gate", () => {
     renderer.destroy();
   });
 
+  it("rebases a held world tap from absolute tile origins without consuming real player motion", () => {
+    const framedView = (
+      spatialEpoch: string,
+      position: { readonly x: number; readonly y: number },
+      worldTileOrigin: { readonly x: number; readonly y: number },
+    ): TideweftView => {
+      const base = view(spatialEpoch, position);
+      return {
+        ...base,
+        terrain: { ...base.terrain, worldTileOrigin },
+      };
+    };
+    let current = framedView("frame-a", { x: 500, y: 300 }, { x: 100, y: -50 });
+    const commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    draw();
+    canvas.emit("pointerdown", { pointerId: 71 });
+
+    // The local player moved four world units while the spatial frame shifted
+    // sixteen tiles. Camera/input continuity must use only the exact frame
+    // translation (-16 * 24), not infer a rebase from player displacement.
+    current = framedView("frame-b", { x: 120, y: 300 }, { x: 116, y: -50 });
+    draw();
+    expect(canvas.releasedPointerIds).not.toContain(71);
+    canvas.emit("pointerup", { pointerId: 71 });
+
+    expect(commands).toEqual([{
+      type: "move-target",
+      point: { x: 116, y: 300 },
+      additive: false,
+    }]);
+    expect(canvas.releasedPointerIds).toContain(71);
+    renderer.destroy();
+  });
+
+  it("rejects a held world tap when a different world reuses the same spatial frame", () => {
+    const inWorld = (worldName: string, position: { x: number; y: number }): TideweftView => {
+      const base = view("g:10:-20", position);
+      return {
+        ...base,
+        worldName,
+        terrain: { ...base.terrain, worldTileOrigin: { x: 10, y: -20 } },
+      };
+    };
+    let current = inWorld("First Estuary", { x: 20, y: 30 });
+    const commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    draw();
+    canvas.emit("pointerdown", { pointerId: 72 });
+
+    current = inWorld("Replacement Estuary", { x: 600, y: 500 });
+    canvas.emit("pointerup", { pointerId: 72 });
+
+    expect(commands).toEqual([]);
+    expect(canvas.releasedPointerIds).toContain(72);
+    renderer.destroy();
+  });
+
   it("treats epochs as opaque, snaps to the new player, and rejects an old desktop release", () => {
     let current = view("7", { x: 20, y: 30 });
     const commands: RendererCommand[] = [];

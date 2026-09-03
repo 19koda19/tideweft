@@ -11,22 +11,34 @@ import {
   PHYSICAL_CARGO_MAX_SERIALIZED_BYTES,
   PHYSICAL_CARGO_STATE_VERSION,
   adoptPhysicalCargoStateV1,
+  commitPhysicalCargoRegionalMutation,
   commitPhysicalCargoState,
   createPhysicalCargoStateFromPlayer,
   gameSaveEnvelopeIntegrity,
+  inspectPhysicalCargoPartitionIndex,
+  locatePhysicalCargoEntity,
+  physicalCargoInactiveWorlds,
+  physicalCargoPromiseCustody,
+  physicalCargoWorlds,
+  queryPhysicalCargoPartitions,
   quotePhysicalCargoSource,
+  snapshotPhysicalCargoState,
+  stepPhysicalCargoAcrossRegions,
   transitionPhysicalCargoRegion,
   validatePhysicalCargoState,
   type PhysicalCargoState,
+  type SerializedPhysicalCargoState,
 } from "./physicalCargoState";
 import {
   LOOSE_CARGO_MAX_ENTITIES,
   LOOSE_CARGO_MAX_HISTORY,
   LOOSE_CARGO_RETAINED_HISTORY,
   addLooseCargoStack,
+  createLooseCargoWorld,
   dropLooseCargo,
   looseCargoEntityId,
   looseCargoEventId,
+  looseCargoRegionKey,
   pickupLooseCargo,
   scatterLooseCargo,
   setLooseCargoLotMaterialState,
@@ -56,17 +68,18 @@ function fixture() {
 
 function resealPhysicalCargoState(
   state: PhysicalCargoState,
-  changes: Partial<Omit<PhysicalCargoState, "integrity">> = {},
+  changes: Partial<Omit<SerializedPhysicalCargoState, "integrity">> = {},
 ): PhysicalCargoState {
+  const snapshot = snapshotPhysicalCargoState(state);
   const unsealed = {
-    version: changes.version ?? state.version,
-    lastSourceOrdinal: changes.lastSourceOrdinal ?? state.lastSourceOrdinal,
-    activeRegion: changes.activeRegion ?? state.activeRegion,
-    activeRegionKey: changes.activeRegionKey ?? state.activeRegionKey,
-    looseWorld: changes.looseWorld ?? state.looseWorld,
-    inactiveWorlds: changes.inactiveWorlds ?? state.inactiveWorlds,
-    carrier: changes.carrier ?? state.carrier,
-    expectedManifest: changes.expectedManifest ?? state.expectedManifest,
+    version: changes.version ?? snapshot.version,
+    lastSourceOrdinal: changes.lastSourceOrdinal ?? snapshot.lastSourceOrdinal,
+    activeRegion: changes.activeRegion ?? snapshot.activeRegion,
+    activeRegionKey: changes.activeRegionKey ?? snapshot.activeRegionKey,
+    looseWorld: changes.looseWorld ?? snapshot.looseWorld,
+    inactiveWorlds: changes.inactiveWorlds ?? snapshot.inactiveWorlds,
+    carrier: changes.carrier ?? snapshot.carrier,
+    expectedManifest: changes.expectedManifest ?? snapshot.expectedManifest,
   };
   const sealPayload = {
     ...unsealed,
@@ -75,7 +88,7 @@ function resealPhysicalCargoState(
       integrity,
     })),
   };
-  return { ...unsealed, integrity: hashCanonical(sealPayload) };
+  return { ...unsealed, integrity: hashCanonical(sealPayload) } as unknown as PhysicalCargoState;
 }
 
 function legacyPhysicalCargoV1(state: PhysicalCargoState) {
@@ -128,10 +141,16 @@ describe("physical cargo save state", () => {
       version: PHYSICAL_CARGO_STATE_VERSION,
       activeRegion: { x: 0, y: 0 },
       activeRegionKey: "r:0:0",
-      inactiveWorlds: [],
     });
+    expect(physicalCargoInactiveWorlds(state)).toEqual([]);
     expect(validatePhysicalCargoState(
-      structuredClone(state),
+      structuredClone(snapshotPhysicalCargoState(state)),
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    )).toMatchObject({ valid: true, reason: "valid" });
+    expect(validatePhysicalCargoState(
+      structuredClone(resealPhysicalCargoState(state)),
       player,
       world.terrain.width,
       world.terrain.height,
@@ -165,11 +184,11 @@ describe("physical cargo save state", () => {
       lastSourceOrdinal: legacy.lastSourceOrdinal,
       activeRegion: { x: 0, y: 0 },
       activeRegionKey: "r:0:0",
-      inactiveWorlds: [],
       carrier: legacy.carrier,
       looseWorld: legacy.looseWorld,
       expectedManifest: legacy.expectedManifest,
     });
+    expect(physicalCargoInactiveWorlds(adopted.state!)).toEqual([]);
 
     const deletedUnsealed = {
       version: 1 as const,
@@ -234,7 +253,7 @@ describe("physical cargo save state", () => {
 
     const eastEmpty = transitionPhysicalCargoRegion(regionZero, { x: 1, y: 0 }, width, height);
     expect(eastEmpty.activeRegionKey).toBe("r:1:0");
-    expect(eastEmpty.inactiveWorlds.map(({ regionKey }) => regionKey)).toEqual(["r:0:0"]);
+    expect(physicalCargoInactiveWorlds(eastEmpty).map(({ regionKey }) => regionKey)).toEqual(["r:0:0"]);
     const eastDrop = dropLooseCargo(eastEmpty.looseWorld, eastEmpty.carrier, {
       lotId: "promise:19",
       x: 750_000,
@@ -252,7 +271,7 @@ describe("physical cargo save state", () => {
 
     const revisitedZero = transitionPhysicalCargoRegion(east, { x: 0, y: 0 }, width, height);
     expect(revisitedZero.looseWorld).toEqual(zeroSnapshot);
-    expect(revisitedZero.inactiveWorlds.map(({ regionKey }) => regionKey)).toEqual(["r:1:0"]);
+    expect(physicalCargoInactiveWorlds(revisitedZero).map(({ regionKey }) => regionKey)).toEqual(["r:1:0"]);
     const revisitedEast = transitionPhysicalCargoRegion(revisitedZero, { x: 1, y: 0 }, width, height);
     expect(revisitedEast.looseWorld).toEqual(eastSnapshot);
     expect(revisitedEast.expectedManifest).toEqual(initial.expectedManifest);
@@ -261,7 +280,7 @@ describe("physical cargo save state", () => {
 
     mirrorPhysicalCarrierToPlayer(revisitedEast, player);
     expect(validatePhysicalCargoState(
-      JSON.parse(JSON.stringify(revisitedEast)),
+      JSON.parse(JSON.stringify(snapshotPhysicalCargoState(revisitedEast))),
       player,
       width,
       height,
@@ -277,8 +296,8 @@ describe("physical cargo save state", () => {
     expect(negative).toMatchObject({
       activeRegion: { x: -1, y: -7 },
       activeRegionKey: "r:-1:-7",
-      inactiveWorlds: [],
     });
+    expect(physicalCargoInactiveWorlds(negative)).toEqual([]);
     expect(negative.lastSourceOrdinal).toBe(initial.lastSourceOrdinal);
     expect(negative.carrier).toBe(initial.carrier);
     expect(negative.expectedManifest).toBe(initial.expectedManifest);
@@ -289,13 +308,13 @@ describe("physical cargo save state", () => {
     };
     const distant = transitionPhysicalCargoRegion(negative, distantRegion, width, height);
     expect(distant.activeRegion).toEqual(distantRegion);
-    expect(distant.inactiveWorlds).toEqual([]);
+    expect(physicalCargoInactiveWorlds(distant)).toEqual([]);
     expect(quotePhysicalCargoSource(distant, "gather", "distant-node").lotId)
       .toMatch(/^pc:-9007199254740991:9007199254740991:source:1:gather:/u);
     const boundedSource = quotePhysicalCargoSource(distant, "x".repeat(96), "distant-node");
     expect(boundedSource.lotId.length).toBeLessThanOrEqual(160);
     const returned = transitionPhysicalCargoRegion(distant, { x: 0, y: 0 }, width, height);
-    expect(returned.inactiveWorlds).toEqual([]);
+    expect(physicalCargoInactiveWorlds(returned)).toEqual([]);
     expect(returned.looseWorld).toEqual(initial.looseWorld);
     expect(() => transitionPhysicalCargoRegion(returned, { x: -0, y: 0 }, width, height))
       .toThrow(/safe integers/u);
@@ -321,9 +340,14 @@ describe("physical cargo save state", () => {
         looseWorld: stepped.state,
         carrier: state.carrier,
       }, { kind: "conserved" });
+      const audit = inspectPhysicalCargoPartitionIndex(state);
+      expect(audit.valid).toBe(true);
+      expect(audit.height).toBeLessThanOrEqual(
+        2 * Math.ceil(Math.log2(audit.size + 1)),
+      );
     }
-    expect(state.inactiveWorlds).toHaveLength(regions.length - 1);
-    const keys = state.inactiveWorlds.map(({ regionKey }) => regionKey);
+    expect(physicalCargoInactiveWorlds(state)).toHaveLength(regions.length - 1);
+    const keys = physicalCargoInactiveWorlds(state).map(({ regionKey }) => regionKey);
     expect(keys).toEqual([...keys].sort());
     expect(new Set(keys).size).toBe(keys.length);
     expect(state.expectedManifest).toEqual(initial.expectedManifest);
@@ -332,19 +356,20 @@ describe("physical cargo save state", () => {
 
     for (const region of [...regions].reverse()) {
       state = transitionPhysicalCargoRegion(state, region, width, height);
+      expect(inspectPhysicalCargoPartitionIndex(state).valid).toBe(true);
     }
     mirrorPhysicalCarrierToPlayer(state, player);
-    const cloned = structuredClone(state);
+    const cloned = structuredClone(snapshotPhysicalCargoState(state));
     expect(validatePhysicalCargoState(cloned, player, width, height))
       .toMatchObject({ valid: true, reason: "valid" });
     expect(new TextEncoder().encode(JSON.stringify(cloned)).byteLength)
       .toBeLessThan(PHYSICAL_CARGO_MAX_SERIALIZED_BYTES);
     expect(PHYSICAL_CARGO_MAX_INACTIVE_WORLDS).toBe(131_071);
 
-    const inactive = state.inactiveWorlds[0];
+    const inactive = physicalCargoInactiveWorlds(state)[0];
     if (!inactive) throw new Error("regional capacity fixture has no inactive world");
     const overCapacity = {
-      ...state,
+      ...snapshotPhysicalCargoState(state),
       inactiveWorlds: Array.from(
         { length: PHYSICAL_CARGO_MAX_INACTIVE_WORLDS + 1 },
         () => inactive,
@@ -365,6 +390,153 @@ describe("physical cargo save state", () => {
       height,
     );
     expect(transitioned.lastSourceOrdinal).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it("queries nine live partitions logarithmically across thousands of inactive histories", () => {
+    const { world, player } = fixture();
+    const pristine = createPhysicalCargoStateFromPlayer(
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    const initial = commitPromiseDrop(pristine);
+    mirrorPhysicalCarrierToPlayer(initial, player);
+    const inactiveWorlds = Array.from({ length: 2_048 }, (_, index) => {
+      const region = { x: index + 1, y: -17 };
+      const advanced = stepLooseCargo(
+        createLooseCargoWorld(world.terrain.width, world.terrain.height, region),
+        [],
+      );
+      if (!advanced.ok) throw new Error(`large partition fixture failed: ${advanced.reason}`);
+      const regionKey = looseCargoRegionKey(region);
+      return {
+        regionKey,
+        world: advanced.state,
+        integrity: hashCanonical({ regionKey, world: advanced.state }),
+      };
+    }).sort((left, right) => left.regionKey < right.regionKey ? -1 : left.regionKey > right.regionKey ? 1 : 0);
+    const admitted = validatePhysicalCargoState(
+      resealPhysicalCargoState(initial, { inactiveWorlds }),
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    if (!admitted.valid || !admitted.state) {
+      throw new Error(`large partition fixture was rejected: ${admitted.reason}`);
+    }
+    const requested = [
+      { x: 0, y: 0 },
+      { x: 1, y: -17 },
+      { x: 7, y: -17 },
+      { x: 73, y: -17 },
+      { x: 511, y: -17 },
+      { x: 1_024, y: -17 },
+      { x: 1_777, y: -17 },
+      { x: 2_048, y: -17 },
+      { x: 99_999, y: -17 },
+    ];
+
+    const query = queryPhysicalCargoPartitions(admitted.state, requested);
+
+    expect(query.requestedRegionCount).toBe(9);
+    expect(query.worlds.map(({ region }) => looseCargoRegionKey(region))).toEqual([
+      "r:0:0",
+      "r:1024:-17",
+      "r:1777:-17",
+      "r:1:-17",
+      "r:2048:-17",
+      "r:511:-17",
+      "r:73:-17",
+      "r:7:-17",
+    ]);
+    const maximumBinaryProbes = (requested.length - 1)
+      * (Math.ceil(Math.log2(inactiveWorlds.length)) + 1);
+    expect(query.inactiveProbeCount).toBeLessThanOrEqual(maximumBinaryProbes);
+    expect(query.inactiveProbeCount).toBeLessThan(inactiveWorlds.length / 10);
+    expect(query.worlds[0]).toBe(admitted.state.looseWorld);
+    const activeEntity = admitted.state.looseWorld.entities[0];
+    if (!activeEntity) throw new Error("large partition fixture has no active parcel");
+    const stepped = stepPhysicalCargoAcrossRegions(admitted.state, [{
+      region: admitted.state.activeRegion,
+      expectedRevision: admitted.state.looseWorld.revision,
+      samples: [{
+        entityId: activeEntity.id,
+        environment: {
+          rain: 0,
+          heat: 0,
+          cold: 0,
+          immersion: 0,
+          currentX: 0,
+          currentY: 0,
+          magicalWaterFlux: 0,
+          impact: 0,
+        },
+        waterDepth: 0,
+        downhillX: 0,
+        downhillY: 0,
+        tumbleImpact: 0,
+        mangroveSnag: 0,
+        brambleSnag: 0,
+      }],
+    }]);
+    expect(stepped.ok).toBe(true);
+    // A local 100 ms parcel tick path-copies no inactive node at all, even
+    // with thousands of durable histories behind it.
+    expect(stepped.state.inactiveWorldIndex).toBe(admitted.state.inactiveWorldIndex);
+    expect(stepped.state.expectedManifest).toBe(admitted.state.expectedManifest);
+    const audit = inspectPhysicalCargoPartitionIndex(stepped.state);
+    expect(audit).toMatchObject({ valid: true, size: 2_048, maximumBalance: 1 });
+    expect(audit.height).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(audit.size + 1)));
+    const wire = snapshotPhysicalCargoState(stepped.state);
+    expect(audit.sidecarSerializedBytes).toBe(
+      new TextEncoder().encode(JSON.stringify(wire)).byteLength,
+    );
+
+    const transitioned = transitionPhysicalCargoRegion(
+      stepped.state,
+      { x: 1_024, y: -17 },
+      world.terrain.width,
+      world.terrain.height,
+    );
+    const transitionAudit = inspectPhysicalCargoPartitionIndex(transitioned);
+    expect(transitionAudit).toMatchObject({ valid: true, size: 2_048, maximumBalance: 1 });
+    expect(validatePhysicalCargoState(
+      structuredClone(snapshotPhysicalCargoState(transitioned)),
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    )).toMatchObject({ valid: true, reason: "valid" });
+    expect(() => queryPhysicalCargoPartitions(
+      admitted.state!,
+      Array.from({ length: 82 }, (_, x) => ({ x, y: 0 })),
+    )).toThrow(/bounded live neighborhood/u);
+  });
+
+  it("derives global Promise custody from the conserved manifest without visiting partitions", () => {
+    const { world, player } = fixture();
+    const initial = createPhysicalCargoStateFromPlayer(
+      player,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    expect(physicalCargoPromiseCustody(initial, 19)).toEqual({
+      carriedQuantity: 2,
+      looseQuantity: 0,
+      condition: 830_000,
+    });
+    const dropped = commitPromiseDrop(initial);
+    const distant = transitionPhysicalCargoRegion(
+      dropped,
+      { x: 8_000, y: -9_000 },
+      world.terrain.width,
+      world.terrain.height,
+    );
+    expect(physicalCargoPromiseCustody(distant, 19)).toEqual({
+      carriedQuantity: 0,
+      looseQuantity: 2,
+      condition: 0,
+    });
+    expect(() => physicalCargoPromiseCustody(distant, -1)).toThrow(/contract identity/u);
   });
 
   it("adopts a legacy maximum history tail and archives it on the next step", () => {
@@ -422,10 +594,11 @@ describe("physical cargo save state", () => {
       world.terrain.width,
       world.terrain.height,
     ).reason;
-    expect(validate({ ...state, lastSourceOrdinal: 2 })).toBe("invalid-integrity");
-    expect(validate({ ...state, expectedManifest: { ...state.expectedManifest, fingerprint: "tampered" } }))
+    const snapshot = snapshotPhysicalCargoState(state);
+    expect(validate({ ...snapshot, lastSourceOrdinal: 2 })).toBe("invalid-integrity");
+    expect(validate({ ...snapshot, expectedManifest: { ...snapshot.expectedManifest, fingerprint: "tampered" } }))
       .toBe("invalid-integrity");
-    expect(validate({ ...state, carrier: { ...state.carrier, lots: state.carrier.lots.slice(1) } }))
+    expect(validate({ ...snapshot, carrier: { ...snapshot.carrier, lots: snapshot.carrier.lots.slice(1) } }))
       .toBe("invalid-integrity");
     const wrongMirror = structuredClone(player);
     wrongMirror.cargo[0]!.condition -= 1;
@@ -439,7 +612,7 @@ describe("physical cargo save state", () => {
     const initial = createPhysicalCargoStateFromPlayer(player, width, height);
     const dropped = commitPromiseDrop(initial);
     const activeEast = transitionPhysicalCargoRegion(dropped, { x: 1, y: 0 }, width, height);
-    const inactive = activeEast.inactiveWorlds[0];
+    const inactive = physicalCargoInactiveWorlds(activeEast)[0];
     const parcel = inactive?.world.entities[0];
     if (!inactive || !parcel) throw new Error("regional tamper fixture is incomplete");
     const reason = (value: unknown) => validatePhysicalCargoState(
@@ -1051,4 +1224,175 @@ describe("physical cargo save state", () => {
     // runners executing the complete suite in parallel.
     expect(elapsed).toBeLessThan(8_000);
   }, 10_000);
+});
+
+describe("atomic physical cargo seam handoff", () => {
+  it("moves one exact parcel into an inactive neighbor and remains valid after reload", () => {
+    const { world, player } = fixture();
+    const width = world.terrain.width;
+    const height = world.terrain.height;
+    const initial = createPhysicalCargoStateFromPlayer(player, width, height);
+    const dropped = dropLooseCargo(initial.looseWorld, initial.carrier, {
+      lotId: "crafting-stack:cordreed",
+      quantity: 1,
+      x: width * FIXED_POINT - 10_000,
+      y: 20 * FIXED_POINT + 500_000,
+    });
+    if (!dropped.ok || !dropped.entity) throw new Error(`seam drop failed: ${dropped.reason}`);
+    const afterDrop = commitPhysicalCargoState(initial, {
+      looseWorld: dropped.world,
+      carrier: dropped.carrier,
+    }, { kind: "conserved" });
+    mirrorPhysicalCarrierToPlayer(afterDrop, player);
+    const input = [{
+      region: { x: 0, y: 0 },
+      expectedRevision: afterDrop.looseWorld.revision,
+      samples: [{
+        entityId: dropped.entity.id,
+        environment: {
+          rain: 0,
+          heat: 0,
+          cold: 0,
+          immersion: 0,
+          currentX: 0,
+          currentY: 0,
+          magicalWaterFlux: 0,
+          impact: 0,
+        },
+        waterDepth: 0,
+        downhillX: FIXED_POINT,
+        downhillY: 0,
+        tumbleImpact: 0,
+        mangroveSnag: 0,
+        brambleSnag: 0,
+      }],
+    }] as const;
+    const stepped = stepPhysicalCargoAcrossRegions(afterDrop, input);
+    expect(stepped.ok).toBe(true);
+    expect(stepped.handoffs).toHaveLength(1);
+    expect(stepped.state.looseWorld.entities).toEqual([]);
+    const east = physicalCargoWorlds(stepped.state).find(({ region }) =>
+      region.x === 1 && region.y === 0);
+    expect(east?.entities[0]).toMatchObject({
+      id: dropped.entity.id,
+      origin: dropped.entity.origin,
+      payload: dropped.entity.payload,
+      owner: dropped.entity.owner,
+      velocityX: expect.any(Number),
+    });
+    expect(east?.entities[0]?.motion).not.toBe("boundary-rest");
+    expect(stepped.state.expectedManifest).toEqual(initial.expectedManifest);
+    expect(validatePhysicalCargoState(
+      structuredClone(snapshotPhysicalCargoState(stepped.state)),
+      player,
+      width,
+      height,
+    )).toMatchObject({ valid: true, reason: "valid" });
+
+    const staleReplay = stepPhysicalCargoAcrossRegions(stepped.state, input);
+    expect(staleReplay).toMatchObject({ ok: false, reason: "stale-step" });
+    expect(staleReplay.state).toBe(stepped.state);
+
+    const activatedEast = transitionPhysicalCargoRegion(
+      stepped.state,
+      { x: 1, y: 0 },
+      width,
+      height,
+    );
+    expect(activatedEast.looseWorld.entities[0]?.id).toBe(dropped.entity.id);
+    expect(activatedEast.expectedManifest).toEqual(initial.expectedManifest);
+
+    const located = locatePhysicalCargoEntity(stepped.state, dropped.entity.id);
+    if (!located) throw new Error("adjacent recovery could not locate handoff parcel");
+    const recovered = pickupLooseCargo(located.world, stepped.state.carrier, {
+      entityId: located.entity.id,
+      x: located.entity.x,
+      y: located.entity.y,
+      reach: 0,
+    });
+    if (!recovered.ok) throw new Error(`adjacent recovery failed: ${recovered.reason}`);
+    const afterRecovery = commitPhysicalCargoRegionalMutation(stepped.state, {
+      looseWorld: recovered.world,
+      carrier: recovered.carrier,
+    }, { kind: "conserved" });
+    expect(afterRecovery.activeRegion).toEqual({ x: 0, y: 0 });
+    expect(locatePhysicalCargoEntity(afterRecovery, dropped.entity.id)).toBeNull();
+    expect(afterRecovery.carrier.lots.some(({ payload }) =>
+      payload.kind === "stack" && payload.item === "cordreed")).toBe(true);
+    mirrorPhysicalCarrierToPlayer(afterRecovery, player);
+    expect(validatePhysicalCargoState(
+      structuredClone(snapshotPhysicalCargoState(afterRecovery)),
+      player,
+      width,
+      height,
+    )).toMatchObject({ valid: true, reason: "valid" });
+  });
+
+  it("fails closed when an interrupted representation duplicates or deletes the handoff parcel", () => {
+    const { world, player } = fixture();
+    const width = world.terrain.width;
+    const height = world.terrain.height;
+    const initial = createPhysicalCargoStateFromPlayer(player, width, height);
+    const dropped = dropLooseCargo(initial.looseWorld, initial.carrier, {
+      lotId: "crafting-stack:cordreed",
+      quantity: 1,
+      x: width * FIXED_POINT - 1,
+      y: FIXED_POINT,
+    });
+    if (!dropped.ok || !dropped.entity) throw new Error(`interruption drop failed: ${dropped.reason}`);
+    const afterDrop = commitPhysicalCargoState(initial, {
+      looseWorld: dropped.world,
+      carrier: dropped.carrier,
+    }, { kind: "conserved" });
+    mirrorPhysicalCarrierToPlayer(afterDrop, player);
+    const stepped = stepPhysicalCargoAcrossRegions(afterDrop, [{
+      region: { x: 0, y: 0 },
+      expectedRevision: afterDrop.looseWorld.revision,
+      samples: [{
+        entityId: dropped.entity.id,
+        environment: {
+          rain: 0,
+          heat: 0,
+          cold: 0,
+          immersion: FIXED_POINT,
+          currentX: FIXED_POINT,
+          currentY: 0,
+          magicalWaterFlux: 0,
+          impact: 0,
+        },
+        waterDepth: FIXED_POINT,
+        downhillX: 0,
+        downhillY: 0,
+        tumbleImpact: 0,
+        mangroveSnag: 0,
+        brambleSnag: 0,
+      }],
+    }]);
+    if (!stepped.ok) throw new Error(`interruption step failed: ${stepped.reason}`);
+    const eastEntry = physicalCargoInactiveWorlds(stepped.state)
+      .find(({ regionKey }) => regionKey === "r:1:0");
+    const entity = eastEntry?.world.entities[0];
+    if (!eastEntry || !entity) throw new Error("handoff destination missing");
+
+    const duplicatedActive = {
+      ...stepped.state.looseWorld,
+      entities: [entity],
+    };
+    const duplicate = resealPhysicalCargoState(stepped.state, { looseWorld: duplicatedActive });
+    expect(validatePhysicalCargoState(duplicate, player, width, height).reason)
+      .toBe("duplicate-identity");
+
+    const deletedWorld = { ...eastEntry.world, entities: [] };
+    const deletedEntry = {
+      regionKey: eastEntry.regionKey,
+      world: deletedWorld,
+      integrity: hashCanonical({ regionKey: eastEntry.regionKey, world: deletedWorld }),
+    };
+    const deleted = resealPhysicalCargoState(stepped.state, {
+      inactiveWorlds: physicalCargoInactiveWorlds(stepped.state).map((entry) =>
+        entry.regionKey === eastEntry.regionKey ? deletedEntry : entry),
+    });
+    expect(validatePhysicalCargoState(deleted, player, width, height).reason)
+      .toBe("manifest-mismatch");
+  });
 });

@@ -1,8 +1,8 @@
 import { currentTerrainVisibility } from "./perceptionPresentation";
-import type { TerrainGridView } from "./types";
+import type { TerrainGridView, WorldPoint } from "./types";
 
-/** The active regional projection is fixed at 98 by 74 cells. */
-export const MAX_TERRAIN_PERCEPTION_MEMORY_TILES = 98 * 74;
+/** The bounded sliding spatial frame is fixed at no more than 120 by 120 cells. */
+export const MAX_TERRAIN_PERCEPTION_MEMORY_TILES = 120 * 120;
 /** A full-strength terrain impression reaches its durable-map baseline within this time. */
 export const TERRAIN_PERCEPTION_MEMORY_FADE_MS = 900;
 /** Relief shares these bounded lightness bands instead of creating per-tile materials. */
@@ -24,11 +24,21 @@ export interface TerrainPerceptionMemoryInput {
  */
 export interface TerrainPerceptionMemoryState {
   readonly values: Float32Array;
+  /** Absolute cell-addressing metadata; contains no hidden terrain facts. */
+  frame: TerrainPerceptionMemoryFrame;
   identity: string;
   sampledAtMs: number;
   tick: number;
   /** Hash of the same eight bands Relief batches by. */
   signature: string;
+}
+
+export interface TerrainPerceptionMemoryFrame {
+  readonly columns: number;
+  readonly rows: number;
+  readonly tileSize: number;
+  readonly worldName: string;
+  readonly worldTileOrigin: WorldPoint | null;
 }
 
 export interface TerrainPerceptionMemoryStore {
@@ -75,6 +85,13 @@ export function terrainPerceptionMemoryIdentity(
     : typeof input.spatialEpoch === "number"
       ? ["number", numberIdentity(input.spatialEpoch)] as const
       : ["string", input.spatialEpoch] as const;
+  const absoluteOrigin = terrain.worldTileOrigin === undefined
+    ? ["absent"] as const
+    : [
+        "point",
+        numberIdentity(terrain.worldTileOrigin.x),
+        numberIdentity(terrain.worldTileOrigin.y),
+      ] as const;
   // JSON's typed tuple encoding keeps arbitrary opaque epoch/world strings
   // collision-safe; delimiters are data, never structure.
   return JSON.stringify([
@@ -85,7 +102,77 @@ export function terrainPerceptionMemoryIdentity(
     numberIdentity(terrain.tileSize),
     numberIdentity(terrain.origin.x),
     numberIdentity(terrain.origin.y),
+    absoluteOrigin,
   ]);
+}
+
+function terrainPerceptionMemoryFrame(
+  input: TerrainPerceptionMemoryInput,
+): TerrainPerceptionMemoryFrame {
+  const candidate = input.terrain.worldTileOrigin;
+  const worldTileOrigin = candidate
+    && Number.isSafeInteger(candidate.x)
+    && Number.isSafeInteger(candidate.y)
+    ? { x: candidate.x, y: candidate.y }
+    : null;
+  return {
+    columns: input.terrain.columns,
+    rows: input.terrain.rows,
+    tileSize: input.terrain.tileSize,
+    worldName: input.worldName ?? "",
+    worldTileOrigin,
+  };
+}
+
+function absoluteFramesCompatible(
+  previous: TerrainPerceptionMemoryFrame,
+  next: TerrainPerceptionMemoryFrame,
+): boolean {
+  return previous.worldTileOrigin !== null
+    && next.worldTileOrigin !== null
+    && previous.worldName === next.worldName
+    && Number.isFinite(previous.tileSize)
+    && previous.tileSize > 0
+    && previous.tileSize === next.tileSize;
+}
+
+function sameAbsoluteFrame(
+  previous: TerrainPerceptionMemoryFrame,
+  next: TerrainPerceptionMemoryFrame,
+): boolean {
+  return absoluteFramesCompatible(previous, next)
+    && previous.columns === next.columns
+    && previous.rows === next.rows
+    && previous.worldTileOrigin!.x === next.worldTileOrigin!.x
+    && previous.worldTileOrigin!.y === next.worldTileOrigin!.y;
+}
+
+function translatedMemoryValue(
+  previous: TerrainPerceptionMemoryState,
+  nextFrame: TerrainPerceptionMemoryFrame,
+  column: number,
+  row: number,
+): number {
+  const previousOrigin = previous.frame.worldTileOrigin;
+  const nextOrigin = nextFrame.worldTileOrigin;
+  if (!previousOrigin || !nextOrigin) return 0;
+  const shiftX = nextOrigin.x - previousOrigin.x;
+  const shiftY = nextOrigin.y - previousOrigin.y;
+  // A difference outside the safe integer envelope necessarily lies far
+  // beyond two bounded frames, so there can be no overlapping cell to retain.
+  if (!Number.isSafeInteger(shiftX) || !Number.isSafeInteger(shiftY)) return 0;
+  const previousColumn = column + shiftX;
+  const previousRow = row + shiftY;
+  if (
+    previousColumn < 0
+    || previousColumn >= previous.frame.columns
+    || previousRow < 0
+    || previousRow >= previous.frame.rows
+  ) return 0;
+  const previousIndex = previousRow * previous.frame.columns + previousColumn;
+  return previousIndex >= 0 && previousIndex < previous.values.length
+    ? previous.values[previousIndex] ?? 0
+    : 0;
 }
 
 /**
@@ -97,11 +184,13 @@ export function sampleTerrainPerceptionMemory(
   previous: TerrainPerceptionMemoryState | undefined,
   input: TerrainPerceptionMemoryInput,
 ): TerrainPerceptionMemoryState {
+  const product = input.terrain.columns * input.terrain.rows;
   const expected = Number.isSafeInteger(input.terrain.columns)
     && Number.isSafeInteger(input.terrain.rows)
     && input.terrain.columns > 0
     && input.terrain.rows > 0
-    ? input.terrain.columns * input.terrain.rows
+    && Number.isSafeInteger(product)
+    ? product
     : 0;
   const count = Math.max(0, Math.min(
     MAX_TERRAIN_PERCEPTION_MEMORY_TILES,
@@ -109,37 +198,65 @@ export function sampleTerrainPerceptionMemory(
     input.terrain.tiles.length,
   ));
   const identity = terrainPerceptionMemoryIdentity(input);
+  const frame = terrainPerceptionMemoryFrame(input);
   const now = Number.isFinite(input.timeMs) ? Math.max(0, input.timeMs) : 0;
   const tick = Number.isFinite(input.tick) ? input.tick : 0;
-  const rebase = !previous
-    || previous.identity !== identity
-    || previous.values.length !== count
-    || tick < previous.tick
-    || now < previous.sampledAtMs;
-  const state: TerrainPerceptionMemoryState = rebase
-    ? {
-        values: new Float32Array(count),
+  const clocksCompatible = previous !== undefined
+    && tick >= previous.tick
+    && now >= previous.sampledAtMs;
+  const absoluteCompatible = previous !== undefined
+    && clocksCompatible
+    && absoluteFramesCompatible(previous.frame, frame);
+  const sameFrame = previous !== undefined
+    && absoluteCompatible
+    && sameAbsoluteFrame(previous.frame, frame)
+    && previous.values.length === count;
+  const legacyCompatible = previous !== undefined
+    && clocksCompatible
+    && previous.frame.worldTileOrigin === null
+    && frame.worldTileOrigin === null
+    && previous.identity === identity
+    && previous.values.length === count;
+  const retainSameArray = sameFrame || legacyCompatible;
+  const translateOverlap = previous !== undefined
+    && absoluteCompatible
+    && !sameFrame;
+  const elapsed = clocksCompatible && previous
+    ? now - previous.sampledAtMs
+    : 0;
+  const values = retainSameArray && previous
+    ? previous.values
+    : new Float32Array(count);
+  const state: TerrainPerceptionMemoryState = retainSameArray && previous
+    ? previous
+    : {
+        values,
+        frame,
         identity,
         sampledAtMs: now,
         tick,
         signature: "",
-      }
-    : previous;
-  const elapsed = rebase ? TERRAIN_PERCEPTION_MEMORY_FADE_MS : now - state.sampledAtMs;
+      };
   let hash = 2_166_136_261;
   for (let index = 0; index < count; index += 1) {
     const live = currentTerrainVisibility(
       input.terrain.tiles[index],
       input.perceptionEnabled,
     );
-    const next = rebase
-      ? live
-      : terrainPerceptionMemoryValue(state.values[index] ?? 0, live, elapsed, input.reducedMotion);
+    const column = index % input.terrain.columns;
+    const row = Math.floor(index / input.terrain.columns);
+    const prior = retainSameArray
+      ? values[index] ?? 0
+      : translateOverlap && previous
+        ? translatedMemoryValue(previous, frame, column, row)
+        : 0;
+    const next = terrainPerceptionMemoryValue(prior, live, elapsed, input.reducedMotion);
     state.values[index] = next;
     const band = Math.round(next * TERRAIN_PERCEPTION_MEMORY_BANDS);
     hash ^= band + index * 17;
     hash = Math.imul(hash, 16_777_619);
   }
+  state.frame = frame;
   state.identity = identity;
   state.sampledAtMs = now;
   state.tick = tick;

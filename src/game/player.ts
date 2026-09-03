@@ -65,8 +65,10 @@ import {
   evaluateAdriftMotion,
 } from "./adrift";
 import { deriveWaterFlowProfile } from "./waterFlow";
+import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 
-export const TILE_UNITS = 1_000;
+/** Shared authoritative sub-tile precision for player and world-position math. */
+export const TILE_UNITS = WORLD_POSITION_UNITS_PER_TILE;
 export const TIDE_HARP_SCAN_RECHARGE = 900;
 export const PACK_LOAD_MILLI_PER_UNIT = 1_000;
 /** New and migrated porters always receive this much shared transport + kit space. */

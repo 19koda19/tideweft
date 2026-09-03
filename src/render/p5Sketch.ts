@@ -4,6 +4,10 @@ import {
   biomeEnvironmentalEmphasis,
   visibleBiomePresentation,
 } from "./biomePresentation";
+import {
+  chartTerrainDecorationHash01,
+  terrainTileGlobalCoordinate,
+} from "./terrainDecoration";
 import { buildSurfaceCurrentCues, buildWaterVoiceLabels } from "./currentCues";
 import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
@@ -80,6 +84,12 @@ import {
   setPointerParallaxTarget,
   type EasedScreenPoint,
 } from "./presentationMotion";
+import {
+  captureTerrainSpatialFrame,
+  terrainSpatialFrameDelta,
+  terrainSpatialFramesEqual,
+  type TerrainSpatialFrame,
+} from "./spatialFrame";
 
 import type {
   CameraView,
@@ -167,6 +177,8 @@ interface ClickCandidate {
   readonly shiftKey: boolean;
   readonly coarsePointer: boolean;
 }
+
+type SpatialEpochObservation = "unchanged" | "rebased" | "invalidated";
 
 interface AttachedCanvasListeners {
   element: HTMLCanvasElement;
@@ -328,6 +340,8 @@ export function createTideweftRenderer(
   let touchSequence: LooseCargoTouchSequence = EMPTY_LOOSE_CARGO_TOUCH_SEQUENCE;
   let hasObservedSpatialEpoch = false;
   let observedSpatialEpoch: number | string | undefined;
+  let observedSpatialFrame: TerrainSpatialFrame | null = null;
+  let observedWorldName: string | undefined;
   const ownsTerrainPerceptionMemory = options.terrainPerceptionMemory === undefined;
   const terrainPerceptionMemory = options.terrainPerceptionMemory
     ?? createTerrainPerceptionMemoryStore();
@@ -444,14 +458,34 @@ export function createTideweftRenderer(
     if (canvasElement) delete canvasElement.dataset.hoverEntity;
   };
 
+  const rebaseCameraToSpatialView = (view: TideweftView, delta: WorldPoint): void => {
+    camera.x += delta.x;
+    camera.y += delta.y;
+    if (camera.focusPoint) {
+      camera.focusPoint = {
+        x: camera.focusPoint.x + delta.x,
+        y: camera.focusPoint.y + delta.y,
+      };
+    }
+    if (pointerWorld) {
+      pointerWorld = { x: pointerWorld.x + delta.x, y: pointerWorld.y + delta.y };
+    }
+    for (const ripple of ripples) {
+      ripple.point = { x: ripple.point.x + delta.x, y: ripple.point.y + delta.y };
+    }
+    const bounds = view.camera.bounds;
+    if (bounds) {
+      camera.x = clamp(camera.x, bounds.minX, bounds.maxX);
+      camera.y = clamp(camera.y, bounds.minY, bounds.maxY);
+    }
+  };
+
   const snapCameraToSpatialView = (view: TideweftView): void => {
     const target = view.camera.followPlayer ? view.player.position : view.camera.center;
     camera.x = target.x;
     camera.y = target.y;
     camera.zoom = clamp(view.camera.zoom * camera.manualZoom, 0.12, 8);
     camera.initialized = true;
-    camera.focusPoint = undefined;
-    camera.focusUntil = 0;
     const bounds = view.camera.bounds;
     if (bounds) {
       camera.x = clamp(camera.x, bounds.minX, bounds.maxX);
@@ -464,25 +498,47 @@ export function createTideweftRenderer(
    * legacy view, while the first defined identity establishes the baseline
    * without disturbing an in-flight interaction.
    */
-  const observeSpatialEpoch = (view: TideweftView): boolean => {
+  const observeSpatialEpoch = (view: TideweftView): SpatialEpochObservation => {
     const nextEpoch = view.spatialEpoch;
-    if (nextEpoch === undefined) return false;
+    if (nextEpoch === undefined) return "unchanged";
+    const nextFrame = captureTerrainSpatialFrame(view.terrain);
     if (!hasObservedSpatialEpoch) {
       hasObservedSpatialEpoch = true;
       observedSpatialEpoch = nextEpoch;
-      return false;
+      observedSpatialFrame = nextFrame;
+      observedWorldName = view.worldName;
+      return "unchanged";
     }
-    if (Object.is(observedSpatialEpoch, nextEpoch)) return false;
+    const epochChanged = !Object.is(observedSpatialEpoch, nextEpoch);
+    const frameChanged = !terrainSpatialFramesEqual(observedSpatialFrame, nextFrame);
+    const worldChanged = !Object.is(observedWorldName, view.worldName);
+    if (!epochChanged && !frameChanged && !worldChanged) {
+      return "unchanged";
+    }
     observedSpatialEpoch = nextEpoch;
+    observedWorldName = view.worldName;
     latestView = view;
-    invalidateSpatialInteraction();
-    snapCameraToSpatialView(view);
-    return true;
+    const delta = worldChanged
+      ? null
+      : terrainSpatialFrameDelta(observedSpatialFrame, nextFrame);
+    if (delta) {
+      rebaseCameraToSpatialView(view, delta);
+      observedSpatialFrame = nextFrame;
+      return "rebased";
+    } else {
+      // Missing/malformed frame metadata cannot safely reinterpret a held world
+      // gesture. Legacy fixtures and true incompatible-world changes retain the
+      // former fail-closed behavior.
+      invalidateSpatialInteraction();
+      snapCameraToSpatialView(view);
+      observedSpatialFrame = nextFrame;
+      return "invalidated";
+    }
   };
 
-  const observeCurrentSpatialEpoch = (): boolean => {
+  const observeCurrentSpatialEpoch = (): SpatialEpochObservation => {
     const currentView = options.getView();
-    if (!currentView) return false;
+    if (!currentView) return "unchanged";
     latestView = currentView;
     return observeSpatialEpoch(currentView);
   };
@@ -728,7 +784,7 @@ export function createTideweftRenderer(
     };
 
     const pointerMove = (event: PointerEvent): void => {
-      if (observeCurrentSpatialEpoch()) {
+      if (observeCurrentSpatialEpoch() === "invalidated") {
         event.preventDefault();
         return;
       }
@@ -779,7 +835,7 @@ export function createTideweftRenderer(
     };
 
     const pointerUp = (event: PointerEvent): void => {
-      if (observeCurrentSpatialEpoch()) {
+      if (observeCurrentSpatialEpoch() === "invalidated") {
         event.preventDefault();
         return;
       }
@@ -858,7 +914,7 @@ export function createTideweftRenderer(
 
     const contextMenu = (event: MouseEvent): void => {
       event.preventDefault();
-      if (observeCurrentSpatialEpoch()) return;
+      if (observeCurrentSpatialEpoch() === "invalidated") return;
       clearPointer();
       emit({ type: "cancel" });
     };
@@ -978,6 +1034,7 @@ export function createTideweftRenderer(
     };
 
     const drawTerrainTexture = (
+      grid: TideweftView["terrain"],
       tile: TerrainTileView,
       column: number,
       row: number,
@@ -996,7 +1053,7 @@ export function createTideweftRenderer(
         : tile.kind === "channel" || tile.kind === "shallows"
           ? 54
           : 48;
-      const variant = hash01(column, row, 0x74657874);
+      const variant = chartTerrainDecorationHash01(grid, column, row, 0x7465_7874);
       const offset = (variant - 0.5) * tileSize * 0.12;
       const weight = 0.72 / camera.zoom;
 
@@ -1094,6 +1151,7 @@ export function createTideweftRenderer(
     };
 
     const drawBiomeAccent = (
+      grid: TideweftView["terrain"],
       tile: TerrainTileView,
       column: number,
       row: number,
@@ -1107,7 +1165,7 @@ export function createTideweftRenderer(
       const emphasis = biomeEnvironmentalEmphasis(tile);
       const centerX = x + tileSize * 0.5;
       const centerY = y + tileSize * 0.5;
-      const variant = hash01(column, row, 0x6269_6f6d);
+      const variant = chartTerrainDecorationHash01(grid, column, row, 0x6269_6f6d);
       const shift = (variant - 0.5) * tileSize * 0.16;
       const alpha = (38 + emphasis * 72) * visibility;
 
@@ -1254,18 +1312,24 @@ export function createTideweftRenderer(
             const liveSensoryStrength = Math.pow(liveCurrentVisibility, 1.08);
             p.fill(withAlpha(water.color, water.opacity * liveSensoryStrength));
             p.rect(x, y, tileSize + 0.4 / camera.zoom, tileSize + 0.4 / camera.zoom);
+            const globalTile = terrainTileGlobalCoordinate(grid, column, row);
             if (
               water.depthDisclosed
-              && (column + row) % 3 === 0
+              && ((globalTile.x % 3) + (globalTile.y % 3)) % 3 === 0
               && waterDepth < 0.74
             ) {
               p.stroke(withAlpha(water.accentColor, water.accentOpacity));
               p.strokeWeight(0.55 / camera.zoom);
-              const inset = tileSize * (0.2 + hash01(column, row, 7) * 0.24);
+              const inset = tileSize * (
+                0.2 + chartTerrainDecorationHash01(grid, column, row, 7) * 0.24
+              );
               p.line(x + inset, y + tileSize * 0.66, x + tileSize - inset * 0.4, y + tileSize * 0.66);
               p.noStroke();
             }
-          } else if (liveCurrentVisibility > 0 && hash01(column, row, 13) > 0.78) {
+          } else if (
+            liveCurrentVisibility > 0
+            && chartTerrainDecorationHash01(grid, column, row, 13) > 0.78
+          ) {
             p.fill(withAlpha(PALETTE.foam, 14 + unit(tile.shelter) * 12));
             const fleck = Math.max(tileSize * 0.08, 0.5 / camera.zoom);
             p.circle(x + tileSize * 0.34, y + tileSize * 0.39, fleck);
@@ -1276,8 +1340,8 @@ export function createTideweftRenderer(
             view.perception !== undefined,
           );
           if (detailVisibility >= 1) {
-            drawTerrainTexture(tile, column, row, x, y, tileSize, waterDepth);
-            drawBiomeAccent(tile, column, row, x, y, tileSize);
+            drawTerrainTexture(grid, tile, column, row, x, y, tileSize, waterDepth);
+            drawBiomeAccent(grid, tile, column, row, x, y, tileSize);
           }
 
           const trace = unit(tile.trace);
@@ -3399,8 +3463,8 @@ export function createTideweftRenderer(
         return;
       }
 
-      const spatialEpochChanged = observeSpatialEpoch(latestView);
-      if (!spatialEpochChanged) updateCamera(latestView, now);
+      const spatialEpochObservation = observeSpatialEpoch(latestView);
+      if (spatialEpochObservation === "unchanged") updateCamera(latestView, now);
       const terrainMemory = terrainPerceptionMemory.sample({
         terrain: latestView.terrain,
         ...(latestView.spatialEpoch === undefined

@@ -106,9 +106,9 @@ export type LooseCargoPointerRelease =
   | { readonly consumesWorldTap: true; readonly command: LooseCargoTargetCommand | null };
 
 /**
- * Projects only the validated, currently loaded region. Cross-region transfer
- * is intentionally owned by the future streamer; signed region coordinates
- * and region-qualified IDs survive this seam unchanged.
+ * Projects one validated physical-custody partition. The caller composes every
+ * partition intersecting its bounded view; signed ownership and persistent IDs
+ * remain unchanged when a parcel crosses an invisible storage boundary.
  */
 export function projectLooseCargoWorld(
   world: unknown,

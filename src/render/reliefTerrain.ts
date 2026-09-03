@@ -5,6 +5,17 @@ import { visibleWaterDepth } from "./waterPresentation";
 
 export type DiscoverySignature = (grid: TerrainGridView) => string;
 
+export interface ReliefTerrainGeometrySignatures {
+  /** Complete physical height/depth field used by present-tense sight. */
+  readonly physical: string;
+  /** Discovery-safe height/depth field used by durable Chart memory. */
+  readonly discovered: string;
+}
+
+export type TerrainGeometrySignatures = (
+  grid: TerrainGridView,
+) => ReliefTerrainGeometrySignatures;
+
 const MIN_RENDERED_WATER_DEPTH = 0.002;
 const MIN_RENDERED_WATER_VISIBILITY = 0.08;
 
@@ -158,6 +169,81 @@ export function createReliefDiscoverySignatureMemo(
     signatures.set(grid.tiles, signature);
     return signature;
   };
+}
+
+/**
+ * Hashes only values that can change Relief mesh geometry. Projection revisions
+ * also include clock and weather presentation, so using `revision` as a mesh
+ * key needlessly rebuilt both 120 x 120 height fields when their shape had not
+ * changed. The discovery-safe signature deliberately follows the exact masked
+ * elevation/depth semantics used by `maskReliefTileForDiscovery`.
+ */
+export function reliefTerrainGeometrySignatures(
+  grid: TerrainGridView,
+): ReliefTerrainGeometrySignatures {
+  let physical = 2_166_136_261;
+  let discovered = 2_166_136_261 ^ 0x6d2b_79f5;
+  for (let index = 0; index < grid.tiles.length; index += 1) {
+    const tile = grid.tiles[index];
+    const kind = terrainKindCode(tile?.kind);
+    const elevation = unit(tile?.elevation);
+    const waterDepth = unit(tile?.waterDepth);
+    const visibility = reliefDiscoveryVisibility(tile);
+    const visibleDepth = visibleWaterDepth(tile) * visibility;
+
+    physical = hashGeometryWord(physical, index);
+    physical = hashGeometryWord(physical, kind);
+    physical = hashGeometryUnit(physical, elevation);
+    physical = hashGeometryUnit(physical, waterDepth);
+
+    discovered = hashGeometryWord(discovered, index);
+    discovered = hashGeometryWord(discovered, kind);
+    discovered = hashGeometryUnit(discovered, elevation * visibility);
+    discovered = hashGeometryUnit(discovered, visibleDepth);
+  }
+  return Object.freeze({
+    physical: `${grid.tiles.length}:${physical >>> 0}`,
+    discovered: `${grid.tiles.length}:${discovered >>> 0}`,
+  });
+}
+
+/** One geometry scan per immutable projected tile array, shared by both keys. */
+export function createReliefTerrainGeometrySignaturesMemo(
+  compute: TerrainGeometrySignatures = reliefTerrainGeometrySignatures,
+): TerrainGeometrySignatures {
+  const signatures = new WeakMap<readonly TerrainTileView[], ReliefTerrainGeometrySignatures>();
+  return (grid): ReliefTerrainGeometrySignatures => {
+    const remembered = signatures.get(grid.tiles);
+    if (remembered) return remembered;
+    const signature = compute(grid);
+    signatures.set(grid.tiles, signature);
+    return signature;
+  };
+}
+
+function hashGeometryWord(hash: number, word: number): number {
+  hash ^= word | 0;
+  return Math.imul(hash, 16_777_619);
+}
+
+function hashGeometryUnit(hash: number, value: number): number {
+  return hashGeometryWord(hash, Math.round(unit(value) * 0xffff_ffff));
+}
+
+function terrainKindCode(kind: TerrainTileView["kind"] | undefined): number {
+  switch (kind) {
+    case "deep-water": return 1;
+    case "channel": return 2;
+    case "shallows": return 3;
+    case "mudflat": return 4;
+    case "sandbar": return 5;
+    case "salt-marsh": return 6;
+    case "meadow": return 7;
+    case "scrub": return 8;
+    case "ridge": return 9;
+    case "built": return 10;
+    default: return 0;
+  }
 }
 
 function unit(value: number | undefined, fallback = 0): number {

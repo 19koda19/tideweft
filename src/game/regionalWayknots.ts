@@ -1,9 +1,15 @@
 import { WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
-import { regionKey, type RegionCoord } from "../sim/regions";
+import {
+  isRegionCoord,
+  regionKey,
+  regionLocalToGlobalTile,
+  type RegionCoord,
+} from "../sim/regions";
 import { deriveTideHarps, type TideHarp } from "./tideHarps";
 import {
   isWindExposedTile,
   queryWayknotEffects,
+  WAYKNOT_RADII,
   type WayknotEffects,
   type WayknotGrid,
   type WayknotState,
@@ -20,6 +26,14 @@ const PERSISTENT_REGION_GRID: WayknotGrid = Object.freeze({
   width: WORLD_WIDTH,
   height: WORLD_HEIGHT,
 });
+const MAX_WAYKNOT_RADIUS = Math.max(...Object.values(WAYKNOT_RADII));
+const CONTINUOUS_INFLUENCE_WIDTH = MAX_WAYKNOT_RADIUS * 2 + 1;
+const CONTINUOUS_INFLUENCE_GRID: WayknotGrid = Object.freeze({
+  width: CONTINUOUS_INFLUENCE_WIDTH,
+  height: CONTINUOUS_INFLUENCE_WIDTH,
+});
+const CONTINUOUS_INFLUENCE_CENTER = MAX_WAYKNOT_RADIUS * CONTINUOUS_INFLUENCE_WIDTH
+  + MAX_WAYKNOT_RADIUS;
 
 export interface RegionalWayknotContext {
   /** Stable signed region containing the queried terrain tile. */
@@ -65,7 +79,11 @@ export function regionalWayknotContextAt(
   });
 }
 
-/** Exact same-region influence; a knot never reaches through a region seam. */
+/**
+ * Query physical influence in continuous tile space. Region/local addresses
+ * remain authoritative ownership, but the storage partition is not a wall:
+ * an edge knot can assist an adjacent cardinal or diagonal tile across it.
+ */
 export function regionalWayknotEffectsAt(
   state: WayknotState,
   world: WorldView,
@@ -74,6 +92,16 @@ export function regionalWayknotEffectsAt(
 ): WayknotEffects {
   const resolved = regionalWayknotContextAt(world, viewTileIndex);
   if (resolved) {
+    if (regionalWindowForWorld(world) !== null) {
+      const projected = projectNearbyWayknots(state, resolved);
+      return queryWayknotEffects(
+        projected,
+        { ...resolved.context, tileIndex: CONTINUOUS_INFLUENCE_CENTER },
+        CONTINUOUS_INFLUENCE_GRID,
+        currentTick,
+        resolved.region,
+      );
+    }
     return queryWayknotEffects(
       state,
       resolved.context,
@@ -141,4 +169,54 @@ export function regionalWayknotViewTileIndex(
   localTileIndex: number,
 ): number | null {
   return regionalTileIndexInView(world, region, localTileIndex);
+}
+
+/**
+ * Re-address only nearby deployed aids into a tiny transient grid so the
+ * established effect kernel can evaluate true global Manhattan distance.
+ * The persistent state, IDs, region owners, and local indexes never change.
+ */
+function projectNearbyWayknots(
+  state: WayknotState,
+  target: RegionalWayknotContext,
+): WayknotState {
+  const targetGlobal = regionLocalToGlobalTile(
+    target.region,
+    target.localTileIndex % WORLD_WIDTH,
+    Math.floor(target.localTileIndex / WORLD_WIDTH),
+  );
+  const wayknots = state.wayknots.flatMap((wayknot) => {
+    if (
+      wayknot.region === null
+      || wayknot.tileIndex === null
+      || !isRegionCoord(wayknot.region)
+      || !Number.isSafeInteger(wayknot.tileIndex)
+      || wayknot.tileIndex < 0
+      || wayknot.tileIndex >= WORLD_WIDTH * WORLD_HEIGHT
+      // With a maximum radius smaller than either storage dimension, a knot
+      // more than one region away on either axis cannot possibly contribute.
+      || Math.abs(wayknot.region.x - target.region.x) > 1
+      || Math.abs(wayknot.region.y - target.region.y) > 1
+    ) return [];
+    const knotGlobal = regionLocalToGlobalTile(
+      wayknot.region,
+      wayknot.tileIndex % WORLD_WIDTH,
+      Math.floor(wayknot.tileIndex / WORLD_WIDTH),
+    );
+    const deltaX = knotGlobal.x - targetGlobal.x;
+    const deltaY = knotGlobal.y - targetGlobal.y;
+    if (
+      !Number.isSafeInteger(deltaX)
+      || !Number.isSafeInteger(deltaY)
+      || Math.abs(deltaX) + Math.abs(deltaY) > MAX_WAYKNOT_RADIUS
+    ) return [];
+    const x = MAX_WAYKNOT_RADIUS + deltaX;
+    const y = MAX_WAYKNOT_RADIUS + deltaY;
+    return [{
+      ...wayknot,
+      region: target.region,
+      tileIndex: y * CONTINUOUS_INFLUENCE_WIDTH + x,
+    }];
+  });
+  return { ...state, wayknots };
 }

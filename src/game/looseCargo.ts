@@ -51,6 +51,14 @@ export const LOOSE_CARGO_MAX_RETIRED_LOTS = 32_768;
 export const LOOSE_CARGO_MAX_REGIONAL_WORLDS = 131_072;
 /** A 32 MiB physical-custody envelope reaches this guard before pathological allocation. */
 export const LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES = 262_144;
+/**
+ * One seamless fixed step can touch only the small storage neighborhood around
+ * the simulated parcels. Keeping the transaction bounded prevents a malformed
+ * adapter from turning one tick into an unbounded whole-save scan.
+ */
+export const LOOSE_CARGO_MAX_ATOMIC_REGIONS = 81;
+export const LOOSE_CARGO_MAX_ATOMIC_ENTITIES =
+  LOOSE_CARGO_MAX_ATOMIC_REGIONS * LOOSE_CARGO_MAX_ENTITIES;
 
 const MAX_WORLD_DIMENSION = 4_096;
 const MAX_CARRIER_LOTS = 4_096;
@@ -84,6 +92,7 @@ const HISTORY_KIND_SET: ReadonlySet<string> = new Set<LooseCargoHistoryKind>([
   "pickup",
   "merge",
   "environment",
+  "handoff",
 ]);
 const CAUSE_CODE_SET: ReadonlySet<string> = new Set<LooseCargoCauseCode>([
   "rain-soak",
@@ -105,6 +114,7 @@ const CAUSE_CODE_SET: ReadonlySet<string> = new Set<LooseCargoCauseCode>([
   "parcel-momentum",
   "parcel-settled",
   "region-boundary-rest",
+  "storage-handoff",
 ]);
 
 export type LooseCargoOwner =
@@ -144,9 +154,17 @@ export type LooseCargoCauseCode =
   | "bramble-snag"
   | "parcel-momentum"
   | "parcel-settled"
-  | "region-boundary-rest";
+  | "region-boundary-rest"
+  /** Invisible persistence ownership change; never a physical impact. */
+  | "storage-handoff";
 
-export type LooseCargoHistoryKind = "drop" | "scatter" | "pickup" | "merge" | "environment";
+export type LooseCargoHistoryKind =
+  | "drop"
+  | "scatter"
+  | "pickup"
+  | "merge"
+  | "environment"
+  | "handoff";
 
 export interface LooseCargoPosition {
   readonly region: LooseCargoRegionAddress;
@@ -541,6 +559,51 @@ export interface LooseCargoStepResult {
   readonly reason: LooseCargoStepReason;
   readonly state: LooseCargoWorldState;
   readonly events: readonly LooseCargoStepEvent[];
+}
+
+/**
+ * Optimistic concurrency boundary for one storage region participating in a
+ * seamless fixed step. A repeated/stale request cannot advance the same world
+ * twice because its exact pre-step revision is part of the request.
+ */
+export interface LooseCargoRegionalStepInput {
+  readonly region: LooseCargoRegionAddress;
+  readonly expectedRevision: number;
+  /** Only parcels inside the active simulation neighborhood are included. */
+  readonly samples: readonly LooseCargoStepSample[];
+}
+
+export interface LooseCargoRegionHandoff {
+  readonly entityId: LooseCargoEntityId;
+  readonly from: LooseCargoPosition;
+  readonly to: LooseCargoPosition;
+  readonly sourceEventId: string;
+  readonly destinationEventId: string;
+}
+
+export interface LooseCargoRegionalStepEvent extends LooseCargoStepEvent {
+  readonly from: LooseCargoPosition;
+  readonly to: LooseCargoPosition;
+  readonly crossedRegion: boolean;
+}
+
+export type LooseCargoRegionalStepReason =
+  | "advanced"
+  | "invalid-world-set"
+  | "invalid-sample"
+  | "stale-step"
+  | "revision-space-exhausted"
+  | "history-capacity-exceeded"
+  | "entity-capacity-exceeded"
+  | "coordinate-space-exhausted";
+
+export interface LooseCargoRegionalStepResult {
+  readonly ok: boolean;
+  readonly reason: LooseCargoRegionalStepReason;
+  /** Canonical region-key order, including newly touched destinations. */
+  readonly worlds: readonly LooseCargoWorldState[];
+  readonly events: readonly LooseCargoRegionalStepEvent[];
+  readonly handoffs: readonly LooseCargoRegionHandoff[];
 }
 
 const CALM_ENVIRONMENT: CargoEnvironmentSample = {
@@ -1674,7 +1737,7 @@ export function quoteLooseCargoDrop(
     transferLoadMilli,
     carrierLoadBeforeMilli: loadBefore,
     carrierLoadAfterMilli: loadBefore - transferLoadMilli,
-    message: `Drop ${describePayload(payload)} here. It remains recoverable as ${looseCargoEntityId(canonicalWorld.region, canonicalWorld.lastEntityOrdinal + 1)}.`,
+    message: `Drop ${describePayload(payload)} here. It will remain in the world.`,
   };
 }
 
@@ -2004,7 +2067,7 @@ export function quoteLooseCargoPickup(
     transferLoadMilli,
     carrierLoadBeforeMilli: loadBefore,
     carrierLoadAfterMilli: loadBefore + transferLoadMilli,
-    message: `Recover ${describePayload(entity.payload)} from world stack ${entity.id}.`,
+    message: `Recover ${describePayload(entity.payload)}.`,
   };
 }
 
@@ -2274,6 +2337,559 @@ export function stepLooseCargo(
     }),
     events,
   };
+}
+
+interface RegionalEntityAdvance {
+  readonly sourceWorld: LooseCargoWorldState;
+  readonly entity: LooseCargoEntity;
+  readonly sample: LooseCargoStepSample;
+  readonly destinationRegion: LooseCargoRegionAddress;
+  readonly x: number;
+  readonly y: number;
+  readonly velocityX: number;
+  readonly velocityY: number;
+  readonly materialState: CargoEnvironmentState;
+  readonly motion: LooseCargoMotion;
+  readonly snaggedBy: LooseCargoSnag | null;
+  readonly causalSignature: string;
+  readonly causalCodes: readonly LooseCargoCauseCode[];
+  readonly environmentCauses: readonly CargoEnvironmentCauseCode[];
+  readonly conditionLoss: number;
+  readonly contaminationGain: number;
+  readonly decayGain: number;
+  readonly impactApplied: number;
+  readonly snags: readonly LooseCargoSnag[];
+  readonly recordable: boolean;
+}
+
+type RegionalHistoryRole = "local" | "outbound" | "inbound";
+
+interface RegionalHistoryPlan {
+  readonly role: RegionalHistoryRole;
+  readonly advance: RegionalEntityAdvance;
+}
+
+interface RegionalEventOrdinals {
+  local?: number;
+  outbound?: number;
+  inbound?: number;
+}
+
+/**
+ * Advance an explicitly selected simulation neighborhood as one immutable
+ * transaction. Storage-region edges are ownership boundaries only: a parcel's
+ * un-clamped position is normalized into the cardinal/corner neighbor while
+ * its stable identity, origin, payload, material state, and velocity survive.
+ *
+ * `worlds` must include any already-touched neighbor that a selected parcel
+ * can enter. Missing destinations are treated as pristine generated storage;
+ * the physical-cargo sidecar adapter below supplies all eight neighbors so it
+ * can never accidentally replace a persisted destination.
+ */
+export function stepLooseCargoAcrossRegions(
+  worlds: readonly LooseCargoWorldState[],
+  inputs: readonly LooseCargoRegionalStepInput[],
+): LooseCargoRegionalStepResult {
+  if (
+    !Array.isArray(worlds)
+    || worlds.length < 1
+    || worlds.length > LOOSE_CARGO_MAX_ATOMIC_REGIONS
+    || !Array.isArray(inputs)
+    || inputs.length < 1
+    || inputs.length > LOOSE_CARGO_MAX_ATOMIC_REGIONS
+  ) return failedRegionalStep("invalid-world-set", worlds);
+
+  const canonicalWorlds: LooseCargoWorldState[] = [];
+  const worldByKey = new Map<string, LooseCargoWorldState>();
+  let width: number | null = null;
+  let height: number | null = null;
+  for (const rawWorld of worlds) {
+    const validation = validateLooseCargoWorld(rawWorld);
+    if (!validation.valid || !validation.state) {
+      return failedRegionalStep("invalid-world-set", worlds);
+    }
+    const world = validation.state;
+    if (
+      (width !== null && world.width !== width)
+      || (height !== null && world.height !== height)
+    ) return failedRegionalStep("invalid-world-set", worlds);
+    width = world.width;
+    height = world.height;
+    const key = looseCargoRegionKey(world.region);
+    if (worldByKey.has(key)) return failedRegionalStep("invalid-world-set", worlds);
+    worldByKey.set(key, world);
+    canonicalWorlds.push(world);
+  }
+  canonicalWorlds.sort(compareWorldRegion);
+  const emptyCarrier = createLooseCargoCarrier(
+    { kind: "unclaimed" },
+    createCraftingInventory(0),
+  );
+  if (!inspectLooseCargoMultiWorldConservation(canonicalWorlds, emptyCarrier).valid) {
+    return failedRegionalStep("invalid-world-set", worlds);
+  }
+
+  const advances: RegionalEntityAdvance[] = [];
+  const inputRegionKeys = new Set<string>();
+  let sampledEntities = 0;
+  for (const rawInput of inputs as readonly unknown[]) {
+    if (!isRecord(rawInput)) return failedRegionalStep("invalid-sample", worlds);
+    const region = canonicalRegionAddress(rawInput.region);
+    if (
+      region === null
+      || !validCounter(rawInput.expectedRevision)
+      || !Array.isArray(rawInput.samples)
+      || rawInput.samples.length < 1
+      || rawInput.samples.length > LOOSE_CARGO_MAX_ENTITIES
+    ) return failedRegionalStep("invalid-sample", worlds);
+    const key = looseCargoRegionKey(region);
+    if (inputRegionKeys.has(key)) return failedRegionalStep("invalid-sample", worlds);
+    inputRegionKeys.add(key);
+    const sourceWorld = worldByKey.get(key);
+    if (!sourceWorld) return failedRegionalStep("invalid-world-set", worlds);
+    if (sourceWorld.revision !== rawInput.expectedRevision) {
+      return failedRegionalStep("stale-step", worlds);
+    }
+    if (
+      sourceWorld.revision >= LOOSE_CARGO_MAX_ORDINAL
+      || sourceWorld.completedSteps >= LOOSE_CARGO_MAX_ORDINAL
+    ) return failedRegionalStep("revision-space-exhausted", worlds);
+
+    const entityById = new Map(sourceWorld.entities.map((entity) => [entity.id, entity]));
+    const selected: LooseCargoEntity[] = [];
+    const selectedIds = new Set<string>();
+    for (const rawSample of rawInput.samples as readonly unknown[]) {
+      if (!isRecord(rawSample) || !validEntityId(rawSample.entityId)) {
+        return failedRegionalStep("invalid-sample", worlds);
+      }
+      const entity = entityById.get(rawSample.entityId);
+      if (!entity || selectedIds.has(entity.id)) {
+        return failedRegionalStep("invalid-sample", worlds);
+      }
+      selectedIds.add(entity.id);
+      selected.push(entity);
+    }
+    const sampleMap = canonicalSamples(
+      rawInput.samples as readonly LooseCargoStepSample[],
+      selected,
+    );
+    if (!sampleMap) return failedRegionalStep("invalid-sample", worlds);
+    sampledEntities += selected.length;
+    if (sampledEntities > LOOSE_CARGO_MAX_ATOMIC_ENTITIES) {
+      return failedRegionalStep("invalid-sample", worlds);
+    }
+    for (const entity of selected) {
+      const advance = advanceLooseCargoAcrossRegion(
+        sourceWorld,
+        entity,
+        sampleMap.get(entity.id)!,
+      );
+      if (!advance) return failedRegionalStep("coordinate-space-exhausted", worlds);
+      advances.push(advance);
+    }
+  }
+  advances.sort((left, right) => compareEntity(left.entity, right.entity));
+
+  // Materialize only destinations that are actually crossed into. A caller
+  // that supplied a persisted neighbor wins over the deterministic empty one.
+  for (const advance of advances) {
+    if (sameRegion(advance.sourceWorld.region, advance.destinationRegion)) continue;
+    const key = looseCargoRegionKey(advance.destinationRegion);
+    if (!worldByKey.has(key)) {
+      if (worldByKey.size >= LOOSE_CARGO_MAX_ATOMIC_REGIONS) {
+        return failedRegionalStep("invalid-world-set", worlds);
+      }
+      worldByKey.set(key, createLooseCargoWorld(
+        advance.sourceWorld.width,
+        advance.sourceWorld.height,
+        advance.destinationRegion,
+      ));
+    }
+  }
+
+  const entityCounts = new Map(
+    [...worldByKey].map(([key, world]) => [key, world.entities.length]),
+  );
+  for (const advance of advances) {
+    const sourceKey = looseCargoRegionKey(advance.sourceWorld.region);
+    const destinationKey = looseCargoRegionKey(advance.destinationRegion);
+    if (sourceKey === destinationKey) continue;
+    entityCounts.set(sourceKey, (entityCounts.get(sourceKey) ?? 0) - 1);
+    entityCounts.set(destinationKey, (entityCounts.get(destinationKey) ?? 0) + 1);
+  }
+  if ([...entityCounts.values()].some((count) => count < 0 || count > LOOSE_CARGO_MAX_ENTITIES)) {
+    return failedRegionalStep("entity-capacity-exceeded", worlds);
+  }
+
+  const plansByRegion = new Map<string, RegionalHistoryPlan[]>();
+  const selectedByRegion = new Map<string, RegionalEntityAdvance[]>();
+  const addPlan = (key: string, plan: RegionalHistoryPlan) => {
+    const plans = plansByRegion.get(key) ?? [];
+    plans.push(plan);
+    plansByRegion.set(key, plans);
+  };
+  for (const advance of advances) {
+    const sourceKey = looseCargoRegionKey(advance.sourceWorld.region);
+    const destinationKey = looseCargoRegionKey(advance.destinationRegion);
+    const selected = selectedByRegion.get(sourceKey) ?? [];
+    selected.push(advance);
+    selectedByRegion.set(sourceKey, selected);
+    if (sourceKey === destinationKey) {
+      if (advance.recordable) addPlan(sourceKey, { role: "local", advance });
+    } else {
+      addPlan(sourceKey, { role: "outbound", advance });
+      addPlan(destinationKey, { role: "inbound", advance });
+    }
+  }
+
+  const ordinalsByEntity = new Map<LooseCargoEntityId, RegionalEventOrdinals>();
+  for (const [key, plans] of plansByRegion) {
+    const world = worldByKey.get(key)!;
+    plans.sort(compareRegionalHistoryPlan);
+    if (
+      world.revision >= LOOSE_CARGO_MAX_ORDINAL
+      || !hasOrdinalSpace(world.lastEventOrdinal, plans.length)
+    ) return failedRegionalStep("history-capacity-exceeded", worlds);
+    plans.forEach((plan, index) => {
+      const ordinal = world.lastEventOrdinal + index + 1;
+      const ordinals = ordinalsByEntity.get(plan.advance.entity.id) ?? {};
+      ordinals[plan.role] = ordinal;
+      ordinalsByEntity.set(plan.advance.entity.id, ordinals);
+    });
+  }
+
+  const nextWorlds: LooseCargoWorldState[] = [];
+  for (const [key, world] of worldByKey) {
+    const selected = selectedByRegion.get(key) ?? [];
+    const plans = plansByRegion.get(key) ?? [];
+    const inbound = plans.filter(({ role }) => role === "inbound");
+    if (selected.length === 0 && inbound.length === 0) {
+      nextWorlds.push(world);
+      continue;
+    }
+    const advanceByEntity = new Map(selected.map((advance) => [advance.entity.id, advance]));
+    const entities: LooseCargoEntity[] = [];
+    for (const entity of world.entities) {
+      const advance = advanceByEntity.get(entity.id);
+      if (!advance) {
+        entities.push(entity);
+        continue;
+      }
+      if (!sameRegion(world.region, advance.destinationRegion)) continue;
+      const ordinal = ordinalsByEntity.get(entity.id)?.local;
+      entities.push(regionalSuccessorEntity(advance, ordinal ?? entity.lastEventOrdinal));
+    }
+    for (const { advance } of inbound) {
+      const ordinal = ordinalsByEntity.get(advance.entity.id)?.inbound;
+      if (ordinal === undefined) {
+        return failedRegionalStep("history-capacity-exceeded", worlds);
+      }
+      entities.push(regionalSuccessorEntity(advance, ordinal));
+    }
+    entities.sort(compareEntity);
+
+    const records = plans.map((plan) => regionalHistoryRecord(
+      world,
+      plan,
+      ordinalsByEntity.get(plan.advance.entity.id)?.[plan.role],
+    ));
+    if (records.some((record) => record === null)) {
+      return failedRegionalStep("history-capacity-exceeded", worlds);
+    }
+    const appendedHistory = appendLooseCargoHistory(
+      world,
+      records as LooseCargoHistoryRecord[],
+    );
+    nextWorlds.push(trustWorldState({
+      ...world,
+      revision: world.revision + 1,
+      completedSteps: world.completedSteps + (selected.length > 0 ? 1 : 0),
+      lastEventOrdinal: world.lastEventOrdinal + records.length,
+      entities,
+      ...appendedHistory,
+    }));
+  }
+  nextWorlds.sort(compareWorldRegion);
+  if (!inspectLooseCargoMultiWorldConservation(nextWorlds, emptyCarrier).valid) {
+    return failedRegionalStep("invalid-world-set", worlds);
+  }
+
+  const events: LooseCargoRegionalStepEvent[] = advances.map((advance) => {
+    const crossedRegion = !sameRegion(advance.sourceWorld.region, advance.destinationRegion);
+    const ordinals = ordinalsByEntity.get(advance.entity.id);
+    const eventOrdinal = crossedRegion ? ordinals?.inbound : ordinals?.local;
+    const eventRegion = crossedRegion ? advance.destinationRegion : advance.sourceWorld.region;
+    const from = positionOf(advance.sourceWorld, advance.entity.x, advance.entity.y);
+    const to: LooseCargoPosition = {
+      region: advance.destinationRegion,
+      x: advance.x,
+      y: advance.y,
+    };
+    return {
+      eventId: eventOrdinal === undefined ? null : looseCargoEventId(eventRegion, eventOrdinal),
+      eventOrdinal: eventOrdinal ?? null,
+      entityId: advance.entity.id,
+      fromTileIndex: tileIndexAt(
+        advance.entity.x,
+        advance.entity.y,
+        advance.sourceWorld.width,
+      ),
+      toTileIndex: tileIndexAt(advance.x, advance.y, advance.sourceWorld.width),
+      moved: crossedRegion || advance.x !== advance.entity.x || advance.y !== advance.entity.y,
+      boundaryCollision: false,
+      impactApplied: advance.impactApplied,
+      snags: advance.snags,
+      conditionLoss: advance.conditionLoss,
+      causes: advance.environmentCauses,
+      causalCodes: crossedRegion
+        ? canonicalCauseCodes([...advance.causalCodes, "storage-handoff"])
+        : advance.causalCodes,
+      motion: advance.motion,
+      from,
+      to,
+      crossedRegion,
+    };
+  });
+  const handoffs: LooseCargoRegionHandoff[] = advances.flatMap((advance) => {
+    if (sameRegion(advance.sourceWorld.region, advance.destinationRegion)) return [];
+    const ordinals = ordinalsByEntity.get(advance.entity.id);
+    if (ordinals?.outbound === undefined || ordinals.inbound === undefined) return [];
+    return [{
+      entityId: advance.entity.id,
+      from: positionOf(advance.sourceWorld, advance.entity.x, advance.entity.y),
+      to: { region: advance.destinationRegion, x: advance.x, y: advance.y },
+      sourceEventId: looseCargoEventId(advance.sourceWorld.region, ordinals.outbound),
+      destinationEventId: looseCargoEventId(advance.destinationRegion, ordinals.inbound),
+    }];
+  });
+  return { ok: true, reason: "advanced", worlds: nextWorlds, events, handoffs };
+}
+
+function advanceLooseCargoAcrossRegion(
+  sourceWorld: LooseCargoWorldState,
+  entity: LooseCargoEntity,
+  sample: LooseCargoStepSample,
+): RegionalEntityAdvance | null {
+  const effectiveEnvironment: CargoEnvironmentSample = {
+    ...sample.environment,
+    immersion: Math.max(sample.environment.immersion, sample.waterDepth),
+  };
+  const baseEvaluation = evaluateCargoEnvironment({
+    property: looseCargoPayloadProperty(entity.payload),
+    state: entity.materialState,
+    environment: { ...effectiveEnvironment, impact: 0 },
+  });
+  const retainedX = multiplySigned(entity.velocityX, VELOCITY_RETENTION);
+  const retainedY = multiplySigned(entity.velocityY, VELOCITY_RETENTION);
+  const currentX = Math.trunc((baseEvaluation.force.x * CURRENT_ACCELERATION) / FIXED_POINT);
+  const currentY = Math.trunc((baseEvaluation.force.y * CURRENT_ACCELERATION) / FIXED_POINT);
+  const slopeX = Math.trunc((sample.downhillX * SLOPE_ACCELERATION) / FIXED_POINT);
+  const slopeY = Math.trunc((sample.downhillY * SLOPE_ACCELERATION) / FIXED_POINT);
+  const beforeSnagX = clampVelocity(retainedX + currentX + slopeX);
+  const beforeSnagY = clampVelocity(retainedY + currentY + slopeY);
+  const snagStrength = unionFixed(sample.mangroveSnag, sample.brambleSnag);
+  const velocityX = settleVelocity(multiplySigned(beforeSnagX, FIXED_POINT - snagStrength));
+  const velocityY = settleVelocity(multiplySigned(beforeSnagY, FIXED_POINT - snagStrength));
+  const normalized = normalizeLooseCargoRegionalPosition(
+    sourceWorld,
+    entity.x + velocityX,
+    entity.y + velocityY,
+  );
+  if (!normalized) return null;
+  const brambleImpact = Math.trunc(sample.brambleSnag / 5);
+  const impactApplied = unit(Math.max(
+    sample.environment.impact ?? 0,
+    sample.tumbleImpact,
+    brambleImpact,
+  ));
+  const evaluation = evaluateCargoEnvironment({
+    property: looseCargoPayloadProperty(entity.payload),
+    state: entity.materialState,
+    environment: { ...effectiveEnvironment, impact: impactApplied },
+  });
+  const snags: readonly LooseCargoSnag[] = [
+    ...(sample.mangroveSnag > 0 ? ["mangrove" as const] : []),
+    ...(sample.brambleSnag > 0 ? ["bramble" as const] : []),
+  ];
+  const stopped = velocityX === 0 && velocityY === 0;
+  const snaggedBy: LooseCargoSnag | null = stopped && snags.length > 0
+    ? sample.brambleSnag >= sample.mangroveSnag ? "bramble" : "mangrove"
+    : null;
+  const currentActive = baseEvaluation.force.x !== 0 || baseEvaluation.force.y !== 0;
+  const gradeActive = sample.downhillX !== 0 || sample.downhillY !== 0;
+  const motion: LooseCargoMotion = snaggedBy !== null
+    ? "snagged"
+    : stopped
+      ? "resting"
+      : gradeActive
+        ? "tumbling"
+        : currentActive
+          ? "drifting"
+          : "tumbling";
+  const causalCodes = canonicalCauseCodes([
+    ...evaluation.causes.map(({ code }) => code),
+    ...(gradeActive ? ["grade-tumble" as const] : []),
+    ...(sample.tumbleImpact > 0 ? ["rock-impact" as const] : []),
+    ...(sample.mangroveSnag > 0 ? ["mangrove-snag" as const] : []),
+    ...(sample.brambleSnag > 0 ? ["bramble-snag" as const] : []),
+    ...(entity.velocityX !== 0 || entity.velocityY !== 0 ? ["parcel-momentum" as const] : []),
+  ]);
+  const causalSignature = causalSignatureFor(causalCodes, impactApplied);
+  const crossedRegion = !sameRegion(sourceWorld.region, normalized.region);
+  const crossedTile = crossedRegion
+    || tileIndexAt(entity.x, entity.y, sourceWorld.width)
+      !== tileIndexAt(normalized.x, normalized.y, sourceWorld.width);
+  return {
+    sourceWorld,
+    entity,
+    sample,
+    destinationRegion: normalized.region,
+    x: normalized.x,
+    y: normalized.y,
+    velocityX,
+    velocityY,
+    materialState: evaluation.nextState,
+    motion,
+    snaggedBy,
+    causalSignature,
+    causalCodes,
+    environmentCauses: evaluation.causes.map(({ code }) => code),
+    conditionLoss: evaluation.change.conditionLoss,
+    contaminationGain: evaluation.change.contaminationGain,
+    decayGain: evaluation.change.decayGain,
+    impactApplied,
+    snags,
+    recordable: crossedTile
+      || causalSignature !== entity.causalSignature
+      || materialThresholdBand(entity.materialState) !== materialThresholdBand(evaluation.nextState),
+  };
+}
+
+function normalizeLooseCargoRegionalPosition(
+  world: LooseCargoWorldState,
+  rawX: number,
+  rawY: number,
+): LooseCargoPosition | null {
+  if (!Number.isSafeInteger(rawX) || !Number.isSafeInteger(rawY)) return null;
+  const spanX = world.width * LOOSE_CARGO_TILE_UNITS;
+  const spanY = world.height * LOOSE_CARGO_TILE_UNITS;
+  const regionDeltaX = Math.floor(rawX / spanX);
+  const regionDeltaY = Math.floor(rawY / spanY);
+  const regionX = world.region.x + regionDeltaX;
+  const regionY = world.region.y + regionDeltaY;
+  if (!Number.isSafeInteger(regionX) || !Number.isSafeInteger(regionY)) return null;
+  const x = rawX - regionDeltaX * spanX;
+  const y = rawY - regionDeltaY * spanY;
+  const region = canonicalRegionAddress({
+    x: Object.is(regionX, -0) ? 0 : regionX,
+    y: Object.is(regionY, -0) ? 0 : regionY,
+  });
+  if (region === null || !validPosition(x, world.width) || !validPosition(y, world.height)) {
+    return null;
+  }
+  return { region, x, y };
+}
+
+function regionalSuccessorEntity(
+  advance: RegionalEntityAdvance,
+  lastEventOrdinal: number,
+): LooseCargoEntity {
+  return {
+    ...advance.entity,
+    materialState: advance.materialState,
+    x: advance.x,
+    y: advance.y,
+    velocityX: advance.velocityX,
+    velocityY: advance.velocityY,
+    motion: advance.motion,
+    snaggedBy: advance.snaggedBy,
+    causalSignature: advance.causalSignature,
+    lastEventOrdinal,
+  };
+}
+
+function regionalHistoryRecord(
+  world: LooseCargoWorldState,
+  plan: RegionalHistoryPlan,
+  ordinal: number | undefined,
+): LooseCargoHistoryRecord | null {
+  if (ordinal === undefined) return null;
+  const { advance } = plan;
+  if (plan.role === "local") {
+    return createHistoryRecord(
+      world,
+      ordinal,
+      "environment",
+      [advance.entity.id],
+      advance.entity.payload,
+      positionOf(world, advance.entity.x, advance.entity.y),
+      positionOf(world, advance.x, advance.y),
+      advance.causalCodes.length > 0 ? advance.causalCodes : ["parcel-settled"],
+      {
+        conditionLoss: advance.conditionLoss,
+        contaminationGain: advance.contaminationGain,
+        decayGain: advance.decayGain,
+      },
+    );
+  }
+  if (plan.role === "outbound") {
+    return createHistoryRecord(
+      world,
+      ordinal,
+      "handoff",
+      [advance.entity.id],
+      advance.entity.payload,
+      positionOf(world, advance.entity.x, advance.entity.y),
+      null,
+      canonicalCauseCodes([...advance.causalCodes, "storage-handoff"]),
+      {
+        conditionLoss: advance.conditionLoss,
+        contaminationGain: advance.contaminationGain,
+        decayGain: advance.decayGain,
+      },
+    );
+  }
+  return createHistoryRecord(
+    world,
+    ordinal,
+    "handoff",
+    [advance.entity.id],
+    advance.entity.payload,
+    null,
+    positionOf(world, advance.x, advance.y),
+    ["storage-handoff"],
+    zeroEnvironmentChange(),
+  );
+}
+
+function compareRegionalHistoryPlan(
+  left: RegionalHistoryPlan,
+  right: RegionalHistoryPlan,
+): number {
+  const entityOrder = compareEntity(left.advance.entity, right.advance.entity);
+  if (entityOrder !== 0) return entityOrder;
+  const roleOrder: Readonly<Record<RegionalHistoryRole, number>> = {
+    outbound: 0,
+    local: 1,
+    inbound: 2,
+  };
+  return roleOrder[left.role] - roleOrder[right.role];
+}
+
+function compareWorldRegion(
+  left: LooseCargoWorldState,
+  right: LooseCargoWorldState,
+): number {
+  const leftKey = looseCargoRegionKey(left.region);
+  const rightKey = looseCargoRegionKey(right.region);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+function failedRegionalStep(
+  reason: Exclude<LooseCargoRegionalStepReason, "advanced">,
+  worlds: readonly LooseCargoWorldState[],
+): LooseCargoRegionalStepResult {
+  return { ok: false, reason, worlds, events: [], handoffs: [] };
 }
 
 function pristineMaterialState(): CargoEnvironmentState {
@@ -2569,7 +3185,7 @@ function transferFailureMessage(
     case "not-owner": return "This loose stack still belongs to another porter or settlement.";
     case "capacity-exceeded": return "The pack has no room for this loose stack.";
     case "identity-conflict": return "That durable item or Promise cargo is already represented here.";
-    case "entity-capacity-exceeded": return "No safe loaded parcel slot remains in this region.";
+    case "entity-capacity-exceeded": return "There is no safe space nearby for another loose parcel.";
     case "id-space-exhausted": return "No safe cargo identity remains in this save.";
     case "history-capacity-exceeded": return "The local parcel history is full; save recovery is required before another transfer.";
   }
@@ -2819,7 +3435,7 @@ function applyScatterCapacityImpact(
     world: nextWorld,
     carrier: carrierValidation.carrier,
     entities: [],
-    message: "The loaded region was full; the parcel stayed carried but took the resolved fall impact.",
+    message: "There was no safe space for the parcel to separate; it stayed carried but took the resolved fall impact.",
     conservation: null,
   };
 }

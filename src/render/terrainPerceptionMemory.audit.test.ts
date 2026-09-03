@@ -247,6 +247,7 @@ describe("adversarial temporal terrain-fog boundary", () => {
     const remembered = rememberedTerrainVisibilityAt(state, 0);
     expect(remembered).toBeGreaterThan(0);
     expect(Object.keys(state).sort()).toEqual([
+      "frame",
       "identity",
       "sampledAtMs",
       "signature",
@@ -319,26 +320,34 @@ describe("adversarial temporal terrain-fog boundary", () => {
     }
   });
 
-  it("keeps opaque recenter identities distinct and replaces bounded active-window storage", () => {
+  it("keeps opaque identities distinct, rebases absolute overlap, and caps active storage", () => {
     const terrain = grid([tile({ currentVisibility: 1 })]);
     const identities = [-0, 0, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]
       .map((spatialEpoch) => terrainPerceptionMemoryIdentity({ terrain, spatialEpoch }));
     expect(new Set(identities)).toHaveLength(identities.length);
 
-    let state = sampleTerrainPerceptionMemory(undefined, input(terrain, 100));
+    const absolute = grid([
+      tile({ currentVisibility: 1 }),
+      tile({ currentVisibility: 1 }),
+    ], 2, { worldTileOrigin: { x: -7_000, y: 9_000 } });
+    let state = sampleTerrainPerceptionMemory(undefined, input(absolute, 100));
     const oldValues = state.values;
-    state = sampleTerrainPerceptionMemory(state, input(grid([tile()]), 150, {
+    state = sampleTerrainPerceptionMemory(state, input(grid([tile(), tile()], 2, {
+      worldTileOrigin: { x: -6_999, y: 9_000 },
+    }), 150, {
       spatialEpoch: "r:9007199254740991:-9007199254740991",
     }));
     expect(state.values).not.toBe(oldValues);
-    expect(rememberedTerrainVisibilityAt(state, 0)).toBe(0);
+    expect(rememberedTerrainVisibilityAt(state, 0)).toBeCloseTo(1 - 50 / 900, 5);
+    expect(rememberedTerrainVisibilityAt(state, 1)).toBe(0);
 
     const oversizedTiles = Array.from(
       { length: MAX_TERRAIN_PERCEPTION_MEMORY_TILES + 37 },
       () => tile({ currentVisibility: 1 }),
     );
-    state = sampleTerrainPerceptionMemory(undefined, input(grid(oversizedTiles, 98), 0));
+    state = sampleTerrainPerceptionMemory(undefined, input(grid(oversizedTiles, 120), 0));
     expect(state.values).toHaveLength(MAX_TERRAIN_PERCEPTION_MEMORY_TILES);
+    expect(MAX_TERRAIN_PERCEPTION_MEMORY_TILES).toBe(120 * 120);
     const store = createTerrainPerceptionMemoryStore();
     store.sample(input(terrain, 0));
     store.reset();

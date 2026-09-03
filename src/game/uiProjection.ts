@@ -1,6 +1,7 @@
 import {
   FIXED_POINT,
   STRAND_AUTOMATION_THRESHOLD,
+  WORLD_HEIGHT,
   WORLD_WIDTH,
   type ContractState,
   type ResidentState,
@@ -85,6 +86,7 @@ import {
 } from "./looseCargo";
 import {
   regionalAddressAt,
+  regionalGlobalTileAt,
   regionalTileIndexInView,
   regionalWorldCenter,
 } from "./regionalWorldView";
@@ -114,8 +116,14 @@ export interface UIProjectionOptions {
   readonly looseCargoCarrier?: LooseCargoCarrierState;
   /** Authoritative loaded parcels used for RECOVER objectives and interaction. */
   readonly looseCargoWorld?: LooseCargoWorldState;
-  /** Sealed unloaded parcel worlds used only for truthful global custody guidance. */
+  /** Sealed parcel worlds intersecting the current bounded spatial frame. */
   readonly inactiveLooseCargoWorlds?: readonly LooseCargoWorldState[];
+  /** Conserved global Promise totals, derived without scanning unloaded partitions. */
+  readonly activePromiseCustody?: {
+    readonly contractId: number;
+    readonly carriedQuantity: number;
+    readonly looseQuantity: number;
+  };
   /** Authoritative momentary hold state shared by Shift and touch. */
   readonly bracing?: boolean;
   /** Optional live movement intent used only to label an ADRIFT stroke. */
@@ -294,17 +302,21 @@ export function projectUIView(
   const worldName = `The ${titleCase(world.seedText)} Estuary`;
   const wayknotControl = projectWayknotControl(world, player);
   const localResource = resourceUnderfoot(player, options);
-  const nearbyParcel = nearestLooseParcel(player, world, options.looseCargoWorld, 2);
+  const looseCargoWorlds = [
+    ...(options.looseCargoWorld ? [options.looseCargoWorld] : []),
+    ...(options.inactiveLooseCargoWorlds ?? []),
+  ];
+  const nearbyParcel = nearestLooseParcel(player, world, looseCargoWorlds, 2);
   const activeCustody = activeContract
     ? promiseCustody(
         activeContract,
         player,
         world,
         options.looseCargoCarrier,
-        [
-          ...(options.looseCargoWorld ? [options.looseCargoWorld] : []),
-          ...(options.inactiveLooseCargoWorlds ?? []),
-        ],
+        looseCargoWorlds,
+        options.activePromiseCustody?.contractId === activeContract.id
+          ? options.activePromiseCustody
+          : undefined,
       )
     : undefined;
 
@@ -334,6 +346,8 @@ export function projectUIView(
       options.requiresSeed ? "replacement-seed-required" : "ordinary-seed",
       options.worldCreationBlocked ? "world-creation-blocked" : "world-creation-enabled",
       options.looseCargoWorld?.revision ?? "no-loose-world",
+      options.activePromiseCustody?.carriedQuantity ?? "no-carried-promise",
+      options.activePromiseCustody?.looseQuantity ?? "no-loose-promise",
       ...(options.inactiveLooseCargoWorlds ?? []).map((cargoWorld) =>
         `${cargoWorld.region.x},${cargoWorld.region.y}:${cargoWorld.revision}`),
     ].join(":"),
@@ -374,11 +388,7 @@ export function projectUIView(
       bracing: options.bracing === true,
       ...(playerSettlementId === null
         ? {
-            locationLabel: regionalLocationLabel(
-              player.mode === "skiff" ? "On the tide" : "Between harbors",
-              spatialCenter.x,
-              spatialCenter.y,
-            ),
+            locationLabel: player.mode === "skiff" ? "On the tide" : "Between harbors",
           }
         : { locationLabel: settlementName(economy, playerSettlementId) }),
     },
@@ -531,12 +541,6 @@ export function projectNavigationCoordinates(
     globalX: global.x,
     globalY: global.y,
   };
-}
-
-function regionalLocationLabel(base: string, regionX: number, regionY: number): string {
-  if (regionX === 0 && regionY === 0) return base;
-  const axis = (value: number) => value > 0 ? `+${value}` : String(value);
-  return `${base} · R ${axis(regionX)},${axis(regionY)}`;
 }
 
 function resourceUnderfoot(
@@ -710,6 +714,16 @@ function projectKit(
       ? null
       : regionalWayknotViewTileIndex(world, wayknot.region, wayknot.tileIndex);
     const tile = viewTileIndex === null ? undefined : world.terrain.tiles[viewTileIndex];
+    const globalTile = wayknot.region === null || wayknot.tileIndex === null
+      ? null
+      : regionLocalToGlobalTile(
+          wayknot.region,
+          wayknot.tileIndex % WORLD_WIDTH,
+          Math.floor(wayknot.tileIndex / WORLD_WIDTH),
+        );
+    const globalLocation = globalTile
+      ? `E ${globalTile.x > 0 ? "+" : ""}${globalTile.x} · N ${globalTile.y > 0 ? "+" : ""}${globalTile.y}`
+      : null;
     return {
       id: String(wayknot.id),
       kind: wayknot.kind,
@@ -717,11 +731,9 @@ function projectKit(
       detail: `LIVE INHERITED CORE · ${WAYKNOT_DESCRIPTIONS[wayknot.kind]} Rebinding spends condition and never refreshes it.`,
       location: deployed ? "deployed" as const : "carried" as const,
       locationLabel: deployed
-        ? tile && wayknot.region && wayknot.tileIndex !== null
-          ? `Deployed in region ${wayknot.region.x},${wayknot.region.y} at ${wayknot.tileIndex % WORLD_WIDTH},${Math.floor(wayknot.tileIndex / WORLD_WIDTH)}`
-          : wayknot.region
-            ? `Deployed beyond this chart in region ${wayknot.region.x},${wayknot.region.y}`
-            : "Deployed in the field"
+        ? globalLocation
+          ? `${tile ? "Deployed nearby" : "Deployed beyond the visible chart"} · ${globalLocation}`
+          : "Deployed in the field"
         : "Core field-kit piece · zero compatibility load",
       loadMilli: 0,
       condition: wayknot.condition / FIXED_POINT,
@@ -897,7 +909,7 @@ function projectFieldReadout(
   const tideHarps = tunedTideHarps(player, world);
   const activeTideHarp = activeTideHarpAtPlayer(player, world, tideHarps);
   const sweptProgress = sweepProgress(player);
-  const biome = tile ? biomeAtPlayer(world, tile) : undefined;
+  const biome = tile ? biomeAtPlayer(world, tile, index) : undefined;
   const biomeLabel = biome ? biomeFieldLabel(biome) : undefined;
   const terrainLabel = settlement
     ? `${settlement.name} harbor · ${biomeLabel ?? "built shore"}`
@@ -992,14 +1004,17 @@ function projectAdriftFieldView(
 function biomeAtPlayer(
   world: WorldView,
   tile: WorldView["terrain"]["tiles"][number],
+  tileIndex: number,
 ): BiomeId {
   const seed = world.rootSeed ?? seedFromText(world.seedText);
+  const globalTile = regionalGlobalTileAt(world, tileIndex) ?? { x: tile.x, y: tile.y };
   return deriveBiomeProfile({
     seed,
     tile,
-    gridHeight: world.terrain.height,
+    gridHeight: WORLD_HEIGHT,
+    globalTile,
     weather: world.weather,
-    magicalWaterInfluence: deriveMagicalWaterInfluence(seed, tile),
+    magicalWaterInfluence: deriveMagicalWaterInfluence(seed, tile, globalTile),
   }).id;
 }
 
@@ -1176,7 +1191,7 @@ function contractObjective(
       : custody.nearestLoose?.motion ?? "moving";
     const range = custody.nearestLoose
       ? `${custody.nearestLoose.distance.toFixed(1)} tiles ${custody.nearestLoose.direction} · ${motion}`
-      : "marked in the loaded landscape";
+      : "outside the current visible landscape";
     return {
       id: `recover-${contract.id}`,
       eyebrow: "Recover loose Promise cargo",
@@ -1222,16 +1237,20 @@ function promiseCustody(
   spatialWorld: WorldView,
   carrier?: LooseCargoCarrierState,
   looseWorlds: readonly LooseCargoWorldState[] = [],
+  authoritativeTotals?: {
+    readonly carriedQuantity: number;
+    readonly looseQuantity: number;
+  },
 ): PromiseCustodyProjection | undefined {
-  if (!carrier || looseWorlds.length === 0) return undefined;
-  const carriedQuantity = carrier.lots.reduce((total, lot) =>
+  if (!carrier) return undefined;
+  const carriedQuantity = authoritativeTotals?.carriedQuantity ?? carrier.lots.reduce((total, lot) =>
     total + (lot.payload.kind === "promise" && lot.payload.contractId === contract.id
       ? lot.payload.quantity
       : 0), 0);
   const loose = looseWorlds.flatMap((cargoWorld) => cargoWorld.entities
     .filter((entity) => entity.payload.kind === "promise" && entity.payload.contractId === contract.id)
     .map((entity) => ({ cargoWorld, entity })));
-  const looseQuantity = loose.reduce((total, { entity }) =>
+  const looseQuantity = authoritativeTotals?.looseQuantity ?? loose.reduce((total, { entity }) =>
     total + (entity.payload.kind === "promise" ? entity.payload.quantity : 0), 0);
   const nearest = [...loose]
     .map(({ cargoWorld, entity }) => {
@@ -1255,15 +1274,14 @@ function promiseCustody(
 function nearestLooseParcel(
   player: PlayerState,
   spatialWorld: WorldView,
-  looseWorld: LooseCargoWorldState | undefined,
+  looseWorlds: readonly LooseCargoWorldState[],
   maximumDistance: number,
 ): LooseCargoWorldState["entities"][number] | undefined {
-  if (!looseWorld) return undefined;
-  return [...looseWorld.entities]
-    .map((entity) => ({
+  return looseWorlds
+    .flatMap((looseWorld) => looseWorld.entities.map((entity) => ({
       entity,
       distance: looseParcelDistance(player, spatialWorld, looseWorld, entity.x, entity.y),
-    }))
+    })))
     .filter(({ distance }) => distance <= maximumDistance)
     .sort((left, right) => left.distance - right.distance
       || left.entity.id.localeCompare(right.entity.id))[0]?.entity;

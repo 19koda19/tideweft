@@ -6,15 +6,25 @@ import {
   type RegionCoord,
   type RegionTileAddress,
 } from "../sim/regions";
-import type { ContractState, TerrainState, WorldView } from "../sim/types";
+import {
+  WORLD_WIDTH,
+  type ContractState,
+  type TerrainState,
+  type WorldView,
+} from "../sim/types";
 import { TILE_UNITS, createPlayer, loadContractCargo, type PlayerState } from "./player";
 import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
+  defaultRegionalFrameOrigin,
   regionalWindowTileAddress,
   type RegionalTerrainWindow,
 } from "./regionalTravel";
-import { createRegionalWorldView } from "./regionalWorldView";
+import {
+  createRegionalWorldView,
+  regionalTileIndexInView,
+  regionalWorldCenter,
+} from "./regionalWorldView";
 import { createSessionState, type GameSessionState } from "./sessionTypes";
 import { projectUIView, signedReportJobId } from "./uiProjection";
 
@@ -37,17 +47,19 @@ function objectiveFixture(
   const player = createPlayer(economy);
   const template = economy.terrain.tiles[0];
   if (!template) throw new Error("regional Promise fixture has no terrain template");
+  const origin = defaultRegionalFrameOrigin(center);
   const tiles: TerrainState["tiles"][number][] = [];
   const addresses: RegionTileAddress[] = [];
   for (let y = 0; y < REGIONAL_TRAVEL_ROWS; y += 1) {
     for (let x = 0; x < REGIONAL_TRAVEL_COLUMNS; x += 1) {
       const index = y * REGIONAL_TRAVEL_COLUMNS + x;
       tiles.push({ ...template, index, x, y });
-      addresses.push(regionalWindowTileAddress(center, x, y));
+      addresses.push(regionalWindowTileAddress(origin, x, y));
     }
   }
   const window: RegionalTerrainWindow = {
     center,
+    origin,
     terrain: {
       width: REGIONAL_TRAVEL_COLUMNS,
       height: REGIONAL_TRAVEL_ROWS,
@@ -79,9 +91,23 @@ function settlementTile(
 }
 
 /** Put the porter on the same local tile in the fixture's nonzero center region. */
-function placeAtMatchingLocalTile(player: PlayerState, tile: { readonly x: number; readonly y: number }): void {
-  player.x = (tile.x + 1.5) * TILE_UNITS;
-  player.y = (tile.y + 1.5) * TILE_UNITS;
+function placeAtMatchingLocalTile(
+  player: PlayerState,
+  spatial: WorldView,
+  tile: { readonly x: number; readonly y: number },
+): void {
+  const viewTileIndex = regionalTileIndexInView(
+    spatial,
+    regionalWorldCenter(spatial),
+    tile.y * WORLD_WIDTH + tile.x,
+  );
+  if (viewTileIndex === null) {
+    throw new Error("matching local tile is outside the regional spatial frame");
+  }
+  const x = viewTileIndex % spatial.terrain.width;
+  const y = Math.floor(viewTileIndex / spatial.terrain.width);
+  player.x = (x + 0.5) * TILE_UNITS;
+  player.y = (y + 0.5) * TILE_UNITS;
   player.previousX = player.x;
   player.previousY = player.y;
 }
@@ -146,7 +172,7 @@ describe("regional Promise objective guidance", () => {
     const destination = economy.settlements.find(({ id }) => id === contract.destinationSettlementId);
     if (!origin || !destination) throw new Error("regional Promise fixture lost a harbor");
 
-    placeAtMatchingLocalTile(player, settlementTile(economy, origin.id));
+    placeAtMatchingLocalTile(player, spatial, settlementTile(economy, origin.id));
     session.trackedContractId = contract.id;
     const pickup = projectUIView(spatial, player, session, { economyWorld: economy }).objective;
     expect(pickup?.title).toContain(origin.name);
@@ -155,7 +181,7 @@ describe("regional Promise objective guidance", () => {
     expect(visibleDistance(pickup?.progressLabel)).toBe(96);
 
     expect(loadContractCargo(player, contract)).toBe(true);
-    placeAtMatchingLocalTile(player, settlementTile(economy, destination.id));
+    placeAtMatchingLocalTile(player, spatial, settlementTile(economy, destination.id));
     const delivery = projectUIView(spatial, player, session, { economyWorld: economy }).objective;
     expect(delivery?.title).toContain(destination.name);
     expect(delivery?.why).toContain(origin.name);
@@ -187,7 +213,7 @@ describe("regional Promise objective guidance", () => {
     );
     const { economy, spatial, player, session, contract } = fixture;
     const originTile = settlementTile(economy, contract.originSettlementId);
-    placeAtMatchingLocalTile(player, originTile);
+    placeAtMatchingLocalTile(player, spatial, originTile);
     session.trackedContractId = contract.id;
 
     const beforeEconomy = structuredClone(economy);
@@ -200,7 +226,7 @@ describe("regional Promise objective guidance", () => {
     expect(Number.isFinite(distance)).toBe(true);
     expect(first?.progressLabel).toContain("north-east");
     expect(second).toEqual(first);
-    expect(regionalHud.player.locationLabel).toBe("Between harbors · R -2,+3");
+    expect(regionalHud.player.locationLabel).toBe("Between harbors");
     expect(regionalHud.revision).toContain("-2,3");
     expect(economy).toEqual(beforeEconomy);
   });
@@ -211,7 +237,11 @@ describe("regional Promise objective guidance", () => {
       createRegionCoord(1_000_000, -1_000_000),
     );
     const { economy, spatial, player, session, contract } = fixture;
-    placeAtMatchingLocalTile(player, settlementTile(economy, contract.originSettlementId));
+    placeAtMatchingLocalTile(
+      player,
+      spatial,
+      settlementTile(economy, contract.originSettlementId),
+    );
     session.trackedContractId = contract.id;
 
     const objective = projectUIView(spatial, player, session, { economyWorld: economy }).objective;

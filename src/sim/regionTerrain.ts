@@ -38,6 +38,24 @@ export interface RegionTerrainSampler {
   readonly sample: (coord: RegionCoord, localX: number, localY: number) => TerrainTile;
 }
 
+export type RegionTerrainBundleGenerator = (
+  coord: RegionCoord,
+) => GeneratedRegionTerrain;
+
+export interface RegionTerrainGenerationJob {
+  readonly coord: RegionCoord;
+  readonly totalTiles: number;
+  readonly completedTiles: number;
+  readonly complete: boolean;
+  /** Advances a deterministic number of tiles and returns the finished bundle. */
+  readonly step: (tileBudget: number) => GeneratedRegionTerrain | null;
+}
+
+export interface RegionTerrainBundleSource {
+  readonly generate: RegionTerrainBundleGenerator;
+  readonly createJob: (coord: RegionCoord) => RegionTerrainGenerationJob;
+}
+
 /** Canonical 128-bit fingerprint for derived baseline terrain manifests. */
 export function regionTerrainHash(terrain: TerrainState): string {
   const encoded = `tideweft-region-terrain/1:${stableStringify(terrain)}`;
@@ -371,8 +389,14 @@ export function generateRegionTerrain(
   if (!isRegionCoord(coord)) {
     throw new RangeError("Region coordinate is outside the supported world");
   }
-  if (coord.x === 0 && coord.y === 0) return generateTerrain(rootSeed);
   const sampler = createRegionTerrainSampler(rootSeed);
+  return generateRegionTerrainWithSampler(coord, sampler);
+}
+
+function generateRegionTerrainWithSampler(
+  coord: RegionCoord,
+  sampler: RegionTerrainSampler,
+): TerrainState {
   const tiles: TerrainTile[] = [];
   for (let localY = 0; localY < WORLD_HEIGHT; localY += 1) {
     for (let localX = 0; localX < WORLD_WIDTH; localX += 1) {
@@ -447,7 +471,88 @@ export function generateRegionTerrainBundle(
   rootSeed: RootSeed,
   coord: RegionCoord,
 ): GeneratedRegionTerrain {
-  const terrain = generateRegionTerrain(rootSeed, coord);
+  assertRootSeed(rootSeed);
+  if (!isRegionCoord(coord)) {
+    throw new RangeError("Region coordinate is outside the supported world");
+  }
+  return regionTerrainBundle(rootSeed, coord, generateRegionTerrain(rootSeed, coord));
+}
+
+/**
+ * Build many region bundles through one sampler. This keeps the immutable
+ * compatibility terrain and its transition-band source shared while a
+ * streaming window fills, without changing any generated value or hash.
+ */
+export function createRegionTerrainBundleGenerator(
+  rootSeed: RootSeed,
+): RegionTerrainBundleGenerator {
+  return createRegionTerrainBundleSource(rootSeed).generate;
+}
+
+/**
+ * Shared deterministic source for immediate generation and small prefetch
+ * slices. Jobs contain no authoritative cursor: cancellation and recreation
+ * produce the same bundle because every tile is globally addressed.
+ */
+export function createRegionTerrainBundleSource(
+  rootSeed: RootSeed,
+): RegionTerrainBundleSource {
+  assertRootSeed(rootSeed);
+  const seed = Object.freeze([...rootSeed]) as RootSeed;
+  const sampler = createRegionTerrainSampler(seed);
+  const createJob = (coord: RegionCoord): RegionTerrainGenerationJob => {
+    if (!isRegionCoord(coord)) {
+      throw new RangeError("Region coordinate is outside the supported world");
+    }
+    const canonicalCoord = createRegionCoord(coord.x, coord.y);
+    const tiles: TerrainTile[] = [];
+    let bundle: GeneratedRegionTerrain | null = null;
+    const totalTiles = WORLD_WIDTH * WORLD_HEIGHT;
+    return Object.freeze({
+      coord: canonicalCoord,
+      totalTiles,
+      get completedTiles(): number {
+        return tiles.length;
+      },
+      get complete(): boolean {
+        return bundle !== null;
+      },
+      step: (tileBudget: number): GeneratedRegionTerrain | null => {
+        if (!Number.isSafeInteger(tileBudget) || tileBudget <= 0) {
+          throw new RangeError("Region terrain job tile budget must be a positive safe integer");
+        }
+        if (bundle) return bundle;
+        const end = Math.min(totalTiles, tiles.length + tileBudget);
+        while (tiles.length < end) {
+          const index = tiles.length;
+          const localX = index % WORLD_WIDTH;
+          const localY = Math.floor(index / WORLD_WIDTH);
+          tiles.push(sampler.sample(canonicalCoord, localX, localY));
+        }
+        if (tiles.length < totalTiles) return null;
+        bundle = regionTerrainBundle(seed, canonicalCoord, {
+          width: WORLD_WIDTH,
+          height: WORLD_HEIGHT,
+          tiles,
+        });
+        return bundle;
+      },
+    });
+  };
+  const generate = (coord: RegionCoord): GeneratedRegionTerrain => {
+    const job = createJob(coord);
+    const bundle = job.step(job.totalTiles);
+    if (!bundle) throw new Error("Complete region generation did not finish its exact tile budget");
+    return bundle;
+  };
+  return Object.freeze({ generate, createJob });
+}
+
+function regionTerrainBundle(
+  rootSeed: RootSeed,
+  coord: RegionCoord,
+  terrain: TerrainState,
+): GeneratedRegionTerrain {
   const canonicalCoord = createRegionCoord(coord.x, coord.y);
   const manifest = Object.freeze({
     version: REGION_TERRAIN_VERSION,

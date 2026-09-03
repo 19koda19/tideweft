@@ -1,6 +1,8 @@
 import { keyedRandomInt, type RootSeed } from "./rng";
 import {
   FIXED_POINT,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
   type TerrainKind,
   type TerrainTile,
   type WeatherState,
@@ -56,8 +58,19 @@ export interface BiomeProfileInput {
   readonly seed: RootSeed;
   readonly tile: BiomeTerrainInput;
   readonly gridHeight: number;
+  /**
+   * Stable infinite-world address for a tile projected through a floating
+   * window. When absent, finite compatibility worlds retain their original
+   * local-coordinate derivation exactly.
+   */
+  readonly globalTile?: BiomeGlobalTile;
   readonly weather?: BiomeWeatherInput;
   readonly magicalWaterInfluence?: number;
+}
+
+export interface BiomeGlobalTile {
+  readonly x: number;
+  readonly y: number;
 }
 
 const CLIMATE_RAIN_DOMAIN = 0x4249_5201;
@@ -161,6 +174,17 @@ function safeCoordinate(value: number): number {
   return Math.min(value, MAX_CLIMATE_COORDINATE);
 }
 
+function validGlobalTile(value: BiomeGlobalTile | undefined): value is BiomeGlobalTile {
+  return value !== undefined
+    && Number.isSafeInteger(value.x)
+    && Number.isSafeInteger(value.y);
+}
+
+function positiveRemainder(value: number, divisor: number): number {
+  const remainder = value % divisor;
+  return remainder < 0 ? remainder + divisor : remainder;
+}
+
 /** Smooth, seed-addressed value noise. It has no cursor and is stable across call order. */
 function regionalNoise(
   seed: RootSeed,
@@ -192,6 +216,73 @@ function regionalNoise(
   const northBlend = fixedLerp(sample(west, north), sample(east, north), amountX);
   const southBlend = fixedLerp(sample(west, south), sample(east, south), amountX);
   return fixedLerp(northBlend, southBlend, amountY);
+}
+
+/**
+ * Signed, safe-integer variant used only by explicitly globally addressed
+ * infinite-world tiles. Separate lattice axes avoid the old 4,096-wide
+ * packing alias at distant coordinates while preserving smooth interpolation.
+ */
+function globalRegionalNoise(
+  seed: RootSeed,
+  x: number,
+  y: number,
+  domain: number,
+  cellSize: number,
+): number {
+  const west = Math.floor(x / cellSize);
+  const north = Math.floor(y / cellSize);
+  const east = west + 1;
+  const south = north + 1;
+  const offsetX = x - west * cellSize;
+  const offsetY = y - north * cellSize;
+  const amountX = smoothFixed(Math.trunc((offsetX * FIXED_POINT) / cellSize));
+  const amountY = smoothFixed(Math.trunc((offsetY * FIXED_POINT) / cellSize));
+
+  const sample = (latticeX: number, latticeY: number): number => {
+    // Only lattice points that can contribute to compatibility region 0,0
+    // retain its established one-dimensional address dialect. Extending that
+    // legacy packing across all positive space aliases (x + 4096, y - 1) and
+    // would eventually repeat climate bands in the unbroken world.
+    if (
+      latticeX >= 0
+      && latticeY >= 0
+      && latticeX <= Math.floor((WORLD_WIDTH - 1) / cellSize) + 1
+      && latticeY <= Math.floor((WORLD_HEIGHT - 1) / cellSize) + 1
+    ) {
+      return keyedRandomInt(
+        seed,
+        domain,
+        0,
+        latticeY * 4_096 + latticeX,
+        1,
+        0,
+        FIXED_POINT,
+      );
+    }
+    return keyedRandomInt(
+      seed,
+      domain ^ 0x4754_494c,
+      latticeY,
+      latticeX,
+      1,
+      0,
+      FIXED_POINT,
+    );
+  };
+
+  const northBlend = fixedLerp(sample(west, north), sample(east, north), amountX);
+  const southBlend = fixedLerp(sample(west, south), sample(east, south), amountX);
+  return fixedLerp(northBlend, southBlend, amountY);
+}
+
+function globalLatitude(globalY: number, gridHeight: number): number {
+  if (gridHeight <= 1) return FIXED_POINT / 2;
+  const maximum = gridHeight - 1;
+  const period = maximum * 2;
+  const phase = positiveRemainder(globalY, period);
+  const mirrored = phase <= maximum ? phase : period - phase;
+  return Math.trunc((mirrored * FIXED_POINT) / maximum);
 }
 
 function terrainSalinity(kind: TerrainKind): number {
@@ -243,20 +334,25 @@ export function deriveBaselineBiomeClimate(
   tile: BiomeTerrainInput,
   gridHeightInput: number,
   magicalWaterInfluence = 0,
+  globalTile?: BiomeGlobalTile,
 ): BiomeClimate {
-  const x = safeCoordinate(tile.x);
-  const y = safeCoordinate(tile.y);
+  const addressed = validGlobalTile(globalTile);
+  const x = addressed ? globalTile.x : safeCoordinate(tile.x);
+  const y = addressed ? globalTile.y : safeCoordinate(tile.y);
   const gridHeight = Number.isSafeInteger(gridHeightInput) && gridHeightInput > 0
     ? gridHeightInput
     : 1;
   const elevation = clampFixed(tile.elevation);
   const moisture = clampFixed(tile.moisture);
   const roughness = clampFixed(tile.roughness);
-  const rainField = regionalNoise(seed, x, y, CLIMATE_RAIN_DOMAIN, 16);
-  const heatField = regionalNoise(seed, x, y, CLIMATE_HEAT_DOMAIN, 24);
-  const saltField = regionalNoise(seed, x, y, CLIMATE_SALT_DOMAIN, 20);
-  const exposureField = regionalNoise(seed, x, y, CLIMATE_EXPOSURE_DOMAIN, 12);
-  const latitude = gridHeight <= 1
+  const noise = addressed ? globalRegionalNoise : regionalNoise;
+  const rainField = noise(seed, x, y, CLIMATE_RAIN_DOMAIN, 16);
+  const heatField = noise(seed, x, y, CLIMATE_HEAT_DOMAIN, 24);
+  const saltField = noise(seed, x, y, CLIMATE_SALT_DOMAIN, 20);
+  const exposureField = noise(seed, x, y, CLIMATE_EXPOSURE_DOMAIN, 12);
+  const latitude = addressed
+    ? globalLatitude(y, gridHeight)
+    : gridHeight <= 1
     ? FIXED_POINT / 2
     : Math.trunc((Math.min(y, gridHeight - 1) * FIXED_POINT) / (gridHeight - 1));
   const equatorialWarmth = FIXED_POINT - Math.abs(latitude * 2 - FIXED_POINT);
@@ -302,11 +398,13 @@ export function deriveBaselineBiomeClimate(
 export function deriveMagicalWaterInfluence(
   seed: RootSeed,
   tile: BiomeTerrainInput,
+  globalTile?: BiomeGlobalTile,
 ): number {
-  const regional = regionalNoise(
+  const addressed = validGlobalTile(globalTile);
+  const regional = (addressed ? globalRegionalNoise : regionalNoise)(
     seed,
-    safeCoordinate(tile.x),
-    safeCoordinate(tile.y),
+    addressed ? globalTile.x : safeCoordinate(tile.x),
+    addressed ? globalTile.y : safeCoordinate(tile.y),
     CLIMATE_MAGIC_DOMAIN,
     18,
   );
@@ -428,6 +526,7 @@ export function deriveBiomeProfile(input: BiomeProfileInput): BiomeProfile {
     input.tile,
     input.gridHeight,
     input.magicalWaterInfluence ?? 0,
+    input.globalTile,
   );
   // Biome identity describes the long-lived place. A passing front changes its
   // current loads and capacities, but does not rename a meadow every time it rains.

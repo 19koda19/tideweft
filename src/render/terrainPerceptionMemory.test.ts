@@ -23,13 +23,18 @@ const tile = (
   currentDetailVisibility,
 });
 
-const grid = (tiles: readonly TerrainTileView[], columns = tiles.length): TerrainGridView => ({
+const grid = (
+  tiles: readonly TerrainTileView[],
+  columns = tiles.length,
+  changes: Partial<TerrainGridView> = {},
+): TerrainGridView => ({
   columns,
   rows: columns === 0 ? 0 : Math.ceil(tiles.length / columns),
   tileSize: 24,
   origin: { x: 0, y: 0 },
   tiles,
   revision: "terrain-memory-test",
+  ...changes,
 });
 
 const sample = (
@@ -72,7 +77,7 @@ describe("short-term terrain perception memory", () => {
     expect(rememberedTerrainVisibilityAt(state, 0)).toBe(0);
   });
 
-  it("rebases on epoch, world, geometry, clock rewind, and reduced-motion transitions", () => {
+  it("resets legacy memory on epoch, world, geometry, clock rewind, and reduced-motion transitions", () => {
     const visible = grid([tile(1)]);
     const hidden = grid([tile(0)]);
     let state = sampleTerrainPerceptionMemory(undefined, sample(visible, 100));
@@ -96,12 +101,87 @@ describe("short-term terrain perception memory", () => {
     expect(rememberedTerrainVisibilityAt(reduced, 0)).toBe(0);
   });
 
+  it("retains and fades only absolute cells shared by consecutive spatial frames", () => {
+    const priorTiles = Array.from({ length: 9 }, (_, index) => tile((index + 1) / 10));
+    const priorTerrain = grid(priorTiles, 3, {
+      worldTileOrigin: { x: -40, y: 70 },
+    });
+    let state = sampleTerrainPerceptionMemory(undefined, sample(priorTerrain, 0, {
+      spatialEpoch: "frame-a",
+    }));
+    const enteringTiles = Array.from({ length: 9 }, () => tile(0));
+    enteringTiles[8] = tile(0.75);
+    const shiftedTerrain = grid(enteringTiles, 3, {
+      worldTileOrigin: { x: -39, y: 71 },
+    });
+    const priorValues = state.values;
+
+    state = sampleTerrainPerceptionMemory(state, sample(shiftedTerrain, 90, {
+      spatialEpoch: "frame-b",
+    }));
+
+    expect(state.values).not.toBe(priorValues);
+    expect(Array.from(state.values)).toEqual([
+      expect.closeTo(0.4, 5),
+      expect.closeTo(0.5, 5),
+      0,
+      expect.closeTo(0.7, 5),
+      expect.closeTo(0.8, 5),
+      0,
+      0,
+      0,
+      expect.closeTo(0.75, 5),
+    ]);
+    expect(state.frame.worldTileOrigin).toEqual({ x: -39, y: 71 });
+  });
+
+  it("initializes entering cells from live sight and never leaks cells that left the frame", () => {
+    const visible = grid(Array.from({ length: 4 }, () => tile(1)), 2, {
+      worldTileOrigin: { x: 10, y: 10 },
+    });
+    let state = sampleTerrainPerceptionMemory(undefined, sample(visible, 0, {
+      spatialEpoch: "near",
+    }));
+    const far = grid([tile(0), tile(0.65), tile(0), tile(0)], 2, {
+      worldTileOrigin: { x: 1_000, y: -1_000 },
+    });
+    state = sampleTerrainPerceptionMemory(state, sample(far, 40, {
+      spatialEpoch: "far",
+    }));
+    expect(Array.from(state.values)).toEqual([0, expect.closeTo(0.65, 5), 0, 0]);
+
+    // Returning does not resurrect values dropped when their cells left the
+    // bounded frame. Only current perception may initialize them again.
+    const returnedHidden = grid(Array.from({ length: 4 }, () => tile(0)), 2, {
+      worldTileOrigin: { x: 10, y: 10 },
+    });
+    state = sampleTerrainPerceptionMemory(state, sample(returnedHidden, 80, {
+      spatialEpoch: "returned",
+    }));
+    expect(Array.from(state.values)).toEqual([0, 0, 0, 0]);
+  });
+
+  it("does not retain absolute overlap across world replacement or tile-scale changes", () => {
+    const visible = grid([tile(1)], 1, { worldTileOrigin: { x: 3, y: 4 } });
+    const hidden = grid([tile(0)], 1, { worldTileOrigin: { x: 3, y: 4 } });
+    const state = sampleTerrainPerceptionMemory(undefined, sample(visible, 0));
+
+    expect(rememberedTerrainVisibilityAt(sampleTerrainPerceptionMemory(
+      state,
+      sample(hidden, 100, { worldName: "Another Estuary" }),
+    ), 0)).toBe(0);
+    expect(rememberedTerrainVisibilityAt(sampleTerrainPerceptionMemory(
+      state,
+      sample({ ...hidden, tileSize: 12 }, 100),
+    ), 0)).toBe(0);
+  });
+
   it("keeps exactly one capped tile array and never grows across repeated samples", () => {
     const tiles = Array.from(
       { length: MAX_TERRAIN_PERCEPTION_MEMORY_TILES + 20 },
       () => tile(1),
     );
-    const terrain = grid(tiles, 98);
+    const terrain = grid(tiles, 120);
     let state = sampleTerrainPerceptionMemory(undefined, sample(terrain, 0));
     const values = state.values;
     expect(values).toHaveLength(MAX_TERRAIN_PERCEPTION_MEMORY_TILES);
@@ -111,6 +191,15 @@ describe("short-term terrain perception memory", () => {
       expect(state.values.length).toBeLessThanOrEqual(MAX_TERRAIN_PERCEPTION_MEMORY_TILES);
     }
     expect(rememberedTerrainVisibilityAt(state, MAX_TERRAIN_PERCEPTION_MEMORY_TILES)).toBe(0);
+
+    const completeFrame = grid(
+      Array.from({ length: 120 * 120 }, () => tile(1)),
+      120,
+      { worldTileOrigin: { x: -1_000_000, y: 1_000_000 } },
+    );
+    const complete = sampleTerrainPerceptionMemory(undefined, sample(completeFrame, 0));
+    expect(complete.values).toHaveLength(14_400);
+    expect(rememberedTerrainVisibilityAt(complete, 14_399)).toBe(1);
   });
 
   it("shares elapsed terrain memory across a quick Chart/Relief-style handoff", () => {

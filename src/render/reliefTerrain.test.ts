@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createReliefDiscoverySignatureMemo,
+  createReliefTerrainGeometrySignaturesMemo,
   discoveredReliefSurfaceHeightAt,
   maskReliefTileForDiscovery,
   perceivedReliefSurfaceHeightAt,
   reliefDiscoveryVisibility,
   reliefDiscoverySignature,
+  reliefTerrainGeometrySignatures,
 } from "./reliefTerrain";
 import { buildTerrainMesh, type TerrainMesh } from "./terrainMesh";
 import type { TerrainGridView, TerrainTileView } from "./types";
@@ -306,6 +308,61 @@ describe("Relief discovery signature memo", () => {
     const revealed = { ...hidden, tiles: [tile({ discovered: 1 })] };
 
     expect(signature(hidden)).not.toBe(signature(revealed));
+    expect(compute).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Relief geometry cache signatures", () => {
+  it("ignores wrapper/weather-only changes while separating physical and discovered shape", () => {
+    const source = grid([
+      tile({ discovered: 0, currentDetailVisibility: 0 }),
+      tile({ elevation: 0.25, waterDepth: 0.8, discovered: 1 }),
+    ]);
+    const first = reliefTerrainGeometrySignatures(source);
+    const presentationOnly = reliefTerrainGeometrySignatures({
+      ...source,
+      revision: "later-weather-frame",
+      tiles: source.tiles.map((entry) => ({
+        ...entry,
+        climate: {
+          rainfall: 1,
+          heat: 0,
+          salinity: 0.5,
+          exposure: 1,
+          magicalWater: 0.25,
+        },
+      })),
+    });
+    expect(presentationOnly).toEqual(first);
+
+    const newlySeen = reliefTerrainGeometrySignatures({
+      ...source,
+      tiles: source.tiles.map((entry, index) => index === 0
+        ? { ...entry, discovered: 1, currentDetailVisibility: 1 as const }
+        : entry),
+    });
+    expect(newlySeen.physical).toBe(first.physical);
+    expect(newlySeen.discovered).not.toBe(first.discovered);
+
+    const reshaped = reliefTerrainGeometrySignatures({
+      ...source,
+      tiles: source.tiles.map((entry, index) => index === 1
+        ? { ...entry, elevation: 0.9 }
+        : entry),
+    });
+    expect(reshaped.physical).not.toBe(first.physical);
+    expect(reshaped.discovered).not.toBe(first.discovered);
+  });
+
+  it("memoizes both geometry keys once per immutable tile array", () => {
+    const compute = vi.fn(reliefTerrainGeometrySignatures);
+    const signatures = createReliefTerrainGeometrySignaturesMemo(compute);
+    const first = grid([tile(), tile({ kind: "channel", waterDepth: 0.6 })]);
+
+    expect(signatures(first)).toBe(signatures(first));
+    expect(signatures({ ...first, revision: "presentation-only" })).toBe(signatures(first));
+    expect(compute).toHaveBeenCalledTimes(1);
+    expect(signatures({ ...first, tiles: [...first.tiles] })).toEqual(signatures(first));
     expect(compute).toHaveBeenCalledTimes(2);
   });
 });

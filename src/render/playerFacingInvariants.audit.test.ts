@@ -269,12 +269,10 @@ describe("player-facing release invariants", () => {
     expect(mobile.terrain).toContain(depthLabel);
     expect(mobile.terrain).toContain(effortLabel);
     expect(mobile.safety).toContain("cross-current + loose footing");
-    expect(desktopNavigation).toContain("REGION -304,+719");
-    expect(desktopNavigation).toContain("LOCAL 17,4");
-    expect(desktopNavigation).toContain("GLOBAL -29775,+52984");
-    expect(mobileNavigation).toContain("R -304,+719");
-    expect(mobileNavigation).toContain("L 17,4");
-    expect(mobileNavigation).toContain("G -29775,+52984");
+    expect(desktopNavigation).toContain("E -29775 · N +52984");
+    expect(desktopNavigation).not.toMatch(/region|local/iu);
+    expect(mobileNavigation).toContain("E-29775 · N+52984");
+    expect(mobileNavigation).not.toMatch(/\bR\b|\bL\b/u);
     expect(desktopNavigation).toContain("60 FPS");
     expect(mobileNavigation).toContain("60 FPS");
 

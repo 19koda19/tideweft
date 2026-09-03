@@ -86,7 +86,7 @@ const signedAxis = (value: number): string => {
   return integer > 0 ? `+${integer}` : String(integer);
 };
 
-/** Floating navigation copy stays terse, signed, and useful in bug reports. */
+/** Ordinary navigation exposes one continuous world address, never storage partitions. */
 export function navigationTelemetryCopy(
   navigation: TideweftUIView["navigation"],
   telemetry: RendererTelemetrySnapshot | undefined,
@@ -95,15 +95,12 @@ export function navigationTelemetryCopy(
   const fps = telemetry?.active && telemetry.frameCount >= 2 && telemetry.fps > 0
     ? `${Math.round(telemetry.fps)} FPS`
     : "FPS —";
-  if (!navigation) return compact
-    ? `R ?,? · L ?,? · G ?,? · ${fps}`
-    : `REGION ?,? · LOCAL ?,? · GLOBAL ?,? · ${fps}`;
-  const region = `${signedAxis(navigation.regionX)},${signedAxis(navigation.regionY)}`;
-  const local = `${navigation.localX},${navigation.localY}`;
-  const global = `${signedAxis(navigation.globalX)},${signedAxis(navigation.globalY)}`;
+  if (!navigation) return `E ? · N ? · ${fps}`;
+  const east = signedAxis(navigation.globalX);
+  const north = signedAxis(navigation.globalY);
   return compact
-    ? `R ${region} · L ${local} · G ${global} · ${fps}`
-    : `REGION ${region} · LOCAL ${local} · GLOBAL ${global} · ${fps}`;
+    ? `E${east} · N${north} · ${fps}`
+    : `E ${east} · N ${north} · ${fps}`;
 }
 const RESTART_SEED_REQUIRED_MESSAGE =
   "Enter a non-empty seed phrase before replacing this estuary.";
@@ -1173,7 +1170,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const navigation = createElement(
     "p",
     "hud-identity__navigation",
-    "REGION ?,? · GLOBAL ?,? · FPS —",
+    "E ? · N ? · FPS —",
   );
   identity.append(worldName, location, navigation);
 
@@ -1226,7 +1223,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const desktopFieldLine = createElement("section", "desktop-field-line");
   desktopFieldLine.setAttribute(
     "aria-label",
-    "Current terrain, depth or ground, effort, stability cause, signed coordinates, and renderer cadence",
+    "Current terrain, depth or ground, effort, stability cause, continuous coordinates, and renderer cadence",
   );
   const desktopFieldTerrain = createElement(
     "span",
@@ -1241,7 +1238,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const desktopFieldNavigation = createElement(
     "span",
     "desktop-field-line__navigation",
-    "REGION ?,? · LOCAL ?,? · GLOBAL ?,? · FPS —",
+    "E ? · N ? · FPS —",
   );
   desktopFieldLine.append(desktopFieldTerrain, desktopFieldSafety, desktopFieldNavigation);
 
@@ -1319,7 +1316,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const mobileNavigation = createElement(
     "span",
     "mobile-field-strip__line mobile-field-strip__navigation",
-    "R ?,? · G ?,? · FPS —",
+    "E? · N? · FPS —",
   );
   mobileFieldCopy.append(
     mobileObjective,

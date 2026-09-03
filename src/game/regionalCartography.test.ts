@@ -38,8 +38,20 @@ describe("persistent regional cartography", () => {
     const count = window.terrain.tiles.length;
     const discovered = Array.from({ length: count }, () => 0);
     const depths = Array.from({ length: count }, () => 0);
-    const westHalo = 35 * window.terrain.width;
-    const originEdge = westHalo + 1;
+    const seamLocalY = 34;
+    const westHalo = window.addresses.findIndex((address) =>
+      address.region.x === -1
+      && address.region.y === 0
+      && address.localX === WORLD_WIDTH - 1
+      && address.localY === seamLocalY);
+    const originEdge = window.addresses.findIndex((address) =>
+      address.region.x === 0
+      && address.region.y === 0
+      && address.localX === 0
+      && address.localY === seamLocalY);
+    if (westHalo < 0 || originEdge < 0) {
+      throw new Error("Cartography fixture lost the signed storage seam");
+    }
     discovered[westHalo] = 610_000;
     discovered[originEdge] = 820_000;
     depths[westHalo] = 340_000;
@@ -52,8 +64,8 @@ describe("persistent regional cartography", () => {
     weaker[originEdge] = 2;
     state = captureRegionalCartographyWindow(state, window, weaker, depths.map(() => 0));
     expect(state.revision).toBe(1);
-    expect(projectRegionalCartographyRegion(state, { x: -1, y: 0 }).discovered[34 * WORLD_WIDTH + WORLD_WIDTH - 1]).toBe(610_000);
-    expect(projectRegionalCartographyRegion(state, { x: 0, y: 0 }).discovered[34 * WORLD_WIDTH]).toBe(820_000);
+    expect(projectRegionalCartographyRegion(state, { x: -1, y: 0 }).discovered[seamLocalY * WORLD_WIDTH + WORLD_WIDTH - 1]).toBe(610_000);
+    expect(projectRegionalCartographyRegion(state, { x: 0, y: 0 }).discovered[seamLocalY * WORLD_WIDTH]).toBe(820_000);
   });
 
   it("rehydrates revisited windows after bounded streaming evicts their terrain", () => {

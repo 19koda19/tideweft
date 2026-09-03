@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.9",
+      "releaseDate": "2026-09-03",
+      "buildIdentity": "0.3.3-alpha.9",
+      "summary": "The courier, route, camera, weather, Wayknots, chart knowledge, and physical parcels can now continue beyond the original estuary through one deterministic world without a transition.",
+      "gameplayContractVersion": 17,
+      "tutorialVersion": 19,
+      "categories": {
+        "gameplay": [
+          "The courier can keep walking in every compass direction through one continuous deterministic terrain field. A bounded 120 by 120 presentation frame moves in small increments around the player while authoritative world position remains exact, including negative and extremely distant coordinates.",
+          "Terrain is generated from stable global samples and prefetched in bounded work before movement needs it. Cardinal, diagonal, negative-coordinate, repeated-crossing, generation-order, and long-walk tests reproduce the same land, water, biome, current, weather, and identity facts.",
+          "Currents and terrain now carry the same persistent loose parcel continuously beyond the old map extent. Parcel identity, condition, momentum, history, Promise custody, and save/reload remain intact; transfer never creates a replacement copy."
+        ],
+        "fixes": [
+          "Traveling beyond the original finite extent no longer announces a new area, resets the route, pauses movement, changes footsteps, or snaps the camera. Chart and Relief preserve the same world-space camera, pointer, route, and perception memory by one exact shift.",
+          "Wayknots now influence travel on both sides of former cardinal and corner boundaries from their true global positions, and a Wayknot outside the current view remains deployed rather than being invalidated merely because its ground is not loaded.",
+          "Biome and magical-water sampling now use the exact global tile address. Distant positive coordinates no longer alias an old compatibility-noise period, and the original estuary retains its established climate values.",
+          "Original-estuary resource nodes retain one global address across a moving view. Traveling away and returning cannot reveal, gather, reset, or duplicate them at a matching local coordinate elsewhere."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Seamless travel grants no health, cargo capacity, money, trust, settlement, resource, or rare-find reroll; distance can be empty and risky without becoming an automatic reward farm.",
+          "The world frame, prefetch cache, and parcel-neighborhood transfer stay strictly bounded for desktop and mobile. Presentation detail may be culled for performance, but world identity and simulation outcomes do not change by device."
+        ],
+        "interface": [
+          "Ordinary HUD navigation now shows one continuous E/N world address and measured FPS on desktop and compact mobile. Internal partition coordinates remain implementation diagnostics rather than geography the player must learn.",
+          "The field manual now teaches only that the world keeps going: no edge tap, generation prompt, address banner, loading screen, or second click is needed. It distinguishes the live empty generated country from future distant settlements, people, wildlife, and opportunities.",
+          "Placed Wayknots use continuous E/N locations in KIT. Camera gestures and charted routes stay attached to the same world positions while the hidden presentation frame moves underneath them."
+        ],
+        "saves": [
+          "The outer game save remains version 4. The nested travel record advances to version 2 with an exact global presentation-frame origin; valid version-1 98 by 74 records migrate into a player-centered 120 by 120 frame without moving the courier or changing discovered ground.",
+          "Atomic parcel ownership across the continuous world is committed under one conserved custody manifest. Save/reload during or after transfer cannot duplicate, delete, reroll, or relocate the parcel.",
+          "Published finite 64 by 48 and 96 by 72 estuaries remain embedded at their original coordinates with their settlements, residents, routes, resources, Promises, Wayknots, cargo, and chart history preserved."
+        ],
+        "knownLimitations": [
+          "This release proves the first seamless-world slice around the preserved original estuary. Generated distant settlements, populations, roads, major watershed-scale geography, wildlife, companions, and causal wilderness opportunities remain later complete slices rather than cloned filler.",
+          "Long-range multi-scale Chart navigation, coarse distant actor simulation, moving route-scale weather fronts, and continent-scale geographic structure are not complete in this release.",
+          "Active currents and terrain can carry a parcel beyond the original map extent, but fully unloaded distant parcels do not yet receive continuous low-detail motion. Returning restores the same conserved object rather than rerolling it."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.8",
       "releaseDate": "2026-09-02",
       "buildIdentity": "0.3.3-alpha.8",

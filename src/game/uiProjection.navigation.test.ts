@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createWorld, createWorldView } from "../sim/public";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { MOBILE_REGION_STREAMING_CONFIG, createTerrainRegionStreamingState } from "./regionStreaming";
-import { createRegionalTerrainWindow } from "./regionalTravel";
+import { createRegionalTerrainWindow, regionLocalToWindowTile } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
 import { TILE_UNITS, createPlayer } from "./player";
 import { projectNavigationCoordinates } from "./uiProjection";
@@ -30,9 +30,15 @@ describe("signed navigation projection", () => {
       // Generated frontier regions intentionally have no cloned settlements;
       // carry the same persistent courier into the projected window.
       const player = createPlayer(economy);
-      // The floating window carries a one-tile neighboring-region halo.
-      player.x = (localX + 1) * TILE_UNITS + TILE_UNITS / 2;
-      player.y = (localY + 1) * TILE_UNITS + TILE_UNITS / 2;
+      const projected = regionLocalToWindowTile(
+        window,
+        { x: regionX, y: regionY },
+        localX,
+        localY,
+      );
+      if (!projected) throw new Error("navigation fixture is absent from its sliding frame");
+      player.x = projected.x * TILE_UNITS + TILE_UNITS / 2;
+      player.y = projected.y * TILE_UNITS + TILE_UNITS / 2;
 
       expect(projectNavigationCoordinates(regional, player)).toEqual({
         regionX,

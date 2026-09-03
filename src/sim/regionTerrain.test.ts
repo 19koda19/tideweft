@@ -8,6 +8,7 @@ import {
   type RegionCoord,
 } from "./regions";
 import {
+  createRegionTerrainBundleGenerator,
   createRegionTerrainSampler,
   generateRegionTerrain,
   generateRegionTerrainBundle,
@@ -178,6 +179,19 @@ describe("deterministic infinite-region terrain", () => {
       generateRegionTerrainBundle(seed, coord).manifest.terrainHash,
     ]));
     expect(reverse).toEqual(forward);
+  });
+
+  it("shares one sampler across a streamed batch without changing any terrain or hash", () => {
+    const seed = seedFromText("one transition band is sampled once");
+    const generate = createRegionTerrainBundleGenerator(seed);
+    for (const coord of [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: -1 },
+      { x: -17, y: 42 },
+    ] as const) {
+      expect(generate(coord)).toEqual(generateRegionTerrainBundle(seed, coord));
+    }
   });
 
   it("keeps every cardinal seam continuous around compatibility and distant regions", () => {

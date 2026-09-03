@@ -38,7 +38,7 @@ describe("desktop/mobile authoritative field parity", () => {
     expect(source).toContain("refs.desktopFieldSafety.textContent = compactHud.safety");
   });
 
-  it("keeps signed region, local, global, and measured FPS in both copies", () => {
+  it("keeps continuous E/N coordinates and measured FPS in both copies", () => {
     const navigation = {
       regionX: -2,
       regionY: 3,
@@ -50,10 +50,12 @@ describe("desktop/mobile authoritative field parity", () => {
     const telemetry = { fps: 59.8, frameTimeMs: 16.7, frameCount: 90, active: true };
     const desktop = navigationTelemetryCopy(navigation, telemetry);
     const mobile = navigationTelemetryCopy(navigation, telemetry, true);
-    for (const token of ["-2,+3", "4,5", "-124,+215", "60 FPS"]) {
+    for (const token of ["-124", "+215", "60 FPS"]) {
       expect(desktop).toContain(token);
       expect(mobile).toContain(token);
     }
+    expect(desktop).not.toMatch(/region|local/iu);
+    expect(mobile).not.toMatch(/\bR\b|\bL\b/u);
   });
 
   it("mounts desktop field truth outside the optional objective and keeps it pane-free", () => {
