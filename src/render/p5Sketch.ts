@@ -2680,6 +2680,14 @@ export function createTideweftRenderer(
           return PALETTE.danger;
         case "waiting":
           return PALETTE.warning;
+        case "listening":
+          return PALETTE.amber;
+        case "watching":
+          return PALETTE.warning;
+        case "alert":
+          return PALETTE.danger;
+        case "searching":
+          return PALETTE.violet;
         case "resting":
           return PALETTE.violet;
         case "traveling":

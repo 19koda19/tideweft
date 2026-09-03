@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(19);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(20);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);

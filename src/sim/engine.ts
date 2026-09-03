@@ -26,6 +26,13 @@ import {
   residentRainProtection,
   residentSkillAptitude,
 } from "./npcIdentity";
+import {
+  canonicalizeActorPerceptionState,
+  canonicalizeActorObservations,
+  stepActorPerception,
+  type ActorObservation,
+  type ActorPerceptionState,
+} from "./actorPerception";
 
 const WEATHER_DOMAIN = 0x5745_4154;
 const MAX_EVENT_HISTORY = 512;
@@ -42,6 +49,22 @@ export const TIDE_CHOIR_RELIABILITY_BONUS = 40_000;
 export interface RouteTraceCoverage {
   routeId: number;
   coverage: number;
+}
+
+/**
+ * A renderer-independent sensory handoff for one fixed world tick. Runtime
+ * adapters may observe physics, but the simulation receives only bounded facts
+ * an individual resident could lawfully know.
+ */
+export interface ResidentPerceptionFrameEntry {
+  readonly residentId: number;
+  readonly actorId: string;
+  readonly observations: readonly ActorObservation[];
+}
+
+export interface ResidentPerceptionFrame {
+  readonly tick: number;
+  readonly residents: readonly ResidentPerceptionFrameEntry[];
 }
 
 type RouteCoverageWorld = {
@@ -737,6 +760,143 @@ function applyCommands(world: WorldState, commands: readonly SimCommand[], tick:
     }
     if (error !== null) rejectCommand(world, tick, command, error);
   }
+}
+
+/**
+ * Advances every resident's cognition exactly once per world tick. A malformed
+ * frame fails closed as an empty sensory frame: time, decay, search expiry, and
+ * give-up still advance, but no selective or forged observation is admitted.
+ */
+function advanceResidentPerception(
+  world: WorldState,
+  frame: ResidentPerceptionFrame | undefined,
+  tick: number,
+): void {
+  const prepared: Array<{
+    readonly resident: ResidentState;
+    readonly perception: ActorPerceptionState;
+  }> = [];
+  for (const resident of world.residents) {
+    const perception = canonicalizeActorPerceptionState(resident.perception);
+    if (
+      perception === null
+      || perception.actorId !== resident.identity.stableId
+      || perception.tick !== tick - 1
+    ) {
+      throw new Error(`Resident ${resident.id} has unsynchronized perception state`);
+    }
+    prepared.push({ resident, perception });
+  }
+
+  const observationsByResident = canonicalResidentPerceptionFrame(world, frame, tick);
+  const nextStates: ActorPerceptionState[] = [];
+  for (const { resident, perception } of prepared) {
+    const next = stepActorPerception(perception, {
+      tick,
+      observations: observationsByResident.get(resident.id) ?? [],
+    });
+    if (next === null || next.tick !== tick) {
+      throw new Error(`Resident ${resident.id} perception could not advance`);
+    }
+    nextStates.push(next);
+  }
+  // Commit only after every resident has produced a valid next state. A bad
+  // resident can never leave half the population on the next cognition tick.
+  for (let index = 0; index < prepared.length; index += 1) {
+    const entry = prepared[index];
+    const next = nextStates[index];
+    if (entry === undefined || next === undefined) {
+      throw new Error("Resident perception commit lost a prepared actor");
+    }
+    entry.resident.perception = next;
+  }
+}
+
+function canonicalResidentPerceptionFrame(
+  world: WorldState,
+  frame: ResidentPerceptionFrame | undefined,
+  tick: number,
+): ReadonlyMap<number, readonly ActorObservation[]> {
+  const empty = new Map<number, readonly ActorObservation[]>();
+  if (frame === undefined) return empty;
+  const candidate: unknown = frame;
+  if (!plainDataRecord(candidate)) return empty;
+  const record = candidate;
+  if (
+    !hasExactDataKeys(record, ["residents", "tick"])
+    || record.tick !== tick
+    || !Array.isArray(record.residents)
+    || record.residents.length !== world.residents.length
+  ) return empty;
+
+  const residentsById = new Map(world.residents.map((resident) => [resident.id, resident]));
+  const residentIds = new Set<number>();
+  const canonicalEntries: Array<{
+    readonly residentId: number;
+    readonly observations: readonly ActorObservation[];
+  }> = [];
+  for (const raw of record.residents) {
+    if (!plainDataRecord(raw)) return empty;
+    const entry = raw;
+    if (
+      !hasExactDataKeys(entry, ["actorId", "observations", "residentId"])
+      || !Number.isSafeInteger(entry.residentId)
+      || Object.is(entry.residentId, -0)
+      || typeof entry.actorId !== "string"
+      || !Array.isArray(entry.observations)
+    ) return empty;
+    const residentId = entry.residentId as number;
+    const resident = residentsById.get(residentId);
+    if (
+      resident === undefined
+      || residentIds.has(residentId)
+      || entry.actorId !== resident.identity.stableId
+    ) return empty;
+    const canonical = canonicalizeActorObservations(entry.observations);
+    if (
+      canonical.length !== entry.observations.length
+      || canonical.some((observation) =>
+        observation.observerId !== resident.identity.stableId
+        || observation.observedAtTick !== tick)
+    ) return empty;
+    residentIds.add(residentId);
+    canonicalEntries.push({ residentId, observations: canonical });
+  }
+  canonicalEntries.sort((left, right) => (
+    left.residentId < right.residentId ? -1 : left.residentId > right.residentId ? 1 : 0
+  ));
+  const accepted = new Map<number, readonly ActorObservation[]>();
+  for (const entry of canonicalEntries) accepted.set(entry.residentId, entry.observations);
+  return accepted;
+}
+
+function plainDataRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (prototype === Object.prototype || prototype === null)
+    && Object.getOwnPropertySymbols(value).length === 0;
+}
+
+function hasExactDataKeys(
+  value: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+): boolean {
+  const keys = Object.keys(value).sort(compareText);
+  const canonicalExpected = [...expected].sort(compareText);
+  if (
+    keys.length !== canonicalExpected.length
+    || keys.some((key, index) => key !== canonicalExpected[index])
+  ) {
+    return false;
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  return keys.every((key) => {
+    const descriptor = descriptors[key];
+    return descriptor !== undefined
+      && descriptor.enumerable
+      && descriptor.get === undefined
+      && descriptor.set === undefined;
+  });
 }
 
 function updateWeather(world: WorldState, tick: number): void {
@@ -1596,9 +1756,14 @@ export function createWorld(seedText: string, pressureMode: PressureMode = "stan
   return world;
 }
 
-export function stepWorld(world: WorldState, commands: readonly SimCommand[] = []): WorldState {
+export function stepWorld(
+  world: WorldState,
+  commands: readonly SimCommand[] = [],
+  perceptionFrame?: ResidentPerceptionFrame,
+): WorldState {
   const tick = world.meta.completedTick + 1;
   applyCommands(world, commands, tick);
+  advanceResidentPerception(world, perceptionFrame, tick);
   world.tide = tideAtTick(tick);
   updateWeather(world, tick);
   updateResidentConditions(world, tick);

@@ -17,6 +17,7 @@ import {
 
 const COMPATIBILITY_REGION = createRegionCoord(0, 0);
 const REGIONAL_VIEW_METADATA = new WeakMap<object, RegionalTerrainWindow>();
+const REGIONAL_VIEW_COMPATIBILITY = new WeakMap<object, WorldView>();
 
 /**
  * Overlay the live compatibility economy on a deterministic floating terrain
@@ -104,6 +105,7 @@ export function createRegionalWorldView(
     choirs,
   };
   REGIONAL_VIEW_METADATA.set(view, window);
+  REGIONAL_VIEW_COMPATIBILITY.set(view, compatibility);
   return view;
 }
 
@@ -160,6 +162,11 @@ export function regionalWorldCenter(world: WorldView): RegionCoord {
 
 export function regionalWindowForWorld(world: WorldView): RegionalTerrainWindow | null {
   return REGIONAL_VIEW_METADATA.get(world) ?? null;
+}
+
+/** Authoritative compatibility economy that a moving terrain view presents. */
+export function regionalCompatibilityWorldForWorld(world: WorldView): WorldView | null {
+  return REGIONAL_VIEW_COMPATIBILITY.get(world) ?? null;
 }
 
 /**

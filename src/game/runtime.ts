@@ -12,6 +12,7 @@ import {
   WORLD_WIDTH,
   stepWorld,
   type ContractState,
+  type ResidentPerceptionFrame,
   type SimCommand,
   type WorldState,
   type WorldView,
@@ -194,6 +195,14 @@ import {
   regionalWorldCenter,
 } from "./regionalWorldView";
 import {
+  HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
+  PLAYER_SENSE_SAMPLE_VERSION,
+  collectExistingHumanObservations,
+  createPlayerSenseSample,
+  type PlayerSenseSample,
+} from "./humanPerception";
+import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
+import {
   projectCompatibilityFieldResources,
   regionalFieldResourceAtViewTile,
   regionalFieldResourceById,
@@ -227,8 +236,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 4;
+const GAME_SAVE_VERSION = 5;
+const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
+const PLAYER_PERCEPTION_CARRY_VERSION = 1 as const;
 /** Begin preparing the next storage neighborhood well before its invisible seam. */
 const TERRAIN_PREFETCH_MARGIN_TILES = 24;
 /** Roughly 5 ms on the reference desktop; work is spread across fixed ticks. */
@@ -273,7 +284,15 @@ interface GameSaveEnvelope {
   physicalCargo: SerializedPhysicalCargoState;
   regionalTravel: string;
   promiseJourney: RegionalPromiseJourneyState;
+  perceptionCarry: PlayerPerceptionCarry;
   integrity: string;
+}
+
+interface PlayerPerceptionCarry {
+  readonly version: typeof PLAYER_PERCEPTION_CARRY_VERSION;
+  readonly playerStepsSinceWorldTick: number;
+  readonly playerSenseSamples: readonly PlayerSenseSample[];
+  readonly nextPlayerSenseSampleOrdinal: number;
 }
 
 export interface TideweftRuntime {
@@ -357,6 +376,8 @@ export async function createTideweftRuntime(
   let commandSequence = 1;
   let commandQueue: SimCommand[] = [];
   let playerStepsSinceWorldTick = 0;
+  let playerSenseSamples: PlayerSenseSample[] = [];
+  let nextPlayerSenseSampleOrdinal = 0;
   let terrainPrefetchJobs: TerrainRegionPrefetchJob[] = [];
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
   let adriftTapControl: PlayerControl | null = null;
@@ -508,6 +529,9 @@ export async function createTideweftRuntime(
     physicalCargo = loaded.physicalCargo;
     regionalTravel = loaded.regionalTravel;
     promiseJourney = loaded.promiseJourney;
+    playerStepsSinceWorldTick = loaded.perceptionCarry.playerStepsSinceWorldTick;
+    playerSenseSamples = [...loaded.perceptionCarry.playerSenseSamples];
+    nextPlayerSenseSampleOrdinal = loaded.perceptionCarry.nextPlayerSenseSampleOrdinal;
     rebuildRegionalWorldView();
     normalizePlayerForRuntime(player, worldView, economyView);
     session = loaded.session;
@@ -740,6 +764,107 @@ export async function createTideweftRuntime(
     };
   }
 
+  /**
+   * Preserve the strongest meaningful parts of every 100 ms player step until
+   * the next authoritative world tick. Residents later receive only contacts
+   * their own sensory queries admit; this buffer is never itself NPC knowledge.
+   */
+  function capturePlayerSenseSample(strongImpact: boolean): void {
+    const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+    if (position === null) throw new Error("Player has no canonical sensory position");
+    const speed = Math.hypot(player.velocityX, player.velocityY);
+    const movementSalience = Math.max(
+      0,
+      Math.min(FIXED_POINT, Math.round(speed * FIXED_POINT / 164)),
+    );
+    const moved = movementSalience > 0;
+    const inWater = player.mode === "wading" || player.mode === "skiff" || player.mode === "swept";
+    const tile = worldView.terrain.tiles[playerTileIndex(player)];
+    const lightVisibility = tile?.terrain === "marsh"
+      ? 550_000
+      : tile?.terrain === "ridge" || tile?.terrain === "deep-water"
+        ? 900_000
+        : 720_000;
+    const soundLoudness = strongImpact
+      ? FIXED_POINT
+      : !moved
+        ? 0
+        : inWater
+          ? Math.max(560_000, movementSalience)
+          : player.pace === "swift"
+            ? Math.max(720_000, movementSalience)
+            : Math.max(360_000, Math.round(movementSalience * 0.72));
+    const soundRangeUnits = strongImpact
+      ? 28 * TILE_UNITS
+      : !moved
+        ? 0
+        : inWater
+          ? 20 * TILE_UNITS
+          : player.pace === "swift"
+            ? 18 * TILE_UNITS
+            : 12 * TILE_UNITS;
+    const sample = createPlayerSenseSample({
+      id: `p-${world.meta.completedTick}-${nextPlayerSenseSampleOrdinal}`,
+      sampleOrdinal: nextPlayerSenseSampleOrdinal,
+      position,
+      movementSalience,
+      lightVisibility,
+      soundLoudness,
+      soundRangeUnits,
+      soundClass: strongImpact ? "impact" : inWater ? "splash" : "footsteps",
+      soundInterrupt: strongImpact ? "strong" : "none",
+    });
+    if (sample === null) throw new Error("Player sensory sample failed validation");
+    nextPlayerSenseSampleOrdinal += 1;
+    if (playerSenseSamples.length >= HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES) {
+      // The fixed runtime normally contributes ten samples. Retain the latest
+      // bounded suffix under catch-up pressure rather than growing without end.
+      playerSenseSamples = playerSenseSamples.slice(
+        playerSenseSamples.length - HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES + 1,
+      );
+    }
+    playerSenseSamples.push(sample);
+  }
+
+  function residentPerceptionFrame(targetTick: number): ResidentPerceptionFrame {
+    const batches = collectExistingHumanObservations({
+      world: worldView,
+      window: regionalTravel.window,
+      targetTick,
+      playerSamples: playerSenseSamples,
+    });
+    const batchByResidentId = new Map<number, (typeof batches)[number]>();
+    for (const batch of batches) {
+      const resident = world.residents.find(({ id }) => id === batch.residentId);
+      if (
+        resident === undefined
+        || resident.identity.stableId !== batch.observerId
+        || batchByResidentId.has(batch.residentId)
+      ) {
+        throw new Error("Human sensory bridge returned a noncanonical resident batch");
+      }
+      batchByResidentId.set(batch.residentId, batch);
+    }
+    return {
+      tick: targetTick,
+      // A supplied frame is a complete snapshot, not a partial patch. Humans
+      // outside the bounded spatial window still receive an explicit empty
+      // observation list so no omitted actor can be mistaken for stale data.
+      residents: [...world.residents]
+        .sort((left, right) => left.id - right.id)
+        .map((resident) => ({
+          residentId: resident.id,
+          actorId: resident.identity.stableId,
+          observations: batchByResidentId.get(resident.id)?.observations ?? [],
+        })),
+    };
+  }
+
+  function clearPlayerSenseSamples(): void {
+    playerSenseSamples = [];
+    nextPlayerSenseSampleOrdinal = 0;
+  }
+
   function mirrorPhysicalCargoToPlayer(): void {
     const mirror = projectLooseCargoCarrierToPlayer(physicalCargo.carrier);
     player.craftingInventory = mirror.craftingInventory;
@@ -965,6 +1090,7 @@ export async function createTideweftRuntime(
       adriftTapTicksRemaining = 0;
     }
     applyPlayerStepToPhysicalCargo(result, incidentPosition);
+    capturePlayerSenseSample(result.traversalIncident !== null || result.becameSwept);
     if (result.enteredTile !== null && result.settlementId !== null) {
       recordHarborArrival(result.settlementId);
       const unlockedTool = unlockFieldToolAtSettlement(player, worldView, result.settlementId);
@@ -986,7 +1112,9 @@ export async function createTideweftRuntime(
     if (worldAdvanced) {
       playerStepsSinceWorldTick = 0;
       const elapsedWeather = world.weather;
-      world = stepWorld(world, commandQueue);
+      const perceptionFrame = residentPerceptionFrame(world.meta.completedTick + 1);
+      world = stepWorld(world, commandQueue, perceptionFrame);
+      clearPlayerSenseSamples();
       commandQueue = [];
       fieldResourceEcology = advanceFieldResourceEcology(
         fieldResourceCatalog,
@@ -2223,6 +2351,7 @@ export async function createTideweftRuntime(
     beginSession();
     commandQueue = [];
     playerStepsSinceWorldTick = 0;
+    clearPlayerSenseSamples();
     terrainPrefetchJobs = [];
     autopilotPath = [];
     adriftTapControl = null;
@@ -3461,6 +3590,12 @@ export async function createTideweftRuntime(
       physicalCargo: snapshotPhysicalCargoState(snapshotPhysicalValidation.state),
       regionalTravel: serializePlayerRegionalTravel(regionalTravelSnapshot),
       promiseJourney: promiseJourneySnapshot,
+      perceptionCarry: canonicalPlayerPerceptionCarry({
+        version: PLAYER_PERCEPTION_CARRY_VERSION,
+        playerStepsSinceWorldTick,
+        playerSenseSamples,
+        nextPlayerSenseSampleOrdinal,
+      }, worldSnapshot.meta.completedTick) ?? invalidPlayerPerceptionCarry(),
     };
     const envelope: GameSaveEnvelope = {
       ...envelopeBase,
@@ -3566,6 +3701,8 @@ export async function createTideweftRuntime(
       traversalFeedback: structuredClone(traversalFeedback),
       commandQueue: structuredClone(commandQueue),
       playerStepsSinceWorldTick,
+      playerSenseSamples: [...playerSenseSamples],
+      nextPlayerSenseSampleOrdinal,
       commandSequence,
       pendingGatherNodeId,
       pendingParcelTargetId,
@@ -3602,6 +3739,8 @@ export async function createTideweftRuntime(
       traversalFeedback = prior.traversalFeedback;
       commandQueue = prior.commandQueue;
       playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
+      playerSenseSamples = prior.playerSenseSamples;
+      nextPlayerSenseSampleOrdinal = prior.nextPlayerSenseSampleOrdinal;
       commandSequence = prior.commandSequence;
       pendingGatherNodeId = prior.pendingGatherNodeId;
       pendingParcelTargetId = prior.pendingParcelTargetId;
@@ -3711,6 +3850,7 @@ type LoadedAutosave = {
   readonly physicalCargo: PhysicalCargoState;
   readonly regionalTravel: RegionalPlayerTravelState;
   readonly promiseJourney: RegionalPromiseJourneyState;
+  readonly perceptionCarry: PlayerPerceptionCarry;
   readonly saveGenerationEra: number;
   readonly saveGeneration: number;
   readonly updatedAt: number;
@@ -3726,6 +3866,120 @@ type LoadedAutosave = {
 } | {
   readonly kind: "read-failed";
 };
+
+function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
+  return Object.freeze({
+    version: PLAYER_PERCEPTION_CARRY_VERSION,
+    playerStepsSinceWorldTick: 0,
+    playerSenseSamples: Object.freeze([]),
+    nextPlayerSenseSampleOrdinal: 0,
+  });
+}
+
+/**
+ * Admit the whole pending sensory interval or none of it. Its contiguous
+ * ordinals and tick-bound IDs make an interrupted interval deterministic and
+ * prevent a resealed payload from splicing observations across world ticks.
+ */
+function canonicalPlayerPerceptionCarry(
+  value: unknown,
+  completedWorldTick: number,
+): PlayerPerceptionCarry | null {
+  if (
+    value === null
+    || typeof value !== "object"
+    || Array.isArray(value)
+    || !hasExactObjectKeys(value, [
+      "nextPlayerSenseSampleOrdinal",
+      "playerSenseSamples",
+      "playerStepsSinceWorldTick",
+      "version",
+    ])
+  ) return null;
+  const record = value as Readonly<Record<string, unknown>>;
+  const phase = record.playerStepsSinceWorldTick;
+  const nextOrdinal = record.nextPlayerSenseSampleOrdinal;
+  const rawSamples = record.playerSenseSamples;
+  if (
+    record.version !== PLAYER_PERCEPTION_CARRY_VERSION
+    || !Number.isSafeInteger(completedWorldTick)
+    || completedWorldTick < 0
+    || !Number.isSafeInteger(phase)
+    || (phase as number) < 0
+    || (phase as number) >= PLAYER_STEPS_PER_WORLD_TICK
+    || !Number.isSafeInteger(nextOrdinal)
+    || nextOrdinal !== phase
+    || !Array.isArray(rawSamples)
+    || rawSamples.length !== phase
+    || rawSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
+  ) return null;
+
+  const samples: PlayerSenseSample[] = [];
+  for (let ordinal = 0; ordinal < rawSamples.length; ordinal += 1) {
+    const raw = rawSamples[ordinal];
+    if (
+      raw === null
+      || typeof raw !== "object"
+      || Array.isArray(raw)
+      || !hasExactObjectKeys(raw, [
+        "id",
+        "lightVisibility",
+        "movementSalience",
+        "position",
+        "sampleOrdinal",
+        "soundClass",
+        "soundInterrupt",
+        "soundLoudness",
+        "soundRangeUnits",
+        "version",
+      ])
+    ) return null;
+    const candidate = raw as unknown as PlayerSenseSample;
+    if (
+      candidate.version !== PLAYER_SENSE_SAMPLE_VERSION
+      || candidate.sampleOrdinal !== ordinal
+      || candidate.id !== `p-${completedWorldTick}-${ordinal}`
+    ) return null;
+    const sample = createPlayerSenseSample({
+      id: candidate.id,
+      sampleOrdinal: candidate.sampleOrdinal,
+      position: candidate.position,
+      movementSalience: candidate.movementSalience,
+      lightVisibility: candidate.lightVisibility,
+      soundLoudness: candidate.soundLoudness,
+      soundRangeUnits: candidate.soundRangeUnits,
+      soundClass: candidate.soundClass,
+      soundInterrupt: candidate.soundInterrupt,
+    });
+    if (sample === null || stableStringify(sample) !== stableStringify(candidate)) return null;
+    samples.push(sample);
+  }
+  return Object.freeze({
+    version: PLAYER_PERCEPTION_CARRY_VERSION,
+    playerStepsSinceWorldTick: phase as number,
+    playerSenseSamples: Object.freeze(samples),
+    nextPlayerSenseSampleOrdinal: nextOrdinal as number,
+  });
+}
+
+function invalidPlayerPerceptionCarry(): never {
+  throw new Error("Refusing to save an inconsistent pending perception interval");
+}
+
+function playerPerceptionCarryMatchesPosition(
+  carry: PlayerPerceptionCarry,
+  regionalTravel: RegionalPlayerTravelState,
+  player: PlayerState,
+): boolean {
+  const latest = carry.playerSenseSamples[carry.playerSenseSamples.length - 1];
+  if (latest === undefined) return carry.playerStepsSinceWorldTick === 0;
+  const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+  return position !== null
+    && position.region.x === latest.position.region.x
+    && position.region.y === latest.position.region.y
+    && position.localX === latest.position.localX
+    && position.localY === latest.position.localY;
+}
 
 function nextSaveGeneration(version: AutosaveVersion): {
   readonly saveGenerationEra: number;
@@ -3799,6 +4053,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         decoded.version !== LEGACY_GAME_SAVE_VERSION
         && decoded.version !== FIELD_RESOURCE_GAME_SAVE_VERSION
         && decoded.version !== PHYSICAL_CARGO_GAME_SAVE_VERSION
+        && decoded.version !== REGIONAL_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -3808,7 +4063,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Save contains an invalid session envelope");
     }
     if (
-      (decoded.version === GAME_SAVE_VERSION && record.payloadVersion !== GAME_SAVE_VERSION)
+      (decoded.version >= REGIONAL_GAME_SAVE_VERSION && record.payloadVersion !== decoded.version)
       || (record.payloadVersion !== undefined && record.payloadVersion !== decoded.version)
     ) {
       throw new Error("Save record format fence does not match its embedded envelope");
@@ -3824,6 +4079,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             "fieldResources",
             "format",
             "integrity",
+            "perceptionCarry",
             "physicalCargo",
             "player",
             "promiseJourney",
@@ -3835,9 +4091,27 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           ])
           || typeof decoded.regionalTravel !== "string"
         ) throw new Error("Current save envelope is not canonical");
+      } else if (decoded.version === REGIONAL_GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "fieldResources",
+            "format",
+            "integrity",
+            "physicalCargo",
+            "player",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+        ) throw new Error("Version 4 save envelope is not canonical");
       } else if (
         Object.hasOwn(decoded, "regionalTravel")
         || Object.hasOwn(decoded, "promiseJourney")
+        || Object.hasOwn(decoded, "perceptionCarry")
       ) {
         throw new Error("Version 3 save contains v4 regional fields");
       }
@@ -3846,6 +4120,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       || Object.hasOwn(decoded, "integrity")
       || Object.hasOwn(decoded, "regionalTravel")
       || Object.hasOwn(decoded, "promiseJourney")
+      || Object.hasOwn(decoded, "perceptionCarry")
     ) {
       throw new Error("Legacy save version contains v3-only physical custody fields");
     }
@@ -3854,6 +4129,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     // being adopted. A lying MAX_SAFE tick must not pin every later save.
     if (record.playTicks !== world.meta.completedTick) {
       throw new Error("Save metadata does not match the decoded world tick");
+    }
+    const perceptionCarry = decoded.version === GAME_SAVE_VERSION
+      ? canonicalPlayerPerceptionCarry(decoded.perceptionCarry, world.meta.completedTick)
+      : emptyPlayerPerceptionCarry();
+    if (perceptionCarry === null) {
+      throw new Error("Current save contains an invalid pending perception interval");
     }
     const rawSession = structuredClone(decoded.session);
     const rawPlayer = structuredClone(decoded.player);
@@ -3900,7 +4181,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       const legacyRegionalGeometry = decoded.player.worldWidth === LEGACY_REGIONAL_TRAVEL_COLUMNS
         && decoded.player.worldHeight === LEGACY_REGIONAL_TRAVEL_ROWS;
       if (
-        decoded.version === GAME_SAVE_VERSION
+        decoded.version >= REGIONAL_GAME_SAVE_VERSION
           ? !currentRegionalGeometry && !legacyRegionalGeometry
           : decoded.player.worldWidth !== world.terrain.width
             || decoded.player.worldHeight !== world.terrain.height
@@ -3936,14 +4217,14 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     validatePlayer(
       decoded.player,
       world,
-      decoded.version === GAME_SAVE_VERSION
+      decoded.version >= REGIONAL_GAME_SAVE_VERSION
         ? decoded.player.worldWidth * decoded.player.worldHeight
         : world.terrain.tiles.length,
     );
     const compatibilityView = createWorldView(world);
     let regionalTravel: RegionalPlayerTravelState;
     let promiseJourney: RegionalPromiseJourneyState;
-    if (decoded.version === GAME_SAVE_VERSION) {
+    if (decoded.version >= REGIONAL_GAME_SAVE_VERSION) {
       const restored = restorePlayerRegionalTravel(
         world.meta.rootSeed,
         decoded.player,
@@ -3973,6 +4254,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       }
       regionalTravel = restored;
       promiseJourney = restoredJourney;
+      if (!playerPerceptionCarryMatchesPosition(perceptionCarry, regionalTravel, decoded.player)) {
+        throw new Error("Current save perception interval does not end at the saved player position");
+      }
     } else {
       promiseJourney = migrateRegionalPromiseJourney(decoded.player, compatibilityView);
       normalizePlayerForRuntime(decoded.player, compatibilityView);
@@ -3982,7 +4266,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Version 3 save contains noncanonical runtime player state");
       regionalTravel = migratePlayerToRegionalTravel(world.meta.rootSeed, decoded.player);
     }
-    const physicalCargoValidation = decoded.version === GAME_SAVE_VERSION
+    const physicalCargoValidation = decoded.version >= REGIONAL_GAME_SAVE_VERSION
       ? validatePhysicalCargoState(decoded.physicalCargo, decoded.player, WORLD_WIDTH, WORLD_HEIGHT)
       : decoded.version === PHYSICAL_CARGO_GAME_SAVE_VERSION
         ? adoptPhysicalCargoStateV1(decoded.physicalCargo, decoded.player, WORLD_WIDTH, WORLD_HEIGHT)
@@ -3995,7 +4279,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error(`Save contains invalid physical cargo: ${physicalCargoValidation.reason}`);
     }
     if (
-      decoded.version === GAME_SAVE_VERSION
+      decoded.version >= REGIONAL_GAME_SAVE_VERSION
       && regionKey(physicalCargoValidation.state.activeRegion) !== regionKey(regionalTravel.stream.center)
     ) throw new Error("Current save physical cargo is active in the wrong region");
     validatePhysicalPromiseCustody(world, decoded.player, physicalCargoValidation.state);
@@ -4009,6 +4293,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       physicalCargo: physicalCargoValidation.state,
       regionalTravel,
       promiseJourney,
+      perceptionCarry,
       saveGenerationEra: version.saveGenerationEra,
       saveGeneration: version.saveGeneration,
       updatedAt: record.updatedAt,

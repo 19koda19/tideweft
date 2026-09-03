@@ -3120,6 +3120,10 @@ export function createTideweftReliefRenderer(
       if (porter.state === "stranded") return RELIEF_PALETTE.danger;
       if (porter.state === "helping") return RELIEF_PALETTE.tide;
       if (porter.state === "waiting") return RELIEF_PALETTE.amber;
+      if (porter.state === "listening") return RELIEF_PALETTE.amber;
+      if (porter.state === "watching") return RELIEF_PALETTE.danger;
+      if (porter.state === "alert") return RELIEF_PALETTE.danger;
+      if (porter.state === "searching") return RELIEF_PALETTE.violet;
       return porter.cargoColor ?? RELIEF_PALETTE.foam;
     };
 

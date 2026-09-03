@@ -243,7 +243,7 @@ describe("observed event projection", () => {
     const route = state.routes[0];
     const resident = state.residents[0];
     if (!route || !resident || remoteIndex < 0) throw new Error("fixture needs a remote route point");
-    route.path = [directIndex, remoteIndex];
+    route.path = contiguousPath(initial, directIndex, remoteIndex);
     resident.location = { kind: "route", routeId: route.id, progress: 0 };
     const world = createWorldView(state);
     const perception = perceptionWithDirectTiles(world, directIndex, [directIndex]);
@@ -269,3 +269,25 @@ describe("observed event projection", () => {
       .toBe(true);
   });
 });
+
+function contiguousPath(
+  world: WorldView,
+  fromIndex: number,
+  toIndex: number,
+): number[] {
+  const from = world.terrain.tiles[fromIndex];
+  const to = world.terrain.tiles[toIndex];
+  if (!from || !to) throw new Error("fixture route endpoints must exist");
+  const path = [fromIndex];
+  let x = from.x;
+  let y = from.y;
+  while (x !== to.x) {
+    x += Math.sign(to.x - x);
+    path.push(y * world.terrain.width + x);
+  }
+  while (y !== to.y) {
+    y += Math.sign(to.y - y);
+    path.push(y * world.terrain.width + x);
+  }
+  return path;
+}

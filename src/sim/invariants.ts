@@ -17,6 +17,8 @@ import {
   stableResidentIdForGeneration,
 } from "./npcIdentity";
 import { stableRegionObjectId } from "./regions";
+import { canonicalizeActorPerceptionState } from "./actorPerception";
+import { stableStringify } from "./util";
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`World invariant failed: ${message}`);
@@ -306,6 +308,20 @@ export function assertWorldInvariants(world: WorldState): void {
         resident.identity.generationVersion,
       ),
       `resident ${resident.id} stable ID does not match its semantic origin`,
+    );
+    const canonicalPerception = canonicalizeActorPerceptionState(resident.perception);
+    invariant(canonicalPerception !== null, `resident ${resident.id} perception is malformed`);
+    invariant(
+      canonicalPerception.actorId === resident.identity.stableId,
+      `resident ${resident.id} perception belongs to another actor`,
+    );
+    invariant(
+      canonicalPerception.tick === world.meta.completedTick,
+      `resident ${resident.id} perception tick does not match the world`,
+    );
+    invariant(
+      stableStringify(canonicalPerception) === stableStringify(resident.perception),
+      `resident ${resident.id} perception is not canonical`,
     );
     invariant(
       resident.identity.heightCm >= 145 && resident.identity.heightCm <= 200,

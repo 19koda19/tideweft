@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.10 — 2026-09-03
+
+Build: `0.3.3-alpha.10` · Gameplay contract: 18 · Tutorial: 20
+
+The original estuary's 42 humans can now notice the courier through lawful sight or anonymous sound, remember a lost sighting, and give up a bounded search without gaining hidden knowledge.
+
+### Gameplay
+
+- The original harbor country's existing 42 humans now receive the first connected shared-perception slice. Their visual contact respects facing, close awareness, terrain elevation, ridges, dense obstruction, structures, active weather, the courier's movement, and terrain-dependent ambient exposure rather than using an omniscient distance trigger.
+- Footfalls, splashes, and serious impacts can produce anonymous directional hearing. Rain and turbulent water near the listener mask sound; wind changes its practical reach and uncertainty. Hearing never grants the courier's identity or an exact source coordinate.
+- Each person maintains bounded attention and suspicion. Losing a clearly identified visual contact starts an expiring scan of the last area actually seen; fresh lawful sight can reacquire the courier, while failure decays to deterministic give-up instead of following hidden live coordinates.
+
+### Fixes
+
+- Human perception now uses segmented world positions and stable resident placement across the moving presentation frame. A frame shift or signed address cannot turn local coordinates into false contact or move a saved search area; this release still generates no humans outside the original harbor country.
+- Malformed or partial perception input fails closed for the whole world tick. Every resident's cognition still advances once for decay and search expiry, and no forged frame can selectively teach one person or leave half the population on a different cognition tick.
+- A resident's search-facing direction is derived from saved attention or the next deterministic last-known-area probe. Breaking line of sight no longer leaves them visually locked onto the courier's hidden current position.
+
+### Balancing
+
+- Perception does not add an easier ruleset or change rewards. Sight, hearing, attention, belief, salient memory, and search duration are bounded for the same A CHALLENGING HARD simulation on desktop and mobile.
+- Only a lawful identified visual contact can establish or refresh the courier's exact last-known point. Anonymous hearing may raise suspicion and guide an uncertain investigation, but it cannot identify or precisely reacquire the player.
+
+### Interface
+
+- Visible people can now use restrained pane-free quick labels, text faces, short speech, and ABOUT behavior such as listening, investigating, watching, alert, or searching nearby. Hidden attention keys, confidence values, and last-known coordinates remain private.
+- Chart 2D and Relief 3D project the same human cognition and the same knowledge-honest ABOUT text. Desktop pointer, touch targets, portrait, and landscape layouts do not fork the sensing rules or expose a mobile-only shortcut.
+- Field Manual version 20 explains what makes the current humans see or hear the courier, how weather and water noise alter contact, and why breaking sight produces a bounded last-known-area search rather than omniscient pursuit.
+
+### Save changes
+
+- The outer game save advances to version 5. Its embedded simulation advances to format 4 and tideweft-sim/6 so each original-estuary resident stores canonical perception, attention, suspicion, beliefs, bounded salient memory, and any active search.
+- Outer save versions 1 through 4 migrate with an empty fixed-step sensory carry. Simulation formats 1 through 3 preserve established identities and initialize each resident as unaware at the old world's completed tick, so old saves gain no invented sightings or suspicion.
+- Version 5 seals the partial fixed-step phase, its bounded player sensory samples, and the next sample ordinal. Saving between world ticks cannot erase or reroll an already-produced footstep, splash, or impact before residents evaluate it.
+- Once a cognition tick commits, save/reload preserves the same last-known area, search progress, attention, decay, reacquisition, and eventual give-up; loading cannot reroll what a resident perceived.
+
+### Known limitations
+
+- This remains a bounded first perception slice for the original estuary's 42 humans sensing the local courier. It is not complete universal perception, human-to-human sensing, generated distant population behavior, or a claim that every actor perceives every other actor.
+- Scent fields, blood or food odor, footprints and environmental evidence, tracking, social reports, rumors, group communication, dogs, birds, deer, bears, waylayers, companions, and broader wildlife ecology remain planned.
+- Current searching changes attention, facing, labels, speech, ABOUT behavior, and memory. Humans do not yet physically pursue, investigate through pathfinding, coordinate a search, or create a persistent aftermath from that search.
+
 ## 0.3.3-alpha.9 — 2026-09-03
 
 Build: `0.3.3-alpha.9` · Gameplay contract: 17 · Tutorial: 19

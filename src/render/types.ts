@@ -402,7 +402,16 @@ export interface TraceView {
   readonly kind: "foot" | "wake" | "possibility";
 }
 
-export type PorterState = "traveling" | "resting" | "helping" | "waiting" | "stranded";
+export type PorterState =
+  | "traveling"
+  | "resting"
+  | "helping"
+  | "waiting"
+  | "stranded"
+  | "listening"
+  | "watching"
+  | "alert"
+  | "searching";
 
 export interface PorterView {
   readonly id: string;

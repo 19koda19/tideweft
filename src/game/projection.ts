@@ -38,6 +38,11 @@ import {
 } from "../sim/types";
 import { residentKnowsFact } from "../sim/npcIdentity";
 import {
+  queryActorAttention,
+  queryActorSearch,
+  type ActorSuspicionState,
+} from "../sim/actorPerception";
+import {
   TILE_UNITS,
   activeTideHarpAtPlayer,
   cargoWeight,
@@ -58,6 +63,7 @@ import {
   visibleRegionalTideHarps,
 } from "./regionalWayknots";
 import {
+  regionalCompatibilityWorldForWorld,
   regionalGlobalTileAt,
   regionalWindowForWorld,
   regionalWorldCenter,
@@ -83,6 +89,14 @@ import {
   type PerceptionCell,
   type PerceptionResult,
 } from "./perception";
+import {
+  residentPlacementInCompatibilityWorld,
+  residentPlacementInRegionalWindow,
+  resolveResidentRouteWorldPlacement,
+  resolveResidentWorldPlacement,
+  type ResidentWorldPlacement,
+} from "./residentSpatial";
+import { worldPositionDelta } from "./worldPosition";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
 const MAX_BIOME_CACHE_ENTRIES = 4;
@@ -175,59 +189,6 @@ export interface ResidentRouteProjection {
   readonly progress: number;
 }
 
-const SETTLEMENT_RESIDENT_OFFSETS = [
-  [1, 0], [0, 1], [-1, 0], [0, -1],
-  [1, 1], [-1, 1], [-1, -1], [1, -1],
-  [2, 0], [0, 2], [-2, 0], [0, -2],
-] as const;
-
-function settlementResidentSlot(
-  world: WorldView,
-  center: { readonly x: number; readonly y: number },
-  ordinal: number,
-): { readonly tileIndex: number; readonly dx: number; readonly dy: number } | undefined {
-  const viable: { tileIndex: number; dx: number; dy: number }[] = [];
-  const seen = new Set<string>();
-  const consider = (dx: number, dy: number): boolean => {
-    const key = `${dx},${dy}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    const x = center.x + dx;
-    const y = center.y + dy;
-    if (x < 0 || y < 0 || x >= world.terrain.width || y >= world.terrain.height) return false;
-    const tileIndex = y * world.terrain.width + x;
-    const tile = world.terrain.tiles[tileIndex];
-    if (!tile || tile.terrain === "deep-water") return false;
-    viable.push({ tileIndex, dx, dy });
-    return viable.length > ordinal;
-  };
-
-  // Preserve the familiar compact harbor arrangement for ordinary crowds.
-  for (const [dx, dy] of SETTLEMENT_RESIDENT_OFFSETS) {
-    if (consider(dx, dy)) return viable[ordinal];
-  }
-
-  // Deliveries can legitimately gather more than twelve visitors at one
-  // harbor. Expand deterministically through square rings instead of wrapping
-  // modulo and placing two persistent people on the same hit target.
-  const maximumRadius = Math.max(world.terrain.width, world.terrain.height);
-  for (let radius = 1; radius <= maximumRadius; radius += 1) {
-    for (let dx = -radius; dx <= radius; dx += 1) {
-      if (consider(dx, -radius)) return viable[ordinal];
-    }
-    for (let dy = -radius + 1; dy <= radius; dy += 1) {
-      if (consider(radius, dy)) return viable[ordinal];
-    }
-    for (let dx = radius - 1; dx >= -radius; dx -= 1) {
-      if (consider(dx, radius)) return viable[ordinal];
-    }
-    for (let dy = radius - 1; dy >= -radius + 1; dy -= 1) {
-      if (consider(-radius, dy)) return viable[ordinal];
-    }
-  }
-  return undefined;
-}
-
 /**
  * Resolves a simulated route resident into the current floating view. A route
  * outside the loaded regional window produces no actor rather than a cloned or
@@ -239,30 +200,11 @@ export function projectResidentRoutePosition(
   tileSize = 24,
 ): ResidentRouteProjection | null {
   if (resident.location.kind !== "route") return null;
-  const location = resident.location;
-  const route = world.routes.find((candidate) => candidate.id === location.routeId);
-  if (!route || route.path.length === 0) return null;
-  const progress = Math.max(0, Math.min(1, location.progress / FIXED_POINT));
-  const scaled = progress * Math.max(0, route.path.length - 1);
-  const fromOffset = Math.min(route.path.length - 1, Math.floor(scaled));
-  const toOffset = Math.min(route.path.length - 1, fromOffset + 1);
-  const fromIndex = route.path[fromOffset];
-  const toIndex = route.path[toOffset];
-  if (fromIndex === undefined || toIndex === undefined) return null;
-  const from = tilePoint(fromIndex, world.terrain.width, tileSize);
-  const to = tilePoint(toIndex, world.terrain.width, tileSize);
-  const local = scaled - fromOffset;
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  return {
-    tileIndex: local < 0.5 ? fromIndex : toIndex,
-    position: {
-      x: from.x + dx * local,
-      y: from.y + dy * local,
-    },
-    facing: dx === 0 && dy === 0 ? 0 : Math.atan2(dy, dx),
-    progress,
-  };
+  const economy = regionalCompatibilityWorldForWorld(world) ?? world;
+  const placement = resolveResidentRouteWorldPlacement(economy, resident);
+  return placement === null
+    ? null
+    : projectResidentPlacement(world, residentAttentionPlacement(resident, placement), tileSize);
 }
 
 /**
@@ -276,40 +218,88 @@ export function projectResidentWorldPosition(
   resident: ResidentState,
   tileSize = 24,
 ): ResidentRouteProjection | null {
-  const route = projectResidentRoutePosition(world, resident, tileSize);
-  if (route) return route;
-  const location = resident.location;
-  if (location.kind !== "settlement") return null;
-  const settlement = world.settlements.find(({ id }) => id === location.settlementId);
-  if (!settlement) return null;
-  const settlementTile = world.terrain.tiles[settlement.tileIndex];
-  if (!settlementTile) return null;
-  const presentResidents = world.residents
-    .filter((candidate) =>
-      candidate.location.kind === "settlement"
-      && candidate.location.settlementId === settlement.id
-    )
-    .sort((left, right) => left.identity.stableId < right.identity.stableId
-      ? -1
-      : left.identity.stableId > right.identity.stableId
-        ? 1
-        : 0);
-  const currentOrdinal = presentResidents.findIndex((candidate) => candidate.id === resident.id);
-  if (currentOrdinal < 0) return null;
-  const chosen = settlementResidentSlot(world, settlementTile, currentOrdinal);
-  if (!chosen) {
-    return {
-      tileIndex: settlement.tileIndex,
-      position: tilePoint(settlement.tileIndex, world.terrain.width, tileSize),
-      facing: 0,
-      progress: 0,
-    };
+  const economy = regionalCompatibilityWorldForWorld(world) ?? world;
+  const placement = resolveResidentWorldPlacement(economy, resident);
+  return placement === null
+    ? null
+    : projectResidentPlacement(world, residentAttentionPlacement(resident, placement), tileSize);
+}
+
+/**
+ * Attention turns a person toward a perceived area without moving them or
+ * consulting the live target. Far deltas fail closed to the route/home facing.
+ */
+function residentAttentionPlacement(
+  resident: ResidentState,
+  placement: ResidentWorldPlacement,
+): ResidentWorldPlacement {
+  if (resident.perception.suspicion === "unaware") return placement;
+  const search = queryActorSearch(resident.perception);
+  const focus = search?.nextProbe ?? queryActorAttention(resident.perception)[0]?.area.center;
+  if (!focus) return placement;
+  try {
+    const delta = worldPositionDelta(placement.position, focus);
+    if (delta.x === 0 && delta.y === 0) return placement;
+    return Object.freeze({
+      ...placement,
+      facing: Math.atan2(delta.y, delta.x),
+    });
+  } catch {
+    return placement;
   }
+}
+
+function porterPerceptionState(suspicion: ActorSuspicionState): PorterView["state"] | null {
+  switch (suspicion) {
+    case "noticed":
+    case "suspicious":
+      return "listening";
+    case "identified":
+      return "watching";
+    case "alert":
+      return "alert";
+    case "searching":
+      return "searching";
+    case "unaware":
+      return null;
+  }
+}
+
+function porterPerceptionLabel(suspicion: ActorSuspicionState): string | null {
+  switch (suspicion) {
+    case "noticed": return "listening";
+    case "suspicious": return "investigating";
+    case "identified": return "watching you";
+    case "alert": return "alert";
+    case "searching": return "searching nearby";
+    case "unaware": return null;
+  }
+}
+
+function projectResidentPlacement(
+  world: WorldView,
+  placement: ResidentWorldPlacement,
+  tileSize: number,
+): ResidentRouteProjection | null {
+  if (!Number.isFinite(tileSize) || tileSize <= 0) return null;
+  const window = regionalWindowForWorld(world);
+  const projected = window
+    ? residentPlacementInRegionalWindow(placement, window)
+    : residentPlacementInCompatibilityWorld(
+        placement,
+        world.terrain.width,
+        world.terrain.height,
+      );
+  if (projected === null) return null;
+  const scale = tileSize / TILE_UNITS;
   return {
-    tileIndex: chosen.tileIndex,
-    position: tilePoint(chosen.tileIndex, world.terrain.width, tileSize),
-    facing: Math.atan2(-chosen.dy, -chosen.dx),
-    progress: 0,
+    tileIndex: projected.tileIndex,
+    position: {
+      x: projected.position.x * scale,
+      y: projected.position.y * scale,
+    },
+    facing: projected.facing,
+    progress: projected.progress,
   };
 }
 
@@ -328,6 +318,15 @@ function porterEmotionMark(
   resident: ResidentState,
   selected: boolean,
 ): NonNullable<PorterView["emotionMark"]> | undefined {
+  if (
+    resident.perception.suspicion === "noticed"
+    || resident.perception.suspicion === "suspicious"
+    || resident.perception.suspicion === "searching"
+  ) return ":S";
+  if (
+    resident.perception.suspicion === "identified"
+    || resident.perception.suspicion === "alert"
+  ) return ":|";
   switch (resident.condition.emotion) {
     case "afraid": return ":[";
     case "worried": return ":S";
@@ -344,6 +343,14 @@ function porterStateSpeech(resident: ResidentState, tick: number, selected: bool
   // transcript or off-screen identity leak.
   const ambientWindow = (tick + resident.id * 17) % 180 < 14;
   if (!selected && !ambientWindow) return undefined;
+  switch (resident.perception.suspicion) {
+    case "noticed": return "Thought I heard something.";
+    case "suspicious": return "Who's there?";
+    case "identified": return "I see you.";
+    case "alert": return "What was that?";
+    case "searching": return "I saw someone here.";
+    case "unaware": break;
+  }
   if (resident.condition.sheltering) return "Holding here until this eases.";
   if (resident.condition.coldStress >= 720_000) return "This cold bites.";
   if (resident.condition.wetness >= 700_000) return "Soaked through.";
@@ -849,22 +856,28 @@ export function projectGameView(
       const speech = options.residentSpeech?.get(resident.id)
         ?? porterStateSpeech(resident, world.completedTick, selected);
       const emotionMark = porterEmotionMark(resident, selected);
+      const identityLabel = knowsName
+        ? resident.name
+        : resident.location.kind === "route"
+          ? "Unknown porter"
+          : "Unknown resident";
+      const perceptionLabel = porterPerceptionLabel(resident.perception.suspicion);
+      const perceptionState = porterPerceptionState(resident.perception.suspicion);
       return [
         {
           id: String(resident.id),
           ...(knowsName ? { name: resident.name } : {}),
-          quickLabel: knowsName
-            ? resident.name
-            : resident.location.kind === "route"
-              ? "Unknown porter"
-              : "Unknown resident",
+          quickLabel: perceptionLabel
+            ? `${identityLabel} · ${perceptionLabel}`
+            : identityLabel,
           position: routeProjection.position,
           facing: routeProjection.facing,
-          state: resident.condition.sheltering
-            ? "resting" as const
-            : resident.intention === "carry"
-              ? "traveling" as const
-              : "waiting" as const,
+          state: perceptionState
+            ?? (resident.condition.sheltering
+              ? "resting" as const
+              : resident.intention === "carry"
+                ? "traveling" as const
+                : "waiting" as const),
           appearance: {
             heightScale: resident.identity.heightCm / 171,
             build: resident.identity.build,

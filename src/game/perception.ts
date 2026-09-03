@@ -110,6 +110,34 @@ export interface PerceptionResult {
   readonly signature: string;
 }
 
+export interface VisualContactInput {
+  readonly columns: number;
+  readonly rows: number;
+  readonly cells: readonly PerceptionCell[];
+  readonly observerTileIndex: number;
+  readonly targetTileIndex: number;
+  readonly observerFacingRadians: number;
+  readonly weatherVisibility: number;
+  /** Actor/item-scale ranges. Terrain silhouette ranges do not grant contact. */
+  readonly detailRangeOverrides?: PerceptionRangeOverrides;
+  /** Normalized visibility contributed by the target's current motion. */
+  readonly targetMovementSalience: number;
+  /** Normalized visibility contributed by light falling on the target. */
+  readonly targetLightVisibility: number;
+}
+
+/**
+ * A deliberately bounded observation. It discloses neither target position,
+ * distance, bearing, cell data, nor identity; identityEligible only states
+ * whether some separate, already-known identity may lawfully be resolved.
+ */
+export interface VisualContact {
+  readonly grade: typeof VISIBILITY_PERIPHERAL | typeof VISIBILITY_DIRECT;
+  readonly identityEligible: boolean;
+  /** Normalized confidence in the inclusive 0..1 range. */
+  readonly confidence: number;
+}
+
 export interface WorldPoint {
   readonly x: number;
   readonly y: number;
@@ -148,6 +176,13 @@ export interface AudibleContact {
   readonly distanceBand: AudibleDistanceBand;
   /** Normalized confidence in the inclusive 0..1 range. */
   readonly certainty: number;
+}
+
+export interface AmbientNoiseInput {
+  /** Local normalized rain intensity in the inclusive 0..1 range. */
+  readonly rainIntensity: number;
+  /** Audible turbulence at the listener, already attenuated for distance. */
+  readonly localWaterTurbulence: number;
 }
 
 interface ValidatedGrid {
@@ -295,17 +330,39 @@ function validateGrid(
 
   const cells: PerceptionCell[] = [];
   for (const rawCell of rawCells) {
-    if (!isRecord(rawCell)) return null;
-    const elevation = rawCell.elevation;
-    const obstruction = rawCell.obstruction;
-    if (!isUnit(elevation) || !isUnit(obstruction)) return null;
-    cells.push({ elevation, obstruction });
+    const cell = readPerceptionCell(rawCell);
+    if (!cell) return null;
+    // Retain the existing full-snapshot copy boundary. Point queries use the
+    // shape-only path below and validate only the cells their ray touches.
+    cells.push({ elevation: cell.elevation, obstruction: cell.obstruction });
   }
   return {
     columns: dimensions.columns,
     rows: dimensions.rows,
     cells,
   };
+}
+
+function validateGridShape(
+  record: Record<string, unknown>,
+  dimensions: { readonly columns: number; readonly rows: number; readonly count: number },
+): ValidatedGrid | null {
+  const rawCells = record.cells;
+  if (!Array.isArray(rawCells) || rawCells.length !== dimensions.count) return null;
+  return {
+    columns: dimensions.columns,
+    rows: dimensions.rows,
+    cells: rawCells as readonly PerceptionCell[],
+  };
+}
+
+function readPerceptionCell(value: unknown): PerceptionCell | null {
+  if (!isRecord(value)) return null;
+  const elevation = value.elevation;
+  const obstruction = value.obstruction;
+  return isUnit(elevation) && isUnit(obstruction)
+    ? value as unknown as PerceptionCell
+    : null;
 }
 
 function validateRanges(
@@ -522,6 +579,7 @@ function hasLineOfSight(
   fromIndex: number,
   toIndex: number,
   blockOnObstruction: boolean,
+  validateTraversedCells = false,
 ): boolean {
   const fromX = fromIndex % grid.columns;
   const fromY = Math.floor(fromIndex / grid.columns);
@@ -530,8 +588,10 @@ function hasLineOfSight(
   const totalDistance = Math.hypot(toX - fromX, toY - fromY);
   if (totalDistance === 0) return true;
 
-  const origin = grid.cells[fromIndex];
-  const target = grid.cells[toIndex];
+  const rawOrigin = grid.cells[fromIndex];
+  const rawTarget = grid.cells[toIndex];
+  const origin = validateTraversedCells ? readPerceptionCell(rawOrigin) : rawOrigin;
+  const target = validateTraversedCells ? readPerceptionCell(rawTarget) : rawTarget;
   if (!origin || !target) return false;
   const originEye = origin.elevation + OBSERVER_EYE_HEIGHT;
   const targetEye = target.elevation + OBSERVER_EYE_HEIGHT;
@@ -545,7 +605,8 @@ function hasLineOfSight(
   let error = deltaX + deltaY;
 
   const cellBlocksRay = (cellX: number, cellY: number): boolean => {
-    const cell = grid.cells[cellY * grid.columns + cellX];
+    const rawCell = grid.cells[cellY * grid.columns + cellX];
+    const cell = validateTraversedCells ? readPerceptionCell(rawCell) : rawCell;
     if (!cell) return true;
     if (blockOnObstruction && cell.obstruction >= OBSTRUCTION_BLOCKING_THRESHOLD) return true;
     const traveled = Math.hypot(cellX - fromX, cellY - fromY);
@@ -581,6 +642,115 @@ function hasLineOfSight(
     if (cellBlocksRay(x, y)) return false;
   }
   return true;
+}
+
+/**
+ * Evaluates one actor/item-scale sight ray without constructing a full-grid
+ * visibility mask. A fully lit/salient target uses the same range, cone,
+ * elevation-horizon, obstruction, and diagonal-supercover rules as the detail
+ * field in evaluatePerception(). Dim stationary targets contract that field;
+ * movement can disclose a silhouette without making identity knowable.
+ */
+export function evaluateVisualContact(input: VisualContactInput): VisualContact | null {
+  const rawInput: unknown = input;
+  if (!isRecord(rawInput)) return null;
+
+  const dimensions = validatedDimensions(rawInput.columns, rawInput.rows);
+  if (!dimensions) return null;
+  const grid = validateGridShape(rawInput, dimensions);
+  const observerTileIndex = rawInput.observerTileIndex;
+  const targetTileIndex = rawInput.targetTileIndex;
+  const observerFacingRadians = rawInput.observerFacingRadians;
+  const weatherVisibility = rawInput.weatherVisibility;
+  const targetMovementSalience = rawInput.targetMovementSalience;
+  const targetLightVisibility = rawInput.targetLightVisibility;
+  const detailRanges = validateRanges(
+    rawInput.detailRangeOverrides,
+    DEFAULT_DETAIL_PERCEPTION_RANGES,
+  );
+  if (
+    !grid
+    || !Number.isSafeInteger(observerTileIndex)
+    || (observerTileIndex as number) < 0
+    || (observerTileIndex as number) >= dimensions.count
+    || !Number.isSafeInteger(targetTileIndex)
+    || (targetTileIndex as number) < 0
+    || (targetTileIndex as number) >= dimensions.count
+    || typeof observerFacingRadians !== "number"
+    || !Number.isFinite(observerFacingRadians)
+    || !isUnit(weatherVisibility)
+    || !isUnit(targetMovementSalience)
+    || !isUnit(targetLightVisibility)
+    || !detailRanges
+  ) return null;
+
+  const observerIndex = observerTileIndex as number;
+  const targetIndex = targetTileIndex as number;
+  // Validate both endpoints even when an early range check would reject the
+  // ray. Intermediate cells are validated only as the deterministic ray walks
+  // them, keeping this query proportional to contact distance rather than map
+  // area.
+  if (
+    !readPerceptionCell(grid.cells[observerIndex])
+    || !readPerceptionCell(grid.cells[targetIndex])
+  ) return null;
+
+  const observerX = observerIndex % dimensions.columns;
+  const observerY = Math.floor(observerIndex / dimensions.columns);
+  const targetX = targetIndex % dimensions.columns;
+  const targetY = Math.floor(targetIndex / dimensions.columns);
+  const deltaX = targetX - observerX;
+  const deltaY = targetY - observerY;
+  const distance = Math.hypot(deltaX, deltaY);
+  if (!Number.isFinite(distance)) return null;
+
+  // Light makes a still target legible. Motion remains a strong but incomplete
+  // silhouette cue, so it can extend contact without granting identity.
+  const targetSalience = Math.max(
+    targetLightVisibility,
+    targetMovementSalience * 0.75,
+  );
+  if (targetSalience <= 0) return null;
+  const peripheralRange = detailRanges.closePeripheralRange
+    * weatherVisibility
+    * targetSalience;
+  const directRange = detailRanges.directSightRange
+    * weatherVisibility
+    * targetSalience;
+  const inPeripheralRange = distance <= peripheralRange + LINE_OF_SIGHT_EPSILON;
+  const inDirectRange = distance <= directRange + LINE_OF_SIGHT_EPSILON;
+  const bearing = distance === 0 ? observerFacingRadians : Math.atan2(deltaY, deltaX);
+  const bearingDistance = angleDistance(bearing, observerFacingRadians);
+  const halfCone = detailRanges.forwardConeRadians / 2;
+  const inForwardCone = bearingDistance <= halfCone + LINE_OF_SIGHT_EPSILON;
+  const direct = inDirectRange && inForwardCone;
+  if (!direct && !inPeripheralRange) return null;
+  if (!hasLineOfSight(grid, observerIndex, targetIndex, true, true)) return null;
+
+  const grade = direct ? VISIBILITY_DIRECT : VISIBILITY_PERIPHERAL;
+  const gradeRange = direct ? directRange : peripheralRange;
+  const proximity = gradeRange <= LINE_OF_SIGHT_EPSILON
+    ? 1
+    : 1 - clampUnit(distance / gradeRange);
+  const angleClarity = direct
+    ? halfCone <= LINE_OF_SIGHT_EPSILON
+      ? 1
+      : 1 - 0.25 * clampUnit(bearingDistance / halfCone)
+    : 0.55;
+  const weatherClarity = 0.4 + 0.6 * weatherVisibility;
+  const confidence = quantize(clampUnit(
+    targetSalience
+    * (0.25 + 0.75 * proximity)
+    * angleClarity
+    * weatherClarity,
+  ));
+  if (confidence <= 0) return null;
+
+  return Object.freeze({
+    grade,
+    identityEligible: direct && targetLightVisibility >= 0.5,
+    confidence,
+  });
 }
 
 /**
@@ -767,6 +937,24 @@ function readPoint(value: unknown): WorldPoint | null {
     && Number.isFinite(y)
     ? { x, y }
     : null;
+}
+
+/**
+ * Combines local rain and already-distance-attenuated turbulent water into the
+ * normalized masking pressure consumed by evaluateAudibleContact(). The two
+ * sources overlap without adding past one; this is simulation data only and
+ * has no dependency on renderer or WebAudio state.
+ */
+export function calculateAmbientNoise(input: AmbientNoiseInput): number | null {
+  const rawInput: unknown = input;
+  if (!isRecord(rawInput)) return null;
+  const rainIntensity = rawInput.rainIntensity;
+  const localWaterTurbulence = rawInput.localWaterTurbulence;
+  if (!isUnit(rainIntensity) || !isUnit(localWaterTurbulence)) return null;
+
+  const rainMask = rainIntensity * 0.62;
+  const waterMask = localWaterTurbulence * 0.72;
+  return quantize(1 - (1 - rainMask) * (1 - waterMask));
 }
 
 /**

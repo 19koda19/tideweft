@@ -80,13 +80,17 @@ Each seed creates:
 
 - One continuous deterministic terrain world. The original 96 × 72 seeded estuary remains unchanged at its established coordinates, including five authoritative terrain families, tidal water depth, and seven derived biome identities: Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen. A bounded 120 × 120 presentation frame moves quietly through the world as the courier travels; stored Alpha 0.1 worlds retain their original 64 × 48 terrain inside it.
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
-- 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, an intention, and a world location.
+- 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, a bounded vision/hearing perception state, an intention, and a world location.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
 - Potential routes between every settlement pair, with only sufficiently strong and sound corridors active for automation.
 
 This is selective simulation. A resident detail earns its place by changing a visible intention, contract, porter choice, settlement state, or story fact. The player does not receive those facts automatically: direct sight exposes only reasonable physical observation, while a nearby GREET adds name, occupation, and home to persistent knowledge.
+
+The same honesty now runs in the other direction for these 42 humans. A person sees the courier only through a forward or close visual contact that can be shortened by weather and blocked by terrain or structures; motion and ambient exposure alter how legible the courier is. Footfalls, splashes, and impacts can instead create an anonymous directional sound. Rain and turbulent water around the listener mask that sound, while wind can change its reach and uncertainty. Hearing something does not reveal who or exactly where it was.
+
+Attention and suspicion are bounded. If a person clearly sees the courier and then loses sight, they face and scan a saved last-known area; they do not follow the courier's hidden live coordinates. A later lawful visual contact can reacquire the courier. Otherwise suspicion decays and the search ends deterministically. Committed cognition persists through save/reload. This release supplies readable watching, listening, alert, and searching cues, not physical pursuit or search pathfinding.
 
 ## Autonomous strand network
 
@@ -145,6 +149,7 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 - In clear air, route-scale terrain reaches toward 52 tiles, remains fully legible through 34, and feathers across the final 18. Exact people, parcels, resources, labels, water detail, actions, and hit targets stay inside the 10-tile detail field.
 - Turning away does not make terrain snap to black like an instantaneous memory loss. A brief terrain-only impression eases into dim durable Chart memory, or into darkness where the ground was never charted, and follows a quick Chart/Relief switch. People, parcels, wildlife, resources, exact water detail, labels, actions, and hit targets leave immediately with live perception; the impression never becomes saved knowledge or an interaction shortcut.
 - Clicking or tapping a directly visible person from the original harbor country opens non-pausing ABOUT text. OBSERVED summarizes approximate body, visible gear, condition, behavior, and apparent emotion; KNOWN contains only learned facts. A close, grounded GREET records one introduction rather than revealing hidden scores or farming repeated relationship progress.
+- Existing humans can notice the courier through occluded sight or anonymous directional sound. Moving openly is more visually salient; active weather reduces visual clarity; rain and nearby rough water mask sound; and wind changes how it travels. A person who loses identified sight searches the last observed area and either reacquires through fresh sight or gives up, rather than tracking an unseen player.
 - Weather can make an assigned porter wet, cold, exhausted, worried, afraid, or temporarily hold position. Small text emoticons, state speech, and behavior communicate those changes; exact emotion values remain private and do not modify the player's difficulty.
 - Player-facing EVENTS includes resident events only when the player caused them or could directly observe their event-time locus. The authoritative history remains complete without granting later knowledge of distant activity.
 - Pointer paths price the same Wayknot fields as manual travel. The placed aids persist in saves and can always be reclaimed; they never become an upgrade currency or upkeep chore.
@@ -164,6 +169,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - An unwanted or risky promise can be handed into accountable care at any harbor; cargo returns to local stock and learned chart/trace remains.
 - Expired or rejected commands are explained, and another useful shortage can emerge.
 - Nothing decays or advances while the game is closed.
+- Outer save format 5 seals any partial fixed-step phase plus its bounded player sensory samples and next ordinal. A save/reload between authoritative world ticks therefore cannot erase an already-created footstep, splash, or impact before nearby humans evaluate it. Older outer formats migrate at a clean empty phase boundary; committed human cognition remains in embedded simulation format 4 and `tideweft-sim/6`.
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
@@ -194,7 +200,7 @@ The current build has procedural sound but does not yet expose separate volume c
 Implemented now:
 
 - the seven-settlement/42-resident deterministic world;
-- stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, direct-sight selection, and non-pausing ABOUT for the original harbor country's 42 humans;
+- stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;
 - seamless deterministic terrain travel in every direction, with continuous E/N location, a bounded moving presentation frame, camera/route continuity, negative-coordinate support, and exact preservation of the original estuary;
@@ -213,7 +219,7 @@ Implemented now:
 
 Expansion runway, not current behavior:
 
-- universal procedural humans beyond the original harbor country; bounded NPC promotion and distant simulation; dogs, bears, birds, deer, ownership, companions, social networks, physical NPC inventory, negotiation, deterrence, and actor-to-actor ecology;
+- universal procedural humans beyond the original harbor country; bounded NPC promotion and distant simulation; scent fields, physical evidence/tracking, social information and rumors, group communication, physical search/pursuit pathfinding, human-to-human perception, dogs, bears, birds, deer, ownership, companions, social networks, physical NPC inventory, negotiation, deterrence, and broader actor-to-actor ecology;
 - runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
 - distant low-detail parcel simulation, living mangrove/bramble snag integration, and delivery compensation that prices recovered condition; continuous transfer of the same parcel across the old map extent is already live;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;

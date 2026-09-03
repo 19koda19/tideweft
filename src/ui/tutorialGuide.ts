@@ -315,8 +315,8 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     id: "planned-universal-npcs",
     status: "planned",
     title: "Universal people, dogs, and wildlife",
-    clarification: "The original harbor country's 42 humans have persistent generated identities, weather-responsive condition, limited event-led emotion, and ABOUT inspection. Dogs, bears, birds, deer, generated distant populations, ownership, companions, cross-species perception, and the complete NPC promotion ecology remain planned.",
-    keywords: ["npc", "dog", "bear", "bird", "wildlife", "companion", "identity", "about", "ecology"],
+    clarification: "The original harbor country's 42 humans have persistent generated identities, weather-responsive condition, limited event-led emotion, ABOUT inspection, and bounded sight/hearing of the courier. Scent, evidence tracking, rumors, groups, physical pursuit, and human-to-human sensing remain planned. Dogs, bears, birds, deer, generated distant populations, ownership, companions, broader cross-species perception, and the complete NPC promotion ecology remain planned too.",
+    keywords: ["npc", "dog", "bear", "bird", "wildlife", "companion", "identity", "about", "perception", "ecology"],
   },
   {
     id: "planned-regional-biomes",
@@ -1028,8 +1028,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "12",
     title: "Meet people as individuals",
     shortTitle: "People & ABOUT",
-    summary: "Residents of the original harbor country and its route porters are visible people with persistent identities, changing conditions, bounded memories, and information you learn rather than receive for free.",
-    keywords: ["person", "resident", "porter", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather"],
+    summary: "The original harbor country's people remember what they could actually see or hear, while ABOUT reveals only what you can observe or have learned.",
+    keywords: ["person", "resident", "porter", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather", "vision", "hearing", "attention", "search"],
     controlIds: ["inspect-person"],
     steps: [
       {
@@ -1050,6 +1050,18 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         title: "Get close enough to exchange names",
         body: "Before an introduction, move within speaking distance and choose GREET. The simulation keeps running, and you must regain footing before speaking while ADRIFT. A successful greeting remembers that person's name, occupation, and home; repeated greetings do not farm new facts.",
+      },
+      {
+        id: "people-perceive",
+        audience: "all",
+        title: "People notice what reaches them",
+        body: "The original harbor country's humans can see the courier through a forward or close field, but terrain, structures, and weather can block or shorten that contact. Moving openly is easier to notice. Footfalls, splashes, and hard impacts may instead be heard as an anonymous direction: rain and nearby turbulent water mask sound, while wind changes how far and how clearly it travels. A sound does not tell somebody your identity or exact position.",
+      },
+      {
+        id: "people-search",
+        audience: "all",
+        title: "Breaking sight really matters",
+        body: "When somebody clearly sees you and then loses sight, they scan the last area they actually observed. They face saved search points rather than your hidden live position. Fresh lawful sight can reacquire you; otherwise their suspicion fades and they give up deterministically. That committed memory survives save/reload, but this slice does not make them physically pursue or pathfind through a search.",
       },
       {
         id: "people-weather-emotion",
@@ -1077,7 +1089,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         tone: "boundary",
         title: "This is the first human slice",
-        body: "These rules currently cover the 42 humans attached to the original harbor settlements. Universal distant human generation, dogs, wildlife, ownership, companions, negotiation, deterrence, and full actor-to-actor ecology are not live yet.",
+        body: "These perception rules currently cover only the 42 humans attached to the original harbor settlements sensing the courier. Scent, evidence tracking, rumors, group communication, human-to-human sensing, physical pursuit/search pathfinding, universal distant human generation, dogs, wildlife, ownership, companions, negotiation, deterrence, and full actor-to-actor ecology are not live yet.",
       },
     ],
   },
@@ -1178,7 +1190,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-local",
         audience: "all",
         title: "The save stays on this device",
-        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins.",
+        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins. Save version 5 also seals a partial movement interval and its bounded sensory samples, so reloading between world ticks cannot erase a footstep, splash, or impact before nearby humans evaluate it; older saves resume from an empty interval.",
       },
       {
         id: "saves-no-offline-time",
@@ -1300,7 +1312,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, and ABOUT inspection for the original harbor country's 42 humans are active. The outer game save remains version 4; embedded simulation snapshots use identity-aware format 3 and rules 5. Perpetual play remains active.",
+        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, ABOUT inspection, occluded sight, anonymous directional hearing, bounded attention/suspicion, and last-known-area searching for the original harbor country's 42 humans are active. The outer game save uses version 5 with sealed pending sensory carry; embedded simulation snapshots use perception-aware format 4 and rules 6. Perpetual play remains active.",
       },
       {
         id: "boundaries-planned-ecology",
@@ -1327,7 +1339,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 19 as const;
+export const TUTORIAL_CONTENT_VERSION = 20 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

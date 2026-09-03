@@ -8,7 +8,11 @@ export {
   runTicks,
   stepWorld,
 } from "./engine";
-export type { RouteTraceCoverage } from "./engine";
+export type {
+  ResidentPerceptionFrame,
+  ResidentPerceptionFrameEntry,
+  RouteTraceCoverage,
+} from "./engine";
 export { assertWorldInvariants } from "./invariants";
 export { deserializeWorld, hashWorld, serializeWorld } from "./persistence";
 export { keyedChance, keyedRandomInt, keyedRandomU32, mixUint32, seedFromText } from "./rng";

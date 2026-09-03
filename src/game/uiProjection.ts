@@ -147,6 +147,12 @@ function residentConditionLabels(resident: ResidentState): string[] {
 }
 
 function observableResidentEmotion(resident: ResidentState): string {
+  if (resident.perception.suspicion === "alert") return "Appears alert";
+  if (resident.perception.suspicion === "searching") return "Appears wary";
+  if (
+    resident.perception.suspicion === "noticed"
+    || resident.perception.suspicion === "suspicious"
+  ) return "Appears uncertain";
   switch (resident.condition.emotion) {
     case "afraid": return "Appears frightened";
     case "worried": return "Appears worried";
@@ -155,6 +161,24 @@ function observableResidentEmotion(resident: ResidentState): string {
     case "focused": return "Appears focused";
     case "content": return "Appears calm";
   }
+}
+
+function observableResidentBehavior(resident: ResidentState): string {
+  switch (resident.perception.suspicion) {
+    case "noticed": return "Listening toward a nearby sound";
+    case "suspicious": return "Investigating something nearby";
+    case "identified": return "Watching you";
+    case "alert": return "Alert and scanning nearby";
+    case "searching": return "Searching the nearby area";
+    case "unaware": break;
+  }
+  return resident.condition.sheltering
+    ? "Holding position in unsafe weather"
+    : resident.activeContractId !== null
+      ? "Carrying a Promise"
+      : resident.location.kind === "route"
+        ? "Traveling nearby"
+        : "Waiting nearby";
 }
 
 function projectResidentAbout(
@@ -202,13 +226,7 @@ function projectResidentAbout(
     { label: "Emotion", value: observableResidentEmotion(resident) },
     {
       label: "Behavior",
-      value: resident.condition.sheltering
-        ? "Holding position in unsafe weather"
-        : resident.activeContractId !== null
-          ? "Carrying a Promise"
-          : resident.location.kind === "route"
-            ? "Traveling nearby"
-            : "Waiting nearby",
+      value: observableResidentBehavior(resident),
     },
   ];
   if (mark !== "none") observed.splice(2, 0, { label: "Distinguishing mark", value: titleCase(mark.replaceAll("-", " ")) });

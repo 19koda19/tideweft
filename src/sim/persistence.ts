@@ -13,12 +13,15 @@ import {
   generateResidentIdentity,
 } from "./npcIdentity";
 import { stableRegionObjectId } from "./regions";
+import { createActorPerceptionState } from "./actorPerception";
 
 const ALPHA_SAVE_FORMAT_VERSION = 1;
 const ALPHA_RULES_VERSION = "tideweft-sim/2";
 const CHOIR_RULES_VERSION = "tideweft-sim/3";
 const PRIOR_SAVE_FORMAT_VERSION = 2;
 const PRIOR_RULES_VERSION = "tideweft-sim/4";
+const IDENTITY_SAVE_FORMAT_VERSION = 3;
+const IDENTITY_RULES_VERSION = "tideweft-sim/5";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -120,6 +123,37 @@ function migrateResidentIdentityFields(world: Record<string, unknown>): void {
   }
 }
 
+function migrateResidentPerceptionFields(world: Record<string, unknown>): void {
+  const meta = world.meta;
+  if (
+    !isRecord(meta)
+    || !Number.isSafeInteger(meta.completedTick)
+    || (meta.completedTick as number) < 0
+  ) {
+    throw new Error("TIDEWEFT prior save has no valid completed tick");
+  }
+  if (!Array.isArray(world.residents)) {
+    throw new Error("TIDEWEFT prior save has no resident population");
+  }
+  const completedTick = meta.completedTick as number;
+  for (const resident of world.residents) {
+    if (
+      !isRecord(resident)
+      || !isRecord(resident.identity)
+      || typeof resident.identity.stableId !== "string"
+    ) {
+      throw new Error("TIDEWEFT prior save resident perception identity is invalid");
+    }
+    // Prior formats had no authoritative cognition. Do not adopt an injected
+    // lookalike field: migration starts every resident from honest unknown
+    // knowledge at the exact tick already authenticated by the old checksum.
+    resident.perception = createActorPerceptionState(
+      resident.identity.stableId,
+      completedTick,
+    );
+  }
+}
+
 function migratePriorWorld(
   envelope: Record<string, unknown>,
   priorSaveFormatVersion: number,
@@ -144,6 +178,7 @@ function migratePriorWorld(
   // checksum has been verified, then validate it under the current rules.
   if (addEmptyChoirs) envelope.world.choirs = [];
   migrateResidentIdentityFields(envelope.world);
+  migrateResidentPerceptionFields(envelope.world);
   legacyMeta.saveFormatVersion = SAVE_FORMAT_VERSION;
   legacyMeta.rulesVersion = RULES_VERSION;
   const world = envelope.world as unknown as WorldState;
@@ -175,6 +210,14 @@ export function deserializeWorld(text: string): WorldState {
       return migratePriorWorld(decoded, PRIOR_SAVE_FORMAT_VERSION, PRIOR_RULES_VERSION, false);
     }
     throw new Error(`TIDEWEFT rules ${String(decoded.rulesVersion)} are incompatible with ${RULES_VERSION}`);
+  }
+  if (decoded.saveFormatVersion === IDENTITY_SAVE_FORMAT_VERSION) {
+    return migratePriorWorld(
+      decoded,
+      IDENTITY_SAVE_FORMAT_VERSION,
+      IDENTITY_RULES_VERSION,
+      false,
+    );
   }
   if (decoded.saveFormatVersion !== SAVE_FORMAT_VERSION) {
     throw new Error(`TIDEWEFT save format ${String(decoded.saveFormatVersion)} has no migration`);

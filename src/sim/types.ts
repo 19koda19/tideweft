@@ -1,3 +1,5 @@
+import type { ActorPerceptionState } from "./actorPerception";
+
 export const WORLD_WIDTH = 96;
 export const WORLD_HEIGHT = 72;
 export const LEGACY_WORLD_WIDTH = 64;
@@ -5,8 +7,8 @@ export const LEGACY_WORLD_HEIGHT = 48;
 export const MIN_SETTLEMENT_MANHATTAN_DISTANCE = 14;
 export const FIXED_POINT = 1_000_000;
 export const STRAND_AUTOMATION_THRESHOLD = 32_000;
-export const SAVE_FORMAT_VERSION = 3;
-export const RULES_VERSION = "tideweft-sim/5";
+export const SAVE_FORMAT_VERSION = 4;
+export const RULES_VERSION = "tideweft-sim/6";
 
 export const RESOURCE_KINDS = [
   "food",
@@ -294,6 +296,8 @@ export interface ResidentState {
   homeSettlementId: EntityId;
   role: ResidentRole;
   identity: ResidentIdentity;
+  /** Authoritative knowledge-honest sensing, attention, and search state. */
+  perception: ActorPerceptionState;
   condition: ResidentCondition;
   playerKnowledge: ResidentPlayerKnowledge;
   memories: ResidentMemory[];

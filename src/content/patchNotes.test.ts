@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.9",
-      buildIdentity: "0.3.3-alpha.9",
-      gameplayContractVersion: 17,
-      tutorialVersion: 19,
+      version: "0.3.3-alpha.10",
+      buildIdentity: "0.3.3-alpha.10",
+      gameplayContractVersion: 18,
+      tutorialVersion: 20,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -82,9 +82,10 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("one continuous deterministic terrain field");
-    expect(activeCopy).toContain("same persistent loose parcel");
-    expect(activeCopy).toContain("continuous E/N world address");
+    expect(activeCopy).toContain("original harbor country's existing 42 humans");
+    expect(activeCopy).toContain("anonymous directional hearing");
+    expect(activeCopy).toContain("last area actually seen");
+    expect(activeCopy).not.toMatch(/complete universal perception|physical pursuit is live/iu);
     expect(allCategoryCopy("gameplay")).toContain("Stability now resolves directly");
     expect(allCategoryCopy("interface")).toContain("same pane-free field facts");
     expect(allCategoryCopy("fixes")).toContain("WebGL emissive material state");

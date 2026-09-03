@@ -26,8 +26,8 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.9';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 17;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.10';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 18;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -1928,8 +1928,8 @@ async function installSmokeTideHarpFixture(contents) {
     const activeRegion = envelope?.physicalCargo?.activeRegion;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 4 ||
-      record.payloadVersion !== 4 ||
+      envelope?.version !== 5 ||
+      record.payloadVersion !== 5 ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       !Array.isArray(knots) ||
@@ -1978,7 +1978,7 @@ async function installSmokeTideHarpFixture(contents) {
     player.surveyTrace = [tileIndex];
 
     // Relocating the porter away from the live compatibility trace must also
-    // update the v4 Promise-journey sidecar. A detour preserves contract
+    // update the current Promise-journey sidecar. A detour preserves contract
     // custody while explicitly refusing finite-route credit; leaving the old
     // trace in place is correctly rejected by the production loader.
     envelope.promiseJourney = {
@@ -1987,8 +1987,14 @@ async function installSmokeTideHarpFixture(contents) {
       detoured: true,
       compatibilityTrace: [],
     };
+    envelope.perceptionCarry = {
+      version: 1,
+      playerStepsSinceWorldTick: 0,
+      playerSenseSamples: [],
+      nextPlayerSenseSampleOrdinal: 0,
+    };
 
-    // The v4 production loader seals the complete envelope. This smoke-only
+    // The v5 production loader seals the complete envelope. This smoke-only
     // persisted fixture deliberately changes player state, so reseal it with
     // the exact canonical encoder/hash used by the production runtime before
     // proving that the normal load path accepts it.
@@ -2182,7 +2188,7 @@ async function installSmokeTideHarpFixture(contents) {
 }
 
 /**
- * Installs one sealed v4 deep-water starting posture through the isolated
+ * Installs one sealed v5 deep-water starting posture through the isolated
  * smoke autosave. The next ordinary movement beat must enter ADRIFT through
  * production footing rules; no gameplay debug surface is shipped for it.
  * The exact pre-probe record is returned so the smoke can restore it after
@@ -2218,8 +2224,8 @@ async function installSmokeAdriftFixture(contents) {
     const terrain = view.terrain;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 4 ||
-      record.payloadVersion !== 4 ||
+      envelope?.version !== 5 ||
+      record.payloadVersion !== 5 ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       player.worldWidth !== terrain.columns ||
@@ -2300,6 +2306,12 @@ async function installSmokeAdriftFixture(contents) {
     player.sweepSupport = null;
     player.currentTrace = [candidate.index];
     player.surveyTrace = [candidate.index];
+    envelope.perceptionCarry = {
+      version: 1,
+      playerStepsSinceWorldTick: 0,
+      playerSenseSamples: [],
+      nextPlayerSenseSampleOrdinal: 0,
+    };
 
     const stableStringify = (value) => {
       if (value === null) return 'null';
@@ -2600,7 +2612,7 @@ async function restoreSmokeAdriftFixture(contents, fixture) {
     database.close();
     return { payloadVersion: record.payloadVersion, seed: record.seed };
   })()`, true);
-  if (written?.payloadVersion !== 4 || written?.seed !== SMOKE_WORLD_SEED) {
+  if (written?.payloadVersion !== 5 || written?.seed !== SMOKE_WORLD_SEED) {
     throw new Error(`the ADRIFT smoke fixture backup was not restored: ${JSON.stringify(written)}`);
   }
 

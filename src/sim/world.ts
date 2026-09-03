@@ -37,6 +37,7 @@ import {
   generateResidentTraits,
   residentRelationshipTrust,
 } from "./npcIdentity";
+import { createActorPerceptionState } from "./actorPerception";
 
 const SETTLEMENT_NAMES = [
   "Latchmere",
@@ -229,12 +230,14 @@ function makeResidents(
         role,
         originRegion: { x: 0, y: 0 },
       } as const;
+      const identity = generateResidentIdentity(identityInput);
       const resident: ResidentState = {
         id,
         name: generateResidentDisplayName(identityInput),
         homeSettlementId: settlement.id,
         role,
-        identity: generateResidentIdentity(identityInput),
+        identity,
+        perception: createActorPerceptionState(identity.stableId),
         condition: createResidentCondition(identityInput),
         playerKnowledge: createResidentPlayerKnowledge(),
         memories: [],

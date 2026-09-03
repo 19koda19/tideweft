@@ -53,6 +53,7 @@ function priorSim4Save(world: WorldState): string {
   for (const settlement of settlements) delete settlement.originKey;
   for (const resident of residents) {
     delete resident.identity;
+    delete resident.perception;
     delete resident.condition;
     delete resident.playerKnowledge;
     delete resident.memories;

@@ -2,12 +2,6 @@
 
 This file records evidence that changes the design. It is not an attempt to summarize every article about games; it captures the sources and constraints that can be turned into mechanics or verification.
 
-## Long-running implementation
-
-OpenAI's goal workflow recommends one durable objective with a verifiable stopping condition, explicit source material, proof commands/artifacts, checkpoints, and a short progress log. It specifically lists games and prototypes as suitable when the app can be built and behavior verified. That structure is maintained in local, ignored execution ledgers; public release truth stays in the README, generated changelog, tutorial, and in-game Patch Notes.
-
-- [OpenAI Docs — Follow a goal](https://learn.chatgpt.com/use-cases/follow-goals)
-
 ## What makes play rewarding and restorative
 
 ### Psychological needs beat a pile of prizes

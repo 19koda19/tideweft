@@ -3,6 +3,16 @@ import { FIXED_POINT, type WorldState, type WorldView } from "./types";
 import { copyInventory } from "./util";
 import { currentInventoryTotals } from "./world";
 import { calculateNetworkMetrics } from "./network";
+import {
+  canonicalizeActorPerceptionState,
+  type ActorPerceptionState,
+} from "./actorPerception";
+
+function copyActorPerception(state: ActorPerceptionState): ActorPerceptionState {
+  const copy = canonicalizeActorPerceptionState(state);
+  if (copy === null) throw new Error("Cannot project malformed actor perception state");
+  return copy;
+}
 
 export function createWorldView(world: WorldState): WorldView {
   return {
@@ -47,6 +57,7 @@ export function createWorldView(world: WorldState): WorldView {
         visibleGear: [...resident.identity.visibleGear],
         history: resident.identity.history.map((event) => ({ ...event })),
       },
+      perception: copyActorPerception(resident.perception),
       condition: { ...resident.condition },
       playerKnowledge: {
         ...resident.playerKnowledge,
