@@ -7,6 +7,7 @@ import type {
   WeatherKind,
 } from "../render/types";
 import type { RendererTelemetrySnapshot } from "../render/rendererTelemetry";
+import type { LivingActorSpecies } from "../game/livingActor";
 
 export type SessionShape = "drift" | "weave" | "wander";
 /**
@@ -236,7 +237,7 @@ export interface ResidentAboutFactUIView {
  * wildlife ID.
  */
 export interface LivingActorTargetUIView {
-  readonly species: "human" | "domestic-dog";
+  readonly species: LivingActorSpecies;
   readonly actorId: string;
 }
 

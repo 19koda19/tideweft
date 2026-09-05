@@ -72,6 +72,7 @@ import {
   deserializeBio0Ecology,
   serializeBio0Ecology,
 } from "./bio0Ecology";
+import { deserializeCoreEcologyPatch } from "./coreEcology";
 import { repositionDogActor, replaceDogActorPhysiology } from "./dogActor";
 import { LOCAL_PLAYER_SUBJECT_ID } from "./humanPerception";
 import { headingToRadians, livingActorAddressForResident } from "./livingActor";
@@ -89,6 +90,7 @@ interface CurrentEnvelope {
   readonly version: number;
   readonly world: string;
   readonly bio0Ecology: string;
+  readonly coreEcology: string;
   readonly porterResponse: unknown;
   readonly livingActorPlayerChoice: unknown;
   readonly player: ReturnType<typeof createPlayer>;
@@ -169,9 +171,10 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(7);
-    expect(firstRepository.snapshot().payloadVersion).toBe(7);
+    expect(firstEnvelope.version).toBe(8);
+    expect(firstRepository.snapshot().payloadVersion).toBe(8);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
+    expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
 
     const world = deserializeWorld(firstEnvelope.world);
     const ecology = requiredBio0(firstEnvelope);
@@ -236,6 +239,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const resumed = await createTideweftRuntime(firstRepository);
     await resumed.save();
     expect(currentEnvelope(firstRepository).bio0Ecology).toBe(firstEnvelope.bio0Ecology);
+    expect(currentEnvelope(firstRepository).coreEcology).toBe(firstEnvelope.coreEcology);
     resumed.destroy();
   });
 
@@ -283,6 +287,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const expectedPlayerChoice = current.livingActorPlayerChoice;
     const {
       bio0Ecology: _bio0Ecology,
+      coreEcology: _coreEcology,
       porterResponse: _porterResponse,
       livingActorPlayerChoice: _livingActorPlayerChoice,
       integrity: _integrity,
@@ -304,7 +309,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(7);
+    expect(migratedEnvelope.version).toBe(8);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -324,6 +329,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const expectedPorterResponse = current.porterResponse;
     const expectedPlayerChoice = current.livingActorPlayerChoice;
     const {
+      coreEcology: _coreEcology,
       porterResponse: _porterResponse,
       livingActorPlayerChoice: _livingActorPlayerChoice,
       integrity: _integrity,
@@ -345,11 +351,72 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(7);
+    expect(envelope.version).toBe(8);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
     migrated.destroy();
+  });
+
+  it("migrates a sealed v7 save to one deterministic core ecology root and preserves it", async () => {
+    const seed = "core ecology sealed v7 migration";
+    const setupRepository = new MemoryRepository(legacyRecord(seed));
+    const setup = await createTideweftRuntime(setupRepository);
+    await setup.save();
+    setup.destroy();
+
+    const currentRecord = setupRepository.snapshot();
+    const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
+    const {
+      coreEcology: _coreEcology,
+      integrity: _integrity,
+      ...priorBase
+    } = current;
+    const v7Base = { ...priorBase, version: 7 };
+    const v7Record: SaveRecord = {
+      ...currentRecord,
+      payloadVersion: 7,
+      updatedAt: currentRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v7Base,
+        integrity: gameSaveEnvelopeIntegrity(v7Base),
+      }),
+    };
+    expect(JSON.parse(v7Record.worldJson)).not.toHaveProperty("coreEcology");
+
+    const firstRepository = new MemoryRepository(v7Record);
+    const secondRepository = new MemoryRepository(v7Record);
+    const first = await createTideweftRuntime(firstRepository);
+    const second = await createTideweftRuntime(secondRepository);
+    expect(first.getUIView().saveWarning).toBeUndefined();
+    expect(second.getUIView().saveWarning).toBeUndefined();
+    await first.save();
+    await second.save();
+
+    const firstEnvelope = currentEnvelope(firstRepository);
+    const secondEnvelope = currentEnvelope(secondRepository);
+    expect(firstEnvelope.version).toBe(8);
+    expect(firstRepository.snapshot().payloadVersion).toBe(8);
+    expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
+    const ecology = requiredCoreEcology(firstEnvelope);
+    expect(ecology.populations.map(({ species }) => species).sort()).toEqual([
+      "black-bear",
+      "deer",
+      "gull",
+    ]);
+    const actorIds = ecology.populations.flatMap(({ members }) =>
+      members.map(({ actor }) => actor.identity.stableId)
+    );
+    expect(actorIds.length).toBeGreaterThan(0);
+    expect(new Set(actorIds).size).toBe(actorIds.length);
+
+    first.destroy();
+    second.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(firstRepository);
+    await resumed.save();
+    expect(currentEnvelope(firstRepository).coreEcology).toBe(firstEnvelope.coreEcology);
+    resumed.destroy();
   });
 
   it("steps exactly once per completed world tick using the prior completed weather and fresh porter address", async () => {
@@ -468,7 +535,7 @@ describe("runtime BIO0 ecology persistence", () => {
 
     scheduledFrame = undefined;
     const runtime = await createTideweftRuntime(repository);
-    let scentRequest = fixture.ecology.pendingMovement;
+    let latestEcology = fixture.ecology;
     let observedClosedApproach = false;
     runtime.start();
     advanceScheduledFrames(1);
@@ -476,36 +543,27 @@ describe("runtime BIO0 ecology persistence", () => {
       advanceScheduledFrames(10);
       await runtime.save();
       const ecology = requiredBio0(currentEnvelope(repository));
-      if (ecology.pendingMovement !== null) scentRequest = ecology.pendingMovement;
+      latestEcology = ecology;
       expect(ecology.dog.address.position).toEqual(fixture.ecology.dog.address.position);
       const latestAccessibility = bio0StepControl.accessibility.at(-1);
-      observedClosedApproach = scentRequest !== null
-        && latestAccessibility?.["approach-food"] === false;
+      observedClosedApproach = latestAccessibility?.["approach-food"] === false
+        && ecology.dog.perception.beliefs.some(
+          ({ perceivedClass }) => perceivedClass === "food-scent",
+        );
     }
     runtime.stop();
 
-    expect(scentRequest).not.toBeNull();
     expect(observedClosedApproach).toBe(true);
+    expect(latestEcology.pendingMovement).toBeNull();
     expect(bio0StepControl.accessibility.at(-1)).toMatchObject({
       eat: false,
       "approach-food": false,
       observe: true,
     });
     const savedWorld = deserializeWorld(currentEnvelope(repository).world);
-    for (let y = 0; y < savedWorld.terrain.height; y += 1) {
-      expect(savedWorld.terrain.tiles[y * savedWorld.terrain.width + fixture.wallX]?.terrain)
-        .toBe("deep-water");
+    for (const tileIndex of fixture.barrierTileIndices) {
+      expect(savedWorld.terrain.tiles[tileIndex]?.terrain).toBe("deep-water");
     }
-    const dogTileX = compatibilityTileIndex(
-      savedWorld.terrain.width,
-      fixture.ecology.dog.address.position,
-    ) % savedWorld.terrain.width;
-    const targetTileX = scentRequest === null
-      ? fixture.wallX
-      : compatibilityTileIndex(savedWorld.terrain.width, scentRequest.targetArea.center)
-        % savedWorld.terrain.width;
-    expect(Math.sign(dogTileX - fixture.wallX)).toBe(fixture.direction);
-    expect(Math.sign(targetTileX - fixture.wallX)).toBe(-fixture.direction);
     runtime.destroy();
   });
 
@@ -699,6 +757,24 @@ describe("runtime BIO0 ecology persistence", () => {
 
   it.each([
     {
+      label: "missing core ecology root",
+      tamper(envelope: Record<string, unknown>) {
+        delete envelope.coreEcology;
+      },
+    },
+    {
+      label: "extra core ecology alias",
+      tamper(envelope: Record<string, unknown>) {
+        envelope.coreEcologyAlias = envelope.coreEcology;
+      },
+    },
+    {
+      label: "noncanonical core ecology serialization",
+      tamper(envelope: Record<string, unknown>) {
+        envelope.coreEcology = `${String(envelope.coreEcology)} `;
+      },
+    },
+    {
       label: "missing BIO0 root",
       tamper(envelope: Record<string, unknown>) {
         delete envelope.bio0Ecology;
@@ -758,7 +834,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed v7 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed v8 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -849,13 +925,11 @@ function prepareLocomotionFixture(
   deepBarrier: boolean,
 ): Readonly<{
   ecology: ReturnType<typeof requiredBio0>;
-  direction: -1 | 1;
-  wallX: number;
+  barrierTileIndices: readonly number[];
 }> {
   let prepared: {
     ecology: ReturnType<typeof requiredBio0>;
-    direction: -1 | 1;
-    wallX: number;
+    barrierTileIndices: readonly number[];
   } | null = null;
   resealCurrent(repository, (decoded) => {
     const envelope = decoded as unknown as CurrentEnvelope;
@@ -906,17 +980,32 @@ function prepareLocomotionFixture(
     if (!moved) throw new Error("BIO0 locomotion fixture produced invalid dog state");
 
     const dogTileX = Math.floor(dogPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
-    const wallX = dogTileX - direction * 2;
+    const dogTileY = Math.floor(dogPosition.localY / WORLD_POSITION_UNITS_PER_TILE);
+    const barrierTileIndices: number[] = [];
     if (deepBarrier) {
-      for (let y = 0; y < world.terrain.height; y += 1) {
-        const tile = world.terrain.tiles[y * world.terrain.width + wallX];
-        if (!tile) throw new Error("BIO0 deep barrier left compatibility terrain");
-        tile.terrain = "deep-water";
+      // A finite wall in one compatibility region is correctly routeable
+      // around once the runtime uses its seamless regional view. Surround the
+      // actor locally instead so the fixture represents a genuinely closed
+      // ground route without pretending the infinite world ends at this save.
+      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+          if (offsetX === 0 && offsetY === 0) continue;
+          const x = dogTileX + offsetX;
+          const y = dogTileY + offsetY;
+          const tileIndex = y * world.terrain.width + x;
+          const tile = x >= 0 && x < world.terrain.width
+            && y >= 0 && y < world.terrain.height
+            ? world.terrain.tiles[tileIndex]
+            : undefined;
+          if (!tile) throw new Error("BIO0 deep barrier left compatibility terrain");
+          tile.terrain = "deep-water";
+          barrierTileIndices.push(tileIndex);
+        }
       }
     }
     decoded.world = serializeWorld(world);
     decoded.bio0Ecology = serializeBio0Ecology(moved);
-    prepared = { ecology: moved, direction, wallX };
+    prepared = { ecology: moved, barrierTileIndices };
   });
   if (prepared === null) throw new Error("BIO0 locomotion fixture was not prepared");
   return prepared;
@@ -1062,6 +1151,12 @@ function currentEnvelope(repository: MemoryRepository): CurrentEnvelope {
 function requiredBio0(envelope: CurrentEnvelope) {
   const state = deserializeBio0Ecology(envelope.bio0Ecology);
   if (!state) throw new Error("current runtime save omitted canonical BIO0 ecology");
+  return state;
+}
+
+function requiredCoreEcology(envelope: CurrentEnvelope) {
+  const state = deserializeCoreEcologyPatch(envelope.coreEcology);
+  if (!state) throw new Error("current runtime save omitted canonical core ecology");
   return state;
 }
 

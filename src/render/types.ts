@@ -1,6 +1,7 @@
 /** Presentation-only contracts consumed by the p5 renderer. */
 
 import type { DogPresentation } from "../game/dogPresentation";
+import type { LivingActorSpecies } from "../game/livingActor";
 import type { RendererTelemetrySnapshot } from "./rendererTelemetry";
 
 export interface WorldPoint {
@@ -446,6 +447,41 @@ export interface PorterView {
  */
 export type DogView = DogPresentation;
 
+/** Living species rendered through the universal actor boundary rather than compatibility residents. */
+export type LivingActorViewSpecies = Exclude<LivingActorSpecies, "human">;
+
+export type WildlifeBehaviorView =
+  | "neutral"
+  | "forage"
+  | "watch"
+  | "alarm"
+  | "flee"
+  | "crossing"
+  | "scavenge"
+  | "pursue"
+  | "guard"
+  | "retreat"
+  | "rest"
+  | "perch";
+
+/**
+ * Directly observed wildlife only. Hidden needs, targets, identities, and
+ * ecology events never cross this renderer projection.
+ */
+export interface WildlifeView {
+  readonly actorId: string;
+  readonly species: Exclude<LivingActorViewSpecies, "domestic-dog">;
+  readonly quickLabel: string;
+  readonly position: WorldPoint;
+  readonly facing: number;
+  readonly sizeScale: number;
+  readonly behavior: WildlifeBehaviorView;
+  readonly conditionLabels: readonly string[];
+  /** Aggregate flocks expose a visible approximate count, never hidden members. */
+  readonly groupSize?: number;
+  readonly selected?: boolean;
+}
+
 export interface ParticleView {
   readonly id: string;
   readonly position: WorldPoint;
@@ -514,6 +550,8 @@ export interface TideweftView {
   readonly porters: readonly PorterView[];
   /** Optional while generated-dog projection rolls through existing fixtures and saves. */
   readonly dogs?: readonly DogView[];
+  /** Optional during the Wave A migration; production projections remain direct-sight only. */
+  readonly wildlife?: readonly WildlifeView[];
   readonly particles?: readonly ParticleView[];
   readonly events?: readonly WorldEventView[];
   readonly camera: CameraView;
@@ -552,7 +590,7 @@ export type RendererCommand =
       readonly type: "select";
       /** Species-tagged universal actor boundary; never reinterpret this ID as a resident. */
       readonly entity: "living-actor";
-      readonly species: "domestic-dog";
+      readonly species: LivingActorViewSpecies;
       readonly id: string;
       /** Current physical point, rebound by the release-frame perception validator. */
       readonly point: WorldPoint;

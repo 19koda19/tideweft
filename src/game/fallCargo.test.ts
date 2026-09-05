@@ -10,6 +10,7 @@ import {
   LOOSE_CARGO_MAX_ENTITIES,
   createLooseCargoCarrier,
   createLooseCargoExpectedManifest,
+  createLooseCargoMultiWorldExpectedManifest,
   createLooseCargoWorld,
   deserializeLooseCargoCarrier,
   deserializeLooseCargoExpectedManifest,
@@ -19,6 +20,7 @@ import {
   serializeLooseCargoWorld,
   scatterLooseCargo,
   validateLooseCargoExpectedManifest,
+  validateLooseCargoMultiWorldExpectedManifest,
 } from "./looseCargo";
 
 const OWNER = { kind: "player", id: "local-porter" } as const;
@@ -186,6 +188,49 @@ describe("fall cargo resolution", () => {
     expect(replay).toMatchObject({ ok: false, reason: "traversal-already-processed" });
     expect(replay.world.entities).toHaveLength(2);
     expect(replay.carrier.lots[0]?.materialState.condition).toBe(conditionAfterFirst);
+  });
+
+  it("preserves the global manifest when another region already holds loose cargo", () => {
+    const { seed, evaluation } = seriousFall("fall with distant physical cargo");
+    const world = createLooseCargoWorld(5, 5, { x: 0, y: 0 });
+    const distantWorld = createLooseCargoWorld(5, 5, { x: 1, y: 0 });
+    const carrier = createLooseCargoCarrier(
+      OWNER,
+      createCraftingInventory(18_000, { cordreed: 2 }),
+    );
+    const distantDrop = scatterLooseCargo(distantWorld, carrier, {
+      lotId: "crafting-stack:cordreed",
+      x: 1_500_000,
+      y: 1_500_000,
+      cause: "forced-release",
+      parts: [{ quantity: 1, velocityX: 0, velocityY: 0 }],
+    });
+    if (!distantDrop.ok) throw new Error(distantDrop.message);
+    const expectedManifest = createLooseCargoMultiWorldExpectedManifest(
+      [world, distantDrop.world],
+      distantDrop.carrier,
+    );
+
+    const resolved = resolveFallCargo({
+      seed,
+      actorId: 0,
+      evaluation,
+      nextTraversalOrdinal: evaluation.usedTraversalOrdinal!,
+      world,
+      otherWorlds: [distantDrop.world],
+      carrier: distantDrop.carrier,
+      expectedManifest,
+      x: 2_500_000,
+      y: 2_500_000,
+    });
+
+    expect(resolved).toMatchObject({ ok: true, outcome: "separated" });
+    expect(distantDrop.world.entities).toHaveLength(1);
+    expect(validateLooseCargoMultiWorldExpectedManifest(
+      resolved.expectedManifest,
+      [resolved.world, distantDrop.world],
+      resolved.carrier,
+    ).valid).toBe(true);
   });
 
   it("applies stumble impact while keeping the exact selected lot carried", () => {

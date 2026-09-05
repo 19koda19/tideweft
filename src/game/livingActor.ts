@@ -3,6 +3,12 @@ import { globalTileToRegion, type GlobalTileCoord } from "../sim/regions";
 import { ACTOR_ID_MAX_LENGTH } from "../sim/actorPerception";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import {
+  LIVING_ACTOR_SPECIES,
+  isLivingActorSpecies,
+  livingSpeciesActorIdMatchesNamespace,
+  type LivingActorSpecies,
+} from "./livingSpeciesRegistry";
+import {
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
   createWorldPosition,
@@ -21,9 +27,13 @@ import {
 export const LIVING_ACTOR_ADDRESS_VERSION = 1 as const;
 export const LIVING_ACTOR_ID_MAX_LENGTH = ACTOR_ID_MAX_LENGTH;
 
-/** Catalog-v1 contains only actor kinds with an implemented identity owner. */
-export const LIVING_ACTOR_SPECIES = ["human", "domestic-dog"] as const;
-export type LivingActorSpecies = (typeof LIVING_ACTOR_SPECIES)[number];
+/**
+ * Species with an implemented stable-identity owner. This is a physical actor
+ * boundary, not a bestiary: each entry must use the same segmented address,
+ * perception, locomotion, persistence, and inspection contracts.
+ */
+export { LIVING_ACTOR_SPECIES };
+export type { LivingActorSpecies };
 
 export type LivingActorPersistenceTier = "ephemeral" | "regional" | "promoted";
 
@@ -54,7 +64,6 @@ export interface LivingActorAddressInput {
   readonly persistence: LivingActorPersistenceTier;
 }
 
-const SPECIES = new Set<string>(LIVING_ACTOR_SPECIES);
 const PERSISTENCE = new Set<string>(["ephemeral", "regional", "promoted"]);
 
 /** Create one canonical, immutable address. */
@@ -62,10 +71,10 @@ export function createLivingActorAddress(input: LivingActorAddressInput): Living
   if (!isLivingActorId(input.actorId)) {
     throw new TypeError("Living actor IDs must be bounded, trimmed, printable strings");
   }
-  if (!SPECIES.has(input.species)) {
+  if (!isLivingActorSpecies(input.species)) {
     throw new TypeError(`Unsupported living actor species ${String(input.species)}`);
   }
-  if (!actorIdMatchesSpeciesNamespace(input.actorId, input.species)) {
+  if (!livingSpeciesActorIdMatchesNamespace(input.actorId, input.species)) {
     throw new TypeError("Living actor ID namespace does not match its species");
   }
   if (!isWorldPosition(input.position)) {
@@ -100,11 +109,8 @@ export function isLivingActorAddress(value: unknown): value is LivingActorAddres
   ])) return false;
   return value.version === LIVING_ACTOR_ADDRESS_VERSION
     && isLivingActorId(value.actorId)
-    && SPECIES.has(value.species as string)
-    && actorIdMatchesSpeciesNamespace(
-      value.actorId,
-      value.species as LivingActorSpecies,
-    )
+    && isLivingActorSpecies(value.species)
+    && livingSpeciesActorIdMatchesNamespace(value.actorId, value.species)
     && isWorldPosition(value.position)
     && isHeading(value.heading)
     && PERSISTENCE.has(value.persistence as string);
@@ -244,14 +250,6 @@ function isLivingActorId(value: unknown): value is string {
     && value.length > 0
     && value.length <= LIVING_ACTOR_ID_MAX_LENGTH
     && /^[A-Za-z0-9][A-Za-z0-9:._/-]*$/u.test(value);
-}
-
-/** Stable actor namespaces are identity ownership boundaries, not display tags. */
-function actorIdMatchesSpeciesNamespace(
-  actorId: string,
-  species: LivingActorSpecies,
-): boolean {
-  return species === "human" ? actorId.startsWith("H-") : actorId.startsWith("D-");
 }
 
 function sameResidentLocation(

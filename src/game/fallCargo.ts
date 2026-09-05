@@ -6,10 +6,12 @@ import {
   LOOSE_CARGO_MAX_ENTITIES,
   LOOSE_CARGO_MAX_VELOCITY,
   createLooseCargoExpectedManifest,
+  createLooseCargoMultiWorldExpectedManifest,
   looseCargoPayloadProperty,
   scatterLooseCargo,
   setLooseCargoLotMaterialState,
   validateLooseCargoExpectedManifest,
+  validateLooseCargoMultiWorldExpectedManifest,
   type LooseCargoCarrierState,
   type LooseCargoExpectedManifest,
   type LooseCargoWorldState,
@@ -35,6 +37,12 @@ export interface FallCargoResolutionInput {
   /** Current persisted traversal cursor before accepting this evaluation. */
   readonly nextTraversalOrdinal: number;
   readonly world: LooseCargoWorldState;
+  /**
+   * Other persisted regional owners covered by `expectedManifest`. They are
+   * immutable during this local fall transaction, but must remain part of the
+   * conservation proof when cargo exists outside the active region.
+   */
+  readonly otherWorlds?: readonly LooseCargoWorldState[];
   readonly carrier: LooseCargoCarrierState;
   /** Persisted independently; never rebuild this from a possibly damaged save. */
   readonly expectedManifest: LooseCargoExpectedManifest;
@@ -79,11 +87,17 @@ export function resolveFallCargo(input: FallCargoResolutionInput): FallCargoReso
     cargoShock: input.evaluation.consequenceQuote?.cargoShock ?? 0,
   });
 
-  const manifest = validateLooseCargoExpectedManifest(
-    input.expectedManifest,
-    input.world,
-    input.carrier,
-  );
+  const manifest = input.otherWorlds === undefined
+    ? validateLooseCargoExpectedManifest(
+        input.expectedManifest,
+        input.world,
+        input.carrier,
+      )
+    : validateLooseCargoMultiWorldExpectedManifest(
+        input.expectedManifest,
+        [input.world, ...input.otherWorlds],
+        input.carrier,
+      );
   if (!manifest.valid) return unchanged(false, "rejected", `manifest-${manifest.reason}`);
   if (!validSeed(input.seed)
     || !Number.isSafeInteger(input.actorId)
@@ -147,7 +161,12 @@ export function resolveFallCargo(input: FallCargoResolutionInput): FallCargoReso
   );
   if (!impacted.ok) return unchanged(false, "rejected", `impact-${impacted.reason}`, selected.id);
 
-  const impactedManifest = createLooseCargoExpectedManifest(input.world, impacted.carrier);
+  const impactedManifest = input.otherWorlds === undefined
+    ? createLooseCargoExpectedManifest(input.world, impacted.carrier)
+    : createLooseCargoMultiWorldExpectedManifest(
+        [input.world, ...input.otherWorlds],
+        impacted.carrier,
+      );
   const impactedOnly = (reason: string): FallCargoResolution => ({
     version: FALL_CARGO_VERSION,
     ok: true,
@@ -216,12 +235,23 @@ export function resolveFallCargo(input: FallCargoResolutionInput): FallCargoReso
     parts,
   });
   if (!scattered.ok) return impactedOnly(`separation-${scattered.reason}`);
-  const nextManifest = createLooseCargoExpectedManifest(scattered.world, scattered.carrier);
-  const verified = validateLooseCargoExpectedManifest(
-    nextManifest,
-    scattered.world,
-    scattered.carrier,
-  );
+  const nextManifest = input.otherWorlds === undefined
+    ? createLooseCargoExpectedManifest(scattered.world, scattered.carrier)
+    : createLooseCargoMultiWorldExpectedManifest(
+        [scattered.world, ...input.otherWorlds],
+        scattered.carrier,
+      );
+  const verified = input.otherWorlds === undefined
+    ? validateLooseCargoExpectedManifest(
+        nextManifest,
+        scattered.world,
+        scattered.carrier,
+      )
+    : validateLooseCargoMultiWorldExpectedManifest(
+        nextManifest,
+        [scattered.world, ...input.otherWorlds],
+        scattered.carrier,
+      );
   if (!verified.valid) return unchanged(false, "rejected", "post-transaction-manifest", selected.id);
   return {
     version: FALL_CARGO_VERSION,

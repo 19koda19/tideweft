@@ -19,6 +19,7 @@ import {
   locatePhysicalCargoEntity,
   physicalCargoInactiveWorlds,
   physicalCargoPromiseCustody,
+  physicalCargoWorldAt,
   physicalCargoWorlds,
   queryPhysicalCargoPartitions,
   quotePhysicalCargoSource,
@@ -33,7 +34,10 @@ import {
   LOOSE_CARGO_MAX_ENTITIES,
   LOOSE_CARGO_MAX_HISTORY,
   LOOSE_CARGO_RETAINED_HISTORY,
+  addLooseCargoProvision,
   addLooseCargoStack,
+  consumeLooseCargoProvisionEntity,
+  createLooseCargoCarrier,
   createLooseCargoWorld,
   dropLooseCargo,
   looseCargoEntityId,
@@ -1326,6 +1330,136 @@ describe("atomic physical cargo seam handoff", () => {
       width,
       height,
     )).toMatchObject({ valid: true, reason: "valid" });
+  });
+
+  it("commits one inactive-region provision consumption as an exact negative delta", () => {
+    const { world, player } = fixture();
+    const width = world.terrain.width;
+    const height = world.terrain.height;
+    const forageRegion = { x: -2, y: 3 } as const;
+    const initial = createPhysicalCargoStateFromPlayer(player, width, height);
+    const activatedForage = transitionPhysicalCargoRegion(
+      initial,
+      forageRegion,
+      width,
+      height,
+    );
+    const source = quotePhysicalCargoSource(
+      activatedForage,
+      "wildlife-forage",
+      "physical-consumption-fixture",
+    );
+    const temporaryCarrier = createLooseCargoCarrier(
+      { kind: "unclaimed" },
+      createCraftingInventory(2 * PACK_LOAD_MILLI_PER_UNIT),
+    );
+    const provision = addLooseCargoProvision(temporaryCarrier, {
+      sourceLotId: source.lotId,
+      provision: "dried-fish",
+      quantity: 1,
+    });
+    if (!provision.ok) throw new Error(`provision fixture failed: ${provision.reason}`);
+    const dropped = dropLooseCargo(activatedForage.looseWorld, provision.carrier, {
+      lotId: source.lotId,
+      quantity: 1,
+      x: 2 * FIXED_POINT + 250_000,
+      y: 4 * FIXED_POINT + 750_000,
+    });
+    if (!dropped.ok || dropped.entity === null) {
+      throw new Error(`provision drop fixture failed: ${dropped.reason}`);
+    }
+    const forageSeeded = commitPhysicalCargoState(activatedForage, {
+      looseWorld: dropped.world,
+      carrier: activatedForage.carrier,
+      committedSourceOrdinal: source.ordinal,
+    }, {
+      kind: "delta",
+      removed: [],
+      added: [dropped.entity.payload],
+    });
+    const prior = transitionPhysicalCargoRegion(forageSeeded, { x: 0, y: 0 }, width, height);
+    const located = locatePhysicalCargoEntity(prior, dropped.entity.id);
+    if (located === null) throw new Error("provision fixture was not persisted regionally");
+    const request = {
+      actorId: "BEAR-v1-physical-consumption-fixture",
+      entityId: located.entity.id,
+      x: located.entity.x,
+      y: located.entity.y,
+      reach: 0,
+    } as const;
+    const consumed = consumeLooseCargoProvisionEntity(located.world, request);
+    if (
+      !consumed.ok
+      || consumed.removedEntity === null
+      || consumed.removedPayload === null
+      || consumed.event === null
+    ) throw new Error(`provision consumption failed: ${consumed.reason}`);
+    const removedEntity = consumed.removedEntity;
+    const removedPayload = consumed.removedPayload;
+
+    // A physical removal cannot pass through the ordinary conserved path.
+    expect(() => commitPhysicalCargoRegionalMutation(prior, {
+      looseWorld: consumed.world,
+      carrier: prior.carrier,
+    }, { kind: "conserved" })).toThrow(/substance changed/u);
+    // Nor can an adapter retain the entity while appending only a consume story.
+    const smuggledHistory = {
+      ...consumed.world,
+      entities: [...consumed.world.entities, removedEntity],
+    };
+    expect(validateLooseCargoWorld(smuggledHistory).valid).toBe(true);
+    expect(() => commitPhysicalCargoRegionalMutation(prior, {
+      looseWorld: smuggledHistory,
+      carrier: prior.carrier,
+    }, { kind: "conserved" })).toThrow(/consume history must exactly remove/u);
+
+    const beforeProvision = prior.expectedManifest.entries.find(
+      ({ payloadKey }) => payloadKey === "provision:dried-fish",
+    );
+    if (beforeProvision === undefined) throw new Error("provision manifest entry is missing");
+    const committed = commitPhysicalCargoRegionalMutation(prior, {
+      looseWorld: consumed.world,
+      carrier: prior.carrier,
+    }, {
+      kind: "delta",
+      removed: [removedPayload],
+      added: [],
+    });
+
+    expect(committed.activeRegion).toEqual({ x: 0, y: 0 });
+    expect(locatePhysicalCargoEntity(committed, dropped.entity.id)).toBeNull();
+    expect(committed.expectedManifest.entries).toEqual(
+      prior.expectedManifest.entries.filter(({ payloadKey }) => payloadKey !== "provision:dried-fish"),
+    );
+    expect(prior.expectedManifest.totalQuantity - committed.expectedManifest.totalQuantity).toBe(1);
+    expect(prior.expectedManifest.totalLoadMilli - committed.expectedManifest.totalLoadMilli)
+      .toBe(beforeProvision.loadMilli);
+    const committedForageWorld = physicalCargoWorldAt(committed, forageRegion);
+    expect(committedForageWorld?.history.filter(({ kind }) => kind === "consume"))
+      .toEqual([consumed.event]);
+
+    const restored = validatePhysicalCargoState(
+      structuredClone(snapshotPhysicalCargoState(committed)),
+      player,
+      width,
+      height,
+    );
+    expect(restored).toMatchObject({ valid: true, reason: "valid" });
+    if (restored.state === null) throw new Error("consumed provision did not survive reload");
+    const restoredState = restored.state;
+    expect(locatePhysicalCargoEntity(restoredState, dropped.entity.id)).toBeNull();
+    const restoredForageWorld = physicalCargoWorldAt(restoredState, forageRegion);
+    if (restoredForageWorld === null) throw new Error("consumption history region was not restored");
+    expect(consumeLooseCargoProvisionEntity(restoredForageWorld, request))
+      .toMatchObject({ ok: false, reason: "entity-not-found" });
+    expect(() => commitPhysicalCargoRegionalMutation(restoredState, {
+      looseWorld: restoredForageWorld,
+      carrier: restoredState.carrier,
+    }, {
+      kind: "delta",
+      removed: [removedPayload],
+      added: [],
+    })).toThrow(/substance changed/u);
   });
 
   it("fails closed when an interrupted representation duplicates or deletes the handoff parcel", () => {

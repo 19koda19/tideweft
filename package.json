@@ -1,6 +1,6 @@
 {
   "name": "tideweft",
-  "version": "0.3.3-alpha.11",
+  "version": "0.3.3-alpha.12",
   "private": true,
   "description": "A restorative strand-type courier ecology built with p5.js and Electron.",
   "type": "module",

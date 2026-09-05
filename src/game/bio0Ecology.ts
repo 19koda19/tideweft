@@ -1,7 +1,9 @@
 import {
   ACTOR_PERCEPTION_SCALE,
+  canonicalizeActorObservations,
   stepActorPerception,
   type ActorBelief,
+  type ActorObservation,
   type ObservedArea,
 } from "../sim/actorPerception";
 import type { CargoEnvironmentState } from "../sim/cargoEnvironment";
@@ -183,6 +185,12 @@ export interface Bio0EcologyStepInput {
   readonly accessibility: DogActionAccessibility;
   readonly foodContact: Bio0OfferedFoodContact | null;
   /**
+   * Optional lawful contacts produced by other full-simulation systems, such
+   * as a heard gull alarm or a directly sighted bear. They enter the same
+   * canonical cognition batch as local food scent and never bypass perception.
+   */
+  readonly additionalDogObservations?: readonly ActorObservation[];
+  /**
    * Omitted legacy/current callers retain full local behavior. Runtime must
    * explicitly request coarse mode whenever this causal web is not wholly
    * inside the loaded interaction neighborhood.
@@ -206,6 +214,14 @@ export interface Bio0EcologyStepResult {
   readonly state: Bio0EcologyState;
   readonly event: Bio0EcologyEvent | null;
 }
+
+type CanonicalBio0EcologyStepInput = Omit<
+  Bio0EcologyStepInput,
+  "additionalDogObservations" | "simulationMode"
+> & Readonly<{
+  additionalDogObservations: readonly ActorObservation[];
+  simulationMode: Bio0SimulationMode;
+}>;
 
 export function createBio0Ecology(input: CreateBio0EcologyInput): Bio0EcologyState {
   if (!plainRecord(input) || !allowedCreateKeys(input)) {
@@ -463,7 +479,7 @@ export function stepBio0Ecology(
     if (provider === null) return failedStep("invariant-failed", state);
     const liveFood = liveSourceFoodLot(current);
     const exposure = inspectActorCargoContainerExposure(provider, step.exposure.rain);
-    const observations = step.simulationMode === "coarse"
+    const scentObservations = step.simulationMode === "coarse"
       ? Object.freeze([])
       : collectLivingActorScentObservations({
         observer: current.dog.address,
@@ -478,6 +494,11 @@ export function stepBio0Ecology(
           packagingLeakage: FIXED_POINT - exposure.effectiveScentContainment,
         }],
       });
+    if (scentObservations === null) return failedStep("sensory-step-rejected", state);
+    const observations = mergeDogObservations(
+      scentObservations,
+      step.additionalDogObservations,
+    );
     if (observations === null) return failedStep("sensory-step-rejected", state);
     const perception = stepActorPerception(current.dog.perception, {
       tick: step.tick,
@@ -707,23 +728,21 @@ export function bio0EcologyEventId(ordinal: number): string {
 function canonicalStepInput(
   value: unknown,
   state: Bio0EcologyState,
-): Bio0EcologyStepInput | null {
-  if (!plainRecord(value) || !exactKeys(value, Object.hasOwn(value, "simulationMode") ? [
-    "accessibility",
-    "exposure",
-    "foodContact",
-    "porterAddress",
-    "simulationMode",
-    "tick",
-    "wind",
-  ] : [
+): CanonicalBio0EcologyStepInput | null {
+  if (!plainRecord(value)) return null;
+  const expectedKeys = [
     "accessibility",
     "exposure",
     "foodContact",
     "porterAddress",
     "tick",
     "wind",
-  ])) return null;
+  ];
+  if (Object.hasOwn(value, "additionalDogObservations")) {
+    expectedKeys.push("additionalDogObservations");
+  }
+  if (Object.hasOwn(value, "simulationMode")) expectedKeys.push("simulationMode");
+  if (!exactKeys(value, expectedKeys)) return null;
   if (!schedulableTick(value.tick) || value.tick !== state.tick + 1) return null;
   const exposure = canonicalExposure(value.exposure);
   const wind = canonicalWind(value.wind);
@@ -740,14 +759,23 @@ function canonicalStepInput(
   const simulationMode = value.simulationMode === undefined
     ? "full"
     : canonicalSimulationMode(value.simulationMode);
+  const additionalDogObservations = canonicalAdditionalDogObservations(
+    Object.hasOwn(value, "additionalDogObservations")
+      ? value.additionalDogObservations
+      : [],
+    state.dog.identity.stableId,
+    value.tick,
+  );
   if (
     exposure === null
     || wind === null
     || accessibility === null
     || porterAddress === null
     || simulationMode === null
+    || additionalDogObservations === null
     || (value.foodContact !== null && foodContact === null)
     || (simulationMode === "coarse" && foodContact !== null)
+    || (simulationMode === "coarse" && additionalDogObservations.length > 0)
   ) return null;
   if (
     foodContact !== null
@@ -760,8 +788,35 @@ function canonicalStepInput(
     wind,
     accessibility,
     foodContact,
+    additionalDogObservations,
     simulationMode,
   });
+}
+
+function canonicalAdditionalDogObservations(
+  value: unknown,
+  dogActorId: string,
+  tick: number,
+): readonly ActorObservation[] | null {
+  if (!Array.isArray(value)) return null;
+  const observations = canonicalizeActorObservations(value);
+  if (
+    observations.length !== value.length
+    || observations.some((observation) =>
+      observation.observerId !== dogActorId || observation.observedAtTick !== tick
+    )
+  ) return null;
+  return observations;
+}
+
+function mergeDogObservations(
+  local: readonly ActorObservation[],
+  additional: readonly ActorObservation[],
+): readonly ActorObservation[] | null {
+  const combined = [...local, ...additional];
+  const observations = canonicalizeActorObservations(combined);
+  // Even exact duplicate IDs are rejected: one physical observation owns one ID.
+  return observations.length === combined.length ? observations : null;
 }
 
 function contactMatchesState(

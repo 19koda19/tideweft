@@ -4,6 +4,7 @@ import {
   ambienceParameters,
   incidentSoundPattern,
   titleCrescendoPattern,
+  wildlifeAlarmPattern,
 } from "./soundscape";
 
 describe("title crescendo", () => {
@@ -39,6 +40,20 @@ describe("traversal incident sound patterns", () => {
   it("uses malformed variant data conservatively", () => {
     expect(incidentSoundPattern("fall", Number.NaN))
       .toEqual(incidentSoundPattern("fall", 0));
+  });
+});
+
+describe("wildlife alarm cue", () => {
+  it("is a restrained immediate rise-and-fall distinct from a looping ambience", () => {
+    const pattern = wildlifeAlarmPattern();
+    expect(pattern).toEqual(wildlifeAlarmPattern());
+    expect(pattern).toHaveLength(3);
+    expect(pattern[0]?.delay).toBe(0);
+    expect(pattern[1]?.frequency ?? 0).toBeGreaterThan(pattern[0]?.frequency ?? 0);
+    expect(pattern[2]?.frequency ?? Number.POSITIVE_INFINITY)
+      .toBeLessThan(pattern[0]?.frequency ?? 0);
+    expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(0.25);
   });
 });
 

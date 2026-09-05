@@ -1,6 +1,7 @@
 import type {
   FieldResourceNodeView,
   LooseCargoView,
+  LivingActorViewSpecies,
   PorterView,
   RendererCommand,
   SettlementView,
@@ -11,6 +12,10 @@ import {
   currentSettlementVisibility,
   isDirectlyDetailPerceived,
 } from "./perceptionPresentation";
+import {
+  isLivingActorSpecies,
+  livingSpeciesActorIdMatchesNamespace,
+} from "../game/livingSpeciesRegistry";
 
 export type WorldTapTarget =
   | {
@@ -19,7 +24,7 @@ export type WorldTapTarget =
     }
   | {
       readonly entity: "living-actor";
-      readonly species: "domestic-dog";
+      readonly species: LivingActorViewSpecies;
       readonly id: string;
     };
 
@@ -81,15 +86,24 @@ const directlyPerceivedParcel = (
   parcel: LooseCargoView,
 ): boolean => directlyPerceivedPoint(view, parcel.position);
 
-const directlyPerceivedDog = (
+const directlyPerceivedLivingActor = (
   view: TideweftView,
+  species: LivingActorViewSpecies,
   actorId: string,
-): NonNullable<TideweftView["dogs"]>[number] | null => {
-  const matches = (view.dogs ?? []).filter((dog) => dog.actorId === actorId);
+): Readonly<{ readonly position: WorldPoint }> | null => {
+  if (
+    !isLivingActorSpecies(species)
+    || !livingSpeciesActorIdMatchesNamespace(actorId, species)
+  ) return null;
+  const matches = species === "domestic-dog"
+    ? (view.dogs ?? []).filter((dog) => dog.actorId === actorId)
+    : (view.wildlife ?? []).filter((actor) => (
+        actor.species === species && actor.actorId === actorId
+      ));
   if (matches.length !== 1) return null;
-  const dog = matches[0];
-  return finitePoint(dog?.position) && directlyPerceivedPoint(view, dog.position)
-    ? dog
+  const actor = matches[0];
+  return finitePoint(actor?.position) && directlyPerceivedPoint(view, actor.position)
+    ? actor
     : null;
 };
 
@@ -123,10 +137,9 @@ export function validatePerceivedEntityCommand(
       if (command.entity === "world") return command;
       if (!command.id) return null;
       if (command.entity === "living-actor") {
-        if (command.species !== "domestic-dog") return null;
-        const dog = directlyPerceivedDog(view, command.id);
-        return dog
-          ? { ...command, point: { ...dog.position } }
+        const actor = directlyPerceivedLivingActor(view, command.species, command.id);
+        return actor
+          ? { ...command, point: { ...actor.position } }
           : null;
       }
       if (command.entity === "route") {

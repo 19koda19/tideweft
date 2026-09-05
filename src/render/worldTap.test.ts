@@ -164,6 +164,16 @@ const perceivedView = ({
     behavior: "observe",
     selected: false,
   }],
+  wildlife: [{
+    actorId: "DEER-v1-world-tap",
+    species: "deer",
+    quickLabel: "Unknown deer",
+    position: { x: 25, y: 5 },
+    facing: 0,
+    sizeScale: 1,
+    behavior: "watch",
+    conditionLabels: [],
+  }],
   camera: { center: { x: 20, y: 5 }, zoom: 1 },
 });
 
@@ -425,6 +435,31 @@ describe("world tap intent", () => {
       ...expected,
       point: { x: 999, y: 999 },
     })).toEqual(expected);
+  });
+
+  it("routes directly perceived wildlife through the same tagged release-frame boundary", () => {
+    const direct = perceivedView();
+    const expected = {
+      type: "select" as const,
+      entity: "living-actor" as const,
+      species: "deer" as const,
+      id: "DEER-v1-world-tap",
+      point: { x: 25, y: 5 },
+    };
+    expect(commandForWorldTap(
+      direct,
+      { entity: "living-actor", species: "deer", id: expected.id },
+      { x: 24, y: 4 },
+      false,
+    )).toEqual(expected);
+    expect(validatePerceivedEntityCommand(direct, {
+      ...expected,
+      point: { x: 999, y: 999 },
+    })).toEqual(expected);
+    expect(validatePerceivedEntityCommand(direct, {
+      ...expected,
+      species: "black-bear",
+    })).toBeNull();
   });
 
   it("rejects hidden, stale, duplicate, or species-mismatched dog selections", () => {

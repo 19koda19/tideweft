@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createActorObservation,
   createActorPerceptionState,
   stepActorPerception,
   type ActorPerceptionState,
@@ -35,6 +36,7 @@ import { createWorldPosition } from "./worldPosition";
 
 const HUMAN_ID = "H-porter-response";
 const DOG_ID = "D-dog-response";
+const BEAR_ID = "BEAR-porter-response";
 const PACK_ID = "pack:porter-response";
 const FOOD_LOT_ID = "food:porter-response";
 
@@ -90,6 +92,37 @@ function perception(
   if (observations === null) throw new Error("Visual perception fixture failed");
   const result = stepActorPerception(initial, { tick, observations });
   if (result === null) throw new Error("Actor perception fixture failed");
+  return result;
+}
+
+function threatPerception(
+  tick: number,
+  perceivedClass: "large-predator" | "animal-alarm" | "danger-sound",
+  strength = 950_000,
+): ActorPerceptionState {
+  const identified = perceivedClass === "large-predator";
+  const observation = createActorObservation({
+    id: `threat-contact:${perceivedClass}:${tick}`,
+    observerId: HUMAN_ID,
+    observedAtTick: tick,
+    channel: identified ? "vision" : "hearing",
+    perceivedClass,
+    subjectId: identified ? BEAR_ID : null,
+    area: {
+      center: position(23_000),
+      radiusUnits: identified ? 0 : 1_000,
+    },
+    confidence: strength,
+    salience: strength,
+    identification: identified ? "identified" : "anonymous",
+    interrupt: "strong",
+  });
+  if (observation === null) throw new Error("Threat perception fixture failed");
+  const result = stepActorPerception(createActorPerceptionState(HUMAN_ID), {
+    tick,
+    observations: [observation],
+  });
+  if (result === null) throw new Error("Threat cognition fixture failed");
   return result;
 }
 
@@ -256,6 +289,82 @@ describe("deterministic porter food-and-animal response policy", () => {
       cargo: cargo("secured"),
       disposition: {
         traits: { resolve: FIXED_POINT, empathy: FIXED_POINT, curiosity: FIXED_POINT },
+        temperament: ["calm", "curious", "patient"],
+      },
+    }));
+    expect(decision).toMatchObject({
+      intent: "wait-observe",
+      subjectId: null,
+      foodLotId: null,
+      cause: { kind: "perception" },
+    });
+  });
+
+  it("secures exposed provisions before reacting further to a direct large predator", () => {
+    const decision = decide(input(10, {
+      perception: threatPerception(10, "large-predator"),
+      disposition: {
+        traits: { resolve: 0, empathy: FIXED_POINT, curiosity: 0 },
+        temperament: ["nervous", "cautious", "practical"],
+      },
+    }));
+    expect(decision).toMatchObject({
+      intent: "secure-food",
+      subjectId: null,
+      foodLotId: null,
+      cause: { kind: "pack", referenceId: PACK_ID },
+    });
+    expect(decision.scores.find(({ intent }) => intent === "offer-food")).toMatchObject({
+      score: 0,
+      accessible: false,
+    });
+  });
+
+  it("reroutes around an identified large predator while preserving only observed identity", () => {
+    const decision = decide(input(10, {
+      perception: threatPerception(10, "large-predator"),
+      cargo: cargo("secured"),
+      disposition: {
+        traits: { resolve: 0, empathy: 0, curiosity: 0 },
+        temperament: ["nervous", "cautious", "practical"],
+      },
+    }));
+    expect(decision).toMatchObject({
+      intent: "reroute",
+      subjectId: BEAR_ID,
+      cause: { kind: "perception" },
+    });
+  });
+
+  it("can leave after an anonymous animal alarm without inventing a bear identity", () => {
+    const decision = decide(input(10, {
+      perception: threatPerception(10, "animal-alarm"),
+      cargo: cargo("secured"),
+      disposition: {
+        traits: { resolve: 0, empathy: FIXED_POINT, curiosity: 0 },
+        temperament: ["nervous", "reserved"],
+      },
+      accessibility: { ...ALL_ACCESSIBLE, reroute: false },
+    }));
+    expect(decision).toMatchObject({
+      intent: "leave",
+      subjectId: null,
+      foodLotId: null,
+      cause: { kind: "perception" },
+    });
+    expect(JSON.stringify(decision)).not.toContain(BEAR_ID);
+    expect(decision.scores.find(({ intent }) => intent === "offer-food")).toMatchObject({
+      score: 0,
+      accessible: false,
+    });
+  });
+
+  it("waits on a weaker anonymous danger sound when calm curiosity outweighs flight", () => {
+    const decision = decide(input(10, {
+      perception: threatPerception(10, "danger-sound", 350_000),
+      cargo: cargo("secured"),
+      disposition: {
+        traits: { resolve: FIXED_POINT, empathy: 0, curiosity: FIXED_POINT },
         temperament: ["calm", "curious", "patient"],
       },
     }));

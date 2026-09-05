@@ -806,7 +806,7 @@ function assertForwardPhysicalTransition(
     throw new RangeError("Physical cargo removed lot identities must remain retired");
   }
   const appendedHistory = assertHistoryContinuation(priorWorld, nextWorld);
-  assertWorldMutationEvidence(priorWorld, nextWorld, appendedHistory);
+  assertWorldMutationEvidence(priorWorld, nextWorld, appendedHistory, authorization);
   assertMaterialDoesNotRollback(
     priorWorld,
     priorCarrier,
@@ -847,11 +847,55 @@ function assertWorldMutationEvidence(
   prior: LooseCargoWorldState,
   next: LooseCargoWorldState,
   appendedHistory: LooseCargoWorldState["history"],
+  authorization: PhysicalCargoCommitAuthorization,
 ): void {
   const priorEntities = new Map(prior.entities.map((entity) => [entity.id, entity]));
   const nextEntities = new Map(next.entities.map((entity) => [entity.id, entity]));
   const added = next.entities.filter((entity) => !priorEntities.has(entity.id));
   const removed = prior.entities.filter((entity) => !nextEntities.has(entity.id));
+  const consumptionRecords = appendedHistory.filter(({ kind }) => kind === "consume");
+  const consumedPayloads: LooseCargoPayload[] = [];
+  const consumedEntityIds = new Set<string>();
+  for (const record of consumptionRecords) {
+    const entityId = record.entityIds.length === 1 ? record.entityIds[0] : undefined;
+    const entity = entityId === undefined ? undefined : priorEntities.get(entityId);
+    if (
+      entity === undefined
+      || entity.payload.kind !== "provision"
+      || nextEntities.has(entity.id)
+      || consumedEntityIds.has(entity.id)
+      || record.step !== prior.completedSteps
+      || record.payloadKey !== `provision:${entity.payload.provision}:lot:${entity.payload.lotId}`
+      || record.quantity !== entity.payload.quantity
+      || stableStringify(record.from) !== stableStringify({
+        region: prior.region,
+        x: entity.x,
+        y: entity.y,
+      })
+      || record.to !== null
+      || stableStringify(record.causes) !== stableStringify(["animal-consumption"])
+      || record.conditionLoss !== 0
+      || record.contaminationGain !== 0
+      || record.decayGain !== 0
+    ) {
+      throw new RangeError("Physical cargo consume history must exactly remove one provision entity");
+    }
+    consumedEntityIds.add(entity.id);
+    consumedPayloads.push(entity.payload);
+  }
+  if (consumptionRecords.length > 0) {
+    const authorizedRemoved = authorization.kind === "delta"
+      ? authorization.removed.map(stableStringify).sort()
+      : [];
+    const exactConsumed = consumedPayloads.map(stableStringify).sort();
+    if (
+      authorization.kind !== "delta"
+      || authorization.added.length !== 0
+      || stableStringify(authorizedRemoved) !== stableStringify(exactConsumed)
+    ) {
+      throw new RangeError("Physical cargo consumption requires its exact negative payload delta");
+    }
+  }
   for (const [id, entity] of priorEntities) {
     const successor = nextEntities.get(id);
     if (!successor) continue;
@@ -878,10 +922,16 @@ function assertWorldMutationEvidence(
     }
   }
   for (const entity of removed) {
-    if (!appendedHistory.some((record) =>
+    const consumptionEvidence = consumptionRecords.filter((record) =>
+      record.entityIds.includes(entity.id));
+    const custodyEvidence = appendedHistory.some((record) =>
       (record.kind === "pickup" || record.kind === "merge")
-      && record.entityIds.includes(entity.id))) {
-      throw new RangeError("Physical cargo removals require new pickup or merge evidence");
+      && record.entityIds.includes(entity.id));
+    if (consumptionEvidence.length > 1 || (consumptionEvidence.length === 1 && custodyEvidence)) {
+      throw new RangeError("Physical cargo removal evidence cannot be ambiguous");
+    }
+    if (consumptionEvidence.length === 0 && !custodyEvidence) {
+      throw new RangeError("Physical cargo removals require new pickup, merge, or consume evidence");
     }
   }
   if (next.completedSteps === prior.completedSteps) {

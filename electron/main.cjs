@@ -26,8 +26,8 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.11';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 19;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.12';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 20;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -1491,6 +1491,10 @@ async function exerciseResidentAboutPhysicalScroll(contents) {
   // returning to short landscape. Reacquire its rendered geometry after that
   // reflow so the physical wheel targets the current scroll surface rather
   // than a stale pre-resize rectangle.
+  contents.focus();
+  await contents.executeJavaScript(`new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  })`, true);
   const probe = await readRendererProbe(contents);
   const body = probe?.residentAbout?.body;
   if (!body?.hasVerticalOverflow) {
@@ -1514,21 +1518,35 @@ async function exerciseResidentAboutPhysicalScroll(contents) {
   if (!targetsBody) {
     throw new Error('resident ABOUT physical scroll point did not target its live body');
   }
-  const initialScrollTop = body.scrollTop;
+  const focusedBody = await contents.executeJavaScript(`(() => {
+    const body = document.querySelector('.resident-about__body');
+    if (!(body instanceof HTMLElement)) return false;
+    body.focus({ preventScroll: true });
+    return document.activeElement === body;
+  })()`, true);
+  if (!focusedBody) {
+    throw new Error('resident ABOUT physical scroll surface could not receive focus');
+  }
+  const focusedProbe = await readRendererProbe(contents);
+  const initialScrollTop = focusedProbe.residentAbout?.body?.scrollTop ?? body.scrollTop;
+  const attempts = [];
   contents.sendInputEvent({ type: 'mouseMove', x, y, movementX: 0, movementY: 0 });
-  for (const deltaY of [240, -240]) {
+  for (const deltaY of [240, -240, 240, -240]) {
     contents.sendInputEvent({
       type: 'mouseWheel',
       x,
       y,
       deltaX: 0,
       deltaY,
+      wheelTicksX: 0,
+      wheelTicksY: deltaY / 120,
       canScroll: true,
-      hasPreciseScrollingDeltas: true,
+      hasPreciseScrollingDeltas: false,
     });
     await new Promise((resolve) => setTimeout(resolve, 140));
     const moved = await readRendererProbe(contents);
-    if ((moved.residentAbout?.body?.scrollTop ?? 0) > initialScrollTop + 1) {
+    attempts.push({ deltaY, scrollTop: moved.residentAbout?.body?.scrollTop ?? null });
+    if (Math.abs((moved.residentAbout?.body?.scrollTop ?? 0) - initialScrollTop) > 1) {
       return {
         required: true,
         point: { x, y },
@@ -1538,7 +1556,13 @@ async function exerciseResidentAboutPhysicalScroll(contents) {
       };
     }
   }
-  throw new Error('resident ABOUT facts overflowed but physical wheel input did not scroll them');
+  throw new Error(
+    `resident ABOUT facts overflowed but physical wheel input did not scroll them: ${JSON.stringify({
+      initialScrollTop,
+      maxScrollTop: body.scrollHeight - body.clientHeight,
+      attempts,
+    })}`,
+  );
 }
 
 async function exerciseSmokeResidentAbout(
@@ -1941,8 +1965,8 @@ async function installSmokeTideHarpFixture(contents) {
     const activeRegion = envelope?.physicalCargo?.activeRegion;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 7 ||
-      record.payloadVersion !== 7 ||
+      envelope?.version !== 8 ||
+      record.payloadVersion !== 8 ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       !Array.isArray(knots) ||
@@ -2007,7 +2031,7 @@ async function installSmokeTideHarpFixture(contents) {
       nextPlayerSenseSampleOrdinal: 0,
     };
 
-    // The v7 production loader seals the complete envelope. This smoke-only
+    // The v8 production loader seals the complete envelope. This smoke-only
     // persisted fixture deliberately changes player state, so reseal it with
     // the exact canonical encoder/hash used by the production runtime before
     // proving that the normal load path accepts it.
@@ -2201,7 +2225,7 @@ async function installSmokeTideHarpFixture(contents) {
 }
 
 /**
- * Installs one sealed v7 deep-water starting posture through the isolated
+ * Installs one sealed v8 deep-water starting posture through the isolated
  * smoke autosave. The next ordinary movement beat must enter ADRIFT through
  * production footing rules; no gameplay debug surface is shipped for it.
  * The exact pre-probe record is returned so the smoke can restore it after
@@ -2237,8 +2261,8 @@ async function installSmokeAdriftFixture(contents) {
     const terrain = view.terrain;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 7 ||
-      record.payloadVersion !== 7 ||
+      envelope?.version !== 8 ||
+      record.payloadVersion !== 8 ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       player.worldWidth !== terrain.columns ||
@@ -2625,7 +2649,7 @@ async function restoreSmokeAdriftFixture(contents, fixture) {
     database.close();
     return { payloadVersion: record.payloadVersion, seed: record.seed };
   })()`, true);
-  if (written?.payloadVersion !== 7 || written?.seed !== SMOKE_WORLD_SEED) {
+  if (written?.payloadVersion !== 8 || written?.seed !== SMOKE_WORLD_SEED) {
     throw new Error(`the ADRIFT smoke fixture backup was not restored: ${JSON.stringify(written)}`);
   }
 

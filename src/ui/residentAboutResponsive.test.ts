@@ -5,6 +5,7 @@ const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 const uiSource = readFileSync(new URL("./createTideweftUI.ts", import.meta.url), "utf8");
 const chartSource = readFileSync(new URL("../render/p5Sketch.ts", import.meta.url), "utf8");
 const reliefSource = readFileSync(new URL("../render/p5ReliefSketch.ts", import.meta.url), "utf8");
+const desktopSource = readFileSync(new URL("../../electron/main.cjs", import.meta.url), "utf8");
 
 describe("resident ABOUT responsive shell", () => {
   it("is a semantic pane-free overlay with no glass class, fill, border, or blur", () => {
@@ -40,6 +41,15 @@ describe("resident ABOUT responsive shell", () => {
     expect(bodyRule).toContain("touch-action: pan-y");
     expect(bodyRule).toContain("pointer-events: auto");
     expect(uiSource).toContain("if (actorChanged) refs.residentAboutBody.scrollTop = 0");
+  });
+
+  it("sends a settled discrete wheel gesture to the packaged ABOUT scroll surface", () => {
+    expect(desktopSource).toContain("contents.focus()");
+    expect(desktopSource).toContain("wheelTicksY: deltaY / 120");
+    expect(desktopSource).toContain("hasPreciseScrollingDeltas: false");
+    expect(desktopSource).toContain(
+      "Math.abs((moved.residentAbout?.body?.scrollTop ?? 0) - initialScrollTop) > 1",
+    );
   });
 
   it("renders an accessible visible reason whenever GREET is disabled", () => {

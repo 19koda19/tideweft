@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(21);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(22);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -311,9 +311,11 @@ describe("TIDEWEFT field-manual content", () => {
       .map((mechanic) => `${mechanic.title} ${mechanic.clarification}`)
       .join(" ");
     expect(plannedCopy).toContain("Seven stable visual biomes");
-    expect(plannedCopy).toContain("One independently generated dog is now paired");
-    expect(plannedCopy).toContain("Additional dogs, bears, birds, deer");
-    expect(plannedCopy).toContain("full/coarse population ecology");
+    expect(plannedCopy).toContain("One independently generated dog and");
+    expect(plannedCopy).toContain("one bounded local patch of deer, gulls, and a black bear");
+    expect(plannedCopy).toContain("persistent full/coarse wildlife state");
+    expect(plannedCopy).toContain("Additional dogs and species");
+    expect(plannedCopy).toContain("complete bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
     expect(plannedCopy).toContain("not implemented yet");
@@ -322,7 +324,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("not yet a trust-money wallet");
   });
 
-  it("teaches the limited persistent-human ABOUT slice without claiming universal NPC ecology", () => {
+  it("teaches the bounded wildlife crossing without claiming the full bestiary", () => {
     const people = tutorialSectionById("people-and-about");
     const copy = people === undefined
       ? ""
@@ -333,7 +335,7 @@ describe("TIDEWEFT field-manual content", () => {
         ].join(" ");
 
     expect(tutorialControlById("inspect-person")).toMatchObject({
-      input: "Click / tap a visible person or dog",
+      input: "Click / tap a visible person, dog, or wild animal",
       audience: "all",
     });
     expect(copy).toContain("OBSERVED");
@@ -345,6 +347,14 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ROUTE AROUND THIS SPOT");
     expect(copy).toContain("exactly one dried-fish unit");
     expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
+    expect(copy).toContain("deer, gull, or black bear");
+    expect(copy).toContain("A heard animal alarm gives an uncertain direction");
+    expect(copy).toContain("WAIT AND WATCH");
+    expect(copy).toContain("your previous route and choice history remain unchanged");
+    expect(copy).toContain("animal-consumption record");
+    expect(copy).toContain("bounded coarse record");
+    expect(copy).toContain("Animals do not attack, receive injuries, die, or leave carcasses");
+    expect(copy).toContain("complete bestiary");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });

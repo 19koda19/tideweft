@@ -147,6 +147,7 @@ import type {
   TideweftRendererController,
   TideweftRendererOptions,
   TideweftView,
+  WildlifeView,
   WayknotKind,
   WayknotView,
   WeatherView,
@@ -187,6 +188,28 @@ const RELIEF_DOG_COAT_COLORS: Readonly<Record<DogView["coat"]["primary"], string
   gray: "#7e8782",
   red: "#98583d",
   "blue-gray": "#657b82",
+};
+
+const RELIEF_WILDLIFE_COLORS: Readonly<Record<WildlifeView["species"], {
+  readonly primary: string;
+  readonly secondary: string;
+  readonly dark: string;
+}>> = {
+  deer: {
+    primary: "#9d744f",
+    secondary: "#d3ae78",
+    dark: "#3c2d25",
+  },
+  gull: {
+    primary: "#e2e8df",
+    secondary: "#879496",
+    dark: "#253438",
+  },
+  "black-bear": {
+    primary: "#202827",
+    secondary: "#5b5145",
+    dark: "#0a1112",
+  },
 };
 
 const DEFAULT_YAW = -0.36;
@@ -711,6 +734,11 @@ export function createTideweftReliefRenderer(
       ? hoverTarget.id
       : null;
 
+  const wildlifeIsHovered = (wildlife: WildlifeView): boolean =>
+    hoverTarget?.entity === "living-actor"
+      && hoverTarget.species === wildlife.species
+      && hoverTarget.id === wildlife.actorId;
+
   const syncReliefLabels = (
     view: TideweftView,
     cache: CachedReliefMesh,
@@ -738,7 +766,7 @@ export function createTideweftReliefRenderer(
       text: string,
       point: WorldPoint,
       height: number,
-      tone: "harbor" | "destination" | "wayknot" | "porter" | "porter-emotion" | "dog" | "adrift" | "sound",
+      tone: "harbor" | "destination" | "wayknot" | "porter" | "porter-emotion" | "dog" | "wildlife" | "adrift" | "sound",
       selected = false,
     ): void => {
       const projected = projectReliefPoint(
@@ -998,6 +1026,42 @@ export function createTideweftReliefRenderer(
         highlighted,
       );
     }
+    for (const wildlife of view.wildlife ?? []) {
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        wildlife.position,
+        view.perception !== undefined,
+      )) continue;
+      const highlighted = Boolean(wildlife.selected || wildlifeIsHovered(wildlife));
+      if (!highlighted) continue;
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        wildlife.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      const approximateGroup = wildlife.species === "gull"
+        && wildlife.groupSize !== undefined
+        && wildlife.groupSize > 1
+        ? ` · ~${clampInteger(wildlife.groupSize, 2, 999)} visible`
+        : "";
+      const observableCondition = wildlife.conditionLabels
+        .slice(0, 2)
+        .map((label) => label.toLocaleLowerCase())
+        .join(" · ");
+      const condition = observableCondition.length > 0
+        ? ` · ${observableCondition}`
+        : "";
+      const labelLift = wildlife.species === "gull" ? 1.16 : 0.78;
+      place(
+        `wildlife-${wildlife.species}-${wildlife.actorId}`,
+        `${wildlife.quickLabel}${approximateGroup}${condition}`,
+        wildlife.position,
+        surface + tileSize * labelLift,
+        "wildlife",
+        highlighted,
+      );
+    }
     if (destination && !view.settlements.some(
       (settlement) => settlement.discovered !== false
         && distanceSquared(destination, settlement.position) <= tileSize * tileSize * 0.25,
@@ -1253,6 +1317,33 @@ export function createTideweftReliefRenderer(
             entity: "living-actor",
             species: "domestic-dog",
             id: dog.actorId,
+          },
+          distance,
+        };
+      }
+    }
+    for (const wildlife of view.wildlife ?? []) {
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        wildlife.position,
+        view.perception !== undefined,
+      )) continue;
+      const speciesScale = wildlife.species === "black-bear"
+        ? 0.62
+        : wildlife.species === "deer"
+          ? 0.48
+          : 0.44;
+      const wildlifeRadius = Math.max(
+        view.terrain.tileSize * speciesScale * clamp(wildlife.sizeScale, 0.55, 1.8),
+        unitsPerPixel() * 22,
+      );
+      const distance = distanceSquared(point, wildlife.position);
+      if (distance <= wildlifeRadius ** 2 && (!nearest || distance < nearest.distance)) {
+        nearest = {
+          target: {
+            entity: "living-actor",
+            species: wildlife.species,
+            id: wildlife.actorId,
           },
           distance,
         };
@@ -3376,6 +3467,239 @@ export function createTideweftReliefRenderer(
       }
     };
 
+    const drawDeer = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+    ): void => {
+      const colors = RELIEF_WILDLIFE_COLORS.deer;
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.095 * scale;
+      const resting = wildlife.behavior === "rest";
+      const bodyHalfLength = base * 1.75;
+      const bodyHalfHeight = base * 0.76;
+      const bodyHalfWidth = base * 0.56;
+      const legHeight = resting ? base * 0.2 : base * 1.35;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.74;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+
+      if (!resting) {
+        p.ambientMaterial(colors.dark);
+        for (const legX of [-bodyHalfLength * 0.68, bodyHalfLength * 0.68]) {
+          for (const legZ of [-bodyHalfWidth * 0.58, bodyHalfWidth * 0.58]) {
+            p.push();
+            p.translate(legX, legHeight * 0.61, legZ);
+            p.box(base * 0.17, legHeight, base * 0.15);
+            p.pop();
+          }
+        }
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 8, 5);
+      p.push();
+      p.translate(bodyHalfLength * 0.72, -bodyHalfHeight * 0.72, 0);
+      p.rotateZ(-0.25);
+      p.ellipsoid(base * 0.38, base * 0.92, base * 0.36, 7, 5);
+      p.translate(base * 0.32, -base * 0.8, 0);
+      p.sphere(base * 0.5, 7, 5);
+      p.ambientMaterial(colors.secondary);
+      p.push();
+      p.translate(base * 0.38, base * 0.04, 0);
+      p.ellipsoid(base * 0.42, base * 0.25, base * 0.28, 6, 4);
+      p.pop();
+      p.ambientMaterial(colors.primary);
+      for (const earZ of [-base * 0.34, base * 0.34]) {
+        p.push();
+        p.translate(-base * 0.12, -base * 0.48, earZ);
+        p.cone(base * 0.18, base * 0.46, 4, 1);
+        p.pop();
+      }
+      p.pop();
+
+      p.stroke(colors.secondary);
+      p.strokeWeight(Math.max(1, base * 0.14));
+      p.line(
+        -bodyHalfLength * 0.9,
+        -bodyHalfHeight * 0.18,
+        0,
+        -bodyHalfLength * 1.28,
+        -bodyHalfHeight * 0.7,
+        0,
+      );
+      p.noStroke();
+      p.pop();
+    };
+
+    const drawGulls = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = RELIEF_WILDLIFE_COLORS.gull;
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.07 * scale;
+      const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
+      const representativeCount = clampInteger(wildlife.groupSize ?? 1, 1, 5);
+      const offsets: readonly (readonly [number, number, number])[] = [
+        [0, 0, 0],
+        [-0.72, 0.24, 0.54],
+        [0.68, 0.34, -0.48],
+        [-0.38, 0.54, -0.72],
+        [0.42, 0.65, 0.74],
+      ];
+
+      for (let index = 0; index < representativeCount; index += 1) {
+        const offset = offsets[index] ?? offsets[0]!;
+        const flightLift = perched
+          ? base * 0.42
+          : tileSize * (0.72 + offset[1] * 0.28);
+        const flap = perched || reducedMotion
+          ? 0
+          : Math.sin(now * 0.007 + index * 1.83) * base * 0.68;
+        p.push();
+        p.translate(
+          wildlife.position.x + offset[0] * tileSize * 0.34,
+          -surface - flightLift,
+          wildlife.position.y + offset[2] * tileSize * 0.34,
+        );
+        p.rotateY(-wildlife.facing + (index - 2) * 0.055);
+        p.noStroke();
+        p.ambientMaterial(colors.primary);
+        p.ellipsoid(base * 0.92, base * 0.34, base * 0.3, 7, 4);
+        p.push();
+        p.translate(base * 0.78, -base * 0.12, 0);
+        p.sphere(base * 0.31, 6, 4);
+        p.ambientMaterial(RELIEF_PALETTE.amber);
+        p.translate(base * 0.34, base * 0.02, 0);
+        p.rotateZ(-p.HALF_PI);
+        p.cone(base * 0.12, base * 0.34, 4, 1);
+        p.pop();
+
+        p.stroke(colors.secondary);
+        p.strokeWeight(Math.max(1, base * 0.17));
+        p.line(
+          -base * 0.12,
+          0,
+          -base * 0.12,
+          -base * 0.38,
+          -flap,
+          -base * 1.62,
+        );
+        p.line(
+          -base * 0.12,
+          0,
+          base * 0.12,
+          -base * 0.38,
+          -flap,
+          base * 1.62,
+        );
+        p.noStroke();
+        p.pop();
+      }
+    };
+
+    const drawBlackBear = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+    ): void => {
+      const colors = RELIEF_WILDLIFE_COLORS["black-bear"];
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.145 * scale;
+      const resting = wildlife.behavior === "rest";
+      const bodyHalfLength = base * 1.5;
+      const bodyHalfHeight = base * 0.83;
+      const bodyHalfWidth = base * 0.72;
+      const legHeight = resting ? base * 0.18 : base * 0.72;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.7;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      if (!resting) {
+        p.ambientMaterial(colors.dark);
+        for (const legX of [-bodyHalfLength * 0.62, bodyHalfLength * 0.62]) {
+          for (const legZ of [-bodyHalfWidth * 0.56, bodyHalfWidth * 0.56]) {
+            p.push();
+            p.translate(legX, legHeight * 0.62, legZ);
+            p.box(base * 0.36, legHeight, base * 0.32);
+            p.pop();
+          }
+        }
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 8, 5);
+      p.push();
+      p.translate(bodyHalfLength * 0.98, -bodyHalfHeight * 0.18, 0);
+      p.sphere(base * 0.66, 7, 5);
+      for (const earZ of [-base * 0.45, base * 0.45]) {
+        p.push();
+        p.translate(-base * 0.12, -base * 0.55, earZ);
+        p.sphere(base * 0.2, 6, 4);
+        p.pop();
+      }
+      p.ambientMaterial(colors.secondary);
+      p.translate(base * 0.53, base * 0.13, 0);
+      p.ellipsoid(base * 0.48, base * 0.32, base * 0.4, 6, 4);
+      p.ambientMaterial(colors.dark);
+      p.translate(base * 0.38, -base * 0.02, 0);
+      p.sphere(base * 0.13, 5, 3);
+      p.pop();
+      p.pop();
+    };
+
+    const drawWildlife = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      now: number,
+    ): void => {
+      const tileSize = view.terrain.tileSize;
+      for (const wildlife of view.wildlife ?? []) {
+        if (!isDirectlyDetailPerceived(
+          view.terrain,
+          wildlife.position,
+          view.perception !== undefined,
+        )) continue;
+        const highlighted = Boolean(wildlife.selected || wildlifeIsHovered(wildlife));
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          wildlife.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        if (highlighted) {
+          const radiusScale = wildlife.species === "black-bear"
+            ? 0.52
+            : wildlife.species === "deer"
+              ? 0.4
+              : 0.34;
+          drawGroundRing(
+            view,
+            cache,
+            wildlife.position,
+            tileSize * radiusScale * clamp(wildlife.sizeScale, 0.55, 1.8),
+            RELIEF_PALETTE.tide,
+            205,
+          );
+        }
+        if (wildlife.species === "deer") {
+          drawDeer(wildlife, surface, tileSize);
+        } else if (wildlife.species === "gull") {
+          drawGulls(wildlife, surface, tileSize, now);
+        } else {
+          drawBlackBear(wildlife, surface, tileSize);
+        }
+      }
+    };
+
     const drawDestination = (view: TideweftView, cache: CachedReliefMesh): void => {
       const destination = view.player.destination;
       if (!destination) return;
@@ -3875,6 +4199,7 @@ export function createTideweftReliefRenderer(
       for (const settlement of view.settlements) drawSettlement(view, cache, settlement);
       drawPorters(view, cache);
       drawDogs(view, cache);
+      drawWildlife(view, cache, now);
       drawPlayer(view, cache);
       drawScanRipples(view, cache, now);
       drawAtmosphere(view.weather);

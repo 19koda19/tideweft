@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
+  createActorObservation,
+  type ActorObservation,
+  type ActorObservationChannel,
+} from "../sim/actorPerception";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
 import { FIXED_POINT } from "../sim/types";
@@ -106,6 +112,38 @@ function stepInput(
     accessibility,
     foodContact,
   };
+}
+
+function dogObservation(
+  state: Bio0EcologyState,
+  spec: Readonly<{
+    id: string;
+    perceivedClass: string;
+    channel?: ActorObservationChannel;
+    subjectId?: string;
+    observerId?: string;
+    observedAtTick?: number;
+  }>,
+): ActorObservation {
+  const channel = spec.channel ?? "vision";
+  const value = createActorObservation({
+    id: spec.id,
+    observerId: spec.observerId ?? state.dog.identity.stableId,
+    observedAtTick: spec.observedAtTick ?? state.tick + 1,
+    channel,
+    perceivedClass: spec.perceivedClass,
+    subjectId: channel === "vision" ? (spec.subjectId ?? "BEAR-external") : null,
+    area: {
+      center: state.dog.address.position,
+      radiusUnits: channel === "hearing" ? MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS : 0,
+    },
+    confidence: FIXED_POINT,
+    salience: FIXED_POINT,
+    identification: channel === "vision" ? "identified" : "anonymous",
+    interrupt: channel === "hearing" ? "strong" : "none",
+  });
+  if (value === null) throw new Error(`Invalid additional dog observation ${spec.id}`);
+  return value;
 }
 
 function offerContact(
@@ -265,6 +303,7 @@ describe("BIO0 porter, dog, provision, weather, and perception orchestration", (
         wind: FIXED_POINT,
       })),
       simulationMode: "coarse",
+      additionalDogObservations: [],
     });
 
     expect(result.ok, result.reason).toBe(true);
@@ -285,6 +324,109 @@ describe("BIO0 porter, dog, provision, weather, and perception orchestration", (
       movementRequestId: null,
       contactId: null,
     });
+  });
+
+  it("merges lawful external wildlife observations into full dog cognition canonically", () => {
+    const initial = createBio0Ecology(fixtureInput());
+    const bear = dogObservation(initial, {
+      id: "bio0:test:bear-seen",
+      perceivedClass: "bear",
+      subjectId: "BEAR-v1-external",
+    });
+    const gullAlarm = dogObservation(initial, {
+      id: "bio0:test:gull-alarm",
+      perceivedClass: "danger-sound",
+      channel: "hearing",
+    });
+    const forward = stepBio0Ecology(initial, {
+      ...stepInput(initial),
+      additionalDogObservations: [bear, gullAlarm],
+    });
+    const reverse = stepBio0Ecology(initial, {
+      ...stepInput(initial),
+      additionalDogObservations: [gullAlarm, bear],
+    });
+
+    expect(forward.ok, forward.reason).toBe(true);
+    expect(reverse).toEqual(forward);
+    expect(forward.state.dog.perception.beliefs.map(({ perceivedClass }) => perceivedClass))
+      .toEqual(expect.arrayContaining(["bear", "danger-sound", "food-scent"]));
+    expect(forward.state.dog.perception.beliefs.find(
+      ({ perceivedClass }) => perceivedClass === "danger-sound",
+    )).toMatchObject({ subjectId: null, identification: "anonymous" });
+    expect(forward.state.dog.perception.beliefs.find(
+      ({ perceivedClass }) => perceivedClass === "bear",
+    )).toMatchObject({ subjectId: "BEAR-v1-external", identification: "identified" });
+  });
+
+  it("rejects malformed, mistimed, duplicate, and coarse external observations atomically", () => {
+    const initial = createBio0Ecology(fixtureInput());
+    const bear = dogObservation(initial, {
+      id: "bio0:test:strict-bear",
+      perceivedClass: "bear",
+    });
+    const invalidInputs: unknown[] = [
+      { ...stepInput(initial), additionalDogObservations: undefined },
+      { ...stepInput(initial), additionalDogObservations: [{ ...bear, debug: true }] },
+      { ...stepInput(initial), additionalDogObservations: [bear, bear] },
+      {
+        ...stepInput(initial),
+        additionalDogObservations: [dogObservation(initial, {
+          id: "bio0:test:wrong-observer",
+          perceivedClass: "bear",
+          observerId: "D-v1-different-dog",
+        })],
+      },
+      {
+        ...stepInput(initial),
+        additionalDogObservations: [dogObservation(initial, {
+          id: "bio0:test:wrong-tick",
+          perceivedClass: "bear",
+          observedAtTick: initial.tick + 2,
+        })],
+      },
+      {
+        ...stepInput(initial),
+        simulationMode: "coarse",
+        additionalDogObservations: [bear],
+      },
+    ];
+    for (const invalid of invalidInputs) {
+      const result = stepBio0Ecology(initial, invalid as Bio0EcologyStepInput);
+      expect(result).toEqual({
+        ok: false,
+        reason: "invalid-input",
+        state: initial,
+        event: null,
+      });
+      expect(result.state).toBe(initial);
+    }
+  });
+
+  it("rejects an external observation ID that collides with generated local scent", () => {
+    const initial = createBio0Ecology(fixtureInput());
+    const baseline = stepBio0Ecology(initial, stepInput(initial));
+    expect(baseline.ok, baseline.reason).toBe(true);
+    const scentId = baseline.state.dog.perception.beliefs.find(
+      ({ perceivedClass }) => perceivedClass === "food-scent",
+    )?.sourceObservationId;
+    if (scentId === undefined) throw new Error("Fixture generated no food-scent observation");
+    const collidingBear = dogObservation(initial, {
+      id: scentId,
+      perceivedClass: "bear",
+      subjectId: "BEAR-collision",
+    });
+    const rejected = stepBio0Ecology(initial, {
+      ...stepInput(initial),
+      additionalDogObservations: [collidingBear],
+    });
+    expect(rejected).toEqual({
+      ok: false,
+      reason: "sensory-step-rejected",
+      state: initial,
+      event: null,
+    });
+    expect(rejected.state).toBe(initial);
   });
 
   it("cannot accept direct food contact during a coarse step", () => {

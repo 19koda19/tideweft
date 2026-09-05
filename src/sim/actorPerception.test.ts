@@ -390,6 +390,41 @@ describe("shared actor observation kernel", () => {
     });
   });
 
+  it("starts a delayed search from the current aged belief and remains canonical", () => {
+    let state = advance(createActorPerceptionState(OBSERVER_ID), 1, [observation({
+      confidence: level(0.95),
+      salience: level(0.95),
+    })]);
+    state = advance(state, 2, [sound({
+      id: "quiet-alarm-2",
+      observedAtTick: 2,
+      confidence: level(0.2),
+      salience: level(0.2),
+      interrupt: "strong",
+    })]);
+    state = advance(state, 3, [sound({
+      id: "quiet-alarm-3",
+      observedAtTick: 3,
+      confidence: level(0.2),
+      salience: level(0.2),
+      interrupt: "strong",
+    })]);
+    state = advance(state, 4);
+    expect(state.suspicion).toBe("alert");
+    state = advance(state, 5);
+
+    expect(state.suspicion).toBe("searching");
+    expect(state.search?.lastObservedTick).toBe(1);
+    const source = state.beliefs.find((belief) => belief.key === state.search?.beliefKey);
+    expect(source?.confidence).toBe(state.search?.initialConfidence);
+    expect(canonicalizeActorPerceptionState(state)).toEqual(state);
+
+    state = advance(state, 6);
+    expect(canonicalizeActorPerceptionState(state)).toEqual(state);
+    expect(state.beliefs.find((belief) => belief.key === state.search?.beliefKey)?.confidence)
+      .toBeLessThan(state.search?.initialConfidence ?? 0);
+  });
+
   it("does not let an ordinary louder anonymous contact erase an attended identified target", () => {
     let state = advance(createActorPerceptionState(OBSERVER_ID), 1, [
       observation({

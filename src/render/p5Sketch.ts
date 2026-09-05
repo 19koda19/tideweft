@@ -96,6 +96,7 @@ import type {
   DogView,
   FieldResourceNodeView,
   LooseCargoView,
+  LivingActorViewSpecies,
   ParticleView,
   PorterView,
   RendererCommand,
@@ -113,6 +114,7 @@ import type {
   WayknotKind,
   WayknotView,
   WeatherView,
+  WildlifeView,
   WorldEventView,
   WorldPoint,
 } from "./types";
@@ -184,7 +186,7 @@ type HoverTarget =
   | { readonly entity: "settlement" | "porter" | "route" | "resource"; readonly id: string }
   | {
       readonly entity: "living-actor";
-      readonly species: "domestic-dog";
+      readonly species: LivingActorViewSpecies;
       readonly id: string;
     }
   | { readonly entity: "parcel"; readonly id: string };
@@ -633,6 +635,25 @@ export function createTideweftRenderer(
             entity: "living-actor",
             species: "domestic-dog",
             id: dog.actorId,
+          },
+          distance,
+        };
+      }
+    }
+
+    const wildlifeRadius = Math.max(
+      view.terrain.tileSize * 0.5,
+      22 / Math.max(camera.zoom, 0.01),
+    );
+    for (const actor of view.wildlife ?? []) {
+      if (!isDirectlyDetailPerceived(view.terrain, actor.position, view.perception !== undefined)) continue;
+      const distance = distanceSquared(point, actor.position);
+      if (distance <= wildlifeRadius * wildlifeRadius && (!nearest || distance < nearest.distance)) {
+        nearest = {
+          target: {
+            entity: "living-actor",
+            species: actor.species,
+            id: actor.actorId,
           },
           distance,
         };
@@ -2949,6 +2970,136 @@ export function createTideweftRenderer(
       }
     };
 
+    const drawWildlife = (actors: readonly WildlifeView[], now: number): void => {
+      const hovered = hoverTarget?.entity === "living-actor" ? hoverTarget : null;
+      for (const actor of actors) {
+        if (
+          latestView?.perception
+          && !isDirectlyDetailPerceived(latestView.terrain, actor.position, true)
+        ) continue;
+        const highlighted = Boolean(actor.selected)
+          || (hovered?.species === actor.species && hovered.id === actor.actorId);
+        const base = (highlighted ? 6 : 5.2) * actor.sizeScale / camera.zoom;
+
+        p.push();
+        p.translate(actor.position.x, actor.position.y);
+        p.rotate(actor.facing);
+        if (highlighted) {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.tide, 205));
+          p.strokeWeight(1.25 / camera.zoom);
+          p.ellipse(0, 0, base * 6.2, base * 3.9);
+        }
+
+        if (actor.species === "gull") {
+          const visible = Math.min(5, Math.max(1, actor.groupSize ?? 1));
+          const flap = reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
+          for (let index = 0; index < visible; index += 1) {
+            const column = index % 3;
+            const row = Math.floor(index / 3);
+            const x = (column - 1) * base * 1.75 + row * base * 0.6;
+            const y = (row - 0.35) * base * 1.4 + (column % 2) * base * 0.25;
+            p.push();
+            p.translate(x, y);
+            p.noFill();
+            p.stroke(withAlpha(PALETTE.ink, 235));
+            p.strokeWeight(Math.max(1, base * 0.42));
+            p.line(-base * 1.05, flap * base, 0, -base * 0.18);
+            p.line(0, -base * 0.18, base * 1.05, flap * base);
+            p.stroke(PALETTE.foam);
+            p.strokeWeight(Math.max(0.55, base * 0.23));
+            p.line(-base * 1.02, flap * base, 0, -base * 0.18);
+            p.line(0, -base * 0.18, base * 1.02, flap * base);
+            p.pop();
+          }
+        } else {
+          const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
+          const guarding = actor.behavior === "guard" || actor.behavior === "watch";
+          const bodyLength = base * (actor.species === "black-bear" ? 3.9 : 3.15);
+          const bodyHeight = base * (actor.species === "black-bear" ? 1.75 : 1.2);
+          const bodyColor = actor.species === "black-bear" ? "#292a24" : "#9b7550";
+          const headColor = actor.species === "black-bear" ? "#332f27" : "#ad8258";
+          const headX = bodyLength * 0.48;
+          const headY = actor.species === "black-bear" ? -bodyHeight * 0.08 : -bodyHeight * 0.52;
+          const headRadius = base * (actor.species === "black-bear" ? 0.82 : 0.58);
+
+          p.stroke(withAlpha(PALETTE.ink, 235));
+          p.strokeWeight(Math.max(0.8, base * 0.16));
+          const legSpread = actor.species === "black-bear" ? 0.31 : 0.34;
+          for (const legX of [-bodyLength * legSpread, bodyLength * legSpread]) {
+            p.line(legX, bodyHeight * 0.22, legX + (fleeing ? -base * 0.3 : 0), bodyHeight * 0.9);
+          }
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.ink, 235));
+          p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.22);
+          p.circle(headX, headY, headRadius * 2.25);
+          p.fill(bodyColor);
+          p.ellipse(0, 0, bodyLength, bodyHeight);
+          p.fill(headColor);
+          p.circle(headX, headY, headRadius * 2);
+          if (actor.species === "deer") {
+            p.fill("#eee1c7");
+            p.triangle(
+              -bodyLength * 0.52,
+              -bodyHeight * 0.12,
+              -bodyLength * 0.67,
+              -bodyHeight * (fleeing ? 0.7 : 0.36),
+              -bodyLength * 0.42,
+              -bodyHeight * 0.38,
+            );
+            p.fill(headColor);
+            p.triangle(
+              headX - headRadius * 0.25,
+              headY - headRadius * 0.68,
+              headX - headRadius * 0.75,
+              headY - headRadius * 1.2,
+              headX - headRadius * 0.05,
+              headY - headRadius * 0.48,
+            );
+            p.triangle(
+              headX + headRadius * 0.12,
+              headY - headRadius * 0.65,
+              headX + headRadius * 0.55,
+              headY - headRadius * 1.18,
+              headX + headRadius * 0.45,
+              headY - headRadius * 0.42,
+            );
+          } else {
+            p.fill(bodyColor);
+            p.circle(headX - headRadius * 0.55, headY - headRadius * 0.62, headRadius * 0.62);
+            p.circle(headX + headRadius * 0.22, headY - headRadius * 0.72, headRadius * 0.62);
+            if (guarding) {
+              p.fill(PALETTE.amber);
+              p.circle(headX + headRadius * 0.62, headY - headRadius * 0.12, Math.max(1.2, base * 0.18));
+            }
+          }
+        }
+        p.pop();
+
+        if (!highlighted) continue;
+        const screen = worldLabelScreen(`wildlife-${actor.actorId}`, actor.position, now);
+        const condition = actor.conditionLabels.slice(0, 2)
+          .map((label) => label.toLocaleLowerCase())
+          .join(" · ");
+        const label = condition.length > 0
+          ? `${actor.quickLabel} · ${condition}`
+          : actor.quickLabel;
+        const width = Math.min(Math.max(1, p.width - 16), p.textWidth(label) + 12);
+        const labelX = clamp(screen.x, 8 + width / 2, Math.max(8 + width / 2, p.width - 8 - width / 2));
+        const labelY = clamp(screen.y + 20, 11, Math.max(11, p.height - 11));
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textSize(10.5);
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.ink, 235));
+        p.text(label, labelX + 1, labelY + 0.5);
+        p.fill(PALETTE.foam);
+        p.text(label, labelX, labelY - 0.5);
+        p.pop();
+      }
+    };
+
     const drawDestination = (view: TideweftView, now: number): void => {
       const destination = view.player.destination;
       if (!destination) return;
@@ -3660,6 +3811,7 @@ export function createTideweftRenderer(
       drawSettlements(latestView.settlements, now);
       drawPorters(latestView.porters, now);
       drawDogs(latestView.dogs ?? [], now);
+      drawWildlife(latestView.wildlife ?? [], now);
       drawParticles(latestView.particles ?? []);
       drawPlayer(latestView, now);
       drawRipples(now);

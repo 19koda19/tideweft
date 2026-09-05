@@ -314,7 +314,7 @@ export function canonicalizeActorPerceptionState(value: unknown): ActorPerceptio
       || source.confidence !== decayScaled(
         search.initialConfidence,
         BELIEF_CONFIDENCE_DECAY_PER_TICK,
-        value.tick - search.lastObservedTick,
+        value.tick - search.startedAtTick,
       )
     ) return null;
   }
@@ -453,15 +453,21 @@ export function stepActorPerception(
       && previousFocus?.subjectId !== undefined
       && !currentKeys.has(previousFocus.key);
     if (lostTrack) {
-      const nextSearch = createSearch(previousFocus, step.tick);
-      if (nextSearch === null) {
+      // Begin search from the belief after it has aged into this step. A
+      // prior-state confidence becomes stale when another interrupt delays
+      // this loss-of-track transition.
+      const searchFocus = beliefByKey.get(previousFocus.key);
+      const nextSearch = searchFocus === undefined
+        ? null
+        : createSearch(searchFocus, step.tick);
+      if (nextSearch === null || searchFocus === undefined) {
         search = null;
         suspicion = suspicionFromPressure(current.suspicion, suspicionPressure);
       } else {
         search = nextSearch;
         suspicion = "searching";
         if (!beliefs.some((belief) => belief.key === previousFocus.key)) {
-          beliefs = selectBeliefs([...beliefs, previousFocus], previousFocus.key);
+          beliefs = selectBeliefs([...beliefs, searchFocus], previousFocus.key);
         }
       }
     } else {

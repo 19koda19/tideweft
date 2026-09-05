@@ -131,6 +131,9 @@ const THREAT_CLASSES = new Set([
   "aggressive-dog",
   "large-predator",
   "bear",
+  "animal-alarm",
+  "herd-alarm",
+  "alarm-call",
 ]);
 
 const MINIMUM_HOLD_TICKS: Readonly<Record<DogBehaviorIntent, number>> = {

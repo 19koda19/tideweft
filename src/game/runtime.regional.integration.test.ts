@@ -56,9 +56,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V7GameSaveEnvelope {
+interface V8GameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 7;
+  readonly version: 8;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -69,6 +69,7 @@ interface V7GameSaveEnvelope {
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: unknown;
   readonly bio0Ecology: string;
+  readonly coreEcology: string;
   readonly porterResponse: PorterResponseState;
   readonly integrity: string;
 }
@@ -141,19 +142,20 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeV7(record: SaveRecord): V7GameSaveEnvelope {
-  const value = JSON.parse(record.worldJson) as V7GameSaveEnvelope;
+function decodeV8(record: SaveRecord): V8GameSaveEnvelope {
+  const value = JSON.parse(record.worldJson) as V8GameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 7
-    || record.payloadVersion !== 7
-  ) throw new Error("fixture did not produce a current v7 regional save");
+    || value.version !== 8
+    || record.payloadVersion !== 8
+  ) throw new Error("fixture did not produce a current v8 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v7 outer envelope does not match its integrity seal");
+    throw new Error("fixture v8 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
+    "coreEcology",
     "fieldResources",
     "format",
     "integrity",
@@ -174,17 +176,17 @@ function decodeV7(record: SaveRecord): V7GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V7GameSaveEnvelope,
+  envelope: V8GameSaveEnvelope,
 ): void {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
-  const sealed: V7GameSaveEnvelope = {
+  const sealed: V8GameSaveEnvelope = {
     ...unsealed,
     integrity: gameSaveEnvelopeIntegrity(unsealed),
   };
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 7,
+    payloadVersion: 8,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -219,7 +221,7 @@ async function createCurrentSave(
   runtime.destroy();
 
   if (contractId === null) return null;
-  const saved = decodeV7(repository.snapshot());
+  const saved = decodeV8(repository.snapshot());
   const lot = saved.physicalCargo.carrier.lots.find(({ payload }) =>
     payload.kind === "promise" && payload.contractId === contractId);
   if (!lot) throw new Error("accepted Promise did not reach the physical carrier");
@@ -334,8 +336,8 @@ function adjacentCompatibilityTrace(
 }
 
 function relocateToEastSeam(
-  envelope: V7GameSaveEnvelope,
-): V7GameSaveEnvelope {
+  envelope: V8GameSaveEnvelope,
+): V8GameSaveEnvelope {
   const world = deserializeWorld(envelope.world);
   const economy = createWorldView(world);
   const travel = restorePlayerRegionalTravel(
@@ -417,7 +419,7 @@ function relocateToEastSeam(
   };
 }
 
-function restoredTravel(envelope: V7GameSaveEnvelope): RegionalPlayerTravelState {
+function restoredTravel(envelope: V8GameSaveEnvelope): RegionalPlayerTravelState {
   const world = deserializeWorld(envelope.world);
   const travel = restorePlayerRegionalTravel(
     world.meta.rootSeed,
@@ -492,13 +494,13 @@ describe("production signed-region crossing", () => {
       true,
     );
     if (!promise) throw new Error("fixture did not accept a Promise");
-    const initialBio0Ecology = decodeV7(repository.snapshot()).bio0Ecology;
-    replaceEnvelope(repository, relocateToEastSeam(decodeV7(repository.snapshot())));
+    const initialBio0Ecology = decodeV8(repository.snapshot()).bio0Ecology;
+    replaceEnvelope(repository, relocateToEastSeam(decodeV8(repository.snapshot())));
 
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getRenderView().spatialEpoch).toBe(
-      spatialEpochFor(restoredTravel(decodeV7(repository.snapshot()))),
+      spatialEpochFor(restoredTravel(decodeV8(repository.snapshot()))),
     );
     runtime.dispatchRenderer({ type: "brace", active: true });
     runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
@@ -506,7 +508,7 @@ describe("production signed-region crossing", () => {
     advancePlayerSteps(runtime, 1);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
-    const eastSave = decodeV7(repository.snapshot());
+    const eastSave = decodeV8(repository.snapshot());
     const eastTravel = restoredTravel(eastSave);
     expect(runtime.getRenderView().spatialEpoch).toBe(spatialEpochFor(eastTravel));
     expect(eastTravel.stream).toMatchObject({
@@ -544,7 +546,7 @@ describe("production signed-region crossing", () => {
     advancePlayerSteps(resumed, 1);
     resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await resumed.save();
-    const returnedSave = decodeV7(repository.snapshot());
+    const returnedSave = decodeV8(repository.snapshot());
     const returnedTravel = restoredTravel(returnedSave);
     expect(resumed.getRenderView().spatialEpoch).toBe(spatialEpochFor(returnedTravel));
     expect(returnedTravel.stream).toMatchObject({
@@ -559,7 +561,7 @@ describe("production signed-region crossing", () => {
     advancePlayerSteps(resumed, 1);
     resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await resumed.save();
-    const revisitedSave = decodeV7(repository.snapshot());
+    const revisitedSave = decodeV8(repository.snapshot());
     const revisitedTravel = restoredTravel(revisitedSave);
     expect(resumed.getRenderView().spatialEpoch).toBe(spatialEpochFor(revisitedTravel));
     expect(revisitedTravel.stream).toMatchObject({
@@ -585,7 +587,7 @@ describe("production signed-region crossing", () => {
   it("rejects an otherwise resealed save captured halfway through a recenter", async () => {
     const repository = new MemoryRepository();
     await createCurrentSave(repository, "no half crossed worlds", false);
-    const relocated = relocateToEastSeam(decodeV7(repository.snapshot()));
+    const relocated = relocateToEastSeam(decodeV8(repository.snapshot()));
     const world = deserializeWorld(relocated.world);
     const player = structuredClone(relocated.player);
     const travel = restoredTravel(relocated);

@@ -3,6 +3,15 @@ import {
   projectDogQuickInspect,
   type DogAboutObservation,
 } from "../game/dogAbout";
+import {
+  projectWildlifeAbout,
+  projectWildlifeQuickInspect,
+  type WildlifeAboutObservation,
+} from "../game/wildlifeAbout";
+import {
+  isLivingActorSpecies,
+  livingSpeciesActorIdMatchesNamespace,
+} from "../game/livingSpeciesRegistry";
 import type {
   ResidentAboutFactUIView,
   ResidentAboutUIView,
@@ -62,6 +71,43 @@ export function projectDogLivingActorInspection(
 
   const target = freezeTarget({
     species: "domestic-dog",
+    actorId: about.actorId,
+  });
+  return deepFreeze({
+    target,
+    quick: {
+      target,
+      heading: quick.heading,
+      summary: quick.summary,
+      distanceUnits: quick.distanceUnits,
+    },
+    about: {
+      target,
+      heading: about.heading,
+      identityLine: about.identity,
+      knowledgeLabel: about.knowledge,
+      observed: about.observed.map(({ label, value }) => ({ label, value })),
+      known: about.known.map(({ label, value }) => ({ label, value })),
+    },
+  });
+}
+
+/** Adapt one directly observed core-wildlife actor to the shared tagged UI contract. */
+export function projectWildlifeLivingActorInspection(
+  actor: unknown,
+  currentObservation: WildlifeAboutObservation,
+): SelectedLivingActorUIView | null {
+  const quick = projectWildlifeQuickInspect(actor, currentObservation);
+  const about = projectWildlifeAbout(actor, currentObservation);
+  if (
+    quick === null
+    || about === null
+    || quick.actorId !== about.actorId
+    || quick.species !== about.species
+  ) return null;
+
+  const target = freezeTarget({
+    species: about.species,
     actorId: about.actorId,
   });
   return deepFreeze({
@@ -243,9 +289,8 @@ function validTarget(value: unknown): value is LivingActorTargetUIView {
     || value.actorId.length > 192
     || !/^[A-Za-z0-9][A-Za-z0-9:._/-]*$/u.test(value.actorId)
   ) return false;
-  return value.species === "human"
-    ? value.actorId.startsWith("H-")
-    : value.species === "domestic-dog" && value.actorId.startsWith("D-");
+  return isLivingActorSpecies(value.species)
+    && livingSpeciesActorIdMatchesNamespace(value.actorId, value.species);
 }
 
 function sameTarget(

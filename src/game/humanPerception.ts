@@ -21,6 +21,7 @@ import {
   type PerceptionCell,
 } from "./perception";
 import type { RegionalTerrainWindow } from "./regionalTravel";
+import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
   regionalCompatibilityWorldForWorld,
   regionalWindowForWorld,
@@ -44,7 +45,7 @@ import {
 } from "./worldPosition";
 
 export const PLAYER_SENSE_SAMPLE_VERSION = 1 as const;
-export const LOCAL_PLAYER_SUBJECT_ID = "player:local" as const;
+export const LOCAL_PLAYER_SUBJECT_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 export const HUMAN_PERCEPTION_MAX_RESIDENTS = 64 as const;
 export const HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES = 16 as const;
 export const HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT =

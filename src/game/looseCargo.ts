@@ -102,6 +102,7 @@ const HISTORY_KIND_SET: ReadonlySet<string> = new Set<LooseCargoHistoryKind>([
   "merge",
   "environment",
   "handoff",
+  "consume",
 ]);
 const CAUSE_CODE_SET: ReadonlySet<string> = new Set<LooseCargoCauseCode>([
   "rain-soak",
@@ -124,6 +125,7 @@ const CAUSE_CODE_SET: ReadonlySet<string> = new Set<LooseCargoCauseCode>([
   "parcel-settled",
   "region-boundary-rest",
   "storage-handoff",
+  "animal-consumption",
 ]);
 
 export type LooseCargoOwner =
@@ -167,7 +169,9 @@ export type LooseCargoCauseCode =
   | "parcel-settled"
   | "region-boundary-rest"
   /** Invisible persistence ownership change; never a physical impact. */
-  | "storage-handoff";
+  | "storage-handoff"
+  /** A provision physically reached and wholly consumed by a living animal. */
+  | "animal-consumption";
 
 export type LooseCargoHistoryKind =
   | "drop"
@@ -175,7 +179,8 @@ export type LooseCargoHistoryKind =
   | "pickup"
   | "merge"
   | "environment"
-  | "handoff";
+  | "handoff"
+  | "consume";
 
 export interface LooseCargoPosition {
   readonly region: LooseCargoRegionAddress;
@@ -484,6 +489,39 @@ export interface LooseCargoPickupRequest {
   readonly y: number;
   /** Manhattan reach in fixed-point tile units. */
   readonly reach: number;
+}
+
+/**
+ * Whole-entity animal consumption deliberately has no quantity field. A
+ * caller cannot ask this boundary to split a world parcel and must authorize
+ * the exact returned payload as a negative physical-cargo delta.
+ */
+export interface LooseCargoProvisionEntityConsumptionRequest {
+  readonly actorId: string;
+  readonly entityId: LooseCargoEntityId;
+  readonly x: number;
+  readonly y: number;
+  /** Manhattan contact reach in fixed-point tile units. */
+  readonly reach: number;
+}
+
+export type LooseCargoProvisionEntityConsumptionReason =
+  | "consumed"
+  | "invalid-world"
+  | "invalid-request"
+  | "entity-not-found"
+  | "not-provision"
+  | "out-of-reach"
+  | "id-space-exhausted";
+
+export interface LooseCargoProvisionEntityConsumptionResult {
+  readonly ok: boolean;
+  readonly reason: LooseCargoProvisionEntityConsumptionReason;
+  readonly world: LooseCargoWorldState;
+  readonly consumedByActorId: string | null;
+  readonly removedEntity: LooseCargoEntity | null;
+  readonly removedPayload: LooseCargoProvisionPayload | null;
+  readonly event: LooseCargoHistoryRecord | null;
 }
 
 export interface LooseCargoTransferResult extends LooseCargoTransferQuote {
@@ -2536,6 +2574,84 @@ export function pickupLooseCargo(
 }
 
 /**
+ * Remove one whole physical provision after an identified animal reaches the
+ * exact world entity. This transaction intentionally does not prove ordinary
+ * conservation: its returned payload is the caller's authorization evidence
+ * for the corresponding negative PhysicalCargoState delta.
+ */
+export function consumeLooseCargoProvisionEntity(
+  world: LooseCargoWorldState,
+  request: LooseCargoProvisionEntityConsumptionRequest,
+): LooseCargoProvisionEntityConsumptionResult {
+  const fail = (
+    reason: Exclude<LooseCargoProvisionEntityConsumptionReason, "consumed">,
+  ): LooseCargoProvisionEntityConsumptionResult => ({
+    ok: false,
+    reason,
+    world,
+    consumedByActorId: null,
+    removedEntity: null,
+    removedPayload: null,
+    event: null,
+  });
+  const validation = validateLooseCargoWorld(world);
+  if (!validation.valid || validation.state === null) return fail("invalid-world");
+  const canonicalWorld = validation.state;
+  if (
+    !isRecord(request)
+    || !hasExactKeys(request, ["actorId", "entityId", "reach", "x", "y"])
+    || canonicalActorId(request.actorId) === null
+    || !validEntityId(request.entityId)
+    || !Number.isSafeInteger(request.reach)
+    || request.reach < 0
+    || request.reach > LOOSE_CARGO_MAX_PICKUP_REACH
+    || !validPosition(request.x, canonicalWorld.width)
+    || !validPosition(request.y, canonicalWorld.height)
+  ) return fail("invalid-request");
+  const actorId = canonicalActorId(request.actorId)!;
+  const entity = canonicalWorld.entities.find((candidate) => candidate.id === request.entityId);
+  if (entity === undefined) return fail("entity-not-found");
+  if (entity.payload.kind !== "provision") return fail("not-provision");
+  if (Math.abs(entity.x - request.x) + Math.abs(entity.y - request.y) > request.reach) {
+    return fail("out-of-reach");
+  }
+  if (
+    canonicalWorld.lastEventOrdinal >= LOOSE_CARGO_MAX_ORDINAL
+    || canonicalWorld.revision >= LOOSE_CARGO_MAX_ORDINAL
+  ) return fail("id-space-exhausted");
+
+  const eventOrdinal = canonicalWorld.lastEventOrdinal + 1;
+  const event = createHistoryRecord(
+    canonicalWorld,
+    eventOrdinal,
+    "consume",
+    [entity.id],
+    entity.payload,
+    positionOf(canonicalWorld, entity.x, entity.y),
+    null,
+    ["animal-consumption"],
+    zeroEnvironmentChange(),
+  );
+  const appendedHistory = appendLooseCargoHistory(canonicalWorld, [event]);
+  const nextWorld = trustWorldState({
+    ...canonicalWorld,
+    revision: canonicalWorld.revision + 1,
+    lastEventOrdinal: eventOrdinal,
+    entities: canonicalWorld.entities.filter((candidate) => candidate.id !== entity.id),
+    ...appendedHistory,
+  });
+  return {
+    ok: true,
+    reason: "consumed",
+    world: nextWorld,
+    consumedByActorId: actorId,
+    removedEntity: entity,
+    removedPayload: entity.payload,
+    event,
+  };
+}
+
+/**
  * Advance every world stack once. Samples are addressed by stable entity ID,
  * making output independent of either input array's order. The sample set must
  * cover every live ID exactly once; missing, duplicate, or unknown IDs fail the
@@ -3382,6 +3498,11 @@ function canonicalOwner(value: unknown): LooseCargoOwner | null {
     return { kind: "settlement", id: value.id };
   }
   return null;
+}
+
+function canonicalActorId(value: unknown): string | null {
+  const owner = canonicalOwner({ kind: "actor", id: value });
+  return owner?.kind === "actor" ? owner.id : null;
 }
 
 function canonicalRegionAddress(value: unknown): LooseCargoRegionAddress | null {
@@ -4355,6 +4476,12 @@ function validLotId(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: object, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
 }
 
 function invalidWorld(reason: Exclude<LooseCargoValidationReason, "valid">): LooseCargoWorldValidation {

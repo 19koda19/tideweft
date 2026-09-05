@@ -2,6 +2,48 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.12",
+      "releaseDate": "2026-09-05",
+      "buildIdentity": "0.3.3-alpha.12",
+      "summary": "A bounded wildlife crossing adds directly observable deer, gulls, and one black bear to the first living web, with shared sight and alarm evidence, physical food scavenging, and save-safe persistence.",
+      "gameplayContractVersion": 20,
+      "tutorialVersion": 22,
+      "categories": {
+        "gameplay": [
+          "The first living web now includes one deterministic local population patch containing deer, gulls, and a black bear. Each actor has a stable generated identity and bounded individual state; the visible gull presentation may summarize the directly observed part of its flock without revealing the hidden population.",
+          "Deer, gulls, the black bear, the nearby dog, and the porter reuse shared sight and alarm observations. A visible predator may change animal behavior, while a heard alarm remains an anonymous direction rather than magically identifying a bear. A nearby porter can secure exposed food, reroute, leave, or wait according to what reached their own perception and their current policy.",
+          "A hungry black bear can reach and consume the crossing's exposed one-unit dried-fish parcel as a real world object. Consumption removes that exact persistent entity, writes animal-consumption history, and cannot be replayed to remove or create another unit."
+        ],
+        "fixes": [
+          "Chart and Relief now gate wildlife rendering, labels, hit targets, selection, and ABOUT through the same current direct-detail sight. Turning away or losing lawful sight closes the observation instead of leaving a remote animal tracker.",
+          "Shared alarm propagation is bounded by range and carries uncertainty without smuggling the caller's stable identity, species, hidden target, or exact internal motive into another actor's knowledge.",
+          "Wildlife food claims now fail closed unless the exact whole provision is physically within reach. Malformed, partial, non-provision, out-of-range, or already-consumed claims leave cargo and ecology unchanged."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. The new animals create information, route pressure, and one finite scavenging consequence without adding combat rewards, random loot, free food, or a second difficulty.",
+          "WAIT AND WATCH, ROUTE AROUND THIS SPOT, and LEAVE remain grounded field choices. Waiting halts the current automatic route briefly, rerouting must preserve the existing destination through a valid path around the observed spot, and a rejected detour leaves the prior route intact.",
+          "Detailed wildlife simulation is bounded to the active moving world window. The same stable actors cross between full and coarse representation without camera-driven respawn, identity rerolls, or an unbounded all-pairs interaction loop."
+        ],
+        "interface": [
+          "Directly visible deer, gulls, and black bears now receive distinct low-cost Chart and Relief silhouettes, readable hover or selection labels, and the shared non-pausing ABOUT surface. A gull may appear as GULL FLOCK when several members are currently visible.",
+          "Wildlife ABOUT reports only current observable species clarity, group estimate, condition, behavior, appearance, and life stage. Hidden needs, targets, causal references, population totals, raw scores, and stable database IDs remain private.",
+          "Field Manual version 22 teaches the deer, gull, and black-bear crossing, shared sight and anonymous alarms, autonomous porter responses, WAIT, REROUTE, LEAVE, whole-parcel scavenging, persistence, and the explicit limits of this bounded release."
+        ],
+        "saves": [
+          "The outer session advances to version 8 and adds one canonical core-ecology record alongside the existing physical cargo, regional travel, first dog web, porter response, player choices, Promise journey, and pending sensory carry. The embedded simulation remains format 4 with tideweft-sim/6.",
+          "Supported outer versions 1 through 7 migrate deterministically. A version-7 save keeps its established world, dog, porter choices, cargo, and history while receiving the same seed-derived untouched wildlife baseline and exposed provision exactly once.",
+          "Wildlife identities, segmented positions, materialization state, needs, condition, perception, intent, bounded memories, population membership, reactions, and physical food-consumption evidence survive save, unload, revisit, and reload without rerolling.",
+          "Version 8 requires its exact canonical ecology and cargo roots with matching integrity and conservation. Missing, aliased, stale, duplicated, or contradictory state is quarantined rather than partially adopted."
+        ],
+        "knownLimitations": [
+          "This is one bounded deer, gull, and black-bear crossing attached to the existing porter-dog web, not a full bestiary or complete worldwide animal population. Additional species, broad habitat generation, reproduction, migration, social groups, and distant ecological opportunities remain later work.",
+          "Animals do not attack, receive injuries, die, or leave carcasses in this release. Hunting, combat, deterrence, capture, treatment, breeding, and a general predator-kill loop are not live.",
+          "The wildlife ABOUT choices are WAIT AND WATCH, ROUTE AROUND THIS SPOT, and LEAVE. The player cannot command, feed, tame, name, own, recruit, or directly manipulate these animals through ABOUT.",
+          "The shared wildlife channel covers bounded visual contact and explicit alarm calls for this crossing. General evidence trails, blood, tracking, social rumor, complete scent ecology, full offscreen predation, and every-species-to-every-species behavior are not live."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.11",
       "releaseDate": "2026-09-05",
       "buildIdentity": "0.3.3-alpha.11",

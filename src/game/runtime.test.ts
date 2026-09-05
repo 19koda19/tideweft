@@ -246,6 +246,7 @@ interface TestGameSaveEnvelope {
   promiseJourney?: RegionalPromiseJourneyState;
   perceptionCarry?: unknown;
   bio0Ecology?: string;
+  coreEcology?: string;
   porterResponse?: PorterResponseState;
   livingActorPlayerChoice?: unknown;
   integrity?: string;
@@ -927,12 +928,12 @@ describe("perpetual new worlds", () => {
       resealGameSave(envelope);
     }],
     ["resealed invalid field ecology", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      if (!envelope.fieldResources) throw new Error("v7 fixture lost field ecology");
+      if (!envelope.fieldResources) throw new Error("v8 fixture lost field ecology");
       envelope.fieldResources = { ...envelope.fieldResources, version: 2 as 1 };
       resealGameSave(envelope);
     }],
     ["resealed invalid traversal ledger", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      if (!envelope.traversalFeedback) throw new Error("v7 fixture lost traversal feedback");
+      if (!envelope.traversalFeedback) throw new Error("v8 fixture lost traversal feedback");
       envelope.traversalFeedback = { ...envelope.traversalFeedback, completedSteps: -1 };
       resealGameSave(envelope);
     }],
@@ -940,7 +941,7 @@ describe("perpetual new worlds", () => {
       delete envelope.physicalCargo;
       resealGameSave(envelope);
     }],
-  ] as const)("quarantines a current v7 save with %s", async (_label, mutate) => {
+  ] as const)("quarantines a current v8 save with %s", async (_label, mutate) => {
     const repository = new MemoryRepository();
     const original = await createTideweftRuntime(repository);
     await original.save();
@@ -1632,7 +1633,7 @@ describe("runtime clarity guards", () => {
     runtime.destroy();
   });
 
-  it("reloads a current v7 ADRIFT save without moving the porter or changing physical cargo", async () => {
+  it("reloads a current v8 ADRIFT save without moving the porter or changing physical cargo", async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     setup.dispatchUI({ type: "resume-world" });
@@ -1644,12 +1645,12 @@ describe("runtime clarity guards", () => {
     await setup.save();
     setup.destroy();
 
-    // Begin from a real, sealed v7 save with an authoritative physical cargo
+    // Begin from a real, sealed v8 save with an authoritative physical cargo
     // manifest. Choose the strongest real wet contact in its persisted region
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(7);
+    expect(prepared.version).toBe(8);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -1743,6 +1744,7 @@ describe("runtime clarity guards", () => {
     // hundreds of ecology/weather steps that the fixture never observed.
     const {
       bio0Ecology: _outdatedBio0Ecology,
+      coreEcology: _outdatedCoreEcology,
       porterResponse: _outdatedPorterResponse,
       livingActorPlayerChoice: _outdatedLivingActorPlayerChoice,
       integrity: _preparedIntegrity,
@@ -1857,8 +1859,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(7);
-    expect(durableRecord.payloadVersion).toBe(7);
+    expect(durable.version).toBe(8);
+    expect(durableRecord.payloadVersion).toBe(8);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");
@@ -2137,7 +2139,7 @@ describe("runtime clarity guards", () => {
     if (!parcelId) throw new Error("dropped Promise lost its parcel identity");
     await runtime.save();
     const beforeReload = decodeGameSave(repository.snapshot()).physicalCargo;
-    expect(beforeReload?.looseWorld.entities[0]?.id).toBe(parcelId);
+    expect(beforeReload?.looseWorld.entities.some(({ id }) => id === parcelId)).toBe(true);
     runtime.destroy();
 
     const resumed = await createTideweftRuntime(repository);
@@ -2156,7 +2158,10 @@ describe("runtime clarity guards", () => {
       row.kind === "promise-cargo")?.lotId).toBe(recoveredLotId);
     await resumed.save();
     const recoveredSave = decodeGameSave(repository.snapshot()).physicalCargo;
-    expect(recoveredSave?.looseWorld.entities).toEqual([]);
+    expect(recoveredSave?.looseWorld.entities.some(({ id }) => id === parcelId)).toBe(false);
+    expect(recoveredSave?.looseWorld.entities.every(({ payload }) =>
+      payload.kind === "provision"
+    )).toBe(true);
     expect(recoveredSave?.carrier.lots.some((lot) => lot.id === recoveredLotId)).toBe(true);
     expect(recoveredSave?.carrier.retiredLotIds).toContain(promiseRow.lotId);
     resumed.destroy();

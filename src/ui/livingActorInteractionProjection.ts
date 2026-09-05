@@ -16,6 +16,10 @@ import type {
   LivingActorInteractionUIView,
   LivingActorTargetUIView,
 } from "./types";
+import {
+  isLivingActorSpecies,
+  livingSpeciesActorIdMatchesNamespace,
+} from "../game/livingSpeciesRegistry";
 
 /**
  * Presentation-only inputs for one living-actor choice surface. The request
@@ -241,10 +245,8 @@ function validTarget(value: unknown): value is LivingActorTargetUIView {
   return plainRecord(value)
     && exactKeys(value, ["actorId", "species"])
     && validActorId(value.actorId)
-    && (value.species === "human" || value.species === "domestic-dog")
-    && (value.species === "human"
-      ? value.actorId.startsWith("H-")
-      : value.actorId.startsWith("D-"));
+    && isLivingActorSpecies(value.species)
+    && livingSpeciesActorIdMatchesNamespace(value.actorId, value.species);
 }
 
 function validNullableActorId(value: unknown): value is string | null {

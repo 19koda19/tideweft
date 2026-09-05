@@ -13,6 +13,7 @@ export type SoundCue =
   | "fall"
   | "impact"
   | "sweep"
+  | "wildlife-alarm"
   | "paddle"
   | "recover"
   | "title"
@@ -181,6 +182,7 @@ export class TideweftSoundscape {
       fall: incidentSoundPattern("fall", variantSeed),
       impact: incidentSoundPattern("impact", variantSeed),
       sweep: incidentSoundPattern("sweep", variantSeed),
+      "wildlife-alarm": wildlifeAlarmPattern(),
       paddle: [
         toneStep(210, 0, "triangle", 0.055),
         toneStep(164, 0.045, "sine", 0.095),
@@ -324,6 +326,18 @@ export function titleCrescendoPattern(): readonly SoundToneStep[] {
     toneStep(220, 0.29, "triangle", 0.72),
     toneStep(329.63, 0.51, "sine", 0.66),
     toneStep(659.25, 0.78, "triangle", 0.48),
+  ];
+}
+
+/**
+ * A compact rise-and-fall call shared by wildlife alarm events. Its immediate
+ * onset communicates event timing without looping or competing with warnings.
+ */
+export function wildlifeAlarmPattern(): readonly SoundToneStep[] {
+  return [
+    toneStep(880, 0, "triangle", 0.055),
+    toneStep(1_174.66, 0.052, "square", 0.045),
+    toneStep(587.33, 0.12, "triangle", 0.09),
   ];
 }
 

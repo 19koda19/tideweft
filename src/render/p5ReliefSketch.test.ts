@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DogView, TideweftView, WeatherView } from "./types";
+import type { DogView, TideweftView, WeatherView, WildlifeView } from "./types";
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 
 const p5Harness = vi.hoisted(() => ({
@@ -20,6 +20,7 @@ const p5Harness = vi.hoisted(() => ({
     readonly args: readonly unknown[];
   }>,
   initialDepthWriteEnabled: false,
+  reducedMotion: false,
 }));
 
 function projectOverlayLocalToScreen(x: number, y: number): { readonly x: number; readonly y: number } {
@@ -213,13 +214,13 @@ class FakeWindow extends FakeEventTarget {
   readonly innerHeight = 240;
   readonly devicePixelRatio = 1;
 
-  matchMedia(): {
+  matchMedia(query: string): {
     matches: boolean;
     addEventListener: ReturnType<typeof vi.fn>;
     removeEventListener: ReturnType<typeof vi.fn>;
   } {
     return {
-      matches: false,
+      matches: query === "(prefers-reduced-motion: reduce)" && p5Harness.reducedMotion,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     };
@@ -348,6 +349,34 @@ function dogView(overrides: Partial<DogView> = {}): DogView {
   };
 }
 
+function wildlifeView(
+  species: WildlifeView["species"],
+  overrides: Partial<WildlifeView> = {},
+): WildlifeView {
+  const quickLabel: Readonly<Record<WildlifeView["species"], string>> = {
+    deer: "Deer",
+    gull: "Gulls",
+    "black-bear": "Black bear",
+  };
+  const actorIdPrefix: Readonly<Record<WildlifeView["species"], string>> = {
+    deer: "DEER-",
+    gull: "GULL-",
+    "black-bear": "BEAR-",
+  };
+  return {
+    actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
+    species,
+    quickLabel: quickLabel[species],
+    position: { x: 48, y: 48 },
+    facing: Math.PI * 0.25,
+    sizeScale: 1,
+    behavior: "watch",
+    conditionLabels: [],
+    selected: false,
+    ...overrides,
+  };
+}
+
 function pointer(
   canvas: FakeCanvas,
   changes: Partial<Record<string, unknown>> = {},
@@ -407,6 +436,7 @@ beforeEach(() => {
   p5Harness.overlayProjection = { xx: 1, xy: 0, yx: 0, yy: 1 };
   p5Harness.materialTrace.length = 0;
   p5Harness.initialDepthWriteEnabled = false;
+  p5Harness.reducedMotion = false;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -1232,6 +1262,167 @@ describe("Relief dog presentation", () => {
     )).toBe(false);
     harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 93 }));
     harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 93 }));
+    expect(harness.dispatch.mock.calls.some(([command]) =>
+      (command as { type?: unknown }).type === "select"
+    )).toBe(false);
+    harness.renderer.destroy();
+  });
+});
+
+describe("Relief wildlife presentation", () => {
+  it("renders distinct low-cost silhouettes and only projected observable labels", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-wildlife", { x: 48, y: 48 });
+    const current: TideweftView = {
+      ...base,
+      wildlife: [
+        wildlifeView("deer", {
+          actorId: "DEER-VISIBLE",
+          position: { x: 30, y: 48 },
+          conditionLabels: ["ALERT"],
+          selected: true,
+        }),
+        wildlifeView("gull", {
+          actorId: "GULL-FLOCK",
+          groupSize: 7,
+          conditionLabels: ["WATCHFUL"],
+          selected: true,
+        }),
+        wildlifeView("black-bear", {
+          actorId: "BEAR-VISIBLE",
+          position: { x: 66, y: 48 },
+          conditionLabels: ["WET"],
+          selected: true,
+        }),
+      ],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const visibleLabels = layer?.children
+      .filter((child) => child.dataset.tone === "wildlife" && !child.removed)
+      .map((child) => child.textContent) ?? [];
+    expect(visibleLabels).toEqual(expect.arrayContaining([
+      "Deer · alert",
+      "Gulls · ~7 visible · watchful",
+      "Black bear · wet",
+    ]));
+    expect(layer?.children.map((child) => child.textContent).join(" "))
+      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE/u);
+    for (const color of ["#9d744f", "#e2e8df", "#202827"]) {
+      expect(p5Harness.materialTrace.some(({ method, args }) =>
+        method === "ambientMaterial" && args[0] === color
+      )).toBe(true);
+    }
+    expect(harness.instance.ellipsoid).toHaveBeenCalled();
+    expect(harness.instance.sphere).toHaveBeenCalled();
+    expect(harness.instance.cone).toHaveBeenCalled();
+    expect(harness.instance.box).toHaveBeenCalled();
+    expect(harness.instance.line).toHaveBeenCalled();
+    harness.renderer.destroy();
+  });
+
+  it("hovers and selects every wildlife species through its stable species-tagged target", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-wildlife-targets", { x: 48, y: 48 });
+    const harness = renderHarness(base);
+    const species: readonly WildlifeView["species"][] = ["deer", "gull", "black-bear"];
+    const prefix: Readonly<Record<WildlifeView["species"], string>> = {
+      deer: "DEER-",
+      gull: "GULL-",
+      "black-bear": "BEAR-",
+    };
+
+    for (const kind of species) {
+      const actor = wildlifeView(kind, {
+        actorId: `${prefix[kind]}target-${kind}`,
+        position: { x: 12, y: 12 },
+      });
+      harness.setView({ ...base, wildlife: [actor] });
+      harness.dispatch.mockClear();
+      harness.canvas.fire("pointermove", pointer(harness.canvas));
+      harness.draw();
+
+      const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+      const hoverLabel = [...(layer?.children ?? [])].reverse().find((child) =>
+        child.dataset.tone === "wildlife" && child.textContent === actor.quickLabel && !child.removed);
+      expect(hoverLabel?.dataset).toMatchObject({ tone: "wildlife", selected: "true" });
+      expect(harness.dispatch).not.toHaveBeenCalled();
+
+      harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 180 }));
+      harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 180 }));
+      expect(harness.dispatch).toHaveBeenLastCalledWith({
+        type: "select",
+        entity: "living-actor",
+        species: kind,
+        id: actor.actorId,
+        point: { x: 12, y: 12 },
+      });
+    }
+    harness.renderer.destroy();
+  });
+
+  it("fails closed outside direct detail and keeps flock motion still under reduced motion", () => {
+    let now = 120;
+    vi.stubGlobal("performance", { now: () => now });
+    p5Harness.reducedMotion = true;
+    const base = view("relief-wildlife-disclosure", { x: 48, y: 48 });
+    const gull = wildlifeView("gull", {
+      actorId: "GULL-reduced-flock",
+      groupSize: 3,
+      selected: true,
+    });
+    const harness = renderHarness({ ...base, wildlife: [gull] });
+    const line = harness.instance.line as ReturnType<typeof vi.fn>;
+    harness.draw();
+    const firstFrameLines = line.mock.calls.map((call) => [...call]);
+    expect(firstFrameLines.length).toBeGreaterThanOrEqual(6);
+
+    line.mockClear();
+    now = 1_920;
+    harness.draw();
+    expect(line.mock.calls).toEqual(firstFrameLines);
+
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    p5Harness.materialTrace.length = 0;
+    harness.dispatch.mockClear();
+    const hidden: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "relief-wildlife-hidden",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 0,
+        detailDirectTileCount: 0,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 0 as const,
+        })),
+      },
+      wildlife: [wildlifeView("black-bear", {
+        actorId: "BEAR-hidden",
+        position: { x: 12, y: 12 },
+        selected: true,
+      })],
+    };
+    harness.setView(hidden);
+    harness.draw();
+    expect(layer?.children.some((child) => child.dataset.tone === "wildlife" && !child.removed))
+      .toBe(false);
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "ambientMaterial" && args[0] === "#202827"
+    )).toBe(false);
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 181 }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 181 }));
     expect(harness.dispatch.mock.calls.some(([command]) =>
       (command as { type?: unknown }).type === "select"
     )).toBe(false);

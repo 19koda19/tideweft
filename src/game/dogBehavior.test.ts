@@ -279,6 +279,22 @@ describe("pure deterministic dog behavior", () => {
     expect(score(decision, "retreat")).toBeGreaterThan(score(decision, "approach-food"));
   });
 
+  it("treats a lawfully heard wildlife alarm as danger without inventing its source", () => {
+    const state = dog();
+    state.needs.safety = ACTOR_PERCEPTION_SCALE;
+    const decision = decide(behaviorInput(state, [{
+      id: "heard-herd-alarm",
+      perceivedClass: "animal-alarm",
+      channel: "hearing",
+      confidence: 860_000,
+      salience: 940_000,
+    }]));
+
+    expect(decision.intent).toBe("retreat");
+    expect(decision.cause.kind).toBe("perception");
+    expect(decision.focusBeliefKey).toContain("heard-herd-alarm");
+  });
+
   it("uses human familiarity and accepted human perception for avoidance", () => {
     const state = dog();
     state.humanFamiliarity = { level: "wary", confidence: 300_000 };

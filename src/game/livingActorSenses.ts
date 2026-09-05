@@ -13,8 +13,11 @@ import { hashCanonical } from "../sim/util";
 import {
   isLivingActorAddress,
   type LivingActorAddress,
-  type LivingActorSpecies,
 } from "./livingActor";
+import {
+  LIVING_SPECIES_REGISTRY,
+  type LivingActorSpecies,
+} from "./livingSpeciesRegistry";
 import { isWorldPosition, type WorldPosition } from "./worldPosition";
 
 export const LIVING_ACTOR_SENSES_VERSION = 1 as const;
@@ -51,33 +54,22 @@ export interface LivingActorScentFrameInput {
   readonly stimuli: readonly LivingActorScentStimulus[];
 }
 
-const PROFILE_BY_SPECIES: Readonly<Record<LivingActorSpecies, LivingActorSenseProfile>> =
-  Object.freeze({
-    human: Object.freeze({
-      version: LIVING_ACTOR_SENSES_VERSION,
-      species: "human",
-      visionAcuity: 850_000,
-      hearingSensitivity: 650_000,
-      scentSensitivity: 180_000,
-      scentBaseRangeUnits: 6_000,
-    }),
-    "domestic-dog": Object.freeze({
-      version: LIVING_ACTOR_SENSES_VERSION,
-      species: "domestic-dog",
-      visionAcuity: 680_000,
-      hearingSensitivity: 950_000,
-      scentSensitivity: ACTOR_PERCEPTION_SCALE,
-      scentBaseRangeUnits: 36_000,
-    }),
-  });
+const PROFILE_BY_SPECIES = new Map<LivingActorSpecies, LivingActorSenseProfile>();
+for (const entry of LIVING_SPECIES_REGISTRY) {
+  PROFILE_BY_SPECIES.set(entry.species, Object.freeze({
+    version: LIVING_ACTOR_SENSES_VERSION,
+    species: entry.species,
+    ...entry.senses,
+  }));
+}
 
 export function livingActorSenseProfile(
   species: LivingActorSpecies,
 ): LivingActorSenseProfile {
-  if (species !== "human" && species !== "domestic-dog") {
+  const profile = PROFILE_BY_SPECIES.get(species);
+  if (profile === undefined) {
     throw new RangeError(`Unsupported sensory species ${String(species)}`);
   }
-  const profile = PROFILE_BY_SPECIES[species];
   return profile;
 }
 

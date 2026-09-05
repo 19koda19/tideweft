@@ -8,6 +8,8 @@ import { FIXED_POINT } from "./types";
 import { stableStringify } from "./util";
 
 export const DOG_GENERATION_VERSION = 1;
+export const DOG_SPECIES = "domestic-dog" as const;
+export const DOG_STABLE_ID_PREFIX = "D-" as const;
 
 /**
  * This is an immutable origin namespace, not the dog's current relationship.
@@ -132,7 +134,7 @@ export interface DogWeatherAdaptation {
 export interface DogIdentity {
   readonly stableId: string;
   readonly generationVersion: number;
-  readonly species: "domestic-dog";
+  readonly species: typeof DOG_SPECIES;
   readonly originRegion: RegionCoord;
   readonly originNamespace: DogOriginNamespace;
   readonly habitatClass: DogHabitatClass;
@@ -205,7 +207,10 @@ interface DogCoatProfile {
 const DOG_IDENTITY_DOMAIN = 0x444f_4749;
 const DOG_ADDRESS_DOMAIN = 0x444f_4741;
 const SEMANTIC_KEY_PATTERN = /^[a-z0-9][a-z0-9._:/-]{0,47}$/u;
-const STABLE_ID_PREFIX_PATTERN = /^D-([RAW])-v1-([0-9a-z]{7}(?:\.[0-9a-z]{7}){3})-([np][0-9a-z]+)\.([np][0-9a-z]+)-([SCTUKR])-(.*)$/u;
+const STABLE_ID_PREFIX_PATTERN = new RegExp(
+  `^${DOG_STABLE_ID_PREFIX}([RAW])-v1-([0-9a-z]{7}(?:\\.[0-9a-z]{7}){3})-([np][0-9a-z]+)\\.([np][0-9a-z]+)-([SCTUKR])-(.*)$`,
+  "u",
+);
 
 const ORIGIN_NAMESPACES: readonly DogOriginNamespace[] = ["regional", "authored", "woven"];
 const HABITAT_CLASSES: readonly DogHabitatClass[] = [
@@ -807,7 +812,7 @@ function encodedSemanticKey(value: string): string {
 function stableDogIdV1(input: DogIdentityGenerationInput): string {
   assertGenerationInput(input);
   return [
-    `D-${namespaceCode(input.originNamespace)}-v1`,
+    `${DOG_STABLE_ID_PREFIX}${namespaceCode(input.originNamespace)}-v1`,
     seedIdentity(input.seed),
     `${signedCoordinate(input.originRegion.x)}.${signedCoordinate(input.originRegion.y)}`,
     habitatCode(input.habitatClass),
@@ -939,7 +944,7 @@ function generateDogIdentityV1Unchecked(input: DogIdentityGenerationInput): DogI
   const identity: DogIdentity = {
     stableId: stableDogId(input),
     generationVersion: DOG_GENERATION_VERSION,
-    species: "domestic-dog",
+    species: DOG_SPECIES,
     originRegion: { x: input.originRegion.x, y: input.originRegion.y },
     originNamespace: input.originNamespace,
     habitatClass: input.habitatClass,
@@ -1086,7 +1091,7 @@ function assertFixedPoint(value: unknown, label: string): asserts value is numbe
 export function assertDogIdentityCoherence(identity: DogIdentity): void {
   assertDogGenerationDictionaries();
   if (
-    identity.species !== "domestic-dog"
+    identity.species !== DOG_SPECIES
     || identity.generationVersion !== 1
     || !isRegionCoord(identity.originRegion)
     || !ORIGIN_NAMESPACES.includes(identity.originNamespace)
@@ -1097,7 +1102,7 @@ export function assertDogIdentityCoherence(identity: DogIdentity): void {
   ) throw new RangeError("Dog identity origin or version is invalid");
   assertSemanticKey(identity.habitatKey, "Dog habitat key");
   assertSemanticKey(identity.populationKey, "Dog population key");
-  const expectedPrefix = `D-${namespaceCode(identity.originNamespace)}-v${identity.generationVersion}-`;
+  const expectedPrefix = `${DOG_STABLE_ID_PREFIX}${namespaceCode(identity.originNamespace)}-v${identity.generationVersion}-`;
   if (!identity.stableId.startsWith(expectedPrefix)) {
     throw new Error("Dog stable ID is outside its immutable origin namespace");
   }

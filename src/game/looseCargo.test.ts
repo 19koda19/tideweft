@@ -6,10 +6,13 @@ import { createCraftingInventory } from "./crafting";
 import {
   LOOSE_CARGO_MAX_VELOCITY,
   LOOSE_CARGO_MAX_ENTITIES,
+  LOOSE_CARGO_MAX_PICKUP_REACH,
   LOOSE_CARGO_RETAINED_HISTORY,
   LOOSE_CARGO_MAX_ORDINAL,
   LOOSE_CARGO_TILE_UNITS,
+  addLooseCargoProvision,
   addLooseCargoStack,
+  consumeLooseCargoProvisionEntity,
   consumeLooseCargoStack,
   createLooseCargoExpectedManifest,
   createLooseCargoMultiWorldExpectedManifest,
@@ -430,6 +433,243 @@ describe("atomic drop and recovery transactions", () => {
     }
     expect(world.entities).toEqual([]);
     expect(world.lastEntityOrdinal).toBe(12);
+  });
+});
+
+describe("whole loose-provision animal consumption", () => {
+  function provisionDrop(
+    quantity = 1,
+    lotId = "provision:wildlife-food",
+  ) {
+    const empty = createLooseCargoCarrier(PLAYER, createCraftingInventory(100_000));
+    const added = addLooseCargoProvision(empty, {
+      sourceLotId: lotId,
+      provision: "dried-fish",
+      quantity,
+      materialState: { condition: 820_000, contamination: 12_000, decay: 45_000 },
+    });
+    expect(added.ok).toBe(true);
+    return drop(createLooseCargoWorld(8, 6), added.carrier, {
+      lotId,
+      quantity,
+      x: 2_000_000,
+      y: 1_500_000,
+    });
+  }
+
+  it("removes exactly one contacted provision entity and returns its exact negative-delta evidence", () => {
+    const first = provisionDrop();
+    const another = addLooseCargoProvision(first.carrier, {
+      sourceLotId: "provision:other-food",
+      provision: "fresh-produce",
+      quantity: 1,
+    });
+    expect(another.ok).toBe(true);
+    const second = drop(first.world, another.carrier, {
+      lotId: "provision:other-food",
+      quantity: 1,
+      x: 2_300_000,
+      y: 1_500_000,
+    });
+    const target = first.entity!;
+    const survivor = second.entity!;
+    const inputBefore = structuredClone(second.world);
+
+    const consumed = consumeLooseCargoProvisionEntity(second.world, {
+      actorId: "BEAR-v1-wave-a-consumer",
+      entityId: target.id,
+      x: 1_950_000,
+      y: 1_500_000,
+      reach: 50_000,
+    });
+
+    expect(consumed).toMatchObject({
+      ok: true,
+      reason: "consumed",
+      consumedByActorId: "BEAR-v1-wave-a-consumer",
+      removedPayload: {
+        kind: "provision",
+        lotId: "provision:wildlife-food",
+        provision: "dried-fish",
+        quantity: 1,
+      },
+      event: {
+        ordinal: second.world.lastEventOrdinal + 1,
+        step: second.world.completedSteps,
+        kind: "consume",
+        entityIds: [target.id],
+        payloadKey: "provision:dried-fish:lot:provision:wildlife-food",
+        quantity: 1,
+        from: {
+          region: { x: 0, y: 0 },
+          x: target.x,
+          y: target.y,
+        },
+        to: null,
+        causes: ["animal-consumption"],
+        conditionLoss: 0,
+        contaminationGain: 0,
+        decayGain: 0,
+      },
+    });
+    expect(consumed.removedEntity).toBe(target);
+    expect(consumed.removedPayload).toBe(target.payload);
+    expect(consumed.world.entities).toEqual([survivor]);
+    expect(consumed.world.lastEntityOrdinal).toBe(second.world.lastEntityOrdinal);
+    expect(consumed.world.lastEventOrdinal).toBe(second.world.lastEventOrdinal + 1);
+    expect(consumed.world.revision).toBe(second.world.revision + 1);
+    expect(second.world).toEqual(inputBefore);
+    expect(Object.isFrozen(consumed.world)).toBe(true);
+    expect(Object.isFrozen(consumed.event)).toBe(true);
+
+    const reloaded = deserializeLooseCargoWorld(serializeLooseCargoWorld(consumed.world));
+    expect(reloaded).toEqual(consumed.world);
+    expect(validateLooseCargoWorld(reloaded).valid).toBe(true);
+
+    const replay = consumeLooseCargoProvisionEntity(consumed.world, {
+      actorId: "BEAR-v1-wave-a-consumer",
+      entityId: target.id,
+      x: target.x,
+      y: target.y,
+      reach: 0,
+    });
+    expect(replay).toMatchObject({
+      ok: false,
+      reason: "entity-not-found",
+      world: consumed.world,
+      consumedByActorId: null,
+      removedEntity: null,
+      removedPayload: null,
+      event: null,
+    });
+    expect(replay.world).toBe(consumed.world);
+  });
+
+  it("fails malformed, partial, non-provision, missing, and out-of-contact requests atomically", () => {
+    const dropped = provisionDrop(2);
+    const stackCarrier = addLooseCargoStack(dropped.carrier, {
+      sourceLotId: "stack:not-food",
+      item: "cordreed",
+      quantity: 1,
+    });
+    expect(stackCarrier.ok).toBe(true);
+    const stackDrop = drop(dropped.world, stackCarrier.carrier, {
+      lotId: "stack:not-food",
+      quantity: 1,
+      x: 2_100_000,
+      y: 1_500_000,
+    });
+    const provision = dropped.entity!;
+    const stack = stackDrop.entity!;
+    const validRequest = {
+      actorId: "DEER-v1-wave-a-consumer",
+      entityId: provision.id,
+      x: provision.x,
+      y: provision.y,
+      reach: 0,
+    };
+    const cases: readonly [unknown, string][] = [
+      [{ ...validRequest, actorId: "" }, "invalid-request"],
+      [{ ...validRequest, actorId: "bad actor id" }, "invalid-request"],
+      [{ ...validRequest, entityId: "missing-entity" }, "entity-not-found"],
+      [{ ...validRequest, entityId: stack.id }, "not-provision"],
+      [{ ...validRequest, x: 0, y: 0, reach: 1 }, "out-of-reach"],
+      [{ ...validRequest, reach: LOOSE_CARGO_MAX_PICKUP_REACH + 1 }, "invalid-request"],
+      [{ ...validRequest, x: -1 }, "invalid-request"],
+      // There is deliberately no partial-quantity protocol. Supplying one is malformed.
+      [{ ...validRequest, quantity: 1 }, "invalid-request"],
+      [{ actorId: validRequest.actorId, entityId: validRequest.entityId }, "invalid-request"],
+    ];
+    for (const [request, reason] of cases) {
+      const result = consumeLooseCargoProvisionEntity(
+        stackDrop.world,
+        request as Parameters<typeof consumeLooseCargoProvisionEntity>[1],
+      );
+      expect(result.reason).toBe(reason);
+      expect(result.ok).toBe(false);
+      expect(result.world).toBe(stackDrop.world);
+      expect(result.removedEntity).toBeNull();
+      expect(result.removedPayload).toBeNull();
+      expect(result.event).toBeNull();
+    }
+    expect(stackDrop.world.entities).toHaveLength(2);
+
+    const invalidWorld = { ...stackDrop.world, version: 99 } as unknown as LooseCargoWorldState;
+    const invalid = consumeLooseCargoProvisionEntity(invalidWorld, validRequest);
+    expect(invalid.reason).toBe("invalid-world");
+    expect(invalid.world).toBe(invalidWorld);
+
+    const saturatedValidation = validateLooseCargoWorld({
+      ...stackDrop.world,
+      revision: LOOSE_CARGO_MAX_ORDINAL,
+      lastEventOrdinal: LOOSE_CARGO_MAX_ORDINAL,
+      historyBaseOrdinal: LOOSE_CARGO_MAX_ORDINAL,
+      historyArchiveHash: "1111111111111111",
+      history: [],
+    });
+    expect(saturatedValidation.valid).toBe(true);
+    const saturated = consumeLooseCargoProvisionEntity(saturatedValidation.state!, validRequest);
+    expect(saturated.reason).toBe("id-space-exhausted");
+    expect(saturated.world).toBe(saturatedValidation.state);
+  });
+
+  it("retains consume evidence when the bounded history tail compacts", () => {
+    let world = createLooseCargoWorld(4, 4);
+    let pack = createLooseCargoCarrier(
+      PLAYER,
+      createCraftingInventory(100_000, { cordreed: 2 }),
+    );
+    const provision = addLooseCargoProvision(pack, {
+      sourceLotId: "provision:compaction-food",
+      provision: "trail-ration",
+      quantity: 1,
+    });
+    expect(provision.ok).toBe(true);
+    pack = provision.carrier;
+    for (let index = 0; index < LOOSE_CARGO_RETAINED_HISTORY / 2; index += 1) {
+      const loose = drop(world, pack, {
+        lotId: "crafting-stack:cordreed",
+        quantity: 1,
+        x: 500_000,
+        y: 500_000,
+      });
+      const recovered = pickupLooseCargo(loose.world, loose.carrier, {
+        entityId: loose.entity!.id,
+        x: 500_000,
+        y: 500_000,
+        reach: 0,
+      });
+      expect(recovered.ok).toBe(true);
+      world = recovered.world;
+      pack = recovered.carrier;
+    }
+    expect(world.history).toHaveLength(LOOSE_CARGO_RETAINED_HISTORY);
+    expect(world.historyBaseOrdinal).toBe(0);
+
+    const food = drop(world, pack, {
+      lotId: "provision:compaction-food",
+      quantity: 1,
+      x: 600_000,
+      y: 600_000,
+    });
+    const consumed = consumeLooseCargoProvisionEntity(food.world, {
+      actorId: "GULL-v1-compaction-consumer",
+      entityId: food.entity!.id,
+      x: 600_000,
+      y: 600_000,
+      reach: 0,
+    });
+    expect(consumed.ok).toBe(true);
+    expect(consumed.world.history).toHaveLength(LOOSE_CARGO_RETAINED_HISTORY);
+    expect(consumed.world.historyBaseOrdinal).toBe(2);
+    expect(consumed.world.historyArchiveHash).not.toBe("0000000000000000");
+    expect(consumed.world.history.at(-1)).toEqual(consumed.event);
+    expect(consumed.world.history.at(-1)).toMatchObject({
+      kind: "consume",
+      causes: ["animal-consumption"],
+    });
+    expect(deserializeLooseCargoWorld(serializeLooseCargoWorld(consumed.world)))
+      .toEqual(consumed.world);
   });
 });
 

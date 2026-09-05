@@ -130,6 +130,12 @@ interface FoodPackFacts {
 interface PerceivedAnimalSignal {
   readonly belief: ActorBelief;
   readonly strength: number;
+  readonly kind: "animal-contact" | "shared-threat";
+  /**
+   * Policy-safe identity. Anonymous alarms and danger sounds never become an
+   * identified animal merely because another system attached source detail.
+   */
+  readonly subjectId: string | null;
 }
 
 interface ScoredCandidate {
@@ -144,6 +150,19 @@ const ANIMAL_CONTACT_CLASSES: ReadonlySet<string> = new Set([
   "domestic-dog",
   "unknown-animal",
   "unknown-dog",
+]);
+
+/** Shared wildlife/perception vocabulary accepted without species-specific hooks. */
+const SHARED_THREAT_CLASSES: ReadonlySet<string> = new Set([
+  "large-predator",
+  "animal-alarm",
+  "danger-sound",
+]);
+
+/** These signals report danger, never the identity of the danger that caused it. */
+const ANONYMOUS_THREAT_CLASSES: ReadonlySet<string> = new Set([
+  "animal-alarm",
+  "danger-sound",
 ]);
 
 const TEMPERAMENTS: ReadonlySet<string> = new Set([
@@ -269,7 +288,7 @@ function decideCanonicalPorterResponse(
   const pack = physicalFoodPack(input.cargo, input.packContainerId, input.current.actorId);
   if (pack === null) return null;
   const animal = strongestAnimalSignal(queryActorAttention(input.perception));
-  const identifiedSubjectId = animal?.belief.subjectId ?? null;
+  const identifiedSubjectId = animal?.subjectId ?? null;
   const recentlyOffered = identifiedSubjectId !== null
     && input.current.lastOfferedSubjectId === identifiedSubjectId
     && input.current.lastOfferedAtTick !== null
@@ -520,13 +539,22 @@ function physicalFoodPack(
 function strongestAnimalSignal(beliefs: readonly ActorBelief[]): PerceivedAnimalSignal | null {
   let best: PerceivedAnimalSignal | null = null;
   for (const belief of beliefs) {
-    if (!ANIMAL_CONTACT_CLASSES.has(belief.perceivedClass)) continue;
+    const kind = ANIMAL_CONTACT_CLASSES.has(belief.perceivedClass)
+      ? "animal-contact"
+      : SHARED_THREAT_CLASSES.has(belief.perceivedClass)
+        ? "shared-threat"
+        : null;
+    if (kind === null) continue;
     const strength = clamp(Math.trunc((belief.confidence * 3 + belief.salience * 2) / 5));
+    const subjectId = kind === "shared-threat"
+      && ANONYMOUS_THREAT_CLASSES.has(belief.perceivedClass)
+      ? null
+      : belief.subjectId;
     if (
       best === null
       || strength > best.strength
       || (strength === best.strength && belief.key < best.belief.key)
-    ) best = Object.freeze({ belief, strength });
+    ) best = Object.freeze({ belief, strength, kind, subjectId });
   }
   return best;
 }
@@ -539,7 +567,9 @@ function scoreIntents(
   request: PorterResponseRequestSignal | null,
 ): Readonly<Record<PorterResponseIntent, number>> {
   const animalStrength = animal?.strength ?? 0;
-  const identified = animal?.belief.subjectId !== null && animal?.belief.subjectId !== undefined;
+  const threatStrength = animal?.kind === "shared-threat" ? animalStrength : 0;
+  const identified = animal !== null && animal.subjectId !== null;
+  const offerEligible = animal?.kind === "animal-contact" && identified;
   const traits = input.disposition.traits;
   const temperament = new Set(input.disposition.temperament);
   const weatherDanger = clamp(
@@ -566,19 +596,21 @@ function scoreIntents(
   const openFood = foodAvailable && pack.closure === "open";
   const offerRequested = request?.kind === "offer-provision"
     && request.subjectId !== null
-    && request.subjectId === animal?.belief.subjectId;
+    && animal?.kind === "animal-contact"
+    && request.subjectId === animal.subjectId;
   const secureRequested = request?.kind === "secure-provisions";
 
   return Object.freeze({
     "secure-food": openFood ? clamp(
       230_000
       + weighted(animalStrength, 360_000)
+      + weighted(threatStrength, 200_000)
       + weighted(weatherDanger, 260_000)
       + weighted(input.needs.food, 80_000)
       + cautious
       + (secureRequested ? 420_000 : 0),
     ) : 0,
-    "offer-food": foodAvailable && identified && !recentlyOffered ? clamp(
+    "offer-food": foodAvailable && offerEligible && !recentlyOffered ? clamp(
       150_000
       + weighted(animalStrength, 250_000)
       + weighted(traits.empathy, 450_000)
@@ -591,6 +623,7 @@ function scoreIntents(
     reroute: animal === null ? 0 : clamp(
       90_000
       + weighted(animalStrength, 180_000)
+      + weighted(threatStrength, 600_000)
       + weighted(weatherDanger, 500_000)
       + cautious
       - weighted(traits.resolve, 120_000),
@@ -599,6 +632,7 @@ function scoreIntents(
       60_000
       + weighted(input.perception.suspicionPressure, 350_000)
       + weighted(animalStrength, 200_000)
+      + weighted(threatStrength, 300_000)
       + weighted(weatherDanger, 350_000)
       + weighted(input.needs.rest, 100_000)
       + (temperament.has("nervous") ? 100_000 : 0)
@@ -610,6 +644,7 @@ function scoreIntents(
       + weighted(traits.curiosity, 350_000)
       + patient
       + (animal !== null && !identified ? 160_000 : 0)
+      - weighted(threatStrength, 180_000)
       - weighted(weatherDanger, 200_000)
       - weighted(input.perception.suspicionPressure, 100_000),
     ),
@@ -628,8 +663,8 @@ function physicallyAvailable(
     case "offer-food":
       return pack.quantity > 0
         && pack.firstFoodLotId !== null
-        && animal?.belief.subjectId !== null
-        && animal?.belief.subjectId !== undefined
+        && animal?.kind === "animal-contact"
+        && animal.subjectId !== null
         && !recentlyOffered;
     case "reroute":
     case "leave":
@@ -650,7 +685,8 @@ function causeFor(
     request !== null
     && ((intent === "offer-food"
       && request.kind === "offer-provision"
-      && request.subjectId === animal?.belief.subjectId)
+      && animal?.kind === "animal-contact"
+      && request.subjectId === animal.subjectId)
       || (intent === "secure-food" && request.kind === "secure-provisions"))
   ) return Object.freeze({ kind: "communication", referenceId: request.requestId });
   switch (intent) {

@@ -260,9 +260,9 @@ export const TUTORIAL_CONTROLS = [
   {
     id: "inspect-person",
     audience: "all",
-    input: "Click / tap a visible person or dog",
-    action: "Open their live ABOUT view",
-    detail: "ABOUT shows only what is observable or already learned. It does not pause danger or preserve a person or dog after sight is lost.",
+    input: "Click / tap a visible person, dog, or wild animal",
+    action: "Open its live ABOUT view",
+    detail: "ABOUT shows only what is observable or already learned. It does not pause danger or preserve an actor after sight is lost.",
   },
   {
     id: "cancel-destination",
@@ -315,7 +315,7 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     id: "planned-universal-npcs",
     status: "planned",
     title: "Broader people, dogs, and wildlife",
-    clarification: "The original harbor country's 42 humans remain the current human population. One independently generated dog is now paired with one existing porter for a small food-and-rain web, with lawful perception, condition, ABOUT, movement, memory, and promotion. Additional dogs, bears, birds, deer, generated distant populations, ownership, companions, full/coarse population ecology, evidence tracking, rumors, groups, physical pursuit, and broad cross-species perception remain planned.",
+    clarification: "The original harbor country's 42 humans remain the current human population. One independently generated dog and one bounded local patch of deer, gulls, and a black bear now prove lawful ABOUT, shared sight and alarm evidence, physical food scavenging, and persistent full/coarse wildlife state. Additional dogs and species, generated distant populations, ownership, companions, reproduction, carcasses, attacks, evidence tracking, rumors, social groups, and the complete bestiary remain planned.",
     keywords: ["npc", "dog", "bear", "bird", "wildlife", "companion", "identity", "about", "perception", "ecology"],
   },
   {
@@ -1026,17 +1026,17 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   {
     id: "people-and-about",
     iconText: "12",
-    title: "Meet people and one dog as individuals",
-    shortTitle: "People, dog & ABOUT",
-    summary: "The original harbor country's 42 humans and its first independent dog act only on lawful perception, while ABOUT reveals only what you can observe or have learned.",
-    keywords: ["person", "resident", "porter", "dog", "food", "scent", "help", "reroute", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather", "vision", "hearing", "attention", "search"],
+    title: "Meet people and visible animals as individuals",
+    shortTitle: "People, wildlife & ABOUT",
+    summary: "The original harbor country's 42 humans, its first independent dog, and a bounded deer, gull, and black-bear crossing act only on lawful perception; ABOUT reveals only what you can currently observe or have learned.",
+    keywords: ["person", "resident", "porter", "dog", "deer", "gull", "black bear", "wildlife", "alarm", "food", "scavenge", "scent", "help", "wait", "reroute", "leave", "persistence", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather", "vision", "hearing", "attention", "search"],
     controlIds: ["inspect-person"],
     steps: [
       {
         id: "people-select",
         audience: "all",
         title: "Inspect an actor you can actually see",
-        body: "Click or tap a directly visible resident, traveling porter, or the single generated dog. ABOUT closes if that actor leaves exact sight; it is a live field observation, not a remote tracker.",
+        body: "Click or tap a directly visible resident, traveling porter, dog, deer, gull, or black bear. ABOUT closes if that actor leaves exact sight; it is a live field observation, not a remote tracker. Several visible gulls may be summarized as a flock without revealing birds outside your sight.",
         controlId: "inspect-person",
       },
       {
@@ -1082,6 +1082,30 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "If the porter decides to help, exactly one dried-fish unit moves from the porter's pack into dog custody before the dog can eat it. The unit cannot be duplicated by retrying. That accepted meal creates bounded dog memory and promotes this individual for persistence; after save and reload, ABOUT may recognize the same Familiar dog and remember that it accepted food from a porter. Promotion preserves an important actor—it is not ownership, training, naming, affection, or a companion bond.",
       },
       {
+        id: "wildlife-alarm-response",
+        audience: "all",
+        title: "Wildlife shares evidence, not secret knowledge",
+        body: "Deer, gulls, the black bear, the nearby dog, and the porter can react to direct sight or an explicit alarm that actually reaches them. A heard animal alarm gives an uncertain direction, not the caller's identity and not automatic knowledge that a bear caused it. Depending on what the porter perceived and their own policy, they may secure exposed food, reroute, leave, or wait.",
+      },
+      {
+        id: "wildlife-player-choices",
+        audience: "all",
+        title: "Watch, route around, or leave",
+        body: "A directly visible deer, gull, or black bear offers WAIT AND WATCH, ROUTE AROUND THIS SPOT, and LEAVE. WAIT briefly stops the current automatic route. ROUTE AROUND must keep the same destination and find a real line outside the observed animal's area; if that fails, your previous route and choice history remain unchanged. LEAVE closes the observation rather than moving the animal.",
+      },
+      {
+        id: "wildlife-physical-scavenging",
+        audience: "all",
+        title: "Exposed food remains physical",
+        body: "In this crossing, a hungry black bear can reach and consume one exposed dried-fish parcel. It must make physical contact, consumes that entire one-unit object, and leaves one animal-consumption record. The same parcel cannot be consumed twice or silently reappear after reload.",
+      },
+      {
+        id: "wildlife-persistence",
+        audience: "all",
+        title: "Distance changes detail, not identity",
+        body: "The deer, gulls, and black bear keep stable identities, positions, needs, condition, perception, intent, memories, and population membership. Leaving the active field can reduce them to a bounded coarse record; returning restores the same saved actors rather than rolling a replacement because the camera moved.",
+      },
+      {
         id: "people-weather-emotion",
         audience: "all",
         title: "Weather reaches other travelers too",
@@ -1106,8 +1130,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "people-slice-boundary",
         audience: "all",
         tone: "boundary",
-        title: "This is one small living web",
-        body: "The released animal scope is exactly one independent domestic dog connected to one existing porter, one provision pack, current rain, and the five visible choices above. Additional dogs, animal populations, bears, birds, deer, ownership, companions, naming, training, affection, groups, evidence trails, combat, hunting, and the complete biodiversity food web are not live yet.",
+        title: "This remains one small living web",
+        body: "The released wildlife scope is one bounded deer, gull, and black-bear crossing connected to the existing independent dog, porter, rain, alarms, and one exposed provision. Animals do not attack, receive injuries, die, or leave carcasses in this build. Additional species, full world populations, reproduction, hunting, taming, ownership, companions, broad tracking, and the complete bestiary are not live yet.",
       },
     ],
   },
@@ -1208,7 +1232,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-local",
         audience: "all",
         title: "The save stays on this device",
-        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins. Outer save version 7 preserves the partial movement interval introduced by version 5 plus the first living web's dog, porter response, physical provisions, player requests, memory, and promotion. Supported versions 1 through 6 migrate deterministically without inventing a companion or duplicating food.",
+        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins. Outer save version 8 preserves the partial movement interval introduced by version 5, the first dog-and-porter web, and the bounded core wildlife patch with its physical food history. Supported versions 1 through 7 migrate deterministically without inventing companion history, rerolling wildlife, or duplicating food.",
       },
       {
         id: "saves-no-offline-time",
@@ -1330,13 +1354,13 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, ABOUT inspection, occluded sight, anonymous directional hearing, bounded attention/suspicion, and last-known-area searching for the original harbor country's 42 humans are active. One generated independent dog now adds physical movement, food scent, rain/cold condition, knowledge-honest ABOUT, five player choices, exact one-unit provision transfer, bounded memory, and promotion beside one existing porter. The outer game save uses version 7; embedded simulation snapshots remain perception-aware format 4 and rules 6. Perpetual play remains active.",
+        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, ABOUT inspection, occluded sight, anonymous directional hearing, bounded attention/suspicion, and last-known-area searching for the original harbor country's 42 humans are active. One generated independent dog adds physical movement, food scent, rain/cold condition, knowledge-honest ABOUT, five player choices, exact one-unit provision transfer, bounded memory, and promotion beside one existing porter. One bounded core wildlife patch now adds directly observable deer, gulls, and a black bear, shared sight and anonymous alarm response, WAIT/REROUTE/LEAVE choices, full/coarse persistence, and one physical exposed-food scavenging event. The outer game save uses version 8; embedded simulation snapshots remain perception-aware format 4 and rules 6. Perpetual play remains active.",
       },
       {
         id: "boundaries-planned-ecology",
         audience: "all",
         title: "Broader ecology is planned",
-        body: "The seven named biomes and their rainfall, heat, salinity, exposure, and magical-water signals are visible now, and current rain affects the first dog's condition and food-scent web. A full animal roster, distant populations, reproduction, predator-prey chains, companions, courier exposure, and material-specific magical-water reactions remain planned; those systems do not alter a delivery behind the HUD's back.",
+        body: "The seven named biomes and their rainfall, heat, salinity, exposure, and magical-water signals are visible now, current rain affects the first dog's condition and food-scent web, and the bounded wildlife crossing reacts through current perception and physical food. A full animal roster, distant generated populations, reproduction, injury, attacks, carcasses, companions, courier exposure, and material-specific magical-water reactions remain planned; those systems do not alter a delivery behind the HUD's back.",
       },
       {
         id: "boundaries-planned-physics",
@@ -1357,7 +1381,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 21 as const;
+export const TUTORIAL_CONTENT_VERSION = 22 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

@@ -17,6 +17,8 @@ import {
 } from "./types";
 
 export const NPC_GENERATION_VERSION = 1;
+export const RESIDENT_SPECIES = "human" as const;
+export const RESIDENT_STABLE_ID_PREFIX = "H-" as const;
 export const MAX_RESIDENT_MEMORIES = 12;
 
 const IDENTITY_DOMAIN = 0x4e50_4349;
@@ -348,7 +350,7 @@ function stableResidentIdV1(input: ResidentIdentityGenerationInput): string {
     settlementToken,
     input.originActorOrdinal + 10_000,
   ).toString(36).padStart(7, "0");
-  return `H-v1-${signedCoordinate(input.originRegion.x)}${signedCoordinate(input.originRegion.y)}-${settlementToken.toString(36)}-${input.originActorOrdinal.toString(36)}-${token}`;
+  return `${RESIDENT_STABLE_ID_PREFIX}v1-${signedCoordinate(input.originRegion.x)}${signedCoordinate(input.originRegion.y)}-${settlementToken.toString(36)}-${input.originActorOrdinal.toString(36)}-${token}`;
 }
 
 /**
@@ -461,7 +463,7 @@ export function generateResidentIdentity(input: ResidentIdentityGenerationInput)
   return {
     stableId: stableResidentId(input),
     generationVersion: NPC_GENERATION_VERSION,
-    species: "human",
+    species: RESIDENT_SPECIES,
     originRegion: { x: input.originRegion.x, y: input.originRegion.y },
     originSettlementKey: input.originSettlementKey,
     originActorOrdinal: input.originActorOrdinal,

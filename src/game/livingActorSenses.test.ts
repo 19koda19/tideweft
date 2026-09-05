@@ -42,7 +42,7 @@ function frame(
 
 describe("shared living actor sensory profiles", () => {
   it("fails closed for a runtime species outside the implemented catalog", () => {
-    expect(() => livingActorSenseProfile("bear" as never)).toThrow(/Unsupported sensory species/u);
+    expect(() => livingActorSenseProfile("otter" as never)).toThrow(/Unsupported sensory species/u);
   });
 
   it("uses one evaluator with species data instead of pair-specific detection", () => {
@@ -53,6 +53,10 @@ describe("shared living actor sensory profiles", () => {
     expect(dog).toHaveLength(1);
     expect(livingActorSenseProfile("domestic-dog").scentSensitivity)
       .toBeGreaterThan(livingActorSenseProfile("human").scentSensitivity);
+    expect(livingActorSenseProfile("black-bear").scentBaseRangeUnits)
+      .toBeGreaterThan(livingActorSenseProfile("domestic-dog").scentBaseRangeUnits);
+    expect(livingActorSenseProfile("gull").visionAcuity)
+      .toBeGreaterThan(livingActorSenseProfile("human").visionAcuity);
   });
 
   it("emits an opaque classified area and never the physical stimulus identity", () => {

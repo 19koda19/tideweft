@@ -50,9 +50,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V7GameSaveEnvelope {
+interface V8GameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 7;
+  readonly version: 8;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -63,6 +63,7 @@ interface V7GameSaveEnvelope {
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: unknown;
   readonly bio0Ecology: string;
+  readonly coreEcology: string;
   readonly porterResponse: PorterResponseState;
   readonly integrity: string;
 }
@@ -139,15 +140,15 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeV7(record: SaveRecord): V7GameSaveEnvelope {
-  const envelope = JSON.parse(record.worldJson) as V7GameSaveEnvelope;
-  if (envelope.format !== "tideweft-session" || envelope.version !== 7) {
-    throw new Error("fixture did not produce a current v7 regional session save");
+function decodeV8(record: SaveRecord): V8GameSaveEnvelope {
+  const envelope = JSON.parse(record.worldJson) as V8GameSaveEnvelope;
+  if (envelope.format !== "tideweft-session" || envelope.version !== 8) {
+    throw new Error("fixture did not produce a current v8 regional session save");
   }
   return envelope;
 }
 
-function reseal(envelope: V7GameSaveEnvelope): V7GameSaveEnvelope {
+function reseal(envelope: V8GameSaveEnvelope): V8GameSaveEnvelope {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
   return {
     ...unsealed,
@@ -157,13 +158,13 @@ function reseal(envelope: V7GameSaveEnvelope): V7GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V7GameSaveEnvelope,
+  envelope: V8GameSaveEnvelope,
 ): void {
   const record = repository.snapshot();
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 7,
+    payloadVersion: 8,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -259,8 +260,8 @@ function moveFixtureFrameToCompatibilityTile(
 }
 
 function relocateToRidgeAtZeroStability(
-  envelope: V7GameSaveEnvelope,
-): { readonly envelope: V7GameSaveEnvelope; readonly corner: RidgeCorner } {
+  envelope: V8GameSaveEnvelope,
+): { readonly envelope: V8GameSaveEnvelope; readonly corner: RidgeCorner } {
   const world = deserializeWorld(envelope.world);
   const regionalTravel = restorePlayerRegionalTravel(
     world.meta.rootSeed,
@@ -369,7 +370,7 @@ function relocateToRidgeAtZeroStability(
   };
 }
 
-async function createV7Fixture(
+async function createV8Fixture(
   repository: MemoryRepository,
   seed: string,
   acceptPromise: boolean,
@@ -378,6 +379,7 @@ async function createV7Fixture(
   readonly sourceLotId: string | null;
   readonly sourceCondition: number | null;
   readonly promiseQuantity: number;
+  readonly nextParcelOrdinal: number;
   readonly corner: RidgeCorner;
 }> {
   const runtime = await createTideweftRuntime(repository);
@@ -404,7 +406,7 @@ async function createV7Fixture(
   await runtime.save();
   runtime.destroy();
 
-  const initial = decodeV7(repository.snapshot());
+  const initial = decodeV8(repository.snapshot());
   const promiseLot = contractId === null
     ? undefined
     : initial.physicalCargo.carrier.lots.find((lot) =>
@@ -419,6 +421,7 @@ async function createV7Fixture(
     sourceLotId: promiseLot?.id ?? null,
     sourceCondition: promiseLot?.materialState.condition ?? null,
     promiseQuantity: promiseLot?.payload.kind === "promise" ? promiseLot.payload.quantity : 0,
+    nextParcelOrdinal: initial.physicalCargo.looseWorld.lastEntityOrdinal + 1,
     corner: relocated.corner,
   };
 }
@@ -445,10 +448,10 @@ function renderedTileIndex(view: TideweftView): number {
 }
 
 describe("production terrain fall and physical cargo", () => {
-  it("rejects a resealed v7 player snapshot whose regional cartography was left stale", async () => {
+  it("rejects a resealed v8 player snapshot whose regional cartography was left stale", async () => {
     const repository = new MemoryRepository();
-    await createV7Fixture(repository, "stale regional fall fixture", false);
-    const stale = structuredClone(decodeV7(repository.snapshot()));
+    await createV8Fixture(repository, "stale regional fall fixture", false);
+    const stale = structuredClone(decodeV8(repository.snapshot()));
     const unseenIndex = stale.player.discovered.findIndex((value) => value !== FIXED_POINT);
     if (unseenIndex < 0) throw new Error("fixture unexpectedly discovered its entire regional window");
     stale.player.discovered[unseenIndex] = FIXED_POINT;
@@ -470,7 +473,7 @@ describe("production terrain fall and physical cargo", () => {
 
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {
     const repository = new MemoryRepository();
-    const fixture = await createV7Fixture(
+    const fixture = await createV8Fixture(
       repository,
       "fall cargo exact test",
       true,
@@ -507,9 +510,9 @@ describe("production terrain fall and physical cargo", () => {
     });
 
     await runtime.save();
-    const fallenSave = decodeV7(repository.snapshot());
+    const fallenSave = decodeV8(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 7,
+      version: 8,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -555,7 +558,7 @@ describe("production terrain fall and physical cargo", () => {
       record.kind === "scatter"
       && record.causes.includes("fall-separation"))).toBe(true);
     const parcelIds = parcels.map(({ id }) => id);
-    expect(parcelIds[0]).toBe("lc:0:0:parcel:1");
+    expect(parcelIds[0]).toBe(`lc:0:0:parcel:${fixture.nextParcelOrdinal}`);
     const materialAndHistory = {
       entities: fallenSave.physicalCargo.looseWorld.entities,
       history: fallenSave.physicalCargo.looseWorld.history,
@@ -580,7 +583,7 @@ describe("production terrain fall and physical cargo", () => {
     expect((resumed.getRenderView().looseCargo ?? []).map(({ id }) => id)).toEqual(visibleParcelIds);
     expect(resumed.getUIView().objective?.id).toBe(`recover-${fixture.contractId}`);
     await resumed.save();
-    const roundTripped = decodeV7(repository.snapshot());
+    const roundTripped = decodeV8(repository.snapshot());
     expect({
       entities: roundTripped.physicalCargo.looseWorld.entities,
       history: roundTripped.physicalCargo.looseWorld.history,
@@ -596,10 +599,14 @@ describe("production terrain fall and physical cargo", () => {
     advancePlayerSteps(resumed, 1);
     resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await resumed.save();
-    const afterRepeatedInput = decodeV7(repository.snapshot());
+    const afterRepeatedInput = decodeV8(repository.snapshot());
     expect(afterRepeatedInput.traversalFeedback.nextTraversalOrdinal).toBe(1);
     expect(incidentCueCalls(incident.cue)).toBe(cueCountBeforeReload);
-    expect(afterRepeatedInput.physicalCargo.looseWorld.entities.map(({ id }) => id).sort())
+    expect(afterRepeatedInput.physicalCargo.looseWorld.entities
+      .filter(({ payload }) =>
+        payload.kind === "promise" && payload.contractId === fixture.contractId)
+      .map(({ id }) => id)
+      .sort())
       .toEqual([...parcelIds].sort());
     expect(promiseQuantity(afterRepeatedInput.physicalCargo, fixture.contractId))
       .toBe(fixture.promiseQuantity);
@@ -608,9 +615,9 @@ describe("production terrain fall and physical cargo", () => {
     resumed.destroy();
   }, 15_000);
 
-  it("applies one terrain fall to an empty porter without inventing or deleting cargo", async () => {
+  it("applies one terrain fall to an empty porter without inventing player cargo", async () => {
     const repository = new MemoryRepository();
-    const fixture = await createV7Fixture(
+    const fixture = await createV8Fixture(
       repository,
       "fall cargo exact test",
       false,
@@ -624,7 +631,7 @@ describe("production terrain fall and physical cargo", () => {
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
 
-    const fallen = decodeV7(repository.snapshot());
+    const fallen = decodeV8(repository.snapshot());
     const incident = fallen.traversalFeedback.incident;
     if (!incident) throw new Error("empty porter fall incident did not persist");
     expect(incident).toMatchObject({
@@ -635,8 +642,12 @@ describe("production terrain fall and physical cargo", () => {
     expect(renderedTileIndex(runtime.getRenderView())).toBe(fixture.corner.ridgeTileIndex);
     expect(fallen.player.stamina).toBeLessThan(staminaBefore);
     expect(fallen.physicalCargo.carrier.lots).toEqual([]);
-    expect(fallen.physicalCargo.looseWorld.entities).toEqual([]);
-    expect(fallen.physicalCargo.expectedManifest.entries).toEqual([]);
+    expect(fallen.physicalCargo.looseWorld.entities.every(({ payload }) =>
+      payload.kind === "provision"
+    )).toBe(true);
+    expect(fallen.physicalCargo.expectedManifest.entries.every(({ payloadKey }) =>
+      payloadKey === "provision:dried-fish"
+    )).toBe(true);
     const staminaAfterFall = fallen.player.stamina;
     const cueCount = incidentCueCalls(incident.cue);
 
@@ -644,12 +655,16 @@ describe("production terrain fall and physical cargo", () => {
     advancePlayerSteps(runtime, 1);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
-    const repeated = decodeV7(repository.snapshot());
+    const repeated = decodeV8(repository.snapshot());
     expect(repeated.traversalFeedback.nextTraversalOrdinal).toBe(1);
     expect(repeated.player.stamina).toBeGreaterThanOrEqual(staminaAfterFall);
     expect(repeated.physicalCargo.carrier.lots).toEqual([]);
-    expect(repeated.physicalCargo.looseWorld.entities).toEqual([]);
-    expect(repeated.physicalCargo.expectedManifest.entries).toEqual([]);
+    expect(repeated.physicalCargo.looseWorld.entities.every(({ payload }) =>
+      payload.kind === "provision"
+    )).toBe(true);
+    expect(repeated.physicalCargo.expectedManifest.entries.every(({ payloadKey }) =>
+      payloadKey === "provision:dried-fish"
+    )).toBe(true);
     expect(incidentCueCalls(incident.cue)).toBe(cueCount);
     runtime.destroy();
   });
