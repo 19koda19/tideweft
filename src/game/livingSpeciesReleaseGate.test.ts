@@ -69,7 +69,164 @@ describe("Living Weft species release gate", () => {
         "same-species-interaction",
         "player-independent-scenario",
       ]));
+    expect(livingSpeciesReadinessReport("brown-rat")).toMatchObject({
+      evidenceAuthenticated: true,
+      state: "blocked",
+      publicReady: false,
+      counts: {
+        active: 25,
+        foundation: 4,
+        unimplemented: 1,
+        notApplicable: 0,
+        total: 30,
+      },
+      blockingCriteria: [
+        "food-web",
+        "perception-senses",
+        "full-coarse-transition",
+        "seamless-region-crossing",
+        "exact-tested-deployment",
+      ],
+    });
+    expect(livingSpeciesReadinessReport("domestic-cat")).toMatchObject({
+      evidenceAuthenticated: true,
+      state: "blocked",
+      publicReady: false,
+      counts: {
+        active: 27,
+        foundation: 2,
+        unimplemented: 1,
+        notApplicable: 0,
+        total: 30,
+      },
+      blockingCriteria: [
+        "food-web",
+        "perception-senses",
+        "exact-tested-deployment",
+      ],
+    });
     expect(livingSpeciesReadinessReport("wolf")).toBeNull();
+  });
+
+  it("authenticates landed Settlement Shadows capabilities without closing deferred systems", () => {
+    for (const species of ["brown-rat", "domestic-cat"] as const) {
+      const releaseGate = gate(species);
+      const state = (criterion: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+        releaseGate.criteria.find((candidate) => candidate.criterion === criterion)
+      );
+
+      expect(state("species-profile")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: species === "brown-rat"
+          ? [
+              "game:core-ecology:v3",
+              "game:living-species-catalog:v1",
+              "sim:core-wildlife-identity:v1",
+            ]
+          : ["game:living-species-catalog:v1", "sim:core-wildlife-identity:v1"],
+      });
+      expect(state("ecological-niche")?.status).toBe("active");
+      expect(state("food-web")?.status).toBe("foundation");
+      expect(state("perception-senses")).toMatchObject({
+        status: "foundation",
+        evidenceOwnerIds: species === "brown-rat"
+          ? [
+              "game:core-ecology-aggregate-perception:v1",
+              "game:core-ecology-small-world:v2",
+              "game:living-actor-senses:v1",
+              "sim:actor-perception:v2",
+            ]
+          : [
+              "game:core-ecology-perception:v1",
+              "game:living-actor-senses:v1",
+              "sim:actor-perception:v2",
+            ],
+      });
+      expect(state("clone-diversity")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: species === "brown-rat"
+          ? ["game:core-ecology:v3", "sim:core-wildlife-identity:v1"]
+          : ["sim:core-wildlife-identity:v1"],
+      });
+      for (const criterion of [
+        "appearance",
+        "sound",
+        "habitat-placement",
+        "locomotion",
+        "dog-interaction",
+        "about-disclosure",
+        "population-materialization",
+        "save-load",
+        "accessibility",
+      ] as const) {
+        expect(state(criterion)?.status).toBe("active");
+      }
+      expect(state("performance-budget")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: [
+          "game:core-ecology-aggregate-perception:v1",
+          "game:core-ecology-habitat:v2",
+          "game:core-ecology:v3",
+          "game:runtime-core-ecology:v1",
+          "test:core-ecology-settlement-shadows-performance:v1",
+        ],
+      });
+      expect(state("mobile-parity")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: [
+          "game:wildlife-about:v1",
+          "game:wildlife-presentation:v1",
+          "test:core-ecology-settlement-shadows-mobile:v1",
+        ],
+      });
+      expect(state("same-species-interaction")).toMatchObject(species === "brown-rat"
+        ? {
+            status: "active",
+            evidenceOwnerIds: ["game:core-ecology-small-world:v2"],
+          }
+        : {
+            status: "active",
+            evidenceOwnerIds: [
+              "game:core-ecology-perception:v1",
+              "game:core-wildlife-actor:v1",
+            ],
+          });
+      expect(state("tutorial-truth")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: ["ui:tutorial-guide:v25"],
+      });
+      expect(state("patch-note-truth")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: ["content:patch-notes-alpha15:v1"],
+      });
+      expect(state("exact-tested-deployment"))
+        .toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    }
+    expect(gate("brown-rat").criteria.find(({ criterion }) => (
+      criterion === "environmental-evidence"
+    ))).toMatchObject({ status: "active" });
+    expect(gate("brown-rat").criteria.find(({ criterion }) => (
+      criterion === "seamless-region-crossing"
+    ))).toMatchObject({ status: "foundation" });
+    expect(gate("brown-rat").criteria.find(({ criterion }) => (
+      criterion === "full-coarse-transition"
+    ))).toMatchObject({ status: "foundation" });
+    expect(gate("domestic-cat").criteria.find(({ criterion }) => (
+      criterion === "environmental-evidence"
+    ))).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: [
+        "game:core-ecology-evidence-runtime:v1",
+        "game:core-wildlife-actor:v1",
+        "game:wildlife-presentation:v1",
+      ],
+    });
+    expect(gate("domestic-cat").criteria.find(({ criterion }) => (
+      criterion === "seamless-region-crossing"
+    ))).toMatchObject({ status: "active" });
+    expect(gate("domestic-cat").criteria.find(({ criterion }) => (
+      criterion === "full-coarse-transition"
+    ))).toMatchObject({ status: "active" });
   });
 
   it("authenticates bounded Wave-A habitat and population evidence without future claims", () => {

@@ -134,6 +134,7 @@ import {
   type TerrainSpatialFrame,
 } from "./spatialFrame";
 import type {
+  AggregateWildlifeEvidenceView,
   DogView,
   FieldResourceNodeView,
   LooseCargoView,
@@ -190,25 +191,123 @@ const RELIEF_DOG_COAT_COLORS: Readonly<Record<DogView["coat"]["primary"], string
   "blue-gray": "#657b82",
 };
 
-const RELIEF_WILDLIFE_COLORS: Readonly<Record<WildlifeView["species"], {
+type ReliefWildlifeForm =
+  | "deer"
+  | "gull-flock"
+  | "black-bear"
+  | "domestic-cat";
+
+interface ReliefWildlifeDescriptor {
+  readonly form: ReliefWildlifeForm;
+  readonly colors: Readonly<{
+    readonly primary: string;
+    readonly secondary: string;
+    readonly dark: string;
+  }>;
+  readonly hitRadiusScale: number;
+  readonly ringRadiusScale: number;
+  readonly labelLift: number;
+  readonly visibleGroupNoun: "flock" | null;
+}
+
+/** Exhaustive visual and targeting policy; species never inherit another silhouette. */
+const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDescriptor>> = {
+  deer: {
+    form: "deer",
+    colors: {
+      primary: "#9d744f",
+      secondary: "#d3ae78",
+      dark: "#3c2d25",
+    },
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.4,
+    labelLift: 0.78,
+    visibleGroupNoun: null,
+  },
+  gull: {
+    form: "gull-flock",
+    colors: {
+      primary: "#e2e8df",
+      secondary: "#879496",
+      dark: "#253438",
+    },
+    hitRadiusScale: 0.44,
+    ringRadiusScale: 0.34,
+    labelLift: 1.16,
+    visibleGroupNoun: "flock",
+  },
+  "black-bear": {
+    form: "black-bear",
+    colors: {
+      primary: "#202827",
+      secondary: "#5b5145",
+      dark: "#0a1112",
+    },
+    hitRadiusScale: 0.62,
+    ringRadiusScale: 0.52,
+    labelLift: 0.78,
+    visibleGroupNoun: null,
+  },
+  "domestic-cat": {
+    form: "domestic-cat",
+    colors: {
+      primary: "#746153",
+      secondary: "#b28f69",
+      dark: "#292522",
+    },
+    hitRadiusScale: 0.44,
+    ringRadiusScale: 0.36,
+    labelLift: 0.68,
+    visibleGroupNoun: null,
+  },
+};
+
+/*
+ * Kept as a narrow accessor so all draw helpers consume the exhaustive record
+ * above rather than growing species-specific color fallbacks.
+ */
+const reliefWildlifeColors = (species: WildlifeView["species"]): Readonly<{
   readonly primary: string;
   readonly secondary: string;
   readonly dark: string;
-}>> = {
-  deer: {
-    primary: "#9d744f",
-    secondary: "#d3ae78",
-    dark: "#3c2d25",
+}> => RELIEF_WILDLIFE[species].colors;
+
+interface ReliefAggregateEvidenceDescriptor {
+  readonly primary: string;
+  readonly secondary: string;
+  readonly dark: string;
+  readonly hitRadiusScale: number;
+  readonly ringRadiusScale: number;
+  readonly liftScale: number;
+}
+
+const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
+  AggregateWildlifeEvidenceView["form"],
+  ReliefAggregateEvidenceDescriptor
+>> = {
+  "gnaw-marks": {
+    primary: "#76563e",
+    secondary: "#dec29b",
+    dark: "#241b16",
+    hitRadiusScale: 0.45,
+    ringRadiusScale: 0.36,
+    liftScale: 0.32,
   },
-  gull: {
-    primary: "#e2e8df",
-    secondary: "#879496",
-    dark: "#253438",
+  "shelter-sign": {
+    primary: "#70563f",
+    secondary: "#b28e68",
+    dark: "#161412",
+    hitRadiusScale: 0.5,
+    ringRadiusScale: 0.4,
+    liftScale: 0.38,
   },
-  "black-bear": {
-    primary: "#202827",
-    secondary: "#5b5145",
-    dark: "#0a1112",
+  "small-tracks": {
+    primary: "#9b8067",
+    secondary: "#c5aa87",
+    dark: "#2c241f",
+    hitRadiusScale: 0.45,
+    ringRadiusScale: 0.36,
+    liftScale: 0.28,
   },
 };
 
@@ -739,6 +838,12 @@ export function createTideweftReliefRenderer(
       && hoverTarget.species === wildlife.species
       && hoverTarget.id === wildlife.actorId;
 
+  const aggregateEvidenceIsHovered = (
+    evidence: AggregateWildlifeEvidenceView,
+  ): boolean => hoverTarget?.entity === "aggregate-wildlife-evidence"
+    && hoverTarget.aggregateId === evidence.aggregateId
+    && hoverTarget.evidenceId === evidence.evidenceId;
+
   const syncReliefLabels = (
     view: TideweftView,
     cache: CachedReliefMesh,
@@ -1027,6 +1132,7 @@ export function createTideweftReliefRenderer(
       );
     }
     for (const wildlife of view.wildlife ?? []) {
+      const descriptor = RELIEF_WILDLIFE[wildlife.species];
       if (!isDirectlyDetailPerceived(
         view.terrain,
         wildlife.position,
@@ -1040,7 +1146,7 @@ export function createTideweftReliefRenderer(
         cache.mesh.verticalScale,
         true,
       );
-      const approximateGroup = wildlife.species === "gull"
+      const approximateGroup = descriptor.visibleGroupNoun !== null
         && wildlife.groupSize !== undefined
         && wildlife.groupSize > 1
         ? ` · ~${clampInteger(wildlife.groupSize, 2, 999)} visible`
@@ -1052,12 +1158,36 @@ export function createTideweftReliefRenderer(
       const condition = observableCondition.length > 0
         ? ` · ${observableCondition}`
         : "";
-      const labelLift = wildlife.species === "gull" ? 1.16 : 0.78;
       place(
         `wildlife-${wildlife.species}-${wildlife.actorId}`,
         `${wildlife.quickLabel}${approximateGroup}${condition}`,
         wildlife.position,
-        surface + tileSize * labelLift,
+        surface + tileSize * descriptor.labelLift,
+        "wildlife",
+        highlighted,
+      );
+    }
+    for (const evidence of view.aggregateWildlifeEvidence ?? []) {
+      if (evidence.representation !== "population-evidence") continue;
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        evidence.position,
+        view.perception !== undefined,
+      )) continue;
+      const highlighted = evidence.selected || aggregateEvidenceIsHovered(evidence);
+      if (!highlighted) continue;
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        evidence.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      const descriptor = RELIEF_AGGREGATE_EVIDENCE[evidence.form];
+      place(
+        `aggregate-wildlife-evidence-${evidence.evidenceId}`,
+        `${evidence.quickLabel} · ${evidence.evidenceLabel.toLocaleLowerCase("en-US")}`,
+        evidence.position,
+        surface + tileSize * descriptor.liftScale,
         "wildlife",
         highlighted,
       );
@@ -1323,18 +1453,16 @@ export function createTideweftReliefRenderer(
       }
     }
     for (const wildlife of view.wildlife ?? []) {
+      const descriptor = RELIEF_WILDLIFE[wildlife.species];
       if (!isDirectlyDetailPerceived(
         view.terrain,
         wildlife.position,
         view.perception !== undefined,
       )) continue;
-      const speciesScale = wildlife.species === "black-bear"
-        ? 0.62
-        : wildlife.species === "deer"
-          ? 0.48
-          : 0.44;
       const wildlifeRadius = Math.max(
-        view.terrain.tileSize * speciesScale * clamp(wildlife.sizeScale, 0.55, 1.8),
+        view.terrain.tileSize
+          * descriptor.hitRadiusScale
+          * clamp(wildlife.sizeScale, 0.55, 1.8),
         unitsPerPixel() * 22,
       );
       const distance = distanceSquared(point, wildlife.position);
@@ -1344,6 +1472,33 @@ export function createTideweftReliefRenderer(
             entity: "living-actor",
             species: wildlife.species,
             id: wildlife.actorId,
+          },
+          distance,
+        };
+      }
+    }
+    for (const evidence of view.aggregateWildlifeEvidence ?? []) {
+      if (evidence.representation !== "population-evidence") continue;
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        evidence.position,
+        view.perception !== undefined,
+      )) continue;
+      const descriptor = RELIEF_AGGREGATE_EVIDENCE[evidence.form];
+      const evidenceRadius = Math.max(
+        view.terrain.tileSize
+          * descriptor.hitRadiusScale
+          * clamp(evidence.sizeScale, 0.55, 1.4),
+        unitsPerPixel() * 22,
+      );
+      const distance = distanceSquared(point, evidence.position);
+      if (distance <= evidenceRadius ** 2 && (!nearest || distance < nearest.distance)) {
+        nearest = {
+          target: {
+            entity: "aggregate-wildlife-evidence",
+            species: "brown-rat",
+            aggregateId: evidence.aggregateId,
+            evidenceId: evidence.evidenceId,
           },
           distance,
         };
@@ -3472,7 +3627,7 @@ export function createTideweftReliefRenderer(
       surface: number,
       tileSize: number,
     ): void => {
-      const colors = RELIEF_WILDLIFE_COLORS.deer;
+      const colors = reliefWildlifeColors("deer");
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
       const base = tileSize * 0.095 * scale;
       const resting = wildlife.behavior === "rest";
@@ -3541,7 +3696,7 @@ export function createTideweftReliefRenderer(
       tileSize: number,
       now: number,
     ): void => {
-      const colors = RELIEF_WILDLIFE_COLORS.gull;
+      const colors = reliefWildlifeColors("gull");
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
       const base = tileSize * 0.07 * scale;
       const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
@@ -3609,7 +3764,7 @@ export function createTideweftReliefRenderer(
       surface: number,
       tileSize: number,
     ): void => {
-      const colors = RELIEF_WILDLIFE_COLORS["black-bear"];
+      const colors = reliefWildlifeColors("black-bear");
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
       const base = tileSize * 0.145 * scale;
       const resting = wildlife.behavior === "rest";
@@ -3656,6 +3811,197 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawDomesticCat = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+    ): void => {
+      const colors = reliefWildlifeColors("domestic-cat");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.082 * scale;
+      const resting = wildlife.behavior === "rest";
+      const bodyHalfLength = base * 1.7;
+      const bodyHalfHeight = base * 0.62;
+      const bodyHalfWidth = base * 0.5;
+      const legHeight = resting ? base * 0.15 : base * 0.92;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.72;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      if (!resting) {
+        p.ambientMaterial(colors.dark);
+        for (const legX of [-bodyHalfLength * 0.62, bodyHalfLength * 0.62]) {
+          for (const legZ of [-bodyHalfWidth * 0.5, bodyHalfWidth * 0.5]) {
+            p.push();
+            p.translate(legX, legHeight * 0.6, legZ);
+            p.box(base * 0.16, legHeight, base * 0.14);
+            p.pop();
+          }
+        }
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 8, 5);
+      p.push();
+      p.translate(bodyHalfLength * 0.92, -bodyHalfHeight * 0.32, 0);
+      p.sphere(base * 0.55, 7, 5);
+      for (const earZ of [-base * 0.37, base * 0.37]) {
+        p.push();
+        p.translate(-base * 0.08, -base * 0.52, earZ);
+        p.ambientMaterial(colors.secondary);
+        p.cone(base * 0.2, base * 0.48, 4, 1);
+        p.pop();
+      }
+      p.ambientMaterial(colors.secondary);
+      p.translate(base * 0.43, base * 0.08, 0);
+      p.ellipsoid(base * 0.38, base * 0.24, base * 0.32, 6, 4);
+      p.pop();
+
+      p.noFill();
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(1, base * 0.18));
+      p.line(
+        -bodyHalfLength * 0.88,
+        -bodyHalfHeight * 0.12,
+        0,
+        -bodyHalfLength * 1.52,
+        -bodyHalfHeight * 1.18,
+        -bodyHalfWidth * 0.14,
+      );
+      p.line(
+        -bodyHalfLength * 1.52,
+        -bodyHalfHeight * 1.18,
+        -bodyHalfWidth * 0.14,
+        -bodyHalfLength * 1.24,
+        -bodyHalfHeight * 1.68,
+        -bodyHalfWidth * 0.08,
+      );
+      p.noStroke();
+      p.pop();
+    };
+
+    const drawAggregateWildlifeEvidenceForm = (
+      evidence: AggregateWildlifeEvidenceView,
+      surface: number,
+      tileSize: number,
+    ): void => {
+      const descriptor = RELIEF_AGGREGATE_EVIDENCE[evidence.form];
+      const base = tileSize * 0.08 * clamp(evidence.sizeScale, 0.55, 1.4);
+      p.push();
+      p.translate(evidence.position.x, -surface - base * 0.12, evidence.position.y);
+      p.noStroke();
+      switch (evidence.form) {
+        case "gnaw-marks":
+          p.rotateY(-0.42);
+          p.ambientMaterial(descriptor.primary);
+          p.box(base * 2.65, base * 0.38, base * 0.92);
+          p.stroke(descriptor.secondary);
+          p.strokeWeight(Math.max(1, base * 0.14));
+          for (const offset of [-0.72, -0.24, 0.24, 0.72]) {
+            p.line(
+              base * offset,
+              -base * 0.24,
+              -base * 0.48,
+              base * (offset - 0.18),
+              -base * 0.25,
+              base * 0.48,
+            );
+          }
+          p.noStroke();
+          break;
+        case "small-tracks":
+          for (let index = 0; index < 4; index += 1) {
+            const x = (index - 1.5) * base * 0.76;
+            const z = (index % 2 === 0 ? 0.35 : -0.35) * base;
+            p.push();
+            p.translate(x, 0, z);
+            p.ambientMaterial(descriptor.primary);
+            p.ellipsoid(base * 0.3, base * 0.075, base * 0.22, 6, 3);
+            p.translate(base * 0.24, -base * 0.015, -base * 0.16);
+            p.ambientMaterial(descriptor.secondary);
+            p.sphere(base * 0.09, 5, 3);
+            p.pop();
+          }
+          p.stroke(descriptor.dark);
+          p.strokeWeight(Math.max(1, base * 0.11));
+          p.line(-base * 1.55, 0, base * 0.7, base * 1.55, 0, -base * 0.7);
+          p.noStroke();
+          break;
+        case "shelter-sign":
+          p.ambientMaterial(descriptor.primary);
+          p.cone(base * 1.45, base * 1.15, 6, 1);
+          p.push();
+          p.translate(base * 0.88, base * 0.18, 0);
+          p.ambientMaterial(descriptor.dark);
+          p.ellipsoid(base * 0.62, base * 0.46, base * 0.72, 7, 4);
+          p.pop();
+          p.stroke(descriptor.secondary);
+          p.strokeWeight(Math.max(1, base * 0.12));
+          p.line(-base * 1.2, base * 0.52, -base * 0.7, base * 1.05, base * 0.52, base * 0.7);
+          p.noStroke();
+          break;
+      }
+      p.pop();
+    };
+
+    const drawAggregateWildlifeEvidence = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+    ): void => {
+      const tileSize = view.terrain.tileSize;
+      for (const evidence of view.aggregateWildlifeEvidence ?? []) {
+        if (!isDirectlyDetailPerceived(
+          view.terrain,
+          evidence.position,
+          view.perception !== undefined,
+        )) continue;
+        const descriptor = RELIEF_AGGREGATE_EVIDENCE[evidence.form];
+        if (evidence.selected || aggregateEvidenceIsHovered(evidence)) {
+          drawGroundRing(
+            view,
+            cache,
+            evidence.position,
+            tileSize
+              * descriptor.ringRadiusScale
+              * clamp(evidence.sizeScale, 0.55, 1.4),
+            RELIEF_PALETTE.tide,
+            205,
+          );
+        }
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          evidence.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        drawAggregateWildlifeEvidenceForm(evidence, surface, tileSize);
+      }
+    };
+
+    const drawReliefWildlifeActor = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): boolean => {
+      switch (RELIEF_WILDLIFE[wildlife.species].form) {
+        case "deer":
+          drawDeer(wildlife, surface, tileSize);
+          return true;
+        case "gull-flock":
+          drawGulls(wildlife, surface, tileSize, now);
+          return true;
+        case "black-bear":
+          drawBlackBear(wildlife, surface, tileSize);
+          return true;
+        case "domestic-cat":
+          drawDomesticCat(wildlife, surface, tileSize);
+          return true;
+      }
+    };
+
     const drawWildlife = (
       view: TideweftView,
       cache: CachedReliefMesh,
@@ -3663,6 +4009,7 @@ export function createTideweftReliefRenderer(
     ): void => {
       const tileSize = view.terrain.tileSize;
       for (const wildlife of view.wildlife ?? []) {
+        const descriptor = RELIEF_WILDLIFE[wildlife.species];
         if (!isDirectlyDetailPerceived(
           view.terrain,
           wildlife.position,
@@ -3676,27 +4023,18 @@ export function createTideweftReliefRenderer(
           true,
         );
         if (highlighted) {
-          const radiusScale = wildlife.species === "black-bear"
-            ? 0.52
-            : wildlife.species === "deer"
-              ? 0.4
-              : 0.34;
           drawGroundRing(
             view,
             cache,
             wildlife.position,
-            tileSize * radiusScale * clamp(wildlife.sizeScale, 0.55, 1.8),
+            tileSize
+              * descriptor.ringRadiusScale
+              * clamp(wildlife.sizeScale, 0.55, 1.8),
             RELIEF_PALETTE.tide,
             205,
           );
         }
-        if (wildlife.species === "deer") {
-          drawDeer(wildlife, surface, tileSize);
-        } else if (wildlife.species === "gull") {
-          drawGulls(wildlife, surface, tileSize, now);
-        } else {
-          drawBlackBear(wildlife, surface, tileSize);
-        }
+        drawReliefWildlifeActor(wildlife, surface, tileSize, now);
       }
     };
 
@@ -4196,6 +4534,7 @@ export function createTideweftReliefRenderer(
       drawSoundings(view, cache);
       drawTideHarps(view, cache, now);
       drawWayknots(view, cache, now);
+      drawAggregateWildlifeEvidence(view, cache);
       for (const settlement of view.settlements) drawSettlement(view, cache, settlement);
       drawPorters(view, cache);
       drawDogs(view, cache);

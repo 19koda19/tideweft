@@ -1650,7 +1650,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(9);
+    expect(prepared.version).toBe(10);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -1859,8 +1859,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(9);
-    expect(durableRecord.payloadVersion).toBe(9);
+    expect(durable.version).toBe(10);
+    expect(durableRecord.payloadVersion).toBe(10);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

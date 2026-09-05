@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DogView, TideweftView, WeatherView, WildlifeView } from "./types";
+import type {
+  AggregateWildlifeEvidenceView,
+  DogView,
+  TideweftView,
+  WeatherView,
+  WildlifeView,
+} from "./types";
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 
 const p5Harness = vi.hoisted(() => ({
@@ -349,19 +355,23 @@ function dogView(overrides: Partial<DogView> = {}): DogView {
   };
 }
 
+type IndividualWildlifeViewSpecies = Exclude<WildlifeView["species"], "brown-rat">;
+
 function wildlifeView(
-  species: WildlifeView["species"],
+  species: IndividualWildlifeViewSpecies,
   overrides: Partial<WildlifeView> = {},
 ): WildlifeView {
-  const quickLabel: Readonly<Record<WildlifeView["species"], string>> = {
+  const quickLabel: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "Deer",
     gull: "Gulls",
     "black-bear": "Black bear",
+    "domestic-cat": "Domestic cat",
   };
-  const actorIdPrefix: Readonly<Record<WildlifeView["species"], string>> = {
+  const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
     gull: "GULL-",
     "black-bear": "BEAR-",
+    "domestic-cat": "CAT-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -372,6 +382,28 @@ function wildlifeView(
     sizeScale: 1,
     behavior: "watch",
     conditionLabels: [],
+    selected: false,
+    ...overrides,
+  };
+}
+
+function aggregateWildlifeEvidenceView(
+  overrides: Partial<AggregateWildlifeEvidenceView> = {},
+): AggregateWildlifeEvidenceView {
+  return {
+    version: 1,
+    aggregateId: "RAT-AREA-v1-relief-aggregate",
+    evidenceId: "RAT-AREA-v1-relief-aggregate:evidence:0",
+    species: "brown-rat",
+    representation: "population-evidence",
+    form: "gnaw-marks",
+    quickLabel: "Brown rat signs",
+    identityLabel: "Brown rat population signs",
+    evidenceLabel: "Rat gnaw marks",
+    speciesIdentified: true,
+    position: { x: 12, y: 12 },
+    sizeScale: 0.82,
+    distanceUnits: 4_000,
     selected: false,
     ...overrides,
   };
@@ -1270,6 +1302,171 @@ describe("Relief dog presentation", () => {
 });
 
 describe("Relief wildlife presentation", () => {
+  it("renders and touch-selects aggregate population evidence without an actor target", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-rat-evidence", { x: 48, y: 48 });
+    const evidence = aggregateWildlifeEvidenceView({ selected: true });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "relief-rat-evidence-direct-detail",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 16,
+        detailDirectTileCount: 16,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+        })),
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const evidenceLabel = layer?.children.find((child) =>
+      child.dataset.tone === "wildlife" && !child.removed
+    );
+    expect(evidenceLabel?.textContent).toBe("Brown rat signs · rat gnaw marks");
+    expect(layer?.children.map((child) => child.textContent).join(" "))
+      .not.toMatch(/RAT-AREA|evidence:0/u);
+    expect(harness.instance.box).toHaveBeenCalled();
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "ambientMaterial" && args[0] === "#76563e"
+    )).toBe(true);
+
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 182,
+      pointerType: "touch",
+    }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 182,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species: "brown-rat",
+      aggregateId: evidence.aggregateId,
+      evidenceId: evidence.evidenceId,
+      point: { x: 12, y: 12 },
+    });
+    expect(harness.dispatch.mock.calls.some(([command]) =>
+      (command as { entity?: unknown }).entity === "living-actor"
+    )).toBe(false);
+    harness.renderer.destroy();
+  });
+
+  it("renders direct cat pawprints in Relief without creating an evidence selection target", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-cat-rain-evidence", { x: 48, y: 48 });
+    const evidence = aggregateWildlifeEvidenceView({
+      aggregateId: "CAT-R-v1-relief-rain-source",
+      evidenceId: "CAT-R-v1-relief-rain-source:e:1:wet-tracks",
+      species: "domestic-cat",
+      representation: "individual-evidence",
+      form: "small-tracks",
+      quickLabel: "Domestic cat signs",
+      identityLabel: "Domestic cat tracks",
+      evidenceLabel: "Wet cat pawprints",
+      sizeScale: 1.02,
+    });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "relief-cat-rain-evidence-direct-detail",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 16,
+        detailDirectTileCount: 16,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+        })),
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+
+    expect(harness.instance.ellipsoid).toHaveBeenCalled();
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 183,
+      pointerType: "touch",
+    }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 183,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch.mock.calls.some(([command]) => (
+      (command as { entity?: unknown }).entity === "aggregate-wildlife-evidence"
+    ))).toBe(false);
+    expect(harness.dispatch.mock.calls.some(([command]) => (
+      (command as { entity?: unknown }).entity === "living-actor"
+    ))).toBe(false);
+    harness.renderer.destroy();
+  });
+
+  it("fails closed for aggregate evidence outside direct detail", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-rat-evidence-hidden", { x: 48, y: 48 });
+    const hidden: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "relief-rat-evidence-hidden",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 0,
+        detailDirectTileCount: 0,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 0 as const,
+        })),
+      },
+      aggregateWildlifeEvidence: [aggregateWildlifeEvidenceView({ selected: true })],
+    };
+    const harness = renderHarness(hidden);
+    harness.draw();
+
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    expect(layer?.children.some((child) => child.dataset.tone === "wildlife" && !child.removed))
+      .toBe(false);
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "ambientMaterial" && args[0] === "#76563e"
+    )).toBe(false);
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 183 }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 183 }));
+    expect(harness.dispatch.mock.calls.some(([command]) =>
+      (command as { type?: unknown }).type === "select"
+    )).toBe(false);
+    harness.renderer.destroy();
+  });
+
   it("renders distinct low-cost silhouettes and only projected observable labels", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-wildlife", { x: 48, y: 48 });
@@ -1294,6 +1491,12 @@ describe("Relief wildlife presentation", () => {
           conditionLabels: ["WET"],
           selected: true,
         }),
+        wildlifeView("domestic-cat", {
+          actorId: "CAT-VISIBLE",
+          position: { x: 84, y: 48 },
+          conditionLabels: ["WATCHFUL"],
+          selected: true,
+        }),
       ],
     };
     const harness = renderHarness(current);
@@ -1307,10 +1510,11 @@ describe("Relief wildlife presentation", () => {
       "Deer · alert",
       "Gulls · ~7 visible · watchful",
       "Black bear · wet",
+      "Domestic cat · watchful",
     ]));
     expect(layer?.children.map((child) => child.textContent).join(" "))
-      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE/u);
-    for (const color of ["#9d744f", "#e2e8df", "#202827"]) {
+      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE/u);
+    for (const color of ["#9d744f", "#e2e8df", "#202827", "#746153"]) {
       expect(p5Harness.materialTrace.some(({ method, args }) =>
         method === "ambientMaterial" && args[0] === color
       )).toBe(true);
@@ -1323,15 +1527,21 @@ describe("Relief wildlife presentation", () => {
     harness.renderer.destroy();
   });
 
-  it("hovers and selects every wildlife species through its stable species-tagged target", () => {
+  it("hovers and selects every individually represented wildlife species", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-wildlife-targets", { x: 48, y: 48 });
     const harness = renderHarness(base);
-    const species: readonly WildlifeView["species"][] = ["deer", "gull", "black-bear"];
-    const prefix: Readonly<Record<WildlifeView["species"], string>> = {
+    const species: readonly IndividualWildlifeViewSpecies[] = [
+      "deer",
+      "gull",
+      "black-bear",
+      "domestic-cat",
+    ];
+    const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
       gull: "GULL-",
       "black-bear": "BEAR-",
+      "domestic-cat": "CAT-",
     };
 
     for (const kind of species) {

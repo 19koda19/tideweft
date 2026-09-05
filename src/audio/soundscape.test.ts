@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ambienceParameters,
   incidentSoundPattern,
+  smallWildlifePattern,
   titleCrescendoPattern,
   wildlifeAlarmPattern,
 } from "./soundscape";
@@ -54,6 +55,26 @@ describe("wildlife alarm cue", () => {
       .toBeLessThan(pattern[0]?.frequency ?? 0);
     expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
       .toBeLessThanOrEqual(0.25);
+  });
+});
+
+describe("small-world wildlife cues", () => {
+  it("keeps rat movement and a cat call short, distinct, and deterministic", () => {
+    const rat = smallWildlifePattern("rat-rustle", 19);
+    const cat = smallWildlifePattern("cat-call", 19);
+    expect(rat).toEqual(smallWildlifePattern("rat-rustle", 19));
+    expect(cat).toEqual(smallWildlifePattern("cat-call", 19));
+    expect(rat).not.toEqual(cat);
+    for (const pattern of [rat, cat]) {
+      expect(pattern.length).toBeGreaterThan(0);
+      expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
+        .toBeLessThanOrEqual(0.4);
+    }
+  });
+
+  it("uses malformed variation conservatively", () => {
+    expect(smallWildlifePattern("rat-rustle", Number.NaN))
+      .toEqual(smallWildlifePattern("rat-rustle", 0));
   });
 });
 

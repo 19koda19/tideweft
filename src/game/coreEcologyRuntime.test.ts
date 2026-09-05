@@ -10,7 +10,8 @@ import { seedFromText } from "../sim/rng";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import {
   createCoreEcologyPatch,
-  type CoreEcologyPatchState,
+  migrateCoreEcologyPatchToAggregatePatch,
+  type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
@@ -91,17 +92,28 @@ function population(
 function patch(
   populations: readonly CoreEcologyPopulationInput[],
   originRegion = ORIGIN,
-): CoreEcologyPatchState {
-  return createCoreEcologyPatch({
+): CoreEcologyAggregatePatchState {
+  const waveA = createCoreEcologyPatch({
     seed: SEED,
     patchKey: "runtime:wave-a",
     originRegion,
     populations,
   });
+  const migrated = migrateCoreEcologyPatchToAggregatePatch(waveA);
+  if (migrated === null) throw new Error("Could not create v3 runtime fixture");
+  return migrated;
+}
+
+function aggregatePatchFromWaveA(
+  state: ReturnType<typeof createCoreEcologyPatch>,
+): CoreEcologyAggregatePatchState {
+  const migrated = migrateCoreEcologyPatchToAggregatePatch(state);
+  if (migrated === null) throw new Error("Could not migrate runtime fixture");
+  return migrated;
 }
 
 function member(
-  state: CoreEcologyPatchState,
+  state: CoreEcologyAggregatePatchState,
   populationKey: string,
   ordinal: number,
 ) {
@@ -214,7 +226,7 @@ describe("core ecology pure runtime seam", () => {
       }],
     });
     if (moved === null) throw new Error("Moved-group fixture failed");
-    const state = createCoreEcologyPatch({
+    const state = aggregatePatchFromWaveA(createCoreEcologyPatch({
       seed: SEED,
       patchKey: "runtime:moved-group",
       originRegion: ORIGIN,
@@ -224,7 +236,7 @@ describe("core ecology pure runtime seam", () => {
         positionAt(firstWindow, 21, 20),
       ])],
       groups: createCoreEcologyGroupSet([moved.group]),
-    });
+    }));
     const movedWindow = shiftedWindow(firstWindow, 50, 0);
     const expectedIds = state.populations[0]!.members
       .map(({ actor }) => actor.identity.stableId)
@@ -259,7 +271,7 @@ describe("core ecology pure runtime seam", () => {
       memberOrdinals: [0, 1],
       anchor: positionAt(firstWindow, 20, 20),
     });
-    const state = createCoreEcologyPatch({
+    const state = aggregatePatchFromWaveA(createCoreEcologyPatch({
       seed: SEED,
       patchKey: "runtime:stale-address",
       originRegion: ORIGIN,
@@ -268,7 +280,7 @@ describe("core ecology pure runtime seam", () => {
         positionAt(firstWindow, 80, 20),
       ])],
       groups: createCoreEcologyGroupSet([group]),
-    });
+    }));
 
     expect(deriveCoreEcologyMaterializedActorIds(
       state,
@@ -287,7 +299,7 @@ describe("core ecology pure runtime seam", () => {
       memberOrdinals: [0, 1],
       anchor: positionAt(firstWindow, 10, 20),
     });
-    const state = createCoreEcologyPatch({
+    const waveAState = createCoreEcologyPatch({
       seed: SEED,
       patchKey: "runtime:partial-crossing",
       originRegion: ORIGIN,
@@ -297,6 +309,8 @@ describe("core ecology pure runtime seam", () => {
       ], new Set([0, 1]))],
       groups: createCoreEcologyGroupSet([group]),
     });
+    const state = migrateCoreEcologyPatchToAggregatePatch(waveAState);
+    if (state === null) throw new Error("Could not migrate partial-crossing fixture");
     const crossingWindow = shiftedWindow(firstWindow, 50, 0);
     const expected = [member(state, "deer:partial-crossing", 1).actor.identity.stableId];
     const beforePositions = state.populations[0]!.members
@@ -350,7 +364,7 @@ describe("core ecology pure runtime seam", () => {
       }],
     });
     if (split === null) throw new Error("Split-crossing fixture failed");
-    const state = createCoreEcologyPatch({
+    const state = aggregatePatchFromWaveA(createCoreEcologyPatch({
       seed: SEED,
       patchKey: "runtime:split-crossing",
       originRegion: ORIGIN,
@@ -362,7 +376,7 @@ describe("core ecology pure runtime seam", () => {
         positionAt(firstWindow, 91, 20),
       ], new Set([1, 3]))],
       groups: createCoreEcologyGroupSet([split.group]),
-    });
+    }));
     const crossingWindow = shiftedWindow(firstWindow, 50, 0);
     const expected = state.populations[0]!.members
       .map(({ actor }) => actor.identity.stableId)

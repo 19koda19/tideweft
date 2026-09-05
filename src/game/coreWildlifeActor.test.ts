@@ -16,6 +16,7 @@ import { seedFromText } from "../sim/rng";
 import {
   CORE_WILDLIFE_ACTOR_VERSION,
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  CORE_WILDLIFE_MEMORY_CAP,
   advanceCoreWildlifeActorCoarse,
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
@@ -335,6 +336,80 @@ describe("core Wave-A wildlife actor", () => {
       referenceId: porter.id,
     });
     expect(result.resourceClaims).toEqual([]);
+  });
+
+  it("lets strong directly sensed rain move a cat to retreat and persist bounded wet tracks", () => {
+    let cat = actor("domestic-cat");
+    for (let tick = 1; tick <= 24; tick += 1) {
+      const rain = observation(cat, tick, {
+        id: `obs:rain:${tick}`,
+        perceivedClass: "rain-exposure",
+        channel: "hearing",
+        confidence: 680_000,
+        salience: 680_000,
+      });
+      const result = step(cat, tick, [rain]);
+      expect(result.decision).toMatchObject({
+        intent: "retreat",
+        cause: { kind: "perception", referenceId: rain.id },
+        focusObservationId: rain.id,
+      });
+      expect(result.resourceClaims).toEqual([]);
+      cat = result.actor;
+    }
+
+    const tracks = cat.memories.flatMap(({ environmentalEvidence }) => (
+      environmentalEvidence === undefined ? [] : [environmentalEvidence]
+    ));
+    expect(tracks.length).toBeGreaterThan(0);
+    expect(tracks.length).toBeLessThanOrEqual(CORE_WILDLIFE_MEMORY_CAP);
+    expect(tracks.every((evidence) => (
+      evidence.kind === "wet-tracks"
+      && evidence.itemConsumption === "none"
+      && evidence.disclosure === "direct-observation-required"
+    ))).toBe(true);
+    expect(new Set(tracks.map(({ evidenceId }) => evidenceId)).size).toBe(tracks.length);
+
+    const serialized = serializeCoreWildlifeActorState(cat);
+    expect(deserializeCoreWildlifeActorState(serialized)).toEqual(cat);
+    const coarse = advanceCoreWildlifeActorCoarse(cat, { atTick: 30 });
+    expect(coarse.memories).toEqual(cat.memories);
+    expect(canonicalizeCoreWildlifeActorState({
+      ...cat,
+      memories: cat.memories.map((memory) => memory.environmentalEvidence === undefined
+        ? memory
+        : {
+            ...memory,
+            environmentalEvidence: {
+              ...memory.environmentalEvidence,
+              disclosure: "remote-knowledge",
+            },
+          }),
+    })).toBeNull();
+  });
+
+  it("lets one same-species competitor change a hungry cat's physical-food decision", () => {
+    const cat = hungry(actor("domestic-cat"), ACTOR_PERCEPTION_SCALE);
+    const seenFood = observation(cat, 1, {
+      id: "obs:cat-food",
+      perceivedClass: "exposed-food",
+      subjectId: "ITEM-cat-food",
+    });
+    const opportunity = food(seenFood.id, "ITEM-cat-food", "exposed-food");
+    expect(step(cat, 1, [seenFood], [opportunity]).decision.intent).toBe("forage");
+
+    const competitor = observation(cat, 1, {
+      id: "obs:cat-competitor",
+      perceivedClass: "food-competitor",
+      subjectId: "CAT-neighbor",
+    });
+    const guarded = step(cat, 1, [seenFood, competitor], [opportunity]);
+    expect(guarded.decision.intent).toBe("guard");
+    expect(guarded.resourceClaims).toEqual([]);
+    expect(guarded.decision.resourceReference).toMatchObject({
+      resourceId: opportunity.resourceId,
+      observedAvailableUnits: opportunity.availableUnits,
+    });
   });
 
   it("uses profile roles for forage and scavenging and returns reference-only claims", () => {

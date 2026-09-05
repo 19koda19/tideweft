@@ -14,6 +14,8 @@ export type SoundCue =
   | "impact"
   | "sweep"
   | "wildlife-alarm"
+  | "rat-rustle"
+  | "cat-call"
   | "paddle"
   | "recover"
   | "title"
@@ -183,6 +185,8 @@ export class TideweftSoundscape {
       impact: incidentSoundPattern("impact", variantSeed),
       sweep: incidentSoundPattern("sweep", variantSeed),
       "wildlife-alarm": wildlifeAlarmPattern(),
+      "rat-rustle": smallWildlifePattern("rat-rustle", variantSeed),
+      "cat-call": smallWildlifePattern("cat-call", variantSeed),
       paddle: [
         toneStep(210, 0, "triangle", 0.055),
         toneStep(164, 0.045, "sine", 0.095),
@@ -197,6 +201,10 @@ export class TideweftSoundscape {
     }
     if (cue === "title") {
       this.noiseBurst(now + 0.06, 0.72, 720, 0.0038 * strength);
+    } else if (cue === "rat-rustle") {
+      this.noiseBurst(now, 0.13, 1_850, 0.012 * strength);
+    } else if (cue === "cat-call") {
+      this.noiseBurst(now + 0.035, 0.11, 980, 0.0045 * strength);
     }
   }
 
@@ -338,6 +346,31 @@ export function wildlifeAlarmPattern(): readonly SoundToneStep[] {
     toneStep(880, 0, "triangle", 0.055),
     toneStep(1_174.66, 0.052, "square", 0.045),
     toneStep(587.33, 0.12, "triangle", 0.09),
+  ];
+}
+
+/**
+ * Short state-event voices for the first small-world ecology. These are
+ * acknowledgements of an authoritative nearby event, never a looping bestiary
+ * ambience or an omniscient locator.
+ */
+export function smallWildlifePattern(
+  cue: "rat-rustle" | "cat-call",
+  variantSeed: number,
+): readonly SoundToneStep[] {
+  const seed = Number.isSafeInteger(variantSeed) ? variantSeed >>> 0 : 0;
+  const shift = ((seed % 9) - 4) * 4;
+  if (cue === "rat-rustle") {
+    return [
+      toneStep(1_320 + shift, 0, "square", 0.025),
+      toneStep(1_010 + shift, 0.048, "triangle", 0.038),
+      toneStep(1_490 + shift, 0.088, "square", 0.022),
+    ];
+  }
+  return [
+    toneStep(392 + shift, 0, "triangle", 0.12),
+    toneStep(523.25 + shift, 0.095, "sine", 0.16),
+    toneStep(349.23 + shift, 0.235, "triangle", 0.13),
   ];
 }
 

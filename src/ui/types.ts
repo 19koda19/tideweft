@@ -230,6 +230,12 @@ export interface ResidentAboutFactUIView {
   readonly tone?: "neutral" | "warning" | "danger" | "good";
 }
 
+/** Species with a lawful individual actor address; aggregate rats are excluded. */
+export type LivingActorTargetSpeciesUIView = Exclude<
+  LivingActorSpecies,
+  "brown-rat"
+>;
+
 /**
  * Stable identity used when a renderer selection crosses into the shared
  * living-actor UI. Species is part of the identity boundary: a dog is never a
@@ -237,7 +243,7 @@ export interface ResidentAboutFactUIView {
  * wildlife ID.
  */
 export interface LivingActorTargetUIView {
-  readonly species: LivingActorSpecies;
+  readonly species: LivingActorTargetSpeciesUIView;
   readonly actorId: string;
 }
 
@@ -289,6 +295,40 @@ export interface SelectedLivingActorUIView {
   readonly about: LivingActorAboutUIView;
   /** Omitted until the current world can prove a truthful contextual choice. */
   readonly interactions?: readonly LivingActorInteractionUIView[];
+}
+
+/** Stable identity for one physical sign belonging to an aggregate population. */
+export interface WildlifeEvidenceTargetUIView {
+  readonly species: "brown-rat";
+  readonly aggregateId: string;
+  readonly evidenceId: string;
+}
+
+export interface WildlifeEvidenceQuickInspectUIView {
+  readonly target: WildlifeEvidenceTargetUIView;
+  readonly heading: string;
+  readonly summary: string;
+  readonly distanceUnits: number;
+}
+
+/** Knowledge-honest disclosure of a sign, never an individual rat dossier. */
+export interface WildlifeEvidenceAboutUIView {
+  readonly target: WildlifeEvidenceTargetUIView;
+  readonly heading: string;
+  readonly identityLine: string;
+  readonly knowledgeLabel: "Unfamiliar" | "Recognized";
+  readonly observed: readonly ResidentAboutFactUIView[];
+  readonly known: readonly ResidentAboutFactUIView[];
+}
+
+/**
+ * Compact, read-only aggregate-evidence selection. Quick and ABOUT records
+ * share one target so facts from separate signs or populations cannot mix.
+ */
+export interface WildlifeEvidenceAboutProjection {
+  readonly target: WildlifeEvidenceTargetUIView;
+  readonly quick: WildlifeEvidenceQuickInspectUIView;
+  readonly about: WildlifeEvidenceAboutUIView;
 }
 
 /** A compact, non-pausing, pane-free disclosure of witnessed/learned facts. */
@@ -460,6 +500,8 @@ export interface TideweftUIView {
   readonly selectedSettlement?: SettlementInspectorUIView;
   /** Additive BIO0 seam; omitted until a host exposes an authoritative living actor. */
   readonly selectedLivingActor?: SelectedLivingActorUIView;
+  /** Directly observed aggregate evidence; close-only and never an actor interaction. */
+  readonly selectedWildlifeEvidence?: WildlifeEvidenceAboutProjection;
   /** Compatibility-human ABOUT retained while runtime selection migrates to stable actor IDs. */
   readonly selectedResident?: ResidentAboutUIView;
   readonly chronicle: readonly ChronicleEntryUIView[];
@@ -512,6 +554,11 @@ export type TideweftUICommand =
       readonly action: "interact";
       readonly target: LivingActorTargetUIView;
       readonly interaction: LivingActorInteractionId;
+    }
+  | {
+      readonly type: "aggregate-wildlife-evidence";
+      readonly action: "close";
+      readonly target: WildlifeEvidenceTargetUIView;
     }
   | { readonly type: "quiet-hour"; readonly action: "open" | "continue" | "finish" }
   | { readonly type: "open-title" }

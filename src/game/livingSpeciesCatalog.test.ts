@@ -34,7 +34,9 @@ describe("Living Weft species module catalog", () => {
       .toEqual([...LIVING_ACTOR_SPECIES].sort());
     expect(LIVING_SPECIES_CATALOG.modules.map(({ moduleId }) => moduleId)).toEqual([
       "living-species:black-bear:v1",
+      "living-species:brown-rat:v1",
       "living-species:deer:v1",
+      "living-species:domestic-cat:v1",
       "living-species:domestic-dog:v1",
       "living-species:gull:v1",
       "living-species:human:v1",
@@ -149,6 +151,198 @@ describe("Living Weft species module catalog", () => {
     }
     expect(livingSpeciesModule("gull")?.locomotion.media)
       .toEqual([{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }]);
+  });
+
+  it("models the landed Settlement Shadows rat aggregate and cat without inherited fallbacks", () => {
+    const rat = livingSpeciesModule("brown-rat");
+    const cat = livingSpeciesModule("domestic-cat");
+
+    expect(rat).toMatchObject({
+      profile: {
+        implementation: "active",
+        taxonomicClass: "mammal",
+        companionEligibility: "never",
+      },
+      identity: {
+        implementation: "active",
+        ownerId: "game:core-ecology:v3",
+        form: "aggregate",
+        stableIdNamespace: "RAT-AREA",
+      },
+      morphology: { model: "aggregate" },
+      spatial: { positionModel: "segmented-area", authoritativeHeading: false },
+      population: {
+        implementation: "active",
+        strategy: "aggregate-field",
+        materialization: "threshold",
+        maxMaterializedPerRegion: 0,
+        authoritativeUnit: "population-patch",
+        dematerialization: "reconcile-population-state",
+      },
+      physiology: { implementation: "foundation" },
+      locomotion: {
+        implementation: "active",
+        decisionModel: "aggregate",
+        crossRegion: false,
+      },
+      activity: {
+        implementation: "active",
+        decisionModel: "aggregate",
+        offscreenModel: "aggregate",
+      },
+      diet: { implementation: "foundation", mode: "omnivore" },
+      social: { implementation: "foundation", groupModel: "variable" },
+      sound: {
+        implementation: "active",
+        ownerId: "audio:soundscape:v1",
+        repertoire: ["rat-rustle"],
+        communicationSignals: [],
+        accessibilityCues: ["direct-observation-caption"],
+      },
+      cognition: { implementation: "foundation", model: "aggregate" },
+      evidence: {
+        status: "active",
+        ownerId: "game:core-ecology:v3",
+        decayOwnerId: "game:core-ecology:v3",
+        produces: ["gnaw-mark", "shelter-sign", "tracks"],
+      },
+      environment: {
+        weather: {
+          status: "active",
+          ownerId: "game:core-ecology-small-world:v2",
+          inputs: ["rain-intensity", "terrain-exposure"],
+          outputs: ["activity-pressure", "displacement-pressure"],
+        },
+      },
+      about: {
+        implementation: "active",
+        observableFields: ["evidence-kind", "evidence-scale", "species"],
+      },
+      persistence: { implementation: "active" },
+    });
+    expect(rat?.profile.ecologicalClasses).toEqual([
+      "forager",
+      "omnivore",
+      "prey",
+      "scavenger",
+      "small-prey",
+    ]);
+    expect(rat?.locomotion).toMatchObject({
+      media: [{ medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }],
+      movementVerbs: ["scurry"],
+      terrainAffordances: ["land"],
+    });
+    expect(rat?.social.group).toMatchObject({ status: "unimplemented", representation: "none" });
+    expect(rat).toMatchObject({
+      interactions: { implementation: "foundation" },
+      health: { implementation: "unimplemented", causalDeath: false },
+      lifeHistory: {
+        implementation: "foundation",
+        reproduction: "unimplemented",
+        mortality: "unimplemented",
+      },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+    });
+
+    expect(cat).toMatchObject({
+      profile: {
+        implementation: "active",
+        taxonomicClass: "mammal",
+        companionEligibility: "never",
+      },
+      identity: { implementation: "active", form: "individual", stableIdNamespace: "CAT" },
+      morphology: { model: "individual" },
+      spatial: { positionModel: "segmented-point", authoritativeHeading: true },
+      population: {
+        implementation: "active",
+        strategy: "hybrid-population",
+        maxMaterializedPerRegion: 4,
+      },
+      physiology: { implementation: "active" },
+      locomotion: {
+        implementation: "active",
+        decisionModel: "individual",
+        crossRegion: true,
+        media: [
+          { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "shallow-water", relativeCapability: 300_000 },
+        ],
+        movementVerbs: ["wade", "walk"],
+        terrainAffordances: ["land", "standable-shallow-water"],
+      },
+      activity: {
+        implementation: "active",
+        decisionModel: "individual",
+        offscreenModel: "individual",
+      },
+      diet: { implementation: "foundation", mode: "carnivore" },
+      social: {
+        implementation: "foundation",
+        groupModel: "solitary",
+        actorToActorRelationships: false,
+      },
+      sound: {
+        implementation: "active",
+        ownerId: "audio:soundscape:v1",
+        repertoire: ["cat-call"],
+        communicationSignals: [],
+        accessibilityCues: ["direct-observation-caption"],
+      },
+      cognition: {
+        implementation: "active",
+        model: "bounded-learning",
+        memoryKinds: ["alarm", "disengagement", "food", "guard", "pursuit", "threat", "weather"],
+      },
+      evidence: {
+        status: "active",
+        ownerId: "game:core-wildlife-actor:v1",
+        decayOwnerId: "game:core-wildlife-actor:v1",
+        produces: ["wet-tracks"],
+      },
+      environment: {
+        weather: {
+          status: "active",
+          ownerId: "game:core-ecology-perception:v1",
+          inputs: ["rain-intensity"],
+          outputs: ["stress"],
+        },
+      },
+      about: {
+        implementation: "active",
+        observableFields: ["appearance", "behavior", "condition", "life-stage", "species"],
+      },
+      persistence: {
+        implementation: "active",
+        defaultTier: "regional",
+        allowedTiers: ["regional"],
+        promotionTriggers: [],
+      },
+    });
+    expect(cat?.profile.ecologicalClasses).toEqual(["forager", "predator", "small-predator"]);
+    expect(cat?.interactions.targets.find(({ targetClass }) => targetClass === "same-species"))
+      .toMatchObject({
+        policy: "available",
+        perceptionChannels: ["vision"],
+        appraisals: ["food-competition"],
+        motivationAxes: ["hunger"],
+        verbs: ["guard"],
+      });
+    expect(cat?.social.group).toMatchObject({ status: "unimplemented", representation: "none" });
+    expect(cat).toMatchObject({
+      interactions: { implementation: "foundation" },
+      health: {
+        implementation: "foundation",
+        incapacitation: false,
+        causalDeath: false,
+        recovery: false,
+      },
+      lifeHistory: {
+        implementation: "foundation",
+        reproduction: "unimplemented",
+        mortality: "unimplemented",
+      },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+    });
   });
 
   it("makes registration order irrelevant while persisted catalog order is canonical", () => {
@@ -754,12 +948,16 @@ describe("Living Weft species module catalog", () => {
   it("declares current deliberate seams instead of pretending they are implemented", () => {
     for (const module of LIVING_SPECIES_CATALOG.modules) {
       expect(module.spatial).toMatchObject({
-        positionModel: "segmented-point",
+        positionModel: module.speciesId === "brown-rat" ? "segmented-area" : "segmented-point",
         signedRegions: true,
         extremeRegions: true,
       });
       expect(module.activity.circadian.status).toBe("unimplemented");
-      expect(module.evidence.status).toBe("unimplemented");
+      expect(module.evidence.status).toBe(
+        module.speciesId === "brown-rat" || module.speciesId === "domestic-cat"
+          ? "active"
+          : "unimplemented",
+      );
       expect(module.environment.fire.status).toBe("unimplemented");
       expect(module.environment.livingCover.status).toBe("unimplemented");
       expect(module.environment.possibility.status).toBe("unimplemented");
@@ -776,8 +974,11 @@ describe("Living Weft species module catalog", () => {
           : "unimplemented",
       );
       expect(module.inventory.implementation).toBe("unimplemented");
-      expect(module.locomotion.crossRegion).toBe(false);
+      expect(module.locomotion.crossRegion).toBe(module.speciesId === "domestic-cat");
     }
+    expect(livingSpeciesModule("brown-rat")?.environment.weather.status).toBe("active");
+    expect(livingSpeciesModule("domestic-cat")?.environment.weather.status)
+      .toBe("active");
     expect(livingSpeciesModule("human")?.population).toMatchObject({
       implementation: "active",
       compatibilityScope: true,

@@ -5,9 +5,9 @@ import {
 import { globalTileToRegion } from "../sim/regions";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
-  canonicalizeCoreEcologyPatch,
-  setCoreEcologyMaterializedActors,
-  type CoreEcologyPatchState,
+  canonicalizeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregatePatchMaterializedActors,
+  type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationMemberState,
   type CoreEcologyPopulationState,
 } from "./coreEcology";
@@ -65,7 +65,7 @@ export function deriveCoreEcologyMaterializedActorIds(
   patchValue: unknown,
   windowValue: unknown,
 ): readonly string[] | null {
-  const patch = canonicalizeCoreEcologyPatch(patchValue);
+  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const window = canonicalWindow(windowValue);
   if (patch === null || window === null) return null;
   const actorIds = patch.populations.flatMap((population) => population.members
@@ -78,7 +78,7 @@ export function deriveCoreEcologyMaterializedActorIds(
 }
 
 function memberIntersectsRuntimeWindow(
-  patch: CoreEcologyPatchState,
+  patch: CoreEcologyAggregatePatchState,
   population: CoreEcologyPopulationState,
   member: CoreEcologyPopulationMemberState,
   window: CoreEcologyRuntimeWindow,
@@ -120,8 +120,8 @@ export function setCoreEcologyMaterializationForWindow(
   patchValue: unknown,
   windowValue: unknown,
   atTick: unknown,
-): CoreEcologyPatchState | null {
-  const patch = canonicalizeCoreEcologyPatch(patchValue);
+): CoreEcologyAggregatePatchState | null {
+  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const actorIds = deriveCoreEcologyMaterializedActorIds(patchValue, windowValue);
   if (
     patch === null
@@ -130,7 +130,7 @@ export function setCoreEcologyMaterializationForWindow(
     || atTick < patch.updatedAtTick
   ) return null;
   try {
-    return setCoreEcologyMaterializedActors(patch, { atTick, actorIds });
+    return setCoreEcologyAggregatePatchMaterializedActors(patch, { atTick, actorIds });
   } catch {
     return null;
   }
@@ -148,7 +148,7 @@ export function projectCoreEcologyWildlife(
     !plainRecord(input)
     || !allowedProjectionInputKeys(input as unknown as Record<string, unknown>)
   ) return null;
-  const patch = canonicalizeCoreEcologyPatch(input.patch);
+  const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
   const window = canonicalWindow(input.window);
   if (
     patch === null
@@ -213,7 +213,7 @@ export function selectedCoreEcologyActor(
   patchValue: unknown,
   targetValue: unknown,
 ): CoreWildlifeActorState | null {
-  const patch = canonicalizeCoreEcologyPatch(patchValue);
+  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const target = canonicalTarget(targetValue);
   if (patch === null || target === null) return null;
   for (const population of patch.populations) {

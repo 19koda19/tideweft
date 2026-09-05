@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.14",
-      buildIdentity: "0.3.3-alpha.14",
+      version: "0.3.3-alpha.15",
+      buildIdentity: "0.3.3-alpha.15",
       gameplayContractVersion: 20,
-      tutorialVersion: 24,
+      tutorialVersion: 25,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes habitat populations and groups without claiming complete worldwide ecology", () => {
+  it("scopes Settlement Shadows and its inherited habitat groups without claiming worldwide ecology", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const habitatRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.14",
+    );
+    const habitatCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => habitatRelease?.categories[category] ?? [])
       .join(" ");
     const wildlifeRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.12",
@@ -92,20 +99,39 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("derived deterministically from the local terrain");
-    expect(activeCopy).toContain("honestly absent");
-    expect(activeCopy).toContain("represented population units");
-    expect(activeCopy).toContain("persistent herds");
-    expect(activeCopy).toContain("persistent flocks");
-    expect(activeCopy).toContain("Black bears remain solitary");
-    expect(activeCopy).toContain("nonlethal habitat-pressure displacement");
-    expect(activeCopy).toContain("shared invariants and representative deer, gull, and bear outcomes");
-    expect(activeCopy).toContain("Novel combinations remain free to emerge");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("advances to version 9");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-8 save migrates once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("reject legacy inner ecology records");
+    expect(activeCopy).toContain("brown rats and domestic cats");
+    expect(activeCopy).toContain("population-area aggregate with no individual rat actors");
+    expect(activeCopy).toContain("free-ranging domestic cats");
+    expect(activeCopy).toContain("cats, dogs, people, or gulls");
+    expect(activeCopy).toContain("Exposed loose physical provisions");
+    expect(activeCopy).toContain("at most one rat population unit redistributes");
+    expect(activeCopy).toContain("never creates or kills a rat actor");
+    expect(activeCopy).toContain("consumes or moves the attracting provision");
+    expect(activeCopy).toContain("gnaw marks, small tracks, or shelter signs");
+    expect(activeCopy).toContain("guarded food");
+    expect(activeCopy).toContain("persistent wet pawprints");
+    expect(activeCopy).toContain("substantially crowded anchor");
+    expect(activeCopy).toContain("non-targetable environmental evidence");
+    expect(activeCopy).toContain("current direct-detail sight");
+    expect(activeCopy).toContain("Rat rustles and domestic-cat calls");
+    expect(activeCopy).toContain("outcome classes, deterministic representative encounters, and bounded fuzzing");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("advances to version 10");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-9 save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("preserving every established actor");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("cannot duplicate cats, food, signs, populations, or migration effects");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("cat ownership, bonding, naming, recruitment");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("wet cat pawprints");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("exhaustive species-to-species behavior are not live");
+    expect(habitatCopy).toContain("derived deterministically from the local terrain");
+    expect(habitatCopy).toContain("honestly absent");
+    expect(habitatCopy).toContain("represented population units");
+    expect(habitatCopy).toContain("persistent herds");
+    expect(habitatCopy).toContain("persistent flocks");
+    expect(habitatCopy).toContain("Black bears remain solitary");
+    expect(habitatCopy).toContain("nonlethal habitat-pressure displacement");
+    expect(habitatCopy).toContain("shared invariants and representative deer, gull, and bear outcomes");
+    expect(habitatCopy).toContain("Novel combinations remain free to emerge");
     expect(contractRelease?.categories.gameplay.join(" ")).toContain(
       "Humans, domestic dogs, deer, gulls, and black bears",
     );

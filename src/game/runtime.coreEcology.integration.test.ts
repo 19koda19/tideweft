@@ -6,10 +6,10 @@ import { createWorldView, deserializeWorld, serializeWorld } from "../sim/public
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import {
-  deserializeCoreEcologyPatch,
-  replaceCoreEcologyActor,
-  serializeCoreEcologyPatch,
-  type CoreEcologyPatchState,
+  deserializeCoreEcologyAggregatePatch,
+  replaceCoreEcologyAggregatePatchActor,
+  serializeCoreEcologyAggregatePatch,
+  type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import {
@@ -68,7 +68,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
 interface V9Envelope {
   readonly format: "tideweft-session";
-  readonly version: 9;
+  readonly version: 10;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -149,14 +149,24 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(9);
-    expect(adoptedCore.derivation).toEqual({ kind: "legacy-fixed-v1" });
+    expect(repository.snapshot().payloadVersion).toBe(10);
+    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v2");
     expect(adoptedCore.groups.groups).toEqual([]);
-    expect(coreActors(adoptedCore)).toEqual(legacy.actors);
-    expect(adoptedCore.populations.every((population) => (
+    const retainedPopulations = adoptedCore.populations.filter(({ species }) => (
+      species === "deer" || species === "gull" || species === "black-bear"
+    ));
+    expect(retainedPopulations.flatMap(({ members }) => members.map(({ actor }) => actor)))
+      .toEqual(legacy.actors);
+    expect(retainedPopulations.every((population) => (
       population.populationSize === population.members.length
       && population.members.every(({ representedUnits }) => representedUnits === 1)
     ))).toBe(true);
+    expect(adoptedCore.populations.filter(({ species }) => species === "domestic-cat"))
+      .toHaveLength(1);
+    expect(adoptedCore.aggregatePopulations.filter(({ species }) => species === "brown-rat"))
+      .toHaveLength(1);
+    expect(new Set(coreActors(adoptedCore).map(({ identity }) => identity.stableId)).size)
+      .toBe(coreActors(adoptedCore).length);
     expect(adopted.physicalCargo).toEqual(current.physicalCargo);
 
     const adoptedText = adopted.coreEcology;
@@ -204,7 +214,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v9 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v10 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -270,7 +280,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(9);
+    expect(before.version).toBe(10);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -335,6 +345,96 @@ describe("runtime core-ecology vertical slice", () => {
     resumed.destroy();
   });
 
+  it("renders and inspects brown-rat signs without synthesizing a rat actor", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "settlement shadows",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+
+    const view = runtime.getRenderView();
+    const evidence = view.aggregateWildlifeEvidence?.[0];
+    if (evidence === undefined) throw new Error("Settlement-shadows fixture has no visible sign");
+    if (evidence.species !== "brown-rat" || evidence.representation !== "population-evidence") {
+      throw new Error("Settlement-shadows fixture first sign is not selectable rat evidence");
+    }
+    expect(evidence).toMatchObject({
+      version: 1,
+      species: "brown-rat",
+      representation: "population-evidence",
+      selected: false,
+    });
+    expect(view.wildlife?.some(({ actorId, species }) => (
+      species === ("brown-rat" as never) || actorId.startsWith("RAT-")
+    ))).toBe(false);
+
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species: evidence.species,
+      aggregateId: evidence.aggregateId,
+      evidenceId: evidence.evidenceId,
+      point: evidence.position,
+    });
+
+    expect(runtime.getRenderView().aggregateWildlifeEvidence?.find(({ evidenceId }) => (
+      evidenceId === evidence.evidenceId
+    ))).toMatchObject({ selected: true });
+    expect(runtime.getUIView().selectedLivingActor).toBeUndefined();
+    expect(runtime.getUIView().selectedWildlifeEvidence).toMatchObject({
+      target: {
+        species: "brown-rat",
+        aggregateId: evidence.aggregateId,
+        evidenceId: evidence.evidenceId,
+      },
+      quick: {
+        target: { evidenceId: evidence.evidenceId },
+      },
+      about: {
+        target: { evidenceId: evidence.evidenceId },
+        known: [],
+      },
+    });
+
+    runtime.dispatchUI({
+      type: "aggregate-wildlife-evidence",
+      action: "close",
+      target: {
+        species: "brown-rat",
+        aggregateId: evidence.aggregateId,
+        evidenceId: evidence.evidenceId,
+      },
+    });
+    expect(runtime.getUIView().selectedWildlifeEvidence).toBeUndefined();
+    expect(runtime.getRenderView().aggregateWildlifeEvidence?.find(({ evidenceId }) => (
+      evidenceId === evidence.evidenceId
+    ))).toMatchObject({ selected: false });
+    runtime.destroy();
+  });
+
+  it("sounds and captions rat displacement only when its new sign is directly perceived", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "settlement shadows",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    expect(runtime.getRenderView().aggregateWildlifeEvidence?.length).toBeGreaterThan(0);
+    soundscapePlay.mockClear();
+
+    advancePlayerSteps(runtime, 80);
+
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rat-rustle")).toHaveLength(1);
+    expect(runtime.getUIView().announcement?.message)
+      .toBe("SMALL RUSTLE — beside the signs you can see.");
+    runtime.destroy();
+  });
+
   it("plays and captions only event-time alarm hearing, including an unseen caller", async () => {
     const { runtime, alarmActorId } = await createAlarmRuntime(-8);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
@@ -390,7 +490,7 @@ describe("runtime core-ecology vertical slice", () => {
     const deer = patch.populations.find(({ species }) => species === "deer")?.members[0]?.actor;
     const gull = patch.populations.find(({ species }) => species === "gull")?.members[0]?.actor;
     if (deer === undefined || gull === undefined) throw new Error("escape fixture lost actors");
-    patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(deer, {
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(deer, {
       atTick: patch.updatedAtTick,
       position: deerPosition,
       heading: 0,
@@ -411,11 +511,11 @@ describe("runtime core-ecology vertical slice", () => {
       },
     });
     if (alarmGull === null) throw new Error("escape fixture alarm state was not canonical");
-    patch = replaceCoreEcologyActor(patch, alarmGull);
+    patch = replaceCoreEcologyAggregatePatchActor(patch, alarmGull);
     for (const actor of coreActors(patch)) {
       if (actor.identity.stableId === deer.identity.stableId
         || actor.identity.stableId === gull.identity.stableId) continue;
-      patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(actor, {
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
         atTick: patch.updatedAtTick,
         position: translateWorldPosition(deerPosition, 100 * WORLD_POSITION_UNITS_PER_TILE, 0),
         heading: actor.address.heading,
@@ -424,7 +524,7 @@ describe("runtime core-ecology vertical slice", () => {
     const nextEnvelope = resealedEnvelope(envelope, {
       world: serializeWorld(world),
       player,
-      coreEcology: serializeCoreEcologyPatch(patch),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
     });
     await repository.save({ ...record, worldJson: JSON.stringify(nextEnvelope) });
     initial.destroy();
@@ -473,7 +573,7 @@ describe("runtime core-ecology vertical slice", () => {
       threatDirection * WORLD_POSITION_UNITS_PER_TILE,
       0,
     );
-    patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(bear, {
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(bear, {
       atTick: patch.updatedAtTick,
       position: bearPosition,
       heading: threatDirection > 0 ? 500_000 : 0,
@@ -483,7 +583,7 @@ describe("runtime core-ecology vertical slice", () => {
         actor.identity.stableId === deer.identity.stableId
         || actor.identity.stableId === bear.identity.stableId
       ) continue;
-      patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(actor, {
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
         atTick: patch.updatedAtTick,
         position: translateWorldPosition(
           deer.address.position,
@@ -499,7 +599,7 @@ describe("runtime core-ecology vertical slice", () => {
 
     const nextEnvelope = resealedEnvelope(envelope, {
       world: serializeWorld(world),
-      coreEcology: serializeCoreEcologyPatch(patch),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
     });
     await repository.save({ ...record, worldJson: JSON.stringify(nextEnvelope) });
     initial.destroy();
@@ -621,14 +721,14 @@ describe("runtime core-ecology vertical slice", () => {
       added: [dropped.entity.payload],
     });
 
-    patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(bear, {
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(bear, {
       atTick: patch.updatedAtTick,
       position: actorStart,
       heading: 0,
     }));
     for (const actor of coreActors(patch)) {
       if (actor.identity.stableId === bear.identity.stableId) continue;
-      patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(actor, {
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
         atTick: patch.updatedAtTick,
         position: translateWorldPosition(actorStart, 100 * WORLD_POSITION_UNITS_PER_TILE, 0),
         heading: actor.address.heading,
@@ -637,7 +737,7 @@ describe("runtime core-ecology vertical slice", () => {
     const nextEnvelope = resealedEnvelope(envelope, {
       world: serializeWorld(world),
       player,
-      coreEcology: serializeCoreEcologyPatch(patch),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
       physicalCargo: snapshotPhysicalCargoState(cargo),
     });
     await repository.save({ ...record, worldJson: JSON.stringify(nextEnvelope) });
@@ -706,12 +806,12 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
     (offsetTiles < 0 ? 1 : -1) * WORLD_POSITION_UNITS_PER_TILE,
     0,
   );
-  patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(alarmActor, {
+  patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(alarmActor, {
     atTick: patch.updatedAtTick,
     position: alarmPosition,
     heading: offsetTiles < 0 ? 0 : 500_000,
   }));
-  patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(bear, {
+  patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(bear, {
     atTick: patch.updatedAtTick,
     position: bearPosition,
     heading: offsetTiles < 0 ? 500_000 : 0,
@@ -719,7 +819,7 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
   for (const actor of coreActors(patch)) {
     if (actor.identity.stableId === alarmActor.identity.stableId
       || actor.identity.stableId === bear.identity.stableId) continue;
-    patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(actor, {
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
       atTick: patch.updatedAtTick,
       position: translateWorldPosition(
         playerPosition,
@@ -732,7 +832,7 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
   const nextEnvelope = resealedEnvelope(envelope, {
     world: serializeWorld(world),
     player,
-    coreEcology: serializeCoreEcologyPatch(patch),
+    coreEcology: serializeCoreEcologyAggregatePatch(patch),
   });
   await repository.save({ ...record, worldJson: JSON.stringify(nextEnvelope) });
   initial.destroy();
@@ -743,8 +843,8 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
 
 function requiredEnvelope(repository: MemoryRepository): V9Envelope {
   const value = JSON.parse(repository.snapshot().worldJson) as V9Envelope;
-  if (value.format !== "tideweft-session" || value.version !== 9) {
-    throw new Error("core-ecology runtime fixture did not save a v9 envelope");
+  if (value.format !== "tideweft-session" || value.version !== 10) {
+    throw new Error("core-ecology runtime fixture did not save a v10 envelope");
   }
   return value;
 }
@@ -876,9 +976,9 @@ function findOpenHorizontalRegionSeam(
   throw new Error("seam fixture could not find an open horizontal region boundary");
 }
 
-function requiredCore(envelope: V9Envelope): CoreEcologyPatchState {
-  const state = deserializeCoreEcologyPatch(envelope.coreEcology);
-  if (state === null) throw new Error("v9 save omitted canonical core ecology");
+function requiredCore(envelope: V9Envelope): CoreEcologyAggregatePatchState {
+  const state = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
+  if (state === null) throw new Error("v10 save omitted canonical core ecology");
   return state;
 }
 
@@ -901,8 +1001,8 @@ function publishedV8CoreEcologyFixture(
 ): Readonly<{ text: string; actors: readonly CoreWildlifeActorState[] }> {
   const world = deserializeWorld(envelope.world);
   const current = requiredCore(envelope);
-  if (current.derivation.kind !== "habitat-v1") {
-    throw new Error("fresh Alpha-14 fixture has no habitat derivation");
+  if (current.derivation.kind !== "habitat-v2") {
+    throw new Error("fresh Wave-B fixture has no harbor-edge habitat derivation");
   }
   const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
   if (bio0 === null) throw new Error("fresh fixture has no canonical Alpha-13 BIO0 state");
@@ -997,11 +1097,11 @@ function requiredCargo(envelope: V9Envelope): PhysicalCargoState {
   return validation.state;
 }
 
-function coreActors(state: CoreEcologyPatchState): readonly CoreWildlifeActorState[] {
+function coreActors(state: CoreEcologyAggregatePatchState): readonly CoreWildlifeActorState[] {
   return state.populations.flatMap(({ members }) => members.map(({ actor }) => actor));
 }
 
-function requiredCrossSpeciesReaction(state: CoreEcologyPatchState) {
+function requiredCrossSpeciesReaction(state: CoreEcologyAggregatePatchState) {
   const actors = coreActors(state);
   const byId = new Map(actors.map((actor) => [actor.identity.stableId, actor] as const));
   for (const actor of actors) {

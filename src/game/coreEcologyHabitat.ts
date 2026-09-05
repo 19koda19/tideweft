@@ -6,11 +6,6 @@ import {
   type BiomeId,
   type BiomeInteraction,
 } from "../sim/biomes";
-import {
-  CORE_WILDLIFE_SPECIES,
-  getCoreWildlifeProfile,
-  type CoreWildlifeSpecies,
-} from "../sim/coreWildlifeIdentity";
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "../sim/rng";
 import {
   createRegionCoord,
@@ -37,15 +32,36 @@ import {
 } from "./worldPosition";
 
 export const CORE_ECOLOGY_HABITAT_VERSION = 1 as const;
+export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION = 2 as const;
+export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
+  "deer",
+  "gull",
+  "black-bear",
+] as const;
+export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES,
+  "brown-rat",
+  "domestic-cat",
+] as const;
+export type CoreEcologyWaveAHabitatSpecies =
+  (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
+export type CoreEcologyHarborEdgeHabitatSpecies =
+  (typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES)[number];
+export type CoreEcologyHabitatRepresentation =
+  | "aggregate-area"
+  | "individual-representatives";
 export const CORE_ECOLOGY_HABITAT_TILE_BUDGET = WORLD_WIDTH * WORLD_HEIGHT;
 export const CORE_ECOLOGY_HABITAT_SPECIES_EVALUATION_BUDGET =
-  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_WILDLIFE_SPECIES.length;
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
+export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_FOCUS_RADIUS_TILES = 32 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_EXCLUDED_TILES = 64 as const;
 
 export const CORE_ECOLOGY_HABITAT_MINIMUM_SITE_SCORE: Readonly<
-  Record<CoreWildlifeSpecies, number>
+  Record<CoreEcologyWaveAHabitatSpecies, number>
 > = Object.freeze({
   deer: 420_000,
   gull: 430_000,
@@ -53,7 +69,7 @@ export const CORE_ECOLOGY_HABITAT_MINIMUM_SITE_SCORE: Readonly<
 });
 
 export const CORE_ECOLOGY_HABITAT_MINIMUM_PERSISTENT_CAPACITY: Readonly<
-  Record<CoreWildlifeSpecies, number>
+  Record<CoreEcologyWaveAHabitatSpecies, number>
 > = Object.freeze({
   deer: 2,
   gull: 2,
@@ -118,7 +134,7 @@ export interface CoreEcologyHabitatAllocation {
 }
 
 export interface CoreEcologyHabitatPopulationAnalysis {
-  readonly species: CoreWildlifeSpecies;
+  readonly species: CoreEcologyWaveAHabitatSpecies;
   readonly populationKey: string;
   readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
   readonly habitatCapacity: number;
@@ -129,6 +145,33 @@ export interface CoreEcologyHabitatPopulationAnalysis {
   readonly trend: CoreEcologyPopulationTrend;
   /** Positive values have room to grow; negative values exceed equilibrium. */
   readonly trendSignal: number;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
+export interface CoreEcologyHarborEdgeActivitySignal {
+  readonly kind:
+    | "browsing"
+    | "foraging"
+    | "roaming"
+    | "shelter-use"
+    | "shore-feeding";
+  /** Habitat-derived fixed-point likelihood/intensity, never direct perception. */
+  readonly intensity: number;
+  readonly activePeriod: "crepuscular" | "diurnal" | "nocturnal" | "variable";
+  readonly source: "habitat-derived";
+}
+
+export interface CoreEcologyHarborEdgeHabitatPopulationAnalysis {
+  readonly species: CoreEcologyHarborEdgeHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
   readonly allocations: readonly CoreEcologyHabitatAllocation[];
 }
 
@@ -147,10 +190,30 @@ export interface CoreEcologyHabitatAssemblage {
   readonly populations: readonly CoreEcologyHabitatPopulationAnalysis[];
 }
 
+/**
+ * Additive Wave-B habitat record. Version 1 remains byte-for-byte parseable;
+ * callers opt into this record when the aggregate patch/runtime is ready.
+ */
+export interface CoreEcologyHarborEdgeHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS;
+  /** Fixed versioned order, including honest absences. */
+  readonly populations: readonly CoreEcologyHarborEdgeHabitatPopulationAnalysis[];
+}
+
 interface HabitatSpeciesRule {
   readonly populationKey: string;
+  readonly representation: CoreEcologyHabitatRepresentation;
   readonly minimumSiteScore: number;
   readonly minimumPersistentCapacity: number;
+  readonly maximumPopulation: number;
   readonly tilesPerCapacityUnit: number;
   readonly maximumAllocations: number;
   readonly minimumAllocationSeparation: number;
@@ -182,8 +245,10 @@ interface HabitatSiteEvaluation {
   readonly rankTie: number;
 }
 
-interface UnallocatedPopulationAnalysis {
-  readonly species: CoreWildlifeSpecies;
+interface UnallocatedPopulationAnalysis<
+  Species extends CoreEcologyHarborEdgeHabitatSpecies = CoreEcologyHarborEdgeHabitatSpecies,
+> {
+  readonly species: Species;
   readonly populationKey: string;
   readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
   readonly habitatCapacity: number;
@@ -194,45 +259,98 @@ interface UnallocatedPopulationAnalysis {
   readonly sites: readonly HabitatSiteEvaluation[];
 }
 
+interface AllocatedPopulationAnalysis<
+  Species extends CoreEcologyHarborEdgeHabitatSpecies = CoreEcologyHarborEdgeHabitatSpecies,
+> {
+  readonly species: Species;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
 const HABITAT_RANDOM_DOMAIN = 0x4841_4231;
 const SITE_RANK_PURPOSE = 0x5349_5445;
 const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
 
-const SPECIES_PURPOSE: Readonly<Record<CoreWildlifeSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyHarborEdgeHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
+  "brown-rat": 0x5241_5453,
+  "domestic-cat": 0x4341_5453,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreWildlifeSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyHarborEdgeHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
+      representation: "individual-representatives",
       minimumSiteScore: CORE_ECOLOGY_HABITAT_MINIMUM_SITE_SCORE.deer,
       minimumPersistentCapacity: CORE_ECOLOGY_HABITAT_MINIMUM_PERSISTENT_CAPACITY.deer,
+      maximumPopulation: 16,
       tilesPerCapacityUnit: 180,
       maximumAllocations: 4,
       minimumAllocationSeparation: 4,
     }),
     gull: Object.freeze({
       populationKey: "habitat-v1/gull",
+      representation: "individual-representatives",
       minimumSiteScore: CORE_ECOLOGY_HABITAT_MINIMUM_SITE_SCORE.gull,
       minimumPersistentCapacity: CORE_ECOLOGY_HABITAT_MINIMUM_PERSISTENT_CAPACITY.gull,
+      maximumPopulation: 24,
       tilesPerCapacityUnit: 120,
       maximumAllocations: 5,
       minimumAllocationSeparation: 3,
     }),
     "black-bear": Object.freeze({
       populationKey: "habitat-v1/black-bear",
+      representation: "individual-representatives",
       minimumSiteScore: CORE_ECOLOGY_HABITAT_MINIMUM_SITE_SCORE["black-bear"],
       minimumPersistentCapacity: CORE_ECOLOGY_HABITAT_MINIMUM_PERSISTENT_CAPACITY["black-bear"],
+      maximumPopulation: 4,
       tilesPerCapacityUnit: 700,
       maximumAllocations: 2,
       minimumAllocationSeparation: 12,
     }),
+    "brown-rat": Object.freeze({
+      populationKey: "habitat-v2/brown-rat",
+      representation: "aggregate-area",
+      minimumSiteScore: 390_000,
+      minimumPersistentCapacity: 4,
+      maximumPopulation: 48,
+      tilesPerCapacityUnit: 20,
+      maximumAllocations: 3,
+      minimumAllocationSeparation: 2,
+    }),
+    "domestic-cat": Object.freeze({
+      populationKey: "habitat-v2/domestic-cat",
+      representation: "individual-representatives",
+      minimumSiteScore: 440_000,
+      minimumPersistentCapacity: 1,
+      maximumPopulation: 4,
+      tilesPerCapacityUnit: 420,
+      maximumAllocations: 2,
+      minimumAllocationSeparation: 8,
+    }),
   });
+
+const ACTIVITY_POLICY: Readonly<Record<
+  CoreEcologyHarborEdgeHabitatSpecies,
+  Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
+>> = Object.freeze({
+  deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
+  gull: Object.freeze({ kind: "shore-feeding", activePeriod: "diurnal" }),
+  "black-bear": Object.freeze({ kind: "foraging", activePeriod: "variable" }),
+  "brown-rat": Object.freeze({ kind: "shelter-use", activePeriod: "nocturnal" }),
+  "domestic-cat": Object.freeze({ kind: "roaming", activePeriod: "crepuscular" }),
+});
 
 const DEER_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
   "tide-channel": 0,
@@ -294,6 +412,36 @@ const BEAR_COVER_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
   glimmerfen: 760_000,
 });
 
+const RAT_FOOD_OPPORTUNITY_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 760_000,
+  "reed-marsh": 900_000,
+  "rain-meadow": 780_000,
+  "sun-meadow": 800_000,
+  "wind-ridge": 350_000,
+  glimmerfen: 850_000,
+});
+
+const RAT_SHELTER_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 820_000,
+  "reed-marsh": 920_000,
+  "rain-meadow": 710_000,
+  "sun-meadow": 620_000,
+  "wind-ridge": 520_000,
+  glimmerfen: 880_000,
+});
+
+const CAT_COVER_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 520_000,
+  "reed-marsh": 760_000,
+  "rain-meadow": 700_000,
+  "sun-meadow": 620_000,
+  "wind-ridge": 740_000,
+  glimmerfen: 720_000,
+});
+
 /**
  * Pure Wave-A habitat analysis. It has no random cursor, live weather, tide,
  * camera, player, or load-order input. Passing the same canonical arguments
@@ -317,7 +465,7 @@ export function deriveCoreEcologyHabitatAssemblage(
   const selection = normalizeSelection(input.focus, originRegion);
   const addressedTiles = addressHabitatTiles(input.rootSeed, originRegion, terrain, selection);
   const evaluatedTiles = addressedTiles.length;
-  const speciesEvaluations = evaluatedTiles * CORE_WILDLIFE_SPECIES.length;
+  const speciesEvaluations = evaluatedTiles * CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.length;
 
   const deerBase = analyzeEnvironmentalCapacity(
     input.rootSeed,
@@ -329,7 +477,7 @@ export function deriveCoreEcologyHabitatAssemblage(
   );
   const deerSupport = ratioFixed(
     deerBase.habitatCapacity,
-    getCoreWildlifeProfile("deer").maximumPatchPopulation,
+    SPECIES_RULES.deer.maximumPopulation,
   );
   const bearBase = analyzeEnvironmentalCapacity(
     input.rootSeed,
@@ -342,7 +490,7 @@ export function deriveCoreEcologyHabitatAssemblage(
   const bearPressure = multiplyFixed(
     ratioFixed(
       bearBase.habitatCapacity,
-      getCoreWildlifeProfile("black-bear").maximumPatchPopulation,
+      SPECIES_RULES["black-bear"].maximumPopulation,
     ),
     260_000,
   );
@@ -391,6 +539,155 @@ export function deriveCoreEcologyHabitatAssemblage(
 }
 
 /**
+ * Pure harbor-edge extension. The first three analyses use the frozen Wave-A
+ * rules and allocation order; rats add bounded area anchors and cats add only
+ * individual-representative allocations. Rat anchors use an independent
+ * occupancy plane, so ecologically meaningful overlap does not evict Wave-A
+ * actors or manufacture hundreds of identities.
+ */
+export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
+  input: DeriveCoreEcologyHabitatAssemblageInput,
+): CoreEcologyHarborEdgeHabitatAssemblage {
+  if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
+    throw new TypeError("Core ecology harbor-edge habitat input has an unsupported shape");
+  }
+  if (!isRegionCoord(input.originRegion)) {
+    throw new RangeError("Core ecology harbor-edge habitat requires a canonical signed origin region");
+  }
+  const originRegion = createRegionCoord(input.originRegion.x, input.originRegion.y);
+  const canonicalTerrain = generateRegionTerrain(input.rootSeed, originRegion);
+  const terrainHash = regionTerrainHash(canonicalTerrain);
+  const terrain = input.terrain === undefined
+    ? canonicalTerrain
+    : requireCanonicalSuppliedTerrain(input.terrain, terrainHash);
+  const selection = normalizeSelection(input.focus, originRegion);
+  const addressedTiles = addressHabitatTiles(input.rootSeed, originRegion, terrain, selection);
+  const evaluatedTiles = addressedTiles.length;
+  const speciesEvaluations =
+    evaluatedTiles * CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length;
+
+  const deerBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "deer",
+    addressedTiles,
+    0,
+    0,
+  );
+  const deerSupport = ratioFixed(
+    deerBase.habitatCapacity,
+    SPECIES_RULES.deer.maximumPopulation,
+  );
+  const bearBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "black-bear",
+    addressedTiles,
+    deerSupport,
+    0,
+  );
+  const bearPressure = multiplyFixed(
+    ratioFixed(
+      bearBase.habitatCapacity,
+      SPECIES_RULES["black-bear"].maximumPopulation,
+    ),
+    260_000,
+  );
+  const deer = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "deer",
+    addressedTiles,
+    0,
+    bearPressure,
+  );
+  const gull = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "gull",
+    addressedTiles,
+    0,
+    multiplyFixed(bearPressure, 300_000),
+  );
+  const ratBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "brown-rat",
+    addressedTiles,
+    0,
+    0,
+  );
+  const ratSupport = ratioFixed(
+    ratBase.habitatCapacity,
+    SPECIES_RULES["brown-rat"].maximumPopulation,
+  );
+  const cat = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "domestic-cat",
+    addressedTiles,
+    ratSupport,
+    0,
+  );
+  const catPressure = multiplyFixed(
+    ratioFixed(cat.habitatCapacity, SPECIES_RULES["domestic-cat"].maximumPopulation),
+    240_000,
+  );
+  const rat = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "brown-rat",
+    addressedTiles,
+    0,
+    catPressure,
+  );
+
+  const individualOccupiedTiles = new Set<number>();
+  const allocatedDeer = allocatePopulation(deer, originRegion, individualOccupiedTiles);
+  const allocatedGull = allocatePopulation(gull, originRegion, individualOccupiedTiles);
+  const allocatedBear = allocatePopulation(bearBase, originRegion, individualOccupiedTiles);
+  const ratOccupiedTiles = new Set<number>();
+  const allocatedRat = allocatePopulation(rat, originRegion, ratOccupiedTiles);
+  const allocatedCat = allocatePopulation(
+    cat,
+    originRegion,
+    individualOccupiedTiles,
+    allocatedRat.allocations,
+  );
+  const allocated = [
+    allocatedDeer,
+    allocatedGull,
+    allocatedBear,
+    allocatedRat,
+    allocatedCat,
+  ] as const;
+  const populations = allocated.map((population) => Object.freeze({
+    ...population,
+    representation: SPECIES_RULES[population.species].representation,
+    activitySignal: activitySignalFor(population),
+  }));
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology harbor-edge habitat allocation budget diverged");
+  }
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
+    originRegion,
+    regionId: stableRegionId(input.rootSeed, originRegion),
+    terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+  });
+}
+
+/**
  * Strict shape/coherence canonicalization for an embedded ecology-v2 record.
  * This deliberately does not regenerate terrain or habitat; load integration
  * can separately compare the result with a freshly derived expected record.
@@ -418,13 +715,13 @@ export function canonicalizeCoreEcologyHabitatAssemblage(
     || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
     || value.maximumAllocationBudget !== CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS
     || !Array.isArray(value.populations)
-    || value.populations.length !== CORE_WILDLIFE_SPECIES.length
+    || value.populations.length !== CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.length
   ) return null;
   const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
   const selection = canonicalizeSelection(value.selection, originRegion);
   if (selection === null) return null;
   const evaluatedTiles = selectedTileCount(selection);
-  const speciesEvaluations = evaluatedTiles * CORE_WILDLIFE_SPECIES.length;
+  const speciesEvaluations = evaluatedTiles * CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.length;
   if (
     value.evaluatedTiles !== evaluatedTiles
     || value.speciesEvaluations !== speciesEvaluations
@@ -433,8 +730,8 @@ export function canonicalizeCoreEcologyHabitatAssemblage(
   ) return null;
   const occupiedTileIndices = new Set<number>();
   const populations: CoreEcologyHabitatPopulationAnalysis[] = [];
-  for (let index = 0; index < CORE_WILDLIFE_SPECIES.length; index += 1) {
-    const species = CORE_WILDLIFE_SPECIES[index];
+  for (let index = 0; index < CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.length; index += 1) {
+    const species = CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES[index];
     if (species === undefined) return null;
     const population = canonicalizePopulationAnalysis(
       value.populations[index],
@@ -463,6 +760,173 @@ export function canonicalizeCoreEcologyHabitatAssemblage(
     speciesEvaluations,
     maximumAllocationBudget: CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS,
     populations: Object.freeze(populations),
+  });
+}
+
+export function canonicalizeCoreEcologyHarborEdgeHabitatAssemblage(
+  value: unknown,
+): CoreEcologyHarborEdgeHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "selection",
+    "speciesEvaluations",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  if (selection === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const speciesEvaluations =
+    evaluatedTiles * CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || value.evaluatedTiles > CORE_ECOLOGY_HABITAT_TILE_BUDGET
+    || value.speciesEvaluations > CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const individualOccupiedTiles = new Set<number>();
+  const aggregateOccupiedTiles = new Set<number>();
+  const populations: CoreEcologyHarborEdgeHabitatPopulationAnalysis[] = [];
+  for (let index = 0; index < CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length; index += 1) {
+    const species = CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES[index];
+    if (species === undefined) return null;
+    const population = canonicalizeHarborEdgePopulationAnalysis(
+      value.populations[index],
+      species,
+      originRegion,
+      selection,
+      evaluatedTiles,
+      species === "brown-rat" ? aggregateOccupiedTiles : individualOccupiedTiles,
+    );
+    if (population === null) return null;
+    populations.push(population);
+  }
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS) return null;
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+  });
+}
+
+function canonicalizeHarborEdgePopulationAnalysis(
+  value: unknown,
+  expectedSpecies: CoreEcologyHarborEdgeHabitatSpecies,
+  originRegion: RegionCoord,
+  selection: CoreEcologyHabitatSelection,
+  evaluatedTiles: number,
+  occupiedTileIndices: Set<number>,
+): CoreEcologyHarborEdgeHabitatPopulationAnalysis | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "activitySignal",
+    "allocations",
+    "capacityInputs",
+    "habitatCapacity",
+    "populationKey",
+    "populationPressure",
+    "populationUnits",
+    "representation",
+    "species",
+    "trend",
+    "trendSignal",
+  ])) return null;
+  const rule = SPECIES_RULES[expectedSpecies];
+  if (
+    value.species !== expectedSpecies
+    || value.representation !== rule.representation
+    || value.populationKey !== rule.populationKey
+    || !nonnegativeSafeInteger(value.habitatCapacity)
+    || value.habitatCapacity > rule.maximumPopulation
+    || !nonnegativeSafeInteger(value.populationUnits)
+    || value.populationUnits > value.habitatCapacity
+    || !fixedInteger(value.populationPressure)
+    || value.populationPressure !== ratioFixed(value.populationUnits, value.habitatCapacity)
+    || !signedFixedInteger(value.trendSignal)
+    || !validTrend(value.trend, value.trendSignal)
+    || !Array.isArray(value.allocations)
+  ) return null;
+  const viable = value.habitatCapacity >= rule.minimumPersistentCapacity;
+  if ((value.populationUnits > 0) !== viable) return null;
+  const capacityInputs = canonicalizeCapacityInputs(value.capacityInputs);
+  if (
+    capacityInputs === null
+    || capacityInputs.eligibleTiles > evaluatedTiles
+    || capacityInputs.suitableTiles > evaluatedTiles
+  ) return null;
+  const expectedAllocationCount = value.populationUnits === 0
+    ? 0
+    : Math.min(value.populationUnits, rule.maximumAllocations);
+  if (
+    value.allocations.length !== expectedAllocationCount
+    || value.allocations.length > capacityInputs.suitableTiles
+  ) return null;
+  const baseRepresentedUnits = expectedAllocationCount === 0
+    ? 0
+    : Math.trunc(value.populationUnits / expectedAllocationCount);
+  const remainder = expectedAllocationCount === 0
+    ? 0
+    : value.populationUnits % expectedAllocationCount;
+  const allocations: CoreEcologyHabitatAllocation[] = [];
+  for (let index = 0; index < value.allocations.length; index += 1) {
+    const allocation = canonicalizeAllocation(
+      value.allocations[index],
+      expectedSpecies,
+      originRegion,
+      selection,
+      index,
+      baseRepresentedUnits + (index < remainder ? 1 : 0),
+    );
+    if (allocation === null || occupiedTileIndices.has(allocation.tileIndex)) return null;
+    occupiedTileIndices.add(allocation.tileIndex);
+    allocations.push(allocation);
+  }
+  const allocated: AllocatedPopulationAnalysis = {
+    species: expectedSpecies,
+    populationKey: rule.populationKey,
+    capacityInputs,
+    habitatCapacity: value.habitatCapacity,
+    populationUnits: value.populationUnits,
+    populationPressure: value.populationPressure,
+    trend: value.trend as CoreEcologyPopulationTrend,
+    trendSignal: value.trendSignal,
+    allocations,
+  };
+  const activitySignal = activitySignalFor(allocated);
+  if (!sameActivitySignal(value.activitySignal, activitySignal)) return null;
+
+  return Object.freeze({
+    ...allocated,
+    representation: rule.representation,
+    activitySignal,
+    allocations: Object.freeze(allocations),
   });
 }
 
@@ -513,7 +977,7 @@ function canonicalizeSelection(
 
 function canonicalizePopulationAnalysis(
   value: unknown,
-  expectedSpecies: CoreWildlifeSpecies,
+  expectedSpecies: CoreEcologyWaveAHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   evaluatedTiles: number,
@@ -531,7 +995,7 @@ function canonicalizePopulationAnalysis(
     "trendSignal",
   ])) return null;
   const rule = SPECIES_RULES[expectedSpecies];
-  const maximumPopulation = getCoreWildlifeProfile(expectedSpecies).maximumPatchPopulation;
+  const maximumPopulation = rule.maximumPopulation;
   if (
     value.species !== expectedSpecies
     || value.populationKey !== rule.populationKey
@@ -638,7 +1102,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreWildlifeSpecies,
+  species: CoreEcologyHarborEdgeHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -722,23 +1186,23 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyHarborEdgeHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreWildlifeSpecies,
+  species: Species,
   addressedTiles: readonly AddressedHabitatTile[],
-  deerSupport: number,
+  preySupport: number,
   predatorPressure: number,
-): UnallocatedPopulationAnalysis {
+): UnallocatedPopulationAnalysis<Species> {
   const rule = SPECIES_RULES[species];
   const sites = addressedTiles.map((addressed) =>
-    evaluateSite(seed, originRegion, species, addressed, deerSupport));
+    evaluateSite(seed, originRegion, species, addressed, preySupport));
   const eligible = sites.filter((site) => site.eligible);
   const suitable = eligible.filter((site) => site.score >= rule.minimumSiteScore);
   const weightedHabitatArea = suitable.reduce((sum, site) => sum + site.score, 0);
   const averages = averageSiteInputs(suitable);
   let habitatCapacity = Math.min(
-    getCoreWildlifeProfile(species).maximumPatchPopulation,
+    rule.maximumPopulation,
     Math.trunc(weightedHabitatArea / (FIXED_POINT * rule.tilesPerCapacityUnit)),
   );
 
@@ -746,7 +1210,7 @@ function analyzeEnvironmentalCapacity(
   // or strong regional plant/shore forage; terrain alone cannot add a predator.
   if (
     species === "black-bear"
-    && deerSupport < 125_000
+    && preySupport < 125_000
     && averages.food < 620_000
   ) habitatCapacity = 0;
 
@@ -808,16 +1272,18 @@ function analyzeEnvironmentalCapacity(
   });
 }
 
-function allocatePopulation(
-  analysis: UnallocatedPopulationAnalysis,
+function allocatePopulation<Species extends CoreEcologyHarborEdgeHabitatSpecies>(
+  analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
-): CoreEcologyHabitatPopulationAnalysis {
+  preferredAllocations: readonly CoreEcologyHabitatAllocation[] = [],
+): AllocatedPopulationAnalysis<Species> {
   const rule = SPECIES_RULES[analysis.species];
   const allocationCount = analysis.populationUnits === 0
     ? 0
     : Math.min(analysis.populationUnits, rule.maximumAllocations);
-  const rankedSites = [...analysis.sites].sort(compareSites);
+  const rankedSites = [...analysis.sites].sort((left, right) =>
+    compareSitesWithPreferredAllocations(left, right, preferredAllocations));
   const selected: HabitatSiteEvaluation[] = [];
   for (const site of rankedSites) {
     if (selected.length >= allocationCount) break;
@@ -975,9 +1441,9 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreWildlifeSpecies,
+  species: CoreEcologyHarborEdgeHabitatSpecies,
   addressed: AddressedHabitatTile,
-  deerSupport: number,
+  preySupport: number,
 ): HabitatSiteEvaluation {
   const { tile, biome, climate, interaction } = addressed;
   let eligible = false;
@@ -1049,7 +1515,7 @@ function evaluateSite(
       );
       food = weightedScore([
         [vegetation, 680_000],
-        [deerSupport, 320_000],
+        [preySupport, 320_000],
       ]);
       water = Math.max(
         distanceScore(addressed.wetDistance, 16),
@@ -1075,6 +1541,75 @@ function evaluateSite(
         && food >= 320_000
         && water >= 150_000
         && cover >= 360_000
+        && climateScore >= 300_000;
+      break;
+    }
+    case "brown-rat": {
+      eligible = tile.terrain !== "deep-water";
+      food = clampFixed(
+        multiplyFixed(RAT_FOOD_OPPORTUNITY_BY_BIOME[biome], 820_000)
+          + multiplyFixed(interaction.rainRetention, 180_000),
+      );
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 12),
+        multiplyFixed(climate.rainfall, 650_000),
+      );
+      cover = clampFixed(
+        multiplyFixed(RAT_SHELTER_BY_BIOME[biome], 760_000)
+          + multiplyFixed(tile.roughness, 240_000),
+      );
+      nesting = weightedScore([
+        [cover, 780_000],
+        [FIXED_POINT - climate.exposure, 220_000],
+      ]);
+      climateScore = ratClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 330_000],
+        [water, 130_000],
+        [cover, 250_000],
+        [nesting, 190_000],
+        [climateScore, 100_000],
+      ]);
+      eligible = eligible
+        && food >= 250_000
+        && cover >= 300_000
+        && nesting >= 300_000;
+      break;
+    }
+    case "domestic-cat": {
+      eligible = tile.terrain !== "deep-water";
+      const localRodentOpportunity = weightedScore([
+        [RAT_FOOD_OPPORTUNITY_BY_BIOME[biome], 450_000],
+        [RAT_SHELTER_BY_BIOME[biome], 550_000],
+      ]);
+      food = weightedScore([
+        [preySupport, 700_000],
+        [localRodentOpportunity, 300_000],
+      ]);
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 16),
+        multiplyFixed(climate.rainfall, 520_000),
+      );
+      cover = clampFixed(
+        multiplyFixed(CAT_COVER_BY_BIOME[biome], 760_000)
+          + multiplyFixed(tile.roughness, 240_000),
+      );
+      nesting = weightedScore([
+        [cover, 680_000],
+        [FIXED_POINT - climate.exposure, 320_000],
+      ]);
+      climateScore = catClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 380_000],
+        [water, 100_000],
+        [cover, 230_000],
+        [nesting, 150_000],
+        [climateScore, 140_000],
+      ]);
+      eligible = eligible
+        && preySupport >= 125_000
+        && food >= 260_000
+        && cover >= 300_000
         && climateScore >= 300_000;
       break;
     }
@@ -1136,6 +1671,24 @@ function bearClimateScore(climate: BiomeClimate, interaction: BiomeInteraction):
     [centeredTolerance(climate.heat, 420_000, 850_000), 300_000],
     [FIXED_POINT - interaction.heatLoad, 150_000],
     [FIXED_POINT - Math.trunc(climate.exposure / 2), 250_000],
+  ]);
+}
+
+function ratClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 580_000, 900_000), 300_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 300_000],
+    [FIXED_POINT - Math.trunc(interaction.saltStress / 2), 200_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 200_000],
+  ]);
+}
+
+function catClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 600_000, 850_000), 340_000],
+    [FIXED_POINT - climate.exposure, 300_000],
+    [FIXED_POINT - Math.trunc(interaction.saltStress / 2), 180_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 180_000],
   ]);
 }
 
@@ -1301,6 +1854,73 @@ function compareSites(left: HabitatSiteEvaluation, right: HabitatSiteEvaluation)
   return left.addressed.tile.index - right.addressed.tile.index;
 }
 
+function compareSitesWithPreferredAllocations(
+  left: HabitatSiteEvaluation,
+  right: HabitatSiteEvaluation,
+  preferredAllocations: readonly CoreEcologyHabitatAllocation[],
+): number {
+  if (preferredAllocations.length > 0) {
+    const leftDistance = nearestAllocationDistance(left, preferredAllocations);
+    const rightDistance = nearestAllocationDistance(right, preferredAllocations);
+    if (leftDistance !== rightDistance) return leftDistance - rightDistance;
+  }
+  return compareSites(left, right);
+}
+
+function nearestAllocationDistance(
+  site: HabitatSiteEvaluation,
+  preferredAllocations: readonly CoreEcologyHabitatAllocation[],
+): number {
+  let nearest = MAX_DISTANCE;
+  for (const allocation of preferredAllocations) {
+    const allocationX = allocation.tileIndex % WORLD_WIDTH;
+    const allocationY = Math.trunc(allocation.tileIndex / WORLD_WIDTH);
+    nearest = Math.min(
+      nearest,
+      Math.abs(site.addressed.tile.x - allocationX)
+        + Math.abs(site.addressed.tile.y - allocationY),
+    );
+  }
+  return nearest;
+}
+
+function activitySignalFor(
+  population: AllocatedPopulationAnalysis,
+): CoreEcologyHarborEdgeActivitySignal {
+  const policy = ACTIVITY_POLICY[population.species];
+  const intensity = population.populationUnits === 0
+    ? 0
+    : clampFixed(
+        150_000
+          + multiplyFixed(population.populationPressure, 650_000)
+          + multiplyFixed(
+            ratioFixed(
+              population.habitatCapacity,
+              SPECIES_RULES[population.species].maximumPopulation,
+            ),
+            200_000,
+          ),
+      );
+  return Object.freeze({
+    kind: policy.kind,
+    intensity,
+    activePeriod: policy.activePeriod,
+    source: "habitat-derived",
+  });
+}
+
+function sameActivitySignal(
+  value: unknown,
+  expected: CoreEcologyHarborEdgeActivitySignal,
+): boolean {
+  return plainRecord(value)
+    && exactKeys(value, ["activePeriod", "intensity", "kind", "source"])
+    && value.activePeriod === expected.activePeriod
+    && value.intensity === expected.intensity
+    && value.kind === expected.kind
+    && value.source === expected.source;
+}
+
 function manhattanTiles(left: TerrainTile, right: TerrainTile): number {
   return Math.abs(left.x - right.x) + Math.abs(left.y - right.y);
 }
@@ -1365,8 +1985,14 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
     : value === "stable";
 }
 
-function validAllocationTerrain(species: CoreWildlifeSpecies, terrain: string): boolean {
+function validAllocationTerrain(
+  species: CoreEcologyHarborEdgeHabitatSpecies,
+  terrain: string,
+): boolean {
   if (species === "gull") return terrain !== "deep-water" && isTerrainKind(terrain);
+  if (species === "brown-rat" || species === "domestic-cat") {
+    return terrain !== "deep-water" && isTerrainKind(terrain);
+  }
   return terrain === "marsh" || terrain === "meadow" || terrain === "ridge";
 }
 
@@ -1415,5 +2041,13 @@ function allowedKeys(value: Record<string, unknown>, keys: readonly string[]): b
 if (
   !Object.values(SPECIES_PURPOSE).every((value) => value >= 0 && value <= UINT32_MAX)
   || CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS
-    !== Object.values(SPECIES_RULES).reduce((sum, rule) => sum + rule.maximumAllocations, 0)
+    !== CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
+  || CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
 ) throw new Error("Core ecology habitat generation constants are incoherent");

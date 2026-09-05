@@ -1,4 +1,7 @@
-export { createTideweftUI } from "./createTideweftUI";
+export {
+  createTideweftUI,
+  resolveTideweftAboutSurface,
+} from "./createTideweftUI";
 export {
   hasCoherentLivingActorInspection,
   projectDogLivingActorInspection,
@@ -9,6 +12,16 @@ export type {
   ActorAboutCloseCommand,
   ResolvedActorAboutSurface,
 } from "./livingActorAbout";
+export {
+  hasCoherentWildlifeEvidenceAboutProjection,
+  projectWildlifeEvidenceAboutProjection,
+  resolveWildlifeEvidenceAboutSurface,
+  sameWildlifeEvidenceTarget,
+} from "./wildlifeEvidenceAbout";
+export type {
+  ResolvedWildlifeEvidenceAboutSurface,
+  WildlifeEvidenceAboutCloseCommand,
+} from "./wildlifeEvidenceAbout";
 export { projectLivingActorInteractionChoices } from "./livingActorInteractionProjection";
 export type { LivingActorInteractionProjectionInput } from "./livingActorInteractionProjection";
 export type * from "./types";

@@ -1,4 +1,6 @@
 import type {
+  AggregateWildlifeEvidenceSpecies,
+  AggregateWildlifeEvidenceView,
   FieldResourceNodeView,
   LooseCargoView,
   LivingActorViewSpecies,
@@ -26,6 +28,12 @@ export type WorldTapTarget =
       readonly entity: "living-actor";
       readonly species: LivingActorViewSpecies;
       readonly id: string;
+    }
+  | {
+      readonly entity: "aggregate-wildlife-evidence";
+      readonly species: AggregateWildlifeEvidenceSpecies;
+      readonly aggregateId: string;
+      readonly evidenceId: string;
     };
 
 export function usesCoarseWorldPointer(
@@ -37,6 +45,12 @@ export function usesCoarseWorldPointer(
 
 const finitePoint = (point: WorldPoint | undefined): point is WorldPoint =>
   Boolean(point && Number.isFinite(point.x) && Number.isFinite(point.y));
+
+const stableAggregateEvidenceId = (value: unknown): value is string =>
+  typeof value === "string"
+  && value.length > 0
+  && value.length <= 256
+  && /^[A-Za-z0-9][A-Za-z0-9:._/-]*$/u.test(value);
 
 const directlyPerceivedPoint = (view: TideweftView, point: WorldPoint): boolean =>
   view.perception === undefined
@@ -107,6 +121,32 @@ const directlyPerceivedLivingActor = (
     : null;
 };
 
+const directlyPerceivedAggregateWildlifeEvidence = (
+  view: TideweftView,
+  species: AggregateWildlifeEvidenceSpecies,
+  aggregateId: string,
+  evidenceId: string,
+): AggregateWildlifeEvidenceView | null => {
+  if (
+    species !== "brown-rat"
+    || view.perception === undefined
+    || !stableAggregateEvidenceId(aggregateId)
+    || !stableAggregateEvidenceId(evidenceId)
+  ) return null;
+  const matches = (view.aggregateWildlifeEvidence ?? []).filter((evidence) => (
+    evidence.representation === "population-evidence"
+    && evidence.species === species
+    && evidence.aggregateId === aggregateId
+    && evidence.evidenceId === evidenceId
+  ));
+  if (matches.length !== 1) return null;
+  const evidence = matches[0];
+  return finitePoint(evidence?.position)
+    && directlyPerceivedPoint(view, evidence.position)
+    ? evidence
+    : null;
+};
+
 /**
  * Last command-line defense for exact entity interactions. Renderers normally
  * remove obscured hit targets before this point, but perception can change
@@ -134,6 +174,22 @@ export function validatePerceivedEntityCommand(
         : null;
     }
     case "select": {
+      if (command.entity === "aggregate-wildlife-evidence") {
+        const evidence = directlyPerceivedAggregateWildlifeEvidence(
+          view,
+          command.species,
+          command.aggregateId,
+          command.evidenceId,
+        );
+        return evidence
+          ? {
+              ...command,
+              // Evidence can be reprojected between press and release. Bind
+              // selection to the current authoritative physical sign point.
+              point: { ...evidence.position },
+            }
+          : null;
+      }
       if (command.entity === "world") return command;
       if (!command.id) return null;
       if (command.entity === "living-actor") {
@@ -223,20 +279,32 @@ export function commandForWorldTap(
     }
   }
   if (target && target.entity !== "resource") {
-    const command = validatePerceivedEntityCommand(view, target.entity === "living-actor"
-      ? {
-          type: "select",
-          entity: "living-actor",
-          species: target.species,
-          id: target.id,
-          point: { ...tappedPoint },
-        }
-      : {
-          type: "select",
-          entity: target.entity,
-          id: target.id,
-          point: { ...tappedPoint },
-        });
+    const command = validatePerceivedEntityCommand(
+      view,
+      target.entity === "living-actor"
+        ? {
+            type: "select",
+            entity: "living-actor",
+            species: target.species,
+            id: target.id,
+            point: { ...tappedPoint },
+          }
+        : target.entity === "aggregate-wildlife-evidence"
+          ? {
+              type: "select",
+              entity: "aggregate-wildlife-evidence",
+              species: target.species,
+              aggregateId: target.aggregateId,
+              evidenceId: target.evidenceId,
+              point: { ...tappedPoint },
+            }
+          : {
+              type: "select",
+              entity: target.entity,
+              id: target.id,
+              point: { ...tappedPoint },
+            },
+    );
     if (command) return command;
   }
   return moveToTap;

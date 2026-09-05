@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { TideweftView } from "./types";
+import type { LivingActorViewSpecies, TideweftView } from "./types";
 import {
   commandForWorldTap,
   routePointerTargetIsDirectlyPerceived,
@@ -173,6 +173,22 @@ const perceivedView = ({
     sizeScale: 1,
     behavior: "watch",
     conditionLabels: [],
+  }],
+  aggregateWildlifeEvidence: [{
+    version: 1,
+    aggregateId: "rat-population:world-tap",
+    evidenceId: "rat-evidence:gnaw:world-tap",
+    species: "brown-rat",
+    representation: "population-evidence",
+    form: "gnaw-marks",
+    quickLabel: "Rat gnaw marks",
+    identityLabel: "Brown rat population signs",
+    evidenceLabel: "Fresh paired gnaw marks",
+    speciesIdentified: true,
+    position: { x: 15, y: 5 },
+    sizeScale: 0.42,
+    distanceUnits: 4_000,
+    selected: false,
   }],
   camera: { center: { x: 20, y: 5 }, zoom: 1 },
 });
@@ -462,6 +478,127 @@ describe("world tap intent", () => {
     })).toBeNull();
   });
 
+  it("selects aggregate rat evidence through its own species-tagged identity", () => {
+    const direct = perceivedView();
+    const expected = {
+      type: "select" as const,
+      entity: "aggregate-wildlife-evidence" as const,
+      species: "brown-rat" as const,
+      aggregateId: "rat-population:world-tap",
+      evidenceId: "rat-evidence:gnaw:world-tap",
+      point: { x: 15, y: 5 },
+    };
+    const target = {
+      entity: "aggregate-wildlife-evidence" as const,
+      species: "brown-rat" as const,
+      aggregateId: expected.aggregateId,
+      evidenceId: expected.evidenceId,
+    };
+
+    expect(commandForWorldTap(direct, target, { x: 14, y: 4 }, false)).toEqual(expected);
+    expect(commandForWorldTap(direct, target, { x: 14, y: 4 }, true)).toEqual(expected);
+    expect(validatePerceivedEntityCommand(direct, {
+      ...expected,
+      point: { x: 999, y: 999 },
+    })).toEqual(expected);
+
+    const repositioned = {
+      ...direct,
+      aggregateWildlifeEvidence: (direct.aggregateWildlifeEvidence ?? []).map((evidence) => ({
+        ...evidence,
+        position: { x: 25, y: 5 },
+      })),
+    };
+    expect(validatePerceivedEntityCommand(repositioned, expected)).toEqual({
+      ...expected,
+      point: { x: 25, y: 5 },
+    });
+  });
+
+  it("rejects stale, ambiguous, hidden, or actor-shaped rat evidence selection", () => {
+    const direct = perceivedView();
+    const command = {
+      type: "select" as const,
+      entity: "aggregate-wildlife-evidence" as const,
+      species: "brown-rat" as const,
+      aggregateId: "rat-population:world-tap",
+      evidenceId: "rat-evidence:gnaw:world-tap",
+      point: { x: 15, y: 5 },
+    };
+    expect(validatePerceivedEntityCommand(direct, {
+      ...command,
+      aggregateId: "rat-population:stale",
+    })).toBeNull();
+    expect(validatePerceivedEntityCommand(direct, {
+      ...command,
+      evidenceId: "rat-evidence:stale",
+    })).toBeNull();
+    expect(validatePerceivedEntityCommand(direct, {
+      ...command,
+      aggregateId: "",
+      evidenceId: "",
+    })).toBeNull();
+    expect(() => validatePerceivedEntityCommand(direct, {
+      ...command,
+      aggregateId: null,
+      evidenceId: undefined,
+    } as unknown as Parameters<typeof validatePerceivedEntityCommand>[1])).not.toThrow();
+    expect(validatePerceivedEntityCommand(direct, {
+      ...command,
+      aggregateId: null,
+      evidenceId: undefined,
+    } as unknown as Parameters<typeof validatePerceivedEntityCommand>[1])).toBeNull();
+
+    const duplicate = {
+      ...direct,
+      aggregateWildlifeEvidence: [
+        ...(direct.aggregateWildlifeEvidence ?? []),
+        { ...(direct.aggregateWildlifeEvidence?.[0] as NonNullable<TideweftView["aggregateWildlifeEvidence"]>[number]) },
+      ],
+    };
+    expect(validatePerceivedEntityCommand(duplicate, command)).toBeNull();
+
+    const hidden = perceivedView({ detailVisibility: [1, 0, 1, 1] });
+    expect(commandForWorldTap(
+      hidden,
+      {
+        entity: "aggregate-wildlife-evidence",
+        species: "brown-rat",
+        aggregateId: command.aggregateId,
+        evidenceId: command.evidenceId,
+      },
+      command.point,
+      true,
+    )).toEqual({ type: "move-target", point: command.point, additive: false });
+
+    const { perception: omittedPerception, ...withoutPerception } = direct;
+    void omittedPerception;
+    expect(validatePerceivedEntityCommand(withoutPerception, command)).toBeNull();
+    expect(commandForWorldTap(
+      withoutPerception,
+      {
+        entity: "aggregate-wildlife-evidence",
+        species: "brown-rat",
+        aggregateId: command.aggregateId,
+        evidenceId: command.evidenceId,
+      },
+      command.point,
+      false,
+    )).toEqual({ type: "move-target", point: command.point, additive: false });
+
+    expect(validatePerceivedEntityCommand(direct, {
+      type: "select",
+      entity: "living-actor",
+      species: "brown-rat",
+      id: "RAT-v1-fabricated",
+      point: command.point,
+    } as unknown as Parameters<typeof validatePerceivedEntityCommand>[1])).toBeNull();
+    expect(validatePerceivedEntityCommand(direct, {
+      ...command,
+      species: "domestic-cat",
+    } as unknown as Parameters<typeof validatePerceivedEntityCommand>[1])).toBeNull();
+  });
+
   it("rejects hidden, stale, duplicate, or species-mismatched dog selections", () => {
     const command = {
       type: "select" as const,
@@ -551,6 +688,17 @@ describe("world tap intent", () => {
       { x: 35, y: 5 },
       false,
     )).toMatchObject({ type: "move-target" });
+    expect(commandForWorldTap(
+      invalid,
+      {
+        entity: "aggregate-wildlife-evidence",
+        species: "brown-rat",
+        aggregateId: "rat-population:world-tap",
+        evidenceId: "rat-evidence:gnaw:world-tap",
+      },
+      { x: 15, y: 5 },
+      true,
+    )).toMatchObject({ type: "move-target" });
     expect(validatePerceivedEntityCommand(invalid, {
       type: "parcel-target",
       parcelId: "parcel-1",
@@ -562,6 +710,14 @@ describe("world tap intent", () => {
       species: "domestic-dog",
       id: "D-R-v1-world-tap",
       point: { x: 35, y: 5 },
+    })).toBeNull();
+    expect(validatePerceivedEntityCommand(invalid, {
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species: "brown-rat",
+      aggregateId: "rat-population:world-tap",
+      evidenceId: "rat-evidence:gnaw:world-tap",
+      point: { x: 15, y: 5 },
     })).toBeNull();
   });
 
@@ -724,3 +880,9 @@ describe("world tap intent", () => {
     expect(Number.isFinite(parcel?.position.y)).toBe(true);
   });
 });
+
+type BrownRatIsNotARenderLivingActor = "brown-rat" extends LivingActorViewSpecies
+  ? false
+  : true;
+const brownRatIsNotARenderLivingActor: BrownRatIsNotARenderLivingActor = true;
+void brownRatIsNotARenderLivingActor;

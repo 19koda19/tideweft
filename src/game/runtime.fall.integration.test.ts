@@ -50,9 +50,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V9GameSaveEnvelope {
+interface V10GameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 9;
+  readonly version: 10;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -140,15 +140,15 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeV8(record: SaveRecord): V9GameSaveEnvelope {
-  const envelope = JSON.parse(record.worldJson) as V9GameSaveEnvelope;
-  if (envelope.format !== "tideweft-session" || envelope.version !== 9) {
-    throw new Error("fixture did not produce a current v9 regional session save");
+function decodeCurrent(record: SaveRecord): V10GameSaveEnvelope {
+  const envelope = JSON.parse(record.worldJson) as V10GameSaveEnvelope;
+  if (envelope.format !== "tideweft-session" || envelope.version !== 10) {
+    throw new Error("fixture did not produce a current v10 regional session save");
   }
   return envelope;
 }
 
-function reseal(envelope: V9GameSaveEnvelope): V9GameSaveEnvelope {
+function reseal(envelope: V10GameSaveEnvelope): V10GameSaveEnvelope {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
   return {
     ...unsealed,
@@ -158,13 +158,13 @@ function reseal(envelope: V9GameSaveEnvelope): V9GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V9GameSaveEnvelope,
+  envelope: V10GameSaveEnvelope,
 ): void {
   const record = repository.snapshot();
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 9,
+    payloadVersion: 10,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -260,8 +260,8 @@ function moveFixtureFrameToCompatibilityTile(
 }
 
 function relocateToRidgeAtZeroStability(
-  envelope: V9GameSaveEnvelope,
-): { readonly envelope: V9GameSaveEnvelope; readonly corner: RidgeCorner } {
+  envelope: V10GameSaveEnvelope,
+): { readonly envelope: V10GameSaveEnvelope; readonly corner: RidgeCorner } {
   const world = deserializeWorld(envelope.world);
   const regionalTravel = restorePlayerRegionalTravel(
     world.meta.rootSeed,
@@ -406,7 +406,7 @@ async function createV8Fixture(
   await runtime.save();
   runtime.destroy();
 
-  const initial = decodeV8(repository.snapshot());
+  const initial = decodeCurrent(repository.snapshot());
   const promiseLot = contractId === null
     ? undefined
     : initial.physicalCargo.carrier.lots.find((lot) =>
@@ -451,7 +451,7 @@ describe("production terrain fall and physical cargo", () => {
   it("rejects a resealed v8 player snapshot whose regional cartography was left stale", async () => {
     const repository = new MemoryRepository();
     await createV8Fixture(repository, "stale regional fall fixture", false);
-    const stale = structuredClone(decodeV8(repository.snapshot()));
+    const stale = structuredClone(decodeCurrent(repository.snapshot()));
     const unseenIndex = stale.player.discovered.findIndex((value) => value !== FIXED_POINT);
     if (unseenIndex < 0) throw new Error("fixture unexpectedly discovered its entire regional window");
     stale.player.discovered[unseenIndex] = FIXED_POINT;
@@ -510,9 +510,9 @@ describe("production terrain fall and physical cargo", () => {
     });
 
     await runtime.save();
-    const fallenSave = decodeV8(repository.snapshot());
+    const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 9,
+      version: 10,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -583,7 +583,7 @@ describe("production terrain fall and physical cargo", () => {
     expect((resumed.getRenderView().looseCargo ?? []).map(({ id }) => id)).toEqual(visibleParcelIds);
     expect(resumed.getUIView().objective?.id).toBe(`recover-${fixture.contractId}`);
     await resumed.save();
-    const roundTripped = decodeV8(repository.snapshot());
+    const roundTripped = decodeCurrent(repository.snapshot());
     expect({
       entities: roundTripped.physicalCargo.looseWorld.entities,
       history: roundTripped.physicalCargo.looseWorld.history,
@@ -599,7 +599,7 @@ describe("production terrain fall and physical cargo", () => {
     advancePlayerSteps(resumed, 1);
     resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await resumed.save();
-    const afterRepeatedInput = decodeV8(repository.snapshot());
+    const afterRepeatedInput = decodeCurrent(repository.snapshot());
     expect(afterRepeatedInput.traversalFeedback.nextTraversalOrdinal).toBe(1);
     expect(incidentCueCalls(incident.cue)).toBe(cueCountBeforeReload);
     expect(afterRepeatedInput.physicalCargo.looseWorld.entities
@@ -631,7 +631,7 @@ describe("production terrain fall and physical cargo", () => {
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
 
-    const fallen = decodeV8(repository.snapshot());
+    const fallen = decodeCurrent(repository.snapshot());
     const incident = fallen.traversalFeedback.incident;
     if (!incident) throw new Error("empty porter fall incident did not persist");
     expect(incident).toMatchObject({
@@ -655,7 +655,7 @@ describe("production terrain fall and physical cargo", () => {
     advancePlayerSteps(runtime, 1);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
-    const repeated = decodeV8(repository.snapshot());
+    const repeated = decodeCurrent(repository.snapshot());
     expect(repeated.traversalFeedback.nextTraversalOrdinal).toBe(1);
     expect(repeated.player.stamina).toBeGreaterThanOrEqual(staminaAfterFall);
     expect(repeated.physicalCargo.carrier.lots).toEqual([]);

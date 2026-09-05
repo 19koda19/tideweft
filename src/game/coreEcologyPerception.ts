@@ -2,9 +2,14 @@ import {
   ACTOR_PERCEPTION_SCALE,
   MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
   canonicalizeActorObservations,
+  createActorObservation,
   type ActorObservation,
 } from "../sim/actorPerception";
-import { CORE_WILDLIFE_SPECIES } from "../sim/coreWildlifeIdentity";
+import {
+  CORE_WILDLIFE_SPECIES,
+  getCoreWildlifeProfile,
+  type CoreWildlifeSpecies,
+} from "../sim/coreWildlifeIdentity";
 import { FIXED_POINT, type TerrainTileView, type WorldView } from "../sim/types";
 import { hashCanonical } from "../sim/util";
 import {
@@ -45,6 +50,7 @@ import {
 } from "./worldPosition";
 
 export const CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS = 14_000 as const;
+export const CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY = 180_000 as const;
 export const CORE_ECOLOGY_PERCEPTION_MAX_OBSERVERS =
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS + 3;
 
@@ -84,7 +90,8 @@ const EMPTY_OBSERVATIONS: readonly ActorObservation[] = Object.freeze([]);
 const CORE_SPECIES = new Set<string>(CORE_WILDLIFE_SPECIES);
 
 /**
- * Builds pairwise visual facts for the exact current wildlife materialization.
+ * Builds pairwise visual facts and bounded local weather cues for the exact
+ * current wildlife materialization.
  * Optional dog, porter, and player addresses observe wildlife and may be
  * observed by wildlife, but this bridge deliberately does not duplicate
  * contacts among those non-core actors.
@@ -117,10 +124,10 @@ export function collectCoreEcologyVisualObservationBatches(
         observerTileIndex: observerPlacement.tileIndex,
         targetTileIndex: subjectPlacement.tileIndex,
         observerFacingRadians: headingToRadians(observer.heading),
-        weatherVisibility: weatherVisibility(frame.world),
+        weatherVisibility: coreEcologyWeatherVisibility(frame.world),
         // This bridge has no velocity evidence and never infers motion from intent.
         targetMovementSalience: 0,
-        targetLightVisibility: targetLightVisibility(targetTile),
+        targetLightVisibility: coreEcologyTargetLightVisibility(targetTile),
       });
       if (sight === null) continue;
       const direct = sight.grade === VISIBILITY_DIRECT;
@@ -142,13 +149,20 @@ export function collectCoreEcologyVisualObservationBatches(
         identityEligible: direct && sight.identityEligible,
       }));
     }
-    const observations = collectLivingActorVisualContactObservations({
+    const visualObservations = collectLivingActorVisualContactObservations({
       version: LIVING_ACTOR_VISUAL_CONTACT_VERSION,
       observer,
       tick: frame.tick,
       contacts,
     });
-    if (observations === null) return null;
+    if (visualObservations === null) return null;
+    const rainCue = coreEcologyCatRainCue(observer, frame);
+    const observations = rainCue === null
+      ? visualObservations
+      : canonicalizeActorObservations([...visualObservations, rainCue]);
+    if (
+      observations.length !== visualObservations.length + (rainCue === null ? 0 : 1)
+    ) return null;
     batches.push(Object.freeze({ observerId: observer.actorId, observations }));
   }
 
@@ -275,7 +289,7 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
       tileIndex: placement.tileIndex,
     }));
   }
-  const cells = perceptionCells(world);
+  const cells = coreEcologyPerceptionCells(world);
   if (cells === null) return null;
   return Object.freeze({
     actors: Object.freeze(actors),
@@ -339,14 +353,79 @@ function perceivedVisualClass(
     subject === "black-bear"
     && (observer === "deer"
       || observer === "gull"
+      || observer === "domestic-cat"
       || observer === "domestic-dog"
       || observer === "human")
   ) return "large-predator";
-  if (subject === "deer" && observer === "black-bear") return "live-prey";
+  if (observer === "domestic-cat" && subject === "domestic-dog") return "predator";
+  if (observer === "domestic-cat" && subject === "domestic-cat") {
+    return "food-competitor";
+  }
+  const observerProfile = coreWildlifeProfile(observer);
+  const subjectProfile = coreWildlifeProfile(subject);
+  if (
+    observerProfile !== null
+    && subjectProfile !== null
+    && observerProfile.roles.includes("predator")
+    && subjectProfile.roles.includes("prey")
+  ) return "live-prey";
+  if (
+    observerProfile !== null
+    && subjectProfile !== null
+    && observerProfile.species !== subjectProfile.species
+    && observerProfile.roles.includes("prey")
+    && subjectProfile.roles.includes("predator")
+  ) return "predator";
   return subject;
 }
 
-function perceptionCells(world: WorldView): readonly PerceptionCell[] | null {
+/**
+ * Rain is a local sensory fact, not an inferred remote weather target. The
+ * currently implemented actor-perception contract has no touch channel, so a
+ * cat receives one anonymous, position-localized hearing cue for sufficiently
+ * audible rain. No other species response is implied by this Alpha-15 slice.
+ */
+function coreEcologyCatRainCue(
+  observer: LivingActorAddress,
+  frame: CanonicalPerceptionFrame,
+): ActorObservation | null {
+  if (
+    observer.species !== "domestic-cat"
+    || (frame.world.weather.kind !== "rain" && frame.world.weather.kind !== "storm")
+    || frame.world.weather.intensity < CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY
+  ) return null;
+  return createActorObservation({
+    id: `ecology-rain:${hashCanonical({
+      observerId: observer.actorId,
+      tick: frame.tick,
+      weatherKind: frame.world.weather.kind,
+      intensity: frame.world.weather.intensity,
+    })}`,
+    observerId: observer.actorId,
+    observedAtTick: frame.tick,
+    channel: "hearing",
+    perceivedClass: "rain-exposure",
+    subjectId: null,
+    area: {
+      center: observer.position,
+      radiusUnits: MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
+    },
+    confidence: frame.world.weather.intensity,
+    salience: frame.world.weather.intensity,
+    identification: "anonymous",
+  });
+}
+
+function coreWildlifeProfile(species: LivingActorSpecies) {
+  return CORE_SPECIES.has(species)
+    ? getCoreWildlifeProfile(species as CoreWildlifeSpecies)
+    : null;
+}
+
+/** Shared terrain/structure occlusion surface for core-ecology sight queries. */
+export function coreEcologyPerceptionCells(
+  world: WorldView,
+): readonly PerceptionCell[] | null {
   const occupied = new Set<number>();
   for (const settlement of world.settlements) {
     if (
@@ -429,7 +508,8 @@ function validTerrainTile(
     && fixedUnit(tile.waterDepth);
 }
 
-function targetLightVisibility(tile: TerrainTileView): number {
+/** Current terrain-light proxy used by bounded core-ecology detail contacts. */
+export function coreEcologyTargetLightVisibility(tile: TerrainTileView): number {
   return tile.terrain === "marsh"
     ? 0.55
     : tile.terrain === "ridge" || tile.terrain === "deep-water"
@@ -437,7 +517,8 @@ function targetLightVisibility(tile: TerrainTileView): number {
       : 0.72;
 }
 
-function weatherVisibility(world: WorldView): number {
+/** Current weather transmission used by bounded core-ecology sight queries. */
+export function coreEcologyWeatherVisibility(world: WorldView): number {
   return Math.max(0, Math.min(1, 1 - world.weather.intensity / FIXED_POINT * 0.52));
 }
 

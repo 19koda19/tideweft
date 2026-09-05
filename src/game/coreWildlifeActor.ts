@@ -32,6 +32,7 @@ import { isWorldPosition, type WorldPosition } from "./worldPosition";
 export const CORE_WILDLIFE_ACTOR_VERSION = 1 as const;
 export const CORE_WILDLIFE_DECISION_VERSION = 1 as const;
 export const CORE_WILDLIFE_EVENT_VERSION = 1 as const;
+export const CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION = 1 as const;
 export const CORE_WILDLIFE_MEMORY_CAP = 16 as const;
 export const CORE_WILDLIFE_MAX_FOOD_OPPORTUNITIES = 24 as const;
 export const CORE_WILDLIFE_ACTOR_MAX_SERIALIZED_BYTES = 384 * 1_024;
@@ -63,7 +64,8 @@ export type CoreWildlifeMemoryKind =
   | "food"
   | "pursuit"
   | "guard"
-  | "disengagement";
+  | "disengagement"
+  | "weather";
 export type CoreWildlifeFoodSourceKind =
   | "natural-forage"
   | "physical-item"
@@ -112,6 +114,23 @@ export interface CoreWildlifeMemory {
   readonly referenceId: string;
   readonly observationId: string | null;
   readonly atTick: number;
+  /**
+   * A physical trace owned by this bounded record's lifecycle. Projection may
+   * disclose the trace itself, never the animal's private memory or cause.
+   */
+  readonly environmentalEvidence?: CoreWildlifeEnvironmentalEvidence;
+}
+
+/** One bounded, saved physical sign produced by an individual wildlife actor. */
+export interface CoreWildlifeEnvironmentalEvidence {
+  readonly version: typeof CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION;
+  readonly evidenceId: string;
+  readonly kind: "wet-tracks";
+  readonly position: WorldPosition;
+  readonly createdAtTick: number;
+  readonly strength: number;
+  readonly itemConsumption: "none";
+  readonly disclosure: "direct-observation-required";
 }
 
 export interface CoreWildlifeActorState {
@@ -237,6 +256,7 @@ const THREAT_CLASSES = new Set([
 const HUMAN_CLASSES = new Set(["human", "porter", "unknown-human", "human-voice"]);
 const ALARM_CLASSES = new Set(["alarm-call", "animal-alarm", "herd-alarm"]);
 const COMPETITOR_CLASSES = new Set(["food-competitor", "competitor"]);
+const RAIN_CLASSES = new Set(["rain-exposure"]);
 const FOOD_SOURCES = new Set<string>(["natural-forage", "physical-item", "living-actor"]);
 const INTENTS = new Set<string>(CORE_WILDLIFE_INTENTS);
 const MEMORY_KINDS = new Set<string>([
@@ -246,6 +266,7 @@ const MEMORY_KINDS = new Set<string>([
   "pursuit",
   "guard",
   "disengagement",
+  "weather",
 ]);
 const CAUSE_KINDS = new Set<string>([
   "perception",
@@ -341,7 +362,11 @@ export function canonicalizeCoreWildlifeActorState(
   const condition = canonicalCondition(value.condition);
   const perception = canonicalizeActorPerceptionState(value.perception);
   const intent = canonicalIntent(value.intent, value.updatedAtTick);
-  const memories = canonicalMemories(value.memories, value.updatedAtTick);
+  const memories = canonicalMemories(
+    value.memories,
+    value.updatedAtTick,
+    identity.species,
+  );
   if (
     needs === null
     || condition === null
@@ -528,7 +553,7 @@ export function stepCoreWildlifeActor(
   const event = createEvent(state, decision);
   const memories = retainMemories([
     ...state.memories,
-    ...memoryForEvent(event),
+    ...memoryForEvent(state, event, perception),
   ]);
   const actor = rebuildActor(state, {
     updatedAtTick: step.tick,
@@ -554,6 +579,7 @@ function decide(
   const human = strongestBelief(attention, HUMAN_CLASSES);
   const alarm = strongestBelief(attention, ALARM_CLASSES);
   const competitor = strongestBelief(attention, COMPETITOR_CLASSES);
+  const rain = strongestBelief(attention, RAIN_CLASSES);
   const effectiveThreat = pressureFor(state, threat);
   const effectiveHuman = pressureFor(state, human);
   const effectiveAlarm = pressureFor(state, alarm);
@@ -603,6 +629,18 @@ function decide(
       ? { kind: "condition", referenceId: "condition:safety-pressure" }
       : { kind: "perception", referenceId: retreatBelief.sourceObservationId },
     retreatBelief?.sourceObservationId ?? null, null);
+  }
+
+  if (
+    state.identity.species === "domestic-cat"
+    && rain !== null
+    && pressureFor(state, rain) >= profile.behavior.retreatThreshold
+    && step.accessibility.retreat
+  ) {
+    return decisionFor(state, step.tick, "retreat", {
+      kind: "perception",
+      referenceId: rain.sourceObservationId,
+    }, rain.sourceObservationId, null);
   }
 
   const selectedFood = selectFoodOpportunity(state, opportunities, step.tick);
@@ -905,7 +943,44 @@ function createEvent(
   });
 }
 
-function memoryForEvent(event: CoreWildlifeCausalEvent): readonly CoreWildlifeMemory[] {
+function memoryForEvent(
+  state: CoreWildlifeActorState,
+  event: CoreWildlifeCausalEvent,
+  perception: ActorPerceptionState,
+): readonly CoreWildlifeMemory[] {
+  const rainBelief = event.observationId === null
+    || event.kind !== "retreat"
+    || event.species !== "domestic-cat"
+    || event.causeReferenceId !== event.observationId
+    ? null
+    : perception.beliefs.find((belief) => (
+        belief.sourceObservationId === event.observationId
+        && belief.perceivedClass === "rain-exposure"
+      )) ?? null;
+  if (rainBelief !== null) {
+    // One trace per short rain-response interval prevents a stationary cat
+    // from filling the bounded memory/evidence budget every simulation tick.
+    if (recentMemory(state, "weather", "weather:rain", event.atTick, 7)) {
+      return Object.freeze([]);
+    }
+    return Object.freeze([deepFreeze({
+      eventId: event.eventId,
+      kind: "weather" as const,
+      referenceId: "weather:rain",
+      observationId: event.observationId,
+      atTick: event.atTick,
+      environmentalEvidence: {
+        version: CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION,
+        evidenceId: `${event.eventId}:wet-tracks`,
+        kind: "wet-tracks" as const,
+        position: event.position,
+        createdAtTick: event.atTick,
+        strength: Math.floor((rainBelief.confidence + rainBelief.salience) / 2),
+        itemConsumption: "none" as const,
+        disclosure: "direct-observation-required" as const,
+      },
+    })]);
+  }
   const kind = memoryKindForIntent(event.kind);
   if (kind === null) return Object.freeze([]);
   return Object.freeze([deepFreeze({
@@ -1093,12 +1168,18 @@ function canonicalResourceReference(value: unknown): CoreWildlifeResourceReferen
   });
 }
 
-function canonicalMemories(value: unknown, maximumTick: number): readonly CoreWildlifeMemory[] | null {
+function canonicalMemories(
+  value: unknown,
+  maximumTick: number,
+  species: CoreWildlifeSpecies,
+): readonly CoreWildlifeMemory[] | null {
   if (!Array.isArray(value) || value.length > CORE_WILDLIFE_MEMORY_CAP) return null;
   const memories: CoreWildlifeMemory[] = [];
   for (const raw of value) {
+    const hasEvidence = plainRecord(raw) && Object.hasOwn(raw, "environmentalEvidence");
     if (!plainRecord(raw) || !exactKeys(raw, [
       "atTick",
+      ...(hasEvidence ? ["environmentalEvidence"] : []),
       "eventId",
       "kind",
       "observationId",
@@ -1112,12 +1193,20 @@ function canonicalMemories(value: unknown, maximumTick: number): readonly CoreWi
       || !nonnegativeSafeInteger(raw.atTick)
       || raw.atTick > maximumTick
     ) return null;
-    memories.push(Object.freeze({
+    const environmentalEvidence = hasEvidence
+      ? canonicalEnvironmentalEvidence(raw.environmentalEvidence, raw.atTick, raw.eventId)
+      : null;
+    if (
+      (raw.kind === "weather") !== (environmentalEvidence !== null)
+      || (environmentalEvidence !== null && species !== "domestic-cat")
+    ) return null;
+    memories.push(deepFreeze({
       eventId: raw.eventId,
       kind: raw.kind as CoreWildlifeMemoryKind,
       referenceId: raw.referenceId,
       observationId: raw.observationId as string | null,
       atTick: raw.atTick,
+      ...(environmentalEvidence === null ? {} : { environmentalEvidence }),
     }));
   }
   memories.sort(compareMemory);
@@ -1125,6 +1214,47 @@ function canonicalMemories(value: unknown, maximumTick: number): readonly CoreWi
     if (memories[index - 1]?.eventId === memories[index]?.eventId) return null;
   }
   return Object.freeze(memories);
+}
+
+function canonicalEnvironmentalEvidence(
+  value: unknown,
+  expectedTick: unknown,
+  expectedEventId: unknown,
+): CoreWildlifeEnvironmentalEvidence | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "createdAtTick",
+    "disclosure",
+    "evidenceId",
+    "itemConsumption",
+    "kind",
+    "position",
+    "strength",
+    "version",
+  ])) return null;
+  if (
+    value.version !== CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION
+    || !validId(value.evidenceId)
+    || typeof expectedEventId !== "string"
+    || value.evidenceId !== `${expectedEventId}:wet-tracks`
+    || value.kind !== "wet-tracks"
+    || !isWorldPosition(value.position)
+    || value.createdAtTick !== expectedTick
+    || !nonnegativeSafeInteger(value.createdAtTick)
+    || !scaledUnit(value.strength)
+    || value.strength === 0
+    || value.itemConsumption !== "none"
+    || value.disclosure !== "direct-observation-required"
+  ) return null;
+  return deepFreeze({
+    version: CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION,
+    evidenceId: value.evidenceId,
+    kind: "wet-tracks",
+    position: value.position,
+    createdAtTick: value.createdAtTick,
+    strength: value.strength,
+    itemConsumption: "none",
+    disclosure: "direct-observation-required",
+  });
 }
 
 function retainMemories(value: readonly CoreWildlifeMemory[]): readonly CoreWildlifeMemory[] {

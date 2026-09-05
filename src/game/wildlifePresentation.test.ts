@@ -1,19 +1,33 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
+  createActorObservation,
+} from "../sim/actorPerception";
 import { createRegionCoord } from "../sim/regions";
+import { seedFromText } from "../sim/rng";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
+  createCoreEcologyAggregatePatch,
+  stepCoreEcologyAggregatePatch,
+  type CoreEcologyPopulationInput,
+} from "./coreEcology";
+import {
+  CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
+import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
+  projectWildlifePopulationEvidencePresentations,
   projectWildlifePresentation,
   type WildlifeDirectObservation,
+  type WildlifePopulationEvidenceObservation,
 } from "./wildlifePresentation";
-import { createWorldPosition } from "./worldPosition";
+import { createWorldPosition, type WorldPosition } from "./worldPosition";
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -71,6 +85,162 @@ function directObservation(
   });
 }
 
+function ratEvidenceFixture() {
+  const seed = seedFromText("presentation-rat-evidence");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "presentation-rat-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v2", habitat },
+    tick: 10,
+  });
+  const population = patch.aggregatePopulations[0];
+  const evidence = population?.evidence[0];
+  if (population === undefined || evidence === undefined) {
+    throw new Error("Rat evidence fixture requires a supported aggregate population");
+  }
+  return { evidence, patch, population };
+}
+
+function catEvidenceFixture() {
+  const seed = seedFromText("presentation-cat-rain-evidence");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: population.species === "domestic-cat"
+              && allocation.allocationOrdinal === 0
+              ? "materialized" as const
+              : "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "presentation-cat-rain-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v2", habitat },
+    tick: 10,
+  });
+  const catPopulation = patch.populations.find(({ species }) => species === "domestic-cat");
+  const cat = catPopulation?.members.find(({ materialization }) => (
+    materialization === "materialized"
+  ))?.actor;
+  if (cat === undefined) throw new Error("Cat evidence fixture requires one actor");
+  const rain = createActorObservation({
+    id: "observation:cat-direct-rain",
+    observerId: cat.identity.stableId,
+    observedAtTick: 11,
+    channel: "hearing",
+    perceivedClass: "rain-exposure",
+    subjectId: null,
+    area: {
+      center: cat.address.position,
+      radiusUnits: MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
+    },
+    confidence: 680_000,
+    salience: 680_000,
+    identification: "anonymous",
+  });
+  if (rain === null) throw new Error("Cat evidence fixture rain observation is invalid");
+  const stepped = stepCoreEcologyAggregatePatch(patch, {
+    tick: 11,
+    actorSteps: [{
+      actorId: cat.identity.stableId,
+      observations: [rain],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+    }],
+  });
+  if (stepped === null) throw new Error("Cat evidence fixture failed to step");
+  const steppedCat = stepped.patch.populations
+    .find(({ species }) => species === "domestic-cat")
+    ?.members.find(({ actor }) => actor.identity.stableId === cat.identity.stableId)?.actor;
+  const evidence = steppedCat?.memories.flatMap(({ environmentalEvidence }) => (
+    environmentalEvidence === undefined ? [] : [environmentalEvidence]
+  ))[0];
+  if (steppedCat === undefined || evidence === undefined) {
+    throw new Error("Cat rain response did not leave bounded evidence");
+  }
+  return { cat: steppedCat, evidence, patch: stepped.patch };
+}
+
+function evidenceObservation(
+  position: WorldPosition,
+  distanceTiles = 4,
+  facingRadians = 0,
+): WildlifePopulationEvidenceObservation {
+  const evidenceGlobalX = position.region.x * WORLD_WIDTH
+    + Math.floor(position.localX / 1_000);
+  const evidenceGlobalY = position.region.y * WORLD_HEIGHT
+    + Math.floor(position.localY / 1_000);
+  const width = Math.max(100, distanceTiles + 2);
+  const cells: PerceptionCell[] = Array.from(
+    { length: width },
+    () => ({ elevation: 0, obstruction: 0 }),
+  );
+  return Object.freeze({
+    window: {
+      origin: { x: evidenceGlobalX - distanceTiles, y: evidenceGlobalY },
+      terrain: { width, height: 1 },
+    },
+    perception: evaluatePerception({
+      columns: width,
+      rows: 1,
+      cells,
+      playerTileIndex: 0,
+      facingRadians,
+      weatherVisibility: 1,
+      rangeOverrides: {
+        closePeripheralRange: 2,
+        directSightRange: 128,
+        forwardConeRadians: Math.PI / 2,
+      },
+      detailRangeOverrides: {
+        closePeripheralRange: 2,
+        directSightRange: 128,
+        forwardConeRadians: Math.PI / 2,
+      },
+    }),
+  });
+}
+
 function pressuredPursuingBear(): CoreWildlifeActorState {
   const actor = wildlife("black-bear");
   const candidate = canonicalizeCoreWildlifeActorState({
@@ -101,6 +271,7 @@ describe("knowledge-honest wildlife presentation", () => {
     ["deer", "Deer"],
     ["gull", "Gulls"],
     ["black-bear", "Black bear"],
+    ["domestic-cat", "Domestic cat"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -124,6 +295,112 @@ describe("knowledge-honest wildlife presentation", () => {
     else expect(presentation?.lifeStageLabel).toBeDefined();
     expect(Object.isFrozen(presentation)).toBe(true);
     expect(Object.isFrozen(presentation?.conditionLabels)).toBe(true);
+  });
+
+  it("projects canonical brown-rat physical evidence without inventing actors or counts", () => {
+    const { evidence, patch, population } = ratEvidenceFixture();
+    const presentations = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position),
+      tileSize: 16,
+      selectedEvidenceId: evidence.evidenceId,
+    });
+
+    expect(presentations).toHaveLength(1);
+    expect(presentations?.[0]).toMatchObject({
+      version: 1,
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "brown-rat",
+      representation: "population-evidence",
+      quickLabel: "Brown rat signs",
+      identityLabel: "Brown rat population signs",
+      speciesIdentified: true,
+      selected: true,
+    });
+    expect(presentations?.[0]).not.toHaveProperty("actorId");
+    expect(presentations?.[0]).not.toHaveProperty("groupSize");
+    expect(presentations?.[0]).not.toHaveProperty("populationSize");
+    expect(presentations?.[0]).not.toHaveProperty("activitySignal");
+    expect(presentations?.[0]).not.toHaveProperty("causeKind");
+    expect(presentations?.[0]).not.toHaveProperty("strength");
+    expect(Object.isFrozen(presentations)).toBe(true);
+    expect(Object.isFrozen(presentations?.[0])).toBe(true);
+  });
+
+  it("projects saved cat rain tracks only through signed direct detail", () => {
+    const { cat, evidence, patch } = catEvidenceFixture();
+    const presentations = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position),
+      tileSize: 16,
+      // Individual tracks deliberately remain non-targetable in this slice.
+      selectedEvidenceId: evidence.evidenceId,
+    });
+
+    expect(presentations?.filter(({ species }) => species === "domestic-cat")).toEqual([
+      expect.objectContaining({
+        version: 1,
+        aggregateId: cat.identity.stableId,
+        evidenceId: evidence.evidenceId,
+        species: "domestic-cat",
+        representation: "individual-evidence",
+        form: "small-tracks",
+        quickLabel: "Domestic cat signs",
+        evidenceLabel: "Wet cat pawprints",
+        speciesIdentified: true,
+        selected: false,
+      }),
+    ]);
+    const catPresentation = presentations?.find(({ species }) => species === "domestic-cat");
+    expect(catPresentation).not.toHaveProperty("causeReferenceId");
+    expect(catPresentation).not.toHaveProperty("strength");
+    expect(catPresentation).not.toHaveProperty("memories");
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position, 4, Math.PI),
+      tileSize: 16,
+    })).toEqual([]);
+  });
+
+  it("keeps distant rat signs uncertain and fails closed for forged perception/state", () => {
+    const { evidence, patch } = ratEvidenceFixture();
+    const distant = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position, 60),
+      tileSize: 1,
+    });
+    expect(distant).toHaveLength(1);
+    expect(distant?.[0]).toMatchObject({
+      quickLabel: "Small-animal signs",
+      identityLabel: "Unidentified small-animal signs",
+      speciesIdentified: false,
+    });
+
+    const observed = evidenceObservation(evidence.position);
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: {
+        ...observed,
+        perception: { ...observed.perception, signature: "perception-v2:forged" },
+      },
+      tileSize: 1,
+    })).toBeNull();
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: {
+        ...patch,
+        aggregatePopulations: patch.aggregatePopulations.map((population, index) => index === 0
+          ? { ...population, populationSize: population.populationSize + 1 }
+          : population),
+      },
+      observation: observed,
+      tileSize: 1,
+    })).toBeNull();
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: { ...observed, visibleAggregateCount: 12 } as WildlifePopulationEvidenceObservation,
+      tileSize: 1,
+    })).toBeNull();
   });
 
   it("withholds species and fine details when direct sight lacks clarity", () => {
@@ -172,6 +449,12 @@ describe("knowledge-honest wildlife presentation", () => {
     expect(projectWildlifePresentation({
       actor: gull,
       observation: directObservation(gull, 4, { visibleAggregateCount: 25 }),
+      tileSize: 1,
+    })).toBeNull();
+    const cat = wildlife("domestic-cat");
+    expect(projectWildlifePresentation({
+      actor: cat,
+      observation: directObservation(cat, 4, { visibleAggregateCount: 2 }),
       tileSize: 1,
     })).toBeNull();
 

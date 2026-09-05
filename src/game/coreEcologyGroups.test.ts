@@ -114,6 +114,24 @@ describe("core ecology social groups", () => {
       populationKey: "black-bear:wave-a",
       groupOrdinal: 0,
     })).toThrow(/social deer and gull/u);
+    for (const solitarySpecies of ["brown-rat", "domestic-cat"] as const) {
+      expect(() => createCoreEcologyGroup({
+        seed: SEED,
+        species: solitarySpecies,
+        originRegion: ORIGIN,
+        populationKey: `${solitarySpecies}:wave-b`,
+        groupOrdinal: 0,
+        memberOrdinals: [0, 1],
+        anchor: position(1, 1),
+      })).toThrow(/not group-eligible/u);
+      expect(() => stableCoreEcologyGroupId({
+        seed: SEED,
+        species: solitarySpecies,
+        originRegion: ORIGIN,
+        populationKey: `${solitarySpecies}:wave-b`,
+        groupOrdinal: 0,
+      })).toThrow(/group-eligible/u);
+    }
   });
 
   it("round-trips canonical group sets at signed world-position limits", () => {

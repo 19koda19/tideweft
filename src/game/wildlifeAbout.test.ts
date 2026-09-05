@@ -1,20 +1,29 @@
 import { describe, expect, it } from "vitest";
 
 import { createRegionCoord } from "../sim/regions";
+import { seedFromText } from "../sim/rng";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
+import {
+  createCoreEcologyAggregatePatch,
+  type CoreEcologyPopulationInput,
+} from "./coreEcology";
 import {
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
+import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
+  projectWildlifePopulationEvidenceAbout,
+  projectWildlifePopulationEvidenceQuickInspect,
   projectWildlifeAbout,
   projectWildlifeQuickInspect,
   type WildlifeAboutObservation,
 } from "./wildlifeAbout";
-import { createWorldPosition } from "./worldPosition";
+import type { WildlifePopulationEvidenceObservation } from "./wildlifePresentation";
+import { createWorldPosition, type WorldPosition } from "./worldPosition";
 import {
   hasCoherentLivingActorInspection,
   projectWildlifeLivingActorInspection,
@@ -75,6 +84,84 @@ function observation(
   });
 }
 
+function ratEvidenceFixture() {
+  const seed = seedFromText("about-rat-evidence");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "about-rat-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v2", habitat },
+    tick: 12,
+  });
+  const population = patch.aggregatePopulations[0];
+  const evidence = population?.evidence[0];
+  if (population === undefined || evidence === undefined) {
+    throw new Error("Rat ABOUT fixture requires a supported aggregate population");
+  }
+  return { evidence, patch, population };
+}
+
+function evidenceObservation(
+  position: WorldPosition,
+  distanceTiles = 4,
+): WildlifePopulationEvidenceObservation {
+  const evidenceGlobalX = position.region.x * WORLD_WIDTH
+    + Math.floor(position.localX / 1_000);
+  const evidenceGlobalY = position.region.y * WORLD_HEIGHT
+    + Math.floor(position.localY / 1_000);
+  const width = Math.max(100, distanceTiles + 2);
+  const cells: PerceptionCell[] = Array.from(
+    { length: width },
+    () => ({ elevation: 0, obstruction: 0 }),
+  );
+  return Object.freeze({
+    window: {
+      origin: { x: evidenceGlobalX - distanceTiles, y: evidenceGlobalY },
+      terrain: { width, height: 1 },
+    },
+    perception: evaluatePerception({
+      columns: width,
+      rows: 1,
+      cells,
+      playerTileIndex: 0,
+      facingRadians: 0,
+      weatherVisibility: 1,
+      rangeOverrides: {
+        closePeripheralRange: 2,
+        directSightRange: 128,
+        forwardConeRadians: Math.PI / 2,
+      },
+      detailRangeOverrides: {
+        closePeripheralRange: 2,
+        directSightRange: 128,
+        forwardConeRadians: Math.PI / 2,
+      },
+    }),
+  });
+}
+
 function pursuingBear(): CoreWildlifeActorState {
   const actor = wildlife("black-bear");
   const result = canonicalizeCoreWildlifeActorState({
@@ -104,6 +191,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
     ["black-bear", "BLACK BEAR", "Black bear"],
+    ["domestic-cat", "DOMESTIC CAT", "Domestic cat"],
   ] as const)("identifies a clear %s without claiming an individual identity", (species, heading, label) => {
     const actor = wildlife(species);
     const visible = observation(actor, 4, species === "gull" ? 7 : undefined);
@@ -121,6 +209,72 @@ describe("knowledge-honest wildlife ABOUT", () => {
     expect(about?.observed).toContainEqual({ label: "Species", value: label });
     expect(about?.identity).not.toContain(actor.identity.stableId);
     expect(about?.knowledge).not.toBe("Known individual");
+  });
+
+  it("describes directly visible brown-rat evidence as population-level signs", () => {
+    const { evidence, patch, population } = ratEvidenceFixture();
+    const visible = evidenceObservation(evidence.position);
+    const quick = projectWildlifePopulationEvidenceQuickInspect(
+      patch,
+      evidence.evidenceId,
+      visible,
+    );
+    const about = projectWildlifePopulationEvidenceAbout(
+      patch,
+      evidence.evidenceId,
+      visible,
+    );
+
+    expect(quick).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "brown-rat",
+      heading: "BROWN RAT SIGNS",
+    });
+    expect(about).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "brown-rat",
+      heading: "BROWN RAT SIGNS",
+      identity: "Brown rat population signs",
+      knowledge: "Recognized",
+      observed: expect.arrayContaining([
+        { label: "Species", value: "Brown rat" },
+        { label: "Scale", value: "Population-level signs" },
+      ]),
+      known: [],
+    });
+    const encoded = JSON.stringify({ about, quick });
+    expect(encoded).not.toMatch(/actorId|groupSize|populationSize|populationPressure|activitySignal/iu);
+    expect(encoded).not.toMatch(/causeKind|causeReferenceId|strength|createdAtTick/iu);
+  });
+
+  it("withholds rat classification when the visible evidence lacks clarity", () => {
+    const { evidence, patch } = ratEvidenceFixture();
+    const about = projectWildlifePopulationEvidenceAbout(
+      patch,
+      evidence.evidenceId,
+      evidenceObservation(evidence.position, 60),
+    );
+    expect(about).toMatchObject({
+      heading: "SMALL-ANIMAL SIGNS",
+      identity: "Unidentified small-animal signs",
+      knowledge: "Unfamiliar",
+      known: [],
+    });
+    expect(about?.observed.map(({ label }) => label)).not.toContain("Species");
+
+    const visible = evidenceObservation(evidence.position);
+    expect(projectWildlifePopulationEvidenceAbout(
+      patch,
+      evidence.evidenceId,
+      { ...visible, visibleAggregateCount: 12 },
+    )).toBeNull();
+    expect(projectWildlifePopulationEvidenceAbout(
+      patch,
+      "missing-evidence",
+      visible,
+    )).toBeNull();
   });
 
   it("keeps species, appearance, condition, and life stage hidden below clarity", () => {

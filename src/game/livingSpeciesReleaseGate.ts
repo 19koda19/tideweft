@@ -173,6 +173,175 @@ function waveACoreWildlifeEvidence(
 }
 
 /**
+ * Truthful evidence for the bounded Settlement Shadows slice. Health,
+ * mortality, carcasses, full food-web turnover, broad multisensory behavior,
+ * and release publication remain deliberately open; shared invariants and a
+ * representative generated audit stand in for a quadratic pair matrix.
+ */
+function settlementShadowsEvidence(
+  species: "brown-rat" | "domestic-cat",
+): readonly ClaimTuple[] {
+  const rat = species === "brown-rat";
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  return [
+    ["species-profile", A, owners(
+      ...(rat ? ["game:core-ecology:v3"] : []),
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["ecological-niche", A, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:core-ecology-habitat:v2",
+      "game:core-ecology-small-world:v2",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["appearance", A, owners(
+      ...(rat ? ["game:core-ecology-evidence-runtime:v1"] : []),
+      "game:wildlife-presentation:v1",
+      ...(!rat ? ["sim:core-wildlife-identity:v1"] : []),
+    )],
+    ["sound", A, owners("audio:soundscape:v1", "game:runtime-core-ecology:v1")],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v2",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["food-web", F, ["game:living-species-catalog:v1", "sim:core-wildlife-identity:v1"]],
+    ["perception-senses", F, owners(
+      ...(rat
+        ? ["game:core-ecology-aggregate-perception:v1", "game:core-ecology-small-world:v2"]
+        : ["game:core-ecology-perception:v1"]),
+      "game:living-actor-senses:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["locomotion", A, owners(
+      rat ? "game:core-ecology-small-world:v2" : "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["human-interaction", A, owners(
+      ...(rat
+        ? ["game:core-ecology-aggregate-perception:v1", "game:core-ecology-small-world:v2"]
+        : ["game:core-ecology-perception:v1"]),
+      ...(!rat ? ["game:core-wildlife-actor:v1"] : []),
+      "game:runtime-core-ecology:v1",
+    )],
+    ["dog-interaction", A, owners(
+      ...(rat
+        ? ["game:core-ecology-aggregate-perception:v1", "game:core-ecology-small-world:v2"]
+        : ["game:core-ecology-perception:v1"]),
+      ...(!rat ? ["game:core-wildlife-actor:v1"] : []),
+      "game:runtime-core-ecology:v1",
+    )],
+    // Rat density spacing and directly observed cat food competition are one
+    // representative same-species outcome per representation, not a claim of
+    // exhaustive social simulation.
+    ["same-species-interaction", A, rat
+      ? owners("game:core-ecology-small-world:v2")
+      : owners(
+          "game:core-ecology-perception:v1",
+          "game:core-wildlife-actor:v1",
+        )],
+    ["other-species-interaction", A, owners(
+      ...(rat
+        ? ["game:core-ecology-aggregate-perception:v1", "game:core-ecology-small-world:v2"]
+        : [
+            "game:core-ecology-aggregate-perception:v1",
+            "game:core-ecology-perception:v1",
+            "game:core-ecology-small-world:v2",
+            "game:core-wildlife-actor:v1",
+          ]),
+      "game:runtime-core-ecology:v1",
+    )],
+    ["neutral-behavior", A, owners(
+      rat ? "game:core-ecology-small-world:v2" : "game:core-wildlife-actor:v1",
+    )],
+    ["disengagement", A, owners(
+      ...(rat
+        ? ["game:core-ecology-aggregate-perception:v1", "game:core-ecology-small-world:v2"]
+        : ["game:core-wildlife-actor:v1"]),
+      "game:runtime-core-ecology:v1",
+    )],
+    ["environmental-evidence", A, rat
+      ? owners(
+          "game:core-ecology-evidence-runtime:v1",
+          "game:core-ecology:v3",
+          "game:wildlife-about:v1",
+          "game:wildlife-presentation:v1",
+        )
+      : owners(
+          "game:core-ecology-evidence-runtime:v1",
+          "game:core-wildlife-actor:v1",
+          "game:wildlife-presentation:v1",
+        )],
+    ["about-disclosure", A, owners(
+      ...(rat ? ["game:core-ecology-evidence-runtime:v1"] : []),
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["knowledge-honesty", A, owners(
+      ...(rat
+        ? ["game:core-ecology-aggregate-perception:v1", "game:core-ecology-evidence-runtime:v1"]
+        : ["game:core-ecology-perception:v1"]),
+      "game:wildlife-about:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v2",
+      "game:core-ecology:v3",
+      "game:runtime-core-ecology:v1",
+    )],
+    // The rat population stays authoritative at aggregate resolution; direct
+    // signs are a view projection rather than a fabricated full actor mode.
+    ["full-coarse-transition", rat ? F : A, owners(
+      "game:core-ecology:v3",
+      ...(rat ? ["game:core-ecology-evidence-runtime:v1"] : []),
+      "game:runtime-core-ecology:v1",
+    )],
+    ["save-load", A, owners("game:core-ecology:v3", "game:runtime-save:v10")],
+    ["seamless-region-crossing", rat ? F : A, owners(
+      ...(rat ? ["game:core-ecology:v3"] : ["game:runtime-core-ecology:v1"]),
+      "game:world-position:v1",
+    )],
+    ["performance-budget", A, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:core-ecology-habitat:v2",
+      "game:core-ecology:v3",
+      "game:runtime-core-ecology:v1",
+      "test:core-ecology-settlement-shadows-performance:v1",
+    )],
+    ["accessibility", A, owners(
+      "game:runtime-core-ecology:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["mobile-parity", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "test:core-ecology-settlement-shadows-mobile:v1",
+    )],
+    ["player-independent-scenario", A, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:core-ecology-small-world:v2",
+      "game:core-ecology:v3",
+    )],
+    ["fuzz-testing", A, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:core-ecology-habitat:v2",
+      "game:core-ecology-small-world:v2",
+      "game:core-ecology:v3",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["clone-diversity", A, owners(
+      ...(rat ? ["game:core-ecology:v3"] : []),
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v25"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha15:v1"]],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -244,6 +413,8 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   deer: waveACoreWildlifeEvidence("deer"),
   gull: waveACoreWildlifeEvidence("gull"),
   "black-bear": waveACoreWildlifeEvidence("black-bear"),
+  "brown-rat": settlementShadowsEvidence("brown-rat"),
+  "domestic-cat": settlementShadowsEvidence("domestic-cat"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {

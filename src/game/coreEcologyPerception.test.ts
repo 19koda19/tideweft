@@ -9,6 +9,7 @@ import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type WorldState, type WorldView } from "../sim/types";
 import {
   CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS,
+  CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY,
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
   type CoreEcologyPerceptionFrameInput,
@@ -91,6 +92,108 @@ describe("core ecology cross-species perception bridge", () => {
     expect(observationsFor(batches, bear.identity.stableId)).toEqual([
       expect.objectContaining({ perceivedClass: "human", subjectId: porter.actorId }),
     ]);
+  });
+
+  it("lets a free-ranging cat and dog recognize one another without turning either into prey", () => {
+    const current = fixture("cat and dog direct contact");
+    const cat = wildlife(current, "domestic-cat", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const dog = actorAddress(
+      "D-core-ecology-cat-contact",
+      "domestic-dog",
+      OBSERVER_X + 4,
+      OBSERVER_Y,
+      500_000,
+    );
+    const batches = collectCoreEcologyVisualObservationBatches(frame(current, [cat], {
+      dogAddress: dog,
+    }));
+
+    expect(observationsFor(batches, cat.identity.stableId)).toEqual([
+      expect.objectContaining({
+        channel: "vision",
+        perceivedClass: "predator",
+        subjectId: dog.actorId,
+        identification: "identified",
+      }),
+    ]);
+    expect(observationsFor(batches, dog.actorId)).toEqual([
+      expect.objectContaining({
+        channel: "vision",
+        perceivedClass: "domestic-cat",
+        subjectId: cat.identity.stableId,
+        identification: "identified",
+      }),
+    ]);
+    expect(observationsFor(batches, cat.identity.stableId)[0]?.perceivedClass)
+      .not.toBe("live-prey");
+  });
+
+  it("classifies a directly seen cat as a lawful food competitor to another cat", () => {
+    const current = fixture("cat same-species competitor");
+    const observer = wildlife(current, "domestic-cat", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const neighbor = wildlife(
+      current,
+      "domestic-cat",
+      OBSERVER_X + 3,
+      OBSERVER_Y,
+      500_000,
+      1,
+    );
+    const batches = collectCoreEcologyVisualObservationBatches(frame(current, [neighbor, observer]));
+
+    expect(observationsFor(batches, observer.identity.stableId)).toEqual([
+      expect.objectContaining({
+        channel: "vision",
+        perceivedClass: "food-competitor",
+        subjectId: neighbor.identity.stableId,
+        identification: "identified",
+      }),
+    ]);
+  });
+
+  it("gives only a materialized cat a bounded local rain cue, not a remote weather identity", () => {
+    const rainy = fixture("cat hears direct rain", undefined, {
+      kind: "rain",
+      intensity: 680_000,
+    });
+    const clear = fixture("cat clear control");
+    const rainyCat = wildlife(rainy, "domestic-cat", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const clearCat = wildlife(clear, "domestic-cat", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const rainyDeer = wildlife(rainy, "deer", OBSERVER_X + 5, OBSERVER_Y, 0, 0);
+
+    const rainyBatches = collectCoreEcologyVisualObservationBatches(frame(rainy, [
+      rainyCat,
+      rainyDeer,
+    ]));
+    const catRain = observationsFor(rainyBatches, rainyCat.identity.stableId)
+      .find(({ perceivedClass }) => perceivedClass === "rain-exposure");
+    expect(catRain).toMatchObject({
+      channel: "hearing",
+      subjectId: null,
+      area: {
+        center: rainyCat.address.position,
+        radiusUnits: MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
+      },
+      confidence: 680_000,
+      salience: 680_000,
+      identification: "anonymous",
+    });
+    expect(observationsFor(rainyBatches, rainyDeer.identity.stableId)
+      .some(({ perceivedClass }) => perceivedClass === "rain-exposure")).toBe(false);
+    expect(observationsFor(
+      collectCoreEcologyVisualObservationBatches(frame(clear, [clearCat])),
+      clearCat.identity.stableId,
+    )).toEqual([]);
+
+    const drizzle = fixture("cat drizzle below cue floor", undefined, {
+      kind: "rain",
+      intensity: CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY - 1,
+    });
+    const drizzleCat = wildlife(drizzle, "domestic-cat", OBSERVER_X, OBSERVER_Y, 0, 0);
+    expect(observationsFor(
+      collectCoreEcologyVisualObservationBatches(frame(drizzle, [drizzleCat])),
+      drizzleCat.identity.stableId,
+    )).toEqual([]);
   });
 
   it("lets a distinct in-frame player and wildlife perceive each other without non-core cross-contact", () => {
@@ -250,12 +353,16 @@ describe("core ecology cross-species perception bridge", () => {
   });
 });
 
-function fixture(seedText: string, ridgeAtX?: number): Fixture {
+function fixture(
+  seedText: string,
+  ridgeAtX?: number,
+  weather: Readonly<{ kind: "rain" | "storm"; intensity: number }> | null = null,
+): Fixture {
   const state = createWorld(seedText, "standard");
   state.weather = {
     ...state.weather,
-    kind: "clear",
-    intensity: 0,
+    kind: weather?.kind ?? "clear",
+    intensity: weather?.intensity ?? 0,
     windX: 0,
     windY: 0,
   };
@@ -293,7 +400,7 @@ function fixture(seedText: string, ridgeAtX?: number): Fixture {
 
 function wildlife(
   current: Fixture,
-  species: "deer" | "gull" | "black-bear",
+  species: "deer" | "gull" | "black-bear" | "domestic-cat",
   tileX: number,
   tileY: number,
   heading: number,

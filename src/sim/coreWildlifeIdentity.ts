@@ -10,15 +10,24 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "deer",
   "gull",
   "black-bear",
+  "brown-rat",
+  "domestic-cat",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
+export type CoreWildlifeRepresentation = "individual" | "aggregate";
+export type CoreWildlifeTaxonomicClass = "bird" | "mammal";
+export type CoreWildlifeDietClass = "herbivore" | "omnivore" | "carnivore";
+export type CoreWildlifeLocomotionClass = "terrestrial" | "aerial";
+export type CoreWildlifeGroupOrganization = "herd" | "flock";
 export type CoreWildlifeEcologicalRole =
   | "alarm-source"
   | "prey"
+  | "small-prey"
   | "forager"
   | "scavenger"
   | "predator"
+  | "small-predator"
   | "omnivore";
 export type CoreWildlifeFoodClass =
   | "browse"
@@ -46,11 +55,84 @@ export type CoreWildlifeLifeStage = "juvenile" | "adult" | "older";
 
 /** Sim-layer identity authority; game registries derive these namespaces. */
 export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
-  Record<CoreWildlifeSpecies, "DEER-" | "GULL-" | "BEAR-">
+  Record<CoreWildlifeSpecies, "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-">
 > = Object.freeze({
   deer: "DEER-",
   gull: "GULL-",
   "black-bear": "BEAR-",
+  "brown-rat": "RAT-",
+  "domestic-cat": "CAT-",
+});
+
+/**
+ * Species-level facts shared by registries and catalog consumers. This is a
+ * separate dictionary so expanding the roster cannot rewrite persisted v1
+ * Wave-A identity profiles or their deterministic draws.
+ */
+export interface CoreWildlifeSpeciesMetadata {
+  readonly species: CoreWildlifeSpecies;
+  readonly actorRepresentation: CoreWildlifeRepresentation;
+  readonly catalogIdentityForm: CoreWildlifeRepresentation;
+  readonly taxonomicClass: CoreWildlifeTaxonomicClass;
+  readonly dietClass: CoreWildlifeDietClass;
+  readonly locomotionClass: CoreWildlifeLocomotionClass;
+  readonly groupOrganization: CoreWildlifeGroupOrganization | null;
+  readonly groupStableIdNamespace: "HERD" | "FLOCK" | null;
+}
+
+export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
+  Record<CoreWildlifeSpecies, CoreWildlifeSpeciesMetadata>
+> = deepFreeze({
+  deer: {
+    species: "deer",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "herbivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: "herd",
+    groupStableIdNamespace: "HERD",
+  },
+  gull: {
+    species: "gull",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "omnivore",
+    locomotionClass: "aerial",
+    groupOrganization: "flock",
+    groupStableIdNamespace: "FLOCK",
+  },
+  "black-bear": {
+    species: "black-bear",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "brown-rat": {
+    species: "brown-rat",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "mammal",
+    dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "domestic-cat": {
+    species: "domestic-cat",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "carnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
 });
 
 export interface CoreWildlifeFoodAffinities {
@@ -235,6 +317,72 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [40_000, 260_000],
     },
   },
+  "brown-rat": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "brown-rat",
+    maximumPatchPopulation: 48,
+    roles: ["prey", "small-prey", "forager", "scavenger", "omnivore"],
+    foodAffinities: {
+      browse: 260_000,
+      "shore-forage": 340_000,
+      carrion: 420_000,
+      "exposed-food": 1_000_000,
+      "live-prey": 80_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 500_000,
+      retreatThreshold: 420_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["brown-agouti", "dark-brown", "gray-brown", "pale-bellied"],
+    temperamentPairs: [
+      ["cautious", "opportunistic"],
+      ["watchful", "social"],
+      ["cautious", "reserved"],
+      ["bold", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [600_000, 960_000],
+      boldness: [120_000, 620_000],
+      sociability: [420_000, 880_000],
+    },
+  },
+  "domestic-cat": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "domestic-cat",
+    maximumPatchPopulation: 4,
+    roles: ["forager", "predator", "small-predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 220_000,
+      carrion: 440_000,
+      "exposed-food": 580_000,
+      "live-prey": 1_000_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 720_000,
+      retreatThreshold: 520_000,
+      forageThreshold: 300_000,
+      guardThreshold: 660_000,
+      maximumPursuitTicks: 8,
+    },
+    morphs: ["black", "brown-tabby", "gray-tabby", "tortoiseshell"],
+    temperamentPairs: [
+      ["reserved", "patient"],
+      ["cautious", "watchful"],
+      ["bold", "opportunistic"],
+      ["watchful", "reserved"],
+    ],
+    traitRanges: {
+      vigilance: [480_000, 900_000],
+      boldness: [240_000, 820_000],
+      sociability: [80_000, 500_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -247,9 +395,19 @@ export function getCoreWildlifeProfile(species: CoreWildlifeSpecies): CoreWildli
   return profile;
 }
 
+export function getCoreWildlifeSpeciesMetadata(
+  species: CoreWildlifeSpecies,
+): CoreWildlifeSpeciesMetadata {
+  const metadata = CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES[species];
+  if (metadata === undefined) {
+    throw new TypeError(`Unsupported core wildlife species ${String(species)}`);
+  }
+  return metadata;
+}
+
 export function coreWildlifeIdPrefix(
   species: CoreWildlifeSpecies,
-): "DEER-" | "GULL-" | "BEAR-" {
+): "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-" {
   const prefix = CORE_WILDLIFE_ID_PREFIX_BY_SPECIES[species];
   if (prefix === undefined) throw new TypeError(`Unsupported core wildlife species ${String(species)}`);
   return prefix;
@@ -328,9 +486,12 @@ export function assertCoreWildlifeIdentity(value: unknown): asserts value is Cor
 export function assertCoreWildlifeProfiles(): void {
   for (const species of CORE_WILDLIFE_SPECIES) {
     const profile = PROFILES[species];
+    const metadata = CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES[species];
     if (
       profile.version !== CORE_WILDLIFE_IDENTITY_VERSION
       || profile.species !== species
+      || metadata.species !== species
+      || ((metadata.groupOrganization === null) !== (metadata.groupStableIdNamespace === null))
       || profile.roles.length === 0
       || new Set(profile.roles).size !== profile.roles.length
       || profile.morphs.length < 3
@@ -345,6 +506,9 @@ export function assertCoreWildlifeProfiles(): void {
     if (profile.behavior.maximumPursuitTicks > 64) {
       throw new Error(`Core wildlife profile ${species} has an unbounded pursuit`);
     }
+  }
+  if (new Set(Object.values(CORE_WILDLIFE_ID_PREFIX_BY_SPECIES)).size !== CORE_WILDLIFE_SPECIES.length) {
+    throw new Error("Core wildlife identity prefixes must remain exclusive");
   }
 }
 

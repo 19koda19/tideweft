@@ -23,6 +23,11 @@ import {
   type ResolvedActorAboutSurface,
 } from "./livingActorAbout";
 import {
+  resolveWildlifeEvidenceAboutSurface,
+  type ResolvedWildlifeEvidenceAboutSurface,
+  type WildlifeEvidenceAboutCloseCommand,
+} from "./wildlifeEvidenceAbout";
+import {
   KIT_DIALOG_ID,
   createKitDialog,
   type KitDialogController,
@@ -60,12 +65,20 @@ export interface ResidentAboutSurfaceState {
   readonly pausesGameplay: false;
 }
 
+type ResolvedAboutSurface =
+  | ResolvedActorAboutSurface
+  | ResolvedWildlifeEvidenceAboutSurface;
+
+type AboutCloseCommand =
+  | ActorAboutCloseCommand
+  | WildlifeEvidenceAboutCloseCommand;
+
 /** ABOUT is resident field feedback, never a modal or a simulation pause. */
 export function residentAboutSurfaceState(
   resident:
     | ResidentAboutUIView
     | LivingActorAboutUIView
-    | ResolvedActorAboutSurface
+    | ResolvedAboutSurface
     | undefined,
 ): ResidentAboutSurfaceState {
   return { hidden: !resident, modal: false, pausesGameplay: false };
@@ -80,16 +93,35 @@ export interface ResidentAboutActionPresentation {
 
 /** Missing actions stay missing; an acquainted actor never regains a dead GREET button. */
 export function residentAboutActionPresentation(
-  resident: ResidentAboutUIView | ResolvedActorAboutSurface,
+  resident: ResidentAboutUIView | ResolvedAboutSurface,
 ): ResidentAboutActionPresentation {
-  const hidden = resident.actionLabel === undefined;
+  const actionLabel = "actionLabel" in resident ? resident.actionLabel : undefined;
+  const actionDisabled = "actionDisabled" in resident
+    ? resident.actionDisabled
+    : undefined;
+  const actionHint = "actionHint" in resident ? resident.actionHint : undefined;
+  const hidden = actionLabel === undefined;
   return {
     hidden,
-    disabled: hidden || Boolean(resident.actionDisabled),
-    label: resident.actionLabel ?? "",
-    hint: resident.actionHint ?? "",
+    disabled: hidden || Boolean(actionDisabled),
+    label: actionLabel ?? "",
+    hint: actionHint ?? "",
   };
 }
+
+export const resolveTideweftAboutSurface = (
+  view: Pick<
+    TideweftUIView,
+    "selectedLivingActor" | "selectedResident" | "selectedWildlifeEvidence"
+  >,
+): ResolvedAboutSurface | undefined => {
+  // A present aggregate selection owns the surface. If it is incoherent, fail
+  // closed instead of falling through to an unrelated stale actor selection.
+  if (view.selectedWildlifeEvidence !== undefined) {
+    return resolveWildlifeEvidenceAboutSurface(view);
+  }
+  return resolveActorAboutSurface(view);
+};
 
 const signedAxis = (value: number): string => {
   const integer = Number.isFinite(value) ? Math.trunc(value) : 0;
@@ -786,7 +818,7 @@ export function handleTideweftUIShortcut(
 /** Escape cancels a non-modal actor disclosure before other HUD shortcuts. */
 export function handleActorAboutEscape(
   event: Pick<UIShortcutEvent, "key" | "defaultPrevented" | "preventDefault">,
-  closeCommand: ActorAboutCloseCommand | undefined,
+  closeCommand: AboutCloseCommand | undefined,
   dispatch: (command: TideweftUICommand) => void,
 ): boolean {
   if (event.defaultPrevented || event.key !== "Escape" || !closeCommand) return false;
@@ -2420,7 +2452,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
   };
 
-  const renderResidentAbout = (actor: ResolvedActorAboutSurface | undefined): void => {
+  const renderResidentAbout = (actor: ResolvedAboutSurface | undefined): void => {
     const signature = actor ? JSON.stringify(actor) : "";
     if (signature === lastResidentAbout) return;
     lastResidentAbout = signature;
@@ -2432,11 +2464,17 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     if (!actor) {
       renderedActorAboutKey = null;
       delete refs.residentAbout.dataset.species;
+      delete refs.residentAbout.dataset.representation;
       return;
     }
     const actorChanged = renderedActorAboutKey !== actor.selectionKey;
     renderedActorAboutKey = actor.selectionKey;
     refs.residentAbout.dataset.species = actor.species;
+    if ("representation" in actor) {
+      refs.residentAbout.dataset.representation = actor.representation;
+    } else {
+      delete refs.residentAbout.dataset.representation;
+    }
     if (actorChanged) refs.residentAboutBody.scrollTop = 0;
     refs.residentAboutTitle.textContent = actor.heading;
     refs.residentAboutIdentity.textContent = actor.identityLine;
@@ -2446,7 +2484,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.residentAboutKnowledge.dataset.knowledge = actor.knowledgeLabel.toLocaleLowerCase();
     const renderFacts = (
       target: HTMLDListElement,
-      facts: ResolvedActorAboutSurface["observed"],
+      facts: ResolvedAboutSurface["observed"],
     ): void => {
       target.replaceChildren();
       for (const fact of facts) {
@@ -2466,7 +2504,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     renderFacts(refs.residentAboutObserved, actor.observed);
     renderFacts(refs.residentAboutKnown, actor.known);
     const action = residentAboutActionPresentation(actor);
-    refs.residentAboutActions.hidden = action.hidden && actor.interactions.length === 0;
+    const interactions = "interactions" in actor ? actor.interactions : [];
+    refs.residentAboutActions.hidden = action.hidden && interactions.length === 0;
     refs.residentAboutGreet.hidden = action.hidden;
     refs.residentAboutGreet.textContent = action.label;
     refs.residentAboutGreet.disabled = action.disabled;
@@ -2480,7 +2519,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       refs.residentAboutGreet.removeAttribute("aria-describedby");
     }
     refs.residentAboutLivingActions.replaceChildren();
-    for (const interaction of actor.interactions) {
+    for (const interaction of interactions) {
       const wrapper = createElement("div", "resident-about__living-action");
       const button = createButton(
         "resident-about__choice",
@@ -2494,6 +2533,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
         if (
           current?.closeCommand.type !== "living-actor"
           || current.selectionKey !== actor.selectionKey
+          || !("interactions" in current)
           || !current.interactions.some(({ id }) => id === interaction.id)
         ) return;
         options.dispatch({
@@ -2531,13 +2571,13 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
   };
 
-  const syncResidentAboutFocus = (actor: ResolvedActorAboutSurface | undefined): void => {
+  const syncResidentAboutFocus = (actor: ResolvedAboutSurface | undefined): void => {
     const nextKey = actor?.selectionKey ?? null;
     if (nextKey === selectedActorAboutKey) return;
     selectedActorAboutKey = nextKey;
     if (nextKey) {
       const quick = actor?.quickSummary ? ` ${actor.quickSummary}.` : "";
-      announce(`${actor?.heading ?? "Living actor"}.${quick} ABOUT details available.`);
+      announce(`${actor?.heading ?? "Nearby evidence"}.${quick} ABOUT details available.`);
     } else {
       restoreResidentAboutFocus();
     }
@@ -2609,7 +2649,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const update = (providedView?: TideweftUIView | null): void => {
     const view = providedView === undefined ? options.getView() ?? null : providedView;
     latestView = view;
-    const actorAbout = view ? resolveActorAboutSurface(view) : undefined;
+    const actorAbout = view ? resolveTideweftAboutSurface(view) : undefined;
     refs.kit.update(view?.kit);
     renderSaveWarning(view?.saveWarning);
     syncResidentAboutFocus(actorAbout);
@@ -2940,8 +2980,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       ...(latestView?.selectedSettlement ? { settlementId: latestView.selectedSettlement.id } : {}),
     });
   });
-  const currentActorAbout = (): ResolvedActorAboutSurface | undefined =>
-    latestView ? resolveActorAboutSurface(latestView) : undefined;
+  const currentActorAbout = (): ResolvedAboutSurface | undefined =>
+    latestView ? resolveTideweftAboutSurface(latestView) : undefined;
   const closeResidentAbout = (): void => {
     const actor = currentActorAbout();
     if (!actor) return;
@@ -2953,7 +2993,12 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     const residentId = actor?.closeCommand.type === "resident"
       ? actor.closeCommand.residentId
       : undefined;
-    if (!residentId || actor?.actionLabel !== "GREET") return;
+    if (
+      !residentId
+      || actor === undefined
+      || !("actionLabel" in actor)
+      || actor.actionLabel !== "GREET"
+    ) return;
     options.dispatch({ type: "resident", action: "greet", residentId });
   });
   refs.inspectorFocus.addEventListener("click", () => {

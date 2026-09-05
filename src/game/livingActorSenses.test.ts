@@ -64,7 +64,9 @@ describe("shared living actor sensory profiles", () => {
   it("derives every production sensory profile from the versioned species catalog", () => {
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId)).toEqual([
       "black-bear",
+      "brown-rat",
       "deer",
+      "domestic-cat",
       "domestic-dog",
       "gull",
       "human",

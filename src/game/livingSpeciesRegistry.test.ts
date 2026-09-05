@@ -21,7 +21,7 @@ import {
 import { createWorldPosition } from "./worldPosition";
 
 describe("lean runtime living-species registry", () => {
-  it("owns the exact Wave A roster and runtime capability values", () => {
+  it("owns the exact current roster and runtime capability values", () => {
     expect(LIVING_SPECIES_REGISTRY_VERSION).toBe(1);
     expect(LIVING_ACTOR_SPECIES).toEqual([
       "human",
@@ -29,11 +29,14 @@ describe("lean runtime living-species registry", () => {
       "deer",
       "gull",
       "black-bear",
+      "brown-rat",
+      "domestic-cat",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
         species: "human",
         actorIdPrefix: "H-",
+        actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
         aboutNoun: "person",
@@ -47,6 +50,7 @@ describe("lean runtime living-species registry", () => {
       {
         species: "domestic-dog",
         actorIdPrefix: "D-",
+        actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
         aboutNoun: "dog",
@@ -60,6 +64,7 @@ describe("lean runtime living-species registry", () => {
       {
         species: "deer",
         actorIdPrefix: "DEER-",
+        actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
         aboutNoun: "deer",
@@ -73,6 +78,7 @@ describe("lean runtime living-species registry", () => {
       {
         species: "gull",
         actorIdPrefix: "GULL-",
+        actorAddressable: true,
         representation: "aggregate",
         locomotionClass: "aerial",
         aboutNoun: "gull",
@@ -86,6 +92,7 @@ describe("lean runtime living-species registry", () => {
       {
         species: "black-bear",
         actorIdPrefix: "BEAR-",
+        actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
         aboutNoun: "black bear",
@@ -94,6 +101,34 @@ describe("lean runtime living-species registry", () => {
           hearingSensitivity: 880_000,
           scentSensitivity: ACTOR_PERCEPTION_SCALE,
           scentBaseRangeUnits: 48_000,
+        },
+      },
+      {
+        species: "brown-rat",
+        actorIdPrefix: "RAT-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "terrestrial",
+        aboutNoun: "brown rat",
+        senses: {
+          visionAcuity: 480_000,
+          hearingSensitivity: 860_000,
+          scentSensitivity: 880_000,
+          scentBaseRangeUnits: 24_000,
+        },
+      },
+      {
+        species: "domestic-cat",
+        actorIdPrefix: "CAT-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        aboutNoun: "domestic cat",
+        senses: {
+          visionAcuity: 900_000,
+          hearingSensitivity: 980_000,
+          scentSensitivity: 720_000,
+          scentBaseRangeUnits: 28_000,
         },
       },
     ]);
@@ -141,20 +176,29 @@ describe("lean runtime living-species registry", () => {
       const other = LIVING_SPECIES_REGISTRY[(index + 1) % LIVING_SPECIES_REGISTRY.length];
       if (other === undefined) throw new Error("registry fixture needs another species");
 
-      expect(livingSpeciesActorIdMatchesNamespace(actorId, entry.species)).toBe(true);
+      expect(livingSpeciesActorIdMatchesNamespace(actorId, entry.species))
+        .toBe(entry.actorAddressable);
       expect(livingSpeciesActorIdMatchesNamespace(actorId, other.species)).toBe(false);
-      expect(createLivingActorAddress({
+      const addressInput = {
         actorId,
         species: entry.species,
         position,
         persistence: entry.species === "human" ? "promoted" : "regional",
-      }).species).toBe(entry.species);
+      } as const;
+      if (entry.actorAddressable) {
+        expect(createLivingActorAddress(addressInput).species).toBe(entry.species);
+      } else {
+        expect(() => createLivingActorAddress(addressInput)).toThrow(
+          "Living actor ID namespace does not match its species",
+        );
+      }
       expect(livingActorSenseProfile(entry.species)).toEqual({
         version: 1,
         species: entry.species,
         ...entry.senses,
       });
     }
+    expect(livingSpeciesActorIdMatchesNamespace("RAT-v1-synthetic", "brown-rat")).toBe(false);
     expect(livingSpeciesActorIdMatchesNamespace("OTTER-v1", "otter")).toBe(false);
   });
 });

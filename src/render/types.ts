@@ -447,8 +447,16 @@ export interface PorterView {
  */
 export type DogView = DogPresentation;
 
-/** Living species rendered through the universal actor boundary rather than compatibility residents. */
-export type LivingActorViewSpecies = Exclude<LivingActorSpecies, "human">;
+/**
+ * Living species rendered through the universal actor boundary rather than
+ * compatibility residents. Brown rats are intentionally excluded: their
+ * authoritative representation is a population area with physical evidence,
+ * never a fabricated individual actor.
+ */
+export type LivingActorViewSpecies = Exclude<
+  LivingActorSpecies,
+  "human" | "brown-rat"
+>;
 
 export type WildlifeBehaviorView =
   | "neutral"
@@ -480,6 +488,36 @@ export interface WildlifeView {
   /** Aggregate flocks expose a visible approximate count, never hidden members. */
   readonly groupSize?: number;
   readonly selected?: boolean;
+}
+
+/** Selectable aggregate-evidence commands remain rat-only in this slice. */
+export type AggregateWildlifeEvidenceSpecies = "brown-rat";
+export type WildlifeEvidenceViewSpecies = AggregateWildlifeEvidenceSpecies | "domestic-cat";
+export type AggregateWildlifeEvidenceForm =
+  | "gnaw-marks"
+  | "shelter-sign"
+  | "small-tracks";
+
+/**
+ * One directly observed physical wildlife sign. This separate view deliberately
+ * exposes no individual state, exact population count, hidden activity, cause,
+ * or interaction affordance.
+ */
+export interface AggregateWildlifeEvidenceView {
+  readonly version: 1;
+  readonly aggregateId: string;
+  readonly evidenceId: string;
+  readonly species: WildlifeEvidenceViewSpecies;
+  readonly representation: "population-evidence" | "individual-evidence";
+  readonly form: AggregateWildlifeEvidenceForm;
+  readonly quickLabel: string;
+  readonly identityLabel: string;
+  readonly evidenceLabel: string;
+  readonly speciesIdentified: boolean;
+  readonly position: WorldPoint;
+  readonly sizeScale: number;
+  readonly distanceUnits: number;
+  readonly selected: boolean;
 }
 
 export interface ParticleView {
@@ -552,6 +590,8 @@ export interface TideweftView {
   readonly dogs?: readonly DogView[];
   /** Optional during the Wave A migration; production projections remain direct-sight only. */
   readonly wildlife?: readonly WildlifeView[];
+  /** Direct-detail aggregate signs; never merge these into the living-actor list. */
+  readonly aggregateWildlifeEvidence?: readonly AggregateWildlifeEvidenceView[];
   readonly particles?: readonly ParticleView[];
   readonly events?: readonly WorldEventView[];
   readonly camera: CameraView;
@@ -559,6 +599,16 @@ export interface TideweftView {
 }
 
 /** Intents emitted by the renderer. The game host validates and translates them. */
+export interface SelectAggregateWildlifeEvidenceCommand {
+  readonly type: "select";
+  readonly entity: "aggregate-wildlife-evidence";
+  readonly species: AggregateWildlifeEvidenceSpecies;
+  readonly aggregateId: string;
+  readonly evidenceId: string;
+  /** Current physical point, rebound by the release-frame perception validator. */
+  readonly point: WorldPoint;
+}
+
 export type RendererCommand =
   | { readonly type: "movement"; readonly vector: WorldPoint }
   | { readonly type: "brace"; readonly active: boolean }
@@ -595,6 +645,7 @@ export type RendererCommand =
       /** Current physical point, rebound by the release-frame perception validator. */
       readonly point: WorldPoint;
     }
+  | SelectAggregateWildlifeEvidenceCommand
   | { readonly type: "cancel" };
 
 export interface TideweftRendererOptions {

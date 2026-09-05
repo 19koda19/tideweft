@@ -28,7 +28,8 @@ export const CORE_ECOLOGY_GROUP_REJOIN_START_COHESION = 650_000 as const;
 export const CORE_ECOLOGY_GROUP_REJOIN_COMPLETE_COHESION = 850_000 as const;
 export const CORE_ECOLOGY_GROUP_COHESION_RECOVERY = 100_000 as const;
 
-export type CoreEcologyGroupSpecies = Exclude<CoreWildlifeSpecies, "black-bear">;
+export const CORE_ECOLOGY_GROUP_SPECIES = ["deer", "gull"] as const;
+export type CoreEcologyGroupSpecies = (typeof CORE_ECOLOGY_GROUP_SPECIES)[number];
 export type CoreEcologyGroupOrganization = "herd" | "flock";
 export type CoreEcologyGroupPhase = "cohesive" | "separated" | "rejoining";
 export type CoreEcologyGroupSignalKind = "alarm" | "movement";
@@ -242,6 +243,13 @@ const DISTURBANCE_CAUSES = new Set<string>([
   "weather-pressure",
 ]);
 const AFTERMATH_KINDS = new Set<string>(["displacement", "reunion", "separation"]);
+const GROUP_SPECIES_POLICY: Readonly<Record<CoreEcologyGroupSpecies, Readonly<{
+  organization: CoreEcologyGroupOrganization;
+  stableIdPrefix: "HERD" | "FLOCK";
+}>>> = Object.freeze({
+  deer: Object.freeze({ organization: "herd", stableIdPrefix: "HERD" }),
+  gull: Object.freeze({ organization: "flock", stableIdPrefix: "FLOCK" }),
+});
 
 export function stableCoreEcologyGroupId(input: Readonly<{
   readonly seed: RootSeed;
@@ -251,8 +259,8 @@ export function stableCoreEcologyGroupId(input: Readonly<{
   readonly groupOrdinal: number;
 }>): string {
   const generation = canonicalGenerationInput(input);
-  if (generation === null || generation.species === "black-bear") {
-    throw new RangeError("Only social deer and gull populations can own Wave-A groups");
+  if (generation === null || !isGroupSpecies(generation.species)) {
+    throw new RangeError("Only explicitly group-eligible social deer and gull populations can own core ecology groups");
   }
   return stableGroupIdFromFields({
     seedFingerprint: rootSeedFingerprint(generation.seed),
@@ -270,8 +278,8 @@ export function createCoreEcologyGroup(
     throw new TypeError("Core ecology group creation input is malformed");
   }
   const generation = canonicalGenerationInput(input);
-  if (generation === null || generation.species === "black-bear") {
-    throw new RangeError("Black bears remain solitary in the Wave-A group layer");
+  if (generation === null || !isGroupSpecies(generation.species)) {
+    throw new RangeError("Core ecology species is solitary or otherwise not group-eligible");
   }
   const memberOrdinals = canonicalOrdinalSet(input.memberOrdinals, 2, memberLimit(generation.species));
   const tick = input.tick ?? 0;
@@ -894,7 +902,7 @@ function canonicalIdentity(value: unknown): CoreEcologyGroupIdentity | null {
   ])) return null;
   if (
     value.generationVersion !== CORE_ECOLOGY_GROUP_GENERATION_VERSION
-    || (value.species !== "deer" && value.species !== "gull")
+    || !isGroupSpecies(value.species)
     || value.organization !== organizationFor(value.species)
     || !isRegionCoord(value.originRegion)
     || !validPopulationKey(value.populationKey)
@@ -1398,7 +1406,7 @@ function canonicalGenerationInput(value: unknown): Readonly<{
     || value.seed.some((word) => (
       !nonnegativeSafeInteger(word) || word > 0xffff_ffff
     ))
-    || (value.species !== "deer" && value.species !== "gull" && value.species !== "black-bear")
+    || !isCoreWildlifeSpecies(value.species)
     || !isRegionCoord(value.originRegion)
     || !validPopulationKey(value.populationKey)
     || !nonnegativeSafeInteger(value.groupOrdinal)
@@ -1419,7 +1427,7 @@ function stableGroupIdFromFields(input: Readonly<{
   populationKey: string;
   groupOrdinal: number;
 }>): string {
-  const prefix = input.species === "deer" ? "HERD" : "FLOCK";
+  const prefix = GROUP_SPECIES_POLICY[input.species].stableIdPrefix;
   return `${prefix}-v1-${input.seedFingerprint}-${encodeSigned(input.originRegion.x)}.${encodeSigned(input.originRegion.y)}-${input.populationKey.length.toString(36)}.${input.populationKey}-${input.groupOrdinal.toString(36)}`;
 }
 
@@ -1428,7 +1436,20 @@ function rootSeedFingerprint(seed: RootSeed): string {
 }
 
 function organizationFor(species: CoreEcologyGroupSpecies): CoreEcologyGroupOrganization {
-  return species === "deer" ? "herd" : "flock";
+  return GROUP_SPECIES_POLICY[species].organization;
+}
+
+function isGroupSpecies(value: unknown): value is CoreEcologyGroupSpecies {
+  return typeof value === "string"
+    && (CORE_ECOLOGY_GROUP_SPECIES as readonly string[]).includes(value);
+}
+
+function isCoreWildlifeSpecies(value: unknown): value is CoreWildlifeSpecies {
+  return value === "deer"
+    || value === "gull"
+    || value === "black-bear"
+    || value === "brown-rat"
+    || value === "domestic-cat";
 }
 
 function memberLimit(species: CoreEcologyGroupSpecies): number {

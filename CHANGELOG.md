@@ -4,6 +4,50 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.15 — 2026-09-05
+
+Build: `0.3.3-alpha.15` · Gameplay contract: 20 · Tutorial: 25
+
+Settlement Shadows adds a stable brown-rat population area, persistent free-ranging domestic cats, directly observable rat signs and wet cat tracks, and bounded ecological responses to nearby life, loose food, terrain, and rain.
+
+### Gameplay
+
+- The original-harbor habitat assemblage now derives brown rats and domestic cats beside the existing deer, gulls, and black bears. Brown rats use one stable population-area aggregate with no individual rat actors; free-ranging domestic cats are bounded, deterministic individual wildlife with persistent generated identity.
+- Current lawful visual contact from nearby cats, dogs, people, or gulls can press rat activity between its saved habitat anchors. Exposed loose physical provisions can create scent attraction, while rain and terrain exposure create their own pressure. On each eight-tick opportunity, at most one rat population unit redistributes inside the existing area.
+- The aggregate response is nonlethal and conserves the world. It never creates or kills a rat actor, consumes or moves the attracting provision, changes Promise custody, or reveals the hidden population automatically. Domestic cats reuse the shared wildlife observation and movement rules across full and coarse representation.
+- A hungry domestic cat can act on a directly seen loose provision. Seeing another cat at the same opportunity can change foraging into guarded food, while sufficiently strong local rain can produce a bounded retreat and persistent wet pawprints without inventing injury, death, or ownership.
+
+### Fixes
+
+- Brown-rat activity is now represented by persistent gnaw marks, small tracks, or shelter signs instead of fake rat sprites. A sign can render, label, select, and open ABOUT only while current direct-detail sight supports it; turning away clears the ephemeral selection rather than creating a remote tracker.
+- Domestic cats, the existing dog, humans, and gulls now enter the Settlement Shadows web through the same terrain-occluded visual contact boundary. Loose-food attraction uses the shared wind- and rain-shaped scent evaluator after physical cargo custody has resolved instead of reading an item through a species-specific proximity shortcut.
+- Rat rustles and domestic-cat calls are emitted only for newly visible activity. Hidden redistribution and offscreen cat decisions remain authoritative world state without entering the player's EVENTS feed or granting a god's-ear cue.
+- Wet cat pawprints survive save, load, and coarse travel but render only under current direct-detail perception. They remain non-targetable environmental evidence and expose neither the cat's hidden cognition nor the cause of its movement.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Settlement Shadows adds route information and local ecological pressure without combat, hunting rewards, loot rats, free provisions, cat ownership, or a companion bonus.
+- Rat redistribution is limited to one population unit per aggregate on a fixed eight-tick cadence and to already validated habitat anchors. A substantially crowded anchor may space one conserved unit toward a quieter anchor; food attraction records no consumption, and cat, dog, human, gull, rain, and terrain pressure cannot cause injury, death, carcasses, or cargo mutation.
+- The shared ecology scaffold is validated through conservation rules, outcome classes, deterministic representative encounters, and bounded fuzzing rather than a bespoke script or exact fixture for every possible species pair.
+
+### Interface
+
+- Chart 2D and Relief 3D now draw distinct low-cost domestic-cat forms, brown-rat signs, and directly visible wet cat pawprints from the same perception-safe projection. Mouse and touch use the same actor and rat-sign hit targets, quick labels, close behavior, and non-pausing ABOUT surface; wet cat tracks are deliberately not a remote-selectable tracker.
+- Rat-sign ABOUT reports only the directly observable evidence and, at sufficient clarity, its brown-rat classification. It never exposes exact population count, activity, pressure, habitat anchors, cause, persistent IDs, or an invented individual rat.
+- Field Manual version 25 explains the difference between an individual cat and an aggregate rat population, visible signs and sound cues, lawful pressure and food scent, fixed-cadence redistribution, physical conservation, save migration, and the limits of this local slice.
+
+### Save changes
+
+- The outer session advances to version 10 and the core-ecology record adopts its aggregate-capable habitat form. It stores the stable rat population area, anchors, activity, bounded evidence and disturbances, plus the existing individual wildlife, groups, physical cargo, and world history.
+- A sealed version-9 save migrates exactly once while preserving every established actor, position, condition, group, item, custody record, Promise, and prior ecology fact. The seed-derived rat area and free-ranging cats are added once without rerolling or replacing the original wildlife.
+- Save, reload, coarse travel, and full-detail return preserve the same cat identities and rat aggregate. Current version-10 saves require the canonical new ecology shape, so refresh cannot duplicate cats, food, signs, populations, or migration effects.
+
+### Known limitations
+
+- This is still one bounded assemblage around the original harbor, not worldwide ecology. Further species, distant habitat populations, ecological migration, reproduction, circadian schedules, and broad food webs remain future work.
+- Animals do not attack, receive injuries, die, or leave carcasses. Hunting, capture, treatment, taming, breeding, cat ownership, bonding, naming, recruitment, and companion behavior are not live.
+- Rat signs and wet cat pawprints are narrow directly observed evidence systems, and loose provisions feed only bounded scent pressure without rat consumption. General scent plumes, broad evidence trails and tracking, social information, and exhaustive species-to-species behavior are not live.
+
 ## 0.3.3-alpha.14 — 2026-09-05
 
 Build: `0.3.3-alpha.14` · Gameplay contract: 20 · Tutorial: 24

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DogView, RendererCommand, TideweftView } from "./types";
+import type {
+  AggregateWildlifeEvidenceView,
+  DogView,
+  RendererCommand,
+  TideweftView,
+  WildlifeView,
+} from "./types";
 
 const p5Harness = vi.hoisted(() => ({
   canvas: null as MockCanvas | null,
@@ -222,6 +228,58 @@ const dogView = (overrides: Partial<DogView> = {}): DogView => ({
   wetness: 700_000,
   conditionLabels: ["WET"],
   behavior: "observe",
+  selected: false,
+  ...overrides,
+});
+
+type IndividualWildlifeViewSpecies = Exclude<WildlifeView["species"], "brown-rat">;
+
+const wildlifeView = (
+  species: IndividualWildlifeViewSpecies,
+  overrides: Partial<WildlifeView> = {},
+): WildlifeView => {
+  const quickLabel: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
+    deer: "Deer",
+    gull: "Gulls",
+    "black-bear": "Black bear",
+    "domestic-cat": "Domestic cat",
+  };
+  const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
+    deer: "DEER-",
+    gull: "GULL-",
+    "black-bear": "BEAR-",
+    "domestic-cat": "CAT-",
+  };
+  return {
+    actorId: `${prefix[species]}R-v1-chart-${species}`,
+    species,
+    quickLabel: quickLabel[species],
+    position: { x: 12, y: 12 },
+    facing: 0,
+    sizeScale: 1,
+    behavior: "watch",
+    conditionLabels: [],
+    selected: false,
+    ...overrides,
+  };
+};
+
+const aggregateWildlifeEvidenceView = (
+  overrides: Partial<AggregateWildlifeEvidenceView> = {},
+): AggregateWildlifeEvidenceView => ({
+  version: 1,
+  aggregateId: "RAT-AREA-v1-chart-aggregate",
+  evidenceId: "RAT-AREA-v1-chart-aggregate:evidence:0",
+  species: "brown-rat",
+  representation: "population-evidence",
+  form: "gnaw-marks",
+  quickLabel: "Brown rat signs",
+  identityLabel: "Brown rat population signs",
+  evidenceLabel: "Rat gnaw marks",
+  speciesIdentified: true,
+  position: { x: 12, y: 12 },
+  sizeScale: 0.82,
+  distanceUnits: 4_000,
   selected: false,
   ...overrides,
 });
@@ -903,4 +961,206 @@ describe("Chart dog presentation", () => {
     expect(dispatch.mock.calls.some(([command]) => command.type === "select")).toBe(false);
     renderer.destroy();
   });
+});
+
+describe("Chart Wave-B wildlife presentation", () => {
+  it("draws and touch-selects population evidence through its non-actor target", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("chart-rat-evidence", { x: 12, y: 12 });
+    const evidence = aggregateWildlifeEvidenceView({ selected: true });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "chart-rat-evidence-direct-detail",
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 1,
+        detailDirectTileCount: 1,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
+    expect(text.mock.calls.some(([copy]) =>
+      copy === "Brown rat signs · rat gnaw marks"
+    )).toBe(true);
+    expect(text.mock.calls.flat().map(String)).not.toContain(evidence.aggregateId);
+    expect(text.mock.calls.flat().map(String)).not.toContain(evidence.evidenceId);
+
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 200,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 200,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species: "brown-rat",
+      aggregateId: evidence.aggregateId,
+      evidenceId: evidence.evidenceId,
+      point: { x: 12, y: 12 },
+    });
+    expect(dispatch.mock.calls.some(([command]) =>
+      (command as { entity?: unknown }).entity === "living-actor"
+    )).toBe(false);
+    renderer.destroy();
+  });
+
+  it("draws direct cat pawprints without inventing a selectable cat actor", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("chart-cat-rain-evidence", { x: 12, y: 12 });
+    const evidence = aggregateWildlifeEvidenceView({
+      aggregateId: "CAT-R-v1-chart-rain-source",
+      evidenceId: "CAT-R-v1-chart-rain-source:e:1:wet-tracks",
+      species: "domestic-cat",
+      representation: "individual-evidence",
+      form: "small-tracks",
+      quickLabel: "Domestic cat signs",
+      identityLabel: "Domestic cat tracks",
+      evidenceLabel: "Wet cat pawprints",
+      sizeScale: 1.02,
+    });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "chart-cat-rain-evidence-direct-detail",
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 1,
+        detailDirectTileCount: 1,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    expect(p5Harness.instance?.ellipse).toHaveBeenCalled();
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 201,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 201,
+      pointerType: "touch",
+    });
+    expect(dispatch.mock.calls.some(([command]) => (
+      command.type === "select"
+      && command.entity === "aggregate-wildlife-evidence"
+    ))).toBe(false);
+    expect(dispatch.mock.calls.some(([command]) => (
+      command.type === "select" && command.entity === "living-actor"
+    ))).toBe(false);
+    renderer.destroy();
+  });
+
+  it("draws and touch-selects the distinct free-ranging domestic-cat form", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("chart-domestic-cat", { x: 12, y: 12 });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [wildlifeView("domestic-cat", {
+        selected: true,
+        conditionLabels: ["WATCHFUL"],
+      })],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    const p = p5Harness.instance;
+    const text = p?.text as ReturnType<typeof vi.fn>;
+    const fill = p?.fill as ReturnType<typeof vi.fn>;
+    const bezier = p?.bezier as ReturnType<typeof vi.fn>;
+    expect(text.mock.calls.some(([copy]) => copy === "Domestic cat · watchful")).toBe(true);
+    expect(text.mock.calls.flat().map(String)).not.toContain("CAT-R-v1-chart-domestic-cat");
+    expect(fill).toHaveBeenCalledWith("#706152");
+    expect(bezier).toHaveBeenCalled();
+
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 201,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 201,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species: "domestic-cat",
+      id: "CAT-R-v1-chart-domestic-cat",
+      point: { x: 12, y: 12 },
+    });
+    renderer.destroy();
+  });
+
 });

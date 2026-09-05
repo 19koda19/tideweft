@@ -92,6 +92,7 @@ import {
 } from "./spatialFrame";
 
 import type {
+  AggregateWildlifeEvidenceView,
   CameraView,
   DogView,
   FieldResourceNodeView,
@@ -188,6 +189,12 @@ type HoverTarget =
       readonly entity: "living-actor";
       readonly species: LivingActorViewSpecies;
       readonly id: string;
+    }
+  | {
+      readonly entity: "aggregate-wildlife-evidence";
+      readonly species: "brown-rat";
+      readonly aggregateId: string;
+      readonly evidenceId: string;
     }
   | { readonly entity: "parcel"; readonly id: string };
 
@@ -654,6 +661,31 @@ export function createTideweftRenderer(
             entity: "living-actor",
             species: actor.species,
             id: actor.actorId,
+          },
+          distance,
+        };
+      }
+    }
+
+    const evidenceRadius = Math.max(
+      view.terrain.tileSize * 0.45,
+      22 / Math.max(camera.zoom, 0.01),
+    );
+    for (const evidence of view.aggregateWildlifeEvidence ?? []) {
+      if (evidence.representation !== "population-evidence") continue;
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        evidence.position,
+        view.perception !== undefined,
+      )) continue;
+      const distance = distanceSquared(point, evidence.position);
+      if (distance <= evidenceRadius ** 2 && (!nearest || distance < nearest.distance)) {
+        nearest = {
+          target: {
+            entity: "aggregate-wildlife-evidence",
+            species: "brown-rat",
+            aggregateId: evidence.aggregateId,
+            evidenceId: evidence.evidenceId,
           },
           distance,
         };
@@ -2970,6 +3002,289 @@ export function createTideweftRenderer(
       }
     };
 
+    const drawChartGulls = (actor: WildlifeView, base: number, now: number): void => {
+      const visible = Math.min(5, Math.max(1, actor.groupSize ?? 1));
+      const flap = reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
+      for (let index = 0; index < visible; index += 1) {
+        const column = index % 3;
+        const row = Math.floor(index / 3);
+        const x = (column - 1) * base * 1.75 + row * base * 0.6;
+        const y = (row - 0.35) * base * 1.4 + (column % 2) * base * 0.25;
+        p.push();
+        p.translate(x, y);
+        p.noFill();
+        p.stroke(withAlpha(PALETTE.ink, 235));
+        p.strokeWeight(Math.max(1, base * 0.42));
+        p.line(-base * 1.05, flap * base, 0, -base * 0.18);
+        p.line(0, -base * 0.18, base * 1.05, flap * base);
+        p.stroke(PALETTE.foam);
+        p.strokeWeight(Math.max(0.55, base * 0.23));
+        p.line(-base * 1.02, flap * base, 0, -base * 0.18);
+        p.line(0, -base * 0.18, base * 1.02, flap * base);
+        p.pop();
+      }
+    };
+
+    const drawChartDeer = (actor: WildlifeView, base: number): void => {
+      const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
+      const bodyLength = base * 3.15;
+      const bodyHeight = base * 1.2;
+      const headX = bodyLength * 0.48;
+      const headY = -bodyHeight * 0.52;
+      const headRadius = base * 0.58;
+      p.stroke(withAlpha(PALETTE.ink, 235));
+      p.strokeWeight(Math.max(0.8, base * 0.16));
+      for (const legX of [-bodyLength * 0.34, bodyLength * 0.34]) {
+        p.line(legX, bodyHeight * 0.22, legX + (fleeing ? -base * 0.3 : 0), bodyHeight * 0.9);
+      }
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 235));
+      p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.22);
+      p.circle(headX, headY, headRadius * 2.25);
+      p.fill("#9b7550");
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.fill("#ad8258");
+      p.circle(headX, headY, headRadius * 2);
+      p.fill("#eee1c7");
+      p.triangle(
+        -bodyLength * 0.52,
+        -bodyHeight * 0.12,
+        -bodyLength * 0.67,
+        -bodyHeight * (fleeing ? 0.7 : 0.36),
+        -bodyLength * 0.42,
+        -bodyHeight * 0.38,
+      );
+      p.fill("#ad8258");
+      p.triangle(
+        headX - headRadius * 0.25,
+        headY - headRadius * 0.68,
+        headX - headRadius * 0.75,
+        headY - headRadius * 1.2,
+        headX - headRadius * 0.05,
+        headY - headRadius * 0.48,
+      );
+      p.triangle(
+        headX + headRadius * 0.12,
+        headY - headRadius * 0.65,
+        headX + headRadius * 0.55,
+        headY - headRadius * 1.18,
+        headX + headRadius * 0.45,
+        headY - headRadius * 0.42,
+      );
+    };
+
+    const drawChartBlackBear = (actor: WildlifeView, base: number): void => {
+      const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
+      const guarding = actor.behavior === "guard" || actor.behavior === "watch";
+      const bodyLength = base * 3.9;
+      const bodyHeight = base * 1.75;
+      const headX = bodyLength * 0.48;
+      const headY = -bodyHeight * 0.08;
+      const headRadius = base * 0.82;
+      p.stroke(withAlpha(PALETTE.ink, 235));
+      p.strokeWeight(Math.max(0.8, base * 0.16));
+      for (const legX of [-bodyLength * 0.31, bodyLength * 0.31]) {
+        p.line(legX, bodyHeight * 0.22, legX + (fleeing ? -base * 0.3 : 0), bodyHeight * 0.9);
+      }
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 235));
+      p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.22);
+      p.circle(headX, headY, headRadius * 2.25);
+      p.fill("#292a24");
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.fill("#332f27");
+      p.circle(headX, headY, headRadius * 2);
+      p.fill("#292a24");
+      p.circle(headX - headRadius * 0.55, headY - headRadius * 0.62, headRadius * 0.62);
+      p.circle(headX + headRadius * 0.22, headY - headRadius * 0.72, headRadius * 0.62);
+      if (guarding) {
+        p.fill(PALETTE.amber);
+        p.circle(headX + headRadius * 0.62, headY - headRadius * 0.12, Math.max(1.2, base * 0.18));
+      }
+    };
+
+    const drawChartDomesticCat = (actor: WildlifeView, base: number): void => {
+      const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
+      const watching = actor.behavior === "guard" || actor.behavior === "watch";
+      const bodyLength = base * 3.35;
+      const bodyHeight = base * 1.08;
+      const headX = bodyLength * 0.48;
+      const headY = -bodyHeight * 0.3;
+      const headRadius = base * 0.62;
+      p.noFill();
+      p.stroke(withAlpha(PALETTE.ink, 235));
+      p.strokeWeight(Math.max(0.9, base * 0.22));
+      p.bezier(
+        -bodyLength * 0.48,
+        -bodyHeight * 0.12,
+        -bodyLength * 0.92,
+        -bodyHeight * 0.82,
+        -bodyLength * 0.76,
+        -bodyHeight * 1.52,
+        -bodyLength * 0.45,
+        -bodyHeight * 1.2,
+      );
+      for (const legX of [-bodyLength * 0.27, bodyLength * 0.25]) {
+        p.line(legX, bodyHeight * 0.2, legX + (fleeing ? -base * 0.36 : 0), bodyHeight * 0.92);
+      }
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 240));
+      p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.24);
+      p.circle(headX, headY, headRadius * 2.25);
+      p.fill("#706152");
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.fill("#8b7762");
+      p.circle(headX, headY, headRadius * 2);
+      p.triangle(
+        headX - headRadius * 0.72,
+        headY - headRadius * 0.46,
+        headX - headRadius * 0.55,
+        headY - headRadius * 1.18,
+        headX - headRadius * 0.04,
+        headY - headRadius * 0.5,
+      );
+      p.triangle(
+        headX + headRadius * 0.05,
+        headY - headRadius * 0.5,
+        headX + headRadius * 0.48,
+        headY - headRadius * 1.18,
+        headX + headRadius * 0.68,
+        headY - headRadius * 0.42,
+      );
+      p.stroke(watching ? PALETTE.amber : "#c7bc8c");
+      p.strokeWeight(Math.max(0.55, base * 0.12));
+      p.line(headX + headRadius * 0.3, headY, headX + headRadius * 1.05, headY - headRadius * 0.18);
+      p.line(headX + headRadius * 0.3, headY + headRadius * 0.12, headX + headRadius * 1.08, headY + headRadius * 0.26);
+    };
+
+    const drawChartWildlifeActor = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): boolean => {
+      switch (actor.species) {
+        case "deer":
+          drawChartDeer(actor, base);
+          return true;
+        case "gull":
+          drawChartGulls(actor, base, now);
+          return true;
+        case "black-bear":
+          drawChartBlackBear(actor, base);
+          return true;
+        case "domestic-cat":
+          drawChartDomesticCat(actor, base);
+          return true;
+      }
+    };
+
+    const drawAggregateWildlifeEvidence = (
+      evidenceViews: readonly AggregateWildlifeEvidenceView[],
+      now: number,
+    ): void => {
+      const hovered = hoverTarget?.entity === "aggregate-wildlife-evidence"
+        ? hoverTarget
+        : null;
+      for (const evidence of evidenceViews) {
+        if (
+          latestView?.perception
+          && !isDirectlyDetailPerceived(latestView.terrain, evidence.position, true)
+        ) continue;
+        const highlighted = evidence.selected
+          || (hovered?.aggregateId === evidence.aggregateId
+            && hovered.evidenceId === evidence.evidenceId);
+        const base = (highlighted ? 5.4 : 4.7)
+          * clamp(evidence.sizeScale, 0.55, 1.4)
+          / camera.zoom;
+
+        p.push();
+        p.translate(evidence.position.x, evidence.position.y);
+        if (highlighted) {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.tide, 205));
+          p.strokeWeight(1.2 / camera.zoom);
+          p.circle(0, 0, base * 5.2);
+        }
+        switch (evidence.form) {
+          case "gnaw-marks":
+            p.noStroke();
+            p.fill(withAlpha(PALETTE.ink, 230));
+            p.ellipse(0, 0, base * 3.35, base * 1.3);
+            p.fill("#76563e");
+            p.ellipse(0, 0, base * 3.05, base * 1.06);
+            p.stroke("#dec29b");
+            p.strokeWeight(Math.max(0.7, base * 0.13));
+            for (const offset of [-0.65, -0.2, 0.25, 0.7]) {
+              p.line(
+                base * offset,
+                -base * 0.46,
+                base * (offset - 0.18),
+                base * 0.38,
+              );
+            }
+            break;
+          case "small-tracks":
+            p.noFill();
+            p.stroke(withAlpha(PALETTE.ink, 235));
+            p.strokeWeight(Math.max(0.75, base * 0.14));
+            p.line(-base * 1.45, base * 0.64, base * 1.45, -base * 0.64);
+            p.noStroke();
+            p.fill("#9b8067");
+            for (let index = 0; index < 4; index += 1) {
+              const x = (index - 1.5) * base * 0.82;
+              const y = (index % 2 === 0 ? 0.3 : -0.3) * base;
+              p.ellipse(x, y, base * 0.48, base * 0.34);
+              p.circle(x + base * 0.26, y - base * 0.22, base * 0.18);
+            }
+            break;
+          case "shelter-sign":
+            p.noStroke();
+            p.fill("#70563f");
+            p.triangle(
+              -base * 1.75,
+              base * 0.72,
+              0,
+              -base * 1.18,
+              base * 1.75,
+              base * 0.72,
+            );
+            p.fill(withAlpha(PALETTE.ink, 245));
+            p.ellipse(0, base * 0.34, base * 1.45, base * 1.05);
+            p.stroke("#b28e68");
+            p.strokeWeight(Math.max(0.7, base * 0.12));
+            p.line(-base * 1.55, base * 0.82, -base * 0.78, base * 0.45);
+            p.line(base * 1.55, base * 0.82, base * 0.78, base * 0.45);
+            break;
+        }
+        p.pop();
+
+        if (!highlighted) continue;
+        const screen = worldLabelScreen(
+          `aggregate-wildlife-evidence-${evidence.evidenceId}`,
+          evidence.position,
+          now,
+        );
+        const label = `${evidence.quickLabel} · ${evidence.evidenceLabel.toLocaleLowerCase("en-US")}`;
+        const width = Math.min(Math.max(1, p.width - 16), p.textWidth(label) + 12);
+        const labelX = clamp(
+          screen.x,
+          8 + width / 2,
+          Math.max(8 + width / 2, p.width - 8 - width / 2),
+        );
+        const labelY = clamp(screen.y + 19, 11, Math.max(11, p.height - 11));
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textSize(10.5);
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.ink, 235));
+        p.text(label, labelX + 1, labelY + 0.5);
+        p.fill(PALETTE.foam);
+        p.text(label, labelX, labelY - 0.5);
+        p.pop();
+      }
+    };
+
     const drawWildlife = (actors: readonly WildlifeView[], now: number): void => {
       const hovered = hoverTarget?.entity === "living-actor" ? hoverTarget : null;
       for (const actor of actors) {
@@ -2991,92 +3306,10 @@ export function createTideweftRenderer(
           p.ellipse(0, 0, base * 6.2, base * 3.9);
         }
 
-        if (actor.species === "gull") {
-          const visible = Math.min(5, Math.max(1, actor.groupSize ?? 1));
-          const flap = reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
-          for (let index = 0; index < visible; index += 1) {
-            const column = index % 3;
-            const row = Math.floor(index / 3);
-            const x = (column - 1) * base * 1.75 + row * base * 0.6;
-            const y = (row - 0.35) * base * 1.4 + (column % 2) * base * 0.25;
-            p.push();
-            p.translate(x, y);
-            p.noFill();
-            p.stroke(withAlpha(PALETTE.ink, 235));
-            p.strokeWeight(Math.max(1, base * 0.42));
-            p.line(-base * 1.05, flap * base, 0, -base * 0.18);
-            p.line(0, -base * 0.18, base * 1.05, flap * base);
-            p.stroke(PALETTE.foam);
-            p.strokeWeight(Math.max(0.55, base * 0.23));
-            p.line(-base * 1.02, flap * base, 0, -base * 0.18);
-            p.line(0, -base * 0.18, base * 1.02, flap * base);
-            p.pop();
-          }
-        } else {
-          const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
-          const guarding = actor.behavior === "guard" || actor.behavior === "watch";
-          const bodyLength = base * (actor.species === "black-bear" ? 3.9 : 3.15);
-          const bodyHeight = base * (actor.species === "black-bear" ? 1.75 : 1.2);
-          const bodyColor = actor.species === "black-bear" ? "#292a24" : "#9b7550";
-          const headColor = actor.species === "black-bear" ? "#332f27" : "#ad8258";
-          const headX = bodyLength * 0.48;
-          const headY = actor.species === "black-bear" ? -bodyHeight * 0.08 : -bodyHeight * 0.52;
-          const headRadius = base * (actor.species === "black-bear" ? 0.82 : 0.58);
-
-          p.stroke(withAlpha(PALETTE.ink, 235));
-          p.strokeWeight(Math.max(0.8, base * 0.16));
-          const legSpread = actor.species === "black-bear" ? 0.31 : 0.34;
-          for (const legX of [-bodyLength * legSpread, bodyLength * legSpread]) {
-            p.line(legX, bodyHeight * 0.22, legX + (fleeing ? -base * 0.3 : 0), bodyHeight * 0.9);
-          }
-          p.noStroke();
-          p.fill(withAlpha(PALETTE.ink, 235));
-          p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.22);
-          p.circle(headX, headY, headRadius * 2.25);
-          p.fill(bodyColor);
-          p.ellipse(0, 0, bodyLength, bodyHeight);
-          p.fill(headColor);
-          p.circle(headX, headY, headRadius * 2);
-          if (actor.species === "deer") {
-            p.fill("#eee1c7");
-            p.triangle(
-              -bodyLength * 0.52,
-              -bodyHeight * 0.12,
-              -bodyLength * 0.67,
-              -bodyHeight * (fleeing ? 0.7 : 0.36),
-              -bodyLength * 0.42,
-              -bodyHeight * 0.38,
-            );
-            p.fill(headColor);
-            p.triangle(
-              headX - headRadius * 0.25,
-              headY - headRadius * 0.68,
-              headX - headRadius * 0.75,
-              headY - headRadius * 1.2,
-              headX - headRadius * 0.05,
-              headY - headRadius * 0.48,
-            );
-            p.triangle(
-              headX + headRadius * 0.12,
-              headY - headRadius * 0.65,
-              headX + headRadius * 0.55,
-              headY - headRadius * 1.18,
-              headX + headRadius * 0.45,
-              headY - headRadius * 0.42,
-            );
-          } else {
-            p.fill(bodyColor);
-            p.circle(headX - headRadius * 0.55, headY - headRadius * 0.62, headRadius * 0.62);
-            p.circle(headX + headRadius * 0.22, headY - headRadius * 0.72, headRadius * 0.62);
-            if (guarding) {
-              p.fill(PALETTE.amber);
-              p.circle(headX + headRadius * 0.62, headY - headRadius * 0.12, Math.max(1.2, base * 0.18));
-            }
-          }
-        }
+        const rendered = drawChartWildlifeActor(actor, base, now);
         p.pop();
 
-        if (!highlighted) continue;
+        if (!rendered || !highlighted) continue;
         const screen = worldLabelScreen(`wildlife-${actor.actorId}`, actor.position, now);
         const condition = actor.conditionLabels.slice(0, 2)
           .map((label) => label.toLocaleLowerCase())
@@ -3808,6 +4041,7 @@ export function createTideweftRenderer(
       drawLooseCargo(latestView, now);
       drawTideHarps(latestView, now);
       drawWayknots(latestView, now);
+      drawAggregateWildlifeEvidence(latestView.aggregateWildlifeEvidence ?? [], now);
       drawSettlements(latestView.settlements, now);
       drawPorters(latestView.porters, now);
       drawDogs(latestView.dogs ?? [], now);
