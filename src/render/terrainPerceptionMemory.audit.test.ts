@@ -386,9 +386,9 @@ describe("adversarial temporal terrain-fog boundary", () => {
     const relief = readFileSync(new URL("./p5ReliefSketch.ts", import.meta.url), "utf8");
     const composite = readFileSync(new URL("./renderer.ts", import.meta.url), "utf8");
     expect(chart).toContain("drawTerrain(latestView, terrainMemory)");
-    expect(chart).not.toMatch(/draw(?:SurfaceCurrents|FieldResources|LooseCargo|Settlements|Porters)\([^)]*terrainMemory/u);
+    expect(chart).not.toMatch(/draw(?:SurfaceCurrents|FieldResources|LooseCargo|Settlements|Porters|Dogs)\([^)]*terrainMemory/u);
     expect(relief).toContain("drawTerrain(view, cache, camera, terrainMemory)");
-    expect(relief).not.toMatch(/draw(?:Water|FieldResources|SurfaceCurrents|LooseCargo|Soundings|Settlements|Porters)\([^)]*terrainMemory/u);
+    expect(relief).not.toMatch(/draw(?:Water|FieldResources|SurfaceCurrents|LooseCargo|Soundings|Settlements|Porters|Dogs)\([^)]*terrainMemory/u);
     expect(relief).not.toMatch(/syncReliefLabels\([^)]*terrainMemory/u);
 
     const soundingStart = chart.indexOf("const drawDepthSoundings =");

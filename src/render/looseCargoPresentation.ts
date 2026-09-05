@@ -9,6 +9,7 @@ import {
   CRAFTED_GEAR_DEFINITIONS,
   CRAFTING_STACK_DEFINITIONS,
 } from "../game/crafting";
+import { PROVISION_DEFINITIONS } from "../game/provisions";
 
 import type {
   CargoProperty,
@@ -513,6 +514,16 @@ function payloadPresentation(payload: Parameters<typeof payloadKind>[0]): {
       property: looseCargoPayloadProperty(payload),
     };
   }
+  if (payload.kind === "provision") {
+    const definition = PROVISION_DEFINITIONS[payload.provision];
+    return {
+      contentKind: kind,
+      resourceKind: payload.provision,
+      resourceLabel: definition.label,
+      quantity: payload.quantity,
+      property: looseCargoPayloadProperty(payload),
+    };
+  }
   return {
     contentKind: kind,
     resourceKind: payload.resource,
@@ -527,6 +538,7 @@ type KernelPayload = import("../game/looseCargo").LooseCargoPayload;
 function payloadKind(payload: KernelPayload): LooseCargoView["contentKind"] {
   if (payload.kind === "promise") return "promise";
   if (payload.kind === "gear") return "gear";
+  if (payload.kind === "provision") return "provision";
   return CRAFTING_STACK_DEFINITIONS[payload.item].tier === "raw" ? "raw-material" : "component";
 }
 
@@ -583,7 +595,7 @@ function validLooseCargoView(value: unknown): value is LooseCargoView {
     || !validRegion(value.region)
     || !finitePoint(value.position)
     || !finitePoint(value.velocity)
-    || !["raw-material", "component", "gear", "promise"].includes(value.contentKind as string)
+    || !["raw-material", "component", "gear", "promise", "provision"].includes(value.contentKind as string)
     || typeof value.resourceKind !== "string" || value.resourceKind.length === 0
     || typeof value.resourceLabel !== "string" || value.resourceLabel.length === 0
     || typeof value.quantity !== "number" || !Number.isSafeInteger(value.quantity) || value.quantity <= 0
@@ -608,7 +620,9 @@ function validLooseCargoView(value: unknown): value is LooseCargoView {
 function validOwner(value: unknown): value is LooseCargoOwner {
   if (!isRecord(value)) return false;
   if (value.kind === "unclaimed") return true;
-  if (value.kind === "player") return typeof value.id === "string" && value.id.length > 0;
+  if (value.kind === "player" || value.kind === "actor") {
+    return typeof value.id === "string" && value.id.length > 0;
+  }
   return value.kind === "settlement" && Number.isSafeInteger(value.id) && (value.id as number) > 0;
 }
 

@@ -76,6 +76,7 @@ import {
   type RegionalPlayerTravelState,
 } from "./regionalPlayerTravel";
 import type { RegionalPromiseJourneyState } from "./regionalPromiseJourney";
+import type { PorterResponseState } from "./porterResponse";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -243,6 +244,10 @@ interface TestGameSaveEnvelope {
   physicalCargo?: SerializedPhysicalCargoState;
   regionalTravel?: string;
   promiseJourney?: RegionalPromiseJourneyState;
+  perceptionCarry?: unknown;
+  bio0Ecology?: string;
+  porterResponse?: PorterResponseState;
+  livingActorPlayerChoice?: unknown;
   integrity?: string;
 }
 
@@ -922,12 +927,12 @@ describe("perpetual new worlds", () => {
       resealGameSave(envelope);
     }],
     ["resealed invalid field ecology", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      if (!envelope.fieldResources) throw new Error("v3 fixture lost field ecology");
+      if (!envelope.fieldResources) throw new Error("v7 fixture lost field ecology");
       envelope.fieldResources = { ...envelope.fieldResources, version: 2 as 1 };
       resealGameSave(envelope);
     }],
     ["resealed invalid traversal ledger", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      if (!envelope.traversalFeedback) throw new Error("v3 fixture lost traversal feedback");
+      if (!envelope.traversalFeedback) throw new Error("v7 fixture lost traversal feedback");
       envelope.traversalFeedback = { ...envelope.traversalFeedback, completedSteps: -1 };
       resealGameSave(envelope);
     }],
@@ -935,7 +940,7 @@ describe("perpetual new worlds", () => {
       delete envelope.physicalCargo;
       resealGameSave(envelope);
     }],
-  ] as const)("quarantines a current v3 save with %s", async (_label, mutate) => {
+  ] as const)("quarantines a current v7 save with %s", async (_label, mutate) => {
     const repository = new MemoryRepository();
     const original = await createTideweftRuntime(repository);
     await original.save();
@@ -1627,7 +1632,7 @@ describe("runtime clarity guards", () => {
     runtime.destroy();
   });
 
-  it("reloads a current v5 ADRIFT save without moving the porter or changing physical cargo", async () => {
+  it("reloads a current v7 ADRIFT save without moving the porter or changing physical cargo", async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     setup.dispatchUI({ type: "resume-world" });
@@ -1639,12 +1644,12 @@ describe("runtime clarity guards", () => {
     await setup.save();
     setup.destroy();
 
-    // Begin from a real, sealed v5 save with an authoritative physical cargo
+    // Begin from a real, sealed v7 save with an authoritative physical cargo
     // manifest. Choose the strongest real wet contact in its persisted region
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(5);
+    expect(prepared.version).toBe(7);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -1732,12 +1737,29 @@ describe("runtime clarity guards", () => {
           compatibilityTrace: [],
         };
     prepared.traversalFeedback = createTraversalFeedbackState();
-    resealGameSave(prepared);
+    // This fixture intentionally fast-forwards the compatibility world outside
+    // the production runtime. Route it once through the supported v5 migration
+    // so the new BIO0 root is created at that completed tick instead of forging
+    // hundreds of ecology/weather steps that the fixture never observed.
+    const {
+      bio0Ecology: _outdatedBio0Ecology,
+      porterResponse: _outdatedPorterResponse,
+      livingActorPlayerChoice: _outdatedLivingActorPlayerChoice,
+      integrity: _preparedIntegrity,
+      ...v5Base
+    } = prepared;
+    const v5Envelope: TestGameSaveEnvelope = { ...v5Base, version: 5 };
+    resealGameSave(v5Envelope);
     repository.replace({
       ...preparedRecord,
+      payloadVersion: 5,
       playTicks: preparedWorld.meta.completedTick,
-      worldJson: JSON.stringify(prepared),
+      worldJson: JSON.stringify(v5Envelope),
     });
+
+    const migration = await createTideweftRuntime(repository);
+    await migration.save();
+    migration.destroy();
 
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
@@ -1835,8 +1857,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(5);
-    expect(durableRecord.payloadVersion).toBe(5);
+    expect(durable.version).toBe(7);
+    expect(durableRecord.payloadVersion).toBe(7);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

@@ -229,6 +229,67 @@ export interface ResidentAboutFactUIView {
   readonly tone?: "neutral" | "warning" | "danger" | "good";
 }
 
+/**
+ * Stable identity used when a renderer selection crosses into the shared
+ * living-actor UI. Species is part of the identity boundary: a dog is never a
+ * synthetic ResidentState and a numeric compatibility resident ID is never a
+ * wildlife ID.
+ */
+export interface LivingActorTargetUIView {
+  readonly species: "human" | "domestic-dog";
+  readonly actorId: string;
+}
+
+export interface LivingActorQuickInspectUIView {
+  readonly target: LivingActorTargetUIView;
+  readonly heading: string;
+  readonly summary: string;
+  /** Exact distance supports deterministic selection policy; ordinary copy does not print it. */
+  readonly distanceUnits: number;
+}
+
+/** Knowledge-honest full disclosure projected by the authoritative actor owner. */
+export interface LivingActorAboutUIView {
+  readonly target: LivingActorTargetUIView;
+  readonly heading: string;
+  readonly identityLine: string;
+  readonly knowledgeLabel: "Unfamiliar" | "Recognized" | "Known individual";
+  readonly observed: readonly ResidentAboutFactUIView[];
+  readonly known: readonly ResidentAboutFactUIView[];
+}
+
+/**
+ * Contextual proposals for the first living-world encounter. These are player
+ * requests, not guaranteed outcomes: the runtime must still validate sensory,
+ * spatial, actor, and physical-custody facts before accepting one.
+ */
+export type LivingActorInteractionId =
+  | "help"
+  | "secure-food"
+  | "wait"
+  | "reroute"
+  | "leave";
+
+export interface LivingActorInteractionUIView {
+  readonly id: LivingActorInteractionId;
+  readonly label: string;
+  readonly disabled?: boolean;
+  readonly hint?: string;
+}
+
+/**
+ * One coherent selected actor. Keeping quick and full projections beside the
+ * same tagged target prevents a hover/contact summary for one animal from
+ * being paired with another animal's ABOUT facts.
+ */
+export interface SelectedLivingActorUIView {
+  readonly target: LivingActorTargetUIView;
+  readonly quick: LivingActorQuickInspectUIView;
+  readonly about: LivingActorAboutUIView;
+  /** Omitted until the current world can prove a truthful contextual choice. */
+  readonly interactions?: readonly LivingActorInteractionUIView[];
+}
+
 /** A compact, non-pausing, pane-free disclosure of witnessed/learned facts. */
 export interface ResidentAboutUIView {
   readonly id: string;
@@ -396,6 +457,9 @@ export interface TideweftUIView {
   readonly objective?: ObjectiveUIView;
   readonly contracts: readonly ContractUIView[];
   readonly selectedSettlement?: SettlementInspectorUIView;
+  /** Additive BIO0 seam; omitted until a host exposes an authoritative living actor. */
+  readonly selectedLivingActor?: SelectedLivingActorUIView;
+  /** Compatibility-human ABOUT retained while runtime selection migrates to stable actor IDs. */
   readonly selectedResident?: ResidentAboutUIView;
   readonly chronicle: readonly ChronicleEntryUIView[];
   readonly title: TitleOverlayUIView;
@@ -436,6 +500,17 @@ export type TideweftUICommand =
       readonly type: "resident";
       readonly action: "greet" | "close";
       readonly residentId?: string;
+    }
+  | {
+      readonly type: "living-actor";
+      readonly action: "close";
+      readonly target: LivingActorTargetUIView;
+    }
+  | {
+      readonly type: "living-actor";
+      readonly action: "interact";
+      readonly target: LivingActorTargetUIView;
+      readonly interaction: LivingActorInteractionId;
     }
   | { readonly type: "quiet-hour"; readonly action: "open" | "continue" | "finish" }
   | { readonly type: "open-title" }

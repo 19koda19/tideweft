@@ -3629,6 +3629,21 @@ body {
   line-height: 1.35;
 }
 
+#game-ui .resident-about__quick {
+  margin: 0.18rem 0 0;
+  color: var(--foam);
+  font-size: 0.64rem;
+  font-weight: 720;
+  letter-spacing: 0.035em;
+  line-height: 1.3;
+}
+
+#game-ui .resident-about__quick[hidden],
+#game-ui .resident-about__section-title[hidden],
+#game-ui .resident-about__facts[hidden] {
+  display: none;
+}
+
 #game-ui .resident-about__knowledge {
   display: inline-block;
   margin-top: 0.38rem;
@@ -3698,7 +3713,8 @@ body {
 }
 
 #game-ui .resident-about__close,
-#game-ui .resident-about__greet {
+#game-ui .resident-about__greet,
+#game-ui .resident-about__choice {
   min-width: max(2.75rem, 44px);
   min-height: max(2.75rem, 44px);
   color: var(--foam);
@@ -3747,6 +3763,34 @@ body {
   padding-inline: 0.9rem;
 }
 
+#game-ui .resident-about__living-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.2rem 0.65rem;
+  pointer-events: auto;
+}
+
+#game-ui .resident-about__living-action {
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
+}
+
+#game-ui .resident-about__choice {
+  min-width: max(5.5rem, 44px);
+  padding-inline: 0.45rem;
+}
+
+#game-ui .resident-about__choice-hint {
+  max-width: 10rem;
+  color: var(--gold);
+  font-size: 0.52rem;
+  line-height: 1.2;
+  text-align: right;
+}
+
 #game-ui .ui-layer[data-resident-about-open="true"] .chronicle-panel {
   visibility: hidden;
 }
@@ -3755,10 +3799,13 @@ body {
    ordinary color never paints a pill or pane over the field. */
 #game-ui .resident-about__close,
 #game-ui .resident-about__greet,
+#game-ui .resident-about__choice,
 #game-ui .resident-about__close:hover,
 #game-ui .resident-about__greet:hover,
+#game-ui .resident-about__choice:hover,
 #game-ui .resident-about__close:focus-visible,
-#game-ui .resident-about__greet:focus-visible {
+#game-ui .resident-about__greet:focus-visible,
+#game-ui .resident-about__choice:focus-visible {
   background: transparent;
   border: 0;
   box-shadow: none;

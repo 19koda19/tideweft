@@ -145,6 +145,25 @@ const perceivedView = ({
     facing: 0,
     state: "traveling",
   }],
+  dogs: [{
+    version: 1,
+    actorId: "D-R-v1-world-tap",
+    quickLabel: "Unknown dog",
+    position: { x: 35, y: 5 },
+    facing: 0,
+    size: "medium",
+    sizeScale: 0.9,
+    coat: {
+      primary: "brown",
+      secondary: "cream",
+      pattern: "bicolor",
+      length: "medium",
+    },
+    wetness: 0,
+    conditionLabels: [],
+    behavior: "observe",
+    selected: false,
+  }],
   camera: { center: { x: 20, y: 5 }, zoom: 1 },
 });
 
@@ -371,6 +390,82 @@ describe("world tap intent", () => {
     });
   });
 
+  it("routes a directly perceived dog through a species-tagged stable actor identity", () => {
+    const direct = perceivedView();
+    const expected = {
+      type: "select" as const,
+      entity: "living-actor" as const,
+      species: "domestic-dog" as const,
+      id: "D-R-v1-world-tap",
+      point: { x: 35, y: 5 },
+    };
+    expect(commandForWorldTap(
+      direct,
+      {
+        entity: "living-actor",
+        species: "domestic-dog",
+        id: "D-R-v1-world-tap",
+      },
+      { x: 34, y: 4 },
+      false,
+    )).toEqual(expected);
+    expect(commandForWorldTap(
+      direct,
+      {
+        entity: "living-actor",
+        species: "domestic-dog",
+        id: "D-R-v1-world-tap",
+      },
+      { x: 34, y: 4 },
+      true,
+    )).toEqual(expected);
+
+    // Validation resolves the release-frame dog and never trusts a stale press point.
+    expect(validatePerceivedEntityCommand(direct, {
+      ...expected,
+      point: { x: 999, y: 999 },
+    })).toEqual(expected);
+  });
+
+  it("rejects hidden, stale, duplicate, or species-mismatched dog selections", () => {
+    const command = {
+      type: "select" as const,
+      entity: "living-actor" as const,
+      species: "domestic-dog" as const,
+      id: "D-R-v1-world-tap",
+      point: { x: 35, y: 5 },
+    };
+    const hidden = perceivedView({
+      detailVisibility: [1, 1, 1, 0],
+    });
+    expect(validatePerceivedEntityCommand(hidden, command)).toBeNull();
+    expect(commandForWorldTap(
+      hidden,
+      {
+        entity: "living-actor",
+        species: "domestic-dog",
+        id: command.id,
+      },
+      command.point,
+      false,
+    )).toEqual({ type: "move-target", point: command.point, additive: false });
+    expect(validatePerceivedEntityCommand(perceivedView(), {
+      ...command,
+      id: "D-R-v1-stale",
+    })).toBeNull();
+
+    const direct = perceivedView();
+    const duplicate = {
+      ...direct,
+      dogs: [...(direct.dogs ?? []), { ...(direct.dogs?.[0] as NonNullable<TideweftView["dogs"]>[number]) }],
+    };
+    expect(validatePerceivedEntityCommand(duplicate, command)).toBeNull();
+    expect(validatePerceivedEntityCommand(
+      direct,
+      { ...command, species: "wolf" } as unknown as Parameters<typeof validatePerceivedEntityCommand>[1],
+    )).toBeNull();
+  });
+
   it("fails closed when an entity claims visibility on an obscured tile", () => {
     const inconsistent = perceivedView({
       tileVisibility: [0, 0, 0.5, 1],
@@ -411,10 +506,27 @@ describe("world tap intent", () => {
       { x: 25, y: 5 },
       false,
     )).toMatchObject({ type: "move-target" });
+    expect(commandForWorldTap(
+      invalid,
+      {
+        entity: "living-actor",
+        species: "domestic-dog",
+        id: "D-R-v1-world-tap",
+      },
+      { x: 35, y: 5 },
+      false,
+    )).toMatchObject({ type: "move-target" });
     expect(validatePerceivedEntityCommand(invalid, {
       type: "parcel-target",
       parcelId: "parcel-1",
       recoverOnArrival: true,
+    })).toBeNull();
+    expect(validatePerceivedEntityCommand(invalid, {
+      type: "select",
+      entity: "living-actor",
+      species: "domestic-dog",
+      id: "D-R-v1-world-tap",
+      point: { x: 35, y: 5 },
     })).toBeNull();
   });
 

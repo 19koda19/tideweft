@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(20);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(21);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -311,8 +311,9 @@ describe("TIDEWEFT field-manual content", () => {
       .map((mechanic) => `${mechanic.title} ${mechanic.clarification}`)
       .join(" ");
     expect(plannedCopy).toContain("Seven stable visual biomes");
-    expect(plannedCopy).toContain("Dogs, bears, birds, deer");
-    expect(plannedCopy).toContain("complete NPC promotion ecology remain planned");
+    expect(plannedCopy).toContain("One independently generated dog is now paired");
+    expect(plannedCopy).toContain("Additional dogs, bears, birds, deer");
+    expect(plannedCopy).toContain("full/coarse population ecology");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
     expect(plannedCopy).toContain("not implemented yet");
@@ -332,7 +333,7 @@ describe("TIDEWEFT field-manual content", () => {
         ].join(" ");
 
     expect(tutorialControlById("inspect-person")).toMatchObject({
-      input: "Click / tap a visible person",
+      input: "Click / tap a visible person or dog",
       audience: "all",
     });
     expect(copy).toContain("OBSERVED");
@@ -340,6 +341,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("name, occupation, and home");
     expect(copy).toContain("never pauses");
     expect(copy).toContain("42 humans");
+    expect(copy).toContain("ASK FOR HELP");
+    expect(copy).toContain("ROUTE AROUND THIS SPOT");
+    expect(copy).toContain("exactly one dried-fish unit");
+    expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });

@@ -5,6 +5,7 @@ import {
   type CargoEnvironmentSample,
   type CargoEnvironmentState,
 } from "../sim/cargoEnvironment";
+import { ACTOR_ID_MAX_LENGTH } from "../sim/actorPerception";
 import { FIXED_POINT, RESOURCE_KINDS, type ResourceKind } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import {
@@ -21,6 +22,11 @@ import {
   type CraftingInventory,
   type CraftingStackId,
 } from "./crafting";
+import {
+  PROVISION_DEFINITIONS,
+  PROVISION_KINDS,
+  type ProvisionKind,
+} from "./provisions";
 
 /**
  * Pure loose-cargo transaction and movement foundation.
@@ -51,6 +57,8 @@ export const LOOSE_CARGO_MAX_RETIRED_LOTS = 32_768;
 export const LOOSE_CARGO_MAX_REGIONAL_WORLDS = 131_072;
 /** A 32 MiB physical-custody envelope reaches this guard before pathological allocation. */
 export const LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES = 262_144;
+/** Bounded active/persisted actor-carrier set for one custody inspection. */
+export const LOOSE_CARGO_MAX_CARRIERS = 4_096;
 /**
  * One seamless fixed step can touch only the small storage neighborhood around
  * the simulated parcels. Keeping the transaction bounded prevents a malformed
@@ -79,6 +87,7 @@ const RAW_MATERIAL_ID_SET: ReadonlySet<string> = new Set<string>(RAW_MATERIAL_ID
 const COMPONENT_ID_SET: ReadonlySet<string> = new Set<string>(CRAFTING_COMPONENT_IDS);
 const GEAR_KIND_SET: ReadonlySet<string> = new Set<string>(CRAFTED_GEAR_KINDS);
 const RESOURCE_KIND_SET: ReadonlySet<string> = new Set<string>(RESOURCE_KINDS);
+const PROVISION_KIND_SET: ReadonlySet<string> = new Set<string>(PROVISION_KINDS);
 const MOTION_SET: ReadonlySet<string> = new Set<LooseCargoMotion>([
   "resting",
   "drifting",
@@ -120,6 +129,8 @@ const CAUSE_CODE_SET: ReadonlySet<string> = new Set<LooseCargoCauseCode>([
 export type LooseCargoOwner =
   | { readonly kind: "unclaimed" }
   | { readonly kind: "player"; readonly id: string }
+  /** Species-neutral physical custody keyed by a persistent actor identity. */
+  | { readonly kind: "actor"; readonly id: string }
   | { readonly kind: "settlement"; readonly id: number };
 
 /**
@@ -214,13 +225,26 @@ export interface LooseCargoPromisePayload {
   readonly property: CargoEnvironmentProperty;
 }
 
+export interface LooseCargoProvisionPayload {
+  readonly kind: "provision";
+  /**
+   * Exact physical-lot identity. A whole lot keeps this identity across
+   * carrier/world transitions; deterministic partial splits receive child
+   * identities and never masquerade as the source remainder.
+   */
+  readonly lotId: string;
+  readonly provision: ProvisionKind;
+  readonly quantity: number;
+}
+
 export type LooseCargoPayload =
   | LooseCargoStackPayload
   | LooseCargoGearPayload
-  | LooseCargoPromisePayload;
+  | LooseCargoPromisePayload
+  | LooseCargoProvisionPayload;
 
 export interface CarriedCargoLot {
-  /** Stable while carried. Partial stack drops keep this ID on the remainder. */
+  /** Stable while carried. Partial quantity drops keep this ID on the remainder. */
   readonly id: string;
   readonly payload: LooseCargoPayload;
   readonly materialState: CargoEnvironmentState;
@@ -291,6 +315,12 @@ export interface PromiseCargoAdapterInput {
 export interface LooseCargoCarrierAdapterResult {
   readonly craftingInventory: CraftingInventory;
   readonly promises: readonly PromiseCargoAdapterInput[];
+  readonly provisions: readonly {
+    readonly lotId: string;
+    readonly provision: ProvisionKind;
+    readonly quantity: number;
+    readonly materialState: CargoEnvironmentState;
+  }[];
   /** Quality remains authoritative even if an older inventory adapter ignores it. */
   readonly lots: readonly CarriedCargoLot[];
   readonly reservedLoadMilli: number;
@@ -325,6 +355,24 @@ export interface LooseCargoAddStackRequest {
   readonly item: CraftingStackId;
   readonly quantity: number;
   readonly materialState?: CargoEnvironmentState;
+}
+
+export interface LooseCargoAddProvisionRequest {
+  /** Stable generation, purchase, or preparation event identity. */
+  readonly sourceLotId: string;
+  readonly provision: ProvisionKind;
+  readonly quantity: number;
+  readonly materialState?: CargoEnvironmentState;
+}
+
+export interface LooseCargoConsumeProvisionRequest {
+  readonly provision: ProvisionKind;
+  readonly quantity: number;
+}
+
+export interface LooseCargoConsumeProvisionLotRequest {
+  readonly lotId: string;
+  readonly quantity: number;
 }
 
 export interface LooseCargoConsumeStackRequest {
@@ -424,7 +472,7 @@ export interface LooseCargoTransferQuote {
 
 export interface LooseCargoDropRequest {
   readonly lotId: string;
-  /** Required for stack lots; a manual drop moves gear and Promise lots whole. */
+  /** Required for stack/provision lots; a manual drop moves gear and Promise lots whole. */
   readonly quantity?: number;
   readonly x: number;
   readonly y: number;
@@ -446,7 +494,7 @@ export interface LooseCargoTransferResult extends LooseCargoTransferQuote {
 }
 
 export interface LooseCargoScatterPart {
-  /** Required for stack and Promise payloads. Durable gear allows one part. */
+  /** Required for stack, provision, and Promise payloads. Durable gear allows one part. */
   readonly quantity?: number;
   readonly velocityX: number;
   readonly velocityY: number;
@@ -521,6 +569,8 @@ export interface LooseCargoConservationSnapshot {
     | "invalid-world"
     | "invalid-world-set"
     | "invalid-carrier"
+    | "invalid-carrier-set"
+    | "duplicate-carrier-owner"
     | "duplicate-region"
     | "duplicate-parcel-identity"
     | "duplicate-durable-identity";
@@ -757,6 +807,7 @@ export function projectLooseCargoCarrier(
   ) as Record<CraftingStackId, number>;
   const gear: CraftedGearItem[] = [];
   const promises: PromiseCargoAdapterInput[] = [];
+  const provisions: LooseCargoCarrierAdapterResult["provisions"][number][] = [];
   for (const lot of canonical.lots) {
     switch (lot.payload.kind) {
       case "stack":
@@ -780,6 +831,14 @@ export function projectLooseCargoCarrier(
           decay: lot.materialState.decay,
         });
         break;
+      case "provision":
+        provisions.push({
+          lotId: lot.payload.lotId,
+          provision: lot.payload.provision,
+          quantity: lot.payload.quantity,
+          materialState: lot.materialState,
+        });
+        break;
     }
   }
   return {
@@ -789,6 +848,7 @@ export function projectLooseCargoCarrier(
       gear,
     ),
     promises,
+    provisions,
     lots: canonical.lots,
     reservedLoadMilli: canonical.reservedLoadMilli,
     retiredLotIds: canonical.retiredLotIds,
@@ -829,6 +889,52 @@ export function addLooseCargoStack(
     {
       id: request.sourceLotId,
       payload: { kind: "stack", item: request.item, quantity: request.quantity },
+      materialState,
+    },
+  ], request.sourceLotId);
+}
+
+/** Add one exact ordinary provision lot without converting it into crafting or
+ * Promise inventory. Replaying the same source identity is idempotent only
+ * when the complete physical definition matches. */
+export function addLooseCargoProvision(
+  carrier: LooseCargoCarrierState,
+  request: LooseCargoAddProvisionRequest,
+): LooseCargoCarrierMutationResult {
+  const canonical = mutationCarrier(carrier);
+  if (canonical === null) return failedCarrierMutation("invalid-carrier", carrier);
+  if (
+    !isRecord(request)
+    || !validLotId(request.sourceLotId)
+    || !PROVISION_KIND_SET.has(request.provision as string)
+    || !validQuantity(request.quantity)
+  ) return failedCarrierMutation("invalid-request", carrier);
+  const materialState = canonicalMaterialState(request.materialState ?? pristineMaterialState());
+  if (materialState === null) return failedCarrierMutation("invalid-request", carrier);
+  if (canonical.retiredLotIds.includes(request.sourceLotId)) {
+    return failedCarrierMutation("identity-conflict", carrier, request.sourceLotId);
+  }
+  const existing = canonical.lots.find((lot) => lot.id === request.sourceLotId);
+  if (existing !== undefined) {
+    const exact = existing.payload.kind === "provision"
+      && existing.payload.lotId === request.sourceLotId
+      && existing.payload.provision === request.provision
+      && existing.payload.quantity === request.quantity
+      && sameMaterialState(existing.materialState, materialState);
+    return exact
+      ? unchangedCarrierMutation(canonical, existing.id)
+      : failedCarrierMutation("identity-conflict", carrier, existing.id);
+  }
+  return commitCarrierMutation(canonical, [
+    ...canonical.lots,
+    {
+      id: request.sourceLotId,
+      payload: {
+        kind: "provision",
+        lotId: request.sourceLotId,
+        provision: request.provision,
+        quantity: request.quantity,
+      },
       materialState,
     },
   ], request.sourceLotId);
@@ -885,6 +991,117 @@ export function consumeLooseCargoStack(
     nextLots,
     removed[0]?.id ?? null,
     removed,
+    canonical.reservedLoadMilli,
+    retiredLotIds,
+  );
+}
+
+/**
+ * Consume ordinary provisions in canonical lot-ID order. Each returned
+ * fragment identifies its exact source lot. Fully consumed IDs become durable
+ * tombstones; partial remainders retain their identity and material state.
+ */
+export function consumeLooseCargoProvision(
+  carrier: LooseCargoCarrierState,
+  request: LooseCargoConsumeProvisionRequest,
+): LooseCargoCarrierMutationResult {
+  const canonical = mutationCarrier(carrier);
+  if (canonical === null) return failedCarrierMutation("invalid-carrier", carrier);
+  if (
+    !isRecord(request)
+    || !PROVISION_KIND_SET.has(request.provision as string)
+    || !validQuantity(request.quantity)
+  ) return failedCarrierMutation("invalid-request", carrier);
+  const available = canonical.lots.reduce((total, lot) => lot.payload.kind === "provision"
+    && lot.payload.provision === request.provision ? total + lot.payload.quantity : total, 0);
+  if (available < request.quantity) {
+    return failedCarrierMutation("quantity-unavailable", carrier);
+  }
+  let remaining = request.quantity;
+  const removed: CarriedCargoLot[] = [];
+  const nextLots: CarriedCargoLot[] = [];
+  for (const lot of canonical.lots) {
+    if (
+      remaining === 0
+      || lot.payload.kind !== "provision"
+      || lot.payload.provision !== request.provision
+    ) {
+      nextLots.push(lot);
+      continue;
+    }
+    const consumed = Math.min(remaining, lot.payload.quantity);
+    removed.push({ ...lot, payload: { ...lot.payload, quantity: consumed } });
+    remaining -= consumed;
+    if (consumed < lot.payload.quantity) {
+      nextLots.push({
+        ...lot,
+        payload: { ...lot.payload, quantity: lot.payload.quantity - consumed },
+      });
+    }
+  }
+  const fullyConsumedIds = removed
+    .filter((fragment) => !nextLots.some((lot) => lot.id === fragment.id))
+    .map(({ id }) => id);
+  const retiredLotIds = addRetiredLotIds(canonical.retiredLotIds, fullyConsumedIds);
+  if (retiredLotIds === null) {
+    return failedCarrierMutation("retirement-space-exhausted", carrier, removed[0]?.id ?? null);
+  }
+  return commitCarrierMutation(
+    canonical,
+    nextLots,
+    removed[0]?.id ?? null,
+    removed,
+    canonical.reservedLoadMilli,
+    retiredLotIds,
+  );
+}
+
+/** Consume from one specifically identified provision lot. */
+export function consumeLooseCargoProvisionLot(
+  carrier: LooseCargoCarrierState,
+  request: LooseCargoConsumeProvisionLotRequest,
+): LooseCargoCarrierMutationResult {
+  const canonical = mutationCarrier(carrier);
+  if (canonical === null) return failedCarrierMutation("invalid-carrier", carrier);
+  if (!isRecord(request) || !validLotId(request.lotId) || !validQuantity(request.quantity)) {
+    return failedCarrierMutation("invalid-request", carrier);
+  }
+  const lot = canonical.lots.find((candidate) => candidate.id === request.lotId);
+  if (lot === undefined || lot.payload.kind !== "provision") {
+    return failedCarrierMutation("lot-not-found", carrier, request.lotId);
+  }
+  const provisionPayload = lot.payload;
+  if (request.quantity > provisionPayload.quantity) {
+    return failedCarrierMutation("quantity-unavailable", carrier, lot.id);
+  }
+  const removed: CarriedCargoLot = {
+    ...lot,
+    payload: { ...provisionPayload, quantity: request.quantity },
+  };
+  const fullyConsumed = request.quantity === provisionPayload.quantity;
+  const nextLots = fullyConsumed
+    ? canonical.lots.filter((candidate) => candidate.id !== lot.id)
+    : canonical.lots.map((candidate) => candidate.id === lot.id
+      ? {
+          ...candidate,
+          payload: {
+            ...provisionPayload,
+            quantity: provisionPayload.quantity - request.quantity,
+          },
+        }
+      : candidate);
+  const retiredLotIds = addRetiredLotIds(
+    canonical.retiredLotIds,
+    fullyConsumed ? [lot.id] : [],
+  );
+  if (retiredLotIds === null) {
+    return failedCarrierMutation("retirement-space-exhausted", carrier, lot.id);
+  }
+  return commitCarrierMutation(
+    canonical,
+    nextLots,
+    lot.id,
+    [removed],
     canonical.reservedLoadMilli,
     retiredLotIds,
   );
@@ -1110,6 +1327,7 @@ export function looseCargoPayloadProperty(payload: LooseCargoPayload): CargoEnvi
     case "stack": return STACK_PROPERTIES[payload.item];
     case "gear": return GEAR_PROPERTIES[payload.gearKind];
     case "promise": return payload.property;
+    case "provision": return PROVISION_DEFINITIONS[payload.provision].property;
   }
 }
 
@@ -1121,6 +1339,8 @@ export function looseCargoPayloadLoadMilli(payload: LooseCargoPayload): number {
       return CRAFTED_GEAR_DEFINITIONS[payload.gearKind].loadMilli;
     case "promise":
       return promiseCargoLoadMilli(payload.quantity, payload.property);
+    case "provision":
+      return PROVISION_DEFINITIONS[payload.provision].loadMilli * payload.quantity;
   }
 }
 
@@ -1182,6 +1402,7 @@ export function validateLooseCargoWorld(value: unknown): LooseCargoWorldValidati
   const entities: LooseCargoEntity[] = [];
   const ids = new Set<string>();
   const gearIds = new Set<number>();
+  const provisionLotIds = new Set<string>();
   const contractDefinitions = new Map<number, string>();
   const contractQuantities = new Map<number, number>();
   let maximumEntityOrdinal = 0;
@@ -1206,6 +1427,11 @@ export function validateLooseCargoWorld(value: unknown): LooseCargoWorldValidati
       const quantity = (contractQuantities.get(entity.payload.contractId) ?? 0) + entity.payload.quantity;
       if (!Number.isSafeInteger(quantity) || quantity > MAX_QUANTITY) return invalidWorld("invalid-entity");
       contractQuantities.set(entity.payload.contractId, quantity);
+    } else if (entity.payload.kind === "provision") {
+      if (provisionLotIds.has(entity.payload.lotId)) {
+        return invalidWorld("duplicate-durable-identity");
+      }
+      provisionLotIds.add(entity.payload.lotId);
     }
     entities.push(entity);
   }
@@ -1288,6 +1514,7 @@ export function validateLooseCargoCarrier(value: unknown): LooseCargoCarrierVali
   const lots: CarriedCargoLot[] = [];
   const lotIds = new Set<string>();
   const gearIds = new Set<number>();
+  const provisionLotIds = new Set<string>();
   const contractDefinitions = new Map<number, string>();
   const contractQuantities = new Map<number, number>();
   const stackQuantities = new Map<CraftingStackId, number>();
@@ -1311,6 +1538,11 @@ export function validateLooseCargoCarrier(value: unknown): LooseCargoCarrierVali
       const quantity = (contractQuantities.get(lot.payload.contractId) ?? 0) + lot.payload.quantity;
       if (!Number.isSafeInteger(quantity) || quantity > MAX_QUANTITY) return invalidCarrier("invalid-lot");
       contractQuantities.set(lot.payload.contractId, quantity);
+    } else if (lot.payload.kind === "provision") {
+      if (provisionLotIds.has(lot.payload.lotId)) {
+        return invalidCarrier("duplicate-durable-identity");
+      }
+      provisionLotIds.add(lot.payload.lotId);
     } else {
       const totalQuantity = (stackQuantities.get(lot.payload.item) ?? 0) + lot.payload.quantity;
       if (!Number.isSafeInteger(totalQuantity) || totalQuantity > MAX_QUANTITY) {
@@ -1417,6 +1649,18 @@ export function looseCargoEventId(
   return `lc:${address.x}:${address.y}:event:${ordinal}`;
 }
 
+/** Exact child identity for a provision fragment created as one world parcel. */
+export function provisionFragmentLotId(entityId: LooseCargoEntityId): string {
+  if (!validEntityId(entityId)) {
+    throw new RangeError("Provision fragment IDs require a valid parcel identity");
+  }
+  const lotId = `provision-fragment:${entityId}`;
+  if (!validLotId(lotId)) {
+    throw new RangeError("Provision fragment identity exceeds the cargo identity budget");
+  }
+  return lotId;
+}
+
 /**
  * Cross-state conservation snapshot. Runtime should validate this after load,
  * after every atomic transfer, and before saving. It catches duplicate durable
@@ -1438,18 +1682,66 @@ export function inspectLooseCargoMultiWorldConservation(
   worlds: readonly LooseCargoWorldState[],
   carrier: LooseCargoCarrierState,
 ): LooseCargoConservationSnapshot {
+  // The legacy world/carrier API has always represented at least one touched
+  // regional world. Actor-only custody intentionally uses the newer
+  // multi-carrier API, which permits an empty world set.
+  if (!Array.isArray(worlds) || worlds.length < 1) {
+    return invalidConservationSnapshot("invalid-world-set");
+  }
+  return inspectLooseCargoMultiCarrierConservation(worlds, [carrier]);
+}
+
+/**
+ * Canonical custody inspection across any number of actor carriers and any
+ * number of touched regional worlds. The legacy single-carrier API delegates
+ * here unchanged. Live lot identities must occur exactly once regardless of
+ * input order; tombstones are evidence, not live substance.
+ */
+export function inspectLooseCargoMultiCarrierConservation(
+  worlds: readonly LooseCargoWorldState[],
+  carriers: readonly LooseCargoCarrierState[],
+): LooseCargoConservationSnapshot {
   if (
     !Array.isArray(worlds)
-    || worlds.length < 1
     || worlds.length > LOOSE_CARGO_MAX_REGIONAL_WORLDS
   ) return invalidConservationSnapshot("invalid-world-set");
-  const carrierValidation = validateLooseCargoCarrier(carrier);
-  if (!carrierValidation.valid || carrierValidation.carrier === null) {
-    return invalidConservationSnapshot("invalid-carrier");
+  if (
+    !Array.isArray(carriers)
+    || carriers.length < 1
+    || carriers.length > LOOSE_CARGO_MAX_CARRIERS
+  ) return invalidConservationSnapshot("invalid-carrier-set");
+  const canonicalCarriers: LooseCargoCarrierState[] = [];
+  const carrierOwnerKeys = new Set<string>();
+  const terminalLotIds = new Set<string>();
+  let carrierLotCount = 0;
+  for (const carrier of carriers) {
+    const validation = validateLooseCargoCarrier(carrier);
+    if (!validation.valid || validation.carrier === null) {
+      return invalidConservationSnapshot("invalid-carrier");
+    }
+    const key = looseCargoOwnerKey(validation.carrier.owner);
+    if (carrierOwnerKeys.has(key)) {
+      return invalidConservationSnapshot("duplicate-carrier-owner");
+    }
+    carrierOwnerKeys.add(key);
+    carrierLotCount += validation.carrier.lots.length;
+    if (
+      !Number.isSafeInteger(carrierLotCount)
+      || carrierLotCount > LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES
+    ) return invalidConservationSnapshot("invalid-carrier-set");
+    for (const retiredLotId of validation.carrier.retiredLotIds) {
+      if (terminalLotIds.has(retiredLotId)) {
+        return invalidConservationSnapshot("duplicate-parcel-identity");
+      }
+      terminalLotIds.add(retiredLotId);
+    }
+    canonicalCarriers.push(validation.carrier);
   }
+  canonicalCarriers.sort((left, right) => compareOwner(left.owner, right.owner));
   const canonicalWorlds: LooseCargoWorldState[] = [];
   const regionKeys = new Set<string>();
   const parcelIds = new Set<string>();
+  const worldLotIds = new Set<string>();
   for (const world of worlds) {
     const validation = validateLooseCargoWorld(world);
     if (!validation.valid || validation.state === null) {
@@ -1467,6 +1759,13 @@ export function inspectLooseCargoMultiWorldConservation(
         return invalidConservationSnapshot("duplicate-parcel-identity");
       }
       parcelIds.add(entity.id);
+      const physicalLotId = entity.payload.kind === "provision"
+        ? entity.payload.lotId
+        : entity.id;
+      if (terminalLotIds.has(physicalLotId) || worldLotIds.has(physicalLotId)) {
+        return invalidConservationSnapshot("duplicate-parcel-identity");
+      }
+      worldLotIds.add(physicalLotId);
     }
     canonicalWorlds.push(validation.state);
   }
@@ -1476,18 +1775,21 @@ export function inspectLooseCargoMultiWorldConservation(
     return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
   });
 
-  const carrierIdentities = [
-    ...carrierValidation.carrier.lots.map(({ id }) => id),
-    ...carrierValidation.carrier.retiredLotIds,
-  ];
-  if (carrierIdentities.some((id) => parcelIds.has(id))) {
-    return invalidConservationSnapshot("duplicate-parcel-identity");
+  const carrierLotIds = new Set<string>();
+  for (const carrier of canonicalCarriers) {
+    for (const lot of carrier.lots) {
+      if (terminalLotIds.has(lot.id) || worldLotIds.has(lot.id) || carrierLotIds.has(lot.id)) {
+        return invalidConservationSnapshot("duplicate-parcel-identity");
+      }
+      carrierLotIds.add(lot.id);
+    }
   }
   const entries = new Map<string, LooseCargoManifestEntry>();
   const gearIds = new Set<number>();
   const promiseDefinitions = new Map<number, string>();
   const promiseQuantities = new Map<number, number>();
   const stackQuantities = new Map<CraftingStackId, number>();
+  const provisionLotIds = new Set<string>();
   const addValue = (value: {
     readonly payload: LooseCargoPayload;
     readonly materialState: CargoEnvironmentState;
@@ -1515,6 +1817,11 @@ export function inspectLooseCargoMultiWorldConservation(
         return invalidConservationSnapshot("duplicate-durable-identity");
       }
       promiseQuantities.set(value.payload.contractId, quantity);
+    } else if (value.payload.kind === "provision") {
+      if (provisionLotIds.has(value.payload.lotId)) {
+        return invalidConservationSnapshot("duplicate-durable-identity");
+      }
+      provisionLotIds.add(value.payload.lotId);
     }
     const payloadKey = manifestPayloadKey(value.payload, value.materialState);
     const quantity = payloadQuantity(value.payload);
@@ -1537,9 +1844,11 @@ export function inspectLooseCargoMultiWorldConservation(
       if (failure) return failure;
     }
   }
-  for (const lot of carrierValidation.carrier.lots) {
-    const failure = addValue(lot);
-    if (failure) return failure;
+  for (const carrier of canonicalCarriers) {
+    for (const lot of carrier.lots) {
+      const failure = addValue(lot);
+      if (failure) return failure;
+    }
   }
   const canonicalEntries = [...entries.values()].sort((left, right) => left.payloadKey < right.payloadKey ? -1 : 1);
   let totalQuantity = 0;
@@ -1599,6 +1908,25 @@ export function proveLooseCargoMultiWorldConservation(
   };
 }
 
+export function proveLooseCargoMultiCarrierConservation(
+  beforeWorlds: readonly LooseCargoWorldState[],
+  beforeCarriers: readonly LooseCargoCarrierState[],
+  afterWorlds: readonly LooseCargoWorldState[],
+  afterCarriers: readonly LooseCargoCarrierState[],
+): LooseCargoConservationProof {
+  const before = inspectLooseCargoMultiCarrierConservation(beforeWorlds, beforeCarriers);
+  const after = inspectLooseCargoMultiCarrierConservation(afterWorlds, afterCarriers);
+  return {
+    conserved: before.valid
+      && after.valid
+      && before.totalQuantity === after.totalQuantity
+      && before.totalLoadMilli === after.totalLoadMilli
+      && before.fingerprint === after.fingerprint,
+    before,
+    after,
+  };
+}
+
 export function createLooseCargoExpectedManifest(
   world: LooseCargoWorldState,
   carrier: LooseCargoCarrierState,
@@ -1641,6 +1969,17 @@ export function createLooseCargoMultiWorldExpectedManifest(
   return structuralManifest(snapshot);
 }
 
+export function createLooseCargoMultiCarrierExpectedManifest(
+  worlds: readonly LooseCargoWorldState[],
+  carriers: readonly LooseCargoCarrierState[],
+): LooseCargoExpectedManifest {
+  const snapshot = inspectLooseCargoMultiCarrierConservation(worlds, carriers);
+  if (!snapshot.valid) {
+    throw new RangeError(`Cannot create multi-carrier expected parcel manifest: ${snapshot.reason}`);
+  }
+  return structuralManifest(snapshot);
+}
+
 export function validateLooseCargoMultiWorldExpectedManifest(
   expected: unknown,
   worlds: readonly LooseCargoWorldState[],
@@ -1654,6 +1993,29 @@ export function validateLooseCargoMultiWorldExpectedManifest(
     return { valid: false, reason: "invalid-expected", actual: null };
   }
   const snapshot = inspectLooseCargoMultiWorldConservation(worlds, carrier);
+  if (!snapshot.valid) {
+    return { valid: false, reason: "invalid-system", actual: null };
+  }
+  const actual = structuralManifest(snapshot);
+  const valid = actual.fingerprint === canonicalExpected.fingerprint
+    && actual.totalQuantity === canonicalExpected.totalQuantity
+    && actual.totalLoadMilli === canonicalExpected.totalLoadMilli;
+  return { valid, reason: valid ? "valid" : "manifest-mismatch", actual };
+}
+
+export function validateLooseCargoMultiCarrierExpectedManifest(
+  expected: unknown,
+  worlds: readonly LooseCargoWorldState[],
+  carriers: readonly LooseCargoCarrierState[],
+): LooseCargoExpectedManifestValidation {
+  const canonicalExpected = canonicalExpectedManifest(
+    expected,
+    LOOSE_CARGO_MAX_MULTI_WORLD_MANIFEST_ENTRIES,
+  );
+  if (canonicalExpected === null) {
+    return { valid: false, reason: "invalid-expected", actual: null };
+  }
+  const snapshot = inspectLooseCargoMultiCarrierConservation(worlds, carriers);
   if (!snapshot.valid) {
     return { valid: false, reason: "invalid-system", actual: null };
   }
@@ -1698,7 +2060,11 @@ export function quoteLooseCargoDrop(
   if (lot === undefined) {
     return failedQuote("drop", "lot-not-found", canonicalWorld, canonicalCarrier, request.lotId);
   }
-  const payload = droppedPayload(lot.payload, request.quantity);
+  const payload = droppedPayload(
+    lot.payload,
+    request.quantity,
+    "provision-fragment:quote",
+  );
   if (payload === null) {
     return failedQuote("drop", "quantity-unavailable", canonicalWorld, canonicalCarrier, lot.id);
   }
@@ -1716,6 +2082,7 @@ export function quoteLooseCargoDrop(
   ) {
     return failedQuote("drop", "id-space-exhausted", canonicalWorld, canonicalCarrier, lot.id);
   }
+  const entityId = looseCargoEntityId(canonicalWorld.region, canonicalWorld.lastEntityOrdinal + 1);
   if (durableIdentityExists(canonicalWorld.entities, payload)) {
     return failedQuote("drop", "identity-conflict", canonicalWorld, canonicalCarrier, lot.id);
   }
@@ -1732,7 +2099,7 @@ export function quoteLooseCargoDrop(
     reason: "ready",
     worldRevision: canonicalWorld.revision,
     carrierRevision: canonicalCarrier.revision,
-    entityId: looseCargoEntityId(canonicalWorld.region, canonicalWorld.lastEntityOrdinal + 1),
+    entityId,
     lotId: lot.id,
     transferLoadMilli,
     carrierLoadBeforeMilli: loadBefore,
@@ -1754,7 +2121,11 @@ export function dropLooseCargo(
   const canonicalCarrier = requireCarrier(carrier);
   const lot = canonicalCarrier.lots.find((candidate) => candidate.id === quote.lotId);
   if (lot === undefined) return { ...quote, ok: false, reason: "lot-not-found", world, carrier, entity: null, conservation: null };
-  const payload = droppedPayload(lot.payload, request.quantity);
+  const payload = droppedPayload(
+    lot.payload,
+    request.quantity,
+    provisionFragmentLotId(quote.entityId),
+  );
   if (payload === null) return { ...quote, ok: false, reason: "quantity-unavailable", world, carrier, entity: null, conservation: null };
   const origin: LooseCargoOrigin = {
     region: canonicalWorld.region,
@@ -1779,7 +2150,9 @@ export function dropLooseCargo(
   const lots = removeFromLot(canonicalCarrier.lots, lot, payload);
   const retiredLotIds = addRetiredLotIds(
     canonicalCarrier.retiredLotIds,
-    lots.some((candidate) => candidate.id === lot.id) ? [] : [lot.id],
+    lots.some((candidate) => candidate.id === lot.id) || lot.payload.kind === "provision"
+      ? []
+      : [lot.id],
   );
   if (retiredLotIds === null) {
     return {
@@ -1886,7 +2259,11 @@ export function scatterLooseCargo(
     ) {
       return failedScatter("invalid-request", world, carrier, "Every parcel impulse must be a bounded integer.");
     }
-    if (lot.payload.kind === "stack" || lot.payload.kind === "promise") {
+    if (
+      lot.payload.kind === "stack"
+      || lot.payload.kind === "promise"
+      || lot.payload.kind === "provision"
+    ) {
       if (!validQuantity(rawPart.quantity)) {
         return failedScatter("quantity-unavailable", world, carrier, "Every separated stack or Promise fragment needs an exact quantity.");
       }
@@ -1918,13 +2295,22 @@ export function scatterLooseCargo(
   const entities: LooseCargoEntity[] = [];
   const records: LooseCargoHistoryRecord[] = [];
   for (let index = 0; index < parts.length; index += 1) {
-    const payload = parts[index]!;
+    const sourcePayload = parts[index]!;
     const part = request.parts[index]!;
     const entityOrdinal = canonicalWorld.lastEntityOrdinal + index + 1;
     const eventOrdinal = canonicalWorld.lastEventOrdinal + index + 1;
     const origin: LooseCargoOrigin = { region: canonicalWorld.region, ordinal: entityOrdinal };
+    const entityId = looseCargoEntityId(origin.region, origin.ordinal);
+    const payload: LooseCargoPayload = sourcePayload.kind === "provision"
+      ? {
+          ...sourcePayload,
+          lotId: request.parts.length === 1 && sourcePayload.quantity === payloadQuantity(lot.payload)
+            ? sourcePayload.lotId
+            : provisionFragmentLotId(entityId),
+        }
+      : sourcePayload;
     const entity: LooseCargoEntity = {
-      id: looseCargoEntityId(origin.region, origin.ordinal),
+      id: entityId,
       origin,
       owner: canonicalCarrier.owner,
       payload,
@@ -1951,13 +2337,17 @@ export function scatterLooseCargo(
       zeroEnvironmentChange(),
     ));
   }
-  const transferredPayload: LooseCargoPayload = lot.payload.kind === "stack" || lot.payload.kind === "promise"
+  const transferredPayload: LooseCargoPayload = lot.payload.kind === "stack"
+    || lot.payload.kind === "promise"
+    || lot.payload.kind === "provision"
     ? { ...lot.payload, quantity: stackQuantity }
     : lot.payload;
   const nextLots = removeFromLot(canonicalCarrier.lots, lot, transferredPayload);
   const retiredLotIds = addRetiredLotIds(
     canonicalCarrier.retiredLotIds,
-    nextLots.some((candidate) => candidate.id === lot.id) ? [] : [lot.id],
+    nextLots.some((candidate) => candidate.id === lot.id) || lot.payload.kind === "provision"
+      ? []
+      : [lot.id],
   );
   if (retiredLotIds === null) {
     return failedScatter("id-space-exhausted", world, carrier, "No safe retired source identity remains.");
@@ -2022,7 +2412,8 @@ export function quoteLooseCargoPickup(
     return failedQuote("pickup", "entity-not-found", canonicalWorld, canonicalCarrier);
   }
   const matchingLot = findMatchingRecoveryLot(canonicalCarrier.lots, entity);
-  const lotId = matchingLot?.id ?? `loose:${entity.id}`;
+  const lotId = matchingLot?.id
+    ?? (entity.payload.kind === "provision" ? entity.payload.lotId : `loose:${entity.id}`);
   if (Math.abs(entity.x - request.x) + Math.abs(entity.y - request.y) > request.reach) {
     return failedQuote("pickup", "out-of-reach", canonicalWorld, canonicalCarrier, lotId, entity.id);
   }
@@ -2939,6 +3330,19 @@ function canonicalPayload(value: unknown): LooseCargoPayload | null {
       property: value.property,
     };
   }
+  if (value.kind === "provision") {
+    if (
+      !validLotId(value.lotId)
+      || !PROVISION_KIND_SET.has(value.provision as string)
+      || !validQuantity(value.quantity)
+    ) return null;
+    return {
+      kind: "provision",
+      lotId: value.lotId,
+      provision: value.provision as ProvisionKind,
+      quantity: value.quantity,
+    };
+  }
   return null;
 }
 
@@ -2965,6 +3369,14 @@ function canonicalOwner(value: unknown): LooseCargoOwner | null {
     && value.id.trim() === value.id
   ) {
     return { kind: "player", id: value.id };
+  }
+  if (
+    value.kind === "actor"
+    && typeof value.id === "string"
+    && value.id.length <= ACTOR_ID_MAX_LENGTH
+    && /^[A-Za-z0-9][A-Za-z0-9:._/-]*$/.test(value.id)
+  ) {
+    return { kind: "actor", id: value.id };
   }
   if (value.kind === "settlement" && validIdentity(value.id)) {
     return { kind: "settlement", id: value.id };
@@ -3106,7 +3518,11 @@ function canonicalLot(value: unknown): CarriedCargoLot | null {
   if (!isRecord(value) || !validLotId(value.id)) return null;
   const payload = canonicalPayload(value.payload);
   const materialState = canonicalMaterialState(value.materialState);
-  if (payload === null || materialState === null) return null;
+  if (
+    payload === null
+    || materialState === null
+    || (payload.kind === "provision" && payload.lotId !== value.id)
+  ) return null;
   return { id: value.id, payload, materialState };
 }
 
@@ -3191,11 +3607,22 @@ function transferFailureMessage(
   }
 }
 
-function droppedPayload(payload: LooseCargoPayload, requestedQuantity: unknown): LooseCargoPayload | null {
-  if (payload.kind !== "stack") {
+function droppedPayload(
+  payload: LooseCargoPayload,
+  requestedQuantity: unknown,
+  provisionChildLotId: string,
+): LooseCargoPayload | null {
+  if (payload.kind !== "stack" && payload.kind !== "provision") {
     return requestedQuantity === undefined ? payload : null;
   }
   if (!validQuantity(requestedQuantity) || requestedQuantity > payload.quantity) return null;
+  if (payload.kind === "provision") {
+    return {
+      ...payload,
+      lotId: requestedQuantity === payload.quantity ? payload.lotId : provisionChildLotId,
+      quantity: requestedQuantity,
+    };
+  }
   return { ...payload, quantity: requestedQuantity };
 }
 
@@ -3206,8 +3633,12 @@ function removeFromLot(
 ): readonly CarriedCargoLot[] {
   if (
     source.payload.kind === dropped.kind
-    && (source.payload.kind === "stack" || source.payload.kind === "promise")
-    && (dropped.kind === "stack" || dropped.kind === "promise")
+    && (
+      source.payload.kind === "stack"
+      || source.payload.kind === "promise"
+      || source.payload.kind === "provision"
+    )
+    && (dropped.kind === "stack" || dropped.kind === "promise" || dropped.kind === "provision")
     && dropped.quantity < source.payload.quantity
   ) {
     const remainingPayload: LooseCargoPayload = {
@@ -3227,15 +3658,25 @@ function removeFromLot(
 function payloadRemovesWholeLot(source: LooseCargoPayload, moved: LooseCargoPayload): boolean {
   if (source.kind !== moved.kind) return false;
   if (source.kind === "gear") return true;
-  return (moved.kind === "stack" || moved.kind === "promise") && moved.quantity === source.quantity;
+  return (
+    moved.kind === "stack"
+    || moved.kind === "promise"
+    || moved.kind === "provision"
+  ) && moved.quantity === source.quantity;
 }
 
 function durableIdentityExists(
   values: readonly { readonly payload: LooseCargoPayload }[],
   payload: LooseCargoPayload,
 ): boolean {
-  if (payload.kind !== "gear") return false;
-  return values.some((value) => value.payload.kind === "gear" && value.payload.gearId === payload.gearId);
+  if (payload.kind === "gear") {
+    return values.some((value) => value.payload.kind === "gear" && value.payload.gearId === payload.gearId);
+  }
+  if (payload.kind === "provision") {
+    return values.some((value) => value.payload.kind === "provision"
+      && value.payload.lotId === payload.lotId);
+  }
+  return false;
 }
 
 function findMatchingRecoveryLot(
@@ -3513,6 +3954,7 @@ function describePayload(payload: LooseCargoPayload): string {
     case "stack": return `${payload.quantity} ${CRAFTING_STACK_DEFINITIONS[payload.item].label}`;
     case "gear": return CRAFTED_GEAR_DEFINITIONS[payload.gearKind].label;
     case "promise": return `${payload.quantity} ${payload.resource} for Promise ${payload.contractId}`;
+    case "provision": return `${payload.quantity} ${PROVISION_DEFINITIONS[payload.provision].label}`;
   }
 }
 
@@ -3524,10 +3966,26 @@ function compareLot(left: CarriedCargoLot, right: CarriedCargoLot): number {
   return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
 
+function looseCargoOwnerKey(owner: LooseCargoOwner): string {
+  switch (owner.kind) {
+    case "unclaimed": return "0:unclaimed";
+    case "player": return `1:${owner.id}`;
+    case "actor": return `2:${owner.id}`;
+    case "settlement": return `3:${owner.id}`;
+  }
+}
+
+function compareOwner(left: LooseCargoOwner, right: LooseCargoOwner): number {
+  const leftKey = looseCargoOwnerKey(left);
+  const rightKey = looseCargoOwnerKey(right);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
 function sameOwner(left: LooseCargoOwner, right: LooseCargoOwner): boolean {
   if (left.kind !== right.kind) return false;
   if (left.kind === "unclaimed" && right.kind === "unclaimed") return true;
   if (left.kind === "player" && right.kind === "player") return left.id === right.id;
+  if (left.kind === "actor" && right.kind === "actor") return left.id === right.id;
   return left.kind === "settlement" && right.kind === "settlement" && left.id === right.id;
 }
 
@@ -3554,6 +4012,7 @@ function historyPayloadKey(payload: LooseCargoPayload): string {
     case "stack": return `stack:${payload.item}`;
     case "gear": return `gear:${payload.gearId}:${payload.gearKind}`;
     case "promise": return `promise:${promiseDefinitionKey(payload)}`;
+    case "provision": return `provision:${payload.provision}:lot:${payload.lotId}`;
   }
 }
 
@@ -3561,7 +4020,10 @@ function manifestPayloadKey(
   payload: LooseCargoPayload,
   materialState: CargoEnvironmentState,
 ): string {
-  return `${historyPayloadKey(payload)}@${materialState.condition},${materialState.contamination},${materialState.decay}`;
+  const substanceKey = payload.kind === "provision"
+    ? `provision:${payload.provision}`
+    : historyPayloadKey(payload);
+  return `${substanceKey}@${materialState.condition},${materialState.contamination},${materialState.decay}`;
 }
 
 function positionOf(world: LooseCargoWorldState, x: number, y: number): LooseCargoPosition {

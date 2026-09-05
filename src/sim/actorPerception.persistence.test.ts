@@ -148,6 +148,25 @@ describe("resident actor-perception persistence", () => {
     expect(() => assertWorldInvariants(first)).not.toThrow();
   });
 
+  it("adopts authenticated current worlds with version-1 cognition without changing knowledge", () => {
+    const source = createInitialWorld("the old senses retain exactly what they knew", "standard");
+    const firstResident = requireResident(source);
+    firstResident.perception = observedState(source);
+    assertWorldInvariants(source);
+
+    const prior = structuredClone(source) as unknown as Record<string, unknown>;
+    const residents = prior.residents as Array<Record<string, unknown>>;
+    for (const resident of residents) {
+      const perception = resident.perception as Record<string, unknown>;
+      perception.version = 1;
+    }
+
+    const restored = deserializeWorld(currentEnvelope(prior));
+    expect(restored).toEqual(source);
+    expect(serializeWorld(restored)).toBe(serializeWorld(source));
+    expect(() => assertWorldInvariants(restored)).not.toThrow();
+  });
+
   it("verifies a format-3 checksum before adding cognition or changing metadata", () => {
     const source = createInitialWorld("an old checksum speaks first", "standard");
     runTicks(source, 11);

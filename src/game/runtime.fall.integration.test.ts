@@ -36,6 +36,7 @@ import {
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import type { PorterResponseState } from "./porterResponse";
 import type { GameSessionState } from "./sessionTypes";
 import type { TraversalFeedbackState } from "./traversalFeedback";
 
@@ -49,9 +50,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V5GameSaveEnvelope {
+interface V7GameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 5;
+  readonly version: 7;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -61,6 +62,8 @@ interface V5GameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: unknown;
+  readonly bio0Ecology: string;
+  readonly porterResponse: PorterResponseState;
   readonly integrity: string;
 }
 
@@ -136,15 +139,15 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeV5(record: SaveRecord): V5GameSaveEnvelope {
-  const envelope = JSON.parse(record.worldJson) as V5GameSaveEnvelope;
-  if (envelope.format !== "tideweft-session" || envelope.version !== 5) {
-    throw new Error("fixture did not produce a current v5 regional session save");
+function decodeV7(record: SaveRecord): V7GameSaveEnvelope {
+  const envelope = JSON.parse(record.worldJson) as V7GameSaveEnvelope;
+  if (envelope.format !== "tideweft-session" || envelope.version !== 7) {
+    throw new Error("fixture did not produce a current v7 regional session save");
   }
   return envelope;
 }
 
-function reseal(envelope: V5GameSaveEnvelope): V5GameSaveEnvelope {
+function reseal(envelope: V7GameSaveEnvelope): V7GameSaveEnvelope {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
   return {
     ...unsealed,
@@ -154,13 +157,13 @@ function reseal(envelope: V5GameSaveEnvelope): V5GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V5GameSaveEnvelope,
+  envelope: V7GameSaveEnvelope,
 ): void {
   const record = repository.snapshot();
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 5,
+    payloadVersion: 7,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -256,8 +259,8 @@ function moveFixtureFrameToCompatibilityTile(
 }
 
 function relocateToRidgeAtZeroStability(
-  envelope: V5GameSaveEnvelope,
-): { readonly envelope: V5GameSaveEnvelope; readonly corner: RidgeCorner } {
+  envelope: V7GameSaveEnvelope,
+): { readonly envelope: V7GameSaveEnvelope; readonly corner: RidgeCorner } {
   const world = deserializeWorld(envelope.world);
   const regionalTravel = restorePlayerRegionalTravel(
     world.meta.rootSeed,
@@ -366,7 +369,7 @@ function relocateToRidgeAtZeroStability(
   };
 }
 
-async function createV5Fixture(
+async function createV7Fixture(
   repository: MemoryRepository,
   seed: string,
   acceptPromise: boolean,
@@ -401,7 +404,7 @@ async function createV5Fixture(
   await runtime.save();
   runtime.destroy();
 
-  const initial = decodeV5(repository.snapshot());
+  const initial = decodeV7(repository.snapshot());
   const promiseLot = contractId === null
     ? undefined
     : initial.physicalCargo.carrier.lots.find((lot) =>
@@ -442,10 +445,10 @@ function renderedTileIndex(view: TideweftView): number {
 }
 
 describe("production terrain fall and physical cargo", () => {
-  it("rejects a resealed v5 player snapshot whose regional cartography was left stale", async () => {
+  it("rejects a resealed v7 player snapshot whose regional cartography was left stale", async () => {
     const repository = new MemoryRepository();
-    await createV5Fixture(repository, "stale regional fall fixture", false);
-    const stale = structuredClone(decodeV5(repository.snapshot()));
+    await createV7Fixture(repository, "stale regional fall fixture", false);
+    const stale = structuredClone(decodeV7(repository.snapshot()));
     const unseenIndex = stale.player.discovered.findIndex((value) => value !== FIXED_POINT);
     if (unseenIndex < 0) throw new Error("fixture unexpectedly discovered its entire regional window");
     stale.player.discovered[unseenIndex] = FIXED_POINT;
@@ -467,7 +470,7 @@ describe("production terrain fall and physical cargo", () => {
 
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {
     const repository = new MemoryRepository();
-    const fixture = await createV5Fixture(
+    const fixture = await createV7Fixture(
       repository,
       "fall cargo exact test",
       true,
@@ -504,9 +507,9 @@ describe("production terrain fall and physical cargo", () => {
     });
 
     await runtime.save();
-    const fallenSave = decodeV5(repository.snapshot());
+    const fallenSave = decodeV7(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 5,
+      version: 7,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -577,7 +580,7 @@ describe("production terrain fall and physical cargo", () => {
     expect((resumed.getRenderView().looseCargo ?? []).map(({ id }) => id)).toEqual(visibleParcelIds);
     expect(resumed.getUIView().objective?.id).toBe(`recover-${fixture.contractId}`);
     await resumed.save();
-    const roundTripped = decodeV5(repository.snapshot());
+    const roundTripped = decodeV7(repository.snapshot());
     expect({
       entities: roundTripped.physicalCargo.looseWorld.entities,
       history: roundTripped.physicalCargo.looseWorld.history,
@@ -593,7 +596,7 @@ describe("production terrain fall and physical cargo", () => {
     advancePlayerSteps(resumed, 1);
     resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await resumed.save();
-    const afterRepeatedInput = decodeV5(repository.snapshot());
+    const afterRepeatedInput = decodeV7(repository.snapshot());
     expect(afterRepeatedInput.traversalFeedback.nextTraversalOrdinal).toBe(1);
     expect(incidentCueCalls(incident.cue)).toBe(cueCountBeforeReload);
     expect(afterRepeatedInput.physicalCargo.looseWorld.entities.map(({ id }) => id).sort())
@@ -607,7 +610,7 @@ describe("production terrain fall and physical cargo", () => {
 
   it("applies one terrain fall to an empty porter without inventing or deleting cargo", async () => {
     const repository = new MemoryRepository();
-    const fixture = await createV5Fixture(
+    const fixture = await createV7Fixture(
       repository,
       "fall cargo exact test",
       false,
@@ -621,7 +624,7 @@ describe("production terrain fall and physical cargo", () => {
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
 
-    const fallen = decodeV5(repository.snapshot());
+    const fallen = decodeV7(repository.snapshot());
     const incident = fallen.traversalFeedback.incident;
     if (!incident) throw new Error("empty porter fall incident did not persist");
     expect(incident).toMatchObject({
@@ -641,7 +644,7 @@ describe("production terrain fall and physical cargo", () => {
     advancePlayerSteps(runtime, 1);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
-    const repeated = decodeV5(repository.snapshot());
+    const repeated = decodeV7(repository.snapshot());
     expect(repeated.traversalFeedback.nextTraversalOrdinal).toBe(1);
     expect(repeated.player.stamina).toBeGreaterThanOrEqual(staminaAfterFall);
     expect(repeated.physicalCargo.carrier.lots).toEqual([]);

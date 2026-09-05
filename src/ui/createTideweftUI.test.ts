@@ -11,6 +11,7 @@ import {
   WAYKNOT_KEY_SHORTCUT,
   bindTitleRestartFlow,
   createUnderfootTerrainStabilizer,
+  handleActorAboutEscape,
   handleResidentAboutEscape,
   handleTideweftUIShortcut,
   mobileHudCopy,
@@ -783,5 +784,28 @@ describe("resident ABOUT behavior", () => {
       "porter-4",
       dispatch,
     )).toBe(false);
+  });
+
+  it("closes a species-tagged actor without translating it into a resident ID", () => {
+    const dispatch = vi.fn();
+    const escape = {
+      key: "Escape",
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+    const target = {
+      species: "domestic-dog",
+      actorId: "D-R-v1-nearby-dog",
+    } as const;
+    expect(handleActorAboutEscape(
+      escape,
+      { type: "living-actor", action: "close", target },
+      dispatch,
+    )).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "living-actor",
+      action: "close",
+      target,
+    });
   });
 });

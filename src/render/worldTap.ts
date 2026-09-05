@@ -12,10 +12,16 @@ import {
   isDirectlyDetailPerceived,
 } from "./perceptionPresentation";
 
-export interface WorldTapTarget {
-  readonly entity: "settlement" | "porter" | "route" | "resource";
-  readonly id: string;
-}
+export type WorldTapTarget =
+  | {
+      readonly entity: "settlement" | "porter" | "route" | "resource";
+      readonly id: string;
+    }
+  | {
+      readonly entity: "living-actor";
+      readonly species: "domestic-dog";
+      readonly id: string;
+    };
 
 export function usesCoarseWorldPointer(
   pointerType: string,
@@ -75,6 +81,18 @@ const directlyPerceivedParcel = (
   parcel: LooseCargoView,
 ): boolean => directlyPerceivedPoint(view, parcel.position);
 
+const directlyPerceivedDog = (
+  view: TideweftView,
+  actorId: string,
+): NonNullable<TideweftView["dogs"]>[number] | null => {
+  const matches = (view.dogs ?? []).filter((dog) => dog.actorId === actorId);
+  if (matches.length !== 1) return null;
+  const dog = matches[0];
+  return finitePoint(dog?.position) && directlyPerceivedPoint(view, dog.position)
+    ? dog
+    : null;
+};
+
 /**
  * Last command-line defense for exact entity interactions. Renderers normally
  * remove obscured hit targets before this point, but perception can change
@@ -104,6 +122,13 @@ export function validatePerceivedEntityCommand(
     case "select": {
       if (command.entity === "world") return command;
       if (!command.id) return null;
+      if (command.entity === "living-actor") {
+        if (command.species !== "domestic-dog") return null;
+        const dog = directlyPerceivedDog(view, command.id);
+        return dog
+          ? { ...command, point: { ...dog.position } }
+          : null;
+      }
       if (command.entity === "route") {
         return finitePoint(command.point)
           && routePointerTargetIsDirectlyPerceived(view, command.point)
@@ -185,12 +210,20 @@ export function commandForWorldTap(
     }
   }
   if (target && target.entity !== "resource") {
-    const command = validatePerceivedEntityCommand(view, {
-      type: "select",
-      entity: target.entity,
-      id: target.id,
-      point: { ...tappedPoint },
-    });
+    const command = validatePerceivedEntityCommand(view, target.entity === "living-actor"
+      ? {
+          type: "select",
+          entity: "living-actor",
+          species: target.species,
+          id: target.id,
+          point: { ...tappedPoint },
+        }
+      : {
+          type: "select",
+          entity: target.entity,
+          id: target.id,
+          point: { ...tappedPoint },
+        });
     if (command) return command;
   }
   return moveToTap;

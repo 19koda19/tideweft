@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { createWorldPosition } from "../game/worldPosition";
 import {
+  ACTOR_ID_MAX_LENGTH,
   ACTOR_ATTENTION_CAP,
   ACTOR_BELIEF_CAP,
   ACTOR_PERCEPTION_VERSION,
   ACTOR_PERCEPTION_SCALE,
   ACTOR_SALIENT_MEMORY_CAP,
   MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
+  PRIOR_ACTOR_PERCEPTION_VERSION,
   canonicalizeActorObservations,
   canonicalizeActorPerceptionState,
   createActorObservation,
@@ -106,6 +108,14 @@ function expectEveryNumberToBeSafeInteger(value: unknown): void {
 }
 
 describe("shared actor observation kernel", () => {
+  it("admits the shared lossless regional actor-ID envelope without accepting aliases", () => {
+    const maximumId = `D-route/bank:${"x".repeat(ACTOR_ID_MAX_LENGTH - 13)}`;
+    expect(maximumId).toHaveLength(ACTOR_ID_MAX_LENGTH);
+    expect(createActorPerceptionState(maximumId).actorId).toBe(maximumId);
+    expect(() => createActorPerceptionState(`${maximumId}x`)).toThrow(/canonical actor ID/u);
+    expect(() => createActorPerceptionState("actor id with spaces")).toThrow(/canonical actor ID/u);
+  });
+
   it("creates a frozen empty state and validates its canonical persisted shape", () => {
     const state = createActorPerceptionState(OBSERVER_ID);
 
@@ -123,6 +133,20 @@ describe("shared actor observation kernel", () => {
     expect(Object.isFrozen(state)).toBe(true);
     expect(Object.isFrozen(state.beliefs)).toBe(true);
     expect(canonicalizeActorPerceptionState(structuredClone(state))).toEqual(state);
+  });
+
+  it("explicitly adopts canonical version-1 cognition without changing its knowledge", () => {
+    const current = advance(createActorPerceptionState(OBSERVER_ID), 1, [
+      observation(),
+      sound(),
+    ]);
+    const prior = {
+      ...structuredClone(current),
+      version: PRIOR_ACTOR_PERCEPTION_VERSION,
+    };
+
+    expect(canonicalizeActorPerceptionState(prior)).toEqual(current);
+    expect(deserializeActorPerceptionState(JSON.stringify(prior))).toEqual(current);
   });
 
   it("canonicalizes observation and attention order independently of input array order", () => {
@@ -468,7 +492,7 @@ describe("shared actor observation kernel", () => {
     const valid = observation();
     const reservedFutureChannel = createActorObservation({
       ...valid,
-      channel: "scent",
+      channel: "touch",
     });
     expect(reservedFutureChannel).toBeNull();
     expect(createActorObservation({ ...valid, confidence: 0.5 })).toBeNull();

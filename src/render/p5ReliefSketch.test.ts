@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TideweftView, WeatherView } from "./types";
+import type { DogView, TideweftView, WeatherView } from "./types";
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 
 const p5Harness = vi.hoisted(() => ({
@@ -322,6 +322,29 @@ function warmWaterView(spatialEpoch = "warm-water"): TideweftView {
       })),
     },
     tide: { ...base.tide, level: 0.9 },
+  };
+}
+
+function dogView(overrides: Partial<DogView> = {}): DogView {
+  return {
+    version: 1,
+    actorId: "D-R-v1-relief-dog",
+    quickLabel: "Unknown dog",
+    position: { x: 48, y: 48 },
+    facing: Math.PI * 0.25,
+    size: "large",
+    sizeScale: 1.08,
+    coat: {
+      primary: "red",
+      secondary: "white",
+      pattern: "patched",
+      length: "long",
+    },
+    wetness: 650_000,
+    conditionLabels: ["SOAKED"],
+    behavior: "approach-food",
+    selected: false,
+    ...overrides,
   };
 }
 
@@ -1105,6 +1128,113 @@ describe("Relief ADRIFT presentation path", () => {
     expect(paddleLabel.removed).toBe(true);
     expect(layer?.children.some((child) => child.dataset.tone === "adrift" && !child.removed))
       .toBe(false);
+    harness.renderer.destroy();
+  });
+});
+
+describe("Relief dog presentation", () => {
+  it("renders a readable quadruped with honest coat/wetness, hover/selection emphasis, and detail gating", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-dog", { x: 48, y: 48 });
+    let current: TideweftView = {
+      ...base,
+      dogs: [dogView({ selected: true, conditionLabels: ["SOAKED", "INJURED"] })],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const selectedLabel = layer?.children.find((child) =>
+      child.textContent === "Unknown dog · soaked · injured" && !child.removed);
+    if (!selectedLabel) throw new Error("expected selected dog label");
+    expect(selectedLabel.dataset).toMatchObject({ tone: "dog", selected: "true" });
+    expect(layer?.children.map((child) => child.textContent).join(" "))
+      .not.toContain("D-R-v1-relief-dog");
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "emissiveMaterial" && args[0] === "#98583d"
+    )).toBe(true);
+    expect(harness.instance.ellipsoid).toHaveBeenCalled();
+    expect(harness.instance.sphere).toHaveBeenCalled();
+    expect(harness.instance.cone).toHaveBeenCalled();
+    expect(harness.instance.box).toHaveBeenCalled();
+
+    current = {
+      ...base,
+      dogs: [dogView({ position: { x: 12, y: 12 }, selected: false })],
+    };
+    harness.setView(current);
+    harness.canvas.fire("pointermove", pointer(harness.canvas));
+    harness.draw();
+    const hoverLabel = [...(layer?.children ?? [])].reverse().find((child) =>
+      child.textContent === "Unknown dog · soaked" && !child.removed);
+    expect(hoverLabel?.dataset).toMatchObject({ tone: "dog", selected: "true" });
+    expect(harness.dispatch).not.toHaveBeenCalled();
+
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 91 }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 91 }));
+    expect(harness.dispatch).toHaveBeenLastCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species: "domestic-dog",
+      id: "D-R-v1-relief-dog",
+      point: { x: 12, y: 12 },
+    });
+
+    harness.dispatch.mockClear();
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 92,
+      pointerType: "touch",
+    }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 92,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch).toHaveBeenCalledOnce();
+    expect(harness.dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species: "domestic-dog",
+      id: "D-R-v1-relief-dog",
+      point: { x: 12, y: 12 },
+    });
+
+    p5Harness.materialTrace.length = 0;
+    harness.dispatch.mockClear();
+    current = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "relief-dog-hidden",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 0,
+        detailDirectTileCount: 0,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 0 as const,
+        })),
+      },
+      dogs: [dogView({ selected: true })],
+    };
+    harness.setView(current);
+    harness.draw();
+    expect(layer?.children.some((child) => child.dataset.tone === "dog" && !child.removed))
+      .toBe(false);
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "emissiveMaterial" && args[0] === "#98583d"
+    )).toBe(false);
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 93 }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 93 }));
+    expect(harness.dispatch.mock.calls.some(([command]) =>
+      (command as { type?: unknown }).type === "select"
+    )).toBe(false);
     harness.renderer.destroy();
   });
 });

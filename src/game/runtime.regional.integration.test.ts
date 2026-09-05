@@ -42,6 +42,7 @@ import {
   createRegionalWorldView,
   regionalTileIndexInView,
 } from "./regionalWorldView";
+import type { PorterResponseState } from "./porterResponse";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { GameSessionState } from "./sessionTypes";
 import type { TraversalFeedbackState } from "./traversalFeedback";
@@ -55,9 +56,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V5GameSaveEnvelope {
+interface V7GameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 5;
+  readonly version: 7;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -67,6 +68,8 @@ interface V5GameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: unknown;
+  readonly bio0Ecology: string;
+  readonly porterResponse: PorterResponseState;
   readonly integrity: string;
 }
 
@@ -138,24 +141,27 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeV5(record: SaveRecord): V5GameSaveEnvelope {
-  const value = JSON.parse(record.worldJson) as V5GameSaveEnvelope;
+function decodeV7(record: SaveRecord): V7GameSaveEnvelope {
+  const value = JSON.parse(record.worldJson) as V7GameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 5
-    || record.payloadVersion !== 5
-  ) throw new Error("fixture did not produce a current v5 regional save");
+    || value.version !== 7
+    || record.payloadVersion !== 7
+  ) throw new Error("fixture did not produce a current v7 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v5 outer envelope does not match its integrity seal");
+    throw new Error("fixture v7 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
+    "bio0Ecology",
     "fieldResources",
     "format",
     "integrity",
+    "livingActorPlayerChoice",
     "perceptionCarry",
     "physicalCargo",
     "player",
+    "porterResponse",
     "promiseJourney",
     "regionalTravel",
     "session",
@@ -168,17 +174,17 @@ function decodeV5(record: SaveRecord): V5GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V5GameSaveEnvelope,
+  envelope: V7GameSaveEnvelope,
 ): void {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
-  const sealed: V5GameSaveEnvelope = {
+  const sealed: V7GameSaveEnvelope = {
     ...unsealed,
     integrity: gameSaveEnvelopeIntegrity(unsealed),
   };
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 5,
+    payloadVersion: 7,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -213,7 +219,7 @@ async function createCurrentSave(
   runtime.destroy();
 
   if (contractId === null) return null;
-  const saved = decodeV5(repository.snapshot());
+  const saved = decodeV7(repository.snapshot());
   const lot = saved.physicalCargo.carrier.lots.find(({ payload }) =>
     payload.kind === "promise" && payload.contractId === contractId);
   if (!lot) throw new Error("accepted Promise did not reach the physical carrier");
@@ -328,8 +334,8 @@ function adjacentCompatibilityTrace(
 }
 
 function relocateToEastSeam(
-  envelope: V5GameSaveEnvelope,
-): V5GameSaveEnvelope {
+  envelope: V7GameSaveEnvelope,
+): V7GameSaveEnvelope {
   const world = deserializeWorld(envelope.world);
   const economy = createWorldView(world);
   const travel = restorePlayerRegionalTravel(
@@ -411,7 +417,7 @@ function relocateToEastSeam(
   };
 }
 
-function restoredTravel(envelope: V5GameSaveEnvelope): RegionalPlayerTravelState {
+function restoredTravel(envelope: V7GameSaveEnvelope): RegionalPlayerTravelState {
   const world = deserializeWorld(envelope.world);
   const travel = restorePlayerRegionalTravel(
     world.meta.rootSeed,
@@ -486,12 +492,13 @@ describe("production signed-region crossing", () => {
       true,
     );
     if (!promise) throw new Error("fixture did not accept a Promise");
-    replaceEnvelope(repository, relocateToEastSeam(decodeV5(repository.snapshot())));
+    const initialBio0Ecology = decodeV7(repository.snapshot()).bio0Ecology;
+    replaceEnvelope(repository, relocateToEastSeam(decodeV7(repository.snapshot())));
 
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getRenderView().spatialEpoch).toBe(
-      spatialEpochFor(restoredTravel(decodeV5(repository.snapshot()))),
+      spatialEpochFor(restoredTravel(decodeV7(repository.snapshot()))),
     );
     runtime.dispatchRenderer({ type: "brace", active: true });
     runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
@@ -499,7 +506,7 @@ describe("production signed-region crossing", () => {
     advancePlayerSteps(runtime, 1);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await runtime.save();
-    const eastSave = decodeV5(repository.snapshot());
+    const eastSave = decodeV7(repository.snapshot());
     const eastTravel = restoredTravel(eastSave);
     expect(runtime.getRenderView().spatialEpoch).toBe(spatialEpochFor(eastTravel));
     expect(eastTravel.stream).toMatchObject({
@@ -519,6 +526,7 @@ describe("production signed-region crossing", () => {
       compatibilityTrace: [],
     });
     expectExactPromiseCustody(eastSave.physicalCargo, promise);
+    expect(eastSave.bio0Ecology).toBe(initialBio0Ecology);
     const eastTerrainHash = regionContentHash(eastTravel, "r:1:0");
     const eastKnowledge = projectRegionalCartographyRegion(
       eastTravel.cartography,
@@ -536,7 +544,7 @@ describe("production signed-region crossing", () => {
     advancePlayerSteps(resumed, 1);
     resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await resumed.save();
-    const returnedSave = decodeV5(repository.snapshot());
+    const returnedSave = decodeV7(repository.snapshot());
     const returnedTravel = restoredTravel(returnedSave);
     expect(resumed.getRenderView().spatialEpoch).toBe(spatialEpochFor(returnedTravel));
     expect(returnedTravel.stream).toMatchObject({
@@ -545,12 +553,13 @@ describe("production signed-region crossing", () => {
     });
     expect(returnedSave.physicalCargo.activeRegion).toEqual({ x: 0, y: 0 });
     expectExactPromiseCustody(returnedSave.physicalCargo, promise);
+    expect(returnedSave.bio0Ecology).toBe(initialBio0Ecology);
 
     resumed.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
     advancePlayerSteps(resumed, 1);
     resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
     await resumed.save();
-    const revisitedSave = decodeV5(repository.snapshot());
+    const revisitedSave = decodeV7(repository.snapshot());
     const revisitedTravel = restoredTravel(revisitedSave);
     expect(resumed.getRenderView().spatialEpoch).toBe(spatialEpochFor(revisitedTravel));
     expect(revisitedTravel.stream).toMatchObject({
@@ -569,13 +578,14 @@ describe("production signed-region crossing", () => {
       value >= (eastKnowledge.depthSoundings[index] ?? 0))).toBe(true);
     expect(revisitedSave.physicalCargo.activeRegion).toEqual({ x: 1, y: 0 });
     expectExactPromiseCustody(revisitedSave.physicalCargo, promise);
+    expect(revisitedSave.bio0Ecology).toBe(initialBio0Ecology);
     resumed.destroy();
   }, 20_000);
 
   it("rejects an otherwise resealed save captured halfway through a recenter", async () => {
     const repository = new MemoryRepository();
     await createCurrentSave(repository, "no half crossed worlds", false);
-    const relocated = relocateToEastSeam(decodeV5(repository.snapshot()));
+    const relocated = relocateToEastSeam(decodeV7(repository.snapshot()));
     const world = deserializeWorld(relocated.world);
     const player = structuredClone(relocated.player);
     const travel = restoredTravel(relocated);

@@ -1,5 +1,6 @@
 /** Presentation-only contracts consumed by the p5 renderer. */
 
+import type { DogPresentation } from "../game/dogPresentation";
 import type { RendererTelemetrySnapshot } from "./rendererTelemetry";
 
 export interface WorldPoint {
@@ -323,7 +324,7 @@ export interface FieldResourceNodeView {
   readonly currentVisibility?: 0 | 0.5 | 1;
 }
 
-export type LooseCargoContentKindView = "raw-material" | "component" | "gear" | "promise";
+export type LooseCargoContentKindView = "raw-material" | "component" | "gear" | "promise" | "provision";
 export type LooseCargoConditionBandView = "sound" | "worn" | "damaged" | "ruined";
 export type LooseCargoMotionView = "resting" | "drifting" | "tumbling" | "snagged" | "boundary-rest";
 export type LooseCargoSnagView = "mangrove" | "bramble";
@@ -438,6 +439,13 @@ export interface PorterView {
   readonly selected?: boolean;
 }
 
+/**
+ * Directly observable dog projection. The game-layer projector withholds this
+ * entire record outside exact detail visibility; renderers retain the stable
+ * actor ID only for visual continuity and future input routing.
+ */
+export type DogView = DogPresentation;
+
 export interface ParticleView {
   readonly id: string;
   readonly position: WorldPoint;
@@ -504,6 +512,8 @@ export interface TideweftView {
   readonly looseCargo?: readonly LooseCargoView[];
   readonly traces: readonly TraceView[];
   readonly porters: readonly PorterView[];
+  /** Optional while generated-dog projection rolls through existing fixtures and saves. */
+  readonly dogs?: readonly DogView[];
   readonly particles?: readonly ParticleView[];
   readonly events?: readonly WorldEventView[];
   readonly camera: CameraView;
@@ -537,6 +547,15 @@ export type RendererCommand =
       readonly entity: "settlement" | "porter" | "route" | "world";
       readonly id?: string;
       readonly point?: WorldPoint;
+    }
+  | {
+      readonly type: "select";
+      /** Species-tagged universal actor boundary; never reinterpret this ID as a resident. */
+      readonly entity: "living-actor";
+      readonly species: "domestic-dog";
+      readonly id: string;
+      /** Current physical point, rebound by the release-frame perception validator. */
+      readonly point: WorldPoint;
     }
   | { readonly type: "cancel" };
 

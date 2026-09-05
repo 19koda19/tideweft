@@ -12,7 +12,7 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 
 ## Current verbs
 
-**Listen → choose → collect → travel → adapt → bind → tune → deliver → tend → witness**
+**Listen → observe → ask → choose → collect → travel → adapt → bind → tune → deliver → tend → witness**
 
 1. Inspect nearby facts, named requesters, shortages, project needs, route reliability, weather, and tide.
 2. Choose a promise by consequence and journey mood rather than abstract reward value.
@@ -23,7 +23,8 @@ Progress appears as concrete changes: a named person receives needed stock, civi
 7. Tune a compact Tide Harp triangle from one Wayknot of each kind, then stand within it to extend the Loom's sounding field.
 8. Deliver or hand off safely at a harbor.
 9. Spend a shared part to reinforce a corridor, or let repeated delivery use weave it naturally.
-10. Read the arrival response, project change, route state, resident movement, and causal chronicle.
+10. Observe a directly visible person or dog through ABOUT, and ask rather than command when another actor controls the response.
+11. Read the arrival response, project change, route state, actor movement, and causal chronicle.
 
 There is no separate currency payout. A delivery’s reward is the system becoming more capable and more legible.
 
@@ -81,6 +82,7 @@ Each seed creates:
 - One continuous deterministic terrain world. The original 96 × 72 seeded estuary remains unchanged at its established coordinates, including five authoritative terrain families, tidal water depth, and seven derived biome identities: Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen. A bounded 120 × 120 presentation frame moves quietly through the world as the courier travels; stored Alpha 0.1 worlds retain their original 64 × 48 terrain inside it.
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
 - 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, a bounded vision/hearing perception state, an intention, and a world location.
+- Exactly one independent domestic dog generated from stable seed and origin inputs, paired with one existing porter for a bounded food-and-rain interaction without ownership or a companion bond.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -91,6 +93,10 @@ This is selective simulation. A resident detail earns its place by changing a vi
 The same honesty now runs in the other direction for these 42 humans. A person sees the courier only through a forward or close visual contact that can be shortened by weather and blocked by terrain or structures; motion and ambient exposure alter how legible the courier is. Footfalls, splashes, and impacts can instead create an anonymous directional sound. Rain and turbulent water around the listener mask that sound, while wind can change its reach and uncertainty. Hearing something does not reveal who or exactly where it was.
 
 Attention and suspicion are bounded. If a person clearly sees the courier and then loses sight, they face and scan a saved last-known area; they do not follow the courier's hidden live coordinates. A later lawful visual contact can reacquire the courier. Otherwise suspicion decays and the search ends deterministically. Committed cognition persists through save/reload. This release supplies readable watching, listening, alert, and searching cues, not physical pursuit or search pathfinding.
+
+The first porter-dog web uses the same knowledge-honest rules. The dog can perceive only a physical dried-fish scent from the porter's conserved pack, with uncertainty shaped by containment, wind, rain, terrain, distance, and reachability; it cannot read the food's hidden coordinate. Rain also affects visible wetness and cold condition. The porter must separately see the dog before choosing whether to wait, secure the pack, reroute, leave, or offer food. Chart and Relief expose the same directly visible dog and non-pausing ABOUT facts.
+
+The dog's ABOUT surface offers exactly five player choices: **ASK FOR HELP**, **SUGGEST SECURING BELONGINGS**, **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE**. Requests preserve porter autonomy. Route-around requires an existing automatic route and computes a real detour to its existing destination around the observed spot. If the porter chooses to help, exactly one dried-fish unit moves from porter custody to dog custody before consumption. That meal can create bounded memory, learned history, and persistence promotion through save/revisit; promotion is not adoption, ownership, naming, affection, training, or a companion system.
 
 ## Autonomous strand network
 
@@ -149,6 +155,7 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 - In clear air, route-scale terrain reaches toward 52 tiles, remains fully legible through 34, and feathers across the final 18. Exact people, parcels, resources, labels, water detail, actions, and hit targets stay inside the 10-tile detail field.
 - Turning away does not make terrain snap to black like an instantaneous memory loss. A brief terrain-only impression eases into dim durable Chart memory, or into darkness where the ground was never charted, and follows a quick Chart/Relief switch. People, parcels, wildlife, resources, exact water detail, labels, actions, and hit targets leave immediately with live perception; the impression never becomes saved knowledge or an interaction shortcut.
 - Clicking or tapping a directly visible person from the original harbor country opens non-pausing ABOUT text. OBSERVED summarizes approximate body, visible gear, condition, behavior, and apparent emotion; KNOWN contains only learned facts. A close, grounded GREET records one introduction rather than revealing hidden scores or farming repeated relationship progress.
+- Clicking or tapping the one directly visible dog opens the same knowledge-honest ABOUT surface. Its five actions let the player request help or pack security, wait, leave, or—when a current automatic route exists—replace that route with a genuine detour around the observed spot.
 - Existing humans can notice the courier through occluded sight or anonymous directional sound. Moving openly is more visually salient; active weather reduces visual clarity; rain and nearby rough water mask sound; and wind changes how it travels. A person who loses identified sight searches the last observed area and either reacquires through fresh sight or gives up, rather than tracking an unseen player.
 - Weather can make an assigned porter wet, cold, exhausted, worried, afraid, or temporarily hold position. Small text emoticons, state speech, and behavior communicate those changes; exact emotion values remain private and do not modify the player's difficulty.
 - Player-facing EVENTS includes resident events only when the player caused them or could directly observe their event-time locus. The authoritative history remains complete without granting later knowledge of distant activity.
@@ -169,7 +176,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - An unwanted or risky promise can be handed into accountable care at any harbor; cargo returns to local stock and learned chart/trace remains.
 - Expired or rejected commands are explained, and another useful shortage can emerge.
 - Nothing decays or advances while the game is closed.
-- Outer save format 5 seals any partial fixed-step phase plus its bounded player sensory samples and next ordinal. A save/reload between authoritative world ticks therefore cannot erase an already-created footstep, splash, or impact before nearby humans evaluate it. Older outer formats migrate at a clean empty phase boundary; committed human cognition remains in embedded simulation format 4 and `tideweft-sim/6`.
+- Outer save format 7 preserves the sealed partial fixed-step phase and bounded player sensory samples introduced by version 5, plus dog ecology, porter response, player-choice history, provision custody, bounded memory, and promotion. Versions 1 through 6 migrate deterministically without inventing dog history or duplicating food; committed human cognition remains in embedded simulation format 4 and `tideweft-sim/6`.
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
@@ -185,7 +192,7 @@ There is no manual in-play pause. Quiet Hour immediately saves, halts the simula
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same eighteen-topic source covering every current control, physical Promises and parcels, information-only reports, terrain-responsive footing/falls, sweep recovery, cargo care, biomes/tools, Wayknots/Harps, the unbroken world, routes/projects, people/ABOUT, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same eighteen-topic source covering every current control, physical Promises and parcels, information-only reports, terrain-responsive footing/falls, sweep recovery, cargo care, biomes/tools, Wayknots/Harps, the unbroken world, routes/projects, people and the first dog through ABOUT, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Version 21 also teaches the dog's five choices, request-versus-command boundary, one-unit transfer, real route-around action, memory/promotion, and the absent companion/full-roster systems. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
 
 The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
@@ -201,6 +208,7 @@ Implemented now:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
+- one stable independent dog paired with one existing porter, with shared lawful visual and physical-food-scent perception, rain/cold condition, traversable movement, knowledge-honest ABOUT, exactly five player choices, autonomous porter response, exact one-unit provision transfer/consumption, bounded memory, persistence promotion, and outer-save-v7 continuity;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;
 - seamless deterministic terrain travel in every direction, with continuous E/N location, a bounded moving presentation frame, camera/route continuity, negative-coordinate support, and exact preservation of the original estuary;
@@ -219,7 +227,7 @@ Implemented now:
 
 Expansion runway, not current behavior:
 
-- universal procedural humans beyond the original harbor country; bounded NPC promotion and distant simulation; scent fields, physical evidence/tracking, social information and rumors, group communication, physical search/pursuit pathfinding, human-to-human perception, dogs, bears, birds, deer, ownership, companions, social networks, physical NPC inventory, negotiation, deterrence, and broader actor-to-actor ecology;
+- universal procedural humans beyond the original harbor country; coarse distant simulation; general scent fields, physical evidence/tracking, social information and rumors, group communication, physical search/pursuit pathfinding, human-to-human perception, additional dogs, bears, birds, deer, full animal populations, reproduction, predator-prey chains, ownership, companions, social networks, general physical NPC inventory, negotiation, deterrence, and broader actor-to-actor ecology;
 - runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
 - distant low-detail parcel simulation, living mangrove/bramble snag integration, and delivery compensation that prices recovered condition; continuous transfer of the same parcel across the old map extent is already live;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;

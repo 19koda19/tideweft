@@ -13,12 +13,20 @@ import {
   stepWorld,
   type ContractState,
   type ResidentPerceptionFrame,
+  type ResidentState,
   type SimCommand,
+  type TerrainState,
+  type WeatherState,
   type WorldState,
   type WorldView,
 } from "../sim/public";
 import { findTilePath, MAX_TIDE_LEVEL } from "../sim/terrain";
-import { stableStringify } from "../sim/util";
+import { hashCanonical, stableStringify } from "../sim/util";
+import { stableDogId, type DogIdentityGenerationInput } from "../sim/dogIdentity";
+import {
+  canonicalizeActorObservations,
+  type ActorObservation,
+} from "../sim/actorPerception";
 import {
   advanceFieldResourceEcology,
   canonicalizeFieldResourceState,
@@ -36,6 +44,11 @@ import {
   type TideweftUICommand,
   type TideweftUIView,
 } from "../ui/types";
+import {
+  projectDogLivingActorInspection,
+  withLivingActorInteractions,
+} from "../ui/livingActorAbout";
+import { projectLivingActorInteractionChoices } from "../ui/livingActorInteractionProjection";
 import { TideweftSoundscape, type WaterAmbienceState } from "../audio/soundscape";
 import {
   ConflictingSaveCopiesError,
@@ -117,7 +130,11 @@ import {
   projectPerception,
   RESIDENT_CONVERSATION_RANGE_TILES,
 } from "./projection";
-import { VISIBILITY_DIRECT } from "./perception";
+import {
+  VISIBILITY_DIRECT,
+  evaluateVisualContact,
+  type PerceptionCell,
+} from "./perception";
 import {
   announce,
   captureSessionBaseline,
@@ -196,6 +213,7 @@ import {
 } from "./regionalWorldView";
 import {
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
+  LOCAL_PLAYER_SUBJECT_ID,
   PLAYER_SENSE_SAMPLE_VERSION,
   collectExistingHumanObservations,
   createPlayerSenseSample,
@@ -225,6 +243,73 @@ import {
   restoreRegionalPromiseJourney,
   type RegionalPromiseJourneyState,
 } from "./regionalPromiseJourney";
+import {
+  BIO0_FOOD_CONTACT_RANGE_UNITS,
+  adoptBio0ActorCargoState,
+  canonicalizeBio0EcologyState,
+  createBio0Ecology,
+  deserializeBio0Ecology,
+  serializeBio0Ecology,
+  stepBio0Ecology,
+  type Bio0EcologyState,
+} from "./bio0Ecology";
+import { repositionDogActor } from "./dogActor";
+import type { DogActionAccessibility } from "./dogBehavior";
+import { DOG_EXPOSURE_VERSION, type DogExposureSample } from "./dogExposure";
+import {
+  headingToRadians,
+  livingActorAddressForResident,
+  livingActorAddressInRegionalWindow,
+  type LivingActorAddress,
+} from "./livingActor";
+import { PROVISION_DEFINITIONS } from "./provisions";
+import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  createSpatialFrame,
+  createWorldPosition,
+  translateWorldPosition,
+  worldPositionDelta,
+  worldPositionToSpatialFrame,
+} from "./worldPosition";
+import { projectDogPresentation } from "./dogPresentation";
+import {
+  createLivingActorTraversabilitySurface,
+  deriveLivingActorSearchProbe,
+  resolveLivingActorLocomotion,
+  type LivingActorTraversabilitySurface,
+} from "./livingActorLocomotion";
+import { ADRIFT_STAND_DEPTH } from "./adrift";
+import {
+  LIVING_ACTOR_VISUAL_CONTACT_VERSION,
+  collectLivingActorVisualContactObservations,
+} from "./livingActorVisualContact";
+import {
+  PORTER_RESPONSE_VERSION,
+  applyPorterResponseDecision,
+  canonicalizePorterResponseState,
+  createPorterResponseState,
+  decidePorterResponse,
+  type PorterResponseAccessibility,
+  type PorterResponseInput,
+  type PorterResponseState,
+} from "./porterResponse";
+import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
+import {
+  LIVING_ACTOR_PLAYER_CHOICE_VERSION,
+  canonicalizeLivingActorPlayerChoiceState,
+  createLivingActorPlayerChoiceAction,
+  createLivingActorPlayerChoiceState,
+  reduceLivingActorPlayerChoice,
+  type LivingActorPlayerChoiceEvent,
+  type LivingActorPlayerChoiceSpec,
+  type LivingActorPlayerChoiceState,
+  type RerouteEffect,
+} from "./livingActorPlayerChoice";
+import {
+  LIVING_ACTOR_ACTION_ENACTMENT_VERSION,
+  enactLivingActorAction,
+  type OfferedProvisionContact,
+} from "./livingActorActionEnactment";
 
 const FIXED_STEP_MS = 100;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
@@ -236,7 +321,9 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 5;
+const GAME_SAVE_VERSION = 7;
+const BIO0_GAME_SAVE_VERSION = 6;
+const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
 const PLAYER_PERCEPTION_CARRY_VERSION = 1 as const;
@@ -285,6 +372,9 @@ interface GameSaveEnvelope {
   regionalTravel: string;
   promiseJourney: RegionalPromiseJourneyState;
   perceptionCarry: PlayerPerceptionCarry;
+  bio0Ecology: string;
+  porterResponse: PorterResponseState;
+  livingActorPlayerChoice: LivingActorPlayerChoiceState;
   integrity: string;
 }
 
@@ -309,6 +399,538 @@ export interface TideweftRuntime {
   readonly setFocusHandler: (handler: ((point: WorldPoint, zoom?: number) => void) | undefined) => void;
 }
 
+type Bio0PorterAddress = LivingActorAddress & { readonly species: "human" };
+
+interface RuntimeBio0Porter {
+  readonly resident: ResidentState;
+  readonly address: Bio0PorterAddress;
+}
+
+const BIO0_HABITAT_KEY = "bio0/compatibility-estuary";
+const BIO0_POPULATION_KEY = "bio0/independent-dogs";
+const BIO0_PROVISION_QUANTITY = 4;
+const BIO0_COARSE_ACTION_ACCESSIBILITY: DogActionAccessibility = Object.freeze({
+  retreat: false,
+  "seek-shelter": false,
+  "avoid-human": false,
+  eat: false,
+  "approach-food": false,
+  rest: false,
+  observe: true,
+});
+
+interface RuntimeBio0PorterVisualFrame {
+  readonly actorId: string;
+  readonly observations: readonly ActorObservation[];
+}
+
+function runtimeBio0Porter(economy: WorldView, actorId?: string): RuntimeBio0Porter {
+  const startingSettlementId = economy.contracts.find(({ status }) => status === "offered")
+    ?.originSettlementId ?? economy.settlements[0]?.id;
+  const seedResidents = actorId === undefined && startingSettlementId !== undefined
+    ? economy.residents.filter((resident) => (
+        resident.location.kind === "settlement"
+        && resident.location.settlementId === startingSettlementId
+      ))
+    : [];
+  const residents = actorId === undefined
+    ? [...(seedResidents.length > 0 ? seedResidents : economy.residents)].sort((left, right) => (
+        left.identity.stableId < right.identity.stableId
+          ? -1
+          : left.identity.stableId > right.identity.stableId
+            ? 1
+            : left.id - right.id
+      ))
+    : economy.residents.filter(({ identity }) => identity.stableId === actorId);
+  for (const resident of residents) {
+    const address = livingActorAddressForResident(economy, resident);
+    if (address?.species === "human") {
+      return { resident, address: address as Bio0PorterAddress };
+    }
+  }
+  throw new Error(actorId === undefined
+    ? "BIO0 requires one existing compatibility resident"
+    : "BIO0 porter no longer resolves through the compatibility resident owner");
+}
+
+function runtimeBio0DogGeneration(
+  world: WorldState,
+  resident: ResidentState,
+): DogIdentityGenerationInput {
+  return {
+    seed: world.meta.rootSeed,
+    originRegion: createRegionCoord(
+      resident.identity.originRegion.x,
+      resident.identity.originRegion.y,
+    ),
+    originNamespace: "regional",
+    habitatClass: "coastal-lowland",
+    habitatKey: BIO0_HABITAT_KEY,
+    populationKey: BIO0_POPULATION_KEY,
+    populationOrdinal: resident.identity.originActorOrdinal,
+  };
+}
+
+function runtimeBio0FoodIds(
+  world: WorldState,
+  porterActorId: string,
+): Readonly<{
+  providerContainerId: string;
+  receiverContainerId: string;
+  sourceLotId: string;
+}> {
+  const identity = hashCanonical([
+    "tideweft-bio0-runtime/1",
+    world.meta.rootSeed,
+    porterActorId,
+  ]);
+  return {
+    providerContainerId: `bio0:porter-pack:${identity}`,
+    receiverContainerId: `bio0:dog-contact-pack:${identity}`,
+    sourceLotId: `bio0:dried-fish:${identity}`,
+  };
+}
+
+function createRuntimeBio0Ecology(
+  world: WorldState,
+  economy: WorldView = createWorldView(world),
+): Bio0EcologyState {
+  const porter = runtimeBio0Porter(economy);
+  const foodIds = runtimeBio0FoodIds(world, porter.address.actorId);
+  const unitLoad = PROVISION_DEFINITIONS["dried-fish"].loadMilli;
+  const porterFacing = headingToRadians(porter.address.heading);
+  const dogOffsetX = Math.round(Math.cos(porterFacing) * WORLD_POSITION_UNITS_PER_TILE);
+  const dogOffsetY = Math.round(Math.sin(porterFacing) * WORLD_POSITION_UNITS_PER_TILE);
+  return createBio0Ecology({
+    dogGeneration: runtimeBio0DogGeneration(world, porter.resident),
+    // Seed the first causal web where the porter can actually perceive the
+    // animal. This is a physical placement, not an injected cognition fact.
+    dogPosition: translateWorldPosition(porter.address.position, dogOffsetX, dogOffsetY),
+    porterAddress: porter.address,
+    food: {
+      providerContainerId: foodIds.providerContainerId,
+      receiverContainerId: foodIds.receiverContainerId,
+      lotId: foodIds.sourceLotId,
+      provision: "dried-fish",
+      quantity: BIO0_PROVISION_QUANTITY,
+      providerCapacityMilliLoad: unitLoad * BIO0_PROVISION_QUANTITY,
+      receiverCapacityMilliLoad: unitLoad,
+      providerClosure: "open",
+      materialState: { condition: FIXED_POINT, contamination: 0, decay: 0 },
+    },
+    tick: world.meta.completedTick,
+  });
+}
+
+function canonicalRuntimeBio0Ecology(
+  value: unknown,
+  world: WorldState,
+  economy: WorldView = createWorldView(world),
+): Bio0EcologyState | null {
+  const state = canonicalizeBio0EcologyState(value);
+  if (state === null || state.tick !== world.meta.completedTick) return null;
+  let porter: RuntimeBio0Porter;
+  try {
+    porter = runtimeBio0Porter(economy, state.porterAddress.actorId);
+  } catch {
+    return null;
+  }
+  const foodIds = runtimeBio0FoodIds(world, porter.address.actorId);
+  if (
+    stableStringify(porter.address) !== stableStringify(state.porterAddress)
+    || state.dog.identity.stableId !== stableDogId(runtimeBio0DogGeneration(world, porter.resident))
+    || state.foodSource.providerContainerId !== foodIds.providerContainerId
+    || state.foodSource.receiverContainerId !== foodIds.receiverContainerId
+    || state.foodSource.sourceLotId !== foodIds.sourceLotId
+  ) return null;
+  return state;
+}
+
+function createRuntimePorterResponse(ecology: Bio0EcologyState): PorterResponseState {
+  return createPorterResponseState(ecology.porterAddress.actorId, ecology.tick);
+}
+
+function canonicalRuntimePorterResponse(
+  value: unknown,
+  ecology: Bio0EcologyState,
+  world: WorldState,
+): PorterResponseState | null {
+  const state = canonicalizePorterResponseState(value);
+  return state !== null
+    && state.actorId === ecology.porterAddress.actorId
+    && state.tick === world.meta.completedTick
+    && stableStringify(state) === stableStringify(value)
+    ? state
+    : null;
+}
+
+function createRuntimeLivingActorPlayerChoice(): LivingActorPlayerChoiceState {
+  return createLivingActorPlayerChoiceState(LOCAL_PLAYER_SUBJECT_ID);
+}
+
+function canonicalRuntimeLivingActorPlayerChoice(
+  value: unknown,
+  world: WorldState,
+): LivingActorPlayerChoiceState | null {
+  const state = canonicalizeLivingActorPlayerChoiceState(value);
+  return state !== null
+    && state.playerId === LOCAL_PLAYER_SUBJECT_ID
+    && state.events.every(({ tick }) => tick <= world.meta.completedTick)
+    && stableStringify(state) === stableStringify(value)
+    ? state
+    : null;
+}
+
+function runtimeLivingActorPerceptionCells(world: WorldView): readonly PerceptionCell[] {
+  const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
+  return world.terrain.tiles.map((tile, index) => ({
+    elevation: tile.elevation / FIXED_POINT,
+    obstruction: occupied.has(index)
+      ? 0.72
+      : tile.terrain === "ridge"
+        ? 0.76
+        : tile.terrain === "marsh"
+          ? 0.34
+          : tile.terrain === "meadow" && tile.roughness >= 880_000
+            ? 0.5
+            : 0,
+  }));
+}
+
+function runtimeBio0DogVisualObservations(
+  world: WorldView,
+  window: RegionalPlayerTravelState["window"],
+  porterAddress: Bio0PorterAddress,
+  dogAddress: LivingActorAddress,
+  tick: number,
+): readonly ActorObservation[] | null {
+  const observer = livingActorAddressInRegionalWindow(porterAddress, window);
+  const subject = livingActorAddressInRegionalWindow(dogAddress, window);
+  if (observer === null || subject === null) return null;
+  const targetTile = world.terrain.tiles[subject.tileIndex];
+  if (targetTile === undefined) return null;
+  const targetLightVisibility = targetTile.terrain === "marsh"
+    ? 0.55
+    : targetTile.terrain === "ridge" || targetTile.terrain === "deep-water"
+      ? 0.9
+      : 0.72;
+  const sight = evaluateVisualContact({
+    columns: world.terrain.width,
+    rows: world.terrain.height,
+    cells: runtimeLivingActorPerceptionCells(world),
+    observerTileIndex: observer.tileIndex,
+    targetTileIndex: subject.tileIndex,
+    observerFacingRadians: headingToRadians(porterAddress.heading),
+    weatherVisibility: clamp(1 - world.weather.intensity / FIXED_POINT * 0.52, 0, 1),
+    targetMovementSalience: 0,
+    targetLightVisibility,
+  });
+  if (sight === null) return Object.freeze([]);
+  const confidence = clamp(Math.round(sight.confidence * FIXED_POINT), 0, FIXED_POINT);
+  const identityEligible = sight.identityEligible;
+  return collectLivingActorVisualContactObservations({
+    version: LIVING_ACTOR_VISUAL_CONTACT_VERSION,
+    observer: porterAddress,
+    tick,
+    contacts: [{
+      version: LIVING_ACTOR_VISUAL_CONTACT_VERSION,
+      evidenceId: `bio0-visual:${hashCanonical({
+        dogActorId: dogAddress.actorId,
+        observerActorId: porterAddress.actorId,
+        tick,
+      })}`,
+      perceivedClass: identityEligible ? "domestic-dog" : "animal-silhouette",
+      subject: dogAddress,
+      lineOfSight: sight.grade === VISIBILITY_DIRECT ? "clear" : "partial",
+      confidence,
+      salience: Math.max(confidence, identityEligible ? 650_000 : 0),
+      identityEligible,
+    }],
+  });
+}
+
+function runtimeBio0FoodContactAccessible(
+  ecology: Bio0EcologyState,
+  porterAddress: Bio0PorterAddress,
+): boolean {
+  try {
+    const delta = worldPositionDelta(ecology.dog.address.position, porterAddress.position);
+    const squared = BigInt(delta.x) * BigInt(delta.x) + BigInt(delta.y) * BigInt(delta.y);
+    return squared <= BigInt(BIO0_FOOD_CONTACT_RANGE_UNITS) ** 2n;
+  } catch {
+    return false;
+  }
+}
+
+function runtimePorterResponseAccessibility(
+  fullSimulation: boolean,
+  offerFood: boolean,
+): PorterResponseAccessibility {
+  return Object.freeze({
+    "secure-food": fullSimulation,
+    reroute: fullSimulation,
+    leave: fullSimulation,
+    "offer-food": fullSimulation && offerFood,
+    "wait-observe": true,
+  });
+}
+
+function runtimePorterResponseInput(
+  current: PorterResponseState,
+  porter: RuntimeBio0Porter,
+  ecology: Bio0EcologyState,
+  weather: WeatherState,
+  fullSimulation: boolean,
+  tick: number,
+): PorterResponseInput | null {
+  const canonical = canonicalizePorterResponseState(current);
+  if (
+    canonical === null
+    || canonical.actorId !== porter.address.actorId
+    || canonical.tick > tick
+    || porter.resident.perception.tick !== tick
+  ) return null;
+  const exposure = bio0ExposureFromCompletedWeather(weather);
+  return {
+    version: PORTER_RESPONSE_VERSION,
+    tick,
+    perception: porter.resident.perception,
+    cargo: ecology.cargo,
+    packContainerId: ecology.foodSource.providerContainerId,
+    weather: {
+      rainIntensity: exposure.rain,
+      coldPressure: exposure.ambientCold,
+      windPressure: exposure.wind,
+    },
+    needs: porter.resident.needs,
+    disposition: {
+      traits: porter.resident.traits,
+      temperament: porter.resident.identity.temperament,
+    },
+    accessibility: runtimePorterResponseAccessibility(
+      fullSimulation,
+      runtimeBio0FoodContactAccessible(ecology, porter.address),
+    ),
+    current: canonical,
+  };
+}
+
+function stepRuntimePorterResponse(
+  current: PorterResponseState,
+  porter: RuntimeBio0Porter,
+  ecology: Bio0EcologyState,
+  weather: WeatherState,
+  fullSimulation: boolean,
+  tick: number,
+): PorterResponseState | null {
+  const input = runtimePorterResponseInput(
+    current,
+    porter,
+    ecology,
+    weather,
+    fullSimulation,
+    tick,
+  );
+  if (input === null) return null;
+  if (input.current.nextThinkTick > tick) {
+    return canonicalizePorterResponseState({ ...input.current, tick });
+  }
+  const decision = decidePorterResponse(input);
+  if (decision === null) return null;
+  const applied = applyPorterResponseDecision(input.current, decision);
+  return applied.ok && applied.state !== null ? applied.state : null;
+}
+
+function runtimeActionableLivingActorRequests(
+  state: LivingActorPlayerChoiceState,
+  tick: number,
+): readonly LivingActorPlayerChoiceEvent[] {
+  return state.events.filter((event) => (
+    event.tick <= tick
+    && (event.effect.kind === "request-provision-offer"
+      || event.effect.kind === "request-secure-provisions")
+  ));
+}
+
+function bio0ExposureFromCompletedWeather(weather: WeatherState): DogExposureSample {
+  const raining = weather.kind === "rain" || weather.kind === "storm";
+  const rain = raining
+    ? clamp(weather.intensity + (weather.kind === "storm" ? 180_000 : 0), 0, FIXED_POINT)
+    : 0;
+  const wind = clamp(
+    Math.trunc((Math.abs(weather.windX) + Math.abs(weather.windY)) / 2),
+    0,
+    FIXED_POINT,
+  );
+  return Object.freeze({
+    version: DOG_EXPOSURE_VERSION,
+    rain,
+    immersion: 0,
+    ambientCold: clamp(Math.trunc((rain + wind) / 2), 0, FIXED_POINT),
+    ambientHeat: 0,
+    wind,
+    shelter: 0,
+    exertion: 0,
+  });
+}
+
+function createRuntimeBio0Traversability(
+  state: Bio0EcologyState,
+  world: WorldView,
+  sampledAtTick: number,
+): LivingActorTraversabilitySurface | null {
+  const origin = regionalAddressAt(world, 0);
+  if (origin === null) return null;
+  return createLivingActorTraversabilitySurface({
+    forActorId: state.dog.identity.stableId,
+    sampledAtTick,
+    origin: createWorldPosition(
+      origin.region,
+      origin.localX * WORLD_POSITION_UNITS_PER_TILE,
+      origin.localY * WORLD_POSITION_UNITS_PER_TILE,
+    ),
+    widthTiles: world.terrain.width,
+    heightTiles: world.terrain.height,
+    cells: world.terrain.tiles.map((tile) => (
+      tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH
+    )
+      ? { access: "deep-water" as const, travelCost: 0 }
+      : {
+          access: "open" as const,
+          travelCost: clamp(tile.baseTravelCost, 1, 1_000_000),
+        }),
+  });
+}
+
+function runtimeBio0ActorTileIndex(
+  state: Bio0EcologyState,
+  surface: LivingActorTraversabilitySurface,
+): number | null {
+  let frame;
+  try {
+    frame = createSpatialFrame(
+      surface.origin,
+      surface.widthTiles * WORLD_POSITION_UNITS_PER_TILE,
+      surface.heightTiles * WORLD_POSITION_UNITS_PER_TILE,
+    );
+  } catch {
+    return null;
+  }
+  const point = worldPositionToSpatialFrame(frame, state.dog.address.position);
+  if (point === null) return null;
+  const x = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
+  const y = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
+  return y * surface.widthTiles + x;
+}
+
+function runtimeBio0HasTraversableStep(
+  state: Bio0EcologyState,
+  surface: LivingActorTraversabilitySurface,
+): boolean {
+  const index = runtimeBio0ActorTileIndex(state, surface);
+  if (index === null) return false;
+  if (surface.cells[index]?.access !== "open") return false;
+  const x = index % surface.widthTiles;
+  const y = Math.floor(index / surface.widthTiles);
+  return [
+    { x: x - 1, y },
+    { x: x + 1, y },
+    { x, y: y - 1 },
+    { x, y: y + 1 },
+  ].some((neighbor) => (
+    neighbor.x >= 0
+    && neighbor.x < surface.widthTiles
+    && neighbor.y >= 0
+    && neighbor.y < surface.heightTiles
+    && surface.cells[neighbor.y * surface.widthTiles + neighbor.x]?.access === "open"
+  ));
+}
+
+function runtimeBio0ApproachAccessible(
+  state: Bio0EcologyState,
+  surface: LivingActorTraversabilitySurface,
+  hasTraversableStep: boolean,
+): boolean | null {
+  const request = state.pendingMovement;
+  if (request === null) return hasTraversableStep;
+  const searchProbe = deriveLivingActorSearchProbe({
+    requestId: request.id,
+    beliefKey: request.beliefKey,
+    probeOrdinal: 0,
+    sourceArea: request.targetArea,
+  });
+  if (searchProbe === null) return null;
+  const resolution = resolveLivingActorLocomotion({
+    requestId: request.id,
+    tick: surface.sampledAtTick,
+    actor: state.dog.address,
+    targetArea: request.targetArea,
+    searchProbe,
+    maximumStepUnits: request.maximumStepUnits,
+    surface,
+  });
+  if (resolution.kind === "no-move" && resolution.reason === "invalid-input") return null;
+  return resolution.kind === "moved";
+}
+
+function runtimeBio0ActionAccessibility(
+  state: Bio0EcologyState,
+  surface: LivingActorTraversabilitySurface,
+): DogActionAccessibility | null {
+  const actorTileIndex = runtimeBio0ActorTileIndex(state, surface);
+  const hasTraversableStep = runtimeBio0HasTraversableStep(state, surface);
+  const approachFood = runtimeBio0ApproachAccessible(
+    state,
+    surface,
+    hasTraversableStep,
+  );
+  if (approachFood === null) return null;
+  return Object.freeze({
+    retreat: hasTraversableStep,
+    "seek-shelter": hasTraversableStep,
+    "avoid-human": hasTraversableStep,
+    // Runtime food contact is deliberately absent until a physical offer exists.
+    eat: false,
+    "approach-food": approachFood,
+    rest: actorTileIndex !== null && surface.cells[actorTileIndex]?.access === "open",
+    // Observation is the species-neutral fail-safe even when locomotion is closed.
+    observe: true,
+  });
+}
+
+function resolveRuntimeBio0Locomotion(
+  state: Bio0EcologyState,
+  surface: LivingActorTraversabilitySurface,
+): Bio0EcologyState | null {
+  const request = state.pendingMovement;
+  if (request === null || request.issuedAtTick !== state.tick) return state;
+  const searchProbe = deriveLivingActorSearchProbe({
+    requestId: request.id,
+    beliefKey: request.beliefKey,
+    probeOrdinal: 0,
+    sourceArea: request.targetArea,
+  });
+  if (searchProbe === null || surface.sampledAtTick !== request.issuedAtTick) return null;
+  const resolution = resolveLivingActorLocomotion({
+    requestId: request.id,
+    tick: request.issuedAtTick,
+    actor: state.dog.address,
+    targetArea: request.targetArea,
+    searchProbe,
+    maximumStepUnits: request.maximumStepUnits,
+    surface,
+  });
+  if (resolution.kind === "no-move") {
+    return resolution.reason === "invalid-input" ? null : state;
+  }
+  const dog = repositionDogActor(state.dog, {
+    position: resolution.actor.position,
+    heading: resolution.actor.heading,
+    atTick: request.issuedAtTick,
+  });
+  return canonicalizeBio0EcologyState({ ...state, dog });
+}
+
 function physicalCargoPartitionsForView(
   state: PhysicalCargoState,
   view: WorldView,
@@ -328,6 +950,9 @@ export async function createTideweftRuntime(
 ): Promise<TideweftRuntime> {
   let world = createWorld("quiet-delta", HARD_PRESSURE_MODE);
   let economyView = createWorldView(world);
+  let bio0Ecology = createRuntimeBio0Ecology(world, economyView);
+  let porterResponse = createRuntimePorterResponse(bio0Ecology);
+  let livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
   let fieldResourceCatalog = runtimeFieldResourceCatalog(world);
   let fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
   let traversalFeedback = createTraversalFeedbackState();
@@ -350,13 +975,28 @@ export async function createTideweftRuntime(
   let session = createSessionState(world.meta.seedText, HARD_POSTURE);
   let perception = projectPerception(worldView, player);
   const initialCargoPartitions = physicalCargoPartitionsForView(physicalCargo, worldView);
-  let renderView = projectGameView(worldView, player, {
-    paused: true,
-    traversalFeedback,
-    looseCargoWorld: physicalCargo.looseWorld,
-    looseCargoWorlds: initialCargoPartitions,
-    perception,
+  const initialDogPresentation = projectDogPresentation({
+    actor: bio0Ecology.dog,
+    window: {
+      origin: regionalTravel.window.origin,
+      terrain: {
+        width: worldView.terrain.width,
+        height: worldView.terrain.height,
+      },
+    },
+    tileSize: RENDER_TILE_SIZE,
+    detailVisibilityGrades: perception.detailVisibilityGrades,
   });
+  let renderView = {
+    ...projectGameView(worldView, player, {
+      paused: true,
+      traversalFeedback,
+      looseCargoWorld: physicalCargo.looseWorld,
+      looseCargoWorlds: initialCargoPartitions,
+      perception,
+    }),
+    dogs: initialDogPresentation === null ? [] : [initialDogPresentation],
+  };
   let uiView = projectUIView(worldView, player, session, {
     economyWorld: economyView,
     fieldResourceCatalog: fieldResourceProjection.catalog,
@@ -400,6 +1040,7 @@ export async function createTideweftRuntime(
   let pendingReportDelivery: { commandId: string; targetSettlementId: number } | null = null;
   let pendingChoir: { commandId: string; cycle: TideChoirCycle } | null = null;
   let selectedResidentId: number | null = null;
+  let selectedDogActorId: string | null = null;
   let pendingResidentObservation: { residentId: number; commandId: string } | null = null;
   let pendingResidentGreeting: { residentId: number; commandId: string } | null = null;
   let eventObservationCursor = 0;
@@ -519,6 +1160,9 @@ export async function createTideweftRuntime(
     // deterministic fixtures, but the playable game now has one ruleset.
     world.meta.pressureMode = HARD_PRESSURE_MODE;
     economyView = createWorldView(world);
+    bio0Ecology = loaded.bio0Ecology;
+    porterResponse = loaded.porterResponse;
+    livingActorPlayerChoice = loaded.livingActorPlayerChoice;
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = canonicalizeFieldResourceState(
       fieldResourceCatalog,
@@ -600,23 +1244,42 @@ export async function createTideweftRuntime(
         : trackedContract?.status === "offered"
           ? "pickup" as const
           : undefined;
-    renderView = projectGameView(worldView, player, {
-      selectedSettlementId: session.selectedSettlementId,
-      selectedResidentId,
-      residentSpeech: activeResidentSpeech(),
-      selectedRouteId: objectiveContract?.routeId ?? null,
-      destinationSettlementId: destinationSettlementId ?? null,
-      ...(destinationKind ? { destinationKind } : {}),
-      fieldResourceCatalog: fieldResourceProjection.catalog,
-      fieldResourceEcology,
-      traversalFeedback,
-      looseCargoWorld: physicalCargo.looseWorld,
-      looseCargoWorlds: visibleCargoPartitions,
-      bracing: manualControl.brace,
-      adriftControl: lastAdriftControl,
-      perception,
-      paused: session.paused || session.titleVisible || session.quietHourVisible,
+    const dogPresentation = projectDogPresentation({
+      actor: bio0Ecology.dog,
+      window: {
+        origin: regionalTravel.window.origin,
+        terrain: {
+          width: worldView.terrain.width,
+          height: worldView.terrain.height,
+        },
+      },
+      tileSize: RENDER_TILE_SIZE,
+      detailVisibilityGrades: perception.detailVisibilityGrades,
+      selected: selectedDogActorId === bio0Ecology.dog.identity.stableId,
     });
+    if (selectedDogActorId !== null && dogPresentation === null) {
+      selectedDogActorId = null;
+    }
+    renderView = {
+      ...projectGameView(worldView, player, {
+        selectedSettlementId: session.selectedSettlementId,
+        selectedResidentId,
+        residentSpeech: activeResidentSpeech(),
+        selectedRouteId: objectiveContract?.routeId ?? null,
+        destinationSettlementId: destinationSettlementId ?? null,
+        ...(destinationKind ? { destinationKind } : {}),
+        fieldResourceCatalog: fieldResourceProjection.catalog,
+        fieldResourceEcology,
+        traversalFeedback,
+        looseCargoWorld: physicalCargo.looseWorld,
+        looseCargoWorlds: visibleCargoPartitions,
+        bracing: manualControl.brace,
+        adriftControl: lastAdriftControl,
+        perception,
+        paused: session.paused || session.titleVisible || session.quietHourVisible,
+      }),
+      dogs: dogPresentation === null ? [] : [dogPresentation],
+    };
     // ABOUT is a live sensory affordance, not a durable remote tracker. Once
     // the selected person leaves direct detail perception, that selection is
     // discarded and cannot silently reappear after a region or camera change.
@@ -626,63 +1289,115 @@ export async function createTideweftRuntime(
     ) {
       selectedResidentId = null;
     }
-    uiView = projectUIView(worldView, player, session, {
-      economyWorld: economyView,
-      selectedResidentId,
-      fieldResourceCatalog: fieldResourceProjection.catalog,
-      fieldResourceEcology,
-      looseCargoCarrier: physicalCargo.carrier,
-      looseCargoWorld: physicalCargo.looseWorld,
-      inactiveLooseCargoWorlds: inactiveCargoPartitions(physicalCargo, visibleCargoPartitions),
-      ...(activePromiseCustody
-        ? { activePromiseCustody: { contractId: activeContract!.id, ...activePromiseCustody } }
-        : {}),
-      bracing: manualControl.brace,
-      adriftControl: lastAdriftControl,
-      traversalFeedback,
-      perception,
-      requiresSeed: replacementSeedRequired,
-      worldCreationBlocked: saveRecoveryBlocked,
-      ...(runtimeIntegrityFailure
-        ? {
-            saveWarning: {
-              id: "runtime-integrity-halt",
-              message: "SIMULATION PAUSED SAFELY",
-              detail: `${runtimeIntegrityFailure} No further world step was accepted. Reload the last durable save; this window will not continue from a partial transaction.`,
-              tone: "danger" as const,
+    const dogInspection = selectedDogActorId === bio0Ecology.dog.identity.stableId
+      ? projectDogLivingActorInspection(bio0Ecology.dog, {
+          perception,
+          window: {
+            origin: regionalTravel.window.origin,
+            terrain: {
+              width: worldView.terrain.width,
+              height: worldView.terrain.height,
             },
-          }
-        : saveFailureVisible
-        ? {
-            saveWarning: {
-              id: `local-save-${recoverableSaveIssue ?? (saveReadFailed ? "read-unavailable" : staleSaveDetected ? "superseded" : newerSaveUnavailable ? "unavailable" : saveRecoveryBlocked ? "blocked" : "failed")}-era-${saveGenerationEra}-generation-${saveGeneration}`,
-              message: recoverableSaveIssue === "corrupt"
-                ? "LOCAL AUTOSAVE UNREADABLE"
-                : recoverableSaveIssue === "conflict"
-                  ? "LOCAL AUTOSAVES CONFLICT"
-                  : saveReadFailed
-                    ? "LOCAL SAVE UNAVAILABLE"
-                  : staleSaveDetected
-                    ? "LOCAL SAVE SUPERSEDED"
-                  : "LOCAL SAVE NOT STORED",
-              detail: recoverableSaveIssue === "corrupt"
-                ? "No damaged data was loaded. Enter a seed to replace that copy safely; this warning remains until the replacement is stored."
-                : recoverableSaveIssue === "conflict"
-                  ? "Neither equal-version copy was chosen. Enter a seed to replace both safely; this warning remains until the replacement is stored."
-                  : saveReadFailed
-                    ? "Tideweft could not prove that local storage is empty. Nothing will be opened, started, or overwritten in this window. Reload to retry local storage."
-                    : staleSaveDetected
-                      ? "Another tab or copy stored a different or newer durable version. This window will not retry or overwrite it. Reload to resolve the copies and continue."
-                      : newerSaveUnavailable
-                        ? "A newer local copy exists but its storage backend is unavailable. Reload; Tideweft will not overwrite it with an older fallback."
-                        : saveRecoveryBlocked
-                          ? "This browser save exhausted its replacement counter. Clear Tideweft's stored site data, reload, and begin the seed again."
-                          : "This estuary currently exists only in this open window. Keep it open while Tideweft retries local storage automatically.",
-              tone: "danger" as const,
+          },
+      })
+      : null;
+    const rawDogInteractions = dogInspection === null
+      ? null
+      : projectLivingActorInteractionChoices({
+          target: dogInspection.target,
+          requestRecipientActorId: bio0Ecology.porterAddress.actorId,
+          actors: [bio0Ecology.dog.address, bio0Ecology.porterAddress],
+          observation: {
+            window: {
+              origin: regionalTravel.window.origin,
+              terrain: {
+                width: worldView.terrain.width,
+                height: worldView.terrain.height,
+              },
             },
+            perception,
+          },
+        });
+    const dogInteractions = rawDogInteractions?.map((choice) => choice.id === "reroute"
+      ? autopilotPath.length > 0
+        ? {
+            ...choice,
+            label: "ROUTE AROUND THIS SPOT",
+            hint: "Replans the current automatic route around the actor's observed position.",
           }
-        : {}),
-    });
+        : {
+            ...choice,
+            label: "ROUTE AROUND THIS SPOT",
+            disabled: true,
+            hint: "Set an automatic route first.",
+          }
+      : choice) ?? null;
+    const dogSelection = dogInspection !== null && dogInteractions !== null
+      ? withLivingActorInteractions(dogInspection, dogInteractions)
+      : null;
+    if (selectedDogActorId !== null && dogSelection === null) {
+      selectedDogActorId = null;
+    }
+    uiView = {
+      ...projectUIView(worldView, player, session, {
+        economyWorld: economyView,
+        selectedResidentId,
+        fieldResourceCatalog: fieldResourceProjection.catalog,
+        fieldResourceEcology,
+        looseCargoCarrier: physicalCargo.carrier,
+        looseCargoWorld: physicalCargo.looseWorld,
+        inactiveLooseCargoWorlds: inactiveCargoPartitions(physicalCargo, visibleCargoPartitions),
+        ...(activePromiseCustody
+          ? { activePromiseCustody: { contractId: activeContract!.id, ...activePromiseCustody } }
+          : {}),
+        bracing: manualControl.brace,
+        adriftControl: lastAdriftControl,
+        traversalFeedback,
+        perception,
+        requiresSeed: replacementSeedRequired,
+        worldCreationBlocked: saveRecoveryBlocked,
+        ...(runtimeIntegrityFailure
+          ? {
+              saveWarning: {
+                id: "runtime-integrity-halt",
+                message: "SIMULATION PAUSED SAFELY",
+                detail: `${runtimeIntegrityFailure} No further world step was accepted. Reload the last durable save; this window will not continue from a partial transaction.`,
+                tone: "danger" as const,
+              },
+            }
+          : saveFailureVisible
+            ? {
+                saveWarning: {
+                  id: `local-save-${recoverableSaveIssue ?? (saveReadFailed ? "read-unavailable" : staleSaveDetected ? "superseded" : newerSaveUnavailable ? "unavailable" : saveRecoveryBlocked ? "blocked" : "failed")}-era-${saveGenerationEra}-generation-${saveGeneration}`,
+                  message: recoverableSaveIssue === "corrupt"
+                    ? "LOCAL AUTOSAVE UNREADABLE"
+                    : recoverableSaveIssue === "conflict"
+                      ? "LOCAL AUTOSAVES CONFLICT"
+                      : saveReadFailed
+                        ? "LOCAL SAVE UNAVAILABLE"
+                        : staleSaveDetected
+                          ? "LOCAL SAVE SUPERSEDED"
+                          : "LOCAL SAVE NOT STORED",
+                  detail: recoverableSaveIssue === "corrupt"
+                    ? "No damaged data was loaded. Enter a seed to replace that copy safely; this warning remains until the replacement is stored."
+                    : recoverableSaveIssue === "conflict"
+                      ? "Neither equal-version copy was chosen. Enter a seed to replace both safely; this warning remains until the replacement is stored."
+                      : saveReadFailed
+                        ? "Tideweft could not prove that local storage is empty. Nothing will be opened, started, or overwritten in this window. Reload to retry local storage."
+                        : staleSaveDetected
+                          ? "Another tab or copy stored a different or newer durable version. This window will not retry or overwrite it. Reload to resolve the copies and continue."
+                          : newerSaveUnavailable
+                            ? "A newer local copy exists but its storage backend is unavailable. Reload; Tideweft will not overwrite it with an older fallback."
+                            : saveRecoveryBlocked
+                              ? "This browser save exhausted its replacement counter. Clear Tideweft's stored site data, reload, and begin the seed again."
+                              : "This estuary currently exists only in this open window. Keep it open while Tideweft retries local storage automatically.",
+                  tone: "danger" as const,
+                },
+              }
+            : {}),
+      }),
+      ...(dogSelection === null ? {} : { selectedLivingActor: dogSelection }),
+    };
   }
 
   function captureNewlyObservedEvents(): void {
@@ -826,7 +1541,10 @@ export async function createTideweftRuntime(
     playerSenseSamples.push(sample);
   }
 
-  function residentPerceptionFrame(targetTick: number): ResidentPerceptionFrame {
+  function residentPerceptionFrame(
+    targetTick: number,
+    bio0Visual: RuntimeBio0PorterVisualFrame | null = null,
+  ): ResidentPerceptionFrame {
     const batches = collectExistingHumanObservations({
       world: worldView,
       window: regionalTravel.window,
@@ -845,18 +1563,36 @@ export async function createTideweftRuntime(
       }
       batchByResidentId.set(batch.residentId, batch);
     }
+    const residents = [...world.residents]
+      .sort((left, right) => left.id - right.id)
+      .map((resident) => {
+        const existing = batchByResidentId.get(resident.id)?.observations ?? [];
+        if (bio0Visual === null || resident.identity.stableId !== bio0Visual.actorId) {
+          return {
+            residentId: resident.id,
+            actorId: resident.identity.stableId,
+            observations: existing,
+          };
+        }
+        const observations = canonicalizeActorObservations([
+          ...existing,
+          ...bio0Visual.observations,
+        ]);
+        if (observations.length !== existing.length + bio0Visual.observations.length) {
+          throw new Error("BIO0 visual contact could not enter porter cognition");
+        }
+        return {
+          residentId: resident.id,
+          actorId: resident.identity.stableId,
+          observations,
+        };
+      });
     return {
       tick: targetTick,
       // A supplied frame is a complete snapshot, not a partial patch. Humans
       // outside the bounded spatial window still receive an explicit empty
       // observation list so no omitted actor can be mistaken for stale data.
-      residents: [...world.residents]
-        .sort((left, right) => left.id - right.id)
-        .map((resident) => ({
-          residentId: resident.id,
-          actorId: resident.identity.stableId,
-          observations: batchByResidentId.get(resident.id)?.observations ?? [],
-        })),
+      residents,
     };
   }
 
@@ -1111,9 +1847,157 @@ export async function createTideweftRuntime(
     const worldAdvanced = playerStepsSinceWorldTick >= PLAYER_STEPS_PER_WORLD_TICK;
     if (worldAdvanced) {
       playerStepsSinceWorldTick = 0;
-      const elapsedWeather = world.weather;
-      const perceptionFrame = residentPerceptionFrame(world.meta.completedTick + 1);
+      const elapsedWeather = { ...world.weather };
+      const targetTick = world.meta.completedTick + 1;
+      const priorPorter = runtimeBio0Porter(
+        economyView,
+        bio0Ecology.porterAddress.actorId,
+      );
+      const bio0Simulation = resolveLivingActorSimulationPolicy({
+        participants: [bio0Ecology.dog.address, priorPorter.address],
+        loadedWindow: {
+          origin: regionalTravel.window.origin,
+          terrain: {
+            width: worldView.terrain.width,
+            height: worldView.terrain.height,
+          },
+        },
+      });
+      if (bio0Simulation === null) {
+        throw new Error("BIO0 active simulation policy could not be resolved");
+      }
+      const dogVisualObservations = bio0Simulation.allowNewObservations
+        ? runtimeBio0DogVisualObservations(
+            worldView,
+            regionalTravel.window,
+            priorPorter.address,
+            bio0Ecology.dog.address,
+            targetTick,
+          )
+        : Object.freeze([] as ActorObservation[]);
+      if (dogVisualObservations === null) {
+        throw new Error("BIO0 dog visual contact could not be resolved");
+      }
+      const perceptionFrame = residentPerceptionFrame(targetTick, {
+        actorId: priorPorter.address.actorId,
+        observations: dogVisualObservations,
+      });
       world = stepWorld(world, commandQueue, perceptionFrame);
+      const completedEconomyView = createWorldView(world);
+      const porter = runtimeBio0Porter(
+        completedEconomyView,
+        bio0Ecology.porterAddress.actorId,
+      );
+      const bio0Traversability = bio0Simulation.allowPhysicalMovement
+        ? createRuntimeBio0Traversability(
+            bio0Ecology,
+            completedEconomyView,
+            world.meta.completedTick,
+          )
+        : null;
+      const bio0Accessibility = bio0Simulation.allowPhysicalMovement
+        ? bio0Traversability === null
+          ? null
+          : runtimeBio0ActionAccessibility(bio0Ecology, bio0Traversability)
+        : BIO0_COARSE_ACTION_ACCESSIBILITY;
+      if (
+        bio0Accessibility === null
+        || (bio0Simulation.allowPhysicalMovement && bio0Traversability === null)
+      ) {
+        throw new Error("BIO0 traversability could not be resolved");
+      }
+      let ecologyForStep = bio0Ecology;
+      let acceptedPorterResponse: PorterResponseState | null = null;
+      let offeredContact: OfferedProvisionContact | null = null;
+      const responseInput = runtimePorterResponseInput(
+        porterResponse,
+        porter,
+        ecologyForStep,
+        elapsedWeather,
+        bio0Simulation.mode === "full",
+        targetTick,
+      );
+      if (responseInput === null) {
+        throw new Error("BIO0 porter response input could not be resolved");
+      }
+      if (responseInput.current.nextThinkTick <= targetTick) {
+        for (const request of runtimeActionableLivingActorRequests(
+          livingActorPlayerChoice,
+          targetTick,
+        )) {
+          const enactment = enactLivingActorAction({
+            version: LIVING_ACTOR_ACTION_ENACTMENT_VERSION,
+            requestId: request.actionId,
+            choiceState: livingActorPlayerChoice,
+            porter: {
+              ...responseInput,
+              cargo: ecologyForStep.cargo,
+              current: responseInput.current,
+            },
+            receiverContainerId: request.effect.kind === "request-provision-offer"
+              ? ecologyForStep.foodSource.receiverContainerId
+              : null,
+          });
+          if (enactment.reason === "request-expired") continue;
+          if (
+            !enactment.ok
+            || enactment.cargo === null
+            || enactment.porterState === null
+          ) {
+            throw new Error(`BIO0 living-actor enactment rejected: ${enactment.reason}`);
+          }
+          if (enactment.reason === "already-applied" && enactment.contact === null) {
+            continue;
+          }
+          const adopted = adoptBio0ActorCargoState(ecologyForStep, enactment.cargo);
+          if (adopted === null) {
+            throw new Error("BIO0 enactment cargo could not be adopted");
+          }
+          ecologyForStep = adopted;
+          acceptedPorterResponse = enactment.porterState;
+          offeredContact = enactment.contact;
+          break;
+        }
+      }
+      if (acceptedPorterResponse === null) {
+        acceptedPorterResponse = stepRuntimePorterResponse(
+          porterResponse,
+          porter,
+          ecologyForStep,
+          elapsedWeather,
+          bio0Simulation.mode === "full",
+          targetTick,
+        );
+      }
+      if (acceptedPorterResponse === null) {
+        throw new Error("BIO0 porter response step rejected");
+      }
+      const stepAccessibility = offeredContact === null
+        ? bio0Accessibility
+        : Object.freeze({ ...bio0Accessibility, eat: true });
+      const bio0Step = stepBio0Ecology(ecologyForStep, {
+        tick: world.meta.completedTick,
+        porterAddress: porter.address,
+        exposure: bio0ExposureFromCompletedWeather(elapsedWeather),
+        wind: { x: elapsedWeather.windX, y: elapsedWeather.windY },
+        accessibility: stepAccessibility,
+        foodContact: offeredContact,
+        simulationMode: bio0Simulation.mode,
+      });
+      const movedBio0 = bio0Step.ok
+        ? bio0Simulation.allowPhysicalMovement
+          ? resolveRuntimeBio0Locomotion(bio0Step.state, bio0Traversability!)
+          : bio0Step.state
+        : null;
+      const acceptedBio0 = bio0Step.ok
+        && movedBio0 !== null
+        ? canonicalRuntimeBio0Ecology(movedBio0, world, completedEconomyView)
+        : null;
+      if (acceptedBio0 === null) {
+        throw new Error(`BIO0 ecology step rejected: ${bio0Step.reason}`);
+      }
+      bio0Ecology = acceptedBio0;
+      porterResponse = acceptedPorterResponse;
       clearPlayerSenseSamples();
       commandQueue = [];
       fieldResourceEcology = advanceFieldResourceEcology(
@@ -1123,6 +2007,31 @@ export async function createTideweftRuntime(
         elapsedWeather,
       );
       rebuildRegionalWorldView();
+      if (bio0Step.event?.kind === "food-consumed") {
+        const eventPerception = projectPerception(worldView, player);
+        const witnessedDog = projectDogPresentation({
+          actor: bio0Ecology.dog,
+          window: {
+            origin: regionalTravel.window.origin,
+            terrain: {
+              width: worldView.terrain.width,
+              height: worldView.terrain.height,
+            },
+          },
+          tileSize: RENDER_TILE_SIZE,
+          detailVisibilityGrades: eventPerception.detailVisibilityGrades,
+        });
+        // BIO0 remains fully simulated and persisted outside the player's
+        // sight, but only direct event-time perception earns player-facing
+        // narration. Walking into view later never grants a retroactive report.
+        if (witnessedDog !== null) {
+          announce(
+            session,
+            "The porter offers one provision. The dog accepts it, and the food leaves the pack.",
+          );
+          soundscape.play("accept", 0.38);
+        }
+      }
     }
 
     if (pendingGatherNodeId !== null && autopilotPath.length === 0) {
@@ -1582,12 +2491,14 @@ export async function createTideweftRuntime(
         if (perceivedCommand.entity === "settlement" && perceivedCommand.id) {
           session.selectedSettlementId = Number(perceivedCommand.id);
           selectedResidentId = null;
+          selectedDogActorId = null;
         } else if (perceivedCommand.entity === "porter" && perceivedCommand.id) {
           const residentId = Number(perceivedCommand.id);
           const visiblePorter = renderView.porters.find((porter) => porter.id === perceivedCommand.id);
           const resident = economyView.residents.find((candidate) => candidate.id === residentId);
           if (visiblePorter && resident) {
             selectedResidentId = residentId;
+            selectedDogActorId = null;
             session.selectedSettlementId = null;
             if (
               resident.playerKnowledge.firstObservedTick === null
@@ -1604,9 +2515,19 @@ export async function createTideweftRuntime(
               pendingResidentObservation = { residentId, commandId: observationCommandId };
             }
           }
+        } else if (
+          perceivedCommand.entity === "living-actor"
+          && perceivedCommand.species === "domestic-dog"
+          && perceivedCommand.id === bio0Ecology.dog.identity.stableId
+          && renderView.dogs?.some(({ actorId }) => actorId === perceivedCommand.id)
+        ) {
+          selectedDogActorId = perceivedCommand.id;
+          selectedResidentId = null;
+          session.selectedSettlementId = null;
         } else if (perceivedCommand.entity === "world") {
           session.selectedSettlementId = null;
           selectedResidentId = null;
+          selectedDogActorId = null;
         }
         refreshViews();
         break;
@@ -1619,6 +2540,7 @@ export async function createTideweftRuntime(
         pendingParcelRecoverOnArrival = false;
         session.selectedSettlementId = null;
         selectedResidentId = null;
+        selectedDogActorId = null;
         refreshViews();
         break;
     }
@@ -1684,6 +2606,183 @@ export async function createTideweftRuntime(
       sequence: commandSequence,
     });
     pendingResidentGreeting = { residentId, commandId: greetingCommandId };
+  }
+
+  function stopAutomaticLivingActorRoute(): void {
+    autopilotPath = [];
+    pendingGatherNodeId = null;
+    pendingParcelTargetId = null;
+    pendingParcelRecoverOnArrival = false;
+  }
+
+  function planLivingActorReroute(effect: RerouteEffect): number[] | null {
+    if (
+      effect.focusActorId !== bio0Ecology.dog.identity.stableId
+      || autopilotPath.length === 0
+    ) return null;
+    const destination = autopilotPath.at(-1);
+    if (destination === undefined) return null;
+    const placement = livingActorAddressInRegionalWindow(
+      bio0Ecology.dog.address,
+      {
+        origin: regionalTravel.window.origin,
+        terrain: {
+          width: worldView.terrain.width,
+          height: worldView.terrain.height,
+        },
+      },
+    );
+    if (placement === null) return null;
+    const start = playerTileIndex(player);
+    const avoidedTiles = new Set<number>();
+    for (let tileIndex = 0; tileIndex < worldView.terrain.tiles.length; tileIndex += 1) {
+      const tile = worldView.terrain.tiles[tileIndex];
+      if (tile === undefined) continue;
+      const centerX = tile.x * WORLD_POSITION_UNITS_PER_TILE
+        + WORLD_POSITION_UNITS_PER_TILE / 2;
+      const centerY = tile.y * WORLD_POSITION_UNITS_PER_TILE
+        + WORLD_POSITION_UNITS_PER_TILE / 2;
+      if (Math.hypot(centerX - placement.point.x, centerY - placement.point.y)
+        <= effect.avoidArea.radiusUnits) {
+        avoidedTiles.add(tileIndex);
+      }
+    }
+    // Leaving the starting tile is legal; arriving at the very place the
+    // player asked to avoid is not a truthful reroute.
+    avoidedTiles.delete(start);
+    if (avoidedTiles.size === 0 || avoidedTiles.has(destination)) return null;
+
+    const traversalTerrain = currentAutopilotTerrain(avoidedTiles);
+    let path: number[];
+    try {
+      path = findTilePath(traversalTerrain, start, destination);
+    } catch {
+      return null;
+    }
+    if (
+      path.length < 2
+      || path.slice(1).some((tileIndex) => avoidedTiles.has(tileIndex))
+    ) return null;
+    const smoothed = smoothCurrentAutopilotPath(
+      traversalTerrain,
+      path,
+      avoidedTiles,
+    );
+    return smoothed.length >= 2 ? smoothed.slice(1) : null;
+  }
+
+  function handleLivingActorInteraction(
+    command: Extract<TideweftUICommand, { readonly type: "living-actor"; readonly action: "interact" }>,
+  ): void {
+    if (
+      command.target.species !== "domestic-dog"
+      || command.target.actorId !== selectedDogActorId
+      || command.target.actorId !== bio0Ecology.dog.identity.stableId
+      || session.paused
+      || session.titleVisible
+      || session.quietHourVisible
+      || player.mode === "swept"
+      || (command.interaction === "reroute" && autopilotPath.length === 0)
+    ) return;
+
+    let porter: RuntimeBio0Porter;
+    try {
+      porter = runtimeBio0Porter(economyView, bio0Ecology.porterAddress.actorId);
+    } catch {
+      return;
+    }
+    const currentPerception = projectPerception(worldView, player);
+    const issuedAtTick = world.meta.completedTick;
+    let spec: LivingActorPlayerChoiceSpec;
+    switch (command.interaction) {
+      case "help":
+        spec = {
+          kind: "ask-offer-provision",
+          issuedAtTick,
+          custodianActorId: porter.address.actorId,
+          beneficiaryActorId: bio0Ecology.dog.identity.stableId,
+          containerId: bio0Ecology.foodSource.providerContainerId,
+        };
+        break;
+      case "secure-food":
+        spec = {
+          kind: "ask-secure-provisions",
+          issuedAtTick,
+          custodianActorId: porter.address.actorId,
+          containerId: bio0Ecology.foodSource.providerContainerId,
+        };
+        break;
+      case "wait":
+        spec = {
+          kind: "wait-observe",
+          issuedAtTick,
+          focusActorId: bio0Ecology.dog.identity.stableId,
+          durationTicks: 3,
+        };
+        break;
+      case "reroute":
+        spec = {
+          kind: "reroute",
+          issuedAtTick,
+          focusActorId: bio0Ecology.dog.identity.stableId,
+        };
+        break;
+      case "leave":
+        spec = {
+          kind: "leave",
+          issuedAtTick,
+          focusActorId: bio0Ecology.dog.identity.stableId,
+        };
+        break;
+    }
+    const action = createLivingActorPlayerChoiceAction(livingActorPlayerChoice, spec);
+    const reduced = reduceLivingActorPlayerChoice(
+      livingActorPlayerChoice,
+      action,
+      {
+        actors: [bio0Ecology.dog.address, porter.address],
+        cargo: bio0Ecology.cargo,
+        observation: {
+          window: {
+            origin: regionalTravel.window.origin,
+            terrain: {
+              width: worldView.terrain.width,
+              height: worldView.terrain.height,
+            },
+          },
+          perception: currentPerception,
+        },
+      },
+    );
+    if (!reduced.ok || reduced.reason !== "applied" || reduced.effect === null) return;
+    const reroutedPath = reduced.effect.kind === "request-reroute"
+      ? planLivingActorReroute(reduced.effect)
+      : null;
+    if (reduced.effect.kind === "request-reroute" && reroutedPath === null) {
+      announce(
+        session,
+        "The Loom cannot preserve that destination while avoiding the observed spot.",
+      );
+      soundscape.play("warning", 0.4);
+      refreshViews();
+      return;
+    }
+    livingActorPlayerChoice = reduced.state;
+    if (reduced.effect.kind === "wait-observe") {
+      stopAutomaticLivingActorRoute();
+      manualControl = { moveX: 0, moveY: 0, brace: manualControl.brace };
+      adriftTapControl = null;
+      adriftTapTicksRemaining = 0;
+    } else if (reduced.effect.kind === "request-reroute") {
+      autopilotPath = reroutedPath ?? [];
+      announce(
+        session,
+        "The Loom bends the current route around the actor's observed position.",
+      );
+    } else if (reduced.effect.kind === "leave-interaction") {
+      selectedDogActorId = null;
+    }
+    saveInBackground();
   }
 
   function dispatchUI(command: TideweftUICommand): void {
@@ -1779,6 +2878,7 @@ export async function createTideweftRuntime(
           const id = Number(command.settlementId);
           session.selectedSettlementId = id;
           selectedResidentId = null;
+          selectedDogActorId = null;
           const settlement = worldView.settlements.find((candidate) => candidate.id === id);
           if (settlement) {
             const tile = worldView.terrain.tiles[settlement.tileIndex];
@@ -1791,6 +2891,17 @@ export async function createTideweftRuntime(
           selectedResidentId = null;
         } else if (command.residentId) {
           greetSelectedResident(Number(command.residentId));
+        }
+        break;
+      case "living-actor":
+        if (
+          command.action === "close"
+          && command.target.species === "domestic-dog"
+          && command.target.actorId === selectedDogActorId
+        ) {
+          selectedDogActorId = null;
+        } else if (command.action === "interact") {
+          handleLivingActorInteraction(command);
         }
         break;
       case "quiet-hour":
@@ -2331,6 +3442,9 @@ export async function createTideweftRuntime(
     world = createWorld(normalizedSeed, session.pressureMode);
     eventObservationCursor = 0;
     economyView = createWorldView(world);
+    bio0Ecology = createRuntimeBio0Ecology(world, economyView);
+    porterResponse = createRuntimePorterResponse(bio0Ecology);
+    livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     traversalFeedback = createTraversalFeedbackState();
@@ -2368,6 +3482,7 @@ export async function createTideweftRuntime(
     pendingReportDelivery = null;
     pendingChoir = null;
     selectedResidentId = null;
+    selectedDogActorId = null;
     pendingResidentObservation = null;
     pendingResidentGreeting = null;
     residentSpeech.clear();
@@ -2378,56 +3493,60 @@ export async function createTideweftRuntime(
     saveInBackground();
   }
 
-  function setAutopilot(point: WorldPoint, additive: boolean, announcePath = true): boolean {
-    if (player.mode === "swept") {
-      if (announcePath) announce(session, "ADRIFT — tap toward visible shallow water to make a short paddle stroke.", true);
-      return false;
-    }
-    const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, worldView.terrain.width - 1);
-    const tileY = clamp(Math.floor(point.y / RENDER_TILE_SIZE), 0, worldView.terrain.height - 1);
-    const destination = tileY * worldView.terrain.width + tileX;
-    // Pointer paths use the same live depth/tool costs as manual travel. Unknown
-    // water receives a caution premium, so sounding a channel can materially
-    // improve the Loom's route without ever making manual exploration illegal.
-    const traversalTerrain = {
+  function currentAutopilotTerrain(
+    avoidedTiles: ReadonlySet<number> = new Set<number>(),
+  ): TerrainState {
+    return {
       ...worldView.terrain,
       tiles: worldView.terrain.tiles.map((tile, index) => {
-        const live = tile;
-        const depth = live?.waterDepth ?? 0;
+        const depth = tile.waterDepth;
         const wayknotEffects = wayknotEffectsAt(player, worldView, index);
         const waterCost = waterEffortPerStep(
           player,
           depth,
           wayknotEffects.staminaCostPermille,
         );
-        const unknownWaterCost = depth > 40_000 && (player.depthSoundings[index] ?? 0) <= 0 ? 850 : 0;
+        const unknownWaterCost = depth > 40_000 && (player.depthSoundings[index] ?? 0) <= 0
+          ? 850
+          : 0;
         const stiltsRelief = player.tools.includes("marsh-stilts")
-          && (tile.terrain === "marsh" || tile.terrain === "tidal-flat") ? 130 : 0;
+          && (tile.terrain === "marsh" || tile.terrain === "tidal-flat")
+          ? 130
+          : 0;
         const unknottedCost = Math.max(
           40,
           tile.baseTravelCost + waterCost + unknownWaterCost - stiltsRelief,
         );
+        const ordinaryCost = Math.max(
+          40,
+          modifyPathCost(unknottedCost, wayknotEffects),
+        );
         return {
           ...tile,
-          baseTravelCost: Math.max(40, modifyPathCost(unknottedCost, wayknotEffects)),
+          // A visible actor is not an impassable wall. A large bounded cost
+          // requests a genuine detour and lets validation reject the proposal
+          // cleanly when no route around the observed place exists.
+          baseTravelCost: avoidedTiles.has(index)
+            ? ordinaryCost + 50_000_000
+            : ordinaryCost,
         };
       }),
     };
-    const path = findTilePath(traversalTerrain, playerTileIndex(player), destination);
-    if (path.length < 2) {
-      if (announcePath) {
-        announce(session, "The Loom cannot currently resolve a traversable line there.");
-        soundscape.play("warning", 0.45);
-      }
-      return false;
-    }
+  }
+
+  function smoothCurrentAutopilotPath(
+    traversalTerrain: TerrainState,
+    path: readonly number[],
+    avoidedTiles: ReadonlySet<number> = new Set<number>(),
+  ): number[] {
     const severeWind = Math.trunc(
       (Math.max(Math.abs(worldView.weather.windX), Math.abs(worldView.weather.windY))
         * worldView.weather.intensity) / FIXED_POINT,
     ) >= 400_000;
     const hazardousTile = (tileIndex: number): boolean => {
       const tile = worldView.terrain.tiles[tileIndex];
-      return !tile
+      return avoidedTiles.has(tileIndex)
+        || !tile
         || tile.waterDepth > 55_000
         || tile.terrain !== "meadow"
         || tile.roughness >= 650_000;
@@ -2442,7 +3561,7 @@ export async function createTideweftRuntime(
         || hazardousTile(toTileIndex)
         || Math.abs(to.elevation - from.elevation) >= 180_000;
     };
-    const smoothed = smoothAutopilotPath(traversalTerrain, path, {
+    return smoothAutopilotPath(traversalTerrain, path, {
       edgePassable: (fromTileIndex, toTileIndex) => {
         const from = worldView.terrain.tiles[fromTileIndex];
         const to = worldView.terrain.tiles[toTileIndex];
@@ -2452,6 +3571,29 @@ export async function createTideweftRuntime(
       hazardousTile,
       hazardousEdge,
     });
+  }
+
+  function setAutopilot(point: WorldPoint, additive: boolean, announcePath = true): boolean {
+    if (player.mode === "swept") {
+      if (announcePath) announce(session, "ADRIFT — tap toward visible shallow water to make a short paddle stroke.", true);
+      return false;
+    }
+    const tileX = clamp(Math.floor(point.x / RENDER_TILE_SIZE), 0, worldView.terrain.width - 1);
+    const tileY = clamp(Math.floor(point.y / RENDER_TILE_SIZE), 0, worldView.terrain.height - 1);
+    const destination = tileY * worldView.terrain.width + tileX;
+    // Pointer paths use the same live depth/tool costs as manual travel. Unknown
+    // water receives a caution premium, so sounding a channel can materially
+    // improve the Loom's route without ever making manual exploration illegal.
+    const traversalTerrain = currentAutopilotTerrain();
+    const path = findTilePath(traversalTerrain, playerTileIndex(player), destination);
+    if (path.length < 2) {
+      if (announcePath) {
+        announce(session, "The Loom cannot currently resolve a traversable line there.");
+        soundscape.play("warning", 0.45);
+      }
+      return false;
+    }
+    const smoothed = smoothCurrentAutopilotPath(traversalTerrain, path);
     const route = path.slice(1);
     const next = smoothed.slice(1);
     autopilotPath = additive ? [...autopilotPath, ...next] : next;
@@ -3579,6 +4721,25 @@ export async function createTideweftRuntime(
       throw new Error(`Refusing to save inconsistent physical cargo: ${snapshotPhysicalValidation.reason}`);
     }
     validatePhysicalPromiseCustody(worldSnapshot, playerSnapshot, snapshotPhysicalValidation.state);
+    const bio0EcologySnapshot = canonicalRuntimeBio0Ecology(bio0Ecology, worldSnapshot);
+    if (bio0EcologySnapshot === null) {
+      throw new Error("Refusing to save inconsistent BIO0 ecology state");
+    }
+    const porterResponseSnapshot = canonicalRuntimePorterResponse(
+      porterResponse,
+      bio0EcologySnapshot,
+      worldSnapshot,
+    );
+    if (porterResponseSnapshot === null) {
+      throw new Error("Refusing to save inconsistent BIO0 porter response state");
+    }
+    const livingActorPlayerChoiceSnapshot = canonicalRuntimeLivingActorPlayerChoice(
+      livingActorPlayerChoice,
+      worldSnapshot,
+    );
+    if (livingActorPlayerChoiceSnapshot === null) {
+      throw new Error("Refusing to save inconsistent living-actor player choice state");
+    }
     const envelopeBase: Omit<GameSaveEnvelope, "integrity"> = {
       format: "tideweft-session",
       version: GAME_SAVE_VERSION,
@@ -3596,6 +4757,9 @@ export async function createTideweftRuntime(
         playerSenseSamples,
         nextPlayerSenseSampleOrdinal,
       }, worldSnapshot.meta.completedTick) ?? invalidPlayerPerceptionCarry(),
+      bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
+      porterResponse: porterResponseSnapshot,
+      livingActorPlayerChoice: livingActorPlayerChoiceSnapshot,
     };
     const envelope: GameSaveEnvelope = {
       ...envelopeBase,
@@ -3694,6 +4858,9 @@ export async function createTideweftRuntime(
       // replaces its root. Retaining the exact reference is therefore a full
       // transaction checkpoint without cloning lifetime regional history.
       physicalCargo,
+      bio0Ecology,
+      porterResponse,
+      livingActorPlayerChoice,
       regionalTravel,
       promiseJourney,
       session: structuredClone(session),
@@ -3714,6 +4881,7 @@ export async function createTideweftRuntime(
       pendingReportDelivery: structuredClone(pendingReportDelivery),
       pendingChoir: structuredClone(pendingChoir),
       selectedResidentId,
+      selectedDogActorId,
       eventObservationCursor,
       pendingResidentObservation: structuredClone(pendingResidentObservation),
       pendingResidentGreeting: structuredClone(pendingResidentGreeting),
@@ -3732,6 +4900,9 @@ export async function createTideweftRuntime(
       }
       player = prior.player;
       physicalCargo = prior.physicalCargo;
+      bio0Ecology = prior.bio0Ecology;
+      porterResponse = prior.porterResponse;
+      livingActorPlayerChoice = prior.livingActorPlayerChoice;
       regionalTravel = prior.regionalTravel;
       promiseJourney = prior.promiseJourney;
       session = prior.session;
@@ -3752,6 +4923,7 @@ export async function createTideweftRuntime(
       pendingReportDelivery = prior.pendingReportDelivery;
       pendingChoir = prior.pendingChoir;
       selectedResidentId = prior.selectedResidentId;
+      selectedDogActorId = prior.selectedDogActorId;
       eventObservationCursor = prior.eventObservationCursor;
       pendingResidentObservation = prior.pendingResidentObservation;
       pendingResidentGreeting = prior.pendingResidentGreeting;
@@ -3848,6 +5020,9 @@ type LoadedAutosave = {
   readonly fieldResources: FieldResourceEcologyState;
   readonly traversalFeedback: TraversalFeedbackState;
   readonly physicalCargo: PhysicalCargoState;
+  readonly bio0Ecology: Bio0EcologyState;
+  readonly porterResponse: PorterResponseState;
+  readonly livingActorPlayerChoice: LivingActorPlayerChoiceState;
   readonly regionalTravel: RegionalPlayerTravelState;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: PlayerPerceptionCarry;
@@ -4054,6 +5229,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== FIELD_RESOURCE_GAME_SAVE_VERSION
         && decoded.version !== PHYSICAL_CARGO_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_GAME_SAVE_VERSION
+        && decoded.version !== PLAYER_PERCEPTION_GAME_SAVE_VERSION
+        && decoded.version !== BIO0_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -4076,6 +5253,29 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       if (decoded.version === GAME_SAVE_VERSION) {
         if (
           !hasExactObjectKeys(decoded, [
+            "bio0Ecology",
+            "fieldResources",
+            "format",
+            "integrity",
+            "livingActorPlayerChoice",
+            "perceptionCarry",
+            "physicalCargo",
+            "player",
+            "porterResponse",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+          || typeof decoded.bio0Ecology !== "string"
+        ) throw new Error("Current save envelope is not canonical");
+      } else if (decoded.version === BIO0_GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "bio0Ecology",
             "fieldResources",
             "format",
             "integrity",
@@ -4090,7 +5290,26 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             "world",
           ])
           || typeof decoded.regionalTravel !== "string"
-        ) throw new Error("Current save envelope is not canonical");
+          || typeof decoded.bio0Ecology !== "string"
+        ) throw new Error("Version 6 save envelope is not canonical");
+      } else if (decoded.version === PLAYER_PERCEPTION_GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "fieldResources",
+            "format",
+            "integrity",
+            "perceptionCarry",
+            "physicalCargo",
+            "player",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+        ) throw new Error("Version 5 save envelope is not canonical");
       } else if (decoded.version === REGIONAL_GAME_SAVE_VERSION) {
         if (
           !hasExactObjectKeys(decoded, [
@@ -4112,6 +5331,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         Object.hasOwn(decoded, "regionalTravel")
         || Object.hasOwn(decoded, "promiseJourney")
         || Object.hasOwn(decoded, "perceptionCarry")
+        || Object.hasOwn(decoded, "bio0Ecology")
+        || Object.hasOwn(decoded, "porterResponse")
+        || Object.hasOwn(decoded, "livingActorPlayerChoice")
       ) {
         throw new Error("Version 3 save contains v4 regional fields");
       }
@@ -4121,6 +5343,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       || Object.hasOwn(decoded, "regionalTravel")
       || Object.hasOwn(decoded, "promiseJourney")
       || Object.hasOwn(decoded, "perceptionCarry")
+      || Object.hasOwn(decoded, "bio0Ecology")
+      || Object.hasOwn(decoded, "porterResponse")
+      || Object.hasOwn(decoded, "livingActorPlayerChoice")
     ) {
       throw new Error("Legacy save version contains v3-only physical custody fields");
     }
@@ -4130,7 +5355,26 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (record.playTicks !== world.meta.completedTick) {
       throw new Error("Save metadata does not match the decoded world tick");
     }
-    const perceptionCarry = decoded.version === GAME_SAVE_VERSION
+    const compatibilityView = createWorldView(world);
+    const bio0Ecology = decoded.version >= BIO0_GAME_SAVE_VERSION
+      ? canonicalRuntimeBio0Ecology(deserializeBio0Ecology(decoded.bio0Ecology), world, compatibilityView)
+      : createRuntimeBio0Ecology(world, compatibilityView);
+    if (bio0Ecology === null) {
+      throw new Error("Current save contains invalid BIO0 ecology state");
+    }
+    const porterResponse = decoded.version === GAME_SAVE_VERSION
+      ? canonicalRuntimePorterResponse(decoded.porterResponse, bio0Ecology, world)
+      : createRuntimePorterResponse(bio0Ecology);
+    if (porterResponse === null) {
+      throw new Error("Current save contains invalid BIO0 porter response state");
+    }
+    const livingActorPlayerChoice = decoded.version === GAME_SAVE_VERSION
+      ? canonicalRuntimeLivingActorPlayerChoice(decoded.livingActorPlayerChoice, world)
+      : createRuntimeLivingActorPlayerChoice();
+    if (livingActorPlayerChoice === null) {
+      throw new Error("Current save contains invalid living-actor player choice state");
+    }
+    const perceptionCarry = decoded.version >= PLAYER_PERCEPTION_GAME_SAVE_VERSION
       ? canonicalPlayerPerceptionCarry(decoded.perceptionCarry, world.meta.completedTick)
       : emptyPlayerPerceptionCarry();
     if (perceptionCarry === null) {
@@ -4221,7 +5465,6 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         ? decoded.player.worldWidth * decoded.player.worldHeight
         : world.terrain.tiles.length,
     );
-    const compatibilityView = createWorldView(world);
     let regionalTravel: RegionalPlayerTravelState;
     let promiseJourney: RegionalPromiseJourneyState;
     if (decoded.version >= REGIONAL_GAME_SAVE_VERSION) {
@@ -4291,6 +5534,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       fieldResources,
       traversalFeedback,
       physicalCargo: physicalCargoValidation.state,
+      bio0Ecology,
+      porterResponse,
+      livingActorPlayerChoice,
       regionalTravel,
       promiseJourney,
       perceptionCarry,

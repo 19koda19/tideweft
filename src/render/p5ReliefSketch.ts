@@ -83,6 +83,7 @@ import {
   routePointerTargetIsDirectlyPerceived,
   usesCoarseWorldPointer,
   validatePerceivedEntityCommand,
+  type WorldTapTarget,
 } from "./worldTap";
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
@@ -133,6 +134,7 @@ import {
   type TerrainSpatialFrame,
 } from "./spatialFrame";
 import type {
+  DogView,
   FieldResourceNodeView,
   LooseCargoView,
   PorterView,
@@ -173,6 +175,19 @@ const RELIEF_PALETTE = {
   violet: "#bea9ff",
   danger: "#ff796c",
 } as const;
+
+const RELIEF_DOG_COAT_COLORS: Readonly<Record<DogView["coat"]["primary"], string>> = {
+  black: "#172022",
+  brown: "#624831",
+  chocolate: "#432f28",
+  tan: "#b68b5c",
+  cream: "#d9ccaa",
+  gold: "#c59a4b",
+  white: "#e8e4d5",
+  gray: "#7e8782",
+  red: "#98583d",
+  "blue-gray": "#657b82",
+};
 
 const DEFAULT_YAW = -0.36;
 const DEFAULT_PITCH = Math.PI * 0.29;
@@ -321,7 +336,7 @@ export function createTideweftReliefRenderer(
   let touchSequenceSuppressed = false;
   let pointerWorld: WorldPoint | null = null;
   let hoverParcelId: string | null = null;
-  let hoverTarget: { entity: "settlement" | "porter" | "route" | "resource"; id: string } | null = null;
+  let hoverTarget: WorldTapTarget | null = null;
   let hasObservedSpatialEpoch = false;
   let observedSpatialEpoch: TideweftView["spatialEpoch"];
   let observedSpatialFrame: TerrainSpatialFrame | null = null;
@@ -690,6 +705,12 @@ export function createTideweftReliefRenderer(
     return (2 * orbit.distance * Math.tan(DEFAULT_FOV / 2)) / height;
   };
 
+  const hoveredDogActorId = (): string | null =>
+    hoverTarget?.entity === "living-actor"
+      && hoverTarget.species === "domestic-dog"
+      ? hoverTarget.id
+      : null;
+
   const syncReliefLabels = (
     view: TideweftView,
     cache: CachedReliefMesh,
@@ -717,7 +738,7 @@ export function createTideweftReliefRenderer(
       text: string,
       point: WorldPoint,
       height: number,
-      tone: "harbor" | "destination" | "wayknot" | "porter" | "porter-emotion" | "adrift" | "sound",
+      tone: "harbor" | "destination" | "wayknot" | "porter" | "porter-emotion" | "dog" | "adrift" | "sound",
       selected = false,
     ): void => {
       const projected = projectReliefPoint(
@@ -948,6 +969,35 @@ export function createTideweftReliefRenderer(
         );
       }
     }
+    const dogHover = hoveredDogActorId();
+    for (const dog of view.dogs ?? []) {
+      if (
+        view.perception
+        && !isDirectlyDetailPerceived(view.terrain, dog.position, true)
+      ) continue;
+      const highlighted = dog.selected || dog.actorId === dogHover;
+      if (!highlighted) continue;
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        dog.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      const observableCondition = dog.conditionLabels
+        .slice(0, 2)
+        .map((label) => label.toLocaleLowerCase())
+        .join(" · ");
+      place(
+        `dog-${dog.actorId}`,
+        observableCondition.length > 0
+          ? `${dog.quickLabel} · ${observableCondition}`
+          : dog.quickLabel,
+        dog.position,
+        surface + tileSize * 0.56,
+        "dog",
+        highlighted,
+      );
+    }
     if (destination && !view.settlements.some(
       (settlement) => settlement.discovered !== false
         && distanceSquared(destination, settlement.position) <= tileSize * tileSize * 0.25,
@@ -1158,17 +1208,17 @@ export function createTideweftReliefRenderer(
 
   const findSelection = (
     point: WorldPoint,
-  ): { entity: "settlement" | "porter" | "route" | "resource"; id: string } | null => {
+  ): WorldTapTarget | null => {
     const view = latestView;
     if (!view) return null;
-    let nearest: { entity: "settlement" | "porter" | "route" | "resource"; id: string; distance: number } | null = null;
+    let nearest: { target: WorldTapTarget; distance: number } | null = null;
     const settlementRadius = Math.max(view.terrain.tileSize * 0.55, unitsPerPixel() * 18);
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
       if (currentSettlementVisibility(settlement, view.perception !== undefined) < 1) continue;
       const distance = distanceSquared(point, settlement.position);
       if (distance <= settlementRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = { entity: "settlement", id: settlement.id, distance };
+        nearest = { target: { entity: "settlement", id: settlement.id }, distance };
       }
     }
     const resourceRadius = Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22);
@@ -1181,8 +1231,7 @@ export function createTideweftReliefRenderer(
     );
     if (resourceHit && (!nearest || resourceHit.distanceSquared < nearest.distance)) {
       nearest = {
-        entity: "resource",
-        id: resourceHit.node.id,
+        target: { entity: "resource", id: resourceHit.node.id },
         distance: resourceHit.distanceSquared,
       };
     }
@@ -1191,7 +1240,22 @@ export function createTideweftReliefRenderer(
       if (!isDirectlyDetailPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
       const distance = distanceSquared(point, porter.position);
       if (distance <= porterRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = { entity: "porter", id: porter.id, distance };
+        nearest = { target: { entity: "porter", id: porter.id }, distance };
+      }
+    }
+    const dogRadius = Math.max(view.terrain.tileSize * 0.4, unitsPerPixel() * 22);
+    for (const dog of view.dogs ?? []) {
+      if (!isDirectlyDetailPerceived(view.terrain, dog.position, view.perception !== undefined)) continue;
+      const distance = distanceSquared(point, dog.position);
+      if (distance <= dogRadius ** 2 && (!nearest || distance < nearest.distance)) {
+        nearest = {
+          target: {
+            entity: "living-actor",
+            species: "domestic-dog",
+            id: dog.actorId,
+          },
+          distance,
+        };
       }
     }
     if (routePointerTargetIsDirectlyPerceived(view, point)) {
@@ -1199,11 +1263,11 @@ export function createTideweftReliefRenderer(
       for (const route of view.routes) {
         const distance = routeDistanceSquared(point, route);
         if (distance <= routeRadius ** 2 && (!nearest || distance < nearest.distance)) {
-          nearest = { entity: "route", id: route.id, distance };
+          nearest = { target: { entity: "route", id: route.id }, distance };
         }
       }
     }
-    return nearest && { entity: nearest.entity, id: nearest.id };
+    return nearest?.target ?? null;
   };
 
   const pulseScan = (point?: WorldPoint): void => {
@@ -3181,6 +3245,137 @@ export function createTideweftReliefRenderer(
       }
     };
 
+    const drawDogs = (view: TideweftView, cache: CachedReliefMesh): void => {
+      const tileSize = view.terrain.tileSize;
+      const dogHover = hoveredDogActorId();
+      for (const dog of view.dogs ?? []) {
+        if (
+          view.perception
+          && !isDirectlyDetailPerceived(view.terrain, dog.position, true)
+        ) continue;
+        const highlighted = dog.selected || dog.actorId === dogHover;
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          dog.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        const primary = RELIEF_DOG_COAT_COLORS[dog.coat.primary];
+        const secondary = dog.coat.secondary === null
+          ? primary
+          : RELIEF_DOG_COAT_COLORS[dog.coat.secondary];
+        const wetness = unit(dog.wetness / 1_000_000);
+        const coatVolume = dog.coat.length === "short"
+          ? 0.94
+          : dog.coat.length === "medium"
+            ? 1
+            : 1.08;
+        const base = tileSize * 0.105 * dog.sizeScale * (highlighted ? 1.08 : 1);
+        const resting = dog.behavior === "rest";
+        const bodyHalfLength = base * 1.45;
+        const bodyHalfHeight = base * (resting ? 0.48 : 0.7) * coatVolume;
+        const bodyHalfWidth = base * 0.62 * coatVolume;
+        const headRadius = base * 0.68 * coatVolume;
+        const legHeight = resting ? 0 : base * 0.92;
+        const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.72;
+        const tuckedTail = dog.behavior === "avoid-human" || dog.behavior === "retreat";
+
+        if (highlighted) {
+          drawGroundRing(
+            view,
+            cache,
+            dog.position,
+            tileSize * 0.32 * dog.sizeScale,
+            RELIEF_PALETTE.tide,
+            205,
+          );
+        }
+
+        p.push();
+        p.translate(dog.position.x, -bodyCenterY, dog.position.y);
+        p.rotateY(-dog.facing);
+        p.noStroke();
+
+        if (!resting) {
+          p.ambientMaterial(RELIEF_PALETTE.ink);
+          for (const legX of [-bodyHalfLength * 0.63, bodyHalfLength * 0.63]) {
+            for (const legZ of [-bodyHalfWidth * 0.58, bodyHalfWidth * 0.58]) {
+              p.push();
+              p.translate(legX, legHeight * 0.56, legZ);
+              p.box(base * 0.22, legHeight, base * 0.2);
+              p.pop();
+            }
+          }
+        }
+
+        p.emissiveMaterial(primary);
+        p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 8, 5);
+        if (dog.coat.secondary !== null && dog.coat.pattern !== "solid") {
+          p.push();
+          p.translate(bodyHalfLength * 0.28, -bodyHalfHeight * 0.15, 0);
+          p.emissiveMaterial(secondary);
+          p.ellipsoid(
+            bodyHalfLength * 0.34,
+            bodyHalfHeight * 0.9,
+            bodyHalfWidth * 1.03,
+            7,
+            5,
+          );
+          p.pop();
+        }
+
+        p.push();
+        p.translate(bodyHalfLength * 0.92, -bodyHalfHeight * 0.34, 0);
+        p.emissiveMaterial(primary);
+        p.sphere(headRadius, 7, 5);
+        p.translate(headRadius * 0.72, headRadius * 0.08, 0);
+        p.emissiveMaterial(secondary);
+        p.ellipsoid(headRadius * 0.68, headRadius * 0.42, headRadius * 0.5, 6, 4);
+        p.ambientMaterial(RELIEF_PALETTE.ink);
+        for (const earZ of [-headRadius * 0.52, headRadius * 0.52]) {
+          p.push();
+          p.translate(-headRadius * 0.58, -headRadius * 0.68, earZ);
+          p.cone(headRadius * 0.3, headRadius * 0.58, 4, 1);
+          p.pop();
+        }
+        p.pop();
+
+        p.stroke(primary);
+        p.strokeWeight(Math.max(1, base * 0.2));
+        p.line(
+          -bodyHalfLength * 0.88,
+          0,
+          0,
+          -bodyHalfLength * 1.55,
+          tuckedTail ? bodyHalfHeight * 0.82 : -bodyHalfHeight * 0.62,
+          0,
+        );
+        p.noStroke();
+
+        if (dog.conditionLabels.includes("INJURED") && !resting) {
+          p.push();
+          p.translate(-bodyHalfLength * 0.62, legHeight * 0.38, -bodyHalfWidth * 0.58);
+          p.ambientMaterial(RELIEF_PALETTE.coral);
+          p.box(base * 0.28, base * 0.17, base * 0.25);
+          p.pop();
+        }
+        if (wetness > 0.02) {
+          p.noFill();
+          p.stroke(RELIEF_PALETTE.water);
+          p.strokeWeight(0.45 + wetness * 0.85);
+          p.ellipsoid(
+            bodyHalfLength * 1.06,
+            bodyHalfHeight * 1.11,
+            bodyHalfWidth * 1.1,
+            8,
+            5,
+          );
+          p.noStroke();
+        }
+        p.pop();
+      }
+    };
+
     const drawDestination = (view: TideweftView, cache: CachedReliefMesh): void => {
       const destination = view.player.destination;
       if (!destination) return;
@@ -3679,6 +3874,7 @@ export function createTideweftReliefRenderer(
       drawWayknots(view, cache, now);
       for (const settlement of view.settlements) drawSettlement(view, cache, settlement);
       drawPorters(view, cache);
+      drawDogs(view, cache);
       drawPlayer(view, cache);
       drawScanRipples(view, cache, now);
       drawAtmosphere(view.weather);

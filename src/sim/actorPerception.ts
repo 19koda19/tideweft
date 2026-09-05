@@ -7,17 +7,21 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "./types";
  * slice. F0 connects these only to the existing humans; later actor types may
  * adopt the same contract without changing its ownership.
  */
-export const ACTOR_PERCEPTION_VERSION = 1 as const;
+export const PRIOR_ACTOR_PERCEPTION_VERSION = 1 as const;
+export const ACTOR_PERCEPTION_VERSION = 2 as const;
 /** All persisted cognition strengths are integer fixed-point on this scale. */
 export const ACTOR_PERCEPTION_SCALE = 1_000_000 as const;
 export const ACTOR_ATTENTION_CAP = 4 as const;
 export const ACTOR_BELIEF_CAP = 24 as const;
 export const ACTOR_SALIENT_MEMORY_CAP = 16 as const;
 export const MAX_ACTOR_OBSERVATIONS_PER_STEP = 128 as const;
+/** Shared stable-actor identity envelope, including lossless regional dog IDs. */
+export const ACTOR_ID_MAX_LENGTH = 192 as const;
 export const WORLD_POSITION_UNITS_PER_TILE = 1_000 as const;
 export const MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS = 250 as const;
+export const MIN_CLASSIFIED_SCENT_UNCERTAINTY_UNITS = 1_000 as const;
 
-/** Reserved channels share the record shape but are not accepted by F0 yet. */
+/** All planned channels share one vocabulary; only implemented channels enter cognition. */
 export const OBSERVATION_CHANNELS = Object.freeze([
   "vision",
   "hearing",
@@ -26,10 +30,18 @@ export const OBSERVATION_CHANNELS = Object.freeze([
   "evidence",
   "social",
 ] as const);
-export const F0_OBSERVATION_CHANNELS = Object.freeze(["vision", "hearing"] as const);
+export const ACTOR_OBSERVATION_CHANNELS = Object.freeze([
+  "vision",
+  "hearing",
+  "scent",
+] as const);
+/** Compatibility alias for the first shared-perception implementation. */
+export const F0_OBSERVATION_CHANNELS = ACTOR_OBSERVATION_CHANNELS;
 
 export type ObservationChannel = (typeof OBSERVATION_CHANNELS)[number];
-export type F0ObservationChannel = (typeof F0_OBSERVATION_CHANNELS)[number];
+export type ActorObservationChannel = (typeof ACTOR_OBSERVATION_CHANNELS)[number];
+/** Compatibility alias retained for consumers of the first implementation. */
+export type F0ObservationChannel = ActorObservationChannel;
 export type ObservationIdentification = "anonymous" | "classified" | "identified";
 export type ObservationInterrupt = "none" | "strong";
 export type ActorSuspicionState =
@@ -42,7 +54,7 @@ export type ActorSuspicionState =
 
 export interface ObservedArea {
   readonly center: WorldPosition;
-  /** Zero is an exact visual position. Heard contacts require uncertainty. */
+  /** Zero is an exact visual position. Heard and scented contacts require uncertainty. */
   readonly radiusUnits: number;
 }
 
@@ -52,9 +64,9 @@ export interface ActorObservation {
   readonly id: string;
   readonly observerId: string;
   readonly observedAtTick: number;
-  readonly channel: F0ObservationChannel;
+  readonly channel: ActorObservationChannel;
   readonly perceivedClass: string;
-  /** Always null for F0 hearing; an anonymous sound is not entity knowledge. */
+  /** Hearing and scent never expose the authoritative source identity. */
   readonly subjectId: string | null;
   readonly area: ObservedArea;
   /** Integer fixed-point 0..ACTOR_PERCEPTION_SCALE. */
@@ -82,7 +94,7 @@ export interface ActorObservationInput {
 /** A bounded, channel-neutral belief produced only from accepted observations. */
 export interface ActorBelief {
   readonly key: string;
-  readonly channel: F0ObservationChannel;
+  readonly channel: ActorObservationChannel;
   readonly perceivedClass: string;
   readonly subjectId: string | null;
   readonly area: ObservedArea;
@@ -105,7 +117,7 @@ export interface AgedActorBelief extends ActorBelief {
 export interface ActorSalientMemory {
   readonly observationId: string;
   readonly beliefKey: string;
-  readonly channel: F0ObservationChannel;
+  readonly channel: ActorObservationChannel;
   readonly perceivedClass: string;
   readonly subjectId: string | null;
   readonly area: ObservedArea;
@@ -156,7 +168,7 @@ export interface ActorPerceptionStepInput {
   readonly observations: readonly ActorObservation[];
 }
 
-const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/;
+const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
 const CLASS_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const MAX_OBSERVED_AREA_RADIUS_UNITS = 10_000_000;
 const MAX_SERIALIZED_STATE_CODE_UNITS = 256_000;
@@ -180,7 +192,7 @@ const REGION_WIDTH_UNITS = WORLD_WIDTH * WORLD_POSITION_UNITS_PER_TILE;
 const REGION_HEIGHT_UNITS = WORLD_HEIGHT * WORLD_POSITION_UNITS_PER_TILE;
 const REGION_LIMIT_BIGINT = BigInt(REGION_COORD_LIMIT);
 
-/** Creates a validated frozen F0 observation, or null without partial recovery. */
+/** Creates a validated frozen sensory observation, or null without partial recovery. */
 export function createActorObservation(input: ActorObservationInput): ActorObservation | null {
   if (!plainRecord(input)) return null;
   return canonicalObservation({
@@ -226,7 +238,11 @@ export function createActorPerceptionState(actorId: string, tick = 0): ActorPerc
   });
 }
 
-/** Strictly validates persisted shape and then restores canonical ordering. */
+/**
+ * Strictly validates persisted shape and restores canonical ordering. Version
+ * 1 states are explicitly adopted into version 2 only when they contain the
+ * original vision/hearing channel domain; scent cannot be smuggled backward.
+ */
 export function canonicalizeActorPerceptionState(value: unknown): ActorPerceptionState | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "actorId",
@@ -240,7 +256,7 @@ export function canonicalizeActorPerceptionState(value: unknown): ActorPerceptio
     "version",
   ])) return null;
   if (
-    value.version !== ACTOR_PERCEPTION_VERSION
+    !isReadablePerceptionVersion(value.version)
     || !validId(value.actorId)
     || !nonnegativeSafeInteger(value.tick)
     || !isSuspicion(value.suspicion)
@@ -256,7 +272,7 @@ export function canonicalizeActorPerceptionState(value: unknown): ActorPerceptio
   const beliefs: ActorBelief[] = [];
   const beliefKeys = new Set<string>();
   for (const raw of value.beliefs) {
-    const belief = canonicalBelief(raw, value.tick);
+    const belief = canonicalBelief(raw, value.tick, value.version);
     if (belief === null || beliefKeys.has(belief.key)) return null;
     beliefKeys.add(belief.key);
     beliefs.push(belief);
@@ -587,7 +603,7 @@ function canonicalObservation(value: unknown): ActorObservation | null {
     || !validId(value.id)
     || !validId(value.observerId)
     || !nonnegativeSafeInteger(value.observedAtTick)
-    || !isF0Channel(value.channel)
+    || !isActorObservationChannel(value.channel)
     || typeof value.perceivedClass !== "string"
     || !CLASS_PATTERN.test(value.perceivedClass)
     || !(value.subjectId === null || validId(value.subjectId))
@@ -604,6 +620,13 @@ function canonicalObservation(value: unknown): ActorObservation | null {
       value.subjectId !== null
       || value.identification !== "anonymous"
       || area.radiusUnits < MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS
+    ) return null;
+  }
+  if (value.channel === "scent") {
+    if (
+      value.subjectId !== null
+      || value.identification !== "classified"
+      || area.radiusUnits < MIN_CLASSIFIED_SCENT_UNCERTAINTY_UNITS
     ) return null;
   }
   if (value.identification === "identified" && value.subjectId === null) return null;
@@ -642,7 +665,11 @@ function canonicalStepInput(
   return Object.freeze({ tick, observations: batch.values });
 }
 
-function canonicalBelief(value: unknown, stateTick: number): ActorBelief | null {
+function canonicalBelief(
+  value: unknown,
+  stateTick: number,
+  sourceVersion: typeof PRIOR_ACTOR_PERCEPTION_VERSION | typeof ACTOR_PERCEPTION_VERSION,
+): ActorBelief | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "area",
     "channel",
@@ -659,7 +686,8 @@ function canonicalBelief(value: unknown, stateTick: number): ActorBelief | null 
   ])) return null;
   if (
     !validBeliefKey(value.key)
-    || !isF0Channel(value.channel)
+    || !isActorObservationChannel(value.channel)
+    || (sourceVersion === PRIOR_ACTOR_PERCEPTION_VERSION && value.channel === "scent")
     || typeof value.perceivedClass !== "string"
     || !CLASS_PATTERN.test(value.perceivedClass)
     || !(value.subjectId === null || validId(value.subjectId))
@@ -676,13 +704,18 @@ function canonicalBelief(value: unknown, stateTick: number): ActorBelief | null 
   const area = canonicalArea(value.area);
   if (area === null) return null;
   const expectedKey = value.subjectId === null
-    ? anonymousBeliefKey(value.channel, value.sourceObservationId)
+    ? contactBeliefKey(value.channel, value.sourceObservationId)
     : subjectBeliefKey(value.subjectId);
   if (value.key !== expectedKey) return null;
   if (value.channel === "hearing" && (
     value.subjectId !== null
     || value.identification !== "anonymous"
     || area.radiusUnits < MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS
+  )) return null;
+  if (value.channel === "scent" && (
+    value.subjectId !== null
+    || value.identification !== "classified"
+    || area.radiusUnits < MIN_CLASSIFIED_SCENT_UNCERTAINTY_UNITS
   )) return null;
   if (value.identification === "identified" && value.subjectId === null) return null;
   if (value.subjectId !== null && value.identification !== "identified") return null;
@@ -716,9 +749,9 @@ function canonicalMemory(value: unknown, stateTick: number): ActorSalientMemory 
   if (
     !validId(value.observationId)
     || !validBeliefKey(value.beliefKey)
-    // F0 only produces durable memory for an identified visual subject.
-    // Anonymous sound and classified silhouettes remain bounded live beliefs,
-    // so a persisted state may not smuggle either into long-term memory.
+    // Only an identified visual subject becomes durable memory. Anonymous
+    // sound, classified scent, and classified silhouettes remain bounded live
+    // beliefs, so persisted state cannot smuggle them into long-term memory.
     || value.channel !== "vision"
     || typeof value.perceivedClass !== "string"
     || !CLASS_PATTERN.test(value.perceivedClass)
@@ -906,10 +939,9 @@ function updateMemory(
 ): readonly ActorSalientMemory[] {
   const byBelief = new Map(previous.map((memory) => [memory.beliefKey, memory]));
   for (const observation of observations) {
-    // Anonymous sound remains useful as a short-lived belief/attention event,
-    // including when it strongly interrupts behavior, but it is not durable
-    // actor memory. F0 persists only a directly identified visual subject so
-    // routine movement or repeated impacts cannot overwrite recognition.
+    // Anonymous sound and classified scent remain useful as short-lived
+    // belief/attention events, including strong interrupts, but are not durable
+    // actor memory. Only direct identified vision can overwrite recognition.
     const durable = observation.channel === "vision"
       && observation.identification === "identified"
       && observation.subjectId !== null;
@@ -1105,7 +1137,7 @@ function sameArea(left: ObservedArea, right: ObservedArea): boolean {
 
 function beliefKeyFor(observation: ActorObservation): string {
   return observation.subjectId === null
-    ? anonymousBeliefKey(observation.channel, observation.id)
+    ? contactBeliefKey(observation.channel, observation.id)
     : subjectBeliefKey(observation.subjectId);
 }
 
@@ -1113,7 +1145,7 @@ function subjectBeliefKey(subjectId: string): string {
   return `subject:${subjectId}`;
 }
 
-function anonymousBeliefKey(channel: F0ObservationChannel, observationId: string): string {
+function contactBeliefKey(channel: ActorObservationChannel, observationId: string): string {
   return `contact:${channel}:${observationId}`;
 }
 
@@ -1187,8 +1219,14 @@ function validBeliefKey(value: unknown): value is string {
     && value.length <= 280;
 }
 
-function isF0Channel(value: unknown): value is F0ObservationChannel {
-  return value === "vision" || value === "hearing";
+function isActorObservationChannel(value: unknown): value is ActorObservationChannel {
+  return value === "vision" || value === "hearing" || value === "scent";
+}
+
+function isReadablePerceptionVersion(
+  value: unknown,
+): value is typeof PRIOR_ACTOR_PERCEPTION_VERSION | typeof ACTOR_PERCEPTION_VERSION {
+  return value === PRIOR_ACTOR_PERCEPTION_VERSION || value === ACTOR_PERCEPTION_VERSION;
 }
 
 function isIdentification(value: unknown): value is ObservationIdentification {

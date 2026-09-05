@@ -7,6 +7,7 @@ import {
   type ContractStatus,
   type ContractUIView,
   type KitTabId,
+  type LivingActorAboutUIView,
   type ResidentAboutUIView,
   type SettlementInspectorUIView,
   type TideweftUIController,
@@ -16,6 +17,11 @@ import {
   type SaveWarningUIView,
   type TitleOverlayUIView,
 } from "./types";
+import {
+  resolveActorAboutSurface,
+  type ActorAboutCloseCommand,
+  type ResolvedActorAboutSurface,
+} from "./livingActorAbout";
 import {
   KIT_DIALOG_ID,
   createKitDialog,
@@ -56,7 +62,11 @@ export interface ResidentAboutSurfaceState {
 
 /** ABOUT is resident field feedback, never a modal or a simulation pause. */
 export function residentAboutSurfaceState(
-  resident: ResidentAboutUIView | undefined,
+  resident:
+    | ResidentAboutUIView
+    | LivingActorAboutUIView
+    | ResolvedActorAboutSurface
+    | undefined,
 ): ResidentAboutSurfaceState {
   return { hidden: !resident, modal: false, pausesGameplay: false };
 }
@@ -70,7 +80,7 @@ export interface ResidentAboutActionPresentation {
 
 /** Missing actions stay missing; an acquainted actor never regains a dead GREET button. */
 export function residentAboutActionPresentation(
-  resident: ResidentAboutUIView,
+  resident: ResidentAboutUIView | ResolvedActorAboutSurface,
 ): ResidentAboutActionPresentation {
   const hidden = resident.actionLabel === undefined;
   return {
@@ -773,16 +783,31 @@ export function handleTideweftUIShortcut(
   return true;
 }
 
-/** Escape cancels the non-modal resident disclosure before other HUD shortcuts. */
+/** Escape cancels a non-modal actor disclosure before other HUD shortcuts. */
+export function handleActorAboutEscape(
+  event: Pick<UIShortcutEvent, "key" | "defaultPrevented" | "preventDefault">,
+  closeCommand: ActorAboutCloseCommand | undefined,
+  dispatch: (command: TideweftUICommand) => void,
+): boolean {
+  if (event.defaultPrevented || event.key !== "Escape" || !closeCommand) return false;
+  event.preventDefault();
+  dispatch(closeCommand);
+  return true;
+}
+
+/** Compatibility wrapper retained for the existing numeric-resident runtime. */
 export function handleResidentAboutEscape(
   event: Pick<UIShortcutEvent, "key" | "defaultPrevented" | "preventDefault">,
   residentId: string | undefined,
   dispatch: (command: TideweftUICommand) => void,
 ): boolean {
-  if (event.defaultPrevented || event.key !== "Escape" || !residentId) return false;
-  event.preventDefault();
-  dispatch({ type: "resident", action: "close", residentId });
-  return true;
+  return handleActorAboutEscape(
+    event,
+    residentId
+      ? { type: "resident", action: "close", residentId }
+      : undefined,
+    dispatch,
+  );
 }
 
 interface UIRefs {
@@ -873,13 +898,17 @@ interface UIRefs {
   residentAbout: HTMLElement;
   residentAboutTitle: HTMLHeadingElement;
   residentAboutIdentity: HTMLParagraphElement;
+  residentAboutQuick: HTMLParagraphElement;
   residentAboutBody: HTMLDivElement;
   residentAboutKnowledge: HTMLSpanElement;
+  residentAboutObservedHeading: HTMLHeadingElement;
   residentAboutObserved: HTMLDListElement;
+  residentAboutKnownHeading: HTMLHeadingElement;
   residentAboutKnown: HTMLDListElement;
   residentAboutClose: HTMLButtonElement;
   residentAboutActions: HTMLDivElement;
   residentAboutGreet: HTMLButtonElement;
+  residentAboutLivingActions: HTMLDivElement;
   residentAboutActionHint: HTMLParagraphElement;
   chronicleDetails: HTMLDetailsElement;
   chronicleSummary: HTMLElement;
@@ -1493,7 +1522,10 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   residentAbout.hidden = true;
   residentAbout.setAttribute("role", "region");
   residentAbout.setAttribute("aria-labelledby", "resident-about-title");
-  residentAbout.setAttribute("aria-describedby", "resident-about-identity");
+  residentAbout.setAttribute(
+    "aria-describedby",
+    "resident-about-identity resident-about-quick",
+  );
   const residentAboutHeader = createElement("header", "resident-about__header");
   const residentAboutHeading = createElement("div", "resident-about__heading");
   residentAboutHeading.append(createElement("p", "resident-about__eyebrow", "ABOUT"));
@@ -1501,32 +1533,43 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   residentAboutTitle.id = "resident-about-title";
   const residentAboutIdentity = createElement("p", "resident-about__identity");
   residentAboutIdentity.id = "resident-about-identity";
-  residentAboutHeading.append(residentAboutTitle, residentAboutIdentity);
+  const residentAboutQuick = createElement("p", "resident-about__quick");
+  residentAboutQuick.id = "resident-about-quick";
+  residentAboutQuick.hidden = true;
+  residentAboutHeading.append(residentAboutTitle, residentAboutIdentity, residentAboutQuick);
   const residentAboutClose = createButton(
     "resident-about__close",
     "×",
-    "Close resident details",
+    "Close ABOUT details",
   );
   residentAboutHeader.append(residentAboutHeading, residentAboutClose);
   const residentAboutBody = createElement("div", "resident-about__body");
   residentAboutBody.tabIndex = 0;
-  residentAboutBody.setAttribute("aria-label", "Scrollable resident details");
+  residentAboutBody.setAttribute("aria-label", "Scrollable ABOUT details");
   const residentAboutKnowledge = createElement("span", "resident-about__knowledge", "Unfamiliar");
-  const residentObservedHeading = createElement("h3", "resident-about__section-title", "OBSERVED");
+  const residentAboutObservedHeading = createElement("h3", "resident-about__section-title", "OBSERVED");
   const residentAboutObserved = createElement("dl", "resident-about__facts");
-  const residentKnownHeading = createElement("h3", "resident-about__section-title", "KNOWN");
+  const residentAboutKnownHeading = createElement("h3", "resident-about__section-title", "KNOWN");
   const residentAboutKnown = createElement("dl", "resident-about__facts");
   const residentAboutActions = createElement("div", "resident-about__actions");
   const residentAboutGreet = createButton("resident-about__greet", "GREET");
+  const residentAboutLivingActions = createElement(
+    "div",
+    "resident-about__living-actions",
+  );
   const residentAboutActionHint = createElement("p", "resident-about__action-hint");
   residentAboutActionHint.id = "resident-about-action-hint";
   residentAboutActionHint.hidden = true;
-  residentAboutActions.append(residentAboutActionHint, residentAboutGreet);
+  residentAboutActions.append(
+    residentAboutActionHint,
+    residentAboutGreet,
+    residentAboutLivingActions,
+  );
   residentAboutBody.append(
     residentAboutKnowledge,
-    residentObservedHeading,
+    residentAboutObservedHeading,
     residentAboutObserved,
-    residentKnownHeading,
+    residentAboutKnownHeading,
     residentAboutKnown,
   );
   residentAbout.append(
@@ -1917,13 +1960,17 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     residentAbout,
     residentAboutTitle,
     residentAboutIdentity,
+    residentAboutQuick,
     residentAboutBody,
     residentAboutKnowledge,
+    residentAboutObservedHeading,
     residentAboutObserved,
+    residentAboutKnownHeading,
     residentAboutKnown,
     residentAboutClose,
     residentAboutActions,
     residentAboutGreet,
+    residentAboutLivingActions,
     residentAboutActionHint,
     chronicleDetails,
     chronicleSummary,
@@ -2002,7 +2049,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let contractPointerActive = false;
   let signedReportPointerActive = false;
   let selectedInspectorId: string | null = null;
-  let selectedResidentId: string | null = null;
+  let selectedActorAboutKey: string | null = null;
+  let renderedActorAboutKey: string | null = null;
   let residentReturnFocus: HTMLElement | null = null;
   let running = false;
   let frameHandle: number | null = null;
@@ -2372,26 +2420,33 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
   };
 
-  const renderResidentAbout = (resident: ResidentAboutUIView | undefined): void => {
-    const signature = resident ? JSON.stringify(resident) : "";
+  const renderResidentAbout = (actor: ResolvedActorAboutSurface | undefined): void => {
+    const signature = actor ? JSON.stringify(actor) : "";
     if (signature === lastResidentAbout) return;
     lastResidentAbout = signature;
-    const surface = residentAboutSurfaceState(resident);
+    const surface = residentAboutSurfaceState(actor);
     refs.residentAbout.hidden = surface.hidden;
     refs.residentAbout.dataset.modal = String(surface.modal);
     refs.residentAbout.dataset.pausesGameplay = String(surface.pausesGameplay);
-    refs.shell.dataset.residentAboutOpen = resident ? "true" : "false";
-    if (!resident) return;
-    const residentChanged = refs.residentAbout.dataset.residentId !== resident.id;
-    refs.residentAbout.dataset.residentId = resident.id;
-    if (residentChanged) refs.residentAboutBody.scrollTop = 0;
-    refs.residentAboutTitle.textContent = resident.heading;
-    refs.residentAboutIdentity.textContent = resident.identityLine;
-    refs.residentAboutKnowledge.textContent = resident.knowledgeLabel;
-    refs.residentAboutKnowledge.dataset.knowledge = resident.knowledgeLabel.toLocaleLowerCase();
+    refs.shell.dataset.residentAboutOpen = actor ? "true" : "false";
+    if (!actor) {
+      renderedActorAboutKey = null;
+      delete refs.residentAbout.dataset.species;
+      return;
+    }
+    const actorChanged = renderedActorAboutKey !== actor.selectionKey;
+    renderedActorAboutKey = actor.selectionKey;
+    refs.residentAbout.dataset.species = actor.species;
+    if (actorChanged) refs.residentAboutBody.scrollTop = 0;
+    refs.residentAboutTitle.textContent = actor.heading;
+    refs.residentAboutIdentity.textContent = actor.identityLine;
+    refs.residentAboutQuick.hidden = actor.quickSummary === undefined;
+    refs.residentAboutQuick.textContent = actor.quickSummary ?? "";
+    refs.residentAboutKnowledge.textContent = actor.knowledgeLabel;
+    refs.residentAboutKnowledge.dataset.knowledge = actor.knowledgeLabel.toLocaleLowerCase();
     const renderFacts = (
       target: HTMLDListElement,
-      facts: ResidentAboutUIView["observed"],
+      facts: ResolvedActorAboutSurface["observed"],
     ): void => {
       target.replaceChildren();
       for (const fact of facts) {
@@ -2404,10 +2459,14 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
         target.append(row);
       }
     };
-    renderFacts(refs.residentAboutObserved, resident.observed);
-    renderFacts(refs.residentAboutKnown, resident.known);
-    const action = residentAboutActionPresentation(resident);
-    refs.residentAboutActions.hidden = action.hidden;
+    refs.residentAboutObservedHeading.hidden = actor.observed.length === 0;
+    refs.residentAboutObserved.hidden = actor.observed.length === 0;
+    refs.residentAboutKnownHeading.hidden = actor.known.length === 0;
+    refs.residentAboutKnown.hidden = actor.known.length === 0;
+    renderFacts(refs.residentAboutObserved, actor.observed);
+    renderFacts(refs.residentAboutKnown, actor.known);
+    const action = residentAboutActionPresentation(actor);
+    refs.residentAboutActions.hidden = action.hidden && actor.interactions.length === 0;
     refs.residentAboutGreet.hidden = action.hidden;
     refs.residentAboutGreet.textContent = action.label;
     refs.residentAboutGreet.disabled = action.disabled;
@@ -2419,6 +2478,43 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       refs.residentAboutGreet.setAttribute("aria-describedby", refs.residentAboutActionHint.id);
     } else {
       refs.residentAboutGreet.removeAttribute("aria-describedby");
+    }
+    refs.residentAboutLivingActions.replaceChildren();
+    for (const interaction of actor.interactions) {
+      const wrapper = createElement("div", "resident-about__living-action");
+      const button = createButton(
+        "resident-about__choice",
+        interaction.label,
+        interaction.hint,
+      );
+      button.disabled = Boolean(interaction.disabled);
+      button.dataset.interaction = interaction.id;
+      button.addEventListener("click", () => {
+        const current = currentActorAbout();
+        if (
+          current?.closeCommand.type !== "living-actor"
+          || current.selectionKey !== actor.selectionKey
+          || !current.interactions.some(({ id }) => id === interaction.id)
+        ) return;
+        options.dispatch({
+          type: "living-actor",
+          action: "interact",
+          target: current.closeCommand.target,
+          interaction: interaction.id,
+        });
+      });
+      wrapper.append(button);
+      if (interaction.disabled && interaction.hint) {
+        const hint = createElement(
+          "span",
+          "resident-about__choice-hint",
+          interaction.hint,
+        );
+        hint.id = `resident-about-choice-${interaction.id}-hint`;
+        button.setAttribute("aria-describedby", hint.id);
+        wrapper.append(hint);
+      }
+      refs.residentAboutLivingActions.append(wrapper);
     }
   };
 
@@ -2435,12 +2531,13 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
   };
 
-  const syncResidentAboutFocus = (resident: ResidentAboutUIView | undefined): void => {
-    const nextId = resident?.id ?? null;
-    if (nextId === selectedResidentId) return;
-    selectedResidentId = nextId;
-    if (nextId) {
-      announce(`${resident?.heading ?? "Resident"}. ABOUT details available.`);
+  const syncResidentAboutFocus = (actor: ResolvedActorAboutSurface | undefined): void => {
+    const nextKey = actor?.selectionKey ?? null;
+    if (nextKey === selectedActorAboutKey) return;
+    selectedActorAboutKey = nextKey;
+    if (nextKey) {
+      const quick = actor?.quickSummary ? ` ${actor.quickSummary}.` : "";
+      announce(`${actor?.heading ?? "Living actor"}.${quick} ABOUT details available.`);
     } else {
       restoreResidentAboutFocus();
     }
@@ -2512,10 +2609,11 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const update = (providedView?: TideweftUIView | null): void => {
     const view = providedView === undefined ? options.getView() ?? null : providedView;
     latestView = view;
+    const actorAbout = view ? resolveActorAboutSurface(view) : undefined;
     refs.kit.update(view?.kit);
     renderSaveWarning(view?.saveWarning);
-    syncResidentAboutFocus(view?.selectedResident);
-    renderResidentAbout(view?.selectedResident);
+    syncResidentAboutFocus(actorAbout);
+    renderResidentAbout(actorAbout);
     if (!view) {
       mobileBrace.release();
       underfootTerrain.reset();
@@ -2842,15 +2940,20 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       ...(latestView?.selectedSettlement ? { settlementId: latestView.selectedSettlement.id } : {}),
     });
   });
+  const currentActorAbout = (): ResolvedActorAboutSurface | undefined =>
+    latestView ? resolveActorAboutSurface(latestView) : undefined;
   const closeResidentAbout = (): void => {
-    const residentId = latestView?.selectedResident?.id;
-    if (!residentId) return;
-    options.dispatch({ type: "resident", action: "close", residentId });
+    const actor = currentActorAbout();
+    if (!actor) return;
+    options.dispatch(actor.closeCommand);
   };
   refs.residentAboutClose.addEventListener("click", closeResidentAbout);
   refs.residentAboutGreet.addEventListener("click", () => {
-    const residentId = latestView?.selectedResident?.id;
-    if (!residentId) return;
+    const actor = currentActorAbout();
+    const residentId = actor?.closeCommand.type === "resident"
+      ? actor.closeCommand.residentId
+      : undefined;
+    if (!residentId || actor?.actionLabel !== "GREET") return;
     options.dispatch({ type: "resident", action: "greet", residentId });
   });
   refs.inspectorFocus.addEventListener("click", () => {
@@ -2881,9 +2984,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   });
 
   const onGlobalKeyDown = (event: KeyboardEvent): void => {
-    if (handleResidentAboutEscape(
+    if (handleActorAboutEscape(
       event,
-      latestView?.selectedResident?.id,
+      currentActorAbout()?.closeCommand,
       options.dispatch,
     )) {
       return;

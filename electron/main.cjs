@@ -26,8 +26,8 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.10';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 18;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.11';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 19;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -1433,7 +1433,7 @@ function probeHasResidentAbout(probe, acquainted) {
     (about.body.overflowY === 'auto' || about.body.overflowY === 'scroll') &&
     about.body.overscrollBehavior === 'contain' &&
     about.body.tabIndex === 0 &&
-    about.body.ariaLabel?.toLowerCase().includes('scrollable resident details') &&
+    about.body.ariaLabel?.toLowerCase().includes('scrollable about details') &&
     about.body.clientHeight > 0 &&
     about.body.scrollHeight >= about.body.clientHeight &&
     about.body.hasHorizontalOverflow === false &&
@@ -1443,7 +1443,7 @@ function probeHasResidentAbout(probe, acquainted) {
     about.close.rect?.width >= 44 &&
     about.close.rect?.height >= 44 &&
     about.close.pointerEvents === 'auto' &&
-    about.close.ariaLabel?.toLowerCase().includes('close resident') &&
+    about.close.ariaLabel?.toLowerCase().includes('close about') &&
     (known
       ? about.knowledge === 'Acquainted' &&
         about.heading !== 'UNKNOWN RESIDENT' &&
@@ -1486,7 +1486,12 @@ async function sendPhysicalLeftClick(contents, rect, label) {
   return { x, y };
 }
 
-async function exerciseResidentAboutPhysicalScroll(contents, probe) {
+async function exerciseResidentAboutPhysicalScroll(contents) {
+  // The mobile ABOUT gate deliberately round-trips through portrait before
+  // returning to short landscape. Reacquire its rendered geometry after that
+  // reflow so the physical wheel targets the current scroll surface rather
+  // than a stale pre-resize rectangle.
+  const probe = await readRendererProbe(contents);
   const body = probe?.residentAbout?.body;
   if (!body?.hasVerticalOverflow) {
     return {
@@ -1501,6 +1506,14 @@ async function exerciseResidentAboutPhysicalScroll(contents, probe) {
   }
   const x = Math.round(rect.left + rect.width / 2);
   const y = Math.round(rect.top + rect.height / 2);
+  const targetsBody = await contents.executeJavaScript(`(() => {
+    const body = document.querySelector('.resident-about__body');
+    const target = document.elementFromPoint(${x}, ${y});
+    return body instanceof HTMLElement && target instanceof Node && body.contains(target);
+  })()`, true);
+  if (!targetsBody) {
+    throw new Error('resident ABOUT physical scroll point did not target its live body');
+  }
   const initialScrollTop = body.scrollTop;
   contents.sendInputEvent({ type: 'mouseMove', x, y, movementX: 0, movementY: 0 });
   for (const deltaY of [240, -240]) {
@@ -1613,7 +1626,7 @@ async function exerciseSmokeResidentAbout(
   const screenshot = typeof captureOpenState === 'function'
     ? await captureOpenState()
     : null;
-  const scroll = await exerciseResidentAboutPhysicalScroll(contents, acquainted);
+  const scroll = await exerciseResidentAboutPhysicalScroll(contents);
   const beforeClose = await readRendererProbe(contents);
   const closePoint = await sendPhysicalLeftClick(
     contents,
@@ -1928,8 +1941,8 @@ async function installSmokeTideHarpFixture(contents) {
     const activeRegion = envelope?.physicalCargo?.activeRegion;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 5 ||
-      record.payloadVersion !== 5 ||
+      envelope?.version !== 7 ||
+      record.payloadVersion !== 7 ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       !Array.isArray(knots) ||
@@ -1994,7 +2007,7 @@ async function installSmokeTideHarpFixture(contents) {
       nextPlayerSenseSampleOrdinal: 0,
     };
 
-    // The v5 production loader seals the complete envelope. This smoke-only
+    // The v7 production loader seals the complete envelope. This smoke-only
     // persisted fixture deliberately changes player state, so reseal it with
     // the exact canonical encoder/hash used by the production runtime before
     // proving that the normal load path accepts it.
@@ -2188,7 +2201,7 @@ async function installSmokeTideHarpFixture(contents) {
 }
 
 /**
- * Installs one sealed v5 deep-water starting posture through the isolated
+ * Installs one sealed v7 deep-water starting posture through the isolated
  * smoke autosave. The next ordinary movement beat must enter ADRIFT through
  * production footing rules; no gameplay debug surface is shipped for it.
  * The exact pre-probe record is returned so the smoke can restore it after
@@ -2224,8 +2237,8 @@ async function installSmokeAdriftFixture(contents) {
     const terrain = view.terrain;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 5 ||
-      record.payloadVersion !== 5 ||
+      envelope?.version !== 7 ||
+      record.payloadVersion !== 7 ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       player.worldWidth !== terrain.columns ||
@@ -2612,7 +2625,7 @@ async function restoreSmokeAdriftFixture(contents, fixture) {
     database.close();
     return { payloadVersion: record.payloadVersion, seed: record.seed };
   })()`, true);
-  if (written?.payloadVersion !== 5 || written?.seed !== SMOKE_WORLD_SEED) {
+  if (written?.payloadVersion !== 7 || written?.seed !== SMOKE_WORLD_SEED) {
     throw new Error(`the ADRIFT smoke fixture backup was not restored: ${JSON.stringify(written)}`);
   }
 

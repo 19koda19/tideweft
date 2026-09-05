@@ -23,6 +23,7 @@ describe("resident ABOUT responsive shell", () => {
   it("keeps both touch controls at 44px and clears the dock/safe areas in portrait and landscape", () => {
     expect(styles).toMatch(/\.resident-about__close,[\s\S]*?min-height: max\(2\.75rem, 44px\)/u);
     expect(styles).toMatch(/\.resident-about__greet[\s\S]*?min-width: max\(7\.25rem, 44px\)/u);
+    expect(styles).toMatch(/\.resident-about__choice[\s\S]*?min-width: max\(5\.5rem, 44px\)/u);
     expect(styles).toContain("env(safe-area-inset-bottom)");
     expect(styles).toContain("@media (orientation: landscape) and (max-height: 34rem)");
     expect(styles).toContain("top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem)");
@@ -31,14 +32,14 @@ describe("resident ABOUT responsive shell", () => {
 
   it("gives overflowing facts a real touch/wheel scroll target without capturing the whole overlay", () => {
     expect(uiSource).toContain('createElement("div", "resident-about__body")');
-    expect(uiSource).toContain('residentAboutBody.setAttribute("aria-label", "Scrollable resident details")');
+    expect(uiSource).toContain('residentAboutBody.setAttribute("aria-label", "Scrollable ABOUT details")');
     expect(uiSource).toContain("residentAboutBody.tabIndex = 0");
     const bodyRule = styles.match(/#game-ui \.resident-about__body \{([\s\S]*?)\n\}/u)?.[1] ?? "";
     expect(bodyRule).toContain("overflow-y: auto");
     expect(bodyRule).toContain("overscroll-behavior: contain");
     expect(bodyRule).toContain("touch-action: pan-y");
     expect(bodyRule).toContain("pointer-events: auto");
-    expect(uiSource).toContain("if (residentChanged) refs.residentAboutBody.scrollTop = 0");
+    expect(uiSource).toContain("if (actorChanged) refs.residentAboutBody.scrollTop = 0");
   });
 
   it("renders an accessible visible reason whenever GREET is disabled", () => {
@@ -46,11 +47,15 @@ describe("resident ABOUT responsive shell", () => {
     expect(uiSource).toContain("const showDisabledReason = action.disabled && action.hint.length > 0");
     expect(uiSource).toContain('refs.residentAboutGreet.setAttribute("aria-describedby", refs.residentAboutActionHint.id)');
     expect(styles).toContain("#game-ui .resident-about__action-hint[hidden]");
+    expect(uiSource).toContain('button.setAttribute("aria-describedby", hint.id)');
+    expect(uiSource).toContain('"resident-about__choice-hint"');
   });
 
   it("announces without stealing focus, restores only entered focus, and never renders a porter name", () => {
     expect(uiSource).not.toContain('residentAbout.setAttribute("aria-live", "polite")');
     expect(uiSource).not.toContain("dataset.stableId");
+    expect(uiSource).not.toContain("dataset.actorId");
+    expect(uiSource).toContain("refs.residentAbout.dataset.species = actor.species");
     expect(uiSource).toContain('let lastResidentAbout = "__unrendered__"');
     expect(uiSource).not.toContain("refs.residentAboutClose.focus(");
     expect(uiSource).toContain('refs.residentAbout.addEventListener("focusin", onResidentAboutFocusIn)');
@@ -73,5 +78,15 @@ describe("resident ABOUT responsive shell", () => {
     expect(porterTone).toContain("background: transparent");
     expect(porterTone).toContain("border: 0");
     expect(porterTone).toContain("box-shadow: none");
+  });
+
+  it("keeps quick and full actor disclosure as floating type and omits empty sections", () => {
+    expect(uiSource).toContain('createElement("p", "resident-about__quick")');
+    expect(uiSource).toContain("refs.residentAboutQuick.textContent = actor.quickSummary");
+    expect(uiSource).toContain("refs.residentAboutKnownHeading.hidden = actor.known.length === 0");
+    expect(uiSource).toContain("refs.residentAboutKnown.hidden = actor.known.length === 0");
+    expect(styles).toContain("#game-ui .resident-about__quick[hidden]");
+    const quickRule = styles.match(/#game-ui \.resident-about__quick \{([\s\S]*?)\n\}/u)?.[1] ?? "";
+    expect(quickRule).not.toMatch(/background|border|box-shadow|backdrop-filter/u);
   });
 });

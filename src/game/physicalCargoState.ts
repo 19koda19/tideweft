@@ -986,6 +986,10 @@ function materialPayloadKey(payload: LooseCargoPayload): string {
     resource: payload.resource,
     property: payload.property,
   });
+  if (payload.kind === "provision") return stableStringify({
+    kind: payload.kind,
+    provision: payload.provision,
+  });
   return stableStringify(payload);
 }
 
@@ -1909,6 +1913,11 @@ function substanceLedgerFromPayloads(payloads: readonly LooseCargoPayload[]): Ma
             resource: payload.resource,
             property: payload.property,
           }), payload.quantity] as const
+        : payload.kind === "provision"
+          ? [stableStringify({
+              kind: payload.kind,
+              provision: payload.provision,
+            }), payload.quantity] as const
         : [stableStringify(payload), 1] as const;
     if (!Number.isSafeInteger(quantity) || quantity <= 0) {
       throw new RangeError("Physical cargo deltas require positive integer payload quantities");
@@ -1925,6 +1934,7 @@ function structuralPayloadKey(payload: LooseCargoPayload): string {
     case "stack": return `stack:${payload.item}`;
     case "gear": return `gear:${payload.gearId}:${payload.gearKind}`;
     case "promise": return `promise:${payload.contractId}:${payload.resource}:${payload.property}`;
+    case "provision": return `provision:${payload.provision}`;
   }
 }
 

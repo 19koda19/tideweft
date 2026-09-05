@@ -13,7 +13,12 @@ import {
   generateResidentIdentity,
 } from "./npcIdentity";
 import { stableRegionObjectId } from "./regions";
-import { createActorPerceptionState } from "./actorPerception";
+import {
+  ACTOR_PERCEPTION_VERSION,
+  PRIOR_ACTOR_PERCEPTION_VERSION,
+  canonicalizeActorPerceptionState,
+  createActorPerceptionState,
+} from "./actorPerception";
 
 const ALPHA_SAVE_FORMAT_VERSION = 1;
 const ALPHA_RULES_VERSION = "tideweft-sim/2";
@@ -154,6 +159,35 @@ function migrateResidentPerceptionFields(world: Record<string, unknown>): void {
   }
 }
 
+/**
+ * Actor cognition has its own nested schema version. Current-format worlds
+ * from the prior release are checksum-authenticated first, then adopted only
+ * when changing `version` is the sole canonical difference.
+ */
+function migrateCurrentResidentPerceptionVersions(world: Record<string, unknown>): void {
+  if (!Array.isArray(world.residents)) {
+    throw new Error("TIDEWEFT save has no resident population");
+  }
+  for (const resident of world.residents) {
+    if (!isRecord(resident) || !isRecord(resident.perception)) {
+      throw new Error("TIDEWEFT current save resident perception is malformed");
+    }
+    if (resident.perception.version !== PRIOR_ACTOR_PERCEPTION_VERSION) continue;
+    const migrated = canonicalizeActorPerceptionState(resident.perception);
+    if (migrated === null) {
+      throw new Error("TIDEWEFT prior actor perception cannot be migrated");
+    }
+    const expected = {
+      ...resident.perception,
+      version: ACTOR_PERCEPTION_VERSION,
+    };
+    if (stableStringify(migrated) !== stableStringify(expected)) {
+      throw new Error("TIDEWEFT prior actor perception is not canonical");
+    }
+    resident.perception = migrated;
+  }
+}
+
 function migratePriorWorld(
   envelope: Record<string, unknown>,
   priorSaveFormatVersion: number,
@@ -226,8 +260,9 @@ export function deserializeWorld(text: string): WorldState {
     throw new Error(`TIDEWEFT rules ${String(decoded.rulesVersion)} are incompatible with ${RULES_VERSION}`);
   }
   if (!isRecord(decoded.world)) throw new Error("TIDEWEFT save has no world snapshot");
+  assertSnapshotChecksum(decoded, decoded.world);
+  migrateCurrentResidentPerceptionVersions(decoded.world);
   const world = decoded.world as unknown as WorldState;
-  assertSnapshotChecksum(decoded, world);
   assertWorldInvariants(world);
   return world;
 }

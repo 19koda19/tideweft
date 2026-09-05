@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.10",
-      buildIdentity: "0.3.3-alpha.10",
-      gameplayContractVersion: 18,
-      tutorialVersion: 20,
+      version: "0.3.3-alpha.11",
+      buildIdentity: "0.3.3-alpha.11",
+      gameplayContractVersion: 19,
+      tutorialVersion: 21,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -83,8 +83,11 @@ describe("canonical offline patch notes", () => {
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
     expect(activeCopy).toContain("original harbor country's existing 42 humans");
-    expect(activeCopy).toContain("anonymous directional hearing");
-    expect(activeCopy).toContain("last area actually seen");
+    expect(activeCopy).toContain("exactly one independent domestic dog");
+    expect(activeCopy).toContain("ASK FOR HELP");
+    expect(activeCopy).toContain("genuinely replans its existing destination");
+    expect(activeCopy).toContain("exactly one dried-fish unit transfers");
+    expect(activeCopy).toContain("not ownership or a companion bond");
     expect(activeCopy).not.toMatch(/complete universal perception|physical pursuit is live/iu);
     expect(allCategoryCopy("gameplay")).toContain("Stability now resolves directly");
     expect(allCategoryCopy("interface")).toContain("same pane-free field facts");

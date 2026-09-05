@@ -2,6 +2,49 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.11",
+      "releaseDate": "2026-09-05",
+      "buildIdentity": "0.3.3-alpha.11",
+      "summary": "The first living web adds one independently generated dog beside one existing porter: lawful food scent, rain and condition, knowledge-honest ABOUT, five player choices, physical provision custody, memory, promotion, and save-safe revisit.",
+      "gameplayContractVersion": 19,
+      "tutorialVersion": 21,
+      "categories": {
+        "gameplay": [
+          "Each seed now creates exactly one independent domestic dog beside one deterministically selected porter from the original harbor country's existing 42 humans. The dog has a stable generated identity, needs, temperament, weather adaptation, and condition; the pairing establishes this small causal web, not ownership or a companion bond.",
+          "The dog follows the shared perception rules rather than reading food coordinates. An open or secured porter pack emits a bounded dried-fish scent shaped by containment, wind, and rain; the dog can move by traversable steps toward its uncertain belief area. The porter must separately perceive the dog through lawful occluded sight before considering a response.",
+          "Selecting the visible dog exposes five choices: ASK FOR HELP, SUGGEST SECURING BELONGINGS, WAIT AND WATCH, ROUTE AROUND THIS SPOT, and LEAVE. Requests do not command the porter. ROUTE AROUND requires an automatic route and genuinely replans its existing destination around the dog's currently observed position.",
+          "When the porter lawfully accepts a help request, exactly one dried-fish unit transfers from the porter's physical pack into dog custody before consumption. The meal creates bounded memories and promotes that same dog for persistence, so a reload can show FAMILIAR DOG and the known history Accepted food from a porter without minting another unit."
+        ],
+        "fixes": [
+          "Chart and Relief now render and hit-test the same knowledge-gated dog projection by stable actor ID. The dog and its ABOUT surface disappear immediately outside direct detail sight, so a stale selection cannot become an offscreen tracker.",
+          "Dog movement consumes an uncertain perception-derived target and a bounded shared traversability surface. Deep water, blocked terrain, invalid coordinates, and unavailable paths close the action instead of teleporting the animal or consulting the true food position.",
+          "Player requests, porter decisions, pack closure, one-unit transfer, dog consumption, memory, promotion, and the world tick commit transactionally. A malformed or interrupted step retains the prior world and custody state rather than leaving half an encounter or a duplicated provision."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. The porter-dog web adds one finite porter pack containing four dried-fish units and one independent dog; it adds no money, loot table, repeatable reward, difficulty option, combat target, or camera-triggered animal respawn.",
+          "Food, rain, cold, wetness, exhaustion, safety, shelter access, human familiarity, and current lawful perception can change dog and porter decisions. The player can ask, observe, secure the attractant, take a real detour, or leave, but cannot force feeding or turn one meal into instant trust.",
+          "Dog cognition, memories, player knowledge, actor-choice history, cargo history, and exact live carriers are capped. Full movement and new perception stay inside the loaded interaction window; unloaded state remains bounded and cannot discover offscreen subjects."
+        ],
+        "interface": [
+          "A directly visible dog receives a readable Chart and Relief marker, UNKNOWN DOG or FAMILIAR DOG quick text, and the shared non-pausing ABOUT surface. OBSERVED may show approximate size, coat, age, condition, and current behavior only at sufficient clarity; KNOWN shows only facts earned through the encounter.",
+          "The five dog choices use the same pointer, keyboard-focus, and touch-sized ABOUT controls. Disabled copy explains when the player must move closer or set an automatic route first, and the route-around result announces whether the Loom found a valid line.",
+          "Field Manual version 21 teaches the one-dog food-and-rain web, the request-versus-command boundary, exact one-unit transfer, persistent memory and promotion, real route-around action, and the explicit absence of a full animal roster or companion system."
+        ],
+        "saves": [
+          "The outer session advances to version 7. It stores canonical first-living-web ecology, porter response, and living-actor player-choice roots alongside the existing physical cargo, regional travel, Promise journey, and pending sensory carry. The embedded simulation remains format 4 with tideweft-sim/6.",
+          "Supported outer versions 1 through 5 deterministically initialize the same seed-bound dog web without inventing memory or duplicating provisions; version 5 retains its sealed partial sensory interval. Version 6 preserves its existing dog ecology and adds deterministic porter-response and empty player-choice state before version 7 is written.",
+          "Dog identity, position, needs, condition, perception, intent, memory, player knowledge, promotion reason, provision custody, consumption evidence, and bounded causal history survive save, unload, revisit, and reload. A promoted dog remains an individual, not an implied companion.",
+          "Version 7 requires exact top-level keys and matching envelope integrity. Missing, aliased, noncanonical, or contradictory dog-ecology, porter-response, player-choice, or physical-custody state is quarantined as an unreadable save rather than partially adopted."
+        ],
+        "knownLimitations": [
+          "This is exactly one porter-dog-provision-rain web near the original harbor country. Additional dogs, animal populations, generated distant actors, bears, birds, deer, predator-prey chains, reproduction, broad habitat ecology, and a complete species roster are not live.",
+          "The dog is independent. Ownership, adoption, naming, affection, training, commands, equipment, rescue, bonded travel, and a full companion system are not live; persistence promotion only prevents an encounter with earned history from being discarded.",
+          "The released animal sensing loop is deliberately narrow: physical food scent, porter visual contact, and player direct-detail inspection. Tracks, environmental evidence, group communication, dog-to-dog behavior, human-to-human sensing, physical human pursuit, other-species interactions, and broad sound repertoires remain later work.",
+          "ASK FOR HELP and SUGGEST SECURING BELONGINGS are requests, so the porter may wait, secure the pack, reroute, leave, or decline to transfer food according to lawful state. ROUTE AROUND is available only for a current automatic route with a valid detour."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.10",
       "releaseDate": "2026-09-03",
       "buildIdentity": "0.3.3-alpha.10",

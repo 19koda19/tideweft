@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RendererCommand, TideweftView } from "./types";
+import type { DogView, RendererCommand, TideweftView } from "./types";
 
 const p5Harness = vi.hoisted(() => ({
   canvas: null as MockCanvas | null,
@@ -203,6 +203,27 @@ const view = (
     bounds: { minX: -1_000, minY: -1_000, maxX: 1_000, maxY: 1_000 },
     ...cameraOverrides,
   },
+});
+
+const dogView = (overrides: Partial<DogView> = {}): DogView => ({
+  version: 1,
+  actorId: "D-R-v1-render-dog",
+  quickLabel: "Unknown dog",
+  position: { x: 12, y: 12 },
+  facing: 0,
+  size: "medium",
+  sizeScale: 0.9,
+  coat: {
+    primary: "brown",
+    secondary: "cream",
+    pattern: "bicolor",
+    length: "medium",
+  },
+  wetness: 700_000,
+  conditionLabels: ["WET"],
+  behavior: "observe",
+  selected: false,
+  ...overrides,
 });
 
 let canvas: MockCanvas;
@@ -767,6 +788,119 @@ describe("Chart ADRIFT presentation path", () => {
     expect(color).toHaveBeenCalledWith("#edfff9");
     expect(line).toHaveBeenCalledTimes(legacyLineCount + 1);
     expect(rect).toHaveBeenCalledTimes(legacyRectCount);
+    renderer.destroy();
+  });
+});
+
+describe("Chart dog presentation", () => {
+  it("draws a distinct observable dog, highlights selection/hover, and cuts it off with live detail", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("chart-dog", { x: 12, y: 12 });
+    const visibleTerrain = {
+      ...base.terrain,
+      tiles: [{
+        kind: "meadow" as const,
+        elevation: 0.2,
+        discovered: 1,
+        currentVisibility: 1,
+        currentDetailVisibility: 1 as const,
+      }],
+    };
+    let current: TideweftView = {
+      ...base,
+      terrain: visibleTerrain,
+      dogs: [dogView({ selected: true, conditionLabels: ["WET", "INJURED"] })],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    const p = p5Harness.instance;
+    const text = p?.text as ReturnType<typeof vi.fn>;
+    const ellipse = p?.ellipse as ReturnType<typeof vi.fn>;
+    const circle = p?.circle as ReturnType<typeof vi.fn>;
+    const triangle = p?.triangle as ReturnType<typeof vi.fn>;
+    expect(text.mock.calls.some(([copy]) => copy === "Unknown dog · wet · injured")).toBe(true);
+    expect(text.mock.calls.flat().map(String)).not.toContain("D-R-v1-render-dog");
+    expect(ellipse).toHaveBeenCalled();
+    expect(circle).toHaveBeenCalled();
+    expect(triangle).toHaveBeenCalled();
+
+    canvas.emit("pointerdown", { clientX: 100, clientY: 50, pointerId: 91 });
+    canvas.emit("pointerup", { clientX: 100, clientY: 50, pointerId: 91 });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species: "domestic-dog",
+      id: "D-R-v1-render-dog",
+      point: { x: 12, y: 12 },
+    });
+
+    dispatch.mockClear();
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 92,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 92,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species: "domestic-dog",
+      id: "D-R-v1-render-dog",
+      point: { x: 12, y: 12 },
+    });
+
+    text.mockClear();
+    dispatch.mockClear();
+    current = {
+      ...current,
+      dogs: [dogView()],
+    };
+    canvas.emit("pointermove", { clientX: 100, clientY: 50, pointerType: "mouse" });
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "Unknown dog · wet")).toBe(true);
+    expect(dispatch).not.toHaveBeenCalled();
+
+    text.mockClear();
+    current = {
+      ...current,
+      perception: {
+        version: 1,
+        signature: "dog-hidden",
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 0,
+        detailDirectTileCount: 0,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...visibleTerrain,
+        tiles: visibleTerrain.tiles.map((tile) => ({
+          ...tile,
+          currentDetailVisibility: 0 as const,
+        })),
+      },
+      dogs: [dogView({ selected: true })],
+    };
+    draw();
+    expect(text.mock.calls.some(([copy]) => String(copy).startsWith("Unknown dog"))).toBe(false);
+    canvas.emit("pointerdown", { clientX: 100, clientY: 50, pointerId: 93 });
+    canvas.emit("pointerup", { clientX: 100, clientY: 50, pointerId: 93 });
+    expect(dispatch.mock.calls.some(([command]) => command.type === "select")).toBe(false);
     renderer.destroy();
   });
 });

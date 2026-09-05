@@ -1012,6 +1012,13 @@ describe("authoritative carrier mutation boundary", () => {
 });
 
 describe("save authority, global addresses, and bounded soak", () => {
+  it("keeps the legacy multi-world API closed on an empty world set", () => {
+    expect(inspectLooseCargoMultiWorldConservation([], carrier())).toMatchObject({
+      valid: false,
+      reason: "invalid-world-set",
+    });
+  });
+
   it("builds one order-independent manifest across signed regional worlds and the carrier", () => {
     const regionZero = createLooseCargoWorld(4, 4, { x: 0, y: 0 });
     const first = drop(regionZero, carrier(), {
