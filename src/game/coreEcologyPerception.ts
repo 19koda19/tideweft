@@ -5,15 +5,12 @@ import {
   createActorObservation,
   type ActorObservation,
 } from "../sim/actorPerception";
-import {
-  CORE_WILDLIFE_SPECIES,
-  getCoreWildlifeProfile,
-  type CoreWildlifeSpecies,
-} from "../sim/coreWildlifeIdentity";
+import { CORE_WILDLIFE_SPECIES } from "../sim/coreWildlifeIdentity";
 import { FIXED_POINT, type TerrainTileView, type WorldView } from "../sim/types";
 import { hashCanonical } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
+  coreEcologyAlarmSignalProfile,
   createCoreEcologyAlarmObservation,
 } from "./coreEcology";
 import {
@@ -34,6 +31,7 @@ import {
 } from "./livingActorVisualContact";
 import { livingActorSenseProfile } from "./livingActorSenses";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
+import { coreEcologyTrophicPerceivedClass } from "./coreEcologyTrophic";
 import {
   VISIBILITY_DIRECT,
   calculateAmbientNoise,
@@ -53,6 +51,8 @@ export const CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS = 14_000 as const;
 export const CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY = 180_000 as const;
 export const CORE_ECOLOGY_PERCEPTION_MAX_OBSERVERS =
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS + 3;
+
+const CORE_SPECIES = new Set<string>(CORE_WILDLIFE_SPECIES);
 
 export interface CoreEcologyPerceptionFrameInput {
   /** The exact current materialized wildlife set; coarse actors do not enter this bridge. */
@@ -87,7 +87,6 @@ interface CanonicalPerceptionFrame {
 }
 
 const EMPTY_OBSERVATIONS: readonly ActorObservation[] = Object.freeze([]);
-const CORE_SPECIES = new Set<string>(CORE_WILDLIFE_SPECIES);
 
 /**
  * Builds pairwise visual facts and bounded local weather cues for the exact
@@ -190,6 +189,7 @@ export function propagateCoreEcologyAlarmObservationBatches(
     localWaterTurbulence: 0,
   });
   if (ambientNoise === null) return null;
+  const emission = coreEcologyAlarmSignalProfile(event.species);
   const batches: CoreEcologyObservationBatch[] = [];
 
   for (const observer of frame.observers) {
@@ -205,7 +205,7 @@ export function propagateCoreEcologyAlarmObservationBatches(
           CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS * hearing / ACTOR_PERCEPTION_SCALE,
         ),
         ambientNoise,
-        sourceLoudness: 1,
+        sourceLoudness: emission.sourceLoudness / FIXED_POINT,
         wind: {
           x: frame.world.weather.windX / FIXED_POINT,
           y: frame.world.weather.windY / FIXED_POINT,
@@ -349,34 +349,7 @@ function perceivedVisualClass(
   observer: LivingActorSpecies,
   subject: LivingActorSpecies,
 ): string {
-  if (
-    subject === "black-bear"
-    && (observer === "deer"
-      || observer === "gull"
-      || observer === "domestic-cat"
-      || observer === "domestic-dog"
-      || observer === "human")
-  ) return "large-predator";
-  if (observer === "domestic-cat" && subject === "domestic-dog") return "predator";
-  if (observer === "domestic-cat" && subject === "domestic-cat") {
-    return "food-competitor";
-  }
-  const observerProfile = coreWildlifeProfile(observer);
-  const subjectProfile = coreWildlifeProfile(subject);
-  if (
-    observerProfile !== null
-    && subjectProfile !== null
-    && observerProfile.roles.includes("predator")
-    && subjectProfile.roles.includes("prey")
-  ) return "live-prey";
-  if (
-    observerProfile !== null
-    && subjectProfile !== null
-    && observerProfile.species !== subjectProfile.species
-    && observerProfile.roles.includes("prey")
-    && subjectProfile.roles.includes("predator")
-  ) return "predator";
-  return subject;
+  return coreEcologyTrophicPerceivedClass(observer, subject) ?? subject;
 }
 
 /**
@@ -414,12 +387,6 @@ function coreEcologyCatRainCue(
     salience: frame.world.weather.intensity,
     identification: "anonymous",
   });
-}
-
-function coreWildlifeProfile(species: LivingActorSpecies) {
-  return CORE_SPECIES.has(species)
-    ? getCoreWildlifeProfile(species as CoreWildlifeSpecies)
-    : null;
 }
 
 /** Shared terrain/structure occlusion surface for core-ecology sight queries. */

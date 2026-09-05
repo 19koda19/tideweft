@@ -492,11 +492,17 @@ export interface WildlifeView {
 
 /** Selectable aggregate-evidence commands remain rat-only in this slice. */
 export type AggregateWildlifeEvidenceSpecies = "brown-rat";
-export type WildlifeEvidenceViewSpecies = AggregateWildlifeEvidenceSpecies | "domestic-cat";
+export type WildlifeEvidenceViewSpecies =
+  | AggregateWildlifeEvidenceSpecies
+  | "domestic-cat"
+  | "marsh-rabbit"
+  | "marsh-fox";
 export type AggregateWildlifeEvidenceForm =
   | "gnaw-marks"
   | "shelter-sign"
-  | "small-tracks";
+  | "small-tracks"
+  | "paired-tracks"
+  | "canid-pawprints";
 
 /**
  * One directly observed physical wildlife sign. This separate view deliberately

@@ -31,6 +31,8 @@ describe("lean runtime living-species registry", () => {
       "black-bear",
       "brown-rat",
       "domestic-cat",
+      "marsh-rabbit",
+      "marsh-fox",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -129,6 +131,34 @@ describe("lean runtime living-species registry", () => {
           hearingSensitivity: 980_000,
           scentSensitivity: 720_000,
           scentBaseRangeUnits: 28_000,
+        },
+      },
+      {
+        species: "marsh-rabbit",
+        actorIdPrefix: "RABBIT-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        aboutNoun: "marsh rabbit",
+        senses: {
+          visionAcuity: 860_000,
+          hearingSensitivity: 970_000,
+          scentSensitivity: 610_000,
+          scentBaseRangeUnits: 18_000,
+        },
+      },
+      {
+        species: "marsh-fox",
+        actorIdPrefix: "FOX-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        aboutNoun: "marsh fox",
+        senses: {
+          visionAcuity: 880_000,
+          hearingSensitivity: 920_000,
+          scentSensitivity: 940_000,
+          scentBaseRangeUnits: 34_000,
         },
       },
     ]);

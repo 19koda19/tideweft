@@ -17,11 +17,14 @@ import {
   CORE_WILDLIFE_ACTOR_VERSION,
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   CORE_WILDLIFE_MEMORY_CAP,
+  CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
   advanceCoreWildlifeActorCoarse,
   canonicalizeCoreWildlifeActorState,
+  coreWildlifeEnvironmentalEvidenceStrengthAtTick,
   createCoreWildlifeActorState,
   deserializeCoreWildlifeActorState,
   repositionCoreWildlifeActor,
+  repositionCoreWildlifeActorWithMovementEvidence,
   replaceCoreWildlifeActorPhysiology,
   serializeCoreWildlifeActorState,
   stepCoreWildlifeActor,
@@ -239,6 +242,154 @@ describe("core Wave-A wildlife actor", () => {
     } as typeof validMove)).toThrow(/ordered/u);
   });
 
+  it("persists bounded species-honest rabbit and fox movement signs", () => {
+    for (const [species, kind] of [
+      ["marsh-rabbit", "paired-tracks"],
+      ["marsh-fox", "canid-pawprints"],
+    ] as const) {
+      const decided = step(actor(species), 1).actor;
+      const position = translateWorldPosition(decided.address.position, 650, 250);
+      const traced = repositionCoreWildlifeActorWithMovementEvidence(decided, {
+        atTick: 1,
+        position,
+        heading: 125_000,
+        strength: 640_000,
+      });
+      const evidence = traced.memories.flatMap((memory) => (
+        memory.environmentalEvidence === undefined ? [] : [memory.environmentalEvidence]
+      ));
+      expect(evidence).toEqual([expect.objectContaining({
+        kind,
+        position,
+        strength: 640_000,
+        itemConsumption: "none",
+        disclosure: "direct-observation-required",
+      })]);
+      expect(traced.memories.at(-1)).toMatchObject({
+        kind: "movement",
+        referenceId: `terrain-trace:${kind}`,
+        observationId: null,
+      });
+      expect(deserializeCoreWildlifeActorState(serializeCoreWildlifeActorState(traced)))
+        .toEqual(traced);
+
+      const repeated = repositionCoreWildlifeActorWithMovementEvidence(traced, {
+        atTick: 1,
+        position: translateWorldPosition(position, 1, 0),
+        heading: 125_000,
+        strength: 900_000,
+      });
+      expect(repeated.address.position).not.toEqual(traced.address.position);
+      expect(repeated.memories).toEqual(traced.memories);
+    }
+  });
+
+  it.each([
+    ["marsh-rabbit", "paired-tracks"],
+    ["marsh-fox", "canid-pawprints"],
+  ] as const)("ages and expires %s movement evidence independently of save cadence", (
+    species,
+    kind,
+  ) => {
+    const source = step(actor(species), 1).actor;
+    const traced = repositionCoreWildlifeActorWithMovementEvidence(source, {
+      atTick: 1,
+      position: translateWorldPosition(source.address.position, 500, 0),
+      heading: source.address.heading,
+      strength: 900_000,
+    });
+    const evidence = traced.memories.find(({ kind: memoryKind }) => (
+      memoryKind === "movement"
+    ))?.environmentalEvidence;
+    if (evidence === undefined) throw new Error("Movement evidence fixture is missing");
+
+    const halfLifeTick = evidence.createdAtTick
+      + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS / 2;
+    const expiryTick = evidence.createdAtTick
+      + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS;
+    expect(evidence.kind).toBe(kind);
+    expect(coreWildlifeEnvironmentalEvidenceStrengthAtTick(evidence, evidence.createdAtTick))
+      .toBe(900_000);
+    expect(coreWildlifeEnvironmentalEvidenceStrengthAtTick(evidence, halfLifeTick))
+      .toBe(450_000);
+    expect(coreWildlifeEnvironmentalEvidenceStrengthAtTick(evidence, expiryTick))
+      .toBe(0);
+    expect(coreWildlifeEnvironmentalEvidenceStrengthAtTick(evidence, evidence.createdAtTick - 1))
+      .toBe(0);
+
+    const almostExpired = repositionCoreWildlifeActor(traced, {
+      atTick: expiryTick - 1,
+      position: traced.address.position,
+      heading: traced.address.heading,
+    });
+    expect(almostExpired.memories.some(({ kind: memoryKind }) => memoryKind === "movement"))
+      .toBe(true);
+    // The source strength remains immutable; current strength is derived from
+    // authoritative time rather than repeatedly rounded and resaved.
+    expect(almostExpired.memories.find(({ kind: memoryKind }) => (
+      memoryKind === "movement"
+    ))?.environmentalEvidence?.strength).toBe(900_000);
+
+    const expiredLoaded = repositionCoreWildlifeActor(almostExpired, {
+      atTick: expiryTick,
+      position: almostExpired.address.position,
+      heading: almostExpired.address.heading,
+    });
+    const reloaded = deserializeCoreWildlifeActorState(
+      serializeCoreWildlifeActorState(traced),
+    );
+    if (reloaded === null) throw new Error("Movement evidence save should roundtrip");
+    const expiredAfterReload = advanceCoreWildlifeActorCoarse(reloaded, {
+      atTick: expiryTick,
+    });
+    expect(expiredLoaded.memories.some(({ kind: memoryKind }) => memoryKind === "movement"))
+      .toBe(false);
+    expect(expiredAfterReload.memories).toEqual(expiredLoaded.memories);
+  });
+
+  it("rejects invented movement signs and species/evidence mismatches", () => {
+    const rabbit = step(actor("marsh-rabbit"), 1).actor;
+    expect(() => repositionCoreWildlifeActorWithMovementEvidence(rabbit, {
+      atTick: 1,
+      position: rabbit.address.position,
+      heading: rabbit.address.heading,
+      strength: 500_000,
+    })).toThrow(/real relocation/u);
+    expect(() => repositionCoreWildlifeActorWithMovementEvidence(rabbit, {
+      atTick: 1,
+      position: translateWorldPosition(rabbit.address.position, 1, 0),
+      heading: rabbit.address.heading,
+      strength: 0,
+    })).toThrow(/real relocation/u);
+    const deer = step(actor("deer"), 1).actor;
+    expect(() => repositionCoreWildlifeActorWithMovementEvidence(deer, {
+      atTick: 1,
+      position: translateWorldPosition(deer.address.position, 1, 0),
+      heading: deer.address.heading,
+      strength: 500_000,
+    })).toThrow(/does not produce/u);
+
+    const traced = repositionCoreWildlifeActorWithMovementEvidence(rabbit, {
+      atTick: 1,
+      position: translateWorldPosition(rabbit.address.position, 1, 0),
+      heading: rabbit.address.heading,
+      strength: 500_000,
+    });
+    expect(canonicalizeCoreWildlifeActorState({
+      ...traced,
+      memories: traced.memories.map((memory) => memory.environmentalEvidence === undefined
+        ? memory
+        : {
+            ...memory,
+            environmentalEvidence: {
+              ...memory.environmentalEvidence,
+              kind: "canid-pawprints",
+              evidenceId: `${memory.eventId}:canid-pawprints`,
+            },
+          }),
+    })).toBeNull();
+  });
+
   it("keeps no-contact behavior neutral and permits real rest pressure", () => {
     const deer = actor("deer");
     const neutral = step(deer, 1);
@@ -370,10 +521,29 @@ describe("core Wave-A wildlife actor", () => {
     ))).toBe(true);
     expect(new Set(tracks.map(({ evidenceId }) => evidenceId)).size).toBe(tracks.length);
 
+    const newestTrack = [...tracks].sort((left, right) => (
+      right.createdAtTick - left.createdAtTick
+    ))[0];
+    if (newestTrack === undefined) throw new Error("Cat track fixture is missing");
+    expect(coreWildlifeEnvironmentalEvidenceStrengthAtTick(
+      newestTrack,
+      newestTrack.createdAtTick + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS / 2,
+    )).toBe(Math.floor(newestTrack.strength / 2));
+
     const serialized = serializeCoreWildlifeActorState(cat);
     expect(deserializeCoreWildlifeActorState(serialized)).toEqual(cat);
     const coarse = advanceCoreWildlifeActorCoarse(cat, { atTick: 30 });
     expect(coarse.memories).toEqual(cat.memories);
+    const afterEvidenceExpiry = advanceCoreWildlifeActorCoarse(coarse, {
+      atTick: newestTrack.createdAtTick
+        + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
+    });
+    expect(afterEvidenceExpiry.memories.some(({ environmentalEvidence }) => (
+      environmentalEvidence !== undefined
+    ))).toBe(false);
+    expect(deserializeCoreWildlifeActorState(
+      serializeCoreWildlifeActorState(afterEvidenceExpiry),
+    )).toEqual(afterEvidenceExpiry);
     expect(canonicalizeCoreWildlifeActorState({
       ...cat,
       memories: cat.memories.map((memory) => memory.environmentalEvidence === undefined
@@ -526,6 +696,71 @@ describe("core Wave-A wildlife actor", () => {
     });
     const coolingDown = step(disengaged.actor, 12, [preyDuringCooldown], [prey]);
     expect(coolingDown.decision.intent).not.toBe("pursue");
+  });
+
+  it("lets a marsh rabbit warn first and then flee from the same perceived fox", () => {
+    const rabbit = actor("marsh-rabbit");
+    const foxAtOne = observation(rabbit, 1, {
+      id: "obs:rabbit-sees-fox",
+      perceivedClass: "predator",
+      subjectId: "FOX-rabbit-test",
+    });
+    const alarmed = step(rabbit, 1, [foxAtOne]);
+    expect(alarmed.decision.intent).toBe("alarm");
+    expect(alarmed.resourceClaims).toEqual([]);
+
+    const foxAtTwo = observation(alarmed.actor, 2, {
+      // Runtime visual evidence is event-time specific even though the seen
+      // subject is stable; cooldown must therefore key the fox, not this ID.
+      id: "obs:rabbit-sees-fox:tick-2",
+      perceivedClass: "predator",
+      subjectId: "FOX-rabbit-test",
+    });
+    const fleeing = step(alarmed.actor, 2, [foxAtTwo]);
+    expect(fleeing.decision.intent).toBe("flee");
+    expect(fleeing.event.kind).toBe("flee");
+  });
+
+  it("bounds fox pursuit and lets a perceived dog replace prey attention", () => {
+    const fox = hungry(actor("marsh-fox"), ACTOR_PERCEPTION_SCALE);
+    const rabbitSeen = observation(fox, 1, {
+      id: "obs:fox-sees-rabbit",
+      perceivedClass: "live-prey",
+      subjectId: "RABBIT-fox-test",
+    });
+    const rabbit = food(rabbitSeen.id, "RABBIT-fox-test", "live-prey", {
+      effort: 160_000,
+      risk: 120_000,
+    });
+    const pursuing = step(fox, 1, [rabbitSeen], [rabbit]);
+    expect(pursuing.decision).toMatchObject({ intent: "pursue", expiresAtTick: 8 });
+    expect(pursuing.resourceClaims).toEqual([]);
+
+    const dogSeen = observation(pursuing.actor, 2, {
+      id: "obs:fox-sees-dog",
+      perceivedClass: "predator",
+      subjectId: "D-R-v1-rabbit-fox-dog",
+    });
+    const rabbitSeenAgain = observation(pursuing.actor, 2, {
+      id: rabbitSeen.id,
+      perceivedClass: "live-prey",
+      subjectId: "RABBIT-fox-test",
+    });
+    const rabbitAgain = { ...rabbit, observationId: rabbitSeenAgain.id };
+    const rabbitAlarm = observation(pursuing.actor, 2, {
+      id: "obs:fox-hears-rabbit-alarm",
+      perceivedClass: "animal-alarm",
+      channel: "hearing",
+    });
+    const interrupted = step(
+      pursuing.actor,
+      2,
+      [rabbitSeenAgain, dogSeen, rabbitAlarm],
+      [rabbitAgain],
+    );
+    expect(["flee", "retreat"]).toContain(interrupted.decision.intent);
+    expect(interrupted.decision.focusObservationId).toBe(dogSeen.id);
+    expect(interrupted.resourceClaims).toEqual([]);
   });
 
   it("canonicalizes input order and fails closed on unlawful contacts", () => {

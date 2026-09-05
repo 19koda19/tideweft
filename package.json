@@ -1,6 +1,6 @@
 {
   "name": "tideweft",
-  "version": "0.3.3-alpha.15",
+  "version": "0.3.3-alpha.16",
   "private": true,
   "description": "A restorative strand-type courier ecology built with p5.js and Electron.",
   "type": "module",
@@ -17,7 +17,7 @@
     "check:public-boundary": "node scripts/check-public-boundary.cjs",
     "test:public-boundary": "node scripts/check-public-boundary.cjs --self-test",
     "test:player-facing-sync": "node scripts/check-player-facing-sync.selftest.cjs",
-    "test:ci": "npm run test:player-facing-sync && npm run test:public-boundary && vitest run",
+    "test:ci": "npm run test:player-facing-sync && npm run test:public-boundary && vitest run --maxWorkers=1",
     "patch-notes:generate": "node scripts/render-patch-notes.cjs",
     "patch-notes:check": "node scripts/render-patch-notes.cjs --check",
     "check:player-facing-sync": "node scripts/check-player-facing-sync.cjs && npm run patch-notes:check",

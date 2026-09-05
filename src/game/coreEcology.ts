@@ -36,12 +36,15 @@ import {
 } from "./coreEcologyGroups";
 import {
   CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
+  CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
   canonicalizeCoreEcologyHabitatAssemblage,
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
+  canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
   type CoreEcologyHarborEdgeActivitySignal,
   type CoreEcologyHarborEdgeHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatPopulationAnalysis,
+  type CoreEcologyMarshEdgeHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
@@ -64,6 +67,14 @@ export const CORE_ECOLOGY_MAX_STEP_TICKS = 64 as const;
 export const CORE_ECOLOGY_PATCH_MAX_SERIALIZED_BYTES = 16 * 1_024 * 1_024;
 export const CORE_ECOLOGY_AGGREGATE_EVIDENCE_VERSION = 1 as const;
 
+/**
+ * Canonical patches are recursively frozen before they leave this module.
+ * Remembering those exact object identities lets trusted runtime transitions
+ * cross the public validation boundary repeatedly without reparsing the same
+ * immutable habitat, actors, groups, and evidence on every lookup.
+ */
+const CANONICAL_AGGREGATE_PATCHES = new WeakSet<object>();
+
 export const CORE_ECOLOGY_WAVE_A_INDIVIDUAL_SPECIES = [
   "deer",
   "gull",
@@ -72,6 +83,8 @@ export const CORE_ECOLOGY_WAVE_A_INDIVIDUAL_SPECIES = [
 export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   ...CORE_ECOLOGY_WAVE_A_INDIVIDUAL_SPECIES,
   "domestic-cat",
+  "marsh-rabbit",
+  "marsh-fox",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -117,6 +130,19 @@ export type CoreEcologyAggregatePatchDerivation =
        */
       readonly kind: "legacy-fixed-v1-with-habitat-v2";
       readonly habitat: CoreEcologyHarborEdgeHabitatAssemblage;
+    }>
+  | Readonly<{
+      readonly kind: "habitat-v3";
+      readonly habitat: CoreEcologyMarshEdgeHabitatAssemblage;
+    }>
+  | Readonly<{
+      /**
+       * A frozen pre-habitat wildlife roster plus the authenticated marsh-edge
+       * extension. Legacy actors remain authoritative; only cat, rat, rabbit,
+       * and fox presence is derived from the v3 habitat record.
+       */
+      readonly kind: "legacy-fixed-v1-with-habitat-v3";
+      readonly habitat: CoreEcologyMarshEdgeHabitatAssemblage;
     }>;
 
 export interface CreateCoreEcologyPatchInput {
@@ -321,6 +347,12 @@ export interface CoreEcologyAlarmObservationInput {
   readonly radiusUnits: number;
   readonly confidence: number;
   readonly salience: number;
+}
+
+export interface CoreEcologyAlarmSignalProfile {
+  /** Integer fixed-point source loudness on the shared simulation scale. */
+  readonly sourceLoudness: number;
+  readonly interrupt: "none" | "strong";
 }
 
 const UTF8_ENCODER = new TextEncoder();
@@ -591,9 +623,9 @@ export function migrateLegacyCoreEcologyPatch(text: unknown): CoreEcologyPatchSt
 }
 
 /**
- * Creates the additive v3 patch. Aggregate populations are derived from the
- * signed habitat-v2 record, never from a requested actor count. Old v1/v2
- * constructors remain frozen and cannot create rat actors.
+ * Creates the additive aggregate patch. Aggregate populations are derived
+ * from a signed habitat-v2/v3 record, never from a requested actor count. Old
+ * v1/v2 constructors remain frozen and cannot create rat actors.
  */
 export function createCoreEcologyAggregatePatch(
   input: CreateCoreEcologyAggregatePatchInput,
@@ -718,6 +750,8 @@ export function createCoreEcologyAggregatePatch(
 
   const aggregatePopulations = derivation.kind === "habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2"
+    || derivation.kind === "habitat-v3"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v3"
     ? aggregatePopulationsFromHabitat(input.seed, derivation.habitat, tick)
     : Object.freeze([]);
   const candidate = {
@@ -738,6 +772,11 @@ export function createCoreEcologyAggregatePatch(
 export function canonicalizeCoreEcologyAggregatePatch(
   value: unknown,
 ): CoreEcologyAggregatePatchState | null {
+  if (
+    typeof value === "object"
+    && value !== null
+    && CANONICAL_AGGREGATE_PATCHES.has(value)
+  ) return value as CoreEcologyAggregatePatchState;
   if (!plainRecord(value) || !exactKeys(value, [
     "aggregatePopulations",
     "derivation",
@@ -823,7 +862,7 @@ export function canonicalizeCoreEcologyAggregatePatch(
       value.originRegion,
     )
   ) return null;
-  return deepFreeze({
+  const patch = deepFreeze({
     version: CORE_ECOLOGY_AGGREGATE_PATCH_VERSION,
     patchKey: value.patchKey,
     originRegion: createRegionCoord(value.originRegion.x, value.originRegion.y),
@@ -833,6 +872,8 @@ export function canonicalizeCoreEcologyAggregatePatch(
     populations,
     aggregatePopulations,
   });
+  CANONICAL_AGGREGATE_PATCHES.add(patch);
+  return patch;
 }
 
 export function serializeCoreEcologyAggregatePatch(value: unknown): string {
@@ -1444,6 +1485,7 @@ export function createCoreEcologyAlarmObservation(
     || !nonnegativeSafeInteger(input.observedAtTick)
     || input.observedAtTick < event.atTick
   ) return null;
+  const signal = coreEcologyAlarmSignalProfile(event.species);
   return createActorObservation({
     id: `alarm:${hashCanonical([event.eventId, input.observerId, input.observedAtTick])}`,
     observerId: input.observerId,
@@ -1458,13 +1500,27 @@ export function createCoreEcologyAlarmObservation(
     confidence: input.confidence,
     salience: input.salience,
     identification: "anonymous",
-    interrupt: "strong",
+    interrupt: signal.interrupt,
   });
+}
+
+/**
+ * Shared emission capability for any alarm-source species. Small prey still
+ * communicate a nearby warning, but a soft foot-thump does not carry or
+ * preempt attention like a full bird/deer alarm call.
+ */
+export function coreEcologyAlarmSignalProfile(
+  species: CoreWildlifeSpecies,
+): CoreEcologyAlarmSignalProfile {
+  const smallPrey = getCoreWildlifeProfile(species).roles.includes("small-prey");
+  return smallPrey
+    ? Object.freeze({ sourceLoudness: 420_000, interrupt: "none" as const })
+    : Object.freeze({ sourceLoudness: FIXED_POINT, interrupt: "strong" as const });
 }
 
 function aggregatePopulationsFromHabitat(
   seed: RootSeed,
-  habitat: CoreEcologyHarborEdgeHabitatAssemblage,
+  habitat: CoreEcologyHarborEdgeHabitatAssemblage | CoreEcologyMarshEdgeHabitatAssemblage,
   tick: number,
 ): readonly CoreEcologyAggregatePopulationState[] {
   const analysis = habitat.populations.find((population) =>
@@ -1962,6 +2018,16 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: value.kind, habitat });
   }
+  if (
+    value.kind === "habitat-v3"
+    || value.kind === "legacy-fixed-v1-with-habitat-v3"
+  ) {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: value.kind, habitat });
+  }
   return canonicalDerivation(value);
 }
 
@@ -2011,16 +2077,25 @@ function aggregateDerivationMatchesPopulations(
   aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
   originRegion: RegionCoord,
 ): boolean {
+  const isHarborEdgeDerivation = derivation.kind === "habitat-v2"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v2";
+  const isMarshEdgeDerivation = derivation.kind === "habitat-v3"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v3";
   if (
-    derivation.kind !== "habitat-v2"
-    && derivation.kind !== "legacy-fixed-v1-with-habitat-v2"
+    !isHarborEdgeDerivation
+    && !isMarshEdgeDerivation
   ) {
     return aggregatePopulations.length === 0
       && derivationMatchesPopulations(derivation, populations, originRegion);
   }
-  const preservesLegacyRoster = derivation.kind === "legacy-fixed-v1-with-habitat-v2";
+  if (!("habitat" in derivation)) return false;
+  const preservesLegacyRoster = derivation.kind === "legacy-fixed-v1-with-habitat-v2"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v3";
+  const expectedHabitatVersion = isHarborEdgeDerivation
+    ? CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
+    : CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION;
   if (
-    derivation.habitat.generationVersion !== CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
+    derivation.habitat.generationVersion !== expectedHabitatVersion
     || derivation.habitat.originRegion.x !== originRegion.x
     || derivation.habitat.originRegion.y !== originRegion.y
   ) return false;
@@ -2073,7 +2148,10 @@ function aggregateDerivationMatchesPopulations(
     // species. Frozen deer/gull/bear state is validated against the published
     // legacy topology at the runtime boundary instead of being rewritten to a
     // history that did not exist in that save.
-    if (preservesLegacyRoster && analysis.species !== "domestic-cat") continue;
+    if (
+      preservesLegacyRoster
+      && isWaveAIndividualSpecies(analysis.species)
+    ) continue;
     const population = individualsByKey.get(key);
     if (analysis.populationUnits === 0) {
       if (population !== undefined) return false;
@@ -2297,6 +2375,7 @@ function playerAbsentGroupDisturbances(
   if (
     patch.derivation.kind !== "habitat-v1"
     && patch.derivation.kind !== "habitat-v2"
+    && patch.derivation.kind !== "habitat-v3"
   ) return Object.freeze([]);
   const population = patch.populations.find((candidate) => (
     candidate.species === group.identity.species

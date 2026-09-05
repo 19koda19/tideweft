@@ -195,7 +195,9 @@ type ReliefWildlifeForm =
   | "deer"
   | "gull-flock"
   | "black-bear"
-  | "domestic-cat";
+  | "domestic-cat"
+  | "marsh-rabbit"
+  | "marsh-fox";
 
 interface ReliefWildlifeDescriptor {
   readonly form: ReliefWildlifeForm;
@@ -260,6 +262,30 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     labelLift: 0.68,
     visibleGroupNoun: null,
   },
+  "marsh-rabbit": {
+    form: "marsh-rabbit",
+    colors: {
+      primary: "#806c52",
+      secondary: "#b49770",
+      dark: "#2d2923",
+    },
+    hitRadiusScale: 0.44,
+    ringRadiusScale: 0.34,
+    labelLift: 0.7,
+    visibleGroupNoun: null,
+  },
+  "marsh-fox": {
+    form: "marsh-fox",
+    colors: {
+      primary: "#995138",
+      secondary: "#d1b691",
+      dark: "#35271f",
+    },
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.4,
+    labelLift: 0.72,
+    visibleGroupNoun: null,
+  },
 };
 
 /*
@@ -308,6 +334,22 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
     hitRadiusScale: 0.45,
     ringRadiusScale: 0.36,
     liftScale: 0.28,
+  },
+  "paired-tracks": {
+    primary: "#80694f",
+    secondary: "#c7ad86",
+    dark: "#29221c",
+    hitRadiusScale: 0.45,
+    ringRadiusScale: 0.36,
+    liftScale: 0.28,
+  },
+  "canid-pawprints": {
+    primary: "#765b48",
+    secondary: "#d0b694",
+    dark: "#251e19",
+    hitRadiusScale: 0.47,
+    ringRadiusScale: 0.38,
+    liftScale: 0.3,
   },
 };
 
@@ -3882,6 +3924,125 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawMarshRabbit = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = reliefWildlifeColors("marsh-rabbit");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.076 * scale;
+      const resting = wildlife.behavior === "rest";
+      const bounding = wildlife.behavior === "flee" || wildlife.behavior === "alarm";
+      const boundLift = reducedMotion || !bounding
+        ? 0
+        : Math.abs(Math.sin(now * 0.01)) * base * 0.72;
+      const bodyHalfLength = base * 1.42;
+      const bodyHalfHeight = base * 0.62;
+      const bodyHalfWidth = base * 0.55;
+      const legHeight = resting ? base * 0.1 : base * 0.55;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.62 + boundLift;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      if (!resting) {
+        p.ambientMaterial(colors.dark);
+        for (const legX of [-bodyHalfLength * 0.58, bodyHalfLength * 0.52]) {
+          p.push();
+          p.translate(legX, legHeight * 0.58, 0);
+          p.box(base * 0.24, legHeight, base * 0.24);
+          p.pop();
+        }
+      }
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 8, 5);
+      p.push();
+      p.translate(bodyHalfLength * 0.82, -bodyHalfHeight * 0.45, 0);
+      p.sphere(base * 0.5, 7, 5);
+      p.ambientMaterial(colors.secondary);
+      for (const earZ of [-base * 0.24, base * 0.24]) {
+        p.push();
+        p.translate(-base * 0.08, -base * 0.72, earZ);
+        p.cone(base * 0.16, base * 1.08, 5, 1);
+        p.pop();
+      }
+      p.pop();
+      p.push();
+      p.translate(-bodyHalfLength * 0.94, -bodyHalfHeight * 0.04, 0);
+      p.ambientMaterial(colors.secondary);
+      p.sphere(base * 0.3, 6, 4);
+      p.pop();
+      p.pop();
+    };
+
+    const drawMarshFox = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = reliefWildlifeColors("marsh-fox");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.09 * scale;
+      const resting = wildlife.behavior === "rest";
+      const stalking = wildlife.behavior === "pursue" || wildlife.behavior === "scavenge";
+      const running = stalking || wildlife.behavior === "flee" || wildlife.behavior === "retreat";
+      const stride = reducedMotion || !running ? 0 : Math.sin(now * 0.012) * base * 0.24;
+      const bodyHalfLength = base * 1.72;
+      const bodyHalfHeight = base * (stalking ? 0.48 : 0.61);
+      const bodyHalfWidth = base * 0.48;
+      const legHeight = resting ? base * 0.12 : base * (stalking ? 0.55 : 0.78);
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.68;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      if (!resting) {
+        p.ambientMaterial(colors.dark);
+        for (const [legX, phase] of [
+          [-bodyHalfLength * 0.58, 1],
+          [bodyHalfLength * 0.58, -1],
+        ] as const) {
+          for (const legZ of [-bodyHalfWidth * 0.48, bodyHalfWidth * 0.48]) {
+            p.push();
+            p.translate(legX + stride * phase, legHeight * 0.62, legZ);
+            p.box(base * 0.16, legHeight, base * 0.14);
+            p.pop();
+          }
+        }
+      }
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 9, 5);
+      p.push();
+      p.translate(bodyHalfLength * 0.92, -bodyHalfHeight * 0.38, 0);
+      p.sphere(base * 0.53, 7, 5);
+      for (const earZ of [-base * 0.34, base * 0.34]) {
+        p.push();
+        p.translate(-base * 0.09, -base * 0.52, earZ);
+        p.ambientMaterial(colors.primary);
+        p.cone(base * 0.18, base * 0.5, 4, 1);
+        p.pop();
+      }
+      p.push();
+      p.translate(base * 0.55, base * 0.09, 0);
+      p.rotateZ(-p.HALF_PI);
+      p.ambientMaterial(colors.secondary);
+      p.cone(base * 0.22, base * 0.72, 5, 1);
+      p.pop();
+      p.pop();
+      p.push();
+      p.translate(-bodyHalfLength * 1.12, bodyHalfHeight * 0.38, 0);
+      p.rotateZ(0.2);
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(base * 1.3, base * 0.29, base * 0.34, 8, 4);
+      p.pop();
+      p.pop();
+    };
+
     const drawAggregateWildlifeEvidenceForm = (
       evidence: AggregateWildlifeEvidenceView,
       surface: number,
@@ -3927,6 +4088,51 @@ export function createTideweftReliefRenderer(
           p.stroke(descriptor.dark);
           p.strokeWeight(Math.max(1, base * 0.11));
           p.line(-base * 1.55, 0, base * 0.7, base * 1.55, 0, -base * 0.7);
+          p.noStroke();
+          break;
+        case "paired-tracks":
+          for (const [x, z, length, width] of [
+            [-0.72, 0.42, 0.7, 0.34],
+            [-0.56, -0.38, 0.7, 0.34],
+            [0.48, 0.24, 0.42, 0.25],
+            [0.62, -0.22, 0.42, 0.25],
+          ] as const) {
+            p.push();
+            p.translate(base * x, 0, base * z);
+            p.ambientMaterial(descriptor.primary);
+            p.ellipsoid(base * length, base * 0.07, base * width, 6, 3);
+            p.pop();
+          }
+          p.stroke(descriptor.secondary);
+          p.strokeWeight(Math.max(1, base * 0.1));
+          p.line(-base * 1.25, 0, base * 0.82, base * 1.25, 0, -base * 0.62);
+          p.noStroke();
+          break;
+        case "canid-pawprints":
+          for (const step of [-0.62, 0.62]) {
+            const x = step * base;
+            const z = -step * base * 0.46;
+            p.push();
+            p.translate(x, 0, z);
+            p.ambientMaterial(descriptor.primary);
+            p.ellipsoid(base * 0.58, base * 0.075, base * 0.48, 7, 3);
+            p.ambientMaterial(descriptor.secondary);
+            for (const [toeX, toeZ] of [
+              [-0.28, -0.37],
+              [-0.09, -0.5],
+              [0.11, -0.5],
+              [0.3, -0.35],
+            ] as const) {
+              p.push();
+              p.translate(toeX * base, -base * 0.025, toeZ * base);
+              p.sphere(base * 0.095, 5, 3);
+              p.pop();
+            }
+            p.pop();
+          }
+          p.stroke(descriptor.dark);
+          p.strokeWeight(Math.max(1, base * 0.1));
+          p.line(-base * 1.45, 0, base * 0.7, base * 1.45, 0, -base * 0.7);
           p.noStroke();
           break;
         case "shelter-sign":
@@ -3998,6 +4204,12 @@ export function createTideweftReliefRenderer(
           return true;
         case "domestic-cat":
           drawDomesticCat(wildlife, surface, tileSize);
+          return true;
+        case "marsh-rabbit":
+          drawMarshRabbit(wildlife, surface, tileSize, now);
+          return true;
+        case "marsh-fox":
+          drawMarshFox(wildlife, surface, tileSize, now);
           return true;
       }
     };

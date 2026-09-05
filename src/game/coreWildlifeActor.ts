@@ -35,6 +35,13 @@ export const CORE_WILDLIFE_EVENT_VERSION = 1 as const;
 export const CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION = 1 as const;
 export const CORE_WILDLIFE_MEMORY_CAP = 16 as const;
 export const CORE_WILDLIFE_MAX_FOOD_OPPORTUNITIES = 24 as const;
+/**
+ * Individual wildlife signs remain physical for at most three in-world hours.
+ * Their observable strength falls linearly over that interval, while this hard
+ * bound also guarantees that an idle or unloaded animal cannot retain a track
+ * forever merely because it stopped producing newer memories.
+ */
+export const CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS = 180 as const;
 export const CORE_WILDLIFE_ACTOR_MAX_SERIALIZED_BYTES = 384 * 1_024;
 
 /** Safety-first tie order; policy rules still decide whether an intent is eligible. */
@@ -65,7 +72,8 @@ export type CoreWildlifeMemoryKind =
   | "pursuit"
   | "guard"
   | "disengagement"
-  | "weather";
+  | "weather"
+  | "movement";
 export type CoreWildlifeFoodSourceKind =
   | "natural-forage"
   | "physical-item"
@@ -125,12 +133,34 @@ export interface CoreWildlifeMemory {
 export interface CoreWildlifeEnvironmentalEvidence {
   readonly version: typeof CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION;
   readonly evidenceId: string;
-  readonly kind: "wet-tracks";
+  readonly kind: "wet-tracks" | "paired-tracks" | "canid-pawprints";
   readonly position: WorldPosition;
   readonly createdAtTick: number;
   readonly strength: number;
   readonly itemConsumption: "none";
   readonly disclosure: "direct-observation-required";
+}
+
+/**
+ * Deterministic current strength for a saved individual wildlife sign. A
+ * future-dated or expired trace fails closed. The saved source strength never
+ * mutates, so save/load cadence cannot change the decay result.
+ */
+export function coreWildlifeEnvironmentalEvidenceStrengthAtTick(
+  evidence: CoreWildlifeEnvironmentalEvidence,
+  atTick: number,
+): number {
+  if (
+    !nonnegativeSafeInteger(atTick)
+    || atTick < evidence.createdAtTick
+  ) return 0;
+  const age = atTick - evidence.createdAtTick;
+  if (age >= CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS) return 0;
+  return Math.floor(
+    evidence.strength
+      * (CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS - age)
+      / CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
+  );
 }
 
 export interface CoreWildlifeActorState {
@@ -240,6 +270,12 @@ export interface RepositionCoreWildlifeActorInput {
   readonly heading: number;
 }
 
+export interface RepositionCoreWildlifeActorWithMovementEvidenceInput
+  extends RepositionCoreWildlifeActorInput {
+  /** Fixed-point physical trace clarity in (0, 1,000,000]. */
+  readonly strength: number;
+}
+
 export interface AdvanceCoreWildlifeActorCoarseInput {
   readonly atTick: number;
 }
@@ -267,6 +303,12 @@ const MEMORY_KINDS = new Set<string>([
   "guard",
   "disengagement",
   "weather",
+  "movement",
+]);
+const ENVIRONMENTAL_EVIDENCE_KINDS = new Set<string>([
+  "wet-tracks",
+  "paired-tracks",
+  "canid-pawprints",
 ]);
 const CAUSE_KINDS = new Set<string>([
   "perception",
@@ -469,6 +511,63 @@ export function repositionCoreWildlifeActor(
 }
 
 /**
+ * Resolves relocation and a bounded physical sign as one transition. Habitat
+ * code decides whether the ground can hold a trace; this boundary proves the
+ * actor actually changed position and prevents stationary evidence minting.
+ */
+export function repositionCoreWildlifeActorWithMovementEvidence(
+  value: unknown,
+  input: RepositionCoreWildlifeActorWithMovementEvidenceInput,
+): CoreWildlifeActorState {
+  const state = requireActor(value);
+  if (
+    !plainRecord(input)
+    || !exactKeys(input, ["atTick", "heading", "position", "strength"])
+    || !isWorldPosition(input.position)
+    || sameWorldPosition(input.position, state.address.position)
+    || !scaledUnit(input.strength)
+    || input.strength === 0
+  ) throw new RangeError("Core wildlife movement evidence requires a real relocation");
+
+  const evidenceKind = state.identity.species === "marsh-rabbit"
+    ? "paired-tracks"
+    : state.identity.species === "marsh-fox"
+      ? "canid-pawprints"
+      : null;
+  if (evidenceKind === null) {
+    throw new RangeError("This wildlife species does not produce bounded movement evidence");
+  }
+  const moved = repositionCoreWildlifeActor(state, {
+    atTick: input.atTick,
+    position: input.position,
+    heading: input.heading,
+  });
+  const referenceId = `terrain-trace:${evidenceKind}`;
+  if (recentMemory(state, "movement", referenceId, input.atTick, 5)) return moved;
+
+  const eventId = `${state.identity.stableId}:m:${input.atTick.toString(36)}`;
+  return rebuildActor(moved, {
+    memories: retainMemories([...moved.memories, deepFreeze({
+      eventId,
+      kind: "movement" as const,
+      referenceId,
+      observationId: null,
+      atTick: input.atTick,
+      environmentalEvidence: {
+        version: CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION,
+        evidenceId: `${eventId}:${evidenceKind}`,
+        kind: evidenceKind,
+        position: moved.address.position,
+        createdAtTick: input.atTick,
+        strength: input.strength,
+        itemConsumption: "none" as const,
+        disclosure: "direct-observation-required" as const,
+      },
+    })], input.atTick),
+  });
+}
+
+/**
  * Advance an unloaded actor without inventing observations, targets, food, or
  * movement.  A temporary intent is charged only until its already-authoritative
  * expiry; the rest of the hidden interval uses neutral observation physiology.
@@ -523,6 +622,7 @@ export function advanceCoreWildlifeActorCoarse(
     needs,
     condition,
     intent,
+    memories: retainMemories(state.memories, input.atTick),
   });
 }
 
@@ -554,7 +654,7 @@ export function stepCoreWildlifeActor(
   const memories = retainMemories([
     ...state.memories,
     ...memoryForEvent(state, event, perception),
-  ]);
+  ], step.tick);
   const actor = rebuildActor(state, {
     updatedAtTick: step.tick,
     perception,
@@ -583,6 +683,12 @@ function decide(
   const effectiveThreat = pressureFor(state, threat);
   const effectiveHuman = pressureFor(state, human);
   const effectiveAlarm = pressureFor(state, alarm);
+  // An anonymous alarm communicates danger, not who is endangered. Prey may
+  // conservatively flee; predators keep it as attention context until they
+  // directly perceive a relevant threat. This prevents a rabbit's own thump
+  // from magically repelling the fox pursuing it.
+  const escapeAlarm = profile.roles.includes("prey") ? alarm : null;
+  const effectiveEscapeAlarm = escapeAlarm === null ? 0 : effectiveAlarm;
 
   if (
     state.intent.kind === "pursue"
@@ -596,10 +702,12 @@ function decide(
   }
 
   const threatReference = threat?.sourceObservationId ?? null;
+  const threatMemoryReference = threat?.subjectId ?? threat?.sourceObservationId ?? null;
   const alarmReady = profile.roles.includes("alarm-source")
     && threat !== null
     && effectiveThreat >= profile.behavior.alarmThreshold
-    && !recentMemory(state, "alarm", threat.sourceObservationId, step.tick, 4);
+    && threatMemoryReference !== null
+    && !recentMemory(state, "alarm", threatMemoryReference, step.tick, 4);
   if (alarmReady && step.accessibility.alarm) {
     return decisionFor(state, step.tick, "alarm", {
       kind: "perception",
@@ -607,10 +715,10 @@ function decide(
     }, threat.sourceObservationId, null);
   }
 
-  const strongestEscape = selectStronger(threat, alarm);
+  const strongestEscape = selectStronger(threat, escapeAlarm);
   if (
     strongestEscape !== null
-    && Math.max(effectiveThreat, effectiveAlarm) >= profile.behavior.fleeThreshold
+    && Math.max(effectiveThreat, effectiveEscapeAlarm) >= profile.behavior.fleeThreshold
     && step.accessibility.flee
   ) {
     return decisionFor(state, step.tick, "flee", {
@@ -983,10 +1091,18 @@ function memoryForEvent(
   }
   const kind = memoryKindForIntent(event.kind);
   if (kind === null) return Object.freeze([]);
+  const focus = event.observationId === null
+    ? null
+    : perception.beliefs.find(({ sourceObservationId }) => (
+        sourceObservationId === event.observationId
+      )) ?? null;
+  const referenceId = (kind === "alarm" || kind === "threat")
+    ? focus?.subjectId ?? event.causeReferenceId
+    : event.resourceReference?.resourceId ?? event.causeReferenceId;
   return Object.freeze([deepFreeze({
     eventId: event.eventId,
     kind,
-    referenceId: event.resourceReference?.resourceId ?? event.causeReferenceId,
+    referenceId,
     observationId: event.observationId,
     atTick: event.atTick,
   })]);
@@ -1196,9 +1312,14 @@ function canonicalMemories(
     const environmentalEvidence = hasEvidence
       ? canonicalEnvironmentalEvidence(raw.environmentalEvidence, raw.atTick, raw.eventId)
       : null;
+    const requiresEvidence = raw.kind === "weather" || raw.kind === "movement";
     if (
-      (raw.kind === "weather") !== (environmentalEvidence !== null)
-      || (environmentalEvidence !== null && species !== "domestic-cat")
+      requiresEvidence !== (environmentalEvidence !== null)
+      || (environmentalEvidence !== null && !validEvidenceOwner(
+        species,
+        raw.kind as CoreWildlifeMemoryKind,
+        environmentalEvidence.kind,
+      ))
     ) return null;
     memories.push(deepFreeze({
       eventId: raw.eventId,
@@ -1235,8 +1356,8 @@ function canonicalEnvironmentalEvidence(
     value.version !== CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION
     || !validId(value.evidenceId)
     || typeof expectedEventId !== "string"
-    || value.evidenceId !== `${expectedEventId}:wet-tracks`
-    || value.kind !== "wet-tracks"
+    || !ENVIRONMENTAL_EVIDENCE_KINDS.has(value.kind as string)
+    || value.evidenceId !== `${expectedEventId}:${String(value.kind)}`
     || !isWorldPosition(value.position)
     || value.createdAtTick !== expectedTick
     || !nonnegativeSafeInteger(value.createdAtTick)
@@ -1248,7 +1369,7 @@ function canonicalEnvironmentalEvidence(
   return deepFreeze({
     version: CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION,
     evidenceId: value.evidenceId,
-    kind: "wet-tracks",
+    kind: value.kind as CoreWildlifeEnvironmentalEvidence["kind"],
     position: value.position,
     createdAtTick: value.createdAtTick,
     strength: value.strength,
@@ -1257,8 +1378,36 @@ function canonicalEnvironmentalEvidence(
   });
 }
 
-function retainMemories(value: readonly CoreWildlifeMemory[]): readonly CoreWildlifeMemory[] {
+function validEvidenceOwner(
+  species: CoreWildlifeSpecies,
+  memoryKind: CoreWildlifeMemoryKind,
+  evidenceKind: CoreWildlifeEnvironmentalEvidence["kind"],
+): boolean {
+  return (
+    species === "domestic-cat"
+    && memoryKind === "weather"
+    && evidenceKind === "wet-tracks"
+  ) || (
+    species === "marsh-rabbit"
+    && memoryKind === "movement"
+    && evidenceKind === "paired-tracks"
+  ) || (
+    species === "marsh-fox"
+    && memoryKind === "movement"
+    && evidenceKind === "canid-pawprints"
+  );
+}
+
+function retainMemories(
+  value: readonly CoreWildlifeMemory[],
+  atTick: number,
+): readonly CoreWildlifeMemory[] {
   return Object.freeze([...value]
+    .filter((memory) => {
+      const evidence = memory.environmentalEvidence;
+      return evidence === undefined
+        || coreWildlifeEnvironmentalEvidenceStrengthAtTick(evidence, atTick) > 0;
+    })
     .sort((left, right) => right.atTick - left.atTick || compareText(left.eventId, right.eventId))
     .slice(0, CORE_WILDLIFE_MEMORY_CAP)
     .sort(compareMemory));
@@ -1277,7 +1426,15 @@ function rebuildActor(
     | "memories"
   >>,
 ): CoreWildlifeActorState {
-  const candidate = canonicalizeCoreWildlifeActorState({ ...state, ...changes });
+  const updatedAtTick = changes.updatedAtTick ?? state.updatedAtTick;
+  const candidate = canonicalizeCoreWildlifeActorState({
+    ...state,
+    ...changes,
+    // Every authoritative time-advancing transition owns expiry. Projection
+    // also applies the same age function, so a legacy save cannot disclose an
+    // already-expired trace before its actor receives another update.
+    memories: retainMemories(changes.memories ?? state.memories, updatedAtTick),
+  });
   if (candidate === null) throw new Error("Core wildlife transition broke actor invariants");
   return candidate;
 }
@@ -1339,6 +1496,13 @@ function positiveSafeInteger(value: unknown): value is number {
 
 function nonnegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0 && !Object.is(value, -0);
+}
+
+function sameWorldPosition(left: WorldPosition, right: WorldPosition): boolean {
+  return left.region.x === right.region.x
+    && left.region.y === right.region.y
+    && left.localX === right.localX
+    && left.localY === right.localY;
 }
 
 function validId(value: unknown): value is string {

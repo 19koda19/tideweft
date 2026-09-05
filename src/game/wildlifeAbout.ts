@@ -102,6 +102,18 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN ANIMAL",
     representation: "individual",
   },
+  "marsh-rabbit": {
+    identifiedName: "Marsh rabbit",
+    identifiedHeading: "MARSH RABBIT",
+    unidentifiedHeading: "SMALL ANIMAL",
+    representation: "individual",
+  },
+  "marsh-fox": {
+    identifiedName: "Marsh fox",
+    identifiedHeading: "MARSH FOX",
+    unidentifiedHeading: "UNKNOWN CANID",
+    representation: "individual",
+  },
 });
 
 /** Compact current-sight summary; stable identity is retained only for routing. */
@@ -153,6 +165,9 @@ export function projectWildlifeAbout(
     ));
   }
   observed.push(fact("Behavior", presentation.behaviorLabel));
+  if (presentation.formLabel !== undefined) {
+    observed.push(fact("Form", presentation.formLabel));
+  }
   if (presentation.appearanceLabel !== undefined) {
     observed.push(fact("Appearance", presentation.appearanceLabel));
   }
@@ -243,7 +258,10 @@ function observePopulationEvidence(
     tileSize: 1,
     selectedEvidenceId: evidenceId,
   });
-  return presentations?.find((candidate) => candidate.evidenceId === evidenceId) ?? null;
+  const presentation = presentations?.find((candidate) => candidate.evidenceId === evidenceId);
+  // Individual movement signs intentionally have no selectable/ABOUT contract
+  // in this slice. Do not route them through the rat population-sign surface.
+  return presentation?.representation === "population-evidence" ? presentation : null;
 }
 
 function populationEvidenceHeading(

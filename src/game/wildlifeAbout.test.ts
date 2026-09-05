@@ -192,6 +192,8 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["gull", "GULL FLOCK", "Gull"],
     ["black-bear", "BLACK BEAR", "Black bear"],
     ["domestic-cat", "DOMESTIC CAT", "Domestic cat"],
+    ["marsh-rabbit", "MARSH RABBIT", "Marsh rabbit"],
+    ["marsh-fox", "MARSH FOX", "Marsh fox"],
   ] as const)("identifies a clear %s without claiming an individual identity", (species, heading, label) => {
     const actor = wildlife(species);
     const visible = observation(actor, 4, species === "gull" ? 7 : undefined);
@@ -209,6 +211,42 @@ describe("knowledge-honest wildlife ABOUT", () => {
     expect(about?.observed).toContainEqual({ label: "Species", value: label });
     expect(about?.identity).not.toContain(actor.identity.stableId);
     expect(about?.knowledge).not.toBe("Known individual");
+  });
+
+  it.each([
+    ["marsh-rabbit", "SMALL ANIMAL", "Unidentified small animal"],
+    ["marsh-fox", "UNKNOWN CANID", "Unidentified canid"],
+  ] as const)("withholds a distant %s classification and private ecology", (
+    species,
+    heading,
+    identity,
+  ) => {
+    const actor = wildlife(species);
+    const about = projectWildlifeAbout(actor, observation(actor, 60));
+    expect(about).toMatchObject({ heading, identity, knowledge: "Unfamiliar", known: [] });
+    expect(about?.observed.map(({ label }) => label)).not.toContain("Species");
+    expect(about?.observed.map(({ label }) => label)).not.toContain("Form");
+    expect(about?.observed.map(({ label }) => label)).not.toContain("Appearance");
+    expect(about?.observed.map(({ label }) => label)).not.toContain("Life stage");
+    expect(JSON.stringify(about)).not.toMatch(/patch|population|target|hunger|prey|temperament/iu);
+  });
+
+  it.each([
+    ["marsh-rabbit", "Compact, long-eared"],
+    ["marsh-fox", "Lean, low-tailed canid"],
+  ] as const)("shows only directly observable close-range %s facts", (species, form) => {
+    const actor = wildlife(species);
+    const selected = projectWildlifeLivingActorInspection(actor, observation(actor));
+    expect(selected?.about.observed).toEqual(expect.arrayContaining([
+      { label: "Species", value: species === "marsh-rabbit" ? "Marsh rabbit" : "Marsh fox" },
+      { label: "Behavior", value: "Watching" },
+      { label: "Form", value: form },
+      { label: "Appearance", value: expect.any(String) },
+      { label: "Life stage", value: expect.any(String) },
+    ]));
+    expect(selected?.about.identityLine).not.toContain(actor.identity.stableId);
+    expect(selected?.about.known).toEqual([]);
+    expect(hasCoherentLivingActorInspection(selected!)).toBe(true);
   });
 
   it("describes directly visible brown-rat evidence as population-level signs", () => {

@@ -6,11 +6,18 @@ import { createWorldView, deserializeWorld, serializeWorld } from "../sim/public
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import {
+  canonicalizeCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
+import {
+  CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES,
+  CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
+  canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
+} from "./coreEcologyHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import {
   canonicalizeCoreWildlifeActorState,
@@ -66,9 +73,9 @@ vi.mock("../audio/soundscape", () => ({
 
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
-interface V9Envelope {
+interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 10;
+  readonly version: 11;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -149,8 +156,8 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(10);
-    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v2");
+    expect(repository.snapshot().payloadVersion).toBe(11);
+    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v3");
     expect(adoptedCore.groups.groups).toEqual([]);
     const retainedPopulations = adoptedCore.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
@@ -175,6 +182,69 @@ describe("runtime core-ecology vertical slice", () => {
     const resumed = await createTideweftRuntime(repository);
     await resumed.save();
     expect(requiredEnvelope(repository).coreEcology).toBe(adoptedText);
+    resumed.destroy();
+  });
+
+  it("migrates a sealed v10 habitat once while preserving every established state root", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "alpha fifteen marsh edge persistence",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const currentRecord = repository.snapshot();
+    const v10Record = harborEdgeV10Record(currentRecord);
+    const v10Envelope = JSON.parse(v10Record.worldJson) as CurrentEnvelope;
+    const v10Ecology = deserializeCoreEcologyAggregatePatch(v10Envelope.coreEcology);
+    if (v10Ecology === null || v10Ecology.derivation.kind !== "habitat-v2") {
+      throw new Error("v10 fixture omitted its authenticated harbor-edge ecology");
+    }
+    expect(v10Ecology.populations.some(({ species }) => (
+      species === "marsh-rabbit" || species === "marsh-fox"
+    ))).toBe(false);
+    expect(v10Ecology.aggregatePopulations[0]?.evidence.length).toBeGreaterThan(0);
+    await repository.save(v10Record);
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const v11Record = repository.snapshot();
+    const v11Envelope = requiredEnvelope(repository);
+    const v11Ecology = requiredCore(v11Envelope);
+    expect(v11Record.payloadVersion).toBe(11);
+    expect(v11Ecology.derivation.kind).toBe("habitat-v3");
+    expect(v11Envelope.world).toBe(v10Envelope.world);
+    expect(v11Envelope.player).toEqual(v10Envelope.player);
+    expect(v11Envelope.physicalCargo).toEqual(v10Envelope.physicalCargo);
+    expect(v11Envelope.promiseJourney).toEqual(v10Envelope.promiseJourney);
+    expect(v11Envelope.bio0Ecology).toBe(v10Envelope.bio0Ecology);
+    expect(v11Ecology.groups).toEqual(v10Ecology.groups);
+    expect(v11Ecology.aggregatePopulations).toEqual(v10Ecology.aggregatePopulations);
+    for (const oldPopulation of v10Ecology.populations) {
+      expect(v11Ecology.populations.find(({ species, populationKey }) => (
+        species === oldPopulation.species && populationKey === oldPopulation.populationKey
+      ))).toEqual(oldPopulation);
+    }
+    if (
+      v11Ecology.derivation.kind !== "habitat-v3"
+      || v10Ecology.derivation.kind !== "habitat-v2"
+    ) throw new Error("migration did not retain canonical habitat derivations");
+    expect(v11Ecology.derivation.habitat.populations.slice(
+      0,
+      CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length,
+    )).toEqual(v10Ecology.derivation.habitat.populations);
+
+    const stableEcology = v11Envelope.coreEcology;
+    migrated.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(stableEcology);
     resumed.destroy();
   });
 
@@ -214,7 +284,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v10 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v11 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -280,7 +350,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(10);
+    expect(before.version).toBe(11);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -458,6 +528,154 @@ describe("runtime core-ecology vertical slice", () => {
 
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
     expect(runtime.getUIView().announcement?.message).not.toBe("ANIMAL ALARM — source unclear.");
+    runtime.destroy();
+  });
+
+  it("persists a witnessed marsh-edge cue and only movement-backed fox signs across reload", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "marsh-edge-runtime-cue-1",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    makeWorldTraceableAndClear(world);
+    const player = structuredClone(envelope.player);
+    const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
+    if (regional === null) throw new Error("marsh-edge cue fixture could not restore its frame");
+    const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
+    if (playerPosition === null) throw new Error("marsh-edge cue fixture lost its player");
+    const direction: -1 | 1 = playerPosition.localX < REGION_WIDTH_UNITS / 2 ? 1 : -1;
+    player.facingMilliRadians = direction > 0 ? 0 : Math.round(Math.PI * 1_000);
+    const rabbitPosition = translateWorldPosition(
+      playerPosition,
+      direction * 6 * WORLD_POSITION_UNITS_PER_TILE,
+      -2 * WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const foxPosition = translateWorldPosition(
+      playerPosition,
+      direction * 6 * WORLD_POSITION_UNITS_PER_TILE,
+      2 * WORLD_POSITION_UNITS_PER_TILE,
+    );
+
+    let patch = requiredCore(envelope);
+    const rabbit = patch.populations
+      .find(({ species }) => species === "marsh-rabbit")?.members[0]?.actor;
+    const fox = patch.populations
+      .find(({ species }) => species === "marsh-fox")?.members[0]?.actor;
+    if (rabbit === undefined || fox === undefined) {
+      throw new Error("marsh-edge cue fixture omitted its rabbit/fox web");
+    }
+    const positionedRabbit = repositionCoreWildlifeActor(rabbit, {
+      atTick: patch.updatedAtTick,
+      position: rabbitPosition,
+      heading: 250_000,
+    });
+    const positionedFox = replaceCoreWildlifeActorPhysiology(
+      repositionCoreWildlifeActor(fox, {
+        atTick: patch.updatedAtTick,
+        position: foxPosition,
+        heading: 750_000,
+      }),
+      {
+        atTick: patch.updatedAtTick,
+        needs: { ...fox.needs, hunger: 1_000_000 },
+        condition: fox.condition,
+      },
+    );
+    patch = replaceCoreEcologyAggregatePatchActor(patch, positionedRabbit);
+    patch = replaceCoreEcologyAggregatePatchActor(patch, positionedFox);
+    let displacedOrdinal = 0;
+    for (const actor of coreActors(patch)) {
+      if (
+        actor.identity.stableId === rabbit.identity.stableId
+        || actor.identity.stableId === fox.identity.stableId
+      ) continue;
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+        atTick: patch.updatedAtTick,
+        position: translateWorldPosition(
+          playerPosition,
+          -direction * (20 + displacedOrdinal) * WORLD_POSITION_UNITS_PER_TILE,
+          (displacedOrdinal % 5 - 2) * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+        heading: actor.address.heading,
+      }));
+      displacedOrdinal += 1;
+    }
+    const nextEnvelope = resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      player,
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
+    });
+    await repository.save({ ...record, worldJson: JSON.stringify(nextEnvelope) });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const runtime = await createTideweftRuntime(repository);
+    soundscapePlay.mockClear();
+    advancePlayerSteps(runtime, 10);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
+      .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
+      .toHaveLength(1);
+    expect(runtime.getUIView().announcement?.message)
+      .toBe("[soft thump nearby] [brief yip nearby]");
+
+    await runtime.save();
+    const after = requiredEnvelope(repository);
+    const afterCore = requiredCore(after);
+    const savedRabbit = coreActors(afterCore)
+      .find(({ identity }) => identity.stableId === rabbit.identity.stableId);
+    const savedFox = coreActors(afterCore)
+      .find(({ identity }) => identity.stableId === fox.identity.stableId);
+    if (savedRabbit === undefined || savedFox === undefined) {
+      throw new Error("marsh-edge actors did not persist after their event");
+    }
+    expect(savedRabbit.intent.kind).toBe("alarm");
+    expect(savedRabbit.address.position).toEqual(rabbitPosition);
+    expect(savedRabbit.memories.some(({ kind }) => kind === "movement")).toBe(false);
+    expect(savedFox.intent.kind).toBe("pursue");
+    expect(worldPositionDelta(foxPosition, savedFox.address.position)).not.toEqual({ x: 0, y: 0 });
+    const movementEvidence = savedFox.memories.find(({ kind }) => kind === "movement")
+      ?.environmentalEvidence;
+    expect(movementEvidence).toMatchObject({
+      kind: "canid-pawprints",
+      position: savedFox.address.position,
+      itemConsumption: "none",
+      disclosure: "direct-observation-required",
+    });
+
+    const durableCore = after.coreEcology;
+    runtime.destroy();
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(durableCore);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
+      .toHaveLength(0);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
+      .toHaveLength(0);
+    resumed.destroy();
+  });
+
+  it("retains a fox pursuit cue witnessed at its event locus when the fox moves out of view", async () => {
+    const { runtime, foxActorId } = await createFoxEventBoundaryRuntime();
+    expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === foxActorId))
+      .toBe(true);
+    soundscapePlay.mockClear();
+
+    advancePlayerSteps(runtime, 10);
+
+    expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === foxActorId))
+      .toBe(false);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
+      .toHaveLength(1);
     runtime.destroy();
   });
 
@@ -841,18 +1059,89 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
   return { runtime, alarmActorId: alarmActor.identity.stableId };
 }
 
-function requiredEnvelope(repository: MemoryRepository): V9Envelope {
-  const value = JSON.parse(repository.snapshot().worldJson) as V9Envelope;
-  if (value.format !== "tideweft-session" || value.version !== 10) {
-    throw new Error("core-ecology runtime fixture did not save a v10 envelope");
+function harborEdgeV10Record(current: SaveRecord): SaveRecord {
+  const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+  const envelope = decoded as unknown as CurrentEnvelope;
+  let ecology = requiredCore(envelope);
+  if (ecology.derivation.kind !== "habitat-v3") {
+    throw new Error("fresh migration source omitted marsh-edge habitat v3");
+  }
+  const habitat = ecology.derivation.habitat;
+  const harborEdgeHabitat = canonicalizeCoreEcologyHarborEdgeHabitatAssemblage({
+    generationVersion: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
+    originRegion: habitat.originRegion,
+    regionId: habitat.regionId,
+    terrainHash: habitat.terrainHash,
+    selection: habitat.selection,
+    evaluatedTiles: habitat.evaluatedTiles,
+    speciesEvaluations:
+      habitat.evaluatedTiles * CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: habitat.populations.slice(
+      0,
+      CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length,
+    ),
+  });
+  if (harborEdgeHabitat === null) {
+    throw new Error("marsh-edge habitat did not preserve its frozen v2 prefix");
+  }
+  const establishedActor = ecology.populations.find(({ species }) => (
+    species !== "marsh-rabbit" && species !== "marsh-fox"
+  ))?.members[0]?.actor;
+  if (establishedActor === undefined) {
+    throw new Error("v10 migration fixture omitted every established actor");
+  }
+  ecology = replaceCoreEcologyAggregatePatchActor(
+    ecology,
+    replaceCoreWildlifeActorPhysiology(establishedActor, {
+      atTick: ecology.updatedAtTick,
+      needs: { ...establishedActor.needs, hunger: 987_654 },
+      condition: {
+        ...establishedActor.condition,
+        health: 876_543,
+        stress: 234_567,
+      },
+    }),
+  );
+  const v10Ecology = canonicalizeCoreEcologyAggregatePatch({
+    ...ecology,
+    derivation: { kind: "habitat-v2", habitat: harborEdgeHabitat },
+    populations: ecology.populations.filter(({ species }) => (
+      species !== "marsh-rabbit" && species !== "marsh-fox"
+    )),
+  });
+  if (v10Ecology === null) {
+    throw new Error("fixture could not reconstruct the canonical v10 ecology state");
+  }
+  const { integrity: _integrity, ...currentBase } = decoded;
+  const v10Base = {
+    ...currentBase,
+    version: 10,
+    coreEcology: serializeCoreEcologyAggregatePatch(v10Ecology),
+  };
+  return {
+    ...current,
+    payloadVersion: 10,
+    updatedAt: current.updatedAt + 1,
+    worldJson: JSON.stringify({
+      ...v10Base,
+      integrity: gameSaveEnvelopeIntegrity(v10Base),
+    }),
+  };
+}
+
+function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
+  const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
+  if (value.format !== "tideweft-session" || value.version !== 11) {
+    throw new Error("core-ecology runtime fixture did not save a v11 envelope");
   }
   return value;
 }
 
 function resealedEnvelope(
-  envelope: V9Envelope,
-  changes: Partial<Pick<V9Envelope, "coreEcology" | "physicalCargo" | "player" | "world">>,
-): V9Envelope {
+  envelope: CurrentEnvelope,
+  changes: Partial<Pick<CurrentEnvelope, "coreEcology" | "physicalCargo" | "player" | "world">>,
+): CurrentEnvelope {
   const unsealed = { ...envelope, ...changes, integrity: "" };
   return Object.freeze({
     ...unsealed,
@@ -873,6 +1162,111 @@ function makeWorldDryAndClear(world: ReturnType<typeof deserializeWorld>): void 
   world.weather.windX = 0;
   world.weather.windY = 0;
   world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+}
+
+function makeWorldTraceableAndClear(world: ReturnType<typeof deserializeWorld>): void {
+  makeWorldDryAndClear(world);
+  for (const tile of world.terrain.tiles) tile.moisture = 900_000;
+}
+
+async function createFoxEventBoundaryRuntime(): Promise<Readonly<{
+  runtime: TideweftRuntime;
+  foxActorId: string;
+}>> {
+  const repository = new MemoryRepository();
+  const initial = await createTideweftRuntime(repository);
+  initial.dispatchUI({
+    type: "new-world",
+    seed: "marsh-edge-runtime-cue-1",
+    posture: "gale",
+    sessionShape: "wander",
+  });
+  await initial.save();
+  const record = repository.snapshot();
+  const envelope = requiredEnvelope(repository);
+  const world = deserializeWorld(envelope.world);
+  makeWorldDryAndClear(world);
+  const player = structuredClone(envelope.player);
+  const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
+  if (regional === null) throw new Error("fox event-locus fixture lost its regional frame");
+  const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
+  if (playerPosition === null) throw new Error("fox event-locus fixture lost its player");
+  const playerGlobalX = playerPosition.region.x * WORLD_WIDTH
+    + Math.floor(playerPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const playerGlobalY = playerPosition.region.y * WORLD_HEIGHT
+    + Math.floor(playerPosition.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const playerWindowX = playerGlobalX - regional.window.origin.x;
+  const playerWindowY = playerGlobalY - regional.window.origin.y;
+  const width = regional.window.terrain.width;
+  const direction: -1 | 1 = playerWindowX + 13 < width ? 1 : -1;
+  player.facingMilliRadians = direction > 0 ? 0 : Math.round(Math.PI * 1_000);
+  const playerIndex = playerWindowY * width + playerWindowX;
+  const foxOffset = 10;
+  const rabbitOffset = 12;
+  const foxPosition = worldPositionAtWindowTile(
+    regional.window,
+    playerIndex + direction * foxOffset,
+  );
+  const rabbitPosition = worldPositionAtWindowTile(
+    regional.window,
+    playerIndex + direction * rabbitOffset,
+  );
+
+  let patch = requiredCore(envelope);
+  const rabbit = patch.populations
+    .find(({ species }) => species === "marsh-rabbit")?.members[0]?.actor;
+  const fox = patch.populations
+    .find(({ species }) => species === "marsh-fox")?.members[0]?.actor;
+  if (rabbit === undefined || fox === undefined) {
+    throw new Error("fox event-locus fixture omitted its rabbit/fox web");
+  }
+  patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(rabbit, {
+    atTick: patch.updatedAtTick,
+    position: rabbitPosition,
+    heading: direction > 0 ? 500_000 : 0,
+  }));
+  const positionedFox = replaceCoreWildlifeActorPhysiology(
+    repositionCoreWildlifeActor(fox, {
+      atTick: patch.updatedAtTick,
+      position: foxPosition,
+      heading: direction > 0 ? 0 : 500_000,
+    }),
+    {
+      atTick: patch.updatedAtTick,
+      needs: { ...fox.needs, hunger: 1_000_000 },
+      condition: fox.condition,
+    },
+  );
+  patch = replaceCoreEcologyAggregatePatchActor(patch, positionedFox);
+  let displacedOrdinal = 0;
+  for (const actor of coreActors(patch)) {
+    if (
+      actor.identity.stableId === rabbit.identity.stableId
+      || actor.identity.stableId === fox.identity.stableId
+    ) continue;
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+      atTick: patch.updatedAtTick,
+      position: translateWorldPosition(
+        playerPosition,
+        -direction * (20 + displacedOrdinal) * WORLD_POSITION_UNITS_PER_TILE,
+        (displacedOrdinal % 5 - 2) * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      heading: actor.address.heading,
+    }));
+    displacedOrdinal += 1;
+  }
+  const nextEnvelope = resealedEnvelope(envelope, {
+    world: serializeWorld(world),
+    player,
+    coreEcology: serializeCoreEcologyAggregatePatch(patch),
+  });
+  await repository.save({ ...record, worldJson: JSON.stringify(nextEnvelope) });
+  initial.destroy();
+  scheduledFrame = undefined;
+  return Object.freeze({
+    runtime: await createTideweftRuntime(repository),
+    foxActorId: fox.identity.stableId,
+  });
 }
 
 function makeWorldShallowAndClear(world: ReturnType<typeof deserializeWorld>): void {
@@ -976,9 +1370,9 @@ function findOpenHorizontalRegionSeam(
   throw new Error("seam fixture could not find an open horizontal region boundary");
 }
 
-function requiredCore(envelope: V9Envelope): CoreEcologyAggregatePatchState {
+function requiredCore(envelope: CurrentEnvelope): CoreEcologyAggregatePatchState {
   const state = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
-  if (state === null) throw new Error("v10 save omitted canonical core ecology");
+  if (state === null) throw new Error("v11 save omitted canonical core ecology");
   return state;
 }
 
@@ -996,13 +1390,13 @@ interface PublishedV8PopulationDefinition {
 }
 
 function publishedV8CoreEcologyFixture(
-  envelope: V9Envelope,
+  envelope: CurrentEnvelope,
   variant: PublishedV8FixtureVariant = "exact",
 ): Readonly<{ text: string; actors: readonly CoreWildlifeActorState[] }> {
   const world = deserializeWorld(envelope.world);
   const current = requiredCore(envelope);
-  if (current.derivation.kind !== "habitat-v2") {
-    throw new Error("fresh Wave-B fixture has no harbor-edge habitat derivation");
+  if (current.derivation.kind !== "habitat-v3") {
+    throw new Error("fresh marsh-edge fixture has no v3 habitat derivation");
   }
   const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
   if (bio0 === null) throw new Error("fresh fixture has no canonical Alpha-13 BIO0 state");
@@ -1084,7 +1478,7 @@ function publishedV8CoreEcologyFixture(
   return Object.freeze({ text, actors: Object.freeze(actors) });
 }
 
-function requiredCargo(envelope: V9Envelope): PhysicalCargoState {
+function requiredCargo(envelope: CurrentEnvelope): PhysicalCargoState {
   const validation = validatePhysicalCargoState(
     envelope.physicalCargo,
     envelope.player,

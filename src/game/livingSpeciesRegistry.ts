@@ -104,6 +104,24 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 28_000,
     },
   },
+  "marsh-rabbit": {
+    aboutNoun: "marsh rabbit",
+    senses: {
+      visionAcuity: 860_000,
+      hearingSensitivity: 970_000,
+      scentSensitivity: 610_000,
+      scentBaseRangeUnits: 18_000,
+    },
+  },
+  "marsh-fox": {
+    aboutNoun: "marsh fox",
+    senses: {
+      visionAcuity: 880_000,
+      hearingSensitivity: 920_000,
+      scentSensitivity: 940_000,
+      scentBaseRangeUnits: 34_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

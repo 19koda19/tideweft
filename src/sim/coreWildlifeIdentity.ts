@@ -12,6 +12,8 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "black-bear",
   "brown-rat",
   "domestic-cat",
+  "marsh-rabbit",
+  "marsh-fox",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -55,13 +57,18 @@ export type CoreWildlifeLifeStage = "juvenile" | "adult" | "older";
 
 /** Sim-layer identity authority; game registries derive these namespaces. */
 export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
-  Record<CoreWildlifeSpecies, "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-">
+  Record<
+    CoreWildlifeSpecies,
+    "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-" | "RABBIT-" | "FOX-"
+  >
 > = Object.freeze({
   deer: "DEER-",
   gull: "GULL-",
   "black-bear": "BEAR-",
   "brown-rat": "RAT-",
   "domestic-cat": "CAT-",
+  "marsh-rabbit": "RABBIT-",
+  "marsh-fox": "FOX-",
 });
 
 /**
@@ -129,6 +136,26 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     catalogIdentityForm: "individual",
     taxonomicClass: "mammal",
     dietClass: "carnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "marsh-rabbit": {
+    species: "marsh-rabbit",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "herbivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "marsh-fox": {
+    species: "marsh-fox",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "omnivore",
     locomotionClass: "terrestrial",
     groupOrganization: null,
     groupStableIdNamespace: null,
@@ -383,6 +410,72 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [80_000, 500_000],
     },
   },
+  "marsh-rabbit": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "marsh-rabbit",
+    maximumPatchPopulation: 24,
+    roles: ["alarm-source", "prey", "small-prey", "forager"],
+    foodAffinities: {
+      browse: 1_000_000,
+      "shore-forage": 420_000,
+      carrion: 0,
+      "exposed-food": 120_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 350_000,
+      fleeThreshold: 520_000,
+      retreatThreshold: 440_000,
+      forageThreshold: 320_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["marsh-brown", "gray-brown", "rufous-backed", "pale-bellied"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["watchful", "social"],
+      ["cautious", "reserved"],
+      ["patient", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [680_000, 980_000],
+      boldness: [60_000, 360_000],
+      sociability: [240_000, 720_000],
+    },
+  },
+  "marsh-fox": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "marsh-fox",
+    maximumPatchPopulation: 3,
+    roles: ["forager", "scavenger", "predator", "small-predator", "omnivore"],
+    foodAffinities: {
+      browse: 140_000,
+      "shore-forage": 500_000,
+      carrion: 650_000,
+      "exposed-food": 720_000,
+      "live-prey": 1_000_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 760_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 280_000,
+      guardThreshold: 620_000,
+      maximumPursuitTicks: 7,
+    },
+    morphs: ["red", "silver-red", "dark-legged", "pale-muzzled"],
+    temperamentPairs: [
+      ["cautious", "opportunistic"],
+      ["bold", "opportunistic"],
+      ["watchful", "patient"],
+      ["reserved", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [520_000, 920_000],
+      boldness: [260_000, 800_000],
+      sociability: [80_000, 420_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -407,7 +500,7 @@ export function getCoreWildlifeSpeciesMetadata(
 
 export function coreWildlifeIdPrefix(
   species: CoreWildlifeSpecies,
-): "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-" {
+): "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-" | "RABBIT-" | "FOX-" {
   const prefix = CORE_WILDLIFE_ID_PREFIX_BY_SPECIES[species];
   if (prefix === undefined) throw new TypeError(`Unsupported core wildlife species ${String(species)}`);
   return prefix;

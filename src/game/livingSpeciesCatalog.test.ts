@@ -40,6 +40,8 @@ describe("Living Weft species module catalog", () => {
       "living-species:domestic-dog:v1",
       "living-species:gull:v1",
       "living-species:human:v1",
+      "living-species:marsh-fox:v1",
+      "living-species:marsh-rabbit:v1",
     ]);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
@@ -343,6 +345,212 @@ describe("Living Weft species module catalog", () => {
       },
       aftermath: { implementation: "unimplemented", carcassModel: "none" },
     });
+  });
+
+  it("declares the active marsh-edge individuals without inventing later mortality systems", () => {
+    const rabbit = livingSpeciesModule("marsh-rabbit");
+    const fox = livingSpeciesModule("marsh-fox");
+
+    for (const module of [rabbit, fox]) {
+      expect(module).toMatchObject({
+        profile: {
+          implementation: "active",
+          ownerId: "sim:core-wildlife-identity:v1",
+          taxonomicClass: "mammal",
+        },
+        identity: {
+          implementation: "active",
+          ownerId: "sim:core-wildlife-identity:v1",
+          form: "individual",
+        },
+        morphology: {
+          implementation: "active",
+          ownerId: "sim:core-wildlife-identity:v1",
+          model: "individual",
+        },
+        habitat: {
+          implementation: "active",
+          ownerId: "game:core-ecology-habitat:v3",
+          migrationModel: "none",
+        },
+        spatial: {
+          implementation: "active",
+          ownerId: "game:living-actor-address:v1",
+          positionModel: "segmented-point",
+          signedRegions: true,
+          extremeRegions: true,
+        },
+        population: {
+          implementation: "active",
+          ownerId: "game:core-ecology:v3",
+          strategy: "hybrid-population",
+          materialization: "mixed",
+          authoritativeUnit: "hybrid",
+          dematerialization: "reconcile-hybrid-state",
+          coarseSimulation: true,
+        },
+        physiology: {
+          implementation: "active",
+          ownerId: "game:core-wildlife-actor:v1",
+        },
+        locomotion: {
+          implementation: "active",
+          ownerId: "game:core-wildlife-locomotion-profile:v1",
+          decisionModel: "individual",
+          crossRegion: true,
+        },
+        activity: {
+          implementation: "active",
+          ownerId: "game:core-wildlife-actor:v1",
+          decisionModel: "individual",
+          offscreenModel: "individual",
+          circadian: { status: "unimplemented", ownerId: null },
+        },
+        social: {
+          implementation: "foundation",
+          ownerId: "game:core-ecology-perception:v1",
+        },
+        cognition: {
+          implementation: "active",
+          ownerId: "game:core-wildlife-actor:v1",
+          attentionOwnerId: "sim:actor-perception:v2",
+          model: "bounded-learning",
+        },
+        lifeHistory: {
+          implementation: "foundation",
+          dynamicAging: false,
+          reproduction: "unimplemented",
+          mortality: "unimplemented",
+        },
+        health: {
+          implementation: "foundation",
+          injuryAxis: null,
+          incapacitation: false,
+          causalDeath: false,
+          recovery: false,
+        },
+        aftermath: {
+          implementation: "unimplemented",
+          ownerId: null,
+          decayOwnerId: null,
+          carcassModel: "none",
+          persistentIdentity: false,
+          resourceClasses: [],
+          evidenceOutputs: [],
+        },
+        about: {
+          implementation: "active",
+          ownerId: "game:wildlife-about:v1",
+          directObservationRequired: true,
+        },
+        persistence: {
+          implementation: "active",
+          ownerId: "game:core-ecology:v3",
+          generationMigration: "preserve-materialized-identity",
+        },
+        inventory: { implementation: "unimplemented", model: "none" },
+      });
+      expect(module?.physiology.conditions.map(({ id }) => id)).toEqual([
+        "exhaustion",
+        "health",
+        "stress",
+      ]);
+      expect(module?.cognition.memoryKinds).toEqual([
+        "alarm",
+        "disengagement",
+        "food",
+        "guard",
+        "movement",
+        "pursuit",
+        "threat",
+      ]);
+      expect(module?.environment).toMatchObject({
+        fire: { status: "unimplemented", ownerId: null },
+        livingCover: { status: "unimplemented", ownerId: null },
+        possibility: { status: "unimplemented", ownerId: null },
+        terrain: { status: "unimplemented", ownerId: null },
+        tide: { status: "unimplemented", ownerId: null },
+        water: { status: "unimplemented", ownerId: null },
+        weather: { status: "unimplemented", ownerId: null },
+      });
+    }
+
+    expect(rabbit).toMatchObject({
+      profile: {
+        ecologicalClasses: ["alarm-source", "forager", "prey", "small-prey"],
+      },
+      habitat: { habitatClasses: ["marsh", "meadow", "settlement-edge"] },
+      identity: { stableIdNamespace: "RABBIT" },
+      diet: { mode: "herbivore" },
+      foodWeb: {
+        consumedBy: ["large-predator", "small-predator"],
+        ecologicalEffects: ["alarm-information", "bounded-food-pressure", "small-prey-support"],
+      },
+      locomotion: {
+        media: [
+          { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "shallow-water", relativeCapability: 450_000 },
+        ],
+        movementVerbs: ["hop", "wade"],
+      },
+      social: { communicationChannels: ["hearing"], groupModel: "variable" },
+      sound: {
+        implementation: "active",
+        ownerId: "audio:soundscape:v1",
+        repertoire: ["rabbit-thump"],
+        communicationSignals: ["rabbit-thump"],
+        accessibilityCues: ["direct-observation-caption"],
+      },
+      evidence: {
+        status: "active",
+        ownerId: "game:core-wildlife-actor:v1",
+        decayOwnerId: "game:core-wildlife-actor:v1",
+        produces: ["paired-tracks"],
+        interprets: [],
+      },
+    });
+    expect(rabbit?.interactions.targets.find(({ targetClass }) => targetClass === "smaller-prey"))
+      .toBeUndefined();
+
+    expect(fox).toMatchObject({
+      profile: {
+        ecologicalClasses: ["forager", "omnivore", "predator", "scavenger", "small-predator"],
+      },
+      habitat: { habitatClasses: ["marsh", "meadow", "ridge", "settlement-edge"] },
+      identity: { stableIdNamespace: "FOX" },
+      diet: { mode: "omnivore" },
+      foodWeb: {
+        competesWith: ["domestic-cat", "gull"],
+        ecologicalEffects: ["bounded-food-pressure", "small-prey-pressure"],
+      },
+      locomotion: {
+        media: [
+          { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "shallow-water", relativeCapability: 600_000 },
+        ],
+        movementVerbs: ["trot", "wade", "walk"],
+      },
+      social: { communicationChannels: [], groupModel: "solitary" },
+      sound: {
+        implementation: "active",
+        ownerId: "audio:soundscape:v1",
+        repertoire: ["fox-yip"],
+        communicationSignals: [],
+        accessibilityCues: ["direct-observation-caption"],
+      },
+      evidence: {
+        status: "active",
+        ownerId: "game:core-wildlife-actor:v1",
+        decayOwnerId: "game:core-wildlife-actor:v1",
+        produces: ["canid-pawprints"],
+        interprets: [],
+      },
+    });
+    expect(fox?.interactions.targets.find(({ targetClass }) => targetClass === "smaller-prey"))
+      .toMatchObject({
+        verbs: ["pursue"],
+        escalationConstraints: ["bounded-pursuit", "direct-perception-required"],
+      });
   });
 
   it("makes registration order irrelevant while persisted catalog order is canonical", () => {
@@ -954,7 +1162,10 @@ describe("Living Weft species module catalog", () => {
       });
       expect(module.activity.circadian.status).toBe("unimplemented");
       expect(module.evidence.status).toBe(
-        module.speciesId === "brown-rat" || module.speciesId === "domestic-cat"
+        module.speciesId === "brown-rat"
+          || module.speciesId === "domestic-cat"
+          || module.speciesId === "marsh-rabbit"
+          || module.speciesId === "marsh-fox"
           ? "active"
           : "unimplemented",
       );
@@ -966,7 +1177,11 @@ describe("Living Weft species module catalog", () => {
       expect(module.persistence.generationMigration).toBe("preserve-materialized-identity");
       expect(module.senses.implementation).toBe("foundation");
       expect(module.social.communicationChannels).toEqual(
-        module.speciesId === "deer" || module.speciesId === "gull" ? ["hearing"] : [],
+        module.speciesId === "deer"
+          || module.speciesId === "gull"
+          || module.speciesId === "marsh-rabbit"
+          ? ["hearing"]
+          : [],
       );
       expect(module.social.group.status).toBe(
         module.speciesId === "deer" || module.speciesId === "gull"
@@ -974,7 +1189,11 @@ describe("Living Weft species module catalog", () => {
           : "unimplemented",
       );
       expect(module.inventory.implementation).toBe("unimplemented");
-      expect(module.locomotion.crossRegion).toBe(module.speciesId === "domestic-cat");
+      expect(module.locomotion.crossRegion).toBe(
+        module.speciesId === "domestic-cat"
+          || module.speciesId === "marsh-rabbit"
+          || module.speciesId === "marsh-fox",
+      );
     }
     expect(livingSpeciesModule("brown-rat")?.environment.weather.status).toBe("active");
     expect(livingSpeciesModule("domestic-cat")?.environment.weather.status)

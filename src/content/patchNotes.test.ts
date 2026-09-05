@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.15",
-      buildIdentity: "0.3.3-alpha.15",
+      version: "0.3.3-alpha.16",
+      buildIdentity: "0.3.3-alpha.16",
       gameplayContractVersion: 20,
-      tutorialVersion: 25,
+      tutorialVersion: 26,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Settlement Shadows and its inherited habitat groups without claiming worldwide ecology", () => {
+  it("scopes Marsh-edge Pursuit and retains earlier habitat work without claiming worldwide ecology", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const settlementRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.15",
+    );
+    const settlementCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => settlementRelease?.categories[category] ?? [])
       .join(" ");
     const habitatRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.14",
@@ -99,30 +106,44 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("brown rats and domestic cats");
-    expect(activeCopy).toContain("population-area aggregate with no individual rat actors");
-    expect(activeCopy).toContain("free-ranging domestic cats");
-    expect(activeCopy).toContain("cats, dogs, people, or gulls");
-    expect(activeCopy).toContain("Exposed loose physical provisions");
-    expect(activeCopy).toContain("at most one rat population unit redistributes");
-    expect(activeCopy).toContain("never creates or kills a rat actor");
-    expect(activeCopy).toContain("consumes or moves the attracting provision");
-    expect(activeCopy).toContain("gnaw marks, small tracks, or shelter signs");
-    expect(activeCopy).toContain("guarded food");
-    expect(activeCopy).toContain("persistent wet pawprints");
-    expect(activeCopy).toContain("substantially crowded anchor");
-    expect(activeCopy).toContain("non-targetable environmental evidence");
+    expect(activeCopy).toContain("Habitat version 3");
+    expect(activeCopy).toContain("deterministic marsh-rabbit and marsh-fox populations");
+    expect(activeCopy).toContain("honestly absent");
+    expect(activeCopy).toContain("alarm and then flee");
+    expect(activeCopy).toContain("pursue a directly perceived rabbit");
+    expect(activeCopy).toContain("dog or large predator");
+    expect(activeCopy).toContain("finite duration and disengages");
+    expect(activeCopy).toContain("never commits an attack, injury, kill, carcass, or prey-consumption transaction");
+    expect(activeCopy).toContain("paired tracks or canid pawprints");
+    expect(activeCopy).toContain("saved movement site");
+    expect(activeCopy).toContain("rabbit thump or fox yip");
     expect(activeCopy).toContain("current direct-detail sight");
-    expect(activeCopy).toContain("Rat rustles and domestic-cat calls");
-    expect(activeCopy).toContain("outcome classes, deterministic representative encounters, and bounded fuzzing");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("advances to version 10");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-9 save migrates exactly once");
+    expect(activeCopy).toContain("SMALL ANIMAL or UNKNOWN CANID");
+    expect(activeCopy).toContain("role, size, perception, decision, and locomotion contracts");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("advances to version 11");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-10 save migrates exactly once");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("preserving every established actor");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("cannot duplicate cats, food, signs, populations, or migration effects");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("cat ownership, bonding, naming, recruitment");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("wet cat pawprints");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("exhaustive species-to-species behavior are not live");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("cannot reroll or duplicate the new populations, actors, or evidence");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide wildlife generation or the full bestiary");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, leave carcasses, or consume live prey");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete scent fields and tracking");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("foliage consumption");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("exhaustive species-pair interaction matrix");
+    expect(settlementCopy).toContain("brown rats and domestic cats");
+    expect(settlementCopy).toContain("population-area aggregate with no individual rat actors");
+    expect(settlementCopy).toContain("free-ranging domestic cats");
+    expect(settlementCopy).toContain("cats, dogs, people, or gulls");
+    expect(settlementCopy).toContain("Exposed loose physical provisions");
+    expect(settlementCopy).toContain("at most one rat population unit redistributes");
+    expect(settlementCopy).toContain("never creates or kills a rat actor");
+    expect(settlementCopy).toContain("consumes or moves the attracting provision");
+    expect(settlementCopy).toContain("gnaw marks, small tracks, or shelter signs");
+    expect(settlementCopy).toContain("guarded food");
+    expect(settlementCopy).toContain("persistent wet pawprints");
+    expect(settlementCopy).toContain("substantially crowded anchor");
+    expect(settlementCopy).toContain("non-targetable environmental evidence");
+    expect(settlementCopy).toContain("Rat rustles and domestic-cat calls");
+    expect(settlementCopy).toContain("outcome classes, deterministic representative encounters, and bounded fuzzing");
     expect(habitatCopy).toContain("derived deterministically from the local terrain");
     expect(habitatCopy).toContain("honestly absent");
     expect(habitatCopy).toContain("represented population units");
@@ -147,7 +168,7 @@ describe("canonical offline patch notes", () => {
     expect(wildlifeCopy).toContain("WAIT AND WATCH");
     expect(wildlifeCopy).toContain("leaves the prior route intact");
     expect(wildlifeCopy).toContain("same stable actors cross between full and coarse representation");
-    expect(activeCopy).not.toMatch(/complete universal perception|physical pursuit is live/iu);
+    expect(activeCopy).not.toMatch(/complete universal perception|lethal pursuit|worldwide populations are live/iu);
     expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("not a full bestiary");
     expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, or leave carcasses");
     expect(allCategoryCopy("gameplay")).toContain("Stability now resolves directly");

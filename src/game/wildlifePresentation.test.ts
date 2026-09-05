@@ -10,18 +10,23 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
+  replaceCoreEcologyAggregatePatchActor,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
+  repositionCoreWildlifeActor,
+  repositionCoreWildlifeActorWithMovementEvidence,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
 import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
+  isWildlifeWorldPositionDirectlyObserved,
   projectWildlifePopulationEvidencePresentations,
   projectWildlifePresentation,
   type WildlifeDirectObservation,
@@ -124,7 +129,7 @@ function ratEvidenceFixture() {
   return { evidence, patch, population };
 }
 
-function catEvidenceFixture() {
+function catEvidenceFixture(currentTick = 11) {
   const seed = seedFromText("presentation-cat-rain-evidence");
   const originRegion = createRegionCoord(0, 0);
   const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({
@@ -198,7 +203,65 @@ function catEvidenceFixture() {
   if (steppedCat === undefined || evidence === undefined) {
     throw new Error("Cat rain response did not leave bounded evidence");
   }
-  return { cat: steppedCat, evidence, patch: stepped.patch };
+  const currentCat = currentTick === steppedCat.updatedAtTick
+    ? steppedCat
+    : repositionCoreWildlifeActor(steppedCat, {
+        atTick: currentTick,
+        heading: steppedCat.address.heading,
+        position: steppedCat.address.position,
+      });
+  const currentPatch = currentCat === steppedCat
+    ? stepped.patch
+    : replaceCoreEcologyAggregatePatchActor(stepped.patch, currentCat);
+  return { cat: currentCat, evidence, patch: currentPatch };
+}
+
+function movementEvidenceFixture(
+  species: "marsh-rabbit" | "marsh-fox",
+  currentTick = 12,
+) {
+  const seed = seedFromText(`presentation-${species}-movement-evidence`);
+  const originRegion = createRegionCoord(0, 0);
+  const sourcePosition = createWorldPosition(originRegion, 23_000, 35_000);
+  const evidencePosition = createWorldPosition(originRegion, 24_000, 35_000);
+  const remoteActorPosition = createWorldPosition(originRegion, 86_000, 35_000);
+  let patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: `presentation-${species}-movement-evidence`,
+    originRegion,
+    tick: 10,
+    populations: [{
+      species,
+      populationKey: `presentation-${species}`,
+      populationSize: 1,
+      members: [{
+        populationOrdinal: 0,
+        representedUnits: 1,
+        position: sourcePosition,
+        materialization: "materialized",
+      }],
+    }],
+    derivation: { kind: "bounded-input-v1" },
+  });
+  const initial = patch.populations[0]?.members[0]?.actor;
+  if (initial === undefined) throw new Error("Movement-evidence fixture requires one actor");
+  const withEvidence = repositionCoreWildlifeActorWithMovementEvidence(initial, {
+    atTick: 11,
+    heading: 0,
+    position: evidencePosition,
+    strength: 740_000,
+  });
+  const evidence = withEvidence.memories.flatMap(({ environmentalEvidence }) => (
+    environmentalEvidence === undefined ? [] : [environmentalEvidence]
+  ))[0];
+  if (evidence === undefined) throw new Error("Movement-evidence fixture requires one sign");
+  const remoteActor = repositionCoreWildlifeActor(withEvidence, {
+    atTick: currentTick,
+    heading: 0,
+    position: remoteActorPosition,
+  });
+  patch = replaceCoreEcologyAggregatePatchActor(patch, remoteActor);
+  return { evidence, evidencePosition, patch, remoteActor, remoteActorPosition };
 }
 
 function evidenceObservation(
@@ -267,11 +330,36 @@ function pressuredPursuingBear(): CoreWildlifeActorState {
 }
 
 describe("knowledge-honest wildlife presentation", () => {
+  it("does not let a later visible actor position authorize an unseen event locus", () => {
+    const region = createRegionCoord(0, 0);
+    const observation = Object.freeze({
+      window: {
+        origin: { x: 0, y: 0 },
+        terrain: { width: 30, height: 1 },
+      },
+      perception: evaluatePerception({
+        columns: 30,
+        rows: 1,
+        cells: Array.from({ length: 30 }, () => ({ elevation: 0, obstruction: 0 })),
+        playerTileIndex: 0,
+        facingRadians: 0,
+        weatherVisibility: 1,
+      }),
+    });
+    const unseenEventLocus = createWorldPosition(region, 11_500, 500);
+    const laterVisibleActorPosition = createWorldPosition(region, 9_500, 500);
+
+    expect(isWildlifeWorldPositionDirectlyObserved(unseenEventLocus, observation)).toBe(false);
+    expect(isWildlifeWorldPositionDirectlyObserved(laterVisibleActorPosition, observation)).toBe(true);
+  });
+
   it.each([
     ["deer", "Deer"],
     ["gull", "Gulls"],
     ["black-bear", "Black bear"],
     ["domestic-cat", "Domestic cat"],
+    ["marsh-rabbit", "Marsh rabbit"],
+    ["marsh-fox", "Marsh fox"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -291,6 +379,13 @@ describe("knowledge-honest wildlife presentation", () => {
       selected: true,
     });
     expect(presentation?.appearanceLabel).toBeDefined();
+    if (species === "marsh-rabbit") {
+      expect(presentation?.formLabel).toBe("Compact, long-eared");
+    } else if (species === "marsh-fox") {
+      expect(presentation?.formLabel).toBe("Lean, low-tailed canid");
+    } else {
+      expect(presentation).not.toHaveProperty("formLabel");
+    }
     if (species === "gull") expect(presentation).not.toHaveProperty("lifeStageLabel");
     else expect(presentation?.lifeStageLabel).toBeDefined();
     expect(Object.isFrozen(presentation)).toBe(true);
@@ -361,6 +456,151 @@ describe("knowledge-honest wildlife presentation", () => {
       observation: evidenceObservation(evidence.position, 4, Math.PI),
       tileSize: 16,
     })).toEqual([]);
+  });
+
+  it("ages cat wet tracks through the same bounded individual-evidence owner", () => {
+    const halfLifeTick = 11 + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS / 2;
+    const faded = catEvidenceFixture(halfLifeTick);
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: faded.patch,
+      observation: evidenceObservation(faded.evidence.position),
+      tileSize: 16,
+    })?.find(({ evidenceId }) => evidenceId === faded.evidence.evidenceId)).toMatchObject({
+      species: "domestic-cat",
+      quickLabel: "Animal signs",
+      identityLabel: "Unidentified animal tracks",
+      evidenceLabel: "Wet pawprints",
+      speciesIdentified: false,
+    });
+
+    const expired = catEvidenceFixture(
+      11 + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
+    );
+    expect(expired.cat.memories.some(({ environmentalEvidence }) => (
+      environmentalEvidence !== undefined
+    ))).toBe(false);
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: expired.patch,
+      observation: evidenceObservation(expired.evidence.position),
+      tileSize: 16,
+    })?.some(({ evidenceId }) => evidenceId === expired.evidence.evidenceId)).toBe(false);
+  });
+
+  it.each([
+    [
+      "marsh-rabbit",
+      "paired-tracks",
+      "Marsh rabbit signs",
+      "Marsh rabbit tracks",
+      "Paired rabbit tracks",
+    ],
+    [
+      "marsh-fox",
+      "canid-pawprints",
+      "Marsh fox signs",
+      "Marsh fox tracks",
+      "Fox pawprints",
+    ],
+  ] as const)("projects %s movement evidence at its own directly visible position", (
+    species,
+    form,
+    quickLabel,
+    identityLabel,
+    evidenceLabel,
+  ) => {
+    const { evidence, patch, remoteActor } = movementEvidenceFixture(species);
+    const presentations = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position),
+      tileSize: 16,
+      // Individual evidence remains deliberately non-targetable.
+      selectedEvidenceId: evidence.evidenceId,
+    });
+    const presentation = presentations?.find(({ evidenceId }) => evidenceId === evidence.evidenceId);
+
+    expect(presentation).toMatchObject({
+      aggregateId: remoteActor.identity.stableId,
+      evidenceId: evidence.evidenceId,
+      species,
+      representation: "individual-evidence",
+      form,
+      quickLabel,
+      identityLabel,
+      evidenceLabel,
+      speciesIdentified: true,
+      selected: false,
+    });
+    expect(presentation).not.toHaveProperty("actorId");
+    expect(presentation).not.toHaveProperty("actorPosition");
+    expect(presentation).not.toHaveProperty("strength");
+    expect(presentation).not.toHaveProperty("createdAtTick");
+    expect(presentation).not.toHaveProperty("memories");
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch,
+      // The actor is visible here, but its old evidence is outside this frame.
+      observation: evidenceObservation(remoteActor.address.position),
+      tileSize: 16,
+    })).toEqual([]);
+  });
+
+  it.each([
+    ["marsh-rabbit", "Paired tracks", "Unidentified paired tracks", "Paired small-animal tracks"],
+    ["marsh-fox", "Canid signs", "Unidentified canid tracks", "Canid pawprints"],
+  ] as const)("keeps distant %s evidence classification bounded", (
+    species,
+    quickLabel,
+    identityLabel,
+    evidenceLabel,
+  ) => {
+    const { evidence, patch } = movementEvidenceFixture(species);
+    const presentations = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position, 60),
+      tileSize: 1,
+    });
+    expect(presentations?.find(({ evidenceId }) => evidenceId === evidence.evidenceId))
+      .toMatchObject({
+        species,
+        quickLabel,
+        identityLabel,
+        evidenceLabel,
+        speciesIdentified: false,
+        selected: false,
+      });
+  });
+
+  it.each([
+    ["marsh-rabbit", "Paired tracks", "Unidentified paired tracks"],
+    ["marsh-fox", "Canid signs", "Unidentified canid tracks"],
+  ] as const)("lets aging %s evidence lose identification and expire", (
+    species,
+    quickLabel,
+    identityLabel,
+  ) => {
+    const halfLifeTick = 11 + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS / 2;
+    const faded = movementEvidenceFixture(species, halfLifeTick);
+    const fadedPresentations = projectWildlifePopulationEvidencePresentations({
+      patch: faded.patch,
+      observation: evidenceObservation(faded.evidence.position),
+      tileSize: 16,
+    });
+    expect(fadedPresentations?.find(({ evidenceId }) => (
+      evidenceId === faded.evidence.evidenceId
+    ))).toMatchObject({
+      species,
+      quickLabel,
+      identityLabel,
+      speciesIdentified: false,
+    });
+
+    const expiryTick = 11 + CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS;
+    const expired = movementEvidenceFixture(species, expiryTick);
+    expect(expired.remoteActor.memories.some(({ kind }) => kind === "movement")).toBe(false);
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: expired.patch,
+      observation: evidenceObservation(expired.evidence.position),
+      tileSize: 16,
+    })?.some(({ evidenceId }) => evidenceId === expired.evidence.evidenceId)).toBe(false);
   });
 
   it("keeps distant rat signs uncertain and fails closed for forged perception/state", () => {
@@ -435,6 +675,33 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(view).not.toHaveProperty("lifeStageLabel");
       expect(view?.conditionLabels).toEqual([]);
     }
+  });
+
+  it.each([
+    ["marsh-rabbit", "Small animal", "Unidentified small animal"],
+    ["marsh-fox", "Unknown canid", "Unidentified canid"],
+  ] as const)("keeps a distant %s at an honest observable class", (
+    species,
+    quickLabel,
+    identityLabel,
+  ) => {
+    const actor = wildlife(species);
+    const presentation = projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor, 60),
+      tileSize: 1,
+    });
+
+    expect(presentation).toMatchObject({
+      species,
+      quickLabel,
+      identityLabel,
+      speciesIdentified: false,
+    });
+    expect(presentation).not.toHaveProperty("formLabel");
+    expect(presentation).not.toHaveProperty("appearanceLabel");
+    expect(presentation).not.toHaveProperty("lifeStageLabel");
+    expect(JSON.stringify(presentation)).not.toMatch(/population|patch|target|hunger|prey/iu);
   });
 
   it("buckets visible gull representatives and rejects hidden population substitutes", () => {

@@ -59,13 +59,13 @@ describe("wildlife alarm cue", () => {
 });
 
 describe("small-world wildlife cues", () => {
-  it("keeps rat movement and a cat call short, distinct, and deterministic", () => {
-    const rat = smallWildlifePattern("rat-rustle", 19);
-    const cat = smallWildlifePattern("cat-call", 19);
-    expect(rat).toEqual(smallWildlifePattern("rat-rustle", 19));
-    expect(cat).toEqual(smallWildlifePattern("cat-call", 19));
-    expect(rat).not.toEqual(cat);
-    for (const pattern of [rat, cat]) {
+  it("keeps each small-world voice short, distinct, and deterministic", () => {
+    const cues = ["rat-rustle", "cat-call", "rabbit-thump", "fox-yip"] as const;
+    const patterns = cues.map((cue) => smallWildlifePattern(cue, 19));
+    expect(new Set(patterns.map((pattern) => JSON.stringify(pattern))).size).toBe(cues.length);
+    for (const [index, cue] of cues.entries()) {
+      const pattern = patterns[index]!;
+      expect(pattern).toEqual(smallWildlifePattern(cue, 19));
       expect(pattern.length).toBeGreaterThan(0);
       expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
         .toBeLessThanOrEqual(0.4);

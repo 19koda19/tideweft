@@ -891,6 +891,56 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     groupModel: "solitary",
     crossRegion: true,
   },
+  "marsh-rabbit": {
+    implementation: "active",
+    habitatOwnerId: "game:core-ecology-habitat:v3",
+    ecologyOwnerId: "game:core-ecology:v3",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["life-stage-size"],
+    appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
+    habitatClasses: ["marsh", "meadow", "settlement-edge"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "shallow-water", relativeCapability: 450_000 },
+    ],
+    movementVerbs: ["hop", "wade"],
+    terrainAffordances: ["land", "standable-shallow-water"],
+    consumedBy: ["large-predator", "small-predator"],
+    competesWith: ["brown-rat", "deer"],
+    ecologicalEffects: ["alarm-information", "bounded-food-pressure", "small-prey-support"],
+    includeDogInteraction: true,
+    groupModel: "variable",
+    crossRegion: true,
+  },
+  "marsh-fox": {
+    implementation: "active",
+    habitatOwnerId: "game:core-ecology-habitat:v3",
+    ecologyOwnerId: "game:core-ecology:v3",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["life-stage-size"],
+    appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
+    habitatClasses: ["marsh", "meadow", "ridge", "settlement-edge"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "shallow-water", relativeCapability: 600_000 },
+    ],
+    movementVerbs: ["trot", "wade", "walk"],
+    terrainAffordances: ["land", "standable-shallow-water"],
+    consumedBy: ["large-predator"],
+    competesWith: ["domestic-cat", "gull"],
+    ecologicalEffects: ["bounded-food-pressure", "small-prey-pressure"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: true,
+  },
 });
 
 function coreWildlifeInteractionTargets(
@@ -1012,11 +1062,10 @@ function sensesFromRegistry(
 }
 
 /**
- * Wave-A animals retain their exact individual/group contracts. Settlement
- * Shadows adds a true brown-rat aggregate and a free-ranging cat individual;
- * their shipped slice is active while deliberately deferred contracts remain
- * foundation or unimplemented. No later species can inherit a catch-all
- * wildlife shape.
+ * Wave-A animals and Settlement Shadows retain their exact contracts. Marsh
+ * rabbit and marsh fox activate only the capabilities their bounded runtime
+ * slice owns; mortality and the later world systems remain explicit seams. No
+ * species can inherit a catch-all wildlife shape.
  */
 function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const profile = getCoreWildlifeProfile(species);
@@ -1025,6 +1074,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const implementation = values.implementation;
   const identityForm = metadata.catalogIdentityForm;
   const aggregate = identityForm === "aggregate";
+  const marshEdgeIndividual = species === "marsh-rabbit" || species === "marsh-fox";
 
   const foodResources = CORE_WILDLIFE_FOOD_CLASSES.filter(
     (resourceClass) => profile.foodAffinities[resourceClass] > 0,
@@ -1193,7 +1243,9 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
         },
     activity: {
       implementation,
-      ownerId: species === "domestic-cat" ? values.behaviorOwnerId : values.ecologyOwnerId,
+      ownerId: species === "domestic-cat" || marshEdgeIndividual
+        ? values.behaviorOwnerId
+        : values.ecologyOwnerId,
       decisionModel: identityForm,
       decisionCadenceTicks: 1,
       offscreenModel: identityForm,
@@ -1211,12 +1263,21 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       group,
       territory: noTerritory(),
     },
-    sound: species === "brown-rat" || species === "domestic-cat"
+    sound: species === "brown-rat"
+      || species === "domestic-cat"
+      || species === "marsh-rabbit"
+      || species === "marsh-fox"
       ? {
           implementation: "active",
           ownerId: "audio:soundscape:v1",
-          repertoire: [species === "brown-rat" ? "rat-rustle" : "cat-call"],
-          communicationSignals: [],
+          repertoire: [species === "brown-rat"
+            ? "rat-rustle"
+            : species === "domestic-cat"
+              ? "cat-call"
+              : species === "marsh-rabbit"
+                ? "rabbit-thump"
+                : "fox-yip"],
+          communicationSignals: species === "marsh-rabbit" ? ["rabbit-thump"] : [],
           accessibilityCues: ["direct-observation-caption"],
         }
       : noSound(),
@@ -1233,6 +1294,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
             "disengagement",
             "food",
             "guard",
+            ...(marshEdgeIndividual ? ["movement"] : []),
             "pursuit",
             "threat",
             ...(species === "domestic-cat" ? ["weather"] : []),
@@ -1248,7 +1310,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
           produces: ["gnaw-mark", "shelter-sign", "tracks"],
           interprets: [],
         }
-      : species === "domestic-cat"
+        : species === "domestic-cat"
         ? {
             status: "active",
             ownerId: "game:core-wildlife-actor:v1",
@@ -1256,6 +1318,14 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
             produces: ["wet-tracks"],
             interprets: [],
           }
+        : species === "marsh-rabbit" || species === "marsh-fox"
+          ? {
+              status: "active",
+              ownerId: "game:core-wildlife-actor:v1",
+              decayOwnerId: "game:core-wildlife-actor:v1",
+              produces: [species === "marsh-rabbit" ? "paired-tracks" : "canid-pawprints"],
+              interprets: [],
+            }
         : {
           status: "unimplemented",
           ownerId: null,

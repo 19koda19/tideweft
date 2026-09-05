@@ -258,7 +258,13 @@ describe("BIO0 release-level player loop", () => {
     // alarm during this interval. This assertion owns only the unwitnessed
     // meal: it must not suppress or masquerade as other perceived events.
     if (currentAnnouncement !== priorAnnouncement) {
-      expect(currentAnnouncement).toBe("ANIMAL ALARM — source unclear.");
+      const expectedCue = currentAnnouncement === "ANIMAL ALARM — source unclear."
+        ? "wildlife-alarm"
+        : currentAnnouncement === "[soft thump nearby]"
+          ? "rabbit-thump"
+          : undefined;
+      expect(expectedCue).toBeDefined();
+      expect(soundscapeControl.plays.some(({ cue }) => cue === expectedCue)).toBe(true);
     }
     expect(soundscapeControl.plays.some(({ cue }) => cue === "accept")).toBe(false);
     runtime.destroy();

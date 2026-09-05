@@ -11,6 +11,7 @@ import type {
 const p5Harness = vi.hoisted(() => ({
   canvas: null as MockCanvas | null,
   instance: null as Record<PropertyKey, unknown> | null,
+  reducedMotion: false,
 }));
 
 vi.mock("p5", () => ({
@@ -243,12 +244,16 @@ const wildlifeView = (
     gull: "Gulls",
     "black-bear": "Black bear",
     "domestic-cat": "Domestic cat",
+    "marsh-rabbit": "Marsh rabbit",
+    "marsh-fox": "Marsh fox",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
     gull: "GULL-",
     "black-bear": "BEAR-",
     "domestic-cat": "CAT-",
+    "marsh-rabbit": "RABBIT-",
+    "marsh-fox": "FOX-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -290,6 +295,7 @@ beforeEach(() => {
   canvas = new MockCanvas();
   p5Harness.canvas = canvas;
   p5Harness.instance = null;
+  p5Harness.reducedMotion = false;
   const mediaQuery = {
     matches: false,
     addEventListener: vi.fn(),
@@ -300,7 +306,10 @@ beforeEach(() => {
     devicePixelRatio: 1,
     innerHeight: 100,
     innerWidth: 200,
-    matchMedia: vi.fn(() => mediaQuery),
+    matchMedia: vi.fn((query: string) => ({
+      ...mediaQuery,
+      matches: query === "(prefers-reduced-motion: reduce)" && p5Harness.reducedMotion,
+    })),
     removeEventListener: vi.fn(),
   });
   vi.stubGlobal("document", {
@@ -1104,6 +1113,82 @@ describe("Chart Wave-B wildlife presentation", () => {
     renderer.destroy();
   });
 
+  it.each([
+    ["marsh-rabbit", "paired-tracks", "Paired rabbit tracks"],
+    ["marsh-fox", "canid-pawprints", "Fox pawprints"],
+  ] as const)("draws non-targetable %s movement evidence as %s", (
+    species,
+    form,
+    evidenceLabel,
+  ) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view(`chart-${species}-evidence`, { x: 12, y: 12 });
+    const evidence = aggregateWildlifeEvidenceView({
+      aggregateId: `${species}:source-hidden-from-labels`,
+      evidenceId: `${species}:movement-evidence:1`,
+      species,
+      representation: "individual-evidence",
+      form,
+      quickLabel: species === "marsh-rabbit" ? "Marsh rabbit signs" : "Marsh fox signs",
+      identityLabel: species === "marsh-rabbit" ? "Marsh rabbit tracks" : "Marsh fox tracks",
+      evidenceLabel,
+      sizeScale: species === "marsh-rabbit" ? 0.94 : 1.12,
+      selected: false,
+    });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: `chart-${species}-evidence-direct-detail`,
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 1,
+        detailDirectTileCount: 1,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    expect(p5Harness.instance?.ellipse).toHaveBeenCalled();
+    expect((p5Harness.instance?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
+      .not.toContain(evidence.evidenceId);
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 205,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 205,
+      pointerType: "touch",
+    });
+    expect(dispatch.mock.calls.some(([command]) => (
+      command.type === "select"
+    ))).toBe(false);
+    renderer.destroy();
+  });
+
   it("draws and touch-selects the distinct free-ranging domestic-cat form", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("chart-domestic-cat", { x: 12, y: 12 });
@@ -1158,6 +1243,74 @@ describe("Chart Wave-B wildlife presentation", () => {
       entity: "living-actor",
       species: "domestic-cat",
       id: "CAT-R-v1-chart-domestic-cat",
+      point: { x: 12, y: 12 },
+    });
+    renderer.destroy();
+  });
+
+  it.each([
+    ["marsh-rabbit", "RABBIT-", "#816b52", "triangle"],
+    ["marsh-fox", "FOX-", "#9d5136", "bezier"],
+  ] as const)("draws and touch-selects the color-independent %s form with reduced motion", (
+    species,
+    prefix,
+    primaryColor,
+    structuralMethod,
+  ) => {
+    vi.stubGlobal("performance", { now: () => 1_337 });
+    p5Harness.reducedMotion = true;
+    const base = view(`chart-${species}`, { x: 12, y: 12 });
+    const actor = wildlifeView(species, {
+      behavior: species === "marsh-rabbit" ? "flee" : "pursue",
+      selected: true,
+    });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [actor],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    const p = p5Harness.instance;
+    const fill = p?.fill as ReturnType<typeof vi.fn>;
+    const structure = p?.[structuralMethod] as ReturnType<typeof vi.fn>;
+    expect(fill).toHaveBeenCalledWith(primaryColor);
+    expect(structure).toHaveBeenCalled();
+    expect((p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
+      .not.toContain(actor.actorId);
+
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 211,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 211,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species,
+      id: `${prefix}R-v1-chart-${species}`,
       point: { x: 12, y: 12 },
     });
     renderer.destroy();

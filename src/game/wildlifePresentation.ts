@@ -7,6 +7,7 @@ import {
 } from "../sim/coreWildlifeIdentity";
 import {
   canonicalizeCoreWildlifeActorState,
+  coreWildlifeEnvironmentalEvidenceStrengthAtTick,
   type CoreWildlifeActorState,
   type CoreWildlifeIntentKind,
 } from "./coreWildlifeActor";
@@ -75,6 +76,8 @@ export interface WildlifePresentation {
   readonly behavior: WildlifePresentationBehavior;
   readonly behaviorLabel: string;
   readonly conditionLabels: readonly string[];
+  /** Directly visible body form; never an inferred capability or hidden trait. */
+  readonly formLabel?: string;
   readonly appearanceLabel?: string;
   readonly lifeStageLabel?: string;
   /** Coarse visible bucket for a gull aggregate; absent for individuals or unknown count. */
@@ -99,7 +102,9 @@ export interface WildlifePopulationEvidenceObservation {
 export type WildlifePopulationEvidenceForm =
   | "gnaw-marks"
   | "shelter-sign"
-  | "small-tracks";
+  | "small-tracks"
+  | "paired-tracks"
+  | "canid-pawprints";
 
 /** One directly visible physical sign. It is neither an actor nor a population census. */
 export interface WildlifePopulationEvidencePresentation {
@@ -108,7 +113,7 @@ export interface WildlifePopulationEvidencePresentation {
   readonly aggregateId: string;
   /** Stable physical-evidence routing identity. */
   readonly evidenceId: string;
-  readonly species: "brown-rat" | "domestic-cat";
+  readonly species: "brown-rat" | "domestic-cat" | "marsh-rabbit" | "marsh-fox";
   readonly representation: "population-evidence" | "individual-evidence";
   readonly form: WildlifePopulationEvidenceForm;
   readonly quickLabel: string;
@@ -126,6 +131,19 @@ export interface WildlifePopulationEvidencePresentationInput {
   readonly observation: WildlifePopulationEvidenceObservation;
   readonly tileSize: number;
   readonly selectedEvidenceId?: string;
+}
+
+/**
+ * Tests one authoritative wildlife event locus against the same signed direct
+ * detail field used by actors and physical signs. The caller must pass the
+ * event-time position; a later actor position cannot grant retroactive sight.
+ */
+export function isWildlifeWorldPositionDirectlyObserved(
+  position: WorldPosition,
+  observation: WildlifePopulationEvidenceObservation,
+): boolean {
+  const context = directEvidenceObservationContext(observation);
+  return context !== null && directEvidenceDetail(position, context) !== null;
 }
 
 interface DirectDetail {
@@ -154,7 +172,9 @@ type WildlifePresentationForm =
   | "gull-flock"
   | "black-bear"
   | "brown-rat"
-  | "domestic-cat";
+  | "domestic-cat"
+  | "marsh-rabbit"
+  | "marsh-fox";
 
 interface WildlifeSpeciesPresentationDescriptor {
   readonly form: WildlifePresentationForm;
@@ -168,6 +188,7 @@ interface WildlifeSpeciesPresentationDescriptor {
   readonly conditionStyle: "individual" | "flock" | "none";
   readonly exposesLifeStage: boolean;
   readonly baseSizeScale: number;
+  readonly observableForm: string | null;
 }
 
 /** Exhaustive observable semantics; adding a species cannot inherit another animal's presentation. */
@@ -186,6 +207,7 @@ const PRESENTATION_BY_SPECIES: Readonly<
     conditionStyle: "individual",
     exposesLifeStage: true,
     baseSizeScale: 1,
+    observableForm: null,
   },
   gull: {
     form: "gull-flock",
@@ -199,6 +221,7 @@ const PRESENTATION_BY_SPECIES: Readonly<
     conditionStyle: "flock",
     exposesLifeStage: false,
     baseSizeScale: 0.64,
+    observableForm: null,
   },
   "black-bear": {
     form: "black-bear",
@@ -212,6 +235,7 @@ const PRESENTATION_BY_SPECIES: Readonly<
     conditionStyle: "individual",
     exposesLifeStage: true,
     baseSizeScale: 1.34,
+    observableForm: null,
   },
   "brown-rat": {
     form: "brown-rat",
@@ -225,6 +249,7 @@ const PRESENTATION_BY_SPECIES: Readonly<
     conditionStyle: "none",
     exposesLifeStage: false,
     baseSizeScale: 0.28,
+    observableForm: null,
   },
   "domestic-cat": {
     form: "domestic-cat",
@@ -238,6 +263,35 @@ const PRESENTATION_BY_SPECIES: Readonly<
     conditionStyle: "individual",
     exposesLifeStage: true,
     baseSizeScale: 0.68,
+    observableForm: null,
+  },
+  "marsh-rabbit": {
+    form: "marsh-rabbit",
+    representation: "actor",
+    identificationClarity: 430_000,
+    unidentifiedQuickLabel: "Small animal",
+    unidentifiedIdentityLabel: "Unidentified small animal",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.52,
+    observableForm: "Compact, long-eared",
+  },
+  "marsh-fox": {
+    form: "marsh-fox",
+    representation: "actor",
+    identificationClarity: 410_000,
+    unidentifiedQuickLabel: "Unknown canid",
+    unidentifiedIdentityLabel: "Unidentified canid",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.82,
+    observableForm: "Lean, low-tailed canid",
   },
 });
 const BEHAVIOR_CLARITY = 180_000;
@@ -280,6 +334,67 @@ const POPULATION_EVIDENCE_BY_KIND: Readonly<
   },
 });
 
+type IndividualEvidenceSpecies = "domestic-cat" | "marsh-rabbit" | "marsh-fox";
+
+interface IndividualEvidenceDescriptor {
+  readonly expectedKind: "wet-tracks" | "paired-tracks" | "canid-pawprints";
+  readonly form: WildlifePopulationEvidenceForm;
+  readonly minimumClarity: number;
+  readonly identifiedQuickLabel: string;
+  readonly unidentifiedQuickLabel: string;
+  readonly identifiedIdentityLabel: string;
+  readonly unidentifiedIdentityLabel: string;
+  readonly identifiedEvidenceLabel: string;
+  readonly unidentifiedEvidenceLabel: string;
+  readonly sizeScale: number;
+}
+
+/**
+ * Exhaustive projection policy for saved individual signs. Each entry keeps
+ * legacy cat wording intact while preventing one species from borrowing
+ * another species' evidence kind or display semantics.
+ */
+const INDIVIDUAL_EVIDENCE_BY_SPECIES: Readonly<
+  Record<IndividualEvidenceSpecies, IndividualEvidenceDescriptor>
+> = deepFreeze({
+  "domestic-cat": {
+    expectedKind: "wet-tracks",
+    form: "small-tracks",
+    minimumClarity: 340_000,
+    identifiedQuickLabel: "Domestic cat signs",
+    unidentifiedQuickLabel: "Animal signs",
+    identifiedIdentityLabel: "Domestic cat tracks",
+    unidentifiedIdentityLabel: "Unidentified animal tracks",
+    identifiedEvidenceLabel: "Wet cat pawprints",
+    unidentifiedEvidenceLabel: "Wet pawprints",
+    sizeScale: 1.02,
+  },
+  "marsh-rabbit": {
+    expectedKind: "paired-tracks",
+    form: "paired-tracks",
+    minimumClarity: 320_000,
+    identifiedQuickLabel: "Marsh rabbit signs",
+    unidentifiedQuickLabel: "Paired tracks",
+    identifiedIdentityLabel: "Marsh rabbit tracks",
+    unidentifiedIdentityLabel: "Unidentified paired tracks",
+    identifiedEvidenceLabel: "Paired rabbit tracks",
+    unidentifiedEvidenceLabel: "Paired small-animal tracks",
+    sizeScale: 0.94,
+  },
+  "marsh-fox": {
+    expectedKind: "canid-pawprints",
+    form: "canid-pawprints",
+    minimumClarity: 350_000,
+    identifiedQuickLabel: "Marsh fox signs",
+    unidentifiedQuickLabel: "Canid signs",
+    identifiedIdentityLabel: "Marsh fox tracks",
+    unidentifiedIdentityLabel: "Unidentified canid tracks",
+    identifiedEvidenceLabel: "Fox pawprints",
+    unidentifiedEvidenceLabel: "Canid pawprints",
+    sizeScale: 1.12,
+  },
+});
+
 /**
  * Projects no animal at all unless the signed detail field directly contains
  * its current tile. Terrain visibility or a caller-authored boolean is never
@@ -314,6 +429,9 @@ export function projectWildlifePresentation(
   const conditionLabels = detail.visualClarity >= CONDITION_CLARITY
     ? observableConditionLabels(actor)
     : Object.freeze([]);
+  const formLabel = detail.visualClarity >= APPEARANCE_CLARITY
+    ? descriptor.observableForm ?? undefined
+    : undefined;
   const appearanceLabel = detail.visualClarity >= APPEARANCE_CLARITY
     ? observableAppearance(actor)
     : undefined;
@@ -338,6 +456,7 @@ export function projectWildlifePresentation(
     behavior,
     behaviorLabel,
     conditionLabels,
+    ...(formLabel === undefined ? {} : { formLabel }),
     ...(appearanceLabel === undefined ? {} : { appearanceLabel }),
     ...(lifeStageLabel === undefined ? {} : { lifeStageLabel }),
     ...(detail.groupSize === undefined ? {} : { groupSize: detail.groupSize }),
@@ -409,38 +528,50 @@ export function projectWildlifePopulationEvidencePresentations(
     }
   }
   for (const population of patch.populations) {
-    if (population.species !== "domestic-cat") continue;
+    if (!isIndividualEvidenceSpecies(population.species)) continue;
+    const descriptor = INDIVIDUAL_EVIDENCE_BY_SPECIES[population.species];
     for (const member of population.members) {
       for (const memory of member.actor.memories) {
         const evidence = memory.environmentalEvidence;
-        if (evidence === undefined || evidence.kind !== "wet-tracks") continue;
+        if (evidence === undefined || evidence.kind !== descriptor.expectedKind) continue;
         const detail = directEvidenceDetail(evidence.position, context);
-        if (detail === null || detail.visualClarity < 340_000) continue;
-        const speciesIdentified = detail.visualClarity
+        if (detail === null) continue;
+        const evidenceStrength = coreWildlifeEnvironmentalEvidenceStrengthAtTick(
+          evidence,
+          patch.updatedAtTick,
+        );
+        const observableClarity = Math.min(detail.visualClarity, evidenceStrength);
+        if (observableClarity < descriptor.minimumClarity) continue;
+        const speciesIdentified = observableClarity
           >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
         presentations.push(deepFreeze({
           version: WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION,
-          // The legacy renderer field is a stable source identity. For this
-          // individual evidence form it carries the owning cat's stable ID.
+          // The legacy renderer field is a stable source identity. For an
+          // individual sign it carries the owning actor's stable ID, but is
+          // never displayed and says nothing about that actor's current place.
           aggregateId: member.actor.identity.stableId,
           evidenceId: evidence.evidenceId,
-          species: "domestic-cat",
+          species: population.species,
           representation: "individual-evidence",
-          form: "small-tracks",
-          quickLabel: speciesIdentified ? "Domestic cat signs" : "Animal signs",
+          form: descriptor.form,
+          quickLabel: speciesIdentified
+            ? descriptor.identifiedQuickLabel
+            : descriptor.unidentifiedQuickLabel,
           identityLabel: speciesIdentified
-            ? "Domestic cat tracks"
-            : "Unidentified animal tracks",
-          evidenceLabel: speciesIdentified ? "Wet cat pawprints" : "Wet pawprints",
+            ? descriptor.identifiedIdentityLabel
+            : descriptor.unidentifiedIdentityLabel,
+          evidenceLabel: speciesIdentified
+            ? descriptor.identifiedEvidenceLabel
+            : descriptor.unidentifiedEvidenceLabel,
           speciesIdentified,
           position: {
             x: detail.point.x * input.tileSize / WORLD_POSITION_UNITS_PER_TILE,
             y: detail.point.y * input.tileSize / WORLD_POSITION_UNITS_PER_TILE,
           },
-          sizeScale: 1.02,
+          sizeScale: descriptor.sizeScale,
           distanceUnits: detail.distanceUnits,
           // Individual signs are deliberately non-targetable in this bounded
-          // slice; ABOUT remains attached to a currently observed living cat.
+          // slice; ABOUT remains attached to a currently observed living actor.
           selected: false,
         }));
       }
@@ -448,6 +579,14 @@ export function projectWildlifePopulationEvidencePresentations(
   }
   presentations.sort((left, right) => compareText(left.evidenceId, right.evidenceId));
   return Object.freeze(presentations);
+}
+
+function isIndividualEvidenceSpecies(
+  species: CoreWildlifeSpecies,
+): species is IndividualEvidenceSpecies {
+  return species === "domestic-cat"
+    || species === "marsh-rabbit"
+    || species === "marsh-fox";
 }
 
 function directDetail(

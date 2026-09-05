@@ -33,6 +33,7 @@ import {
 
 export const CORE_ECOLOGY_HABITAT_VERSION = 1 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION = 2 as const;
+export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION = 3 as const;
 export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
   "deer",
   "gull",
@@ -43,10 +44,17 @@ export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES = [
   "brown-rat",
   "domestic-cat",
 ] as const;
+export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES,
+  "marsh-rabbit",
+  "marsh-fox",
+] as const;
 export type CoreEcologyWaveAHabitatSpecies =
   (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
 export type CoreEcologyHarborEdgeHabitatSpecies =
   (typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES)[number];
+export type CoreEcologyMarshEdgeHabitatSpecies =
+  (typeof CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES)[number];
 export type CoreEcologyHabitatRepresentation =
   | "aggregate-area"
   | "individual-representatives";
@@ -55,8 +63,11 @@ export const CORE_ECOLOGY_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
+export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS = 21 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_FOCUS_RADIUS_TILES = 32 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_EXCLUDED_TILES = 64 as const;
 
@@ -175,6 +186,20 @@ export interface CoreEcologyHarborEdgeHabitatPopulationAnalysis {
   readonly allocations: readonly CoreEcologyHabitatAllocation[];
 }
 
+export interface CoreEcologyMarshEdgeHabitatPopulationAnalysis {
+  readonly species: CoreEcologyMarshEdgeHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
 export interface CoreEcologyHabitatAssemblage {
   readonly generationVersion: typeof CORE_ECOLOGY_HABITAT_VERSION;
   readonly originRegion: RegionCoord;
@@ -206,6 +231,24 @@ export interface CoreEcologyHarborEdgeHabitatAssemblage {
     typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS;
   /** Fixed versioned order, including honest absences. */
   readonly populations: readonly CoreEcologyHarborEdgeHabitatPopulationAnalysis[];
+}
+
+/**
+ * Additive marsh-edge habitat record. The first five analyses are the exact
+ * v2 harbor-edge records; only rabbit and fox analyses are appended.
+ */
+export interface CoreEcologyMarshEdgeHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS;
+  /** Fixed versioned order, including honest absences. */
+  readonly populations: readonly CoreEcologyMarshEdgeHabitatPopulationAnalysis[];
 }
 
 interface HabitatSpeciesRule {
@@ -246,7 +289,7 @@ interface HabitatSiteEvaluation {
 }
 
 interface UnallocatedPopulationAnalysis<
-  Species extends CoreEcologyHarborEdgeHabitatSpecies = CoreEcologyHarborEdgeHabitatSpecies,
+  Species extends CoreEcologyMarshEdgeHabitatSpecies = CoreEcologyMarshEdgeHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -260,7 +303,7 @@ interface UnallocatedPopulationAnalysis<
 }
 
 interface AllocatedPopulationAnalysis<
-  Species extends CoreEcologyHarborEdgeHabitatSpecies = CoreEcologyHarborEdgeHabitatSpecies,
+  Species extends CoreEcologyMarshEdgeHabitatSpecies = CoreEcologyMarshEdgeHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -273,21 +316,30 @@ interface AllocatedPopulationAnalysis<
   readonly allocations: readonly CoreEcologyHabitatAllocation[];
 }
 
+interface PreparedCoreEcologyHabitatContext {
+  readonly originRegion: RegionCoord;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly addressedTiles: readonly AddressedHabitatTile[];
+}
+
 const HABITAT_RANDOM_DOMAIN = 0x4841_4231;
 const SITE_RANK_PURPOSE = 0x5349_5445;
 const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
 
-const SPECIES_PURPOSE: Readonly<Record<CoreEcologyHarborEdgeHabitatSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
   "brown-rat": 0x5241_5453,
   "domestic-cat": 0x4341_5453,
+  "marsh-rabbit": 0x5241_4242,
+  "marsh-fox": 0x464f_584d,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreEcologyHarborEdgeHabitatSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
@@ -339,10 +391,30 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyHarborEdgeHabitatSpecies, Habita
       maximumAllocations: 2,
       minimumAllocationSeparation: 8,
     }),
+    "marsh-rabbit": Object.freeze({
+      populationKey: "habitat-v3/marsh-rabbit",
+      representation: "individual-representatives",
+      minimumSiteScore: 410_000,
+      minimumPersistentCapacity: 2,
+      maximumPopulation: 24,
+      tilesPerCapacityUnit: 84,
+      maximumAllocations: 3,
+      minimumAllocationSeparation: 4,
+    }),
+    "marsh-fox": Object.freeze({
+      populationKey: "habitat-v3/marsh-fox",
+      representation: "individual-representatives",
+      minimumSiteScore: 430_000,
+      minimumPersistentCapacity: 1,
+      maximumPopulation: 3,
+      tilesPerCapacityUnit: 460,
+      maximumAllocations: 2,
+      minimumAllocationSeparation: 10,
+    }),
   });
 
 const ACTIVITY_POLICY: Readonly<Record<
-  CoreEcologyHarborEdgeHabitatSpecies,
+  CoreEcologyMarshEdgeHabitatSpecies,
   Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
 >> = Object.freeze({
   deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
@@ -350,6 +422,8 @@ const ACTIVITY_POLICY: Readonly<Record<
   "black-bear": Object.freeze({ kind: "foraging", activePeriod: "variable" }),
   "brown-rat": Object.freeze({ kind: "shelter-use", activePeriod: "nocturnal" }),
   "domestic-cat": Object.freeze({ kind: "roaming", activePeriod: "crepuscular" }),
+  "marsh-rabbit": Object.freeze({ kind: "foraging", activePeriod: "crepuscular" }),
+  "marsh-fox": Object.freeze({ kind: "roaming", activePeriod: "variable" }),
 });
 
 const DEER_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
@@ -495,14 +569,7 @@ export function deriveCoreEcologyHabitatAssemblage(
     260_000,
   );
   const unallocated = [
-    analyzeEnvironmentalCapacity(
-      input.rootSeed,
-      originRegion,
-      "deer",
-      addressedTiles,
-      0,
-      bearPressure,
-    ),
+    applyPredatorPressure(deerBase, bearPressure),
     analyzeEnvironmentalCapacity(
       input.rootSeed,
       originRegion,
@@ -548,26 +615,21 @@ export function deriveCoreEcologyHabitatAssemblage(
 export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
   input: DeriveCoreEcologyHabitatAssemblageInput,
 ): CoreEcologyHarborEdgeHabitatAssemblage {
-  if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
-    throw new TypeError("Core ecology harbor-edge habitat input has an unsupported shape");
-  }
-  if (!isRegionCoord(input.originRegion)) {
-    throw new RangeError("Core ecology harbor-edge habitat requires a canonical signed origin region");
-  }
-  const originRegion = createRegionCoord(input.originRegion.x, input.originRegion.y);
-  const canonicalTerrain = generateRegionTerrain(input.rootSeed, originRegion);
-  const terrainHash = regionTerrainHash(canonicalTerrain);
-  const terrain = input.terrain === undefined
-    ? canonicalTerrain
-    : requireCanonicalSuppliedTerrain(input.terrain, terrainHash);
-  const selection = normalizeSelection(input.focus, originRegion);
-  const addressedTiles = addressHabitatTiles(input.rootSeed, originRegion, terrain, selection);
+  const context = prepareCoreEcologyHabitatContext(input, "harbor-edge");
+  return deriveCoreEcologyHarborEdgeFromPrepared(input.rootSeed, context);
+}
+
+function deriveCoreEcologyHarborEdgeFromPrepared(
+  rootSeed: RootSeed,
+  context: PreparedCoreEcologyHabitatContext,
+): CoreEcologyHarborEdgeHabitatAssemblage {
+  const { addressedTiles, originRegion, selection, terrainHash } = context;
   const evaluatedTiles = addressedTiles.length;
   const speciesEvaluations =
     evaluatedTiles * CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length;
 
   const deerBase = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "deer",
     addressedTiles,
@@ -579,7 +641,7 @@ export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
     SPECIES_RULES.deer.maximumPopulation,
   );
   const bearBase = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "black-bear",
     addressedTiles,
@@ -593,16 +655,9 @@ export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
     ),
     260_000,
   );
-  const deer = analyzeEnvironmentalCapacity(
-    input.rootSeed,
-    originRegion,
-    "deer",
-    addressedTiles,
-    0,
-    bearPressure,
-  );
+  const deer = applyPredatorPressure(deerBase, bearPressure);
   const gull = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "gull",
     addressedTiles,
@@ -610,7 +665,7 @@ export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
     multiplyFixed(bearPressure, 300_000),
   );
   const ratBase = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "brown-rat",
     addressedTiles,
@@ -622,7 +677,7 @@ export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
     SPECIES_RULES["brown-rat"].maximumPopulation,
   );
   const cat = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "domestic-cat",
     addressedTiles,
@@ -633,14 +688,7 @@ export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
     ratioFixed(cat.habitatCapacity, SPECIES_RULES["domestic-cat"].maximumPopulation),
     240_000,
   );
-  const rat = analyzeEnvironmentalCapacity(
-    input.rootSeed,
-    originRegion,
-    "brown-rat",
-    addressedTiles,
-    0,
-    catPressure,
-  );
+  const rat = applyPredatorPressure(ratBase, catPressure);
 
   const individualOccupiedTiles = new Set<number>();
   const allocatedDeer = allocatePopulation(deer, originRegion, individualOccupiedTiles);
@@ -677,12 +725,115 @@ export function deriveCoreEcologyHarborEdgeHabitatAssemblage(
   return Object.freeze({
     generationVersion: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
     originRegion,
-    regionId: stableRegionId(input.rootSeed, originRegion),
+    regionId: stableRegionId(rootSeed, originRegion),
     terrainHash,
     selection,
     evaluatedTiles,
     speciesEvaluations,
     maximumAllocationBudget: CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+  });
+}
+
+/**
+ * Pure marsh-edge extension. The complete v2 prefix is reused unchanged;
+ * rabbit and fox analyses then occupy the remaining individual-representative
+ * plane. Fox viability is derived from actual rabbit/rat population support,
+ * not from a guaranteed roster or an ambient spawn count.
+ */
+export function deriveCoreEcologyMarshEdgeHabitatAssemblage(
+  input: DeriveCoreEcologyHabitatAssemblageInput,
+): CoreEcologyMarshEdgeHabitatAssemblage {
+  // Prepare terrain, its canonical hash, selection, distance fields, and
+  // biome/climate addressing once. The frozen v2 prefix and additive v3
+  // analyses consume the same immutable context instead of independently
+  // regenerating and re-addressing the region.
+  const context = prepareCoreEcologyHabitatContext(input, "marsh-edge");
+  const harborEdge = deriveCoreEcologyHarborEdgeFromPrepared(input.rootSeed, context);
+  const originRegion = harborEdge.originRegion;
+  const addressedTiles = context.addressedTiles;
+  const rat = harborEdge.populations.find(({ species }) => species === "brown-rat");
+  if (rat === undefined) throw new Error("Core ecology harbor-edge rat analysis is missing");
+
+  const rabbitBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "marsh-rabbit",
+    addressedTiles,
+    0,
+    0,
+  );
+  const rabbitSupport = ratioFixed(
+    rabbitBase.populationUnits,
+    SPECIES_RULES["marsh-rabbit"].maximumPopulation,
+  );
+  const ratSupport = ratioFixed(
+    rat.populationUnits,
+    SPECIES_RULES["brown-rat"].maximumPopulation,
+  );
+  const smallPreySupport = clampFixed(
+    multiplyFixed(rabbitSupport, 700_000)
+      + multiplyFixed(ratSupport, 400_000),
+  );
+  const fox = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "marsh-fox",
+    addressedTiles,
+    smallPreySupport,
+    0,
+  );
+  const foxPressure = multiplyFixed(
+    ratioFixed(fox.populationUnits, SPECIES_RULES["marsh-fox"].maximumPopulation),
+    260_000,
+  );
+  const rabbit = applyPredatorPressure(rabbitBase, foxPressure);
+
+  const individualOccupiedTiles = new Set<number>();
+  for (const population of harborEdge.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) {
+      individualOccupiedTiles.add(allocation.tileIndex);
+    }
+  }
+  const allocatedRabbit = allocatePopulation(
+    rabbit,
+    originRegion,
+    individualOccupiedTiles,
+  );
+  const allocatedFox = allocatePopulation(
+    fox,
+    originRegion,
+    individualOccupiedTiles,
+    [...allocatedRabbit.allocations, ...rat.allocations],
+  );
+  const extension = [allocatedRabbit, allocatedFox].map((population) => Object.freeze({
+    ...population,
+    representation: SPECIES_RULES[population.species].representation,
+    activitySignal: activitySignalFor(population),
+  }));
+  const populations: CoreEcologyMarshEdgeHabitatPopulationAnalysis[] = [
+    ...harborEdge.populations,
+    ...extension,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology marsh-edge habitat allocation budget diverged");
+  }
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
+    originRegion,
+    regionId: harborEdge.regionId,
+    terrainHash: harborEdge.terrainHash,
+    selection: harborEdge.selection,
+    evaluatedTiles: harborEdge.evaluatedTiles,
+    speciesEvaluations:
+      harborEdge.evaluatedTiles * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
     populations: Object.freeze(populations),
   });
 }
@@ -837,14 +988,96 @@ export function canonicalizeCoreEcologyHarborEdgeHabitatAssemblage(
   });
 }
 
-function canonicalizeHarborEdgePopulationAnalysis(
+export function canonicalizeCoreEcologyMarshEdgeHabitatAssemblage(
   value: unknown,
-  expectedSpecies: CoreEcologyHarborEdgeHabitatSpecies,
+): CoreEcologyMarshEdgeHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "selection",
+    "speciesEvaluations",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  if (selection === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const speciesEvaluations =
+    evaluatedTiles * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || value.evaluatedTiles > CORE_ECOLOGY_HABITAT_TILE_BUDGET
+    || value.speciesEvaluations > CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const individualOccupiedTiles = new Set<number>();
+  const aggregateOccupiedTiles = new Set<number>();
+  const populations: CoreEcologyMarshEdgeHabitatPopulationAnalysis[] = [];
+  for (let index = 0; index < CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length; index += 1) {
+    const species = CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES[index];
+    if (species === undefined) return null;
+    const population = canonicalizeHarborEdgePopulationAnalysis(
+      value.populations[index],
+      species,
+      originRegion,
+      selection,
+      evaluatedTiles,
+      species === "brown-rat" ? aggregateOccupiedTiles : individualOccupiedTiles,
+    );
+    if (population === null) return null;
+    populations.push(population);
+  }
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS) return null;
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+  });
+}
+
+type VersionedHabitatPopulationAnalysis<
+  Species extends CoreEcologyMarshEdgeHabitatSpecies,
+> = Omit<CoreEcologyMarshEdgeHabitatPopulationAnalysis, "species"> & {
+  readonly species: Species;
+};
+
+function canonicalizeHarborEdgePopulationAnalysis<
+  Species extends CoreEcologyMarshEdgeHabitatSpecies,
+>(
+  value: unknown,
+  expectedSpecies: Species,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   evaluatedTiles: number,
   occupiedTileIndices: Set<number>,
-): CoreEcologyHarborEdgeHabitatPopulationAnalysis | null {
+): VersionedHabitatPopulationAnalysis<Species> | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "activitySignal",
     "allocations",
@@ -908,7 +1141,7 @@ function canonicalizeHarborEdgePopulationAnalysis(
     occupiedTileIndices.add(allocation.tileIndex);
     allocations.push(allocation);
   }
-  const allocated: AllocatedPopulationAnalysis = {
+  const allocated: AllocatedPopulationAnalysis<Species> = {
     species: expectedSpecies,
     populationKey: rule.populationKey,
     capacityInputs,
@@ -1102,7 +1335,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreEcologyHarborEdgeHabitatSpecies,
+  species: CoreEcologyMarshEdgeHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -1186,7 +1419,7 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity<Species extends CoreEcologyHarborEdgeHabitatSpecies>(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyMarshEdgeHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
   species: Species,
@@ -1213,6 +1446,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyHarborEdgeHabit
     && preySupport < 125_000
     && averages.food < 620_000
   ) habitatCapacity = 0;
+  if (species === "marsh-fox" && preySupport < 120_000) habitatCapacity = 0;
 
   const capacityInputs = Object.freeze({
     eligibleTiles: eligible.length,
@@ -1272,7 +1506,45 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyHarborEdgeHabit
   });
 }
 
-function allocatePopulation<Species extends CoreEcologyHarborEdgeHabitatSpecies>(
+/**
+ * Predator pressure changes only population trend metadata. Reusing the
+ * already-derived site/capacity result keeps the exact habitat contract while
+ * avoiding a second full species pass for deer, rats, and rabbits.
+ */
+function applyPredatorPressure<Species extends CoreEcologyMarshEdgeHabitatSpecies>(
+  analysis: UnallocatedPopulationAnalysis<Species>,
+  predatorPressure: number,
+): UnallocatedPopulationAnalysis<Species> {
+  if (analysis.capacityInputs.predatorPressure === predatorPressure) return analysis;
+  const averageHabitatScore = analysis.capacityInputs.suitableTiles === 0
+    ? 0
+    : Math.trunc(
+        analysis.capacityInputs.weightedHabitatArea
+          / analysis.capacityInputs.suitableTiles,
+      );
+  const equilibriumPressure = clampFixed(
+    320_000
+      + multiplyFixed(averageHabitatScore, 610_000)
+      - predatorPressure,
+  );
+  const trendSignal = equilibriumPressure - analysis.populationPressure;
+  const trend: CoreEcologyPopulationTrend = trendSignal >= 80_000
+    ? "growing"
+    : trendSignal <= -80_000
+    ? "declining"
+    : "stable";
+  return Object.freeze({
+    ...analysis,
+    capacityInputs: Object.freeze({
+      ...analysis.capacityInputs,
+      predatorPressure,
+    }),
+    trend,
+    trendSignal,
+  });
+}
+
+function allocatePopulation<Species extends CoreEcologyMarshEdgeHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
@@ -1441,7 +1713,7 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreEcologyHarborEdgeHabitatSpecies,
+  species: CoreEcologyMarshEdgeHabitatSpecies,
   addressed: AddressedHabitatTile,
   preySupport: number,
 ): HabitatSiteEvaluation {
@@ -1613,6 +1885,76 @@ function evaluateSite(
         && climateScore >= 300_000;
       break;
     }
+    case "marsh-rabbit": {
+      eligible = tile.terrain === "marsh" || tile.terrain === "meadow";
+      const terrainForage = tile.terrain === "marsh" ? 900_000 : 760_000;
+      food = multiplyFixed(
+        terrainForage,
+        FIXED_POINT - Math.trunc(interaction.saltStress / 2),
+      );
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 10),
+        multiplyFixed(climate.rainfall, 720_000),
+      );
+      cover = weightedScore([
+        [tile.roughness, 650_000],
+        [tile.terrain === "marsh" ? 880_000 : 520_000, 350_000],
+      ]);
+      nesting = weightedScore([
+        [cover, 720_000],
+        [FIXED_POINT - climate.exposure, 280_000],
+      ]);
+      climateScore = rabbitClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 300_000],
+        [water, 150_000],
+        [cover, 240_000],
+        [nesting, 170_000],
+        [climateScore, 140_000],
+      ]);
+      eligible = eligible
+        && food >= 300_000
+        && water >= 180_000
+        && cover >= 260_000
+        && climateScore >= 300_000;
+      break;
+    }
+    case "marsh-fox": {
+      eligible = tile.terrain === "marsh"
+        || tile.terrain === "meadow"
+        || tile.terrain === "ridge";
+      const terrainCover = tile.terrain === "marsh"
+        ? 760_000
+        : tile.terrain === "ridge"
+        ? 700_000
+        : 520_000;
+      food = preySupport;
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 18),
+        multiplyFixed(climate.rainfall, 480_000),
+      );
+      cover = weightedScore([
+        [tile.roughness, 640_000],
+        [terrainCover, 360_000],
+      ]);
+      nesting = weightedScore([
+        [cover, 760_000],
+        [FIXED_POINT - climate.exposure, 240_000],
+      ]);
+      climateScore = foxClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 390_000],
+        [water, 70_000],
+        [cover, 250_000],
+        [nesting, 150_000],
+        [climateScore, 140_000],
+      ]);
+      eligible = eligible
+        && preySupport >= 120_000
+        && cover >= 260_000
+        && climateScore >= 300_000;
+      break;
+    }
   }
 
   eligible = eligible && addressed.withinSelection;
@@ -1692,6 +2034,24 @@ function catClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): 
   ]);
 }
 
+function rabbitClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 560_000, 780_000), 320_000],
+    [centeredTolerance(climate.rainfall, 650_000, 900_000), 260_000],
+    [FIXED_POINT - climate.exposure, 240_000],
+    [FIXED_POINT - interaction.saltStress, 180_000],
+  ]);
+}
+
+function foxClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 560_000, 900_000), 340_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 260_000],
+    [FIXED_POINT - Math.trunc(interaction.saltStress / 2), 200_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 200_000],
+  ]);
+}
+
 function averageSiteInputs(
   sites: readonly HabitatSiteEvaluation[],
 ): Omit<CoreEcologyHabitatCapacityInputs, "eligibleTiles" | "suitableTiles" | "weightedHabitatArea" | "predatorPressure"> {
@@ -1745,6 +2105,33 @@ function distanceField(
     }
   }
   return Object.freeze(distances);
+}
+
+function prepareCoreEcologyHabitatContext(
+  input: DeriveCoreEcologyHabitatAssemblageInput,
+  extension: "harbor-edge" | "marsh-edge",
+): PreparedCoreEcologyHabitatContext {
+  if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
+    throw new TypeError(`Core ecology ${extension} habitat input has an unsupported shape`);
+  }
+  if (!isRegionCoord(input.originRegion)) {
+    throw new RangeError(
+      `Core ecology ${extension} habitat requires a canonical signed origin region`,
+    );
+  }
+  const originRegion = createRegionCoord(input.originRegion.x, input.originRegion.y);
+  const canonicalTerrain = generateRegionTerrain(input.rootSeed, originRegion);
+  const terrainHash = regionTerrainHash(canonicalTerrain);
+  const terrain = input.terrain === undefined
+    ? canonicalTerrain
+    : requireCanonicalSuppliedTerrain(input.terrain, terrainHash);
+  const selection = normalizeSelection(input.focus, originRegion);
+  return {
+    originRegion,
+    terrainHash,
+    selection,
+    addressedTiles: addressHabitatTiles(input.rootSeed, originRegion, terrain, selection),
+  };
 }
 
 function normalizeSelection(
@@ -1986,7 +2373,7 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
 }
 
 function validAllocationTerrain(
-  species: CoreEcologyHarborEdgeHabitatSpecies,
+  species: CoreEcologyMarshEdgeHabitatSpecies,
   terrain: string,
 ): boolean {
   if (species === "gull") return terrain !== "deep-water" && isTerrainKind(terrain);
@@ -2047,6 +2434,11 @@ if (
     )
   || CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS
     !== CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
+  || CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.reduce(
       (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
       0,
     )

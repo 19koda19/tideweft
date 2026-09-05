@@ -366,12 +366,16 @@ function wildlifeView(
     gull: "Gulls",
     "black-bear": "Black bear",
     "domestic-cat": "Domestic cat",
+    "marsh-rabbit": "Marsh rabbit",
+    "marsh-fox": "Marsh fox",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
     gull: "GULL-",
     "black-bear": "BEAR-",
     "domestic-cat": "CAT-",
+    "marsh-rabbit": "RABBIT-",
+    "marsh-fox": "FOX-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -1424,6 +1428,74 @@ describe("Relief wildlife presentation", () => {
     harness.renderer.destroy();
   });
 
+  it.each([
+    ["marsh-rabbit", "paired-tracks", "#80694f"],
+    ["marsh-fox", "canid-pawprints", "#765b48"],
+  ] as const)("renders non-targetable %s movement evidence as %s", (
+    species,
+    form,
+    primary,
+  ) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view(`relief-${species}-evidence`, { x: 48, y: 48 });
+    const evidence = aggregateWildlifeEvidenceView({
+      aggregateId: `${species}:source-hidden-from-labels`,
+      evidenceId: `${species}:movement-evidence:1`,
+      species,
+      representation: "individual-evidence",
+      form,
+      quickLabel: species === "marsh-rabbit" ? "Marsh rabbit signs" : "Marsh fox signs",
+      identityLabel: species === "marsh-rabbit" ? "Marsh rabbit tracks" : "Marsh fox tracks",
+      evidenceLabel: species === "marsh-rabbit" ? "Paired rabbit tracks" : "Fox pawprints",
+      sizeScale: species === "marsh-rabbit" ? 0.94 : 1.12,
+      selected: false,
+    });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: `relief-${species}-evidence-direct-detail`,
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 16,
+        detailDirectTileCount: 16,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+        })),
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+
+    expect(p5Harness.materialTrace.some(({ method, args }) => (
+      method === "ambientMaterial" && args[0] === primary
+    ))).toBe(true);
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    expect(layer?.children.some((child) => child.textContent?.includes(evidence.evidenceId)))
+      .toBe(false);
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 185,
+      pointerType: "touch",
+    }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 185,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch.mock.calls.some(([command]) => (
+      (command as { type?: unknown }).type === "select"
+    ))).toBe(false);
+    harness.renderer.destroy();
+  });
+
   it("fails closed for aggregate evidence outside direct detail", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-rat-evidence-hidden", { x: 48, y: 48 });
@@ -1497,6 +1569,20 @@ describe("Relief wildlife presentation", () => {
           conditionLabels: ["WATCHFUL"],
           selected: true,
         }),
+        wildlifeView("marsh-rabbit", {
+          actorId: "RABBIT-VISIBLE",
+          position: { x: 36, y: 72 },
+          behavior: "flee",
+          conditionLabels: ["ALERT"],
+          selected: true,
+        }),
+        wildlifeView("marsh-fox", {
+          actorId: "FOX-VISIBLE",
+          position: { x: 72, y: 72 },
+          behavior: "pursue",
+          conditionLabels: ["TENSE"],
+          selected: true,
+        }),
       ],
     };
     const harness = renderHarness(current);
@@ -1511,10 +1597,12 @@ describe("Relief wildlife presentation", () => {
       "Gulls · ~7 visible · watchful",
       "Black bear · wet",
       "Domestic cat · watchful",
+      "Marsh rabbit · alert",
+      "Marsh fox · tense",
     ]));
     expect(layer?.children.map((child) => child.textContent).join(" "))
-      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE/u);
-    for (const color of ["#9d744f", "#e2e8df", "#202827", "#746153"]) {
+      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE|RABBIT-VISIBLE|FOX-VISIBLE/u);
+    for (const color of ["#9d744f", "#e2e8df", "#202827", "#746153", "#806c52", "#995138"]) {
       expect(p5Harness.materialTrace.some(({ method, args }) =>
         method === "ambientMaterial" && args[0] === color
       )).toBe(true);
@@ -1527,6 +1615,71 @@ describe("Relief wildlife presentation", () => {
     harness.renderer.destroy();
   });
 
+  it("distinguishes rabbit ears from the fox's low tail without relying on color", () => {
+    vi.stubGlobal("performance", { now: () => 320 });
+    const base = view("relief-marsh-forms", { x: 48, y: 48 });
+    const rabbitHarness = renderHarness({
+      ...base,
+      wildlife: [wildlifeView("marsh-rabbit", { behavior: "flee" })],
+    });
+    rabbitHarness.draw();
+    const rabbitCones = (rabbitHarness.instance.cone as ReturnType<typeof vi.fn>).mock.calls;
+    expect(rabbitCones.filter(([radius, height]) => (
+      Number(height) > Number(radius) * 6
+    ))).toHaveLength(2);
+    rabbitHarness.renderer.destroy();
+
+    p5Harness.instances.length = 0;
+    p5Harness.materialTrace.length = 0;
+    const foxHarness = renderHarness({
+      ...base,
+      wildlife: [wildlifeView("marsh-fox", { behavior: "pursue" })],
+    });
+    foxHarness.draw();
+    const foxTail = (foxHarness.instance.ellipsoid as ReturnType<typeof vi.fn>).mock.calls
+      .find(([length, height]) => Number(length) > Number(height) * 4);
+    expect(foxTail).toBeDefined();
+    expect((foxHarness.instance.cone as ReturnType<typeof vi.fn>).mock.calls.length)
+      .toBeGreaterThanOrEqual(3);
+    foxHarness.renderer.destroy();
+  });
+
+  it("keeps rabbit and fox geometry static and targetable under reduced motion", () => {
+    let now = 120;
+    vi.stubGlobal("performance", { now: () => now });
+    p5Harness.reducedMotion = true;
+    const base = view("relief-marsh-reduced", { x: 48, y: 48 });
+    const harness = renderHarness({
+      ...base,
+      wildlife: [
+        wildlifeView("marsh-rabbit", { position: { x: 12, y: 12 }, behavior: "flee" }),
+        wildlifeView("marsh-fox", { position: { x: 36, y: 12 }, behavior: "pursue" }),
+      ],
+    });
+    const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
+    harness.draw();
+    const firstFrame = translate.mock.calls.map((call) => [...call]);
+    translate.mockClear();
+    now = 2_120;
+    harness.draw();
+    expect(translate.mock.calls).toEqual(firstFrame);
+
+    harness.dispatch.mockClear();
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 184,
+      pointerType: "touch",
+    }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 184,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch.mock.calls.some(([command]) => (
+      (command as { entity?: unknown; species?: unknown }).entity === "living-actor"
+      && (command as { species?: unknown }).species === "marsh-rabbit"
+    ))).toBe(true);
+    harness.renderer.destroy();
+  });
+
   it("hovers and selects every individually represented wildlife species", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-wildlife-targets", { x: 48, y: 48 });
@@ -1536,12 +1689,16 @@ describe("Relief wildlife presentation", () => {
       "gull",
       "black-bear",
       "domestic-cat",
+      "marsh-rabbit",
+      "marsh-fox",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
       gull: "GULL-",
       "black-bear": "BEAR-",
       "domestic-cat": "CAT-",
+      "marsh-rabbit": "RABBIT-",
+      "marsh-fox": "FOX-",
     };
 
     for (const kind of species) {

@@ -4,6 +4,50 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.16 — 2026-09-05
+
+Build: `0.3.3-alpha.16` · Gameplay contract: 20 · Tutorial: 26
+
+Marsh-edge Pursuit adds habitat-derived marsh rabbits and marsh foxes, a readable nonlethal chase, direct movement signs, and knowledge-honest field cues without turning the ecology into combat.
+
+### Gameplay
+
+- Habitat version 3 extends the bounded original-harbor assemblage with deterministic marsh-rabbit and marsh-fox populations while preserving every earlier habitat analysis. Either species can be honestly absent when the local marsh edge cannot support it; present animals use bounded persistent individual representatives rather than camera-triggered spawns.
+- A marsh rabbit that directly perceives a fox can alarm and then flee. A hungry marsh fox can pursue a directly perceived rabbit, while a lawfully perceived dog or large predator can replace that prey as the more urgent pressure and send the fox away.
+- Rabbit flight and fox pursuit use the shared terrain and path resolver with distinct bounded gaits. Pursuit has a finite duration and disengages when its lawful opportunity ends; it never commits an attack, injury, kill, carcass, or prey-consumption transaction.
+- Actual rabbit and fox movement can leave bounded paired tracks or canid pawprints at the saved movement site. A rabbit thump or fox yip is presented only for a causative transition visible at event time, so hidden behavior remains world state rather than remote player knowledge.
+
+### Fixes
+
+- Predator and prey appraisal now combines broad ecological role with a small-prey size class. This deliberately fixes the old size-blind result that could classify a domestic cat and a deer as a predator-prey pair; cats and marsh foxes can pursue declared small prey without treating deer as food.
+- Rabbit and fox movement signs project from their persisted evidence coordinates rather than the animal's later position. They require current direct-detail sight, are not targetable, lose identifying clarity as they age, and disappear after three in-world hours instead of becoming permanent remote animal locators.
+- Fox pursuits now have a deterministic time bound and cooldown, and blocked locomotion feeds back into the shared decision boundary instead of creating an endless chase or a terrain-bypassing move.
+- Rabbit-thump and fox-yip cues use original low-cost sound patterns with equivalent anonymous bottom-right captions. Runtime emission remains gated to a newly visible causative event.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Marsh-edge Pursuit adds route pressure and readable animal behavior without combat, hunting rewards, carcass loot, free food, or a companion bonus.
+- Rabbit and fox populations, materialized representatives, movement distance, pursuit duration, memories, and evidence are bounded. Full and coarse simulation preserve the same individuals without turning the local food-web relation into an unbounded all-pairs scan.
+- The shared role, size, perception, decision, and locomotion contracts are tested through invariants, bounded fuzzing, and representative rabbit-fox-dog-predator scenarios rather than a bespoke script or exhaustive fixture for every possible species pair.
+
+### Interface
+
+- Chart 2D and Relief 3D now give marsh rabbits and marsh foxes distinct color-independent forms, movement cues, readable labels, generous shared mouse and touch targets, and reduced-motion parity.
+- At uncertain range, ABOUT says SMALL ANIMAL or UNKNOWN CANID. Direct identification may add the observed species, approximate form, morph, life stage, condition, and current behavior, but never hidden statistics, a private target, population pressure, or habitat truth.
+- Paired tracks and canid pawprints have distinct truthful forms under direct sight, but remain non-targetable evidence with no invented label or ABOUT record. Field Manual version 26 explains the pursuit, movement signs, visible-event sound, save migration, and the limits of this bounded slice.
+
+### Save changes
+
+- The outer session advances to version 11. Its existing aggregate-capable ecology record now authenticates the habitat-version-3 derivation, marsh-rabbit and marsh-fox populations, persistent actors, bounded movement evidence, and the earlier groups, rat area, cats, cargo, and world history.
+- A sealed version-10 save migrates exactly once while preserving every established actor, group, aggregate population, item, custody record, Promise, disturbance, evidence record, and world fact. Only the deterministic marsh-rabbit and marsh-fox extension is appended.
+- Save, reload, coarse travel, full-detail return, signed region boundaries, and extreme coordinates preserve rabbit and fox identities, saved intent, and movement signs. Refresh cannot reroll or duplicate the new populations, actors, or evidence.
+
+### Known limitations
+
+- This remains one bounded habitat assemblage near the original harbor, not worldwide wildlife generation or the full bestiary. Distant populations, reproduction, ecological migration, and circadian behavior are not live.
+- Fox pursuit is intentionally nonlethal. Animals do not attack, receive injuries, die, leave carcasses, or consume live prey; hunting, capture, treatment, and predator-kill population effects are not live.
+- Rabbit and fox tracks are a narrow direct movement-sign system, and their calls are visible-event presentation cues. Complete scent fields and tracking, foliage consumption, broader food-web turnover, social information, and an exhaustive species-pair interaction matrix are not live.
+
 ## 0.3.3-alpha.15 — 2026-09-05
 
 Build: `0.3.3-alpha.15` · Gameplay contract: 20 · Tutorial: 25

@@ -16,6 +16,8 @@ export type SoundCue =
   | "wildlife-alarm"
   | "rat-rustle"
   | "cat-call"
+  | "rabbit-thump"
+  | "fox-yip"
   | "paddle"
   | "recover"
   | "title"
@@ -27,6 +29,12 @@ export interface SoundToneStep {
   readonly type: OscillatorType;
   readonly duration: number;
 }
+
+export type SmallWildlifeCue =
+  | "rat-rustle"
+  | "cat-call"
+  | "rabbit-thump"
+  | "fox-yip";
 
 export interface AudioSettings {
   enabled: boolean;
@@ -187,6 +195,8 @@ export class TideweftSoundscape {
       "wildlife-alarm": wildlifeAlarmPattern(),
       "rat-rustle": smallWildlifePattern("rat-rustle", variantSeed),
       "cat-call": smallWildlifePattern("cat-call", variantSeed),
+      "rabbit-thump": smallWildlifePattern("rabbit-thump", variantSeed),
+      "fox-yip": smallWildlifePattern("fox-yip", variantSeed),
       paddle: [
         toneStep(210, 0, "triangle", 0.055),
         toneStep(164, 0.045, "sine", 0.095),
@@ -205,6 +215,10 @@ export class TideweftSoundscape {
       this.noiseBurst(now, 0.13, 1_850, 0.012 * strength);
     } else if (cue === "cat-call") {
       this.noiseBurst(now + 0.035, 0.11, 980, 0.0045 * strength);
+    } else if (cue === "rabbit-thump") {
+      this.noiseBurst(now, 0.085, 185, 0.011 * strength);
+    } else if (cue === "fox-yip") {
+      this.noiseBurst(now + 0.025, 0.1, 1_220, 0.004 * strength);
     }
   }
 
@@ -355,7 +369,7 @@ export function wildlifeAlarmPattern(): readonly SoundToneStep[] {
  * ambience or an omniscient locator.
  */
 export function smallWildlifePattern(
-  cue: "rat-rustle" | "cat-call",
+  cue: SmallWildlifeCue,
   variantSeed: number,
 ): readonly SoundToneStep[] {
   const seed = Number.isSafeInteger(variantSeed) ? variantSeed >>> 0 : 0;
@@ -367,10 +381,23 @@ export function smallWildlifePattern(
       toneStep(1_490 + shift, 0.088, "square", 0.022),
     ];
   }
+  if (cue === "cat-call") {
+    return [
+      toneStep(392 + shift, 0, "triangle", 0.12),
+      toneStep(523.25 + shift, 0.095, "sine", 0.16),
+      toneStep(349.23 + shift, 0.235, "triangle", 0.13),
+    ];
+  }
+  if (cue === "rabbit-thump") {
+    return [
+      toneStep(116 + Math.trunc(shift / 2), 0, "square", 0.045),
+      toneStep(82 + Math.trunc(shift / 3), 0.052, "sine", 0.085),
+    ];
+  }
   return [
-    toneStep(392 + shift, 0, "triangle", 0.12),
-    toneStep(523.25 + shift, 0.095, "sine", 0.16),
-    toneStep(349.23 + shift, 0.235, "triangle", 0.13),
+    toneStep(698.46 + shift, 0, "triangle", 0.075),
+    toneStep(987.77 + shift, 0.062, "square", 0.055),
+    toneStep(659.25 + shift, 0.13, "sine", 0.105),
   ];
 }
 

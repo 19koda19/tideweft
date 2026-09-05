@@ -310,6 +310,44 @@ describe("core ecology cross-species perception bridge", () => {
     expect(serialized).not.toContain(event.causeReferenceId);
   });
 
+  it("keeps a small-prey foot alarm audible nearby without treating it as a full alarm-call interrupt", () => {
+    const current = fixture("rabbit foot alarm has bounded reach");
+    const rabbit = wildlife(current, "marsh-rabbit", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const nearbyPorter = actorAddress(
+      "H-rabbit-alarm-nearby",
+      "human",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      500_000,
+    );
+    const distantPlayer = actorAddress(
+      "H-rabbit-alarm-distant",
+      "human",
+      OBSERVER_X + 7,
+      OBSERVER_Y,
+      500_000,
+    );
+    const input = frame(current, [rabbit], {
+      porterAddress: nearbyPorter,
+      playerAddress: distantPlayer,
+    });
+
+    const batches = propagateCoreEcologyAlarmObservationBatches(
+      alarmEvent(rabbit),
+      input,
+    );
+    expect(observationsFor(batches, nearbyPorter.actorId)).toEqual([
+      expect.objectContaining({
+        channel: "hearing",
+        perceivedClass: "animal-alarm",
+        subjectId: null,
+        identification: "anonymous",
+        interrupt: "none",
+      }),
+    ]);
+    expect(observationsFor(batches, distantPlayer.actorId)).toEqual([]);
+  });
+
   it("fails closed on stale/aliased frames and forged alarms", () => {
     const current = fixture("malformed perception fails closed");
     const deer = wildlife(current, "deer", OBSERVER_X, OBSERVER_Y, 0, 0);
@@ -400,7 +438,7 @@ function fixture(
 
 function wildlife(
   current: Fixture,
-  species: "deer" | "gull" | "black-bear" | "domestic-cat",
+  species: "deer" | "gull" | "black-bear" | "domestic-cat" | "marsh-rabbit",
   tileX: number,
   tileY: number,
   heading: number,

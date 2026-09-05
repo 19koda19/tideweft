@@ -30,6 +30,9 @@ const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
 const CARDINAL_COST_UNITS = WORLD_POSITION_UNITS_PER_TILE;
 const DIAGONAL_COST_UNITS = 1_414;
 
+/** Exact outputs of canonicalSurface are recursively immutable. */
+const CANONICAL_TRAVERSABILITY_SURFACES = new WeakSet<object>();
+
 /**
  * Access is already resolved for the addressed actor's current locomotion
  * capabilities. A flying actor may therefore receive `open` over raw deep
@@ -393,6 +396,11 @@ function canonicalInput(value: unknown): CanonicalLocomotionInput | null {
 }
 
 function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | null {
+  if (
+    typeof value === "object"
+    && value !== null
+    && CANONICAL_TRAVERSABILITY_SURFACES.has(value)
+  ) return value as LivingActorTraversabilitySurface;
   if (!plainRecord(value) || !exactKeys(value, [
     "cells",
     "forActorId",
@@ -433,7 +441,7 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
   } catch {
     return null;
   }
-  return Object.freeze({
+  const surface = Object.freeze({
     version: LIVING_ACTOR_TRAVERSABILITY_VERSION,
     forActorId: value.forActorId,
     sampledAtTick: value.sampledAtTick,
@@ -442,6 +450,8 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
     heightTiles: value.heightTiles,
     cells: Object.freeze(cells),
   });
+  CANONICAL_TRAVERSABILITY_SURFACES.add(surface);
+  return surface;
 }
 
 function canonicalCell(value: unknown): LivingActorTraversabilityCell | null {

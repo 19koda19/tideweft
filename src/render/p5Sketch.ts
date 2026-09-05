@@ -3157,6 +3157,113 @@ export function createTideweftRenderer(
       p.line(headX + headRadius * 0.3, headY + headRadius * 0.12, headX + headRadius * 1.08, headY + headRadius * 0.26);
     };
 
+    const drawChartMarshRabbit = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const bounding = actor.behavior === "flee" || actor.behavior === "alarm";
+      const lift = reducedMotion || !bounding
+        ? 0
+        : Math.abs(Math.sin(now * 0.01)) * base * 0.52;
+      const bodyLength = base * 2.72;
+      const bodyHeight = base * 1.18;
+      const headX = bodyLength * 0.44;
+      const headY = -bodyHeight * 0.38 - lift * 0.12;
+      const headRadius = base * 0.56;
+
+      p.translate(0, -lift);
+      p.stroke(withAlpha(PALETTE.ink, 240));
+      p.strokeWeight(Math.max(0.8, base * 0.16));
+      p.line(-bodyLength * 0.26, bodyHeight * 0.25, -bodyLength * 0.5, bodyHeight * 0.72);
+      p.line(bodyLength * 0.28, bodyHeight * 0.24, bodyLength * 0.48, bodyHeight * 0.7);
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 240));
+      p.ellipse(-bodyLength * 0.08, 0, bodyLength * 1.1, bodyHeight * 1.28);
+      p.circle(headX, headY, headRadius * 2.28);
+      p.fill("#816b52");
+      p.ellipse(-bodyLength * 0.08, 0, bodyLength, bodyHeight);
+      p.circle(headX, headY, headRadius * 2);
+      p.fill("#a98a65");
+      for (const offset of [-0.26, 0.2]) {
+        p.triangle(
+          headX + headRadius * offset - headRadius * 0.21,
+          headY - headRadius * 0.55,
+          headX + headRadius * offset,
+          headY - headRadius * 1.96,
+          headX + headRadius * offset + headRadius * 0.25,
+          headY - headRadius * 0.5,
+        );
+      }
+      p.fill("#eee3ca");
+      p.circle(-bodyLength * 0.58, -bodyHeight * 0.08, base * 0.72);
+    };
+
+    const drawChartMarshFox = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const stalking = actor.behavior === "pursue" || actor.behavior === "scavenge";
+      const running = stalking || actor.behavior === "flee" || actor.behavior === "retreat";
+      const stride = reducedMotion || !running ? 0 : Math.sin(now * 0.012) * base * 0.34;
+      const bodyLength = base * 3.72;
+      const bodyHeight = base * (stalking ? 0.88 : 1.08);
+      const headX = bodyLength * 0.49;
+      const headY = -bodyHeight * 0.3;
+      const headRadius = base * 0.63;
+
+      p.noFill();
+      p.stroke(withAlpha(PALETTE.ink, 240));
+      p.strokeWeight(Math.max(1.1, base * 0.3));
+      p.bezier(
+        -bodyLength * 0.46,
+        -bodyHeight * 0.02,
+        -bodyLength * 0.88,
+        bodyHeight * 0.18,
+        -bodyLength * 1.06,
+        bodyHeight * 0.64,
+        -bodyLength * 0.72,
+        bodyHeight * 0.7,
+      );
+      p.strokeWeight(Math.max(0.8, base * 0.15));
+      p.line(-bodyLength * 0.28, bodyHeight * 0.22, -bodyLength * 0.3 + stride, bodyHeight * 0.86);
+      p.line(bodyLength * 0.29, bodyHeight * 0.22, bodyLength * 0.31 - stride, bodyHeight * 0.86);
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 240));
+      p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.24);
+      p.circle(headX, headY, headRadius * 2.25);
+      p.fill("#9d5136");
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.circle(headX, headY, headRadius * 2);
+      p.fill("#b96a43");
+      p.triangle(
+        headX - headRadius * 0.72,
+        headY - headRadius * 0.42,
+        headX - headRadius * 0.5,
+        headY - headRadius * 1.34,
+        headX - headRadius * 0.02,
+        headY - headRadius * 0.46,
+      );
+      p.triangle(
+        headX + headRadius * 0.02,
+        headY - headRadius * 0.48,
+        headX + headRadius * 0.44,
+        headY - headRadius * 1.3,
+        headX + headRadius * 0.68,
+        headY - headRadius * 0.38,
+      );
+      p.fill("#d8c7a7");
+      p.triangle(
+        headX + headRadius * 0.48,
+        headY - headRadius * 0.12,
+        headX + headRadius * 1.28,
+        headY + headRadius * 0.1,
+        headX + headRadius * 0.42,
+        headY + headRadius * 0.42,
+      );
+    };
+
     const drawChartWildlifeActor = (
       actor: WildlifeView,
       base: number,
@@ -3174,6 +3281,12 @@ export function createTideweftRenderer(
           return true;
         case "domestic-cat":
           drawChartDomesticCat(actor, base);
+          return true;
+        case "marsh-rabbit":
+          drawChartMarshRabbit(actor, base, now);
+          return true;
+        case "marsh-fox":
+          drawChartMarshFox(actor, base, now);
           return true;
       }
     };
@@ -3236,6 +3349,42 @@ export function createTideweftRenderer(
               p.ellipse(x, y, base * 0.48, base * 0.34);
               p.circle(x + base * 0.26, y - base * 0.22, base * 0.18);
             }
+            break;
+          case "paired-tracks":
+            p.noStroke();
+            p.fill(withAlpha(PALETTE.ink, 230));
+            for (const [x, y, length, width] of [
+              [-0.72, 0.42, 0.68, 0.34],
+              [-0.56, -0.38, 0.68, 0.34],
+              [0.48, 0.24, 0.42, 0.25],
+              [0.62, -0.22, 0.42, 0.25],
+            ] as const) {
+              p.ellipse(base * x, base * y, base * length, base * width);
+            }
+            p.stroke("#c7ad86");
+            p.strokeWeight(Math.max(0.65, base * 0.11));
+            p.line(-base * 1.25, base * 0.82, base * 1.25, -base * 0.62);
+            break;
+          case "canid-pawprints":
+            p.noStroke();
+            for (const step of [-0.62, 0.62]) {
+              const x = step * base;
+              const y = -step * base * 0.46;
+              p.fill(withAlpha(PALETTE.ink, 235));
+              p.ellipse(x, y, base * 0.58, base * 0.48);
+              p.fill("#9b8067");
+              for (const [toeX, toeY] of [
+                [-0.28, -0.37],
+                [-0.09, -0.5],
+                [0.11, -0.5],
+                [0.3, -0.35],
+              ] as const) {
+                p.circle(x + toeX * base, y + toeY * base, base * 0.2);
+              }
+            }
+            p.stroke("#d0b694");
+            p.strokeWeight(Math.max(0.65, base * 0.1));
+            p.line(-base * 1.45, base * 0.7, base * 1.45, -base * 0.7);
             break;
           case "shelter-sign":
             p.noStroke();

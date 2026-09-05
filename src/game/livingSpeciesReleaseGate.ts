@@ -8,6 +8,7 @@ import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 export const LIVING_SPECIES_RELEASE_GATE_VERSION = 1 as const;
 export const LIVING_SPECIES_READINESS_REPORT_VERSION = 1 as const;
 export const MAX_RELEASE_EVIDENCE_OWNERS = 8 as const;
+export const ALPHA16_MARSH_EDGE_BOUNDED_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -101,6 +102,69 @@ export interface LivingSpeciesReadinessReport {
   readonly publicReady: boolean;
   readonly counts: LivingSpeciesReadinessCounts;
   readonly blockingCriteria: readonly LivingSpeciesReleaseCriterion[];
+}
+
+export const ALPHA16_MARSH_EDGE_SPECIES = [
+  "marsh-rabbit",
+  "marsh-fox",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha16MarshEdgeSpecies = (typeof ALPHA16_MARSH_EDGE_SPECIES)[number];
+
+/**
+ * Technical claims owned by the bounded Alpha-16 rabbit/fox implementation.
+ * Deferred universal systems and release records remain visible in the full
+ * 30-criterion gate and cannot be laundered through this smaller result.
+ */
+export const ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA = [
+  "species-profile",
+  "ecological-niche",
+  "appearance",
+  "sound",
+  "habitat-placement",
+  "locomotion",
+  "human-interaction",
+  "dog-interaction",
+  "other-species-interaction",
+  "neutral-behavior",
+  "disengagement",
+  "environmental-evidence",
+  "about-disclosure",
+  "knowledge-honesty",
+  "population-materialization",
+  "full-coarse-transition",
+  "save-load",
+  "seamless-region-crossing",
+  "performance-budget",
+  "accessibility",
+  "mobile-parity",
+  "player-independent-scenario",
+  "fuzz-testing",
+  "clone-diversity",
+] as const satisfies readonly LivingSpeciesReleaseCriterion[];
+
+export interface Alpha16MarshEdgeBoundedReadinessReport {
+  readonly version: typeof ALPHA16_MARSH_EDGE_BOUNDED_READINESS_VERSION;
+  readonly unitId: "alpha16-marsh-edge";
+  readonly speciesIds: readonly Alpha16MarshEdgeSpecies[];
+  readonly boundedCriteria: readonly LivingSpeciesReleaseCriterion[];
+  /** Exact match against the build-owned rabbit/fox evidence rows. */
+  readonly evidenceAuthenticated: boolean;
+  /**
+   * The bounded implementation candidate is internally ready. This is not a
+   * claim that public copy is written, a deployment exists, or the broader
+   * biodiversity roster is complete.
+   */
+  readonly boundedCandidateReady: boolean;
+  readonly blockingBoundedCriteria: readonly LivingSpeciesReleaseCriterion[];
+  /** Tutorial and patch-note evidence for this publication unit. */
+  readonly publicationRecordsReady: boolean;
+  /** May become true only after the exact tested build is verified live. */
+  readonly exactTestedDeploymentVerified: boolean;
+  readonly published: boolean;
+  /** Both species have all 30 criteria active/N-A; not the whole biodiversity program. */
+  readonly fullThirtyCriterionReady: boolean;
+  readonly fullGateBlockingCriteria: readonly LivingSpeciesReleaseCriterion[];
 }
 
 const STATUS = new Set<string>(["active", "foundation", "unimplemented", "not-applicable"]);
@@ -342,6 +406,144 @@ function settlementShadowsEvidence(
 }
 
 /**
+ * Build-owned evidence for the bounded Alpha-16 marsh-edge publication unit.
+ * A generic role resolver and one representative rabbit/fox/dog scenario
+ * stand in for a quadratic interaction matrix. Food-web turnover and the
+ * broader multisensory model remain foundations; same-species social behavior
+ * and exact deployment remain openly unimplemented.
+ * Mortality, carcasses, living-cover response, and circadian schedules stay
+ * explicit omissions in the species catalog and are audited in focused tests.
+ */
+function marshEdgeEvidence(
+  _species: Alpha16MarshEdgeSpecies,
+): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  return [
+    ["species-profile", A, owners(
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["ecological-niche", A, owners(
+      "game:core-ecology-habitat:v3",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["appearance", A, owners(
+      "game:wildlife-presentation:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["sound", A, owners(
+      "audio:soundscape:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v3",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["food-web", F, owners(
+      "game:core-ecology-trophic:v1",
+      "game:core-wildlife-actor:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["perception-senses", F, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-actor-senses:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["locomotion", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:core-wildlife-locomotion-profile:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["human-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["dog-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-trophic:v1",
+      "game:core-wildlife-actor:v1",
+    )],
+    ["same-species-interaction", U, []],
+    ["other-species-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-trophic:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["neutral-behavior", A, ["game:core-wildlife-actor:v1"]],
+    ["disengagement", A, ["game:core-wildlife-actor:v1"]],
+    ["environmental-evidence", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["about-disclosure", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v3",
+      "game:core-ecology:v3",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-ecology:v3",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["save-load", A, owners(
+      "game:core-ecology:v3",
+      "game:runtime-save:v11",
+    )],
+    ["seamless-region-crossing", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "game:world-position:v1",
+    )],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v3",
+      "game:core-ecology:v3",
+      "game:runtime-core-ecology:v1",
+      "test:core-ecology-marsh-edge-performance:v1",
+    )],
+    ["accessibility", A, owners(
+      "audio:soundscape:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["mobile-parity", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "test:core-ecology-marsh-edge-mobile:v1",
+    )],
+    ["player-independent-scenario", A, owners(
+      "game:core-ecology-trophic:v1",
+      "game:core-wildlife-actor:v1",
+    )],
+    ["fuzz-testing", A, owners(
+      "game:core-ecology-habitat:v3",
+      "game:core-ecology:v3",
+      "sim:core-wildlife-identity:v1",
+      "test:core-ecology-marsh-edge-fuzz:v1",
+    )],
+    ["clone-diversity", A, ["sim:core-wildlife-identity:v1"]],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v26"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha16:v1"]],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -415,6 +617,8 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "black-bear": waveACoreWildlifeEvidence("black-bear"),
   "brown-rat": settlementShadowsEvidence("brown-rat"),
   "domestic-cat": settlementShadowsEvidence("domestic-cat"),
+  "marsh-rabbit": marshEdgeEvidence("marsh-rabbit"),
+  "marsh-fox": marshEdgeEvidence("marsh-fox"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -554,6 +758,61 @@ export function livingSpeciesReadinessReport(speciesId: string): LivingSpeciesRe
   const gate = LIVING_SPECIES_RELEASE_GATES.gates.find((candidate) => candidate.speciesId === speciesId);
   return gate === undefined ? null : auditLivingSpeciesReleaseGate(gate);
 }
+
+/**
+ * Derive the bounded Alpha-16 candidate state exclusively from authenticated
+ * built-in evidence. A true bounded candidate never implies a live build or
+ * completion of the full 30-criterion species gate.
+ */
+export function alpha16MarshEdgeBoundedReadiness(): Alpha16MarshEdgeBoundedReadinessReport {
+  const reports = ALPHA16_MARSH_EDGE_SPECIES.map((speciesId) => ({
+    speciesId,
+    gate: LIVING_SPECIES_RELEASE_GATES.gates.find((candidate) => (
+      candidate.speciesId === speciesId
+    )),
+    report: livingSpeciesReadinessReport(speciesId),
+  }));
+  const evidenceAuthenticated = reports.every(({ gate, report }) => (
+    gate !== undefined && report?.evidenceAuthenticated === true
+  ));
+  const blockingBoundedCriteria = ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA.filter((criterion) => (
+    reports.some(({ gate }) => gate?.criteria.find((state) => state.criterion === criterion)?.status !== "active")
+  ));
+  const publicationRecordsReady = evidenceAuthenticated && [
+    "tutorial-truth",
+    "patch-note-truth",
+  ].every((criterion) => reports.every(({ gate }) => (
+    gate?.criteria.find((state) => state.criterion === criterion)?.status === "active"
+  )));
+  const exactTestedDeploymentVerified = evidenceAuthenticated && reports.every(({ gate }) => (
+    gate?.criteria.find(({ criterion }) => criterion === "exact-tested-deployment")?.status === "active"
+  ));
+  const fullGateBlockingCriteria = LIVING_SPECIES_RELEASE_CRITERIA.filter((criterion) => (
+    reports.some(({ report }) => report?.blockingCriteria.includes(criterion) ?? true)
+  ));
+  const boundedCandidateReady = evidenceAuthenticated && blockingBoundedCriteria.length === 0;
+  const fullThirtyCriterionReady = evidenceAuthenticated
+    && reports.every(({ report }) => report?.publicReady === true);
+  return deepFreeze({
+    version: ALPHA16_MARSH_EDGE_BOUNDED_READINESS_VERSION,
+    unitId: "alpha16-marsh-edge",
+    speciesIds: [...ALPHA16_MARSH_EDGE_SPECIES],
+    boundedCriteria: [...ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA],
+    evidenceAuthenticated,
+    boundedCandidateReady,
+    blockingBoundedCriteria,
+    publicationRecordsReady,
+    exactTestedDeploymentVerified,
+    published: boundedCandidateReady
+      && publicationRecordsReady
+      && exactTestedDeploymentVerified,
+    fullThirtyCriterionReady,
+    fullGateBlockingCriteria,
+  });
+}
+
+export const ALPHA16_MARSH_EDGE_BOUNDED_READINESS =
+  alpha16MarshEdgeBoundedReadiness();
 
 function canonicalCriterionState(
   value: unknown,

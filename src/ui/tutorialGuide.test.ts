@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(25);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(26);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,11 +63,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("humans, domestic dogs, deer, gulls, black bears, brown rats, and domestic cats");
-    expect(copy).toContain("stable habitat-derived population area");
-    expect(copy).toContain("free-ranging cats persist as individual wildlife");
-    expect(copy).toContain("Directly visible rat signs and cats");
-    expect(copy).toContain("Chart, Relief, mouse, touch");
+    expect(copy).toContain("humans, domestic dogs, deer, gulls, black bears, brown rats, domestic cats, marsh rabbits, and marsh foxes");
+    expect(copy).toContain("deterministic habitat-derived populations");
+    expect(copy).toContain("nonlethal alarm, flight, finite pursuit");
+    expect(copy).toContain("direct movement signs");
+    expect(copy).toContain("Chart, Relief, mouse, and touch");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -243,10 +243,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 10");
-    expect(copy).toContain("sealed version 9 save migrates exactly once");
-    expect(copy).toContain("every established actor, item, Promise, and world fact stays exact");
-    expect(copy).toContain("cannot add another population, reroll a cat, duplicate food, or rewrite older ecology");
+    expect(copy).toContain("Outer save version 11");
+    expect(copy).toContain("sealed version 10 save migrates exactly once");
+    expect(copy).toContain("every established actor, group, aggregate population, item, Promise, evidence record, and world fact stays exact");
+    expect(copy).toContain("cannot add another population, reroll an animal, duplicate movement signs, or rewrite older ecology");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -324,13 +324,14 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("bounded habitat-derived local assemblage");
     expect(plannedCopy).toContain("brown-rat population areas");
     expect(plannedCopy).toContain("free-ranging domestic cats");
+    expect(plannedCopy).toContain("marsh rabbits");
+    expect(plannedCopy).toContain("marsh foxes");
     expect(plannedCopy).toContain("aggregate population rather than individual actors");
-    expect(plannedCopy).toContain("cannot be owned, bonded, named, or recruited");
     expect(plannedCopy).toContain("Further dogs and wildlife species");
     expect(plannedCopy).toContain("worldwide populations");
     expect(plannedCopy).toContain("animal death and carcasses");
-    expect(plannedCopy).toContain("broad scent and evidence tracking");
-    expect(plannedCopy).toContain("complete bestiary");
+    expect(plannedCopy).toContain("complete scent and evidence tracking");
+    expect(plannedCopy).toContain("full bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
     expect(plannedCopy).toContain("not implemented yet");
@@ -362,7 +363,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ROUTE AROUND THIS SPOT");
     expect(copy).toContain("exactly one dried-fish unit");
     expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
-    expect(copy).toContain("deer, gull, black bear, or domestic cat");
+    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, or marsh fox");
     expect(copy).toContain("A heard animal alarm gives an uncertain direction");
     expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("your previous route and choice history remain unchanged");
@@ -384,18 +385,32 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("are not selectable");
     expect(copy).toContain("Gnaw marks, small tracks, and shelter signs");
     expect(copy).toContain("never reveals an exact count, hidden anchor, pressure value, cause, or individual rat identity");
-    expect(copy).toContain("A rat rustle or cat call");
-    expect(copy).toContain("Offscreen redistribution and hidden cat activity");
+    expect(copy).toContain("A rat rustle, cat call, rabbit thump, or fox yip");
+    expect(copy).toContain("Offscreen redistribution, movement, and hidden animal decisions");
+    expect(copy).toContain("directly perceives a fox can alarm and then flee");
+    expect(copy).toContain("hungry marsh fox can pursue a rabbit it directly perceives");
+    expect(copy).toContain("dog or black bear can become the more urgent pressure");
+    expect(copy).toContain("pursuit must disengage after its finite opportunity");
+    expect(copy).toContain("no attack, injury, death, carcass, or live-prey consumption");
+    expect(copy).toContain("SMALL ANIMAL or UNKNOWN CANID");
+    expect(copy).toContain("approximate visible form, morph, life stage, condition, and current behavior");
+    expect(copy).toContain("never reveals a hidden statistic, private target, population pressure, or habitat calculation");
+    expect(copy).toContain("movement can leave paired tracks");
+    expect(copy).toContain("movement can leave canid pawprints");
+    expect(copy).toContain("saved sign stays at that movement site");
+    expect(copy).toContain("is not selectable or usable as a remote locator");
     expect(copy).toContain("Rat-sign ABOUT is close-only because a sign is not an actor");
     expect(copy).toContain("standable shallow water");
     expect(copy).toContain("remaining saved intent to physiology");
     expect(copy).toContain("ages existing perception without adding facts");
     expect(copy).toContain("nonlethal player-absent aftermath");
     expect(copy).toContain("no harm or cargo interaction");
-    expect(copy).toContain("Animals do not attack, receive injuries, die, or leave carcasses");
-    expect(copy).toContain("Further wildlife species, worldwide populations");
-    expect(copy).toContain("broad scent and evidence tracking");
-    expect(copy).toContain("complete bestiary");
+    expect(copy).toContain("Animals do not attack, receive injuries, die, leave carcasses, or consume live prey");
+    expect(copy).toContain("Complete scent and evidence tracking");
+    expect(copy).toContain("foliage consumption");
+    expect(copy).toContain("circadian behavior");
+    expect(copy).toContain("further species, worldwide populations, the full bestiary");
+    expect(copy).toContain("exhaustive species-pair interaction matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
