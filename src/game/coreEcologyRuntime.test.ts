@@ -14,12 +14,18 @@ import {
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
+  createCoreEcologyGroup,
+  createCoreEcologyGroupSet,
+  stepCoreEcologyGroupCoarse,
+} from "./coreEcologyGroups";
+import {
   deriveCoreEcologyMaterializedActorIds,
   projectCoreEcologyWildlife,
   selectedCoreEcologyActor,
   setCoreEcologyMaterializationForWindow,
   type CoreEcologyRuntimeWindow,
 } from "./coreEcologyRuntime";
+import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
   REGIONAL_TRAVEL_COLUMNS,
@@ -176,6 +182,202 @@ describe("core ecology pure runtime seam", () => {
       expect(member(second, "deer:rebase", ordinal).actor)
         .toEqual(member(state, "deer:rebase", ordinal).actor);
     }
+  });
+
+  it("materializes a dormant herd from its moved group anchor rather than stale member addresses", () => {
+    const firstWindow = windowAt();
+    const initialAnchor = positionAt(firstWindow, 20, 20);
+    const movedAnchor = positionAt(firstWindow, 80, 20);
+    const initialGroup = createCoreEcologyGroup({
+      seed: SEED,
+      species: "deer",
+      originRegion: ORIGIN,
+      populationKey: "deer:moved-group",
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1],
+      anchor: initialAnchor,
+    });
+    const moved = stepCoreEcologyGroupCoarse(initialGroup, {
+      atTick: 8,
+      disturbances: [{
+        disturbanceId: "disturbance:moved-group",
+        atTick: 8,
+        causeKind: "habitat-pressure",
+        causeReferenceId: "habitat:moved-group",
+        pressure: 100_000,
+        movementHeading: 250_000,
+        destinationAnchors: [movedAnchor],
+        rendezvousAnchor: movedAnchor,
+        playerAbsent: true,
+        nonlethal: true,
+        cargoInteraction: false,
+      }],
+    });
+    if (moved === null) throw new Error("Moved-group fixture failed");
+    const state = createCoreEcologyPatch({
+      seed: SEED,
+      patchKey: "runtime:moved-group",
+      originRegion: ORIGIN,
+      tick: 8,
+      populations: [population("deer", "deer:moved-group", [
+        positionAt(firstWindow, 20, 20),
+        positionAt(firstWindow, 21, 20),
+      ])],
+      groups: createCoreEcologyGroupSet([moved.group]),
+    });
+    const movedWindow = shiftedWindow(firstWindow, 50, 0);
+    const expectedIds = state.populations[0]!.members
+      .map(({ actor }) => actor.identity.stableId)
+      .sort();
+
+    expect(deriveCoreEcologyMaterializedActorIds(state, movedWindow)).toEqual(expectedIds);
+    const materialized = setCoreEcologyMaterializationForWindow(state, movedWindow, 8);
+    if (materialized === null) throw new Error("Moved-group materialization failed");
+    for (const groupedMember of materialized.populations[0]!.members) {
+      expect(groupedMember.materialization).toBe("materialized");
+      expect(groupedMember.actor.address.position.localX).toBeGreaterThanOrEqual(
+        movedAnchor.localX - 240,
+      );
+      expect(groupedMember.actor.address.position.localX).toBeLessThanOrEqual(
+        movedAnchor.localX + 240,
+      );
+      expect(livingActorAddressInRegionalWindow(
+        groupedMember.actor.address,
+        movedWindow,
+      )).not.toBeNull();
+    }
+  });
+
+  it("does not materialize a stale dormant member whose group anchor is outside the frame", () => {
+    const firstWindow = windowAt();
+    const group = createCoreEcologyGroup({
+      seed: SEED,
+      species: "deer",
+      originRegion: ORIGIN,
+      populationKey: "deer:stale-address",
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1],
+      anchor: positionAt(firstWindow, 20, 20),
+    });
+    const state = createCoreEcologyPatch({
+      seed: SEED,
+      patchKey: "runtime:stale-address",
+      originRegion: ORIGIN,
+      populations: [population("deer", "deer:stale-address", [
+        positionAt(firstWindow, 20, 20),
+        positionAt(firstWindow, 80, 20),
+      ])],
+      groups: createCoreEcologyGroupSet([group]),
+    });
+
+    expect(deriveCoreEcologyMaterializedActorIds(
+      state,
+      shiftedWindow(firstWindow, 50, 0),
+    )).toEqual([]);
+  });
+
+  it("keeps a partially crossing herd exact and idempotent at an unchanged camera window", () => {
+    const firstWindow = windowAt();
+    const group = createCoreEcologyGroup({
+      seed: SEED,
+      species: "deer",
+      originRegion: ORIGIN,
+      populationKey: "deer:partial-crossing",
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1],
+      anchor: positionAt(firstWindow, 10, 20),
+    });
+    const state = createCoreEcologyPatch({
+      seed: SEED,
+      patchKey: "runtime:partial-crossing",
+      originRegion: ORIGIN,
+      populations: [population("deer", "deer:partial-crossing", [
+        positionAt(firstWindow, 10, 20),
+        positionAt(firstWindow, 80, 20),
+      ], new Set([0, 1]))],
+      groups: createCoreEcologyGroupSet([group]),
+    });
+    const crossingWindow = shiftedWindow(firstWindow, 50, 0);
+    const expected = [member(state, "deer:partial-crossing", 1).actor.identity.stableId];
+    const beforePositions = state.populations[0]!.members
+      .map(({ actor }) => actor.address.position);
+
+    expect(deriveCoreEcologyMaterializedActorIds(state, crossingWindow)).toEqual(expected);
+    const first = setCoreEcologyMaterializationForWindow(state, crossingWindow, 1);
+    if (first === null) throw new Error("Partial crossing materialization failed");
+    expect(deriveCoreEcologyMaterializedActorIds(first, crossingWindow)).toEqual(expected);
+    const repeated = setCoreEcologyMaterializationForWindow(first, crossingWindow, 1);
+    expect(repeated).toEqual(first);
+    expect(first.populations[0]!.members.map(({ actor }) => actor.address.position))
+      .toEqual(beforePositions);
+
+    const widened = setCoreEcologyMaterializationForWindow(first, firstWindow, 2);
+    if (widened === null) throw new Error("Partial crossing re-entry failed");
+    expect(widened.populations[0]!.members.map(({ actor }) => actor.address.position))
+      .toEqual(beforePositions);
+    expect(deriveCoreEcologyMaterializedActorIds(widened, firstWindow))
+      .toEqual(widened.populations[0]!.members.map(({ actor }) => actor.identity.stableId).sort());
+  });
+
+  it("preserves a dormant split component anchor while another component is active", () => {
+    const firstWindow = windowAt();
+    const initialGroup = createCoreEcologyGroup({
+      seed: SEED,
+      species: "deer",
+      originRegion: ORIGIN,
+      populationKey: "deer:split-crossing",
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1, 2, 3],
+      anchor: positionAt(firstWindow, 5, 20),
+    });
+    const split = stepCoreEcologyGroupCoarse(initialGroup, {
+      atTick: 8,
+      disturbances: [{
+        disturbanceId: "disturbance:split-crossing",
+        atTick: 8,
+        causeKind: "habitat-pressure",
+        causeReferenceId: "habitat:split-crossing",
+        pressure: 800_000,
+        movementHeading: 250_000,
+        destinationAnchors: [
+          positionAt(firstWindow, 80, 20),
+          positionAt(firstWindow, 90, 20),
+        ],
+        rendezvousAnchor: positionAt(firstWindow, 85, 20),
+        playerAbsent: true,
+        nonlethal: true,
+        cargoInteraction: false,
+      }],
+    });
+    if (split === null) throw new Error("Split-crossing fixture failed");
+    const state = createCoreEcologyPatch({
+      seed: SEED,
+      patchKey: "runtime:split-crossing",
+      originRegion: ORIGIN,
+      tick: 8,
+      populations: [population("deer", "deer:split-crossing", [
+        positionAt(firstWindow, 5, 20),
+        positionAt(firstWindow, 90, 20),
+        positionAt(firstWindow, 6, 20),
+        positionAt(firstWindow, 91, 20),
+      ], new Set([1, 3]))],
+      groups: createCoreEcologyGroupSet([split.group]),
+    });
+    const crossingWindow = shiftedWindow(firstWindow, 50, 0);
+    const expected = state.populations[0]!.members
+      .map(({ actor }) => actor.identity.stableId)
+      .sort();
+
+    expect(deriveCoreEcologyMaterializedActorIds(state, crossingWindow)).toEqual(expected);
+    const first = setCoreEcologyMaterializationForWindow(state, crossingWindow, 8);
+    if (first === null) throw new Error("Split component materialization failed");
+    for (const groupedMember of first.populations[0]!.members) {
+      expect(groupedMember.materialization).toBe("materialized");
+      expect(livingActorAddressInRegionalWindow(groupedMember.actor.address, crossingWindow))
+        .not.toBeNull();
+    }
+    expect(deriveCoreEcologyMaterializedActorIds(first, crossingWindow)).toEqual(expected);
+    expect(setCoreEcologyMaterializationForWindow(first, crossingWindow, 8)).toEqual(first);
   });
 
   it.each([

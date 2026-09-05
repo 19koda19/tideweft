@@ -51,33 +51,60 @@ describe("Living Weft species release gate", () => {
       expect(wildlife?.counts.total).toBe(30);
       expect(wildlife?.blockingCriteria).toEqual(expect.arrayContaining([
         "sound",
-        "habitat-placement",
         "perception-senses",
-        "same-species-interaction",
         "environmental-evidence",
         "seamless-region-crossing",
         "performance-budget",
-        "player-independent-scenario",
         "fuzz-testing",
       ]));
     }
+    for (const species of ["deer", "gull"] as const) {
+      const wildlife = livingSpeciesReadinessReport(species);
+      expect(wildlife?.blockingCriteria).not.toContain("habitat-placement");
+      expect(wildlife?.blockingCriteria).not.toContain("same-species-interaction");
+      expect(wildlife?.blockingCriteria).not.toContain("player-independent-scenario");
+    }
+    expect(livingSpeciesReadinessReport("black-bear")?.blockingCriteria)
+      .toEqual(expect.arrayContaining([
+        "same-species-interaction",
+        "player-independent-scenario",
+      ]));
     expect(livingSpeciesReadinessReport("wolf")).toBeNull();
   });
 
-  it("authenticates the bounded Alpha 12 wildlife evidence without claiming missing systems", () => {
+  it("authenticates bounded Wave-A habitat and population evidence without future claims", () => {
     for (const species of ["deer", "gull", "black-bear"] as const) {
       const releaseGate = gate(species);
       const state = (criterion: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
         releaseGate.criteria.find((candidate) => candidate.criterion === criterion)
       );
 
+      expect(state("habitat-placement")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: [
+          "game:core-ecology-habitat:v1",
+          "game:runtime-core-ecology:v1",
+        ],
+      });
       expect(state("population-materialization")).toMatchObject({ status: "active" });
       expect(state("full-coarse-transition")).toMatchObject({ status: "active" });
-      expect(state("save-load")).toMatchObject({ status: "active" });
+      expect(state("save-load")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: ["game:core-ecology:v2", "game:runtime-save:v9"],
+      });
       expect(state("mobile-parity")).toMatchObject({ status: "active" });
-      expect(state("tutorial-truth")).toMatchObject({ status: "active" });
-      expect(state("patch-note-truth")).toMatchObject({ status: "active" });
-      expect(state("exact-tested-deployment")).toMatchObject({ status: "active" });
+      expect(state("tutorial-truth")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: ["ui:tutorial-guide:v24"],
+      });
+      expect(state("patch-note-truth")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: ["content:patch-notes-alpha14:v1"],
+      });
+      expect(state("exact-tested-deployment")).toMatchObject({
+        status: "unimplemented",
+        evidenceOwnerIds: [],
+      });
       expect(state("performance-budget")).toMatchObject({ status: "foundation" });
       expect(state("perception-senses")).toMatchObject({ status: "foundation" });
       expect(state("sound")).toEqual(expect.objectContaining({
@@ -88,11 +115,27 @@ describe("Living Weft species release gate", () => {
         status: "unimplemented",
         evidenceOwnerIds: [],
       }));
-      expect(state("player-independent-scenario")).toEqual(expect.objectContaining({
-        status: "unimplemented",
-        evidenceOwnerIds: [],
-      }));
     }
+
+    for (const species of ["deer", "gull"] as const) {
+      const releaseGate = gate(species);
+      expect(releaseGate.criteria.find(({ criterion }) => criterion === "same-species-interaction"))
+        .toMatchObject({
+          status: "active",
+          evidenceOwnerIds: ["game:core-ecology-groups:v1"],
+        });
+      expect(releaseGate.criteria.find(({ criterion }) => criterion === "player-independent-scenario"))
+        .toMatchObject({
+          status: "active",
+          evidenceOwnerIds: ["game:core-ecology-groups:v1", "game:core-ecology:v2"],
+        });
+    }
+
+    const bear = gate("black-bear");
+    expect(bear.criteria.find(({ criterion }) => criterion === "same-species-interaction"))
+      .toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    expect(bear.criteria.find(({ criterion }) => criterion === "player-independent-scenario"))
+      .toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
   });
 
   it("fails closed on incomplete, reordered, extra, or unregistered claims", () => {

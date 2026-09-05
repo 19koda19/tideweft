@@ -11,6 +11,7 @@ import {
   type CoreEcologyPopulationMemberState,
   type CoreEcologyPopulationState,
 } from "./coreEcology";
+import { coreEcologyGroupComponentForMember } from "./coreEcologyGroups";
 import type { CoreWildlifeActorState } from "./coreWildlifeActor";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { livingSpeciesActorIdMatchesNamespace } from "./livingSpeciesRegistry";
@@ -55,7 +56,11 @@ interface VisibleMember {
   readonly presentation: WildlifePresentation;
 }
 
-/** Exact stable-ID set whose saved actor addresses lie in the current frame. */
+/**
+ * Exact stable-ID set whose authoritative current representation lies in the
+ * frame. A coarse social actor belongs at its saved group-component anchor;
+ * its dormant individual address is history, not a second location.
+ */
 export function deriveCoreEcologyMaterializedActorIds(
   patchValue: unknown,
   windowValue: unknown,
@@ -63,13 +68,48 @@ export function deriveCoreEcologyMaterializedActorIds(
   const patch = canonicalizeCoreEcologyPatch(patchValue);
   const window = canonicalWindow(windowValue);
   if (patch === null || window === null) return null;
-  const actorIds = patch.populations.flatMap(({ members }) => members
-    .filter(({ actor }) => livingActorAddressInRegionalWindow(actor.address, window) !== null)
+  const actorIds = patch.populations.flatMap((population) => population.members
+    .filter((member) => memberIntersectsRuntimeWindow(patch, population, member, window))
     .map(({ actor }) => actor.identity.stableId));
   actorIds.sort(compareText);
   return actorIds.length <= CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
     ? Object.freeze(actorIds)
     : null;
+}
+
+function memberIntersectsRuntimeWindow(
+  patch: CoreEcologyPatchState,
+  population: CoreEcologyPopulationState,
+  member: CoreEcologyPopulationMemberState,
+  window: CoreEcologyRuntimeWindow,
+): boolean {
+  if (member.materialization === "materialized") {
+    return livingActorAddressInRegionalWindow(member.actor.address, window) !== null;
+  }
+  const group = patch.groups.groups.find((candidate) => (
+    candidate.identity.species === population.species
+    && candidate.identity.populationKey === population.populationKey
+    && candidate.memberOrdinals.includes(member.populationOrdinal)
+  ));
+  if (group === undefined) {
+    return livingActorAddressInRegionalWindow(member.actor.address, window) !== null;
+  }
+  const component = coreEcologyGroupComponentForMember(group, member.populationOrdinal);
+  if (component === null) return false;
+  // A partially materialized component still has exact individual positions.
+  // Its coarse members remain at their last exact address until the whole
+  // component becomes dormant; only then does the aggregate anchor own place.
+  const componentHasMaterializedMember = population.members.some((candidate) => (
+    candidate.materialization === "materialized"
+    && component.memberOrdinals.includes(candidate.populationOrdinal)
+  ));
+  if (componentHasMaterializedMember) {
+    return livingActorAddressInRegionalWindow(member.actor.address, window) !== null;
+  }
+  return livingActorAddressInRegionalWindow({
+    ...member.actor.address,
+    position: component.anchor,
+  }, window) !== null;
 }
 
 /**

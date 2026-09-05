@@ -16,6 +16,7 @@ import { seedFromText } from "../sim/rng";
 import {
   CORE_WILDLIFE_ACTOR_VERSION,
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  advanceCoreWildlifeActorCoarse,
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
   deserializeCoreWildlifeActorState,
@@ -255,6 +256,34 @@ describe("core Wave-A wildlife actor", () => {
     const resting = step(tired, 2);
     expect(resting.decision.intent).toBe("rest");
     expect(resting.actor.needs.rest).toBeLessThan(tired.needs.rest);
+  });
+
+  it("ages an absent actor without charging a newly selected intent across hidden time", () => {
+    const tired = replaceCoreWildlifeActorPhysiology(actor("deer"), {
+      atTick: 0,
+      needs: { hunger: 0, safety: 0, rest: 900_000 },
+      condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 0, stress: 0 },
+    });
+    const resting = step(tired, 1).actor;
+    expect(resting.intent).toMatchObject({ kind: "rest", expiresAtTick: 6 });
+
+    const advanced = advanceCoreWildlifeActorCoarse(resting, { atTick: 20 });
+
+    expect(advanced.address).toEqual(resting.address);
+    expect(advanced.identity).toEqual(resting.identity);
+    expect(advanced.perception.tick).toBe(20);
+    expect(advanced.intent).toMatchObject({
+      kind: "observe",
+      cause: { kind: "condition", referenceId: "condition:coarse-watch" },
+      enteredAtTick: 20,
+      expiresAtTick: null,
+    });
+    // Five remaining rest ticks, then fourteen neutral ticks—not nineteen
+    // retroactive rest ticks chosen on rematerialization.
+    expect(advanced.needs).toEqual({ hunger: 80_000, safety: 0, rest: 762_000 });
+    expect(advanced.memories).toEqual(resting.memories);
+    expect(() => advanceCoreWildlifeActorCoarse(advanced, { atTick: 20 }))
+      .toThrow(/stale/u);
   });
 
   it("emits a causal alarm before fleeing from the same still-perceived threat", () => {

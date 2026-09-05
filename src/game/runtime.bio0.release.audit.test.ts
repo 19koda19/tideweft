@@ -250,7 +250,16 @@ describe("BIO0 release-level player loop", () => {
     runtime.stop();
 
     expect(ecology.events.filter(({ kind }) => kind === "food-consumed")).toHaveLength(1);
-    expect(runtime.getUIView().announcement?.message).toBe(priorAnnouncement);
+    const currentAnnouncement = runtime.getUIView().announcement?.message;
+    expect(currentAnnouncement).not.toBe(
+      "The porter offers one provision. The dog accepts it, and the food leaves the pack.",
+    );
+    // Habitat-derived wildlife may lawfully produce an unrelated, audible
+    // alarm during this interval. This assertion owns only the unwitnessed
+    // meal: it must not suppress or masquerade as other perceived events.
+    if (currentAnnouncement !== priorAnnouncement) {
+      expect(currentAnnouncement).toBe("ANIMAL ALARM — source unclear.");
+    }
     expect(soundscapeControl.plays.some(({ cue }) => cue === "accept")).toBe(false);
     runtime.destroy();
   });

@@ -26,8 +26,9 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.13';
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.14';
 const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 20;
+const SMOKE_EXPECTED_SAVE_VERSION = 9;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -1965,8 +1966,8 @@ async function installSmokeTideHarpFixture(contents) {
     const activeRegion = envelope?.physicalCargo?.activeRegion;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 8 ||
-      record.payloadVersion !== 8 ||
+      envelope?.version !== ${SMOKE_EXPECTED_SAVE_VERSION} ||
+      record.payloadVersion !== ${SMOKE_EXPECTED_SAVE_VERSION} ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       !Array.isArray(knots) ||
@@ -2031,7 +2032,7 @@ async function installSmokeTideHarpFixture(contents) {
       nextPlayerSenseSampleOrdinal: 0,
     };
 
-    // The v8 production loader seals the complete envelope. This smoke-only
+    // The current production loader seals the complete envelope. This smoke-only
     // persisted fixture deliberately changes player state, so reseal it with
     // the exact canonical encoder/hash used by the production runtime before
     // proving that the normal load path accepts it.
@@ -2225,7 +2226,7 @@ async function installSmokeTideHarpFixture(contents) {
 }
 
 /**
- * Installs one sealed v8 deep-water starting posture through the isolated
+ * Installs one sealed current-version deep-water starting posture through the isolated
  * smoke autosave. The next ordinary movement beat must enter ADRIFT through
  * production footing rules; no gameplay debug surface is shipped for it.
  * The exact pre-probe record is returned so the smoke can restore it after
@@ -2261,8 +2262,8 @@ async function installSmokeAdriftFixture(contents) {
     const terrain = view.terrain;
     if (
       envelope?.format !== 'tideweft-session' ||
-      envelope?.version !== 8 ||
-      record.payloadVersion !== 8 ||
+      envelope?.version !== ${SMOKE_EXPECTED_SAVE_VERSION} ||
+      record.payloadVersion !== ${SMOKE_EXPECTED_SAVE_VERSION} ||
       typeof envelope.regionalTravel !== 'string' ||
       !player ||
       player.worldWidth !== terrain.columns ||
@@ -2649,7 +2650,7 @@ async function restoreSmokeAdriftFixture(contents, fixture) {
     database.close();
     return { payloadVersion: record.payloadVersion, seed: record.seed };
   })()`, true);
-  if (written?.payloadVersion !== 8 || written?.seed !== SMOKE_WORLD_SEED) {
+  if (written?.payloadVersion !== SMOKE_EXPECTED_SAVE_VERSION || written?.seed !== SMOKE_WORLD_SEED) {
     throw new Error(`the ADRIFT smoke fixture backup was not restored: ${JSON.stringify(written)}`);
   }
 
@@ -3838,6 +3839,7 @@ async function runProductionSmoke(window) {
   const rendererErrors = [];
   const rendererWarnings = [];
   const resourceFailures = [];
+  const resourceAborts = [];
   const contents = window.webContents;
 
   contents.on('console-message', (event) => {
@@ -3869,6 +3871,15 @@ async function runProductionSmoke(window) {
     }
   });
   contents.session.webRequest.onErrorOccurred(requestFilter, (details) => {
+    // Smoke fixtures intentionally navigate/reload the renderer several times.
+    // Chromium reports a subresource canceled by one of those navigations as
+    // ERR_ABORTED even when the next document and its bundle load successfully.
+    // A genuinely missing/failed resource is still caught by onCompleted, the
+    // renderer error channel, or the ready/runtime probes below.
+    if (details.error === 'net::ERR_ABORTED') {
+      resourceAborts.push({ url: details.url, error: details.error });
+      return;
+    }
     resourceFailures.push({ url: details.url, error: details.error });
   });
 
@@ -4232,8 +4243,16 @@ async function runProductionSmoke(window) {
   if (resourceFailures.length > 0) {
     throw new Error(`production resources failed to load: ${JSON.stringify(resourceFailures)}`);
   }
-  if (rendererErrors.length > 0) {
-    throw new Error(`renderer logged errors: ${JSON.stringify(rendererErrors)}`);
+  const abortedUrls = new Set(resourceAborts.map(({ url }) => url));
+  const navigationDiagnostics = rendererErrors.filter((entry) => (
+    entry.message === 'Error fetching script: TypeError: Failed to fetch'
+    && abortedUrls.has(entry.source)
+  ));
+  const actionableRendererErrors = rendererErrors.filter((entry) => (
+    !navigationDiagnostics.includes(entry)
+  ));
+  if (actionableRendererErrors.length > 0) {
+    throw new Error(`renderer logged errors: ${JSON.stringify(actionableRendererErrors)}`);
   }
 
   smokeResult(true, {
@@ -4311,6 +4330,7 @@ async function runProductionSmoke(window) {
     },
     screenshotViewport: screenshotViewportProbe,
     rendererWarnings,
+    navigationDiagnostics,
     resourceFailures,
     titleScreenshot,
     mobileScreenshot,

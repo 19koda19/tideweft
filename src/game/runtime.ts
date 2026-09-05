@@ -28,7 +28,10 @@ import {
   createActorObservation,
   type ActorObservation,
 } from "../sim/actorPerception";
-import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
+import {
+  generateCoreWildlifeIdentity,
+  type CoreWildlifeSpecies,
+} from "../sim/coreWildlifeIdentity";
 import {
   advanceFieldResourceEcology,
   canonicalizeFieldResourceState,
@@ -277,12 +280,23 @@ import {
   coreEcologyActor,
   createCoreEcologyPatch,
   deserializeCoreEcologyPatch,
+  migrateLegacyCoreEcologyPatch,
   replaceCoreEcologyActor,
   serializeCoreEcologyPatch,
   setCoreEcologyMaterializedActors,
   stepCoreEcologyPatch,
   type CoreEcologyPatchState,
+  type CoreEcologyPopulationState,
 } from "./coreEcology";
+import {
+  deriveCoreEcologyHabitatAssemblage,
+  type CoreEcologyHabitatAssemblage,
+} from "./coreEcologyHabitat";
+import {
+  createCoreEcologyGroup,
+  createCoreEcologyGroupSet,
+  type CoreEcologyGroupState,
+} from "./coreEcologyGroups";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   CORE_WILDLIFE_EVENT_VERSION,
@@ -370,7 +384,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 8;
+const GAME_SAVE_VERSION = 9;
+const CORE_ECOLOGY_GAME_SAVE_VERSION = 8;
 const LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION = 7;
 const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
@@ -471,10 +486,26 @@ const BIO0_COARSE_ACTION_ACCESSIBILITY: DogActionAccessibility = Object.freeze({
 });
 
 const CORE_ECOLOGY_PATCH_KEY = "wave-a/alarm-crossing";
-const CORE_ECOLOGY_DEER_POPULATION_KEY = "wave-a/deer-herd";
-const CORE_ECOLOGY_GULL_POPULATION_KEY = "wave-a/gull-flock";
-const CORE_ECOLOGY_BEAR_POPULATION_KEY = "wave-a/black-bear";
+const LEGACY_CORE_ECOLOGY_POPULATION_TOPOLOGY = Object.freeze([
+  Object.freeze({
+    species: "black-bear" as const,
+    populationKey: "wave-a/black-bear",
+    populationOrdinals: Object.freeze([0]),
+  }),
+  Object.freeze({
+    species: "deer" as const,
+    populationKey: "wave-a/deer-herd",
+    populationOrdinals: Object.freeze([0, 1]),
+  }),
+  Object.freeze({
+    species: "gull" as const,
+    populationKey: "wave-a/gull-flock",
+    populationOrdinals: Object.freeze([0, 1, 2]),
+  }),
+] as const);
 const CORE_ECOLOGY_FORAGE_PROVISION = "dried-fish" as const;
+const RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT = 24;
+const runtimeCoreEcologyHabitatCache = new Map<string, CoreEcologyHabitatAssemblage>();
 const CORE_ECOLOGY_CONTACT_REACH_LOOSE_UNITS = Math.trunc(LOOSE_CARGO_TILE_UNITS * 3 / 4);
 const CORE_ECOLOGY_MOVE_STEP_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE * 3 / 4);
 
@@ -616,83 +647,120 @@ function canonicalRuntimeBio0Ecology(
 function createRuntimeCoreEcology(
   world: WorldState,
   bio0: Bio0EcologyState,
+  economy: WorldView = createWorldView(world),
 ): CoreEcologyPatchState {
-  const origin = bio0.porterAddress.position;
+  const habitat = deriveRuntimeCoreEcologyHabitat(world, bio0, economy);
+  const groups = createRuntimeCoreEcologyGroups(world, habitat);
   let patch = createCoreEcologyPatch({
     seed: world.meta.rootSeed,
     patchKey: CORE_ECOLOGY_PATCH_KEY,
-    originRegion: origin.region,
+    originRegion: habitat.originRegion,
     tick: world.meta.completedTick,
-    populations: [
-      {
-        species: "deer",
-        populationKey: CORE_ECOLOGY_DEER_POPULATION_KEY,
-        members: [
-          {
-            populationOrdinal: 0,
-            position: translateWorldPosition(
-              origin,
-              5 * WORLD_POSITION_UNITS_PER_TILE,
-              2 * WORLD_POSITION_UNITS_PER_TILE,
-            ),
-            heading: 625_000,
-            materialization: "materialized",
-          },
-          {
-            populationOrdinal: 1,
-            position: translateWorldPosition(
-              origin,
-              6 * WORLD_POSITION_UNITS_PER_TILE,
-              3 * WORLD_POSITION_UNITS_PER_TILE,
-            ),
-            heading: 590_000,
-            materialization: "materialized",
-          },
-        ],
-      },
-      {
-        species: "gull",
-        populationKey: CORE_ECOLOGY_GULL_POPULATION_KEY,
-        members: [0, 1, 2].map((populationOrdinal) => ({
-          populationOrdinal,
-          position: translateWorldPosition(
-            origin,
-            (2 + populationOrdinal) * WORLD_POSITION_UNITS_PER_TILE,
-            (-2 + (populationOrdinal % 2)) * WORLD_POSITION_UNITS_PER_TILE,
-          ),
-          heading: 110_000 + populationOrdinal * 70_000,
+    derivation: { kind: "habitat-v1", habitat },
+    groups,
+    populations: habitat.populations
+      .filter(({ populationUnits }) => populationUnits > 0)
+      .map((population) => ({
+        species: population.species,
+        populationKey: population.populationKey,
+        populationSize: population.populationUnits,
+        members: population.allocations.map((allocation) => ({
+          populationOrdinal: allocation.allocationOrdinal,
+          representedUnits: allocation.representedUnits,
+          position: allocation.position,
           materialization: "materialized" as const,
         })),
-      },
-      {
-        species: "black-bear",
-        populationKey: CORE_ECOLOGY_BEAR_POPULATION_KEY,
-        members: [{
-          populationOrdinal: 0,
-          position: translateWorldPosition(
-            origin,
-            9 * WORLD_POSITION_UNITS_PER_TILE,
-            2 * WORLD_POSITION_UNITS_PER_TILE,
-          ),
-          heading: 500_000,
-          materialization: "materialized",
-        }],
-      },
-    ],
+      })),
   });
   const bearMember = patch.populations
     .find(({ species }) => species === "black-bear")
     ?.members[0];
-  if (bearMember === undefined) {
-    throw new Error("Wave-A ecology creation lost its black bear");
+  if (bearMember !== undefined) {
+    const hungryBear = replaceCoreWildlifeActorPhysiology(bearMember.actor, {
+      atTick: world.meta.completedTick,
+      needs: { ...bearMember.actor.needs, hunger: Math.max(680_000, bearMember.actor.needs.hunger) },
+      condition: bearMember.actor.condition,
+    });
+    patch = replaceCoreEcologyActor(patch, hungryBear);
   }
-  const hungryBear = replaceCoreWildlifeActorPhysiology(bearMember.actor, {
-    atTick: world.meta.completedTick,
-    needs: { ...bearMember.actor.needs, hunger: Math.max(680_000, bearMember.actor.needs.hunger) },
-    condition: bearMember.actor.condition,
-  });
-  patch = replaceCoreEcologyActor(patch, hungryBear);
   return patch;
+}
+
+function deriveRuntimeCoreEcologyHabitat(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView,
+): CoreEcologyHabitatAssemblage {
+  const porter = runtimeBio0Porter(economy, bio0.porterAddress.actorId);
+  const startingSettlement = economy.settlements.find(
+    ({ id }) => id === porter.resident.homeSettlementId,
+  ) ?? economy.settlements[0];
+  const startingTile = startingSettlement === undefined
+    ? undefined
+    : economy.terrain.tiles[startingSettlement.tileIndex];
+  const focus = startingTile === undefined
+    ? bio0.porterAddress.position
+    : createWorldPosition(
+        bio0.porterAddress.position.region,
+        Math.min(
+          REGION_WIDTH_UNITS - 1,
+          (startingTile.x + 6) * WORLD_POSITION_UNITS_PER_TILE
+            + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+        ),
+        startingTile.y * WORLD_POSITION_UNITS_PER_TILE
+          + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+      );
+  const excludedTileIndices = economy.settlements
+    .map(({ tileIndex }) => tileIndex)
+    .filter((tileIndex) => Number.isSafeInteger(tileIndex) && tileIndex >= 0)
+    .sort((left, right) => left - right);
+  const cacheKey = hashCanonical([
+    "runtime-core-ecology-habitat/v1",
+    world.meta.rootSeed,
+    focus,
+    32,
+    excludedTileIndices,
+  ]);
+  const cached = runtimeCoreEcologyHabitatCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const habitat = deriveCoreEcologyHabitatAssemblage({
+    rootSeed: world.meta.rootSeed,
+    originRegion: focus.region,
+    focus: {
+      position: focus,
+      radiusTiles: 32,
+      excludedTileIndices,
+    },
+  });
+  runtimeCoreEcologyHabitatCache.set(cacheKey, habitat);
+  if (runtimeCoreEcologyHabitatCache.size > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT) {
+    const oldest = runtimeCoreEcologyHabitatCache.keys().next().value as string | undefined;
+    if (oldest !== undefined) runtimeCoreEcologyHabitatCache.delete(oldest);
+  }
+  return habitat;
+}
+
+function createRuntimeCoreEcologyGroups(
+  world: WorldState,
+  habitat: CoreEcologyHabitatAssemblage,
+) {
+  const groups: CoreEcologyGroupState[] = [];
+  for (const population of habitat.populations) {
+    if (population.species === "black-bear" || population.allocations.length < 2) continue;
+    const anchor = population.allocations[0]?.position;
+    if (anchor === undefined) continue;
+    groups.push(createCoreEcologyGroup({
+      seed: world.meta.rootSeed,
+      species: population.species,
+      originRegion: habitat.originRegion,
+      populationKey: population.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: population.allocations.map(({ allocationOrdinal }) => allocationOrdinal),
+      anchor,
+      tick: world.meta.completedTick,
+    }));
+  }
+  return createCoreEcologyGroupSet(groups);
 }
 
 function canonicalRuntimeCoreEcology(
@@ -706,34 +774,78 @@ function canonicalRuntimeCoreEcology(
     || state.updatedAtTick !== world.meta.completedTick
     || state.patchKey !== CORE_ECOLOGY_PATCH_KEY
   ) return null;
-  const expected = createRuntimeCoreEcology(world, bio0);
+  const origin = bio0.porterAddress.position.region;
   if (
-    stableStringify(state.originRegion) !== stableStringify(expected.originRegion)
-    || state.populations.length !== expected.populations.length
+    state.originRegion.x !== origin.x
+    || state.originRegion.y !== origin.y
+    || state.derivation.kind === "bounded-input-v1"
   ) return null;
-  for (let index = 0; index < expected.populations.length; index += 1) {
-    const actualPopulation = state.populations[index];
-    const expectedPopulation = expected.populations[index];
-    if (
-      actualPopulation === undefined
-      || expectedPopulation === undefined
-      || actualPopulation.species !== expectedPopulation.species
-      || actualPopulation.populationKey !== expectedPopulation.populationKey
-      || actualPopulation.populationSize !== expectedPopulation.populationSize
-      || actualPopulation.members.length !== expectedPopulation.members.length
-    ) return null;
-    for (let memberIndex = 0; memberIndex < expectedPopulation.members.length; memberIndex += 1) {
-      const actual = actualPopulation.members[memberIndex];
-      const baseline = expectedPopulation.members[memberIndex];
-      if (
-        actual === undefined
-        || baseline === undefined
-        || actual.populationOrdinal !== baseline.populationOrdinal
-        || stableStringify(actual.actor.identity) !== stableStringify(baseline.actor.identity)
-      ) return null;
+  if (state.derivation.kind === "habitat-v1") {
+    const expectedHabitat = deriveRuntimeCoreEcologyHabitat(world, bio0, createWorldView(world));
+    if (stableStringify(state.derivation.habitat) !== stableStringify(expectedHabitat)) return null;
+    const expectedGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat);
+    if (!runtimeCoreGroupTopologyMatches(state.groups.groups, expectedGroups.groups)) return null;
+  } else if (
+    state.groups.groups.length !== 0
+    || !legacyRuntimeCoreEcologyTopologyMatches(state.populations)
+  ) {
+    return null;
+  }
+  for (const population of state.populations) {
+    for (const member of population.members) {
+      const expectedIdentity = generateCoreWildlifeIdentity({
+        seed: world.meta.rootSeed,
+        species: population.species,
+        originRegion: state.originRegion,
+        populationKey: population.populationKey,
+        populationOrdinal: member.populationOrdinal,
+      });
+      if (stableStringify(member.actor.identity) !== stableStringify(expectedIdentity)) return null;
     }
   }
   return state;
+}
+
+/**
+ * Alpha-13 shipped exactly one fixed six-actor topology. Structural v1 input
+ * alone is not migration authority: missing, extra, or invented populations
+ * must be quarantined even when their actor identities are self-consistent.
+ */
+function legacyRuntimeCoreEcologyTopologyMatches(
+  populations: readonly CoreEcologyPopulationState[],
+): boolean {
+  if (populations.length !== LEGACY_CORE_ECOLOGY_POPULATION_TOPOLOGY.length) return false;
+  return LEGACY_CORE_ECOLOGY_POPULATION_TOPOLOGY.every((expected) => {
+    const population = populations.find((candidate) => (
+      candidate.species === expected.species
+      && candidate.populationKey === expected.populationKey
+    ));
+    return population !== undefined
+      && population.populationSize === expected.populationOrdinals.length
+      && population.members.length === expected.populationOrdinals.length
+      && population.members.every((member, index) => (
+        member.populationOrdinal === expected.populationOrdinals[index]
+        && member.representedUnits === 1
+      ));
+  });
+}
+
+function runtimeCoreGroupTopologyMatches(
+  actual: readonly CoreEcologyGroupState[],
+  expected: readonly CoreEcologyGroupState[],
+): boolean {
+  if (actual.length !== expected.length) return false;
+  for (let index = 0; index < expected.length; index += 1) {
+    const current = actual[index];
+    const baseline = expected[index];
+    if (
+      current === undefined
+      || baseline === undefined
+      || stableStringify(current.identity) !== stableStringify(baseline.identity)
+      || stableStringify(current.memberOrdinals) !== stableStringify(baseline.memberOrdinals)
+    ) return false;
+  }
+  return true;
 }
 
 function seedRuntimeCoreEcologyProvision(
@@ -743,7 +855,7 @@ function seedRuntimeCoreEcologyProvision(
   const bear = ecology.populations
     .find(({ species }) => species === "black-bear")
     ?.members[0]?.actor;
-  if (bear === undefined) throw new Error("Wave-A forage seed requires its black bear");
+  if (bear === undefined) return state;
   const target = transitionPhysicalCargoRegion(
     state,
     bear.address.position.region,
@@ -6561,6 +6673,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== PLAYER_PERCEPTION_GAME_SAVE_VERSION
         && decoded.version !== BIO0_GAME_SAVE_VERSION
         && decoded.version !== LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION
+        && decoded.version !== CORE_ECOLOGY_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -6604,6 +6717,30 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           || typeof decoded.bio0Ecology !== "string"
           || typeof decoded.coreEcology !== "string"
         ) throw new Error("Current save envelope is not canonical");
+      } else if (decoded.version === CORE_ECOLOGY_GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "bio0Ecology",
+            "coreEcology",
+            "fieldResources",
+            "format",
+            "integrity",
+            "livingActorPlayerChoice",
+            "perceptionCarry",
+            "physicalCargo",
+            "player",
+            "porterResponse",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+          || typeof decoded.bio0Ecology !== "string"
+          || typeof decoded.coreEcology !== "string"
+        ) throw new Error("Version 8 save envelope is not canonical");
       } else if (decoded.version === LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION) {
         if (
           !hasExactObjectKeys(decoded, [
@@ -6718,9 +6855,11 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (bio0Ecology === null) {
       throw new Error("Current save contains invalid BIO0 ecology state");
     }
-    const coreEcology = decoded.version >= GAME_SAVE_VERSION
+    const coreEcology = decoded.version >= CORE_ECOLOGY_GAME_SAVE_VERSION
       ? canonicalRuntimeCoreEcology(
-          deserializeCoreEcologyPatch(decoded.coreEcology),
+          decoded.version === GAME_SAVE_VERSION
+            ? deserializeCoreEcologyPatch(decoded.coreEcology)
+            : migrateLegacyCoreEcologyPatch(decoded.coreEcology),
           world,
           bio0Ecology,
         )
@@ -6887,7 +7026,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (!physicalCargoValidation.valid || !physicalCargoValidation.state) {
       throw new Error(`Save contains invalid physical cargo: ${physicalCargoValidation.reason}`);
     }
-    const loadedPhysicalCargo = decoded.version >= GAME_SAVE_VERSION
+    const loadedPhysicalCargo = decoded.version >= CORE_ECOLOGY_GAME_SAVE_VERSION
       ? physicalCargoValidation.state
       : seedRuntimeCoreEcologyProvision(physicalCargoValidation.state, coreEcology);
     if (

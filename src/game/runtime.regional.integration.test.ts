@@ -56,9 +56,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V8GameSaveEnvelope {
+interface V9GameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 8;
+  readonly version: 9;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -142,16 +142,16 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeV8(record: SaveRecord): V8GameSaveEnvelope {
-  const value = JSON.parse(record.worldJson) as V8GameSaveEnvelope;
+function decodeV8(record: SaveRecord): V9GameSaveEnvelope {
+  const value = JSON.parse(record.worldJson) as V9GameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 8
-    || record.payloadVersion !== 8
-  ) throw new Error("fixture did not produce a current v8 regional save");
+    || value.version !== 9
+    || record.payloadVersion !== 9
+  ) throw new Error("fixture did not produce a current v9 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v8 outer envelope does not match its integrity seal");
+    throw new Error("fixture v9 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
@@ -176,17 +176,17 @@ function decodeV8(record: SaveRecord): V8GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V8GameSaveEnvelope,
+  envelope: V9GameSaveEnvelope,
 ): void {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
-  const sealed: V8GameSaveEnvelope = {
+  const sealed: V9GameSaveEnvelope = {
     ...unsealed,
     integrity: gameSaveEnvelopeIntegrity(unsealed),
   };
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 8,
+    payloadVersion: 9,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -336,8 +336,8 @@ function adjacentCompatibilityTrace(
 }
 
 function relocateToEastSeam(
-  envelope: V8GameSaveEnvelope,
-): V8GameSaveEnvelope {
+  envelope: V9GameSaveEnvelope,
+): V9GameSaveEnvelope {
   const world = deserializeWorld(envelope.world);
   const economy = createWorldView(world);
   const travel = restorePlayerRegionalTravel(
@@ -419,7 +419,7 @@ function relocateToEastSeam(
   };
 }
 
-function restoredTravel(envelope: V8GameSaveEnvelope): RegionalPlayerTravelState {
+function restoredTravel(envelope: V9GameSaveEnvelope): RegionalPlayerTravelState {
   const world = deserializeWorld(envelope.world);
   const travel = restorePlayerRegionalTravel(
     world.meta.rootSeed,

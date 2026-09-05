@@ -8,6 +8,7 @@ import {
 } from "../sim/actorPerception";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
+import { stableStringify } from "../sim/util";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   replaceCoreWildlifeActorPhysiology,
@@ -22,6 +23,7 @@ import {
   createCoreEcologyAlarmObservation,
   createCoreEcologyPatch,
   deserializeCoreEcologyPatch,
+  migrateLegacyCoreEcologyPatch,
   replaceCoreEcologyActor,
   serializeCoreEcologyPatch,
   setCoreEcologyMaterializedActors,
@@ -29,6 +31,11 @@ import {
   type CoreEcologyPatchState,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
+import {
+  createCoreEcologyGroup,
+  createCoreEcologyGroupSet,
+  stepCoreEcologyGroupCoarse,
+} from "./coreEcologyGroups";
 import {
   REGION_HEIGHT_UNITS,
   REGION_WIDTH_UNITS,
@@ -204,6 +211,65 @@ describe("bounded core ecology patch", () => {
     })).toThrow(/outside its patch/u);
   });
 
+  it("binds aggregate population size to the exact units represented by active-window actors", () => {
+    const deer = population("deer", [0, 1]);
+    const state = patch([{
+      ...deer,
+      populationSize: 4,
+      members: deer.members.map((member) => ({ ...member, representedUnits: 2 })),
+    }]);
+    expect(state.populations[0]).toMatchObject({ populationSize: 4 });
+    expect(state.populations[0]?.members.map(({ representedUnits }) => representedUnits))
+      .toEqual([2, 2]);
+
+    const inconsistent = {
+      ...state,
+      populations: state.populations.map((entry) => ({ ...entry, populationSize: 3 })),
+    };
+    expect(canonicalizeCoreEcologyPatch(inconsistent)).toBeNull();
+  });
+
+  it("adopts the exact legacy actors once without accepting legacy text as current state", () => {
+    const state = patch([
+      population("deer", [0, 1], false),
+      population("gull", [0], false),
+    ]);
+    const legacyText = stableStringify({
+      version: 1,
+      patchKey: state.patchKey,
+      originRegion: state.originRegion,
+      updatedAtTick: state.updatedAtTick,
+      populations: state.populations.map((entry) => ({
+        species: entry.species,
+        populationKey: entry.populationKey,
+        populationSize: entry.members.length,
+        members: entry.members.map(({ populationOrdinal, materialization, actor }) => ({
+          populationOrdinal,
+          materialization,
+          actor,
+        })),
+      })),
+    });
+
+    expect(deserializeCoreEcologyPatch(legacyText)).toBeNull();
+    const migrated = migrateLegacyCoreEcologyPatch(legacyText);
+    expect(migrated).not.toBeNull();
+    expect(migrated?.derivation).toEqual({ kind: "legacy-fixed-v1" });
+    expect(migrated?.groups.groups).toEqual([]);
+    expect(migrated?.populations.every((entry) => entry.members.every(
+      ({ materialization }) => materialization === "coarse",
+    ))).toBe(true);
+    expect(migrated?.populations.flatMap(({ members: entries }) =>
+      entries.map(({ actor }) => actor)))
+      .toEqual(state.populations.flatMap(({ members: entries }) =>
+        entries.map(({ actor }) => actor)));
+    expect(migrated?.populations.every((entry) => entry.members.every(
+      ({ representedUnits }) => representedUnits === 1,
+    ))).toBe(true);
+    expect(migrateLegacyCoreEcologyPatch(`${legacyText} `)).toBeNull();
+    expect(deserializeCoreEcologyPatch(serializeCoreEcologyPatch(migrated))).toEqual(migrated);
+  });
+
   it("enforces profile, total, and materialized population budgets", () => {
     expect(() => patch([population("deer", Array.from({ length: 17 }, (_, index) => index))]))
       .toThrow(/deer population exceeds/u);
@@ -264,6 +330,97 @@ describe("bounded core ecology patch", () => {
     expect(state.updatedAtTick).toBe(0);
   });
 
+  it("advances coarse physiology and cognition without granting hidden perception or movement", () => {
+    const state = patch([population("deer", [0], false)]);
+    const before = bySpecies(state, "deer");
+    const result = stepCoreEcologyPatch(state, { tick: 20, actorSteps: [] });
+    if (result === null) throw new Error("Valid coarse ecology step failed");
+    const after = bySpecies(result.patch, "deer");
+
+    expect(after.updatedAtTick).toBe(20);
+    expect(after.perception.tick).toBe(20);
+    expect(after.address).toEqual(before.address);
+    expect(after.identity).toEqual(before.identity);
+    expect(after.perception.beliefs).toEqual([]);
+    expect(result.events).toEqual([]);
+    expect(result.resourceClaims).toEqual([]);
+  });
+
+  it("holds active group topology until every member returns to coarse authority", () => {
+    const deerPopulation = population("deer", [0, 1, 2, 3]);
+    const initialGroup = createCoreEcologyGroup({
+      seed: SEED,
+      species: "deer",
+      originRegion: ORIGIN,
+      populationKey: deerPopulation.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1, 2, 3],
+      anchor: createWorldPosition(ORIGIN, 10_000, 20_000),
+    });
+    const split = stepCoreEcologyGroupCoarse(initialGroup, {
+      atTick: 8,
+      disturbances: [{
+        disturbanceId: "disturbance:active-rejoin",
+        atTick: 8,
+        causeKind: "habitat-pressure",
+        causeReferenceId: "habitat:active-rejoin",
+        pressure: 800_000,
+        movementHeading: 250_000,
+        destinationAnchors: [
+          createWorldPosition(ORIGIN, 30_000, 30_000),
+          createWorldPosition(ORIGIN, 50_000, 50_000),
+        ],
+        rendezvousAnchor: createWorldPosition(ORIGIN, 40_000, 40_000),
+        playerAbsent: true,
+        nonlethal: true,
+        cargoInteraction: false,
+      }],
+    });
+    if (split === null) throw new Error("Active group fixture failed to split");
+    let active = createCoreEcologyPatch({
+      seed: SEED,
+      patchKey: "east-marsh:active-rejoin",
+      originRegion: ORIGIN,
+      tick: 8,
+      populations: [deerPopulation],
+      groups: createCoreEcologyGroupSet([split.group]),
+    });
+
+    for (const tick of [16, 24, 32, 40]) {
+      const result = stepCoreEcologyPatch(active, { tick, actorSteps: emptySteps(active) });
+      if (result === null) throw new Error(`Active group step ${tick} failed`);
+      active = result.patch;
+    }
+    const held = active.groups.groups[0];
+    expect(held).toMatchObject({
+      phase: split.group.phase,
+      cohesion: split.group.cohesion,
+      components: split.group.components,
+      lineage: split.group.lineage,
+      aftermath: split.group.aftermath,
+      updatedAtTick: 40,
+      nextCoarseTick: 48,
+    });
+
+    let coarse = setCoreEcologyMaterializedActors(active, { atTick: 40, actorIds: [] });
+    for (const tick of [48, 56, 64, 72]) {
+      const result = stepCoreEcologyPatch(coarse, { tick, actorSteps: [] });
+      if (result === null) throw new Error(`Coarse group recovery ${tick} failed`);
+      coarse = result.patch;
+    }
+    expect(coarse.groups.groups[0]).toMatchObject({
+      phase: "cohesive",
+      updatedAtTick: 72,
+      nextCoarseTick: 80,
+    });
+    expect(coarse.groups.groups[0]?.aftermath).toHaveLength(split.group.aftermath.length + 1);
+    expect(coarse.groups.groups[0]?.aftermath.at(-1)).toMatchObject({
+      kind: "reunion",
+      atTick: 72,
+      playerAbsent: true,
+    });
+  });
+
   it("propagates a gull alarm lawfully to deer without revealing a source identity", () => {
     const state = patch([population("deer"), population("gull")]);
     const gull = bySpecies(state, "gull");
@@ -309,6 +466,58 @@ describe("bounded core ecology patch", () => {
     const deerEvent = second.events.find(({ actorId }) => actorId === currentDeer.identity.stableId);
     expect(deerEvent?.kind).toBe("flee");
     expect(deerEvent?.causeReferenceId).toBe(heard.id);
+  });
+
+  it("carries a directly observed alarm through its persistent flock signal", () => {
+    const gullPopulation = population("gull", [0, 1]);
+    const flock = createCoreEcologyGroup({
+      seed: SEED,
+      species: "gull",
+      originRegion: ORIGIN,
+      populationKey: gullPopulation.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1],
+      anchor: gullPopulation.members[0]!.position,
+    });
+    const state = createCoreEcologyPatch({
+      seed: SEED,
+      patchKey: "east-marsh:flock-signal",
+      originRegion: ORIGIN,
+      populations: [gullPopulation],
+      groups: createCoreEcologyGroupSet([flock]),
+    });
+    const firstGull = state.populations[0]!.members[0]!.actor;
+    const secondGull = state.populations[0]!.members[1]!.actor;
+    const predator = directObservation(
+      firstGull,
+      1,
+      "obs:flock-predator",
+      "large-predator",
+      "PREDATOR-flock-edge",
+    );
+    const first = stepCoreEcologyPatch(state, {
+      tick: 1,
+      actorSteps: [actorStep(firstGull, [predator]), actorStep(secondGull)],
+    });
+    if (first === null) throw new Error("Flock alarm step failed");
+    const alarm = first.events.find(({ actorId, kind }) => (
+      actorId === firstGull.identity.stableId && kind === "alarm"
+    ));
+    if (alarm === undefined) throw new Error("Flock alarm was not emitted");
+    const emittedSignal = first.patch.groups.groups[0]?.signals.find(
+      ({ causeReferenceId }) => causeReferenceId === alarm.eventId,
+    );
+    expect(emittedSignal?.reachedMemberOrdinals).toEqual([0]);
+
+    const second = stepCoreEcologyPatch(first.patch, {
+      tick: 8,
+      actorSteps: emptySteps(first.patch),
+    });
+    if (second === null) throw new Error("Flock propagation step failed");
+    const propagated = second.patch.groups.groups[0]?.signals.find(
+      ({ causeReferenceId }) => causeReferenceId === alarm.eventId,
+    );
+    expect(propagated?.reachedMemberOrdinals).toEqual([0, 1]);
   });
 
   it("surfaces conflicting physical claims without mutating or resolving the item", () => {

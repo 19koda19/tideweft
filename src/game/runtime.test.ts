@@ -941,7 +941,7 @@ describe("perpetual new worlds", () => {
       delete envelope.physicalCargo;
       resealGameSave(envelope);
     }],
-  ] as const)("quarantines a current v8 save with %s", async (_label, mutate) => {
+  ] as const)("quarantines a current save with %s", async (_label, mutate) => {
     const repository = new MemoryRepository();
     const original = await createTideweftRuntime(repository);
     await original.save();
@@ -1633,7 +1633,7 @@ describe("runtime clarity guards", () => {
     runtime.destroy();
   });
 
-  it("reloads a current v8 ADRIFT save without moving the porter or changing physical cargo", async () => {
+  it("reloads a current ADRIFT save without moving the porter or changing physical cargo", async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     setup.dispatchUI({ type: "resume-world" });
@@ -1645,12 +1645,12 @@ describe("runtime clarity guards", () => {
     await setup.save();
     setup.destroy();
 
-    // Begin from a real, sealed v8 save with an authoritative physical cargo
+    // Begin from a real, sealed current save with an authoritative physical cargo
     // manifest. Choose the strongest real wet contact in its persisted region
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(8);
+    expect(prepared.version).toBe(9);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -1859,8 +1859,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(8);
-    expect(durableRecord.payloadVersion).toBe(8);
+    expect(durable.version).toBe(9);
+    expect(durableRecord.payloadVersion).toBe(9);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

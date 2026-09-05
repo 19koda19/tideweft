@@ -315,8 +315,8 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     id: "planned-universal-npcs",
     status: "planned",
     title: "Broader people, dogs, and wildlife",
-    clarification: "The original harbor country's 42 humans remain the current human population. One independently generated dog and one bounded local patch of deer, gulls, and a black bear now prove lawful ABOUT, shared sight and alarm evidence, physical food scavenging, and persistent full/coarse wildlife state. Additional dogs and species, generated distant populations, ownership, companions, reproduction, carcasses, attacks, evidence tracking, rumors, social groups, and the complete bestiary remain planned.",
-    keywords: ["npc", "dog", "bear", "bird", "wildlife", "companion", "identity", "about", "perception", "ecology"],
+    clarification: "The original harbor country's 42 humans remain the current human population, alongside one independently generated dog. Near the stable starting harbor, a bounded habitat-derived local assemblage of deer, gulls, and black bears now combines population capacity, pressure, and trend with a bounded set of representatives; unsupported populations can be genuinely absent. When group-sized populations form, deer herds and gull flocks persist while black bears stay solitary. Additional dogs and wildlife species, worldwide populations, ownership, companions, reproduction, animal death and carcasses, attacks, general scent, environmental-evidence tracking, rumors, and the complete bestiary remain planned.",
+    keywords: ["npc", "dog", "bear", "bird", "wildlife", "companion", "identity", "about", "perception", "ecology", "habitat", "population", "herd", "flock"],
   },
   {
     id: "planned-regional-biomes",
@@ -418,8 +418,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "whats-new-five-actor-contract",
         audience: "all",
-        title: "One shared living contract",
-        body: "Humans, domestic dogs, deer, gulls, and black bears now share one validated, versioned species-and-senses contract. This review reconciles the five actor types already in the world; it adds no new species or behavior.",
+        title: "Habitat now shapes the local wildlife",
+        body: "Humans, domestic dogs, deer, gulls, and black bears retain one validated, versioned species-and-senses contract. This build adds no new species: it replaces the fixed wildlife crossing with a bounded habitat-derived assemblage near the stable starting harbor, including honest population absence, persistent deer herds and gull flocks when group-sized populations form, and solitary black bears.",
       },
     ],
     callouts: [
@@ -521,7 +521,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "regions-current-boundary",
         audience: "all",
         title: "Read the current frontier honestly",
-        body: "Procedural terrain, water, weather, footing, Wayknots, carried cargo, loose-parcel drift, and local saves continue beyond the old map extent. Currents and terrain carry the same recoverable object onward without changing its identity, condition, momentum, history, or Promise custody. Generated distant settlements, wildlife, humans, causal wilderness finds, and natural material patches are not live yet; the country beyond the original estuary can therefore be genuinely empty.",
+        body: "Procedural terrain, water, weather, footing, Wayknots, carried cargo, loose-parcel drift, and local saves continue beyond the old map extent. Currents and terrain carry the same recoverable object onward without changing its identity, condition, momentum, history, or Promise custody. Generated distant settlements, humans, worldwide wildlife assemblages, causal wilderness finds, and natural material patches are not live yet; only the bounded habitat-derived wildlife near the stable starting harbor is populated, and unsupported local populations can be genuinely absent.",
       },
     ],
     callouts: [
@@ -1034,8 +1034,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "12",
     title: "Meet people and visible animals as individuals",
     shortTitle: "People, wildlife & ABOUT",
-    summary: "The original harbor country's 42 humans, its first independent dog, and a bounded deer, gull, and black-bear crossing act only on lawful perception; ABOUT reveals only what you can currently observe or have learned.",
-    keywords: ["person", "resident", "porter", "dog", "deer", "gull", "black bear", "wildlife", "alarm", "food", "scavenge", "scent", "help", "wait", "reroute", "leave", "persistence", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather", "vision", "hearing", "attention", "search"],
+    summary: "The original harbor country's 42 humans, its first independent dog, and a bounded habitat-derived wildlife assemblage near the stable starting harbor act only on lawful perception; ABOUT reveals only what you can currently observe or have learned.",
+    keywords: ["person", "resident", "porter", "dog", "deer", "gull", "black bear", "wildlife", "alarm", "food", "scavenge", "scent", "help", "wait", "reroute", "leave", "persistence", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather", "vision", "hearing", "attention", "search", "habitat", "population", "herd", "flock", "shallow water", "aftermath", "absence"],
     controlIds: ["inspect-person"],
     steps: [
       {
@@ -1094,22 +1094,40 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "Deer, gulls, the black bear, the nearby dog, and the porter can react to direct sight or an explicit alarm that actually reaches them. A heard animal alarm gives an uncertain direction, not the caller's identity and not automatic knowledge that a bear caused it. Depending on what the porter perceived and their own policy, they may secure exposed food, reroute, leave, or wait.",
       },
       {
+        id: "wildlife-habitat-populations",
+        audience: "all",
+        title: "Habitat supports a population—or honest absence",
+        body: "Near the stable starting harbor, terrain and habitat derive each local population rather than forcing a fixed roster. The hybrid model records capacity, population pressure, and trend while materializing only a bounded set of representatives; a species with too little support is genuinely absent instead of being rerolled. When present in numbers, deer persist in herds and gulls in flocks, while black bears stay solitary.",
+      },
+      {
         id: "wildlife-player-choices",
         audience: "all",
         title: "Watch, route around, or leave",
         body: "A directly visible deer, gull, or black bear offers WAIT AND WATCH, ROUTE AROUND THIS SPOT, and LEAVE. WAIT briefly stops the current automatic route. ROUTE AROUND must keep the same destination and find a real line outside the observed animal's area; if that fails, your previous route and choice history remain unchanged. LEAVE closes the observation rather than moving the animal.",
       },
       {
+        id: "wildlife-standable-water",
+        audience: "all",
+        title: "Shallows are still terrain",
+        body: "A threatened deer can flee through standable shallow water under the same terrain rules used by shared locomotion. Deep or otherwise impassable water is not silently ignored to manufacture an escape.",
+      },
+      {
         id: "wildlife-physical-scavenging",
         audience: "all",
         title: "Exposed food remains physical",
-        body: "In this crossing, a hungry black bear can reach and consume one exposed dried-fish parcel. It must make physical contact, consumes that entire one-unit object, and leaves one animal-consumption record. The same parcel cannot be consumed twice or silently reappear after reload.",
+        body: "When the local assemblage includes a hungry black bear, it can reach and consume one exposed dried-fish parcel. It must make physical contact, consumes that entire one-unit object, and leaves one animal-consumption record. The same parcel cannot be consumed twice or silently reappear after reload.",
       },
       {
         id: "wildlife-persistence",
         audience: "all",
         title: "Distance changes detail, not identity",
-        body: "The deer, gulls, and black bear keep stable identities, positions, needs, condition, perception, intent, memories, and population membership. Leaving the active field can reduce them to a bounded coarse record; returning restores the same saved actors rather than rolling a replacement because the camera moved.",
+        body: "Each representative keeps its stable identity and population membership. Outside the active field, an individual coarse step applies only the remaining saved intent to physiology, ages existing perception without adding facts, and invents no movement, target, food, or player event. Returning restores the same saved actors rather than rolling replacements because the camera moved.",
+      },
+      {
+        id: "wildlife-player-absent-aftermath",
+        audience: "all",
+        title: "An absent group can leave bounded aftermath",
+        body: "When an entire saved herd or flock is outside full simulation, bounded habitat pressure can advance its persistent group state and record nonlethal player-absent aftermath: displacement, separation, or reunion. That coarse aftermath causes no harm or cargo interaction and never enters player EVENTS by itself.",
       },
       {
         id: "people-weather-emotion",
@@ -1137,7 +1155,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         tone: "boundary",
         title: "This remains one small living web",
-        body: "The released wildlife scope is one bounded deer, gull, and black-bear crossing connected to the existing independent dog, porter, rain, alarms, and one exposed provision. Animals do not attack, receive injuries, die, or leave carcasses in this build. Additional species, full world populations, reproduction, hunting, taming, ownership, companions, broad tracking, and the complete bestiary are not live yet.",
+        body: "The released wildlife scope is one bounded habitat-derived local assemblage near the stable starting harbor, connected to the existing independent dog, porter, rain, alarms, and—when a bear is present—one exposed provision. A locally unsupported species can be absent. Animals do not attack, receive injuries, die, or leave carcasses in this build. Additional wildlife species, worldwide populations, reproduction, hunting, taming, ownership, companions, general scent, environmental-evidence tracking, and the complete bestiary are not live yet.",
       },
     ],
   },
@@ -1238,7 +1256,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-local",
         audience: "all",
         title: "The save stays on this device",
-        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins. Outer save version 8 preserves the partial movement interval introduced by version 5, the first dog-and-porter web, and the bounded core wildlife patch with its physical food history. Supported versions 1 through 7 migrate deterministically without inventing companion history, rerolling wildlife, or duplicating food.",
+        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins. Outer save version 9 preserves the habitat-derived local assemblage, persistent groups, bounded representatives, and physical food history. A sealed version 8 save migrates exactly once without rerolling its actors or cargo; re-saving and reloading preserves that adopted ecology exactly. Earlier supported saves still migrate deterministically without inventing companion history, rerolling wildlife, or duplicating food.",
       },
       {
         id: "saves-no-offline-time",
@@ -1360,13 +1378,13 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, ABOUT inspection, occluded sight, anonymous directional hearing, bounded attention/suspicion, and last-known-area searching for the original harbor country's 42 humans are active. One generated independent dog adds physical movement, food scent, rain/cold condition, knowledge-honest ABOUT, five player choices, exact one-unit provision transfer, bounded memory, and promotion beside one existing porter. One bounded core wildlife patch now adds directly observable deer, gulls, and a black bear, shared sight and anonymous alarm response, WAIT/REROUTE/LEAVE choices, full/coarse persistence, and one physical exposed-food scavenging event. The outer game save uses version 8; embedded simulation snapshots remain perception-aware format 4 and rules 6. Perpetual play remains active.",
+        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, ABOUT inspection, occluded sight, anonymous directional hearing, bounded attention/suspicion, and last-known-area searching for the original harbor country's 42 humans are active. One generated independent dog adds physical movement, food scent, rain/cold condition, knowledge-honest ABOUT, five player choices, exact one-unit provision transfer, bounded memory, and promotion beside one existing porter. One bounded habitat-derived local wildlife assemblage near the stable starting harbor now adds capacity, population pressure, and trend; bounded representatives with possible species absence; persistent group-sized deer herds and gull flocks with solitary black bears; shared sight and anonymous alarm response; WAIT/REROUTE/LEAVE choices; standable-shallow-water locomotion; and coarse saved-intent/physiology plus bounded nonlethal player-absent group aftermath. When a black bear is present, one physical exposed provision supports a real scavenging opportunity. The outer game save uses version 9 with exact one-time sealed-version-8 migration; embedded simulation snapshots remain perception-aware format 4 and rules 6. Perpetual play remains active.",
       },
       {
         id: "boundaries-planned-ecology",
         audience: "all",
         title: "Broader ecology is planned",
-        body: "The seven named biomes and their rainfall, heat, salinity, exposure, and magical-water signals are visible now, current rain affects the first dog's condition and food-scent web, and the bounded wildlife crossing reacts through current perception and physical food. A full animal roster, distant generated populations, reproduction, injury, attacks, carcasses, companions, courier exposure, and material-specific magical-water reactions remain planned; those systems do not alter a delivery behind the HUD's back.",
+        body: "The seven named biomes and their rainfall, heat, salinity, exposure, and magical-water signals are visible now, current rain affects the first dog's condition and food-scent web, and the bounded local assemblage reacts through current perception, persistent groups, and physical food. Additional wildlife species and worldwide populations, reproduction, injury, death, attacks, carcasses, general scent, environmental-evidence tracking, companions, courier exposure, and material-specific magical-water reactions remain planned; those systems do not alter a delivery behind the HUD's back.",
       },
       {
         id: "boundaries-planned-physics",
@@ -1387,7 +1405,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 23 as const;
+export const TUTORIAL_CONTENT_VERSION = 24 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

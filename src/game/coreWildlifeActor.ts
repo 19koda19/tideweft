@@ -221,6 +221,10 @@ export interface RepositionCoreWildlifeActorInput {
   readonly heading: number;
 }
 
+export interface AdvanceCoreWildlifeActorCoarseInput {
+  readonly atTick: number;
+}
+
 const UTF8_ENCODER = new TextEncoder();
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
 const THREAT_CLASSES = new Set([
@@ -436,6 +440,64 @@ export function repositionCoreWildlifeActor(
   return rebuildActor(state, {
     updatedAtTick: move.atTick,
     address,
+  });
+}
+
+/**
+ * Advance an unloaded actor without inventing observations, targets, food, or
+ * movement.  A temporary intent is charged only until its already-authoritative
+ * expiry; the rest of the hidden interval uses neutral observation physiology.
+ * This prevents rematerialization from retroactively applying a newly selected
+ * full-simulation intent across the entire time the actor was absent.
+ */
+export function advanceCoreWildlifeActorCoarse(
+  value: unknown,
+  input: AdvanceCoreWildlifeActorCoarseInput,
+): CoreWildlifeActorState {
+  const state = requireActor(value);
+  if (
+    !plainRecord(input)
+    || !exactKeys(input, ["atTick"])
+    || !nonnegativeSafeInteger(input.atTick)
+    || input.atTick <= state.updatedAtTick
+    || input.atTick > Number.MAX_SAFE_INTEGER - 64
+  ) throw new RangeError("Core wildlife coarse advance is malformed or stale");
+
+  const elapsed = input.atTick - state.updatedAtTick;
+  const expiresAt = state.intent.expiresAtTick;
+  const intentElapsed = expiresAt === null
+    ? elapsed
+    : Math.max(0, Math.min(elapsed, expiresAt - state.updatedAtTick));
+  const neutralElapsed = elapsed - intentElapsed;
+  let needs = ageNeeds(state.needs, state.intent.kind, intentElapsed);
+  let condition = ageCondition(state.condition, state.intent.kind, intentElapsed);
+  if (neutralElapsed > 0) {
+    needs = ageNeeds(needs, "observe", neutralElapsed);
+    condition = ageCondition(condition, "observe", neutralElapsed);
+  }
+  const perception = stepActorPerception(state.perception, {
+    tick: input.atTick,
+    observations: [],
+  });
+  if (perception === null) {
+    throw new Error("Core wildlife coarse cognition could not age to the requested tick");
+  }
+  const intent = expiresAt !== null && expiresAt <= input.atTick
+    ? {
+        kind: "observe" as const,
+        cause: { kind: "condition" as const, referenceId: "condition:coarse-watch" },
+        focusObservationId: null,
+        resourceReference: null,
+        enteredAtTick: input.atTick,
+        expiresAtTick: null,
+      }
+    : state.intent;
+  return rebuildActor(state, {
+    updatedAtTick: input.atTick,
+    perception,
+    needs,
+    condition,
+    intent,
   });
 }
 

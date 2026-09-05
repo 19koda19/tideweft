@@ -123,38 +123,52 @@ const U = "unimplemented" as const;
 const F = "foundation" as const;
 const A = "active" as const;
 
-function alpha12CoreWildlifeEvidence(): readonly ClaimTuple[] {
+function waveACoreWildlifeEvidence(
+  species: "deer" | "gull" | "black-bear",
+): readonly ClaimTuple[] {
+  const socialGroup = species !== "black-bear";
+  const transitionEvidence = socialGroup
+    ? [
+        "game:core-ecology-groups:v1",
+        "game:core-ecology:v2",
+        "game:runtime-core-ecology:v1",
+      ]
+    : ["game:core-ecology:v2", "game:runtime-core-ecology:v1"];
   return [
     ["species-profile", A, ["game:living-species-catalog:v1", "sim:core-wildlife-identity:v1"]],
-    ["ecological-niche", F, ["game:core-wildlife-actor:v1", "sim:core-wildlife-identity:v1"]],
+    ["ecological-niche", F, ["game:core-ecology-habitat:v1", "game:core-wildlife-actor:v1", "sim:core-wildlife-identity:v1"]],
     ["appearance", A, ["game:wildlife-presentation:v1", "sim:core-wildlife-identity:v1"]],
     ["sound", U, []],
-    ["habitat-placement", F, ["game:runtime-core-ecology:v1"]],
+    ["habitat-placement", A, ["game:core-ecology-habitat:v1", "game:runtime-core-ecology:v1"]],
     ["food-web", F, ["game:core-wildlife-actor:v1", "sim:core-wildlife-identity:v1"]],
     ["perception-senses", F, ["game:core-ecology-perception:v1", "game:living-actor-senses:v1", "sim:actor-perception:v2"]],
     ["locomotion", F, ["game:core-wildlife-actor:v1", "game:runtime-core-ecology:v1"]],
     ["human-interaction", A, ["game:core-ecology-perception:v1", "game:core-wildlife-actor:v1"]],
     ["dog-interaction", A, ["game:core-ecology-perception:v1", "game:core-wildlife-actor:v1"]],
-    ["same-species-interaction", U, []],
+    ["same-species-interaction", socialGroup ? A : U, socialGroup ? ["game:core-ecology-groups:v1"] : []],
     ["other-species-interaction", A, ["game:core-ecology-perception:v1", "game:core-wildlife-actor:v1"]],
     ["neutral-behavior", A, ["game:core-wildlife-actor:v1"]],
     ["disengagement", A, ["game:core-wildlife-actor:v1"]],
     ["environmental-evidence", U, []],
     ["about-disclosure", A, ["game:wildlife-about:v1"]],
     ["knowledge-honesty", A, ["game:core-ecology-perception:v1", "game:wildlife-about:v1", "sim:actor-perception:v2"]],
-    ["population-materialization", A, ["game:core-ecology:v1", "game:runtime-core-ecology:v1"]],
-    ["full-coarse-transition", A, ["game:core-ecology:v1", "game:runtime-core-ecology:v1"]],
-    ["save-load", A, ["game:core-ecology:v1", "sim:persistence:v8"]],
+    ["population-materialization", A, ["game:core-ecology-habitat:v1", "game:core-ecology:v2", "game:runtime-core-ecology:v1"]],
+    ["full-coarse-transition", A, transitionEvidence],
+    ["save-load", A, ["game:core-ecology:v2", "game:runtime-save:v9"]],
     ["seamless-region-crossing", F, ["game:living-actor-address:v1", "game:world-position:v1"]],
-    ["performance-budget", F, ["game:core-ecology:v1", "game:runtime-core-ecology:v1"]],
+    ["performance-budget", F, ["game:core-ecology-habitat:v1", "game:core-ecology:v2", "game:runtime-core-ecology:v1"]],
     ["accessibility", A, ["game:wildlife-about:v1", "game:wildlife-presentation:v1"]],
     ["mobile-parity", A, ["game:wildlife-about:v1", "game:wildlife-presentation:v1"]],
-    ["player-independent-scenario", U, []],
+    ["player-independent-scenario", socialGroup ? A : U, socialGroup
+      ? ["game:core-ecology-groups:v1", "game:core-ecology:v2"]
+      : []],
     ["fuzz-testing", U, []],
     ["clone-diversity", A, ["sim:core-wildlife-identity:v1"]],
-    ["tutorial-truth", A, ["ui:tutorial-guide:v22"]],
-    ["patch-note-truth", A, ["content:patch-notes-alpha12:v1"]],
-    ["exact-tested-deployment", A, ["release:alpha12-live-verification:v1"]],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v24"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha14:v1"]],
+    // Exact deployment evidence is external and can exist only after this
+    // immutable Alpha-14 candidate is live; Alpha-13 cannot attest this slice.
+    ["exact-tested-deployment", U, []],
   ];
 }
 
@@ -227,9 +241,9 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
     ["patch-note-truth", U, []],
     ["exact-tested-deployment", U, []],
   ],
-  deer: alpha12CoreWildlifeEvidence(),
-  gull: alpha12CoreWildlifeEvidence(),
-  "black-bear": alpha12CoreWildlifeEvidence(),
+  deer: waveACoreWildlifeEvidence("deer"),
+  gull: waveACoreWildlifeEvidence("gull"),
+  "black-bear": waveACoreWildlifeEvidence("black-bear"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {

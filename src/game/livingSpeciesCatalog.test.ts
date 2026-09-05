@@ -44,18 +44,44 @@ describe("Living Weft species module catalog", () => {
     expect(livingSpeciesModule("wolf")).toBeNull();
   });
 
-  it("keeps every Alpha 12 wildlife actor individual while gull flocks stay presentational", () => {
+  it("keeps individual wildlife identity over habitat-derived hybrid population patches", () => {
     for (const species of ["deer", "gull", "black-bear"] as const) {
       const module = livingSpeciesModule(species);
       expect(module).not.toBeNull();
       expect(module?.identity.form).toBe("individual");
       expect(module?.morphology.model).toBe("individual");
+      expect(module?.habitat).toMatchObject({
+        implementation: "active",
+        ownerId: "game:core-ecology-habitat:v1",
+        migrationModel: "none",
+      });
       expect(module?.population).toMatchObject({
         implementation: "active",
-        authoritativeUnit: "individual-records",
-        dematerialization: "preserve-individual-records",
-        coarseSimulation: false,
+        ownerId: "game:core-ecology:v2",
+        strategy: "hybrid-population",
+        materialization: "mixed",
+        authoritativeUnit: "hybrid",
+        dematerialization: "reconcile-hybrid-state",
+        coarseSimulation: true,
       });
+      expect(module?.population.stateAxes.map(({ id }) => id)).toEqual([
+        "habitat-capacity",
+        "population-pressure",
+        "population-size",
+        "population-trend",
+      ]);
+      expect(module?.population.carryingCapacityInputs).toEqual([
+        "climate",
+        "cover",
+        "eligible-tiles",
+        "food",
+        "nesting",
+        "predator-pressure",
+        "suitable-tiles",
+        "water",
+        "weighted-habitat-area",
+      ]);
+      expect(module?.activity.offscreenModel).toBe("individual");
       expect(module?.lifeHistory).toMatchObject({
         dynamicAging: false,
         reproduction: "unimplemented",
@@ -69,10 +95,60 @@ describe("Living Weft species module catalog", () => {
       });
     }
 
+    expect(livingSpeciesModule("deer")?.habitat.habitatClasses)
+      .toEqual(["marsh", "meadow", "ridge"]);
+    expect(livingSpeciesModule("gull")?.habitat.habitatClasses)
+      .toEqual(["marsh", "meadow", "ridge", "tidal-flat"]);
+    expect(livingSpeciesModule("black-bear")?.habitat.habitatClasses)
+      .toEqual(["marsh", "meadow", "ridge"]);
+
+    expect(livingSpeciesModule("deer")?.social).toMatchObject({
+      implementation: "active",
+      groupModel: "group",
+      group: {
+        status: "active",
+        organizationKinds: ["herd"],
+        stableIdNamespace: "HERD",
+        membership: true,
+        informationPropagation: true,
+        splitMerge: true,
+        separationReunion: true,
+      },
+    });
+    expect(livingSpeciesModule("gull")?.social).toMatchObject({
+      implementation: "active",
+      groupModel: "group",
+      group: {
+        status: "active",
+        organizationKinds: ["flock"],
+        stableIdNamespace: "FLOCK",
+        membership: true,
+        informationPropagation: true,
+        splitMerge: true,
+        separationReunion: true,
+      },
+    });
+    expect(livingSpeciesModule("black-bear")?.social).toMatchObject({
+      implementation: "foundation",
+      groupModel: "solitary",
+      group: { status: "unimplemented", representation: "none" },
+    });
     expect(livingSpeciesModule("gull")?.morphology.dynamicOverlays)
       .toContain("visible-flock-summary");
     expect(livingSpeciesModule("gull")?.identity.form).not.toBe("hybrid");
-    expect(livingSpeciesModule("gull")?.population.authoritativeUnit).not.toBe("group-records");
+    expect(livingSpeciesModule("gull")?.population.authoritativeUnit).toBe("hybrid");
+    for (const species of ["deer", "black-bear"] as const) {
+      expect(livingSpeciesModule(species)?.locomotion).toMatchObject({
+        media: [
+          { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "shallow-water", relativeCapability: 650_000 },
+        ],
+        movementVerbs: ["wade", "walk"],
+        terrainAffordances: ["land", "standable-shallow-water"],
+      });
+    }
+    expect(livingSpeciesModule("gull")?.locomotion.media)
+      .toEqual([{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }]);
   });
 
   it("makes registration order irrelevant while persisted catalog order is canonical", () => {
@@ -152,9 +228,34 @@ describe("Living Weft species module catalog", () => {
     expect(createLivingSpeciesCatalog([human, groupNamespaceCollision])).toBeNull();
   });
 
-  it("binds individual, aggregate, and hybrid forms to compatible materialization models", () => {
+  it("binds identity forms and population representations without conflating the two", () => {
     const dog = cloneModule("domestic-dog");
     expect(canonicalizeLivingSpeciesModule(dog)).not.toBeNull();
+
+    const individualWithHybridPopulation = canonicalizeLivingSpeciesModule({
+      ...dog,
+      population: {
+        ...dog.population,
+        implementation: "foundation",
+        ownerId: "game:test-population:v1",
+        strategy: "hybrid-population",
+        materialization: "mixed",
+        coarseSimulation: true,
+        authoritativeUnit: "hybrid",
+        dematerialization: "reconcile-hybrid-state",
+        stateAxes: [fixedAxis("population-pressure")],
+        carryingCapacityInputs: ["habitat-capacity"],
+      },
+      activity: {
+        ...dog.activity,
+        offscreenModel: "individual",
+      },
+    });
+    expect(individualWithHybridPopulation).toMatchObject({
+      identity: { form: "individual", parentSpeciesIds: [] },
+      morphology: { model: "individual" },
+      population: { strategy: "hybrid-population", authoritativeUnit: "hybrid" },
+    });
 
     expect(canonicalizeLivingSpeciesModule({
       ...dog,
@@ -669,7 +770,11 @@ describe("Living Weft species module catalog", () => {
       expect(module.social.communicationChannels).toEqual(
         module.speciesId === "deer" || module.speciesId === "gull" ? ["hearing"] : [],
       );
-      expect(module.social.group.status).toBe("unimplemented");
+      expect(module.social.group.status).toBe(
+        module.speciesId === "deer" || module.speciesId === "gull"
+          ? "active"
+          : "unimplemented",
+      );
       expect(module.inventory.implementation).toBe("unimplemented");
       expect(module.locomotion.crossRegion).toBe(false);
     }
@@ -687,8 +792,9 @@ describe("Living Weft species module catalog", () => {
       expect(livingSpeciesModule(species)?.population).toMatchObject({
         implementation: "active",
         compatibilityScope: false,
-        strategy: "deterministic-regional-individuals",
-        materialization: "active-window",
+        strategy: "hybrid-population",
+        materialization: "mixed",
+        coarseSimulation: true,
       });
     }
     expect(livingSpeciesModule("domestic-dog")?.persistence.implementation).toBe("foundation");

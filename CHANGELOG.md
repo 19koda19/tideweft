@@ -4,6 +4,47 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.14 — 2026-09-05
+
+Build: `0.3.3-alpha.14` · Gameplay contract: 20 · Tutorial: 24
+
+The first wildlife crossing is now derived from its actual habitat and backed by bounded populations, persistent group-sized deer herds and gull flocks, solitary bears, and nonlethal player-absent group history.
+
+### Gameplay
+
+- The bounded wildlife assemblage near the original harbor is now derived deterministically from the local terrain, biome, water, cover, food, nesting conditions, and predator pressure. A species may be honestly absent when the habitat cannot support it instead of being forced into a fixed roster.
+- Each deer, gull, or black-bear population now records habitat capacity, represented population units, pressure, and a deterministic pressure trend. The active window materializes only a bounded set of persistent individual representatives; one representative may stand for several aggregate population units without merging its identity with another actor.
+- In new habitat-derived assemblages, group-sized deer form persistent herds and gulls form persistent flocks, with stable membership, cohesion, alarm-signal state, split/rejoin lineage, and saved anchors. Black bears remain solitary. A fully coarse group may undergo deterministic nonlethal habitat-pressure displacement while the player is absent. The record never enters player EVENTS or knowledge automatically; player-facing aftermath inspection is not yet live.
+
+### Fixes
+
+- Full-to-coarse transitions now preserve each wildlife identity and reconcile group anchors before the same actors rematerialize. Coarse actors age only their already-authoritative physiology and current saved intent; they do not invent movement, targets, perception, food, or player knowledge while unloaded.
+- Threatened deer on valid standable shallow water can now choose and complete a valid move back across standable shallow terrain. Deep or nonstandable water remains closed to ordinary land-animal movement.
+- Habitat generation now evaluates only the exact bounded focus tiles it selected and reuses a small frozen cache for the same seed-bound local analysis, keeping repeated runtime construction bounded without changing ecological results.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Habitat capacity and pressure create ecological constraints rather than spawn quotas, so a quiet patch with no valid bear, deer, or gull remains a legitimate deterministic outcome.
+- Player-absent group incidents are limited to separation, displacement, or reunion. They cannot harm actors, touch cargo, manufacture a witnessed event, or reveal remote information to the player.
+- The release proves shared invariants and representative deer, gull, and bear outcomes instead of scripting every possible species pairing. Novel combinations remain free to emerge through the same bounded sensory, needs, movement, and group contracts.
+
+### Interface
+
+- Field Manual version 24 explains habitat-derived presence, aggregate populations, deer herds, gull flocks, solitary bears, coarse limits, and the difference between an event existing in the world and the player knowing about it.
+- Existing Chart, Relief, selection, and ABOUT surfaces remain knowledge-gated. They show only materialized actors and earned observations, never exact hidden population pressure, remote group incidents, or an omniscient wildlife tracker.
+
+### Save changes
+
+- The outer session advances to version 9 and the core-ecology record advances to its canonical habitat-and-group format. It stores habitat derivation, represented units, capacity, pressure, trend, group membership, component anchors, signals, lineage, aftermath, and the same persistent actor states.
+- A sealed version-8 save migrates once into version 9 while preserving its exact wildlife identities and dynamic states, physical cargo identities and custody, Promise state, and world progress. Reloading cannot reroll the migrated actors, and migration does not invent habitat or group history.
+- Older supported saves receive the current seed-derived untouched habitat baseline without invented observations or incident history. Current version-9 saves reject legacy inner ecology records instead of silently applying a second migration.
+
+### Known limitations
+
+- This remains one bounded local habitat assemblage around the original harbor, not worldwide ecology or a larger bestiary. Additional species, distant habitat populations, ecological migration, reproduction, and circadian life remain future work.
+- Animals still do not attack, receive injuries, die, or leave carcasses. Hunting, combat, capture, treatment, breeding, and predator-kill population effects are not live.
+- The player-absent ecology slice supports only authorized nonlethal group pressure and aftermath. General scent plumes, evidence trails, tracking, rumors, sleep schedules, multi-species food webs, and exhaustive species-to-species behavior are not live.
+
 ## 0.3.3-alpha.13 — 2026-09-05
 
 Build: `0.3.3-alpha.13` · Gameplay contract: 20 · Tutorial: 23

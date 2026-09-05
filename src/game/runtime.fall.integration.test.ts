@@ -50,9 +50,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V8GameSaveEnvelope {
+interface V9GameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 8;
+  readonly version: 9;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -140,15 +140,15 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeV8(record: SaveRecord): V8GameSaveEnvelope {
-  const envelope = JSON.parse(record.worldJson) as V8GameSaveEnvelope;
-  if (envelope.format !== "tideweft-session" || envelope.version !== 8) {
-    throw new Error("fixture did not produce a current v8 regional session save");
+function decodeV8(record: SaveRecord): V9GameSaveEnvelope {
+  const envelope = JSON.parse(record.worldJson) as V9GameSaveEnvelope;
+  if (envelope.format !== "tideweft-session" || envelope.version !== 9) {
+    throw new Error("fixture did not produce a current v9 regional session save");
   }
   return envelope;
 }
 
-function reseal(envelope: V8GameSaveEnvelope): V8GameSaveEnvelope {
+function reseal(envelope: V9GameSaveEnvelope): V9GameSaveEnvelope {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
   return {
     ...unsealed,
@@ -158,13 +158,13 @@ function reseal(envelope: V8GameSaveEnvelope): V8GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V8GameSaveEnvelope,
+  envelope: V9GameSaveEnvelope,
 ): void {
   const record = repository.snapshot();
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 8,
+    payloadVersion: 9,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -260,8 +260,8 @@ function moveFixtureFrameToCompatibilityTile(
 }
 
 function relocateToRidgeAtZeroStability(
-  envelope: V8GameSaveEnvelope,
-): { readonly envelope: V8GameSaveEnvelope; readonly corner: RidgeCorner } {
+  envelope: V9GameSaveEnvelope,
+): { readonly envelope: V9GameSaveEnvelope; readonly corner: RidgeCorner } {
   const world = deserializeWorld(envelope.world);
   const regionalTravel = restorePlayerRegionalTravel(
     world.meta.rootSeed,
@@ -512,7 +512,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeV8(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 8,
+      version: 9,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,

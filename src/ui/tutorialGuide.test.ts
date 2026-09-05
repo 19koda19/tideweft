@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(23);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(24);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -65,7 +65,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("Humans, domestic dogs, deer, gulls, and black bears");
     expect(copy).toContain("validated, versioned species-and-senses contract");
-    expect(copy).toContain("adds no new species or behavior");
+    expect(copy).toContain("adds no new species");
+    expect(copy).toContain("bounded habitat-derived assemblage near the stable starting harbor");
+    expect(copy).toContain("persistent deer herds and gull flocks when group-sized populations form");
+    expect(copy).toContain("solitary black bears");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -241,6 +244,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
+    expect(copy).toContain("Outer save version 9");
+    expect(copy).toContain("sealed version 8 save migrates exactly once");
+    expect(copy).toContain("without rerolling its actors or cargo");
+    expect(copy).toContain("preserves that adopted ecology exactly");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -314,10 +321,18 @@ describe("TIDEWEFT field-manual content", () => {
       .map((mechanic) => `${mechanic.title} ${mechanic.clarification}`)
       .join(" ");
     expect(plannedCopy).toContain("Seven stable visual biomes");
-    expect(plannedCopy).toContain("One independently generated dog and");
-    expect(plannedCopy).toContain("one bounded local patch of deer, gulls, and a black bear");
-    expect(plannedCopy).toContain("persistent full/coarse wildlife state");
-    expect(plannedCopy).toContain("Additional dogs and species");
+    expect(plannedCopy).toContain("one independently generated dog");
+    expect(plannedCopy).toContain("bounded habitat-derived local assemblage");
+    expect(plannedCopy).toContain("population capacity, pressure, and trend");
+    expect(plannedCopy).toContain("bounded set of representatives");
+    expect(plannedCopy).toContain("unsupported populations can be genuinely absent");
+    expect(plannedCopy).toContain("deer herds and gull flocks persist");
+    expect(plannedCopy).toContain("black bears stay solitary");
+    expect(plannedCopy).toContain("Additional dogs and wildlife species");
+    expect(plannedCopy).toContain("worldwide populations");
+    expect(plannedCopy).toContain("animal death and carcasses");
+    expect(plannedCopy).toContain("general scent");
+    expect(plannedCopy).toContain("environmental-evidence tracking");
     expect(plannedCopy).toContain("complete bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
@@ -355,8 +370,21 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("your previous route and choice history remain unchanged");
     expect(copy).toContain("animal-consumption record");
-    expect(copy).toContain("bounded coarse record");
+    expect(copy).toContain("terrain and habitat derive each local population");
+    expect(copy).toContain("hybrid model records capacity, population pressure, and trend");
+    expect(copy).toContain("bounded set of representatives");
+    expect(copy).toContain("genuinely absent instead of being rerolled");
+    expect(copy).toContain("deer persist in herds and gulls in flocks");
+    expect(copy).toContain("black bears stay solitary");
+    expect(copy).toContain("standable shallow water");
+    expect(copy).toContain("remaining saved intent to physiology");
+    expect(copy).toContain("ages existing perception without adding facts");
+    expect(copy).toContain("nonlethal player-absent aftermath");
+    expect(copy).toContain("no harm or cargo interaction");
     expect(copy).toContain("Animals do not attack, receive injuries, die, or leave carcasses");
+    expect(copy).toContain("Additional wildlife species, worldwide populations");
+    expect(copy).toContain("general scent");
+    expect(copy).toContain("environmental-evidence tracking");
     expect(copy).toContain("complete bestiary");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);

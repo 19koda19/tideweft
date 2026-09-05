@@ -841,9 +841,10 @@ function sensesFromRegistry(
 }
 
 /**
- * Alpha 12 wildlife are persistent individual actors. Gull flock wording is a
- * directly-visible presentation summary only; it never replaces or merges the
- * authoritative individual records represented here.
+ * Wave-A wildlife retain persistent individual actor identity while habitat
+ * analysis owns the bounded population patch around those representatives.
+ * Deer herds and gull flocks add stable group state without replacing members;
+ * black bears remain solitary.
  */
 function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const profile = getCoreWildlifeProfile(species);
@@ -860,9 +861,38 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     species === "gull"
       ? ["visible-condition", "visible-flock-summary"]
       : ["visible-condition"];
-  const movementMedium: LivingSpeciesLocomotionMedium = species === "gull" ? "air" : "land";
-  const movementVerb = species === "gull" ? "fly" : "walk";
-  const terrainAffordance = species === "gull" ? "open-air" : "land";
+  const movementMedia: readonly LivingSpeciesLocomotionMediumContract[] = species === "gull"
+    ? [{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }]
+    : [
+        { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+        { medium: "shallow-water", relativeCapability: 650_000 },
+      ];
+  const movementVerbs = species === "gull" ? ["fly"] : ["wade", "walk"];
+  const terrainAffordances = species === "gull"
+    ? ["open-air"]
+    : ["land", "standable-shallow-water"];
+  const habitatClasses = species === "gull"
+    ? ["marsh", "meadow", "ridge", "tidal-flat"]
+    : ["marsh", "meadow", "ridge"];
+  const group = species === "black-bear"
+    ? noGroupSystem()
+    : {
+        status: "active" as const,
+        ownerId: "game:core-ecology-groups:v1",
+        representation: "hybrid" as const,
+        organizationKinds: [species === "deer" ? "herd" : "flock"],
+        stateAxes: [fixed("cohesion"), fixed("movement-heading"), enumAxis("phase")],
+        leadershipModel: "none" as const,
+        coordinationVerbs: ["alarm", "displace", "rejoin", "split"],
+        stableIdentity: true,
+        stableIdNamespace: species === "deer" ? "HERD" : "FLOCK",
+        generationVersion: 1,
+        membership: true,
+        informationPropagation: true,
+        splitMerge: true,
+        separationReunion: true,
+        sharedMemory: true,
+      };
 
   return {
     version: LIVING_SPECIES_MODULE_VERSION,
@@ -885,11 +915,18 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       dynamicOverlays,
     },
     habitat: {
-      implementation: "foundation",
-      ownerId: "game:runtime-core-ecology:v1",
-      habitatClasses: ["bounded-crossing"],
-      placementInputs: ["origin-region", "population-key", "population-ordinal"],
-      climateInputs: [],
+      implementation: "active",
+      ownerId: "game:core-ecology-habitat:v1",
+      habitatClasses,
+      placementInputs: [
+        "excluded-tile-indices",
+        "focus-position",
+        "focus-radius",
+        "origin-region",
+        "region-terrain",
+        "root-seed",
+      ],
+      climateInputs: ["biome-climate", "biome-interaction"],
       migrationModel: "none",
     },
     identity: {
@@ -910,15 +947,30 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     },
     population: {
       implementation: "active",
-      ownerId: "game:core-ecology:v1",
-      strategy: "deterministic-regional-individuals",
-      materialization: "active-window",
+      ownerId: "game:core-ecology:v2",
+      strategy: "hybrid-population",
+      materialization: "mixed",
       maxMaterializedPerRegion: profile.maximumPatchPopulation,
-      coarseSimulation: false,
-      authoritativeUnit: "individual-records",
-      dematerialization: "preserve-individual-records",
-      stateAxes: [],
-      carryingCapacityInputs: [],
+      coarseSimulation: true,
+      authoritativeUnit: "hybrid",
+      dematerialization: "reconcile-hybrid-state",
+      stateAxes: [
+        safeIntegerAxis("habitat-capacity", profile.maximumPatchPopulation),
+        fixed("population-pressure"),
+        safeIntegerAxis("population-size", profile.maximumPatchPopulation),
+        enumAxis("population-trend"),
+      ],
+      carryingCapacityInputs: [
+        "climate",
+        "cover",
+        "eligible-tiles",
+        "food",
+        "nesting",
+        "predator-pressure",
+        "suitable-tiles",
+        "water",
+        "weighted-habitat-area",
+      ],
       compatibilityScope: false,
       triggers: ["active-window", "save-load", "world-create"],
     },
@@ -936,9 +988,9 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       mode: "mobile",
       decisionModel: "individual",
       crossRegion: false,
-      media: [{ medium: movementMedium, relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }],
-      movementVerbs: [movementVerb],
-      terrainAffordances: [terrainAffordance],
+      media: movementMedia,
+      movementVerbs,
+      terrainAffordances,
     },
     diet: {
       implementation: "foundation",
@@ -976,20 +1028,22 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     },
     activity: {
       implementation: "active",
-      ownerId: "game:core-wildlife-actor:v1",
+      ownerId: "game:core-ecology:v2",
       decisionModel: "individual",
       decisionCadenceTicks: 1,
-      offscreenModel: "none",
+      offscreenModel: "individual",
       circadian: noCircadianSchedule(),
     },
     social: {
-      implementation: "foundation",
-      ownerId: "game:core-ecology-perception:v1",
-      groupModel: species === "black-bear" ? "solitary" : "variable",
+      implementation: species === "black-bear" ? "foundation" : "active",
+      ownerId: species === "black-bear"
+        ? "game:core-ecology-perception:v1"
+        : "game:core-ecology-groups:v1",
+      groupModel: species === "black-bear" ? "solitary" : "group",
       actorToActorRelationships: false,
       relationshipAxes: [],
       communicationChannels: profile.roles.includes("alarm-source") ? ["hearing"] : [],
-      group: noGroupSystem(),
+      group,
       territory: noTerritory(),
     },
     sound: noSound(),
@@ -1049,7 +1103,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     },
     persistence: {
       implementation: "active",
-      ownerId: "game:core-ecology:v1",
+      ownerId: "game:core-ecology:v2",
       defaultTier: "regional",
       allowedTiers: ["regional"],
       promotionTriggers: [],
@@ -2021,14 +2075,20 @@ function validPopulation(value: unknown, form: LivingSpeciesIdentityForm): value
     || value.materialization !== "always"
   )) return false;
   if (form === "individual") {
-    if (
-      value.authoritativeUnit !== "individual-records"
-      || (value.strategy !== "persistent-individuals" && value.strategy !== "deterministic-regional-individuals")
-      || (value.materialization !== "always" && value.materialization !== "active-window")
-    ) return false;
-    return value.materialization === "always"
-      ? value.dematerialization === "none"
-      : value.dematerialization === "preserve-individual-records";
+    const individualRecords = value.authoritativeUnit === "individual-records"
+      && (value.strategy === "persistent-individuals" || value.strategy === "deterministic-regional-individuals")
+      && (value.materialization === "always" || value.materialization === "active-window")
+      && (value.materialization === "always"
+        ? value.dematerialization === "none"
+        : value.dematerialization === "preserve-individual-records");
+    const aggregatePatchWithIndividualRepresentatives = value.authoritativeUnit === "hybrid"
+      && value.dematerialization === "reconcile-hybrid-state"
+      && value.strategy === "hybrid-population"
+      && value.materialization === "mixed"
+      && value.coarseSimulation
+      && value.stateAxes.length > 0
+      && value.carryingCapacityInputs.length > 0;
+    return individualRecords || aggregatePatchWithIndividualRepresentatives;
   }
   if (form === "aggregate") {
     const reconciliationMatches =

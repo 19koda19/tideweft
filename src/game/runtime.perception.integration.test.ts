@@ -188,7 +188,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 8,
+      version: 9,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 9,
@@ -221,7 +221,7 @@ describe("runtime existing-human perception path", () => {
     resumed.destroy();
   });
 
-  it("migrates a sealed v4 regional save to an empty v8 perception interval", async () => {
+  it("migrates a sealed v4 regional save to an empty current perception interval", async () => {
     const fixture = perceptionFixture("runtime perception v4 migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -253,7 +253,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 8,
+      version: 9,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 0,
@@ -298,7 +298,7 @@ describe("runtime existing-human perception path", () => {
         mutablePosition.localX += 1;
       },
     },
-  ])("rejects a resealed v8 save with $label", async ({ tamper }) => {
+  ])("rejects a resealed current save with $label", async ({ tamper }) => {
     const fixture = perceptionFixture("runtime perception corrupt carry");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);

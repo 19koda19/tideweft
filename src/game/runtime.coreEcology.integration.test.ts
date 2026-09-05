@@ -1,17 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
+import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { createWorldView, deserializeWorld, serializeWorld } from "../sim/public";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
+import { stableStringify } from "../sim/util";
 import {
   deserializeCoreEcologyPatch,
   replaceCoreEcologyActor,
   serializeCoreEcologyPatch,
   type CoreEcologyPatchState,
 } from "./coreEcology";
+import { deserializeBio0Ecology } from "./bio0Ecology";
 import {
   canonicalizeCoreWildlifeActorState,
+  createCoreWildlifeActorState,
   repositionCoreWildlifeActor,
+  replaceCoreWildlifeActorPhysiology,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
 import {
@@ -61,12 +66,13 @@ vi.mock("../audio/soundscape", () => ({
 
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
-interface V8Envelope {
+interface V9Envelope {
   readonly format: "tideweft-session";
-  readonly version: 8;
+  readonly version: 9;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
+  readonly bio0Ecology: string;
   readonly coreEcology: string;
   readonly regionalTravel: string;
   readonly integrity: string;
@@ -111,6 +117,118 @@ afterEach(() => {
 });
 
 describe("runtime core-ecology vertical slice", () => {
+  it("migrates the sealed v8 ecology exactly once without rerolling actors or cargo", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "alpha thirteen ecology migration",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const currentRecord = repository.snapshot();
+    const current = requiredEnvelope(repository);
+    const legacy = publishedV8CoreEcologyFixture(current);
+    const { integrity: _currentIntegrity, ...currentBase } = current;
+    const v8Base = { ...currentBase, version: 8 as const, coreEcology: legacy.text };
+    await repository.save({
+      ...currentRecord,
+      payloadVersion: 8,
+      updatedAt: currentRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v8Base,
+        integrity: gameSaveEnvelopeIntegrity(v8Base),
+      }),
+    });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const adopted = requiredEnvelope(repository);
+    const adoptedCore = requiredCore(adopted);
+    expect(repository.snapshot().payloadVersion).toBe(9);
+    expect(adoptedCore.derivation).toEqual({ kind: "legacy-fixed-v1" });
+    expect(adoptedCore.groups.groups).toEqual([]);
+    expect(coreActors(adoptedCore)).toEqual(legacy.actors);
+    expect(adoptedCore.populations.every((population) => (
+      population.populationSize === population.members.length
+      && population.members.every(({ representedUnits }) => representedUnits === 1)
+    ))).toBe(true);
+    expect(adopted.physicalCargo).toEqual(current.physicalCargo);
+
+    const adoptedText = adopted.coreEcology;
+    migrated.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(adoptedText);
+    resumed.destroy();
+  });
+
+  it("quarantines legacy v8 ecology with missing or invented population topology", async () => {
+    for (const variant of ["missing-gull", "invented-gull-key"] as const) {
+      const repository = new MemoryRepository();
+      const initial = await createTideweftRuntime(repository);
+      initial.dispatchUI({
+        type: "new-world",
+        seed: `invalid alpha thirteen topology ${variant}`,
+        posture: "gale",
+        sessionShape: "wander",
+      });
+      await initial.save();
+      const currentRecord = repository.snapshot();
+      const current = requiredEnvelope(repository);
+      const legacy = publishedV8CoreEcologyFixture(current, variant);
+      const { integrity: _currentIntegrity, ...currentBase } = current;
+      const v8Base = { ...currentBase, version: 8 as const, coreEcology: legacy.text };
+      await repository.save({
+        ...currentRecord,
+        payloadVersion: 8,
+        updatedAt: currentRecord.updatedAt + 1,
+        worldJson: JSON.stringify({
+          ...v8Base,
+          integrity: gameSaveEnvelopeIntegrity(v8Base),
+        }),
+      });
+      initial.destroy();
+      scheduledFrame = undefined;
+
+      const rejected = await createTideweftRuntime(repository);
+      expect(rejected.getUIView().title.hasSave).toBe(false);
+      expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+      rejected.destroy();
+      scheduledFrame = undefined;
+    }
+  });
+
+  it("quarantines a legacy ecology nested inside a current v9 envelope", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "legacy ecology cannot masquerade as current",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const current = requiredEnvelope(repository);
+    const masquerading = resealedEnvelope(current, {
+      coreEcology: publishedV8CoreEcologyFixture(current).text,
+    });
+    await repository.save({ ...record, worldJson: JSON.stringify(masquerading) });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().title.hasSave).toBe(false);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  });
+
   it("renders lawful wildlife and persists one reaction plus one physical meal across reload", async () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
@@ -152,7 +270,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(8);
+    expect(before.version).toBe(9);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -248,7 +366,7 @@ describe("runtime core-ecology vertical slice", () => {
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
       type: "new-world",
-      seed: "edge routed wildlife escape",
+      seed: "wildlife alarm crossing",
       posture: "gale",
       sessionShape: "wander",
     });
@@ -322,6 +440,85 @@ describe("runtime core-ecology vertical slice", () => {
     expect(movedDeer.intent.kind).toBe("flee");
     expect(movement.x).toBe(0);
     expect(movement.y).toBeLessThan(0);
+    runtime.destroy();
+  });
+
+  it("lets a threatened deer move from standable shallow water through shared locomotion", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "wildlife shallow channel crossing",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    makeWorldShallowAndClear(world);
+    let patch = requiredCore(envelope);
+    const deer = patch.populations.find(({ species }) => species === "deer")?.members[0]?.actor;
+    const bear = patch.populations
+      .find(({ species }) => species === "black-bear")?.members[0]?.actor;
+    if (deer === undefined || bear === undefined) {
+      throw new Error("shallow-channel fixture lost its deer or bear");
+    }
+    if (deer.address.position.region.x !== 0 || deer.address.position.region.y !== 0) {
+      throw new Error("shallow-channel fixture left the compatibility region");
+    }
+    const threatDirection = deer.address.position.localX < REGION_WIDTH_UNITS / 2 ? 1 : -1;
+    const bearPosition = translateWorldPosition(
+      deer.address.position,
+      threatDirection * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(bear, {
+      atTick: patch.updatedAtTick,
+      position: bearPosition,
+      heading: threatDirection > 0 ? 500_000 : 0,
+    }));
+    for (const actor of coreActors(patch)) {
+      if (
+        actor.identity.stableId === deer.identity.stableId
+        || actor.identity.stableId === bear.identity.stableId
+      ) continue;
+      patch = replaceCoreEcologyActor(patch, repositionCoreWildlifeActor(actor, {
+        atTick: patch.updatedAtTick,
+        position: translateWorldPosition(
+          deer.address.position,
+          0,
+          (30 + actor.identity.populationOrdinal) * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+        heading: actor.address.heading,
+      }));
+    }
+    const startTile = compatibilityTileAtPosition(world, deer.address.position);
+    expect(startTile.waterDepth).toBeGreaterThan(0);
+    expect(startTile.waterDepth).toBeLessThanOrEqual(ADRIFT_STAND_DEPTH);
+
+    const nextEnvelope = resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      coreEcology: serializeCoreEcologyPatch(patch),
+    });
+    await repository.save({ ...record, worldJson: JSON.stringify(nextEnvelope) });
+    initial.destroy();
+    scheduledFrame = undefined;
+    const runtime = await createTideweftRuntime(repository);
+
+    advancePlayerSteps(runtime, 30);
+    await runtime.save();
+    const savedEnvelope = requiredEnvelope(repository);
+    const savedWorld = deserializeWorld(savedEnvelope.world);
+    const movedDeer = coreActors(requiredCore(savedEnvelope))
+      .find(({ identity }) => identity.stableId === deer.identity.stableId);
+    if (movedDeer === undefined) throw new Error("shallow-channel deer was not persisted");
+    const movement = worldPositionDelta(deer.address.position, movedDeer.address.position);
+    const endTile = compatibilityTileAtPosition(savedWorld, movedDeer.address.position);
+    expect(["flee", "retreat"]).toContain(movedDeer.intent.kind);
+    expect(Math.abs(movement.x) + Math.abs(movement.y)).toBeGreaterThan(0);
+    expect(endTile.waterDepth).toBeGreaterThan(0);
+    expect(endTile.waterDepth).toBeLessThanOrEqual(ADRIFT_STAND_DEPTH);
     runtime.destroy();
   });
 
@@ -478,7 +675,7 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
   const initial = await createTideweftRuntime(repository);
   initial.dispatchUI({
     type: "new-world",
-    seed: `event time alarm ${offsetTiles}`,
+    seed: "wildlife alarm crossing",
     posture: "gale",
     sessionShape: "wander",
   });
@@ -544,18 +741,18 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
   return { runtime, alarmActorId: alarmActor.identity.stableId };
 }
 
-function requiredEnvelope(repository: MemoryRepository): V8Envelope {
-  const value = JSON.parse(repository.snapshot().worldJson) as V8Envelope;
-  if (value.format !== "tideweft-session" || value.version !== 8) {
-    throw new Error("core-ecology runtime fixture did not save a v8 envelope");
+function requiredEnvelope(repository: MemoryRepository): V9Envelope {
+  const value = JSON.parse(repository.snapshot().worldJson) as V9Envelope;
+  if (value.format !== "tideweft-session" || value.version !== 9) {
+    throw new Error("core-ecology runtime fixture did not save a v9 envelope");
   }
   return value;
 }
 
 function resealedEnvelope(
-  envelope: V8Envelope,
-  changes: Partial<Pick<V8Envelope, "coreEcology" | "physicalCargo" | "player" | "world">>,
-): V8Envelope {
+  envelope: V9Envelope,
+  changes: Partial<Pick<V9Envelope, "coreEcology" | "physicalCargo" | "player" | "world">>,
+): V9Envelope {
   const unsealed = { ...envelope, ...changes, integrity: "" };
   return Object.freeze({
     ...unsealed,
@@ -576,6 +773,35 @@ function makeWorldDryAndClear(world: ReturnType<typeof deserializeWorld>): void 
   world.weather.windX = 0;
   world.weather.windY = 0;
   world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+}
+
+function makeWorldShallowAndClear(world: ReturnType<typeof deserializeWorld>): void {
+  for (const tile of world.terrain.tiles) {
+    tile.elevation = world.tide.level - 20_000;
+    tile.moisture = 900_000;
+    tile.roughness = 0;
+    tile.terrain = "tidal-flat";
+    tile.baseTravelCost = 110;
+  }
+  world.weather.kind = "clear";
+  world.weather.intensity = 0;
+  world.weather.windX = 0;
+  world.weather.windY = 0;
+  world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+}
+
+function compatibilityTileAtPosition(
+  world: ReturnType<typeof deserializeWorld>,
+  position: CoreWildlifeActorState["address"]["position"],
+) {
+  if (position.region.x !== 0 || position.region.y !== 0) {
+    throw new Error("fixture position left the compatibility region");
+  }
+  const tileX = Math.trunc(position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const tileY = Math.trunc(position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const tile = createWorldView(world).terrain.tiles[tileY * WORLD_WIDTH + tileX];
+  if (tile === undefined) throw new Error("fixture position has no compatibility tile");
+  return tile;
 }
 
 function findOpenLeftEdgeEscapeTile(
@@ -650,13 +876,115 @@ function findOpenHorizontalRegionSeam(
   throw new Error("seam fixture could not find an open horizontal region boundary");
 }
 
-function requiredCore(envelope: V8Envelope): CoreEcologyPatchState {
+function requiredCore(envelope: V9Envelope): CoreEcologyPatchState {
   const state = deserializeCoreEcologyPatch(envelope.coreEcology);
-  if (state === null) throw new Error("v8 save omitted canonical core ecology");
+  if (state === null) throw new Error("v9 save omitted canonical core ecology");
   return state;
 }
 
-function requiredCargo(envelope: V8Envelope): PhysicalCargoState {
+type PublishedV8FixtureVariant = "exact" | "invented-gull-key" | "missing-gull";
+
+interface PublishedV8PopulationDefinition {
+  readonly species: CoreWildlifeSpecies;
+  readonly populationKey: string;
+  readonly members: readonly Readonly<{
+    ordinal: number;
+    tileOffsetX: number;
+    tileOffsetY: number;
+    heading: number;
+  }>[];
+}
+
+function publishedV8CoreEcologyFixture(
+  envelope: V9Envelope,
+  variant: PublishedV8FixtureVariant = "exact",
+): Readonly<{ text: string; actors: readonly CoreWildlifeActorState[] }> {
+  const world = deserializeWorld(envelope.world);
+  const current = requiredCore(envelope);
+  if (current.derivation.kind !== "habitat-v1") {
+    throw new Error("fresh Alpha-14 fixture has no habitat derivation");
+  }
+  const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
+  if (bio0 === null) throw new Error("fresh fixture has no canonical Alpha-13 BIO0 state");
+  const origin = bio0.porterAddress.position;
+  const gullKey = variant === "invented-gull-key"
+    ? "wave-a/invented-gull"
+    : "wave-a/gull-flock";
+  const definitions: readonly PublishedV8PopulationDefinition[] = [
+    {
+      species: "black-bear",
+      populationKey: "wave-a/black-bear",
+      members: [{ ordinal: 0, tileOffsetX: 9, tileOffsetY: 2, heading: 500_000 }],
+    },
+    {
+      species: "deer",
+      populationKey: "wave-a/deer-herd",
+      members: [
+        { ordinal: 0, tileOffsetX: 5, tileOffsetY: 2, heading: 625_000 },
+        { ordinal: 1, tileOffsetX: 6, tileOffsetY: 3, heading: 590_000 },
+      ],
+    },
+    {
+      species: "gull",
+      populationKey: gullKey,
+      members: [
+        { ordinal: 0, tileOffsetX: 2, tileOffsetY: -2, heading: 110_000 },
+        { ordinal: 1, tileOffsetX: 3, tileOffsetY: -1, heading: 180_000 },
+        { ordinal: 2, tileOffsetX: 4, tileOffsetY: -2, heading: 250_000 },
+      ],
+    },
+  ];
+  const included = definitions.filter(({ species }) => (
+    variant !== "missing-gull" || species !== "gull"
+  ));
+  const populations = included.map((definition) => {
+    const members = definition.members.map((entry) => {
+      const baseline = createCoreWildlifeActorState({
+        seed: world.meta.rootSeed,
+        species: definition.species,
+        originRegion: origin.region,
+        populationKey: definition.populationKey,
+        populationOrdinal: entry.ordinal,
+        position: translateWorldPosition(
+          origin,
+          entry.tileOffsetX * WORLD_POSITION_UNITS_PER_TILE,
+          entry.tileOffsetY * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+        heading: entry.heading,
+        tick: world.meta.completedTick,
+      });
+      const actor = definition.species === "black-bear"
+        ? replaceCoreWildlifeActorPhysiology(baseline, {
+            atTick: world.meta.completedTick,
+            needs: { ...baseline.needs, hunger: Math.max(680_000, baseline.needs.hunger) },
+            condition: baseline.condition,
+          })
+        : baseline;
+      return {
+        populationOrdinal: entry.ordinal,
+        materialization: "materialized" as const,
+        actor,
+      };
+    });
+    return {
+      species: definition.species,
+      populationKey: definition.populationKey,
+      populationSize: members.length,
+      members,
+    };
+  });
+  const actors = populations.flatMap(({ members }) => members.map(({ actor }) => actor));
+  const text = stableStringify({
+    version: 1,
+    patchKey: "wave-a/alarm-crossing",
+    originRegion: origin.region,
+    updatedAtTick: world.meta.completedTick,
+    populations,
+  });
+  return Object.freeze({ text, actors: Object.freeze(actors) });
+}
+
+function requiredCargo(envelope: V9Envelope): PhysicalCargoState {
   const validation = validatePhysicalCargoState(
     envelope.physicalCargo,
     envelope.player,
