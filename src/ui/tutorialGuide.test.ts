@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(22);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(23);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,6 +63,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
+    expect(copy).toContain("Humans, domestic dogs, deer, gulls, and black bears");
+    expect(copy).toContain("validated, versioned species-and-senses contract");
+    expect(copy).toContain("adds no new species or behavior");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {

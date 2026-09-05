@@ -415,6 +415,12 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         title: "Return to the same page",
         body: "Opening Patch Notes dispatches no simulation or save command. From the active field, the world continues underneath; from the title or Quiet Hour, the existing stopped state is preserved. Close them to return to this exact field-manual page; keyboard and touch use the same release history.",
       },
+      {
+        id: "whats-new-five-actor-contract",
+        audience: "all",
+        title: "One shared living contract",
+        body: "Humans, domestic dogs, deer, gulls, and black bears now share one validated, versioned species-and-senses contract. This review reconciles the five actor types already in the world; it adds no new species or behavior.",
+      },
     ],
     callouts: [
       {
@@ -1381,7 +1387,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 22 as const;
+export const TUTORIAL_CONTENT_VERSION = 23 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

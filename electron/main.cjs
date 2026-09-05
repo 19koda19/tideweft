@@ -26,7 +26,7 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.12';
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.13';
 const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 20;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;

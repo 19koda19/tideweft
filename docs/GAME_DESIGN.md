@@ -83,6 +83,7 @@ Each seed creates:
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
 - 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, a bounded vision/hearing perception state, an intention, and a world location.
 - Exactly one independent domestic dog generated from stable seed and origin inputs, paired with one existing porter for a bounded food-and-rain interaction without ownership or a companion bond.
+- One bounded local core-wildlife patch attached to that first living web: two deer, three gulls, and one black bear with stable generated identities, bounded individual state, shared sight/alarm evidence, and full/coarse continuity. This is a fixed first crossing, not worldwide habitat generation.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -97,6 +98,10 @@ Attention and suspicion are bounded. If a person clearly sees the courier and th
 The first porter-dog web uses the same knowledge-honest rules. The dog can perceive only a physical dried-fish scent from the porter's conserved pack, with uncertainty shaped by containment, wind, rain, terrain, distance, and reachability; it cannot read the food's hidden coordinate. Rain also affects visible wetness and cold condition. The porter must separately see the dog before choosing whether to wait, secure the pack, reroute, leave, or offer food. Chart and Relief expose the same directly visible dog and non-pausing ABOUT facts.
 
 The dog's ABOUT surface offers exactly five player choices: **ASK FOR HELP**, **SUGGEST SECURING BELONGINGS**, **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE**. Requests preserve porter autonomy. Route-around requires an existing automatic route and computes a real detour to its existing destination around the observed spot. If the porter chooses to help, exactly one dried-fish unit moves from porter custody to dog custody before consumption. That meal can create bounded memory, learned history, and persistence promotion through save/revisit; promotion is not adoption, ownership, naming, affection, training, or a companion system.
+
+The bounded core-wildlife crossing extends the same observation boundary to deer, gulls, and one black bear. Terrain and structures can block sight; sufficiently clear contact can identify predator or prey classes; and an explicit alarm can propagate through bounded hearing without revealing the caller's stable identity, species, hidden target, or exact motive. The current dog, porter, and player receive only the observations that reach them. Directly visible wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT surface; loss of direct-detail sight removes rendering, selection, labels, actions, and inspection rather than leaving a remote tracker.
+
+The hungry bear may choose an easier exposed provision instead of pursuing visible live prey. A gull may also opportunistically inspect and claim that exposed food. Either animal must physically reach the same exact whole dried-fish parcel before consumption can commit; the entity is then removed and its animal-consumption history persists. Deer and gulls can currently alarm, flee, retreat, observe, or disengage through their role and current observations, but deer browsing is not live. The player can **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, or **LEAVE**, but cannot command, feed, tame, name, own, recruit, attack, or otherwise directly manipulate these animals in this release.
 
 ## Autonomous strand network
 
@@ -192,7 +197,7 @@ There is no manual in-play pause. Quiet Hour immediately saves, halts the simula
 
 ## Onboarding and accessibility
 
-The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same eighteen-topic source covering every current control, physical Promises and parcels, information-only reports, terrain-responsive footing/falls, sweep recovery, cargo care, biomes/tools, Wayknots/Harps, the unbroken world, routes/projects, people and the first dog through ABOUT, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Version 21 also teaches the dog's five choices, request-versus-command boundary, one-unit transfer, real route-around action, memory/promotion, and the absent companion/full-roster systems. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
+The contextual first route teaches movement, depth sounding, promise choice, travel, arrival, and witnessing in sequence. A complete versioned field manual then acts as the durable explanation layer: desktop T and the mobile ? open the same eighteen-topic source covering every current control, physical Promises and parcels, information-only reports, terrain-responsive footing/falls, sweep recovery, cargo care, biomes/tools, Wayknots/Harps, the unbroken world, routes/projects, living actors through ABOUT, views/HUD, local saves/Quiet Hour, accessibility, and explicit build boundaries. Version 23 teaches the dog's five choices, request-versus-command boundary, one-unit transfer, real route-around action, memory/promotion, the bounded deer/gull/black-bear crossing, anonymous alarms, whole-parcel scavenging, the shared five-species sensory contract, and the absent companion/full-roster/harm systems. Each feature phase updates this manual and its tests as part of completion, so new rules do not accumulate as unexplained HUD clutter.
 
 The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
@@ -204,11 +209,20 @@ The current build has procedural sound but does not yet expose separate volume c
 
 ## Implemented vertical-slice boundary
 
+The verified Alpha `0.3.3-alpha.12` gameplay checkpoint is exact release
+commit `4784315a77d815533a9370ece3d7daeb1cc8d5bc`.
+
+Source version `0.3.3-alpha.13` retains that exact gameplay and save boundary
+while making the five current living-actor types share one validated,
+versioned species-and-senses contract. It adds no species or encounter.
+
 Implemented now:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
-- one stable independent dog paired with one existing porter, with shared lawful visual and physical-food-scent perception, rain/cold condition, traversable movement, knowledge-honest ABOUT, exactly five player choices, autonomous porter response, exact one-unit provision transfer/consumption, bounded memory, persistence promotion, and outer-save-v7 continuity;
+- one stable independent dog paired with one existing porter, with shared lawful visual and physical-food-scent perception, rain/cold condition, traversable movement, knowledge-honest ABOUT, exactly five player choices, autonomous porter response, exact one-unit provision transfer/consumption, bounded memory, and persistence promotion;
+- one deterministic bounded deer/gull/black-bear patch with stable identities, shared visual and anonymous alarm observations, predator/prey appraisal, bounded alarm/flee/retreat/pursuit/disengagement, a directly visible gull-flock summary, black-bear whole-parcel scavenging, knowledge-honest ABOUT, frozen coarse records across moving-window transitions, and outer-save-v8 persistence;
+- one versioned production species contract covering exactly the five implemented living-actor types—human, domestic dog, deer, gull, and black bear—whose sensory data feeds the shared evaluator and whose missing group, evidence, health/death, circadian, habitat-breadth, and scale capabilities remain explicitly closed;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;
 - seamless deterministic terrain travel in every direction, with continuous E/N location, a bounded moving presentation frame, camera/route continuity, negative-coordinate support, and exact preservation of the original estuary;
@@ -227,7 +241,7 @@ Implemented now:
 
 Expansion runway, not current behavior:
 
-- universal procedural humans beyond the original harbor country; coarse distant simulation; general scent fields, physical evidence/tracking, social information and rumors, group communication, physical search/pursuit pathfinding, human-to-human perception, additional dogs, bears, birds, deer, full animal populations, reproduction, predator-prey chains, ownership, companions, social networks, general physical NPC inventory, negotiation, deterrence, and broader actor-to-actor ecology;
+- universal procedural humans beyond the original harbor country; coarse distant simulation; general scent fields, physical evidence/tracking, social information and rumors, group communication, physical human search/pursuit pathfinding, human-to-human perception, additional dogs and wildlife beyond the one bounded core patch, habitat-derived worldwide populations, reproduction, migration, persistent herd/flock social state, attacks/injury/death/carcasses, ownership, companions, social networks, general physical NPC inventory, negotiation, deterrence, and broader actor-to-actor ecology;
 - runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
 - distant low-detail parcel simulation, living mangrove/bramble snag integration, and delivery compensation that prices recovered condition; continuous transfer of the same parcel across the old map extent is already live;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;

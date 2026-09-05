@@ -4,6 +4,42 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.13 — 2026-09-05
+
+Build: `0.3.3-alpha.13` · Gameplay contract: 20 · Tutorial: 23
+
+The five living actor types already present now share one strict, versioned species and sensory contract, with release evidence that stays explicit about every unfinished capability.
+
+### Gameplay
+
+- Humans, domestic dogs, deer, gulls, and black bears now share one validated versioned species catalog. The catalog must exactly match the current living-actor roster and fails closed on missing, duplicate, malformed, or extra modules.
+- The current wildlife records remain persistent individuals with bounded needs, condition, attention, memory, and materialization. A visible gull flock is only a summary of directly observed gulls; it does not merge their identities or reveal hidden population state.
+
+### Fixes
+
+- The species catalog and its build-owned release evidence now cover all five actor types already present instead of stopping at humans and domestic dogs.
+- Production alarm hearing and scent sensitivity now read the matching relative capabilities through the validated species contract. Species-specific visual acuity remains recorded foundation data rather than a claimed live input.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. This reconciliation preserves the existing five sensory profiles and does not add detection range, omniscient awareness, wildlife rewards, or easier travel.
+- Relative sensory capability is not a detection radius. Line of sight, distance, physical sound or scent evidence, wind, rain, packaging, and current observation rules still determine what an actor can lawfully perceive.
+
+### Interface
+
+- Field Manual version 23 identifies the shared five-actor species-and-senses contract and states plainly that this release adds no new species or behavior.
+- Existing Chart and Relief markers, selection, and ABOUT disclosure remain knowledge-gated; this contract review adds no remote tracker or hidden-stat display.
+
+### Save changes
+
+- The outer session remains version 8 and the embedded simulation remains format 4 with tideweft-sim/6. This release requires no save migration and does not rewrite established actor identities or ecology state.
+- Species contracts and release evidence are build-owned validation data rather than serialized world entities, so loading an existing Alpha 12 save preserves its exact actors, cargo, memories, and materialization state.
+
+### Known limitations
+
+- This release adds no new species, spawn site, population, behavior, interaction, attack, or ecological outcome. It reconciles only the five actor types already present in the bounded Alpha 12 living web.
+- Animal sound repertoires, injuries, incapacitation, causal death, carcasses, circadian schedules, persistent herds or flocks, environmental evidence, worldwide habitat populations, unloaded-region ecology, and player-independent scenarios remain not live.
+
 ## 0.3.3-alpha.12 — 2026-09-05
 
 Build: `0.3.3-alpha.12` · Gameplay contract: 20 · Tutorial: 22

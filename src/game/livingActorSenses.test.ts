@@ -9,6 +9,8 @@ import {
   type LivingActorScentStimulus,
 } from "./livingActorSenses";
 import { createLivingActorAddress } from "./livingActor";
+import { LIVING_SPECIES_CATALOG } from "./livingSpeciesCatalog";
+import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 import { createWorldPosition } from "./worldPosition";
 
 function address(species: "human" | "domestic-dog", localX = 10_000) {
@@ -57,6 +59,28 @@ describe("shared living actor sensory profiles", () => {
       .toBeGreaterThan(livingActorSenseProfile("domestic-dog").scentBaseRangeUnits);
     expect(livingActorSenseProfile("gull").visionAcuity)
       .toBeGreaterThan(livingActorSenseProfile("human").visionAcuity);
+  });
+
+  it("derives every production sensory profile from the versioned species catalog", () => {
+    expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId)).toEqual([
+      "black-bear",
+      "deer",
+      "domestic-dog",
+      "gull",
+      "human",
+    ]);
+    for (const module of LIVING_SPECIES_CATALOG.modules) {
+      const profile = livingActorSenseProfile(module.speciesId as LivingActorSpecies);
+      expect(profile.visionAcuity).toBe(
+        module.senses.channels.find(({ channel }) => channel === "vision")?.relativeCapability,
+      );
+      expect(profile.hearingSensitivity).toBe(
+        module.senses.channels.find(({ channel }) => channel === "hearing")?.relativeCapability,
+      );
+      expect(profile.scentSensitivity).toBe(
+        module.senses.channels.find(({ channel }) => channel === "scent")?.relativeCapability,
+      );
+    }
   });
 
   it("emits an opaque classified area and never the physical stimulus identity", () => {

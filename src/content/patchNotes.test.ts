@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.12",
-      buildIdentity: "0.3.3-alpha.12",
+      version: "0.3.3-alpha.13",
+      buildIdentity: "0.3.3-alpha.13",
       gameplayContractVersion: 20,
-      tutorialVersion: 22,
+      tutorialVersion: 23,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("announces only the bounded Wave-A wildlife crossing as live", () => {
+  it("scopes the five-actor contract review without inventing a new wildlife release", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const wildlifeRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.12",
+    );
+    const wildlifeCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => wildlifeRelease?.categories[category] ?? [])
       .join(" ");
     const horizonRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.0",
@@ -82,18 +89,29 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("one deterministic local population patch");
-    expect(activeCopy).toContain("deer, gulls, and a black bear");
-    expect(activeCopy).toContain("shared sight and alarm observations");
-    expect(activeCopy).toContain("a heard alarm remains an anonymous direction");
-    expect(activeCopy).toContain("secure exposed food, reroute, leave, or wait");
-    expect(activeCopy).toContain("consume the crossing's exposed one-unit dried-fish parcel");
-    expect(activeCopy).toContain("WAIT AND WATCH");
-    expect(activeCopy).toContain("leaves the prior route intact");
-    expect(activeCopy).toContain("same stable actors cross between full and coarse representation");
+    expect(activeCopy).toContain("Humans, domestic dogs, deer, gulls, and black bears");
+    expect(activeCopy).toContain("share one validated versioned species catalog");
+    expect(activeCopy).toContain("visible gull flock is only a summary");
+    expect(activeCopy).toContain("adds no new species or behavior");
+    expect(activeCopy).toContain("does not add detection range");
+    expect(activeCopy).toContain("Production alarm hearing and scent sensitivity");
+    expect(activeCopy).toContain("visual acuity remains recorded foundation data");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("remains version 8");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("requires no save migration");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("This release adds no new species");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("circadian schedules");
+    expect(wildlifeCopy).toContain("one deterministic local population patch");
+    expect(wildlifeCopy).toContain("deer, gulls, and a black bear");
+    expect(wildlifeCopy).toContain("shared sight and alarm observations");
+    expect(wildlifeCopy).toContain("a heard alarm remains an anonymous direction");
+    expect(wildlifeCopy).toContain("secure exposed food, reroute, leave, or wait");
+    expect(wildlifeCopy).toContain("consume the crossing's exposed one-unit dried-fish parcel");
+    expect(wildlifeCopy).toContain("WAIT AND WATCH");
+    expect(wildlifeCopy).toContain("leaves the prior route intact");
+    expect(wildlifeCopy).toContain("same stable actors cross between full and coarse representation");
     expect(activeCopy).not.toMatch(/complete universal perception|physical pursuit is live/iu);
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not a full bestiary");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, or leave carcasses");
+    expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("not a full bestiary");
+    expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, or leave carcasses");
     expect(allCategoryCopy("gameplay")).toContain("Stability now resolves directly");
     expect(allCategoryCopy("interface")).toContain("same pane-free field facts");
     expect(allCategoryCopy("fixes")).toContain("WebGL emissive material state");

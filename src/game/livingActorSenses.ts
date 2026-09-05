@@ -15,9 +15,10 @@ import {
   type LivingActorAddress,
 } from "./livingActor";
 import {
-  LIVING_SPECIES_REGISTRY,
+  livingSpeciesRegistryEntry,
   type LivingActorSpecies,
 } from "./livingSpeciesRegistry";
+import { LIVING_SPECIES_CATALOG } from "./livingSpeciesCatalog";
 import { isWorldPosition, type WorldPosition } from "./worldPosition";
 
 export const LIVING_ACTOR_SENSES_VERSION = 1 as const;
@@ -55,11 +56,21 @@ export interface LivingActorScentFrameInput {
 }
 
 const PROFILE_BY_SPECIES = new Map<LivingActorSpecies, LivingActorSenseProfile>();
-for (const entry of LIVING_SPECIES_REGISTRY) {
+for (const module of LIVING_SPECIES_CATALOG.modules) {
+  const entry = livingSpeciesRegistryEntry(module.speciesId);
+  const vision = module.senses.channels.find(({ channel }) => channel === "vision");
+  const hearing = module.senses.channels.find(({ channel }) => channel === "hearing");
+  const scent = module.senses.channels.find(({ channel }) => channel === "scent");
+  if (entry === null || vision === undefined || hearing === undefined || scent === undefined) {
+    throw new Error(`Living species ${module.speciesId} lacks its production sensory contract`);
+  }
   PROFILE_BY_SPECIES.set(entry.species, Object.freeze({
     version: LIVING_ACTOR_SENSES_VERSION,
     species: entry.species,
-    ...entry.senses,
+    visionAcuity: vision.relativeCapability,
+    hearingSensitivity: hearing.relativeCapability,
+    scentSensitivity: scent.relativeCapability,
+    scentBaseRangeUnits: entry.senses.scentBaseRangeUnits,
   }));
 }
 
