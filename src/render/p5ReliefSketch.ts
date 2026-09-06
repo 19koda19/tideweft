@@ -199,6 +199,7 @@ type ReliefWildlifeForm =
   | "northern-harrier"
   | "snowy-egret"
   | "american-black-duck"
+  | "north-american-river-otter"
   | "black-bear"
   | "domestic-cat"
   | "marsh-rabbit"
@@ -285,6 +286,18 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.48,
     ringRadiusScale: 0.39,
     labelLift: 0.74,
+  },
+  "north-american-river-otter": {
+    form: "north-american-river-otter",
+    colors: {
+      primary: "#5b402e",
+      secondary: "#9b7957",
+      dark: "#241b17",
+      accent: "#d6c3a0",
+    },
+    hitRadiusScale: 0.52,
+    ringRadiusScale: 0.43,
+    labelLift: 0.72,
   },
   "black-bear": {
     form: "black-bear",
@@ -4087,6 +4100,104 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawNorthAmericanRiverOtter = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = reliefWildlifeColors("north-american-river-otter");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.1 * scale;
+      const resting = wildlife.behavior === "rest";
+      const diving = wildlife.behavior === "dive";
+      const swimming = wildlife.behavior === "crossing"
+        || wildlife.behavior === "forage"
+        || wildlife.behavior === "swim"
+        || diving;
+      const bodyHalfLength = base * 1.86;
+      const bodyHalfHeight = base * 0.52;
+      const bodyHalfWidth = base * 0.58;
+      const swimLift = swimming && !resting ? RELIEF_WATER_SURFACE_LIFT : 0;
+      const bodyCenterY = surface + swimLift + bodyHalfHeight * (diving ? 0.08 : 0.78);
+      const undulation = reducedMotion || !swimming
+        ? 0
+        : Math.sin(now * 0.0065) * base * 0.12;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+
+      if (!swimming && !resting) {
+        p.ambientMaterial(colors.dark);
+        for (const legX of [-bodyHalfLength * 0.55, bodyHalfLength * 0.55]) {
+          for (const legZ of [-bodyHalfWidth * 0.44, bodyHalfWidth * 0.44]) {
+            p.push();
+            p.translate(legX, bodyHalfHeight * 0.92, legZ);
+            p.box(base * 0.24, base * 0.42, base * 0.22);
+            p.pop();
+          }
+        }
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 9, 5);
+      p.push();
+      p.translate(base * 0.24, bodyHalfHeight * 0.38, 0);
+      p.ambientMaterial(colors.secondary);
+      p.ellipsoid(base * 1.28, base * 0.13, base * 0.42, 8, 4);
+      p.pop();
+      p.push();
+      p.translate(bodyHalfLength * 0.93, diving ? bodyHalfHeight * 0.48 : -bodyHalfHeight * 0.2, 0);
+      p.sphere(base * 0.52, 8, 5);
+      for (const earZ of [-base * 0.37, base * 0.37]) {
+        p.push();
+        p.translate(-base * 0.06, -base * 0.42, earZ);
+        p.ambientMaterial(colors.dark);
+        p.sphere(base * 0.13, 6, 4);
+        p.pop();
+      }
+      p.translate(base * 0.43, base * 0.12, 0);
+      p.ambientMaterial(colors.accent ?? colors.secondary);
+      p.ellipsoid(base * 0.44, base * 0.28, base * 0.37, 7, 4);
+      p.translate(base * 0.34, 0, 0);
+      p.ambientMaterial(colors.dark);
+      p.sphere(base * 0.11, 5, 3);
+      p.pop();
+
+      p.push();
+      p.translate(-bodyHalfLength * 0.98, undulation, 0);
+      p.rotateZ(p.HALF_PI + (reducedMotion ? 0 : undulation / Math.max(base, 0.001)));
+      p.ambientMaterial(colors.dark);
+      p.cone(base * 0.4, base * 1.74, 7, 2);
+      p.pop();
+
+      if (swimming) {
+        p.noFill();
+        p.stroke(colors.accent ?? colors.secondary);
+        p.strokeWeight(Math.max(1, base * 0.09));
+        p.line(
+          -bodyHalfLength * 1.75,
+          bodyHalfHeight * 0.58,
+          0,
+          -base * 0.5,
+          0,
+          bodyHalfWidth * 1.45,
+        );
+        p.line(
+          -bodyHalfLength * 1.75,
+          bodyHalfHeight * 0.58,
+          0,
+          -base * 0.5,
+          0,
+          -bodyHalfWidth * 1.45,
+        );
+        p.noStroke();
+      }
+      p.pop();
+    };
+
     const drawBlackBear = (
       wildlife: WildlifeView,
       surface: number,
@@ -4589,6 +4700,9 @@ export function createTideweftReliefRenderer(
           return true;
         case "american-black-duck":
           drawAmericanBlackDuck(wildlife, surface, tileSize, now);
+          return true;
+        case "north-american-river-otter":
+          drawNorthAmericanRiverOtter(wildlife, surface, tileSize, now);
           return true;
         case "black-bear":
           drawBlackBear(wildlife, surface, tileSize);

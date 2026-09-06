@@ -5,10 +5,12 @@ import { seedFromText, type RootSeed } from "../sim/rng";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   CORE_ECOLOGY_PATCH_MAX_SERIALIZED_BYTES,
+  createCoreEcologyAggregatePatch,
   createCoreEcologyPatch,
   deserializeCoreEcologyPatch,
   serializeCoreEcologyPatch,
   setCoreEcologyMaterializedActors,
+  stepCoreEcologyAggregatePatch,
   stepCoreEcologyPatch,
   type CoreEcologyPatchState,
 } from "./coreEcology";
@@ -17,11 +19,14 @@ import {
   CORE_ECOLOGY_HABITAT_SPECIES_EVALUATION_BUDGET,
   CORE_ECOLOGY_HABITAT_TILE_BUDGET,
   deriveCoreEcologyHabitatAssemblage,
+  deriveCoreEcologyTidalWebHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
+  CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
   CORE_ECOLOGY_GROUP_MAX_GROUPS,
   CORE_ECOLOGY_GROUP_MAX_SERIALIZED_BYTES,
+  CORE_ECOLOGY_GROUP_SPECIES,
   createCoreEcologyGroup,
   createCoreEcologyGroupSet,
   serializeCoreEcologyGroupSet,
@@ -130,6 +135,94 @@ describe("Wave-A representative ecology audit", () => {
 
     const encoded = serializeCoreEcologyPatch(rematerialized);
     expect(deserializeCoreEcologyPatch(encoded)).toEqual(rematerialized);
+  });
+
+  it("lets habitat-v7 inherit deterministic nonlethal player-absent group aftermath", () => {
+    const seed = seedFromText("otter habitat 0");
+    const originRegion = createRegionCoord(0, 0);
+    const habitat = deriveCoreEcologyTidalWebHabitatAssemblage({
+      rootSeed: seed,
+      originRegion,
+    });
+    const groupedPopulation = habitat.populations.find((population) => (
+      population.representation === "individual-representatives"
+      && CORE_ECOLOGY_GROUP_SPECIES.includes(population.species)
+      && population.allocations.length >= 2
+      && population.populationPressure >= 450_000
+    ));
+    if (groupedPopulation === undefined) {
+      throw new Error("Current habitat fixture lacks a pressure-supported social group");
+    }
+    const anchor = groupedPopulation.allocations[0]?.position;
+    if (anchor === undefined) throw new Error("Current habitat social group lacks an anchor");
+    const group = createCoreEcologyGroup({
+      seed,
+      species: groupedPopulation.species,
+      originRegion,
+      populationKey: groupedPopulation.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: groupedPopulation.allocations.map(({ allocationOrdinal }) => (
+        allocationOrdinal
+      )),
+      anchor,
+    });
+    const initial = createCoreEcologyAggregatePatch({
+      seed,
+      patchKey: "audit:current-habitat-group-inheritance",
+      originRegion,
+      derivation: { kind: "habitat-v7", habitat },
+      groups: createCoreEcologyGroupSet([group]),
+      populations: habitat.populations.flatMap((population) => (
+        population.representation !== "individual-representatives"
+          || population.populationUnits === 0
+          ? []
+          : [{
+              species: population.species,
+              populationKey: population.populationKey,
+              populationSize: population.populationUnits,
+              members: population.allocations.map((allocation) => ({
+                populationOrdinal: allocation.allocationOrdinal,
+                representedUnits: allocation.representedUnits,
+                position: allocation.position,
+                materialization: "coarse" as const,
+              })),
+            }]
+      )),
+    });
+    const initialActorIds = initial.populations.flatMap(({ members }) => (
+      members.map(({ actor }) => actor.identity.stableId)
+    ));
+
+    const advanceToAftermath = () => {
+      let patch = initial;
+      for (let cadence = 1; cadence <= 8; cadence += 1) {
+        const result = stepCoreEcologyAggregatePatch(patch, {
+          tick: cadence * CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
+          actorSteps: [],
+        });
+        if (result === null) throw new Error("Current habitat group cadence failed");
+        expect(result.events).toEqual([]);
+        expect(result.resourceClaims).toEqual([]);
+        patch = result.patch;
+        if (patch.groups.groups[0]?.aftermath.length) return patch;
+      }
+      throw new Error("Current habitat group never produced its bounded pressure aftermath");
+    };
+
+    const advanced = advanceToAftermath();
+    const replay = advanceToAftermath();
+    const aftermath = advanced.groups.groups[0]?.aftermath ?? [];
+    expect(aftermath.length).toBeGreaterThan(0);
+    expect(aftermath.every((event) => (
+      event.playerAbsent
+      && event.harm === "none"
+      && !event.cargoInteraction
+      && event.disclosure === "direct-observation-required"
+    ))).toBe(true);
+    expect(advanced.groups).toEqual(replay.groups);
+    expect(advanced.populations.flatMap(({ members }) => (
+      members.map(({ actor }) => actor.identity.stableId)
+    ))).toEqual(initialActorIds);
   });
 
   it("bounds spatial work and persisted representatives instead of scaling with population units", () => {

@@ -38,6 +38,7 @@ export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION = 3 as const;
 export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION = 4 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION = 5 as const;
 export const CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION = 6 as const;
+export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION = 7 as const;
 export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
   "deer",
   "gull",
@@ -69,6 +70,10 @@ export const CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES = [
   ...CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES,
   "american-black-duck",
 ] as const;
+export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES,
+  "north-american-river-otter",
+] as const;
 export type CoreEcologyWaveAHabitatSpecies =
   (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
 export type CoreEcologyHarborEdgeHabitatSpecies =
@@ -81,6 +86,8 @@ export type CoreEcologyTidalTableHabitatSpecies =
   (typeof CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES)[number];
 export type CoreEcologyWaterfowlHabitatSpecies =
   (typeof CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES)[number];
+export type CoreEcologyTidalWebHabitatSpecies =
+  (typeof CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES)[number];
 export type CoreEcologyHabitatRepresentation =
   | "aggregate-area"
   | "group-actor"
@@ -98,15 +105,19 @@ export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS = 21 as const;
 export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS = 28 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS = 36 as const;
 export const CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS = 37 as const;
+export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS = 38 as const;
 /** Saved, non-population tidal destinations remain deliberately small and bounded. */
 export const CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS = 12 as const;
 export const CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS = 15 as const;
+export const CORE_ECOLOGY_TIDAL_WEB_MAX_ANCHOR_RECORDS = 17 as const;
 export const CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH = 20_000 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS = 4 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS = 1 as const;
@@ -115,6 +126,11 @@ export const CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH = 78_000 as const;
 export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS = 2 as const;
 export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_REFUGE_ANCHORS = 1 as const;
 export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH = 18_000 as const;
+export const CORE_ECOLOGY_RIVER_OTTER_FORAGING_ANCHORS = 1 as const;
+export const CORE_ECOLOGY_RIVER_OTTER_HAULOUT_ANCHORS = 1 as const;
+export const CORE_ECOLOGY_RIVER_OTTER_MINIMUM_FORAGING_DEPTH = 30_000 as const;
+export const CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_FORAGING_DEPTH = 500_000 as const;
+export const CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_HAULOUT_DISTANCE_TILES = 12 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_FOCUS_RADIUS_TILES = 32 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_EXCLUDED_TILES = 64 as const;
 
@@ -212,6 +228,7 @@ export interface CoreEcologyHarborEdgeActivitySignal {
     | "burrow-foraging"
     | "chorusing"
     | "dabbling"
+    | "aquatic-foraging"
     | "foraging"
     | "quartering-search"
     | "roaming"
@@ -302,6 +319,20 @@ export interface CoreEcologyWaterfowlHabitatPopulationAnalysis {
   readonly allocations: readonly CoreEcologyHabitatAllocation[];
 }
 
+export interface CoreEcologyTidalWebHabitatPopulationAnalysis {
+  readonly species: CoreEcologyTidalWebHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
 export type CoreEcologyTidalTableAnchorSpecies =
   | "atlantic-silverside"
   | "atlantic-marsh-fiddler-crab"
@@ -314,6 +345,15 @@ export type CoreEcologyTidalTableAnchorPurpose =
   | "dabbling"
   | "refuge";
 
+export type CoreEcologyTidalWebAnchorSpecies =
+  | CoreEcologyTidalTableAnchorSpecies
+  | "north-american-river-otter";
+
+export type CoreEcologyTidalWebAnchorPurpose =
+  | CoreEcologyTidalTableAnchorPurpose
+  | "foraging"
+  | "haulout";
+
 /**
  * Seed/region/habitat-derived tidal destination. Elevation is persisted so
  * live tide can derive local depth without trusting camera state or rebuilding
@@ -323,6 +363,18 @@ export type CoreEcologyTidalTableAnchorPurpose =
 export interface CoreEcologyTidalTableHabitatAnchor {
   readonly species: CoreEcologyTidalTableAnchorSpecies;
   readonly purpose: CoreEcologyTidalTableAnchorPurpose;
+  readonly anchorOrdinal: number;
+  readonly tileIndex: number;
+  readonly globalTile: GlobalTileCoord;
+  readonly position: WorldPosition;
+  readonly elevation: number;
+  readonly terrain: TerrainKind;
+  readonly biome: BiomeId;
+}
+
+export interface CoreEcologyTidalWebHabitatAnchor {
+  readonly species: CoreEcologyTidalWebAnchorSpecies;
+  readonly purpose: CoreEcologyTidalWebAnchorPurpose;
   readonly anchorOrdinal: number;
   readonly tileIndex: number;
   readonly globalTile: GlobalTileCoord;
@@ -443,6 +495,26 @@ export interface CoreEcologyWaterfowlHabitatAssemblage {
   readonly tidalAnchors: readonly CoreEcologyTidalTableHabitatAnchor[];
 }
 
+/**
+ * Additive tidal-web record. The complete v6 population and anchor sequences
+ * remain an immutable prefix. One river-otter representative and exactly one
+ * wet foraging plus one dry haulout destination are appended only when stable
+ * fish, crab, shore, and all-tide water habitat support the individual.
+ */
+export interface CoreEcologyTidalWebHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS;
+  readonly populations: readonly CoreEcologyTidalWebHabitatPopulationAnalysis[];
+  readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
+}
+
 interface HabitatSpeciesRule {
   readonly populationKey: string;
   readonly representation: CoreEcologyHabitatRepresentation;
@@ -458,7 +530,7 @@ interface HabitatSpeciesRule {
 }
 
 export interface CoreEcologyHabitatSpeciesBounds {
-  readonly species: CoreEcologyWaterfowlHabitatSpecies;
+  readonly species: CoreEcologyTidalWebHabitatSpecies;
   readonly representation: CoreEcologyHabitatRepresentation;
   readonly maximumPopulation: number;
   readonly maximumAllocations: number;
@@ -491,7 +563,7 @@ interface HabitatSiteEvaluation {
 }
 
 interface UnallocatedPopulationAnalysis<
-  Species extends CoreEcologyWaterfowlHabitatSpecies = CoreEcologyWaterfowlHabitatSpecies,
+  Species extends CoreEcologyTidalWebHabitatSpecies = CoreEcologyTidalWebHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -505,7 +577,7 @@ interface UnallocatedPopulationAnalysis<
 }
 
 interface AllocatedPopulationAnalysis<
-  Species extends CoreEcologyWaterfowlHabitatSpecies = CoreEcologyWaterfowlHabitatSpecies,
+  Species extends CoreEcologyTidalWebHabitatSpecies = CoreEcologyTidalWebHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -531,7 +603,7 @@ const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
 
-const SPECIES_PURPOSE: Readonly<Record<CoreEcologyWaterfowlHabitatSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyTidalWebHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
@@ -546,9 +618,10 @@ const SPECIES_PURPOSE: Readonly<Record<CoreEcologyWaterfowlHabitatSpecies, numbe
   "atlantic-marsh-fiddler-crab": 0x4649_4444,
   "snowy-egret": 0x4547_5245,
   "american-black-duck": 0x4244_5543,
+  "north-american-river-otter": 0x4f54_5452,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreEcologyWaterfowlHabitatSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyTidalWebHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
@@ -732,6 +805,19 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyWaterfowlHabitatSpecies, Habitat
       maximumOccupancyTarget: 1_000_000,
       minimumPopulationWhenViable: 1,
     }),
+    "north-american-river-otter": Object.freeze({
+      populationKey: "habitat-v7/north-american-river-otter",
+      representation: "individual-representatives",
+      minimumSiteScore: 440_000,
+      minimumPersistentCapacity: 1,
+      maximumPopulation: 1,
+      tilesPerCapacityUnit: 560,
+      maximumAllocations: 1,
+      minimumAllocationSeparation: 16,
+      minimumOccupancyTarget: 1_000_000,
+      maximumOccupancyTarget: 1_000_000,
+      minimumPopulationWhenViable: 1,
+    }),
   });
 
 /** Shared read-only seam used to prove habitat, identity, and runtime budgets agree. */
@@ -740,9 +826,9 @@ export function coreEcologyHabitatSpeciesBounds(
 ): CoreEcologyHabitatSpeciesBounds | null {
   if (
     typeof value !== "string"
-    || !(CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES as readonly string[]).includes(value)
+    || !(CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES as readonly string[]).includes(value)
   ) return null;
-  const species = value as CoreEcologyWaterfowlHabitatSpecies;
+  const species = value as CoreEcologyTidalWebHabitatSpecies;
   const rule = SPECIES_RULES[species];
   return Object.freeze({
     species,
@@ -753,7 +839,7 @@ export function coreEcologyHabitatSpeciesBounds(
 }
 
 const ACTIVITY_POLICY: Readonly<Record<
-  CoreEcologyWaterfowlHabitatSpecies,
+  CoreEcologyTidalWebHabitatSpecies,
   Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
 >> = Object.freeze({
   deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
@@ -783,6 +869,10 @@ const ACTIVITY_POLICY: Readonly<Record<
   }),
   "american-black-duck": Object.freeze({
     kind: "dabbling",
+    activePeriod: "tide-responsive",
+  }),
+  "north-american-river-otter": Object.freeze({
+    kind: "aquatic-foraging",
     activePeriod: "tide-responsive",
   }),
 });
@@ -965,6 +1055,26 @@ const BLACK_DUCK_FORAGE_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.fre
   "sun-meadow": 280_000,
   "wind-ridge": 80_000,
   glimmerfen: 880_000,
+});
+
+const RIVER_OTTER_FORAGE_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 1_000_000,
+  "brine-flat": 520_000,
+  "reed-marsh": 940_000,
+  "rain-meadow": 560_000,
+  "sun-meadow": 300_000,
+  "wind-ridge": 80_000,
+  glimmerfen: 820_000,
+});
+
+const RIVER_OTTER_HAULOUT_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 320_000,
+  "reed-marsh": 860_000,
+  "rain-meadow": 820_000,
+  "sun-meadow": 560_000,
+  "wind-ridge": 420_000,
+  glimmerfen: 780_000,
 });
 
 /**
@@ -1555,7 +1665,14 @@ export function deriveCoreEcologyWaterfowlHabitatAssemblage(
   input: DeriveCoreEcologyHabitatAssemblageInput,
 ): CoreEcologyWaterfowlHabitatAssemblage {
   const context = prepareCoreEcologyHabitatContext(input, "waterfowl");
-  const tidalTable = deriveCoreEcologyTidalTableFromPrepared(input.rootSeed, context);
+  return deriveCoreEcologyWaterfowlFromPrepared(input.rootSeed, context);
+}
+
+function deriveCoreEcologyWaterfowlFromPrepared(
+  rootSeed: RootSeed,
+  context: PreparedCoreEcologyHabitatContext,
+): CoreEcologyWaterfowlHabitatAssemblage {
+  const tidalTable = deriveCoreEcologyTidalTableFromPrepared(rootSeed, context);
   const { addressedTiles, originRegion } = context;
   const silverside = tidalTable.populations.find(({ species }) => (
     species === "atlantic-silverside"
@@ -1576,7 +1693,7 @@ export function deriveCoreEcologyWaterfowlHabitatAssemblage(
     ),
   );
   const duck = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "american-black-duck",
     addressedTiles,
@@ -1637,6 +1754,108 @@ export function deriveCoreEcologyWaterfowlHabitatAssemblage(
     speciesEvaluations:
       tidalTable.evaluatedTiles * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length,
     maximumAllocationBudget: CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors,
+  });
+}
+
+/**
+ * Pure tidal-web extension. The complete waterfowl-v6 result is reused as an
+ * immutable prefix. Current tide, weather, player, camera, and load order are
+ * deliberately absent: only stable fish/crab support and bounded shore/water
+ * habitat may admit the single river-otter representative.
+ */
+export function deriveCoreEcologyTidalWebHabitatAssemblage(
+  input: DeriveCoreEcologyHabitatAssemblageInput,
+): CoreEcologyTidalWebHabitatAssemblage {
+  const context = prepareCoreEcologyHabitatContext(input, "tidal-web");
+  const waterfowl = deriveCoreEcologyWaterfowlFromPrepared(input.rootSeed, context);
+  const { addressedTiles, originRegion } = context;
+  const silverside = waterfowl.populations.find(({ species }) => (
+    species === "atlantic-silverside"
+  ));
+  const fiddler = waterfowl.populations.find(({ species }) => (
+    species === "atlantic-marsh-fiddler-crab"
+  ));
+  if (silverside === undefined || fiddler === undefined) {
+    throw new Error("Core ecology tidal-web aquatic support is missing");
+  }
+  const aquaticSupport = silverside.populationUnits > 0 && fiddler.populationUnits > 0
+    ? clampFixed(
+        multiplyFixed(
+          ratioFixed(
+            silverside.populationUnits,
+            SPECIES_RULES["atlantic-silverside"].maximumPopulation,
+          ),
+          720_000,
+        ) + multiplyFixed(
+          ratioFixed(
+            fiddler.populationUnits,
+            SPECIES_RULES["atlantic-marsh-fiddler-crab"].maximumPopulation,
+          ),
+          280_000,
+        ),
+      )
+    : 0;
+  const otter = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "north-american-river-otter",
+    addressedTiles,
+    aquaticSupport,
+    0,
+  );
+  const individualOccupiedTiles = new Set<number>();
+  for (const population of waterfowl.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) {
+      individualOccupiedTiles.add(allocation.tileIndex);
+    }
+  }
+  const allocatedOtter = allocatePopulation(
+    otter,
+    originRegion,
+    individualOccupiedTiles,
+    [...silverside.allocations, ...fiddler.allocations],
+  );
+  const otterPopulation = Object.freeze({
+    ...allocatedOtter,
+    representation: SPECIES_RULES["north-american-river-otter"].representation,
+    activitySignal: activitySignalFor(allocatedOtter),
+  });
+  const populations: CoreEcologyTidalWebHabitatPopulationAnalysis[] = [
+    ...waterfowl.populations,
+    otterPopulation,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology tidal-web habitat allocation budget diverged");
+  }
+  const otterAnchors = createNorthAmericanRiverOtterHabitatAnchors(
+    originRegion,
+    otter,
+    [...silverside.allocations, ...fiddler.allocations],
+  );
+  const tidalAnchors = Object.freeze([
+    ...waterfowl.tidalAnchors,
+    ...otterAnchors,
+  ]);
+  if (tidalAnchors.length > CORE_ECOLOGY_TIDAL_WEB_MAX_ANCHOR_RECORDS) {
+    throw new Error("Core ecology tidal-web anchor budget diverged");
+  }
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
+    originRegion: waterfowl.originRegion,
+    regionId: waterfowl.regionId,
+    terrainHash: waterfowl.terrainHash,
+    selection: waterfowl.selection,
+    evaluatedTiles: waterfowl.evaluatedTiles,
+    speciesEvaluations:
+      waterfowl.evaluatedTiles * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
     populations: Object.freeze(populations),
     tidalAnchors,
   });
@@ -2156,6 +2375,142 @@ export function canonicalizeCoreEcologyWaterfowlHabitatAssemblage(
   });
 }
 
+export function canonicalizeCoreEcologyTidalWebHabitatAssemblage(
+  value: unknown,
+): CoreEcologyTidalWebHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "selection",
+    "speciesEvaluations",
+    "tidalAnchors",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length
+    || !Array.isArray(value.tidalAnchors)
+    || value.tidalAnchors.length > CORE_ECOLOGY_TIDAL_WEB_MAX_ANCHOR_RECORDS
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  if (selection === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const speciesEvaluations = evaluatedTiles * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || value.evaluatedTiles > CORE_ECOLOGY_HABITAT_TILE_BUDGET
+    || value.speciesEvaluations > CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const v6PopulationValues = value.populations.slice(
+    0,
+    CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length,
+  );
+  const v6AnchorCount = expectedWaterfowlAnchorCount(v6PopulationValues);
+  if (v6AnchorCount === null) return null;
+  const waterfowl = canonicalizeCoreEcologyWaterfowlHabitatAssemblage({
+    generationVersion: CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations: evaluatedTiles * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS,
+    populations: v6PopulationValues,
+    tidalAnchors: value.tidalAnchors.slice(0, v6AnchorCount),
+  });
+  if (waterfowl === null) return null;
+  const occupied = new Set<number>();
+  for (const population of waterfowl.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) occupied.add(allocation.tileIndex);
+  }
+  const otter = canonicalizeHarborEdgePopulationAnalysis(
+    value.populations[CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length],
+    "north-american-river-otter",
+    originRegion,
+    selection,
+    evaluatedTiles,
+    occupied,
+  );
+  if (otter === null) return null;
+  const silverside = waterfowl.populations.find(({ species }) => (
+    species === "atlantic-silverside"
+  ));
+  const fiddler = waterfowl.populations.find(({ species }) => (
+    species === "atlantic-marsh-fiddler-crab"
+  ));
+  if (
+    otter.populationUnits > 0
+    && (
+      silverside === undefined
+      || silverside.populationUnits === 0
+      || fiddler === undefined
+      || fiddler.populationUnits === 0
+    )
+  ) return null;
+  const otterAnchors = canonicalizeNorthAmericanRiverOtterHabitatAnchors(
+    value.tidalAnchors.slice(v6AnchorCount),
+    originRegion,
+    selection,
+    otter,
+  );
+  if (otterAnchors === null) return null;
+  const populations: CoreEcologyTidalWebHabitatPopulationAnalysis[] = [
+    ...waterfowl.populations,
+    otter,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS) return null;
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors: Object.freeze([...waterfowl.tidalAnchors, ...otterAnchors]),
+  });
+}
+
+function expectedWaterfowlAnchorCount(
+  populations: readonly unknown[],
+): number | null {
+  const v5Count = expectedTidalTableAnchorCount(populations);
+  const duck = populations[CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.indexOf(
+    "american-black-duck",
+  )];
+  if (
+    v5Count === null
+    || !plainRecord(duck)
+    || !nonnegativeSafeInteger(duck.populationUnits)
+  ) return null;
+  return v5Count + (duck.populationUnits > 0
+    ? CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS
+      + CORE_ECOLOGY_AMERICAN_BLACK_DUCK_REFUGE_ANCHORS
+    : 0);
+}
+
 function expectedTidalTableAnchorCount(
   populations: readonly unknown[],
 ): number | null {
@@ -2414,6 +2769,111 @@ function canonicalizeAmericanBlackDuckHabitatAnchors(
   return Object.freeze(anchors);
 }
 
+function canonicalizeNorthAmericanRiverOtterHabitatAnchors(
+  value: readonly unknown[],
+  originRegion: RegionCoord,
+  selection: CoreEcologyHabitatSelection,
+  otter: VersionedHabitatPopulationAnalysis<"north-american-river-otter">,
+): readonly CoreEcologyTidalWebHabitatAnchor[] | null {
+  const expected = otter.populationUnits === 0
+    ? []
+    : [
+        ...Array.from(
+          { length: CORE_ECOLOGY_RIVER_OTTER_FORAGING_ANCHORS },
+          (_, anchorOrdinal) => ({ purpose: "foraging" as const, anchorOrdinal }),
+        ),
+        ...Array.from(
+          { length: CORE_ECOLOGY_RIVER_OTTER_HAULOUT_ANCHORS },
+          (_, anchorOrdinal) => ({ purpose: "haulout" as const, anchorOrdinal }),
+        ),
+      ];
+  if (value.length !== expected.length) return null;
+  const anchors: CoreEcologyTidalWebHabitatAnchor[] = [];
+  const seenTiles = new Set<number>();
+  for (let index = 0; index < expected.length; index += 1) {
+    const identity = expected[index];
+    const raw = value[index];
+    if (
+      identity === undefined
+      || !plainRecord(raw)
+      || !exactKeys(raw, [
+        "anchorOrdinal",
+        "biome",
+        "elevation",
+        "globalTile",
+        "position",
+        "purpose",
+        "species",
+        "terrain",
+        "tileIndex",
+      ])
+      || raw.species !== "north-american-river-otter"
+      || raw.purpose !== identity.purpose
+      || raw.anchorOrdinal !== identity.anchorOrdinal
+      || !nonnegativeSafeInteger(raw.tileIndex)
+      || raw.tileIndex >= CORE_ECOLOGY_HABITAT_TILE_BUDGET
+      || seenTiles.has(raw.tileIndex)
+      || !fixedInteger(raw.elevation)
+      || typeof raw.terrain !== "string"
+      || terrainKindForElevation(raw.elevation) !== raw.terrain
+      || !validTidalWebAnchorTerrain(
+        "north-american-river-otter",
+        identity.purpose,
+        raw.terrain,
+      )
+      || typeof raw.biome !== "string"
+      || !(BIOME_IDS as readonly string[]).includes(raw.biome)
+      || !plainRecord(raw.globalTile)
+      || !exactKeys(raw.globalTile, ["x", "y"])
+      || !canonicalSafeInteger(raw.globalTile.x)
+      || !canonicalSafeInteger(raw.globalTile.y)
+      || !isWorldPosition(raw.position)
+      || !tileInsideSelection(raw.tileIndex, selection)
+    ) return null;
+    const tileX = raw.tileIndex % WORLD_WIDTH;
+    const tileY = Math.trunc(raw.tileIndex / WORLD_WIDTH);
+    const localX = tileX * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    const localY = tileY * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    const globalTile = regionLocalToGlobalTile(originRegion, tileX, tileY);
+    if (
+      raw.position.region.x !== originRegion.x
+      || raw.position.region.y !== originRegion.y
+      || raw.position.localX !== localX
+      || raw.position.localY !== localY
+      || raw.globalTile.x !== globalTile.x
+      || raw.globalTile.y !== globalTile.y
+      || identity.purpose === "foraging" && !isRiverOtterForagingElevation(raw.elevation)
+      || identity.purpose === "haulout" && raw.elevation < MAX_TIDE_LEVEL
+    ) return null;
+    seenTiles.add(raw.tileIndex);
+    anchors.push(Object.freeze({
+      species: "north-american-river-otter",
+      purpose: identity.purpose,
+      anchorOrdinal: identity.anchorOrdinal,
+      tileIndex: raw.tileIndex,
+      globalTile: Object.freeze({ x: raw.globalTile.x, y: raw.globalTile.y }),
+      position: createWorldPosition(originRegion, localX, localY),
+      elevation: raw.elevation,
+      terrain: raw.terrain as TerrainKind,
+      biome: raw.biome as BiomeId,
+    }));
+  }
+  const foraging = anchors.find(({ purpose }) => purpose === "foraging");
+  const haulout = anchors.find(({ purpose }) => purpose === "haulout");
+  if (
+    otter.populationUnits > 0
+    && (
+      foraging === undefined
+      || haulout === undefined
+      || manhattanTileIndices(foraging.tileIndex, haulout.tileIndex)
+        > CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_HAULOUT_DISTANCE_TILES
+    )
+  ) return null;
+  return Object.freeze(anchors);
+}
+
 function tileInsideSelection(
   tileIndex: number,
   selection: CoreEcologyHabitatSelection,
@@ -2436,13 +2896,13 @@ function terrainKindForElevation(elevation: number): TerrainKind {
 }
 
 type VersionedHabitatPopulationAnalysis<
-  Species extends CoreEcologyWaterfowlHabitatSpecies,
+  Species extends CoreEcologyTidalWebHabitatSpecies,
 > = Omit<CoreEcologyRainChorusHabitatPopulationAnalysis, "species"> & {
   readonly species: Species;
 };
 
 function canonicalizeHarborEdgePopulationAnalysis<
-  Species extends CoreEcologyWaterfowlHabitatSpecies,
+  Species extends CoreEcologyTidalWebHabitatSpecies,
 >(
   value: unknown,
   expectedSpecies: Species,
@@ -2708,7 +3168,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreEcologyWaterfowlHabitatSpecies,
+  species: CoreEcologyTidalWebHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -2792,7 +3252,7 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity<Species extends CoreEcologyWaterfowlHabitatSpecies>(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyTidalWebHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
   species: Species,
@@ -2844,6 +3304,13 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyWaterfowlHabita
         MIN_TIDE_LEVEL - addressed.tile.elevation
           >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
       ))
+    )
+  ) habitatCapacity = 0;
+  if (
+    species === "north-american-river-otter"
+    && (
+      preySupport < 150_000
+      || !hasNorthAmericanRiverOtterAnchorPair(suitable)
     )
   ) habitatCapacity = 0;
   // A school may spread onto tidal flats at flood, but it cannot persist in a
@@ -2924,7 +3391,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyWaterfowlHabita
  * already-derived site/capacity result keeps the exact habitat contract while
  * avoiding a second full species pass for deer, rats, and rabbits.
  */
-function applyPredatorPressure<Species extends CoreEcologyWaterfowlHabitatSpecies>(
+function applyPredatorPressure<Species extends CoreEcologyTidalWebHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   predatorPressure: number,
 ): UnallocatedPopulationAnalysis<Species> {
@@ -2977,7 +3444,26 @@ function hasAmericanBlackDuckRefuge(
   ));
 }
 
-function allocatePopulation<Species extends CoreEcologyWaterfowlHabitatSpecies>(
+function hasNorthAmericanRiverOtterAnchorPair(
+  sites: readonly HabitatSiteEvaluation[],
+): boolean {
+  const foragingSites = sites.filter(({ addressed }) => (
+    isRiverOtterForagingElevation(addressed.tile.elevation)
+    && (
+      addressed.tile.terrain === "deep-water"
+      || addressed.tile.terrain === "tidal-flat"
+    )
+  ));
+  return foragingSites.some((foraging) => sites.some(({ addressed }) => (
+    addressed.tile.elevation >= MAX_TIDE_LEVEL
+    && (addressed.tile.terrain === "meadow" || addressed.tile.terrain === "ridge")
+    && addressed.tile.index !== foraging.addressed.tile.index
+    && manhattanTiles(addressed.tile, foraging.addressed.tile)
+      <= CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_HAULOUT_DISTANCE_TILES
+  )));
+}
+
+function allocatePopulation<Species extends CoreEcologyTidalWebHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
@@ -3244,6 +3730,74 @@ function createAmericanBlackDuckHabitatAnchors(
   return Object.freeze(anchors);
 }
 
+function createNorthAmericanRiverOtterHabitatAnchors(
+  originRegion: RegionCoord,
+  otter: UnallocatedPopulationAnalysis<"north-american-river-otter">,
+  aquaticAllocations: readonly CoreEcologyHabitatAllocation[],
+): readonly CoreEcologyTidalWebHabitatAnchor[] {
+  if (otter.populationUnits === 0) return Object.freeze([]);
+  const foraging = [...otter.sites]
+    .filter(({ addressed }) => (
+      isRiverOtterForagingElevation(addressed.tile.elevation)
+      && (
+        addressed.tile.terrain === "deep-water"
+        || addressed.tile.terrain === "tidal-flat"
+      )
+      && otter.sites.some(({ addressed: possibleHaulout }) => (
+        possibleHaulout.tile.elevation >= MAX_TIDE_LEVEL
+        && (
+          possibleHaulout.tile.terrain === "meadow"
+          || possibleHaulout.tile.terrain === "ridge"
+        )
+        && possibleHaulout.tile.index !== addressed.tile.index
+        && manhattanTiles(possibleHaulout.tile, addressed.tile)
+          <= CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_HAULOUT_DISTANCE_TILES
+      ))
+    ))
+    .sort((left, right) => compareSitesWithPreferredAllocations(
+      left,
+      right,
+      aquaticAllocations,
+    ))[0];
+  if (foraging === undefined) {
+    throw new Error("Core ecology North American river otter lacks all-tide foraging water");
+  }
+  const haulout = [...otter.sites]
+    .filter(({ addressed }) => (
+      addressed.tile.elevation >= MAX_TIDE_LEVEL
+      && (addressed.tile.terrain === "meadow" || addressed.tile.terrain === "ridge")
+      && addressed.tile.index !== foraging.addressed.tile.index
+      && manhattanTiles(addressed.tile, foraging.addressed.tile)
+        <= CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_HAULOUT_DISTANCE_TILES
+    ))
+    .sort((left, right) => (
+      manhattanTiles(left.addressed.tile, foraging.addressed.tile)
+        - manhattanTiles(right.addressed.tile, foraging.addressed.tile)
+      || right.placementRank - left.placementRank
+      || left.rankTie - right.rankTie
+      || left.addressed.tile.index - right.addressed.tile.index
+    ))[0];
+  if (haulout === undefined) {
+    throw new Error("Core ecology North American river otter lacks a dry shore haulout");
+  }
+  return Object.freeze([
+    tidalWebAnchorFromSite(
+      "north-american-river-otter",
+      "foraging",
+      0,
+      foraging.addressed,
+      originRegion,
+    ),
+    tidalWebAnchorFromSite(
+      "north-american-river-otter",
+      "haulout",
+      0,
+      haulout.addressed,
+      originRegion,
+    ),
+  ]);
+}
+
 function tidalAnchorFromSite(
   species: CoreEcologyTidalTableAnchorSpecies,
   purpose: CoreEcologyTidalTableAnchorPurpose,
@@ -3251,6 +3805,34 @@ function tidalAnchorFromSite(
   addressed: AddressedHabitatTile,
   originRegion: RegionCoord,
 ): CoreEcologyTidalTableHabitatAnchor {
+  const tile = addressed.tile;
+  const localX = tile.x * WORLD_POSITION_UNITS_PER_TILE
+    + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+  const localY = tile.y * WORLD_POSITION_UNITS_PER_TILE
+    + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+  return Object.freeze({
+    species,
+    purpose,
+    anchorOrdinal,
+    tileIndex: tile.index,
+    globalTile: Object.freeze({
+      x: addressed.globalTile.x,
+      y: addressed.globalTile.y,
+    }),
+    position: createWorldPosition(originRegion, localX, localY),
+    elevation: tile.elevation,
+    terrain: tile.terrain,
+    biome: addressed.biome,
+  });
+}
+
+function tidalWebAnchorFromSite(
+  species: "north-american-river-otter",
+  purpose: "foraging" | "haulout",
+  anchorOrdinal: number,
+  addressed: AddressedHabitatTile,
+  originRegion: RegionCoord,
+): CoreEcologyTidalWebHabitatAnchor {
   const tile = addressed.tile;
   const localX = tile.x * WORLD_POSITION_UNITS_PER_TILE
     + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
@@ -3359,7 +3941,7 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreEcologyWaterfowlHabitatSpecies,
+  species: CoreEcologyTidalWebHabitatSpecies,
   addressed: AddressedHabitatTile,
   preySupport: number,
 ): HabitatSiteEvaluation {
@@ -3837,6 +4419,49 @@ function evaluateSite(
         && climateScore >= 300_000;
       break;
     }
+    case "north-american-river-otter": {
+      eligible = tile.terrain === "deep-water"
+        || tile.terrain === "tidal-flat"
+        || tile.terrain === "marsh"
+        || tile.terrain === "meadow"
+        || tile.terrain === "ridge";
+      food = weightedScore([
+        [preySupport, 820_000],
+        [RIVER_OTTER_FORAGE_BY_BIOME[biome], 180_000],
+      ]);
+      water = tile.terrain === "deep-water" || tile.terrain === "tidal-flat"
+        ? FIXED_POINT
+        : distanceScore(addressed.openWaterDistance, 12);
+      cover = weightedScore([
+        [RIVER_OTTER_HAULOUT_BY_BIOME[biome], 560_000],
+        [tile.roughness, 220_000],
+        [interaction.rainRetention, 220_000],
+      ]);
+      nesting = weightedScore([
+        [RIVER_OTTER_HAULOUT_BY_BIOME[biome], 620_000],
+        [water, 240_000],
+        [FIXED_POINT - Math.trunc(climate.exposure / 2), 140_000],
+      ]);
+      climateScore = riverOtterClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 350_000],
+        [water, 250_000],
+        [cover, 150_000],
+        [nesting, 100_000],
+        [climateScore, 150_000],
+      ]);
+      eligible = eligible
+        && preySupport >= 150_000
+        && water >= 300_000
+        && climateScore >= 300_000
+        && (
+          tile.terrain === "deep-water"
+          || tile.terrain === "tidal-flat"
+          || addressed.openWaterDistance
+            <= CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_HAULOUT_DISTANCE_TILES
+        );
+      break;
+    }
   }
 
   eligible = eligible && addressed.withinSelection;
@@ -4004,6 +4629,16 @@ function blackDuckClimateScore(climate: BiomeClimate, interaction: BiomeInteract
   ]);
 }
 
+function riverOtterClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.salinity, 320_000, 760_000), 290_000],
+    [centeredTolerance(climate.heat, 500_000, 900_000), 280_000],
+    [centeredTolerance(climate.rainfall, 620_000, 900_000), 210_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 100_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 120_000],
+  ]);
+}
+
 function averageSiteInputs(
   sites: readonly HabitatSiteEvaluation[],
 ): Omit<CoreEcologyHabitatCapacityInputs, "eligibleTiles" | "suitableTiles" | "weightedHabitatArea" | "predatorPressure"> {
@@ -4066,7 +4701,8 @@ function prepareCoreEcologyHabitatContext(
     | "marsh-edge"
     | "rain-chorus"
     | "tidal-table"
-    | "waterfowl",
+    | "waterfowl"
+    | "tidal-web",
 ): PreparedCoreEcologyHabitatContext {
   if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
     throw new TypeError(`Core ecology ${extension} habitat input has an unsupported shape`);
@@ -4330,7 +4966,7 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
 }
 
 function validAllocationTerrain(
-  species: CoreEcologyWaterfowlHabitatSpecies,
+  species: CoreEcologyTidalWebHabitatSpecies,
   terrain: string,
 ): boolean {
   if (species === "gull" || species === "fish-crow") {
@@ -4353,6 +4989,9 @@ function validAllocationTerrain(
   }
   if (species === "american-black-duck") {
     return terrain === "deep-water" || terrain === "tidal-flat" || terrain === "marsh";
+  }
+  if (species === "north-american-river-otter") {
+    return isTerrainKind(terrain);
   }
   return terrain === "marsh" || terrain === "meadow" || terrain === "ridge";
 }
@@ -4377,11 +5016,40 @@ function validTidalAnchorTerrain(
   return purpose === "refuge" && (terrain === "meadow" || terrain === "ridge");
 }
 
+function validTidalWebAnchorTerrain(
+  species: CoreEcologyTidalWebAnchorSpecies,
+  purpose: CoreEcologyTidalWebAnchorPurpose,
+  terrain: string,
+): boolean {
+  if (species !== "north-american-river-otter") {
+    return validTidalAnchorTerrain(species, purpose as CoreEcologyTidalTableAnchorPurpose, terrain);
+  }
+  if (purpose === "foraging") {
+    return terrain === "deep-water" || terrain === "tidal-flat";
+  }
+  return purpose === "haulout" && (terrain === "meadow" || terrain === "ridge");
+}
+
 function isPotentialSnowyEgretWadingElevation(elevation: number): boolean {
   return elevation
       >= MIN_TIDE_LEVEL - CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH
     && elevation
       <= MAX_TIDE_LEVEL - CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH;
+}
+
+function isRiverOtterForagingElevation(elevation: number): boolean {
+  const lowTideDepth = MIN_TIDE_LEVEL - elevation;
+  const highTideDepth = MAX_TIDE_LEVEL - elevation;
+  return lowTideDepth >= CORE_ECOLOGY_RIVER_OTTER_MINIMUM_FORAGING_DEPTH
+    && highTideDepth <= CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_FORAGING_DEPTH;
+}
+
+function manhattanTileIndices(left: number, right: number): number {
+  const leftX = left % WORLD_WIDTH;
+  const leftY = Math.trunc(left / WORLD_WIDTH);
+  const rightX = right % WORLD_WIDTH;
+  const rightY = Math.trunc(right / WORLD_WIDTH);
+  return Math.abs(leftX - rightX) + Math.abs(leftY - rightY);
 }
 
 function isTerrainKind(value: string): value is TerrainKind {
@@ -4458,6 +5126,11 @@ if (
       (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
       0,
     )
+  || CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
   || CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS
     !== SPECIES_RULES["atlantic-silverside"].maximumAllocations
       + SPECIES_RULES["atlantic-marsh-fiddler-crab"].maximumAllocations
@@ -4467,4 +5140,8 @@ if (
     !== CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS
       + CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS
       + CORE_ECOLOGY_AMERICAN_BLACK_DUCK_REFUGE_ANCHORS
+  || CORE_ECOLOGY_TIDAL_WEB_MAX_ANCHOR_RECORDS
+    !== CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS
+      + CORE_ECOLOGY_RIVER_OTTER_FORAGING_ANCHORS
+      + CORE_ECOLOGY_RIVER_OTTER_HAULOUT_ANCHORS
 ) throw new Error("Core ecology habitat generation constants are incoherent");

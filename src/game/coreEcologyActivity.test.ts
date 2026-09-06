@@ -28,9 +28,11 @@ import {
 import {
   CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyTidalWebHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
   deriveCoreEcologyWaterfowlHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
+  type CoreEcologyTidalWebHabitatAssemblage,
   type CoreEcologyTidalTableHabitatAssemblage,
   type CoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
@@ -73,6 +75,7 @@ describe("core ecology bounded activity", () => {
       "northern-harrier",
       "snowy-egret",
       "american-black-duck",
+      "north-american-river-otter",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
@@ -715,6 +718,131 @@ describe("core ecology bounded activity", () => {
       .toBeNull();
   });
 
+  it("moves one otter across the shared shore-water seam and forages only from current sight", () => {
+    let patch = tidalWebActivityPatch(360);
+    const otter = memberFor(patch, "north-american-river-otter").actor;
+    if (
+      patch.derivation.kind !== "habitat-v7"
+      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
+    ) throw new Error("Otter fixture lost habitat-v7 custody");
+    const anchors = patch.derivation.habitat.tidalAnchors.filter(({ species }) => (
+      species === "north-american-river-otter"
+    ));
+    const foraging = anchors.find(({ purpose }) => purpose === "foraging");
+    const haulout = anchors.find(({ purpose }) => purpose === "haulout");
+    if (foraging === undefined || haulout === undefined) {
+      throw new Error("Otter fixture lacks its authenticated shore-water pair");
+    }
+
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(otter, {
+      atTick: 360,
+      position: haulout.position,
+      heading: otter.address.heading,
+    }));
+    const outbound = projectCoreEcologyActivity(patch, {
+      actorId: otter.identity.stableId,
+      atTick: 360,
+    });
+    expect(outbound).toMatchObject({
+      state: "seeking-foraging-water",
+      sourceObservationId: null,
+      presentationSignal: "shore-water-relocation",
+      motion: {
+        kind: "target-area",
+        verb: "seek-otter-foraging-water",
+        travelMedium: "amphibious",
+      },
+    });
+    expect(stepCoreEcologyActivityMotion(patch, {
+      actorId: otter.identity.stableId,
+      atTick: 360,
+      maximumStepUnits: 780,
+    })).toBeNull();
+    const openSurface = createLivingActorTraversabilitySurface({
+      forActorId: otter.identity.stableId,
+      sampledAtTick: 360,
+      origin: createWorldPosition(ORIGIN, 0, 0),
+      widthTiles: WORLD_WIDTH,
+      heightTiles: WORLD_HEIGHT,
+      cells: Array.from(
+        { length: WORLD_WIDTH * WORLD_HEIGHT },
+        () => ({ access: "open" as const, travelCost: 300_000 }),
+      ),
+    });
+    expect(stepCoreEcologyActivityMotion(patch, {
+      actorId: otter.identity.stableId,
+      atTick: 360,
+      maximumStepUnits: 780,
+      surface: openSurface,
+    })?.resolution).toBe("moved");
+
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(
+      memberFor(patch, "north-american-river-otter").actor,
+      {
+        atTick: 360,
+        position: foraging.position,
+        heading: otter.address.heading,
+      },
+    ));
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: otter.identity.stableId,
+      atTick: 360,
+    })).toMatchObject({
+      state: "water-scan",
+      sourceObservationId: null,
+      presentationSignal: "surface-swimming",
+    });
+    const observation = createActorObservation({
+      id: "otter-aquatic:361",
+      observerId: otter.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: { center: foraging.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (observation === null) throw new Error("Otter aquatic observation fixture failed");
+    const observed = stepCoreWildlifeActor(
+      memberFor(patch, "north-american-river-otter").actor,
+      {
+        tick: 361,
+        observations: [observation],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+        neutralActivityPreference: "observe",
+      },
+    );
+    if (observed === null) throw new Error("Otter cognition rejected lawful aquatic activity");
+    patch = replaceCoreEcologyAggregatePatchActor(patch, observed.actor);
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: otter.identity.stableId,
+      atTick: 361,
+    })).toMatchObject({
+      state: "aquatic-foraging",
+      sourceObservationId: observation.id,
+      presentationSignal: "aquatic-foraging",
+    });
+
+    let restPatch = tidalWebActivityPatch(0);
+    const restingOtter = memberFor(restPatch, "north-american-river-otter").actor;
+    restPatch = replaceCoreEcologyAggregatePatchActor(restPatch, repositionCoreWildlifeActor(
+      restingOtter,
+      { atTick: 0, position: foraging.position, heading: restingOtter.address.heading },
+    ));
+    expect(projectCoreEcologyActivity(restPatch, {
+      actorId: restingOtter.identity.stableId,
+      atTick: 0,
+    })).toMatchObject({
+      state: "hauling-out",
+      presentationSignal: "shore-water-relocation",
+      motion: { verb: "seek-otter-haulout", travelMedium: "amphibious" },
+    });
+  });
+
   it("leaves coarse and non-policy actors untouched", () => {
     const coarse = activityPatch(360, "coarse");
     const crow = memberFor(coarse, "fish-crow");
@@ -802,6 +930,24 @@ function waterfowlActivityPatch(tick: number): CoreEcologyAggregatePatchState {
     derivation: { kind: "habitat-v6", habitat },
   });
   memberFor(patch, "american-black-duck");
+  return patch;
+}
+
+function tidalWebActivityPatch(tick: number): CoreEcologyAggregatePatchState {
+  const seed = seedFromText("otter habitat 0");
+  const habitat = deriveCoreEcologyTidalWebHabitatAssemblage({
+    rootSeed: seed,
+    originRegion: ORIGIN,
+  });
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: `tidal-web-activity:${tick}`,
+    originRegion: ORIGIN,
+    tick,
+    populations: tidalWebIndividualInputs(habitat),
+    derivation: { kind: "habitat-v7", habitat },
+  });
+  memberFor(patch, "north-american-river-otter");
   return patch;
 }
 
@@ -907,6 +1053,29 @@ function waterfowlIndividualInputs(
             representedUnits: allocation.representedUnits,
             position: allocation.position,
             materialization: population.species === "american-black-duck"
+              ? "materialized" as const
+              : "coarse" as const,
+          })),
+        }]
+  ));
+}
+
+function tidalWebIndividualInputs(
+  habitat: CoreEcologyTidalWebHabitatAssemblage,
+): readonly CoreEcologyPopulationInput[] {
+  return habitat.populations.flatMap((population) => (
+    population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: population.species === "north-american-river-otter"
               ? "materialized" as const
               : "coarse" as const,
           })),

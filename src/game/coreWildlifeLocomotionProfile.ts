@@ -17,7 +17,10 @@ export const CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION = 1 as const;
  * caller selects the medium for the current activity; the shared surface and
  * locomotion resolver still own the route.
  */
-export type CoreWildlifeTravelMedium = "air" | "surface-water";
+export type CoreWildlifeTravelMedium =
+  | "air"
+  | "amphibious"
+  | "surface-water";
 
 interface DampCoverPreference {
   readonly terrain: "meadow";
@@ -170,6 +173,29 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       retreat: 860_000,
     }),
   }),
+  "north-american-river-otter": Object.freeze({
+    // One shared amphibious profile owns both bankside travel and swimming.
+    // Activity selects the medium; the ordinary traversability resolver still
+    // decides whether a physical route exists at the current water depth.
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: 230_000,
+    baseTerrainMultiplier: 940_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 720_000,
+      meadow: 920_000,
+      ridge: 1_280_000,
+      "tidal-flat": 800_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 780_000,
+    intentStepFactors: Object.freeze({
+      disengage: 860_000,
+      flee: 920_000,
+      pursue: 940_000,
+      retreat: 880_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(
@@ -208,6 +234,19 @@ export function coreWildlifeTraversabilityCell(
     return tile.terrain === "deep-water" || tile.waterDepth > 0
       ? Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost })
       : Object.freeze({ access: "blocked", travelCost: 0 });
+  }
+  if (medium === "amphibious") {
+    if (
+      profile.surfaceWaterTravelCost === null
+      || !coreEcologySpeciesHasRuntimeCapability(species, "amphibious-locomotion")
+      || !coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
+      || !coreEcologySpeciesHasRuntimeCapability(species, "shore-water-activity")
+    ) {
+      throw new Error(`Species ${species} lacks an amphibious locomotion profile`);
+    }
+    if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
+      return Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost });
+    }
   }
   if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
     return Object.freeze({ access: "deep-water", travelCost: 0 });

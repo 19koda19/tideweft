@@ -41,6 +41,7 @@ describe("lean runtime living-species registry", () => {
       "atlantic-marsh-fiddler-crab",
       "snowy-egret",
       "american-black-duck",
+      "north-american-river-otter",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -299,11 +300,32 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 8_000,
         },
       },
+      {
+        species: "north-american-river-otter",
+        actorIdPrefix: "OTTER-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "North American river otter",
+        senses: {
+          visionAcuity: 820_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: 840_000,
+          scentBaseRangeUnits: 28_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
       "DUCK-v1-waterfowl-fixture",
       "american-black-duck",
+    )).toBe(true);
+    expect(isLivingSpeciesActorAddressable("north-american-river-otter")).toBe(true);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "OTTER-v1-wave-c-fixture",
+      "north-american-river-otter",
     )).toBe(true);
   });
 

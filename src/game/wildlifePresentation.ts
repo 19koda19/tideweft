@@ -63,8 +63,11 @@ export type AggregateWildlifeSpecies = CoreEcologyAggregateSpecies;
 
 export type WildlifePresentationBehavior =
   | "watch"
+  | "swim"
   | "alarm"
   | "flee"
+  | "crossing"
+  | "dive"
   | "scavenge"
   | "forage"
   | "pursue"
@@ -218,6 +221,7 @@ type WildlifePresentationForm =
   | "northern-harrier"
   | "snowy-egret"
   | "american-black-duck"
+  | "north-american-river-otter"
   | "black-bear"
   | "brown-rat"
   | "domestic-cat"
@@ -441,6 +445,20 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: true,
     baseSizeScale: 0.78,
     observableForm: "Broad-bodied dabbling duck",
+  },
+  "north-american-river-otter": {
+    form: "north-american-river-otter",
+    representation: "actor",
+    identificationClarity: 370_000,
+    unidentifiedQuickLabel: "Unknown aquatic mammal",
+    unidentifiedIdentityLabel: "Unidentified aquatic mammal",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.86,
+    observableForm: "Long-bodied, low-slung swimmer",
   },
 });
 const BEHAVIOR_CLARITY = 180_000;
@@ -721,12 +739,12 @@ export function projectWildlifePopulationEvidencePresentations(
   const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
   const context = directEvidenceObservationContext(input.observation);
   if (patch === null || context === null) return null;
-  const ownsTidalHabitat = patch.derivation.kind === "habitat-v5"
-    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v5";
-  const tidal = ownsTidalHabitat
-    ? projectCoreEcologyTidalTable(patch, patch.updatedAtTick)
-    : null;
-  if (ownsTidalHabitat && tidal === null) return null;
+  const ownsTidalPopulations = patch.aggregatePopulations.some(({ species }) => (
+    species === "atlantic-silverside"
+      || species === "atlantic-marsh-fiddler-crab"
+  ));
+  const tidal = projectCoreEcologyTidalTable(patch, patch.updatedAtTick);
+  if (ownsTidalPopulations && tidal === null) return null;
 
   const presentations: WildlifePopulationEvidencePresentation[] = [];
   for (const population of patch.aggregatePopulations) {
@@ -1122,17 +1140,20 @@ function activityBehavior(
   activity: CoreEcologyActivityProjection | null,
 ): Extract<
   WildlifePresentationBehavior,
-  "flight" | "forage" | "perch" | "quarter" | "rest" | "watch"
+  "crossing" | "dive" | "flight" | "forage" | "perch" | "quarter" | "rest" | "swim" | "watch"
 > | null {
   switch (activity?.presentationSignal) {
     case "perched": return "perch";
     case "low-quartering-flight": return "quarter";
     case "resting": return "rest";
     case "dabbling-forage": return "forage";
-    case "surface-swimming": return "watch";
+    case "surface-swimming": return "swim";
     case "tidal-relocation-flight": return "flight";
     case "wading-search": return "forage";
     case "wading-scan": return null;
+    case "aquatic-foraging": return "forage";
+    case "shore-water-relocation": return "crossing";
+    case "surface-diving": return "dive";
     case null:
     case undefined:
       return null;
@@ -1166,6 +1187,11 @@ function observableBehavior(
   if (activity?.presentationSignal === "dabbling-forage") return "Dabbling";
   if (activity?.presentationSignal === "surface-swimming") return "Swimming";
   if (activity?.presentationSignal === "wading-scan") return "Scanning shallows";
+  if (activity?.presentationSignal === "aquatic-foraging") return "Foraging in water";
+  if (activity?.presentationSignal === "shore-water-relocation") {
+    return "Moving between shore and water";
+  }
+  if (activity?.presentationSignal === "surface-diving") return "Diving";
   const projected = activityBehavior(activity);
   if (projected === "perch") return "Perched";
   if (projected === "quarter") return "Quartering low";
@@ -1193,6 +1219,9 @@ function coarseMotion(
   if (
     activity?.presentationSignal === "dabbling-forage"
     || activity?.presentationSignal === "surface-swimming"
+    || activity?.presentationSignal === "aquatic-foraging"
+    || activity?.presentationSignal === "shore-water-relocation"
+    || activity?.presentationSignal === "surface-diving"
   ) return "Moving";
   const projected = activityBehavior(activity);
   if (projected === "quarter" || projected === "forage" || projected === "flight") {

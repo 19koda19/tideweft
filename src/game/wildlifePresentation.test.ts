@@ -28,6 +28,7 @@ import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
+  deriveCoreEcologyTidalWebHabitatAssemblage,
   deriveCoreEcologyWaterfowlHabitatAssemblage,
   CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
 } from "./coreEcologyHabitat";
@@ -240,6 +241,64 @@ function tidalEvidenceFixture(tick = 10) {
     throw new Error("Tidal presentation fixture requires both aggregates and one egret");
   }
   return { crab, egret, patch, silverside };
+}
+
+function tidalWebEvidenceFixture(tick = 360) {
+  const seed = seedFromText("otter habitat 0");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyTidalWebHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "presentation-tidal-web-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v7", habitat },
+    tick,
+  });
+  const tidal = projectCoreEcologyTidalTable(patch, tick);
+  const usable = tidal?.anchorDepths.find((depth) => {
+    const population = patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === depth.aggregateId
+    ));
+    const anchor = population?.anchors[depth.anchorOrdinal];
+    return depth.activityUsable
+      && anchor !== undefined
+      && anchor.populationUnits > 0
+      && (population?.activitySignal.intensity ?? 0) > 0;
+  });
+  const population = patch.aggregatePopulations.find(({ aggregateId }) => (
+    aggregateId === usable?.aggregateId
+  ));
+  const evidence = population?.evidence.find(({ position }) => (
+    usable !== undefined
+    && position.region.x === usable.position.region.x
+    && position.region.y === usable.position.region.y
+    && position.localX === usable.position.localX
+    && position.localY === usable.position.localY
+  ));
+  if (usable === undefined || population === undefined || evidence === undefined) {
+    throw new Error("Tidal-web presentation fixture requires current occupied aquatic evidence");
+  }
+  return { evidence, patch, population };
 }
 
 function waterfowlActivityFixture(tick = 360) {
@@ -580,6 +639,7 @@ describe("knowledge-honest wildlife presentation", () => {
     ["northern-harrier", "Northern harrier"],
     ["snowy-egret", "Snowy egret"],
     ["american-black-duck", "American black duck"],
+    ["north-american-river-otter", "North American river otter"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -611,6 +671,8 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(presentation?.formLabel).toBe("Slender, long-legged wader");
     } else if (species === "american-black-duck") {
       expect(presentation?.formLabel).toBe("Broad-bodied dabbling duck");
+    } else if (species === "north-american-river-otter") {
+      expect(presentation?.formLabel).toBe("Long-bodied, low-slung swimmer");
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
@@ -766,7 +828,7 @@ describe("knowledge-honest wildlife presentation", () => {
 
     expect(presentation).toMatchObject({
       species: "american-black-duck",
-      behavior: "watch",
+      behavior: "swim",
       behaviorLabel: "Swimming",
     });
     expect(JSON.stringify(presentation))
@@ -945,6 +1007,22 @@ describe("knowledge-honest wildlife presentation", () => {
         : form === "burrow-openings"
           ? "Small burrow openings"
           : "Fine mud feeding scrapes",
+    });
+  });
+
+  it("keeps current occupied aquatic evidence visible through the latest tidal habitat authority", () => {
+    const { evidence, patch, population } = tidalWebEvidenceFixture();
+    const presentation = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position),
+      tileSize: 16,
+    })?.find(({ evidenceId }) => evidenceId === evidence.evidenceId);
+
+    expect(presentation).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: population.species,
+      representation: "population-evidence",
     });
   });
 
@@ -1325,17 +1403,24 @@ describe("knowledge-honest wildlife presentation", () => {
   });
 
   it.each([
-    ["marsh-rabbit", "Small animal", "Unidentified small animal"],
-    ["marsh-fox", "Unknown canid", "Unidentified canid"],
+    ["marsh-rabbit", "Small animal", "Unidentified small animal", 60],
+    ["marsh-fox", "Unknown canid", "Unidentified canid", 60],
+    [
+      "north-american-river-otter",
+      "Unknown aquatic mammal",
+      "Unidentified aquatic mammal",
+      90,
+    ],
   ] as const)("keeps a distant %s at an honest observable class", (
     species,
     quickLabel,
     identityLabel,
+    distanceTiles,
   ) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
       actor,
-      observation: directObservation(actor, 60),
+      observation: directObservation(actor, distanceTiles),
       tileSize: 1,
     });
 

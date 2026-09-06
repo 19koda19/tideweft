@@ -18,6 +18,7 @@ export const ALPHA17_RAIN_CHORUS_BOUNDED_READINESS_VERSION = 1 as const;
 export const WAVE_B_BOUNDED_STARTING_HARBOR_READINESS_VERSION = 1 as const;
 export const WAVE_C_TIDAL_TABLE_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS_VERSION = 1 as const;
+export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -319,6 +320,92 @@ export interface Alpha20AmericanBlackDuckBoundedReadinessReport {
   readonly fullThirtyCriterionReady: boolean;
   /** Claims this one-individual technical witness can never authorize. */
   readonly excludedClaims: readonly Alpha20AmericanBlackDuckExcludedClaim[];
+}
+
+export const ALPHA21_RIVER_OTTER_SPECIES = [
+  "north-american-river-otter",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha21RiverOtterSpecies = (typeof ALPHA21_RIVER_OTTER_SPECIES)[number];
+
+export type Alpha21RiverOtterBoundedCapability =
+  | "species-profile"
+  | "individual-representation"
+  | "habitat-placement"
+  | "bounded-activity"
+  | "amphibious-locomotion"
+  | "lawful-perception"
+  | "top-k-materialization"
+  | "save-migration"
+  | "individual-presentation"
+  | "nonlethal-interactions"
+  | "bounded-local-continuity"
+  | "performance-budget"
+  | "representative-emergence"
+  | "excluded-claim-integrity";
+
+export type Alpha21RiverOtterExcludedClaim =
+  | "mortality"
+  | "carcasses"
+  | "harmful-predation"
+  | "capture"
+  | "live-prey-consumption"
+  | "sound"
+  | "environmental-evidence"
+  | "reproduction"
+  | "same-species-interaction"
+  | "ecological-cross-region-migration"
+  | "weather-water-tide-condition-mutation"
+  | "full-trophic-turnover"
+  | "full-wave-c"
+  | "full-directive-04-1";
+
+export const ALPHA21_RIVER_OTTER_EXCLUDED_CLAIMS = [
+  "mortality",
+  "carcasses",
+  "harmful-predation",
+  "capture",
+  "live-prey-consumption",
+  "sound",
+  "environmental-evidence",
+  "reproduction",
+  "same-species-interaction",
+  "ecological-cross-region-migration",
+  "weather-water-tide-condition-mutation",
+  "full-trophic-turnover",
+  "full-wave-c",
+  "full-directive-04-1",
+] as const satisfies readonly Alpha21RiverOtterExcludedClaim[];
+
+export interface Alpha21RiverOtterBoundedReadinessReport {
+  readonly version: typeof ALPHA21_RIVER_OTTER_BOUNDED_READINESS_VERSION;
+  readonly unitId: "alpha21-north-american-river-otter";
+  readonly scope: "one-bounded-amphibious-individual";
+  readonly speciesIds: readonly Alpha21RiverOtterSpecies[];
+  readonly evidenceAuthenticated: boolean;
+  readonly speciesProfileReady: boolean;
+  readonly individualRepresentationReady: boolean;
+  readonly habitatPlacementReady: boolean;
+  readonly boundedActivityReady: boolean;
+  readonly amphibiousLocomotionReady: boolean;
+  readonly lawfulPerceptionReady: boolean;
+  readonly topKMaterializationReady: boolean;
+  readonly saveMigrationReady: boolean;
+  readonly individualPresentationReady: boolean;
+  readonly nonlethalInteractionsReady: boolean;
+  readonly boundedLocalContinuityReady: boolean;
+  readonly performanceEvidenceReady: boolean;
+  readonly representativeEmergenceReady: boolean;
+  readonly excludedClaimIntegrityReady: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingCapabilities: readonly Alpha21RiverOtterBoundedCapability[];
+  readonly evidenceOwnerIds: readonly string[];
+  readonly publicationRecordsReady: boolean;
+  readonly exactTestedDeploymentVerified: boolean;
+  readonly published: boolean;
+  readonly fullThirtyCriterionReady: boolean;
+  /** Claims this bounded shore-water witness can never authorize. */
+  readonly excludedClaims: readonly Alpha21RiverOtterExcludedClaim[];
 }
 
 /** The seven deliberately bounded small-world roles shipped across Wave B. */
@@ -1367,6 +1454,146 @@ function americanBlackDuckEvidence(): readonly ClaimTuple[] {
 }
 
 /**
+ * Build-owned evidence for Alpha-21's single North American river otter. The
+ * active rows cover only its bounded shore-water habitat, shared amphibious
+ * activity/locomotion, spatial top-K materialization, presentation, and save
+ * adoption. Sensory declarations and food-web semantics remain foundations;
+ * sound, physical evidence, mortality, capture, live-prey consumption,
+ * reproduction, and ecological migration remain explicit absences.
+ */
+function riverOtterEvidence(): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  return [
+    ["species-profile", A, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["ecological-niche", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-ecology-habitat:v7",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+    )],
+    ["appearance", A, owners(
+      "game:wildlife-presentation:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["sound", U, []],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v7",
+      "game:core-ecology:v6",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["food-web", F, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["perception-senses", F, owners(
+      "game:core-ecology-perception:v1",
+      "game:living-actor-senses:v1",
+      "sim:actor-perception:v2",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["locomotion", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-wildlife-actor:v1",
+      "game:core-wildlife-locomotion-profile:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["human-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["dog-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["same-species-interaction", U, []],
+    ["other-species-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["neutral-behavior", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-wildlife-actor:v1",
+    )],
+    ["disengagement", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-wildlife-actor:v1",
+    )],
+    ["environmental-evidence", U, []],
+    ["about-disclosure", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v7",
+      "game:core-ecology:v6",
+      "game:runtime-core-ecology:v1",
+      "test:core-ecology-spatial-top-k:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-ecology:v6",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["save-load", A, owners(
+      "game:core-ecology:v6",
+      "game:runtime-save:v15",
+      "test:alpha21-save-migration:v1",
+    )],
+    ["seamless-region-crossing", U, []],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v7",
+      "game:core-ecology:v6",
+      "game:runtime-core-ecology:v1",
+      "test:core-ecology-spatial-top-k:v1",
+    )],
+    ["accessibility", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["mobile-parity", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "test:alpha21-chart-relief-presentation:v1",
+    )],
+    ["player-independent-scenario", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-ecology-habitat:v7",
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-trophic:v1",
+      "test:alpha21-shore-water-response:v1",
+    )],
+    ["fuzz-testing", F, owners(
+      "game:core-ecology-habitat:v7",
+      "game:core-ecology:v6",
+    )],
+    ["clone-diversity", A, ["sim:core-wildlife-identity:v1"]],
+    ["tutorial-truth", U, []],
+    ["patch-note-truth", U, []],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -1449,6 +1676,7 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "atlantic-marsh-fiddler-crab": tidalTableEvidence("atlantic-marsh-fiddler-crab"),
   "snowy-egret": tidalTableEvidence("snowy-egret"),
   "american-black-duck": americanBlackDuckEvidence(),
+  "north-american-river-otter": riverOtterEvidence(),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -2269,6 +2497,282 @@ Alpha20AmericanBlackDuckBoundedReadinessReport {
 
 export const ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS =
   alpha20AmericanBlackDuckBoundedReadiness();
+
+/**
+ * Authenticated Alpha-21 witness for one bounded North American river otter.
+ * This closes the live local shore-water slice and explicitly refuses to
+ * imply harmful predation, evidence, life history, or ecological migration.
+ */
+export function alpha21RiverOtterBoundedReadiness():
+Alpha21RiverOtterBoundedReadinessReport {
+  const speciesId = ALPHA21_RIVER_OTTER_SPECIES[0];
+  const gate = LIVING_SPECIES_RELEASE_GATES.gates.find((candidate) => (
+    candidate.speciesId === speciesId
+  ));
+  const report = gate === undefined ? null : auditLivingSpeciesReleaseGate(gate);
+  const module = livingSpeciesModule(speciesId);
+  const runtimePolicy = coreEcologySpeciesRuntimePolicy(speciesId);
+  const ownsRuntimeCapability = (
+    capability: CoreEcologySpeciesRuntimeCapability,
+  ): boolean => runtimePolicy?.capabilities.includes(capability) === true;
+  const criterion = (name: LivingSpeciesReleaseCriterion) => (
+    gate?.criteria.find((state) => state.criterion === name)
+  );
+  const active = (name: LivingSpeciesReleaseCriterion): boolean => (
+    criterion(name)?.status === "active"
+  );
+  const hasOwner = (name: LivingSpeciesReleaseCriterion, ownerId: string): boolean => (
+    criterion(name)?.evidenceOwnerIds.includes(ownerId) === true
+  );
+  const evidenceAuthenticated = gate !== undefined
+    && report?.evidenceAuthenticated === true;
+
+  const speciesProfileReady = module !== null
+    && runtimePolicy !== null
+    && active("species-profile")
+    && active("ecological-niche")
+    && module.profile.implementation === "active"
+    && module.profile.taxonomicClass === "mammal"
+    && [
+      "aquatic-forager",
+      "aquatic-predator",
+      "forager",
+      "predator",
+      "scavenger",
+      "small-predator",
+    ].every((ecologicalClass) => module.profile.ecologicalClasses.includes(ecologicalClass))
+    && runtimePolicy.speciesId === speciesId;
+  const individualRepresentationReady = module !== null
+    && runtimePolicy !== null
+    && module.identity.implementation === "active"
+    && module.identity.form === "individual"
+    && module.identity.stableIdNamespace === "OTTER"
+    && module.population.implementation === "active"
+    && module.population.authoritativeUnit === "hybrid"
+    && module.population.materialization === "mixed"
+    && module.population.maxMaterializedPerRegion === 1
+    && module.population.coarseSimulation
+    && runtimePolicy.actorAddressable
+    && runtimePolicy.identityForm === "individual"
+    && runtimePolicy.maximumMaterializedActors === 1
+    && runtimePolicy.presentationModel === "individual"
+    && module.social.group.status === "unimplemented"
+    && !module.social.group.stableIdentity
+    && runtimePolicy.groupStableIdNamespace === null;
+  const habitatPlacementReady = module !== null
+    && active("habitat-placement")
+    && module.habitat.implementation === "active"
+    && module.habitat.ownerId === "game:core-ecology-habitat:v7"
+    && module.habitat.migrationModel === "none";
+  const boundedActivityReady = module !== null
+    && runtimePolicy !== null
+    && active("neutral-behavior")
+    && active("player-independent-scenario")
+    && module.activity.implementation === "active"
+    && module.activity.ownerId === "game:core-ecology-activity:v1"
+    && module.activity.circadian.status === "active"
+    && [
+      "aquatic-foraging",
+      "shore-water-relocation",
+      "surface-diving",
+    ].every((signal) => runtimePolicy.activitySignals.includes(signal))
+    && ([
+      "aquatic-foraging",
+      "shore-water-activity",
+      "tidal-activity",
+      "water-depth-response",
+    ] as const).every(ownsRuntimeCapability);
+  const amphibiousLocomotionReady = module !== null
+    && runtimePolicy !== null
+    && active("locomotion")
+    && module.locomotion.implementation === "active"
+    && module.locomotion.ownerId === "game:core-wildlife-locomotion-profile:v1"
+    && module.locomotion.crossRegion === false
+    && ["deep-water", "land", "shallow-water"].every((medium) => (
+      module.locomotion.media.some((entry) => entry.medium === medium)
+    ))
+    && ["bound", "dive", "swim", "trot"].every((verb) => (
+      module.locomotion.movementVerbs.includes(verb)
+    ))
+    && ([
+      "amphibious-locomotion",
+      "aquatic-locomotion",
+      "water-depth-response",
+    ] as const).every(ownsRuntimeCapability)
+    && !runtimePolicy.capabilities.includes("aerial-locomotion");
+  const lawfulPerceptionReady = module !== null
+    && runtimePolicy !== null
+    && criterion("perception-senses")?.status === "foundation"
+    && hasOwner("perception-senses", "game:core-ecology-perception:v1")
+    && module.senses.implementation === "foundation"
+    && module.senses.ownerId === "game:living-actor-senses:v1"
+    && ([
+      "food-investigation",
+      "movement-memory",
+      "small-prey-pursuit",
+    ] as const).every(ownsRuntimeCapability);
+  const topKMaterializationReady = module !== null
+    && active("population-materialization")
+    && hasOwner("population-materialization", "test:core-ecology-spatial-top-k:v1")
+    && module.population.implementation === "active"
+    && module.population.maxMaterializedPerRegion === 1
+    && module.population.coarseSimulation;
+  const saveMigrationReady = module !== null
+    && active("save-load")
+    && hasOwner("save-load", "game:runtime-save:v15")
+    && hasOwner("save-load", "test:alpha21-save-migration:v1")
+    && module.persistence.implementation === "active"
+    && module.persistence.generationMigration === "preserve-materialized-identity";
+  const individualPresentationReady = module !== null
+    && runtimePolicy !== null
+    && runtimePolicy.presentationModel === "individual"
+    && module.about.implementation === "active"
+    && module.about.ownerId === "game:wildlife-about:v1"
+    && [
+      "appearance",
+      "about-disclosure",
+      "knowledge-honesty",
+      "accessibility",
+      "mobile-parity",
+    ].every((name) => active(name as LivingSpeciesReleaseCriterion))
+    && hasOwner("mobile-parity", "test:alpha21-chart-relief-presentation:v1");
+  const forbiddenInteractionVerbs = new Set(["attack", "capture", "consume", "kill"]);
+  const aquaticTarget = module?.interactions.targets.find(({ targetClass }) => (
+    targetClass === "aquatic-animal"
+  ));
+  const smallerPreyTarget = module?.interactions.targets.find(({ targetClass }) => (
+    targetClass === "smaller-prey"
+  ));
+  const nonlethalInteractionsReady = module !== null
+    && active("human-interaction")
+    && active("dog-interaction")
+    && active("other-species-interaction")
+    && module.interactions.targets.length === LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length
+    && module.interactions.targets.every((target, index) => (
+      target.targetClass === LIVING_SPECIES_INTERACTION_TARGET_CLASSES[index]
+      && (target.policy === "available" || target.policy === "intentional-no-response")
+      && target.verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ))
+    && aquaticTarget?.verbs.includes("dive") === true
+    && aquaticTarget.escalationConstraints.includes("nonlethal-pressure-only")
+    && smallerPreyTarget?.verbs.length === 1
+    && smallerPreyTarget.verbs[0] === "pursue"
+    && smallerPreyTarget.escalationConstraints.includes("bounded-pursuit")
+    && smallerPreyTarget.escalationConstraints.includes("direct-perception-required");
+  const boundedLocalContinuityReady = module !== null
+    && active("full-coarse-transition")
+    && criterion("seamless-region-crossing")?.status === "unimplemented"
+    && module.spatial.signedRegions
+    && module.spatial.extremeRegions
+    && module.locomotion.crossRegion === false;
+  const performanceEvidenceReady = active("performance-budget")
+    && hasOwner("performance-budget", "test:core-ecology-spatial-top-k:v1");
+  const representativeEmergenceReady = active("player-independent-scenario")
+    && hasOwner("player-independent-scenario", "test:alpha21-shore-water-response:v1")
+    && boundedActivityReady
+    && amphibiousLocomotionReady
+    && lawfulPerceptionReady
+    && nonlethalInteractionsReady;
+  const sameSpeciesTarget = module?.interactions.targets.find(({ targetClass }) => (
+    targetClass === "same-species"
+  ));
+  const excludedClaimIntegrityReady = module !== null
+    && runtimePolicy !== null
+    && criterion("sound")?.status === "unimplemented"
+    && criterion("environmental-evidence")?.status === "unimplemented"
+    && criterion("same-species-interaction")?.status === "unimplemented"
+    && criterion("food-web")?.status === "foundation"
+    && module.sound.implementation === "unimplemented"
+    && module.sound.repertoire.length === 0
+    && module.evidence.status === "unimplemented"
+    && module.evidence.produces.length === 0
+    && runtimePolicy.evidenceKinds.length === 0
+    && module.lifeHistory.mortality === "unimplemented"
+    && module.lifeHistory.reproduction === "unimplemented"
+    && module.health.implementation === "unimplemented"
+    && module.health.causalDeath === false
+    && module.aftermath.implementation === "unimplemented"
+    && module.aftermath.carcassModel === "none"
+    && module.social.group.status === "unimplemented"
+    && module.social.territory.model === "none"
+    && module.habitat.migrationModel === "none"
+    && module.locomotion.crossRegion === false
+    && module.environment.weather.status === "unimplemented"
+    && module.environment.water.status === "unimplemented"
+    && module.environment.tide.status === "unimplemented"
+    && sameSpeciesTarget?.policy === "intentional-no-response"
+    && module.interactions.targets.every(({ verbs }) => (
+      verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ));
+
+  const capabilities: readonly (
+    readonly [Alpha21RiverOtterBoundedCapability, boolean]
+  )[] = [
+    ["species-profile", speciesProfileReady],
+    ["individual-representation", individualRepresentationReady],
+    ["habitat-placement", habitatPlacementReady],
+    ["bounded-activity", boundedActivityReady],
+    ["amphibious-locomotion", amphibiousLocomotionReady],
+    ["lawful-perception", lawfulPerceptionReady],
+    ["top-k-materialization", topKMaterializationReady],
+    ["save-migration", saveMigrationReady],
+    ["individual-presentation", individualPresentationReady],
+    ["nonlethal-interactions", nonlethalInteractionsReady],
+    ["bounded-local-continuity", boundedLocalContinuityReady],
+    ["performance-budget", performanceEvidenceReady],
+    ["representative-emergence", representativeEmergenceReady],
+    ["excluded-claim-integrity", excludedClaimIntegrityReady],
+  ];
+  const blockingCapabilities = capabilities
+    .filter(([, ready]) => !ready)
+    .map(([capability]) => capability);
+  const evidenceOwnerIds = gate === undefined
+    ? []
+    : [...new Set(gate.criteria.flatMap(({ evidenceOwnerIds: values }) => values))]
+      .sort(compareText);
+  const publicationRecordsReady = evidenceAuthenticated
+    && active("tutorial-truth")
+    && active("patch-note-truth");
+  const exactTestedDeploymentVerified = evidenceAuthenticated
+    && active("exact-tested-deployment");
+  const boundedCandidateReady = evidenceAuthenticated
+    && blockingCapabilities.length === 0;
+
+  return deepFreeze({
+    version: ALPHA21_RIVER_OTTER_BOUNDED_READINESS_VERSION,
+    unitId: "alpha21-north-american-river-otter",
+    scope: "one-bounded-amphibious-individual",
+    speciesIds: [...ALPHA21_RIVER_OTTER_SPECIES],
+    evidenceAuthenticated,
+    speciesProfileReady,
+    individualRepresentationReady,
+    habitatPlacementReady,
+    boundedActivityReady,
+    amphibiousLocomotionReady,
+    lawfulPerceptionReady,
+    topKMaterializationReady,
+    saveMigrationReady,
+    individualPresentationReady,
+    nonlethalInteractionsReady,
+    boundedLocalContinuityReady,
+    performanceEvidenceReady,
+    representativeEmergenceReady,
+    excludedClaimIntegrityReady,
+    boundedCandidateReady,
+    blockingCapabilities,
+    evidenceOwnerIds,
+    publicationRecordsReady,
+    exactTestedDeploymentVerified,
+    published: boundedCandidateReady
+      && publicationRecordsReady
+      && exactTestedDeploymentVerified,
+    fullThirtyCriterionReady: report?.publicReady === true,
+    excludedClaims: [...ALPHA21_RIVER_OTTER_EXCLUDED_CLAIMS],
+  });
+}
+
+export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS =
+  alpha21RiverOtterBoundedReadiness();
 
 function canonicalCriterionState(
   value: unknown,

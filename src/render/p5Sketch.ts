@@ -3249,6 +3249,110 @@ export function createTideweftRenderer(
       );
     };
 
+    const drawChartNorthAmericanRiverOtter = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const resting = actor.behavior === "rest";
+      const diving = actor.behavior === "dive";
+      const swimming = actor.behavior === "crossing"
+        || actor.behavior === "forage"
+        || actor.behavior === "swim"
+        || diving;
+      const bodyLength = base * 3.75;
+      const bodyHeight = base * (resting ? 1.12 : 0.94);
+      const headX = bodyLength * 0.49;
+      const headY = diving ? bodyHeight * 0.32 : -bodyHeight * 0.16;
+      const headRadius = base * 0.62;
+      const tailWave = reducedMotion || !swimming
+        ? 0
+        : Math.sin(now * 0.007) * base * 0.28;
+
+      p.noFill();
+      p.stroke(withAlpha(PALETTE.ink, 242));
+      p.strokeWeight(Math.max(1.2, base * 0.38));
+      p.bezier(
+        -bodyLength * 0.44,
+        bodyHeight * 0.05,
+        -bodyLength * 0.8,
+        -bodyHeight * 0.08 + tailWave,
+        -bodyLength * 1.05,
+        bodyHeight * 0.34 - tailWave,
+        -bodyLength * 1.2,
+        bodyHeight * 0.08,
+      );
+      p.stroke("#5b402e");
+      p.strokeWeight(Math.max(0.7, base * 0.22));
+      p.bezier(
+        -bodyLength * 0.44,
+        bodyHeight * 0.05,
+        -bodyLength * 0.8,
+        -bodyHeight * 0.08 + tailWave,
+        -bodyLength * 1.05,
+        bodyHeight * 0.34 - tailWave,
+        -bodyLength * 1.2,
+        bodyHeight * 0.08,
+      );
+
+      if (!swimming && !resting) {
+        p.stroke(withAlpha(PALETTE.ink, 235));
+        p.strokeWeight(Math.max(0.75, base * 0.14));
+        for (const legX of [-bodyLength * 0.28, bodyLength * 0.23]) {
+          p.line(legX, bodyHeight * 0.24, legX - base * 0.1, bodyHeight * 0.76);
+        }
+      }
+
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 242));
+      p.ellipse(0, 0, bodyLength * 1.1, bodyHeight * 1.3);
+      p.circle(headX, headY, headRadius * 2.3);
+      p.fill("#5b402e");
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.circle(headX, headY, headRadius * 2);
+      p.fill("#9b7957");
+      p.ellipse(
+        headX + headRadius * 0.52,
+        headY + headRadius * 0.12,
+        headRadius * 1.02,
+        headRadius * 0.62,
+      );
+      p.fill("#241b17");
+      p.circle(headX + headRadius * 0.95, headY + headRadius * 0.08, base * 0.17);
+      p.circle(headX + headRadius * 0.12, headY - headRadius * 0.68, base * 0.23);
+
+      p.stroke("#d6c3a0");
+      p.strokeWeight(Math.max(0.55, base * 0.08));
+      p.line(
+        headX + headRadius * 0.64,
+        headY + headRadius * 0.08,
+        headX + headRadius * 1.34,
+        headY - headRadius * 0.2,
+      );
+      p.line(
+        headX + headRadius * 0.64,
+        headY + headRadius * 0.16,
+        headX + headRadius * 1.36,
+        headY + headRadius * 0.38,
+      );
+
+      if (swimming) {
+        p.noFill();
+        p.stroke(withAlpha(PALETTE.sky, 190));
+        p.strokeWeight(Math.max(0.65, base * 0.1));
+        p.bezier(
+          -bodyLength * 0.92,
+          -bodyHeight * 0.65,
+          -bodyLength * 0.42,
+          -bodyHeight * 1.04,
+          bodyLength * 0.18,
+          -bodyHeight * 0.92,
+          bodyLength * 0.54,
+          -bodyHeight * 0.68,
+        );
+      }
+    };
+
     const drawChartDeer = (actor: WildlifeView, base: number): void => {
       const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
       const bodyLength = base * 3.15;
@@ -3511,6 +3615,9 @@ export function createTideweftRenderer(
           return true;
         case "american-black-duck":
           drawChartAmericanBlackDuck(actor, base, now);
+          return true;
+        case "north-american-river-otter":
+          drawChartNorthAmericanRiverOtter(actor, base, now);
           return true;
         case "black-bear":
           drawChartBlackBear(actor, base);

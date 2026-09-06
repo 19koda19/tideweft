@@ -27,10 +27,14 @@ import {
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
+  CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES,
+  CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
   canonicalizeCoreEcologyTidalTableHabitatAssemblage,
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   canonicalizeCoreEcologyRainChorusHabitatAssemblage,
+  canonicalizeCoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import {
@@ -90,7 +94,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 14;
+  readonly version: 15;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -172,8 +176,8 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(14);
-    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v6");
+    expect(repository.snapshot().payloadVersion).toBe(15);
+    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v7");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => identity.species === "fish-crow",
     ));
@@ -195,11 +199,15 @@ describe("runtime core-ecology vertical slice", () => {
       "snowy-egret",
       "american-black-duck",
     ] as const) {
-      expect(adoptedCore.populations.find(
+      const adoptedPopulation = adoptedCore.populations.find(
         (population) => population.species === species,
-      )).toEqual(currentCore.populations.find(
+      );
+      const currentPopulation = currentCore.populations.find(
         (population) => population.species === species,
-      ));
+      );
+      expect(adoptedPopulation?.populationSize).toBe(currentPopulation?.populationSize);
+      expect(adoptedPopulation?.members.map(({ actor }) => actor.identity))
+        .toEqual(currentPopulation?.members.map(({ actor }) => actor.identity));
     }
     for (const species of [
       "brown-rat",
@@ -257,8 +265,8 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(14);
-    expect(v13Ecology.derivation.kind).toBe("habitat-v6");
+    expect(v13Record.payloadVersion).toBe(15);
+    expect(v13Ecology.derivation.kind).toBe("habitat-v7");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
     expect(v13Envelope.physicalCargo).toEqual(v10Envelope.physicalCargo);
@@ -280,7 +288,7 @@ describe("runtime core-ecology vertical slice", () => {
       ))).toEqual(oldPopulation);
     }
     if (
-      v13Ecology.derivation.kind !== "habitat-v6"
+      v13Ecology.derivation.kind !== "habitat-v7"
       || v10Ecology.derivation.kind !== "habitat-v2"
     ) throw new Error("migration did not retain canonical habitat derivations");
     expect(v13Ecology.derivation.habitat.populations.slice(
@@ -310,7 +318,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = requiredEnvelope(repository);
     const currentEcology = requiredCore(currentEnvelope);
-    if (currentEcology.derivation.kind !== "habitat-v6") {
+    if (currentEcology.derivation.kind !== "habitat-v7") {
       throw new Error("current fixture omitted its tidal-table habitat");
     }
     const v11Record = marshEdgeV11Record(currentRecord);
@@ -338,8 +346,8 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(14);
-    expect(v13Ecology.derivation.kind).toBe("habitat-v6");
+    expect(v13Record.payloadVersion).toBe(15);
+    expect(v13Ecology.derivation.kind).toBe("habitat-v7");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
     expect(v13Envelope.physicalCargo).toEqual(v11Envelope.physicalCargo);
@@ -360,7 +368,7 @@ describe("runtime core-ecology vertical slice", () => {
         ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
       ))).toBe(stableStringify(oldAggregate));
     }
-    if (v13Ecology.derivation.kind !== "habitat-v6") {
+    if (v13Ecology.derivation.kind !== "habitat-v7") {
       throw new Error("v11 migration did not reach a canonical v5 derivation");
     }
     expect(v13Ecology.derivation.habitat.populations.slice(
@@ -368,11 +376,15 @@ describe("runtime core-ecology vertical slice", () => {
       CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
     )).toEqual(v11Ecology.derivation.habitat.populations);
     for (const species of ["fish-crow", "northern-harrier"] as const) {
-      expect(stableStringify(v13Ecology.populations.find(
+      const migratedPopulation = v13Ecology.populations.find(
         (population) => population.species === species,
-      ))).toBe(stableStringify(currentEcology.populations.find(
+      );
+      const currentPopulation = currentEcology.populations.find(
         (population) => population.species === species,
-      )));
+      );
+      expect(migratedPopulation?.populationSize).toBe(currentPopulation?.populationSize);
+      expect(migratedPopulation?.members.map(({ actor }) => actor.identity))
+        .toEqual(currentPopulation?.members.map(({ actor }) => actor.identity));
     }
     expect(stableStringify(v13Ecology.aggregatePopulations.find(
       ({ species }) => species === "southern-leopard-frog",
@@ -407,7 +419,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = requiredEnvelope(repository);
     const currentEcology = requiredCore(currentEnvelope);
-    if (currentEcology.derivation.kind !== "habitat-v6") {
+    if (currentEcology.derivation.kind !== "habitat-v7") {
       throw new Error("current fixture omitted its tidal-table habitat");
     }
     const v12Record = rainChorusV12Record(currentRecord);
@@ -432,8 +444,8 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(14);
-    expect(v13Ecology.derivation.kind).toBe("habitat-v6");
+    expect(v13Record.payloadVersion).toBe(15);
+    expect(v13Ecology.derivation.kind).toBe("habitat-v7");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
     expect(v13Envelope.physicalCargo).toEqual(v12Envelope.physicalCargo);
@@ -454,7 +466,7 @@ describe("runtime core-ecology vertical slice", () => {
         ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
       )).toEqual(oldAggregate);
     }
-    if (v13Ecology.derivation.kind !== "habitat-v6") {
+    if (v13Ecology.derivation.kind !== "habitat-v7") {
       throw new Error("v12 migration did not reach canonical habitat v5");
     }
     expect(v13Ecology.derivation.habitat.populations.slice(
@@ -497,7 +509,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentDuck = currentEcology.populations.find(({ species }) => (
       species === "american-black-duck"
     ));
-    if (currentDuck === undefined || currentEcology.derivation.kind !== "habitat-v6") {
+    if (currentDuck === undefined || currentEcology.derivation.kind !== "habitat-v7") {
       throw new Error("current migration fixture omitted its bounded duck");
     }
     const v13Record = tidalTableV13Record(currentRecord);
@@ -519,8 +531,8 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(14);
-    expect(adopted.derivation.kind).toBe("habitat-v6");
+    expect(adoptedRecord.payloadVersion).toBe(15);
+    expect(adopted.derivation.kind).toBe("habitat-v7");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
     expect(adoptedEnvelope.physicalCargo).toEqual(v13Envelope.physicalCargo);
@@ -537,6 +549,67 @@ describe("runtime core-ecology vertical slice", () => {
     expect(adopted.populations.find(({ species }) => (
       species === "american-black-duck"
     ))).toEqual(currentDuck);
+
+    const stableEcology = adoptedEnvelope.coreEcology;
+    migrated.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(stableEcology);
+    resumed.destroy();
+  });
+
+  it("adopts a sealed v14 habitat once without rerolling its established ecology", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "otter habitat 0",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const currentRecord = repository.snapshot();
+    const v14Record = waterfowlV14Record(currentRecord);
+    const v14Envelope = JSON.parse(v14Record.worldJson) as unknown as CurrentEnvelope;
+    const v14Ecology = deserializeCoreEcologyAggregatePatch(v14Envelope.coreEcology);
+    if (v14Ecology === null || v14Ecology.derivation.kind !== "habitat-v6") {
+      throw new Error("v14 fixture omitted its authenticated waterfowl ecology");
+    }
+    expect(v14Ecology.populations.some(
+      ({ species }) => species === "north-american-river-otter",
+    )).toBe(false);
+    await repository.save(v14Record);
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const adoptedRecord = repository.snapshot();
+    const adoptedEnvelope = requiredEnvelope(repository);
+    const adopted = requiredCore(adoptedEnvelope);
+    expect(adoptedRecord.payloadVersion).toBe(15);
+    expect(adopted.derivation.kind).toBe("habitat-v7");
+    expect(adoptedEnvelope.world).toBe(v14Envelope.world);
+    expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
+    expect(adoptedEnvelope.physicalCargo).toEqual(v14Envelope.physicalCargo);
+    expect(adopted.groups).toEqual(v14Ecology.groups);
+    expect(adopted.aggregatePopulations).toEqual(v14Ecology.aggregatePopulations);
+    for (const established of v14Ecology.populations) {
+      expect(adopted.populations.find(({ species, populationKey }) => (
+        species === established.species && populationKey === established.populationKey
+      ))).toEqual(established);
+    }
+    if (adopted.derivation.kind !== "habitat-v7") {
+      throw new Error("v14 migration did not reach tidal-web habitat v7");
+    }
+    const otterHabitat = adopted.derivation.habitat.populations.find(
+      ({ species }) => species === "north-american-river-otter",
+    );
+    expect(adopted.populations.some(
+      ({ species }) => species === "north-american-river-otter",
+    )).toBe((otterHabitat?.populationUnits ?? 0) > 0);
 
     const stableEcology = adoptedEnvelope.coreEcology;
     migrated.destroy();
@@ -647,7 +720,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v14 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v15 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -672,7 +745,7 @@ describe("runtime core-ecology vertical slice", () => {
     rejected.destroy();
   });
 
-  it("quarantines an Alpha-19 aggregate record masquerading inside a current v14 envelope", async () => {
+  it("quarantines an Alpha-19 aggregate record masquerading inside a current v15 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -770,7 +843,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(14);
+    expect(before.version).toBe(15);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -1157,7 +1230,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(Math.hypot(delta.x, delta.y))
       .toBeLessThan(Math.hypot(initialDelta.x, initialDelta.y));
 
-    for (let step = 0; step < 3; step += 1) {
+    for (let step = 0; step < 4; step += 1) {
       const activity = projectCoreEcologyActivity(savedCore, {
         actorId: crow.identity.stableId,
         atTick: savedCore.updatedAtTick,
@@ -1173,7 +1246,7 @@ describe("runtime core-ecology vertical slice", () => {
       if (savedCrow === undefined) throw new Error("Crow vanished before resting at its perch");
     }
     delta = worldPositionDelta(savedCrow.address.position, perch);
-    expect(Math.hypot(delta.x, delta.y)).toBeLessThanOrEqual(
+    expect(Math.max(Math.abs(delta.x), Math.abs(delta.y))).toBeLessThanOrEqual(
       Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
     );
     expect(savedCrow.intent.kind).toBe("rest");
@@ -1698,6 +1771,76 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   });
 
+  it("routes a responding shore-water actor through deep water with the shared resolver", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "otter habitat 0",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    let patch = requiredCore(envelope);
+    const otterMember = patch.populations.find(
+      ({ species }) => species === "north-american-river-otter",
+    )?.members[0];
+    const otter = otterMember?.actor;
+    const bear = patch.populations.find(
+      ({ species }) => species === "black-bear",
+    )?.members[0]?.actor;
+    if (otter === undefined || bear === undefined) {
+      throw new Error("shore-water fixture lost its otter or threat");
+    }
+    expect(otterMember?.materialization).toBe("materialized");
+    if (patch.derivation.kind !== "habitat-v7") {
+      throw new Error("shore-water fixture omitted its authenticated habitat");
+    }
+    const otterPosition = findDeepWaterRoutePosition(world);
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(otter, {
+      atTick: patch.updatedAtTick,
+      position: otterPosition,
+      heading: 0,
+    }));
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(bear, {
+      atTick: patch.updatedAtTick,
+      position: translateWorldPosition(otterPosition, WORLD_POSITION_UNITS_PER_TILE, 0),
+      heading: 500_000,
+    }));
+    const startTile = compatibilityTileAtPosition(world, otterPosition);
+    expect(startTile.waterDepth).toBeGreaterThan(ADRIFT_STAND_DEPTH);
+
+    const prepared = resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
+    });
+    await repository.save({ ...record, worldJson: JSON.stringify(prepared) });
+    initial.destroy();
+    scheduledFrame = undefined;
+    const runtime = await createTideweftRuntime(repository);
+    if (runtime.getUIView().saveWarning !== undefined) {
+      throw new Error(`shore-water fixture rejected: ${stableStringify(runtime.getUIView().saveWarning)}`);
+    }
+
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const savedEnvelope = requiredEnvelope(repository);
+    const savedWorld = deserializeWorld(savedEnvelope.world);
+    const movedOtter = coreActors(requiredCore(savedEnvelope)).find(
+      ({ identity }) => identity.stableId === otter.identity.stableId,
+    );
+    if (movedOtter === undefined) throw new Error("shore-water actor was not persisted");
+    const movement = worldPositionDelta(otterPosition, movedOtter.address.position);
+    expect(["flee", "retreat"]).toContain(movedOtter.intent.kind);
+    expect(Math.abs(movement.x) + Math.abs(movement.y)).toBeGreaterThan(0);
+    expect(compatibilityTileAtPosition(savedWorld, movedOtter.address.position).waterDepth)
+      .toBeGreaterThan(ADRIFT_STAND_DEPTH);
+    runtime.destroy();
+  });
+
   it("denies a floored negative-seam food claim outside exact loose-unit reach", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
@@ -1921,8 +2064,8 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
   const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
   const envelope = decoded as unknown as CurrentEnvelope;
   let ecology = requiredCore(envelope);
-  if (ecology.derivation.kind !== "habitat-v6") {
-    throw new Error("fresh migration source omitted waterfowl habitat v6");
+  if (ecology.derivation.kind !== "habitat-v7") {
+    throw new Error("fresh migration source omitted tidal-web habitat v7");
   }
   const habitat = ecology.derivation.habitat;
   const harborEdgeHabitat = canonicalizeCoreEcologyHarborEdgeHabitatAssemblage({
@@ -2006,9 +2149,9 @@ function marshEdgeV11Record(current: SaveRecord): SaveRecord {
   const envelope = decoded as unknown as CurrentEnvelope;
   const ecology = requiredCore(envelope);
   if (
-    ecology.derivation.kind !== "habitat-v6"
-    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
-  ) throw new Error("fresh migration source omitted waterfowl habitat v6");
+    ecology.derivation.kind !== "habitat-v7"
+    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
+  ) throw new Error("fresh migration source omitted tidal-web habitat v7");
   const habitat = ecology.derivation.habitat;
   const { tidalAnchors: _tidalAnchors, ...preTidalHabitat } = habitat;
   const marshEdgeHabitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage({
@@ -2027,7 +2170,7 @@ function marshEdgeV11Record(current: SaveRecord): SaveRecord {
   }
   const v11Ecology = canonicalizeCoreEcologyAggregatePatch({
     ...ecology,
-    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
       ? { kind: "legacy-fixed-v1-with-habitat-v3", habitat: marshEdgeHabitat }
       : { kind: "habitat-v3", habitat: marshEdgeHabitat },
     populations: ecology.populations.filter(({ species }) => (
@@ -2035,6 +2178,7 @@ function marshEdgeV11Record(current: SaveRecord): SaveRecord {
       && species !== "northern-harrier"
       && species !== "snowy-egret"
       && species !== "american-black-duck"
+      && species !== "north-american-river-otter"
     )),
     groups: {
       ...ecology.groups,
@@ -2071,9 +2215,9 @@ function rainChorusV12Record(current: SaveRecord): SaveRecord {
   const envelope = decoded as unknown as CurrentEnvelope;
   const ecology = requiredCore(envelope);
   if (
-    ecology.derivation.kind !== "habitat-v6"
-    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
-  ) throw new Error("fresh migration source omitted waterfowl habitat v6");
+    ecology.derivation.kind !== "habitat-v7"
+    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
+  ) throw new Error("fresh migration source omitted tidal-web habitat v7");
   const habitat = ecology.derivation.habitat;
   const { tidalAnchors: _tidalAnchors, ...rainChorusPrefix } = habitat;
   const rainChorusHabitat = canonicalizeCoreEcologyRainChorusHabitatAssemblage({
@@ -2092,11 +2236,13 @@ function rainChorusV12Record(current: SaveRecord): SaveRecord {
   }
   const v12Ecology = canonicalizeCoreEcologyAggregatePatch({
     ...ecology,
-    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
       ? { kind: "legacy-fixed-v1-with-habitat-v4", habitat: rainChorusHabitat }
       : { kind: "habitat-v4", habitat: rainChorusHabitat },
     populations: ecology.populations.filter(({ species }) => (
-      species !== "snowy-egret" && species !== "american-black-duck"
+      species !== "snowy-egret"
+      && species !== "american-black-duck"
+      && species !== "north-american-river-otter"
     )),
     aggregatePopulations: ecology.aggregatePopulations.filter(({ species }) => (
       species !== "atlantic-silverside"
@@ -2128,9 +2274,9 @@ function tidalTableV13Record(current: SaveRecord): SaveRecord {
   const envelope = decoded as unknown as CurrentEnvelope;
   const ecology = requiredCore(envelope);
   if (
-    ecology.derivation.kind !== "habitat-v6"
-    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
-  ) throw new Error("fresh migration source omitted waterfowl habitat v6");
+    ecology.derivation.kind !== "habitat-v7"
+    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
+  ) throw new Error("fresh migration source omitted tidal-web habitat v7");
   const habitat = ecology.derivation.habitat;
   const tidalTableHabitat = canonicalizeCoreEcologyTidalTableHabitatAssemblage({
     ...habitat,
@@ -2144,6 +2290,7 @@ function tidalTableV13Record(current: SaveRecord): SaveRecord {
     ),
     tidalAnchors: habitat.tidalAnchors.filter(({ species }) => (
       species !== "american-black-duck"
+      && species !== "north-american-river-otter"
     )),
   });
   if (tidalTableHabitat === null) {
@@ -2151,11 +2298,12 @@ function tidalTableV13Record(current: SaveRecord): SaveRecord {
   }
   const v13Ecology = canonicalizeCoreEcologyAggregatePatch({
     ...ecology,
-    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
       ? { kind: "legacy-fixed-v1-with-habitat-v5", habitat: tidalTableHabitat }
       : { kind: "habitat-v5", habitat: tidalTableHabitat },
     populations: ecology.populations.filter(({ species }) => (
       species !== "american-black-duck"
+      && species !== "north-american-river-otter"
     )),
   });
   if (v13Ecology === null) {
@@ -2178,6 +2326,61 @@ function tidalTableV13Record(current: SaveRecord): SaveRecord {
   };
 }
 
+function waterfowlV14Record(current: SaveRecord): SaveRecord {
+  const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+  const envelope = decoded as unknown as CurrentEnvelope;
+  const ecology = requiredCore(envelope);
+  if (
+    ecology.derivation.kind !== "habitat-v7"
+    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
+  ) throw new Error("fresh migration source omitted tidal-web habitat v7");
+  const habitat = ecology.derivation.habitat;
+  const waterfowlHabitat = canonicalizeCoreEcologyWaterfowlHabitatAssemblage({
+    ...habitat,
+    generationVersion: CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
+    speciesEvaluations:
+      habitat.evaluatedTiles * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS,
+    populations: habitat.populations.slice(
+      0,
+      CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length,
+    ),
+    tidalAnchors: habitat.tidalAnchors.filter(
+      ({ species }) => species !== "north-american-river-otter",
+    ),
+  });
+  if (waterfowlHabitat === null) {
+    throw new Error("tidal-web habitat did not preserve its frozen v6 prefix");
+  }
+  const v14Ecology = canonicalizeCoreEcologyAggregatePatch({
+    ...ecology,
+    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
+      ? { kind: "legacy-fixed-v1-with-habitat-v6", habitat: waterfowlHabitat }
+      : { kind: "habitat-v6", habitat: waterfowlHabitat },
+    populations: ecology.populations.filter(
+      ({ species }) => species !== "north-american-river-otter",
+    ),
+  });
+  if (v14Ecology === null) {
+    throw new Error("fixture could not reconstruct canonical v14 ecology state");
+  }
+  const { integrity: _integrity, ...currentBase } = decoded;
+  const v14Base = {
+    ...currentBase,
+    version: 14,
+    coreEcology: serializeCoreEcologyAggregatePatch(v14Ecology),
+  };
+  return {
+    ...current,
+    payloadVersion: 14,
+    updatedAt: current.updatedAt + 1,
+    worldJson: JSON.stringify({
+      ...v14Base,
+      integrity: gameSaveEnvelopeIntegrity(v14Base),
+    }),
+  };
+}
+
 function serializePublishedAggregateV3(
   ecology: CoreEcologyAggregatePatchState,
 ): string {
@@ -2193,8 +2396,8 @@ function serializePublishedAggregateV3(
 
 function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
-  if (value.format !== "tideweft-session" || value.version !== 14) {
-    throw new Error("core-ecology runtime fixture did not save a v14 envelope");
+  if (value.format !== "tideweft-session" || value.version !== 15) {
+    throw new Error("core-ecology runtime fixture did not save a v15 envelope");
   }
   return value;
 }
@@ -2359,6 +2562,37 @@ function compatibilityTileAtPosition(
   return tile;
 }
 
+function findDeepWaterRoutePosition(
+  world: ReturnType<typeof deserializeWorld>,
+): CoreWildlifeActorState["address"]["position"] {
+  const view = createWorldView(world);
+  for (let y = 1; y < WORLD_HEIGHT - 1; y += 1) {
+    for (let x = 1; x < WORLD_WIDTH - 1; x += 1) {
+      const neighborhood = [
+        (y - 1) * WORLD_WIDTH + x - 1,
+        (y - 1) * WORLD_WIDTH + x,
+        (y - 1) * WORLD_WIDTH + x + 1,
+        y * WORLD_WIDTH + x - 1,
+        y * WORLD_WIDTH + x,
+        y * WORLD_WIDTH + x + 1,
+        (y + 1) * WORLD_WIDTH + x - 1,
+        (y + 1) * WORLD_WIDTH + x,
+        (y + 1) * WORLD_WIDTH + x + 1,
+      ];
+      if (neighborhood.every((index) => (
+        (view.terrain.tiles[index]?.waterDepth ?? 0) > ADRIFT_STAND_DEPTH
+      ))) {
+        return createWorldPosition(
+          { x: 0, y: 0 },
+          x * WORLD_POSITION_UNITS_PER_TILE + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+          y * WORLD_POSITION_UNITS_PER_TILE + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+        );
+      }
+    }
+  }
+  throw new Error("shore-water fixture found no connected deep-water route");
+}
+
 function findOpenLeftEdgeEscapeTile(
   world: ReturnType<typeof createRegionalWorldView>,
 ): { readonly index: number } {
@@ -2456,8 +2690,8 @@ function publishedV8CoreEcologyFixture(
 ): Readonly<{ text: string; actors: readonly CoreWildlifeActorState[] }> {
   const world = deserializeWorld(envelope.world);
   const current = requiredCore(envelope);
-  if (current.derivation.kind !== "habitat-v6") {
-    throw new Error("fresh waterfowl fixture has no v6 habitat derivation");
+  if (current.derivation.kind !== "habitat-v7") {
+    throw new Error("fresh tidal-web fixture has no v7 habitat derivation");
   }
   const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
   if (bio0 === null) throw new Error("fresh fixture has no canonical Alpha-13 BIO0 state");

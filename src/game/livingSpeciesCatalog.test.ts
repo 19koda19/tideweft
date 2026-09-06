@@ -48,6 +48,7 @@ describe("Living Weft species module catalog", () => {
       "living-species:human:v1",
       "living-species:marsh-fox:v1",
       "living-species:marsh-rabbit:v1",
+      "living-species:north-american-river-otter:v1",
       "living-species:northern-harrier:v1",
       "living-species:snowy-egret:v1",
       "living-species:southern-leopard-frog:v1",
@@ -670,11 +671,12 @@ describe("Living Weft species module catalog", () => {
     });
   });
 
-  it("defines the Wave-C tidal contracts and one bounded waterfowl representative", () => {
+  it("defines the Wave-C tidal contracts through shared capability profiles", () => {
     const silverside = livingSpeciesModule("atlantic-silverside");
     const crab = livingSpeciesModule("atlantic-marsh-fiddler-crab");
     const egret = livingSpeciesModule("snowy-egret");
     const duck = livingSpeciesModule("american-black-duck");
+    const otter = livingSpeciesModule("north-american-river-otter");
 
     expect(silverside).toMatchObject({
       profile: {
@@ -808,6 +810,61 @@ describe("Living Weft species module catalog", () => {
       },
       lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
     });
+    expect(otter).toMatchObject({
+      profile: {
+        implementation: "active",
+        taxonomicClass: "mammal",
+        ecologicalClasses: [
+          "aquatic-forager",
+          "aquatic-predator",
+          "forager",
+          "predator",
+          "scavenger",
+          "small-predator",
+        ],
+      },
+      identity: { form: "individual", stableIdNamespace: "OTTER" },
+      spatial: { positionModel: "segmented-point", authoritativeHeading: true },
+      population: { strategy: "hybrid-population", maxMaterializedPerRegion: 1 },
+      habitat: {
+        implementation: "active",
+        ownerId: "game:core-ecology-habitat:v7",
+        migrationModel: "none",
+      },
+      locomotion: {
+        implementation: "active",
+        ownerId: "game:core-wildlife-locomotion-profile:v1",
+        decisionModel: "individual",
+        media: [
+          { medium: "deep-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "land", relativeCapability: 720_000 },
+          { medium: "shallow-water", relativeCapability: 950_000 },
+        ],
+        movementVerbs: ["bound", "dive", "swim", "trot"],
+      },
+      activity: {
+        implementation: "active",
+        ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
+        decisionModel: "individual",
+        circadian: { status: "active", rhythm: "diurnal" },
+      },
+      social: {
+        implementation: "foundation",
+        ownerId: "game:core-ecology-perception:v1",
+        groupModel: "solitary",
+        group: { status: "unimplemented" },
+      },
+      sound: { implementation: "unimplemented", repertoire: [], communicationSignals: [] },
+      evidence: { status: "unimplemented", produces: [] },
+      health: { implementation: "unimplemented", causalDeath: false },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      environment: {
+        weather: { status: "unimplemented" },
+        water: { status: "unimplemented", inputs: [], outputs: [] },
+        tide: { status: "unimplemented", inputs: [], outputs: [] },
+      },
+      lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
+    });
 
     expect(silverside?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
       .toEqual(["waterborne-vibration"]);
@@ -820,6 +877,8 @@ describe("Living Weft species module catalog", () => {
     expect(egret?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
       .toEqual(["airborne-sound"]);
     expect(duck?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
+      .toEqual(["airborne-sound"]);
+    expect(otter?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
       .toEqual(["airborne-sound"]);
 
     for (const module of [silverside, crab, egret]) {
@@ -862,6 +921,9 @@ describe("Living Weft species module catalog", () => {
     expect(availableTargets(duck)).toEqual([
       "aquatic-animal", "dog", "food", "human", "predator", "water",
     ]);
+    expect(availableTargets(otter)).toEqual([
+      "aquatic-animal", "dog", "food", "human", "predator", "smaller-prey", "water",
+    ]);
     expect(egret?.interactions.targets.find(({ targetClass }) => targetClass === "aquatic-animal"))
       .toMatchObject({
         verbs: ["approach", "probe"],
@@ -884,6 +946,19 @@ describe("Living Weft species module catalog", () => {
       });
     expect(duck?.interactions.targets.find(({ targetClass }) => targetClass === "water"))
       .toMatchObject({ verbs: ["redistribute", "swim"] });
+    expect(otter?.interactions.targets.find(({ targetClass }) => targetClass === "aquatic-animal"))
+      .toMatchObject({
+        verbs: ["approach", "dive"],
+        escalationConstraints: [
+          "aggregate-unit-conservation",
+          "direct-perception-required",
+          "no-health-or-mortality-outcome",
+          "nonlethal-pressure-only",
+        ],
+      });
+    expect(otter?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+      verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+    ))).toBe(false);
     expect(duck?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
       verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
     ))).toBe(false);

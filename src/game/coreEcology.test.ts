@@ -26,6 +26,7 @@ import {
   deserializeCoreEcologyPatch,
   migrateLegacyCoreEcologyPatch,
   replaceCoreEcologyActor,
+  replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyPatch,
   setCoreEcologyMaterializedActors,
   stepCoreEcologyAggregatePatch,
@@ -89,7 +90,7 @@ function members(state: Pick<CoreEcologyPatchState, "populations">) {
 }
 
 function bySpecies(
-  state: CoreEcologyPatchState,
+  state: Pick<CoreEcologyPatchState, "populations">,
   species: CoreEcologyIndividualSpecies,
 ): CoreWildlifeActorState {
   const result = members(state).find(({ actor }) => actor.identity.species === species)?.actor;
@@ -594,17 +595,38 @@ describe("bounded core ecology patch", () => {
   });
 
   it("surfaces conflicting physical claims without mutating or resolving the item", () => {
-    let state = patch([population("gull"), population("black-bear")]);
-    for (const species of ["gull", "black-bear"] as const) {
+    let state = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "shared-food-claims",
+      originRegion: ORIGIN,
+      populations: [
+        population("gull"),
+        population("black-bear"),
+        population("north-american-river-otter"),
+      ],
+      derivation: { kind: "bounded-input-v1" },
+    });
+    for (const species of [
+      "gull",
+      "black-bear",
+      "north-american-river-otter",
+    ] as const) {
       const current = bySpecies(state, species);
-      state = replaceCoreEcologyActor(state, replaceCoreWildlifeActorPhysiology(current, {
+      state = replaceCoreEcologyAggregatePatchActor(
+        state,
+        replaceCoreWildlifeActorPhysiology(current, {
         atTick: 0,
         needs: { ...current.needs, hunger: ACTOR_PERCEPTION_SCALE },
         condition: current.condition,
-      }));
+        }),
+      );
     }
     const lot = Object.freeze({ id: "LOT-dried-fish", availableUnits: 1 });
-    const actorSteps = (["gull", "black-bear"] as const).map((species) => {
+    const actorSteps = ([
+      "gull",
+      "black-bear",
+      "north-american-river-otter",
+    ] as const).map((species) => {
       const current = bySpecies(state, species);
       const seen = directObservation(
         current,
@@ -627,12 +649,12 @@ describe("bounded core ecology patch", () => {
         accessible: true,
       }]);
     });
-    const result = stepCoreEcologyPatch(state, { tick: 1, actorSteps });
+    const result = stepCoreEcologyAggregatePatch(state, { tick: 1, actorSteps });
     if (result === null) throw new Error("Shared resource ecology step failed");
-    expect(result.resourceClaims).toHaveLength(2);
+    expect(result.resourceClaims).toHaveLength(3);
     expect(result.resourceClaims.map(({ resourceId }) => resourceId))
-      .toEqual([lot.id, lot.id]);
-    expect(result.resourceClaims.map(({ requestedUnits }) => requestedUnits)).toEqual([1, 1]);
+      .toEqual([lot.id, lot.id, lot.id]);
+    expect(result.resourceClaims.map(({ requestedUnits }) => requestedUnits)).toEqual([1, 1, 1]);
     expect(lot.availableUnits).toBe(1);
   });
 

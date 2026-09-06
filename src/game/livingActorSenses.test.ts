@@ -76,6 +76,7 @@ describe("shared living actor sensory profiles", () => {
       "human",
       "marsh-fox",
       "marsh-rabbit",
+      "north-american-river-otter",
       "northern-harrier",
       "snowy-egret",
       "southern-leopard-frog",

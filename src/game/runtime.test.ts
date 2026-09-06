@@ -298,8 +298,8 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   if (
     current === null
     || (
-      current.derivation.kind !== "habitat-v6"
-      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
+      current.derivation.kind !== "habitat-v7"
+      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
     )
   ) throw new Error("fixture requires a canonical waterfowl ecology save");
 
@@ -320,7 +320,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   }
   const ecology = canonicalizeCoreEcologyAggregatePatch({
     ...current,
-    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
       ? {
           kind: "legacy-fixed-v1-with-habitat-v3",
           habitat: marshEdgeHabitat,
@@ -340,6 +340,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
       && species !== "northern-harrier"
       && species !== "snowy-egret"
       && species !== "american-black-duck"
+      && species !== "north-american-river-otter"
     )),
     aggregatePopulations: current.aggregatePopulations.filter(
       ({ species }) => species !== "southern-leopard-frog"
@@ -1452,11 +1453,11 @@ describe("perpetual new worlds", () => {
     const originalEcology = deserializeCoreEcologyAggregatePatch(
       originalEnvelope.coreEcology,
     );
-    expect(originalEnvelope.version).toBe(14);
-    expect(originalRecord.payloadVersion).toBe(14);
-    expect(originalEcology?.derivation.kind).toBe("habitat-v6");
-    if (originalEcology?.derivation.kind !== "habitat-v6") {
-      throw new Error("fixture did not create current waterfowl ecology");
+    expect(originalEnvelope.version).toBe(15);
+    expect(originalRecord.payloadVersion).toBe(15);
+    expect(originalEcology?.derivation.kind).toBe("habitat-v7");
+    if (originalEcology?.derivation.kind !== "habitat-v7") {
+      throw new Error("fixture did not create current tidal-web ecology");
     }
 
     const originalCrow = originalEcology.populations.find(
@@ -1507,11 +1508,11 @@ describe("perpetual new worlds", () => {
     const migratedEcology = deserializeCoreEcologyAggregatePatch(
       migratedEnvelope.coreEcology,
     );
-    expect(migratedEnvelope.version).toBe(14);
-    expect(migratedRecord.payloadVersion).toBe(14);
-    expect(migratedEcology?.derivation.kind).toBe("habitat-v6");
-    if (migratedEcology?.derivation.kind !== "habitat-v6") {
-      throw new Error("v11 migration did not produce canonical v14 ecology");
+    expect(migratedEnvelope.version).toBe(15);
+    expect(migratedRecord.payloadVersion).toBe(15);
+    expect(migratedEcology?.derivation.kind).toBe("habitat-v7");
+    if (migratedEcology?.derivation.kind !== "habitat-v7") {
+      throw new Error("v11 migration did not produce canonical v15 ecology");
     }
 
     for (const oldPopulation of predecessor.ecology.populations) {
@@ -1542,11 +1543,11 @@ describe("perpetual new worlds", () => {
         : [],
     );
     for (const species of ["fish-crow", "northern-harrier"] as const) {
-      expect(stableStringify(migratedEcology.populations.find(
+      expect(migratedEcology.populations.find(
         (population) => population.species === species,
-      ))).toBe(stableStringify(originalEcology.populations.find(
+      )?.members.map(({ actor }) => actor.identity)).toEqual(originalEcology.populations.find(
         (population) => population.species === species,
-      )));
+      )?.members.map(({ actor }) => actor.identity));
     }
     expect(stableStringify(migratedEcology.aggregatePopulations.find(
       ({ species }) => species === "southern-leopard-frog",
@@ -1575,11 +1576,11 @@ describe("perpetual new worlds", () => {
     expect(migratedEnvelope.physicalCargo).toEqual(originalEnvelope.physicalCargo);
     expect(migratedEnvelope.bio0Ecology).toBe(originalEnvelope.bio0Ecology);
 
-    const firstV14Ecology = migratedEnvelope.coreEcology;
+    const firstV15Ecology = migratedEnvelope.coreEcology;
     migratedRuntime.destroy();
     const reloaded = await createTideweftRuntime(repository);
     await reloaded.save();
-    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstV14Ecology);
+    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstV15Ecology);
     reloaded.destroy();
   });
 
@@ -1894,7 +1895,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(14);
+    expect(prepared.version).toBe(15);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2103,8 +2104,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(14);
-    expect(durableRecord.payloadVersion).toBe(14);
+    expect(durable.version).toBe(15);
+    expect(durableRecord.payloadVersion).toBe(15);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

@@ -359,6 +359,11 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["northern-harrier", "NORTHERN HARRIER", "Northern harrier"],
     ["snowy-egret", "SNOWY EGRET", "Snowy egret"],
     ["american-black-duck", "AMERICAN BLACK DUCK", "American black duck"],
+    [
+      "north-american-river-otter",
+      "NORTH AMERICAN RIVER OTTER",
+      "North American river otter",
+    ],
   ] as const)("identifies a clear %s without claiming an individual identity", (species, heading, label) => {
     const actor = wildlife(species);
     const visible = observation(
@@ -383,15 +388,22 @@ describe("knowledge-honest wildlife ABOUT", () => {
   });
 
   it.each([
-    ["marsh-rabbit", "SMALL ANIMAL", "Unidentified small animal"],
-    ["marsh-fox", "UNKNOWN CANID", "Unidentified canid"],
+    ["marsh-rabbit", "SMALL ANIMAL", "Unidentified small animal", 60],
+    ["marsh-fox", "UNKNOWN CANID", "Unidentified canid", 60],
+    [
+      "north-american-river-otter",
+      "UNKNOWN AQUATIC MAMMAL",
+      "Unidentified aquatic mammal",
+      90,
+    ],
   ] as const)("withholds a distant %s classification and private ecology", (
     species,
     heading,
     identity,
+    distanceTiles,
   ) => {
     const actor = wildlife(species);
-    const about = projectWildlifeAbout(actor, observation(actor, 60));
+    const about = projectWildlifeAbout(actor, observation(actor, distanceTiles));
     expect(about).toMatchObject({ heading, identity, knowledge: "Unfamiliar", known: [] });
     expect(about?.observed.map(({ label }) => label)).not.toContain("Species");
     expect(about?.observed.map(({ label }) => label)).not.toContain("Form");
@@ -405,6 +417,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["marsh-fox", "Lean, low-tailed canid"],
     ["snowy-egret", "Slender, long-legged wader"],
     ["american-black-duck", "Broad-bodied dabbling duck"],
+    ["north-american-river-otter", "Long-bodied, low-slung swimmer"],
   ] as const)("shows only directly observable close-range %s facts", (species, form) => {
     const actor = wildlife(species);
     const selected = projectWildlifeLivingActorInspection(actor, observation(actor));
@@ -417,7 +430,9 @@ describe("knowledge-honest wildlife ABOUT", () => {
             ? "Marsh fox"
             : species === "snowy-egret"
               ? "Snowy egret"
-              : "American black duck",
+              : species === "american-black-duck"
+                ? "American black duck"
+                : "North American river otter",
       },
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },

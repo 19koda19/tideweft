@@ -32,7 +32,7 @@ function input(
 }
 
 describe("core wildlife identity", () => {
-  it("appends the waterfowl contract without rewriting prior wildlife", () => {
+  it("appends the Wave-C otter contract without rewriting prior wildlife", () => {
     expect(CORE_WILDLIFE_IDENTITY_VERSION).toBe(1);
     expect(CORE_WILDLIFE_SPECIES).toEqual([
       "deer",
@@ -49,6 +49,7 @@ describe("core wildlife identity", () => {
       "atlantic-marsh-fiddler-crab",
       "snowy-egret",
       "american-black-duck",
+      "north-american-river-otter",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -224,6 +225,27 @@ describe("core wildlife identity", () => {
       locomotionClass: "amphibious",
       taxonomicClass: "bird",
     });
+    expect(getCoreWildlifeProfile("north-american-river-otter")).toMatchObject({
+      maximumPatchPopulation: 1,
+      roles: ["forager", "scavenger", "predator", "small-predator"],
+      foodAffinities: {
+        browse: 0,
+        "shore-forage": 900_000,
+        carrion: 380_000,
+        "exposed-food": 420_000,
+        "live-prey": 1_000_000,
+      },
+      behavior: { maximumPursuitTicks: 9 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("north-american-river-otter")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      dietClass: "carnivore",
+      groupOrganization: null,
+      groupStableIdNamespace: null,
+      locomotionClass: "amphibious",
+      taxonomicClass: "mammal",
+    });
   });
 
   it("fixes the Alpha-20 duck identity contract as deterministic bytes", () => {
@@ -232,6 +254,15 @@ describe("core wildlife identity", () => {
     );
     expect(stableCoreWildlifeId(input("american-black-duck"))).toBe(
       "DUCK-v1-0huwe9o.1ezclkl.0tl4wgd.1kiba8e-njz.p8g-u.american-black-duck:east-marsh-3",
+    );
+  });
+
+  it("fixes the Wave-C otter identity admission as deterministic bytes", () => {
+    expect(JSON.stringify(getCoreWildlifeProfile("north-american-river-otter"))).toBe(
+      '{"version":1,"species":"north-american-river-otter","maximumPatchPopulation":1,"roles":["forager","scavenger","predator","small-predator"],"foodAffinities":{"browse":0,"shore-forage":900000,"carrion":380000,"exposed-food":420000,"live-prey":1000000},"behavior":{"alarmThreshold":1000000,"fleeThreshold":800000,"retreatThreshold":600000,"forageThreshold":240000,"guardThreshold":620000,"maximumPursuitTicks":9},"morphs":["dark-chocolate","rich-brown","silver-muzzled","warm-brown"],"temperamentPairs":[["cautious","opportunistic"],["bold","opportunistic"],["watchful","patient"],["reserved","watchful"]],"traitRanges":{"vigilance":[520000,900000],"boldness":[240000,820000],"sociability":[180000,700000]}}',
+    );
+    expect(stableCoreWildlifeId(input("north-american-river-otter"))).toBe(
+      "OTTER-v1-0huwe9o.1ezclkl.0tl4wgd.1kiba8e-njz.p8g-11.north-american-river-otter:east-marsh-3",
     );
   });
 

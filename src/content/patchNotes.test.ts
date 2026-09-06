@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.20",
-      buildIdentity: "0.3.3-alpha.20",
+      version: "0.3.3-alpha.21",
+      buildIdentity: "0.3.3-alpha.21",
       gameplayContractVersion: 20,
-      tutorialVersion: 30,
+      tutorialVersion: 31,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,7 +68,7 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the bounded waterfowl unit and retains earlier habitat work", () => {
+  it("scopes the bounded Living Channel unit and retains earlier habitat work", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
@@ -127,23 +127,28 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("persistent American-black-duck representative");
+    expect(activeCopy).toContain("North American river otter");
+    expect(activeCopy).toContain("version-6 population and anchor record as its exact prefix");
+    expect(activeCopy).toContain("silverside school, fiddler-crab area");
     expect(activeCopy).toContain("anonymous aquatic-activity observation");
-    expect(activeCopy).toContain("movement medium");
-    expect(activeCopy).toContain("shared traversability and path resolver");
-    expect(activeCopy).toContain("durable completed-operation tick");
-    expect(activeCopy).toContain("does not claim or require an exhaustive animal-by-animal interaction test matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 14");
+    expect(activeCopy).toContain("shared locomotion and path resolver");
+    expect(activeCopy).toContain("nonlethal pressure");
+    expect(activeCopy).toContain("physical-item claim boundary");
+    expect(activeCopy).toContain("nearest 24");
+    expect(activeCopy).toContain("does not require a bespoke test for every species or every possible animal pair");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 15");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" "))
-      .toContain("sealed version-13 Tide Table save migrates exactly once");
+      .toContain("sealed version-14 Between Water and Sky save migrates exactly once");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" "))
-      .toContain("Every version-5 habitat population and tidal anchor");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("bounded second Wave-C unit");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no simulated flock, nesting, reproduction, capture, consumption, injury, mortality, or carcass state");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete scent fields and tracking");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("foliage consumption");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("full sleep and circadian schedules");
+      .toContain("Every earlier population, habitat anchor, actor, group, aggregate unit");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("final bounded starting-harbor Wave-C role slice");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not completion of Wave C");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("worldwide ecology");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("cannot capture or consume live prey");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, fishing, reproduction, migration");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("No otter-specific call");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("complete sound propagation");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("new persistent track or evidence type");
     expect(tidalCopy).toContain("Atlantic-silverside school aggregate");
     expect(tidalCopy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
     expect(tidalCopy).toContain("persistent snowy-egret representative");

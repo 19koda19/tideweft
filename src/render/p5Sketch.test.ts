@@ -250,6 +250,7 @@ const wildlifeView = (
     "northern-harrier": "Northern harrier",
     "snowy-egret": "Snowy egret",
     "american-black-duck": "American black duck",
+    "north-american-river-otter": "North American river otter",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -262,6 +263,7 @@ const wildlifeView = (
     "northern-harrier": "HARRIER-",
     "snowy-egret": "EGRET-",
     "american-black-duck": "DUCK-",
+    "north-american-river-otter": "OTTER-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -1551,6 +1553,71 @@ describe("Chart Wave-B wildlife presentation", () => {
       type: "select",
       entity: "living-actor",
       species: "american-black-duck",
+      id: actor.actorId,
+      point: { x: 12, y: 12 },
+    });
+    renderer.destroy();
+  });
+
+  it("draws and touch-selects one sinuous river otter without hidden ecology", () => {
+    vi.stubGlobal("performance", { now: () => 2_117 });
+    p5Harness.reducedMotion = true;
+    const base = view("chart-north-american-river-otter", { x: 12, y: 12 });
+    const actor = wildlifeView("north-american-river-otter", {
+      behavior: "swim",
+      conditionLabels: ["WATCHFUL"],
+      groupSize: 7,
+      selected: true,
+    });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "channel",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [actor],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    const p = p5Harness.instance;
+    const fills = (p?.fill as ReturnType<typeof vi.fn>).mock.calls.flat();
+    expect(fills).toEqual(expect.arrayContaining(["#5b402e", "#9b7957", "#241b17"]));
+    expect(p?.ellipse).toHaveBeenCalled();
+    expect(p?.bezier).toHaveBeenCalled();
+    expect(p?.line).toHaveBeenCalled();
+    const visibleText = (p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String);
+    expect(visibleText).toContain("North American river otter · watchful");
+    expect(visibleText.join(" "))
+      .not.toMatch(/OTTER-R|~7 visible|flock|hunger|prey|fish|crab|target/iu);
+
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 221,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 221,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species: "north-american-river-otter",
       id: actor.actorId,
       point: { x: 12, y: 12 },
     });

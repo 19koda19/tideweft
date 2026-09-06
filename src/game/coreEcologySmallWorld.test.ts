@@ -6,6 +6,7 @@ import { FIXED_POINT } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
   displaceCoreEcologyAggregatePopulation,
+  setCoreEcologyAggregateActivityIntensity,
   serializeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
@@ -13,8 +14,10 @@ import {
 import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyTidalWebHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
+  type CoreEcologyTidalWebHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { resolveCoreEcologyAggregateActivityIntensity } from "./coreEcologyAggregatePolicy";
 import {
@@ -30,12 +33,16 @@ import {
   type CoreEcologySettlementShadowsStimulus,
   type CoreEcologySettlementShadowsStimulusFrame,
 } from "./coreEcologySmallWorld";
+import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 
 const SEED = seedFromText("settlement shadows interaction");
 const ORIGIN = createRegionCoord(-17, 23);
 
 function individualInputs(
-  habitat: CoreEcologyHarborEdgeHabitatAssemblage | CoreEcologyRainChorusHabitatAssemblage,
+  habitat:
+    | CoreEcologyHarborEdgeHabitatAssemblage
+    | CoreEcologyRainChorusHabitatAssemblage
+    | CoreEcologyTidalWebHabitatAssemblage,
 ): readonly CoreEcologyPopulationInput[] {
   return habitat.populations.flatMap((population) => (
     population.representation !== "individual-representatives"
@@ -554,6 +561,118 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
     );
     expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [rabbitAtRats])))
       .toBeNull();
+  });
+
+  it("inherits tidal routing and habitat activity baselines through the v7 habitat record", () => {
+    const seed = seedFromText("otter habitat 0");
+    const origin = createRegionCoord(0, 0);
+    const habitat = deriveCoreEcologyTidalWebHabitatAssemblage({
+      rootSeed: seed,
+      originRegion: origin,
+    });
+    const initial = createCoreEcologyAggregatePatch({
+      seed,
+      patchKey: "tidal-web:inherited-small-world-capabilities",
+      originRegion: origin,
+      tick: 0,
+      populations: individualInputs(habitat),
+      derivation: { kind: "habitat-v7", habitat },
+    });
+
+    const tidal = projectCoreEcologyTidalTable(initial, 0);
+    const fish = initial.aggregatePopulations.find(({ species }) => (
+      species === "atlantic-silverside"
+    ));
+    const otterId = initial.populations.find(({ species }) => (
+      species === "north-american-river-otter"
+    ))?.members[0]?.actor.identity.stableId;
+    const usableFishAnchors = new Set(tidal?.anchorDepths.filter(({ aggregateId, activityUsable }) => (
+      aggregateId === fish?.aggregateId && activityUsable
+    )).map(({ anchorOrdinal }) => anchorOrdinal));
+    const pressuredAnchor = fish?.anchors.find(({ anchorOrdinal, populationUnits }) => (
+      populationUnits > 0 && !usableFishAnchors.has(anchorOrdinal)
+    ));
+    const lawfulDestination = fish?.anchors.find(({ anchorOrdinal }) => (
+      anchorOrdinal !== pressuredAnchor?.anchorOrdinal && usableFishAnchors.has(anchorOrdinal)
+    ));
+    if (
+      tidal === null
+      || fish === undefined
+      || otterId === undefined
+      || pressuredAnchor === undefined
+      || lawfulDestination === undefined
+    ) {
+      throw new Error("V7 inheritance fixture lacks tidal fish, otter pressure, or lawful water");
+    }
+    const visualPressure: CoreEcologySettlementShadowsStimulus = {
+      version: CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION,
+      stimulusId: "stimulus:v7-otter-fish-pressure",
+      sourceReferenceId: otterId,
+      sourceKind: "north-american-river-otter",
+      response: "pressure",
+      targetAggregateId: fish.aggregateId,
+      channels: ["vision"],
+      anchorInfluences: [
+        { anchorOrdinal: pressuredAnchor.anchorOrdinal, intensity: 900_000 },
+        { anchorOrdinal: lawfulDestination.anchorOrdinal, intensity: 0 },
+      ],
+    };
+    const pressured = stepCoreEcologySettlementShadows(
+      initial,
+      0,
+      frame(0, [visualPressure]),
+    );
+    const fishEvent = pressured?.events.find(({ stimulusId }) => (
+      stimulusId === visualPressure.stimulusId
+    ));
+    const fishAfter = pressured?.patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === fish.aggregateId
+    ));
+    expect(fishEvent).toMatchObject({
+      sourceKind: "north-american-river-otter",
+      targetSpecies: "atlantic-silverside",
+      response: "pressure",
+      channels: ["vision"],
+      causeKind: "predator-pressure",
+      fromAnchorOrdinal: pressuredAnchor.anchorOrdinal,
+      mortality: "none",
+      cargoInteraction: false,
+      itemConsumption: "none",
+    });
+    expect(usableFishAnchors.has(fishEvent?.toAnchorOrdinal ?? -1)).toBe(true);
+    expect(fishAfter?.populationSize).toBe(fish.populationSize);
+    expect(fishAfter?.anchors.reduce((sum, anchor) => sum + anchor.populationUnits, 0))
+      .toBe(fish.populationSize);
+
+    const frog = initial.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    const frogHabitatBaseline = habitat.populations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ))?.activitySignal.intensity;
+    if (frog === undefined || frogHabitatBaseline === undefined) {
+      throw new Error("V7 inheritance fixture lacks its authenticated frog baseline");
+    }
+    const stale = setCoreEcologyAggregateActivityIntensity(initial, {
+      aggregateId: frog.aggregateId,
+      atTick: 0,
+      intensity: 0,
+    });
+    if (stale === null) throw new Error("Could not install stale frog activity control");
+    const dry = stepCoreEcologySettlementShadows(stale, 0, frame(0, []));
+    const dryFrog = dry?.patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === frog.aggregateId
+    ));
+    const expectedDryIntensity = resolveCoreEcologyAggregateActivityIntensity(
+      "southern-leopard-frog",
+      frogHabitatBaseline,
+      0,
+    );
+    expect(expectedDryIntensity).toBeGreaterThan(0);
+    expect(dryFrog?.activitySignal.intensity).toBe(expectedDryIntensity);
+    expect(dryFrog?.activitySignal.intensity).not.toBe(
+      resolveCoreEcologyAggregateActivityIntensity("southern-leopard-frog", 0, 0),
+    );
   });
 
   it("selects the strongest lawful gradient once, independent of input order", () => {

@@ -21,6 +21,7 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "atlantic-marsh-fiddler-crab",
   "snowy-egret",
   "american-black-duck",
+  "north-american-river-otter",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -94,6 +95,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "FIDDLER-"
     | "EGRET-"
     | "DUCK-"
+    | "OTTER-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -110,6 +112,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "atlantic-marsh-fiddler-crab": "FIDDLER-",
   "snowy-egret": "EGRET-",
   "american-black-duck": "DUCK-",
+  "north-american-river-otter": "OTTER-",
 });
 
 /**
@@ -272,6 +275,16 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     catalogIdentityForm: "individual",
     taxonomicClass: "bird",
     dietClass: "omnivore",
+    locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "north-american-river-otter": {
+    species: "north-american-river-otter",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "carnivore",
     locomotionClass: "amphibious",
     groupOrganization: null,
     groupStableIdNamespace: null,
@@ -821,6 +834,39 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       vigilance: [620_000, 960_000],
       boldness: [100_000, 520_000],
       sociability: [240_000, 700_000],
+    },
+  },
+  "north-american-river-otter": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "north-american-river-otter",
+    maximumPatchPopulation: 1,
+    roles: ["forager", "scavenger", "predator", "small-predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 900_000,
+      carrion: 380_000,
+      "exposed-food": 420_000,
+      "live-prey": 1_000_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 800_000,
+      retreatThreshold: 600_000,
+      forageThreshold: 240_000,
+      guardThreshold: 620_000,
+      maximumPursuitTicks: 9,
+    },
+    morphs: ["dark-chocolate", "rich-brown", "silver-muzzled", "warm-brown"],
+    temperamentPairs: [
+      ["cautious", "opportunistic"],
+      ["bold", "opportunistic"],
+      ["watchful", "patient"],
+      ["reserved", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [520_000, 900_000],
+      boldness: [240_000, 820_000],
+      sociability: [180_000, 700_000],
     },
   },
 });

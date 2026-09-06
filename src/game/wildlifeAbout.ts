@@ -163,6 +163,12 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN DUCK",
     representation: "individual",
   },
+  "north-american-river-otter": {
+    identifiedName: "North American river otter",
+    identifiedHeading: "NORTH AMERICAN RIVER OTTER",
+    unidentifiedHeading: "UNKNOWN AQUATIC MAMMAL",
+    representation: "individual",
+  },
 });
 
 /**

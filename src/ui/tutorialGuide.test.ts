@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(30);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(31);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,14 +63,17 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("second bounded Wave-C unit");
-    expect(copy).toContain("at most one persistent American black duck");
+    expect(copy).toContain("final bounded starting-harbor Wave-C role slice");
+    expect(copy).toContain("at most one persistent North American river otter");
+    expect(copy).toContain("fish, crab, usable water, and a dry shore haulout");
     expect(copy).toContain("AQUATIC ACTIVITY");
     expect(copy).toContain("shared terrain-occluded vision");
-    expect(copy).toContain("air or surface-water movement explicitly");
-    expect(copy).toContain("shared traversability and path resolver");
-    expect(copy).toContain("one representative use of the common species scaffold");
-    expect(copy).toContain("not a flock, nesting, migration, capture, mortality, carcass, consumption, worldwide ecology, or completed Wave C");
+    expect(copy).toContain("Shared amphibious locomotion");
+    expect(copy).toContain("nonlethal fish and crab pressure");
+    expect(copy).toContain("ordinary physical-item claims");
+    expect(copy).toContain("Exact spatial top-K selection keeps the active field at 24 individuals");
+    expect(copy).toContain("instead of a species-by-species or N² test matrix");
+    expect(copy).toContain("does not add live-prey capture or consumption, harmful attacks, injury, mortality, carcasses, fishing, sound or track evidence, reproduction, migration, worldwide ecology, completed Wave C, or completed Directive 04_1");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -246,10 +249,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 14");
-    expect(copy).toContain("sealed version 13 Tide Table save migrates exactly once");
-    expect(copy).toContain("every established habitat-version-5 population and tidal anchor, actor, group, aggregate population, item, Promise, disturbance, evidence record, and world fact stays exact");
-    expect(copy).toContain("cannot add another population, reroll an animal or anchor, duplicate a group or consumed provision, replay a completed tidal-edge opportunity, or rewrite older ecology");
+    expect(copy).toContain("Outer save version 15");
+    expect(copy).toContain("sealed version 14 Between Water and Sky save migrates exactly once");
+    expect(copy).toContain("every established habitat-version-6 population and anchor, actor, group, aggregate population, item, Promise, custody record, disturbance, evidence record, and world fact stays exact");
+    expect(copy).toContain("cannot add another population, reroll an animal or anchor, duplicate a group or provision, exceed the 24-actor materialization cap, replay a completed tidal-edge opportunity, or rewrite older ecology");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -336,13 +339,15 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
     expect(plannedCopy).toContain("at most one snowy egret");
     expect(plannedCopy).toContain("at most one American black duck");
-    expect(plannedCopy).toContain("one addressable individual, not a flock");
+    expect(plannedCopy).toContain("at most one North American river otter");
+    expect(plannedCopy).toContain("fish, crab, water, and dry-shore habitat all support it");
+    expect(plannedCopy).toContain("each one addressable individual, not a flock or hidden family");
     expect(plannedCopy).toContain("Rats, frogs, silversides, and fiddler crabs");
     expect(plannedCopy).toContain("aggregate populations rather than individual actors");
     expect(plannedCopy).toContain("Further dogs and wildlife species");
     expect(plannedCopy).toContain("worldwide populations");
     expect(plannedCopy).toContain("animal death and carcasses");
-    expect(plannedCopy).toContain("complete scent and evidence tracking");
+    expect(plannedCopy).toContain("complete sound, scent and evidence tracking");
     expect(plannedCopy).toContain("full bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
@@ -375,7 +380,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ROUTE AROUND THIS SPOT");
     expect(copy).toContain("exactly one dried-fish unit");
     expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
-    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, snowy egret, or American black duck");
+    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, snowy egret, American black duck, or North American river otter");
     expect(copy).toContain("A heard animal alarm gives an uncertain direction");
     expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("your previous route and choice history remain unchanged");
@@ -385,7 +390,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("bounded set of representatives");
     expect(copy).toContain("genuinely absent instead of being rerolled");
     expect(copy).toContain("deer persist in herds, gulls in flocks, and up to three fish-crow representatives in one CROW-FLOCK");
-    expect(copy).toContain("at most one snowy egret and at most one American black duck use persistent individual identities");
+    expect(copy).toContain("at most one snowy egret, at most one American black duck, and at most one North American river otter use persistent individual identities");
+    expect(copy).toContain("same habitat supports fish, crab, usable deep or tidal water, and a distinct dry shore haulout");
+    expect(copy).toContain("deterministic distance and stable identity select the nearest 24");
     expect(copy).toContain("Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs remain conserved");
     expect(copy).toContain("Lawfully perceived predators, dogs, people, and other supported animal roles");
     expect(copy).toContain("neutral animal such as a rabbit cannot disturb one merely by being nearby");
@@ -436,6 +443,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Relocation from refuge uses bounded air travel");
     expect(copy).toContain("movement already on water selects surface-water travel through the shared traversability and path resolver");
     expect(copy).toContain("reusable capability-driven ecology seam rather than adding a duck-only detection or pathing system");
+    expect(copy).toContain("one saved water-foraging place, and one distinct dry shore haulout");
+    expect(copy).toContain("Shared amphibious locomotion—not an otter-only pathfinder");
+    expect(copy).toContain("Its broad roles can create nonlethal fish or crab pressure");
+    expect(copy).toContain("common physical-item claim resolver can settle one loose-food contest without cloning the item");
+    expect(copy).toContain("None of this is a live-prey capture or meal, harmful attack, injury, death, carcass, fishing, call, or track-evidence system");
     expect(copy).toContain("deterministic low quartering search");
     expect(copy).toContain("only a crow actually mobbing it becomes pressure that can break the pursuit");
     expect(copy).toContain("At rest time, crows seek authenticated habitat perches");
@@ -443,31 +455,33 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("nonlethal player-absent aftermath");
     expect(copy).toContain("no harm or cargo interaction");
     expect(copy).toContain("Animals do not attack, receive injuries, die, leave carcasses, or consume live prey");
-    expect(copy).toContain("complete scent and evidence tracking");
+    expect(copy).toContain("Complete sound, scent and evidence tracking");
     expect(copy).toContain("foliage consumption");
     expect(copy).toContain("complete circadian behavior");
-    expect(copy).toContain("further species, worldwide populations, the full bestiary");
+    expect(copy).toContain("further species");
+    expect(copy).toContain("worldwide populations, the full bestiary");
     expect(copy).toContain("seven Wave-B ecological roles remain closed only for one bounded");
-    expect(copy).toContain("first two bounded Wave-C slices");
+    expect(copy).toContain("three bounded Wave-C slices");
     expect(copy).toContain("duck has no flock, nesting, reproduction, migration, capture, mortality, carcass, or consumption state");
-    expect(copy).toContain("otter-like predator");
+    expect(copy).toContain("otter likewise has no capture, live-prey consumption, harmful attack, injury, mortality, carcass, fishing, call, track-evidence, reproduction, or migration state");
     expect(copy).toContain("do not create ecology in every distant region or complete Wave C");
-    expect(copy).toContain("exhaustive species-pair interaction matrix");
+    expect(copy).toContain("instead of requiring a species-by-species or N² pair matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the current waterfowl save adoption without rewriting older ecology", () => {
+  it("teaches the current otter save adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 14 preserves habitat version 6");
+    expect(copy).toContain("Outer save version 15 preserves habitat version 7");
     expect(copy).toContain("aggregate ecology record version 4");
     expect(copy).toContain("all four aggregate populations");
-    expect(copy).toContain("tidal and waterfowl anchors");
+    expect(copy).toContain("tidal, waterfowl, and otter anchors");
+    expect(copy).toContain("deterministic top-K materialization state");
     expect(copy).toContain("durable tide-operation clock");
-    expect(copy).toContain("sealed version 13 Tide Table save migrates exactly once");
-    expect(copy).toContain("every established habitat-version-5 population and tidal anchor");
-    expect(copy).toContain("zero-or-one American-black-duck population");
+    expect(copy).toContain("sealed version 14 Between Water and Sky save migrates exactly once");
+    expect(copy).toContain("every established habitat-version-6 population and anchor");
+    expect(copy).toContain("zero-or-one North American river otter population");
     expect(copy).toContain("cannot add another population, reroll an animal or anchor");
   });
 

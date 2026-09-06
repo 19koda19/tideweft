@@ -6,6 +6,9 @@ import {
   ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS,
   ALPHA20_AMERICAN_BLACK_DUCK_EXCLUDED_CLAIMS,
   ALPHA20_AMERICAN_BLACK_DUCK_SPECIES,
+  ALPHA21_RIVER_OTTER_BOUNDED_READINESS,
+  ALPHA21_RIVER_OTTER_EXCLUDED_CLAIMS,
+  ALPHA21_RIVER_OTTER_SPECIES,
   ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA,
   ALPHA16_MARSH_EDGE_BOUNDED_READINESS,
   ALPHA16_MARSH_EDGE_SPECIES,
@@ -23,6 +26,7 @@ import {
   alpha16MarshEdgeBoundedReadiness,
   alpha17RainChorusBoundedReadiness,
   alpha20AmericanBlackDuckBoundedReadiness,
+  alpha21RiverOtterBoundedReadiness,
   auditLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGateSet,
@@ -661,6 +665,174 @@ describe("Living Weft species release gate", () => {
         group: { status: "unimplemented", stableIdentity: false },
         territory: { model: "none", anchorKinds: [] },
       },
+    });
+    expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+      verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+    ))).toBe(false);
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);
+    expect(Object.isFrozen(readiness.evidenceOwnerIds)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("authenticates Alpha-21 as one bounded otter without harmful or later-ecology claims", () => {
+    const readiness = alpha21RiverOtterBoundedReadiness();
+    const releaseGate = gate("north-american-river-otter");
+    const state = (criterion: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+      releaseGate.criteria.find((candidate) => candidate.criterion === criterion)
+    );
+
+    expect(readiness).toEqual(ALPHA21_RIVER_OTTER_BOUNDED_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "alpha21-north-american-river-otter",
+      scope: "one-bounded-amphibious-individual",
+      speciesIds: ["north-american-river-otter"],
+      evidenceAuthenticated: true,
+      speciesProfileReady: true,
+      individualRepresentationReady: true,
+      habitatPlacementReady: true,
+      boundedActivityReady: true,
+      amphibiousLocomotionReady: true,
+      lawfulPerceptionReady: true,
+      topKMaterializationReady: true,
+      saveMigrationReady: true,
+      individualPresentationReady: true,
+      nonlethalInteractionsReady: true,
+      boundedLocalContinuityReady: true,
+      performanceEvidenceReady: true,
+      representativeEmergenceReady: true,
+      excludedClaimIntegrityReady: true,
+      boundedCandidateReady: true,
+      blockingCapabilities: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+    });
+    expect(readiness.speciesIds).toEqual(ALPHA21_RIVER_OTTER_SPECIES);
+    expect(readiness.excludedClaims).toEqual(ALPHA21_RIVER_OTTER_EXCLUDED_CLAIMS);
+    expect(readiness.excludedClaims).toEqual([
+      "mortality",
+      "carcasses",
+      "harmful-predation",
+      "capture",
+      "live-prey-consumption",
+      "sound",
+      "environmental-evidence",
+      "reproduction",
+      "same-species-interaction",
+      "ecological-cross-region-migration",
+      "weather-water-tide-condition-mutation",
+      "full-trophic-turnover",
+      "full-wave-c",
+      "full-directive-04-1",
+    ]);
+    expect(readiness.evidenceOwnerIds).toEqual([...readiness.evidenceOwnerIds].sort());
+    expect(readiness.evidenceOwnerIds).toEqual(expect.arrayContaining([
+      "game:core-ecology-activity:v1",
+      "game:core-ecology-habitat:v7",
+      "game:core-ecology-perception:v1",
+      "game:core-ecology:v6",
+      "game:core-wildlife-locomotion-profile:v1",
+      "game:runtime-save:v15",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "test:alpha21-chart-relief-presentation:v1",
+      "test:alpha21-save-migration:v1",
+      "test:alpha21-shore-water-response:v1",
+      "test:core-ecology-spatial-top-k:v1",
+    ]));
+
+    expect(state("food-web")).toMatchObject({ status: "foundation" });
+    expect(state("perception-senses")).toMatchObject({
+      status: "foundation",
+      evidenceOwnerIds: expect.arrayContaining(["game:core-ecology-perception:v1"]),
+    });
+    expect(state("population-materialization")).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: expect.arrayContaining(["test:core-ecology-spatial-top-k:v1"]),
+    });
+    expect(state("save-load")).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: expect.arrayContaining([
+        "game:runtime-save:v15",
+        "test:alpha21-save-migration:v1",
+      ]),
+    });
+    expect(state("player-independent-scenario")).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: expect.arrayContaining(["test:alpha21-shore-water-response:v1"]),
+    });
+    expect(state("fuzz-testing")).toMatchObject({ status: "foundation" });
+    for (const criterion of [
+      "sound",
+      "same-species-interaction",
+      "environmental-evidence",
+      "seamless-region-crossing",
+      "tutorial-truth",
+      "patch-note-truth",
+      "exact-tested-deployment",
+    ] as const) {
+      expect(state(criterion)).toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    }
+
+    const module = livingSpeciesModule("north-american-river-otter");
+    expect(module).toMatchObject({
+      profile: { implementation: "active", taxonomicClass: "mammal" },
+      identity: { implementation: "active", form: "individual", stableIdNamespace: "OTTER" },
+      population: {
+        implementation: "active",
+        materialization: "mixed",
+        maxMaterializedPerRegion: 1,
+        coarseSimulation: true,
+      },
+      habitat: {
+        implementation: "active",
+        ownerId: "game:core-ecology-habitat:v7",
+        migrationModel: "none",
+      },
+      activity: { implementation: "active", ownerId: "game:core-ecology-activity:v1" },
+      locomotion: {
+        implementation: "active",
+        ownerId: "game:core-wildlife-locomotion-profile:v1",
+        crossRegion: false,
+      },
+      sound: { implementation: "unimplemented", repertoire: [] },
+      evidence: { status: "unimplemented", produces: [] },
+      lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
+      health: { implementation: "unimplemented", causalDeath: false },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      environment: {
+        weather: { status: "unimplemented" },
+        water: { status: "unimplemented" },
+        tide: { status: "unimplemented" },
+      },
+      social: {
+        group: { status: "unimplemented", stableIdentity: false },
+        territory: { model: "none", anchorKinds: [] },
+      },
+    });
+    expect(module?.interactions.targets.find(({ targetClass }) => (
+      targetClass === "aquatic-animal"
+    ))).toMatchObject({
+      verbs: ["approach", "dive"],
+      escalationConstraints: expect.arrayContaining([
+        "aggregate-unit-conservation",
+        "direct-perception-required",
+        "no-health-or-mortality-outcome",
+        "nonlethal-pressure-only",
+      ]),
+    });
+    expect(module?.interactions.targets.find(({ targetClass }) => (
+      targetClass === "smaller-prey"
+    ))).toMatchObject({
+      verbs: ["pursue"],
+      escalationConstraints: expect.arrayContaining([
+        "bounded-pursuit",
+        "direct-perception-required",
+      ]),
     });
     expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
       verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"

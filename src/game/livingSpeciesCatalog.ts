@@ -1409,6 +1409,72 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     conditionAxes: [fixed("exhaustion"), fixed("stress")],
     aboutObservableFields: ["appearance", "behavior", "species"],
   },
+  "north-american-river-otter": {
+    implementation: "active",
+    ecologicalClasses: [
+      "aquatic-forager",
+      "aquatic-predator",
+      "forager",
+      "predator",
+      "scavenger",
+      "small-predator",
+    ],
+    habitatOwnerId: "game:core-ecology-habitat:v7",
+    ecologyOwnerId: "game:core-wildlife-actor:v1",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["body-size", "coat-state"],
+    appearanceTraits: ["dense-brown-coat", "long-tail", "pale-muzzle"],
+    habitatClasses: [
+      "estuarine-channel",
+      "flooded-marsh-edge",
+      "riverbank",
+      "shallow-water",
+      "tidal-creek",
+    ],
+    movementMedia: [
+      { medium: "deep-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "land", relativeCapability: 720_000 },
+      { medium: "shallow-water", relativeCapability: 950_000 },
+    ],
+    movementVerbs: ["bound", "dive", "swim", "trot"],
+    terrainAffordances: [
+      "connected-water",
+      "land",
+      "shore-haulout",
+      "swimmable-deep-water",
+      "swimmable-shallow-water",
+    ],
+    consumedBy: ["large-predator"],
+    competesWith: ["snowy-egret"],
+    ecologicalEffects: [
+      "nonlethal-aquatic-pressure",
+      "prey-redistribution",
+      "scavenger-opportunity",
+    ],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    // Shore/water scheduling and depth selection are capability-owned. They
+    // do not directly mutate condition axes in this bounded slice.
+    water: absentResponse(),
+    tide: absentResponse(),
+    health: noHealth(),
+    conditionAxes: [fixed("exhaustion"), fixed("stress")],
+    aboutObservableFields: ["appearance", "approximate-size", "behavior", "species"],
+  },
 });
 
 /**
@@ -1699,6 +1765,26 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     water: "available",
     weather: "intentional-no-response",
   },
+  "north-american-river-otter": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "available",
+    water: "available",
+    weather: "intentional-no-response",
+  },
 } as const satisfies Readonly<Record<
   CoreWildlifeSpecies,
   Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
@@ -1712,15 +1798,21 @@ function coreWildlifeInteractionTargets(
   const targets: LivingSpeciesInteractionTargetContract[] = [];
 
   if (coreEcologySpeciesHasRuntimeCapability(species, "aquatic-foraging")) {
+    const movementVerbs = CORE_WILDLIFE_CATALOG_VALUES[species].movementVerbs;
+    const forageVerbs = coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
+      ? movementVerbs.includes("dabble")
+        ? ["approach", "dabble"]
+        : movementVerbs.includes("dive")
+          ? ["approach", "dive"]
+          : ["approach", "forage"]
+      : ["approach", "probe"];
     targets.push({
       targetClass: "aquatic-animal",
       policy: "available",
       perceptionChannels: ["vision"],
       appraisals: ["forage-opportunity"],
       motivationAxes: ["forage-drive"],
-      verbs: coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
-        ? ["approach", "dabble"]
-        : ["approach", "probe"],
+      verbs: forageVerbs,
       escalationConstraints: [
         "aggregate-unit-conservation",
         "direct-perception-required",

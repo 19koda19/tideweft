@@ -20,6 +20,7 @@ import {
   stepCoreEcologyActivityMotion,
 } from "./coreEcologyActivity";
 import {
+  deriveCoreEcologyTidalWebHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
   deriveCoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
@@ -51,21 +52,21 @@ const SEED_TEXT = "tidal-triad-1";
 const SEED = seedFromText(SEED_TEXT);
 const REGION = createRegionCoord(0, 0);
 
-describe("snowy egret perception of tidal aggregates", () => {
+describe("capability-selected perception of tidal aggregates", () => {
   it("selects every materialized aquatic forager with stable anonymous capped output", () => {
-    const seedText = "waterfowl habitat 1";
+    const seedText = "otter habitat 0";
     const seed = seedFromText(seedText);
-    const habitat = deriveCoreEcologyWaterfowlHabitatAssemblage({
+    const habitat = deriveCoreEcologyTidalWebHabitatAssemblage({
       rootSeed: seed,
       originRegion: REGION,
     });
     const created = createCoreEcologyAggregatePatch({
       seed,
-      patchKey: "tidal-perception:waterfowl",
+      patchKey: "tidal-perception:tidal-web",
       originRegion: REGION,
       tick: 360,
       populations: individualInputs(habitat),
-      derivation: { kind: "habitat-v6", habitat },
+      derivation: { kind: "habitat-v7", habitat },
     });
     const tidalStep = stepCoreEcologyTidalTable(created, { atTick: 360 });
     if (tidalStep === null) throw new Error("Waterfowl tidal fixture step failed");
@@ -80,7 +81,11 @@ describe("snowy egret perception of tidal aggregates", () => {
     ));
     if (cue === undefined) throw new Error("Waterfowl fixture lacks an aquatic cue");
     let patch = tidalStep.patch;
-    for (const species of ["snowy-egret", "american-black-duck"] as const) {
+    for (const species of [
+      "snowy-egret",
+      "american-black-duck",
+      "north-american-river-otter",
+    ] as const) {
       const actor = patch.populations.find((population) => population.species === species)
         ?.members[0]?.actor;
       if (actor === undefined) throw new Error(`Waterfowl fixture lacks ${species}`);
@@ -121,18 +126,23 @@ describe("snowy egret perception of tidal aggregates", () => {
     const duck = patch.populations.find(({ species }) => species === "american-black-duck")
       ?.members[0]?.actor;
     const egret = egretActor(patch);
-    if (duck === undefined) throw new Error("Waterfowl fixture lacks duck actor");
+    const otter = patch.populations.find(
+      ({ species }) => species === "north-american-river-otter",
+    )?.members[0]?.actor;
+    if (duck === undefined || otter === undefined) {
+      throw new Error("Tidal-web fixture lacks an admitted aquatic forager");
+    }
     const batches = collectCoreEcologyAggregateActivityObservationBatches({
-      actors: [egret, duck].reverse(),
+      actors: [egret, duck, otter].reverse(),
       patch,
       tick: 361,
       window,
       world,
     });
     expect(batches?.map(({ observerId }) => observerId)).toEqual(
-      [duck.identity.stableId, egret.identity.stableId].sort(),
+      [duck.identity.stableId, egret.identity.stableId, otter.identity.stableId].sort(),
     );
-    expect(batches).toHaveLength(2);
+    expect(batches).toHaveLength(3);
     for (const batch of batches ?? []) {
       expect(batch.observations.length).toBeGreaterThan(0);
       expect(batch.observations.every((observation) => (
@@ -146,7 +156,7 @@ describe("snowy egret perception of tidal aggregates", () => {
       expect(serialized).not.toContain("FIDDLE-AREA");
     }
     const repeated = collectCoreEcologyAggregateActivityObservationBatches({
-      actors: [duck, egret],
+      actors: [duck, egret, otter],
       patch,
       tick: 361,
       window,
@@ -496,7 +506,8 @@ function visibleCueFixture(tick: number): Readonly<{
 function individualInputs(
   habitat:
     | ReturnType<typeof deriveCoreEcologyTidalTableHabitatAssemblage>
-    | ReturnType<typeof deriveCoreEcologyWaterfowlHabitatAssemblage>,
+    | ReturnType<typeof deriveCoreEcologyWaterfowlHabitatAssemblage>
+    | ReturnType<typeof deriveCoreEcologyTidalWebHabitatAssemblage>,
 ): readonly CoreEcologyPopulationInput[] {
   return habitat.populations.flatMap((population) => (
     population.representation !== "individual-representatives"
@@ -512,6 +523,7 @@ function individualInputs(
             position: allocation.position,
             materialization: population.species === "snowy-egret"
               || population.species === "american-black-duck"
+              || population.species === "north-american-river-otter"
               ? "materialized" as const
               : "coarse" as const,
           })),

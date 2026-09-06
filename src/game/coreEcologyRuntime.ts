@@ -23,6 +23,7 @@ import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
 } from "./regionalTravel";
+import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 import {
   hasValidPerceptionSignature,
   type PerceptionResult,
@@ -60,9 +61,17 @@ interface VisibleMember {
   readonly presentation: WildlifePresentation;
 }
 
+interface MaterializationCandidate {
+  readonly actorId: string;
+  /** Exact squared distance in doubled frame-fixed-point coordinates. */
+  readonly distanceFromWindowCenterSquared: number;
+}
+
 /**
- * Exact stable-ID set whose authoritative current representation lies in the
- * frame. A coarse social actor belongs at its saved group-component anchor;
+ * Bounded stable-ID set whose authoritative current representation lies in
+ * the frame. When more actors intersect than can run at full fidelity, the
+ * physically closest candidates win with stable actor ID as the only tie
+ * break. A coarse social actor belongs at its saved group-component anchor;
  * its dormant individual address is history, not a second location.
  */
 export function deriveCoreEcologyMaterializedActorIds(
@@ -72,23 +81,35 @@ export function deriveCoreEcologyMaterializedActorIds(
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const window = canonicalWindow(windowValue);
   if (patch === null || window === null) return null;
-  const actorIds = patch.populations.flatMap((population) => population.members
-    .filter((member) => memberIntersectsRuntimeWindow(patch, population, member, window))
-    .map(({ actor }) => actor.identity.stableId));
+  const candidates: MaterializationCandidate[] = [];
+  for (const population of patch.populations) {
+    for (const member of population.members) {
+      const point = memberPointInRuntimeWindow(patch, population, member, window);
+      if (point === null) continue;
+      candidates.push(Object.freeze({
+        actorId: member.actor.identity.stableId,
+        distanceFromWindowCenterSquared: distanceFromWindowCenterSquared(point, window),
+      }));
+    }
+  }
+  candidates.sort(compareMaterializationCandidate);
+  const actorIds = candidates
+    .slice(0, CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS)
+    .map(({ actorId }) => actorId);
+  // The materialization command is a set, so keep its serialized spelling
+  // independent of spatial traversal or population array order.
   actorIds.sort(compareText);
-  return actorIds.length <= CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
-    ? Object.freeze(actorIds)
-    : null;
+  return Object.freeze(actorIds);
 }
 
-function memberIntersectsRuntimeWindow(
+function memberPointInRuntimeWindow(
   patch: CoreEcologyAggregatePatchState,
   population: CoreEcologyPopulationState,
   member: CoreEcologyPopulationMemberState,
   window: CoreEcologyRuntimeWindow,
-): boolean {
+): Readonly<{ x: number; y: number }> | null {
   if (member.materialization === "materialized") {
-    return livingActorAddressInRegionalWindow(member.actor.address, window) !== null;
+    return livingActorAddressInRegionalWindow(member.actor.address, window)?.point ?? null;
   }
   const group = patch.groups.groups.find((candidate) => (
     candidate.identity.species === population.species
@@ -96,10 +117,10 @@ function memberIntersectsRuntimeWindow(
     && candidate.memberOrdinals.includes(member.populationOrdinal)
   ));
   if (group === undefined) {
-    return livingActorAddressInRegionalWindow(member.actor.address, window) !== null;
+    return livingActorAddressInRegionalWindow(member.actor.address, window)?.point ?? null;
   }
   const component = coreEcologyGroupComponentForMember(group, member.populationOrdinal);
-  if (component === null) return false;
+  if (component === null) return null;
   // A partially materialized component still has exact individual positions.
   // Its coarse members remain at their last exact address until the whole
   // component becomes dormant; only then does the aggregate anchor own place.
@@ -108,12 +129,26 @@ function memberIntersectsRuntimeWindow(
     && component.memberOrdinals.includes(candidate.populationOrdinal)
   ));
   if (componentHasMaterializedMember) {
-    return livingActorAddressInRegionalWindow(member.actor.address, window) !== null;
+    return livingActorAddressInRegionalWindow(member.actor.address, window)?.point ?? null;
   }
   return livingActorAddressInRegionalWindow({
     ...member.actor.address,
     position: component.anchor,
-  }, window) !== null;
+  }, window)?.point ?? null;
+}
+
+function distanceFromWindowCenterSquared(
+  point: Readonly<{ x: number; y: number }>,
+  window: CoreEcologyRuntimeWindow,
+): number {
+  // Doubling both axes keeps an exact integer metric even if a future bounded
+  // window has odd dimensions. The point is already safely local to the frame,
+  // so this calculation never flattens extreme global coordinates.
+  const deltaX = point.x * 2
+    - window.terrain.width * WORLD_POSITION_UNITS_PER_TILE;
+  const deltaY = point.y * 2
+    - window.terrain.height * WORLD_POSITION_UNITS_PER_TILE;
+  return deltaX * deltaX + deltaY * deltaY;
 }
 
 /**
@@ -318,6 +353,14 @@ function allowedProjectionInputKeys(value: Record<string, unknown>): boolean {
 
 function comparePresentation(left: WildlifePresentation, right: WildlifePresentation): number {
   return compareText(left.species, right.species) || compareText(left.actorId, right.actorId);
+}
+
+function compareMaterializationCandidate(
+  left: MaterializationCandidate,
+  right: MaterializationCandidate,
+): number {
+  return left.distanceFromWindowCenterSquared - right.distanceFromWindowCenterSquared
+    || compareText(left.actorId, right.actorId);
 }
 
 function compareText(left: string, right: string): number {

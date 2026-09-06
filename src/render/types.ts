@@ -462,10 +462,12 @@ export type LivingActorViewSpecies = Exclude<
 export type WildlifeBehaviorView =
   | "neutral"
   | "forage"
+  | "swim"
   | "watch"
   | "alarm"
   | "flee"
   | "crossing"
+  | "dive"
   | "scavenge"
   | "pursue"
   | "guard"

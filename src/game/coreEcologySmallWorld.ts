@@ -273,10 +273,12 @@ export function stepCoreEcologySettlementShadows(
     ? emptyStimulusFrame(atTick)
     : canonicalizeCoreEcologySettlementShadowsStimulusFrame(stimulusFrame);
   if (frame === null || frame.atTick !== atTick) return null;
-  const ownsTidalHabitat = patch.derivation.kind === "habitat-v5"
-    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v5";
-  const tidal = ownsTidalHabitat ? projectCoreEcologyTidalTable(patch, atTick) : null;
-  if (ownsTidalHabitat && tidal === null) return null;
+  const ownsTidalPopulations = patch.aggregatePopulations.some(({ species }) => (
+    species === "atlantic-silverside"
+      || species === "atlantic-marsh-fiddler-crab"
+  ));
+  const tidal = projectCoreEcologyTidalTable(patch, atTick);
+  if (ownsTidalPopulations && tidal === null) return null;
   const aggregatesById = new Map(patch.aggregatePopulations.map((population) => (
     [population.aggregateId, population] as const
   )));
@@ -483,12 +485,7 @@ function habitatActivityIntensity(
     throw new Error("Aggregate activity projection lost its population");
   }
   const derivation = patch.derivation;
-  if (
-    derivation.kind !== "habitat-v4"
-    && derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
-    && derivation.kind !== "habitat-v5"
-    && derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
-  ) return population.activitySignal.intensity;
+  if (!("habitat" in derivation)) return population.activitySignal.intensity;
   const analysis = derivation.habitat.populations.find((candidate) => (
     candidate.species === population.species
     && candidate.populationKey === population.populationKey
@@ -496,7 +493,12 @@ function habitatActivityIntensity(
   if (analysis === undefined) {
     throw new Error("Rain-responsive aggregate is absent from its habitat derivation");
   }
-  return analysis.activitySignal.intensity;
+  // Habitat v1 predates aggregate activity ownership. Later habitat records
+  // expose the authenticated baseline directly, so inheritance follows the
+  // capability instead of an ever-growing list of schema-version names.
+  return "activitySignal" in analysis
+    ? analysis.activitySignal.intensity
+    : population.activitySignal.intensity;
 }
 
 function aggregateDensityStimulus(

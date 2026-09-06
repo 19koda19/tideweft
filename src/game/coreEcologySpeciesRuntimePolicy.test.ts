@@ -36,6 +36,7 @@ describe("core ecology species runtime policy", () => {
       "atlantic-marsh-fiddler-crab",
       "snowy-egret",
       "american-black-duck",
+      "north-american-river-otter",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -72,7 +73,7 @@ describe("core ecology species runtime policy", () => {
     });
   });
 
-  it("declares the bounded tidal-school, crab-area, wader, and waterfowl seams", () => {
+  it("declares the bounded Wave-C aquatic capability seams", () => {
     expect(coreEcologySpeciesRuntimePolicy("atlantic-silverside")).toMatchObject({
       actorAddressable: false,
       identityForm: "aggregate",
@@ -166,6 +167,36 @@ describe("core ecology species runtime policy", () => {
       .toBe(false);
     expect(coreEcologySpeciesHasRuntimeCapability("american-black-duck", "wading"))
       .toBe(false);
+    expect(coreEcologySpeciesRuntimePolicy("north-american-river-otter")).toMatchObject({
+      actorAddressable: true,
+      identityForm: "individual",
+      representation: "individual",
+      locomotionClass: "amphibious",
+      groupOrganization: null,
+      groupStableIdNamespace: null,
+      maximumMaterializedActors: 1,
+      aggregate: null,
+      capabilities: [
+        "actor-address",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "aquatic-locomotion",
+        "diurnal-activity",
+        "food-investigation",
+        "movement-memory",
+        "shore-water-activity",
+        "small-prey-pursuit",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["aquatic-foraging", "shore-water-relocation", "surface-diving"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    });
+    expect(coreEcologySpeciesHasRuntimeCapability(
+      "north-american-river-otter",
+      "ground-movement-evidence",
+    )).toBe(false);
   });
 
   it("keeps mobbing and aerial predation orthogonal to prey identity", () => {

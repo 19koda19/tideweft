@@ -40,12 +40,14 @@ import {
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
+  CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
   CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
   canonicalizeCoreEcologyHabitatAssemblage,
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   canonicalizeCoreEcologyRainChorusHabitatAssemblage,
   canonicalizeCoreEcologyTidalTableHabitatAssemblage,
+  canonicalizeCoreEcologyTidalWebHabitatAssemblage,
   canonicalizeCoreEcologyWaterfowlHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
   type CoreEcologyHarborEdgeActivitySignal,
@@ -54,6 +56,7 @@ import {
   type CoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyTidalTableHabitatAssemblage,
+  type CoreEcologyTidalWebHabitatAssemblage,
   type CoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
@@ -112,6 +115,7 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "northern-harrier",
   "snowy-egret",
   "american-black-duck",
+  "north-american-river-otter",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -200,6 +204,15 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Frozen pre-habitat actors remain authoritative through the v6 extension. */
       readonly kind: "legacy-fixed-v1-with-habitat-v6";
       readonly habitat: CoreEcologyWaterfowlHabitatAssemblage;
+    }>
+  | Readonly<{
+      readonly kind: "habitat-v7";
+      readonly habitat: CoreEcologyTidalWebHabitatAssemblage;
+    }>
+  | Readonly<{
+      /** Frozen pre-habitat actors remain authoritative through the v7 extension. */
+      readonly kind: "legacy-fixed-v1-with-habitat-v7";
+      readonly habitat: CoreEcologyTidalWebHabitatAssemblage;
     }>;
 
 export interface CreateCoreEcologyPatchInput {
@@ -843,6 +856,8 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v5"
     || derivation.kind === "habitat-v6"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+    || derivation.kind === "habitat-v7"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v7"
     ? aggregatePopulationsFromHabitat(input.seed, derivation.habitat, tick)
     : Object.freeze([]);
   const candidate = {
@@ -1807,7 +1822,8 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyMarshEdgeHabitatAssemblage
     | CoreEcologyRainChorusHabitatAssemblage
     | CoreEcologyTidalTableHabitatAssemblage
-    | CoreEcologyWaterfowlHabitatAssemblage,
+    | CoreEcologyWaterfowlHabitatAssemblage
+    | CoreEcologyTidalWebHabitatAssemblage,
   tick: number,
 ): readonly CoreEcologyAggregatePopulationState[] {
   const seedFingerprint = rootSeedFingerprint(seed);
@@ -2389,6 +2405,16 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: value.kind, habitat });
   }
+  if (
+    value.kind === "habitat-v7"
+    || value.kind === "legacy-fixed-v1-with-habitat-v7"
+  ) {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyTidalWebHabitatAssemblage(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: value.kind, habitat });
+  }
   return canonicalDerivation(value);
 }
 
@@ -2448,12 +2474,15 @@ function aggregateDerivationMatchesPopulations(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v5";
   const isWaterfowlDerivation = derivation.kind === "habitat-v6"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v6";
+  const isTidalWebDerivation = derivation.kind === "habitat-v7"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v7";
   if (
     !isHarborEdgeDerivation
     && !isMarshEdgeDerivation
     && !isRainChorusDerivation
     && !isTidalTableDerivation
     && !isWaterfowlDerivation
+    && !isTidalWebDerivation
   ) {
     return aggregatePopulations.length === 0
       && derivationMatchesPopulations(derivation, populations, originRegion);
@@ -2463,7 +2492,8 @@ function aggregateDerivationMatchesPopulations(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v3"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v4"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v5"
-    || derivation.kind === "legacy-fixed-v1-with-habitat-v6";
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v7";
   const expectedHabitatVersion = isHarborEdgeDerivation
     ? CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
     : isMarshEdgeDerivation
@@ -2472,7 +2502,9 @@ function aggregateDerivationMatchesPopulations(
     ? CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION
     : isTidalTableDerivation
     ? CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION
-    : CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION;
+    : isWaterfowlDerivation
+    ? CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION
+    : CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION;
   if (
     derivation.habitat.generationVersion !== expectedHabitatVersion
     || derivation.habitat.originRegion.x !== originRegion.x
@@ -2757,13 +2789,11 @@ function playerAbsentGroupDisturbances(
   group: CoreEcologyGroupState,
   atTick: number,
 ): readonly CoreEcologyPlayerAbsentDisturbance[] {
-  if (
-    patch.derivation.kind !== "habitat-v1"
-    && patch.derivation.kind !== "habitat-v2"
-    && patch.derivation.kind !== "habitat-v3"
-    && patch.derivation.kind !== "habitat-v4"
-    && patch.derivation.kind !== "habitat-v5"
-  ) return Object.freeze([]);
+  // Every authenticated habitat generation owns the same bounded population-
+  // pressure inputs. Follow that capability so later append-only habitat
+  // records—and their legacy-roster migration wrappers—inherit the established
+  // coarse, player-absent behavior without another schema-version allowlist.
+  if (!("habitat" in patch.derivation)) return Object.freeze([]);
   const population = patch.populations.find((candidate) => (
     candidate.species === group.identity.species
     && candidate.populationKey === group.identity.populationKey

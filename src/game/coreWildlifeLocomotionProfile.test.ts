@@ -85,6 +85,11 @@ describe("core wildlife locomotion profiles", () => {
       "surface-water",
     )).toMatchObject({ access: "open" });
     expect(() => coreWildlifeTraversabilityCell(
+      "american-black-duck",
+      dryLand,
+      "amphibious",
+    )).toThrow("lacks an amphibious locomotion profile");
+    expect(() => coreWildlifeTraversabilityCell(
       "snowy-egret",
       shallowWater,
       "surface-water",
@@ -136,6 +141,52 @@ describe("core wildlife locomotion profiles", () => {
     expect(resolution).toMatchObject({ kind: "moved", distanceUnits: 1_000 });
     if (resolution.kind !== "moved") throw new Error("Duck surface route did not move");
     expect(resolution.trajectory.every(({ localY }) => localY < 1_000)).toBe(true);
+  });
+
+  it("uses one amphibious surface for a lawful shore-water round trip", () => {
+    const species = "north-american-river-otter" as const;
+    const tick = 41;
+    const origin = createWorldPosition(createRegionCoord(0, 0), 0, 0);
+    const shore = tile({ terrain: "marsh", waterDepth: 0 });
+    const channel = tile({ terrain: "deep-water", waterDepth: 900_000 });
+    const cells = [shore, shore, channel, channel].map((candidate) => (
+      coreWildlifeTraversabilityCell(species, candidate, "amphibious")
+    ));
+    expect(cells.every(({ access }) => access === "open")).toBe(true);
+
+    const actorId = "OTTER-R-v1-locomotion/otter-1";
+    const surface = createLivingActorTraversabilitySurface({
+      forActorId: actorId,
+      sampledAtTick: tick,
+      origin,
+      widthTiles: 4,
+      heightTiles: 1,
+      cells,
+    });
+    const resolveAcrossBoundary = (fromX: number, toX: number) => (
+      resolveLivingActorLocomotion({
+        requestId: `amphibious:${fromX}:${toX}`,
+        tick,
+        actor: createLivingActorAddress({
+          actorId,
+          species,
+          position: createWorldPosition(createRegionCoord(0, 0), fromX, 500),
+          heading: 0,
+          persistence: "regional",
+        }),
+        targetArea: {
+          center: createWorldPosition(createRegionCoord(0, 0), toX, 500),
+          radiusUnits: 0,
+        },
+        maximumStepUnits: 4_000,
+        surface,
+      })
+    );
+
+    const intoWater = resolveAcrossBoundary(500, 3_500);
+    const ontoShore = resolveAcrossBoundary(3_500, 500);
+    expect(intoWater).toMatchObject({ kind: "moved", reachedObservedArea: true });
+    expect(ontoShore).toMatchObject({ kind: "moved", reachedObservedArea: true });
   });
 
   it("keeps every established terrestrial species on the exact base cost/step", () => {

@@ -106,6 +106,26 @@ describe("core ecology trophic capability resolver", () => {
       "snowy-egret",
       "atlantic-marsh-fiddler-crab",
     )).toBe(false);
+
+    // A newly admitted amphibious forager plugs into the same broad trophic
+    // seam: anonymous aquatic populations perceive pressure, while no direct
+    // capture, harm, or species-pair pursuit is invented.
+    expect(coreEcologyTrophicPerceivedClass(
+      "atlantic-silverside",
+      "north-american-river-otter",
+    )).toBe("aquatic-foraging-pressure");
+    expect(coreEcologyTrophicPerceivedClass(
+      "atlantic-marsh-fiddler-crab",
+      "north-american-river-otter",
+    )).toBe("aquatic-foraging-pressure");
+    expect(coreEcologyTrophicPerceivedClass(
+      "north-american-river-otter",
+      "atlantic-silverside",
+    )).toBeNull();
+    expect(coreEcologyCanPursueLivingActor(
+      "north-american-river-otter",
+      "atlantic-silverside",
+    )).toBe(false);
   });
 
   it("is total and deterministic across the declared roster", () => {

@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.21",
+      "releaseDate": "2026-09-06",
+      "buildIdentity": "0.3.3-alpha.21",
+      "summary": "The Living Channel adds a habitat-supported North American river otter to the bounded starting-harbor ecology, exercising shared amphibious movement, lawful aquatic observation, spatial materialization, and physical food competition without species-pair scripting.",
+      "gameplayContractVersion": 20,
+      "tutorialVersion": 31,
+      "categories": {
+        "gameplay": [
+          "Habitat version 7 preserves the entire version-6 population and anchor record as its exact prefix, then may append zero or one persistent North American river otter only where the existing silverside school, fiddler-crab area, usable foraging water, and a distinct dry shore haulout all support it. Unsupported habitat produces honest absence rather than a forced spawn or reload reroll.",
+          "The otter can move between its authenticated shore haulout and surface water through the ordinary shared locomotion and path resolver. In water it may scan, dive, or forage, but a current anonymous aquatic-activity observation can guide it only after the shared terrain-occluded vision boundary lawfully supplies that fact.",
+          "Shared roles and capabilities let a lawfully visible otter create nonlethal pressure for eligible fish and crab aggregates. The existing physical-item claim boundary also permits one representative loose-food competition and custody interaction without a private otter loot table or duplicated provision."
+        ],
+        "fixes": [
+          "Core-ecology materialization now ranks every lawful individual candidate by exact local distance to the bounded active field, breaks ties by stable actor ID, and selects the nearest 24 regardless of source array order. Overflow individuals retain their identities and authoritative coarse state instead of disappearing or exceeding the established actor ceiling.",
+          "Amphibious activity now declares shore-and-water travel through one reusable capability seam. The same terrain surface and route solver reject an invalid shore or water step instead of granting the otter a private movement shortcut.",
+          "Chart, Relief, selection, and ABOUT now agree on the same current otter identity, position, behavior, and knowledge boundary. Distant contact stays an unidentified aquatic mammal, and loss of lawful detail removes the target rather than leaving a remote tracker."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Otter pressure is aggregate avoidance or activity change only: it does not capture or consume live prey, injure or kill an actor, create a carcass, implement fishing, or alter the courier's statistics.",
+          "The local patch still materializes no more than 24 individual wildlife actors. Deterministic spatial top-K selection changes which eligible nearby representatives receive detail; it does not increase population totals, fabricate actors, or make the camera authoritative.",
+          "Shared invariants, property and bounded-fuzz checks, conservation rules, and representative shore-water, aggregate-pressure, and physical-custody witnesses validate the reusable architecture. The release deliberately does not require a bespoke test for every species or every possible animal pair."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D give the North American river otter a distinct low-slung swimming form, readable surface motion, matching mouse and touch targets, and reduced-motion parity while preserving the same direct-sight boundary.",
+          "Close lawful ABOUT can identify one North American river otter and describe only observable form, condition, and current behavior such as foraging in water, moving between shore and water, diving, scanning, swimming, or resting. It never reveals a hidden target, exact trait value, aggregate census, or stable database ID.",
+          "Field Manual version 31 explains the habitat-dependent one-otter unit, shared amphibious travel, lawful anonymous aquatic activity, nonlethal fish and crab pressure, physical loose-food competition, deterministic spatial materialization, version-15 save adoption, and the systems that remain absent."
+        ],
+        "saves": [
+          "The outer session advances to version 15 and habitat analysis advances to version 7. Current records authenticate the exact version-6 prefix, zero-or-one otter identity and anchors, current individual materialization, aggregate conservation, and every established actor, item, Promise, custody, evidence, and world-history root.",
+          "A sealed version-14 Between Water and Sky save migrates exactly once. Every earlier population, habitat anchor, actor, group, aggregate unit, tide-operation clock, item, Promise, custody record, evidence record, and world fact stays exact while the deterministic otter habitat extension is appended once.",
+          "Save, reload, coarse travel, full-detail return, negative coordinates, and extreme signed coordinates preserve the same otter presence or honest absence, stable identity, shore and water anchors, materialization order, aggregate totals, and physical item custody. Reload cannot add another otter, reroll support, exceed the 24-actor cap, or duplicate food."
+        ],
+        "knownLimitations": [
+          "This is the final bounded starting-harbor Wave-C role slice, not completion of Wave C, Directive 04_1, worldwide ecology, ecological cross-region migration, or the complete 75-to-150-profile bestiary.",
+          "The otter cannot capture or consume live prey and has no harmful attack, injury, mortality, carcass, fishing, reproduction, migration, or complete circadian-life system. Its current fish and crab relationship is nonlethal aggregate pressure only.",
+          "No otter-specific call, complete sound propagation, new persistent track or evidence type, complete scent field, broad information flow, or exhaustive species-pair test matrix is claimed. Wider aquatic and scavenger breadth remains future work."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.20",
       "releaseDate": "2026-09-06",
       "buildIdentity": "0.3.3-alpha.20",
