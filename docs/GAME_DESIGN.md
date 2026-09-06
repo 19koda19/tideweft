@@ -280,8 +280,8 @@ consumption, a full circadian simulation, complete scent, worldwide ecology, the
 full bestiary, or an exhaustive species-pair matrix. The broader Wave B
 biodiversity expansion remains active.
 
-Source candidate `0.3.3-alpha.18 — One Marsh, Many Eyes` closes only the bounded
-starting-harbor Wave-B policy and player-facing parity gaps described above.
+Source version `0.3.3-alpha.18 — One Marsh, Many Eyes` is the bounded
+starting-harbor Wave-B policy and player-facing parity closure release.
 Canonical species-driven aggregate input lets representative fox presence
 pressure the rat and frog areas through shared trophic policy while rabbit
 co-presence remains neutral; every broad target row is explicit; selected gull
@@ -291,13 +291,14 @@ The representation-aware Wave-B readiness report authenticates those seven
 roles only under `bounded-starting-harbor` and keeps worldwide ecology,
 migration, promotion, full species readiness, and broader biodiversity completion outside
 its authority.
-Alpha 17 remains the latest verified boundary until this candidate passes full
-tests, production/package gates, CI, Pages, and exact-live verification. The
-candidate adds no worldwide ecology, attack, injury, mortality, carcass,
+Exact feature commit `673fc373b2b6de81f299f4c176681c969ace6915` passed CI run
+`34027046007` and Pages run `34027046121`, and the deployed HTML, icon,
+manifest, JavaScript, and CSS match the tested committed build byte-for-byte.
+The release adds no worldwide ecology, attack, injury, mortality, carcass,
 live-prey consumption, complete scent, full circadian simulation, full bestiary,
 or N² interaction claim.
 
-Verified through Alpha 17:
+Verified through Alpha 18:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
