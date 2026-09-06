@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { ACTOR_PERCEPTION_SCALE, createActorObservation } from "../sim/actorPerception";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { seedFromText, type RootSeed } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord, type RegionCoord } from "../sim/regions";
+import { tideAtTick } from "../sim/terrain";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
@@ -17,23 +19,29 @@ import {
   CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS,
   CORE_ECOLOGY_ACTIVITY_OWNER_ID,
   CORE_ECOLOGY_ACTIVITY_SPECIES,
+  coreEcologyActivityTravelMedium,
   projectCoreEcologyActivity,
   projectCoreEcologyDayPhase,
   stepCoreEcologyActivityMotion,
   validateCoreEcologyActivityPolicies,
 } from "./coreEcologyActivity";
 import {
+  CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
   deriveCoreEcologyRainChorusHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
+  deriveCoreEcologyWaterfowlHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyTidalTableHabitatAssemblage,
+  type CoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES } from "./coreEcologySpeciesRuntimePolicy";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   repositionCoreWildlifeActor,
+  stepCoreWildlifeActor,
 } from "./coreWildlifeActor";
+import { createLivingActorTraversabilitySurface } from "./livingActorLocomotion";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -64,6 +72,7 @@ describe("core ecology bounded activity", () => {
       "fish-crow",
       "northern-harrier",
       "snowy-egret",
+      "american-black-duck",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
@@ -462,6 +471,250 @@ describe("core ecology bounded activity", () => {
     });
   });
 
+  it("floats, scans, and dabbles only at live authenticated duck water", () => {
+    let patch = waterfowlActivityPatch(360);
+    const duck = memberFor(patch, "american-black-duck").actor;
+    if (
+      patch.derivation.kind !== "habitat-v6"
+      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
+    ) throw new Error("Waterfowl fixture lost habitat-v6 custody");
+    const tide = tideAtTick(360);
+    const target = patch.derivation.habitat.tidalAnchors.find((anchor) => (
+      anchor.species === "american-black-duck"
+      && anchor.purpose === "dabbling"
+      && tide.level - anchor.elevation
+        >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+    ));
+    if (target === undefined) throw new Error("Waterfowl fixture lacks live dabbling water");
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(duck, {
+      atTick: 360,
+      position: target.position,
+      heading: duck.address.heading,
+    }));
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 360,
+    })).toMatchObject({
+      state: "floating",
+      sourceObservationId: null,
+      presentationSignal: "surface-swimming",
+      motion: { kind: "hold-position" },
+    });
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 364,
+    })).toMatchObject({
+      state: "water-scan",
+      sourceObservationId: null,
+      presentationSignal: "surface-swimming",
+      motion: { kind: "hold-position" },
+    });
+
+    const observation = createActorObservation({
+      id: "duck-aquatic:361",
+      observerId: duck.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: { center: target.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (observation === null) throw new Error("Duck aquatic observation fixture failed");
+    const observed = stepCoreWildlifeActor(
+      memberFor(patch, "american-black-duck").actor,
+      {
+        tick: 361,
+        observations: [observation],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+        neutralActivityPreference: "observe",
+      },
+    );
+    if (observed === null) throw new Error("Duck cognition rejected lawful aquatic activity");
+    const observedPatch = replaceCoreEcologyAggregatePatchActor(patch, observed.actor);
+    expect(projectCoreEcologyActivity(observedPatch, {
+      actorId: duck.identity.stableId,
+      atTick: 361,
+    })).toMatchObject({
+      state: "dabbling",
+      sourceObservationId: observation.id,
+      presentationSignal: "dabbling-forage",
+      motion: { kind: "hold-position" },
+    });
+  });
+
+  it("uses bounded surface routing, aerial refuge travel, and intent-owned flushes", () => {
+    let patch = waterfowlActivityPatch(360);
+    let duck = memberFor(patch, "american-black-duck").actor;
+    if (
+      patch.derivation.kind !== "habitat-v6"
+      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
+    ) throw new Error("Waterfowl fixture lost habitat-v6 custody");
+    const tide = tideAtTick(360);
+    const target = patch.derivation.habitat.tidalAnchors.find((anchor) => (
+      anchor.species === "american-black-duck"
+      && anchor.purpose === "dabbling"
+      && tide.level - anchor.elevation
+        >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+    ));
+    if (target === undefined) throw new Error("Waterfowl fixture lacks live dabbling water");
+    const offsetX = target.position.localX < WORLD_WIDTH * WORLD_POSITION_UNITS_PER_TILE / 2
+      ? 2 * WORLD_POSITION_UNITS_PER_TILE
+      : -2 * WORLD_POSITION_UNITS_PER_TILE;
+    duck = repositionCoreWildlifeActor(duck, {
+      atTick: 360,
+      position: translateWorldPosition(target.position, offsetX, 0),
+      heading: duck.address.heading,
+    });
+    patch = replaceCoreEcologyAggregatePatchActor(patch, duck);
+    const activity = projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 360,
+    });
+    expect(activity).toMatchObject({
+      state: "seeking-dabbling-water",
+      motion: {
+        kind: "target-area",
+        verb: "seek-dabbling-water",
+        travelMedium: "surface-water",
+      },
+    });
+    expect(activity === null ? null : coreEcologyActivityTravelMedium(activity.motion))
+      .toBe("surface-water");
+    expect(stepCoreEcologyActivityMotion(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 360,
+      maximumStepUnits: 720,
+    })).toBeNull();
+
+    const surface = createLivingActorTraversabilitySurface({
+      forActorId: duck.identity.stableId,
+      sampledAtTick: 360,
+      origin: createWorldPosition(ORIGIN, 0, 0),
+      widthTiles: WORLD_WIDTH,
+      heightTiles: WORLD_HEIGHT,
+      cells: Array.from(
+        { length: WORLD_WIDTH * WORLD_HEIGHT },
+        () => ({ access: "open" as const, travelCost: 300_000 }),
+      ),
+    });
+    const moved = stepCoreEcologyActivityMotion(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 360,
+      maximumStepUnits: 720,
+      surface,
+    });
+    expect(moved?.resolution).toBe("moved");
+    if (activity?.motion.kind !== "target-area" || moved === null) {
+      throw new Error("Duck surface activity failed to produce a target move");
+    }
+    const before = worldPositionDelta(
+      duck.address.position,
+      activity.motion.targetArea.center,
+    );
+    const afterDuck = memberFor(moved.patch, "american-black-duck").actor;
+    const after = worldPositionDelta(
+      afterDuck.address.position,
+      activity.motion.targetArea.center,
+    );
+    expect(Math.hypot(after.x, after.y)).toBeLessThan(Math.hypot(before.x, before.y));
+
+    const blockedSurface = createLivingActorTraversabilitySurface({
+      forActorId: duck.identity.stableId,
+      sampledAtTick: 360,
+      origin: createWorldPosition(ORIGIN, 0, 0),
+      widthTiles: WORLD_WIDTH,
+      heightTiles: WORLD_HEIGHT,
+      cells: Array.from(
+        { length: WORLD_WIDTH * WORLD_HEIGHT },
+        () => ({ access: "blocked" as const, travelCost: 0 }),
+      ),
+    });
+    expect(stepCoreEcologyActivityMotion(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 360,
+      maximumStepUnits: 720,
+      surface: blockedSurface,
+    })?.resolution).toBe("blocked");
+
+    let restPatch = waterfowlActivityPatch(0);
+    const restingDuck = memberFor(restPatch, "american-black-duck").actor;
+    expect(projectCoreEcologyActivity(restPatch, {
+      actorId: restingDuck.identity.stableId,
+      atTick: 0,
+    })).toMatchObject({
+      state: "seeking-tidal-refuge",
+      motion: {
+        kind: "target-area",
+        verb: "seek-waterfowl-refuge",
+        travelMedium: "air",
+      },
+    });
+    const refuge = restPatch.derivation.kind === "habitat-v6"
+      || restPatch.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+      ? restPatch.derivation.habitat.tidalAnchors.find((anchor) => (
+          anchor.species === "american-black-duck" && anchor.purpose === "refuge"
+        ))
+      : undefined;
+    if (refuge === undefined) throw new Error("Waterfowl fixture lacks dry refuge");
+    restPatch = replaceCoreEcologyAggregatePatchActor(
+      restPatch,
+      repositionCoreWildlifeActor(restingDuck, {
+        atTick: 0,
+        position: refuge.position,
+        heading: restingDuck.address.heading,
+      }),
+    );
+    expect(projectCoreEcologyActivity(restPatch, {
+      actorId: restingDuck.identity.stableId,
+      atTick: 0,
+    })).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      motion: { kind: "hold-position" },
+    });
+
+    const threat = createActorObservation({
+      id: "duck-threat:361",
+      observerId: duck.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "predator",
+      subjectId: "FOX-duck-threat",
+      area: { center: duck.address.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "identified",
+      interrupt: "strong",
+    });
+    if (threat === null) throw new Error("Duck threat fixture failed");
+    const alarmed = stepCoreWildlifeActor(duck, {
+      tick: 361,
+      observations: [threat],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (alarmed === null) throw new Error("Duck threat cognition failed");
+    const alarmPatch = replaceCoreEcologyAggregatePatchActor(patch, alarmed.actor);
+    const responsive = projectCoreEcologyActivity(alarmPatch, {
+      actorId: duck.identity.stableId,
+      atTick: 361,
+    });
+    expect(["alarm", "flee", "retreat"]).toContain(alarmed.actor.intent.kind);
+    expect(responsive).toMatchObject({
+      state: "responding",
+      responsiveToImmediateIntent: true,
+      motion: { kind: "defer-to-intent" },
+    });
+    expect(responsive === null ? null : coreEcologyActivityTravelMedium(responsive.motion))
+      .toBeNull();
+  });
+
   it("leaves coarse and non-policy actors untouched", () => {
     const coarse = activityPatch(360, "coarse");
     const crow = memberFor(coarse, "fish-crow");
@@ -531,6 +784,24 @@ function tidalActivityPatch(tick: number): CoreEcologyAggregatePatchState {
     derivation: { kind: "habitat-v5", habitat },
   });
   memberFor(patch, "snowy-egret");
+  return patch;
+}
+
+function waterfowlActivityPatch(tick: number): CoreEcologyAggregatePatchState {
+  const seed = seedFromText("waterfowl habitat 1");
+  const habitat = deriveCoreEcologyWaterfowlHabitatAssemblage({
+    rootSeed: seed,
+    originRegion: ORIGIN,
+  });
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: `waterfowl-activity:${tick}`,
+    originRegion: ORIGIN,
+    tick,
+    populations: waterfowlIndividualInputs(habitat),
+    derivation: { kind: "habitat-v6", habitat },
+  });
+  memberFor(patch, "american-black-duck");
   return patch;
 }
 
@@ -615,6 +886,29 @@ function tidalIndividualInputs(
             representedUnits: allocation.representedUnits,
             position: allocation.position,
             materialization: "materialized" as const,
+          })),
+        }]
+  ));
+}
+
+function waterfowlIndividualInputs(
+  habitat: CoreEcologyWaterfowlHabitatAssemblage,
+): readonly CoreEcologyPopulationInput[] {
+  return habitat.populations.flatMap((population) => (
+    population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: population.species === "american-black-duck"
+              ? "materialized" as const
+              : "coarse" as const,
           })),
         }]
   ));

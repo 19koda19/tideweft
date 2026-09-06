@@ -249,6 +249,7 @@ const wildlifeView = (
     "fish-crow": "Fish crows",
     "northern-harrier": "Northern harrier",
     "snowy-egret": "Snowy egret",
+    "american-black-duck": "American black duck",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -260,6 +261,7 @@ const wildlifeView = (
     "fish-crow": "CROW-",
     "northern-harrier": "HARRIER-",
     "snowy-egret": "EGRET-",
+    "american-black-duck": "DUCK-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -1485,6 +1487,71 @@ describe("Chart Wave-B wildlife presentation", () => {
       entity: "living-actor",
       species,
       id: `${prefix}R-v1-chart-${species}`,
+      point: { x: 12, y: 12 },
+    });
+    renderer.destroy();
+  });
+
+  it("draws and touch-selects one broad-billed American black duck without flock copy", () => {
+    vi.stubGlobal("performance", { now: () => 2_117 });
+    p5Harness.reducedMotion = true;
+    const base = view("chart-american-black-duck", { x: 12, y: 12 });
+    const actor = wildlifeView("american-black-duck", {
+      behavior: "forage",
+      conditionLabels: ["WATCHFUL"],
+      // Even a malformed renderer input cannot turn this individual into a flock label.
+      groupSize: 7,
+      selected: true,
+    });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "shallows",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [actor],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    const p = p5Harness.instance;
+    const fills = (p?.fill as ReturnType<typeof vi.fn>).mock.calls.flat();
+    expect(fills).toEqual(expect.arrayContaining(["#4b382e", "#76604a", "#4a5f8f", "#a59655"]));
+    expect(p?.ellipse).toHaveBeenCalled();
+    expect(p?.quad).toHaveBeenCalled();
+    expect(p?.triangle).toHaveBeenCalled();
+    const visibleText = (p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String);
+    expect(visibleText).toContain("American black duck · watchful");
+    expect(visibleText.join(" ")).not.toMatch(/DUCK-R|~7 visible|flock/iu);
+
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 220,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 220,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species: "american-black-duck",
+      id: actor.actorId,
       point: { x: 12, y: 12 },
     });
     renderer.destroy();

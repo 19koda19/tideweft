@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { LIVING_SPECIES_CATALOG, livingSpeciesModule } from "./livingSpeciesCatalog";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 import {
+  ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS,
+  ALPHA20_AMERICAN_BLACK_DUCK_EXCLUDED_CLAIMS,
+  ALPHA20_AMERICAN_BLACK_DUCK_SPECIES,
   ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA,
   ALPHA16_MARSH_EDGE_BOUNDED_READINESS,
   ALPHA16_MARSH_EDGE_SPECIES,
@@ -19,6 +22,7 @@ import {
   WAVE_C_TIDAL_TABLE_SPECIES,
   alpha16MarshEdgeBoundedReadiness,
   alpha17RainChorusBoundedReadiness,
+  alpha20AmericanBlackDuckBoundedReadiness,
   auditLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGateSet,
@@ -567,6 +571,104 @@ describe("Living Weft species release gate", () => {
     expect(Object.isFrozen(readiness.roles)).toBe(true);
     expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
     expect(Object.isFrozen(readiness.blockingRoles)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("authenticates Alpha-20 as one bounded duck without life-history, migration, or flock claims", () => {
+    const readiness = alpha20AmericanBlackDuckBoundedReadiness();
+    const releaseGate = gate("american-black-duck");
+    const state = (criterion: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+      releaseGate.criteria.find((candidate) => candidate.criterion === criterion)
+    );
+
+    expect(readiness).toEqual(ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "alpha20-american-black-duck",
+      scope: "one-bounded-waterfowl-individual",
+      speciesIds: ["american-black-duck"],
+      evidenceAuthenticated: true,
+      speciesProfileReady: true,
+      individualRepresentationReady: true,
+      habitatPlacementReady: true,
+      boundedActivityReady: true,
+      multimodalLocomotionReady: true,
+      lawfulPerceptionReady: true,
+      individualPresentationReady: true,
+      nonlethalInteractionsReady: true,
+      boundedLocalContinuityReady: true,
+      performanceEvidenceReady: true,
+      excludedClaimIntegrityReady: true,
+      boundedCandidateReady: true,
+      blockingCapabilities: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+    });
+    expect(readiness.speciesIds).toEqual(ALPHA20_AMERICAN_BLACK_DUCK_SPECIES);
+    expect(readiness.excludedClaims).toEqual(ALPHA20_AMERICAN_BLACK_DUCK_EXCLUDED_CLAIMS);
+    expect(readiness.excludedClaims).toEqual([
+      "mortality",
+      "carcasses",
+      "nesting",
+      "ecological-cross-region-migration",
+      "full-flock",
+      "capture",
+      "consumption",
+      "reproduction",
+      "full-wave-c",
+      "full-directive-04-1",
+    ]);
+    expect(readiness.evidenceOwnerIds).toEqual([...readiness.evidenceOwnerIds].sort());
+    expect(readiness.evidenceOwnerIds).toEqual(expect.arrayContaining([
+      "game:core-ecology-activity:v1",
+      "game:core-ecology-habitat:v6",
+      "game:core-ecology-perception:v1",
+      "game:core-wildlife-locomotion-profile:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    ]));
+
+    expect(state("food-web")).toMatchObject({ status: "foundation" });
+    expect(state("perception-senses")).toMatchObject({
+      status: "foundation",
+      evidenceOwnerIds: expect.arrayContaining(["game:core-ecology-perception:v1"]),
+    });
+    expect(state("fuzz-testing")).toMatchObject({ status: "foundation" });
+    for (const criterion of [
+      "sound",
+      "same-species-interaction",
+      "environmental-evidence",
+      "seamless-region-crossing",
+      "tutorial-truth",
+      "patch-note-truth",
+      "exact-tested-deployment",
+    ] as const) {
+      expect(state(criterion)).toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    }
+
+    const module = livingSpeciesModule("american-black-duck");
+    expect(module).toMatchObject({
+      identity: { form: "individual", stableIdNamespace: "DUCK" },
+      population: { maxMaterializedPerRegion: 1 },
+      habitat: { migrationModel: "none" },
+      locomotion: { crossRegion: false },
+      lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
+      health: { causalDeath: false },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      social: {
+        group: { status: "unimplemented", stableIdentity: false },
+        territory: { model: "none", anchorKinds: [] },
+      },
+    });
+    expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+      verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+    ))).toBe(false);
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);
+    expect(Object.isFrozen(readiness.evidenceOwnerIds)).toBe(true);
     expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
   });
 

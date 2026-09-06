@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.20 — 2026-09-06
+
+Build: `0.3.3-alpha.20` · Gameplay contract: 20 · Tutorial: 30
+
+Between Water and Sky adds at most one persistent American black duck near the stable starting harbor, using shared lawful perception and an explicit air-or-surface-water movement seam rather than species-pair scripting.
+
+### Gameplay
+
+- Habitat version 6 preserves the entire Tide Table version-5 population and anchor record as its exact prefix, then may append one persistent American-black-duck representative, two saved dabbling-water destinations, and one dry refuge where the same bounded habitat can genuinely support them. Unsupported waterfowl remain honestly absent rather than being forced or rerolled.
+- During its bounded daylight activity, the duck can float, scan, or dabble at currently wet saved habitat. A current anonymous aquatic-activity observation may guide its choice only after the shared terrain-occluded vision boundary produces that fact; otherwise it uses a deterministic eligible water destination or returns to its authenticated refuge as the tide changes.
+- The activity itself selects a movement medium. Movement beginning at the dry refuge uses bounded flight, while movement already on water uses the shared traversability and path resolver over currently wet cells. The same capability-selected aggregate-observation bridge now serves eligible aquatic foragers without a duckDetectFish or species-pair detection function.
+
+### Fixes
+
+- Tidal edge redistribution now records one durable completed-operation tick outside the bounded disturbance tail. Evicting an old visible event with unrelated same-tick activity can no longer make a conserved fish unit perform the same tide-edge opportunity twice; sealed Alpha-19 records reconstruct that clock deterministically from their authenticated completed tick and retained history.
+- The anonymous aquatic-activity bridge now authenticates every currently materialized aquatic-foraging observer against the saved ecology patch, applies the same current line-of-sight and depth-usable-anchor rules to each, and still exposes no aggregate actor ID, hidden census, or occluded target.
+- Chart and Relief now agree on the American black duck's selected identity, behavior label, ABOUT disclosure, and one-individual scope. Surface swimming, dabbling, resting, and relocation flight are projected from the same authoritative activity state rather than inferred independently by either renderer.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. The duck changes no courier statistics, cargo rules, Promise outcome, or tidal population total; its current interactions are observation, alarm, nonlethal pressure, avoidance, and movement only.
+- The extension adds at most one materialized duck and three saved waterfowl destinations while retaining the global 24-actor materialization ceiling and bounded habitat, anchor, path, observation, save-size, and tide-soak budgets.
+- Shared capability invariants, deterministic signed-space checks, aggregate conservation, one representative multimodal route, and bounded performance witnesses validate the reusable scaffold. The release does not claim or require an exhaustive animal-by-animal interaction test matrix.
+
+### Interface
+
+- Chart 2D and Relief 3D give the American black duck a distinct broad-billed, mottled-brown form with a violet wing accent, color-independent silhouette detail, matching mouse and touch targets, and reduced-motion parity. It is never labeled as a flock.
+- Close lawful ABOUT can identify the individual and describe only visible form, current condition, and authenticated behavior such as FLOATING, WATER SCAN, DABBLING, RESTING, SURFACE SWIMMING, or RELOCATION FLIGHT. It never reveals a hidden target, exact trait value, private aggregate count, or database ID.
+- Field Manual version 30 explains the live one-duck waterfowl unit, lawful anonymous aquatic observation, explicit flight-versus-surface movement, version-14 save adoption, and the still-absent flock, nesting, migration, mortality, and carcass systems.
+
+### Save changes
+
+- The outer session advances to version 14, habitat analysis advances to version 6, and the aggregate ecology record advances to version 4 for its durable tide-operation clock. Current saves authenticate the exact waterfowl habitat, actor identity, movement state, aggregate conservation, and every established world and custody root.
+- A sealed version-13 Tide Table save migrates exactly once. Every version-5 habitat population and tidal anchor, actor, group, aggregate unit, disturbance, evidence record, item, Promise, custody record, player fact, and world fact stays exact while the deterministic waterfowl habitat and zero-or-one duck population are appended once.
+- Save, reload, coarse travel, full-detail return, negative coordinates, and extreme signed coordinates preserve the same duck presence or honest absence, identity, position, tide clock, and aggregate totals. A legacy inner ecology record cannot masquerade inside a current version-14 envelope, and refresh cannot reroll or duplicate the extension.
+
+### Known limitations
+
+- This is a bounded second Wave-C unit near the stable starting harbor. It is not worldwide ecology, ecological cross-region migration, completion of Wave C, the full biodiversity directive, or the complete 75-to-150-profile bestiary; the otter-like predator and wider waterfowl breadth remain later work.
+- The duck has no simulated flock, nesting, reproduction, capture, consumption, injury, mortality, or carcass state. No call is invented merely to fill a sound row, and aquatic-foraging observations remain nonlethal information rather than feeding or population loss.
+- Complete scent fields and tracking, foliage consumption, broad social information, full sleep and circadian schedules, wildlife promotion beyond current rules, worldwide populations, and harmful animal interactions remain future systems.
+
 ## 0.3.3-alpha.19 — 2026-09-06
 
 Build: `0.3.3-alpha.19` · Gameplay contract: 20 · Tutorial: 29

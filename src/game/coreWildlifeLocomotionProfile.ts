@@ -12,6 +12,13 @@ import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 const LOCOMOTION_FACTOR_SCALE = 1_000_000;
 export const CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION = 1 as const;
 
+/**
+ * A materialized bird may have more than one lawful movement medium. The
+ * caller selects the medium for the current activity; the shared surface and
+ * locomotion resolver still own the route.
+ */
+export type CoreWildlifeTravelMedium = "air" | "surface-water";
+
 interface DampCoverPreference {
   readonly terrain: "meadow";
   readonly minimumMoisture: number;
@@ -24,6 +31,8 @@ export interface CoreWildlifeLocomotionProfile {
   readonly mode: "terrestrial" | "aerial";
   /** Aerial travel does not inherit the surface tile's ground impedance. */
   readonly aerialTravelCost: number | null;
+  /** Surface swimming is restricted to genuinely wet cells. */
+  readonly surfaceWaterTravelCost: number | null;
   readonly baseTerrainMultiplier: number;
   readonly terrainMultipliers: Readonly<Partial<Record<TerrainTileView["terrain"], number>>>;
   readonly dampCoverPreference: DampCoverPreference | null;
@@ -34,6 +43,7 @@ export interface CoreWildlifeLocomotionProfile {
 const DEFAULT_LOCOMOTION_PROFILE: CoreWildlifeLocomotionProfile = Object.freeze({
   mode: "terrestrial",
   aerialTravelCost: null,
+  surfaceWaterTravelCost: null,
   baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
   terrainMultipliers: Object.freeze({}),
   dampCoverPreference: null,
@@ -53,6 +63,7 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
   gull: Object.freeze({
     mode: "aerial",
     aerialTravelCost: 260_000,
+    surfaceWaterTravelCost: null,
     baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
     terrainMultipliers: Object.freeze({}),
     dampCoverPreference: null,
@@ -62,6 +73,7 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
   "marsh-rabbit": Object.freeze({
     mode: "terrestrial",
     aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
     baseTerrainMultiplier: 920_000,
     terrainMultipliers: Object.freeze({
       marsh: 720_000,
@@ -85,6 +97,7 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
   "marsh-fox": Object.freeze({
     mode: "terrestrial",
     aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
     baseTerrainMultiplier: 880_000,
     terrainMultipliers: Object.freeze({
       marsh: 1_180_000,
@@ -101,6 +114,7 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
   "fish-crow": Object.freeze({
     mode: "aerial",
     aerialTravelCost: 240_000,
+    surfaceWaterTravelCost: null,
     baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
     terrainMultipliers: Object.freeze({}),
     dampCoverPreference: null,
@@ -114,6 +128,7 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
   "northern-harrier": Object.freeze({
     mode: "aerial",
     aerialTravelCost: 220_000,
+    surfaceWaterTravelCost: null,
     baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
     terrainMultipliers: Object.freeze({}),
     dampCoverPreference: null,
@@ -129,6 +144,7 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
     // between those anchors in flight through the shared aerial path surface.
     mode: "aerial",
     aerialTravelCost: 250_000,
+    surfaceWaterTravelCost: null,
     baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
     terrainMultipliers: Object.freeze({}),
     dampCoverPreference: null,
@@ -136,6 +152,22 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
     intentStepFactors: Object.freeze({
       flee: 900_000,
       retreat: 840_000,
+    }),
+  }),
+  "american-black-duck": Object.freeze({
+    // A flush is real aerial travel; ordinary dabbling relocations instead
+    // select the shared surface-water medium explicitly.
+    mode: "aerial",
+    aerialTravelCost: 245_000,
+    surfaceWaterTravelCost: 300_000,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 720_000,
+    intentStepFactors: Object.freeze({
+      alarm: 840_000,
+      flee: 920_000,
+      retreat: 860_000,
     }),
   }),
 });
@@ -152,13 +184,30 @@ export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(
 export function coreWildlifeTraversabilityCell(
   species: CoreWildlifeSpecies,
   tile: TerrainTileView,
+  travelMedium?: CoreWildlifeTravelMedium,
 ): LivingActorTraversabilityCell {
   const profile = coreWildlifeLocomotionProfile(species);
-  if (coreEcologySpeciesHasRuntimeCapability(species, "aerial-locomotion")) {
+  const medium = travelMedium ?? (
+    coreEcologySpeciesHasRuntimeCapability(species, "aerial-locomotion")
+      ? "air"
+      : null
+  );
+  if (medium === "air") {
     if (profile.mode !== "aerial" || profile.aerialTravelCost === null) {
       throw new Error(`Aerial species ${species} lacks an aerial locomotion profile`);
     }
     return Object.freeze({ access: "open", travelCost: profile.aerialTravelCost });
+  }
+  if (medium === "surface-water") {
+    if (
+      profile.surfaceWaterTravelCost === null
+      || !coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
+    ) {
+      throw new Error(`Species ${species} lacks a surface-water locomotion profile`);
+    }
+    return tile.terrain === "deep-water" || tile.waterDepth > 0
+      ? Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost })
+      : Object.freeze({ access: "blocked", travelCost: 0 });
   }
   if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
     return Object.freeze({ access: "deep-water", travelCost: 0 });
@@ -195,6 +244,11 @@ export function coreWildlifeLocomotionProfile(
   const aerial = coreEcologySpeciesHasRuntimeCapability(species, "aerial-locomotion");
   if (aerial !== (profile.mode === "aerial") || aerial !== (profile.aerialTravelCost !== null)) {
     throw new Error(`Core wildlife locomotion policy mismatch for ${species}`);
+  }
+  const surfaceWater = coreEcologySpeciesHasRuntimeCapability(species, "actor-address")
+    && coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion");
+  if (surfaceWater !== (profile.surfaceWaterTravelCost !== null)) {
+    throw new Error(`Core wildlife surface-water locomotion policy mismatch for ${species}`);
   }
   return profile;
 }

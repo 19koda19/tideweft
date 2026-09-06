@@ -40,6 +40,7 @@ describe("lean runtime living-species registry", () => {
       "atlantic-silverside",
       "atlantic-marsh-fiddler-crab",
       "snowy-egret",
+      "american-black-duck",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -282,7 +283,28 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 6_000,
         },
       },
+      {
+        species: "american-black-duck",
+        actorIdPrefix: "DUCK-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "american black duck",
+        senses: {
+          visionAcuity: 920_000,
+          hearingSensitivity: 820_000,
+          scentSensitivity: 220_000,
+          scentBaseRangeUnits: 8_000,
+        },
+      },
     ]);
+    expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "DUCK-v1-waterfowl-fixture",
+      "american-black-duck",
+    )).toBe(true);
   });
 
   it("is deeply immutable and fails unknown species closed", () => {

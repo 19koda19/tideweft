@@ -35,6 +35,7 @@ describe("core ecology species runtime policy", () => {
       "atlantic-silverside",
       "atlantic-marsh-fiddler-crab",
       "snowy-egret",
+      "american-black-duck",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -55,6 +56,7 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanOwnActorAddress("atlantic-silverside")).toBe(false);
     expect(coreEcologySpeciesCanOwnActorAddress("atlantic-marsh-fiddler-crab")).toBe(false);
     expect(coreEcologySpeciesCanOwnActorAddress("snowy-egret")).toBe(true);
+    expect(coreEcologySpeciesCanOwnActorAddress("american-black-duck")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("invented-frog")).toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("southern-leopard-frog")).toMatchObject({
       actorAddressable: false,
@@ -70,7 +72,7 @@ describe("core ecology species runtime policy", () => {
     });
   });
 
-  it("declares the bounded tidal-school, crab-area, and wader capability seams", () => {
+  it("declares the bounded tidal-school, crab-area, wader, and waterfowl seams", () => {
     expect(coreEcologySpeciesRuntimePolicy("atlantic-silverside")).toMatchObject({
       actorAddressable: false,
       identityForm: "aggregate",
@@ -133,6 +135,36 @@ describe("core ecology species runtime policy", () => {
       presentationModel: "individual",
     });
     expect(coreEcologySpeciesHasRuntimeCapability("snowy-egret", "small-prey-pursuit"))
+      .toBe(false);
+    expect(coreEcologySpeciesRuntimePolicy("american-black-duck")).toMatchObject({
+      actorAddressable: true,
+      identityForm: "individual",
+      representation: "individual",
+      locomotionClass: "amphibious",
+      groupOrganization: null,
+      groupStableIdNamespace: null,
+      maximumMaterializedActors: 1,
+      aggregate: null,
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "aquatic-locomotion",
+        "diurnal-activity",
+        "food-investigation",
+        "movement-memory",
+        "shared-alarm",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["dabbling-forage", "surface-swimming", "tidal-relocation-flight"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    });
+    expect(coreEcologySpeciesHasRuntimeCapability("american-black-duck", "group-coordination"))
+      .toBe(false);
+    expect(coreEcologySpeciesHasRuntimeCapability("american-black-duck", "wading"))
       .toBe(false);
   });
 

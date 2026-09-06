@@ -35,6 +35,7 @@ describe("Living Weft species module catalog", () => {
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
       .toEqual([...LIVING_ACTOR_SPECIES].sort());
     expect(LIVING_SPECIES_CATALOG.modules.map(({ moduleId }) => moduleId)).toEqual([
+      "living-species:american-black-duck:v1",
       "living-species:atlantic-marsh-fiddler-crab:v1",
       "living-species:atlantic-silverside:v1",
       "living-species:black-bear:v1",
@@ -669,10 +670,11 @@ describe("Living Weft species module catalog", () => {
     });
   });
 
-  it("defines the first Wave-C tidal contracts without actor-addressing aggregate animals", () => {
+  it("defines the Wave-C tidal contracts and one bounded waterfowl representative", () => {
     const silverside = livingSpeciesModule("atlantic-silverside");
     const crab = livingSpeciesModule("atlantic-marsh-fiddler-crab");
     const egret = livingSpeciesModule("snowy-egret");
+    const duck = livingSpeciesModule("american-black-duck");
 
     expect(silverside).toMatchObject({
       profile: {
@@ -752,6 +754,60 @@ describe("Living Weft species module catalog", () => {
       },
       social: { groupModel: "solitary", group: { status: "unimplemented" } },
     });
+    expect(duck).toMatchObject({
+      profile: {
+        implementation: "active",
+        taxonomicClass: "bird",
+        ecologicalClasses: [
+          "alarm-source",
+          "aquatic-forager",
+          "forager",
+          "omnivore",
+          "prey",
+          "small-prey",
+          "waterfowl",
+        ],
+      },
+      identity: { form: "individual", stableIdNamespace: "DUCK" },
+      spatial: { positionModel: "segmented-point", authoritativeHeading: true },
+      population: {
+        strategy: "hybrid-population",
+        maxMaterializedPerRegion: 1,
+      },
+      locomotion: {
+        implementation: "active",
+        ownerId: "game:core-wildlife-locomotion-profile:v1",
+        decisionModel: "individual",
+        media: [
+          { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "deep-water", relativeCapability: 950_000 },
+          { medium: "shallow-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+        ],
+        movementVerbs: ["dabble", "fly", "relocate", "swim"],
+      },
+      activity: {
+        implementation: "active",
+        ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
+        decisionModel: "individual",
+        circadian: { status: "active", rhythm: "diurnal" },
+      },
+      social: {
+        implementation: "foundation",
+        groupModel: "variable",
+        communicationChannels: ["hearing"],
+        group: { status: "unimplemented" },
+      },
+      sound: { implementation: "unimplemented", repertoire: [], communicationSignals: [] },
+      evidence: { status: "unimplemented", produces: [] },
+      health: { implementation: "unimplemented", causalDeath: false },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      environment: {
+        weather: { status: "unimplemented" },
+        water: { status: "unimplemented", inputs: [], outputs: [] },
+        tide: { status: "unimplemented", inputs: [], outputs: [] },
+      },
+      lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
+    });
 
     expect(silverside?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
       .toEqual(["waterborne-vibration"]);
@@ -762,6 +818,8 @@ describe("Living Weft species module catalog", () => {
     expect(crab?.senses.channels.find(({ channel }) => channel === "scent")?.modalities)
       .toEqual(["dissolved-chemical"]);
     expect(egret?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
+      .toEqual(["airborne-sound"]);
+    expect(duck?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
       .toEqual(["airborne-sound"]);
 
     for (const module of [silverside, crab, egret]) {
@@ -801,6 +859,9 @@ describe("Living Weft species module catalog", () => {
     expect(availableTargets(egret)).toEqual([
       "aquatic-animal", "dog", "food", "human", "predator", "water",
     ]);
+    expect(availableTargets(duck)).toEqual([
+      "aquatic-animal", "dog", "food", "human", "predator", "water",
+    ]);
     expect(egret?.interactions.targets.find(({ targetClass }) => targetClass === "aquatic-animal"))
       .toMatchObject({
         verbs: ["approach", "probe"],
@@ -811,6 +872,21 @@ describe("Living Weft species module catalog", () => {
           "nonlethal-pressure-only",
         ],
       });
+    expect(duck?.interactions.targets.find(({ targetClass }) => targetClass === "aquatic-animal"))
+      .toMatchObject({
+        verbs: ["approach", "dabble"],
+        escalationConstraints: [
+          "aggregate-unit-conservation",
+          "direct-perception-required",
+          "no-health-or-mortality-outcome",
+          "nonlethal-pressure-only",
+        ],
+      });
+    expect(duck?.interactions.targets.find(({ targetClass }) => targetClass === "water"))
+      .toMatchObject({ verbs: ["redistribute", "swim"] });
+    expect(duck?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+      verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+    ))).toBe(false);
   });
 
   it("makes registration order irrelevant while persisted catalog order is canonical", () => {
@@ -1497,6 +1573,7 @@ describe("Living Weft species module catalog", () => {
       expect(module.senses.implementation).toBe("foundation");
       expect(module.social.communicationChannels).toEqual(
         module.speciesId === "deer"
+          || module.speciesId === "american-black-duck"
           || module.speciesId === "gull"
           || module.speciesId === "fish-crow"
           || module.speciesId === "marsh-rabbit"

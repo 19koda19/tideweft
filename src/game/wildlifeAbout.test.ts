@@ -358,6 +358,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["fish-crow", "FISH CROW FLOCK", "Fish crow"],
     ["northern-harrier", "NORTHERN HARRIER", "Northern harrier"],
     ["snowy-egret", "SNOWY EGRET", "Snowy egret"],
+    ["american-black-duck", "AMERICAN BLACK DUCK", "American black duck"],
   ] as const)("identifies a clear %s without claiming an individual identity", (species, heading, label) => {
     const actor = wildlife(species);
     const visible = observation(
@@ -403,6 +404,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["marsh-rabbit", "Compact, long-eared"],
     ["marsh-fox", "Lean, low-tailed canid"],
     ["snowy-egret", "Slender, long-legged wader"],
+    ["american-black-duck", "Broad-bodied dabbling duck"],
   ] as const)("shows only directly observable close-range %s facts", (species, form) => {
     const actor = wildlife(species);
     const selected = projectWildlifeLivingActorInspection(actor, observation(actor));
@@ -413,7 +415,9 @@ describe("knowledge-honest wildlife ABOUT", () => {
           ? "Marsh rabbit"
           : species === "marsh-fox"
             ? "Marsh fox"
-            : "Snowy egret",
+            : species === "snowy-egret"
+              ? "Snowy egret"
+              : "American black duck",
       },
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },
@@ -481,6 +485,46 @@ describe("knowledge-honest wildlife ABOUT", () => {
     expect(quick).toMatchObject({ species: "snowy-egret", summary: "Flying" });
     expect(about?.observed).toContainEqual({ label: "Behavior", value: "Flying" });
     expect(about?.known).toEqual([]);
+  });
+
+  it("describes one observed American black duck without a flock or hidden ecology", () => {
+    const duck = wildlife("american-black-duck");
+    const visible = observation(duck);
+    const quick = projectWildlifeQuickInspect(duck, visible);
+    const about = projectWildlifeAbout(duck, visible);
+
+    expect(quick).toMatchObject({
+      actorId: duck.identity.stableId,
+      species: "american-black-duck",
+      heading: "AMERICAN BLACK DUCK",
+      summary: "Watching",
+    });
+    expect(about).toMatchObject({
+      actorId: duck.identity.stableId,
+      species: "american-black-duck",
+      heading: "AMERICAN BLACK DUCK",
+      identity: "American black duck",
+      knowledge: "Recognized",
+      known: [],
+    });
+    expect(about?.observed).toEqual(expect.arrayContaining([
+      { label: "Species", value: "American black duck" },
+      { label: "Behavior", value: "Watching" },
+      { label: "Form", value: "Broad-bodied dabbling duck" },
+    ]));
+    expect(about?.observed.map(({ label }) => label)).not.toContain("Visible group");
+    expect(JSON.stringify({ about, quick }))
+      .not.toMatch(/flock|nest|migration|mortality|carcass|populationSize|target/iu);
+    expect(projectWildlifeAbout(duck, observation(duck, 4, 2))).toBeNull();
+
+    const distant = projectWildlifeAbout(duck, observation(duck, 90));
+    expect(distant).toMatchObject({
+      heading: "UNKNOWN DUCK",
+      identity: "Unidentified duck",
+      knowledge: "Unfamiliar",
+      observed: [{ label: "Behavior", value: "Still" }],
+      known: [],
+    });
   });
 
   it("describes directly visible brown-rat evidence as population-level signs", () => {

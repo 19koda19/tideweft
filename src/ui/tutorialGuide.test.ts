@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(29);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(30);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,14 +63,14 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("first bounded Wave-C unit");
-    expect(copy).toContain("Atlantic-silverside school aggregate");
-    expect(copy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
-    expect(copy).toContain("at most one snowy egret");
-    expect(copy).toContain("tide changes water depth");
-    expect(copy).toContain("without rerolling any population");
-    expect(copy).toContain("lawfully see anonymous aquatic activity");
-    expect(copy).toContain("never a hidden capture, kill, carcass, fishing result, or consumed animal");
+    expect(copy).toContain("second bounded Wave-C unit");
+    expect(copy).toContain("at most one persistent American black duck");
+    expect(copy).toContain("AQUATIC ACTIVITY");
+    expect(copy).toContain("shared terrain-occluded vision");
+    expect(copy).toContain("air or surface-water movement explicitly");
+    expect(copy).toContain("shared traversability and path resolver");
+    expect(copy).toContain("one representative use of the common species scaffold");
+    expect(copy).toContain("not a flock, nesting, migration, capture, mortality, carcass, consumption, worldwide ecology, or completed Wave C");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -246,10 +246,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 13");
-    expect(copy).toContain("sealed version 12 save migrates exactly once");
-    expect(copy).toContain("every established habitat-version-4 population byte, actor, group, aggregate population, item, Promise, disturbance, evidence record, and world fact stays exact");
-    expect(copy).toContain("cannot add another population, reroll an animal or tidal anchor, duplicate a group or consumed provision, or rewrite older ecology");
+    expect(copy).toContain("Outer save version 14");
+    expect(copy).toContain("sealed version 13 Tide Table save migrates exactly once");
+    expect(copy).toContain("every established habitat-version-5 population and tidal anchor, actor, group, aggregate population, item, Promise, disturbance, evidence record, and world fact stays exact");
+    expect(copy).toContain("cannot add another population, reroll an animal or anchor, duplicate a group or consumed provision, replay a completed tidal-edge opportunity, or rewrite older ecology");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -335,6 +335,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("Atlantic-silverside school aggregate");
     expect(plannedCopy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
     expect(plannedCopy).toContain("at most one snowy egret");
+    expect(plannedCopy).toContain("at most one American black duck");
+    expect(plannedCopy).toContain("one addressable individual, not a flock");
     expect(plannedCopy).toContain("Rats, frogs, silversides, and fiddler crabs");
     expect(plannedCopy).toContain("aggregate populations rather than individual actors");
     expect(plannedCopy).toContain("Further dogs and wildlife species");
@@ -373,7 +375,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ROUTE AROUND THIS SPOT");
     expect(copy).toContain("exactly one dried-fish unit");
     expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
-    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, or snowy egret");
+    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, snowy egret, or American black duck");
     expect(copy).toContain("A heard animal alarm gives an uncertain direction");
     expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("your previous route and choice history remain unchanged");
@@ -383,7 +385,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("bounded set of representatives");
     expect(copy).toContain("genuinely absent instead of being rerolled");
     expect(copy).toContain("deer persist in herds, gulls in flocks, and up to three fish-crow representatives in one CROW-FLOCK");
-    expect(copy).toContain("Black bears, the northern harrier, and at most one snowy egret stay solitary");
+    expect(copy).toContain("at most one snowy egret and at most one American black duck use persistent individual identities");
     expect(copy).toContain("Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs remain conserved");
     expect(copy).toContain("Lawfully perceived predators, dogs, people, and other supported animal roles");
     expect(copy).toContain("neutral animal such as a rabbit cannot disturb one merely by being nearby");
@@ -429,6 +431,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("shared vision gives it a current anonymous AQUATIC ACTIVITY observation");
     expect(copy).toContain("only then can shared locomotion carry it toward that observed edge");
     expect(copy).toContain("cannot capture, injure, kill, consume, create a carcass, or implement fishing");
+    expect(copy).toContain("two saved dabbling-water destinations, and one dry refuge");
+    expect(copy).toContain("FLOATING, WATER SCAN, DABBLING, RESTING, SURFACE SWIMMING, or RELOCATION FLIGHT");
+    expect(copy).toContain("Relocation from refuge uses bounded air travel");
+    expect(copy).toContain("movement already on water selects surface-water travel through the shared traversability and path resolver");
+    expect(copy).toContain("reusable capability-driven ecology seam rather than adding a duck-only detection or pathing system");
     expect(copy).toContain("deterministic low quartering search");
     expect(copy).toContain("only a crow actually mobbing it becomes pressure that can break the pursuit");
     expect(copy).toContain("At rest time, crows seek authenticated habitat perches");
@@ -441,23 +448,27 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species, worldwide populations, the full bestiary");
     expect(copy).toContain("seven Wave-B ecological roles remain closed only for one bounded");
-    expect(copy).toContain("first bounded Wave-C tidal unit");
+    expect(copy).toContain("first two bounded Wave-C slices");
+    expect(copy).toContain("duck has no flock, nesting, reproduction, migration, capture, mortality, carcass, or consumption state");
+    expect(copy).toContain("otter-like predator");
     expect(copy).toContain("do not create ecology in every distant region or complete Wave C");
     expect(copy).toContain("exhaustive species-pair interaction matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the current Tide Table save adoption without rewriting older ecology", () => {
+  it("teaches the current waterfowl save adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 13 preserves habitat version 5");
+    expect(copy).toContain("Outer save version 14 preserves habitat version 6");
+    expect(copy).toContain("aggregate ecology record version 4");
     expect(copy).toContain("all four aggregate populations");
-    expect(copy).toContain("tidal-anchor elevations");
-    expect(copy).toContain("sealed version 12 save migrates exactly once");
-    expect(copy).toContain("every established habitat-version-4 population byte");
-    expect(copy).toContain("Atlantic-silverside, Atlantic-marsh-fiddler-crab, and snowy-egret ecology");
-    expect(copy).toContain("cannot add another population, reroll an animal or tidal anchor");
+    expect(copy).toContain("tidal and waterfowl anchors");
+    expect(copy).toContain("durable tide-operation clock");
+    expect(copy).toContain("sealed version 13 Tide Table save migrates exactly once");
+    expect(copy).toContain("every established habitat-version-5 population and tidal anchor");
+    expect(copy).toContain("zero-or-one American-black-duck population");
+    expect(copy).toContain("cannot add another population, reroll an animal or anchor");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

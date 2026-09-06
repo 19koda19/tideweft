@@ -1,5 +1,6 @@
 import type { ObservedArea } from "../sim/actorPerception";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
+import { tideAtTick } from "../sim/terrain";
 import { hashCanonical } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_STEP_TICKS,
@@ -9,7 +10,10 @@ import {
   type CoreEcologyPopulationMemberState,
   type CoreEcologyPopulationState,
 } from "./coreEcology";
-import type { CoreEcologyHabitatAllocation } from "./coreEcologyHabitat";
+import {
+  CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
+  type CoreEcologyHabitatAllocation,
+} from "./coreEcologyHabitat";
 import {
   projectCoreEcologyTidalTable,
   type CoreEcologySnowyEgretTidalTarget,
@@ -25,7 +29,12 @@ import {
   repositionCoreWildlifeActor,
   type CoreWildlifeIntentKind,
 } from "./coreWildlifeActor";
+import type { CoreWildlifeTravelMedium } from "./coreWildlifeLocomotionProfile";
 import { headingFromRadians } from "./livingActor";
+import {
+  resolveLivingActorLocomotion,
+  type LivingActorTraversabilitySurface,
+} from "./livingActorLocomotion";
 import {
   REGION_HEIGHT_UNITS,
   REGION_WIDTH_UNITS,
@@ -49,6 +58,7 @@ export const CORE_ECOLOGY_ACTIVITY_SPECIES = Object.freeze([
   "fish-crow",
   "northern-harrier",
   "snowy-egret",
+  "american-black-duck",
 ] as const);
 
 export type CoreEcologyActivitySpecies =
@@ -56,14 +66,18 @@ export type CoreEcologyActivitySpecies =
 export type CoreEcologyBoundedDayPhase = "daylight" | "rest-window";
 export type CoreEcologyActivityState =
   | "active-watch"
+  | "dabbling"
+  | "floating"
   | "low-quartering"
   | "perched"
   | "responding"
   | "resting"
   | "seeking-perch"
   | "seeking-tidal-refuge"
+  | "seeking-dabbling-water"
   | "seeking-wading-ground"
   | "waiting-on-tide"
+  | "water-scan"
   | "wading-scan"
   | "wading-search";
 
@@ -83,6 +97,12 @@ export type CoreEcologyActivityMotion =
         | "seek-tidal-refuge"
         | "seek-wading-ground";
       readonly targetArea: ObservedArea;
+    }>
+  | Readonly<{
+      readonly kind: "target-area";
+      readonly verb: "seek-dabbling-water" | "seek-waterfowl-refuge";
+      readonly targetArea: ObservedArea;
+      readonly travelMedium: CoreWildlifeTravelMedium;
     }>;
 
 export interface CoreEcologyActivityProjection {
@@ -105,6 +125,8 @@ export interface CoreEcologyActivityProjection {
     | "low-quartering-flight"
     | "perched"
     | "resting"
+    | "dabbling-forage"
+    | "surface-swimming"
     | "tidal-relocation-flight"
     | "wading-scan"
     | "wading-search"
@@ -123,12 +145,14 @@ export interface ProjectCoreEcologyActivityInput {
 
 export interface StepCoreEcologyActivityMotionInput extends ProjectCoreEcologyActivityInput {
   readonly maximumStepUnits: number;
+  /** Required only when the projected target selects surface-water travel. */
+  readonly surface?: LivingActorTraversabilitySurface;
 }
 
 export interface CoreEcologyActivityMotionStep {
   readonly patch: CoreEcologyAggregatePatchState;
   readonly projection: CoreEcologyActivityProjection;
-  readonly resolution: "arrived" | "deferred" | "held" | "moved";
+  readonly resolution: "arrived" | "blocked" | "deferred" | "held" | "moved";
 }
 
 const ACTIVITY_SPECIES = new Set<CoreWildlifeSpecies>(CORE_ECOLOGY_ACTIVITY_SPECIES);
@@ -150,6 +174,7 @@ const REQUIRED_COMMON_CAPABILITIES = Object.freeze([
 const PERCH_ARRIVAL_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
 const QUARTERING_TARGET_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
 const WADING_ARRIVAL_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 3);
+const DABBLING_ARRIVAL_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 3);
 const QUARTERING_OFFSETS = Object.freeze([
   Object.freeze({ x: -2_400, y: -1_100 }),
   Object.freeze({ x: -800, y: -2_200 }),
@@ -180,10 +205,21 @@ export function projectCoreEcologyDayPhase(
 }
 
 /**
- * Resolves an actionable activity projection for a materialized Rain Chorus
- * bird. Habitat-v4 custody proves that a crow's allocation is a lawful perch;
- * arbitrary caller positions cannot mint one. Other species fail closed and
- * retain their byte-compatible existing behavior.
+ * Resolves the movement medium without a species branch. Legacy target-area
+ * verbs predate multimodal activity and retain their exact aerial projection
+ * bytes; new motions carry the explicit choice on the motion itself.
+ */
+export function coreEcologyActivityTravelMedium(
+  motion: CoreEcologyActivityMotion,
+): CoreWildlifeTravelMedium | null {
+  if (motion.kind !== "target-area") return null;
+  return "travelMedium" in motion ? motion.travelMedium : "air";
+}
+
+/**
+ * Resolves an actionable bounded activity projection for a materialized bird.
+ * Versioned habitat custody proves every perch, wading edge, dabbling cell,
+ * and refuge; arbitrary caller positions cannot mint a destination.
  */
 export function projectCoreEcologyActivity(
   patchValue: unknown,
@@ -194,20 +230,22 @@ export function projectCoreEcologyActivity(
 }
 
 /**
- * Executes one authenticated schedule-owned aerial movement as a transaction.
- * A malformed, distant-imprecise, or unrepresentable target fails closed; it
- * never becomes an ordinary neutral intent for the runtime's chase/escape
- * refinement loop.
+ * Executes one authenticated schedule-owned movement as a transaction. Legacy
+ * aerial motion retains its direct bounded step, while explicit surface-water
+ * motion goes through the shared traversability/path resolver. A malformed or
+ * unrepresentable target fails closed and never becomes a neutral chase target.
  */
 export function stepCoreEcologyActivityMotion(
   patchValue: unknown,
   input: StepCoreEcologyActivityMotionInput,
 ): CoreEcologyActivityMotionStep | null {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
+  const ordinaryKeys = ["actorId", "atTick", "maximumStepUnits"] as const;
+  const withSurfaceKeys = [...ordinaryKeys, "surface"] as const;
   if (
     patch === null
     || !plainRecord(input)
-    || !exactKeys(input, ["actorId", "atTick", "maximumStepUnits"])
+    || (!exactKeys(input, ordinaryKeys) && !exactKeys(input, withSurfaceKeys))
     || typeof input.actorId !== "string"
     || input.actorId.length === 0
     || input.actorId.length > 256
@@ -228,6 +266,42 @@ export function stepCoreEcologyActivityMotion(
 
   const owned = findMaterializedActor(patch, input.actorId);
   if (owned === null) return null;
+  const travelMedium = coreEcologyActivityTravelMedium(projection.motion);
+  if (travelMedium === "surface-water") {
+    if (input.surface === undefined) return null;
+    const resolution = resolveLivingActorLocomotion({
+      requestId: `ecology-activity:${hashCanonical({
+        actorId: input.actorId,
+        atTick: input.atTick,
+        targetArea: projection.motion.targetArea,
+        travelMedium,
+      })}`,
+      tick: input.atTick,
+      actor: owned.member.actor.address,
+      targetArea: projection.motion.targetArea,
+      maximumStepUnits: input.maximumStepUnits,
+      surface: input.surface,
+    });
+    if (resolution.kind === "no-move") {
+      return resolution.reason === "already-within-observed-area"
+        ? activityMotionStep(patch, projection, "arrived")
+        : activityMotionStep(patch, projection, "blocked");
+    }
+    try {
+      const moved = repositionCoreWildlifeActor(owned.member.actor, {
+        atTick: input.atTick,
+        position: resolution.actor.position,
+        heading: resolution.actor.heading,
+      });
+      return activityMotionStep(
+        replaceCoreEcologyAggregatePatchActor(patch, moved),
+        projection,
+        "moved",
+      );
+    } catch {
+      return null;
+    }
+  }
   let delta: Readonly<{ x: number; y: number }>;
   try {
     delta = worldPositionDelta(
@@ -332,6 +406,123 @@ function projectCanonicalCoreEcologyActivity(
       presentationSignal: null,
       perch,
       motion: Object.freeze({ kind: "defer-to-intent" }),
+    });
+  }
+
+  if (owned.species === "american-black-duck") {
+    const waterfowl = projectAmericanBlackDuckTidalActivity(
+      patch,
+      input.atTick,
+      input.actorId,
+    );
+    if (waterfowl === null) return null;
+    const atRefuge = withinWorldRadius(
+      owned.member.actor.address.position,
+      waterfowl.refugeTarget.targetPosition,
+      DABBLING_ARRIVAL_RADIUS_UNITS,
+    );
+    if (inRestWindow || actorNeedsRest) {
+      return activityProjection(owned, input.atTick, day, {
+        state: atRefuge ? "resting" : "seeking-tidal-refuge",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: inRestWindow && atRefuge ? "rest" : "observe",
+        presentationSignal: atRefuge ? "resting" : "tidal-relocation-flight",
+        perch: noPerchProjection(),
+        motion: atRefuge
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-waterfowl-refuge",
+              targetArea: frozenArea(
+                waterfowl.refugeTarget.targetPosition,
+                DABBLING_ARRIVAL_RADIUS_UNITS,
+              ),
+              travelMedium: "air",
+            }),
+      });
+    }
+    if (waterfowl.dabblingTargets.length === 0) {
+      return activityProjection(owned, input.atTick, day, {
+        state: atRefuge ? "waiting-on-tide" : "seeking-tidal-refuge",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: "observe",
+        presentationSignal: atRefuge ? null : "tidal-relocation-flight",
+        perch: noPerchProjection(),
+        motion: atRefuge
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-waterfowl-refuge",
+              targetArea: frozenArea(
+                waterfowl.refugeTarget.targetPosition,
+                DABBLING_ARRIVAL_RADIUS_UNITS,
+              ),
+              travelMedium: "air",
+            }),
+      });
+    }
+    const aquaticObservation = currentAquaticActivityObservation(
+      owned.member.actor,
+      input.atTick,
+    );
+    const observedTarget = aquaticObservation === null
+      ? null
+      : nearestDabblingTarget(
+          aquaticObservation.area.center,
+          waterfowl.dabblingTargets,
+        );
+    const currentTarget = waterfowl.dabblingTargets.find((target) => (
+      withinWorldRadius(
+        owned.member.actor.address.position,
+        target.targetPosition,
+        DABBLING_ARRIVAL_RADIUS_UNITS,
+      )
+    )) ?? null;
+    const target = observedTarget
+      ?? currentTarget
+      ?? stableDabblingTarget(input.actorId, waterfowl.dabblingTargets);
+    if (target === null) return null;
+    const atDabblingWater = withinWorldRadius(
+      owned.member.actor.address.position,
+      target.targetPosition,
+      DABBLING_ARRIVAL_RADIUS_UNITS,
+    );
+    if (atDabblingWater) {
+      const dabbling = aquaticObservation !== null && observedTarget !== null;
+      const scanning = !dabbling
+        && Math.trunc(input.atTick / CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS) % 2 === 1;
+      return activityProjection(owned, input.atTick, day, {
+        state: dabbling ? "dabbling" : scanning ? "water-scan" : "floating",
+        responsiveToImmediateIntent: false,
+        sourceObservationId: dabbling
+          ? aquaticObservation.sourceObservationId
+          : null,
+        preferredNeutralIntent: "observe",
+        presentationSignal: dabbling
+          ? "dabbling-forage"
+          : "surface-swimming",
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "hold-position" }),
+      });
+    }
+    const travelMedium: CoreWildlifeTravelMedium = atRefuge
+      ? "air"
+      : "surface-water";
+    return activityProjection(owned, input.atTick, day, {
+      state: "seeking-dabbling-water",
+      responsiveToImmediateIntent: false,
+      sourceObservationId: aquaticObservation?.sourceObservationId ?? null,
+      preferredNeutralIntent: "observe",
+      presentationSignal: travelMedium === "air"
+        ? "tidal-relocation-flight"
+        : "surface-swimming",
+      perch: noPerchProjection(),
+      motion: Object.freeze({
+        kind: "target-area",
+        verb: "seek-dabbling-water",
+        targetArea: frozenArea(target.targetPosition, DABBLING_ARRIVAL_RADIUS_UNITS),
+        travelMedium,
+      }),
     });
   }
 
@@ -539,12 +730,19 @@ export function validateCoreEcologyActivityPolicies(
     }
     if (
       species !== "snowy-egret"
+      && species !== "american-black-duck"
       && policy.locomotionClass !== "aerial"
     ) {
       errors.push(`${species}:activity-requires-aerial-locomotion-class`);
     }
     if (species === "snowy-egret" && policy.locomotionClass !== "amphibious") {
       errors.push("snowy-egret:activity-requires-amphibious-locomotion-class");
+    }
+    if (
+      species === "american-black-duck"
+      && policy.locomotionClass !== "amphibious"
+    ) {
+      errors.push("american-black-duck:activity-requires-amphibious-locomotion-class");
     }
   }
   const crow = bySpecies.get("fish-crow");
@@ -588,6 +786,22 @@ export function validateCoreEcologyActivityPolicies(
     }
     if (egret.capabilities.includes("aerial-predator")) {
       errors.push("snowy-egret:must-not-own-aerial-predator");
+    }
+  }
+  const duck = bySpecies.get("american-black-duck");
+  if (duck !== undefined) {
+    for (const capability of [
+      "aquatic-foraging",
+      "aquatic-locomotion",
+      "tidal-activity",
+      "water-depth-response",
+    ] as const) {
+      if (!duck.capabilities.includes(capability)) {
+        errors.push(`american-black-duck:missing-${capability}`);
+      }
+    }
+    if (duck.capabilities.includes("aerial-predator")) {
+      errors.push("american-black-duck:must-not-own-aerial-predator");
     }
   }
   return Object.freeze(errors.sort(compareText));
@@ -663,6 +877,91 @@ function nearestWadingTarget(
   })[0] ?? null;
 }
 
+interface CoreEcologyAmericanBlackDuckTidalTarget {
+  readonly purpose: "dabbling" | "refuge";
+  readonly targetAnchorOrdinal: number;
+  readonly targetPosition: WorldPosition;
+  readonly waterDepth: number;
+}
+
+interface CoreEcologyAmericanBlackDuckTidalActivity {
+  readonly actorId: string;
+  readonly dabblingTargets: readonly CoreEcologyAmericanBlackDuckTidalTarget[];
+  readonly refugeTarget: CoreEcologyAmericanBlackDuckTidalTarget;
+}
+
+function projectAmericanBlackDuckTidalActivity(
+  patch: CoreEcologyAggregatePatchState,
+  atTick: number,
+  actorId: string,
+): CoreEcologyAmericanBlackDuckTidalActivity | null {
+  if (
+    patch.derivation.kind !== "habitat-v6"
+    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
+  ) return null;
+  const anchors = patch.derivation.habitat.tidalAnchors.filter(({ species }) => (
+    species === "american-black-duck"
+  ));
+  const refugeAnchors = anchors.filter(({ purpose }) => purpose === "refuge");
+  const dabblingAnchors = anchors.filter(({ purpose }) => purpose === "dabbling");
+  if (refugeAnchors.length !== 1 || dabblingAnchors.length !== 2) return null;
+  const tide = tideAtTick(atTick);
+  const refuge = refugeAnchors[0];
+  if (refuge === undefined) return null;
+  const refugeTarget: CoreEcologyAmericanBlackDuckTidalTarget = Object.freeze({
+    purpose: "refuge",
+    targetAnchorOrdinal: refuge.anchorOrdinal,
+    targetPosition: refuge.position,
+    waterDepth: Math.max(0, tide.level - refuge.elevation),
+  });
+  const dabblingTargets = dabblingAnchors
+    .map((anchor): CoreEcologyAmericanBlackDuckTidalTarget => Object.freeze({
+      purpose: "dabbling",
+      targetAnchorOrdinal: anchor.anchorOrdinal,
+      targetPosition: anchor.position,
+      waterDepth: Math.max(0, tide.level - anchor.elevation),
+    }))
+    .filter(({ waterDepth }) => (
+      waterDepth >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+    ))
+    .sort((left, right) => (
+      right.waterDepth - left.waterDepth
+      || left.targetAnchorOrdinal - right.targetAnchorOrdinal
+    ));
+  return Object.freeze({
+    actorId,
+    dabblingTargets: Object.freeze(dabblingTargets),
+    refugeTarget,
+  });
+}
+
+function nearestDabblingTarget(
+  origin: WorldPosition,
+  targets: readonly CoreEcologyAmericanBlackDuckTidalTarget[],
+): CoreEcologyAmericanBlackDuckTidalTarget | null {
+  return [...targets].sort((left, right) => {
+    const leftDistance = worldDistanceSquared(origin, left.targetPosition);
+    const rightDistance = worldDistanceSquared(origin, right.targetPosition);
+    return leftDistance < rightDistance
+      ? -1
+      : leftDistance > rightDistance
+        ? 1
+        : left.targetAnchorOrdinal - right.targetAnchorOrdinal;
+  })[0] ?? null;
+}
+
+function stableDabblingTarget(
+  actorId: string,
+  targets: readonly CoreEcologyAmericanBlackDuckTidalTarget[],
+): CoreEcologyAmericanBlackDuckTidalTarget | null {
+  if (targets.length === 0) return null;
+  const ordinal = Number.parseInt(
+    hashCanonical([actorId, "dabbling-target-v1"]).slice(0, 8),
+    16,
+  ) % targets.length;
+  return targets[ordinal] ?? null;
+}
+
 function worldDistanceSquared(left: WorldPosition, right: WorldPosition): bigint {
   const deltaX = (BigInt(right.region.x) - BigInt(left.region.x))
     * BigInt(REGION_WIDTH_UNITS) + BigInt(right.localX - left.localX);
@@ -703,6 +1002,8 @@ function authenticatedHabitatAllocation(
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
     && patch.derivation.kind !== "habitat-v5"
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
+    && patch.derivation.kind !== "habitat-v6"
+    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
   ) return null;
   const analysis = patch.derivation.habitat.populations.find((candidate) => (
     candidate.species === population.species
@@ -730,6 +1031,11 @@ function runtimePolicyOwnsActivity(
         && policy.capabilities.includes("wading")
         && policy.capabilities.includes("water-depth-response")
         && policy.activitySignals.includes("wading-forage")
+      : species === "american-black-duck"
+        ? policy.capabilities.includes("aquatic-foraging")
+          && policy.capabilities.includes("aquatic-locomotion")
+          && policy.capabilities.includes("tidal-activity")
+          && policy.capabilities.includes("water-depth-response")
       : policy.capabilities.includes("aerial-predator")
       && policy.capabilities.includes("small-prey-pursuit")
       && policy.activitySignals.includes("low-quartering-flight");

@@ -3176,6 +3176,79 @@ export function createTideweftRenderer(
       );
     };
 
+    const drawChartAmericanBlackDuck = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const dabbling = actor.behavior === "forage";
+      const flying = actor.behavior === "flight";
+      const headDip = dabbling
+        ? reducedMotion ? base * 0.22 : Math.abs(Math.sin(now * 0.006)) * base * 0.34
+        : 0;
+      const bodyLength = base * 2.9;
+      const bodyHeight = base * 1.28;
+      const headX = bodyLength * (dabbling ? 0.34 : 0.48);
+      const headY = bodyHeight * (dabbling ? 0.42 : -0.2) + headDip;
+      const headRadius = base * 0.58;
+
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 242));
+      p.ellipse(0, 0, bodyLength * 1.1, bodyHeight * 1.28);
+      p.circle(headX, headY, headRadius * 2.3);
+      p.fill("#4b382e");
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.fill("#76604a");
+      p.circle(headX, headY, headRadius * 2);
+
+      if (flying) {
+        const wingLift = reducedMotion ? 0 : Math.sin(now * 0.006) * base * 0.28;
+        p.fill("#5d4939");
+        p.quad(
+          -base * 0.72, -base * 0.08,
+          -base * 0.38, -base * 2.2 + wingLift,
+          base * 0.58, -base * 0.7,
+          base * 0.72, base * 0.06,
+        );
+        p.quad(
+          -base * 0.72, base * 0.08,
+          -base * 0.38, base * 2.2 - wingLift,
+          base * 0.58, base * 0.7,
+          base * 0.72, -base * 0.06,
+        );
+      } else {
+        p.fill("#5d4939");
+        p.ellipse(-base * 0.28, 0, base * 1.72, base * 0.74);
+      }
+
+      // A violet speculum and broad flat bill make the form readable without
+      // turning this one persistent actor into a generic gull or a flock.
+      p.fill("#4a5f8f");
+      p.quad(
+        -base * 0.64, -base * 0.42,
+        base * 0.08, -base * 0.3,
+        base * 0.02, base * 0.28,
+        -base * 0.7, base * 0.38,
+      );
+      p.fill("#a59655");
+      p.quad(
+        headX + headRadius * 0.56, headY - headRadius * 0.27,
+        headX + headRadius * 1.45, headY - headRadius * 0.2,
+        headX + headRadius * 1.45, headY + headRadius * 0.2,
+        headX + headRadius * 0.56, headY + headRadius * 0.27,
+      );
+      p.fill(withAlpha(PALETTE.ink, 245));
+      p.circle(headX + headRadius * 0.28, headY - headRadius * 0.34, base * 0.13);
+      p.triangle(
+        -bodyLength * 0.5,
+        -bodyHeight * 0.28,
+        -bodyLength * 0.82,
+        0,
+        -bodyLength * 0.5,
+        bodyHeight * 0.28,
+      );
+    };
+
     const drawChartDeer = (actor: WildlifeView, base: number): void => {
       const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
       const bodyLength = base * 3.15;
@@ -3435,6 +3508,9 @@ export function createTideweftRenderer(
           return true;
         case "snowy-egret":
           drawChartSnowyEgret(actor, base, now);
+          return true;
+        case "american-black-duck":
+          drawChartAmericanBlackDuck(actor, base, now);
           return true;
         case "black-bear":
           drawChartBlackBear(actor, base);

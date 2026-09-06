@@ -19,7 +19,10 @@ import {
   projectCoreEcologyActivity,
   stepCoreEcologyActivityMotion,
 } from "./coreEcologyActivity";
-import { deriveCoreEcologyTidalTableHabitatAssemblage } from "./coreEcologyHabitat";
+import {
+  deriveCoreEcologyTidalTableHabitatAssemblage,
+  deriveCoreEcologyWaterfowlHabitatAssemblage,
+} from "./coreEcologyHabitat";
 import {
   collectCoreEcologyAggregateActivityObservationBatches,
 } from "./coreEcologyPerception";
@@ -49,6 +52,109 @@ const SEED = seedFromText(SEED_TEXT);
 const REGION = createRegionCoord(0, 0);
 
 describe("snowy egret perception of tidal aggregates", () => {
+  it("selects every materialized aquatic forager with stable anonymous capped output", () => {
+    const seedText = "waterfowl habitat 1";
+    const seed = seedFromText(seedText);
+    const habitat = deriveCoreEcologyWaterfowlHabitatAssemblage({
+      rootSeed: seed,
+      originRegion: REGION,
+    });
+    const created = createCoreEcologyAggregatePatch({
+      seed,
+      patchKey: "tidal-perception:waterfowl",
+      originRegion: REGION,
+      tick: 360,
+      populations: individualInputs(habitat),
+      derivation: { kind: "habitat-v6", habitat },
+    });
+    const tidalStep = stepCoreEcologyTidalTable(created, { atTick: 360 });
+    if (tidalStep === null) throw new Error("Waterfowl tidal fixture step failed");
+    const tidal = projectCoreEcologyTidalTable(tidalStep.patch, 361);
+    const cue = tidal?.anchorDepths.find((depth) => (
+      depth.activityUsable
+      && (tidalStep.patch.aggregatePopulations
+        .find(({ aggregateId }) => aggregateId === depth.aggregateId)
+        ?.anchors[depth.anchorOrdinal]?.populationUnits ?? 0) > 0
+      && (tidal.aggregateActivities
+        .find(({ aggregateId }) => aggregateId === depth.aggregateId)?.intensity ?? 0) > 0
+    ));
+    if (cue === undefined) throw new Error("Waterfowl fixture lacks an aquatic cue");
+    let patch = tidalStep.patch;
+    for (const species of ["snowy-egret", "american-black-duck"] as const) {
+      const actor = patch.populations.find((population) => population.species === species)
+        ?.members[0]?.actor;
+      if (actor === undefined) throw new Error(`Waterfowl fixture lacks ${species}`);
+      patch = replaceCoreEcologyAggregatePatchActor(
+        patch,
+        repositionCoreWildlifeActor(actor, {
+          atTick: 360,
+          position: cue.position,
+          heading: actor.address.heading,
+        }),
+      );
+    }
+
+    const state = createWorld(seedText, "standard");
+    state.weather = {
+      ...state.weather,
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+    };
+    for (const settlement of state.settlements) settlement.tileIndex = 0;
+    const economy = createWorldView(state);
+    const window = createRegionalTerrainWindow(
+      state.meta.rootSeed,
+      createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed }),
+      regionalFrameOriginAtAddress({
+        region: REGION,
+        localX: Math.trunc(WORLD_WIDTH / 2),
+        localY: Math.trunc(WORLD_HEIGHT / 2),
+      }),
+    );
+    const world = createRegionalWorldView(
+      economy,
+      window,
+      projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+    );
+    const duck = patch.populations.find(({ species }) => species === "american-black-duck")
+      ?.members[0]?.actor;
+    const egret = egretActor(patch);
+    if (duck === undefined) throw new Error("Waterfowl fixture lacks duck actor");
+    const batches = collectCoreEcologyAggregateActivityObservationBatches({
+      actors: [egret, duck].reverse(),
+      patch,
+      tick: 361,
+      window,
+      world,
+    });
+    expect(batches?.map(({ observerId }) => observerId)).toEqual(
+      [duck.identity.stableId, egret.identity.stableId].sort(),
+    );
+    expect(batches).toHaveLength(2);
+    for (const batch of batches ?? []) {
+      expect(batch.observations.length).toBeGreaterThan(0);
+      expect(batch.observations.every((observation) => (
+        observation.subjectId === null
+        && observation.perceivedClass === "aquatic-activity"
+        && observation.channel === "vision"
+      ))).toBe(true);
+      const serialized = JSON.stringify(batch.observations);
+      expect(serialized).not.toContain("populationUnits");
+      expect(serialized).not.toContain("SILVERSIDE-AREA");
+      expect(serialized).not.toContain("FIDDLE-AREA");
+    }
+    const repeated = collectCoreEcologyAggregateActivityObservationBatches({
+      actors: [duck, egret],
+      patch,
+      tick: 361,
+      window,
+      world,
+    });
+    expect(repeated).toEqual(batches);
+  });
+
   it("creates only a current anonymous visual fact for an occupied, active, depth-usable anchor", () => {
     const { patch, world, window } = visibleCueFixture(360);
     const tidal = projectCoreEcologyTidalTable(patch, 361);
@@ -388,7 +494,9 @@ function visibleCueFixture(tick: number): Readonly<{
 }
 
 function individualInputs(
-  habitat: ReturnType<typeof deriveCoreEcologyTidalTableHabitatAssemblage>,
+  habitat:
+    | ReturnType<typeof deriveCoreEcologyTidalTableHabitatAssemblage>
+    | ReturnType<typeof deriveCoreEcologyWaterfowlHabitatAssemblage>,
 ): readonly CoreEcologyPopulationInput[] {
   return habitat.populations.flatMap((population) => (
     population.representation !== "individual-representatives"
@@ -403,6 +511,7 @@ function individualInputs(
             representedUnits: allocation.representedUnits,
             position: allocation.position,
             materialization: population.species === "snowy-egret"
+              || population.species === "american-black-duck"
               ? "materialized" as const
               : "coarse" as const,
           })),

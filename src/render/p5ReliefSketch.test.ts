@@ -371,6 +371,7 @@ function wildlifeView(
     "fish-crow": "Fish crows",
     "northern-harrier": "Northern harrier",
     "snowy-egret": "Snowy egret",
+    "american-black-duck": "American black duck",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -382,6 +383,7 @@ function wildlifeView(
     "fish-crow": "CROW-",
     "northern-harrier": "HARRIER-",
     "snowy-egret": "EGRET-",
+    "american-black-duck": "DUCK-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -1770,6 +1772,13 @@ describe("Relief wildlife presentation", () => {
           conditionLabels: ["WATCHFUL"],
           selected: true,
         }),
+        wildlifeView("american-black-duck", {
+          actorId: "DUCK-VISIBLE",
+          position: { x: 12, y: 72 },
+          behavior: "forage",
+          conditionLabels: ["WATCHFUL"],
+          selected: true,
+        }),
       ],
     };
     const harness = renderHarness(current);
@@ -1789,9 +1798,10 @@ describe("Relief wildlife presentation", () => {
       "Fish crows · ~3 visible · watchful",
       "Northern harrier · alert",
       "Snowy egret · watchful",
+      "American black duck · watchful",
     ]));
     expect(layer?.children.map((child) => child.textContent).join(" "))
-      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE|RABBIT-VISIBLE|FOX-VISIBLE|CROW-VISIBLE|HARRIER-VISIBLE|EGRET-VISIBLE/u);
+      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE|RABBIT-VISIBLE|FOX-VISIBLE|CROW-VISIBLE|HARRIER-VISIBLE|EGRET-VISIBLE|DUCK-VISIBLE/u);
     for (const color of [
       "#9d744f",
       "#e2e8df",
@@ -1803,6 +1813,8 @@ describe("Relief wildlife presentation", () => {
       "#88715d",
       "#f4f1df",
       "#d3ad4f",
+      "#4b382e",
+      "#4a5f8f",
     ]) {
       expect(p5Harness.materialTrace.some(({ method, args }) =>
         method === "ambientMaterial" && args[0] === color
@@ -1813,6 +1825,43 @@ describe("Relief wildlife presentation", () => {
     expect(harness.instance.cone).toHaveBeenCalled();
     expect(harness.instance.box).toHaveBeenCalled();
     expect(harness.instance.line).toHaveBeenCalled();
+    harness.renderer.destroy();
+  });
+
+  it("renders one floating broad-billed duck form without a flock suffix", () => {
+    vi.stubGlobal("performance", { now: () => 320 });
+    p5Harness.reducedMotion = true;
+    const base = view("relief-american-black-duck", { x: 48, y: 48 });
+    const duck = wildlifeView("american-black-duck", {
+      actorId: "DUCK-INDIVIDUAL",
+      behavior: "forage",
+      conditionLabels: ["WATCHFUL"],
+      groupSize: 7,
+      selected: true,
+    });
+    const harness = renderHarness({ ...base, wildlife: [duck] });
+    harness.draw();
+
+    for (const color of ["#4b382e", "#76604a", "#4a5f8f", "#a59655"]) {
+      expect(p5Harness.materialTrace.some(({ method, args }) => (
+        method === "ambientMaterial" && args[0] === color
+      ))).toBe(true);
+    }
+    expect((harness.instance.ellipsoid as ReturnType<typeof vi.fn>).mock.calls.some(
+      ([length, height]) => Number(length) > Number(height) * 2.5,
+    )).toBe(true);
+    expect((harness.instance.box as ReturnType<typeof vi.fn>).mock.calls.some(
+      ([length, height, width]) => (
+        Number(length) > Number(height) * 3
+        && Number(width) > Number(height) * 2
+      ),
+    )).toBe(true);
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const labels = layer?.children.filter((child) => (
+      child.dataset.tone === "wildlife" && !child.removed
+    )).map((child) => child.textContent) ?? [];
+    expect(labels).toContain("American black duck · watchful");
+    expect(labels.join(" ")).not.toMatch(/DUCK-INDIVIDUAL|~7 visible|flock/iu);
     harness.renderer.destroy();
   });
 
@@ -1980,6 +2029,7 @@ describe("Relief wildlife presentation", () => {
       "fish-crow",
       "northern-harrier",
       "snowy-egret",
+      "american-black-duck",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -1991,6 +2041,7 @@ describe("Relief wildlife presentation", () => {
       "fish-crow": "CROW-",
       "northern-harrier": "HARRIER-",
       "snowy-egret": "EGRET-",
+      "american-black-duck": "DUCK-",
     };
 
     for (const kind of species) {

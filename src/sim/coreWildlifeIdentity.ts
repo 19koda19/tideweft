@@ -20,6 +20,7 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "atlantic-silverside",
   "atlantic-marsh-fiddler-crab",
   "snowy-egret",
+  "american-black-duck",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -92,6 +93,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "SILVERSIDE-"
     | "FIDDLER-"
     | "EGRET-"
+    | "DUCK-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -107,6 +109,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "atlantic-silverside": "SILVERSIDE-",
   "atlantic-marsh-fiddler-crab": "FIDDLER-",
   "snowy-egret": "EGRET-",
+  "american-black-duck": "DUCK-",
 });
 
 /**
@@ -259,6 +262,16 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     catalogIdentityForm: "individual",
     taxonomicClass: "bird",
     dietClass: "carnivore",
+    locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "american-black-duck": {
+    species: "american-black-duck",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "omnivore",
     locomotionClass: "amphibious",
     groupOrganization: null,
     groupStableIdNamespace: null,
@@ -775,6 +788,39 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       vigilance: [680_000, 980_000],
       boldness: [160_000, 660_000],
       sociability: [120_000, 540_000],
+    },
+  },
+  "american-black-duck": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "american-black-duck",
+    maximumPatchPopulation: 1,
+    roles: ["alarm-source", "prey", "small-prey", "forager", "omnivore"],
+    foodAffinities: {
+      browse: 780_000,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 140_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 360_000,
+      fleeThreshold: 650_000,
+      retreatThreshold: 520_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["deep-chocolate", "mottled-brown", "pale-faced", "warm-brown"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["patient", "watchful"],
+      ["social", "opportunistic"],
+      ["watchful", "social"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 960_000],
+      boldness: [100_000, 520_000],
+      sociability: [240_000, 700_000],
     },
   },
 });

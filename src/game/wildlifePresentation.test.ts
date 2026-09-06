@@ -28,6 +28,8 @@ import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
+  deriveCoreEcologyWaterfowlHabitatAssemblage,
+  CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
 } from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
@@ -39,6 +41,7 @@ import {
   type WildlifePopulationEvidenceObservation,
 } from "./wildlifePresentation";
 import { createWorldPosition, type WorldPosition } from "./worldPosition";
+import { tideAtTick } from "../sim/terrain";
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -237,6 +240,61 @@ function tidalEvidenceFixture(tick = 10) {
     throw new Error("Tidal presentation fixture requires both aggregates and one egret");
   }
   return { crab, egret, patch, silverside };
+}
+
+function waterfowlActivityFixture(tick = 360) {
+  const seed = seedFromText("waterfowl habitat 1");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyWaterfowlHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: population.species === "american-black-duck"
+              ? "materialized" as const
+              : "coarse" as const,
+          })),
+        }],
+  );
+  let patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: `presentation-waterfowl:${tick}`,
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v6", habitat },
+    tick,
+  });
+  const initialDuck = patch.populations.find(({ species }) => (
+    species === "american-black-duck"
+  ))?.members[0]?.actor;
+  const tide = tideAtTick(tick);
+  const target = habitat.tidalAnchors.find((anchor) => (
+    anchor.species === "american-black-duck"
+    && anchor.purpose === "dabbling"
+    && tide.level - anchor.elevation
+      >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+  ));
+  if (initialDuck === undefined || target === undefined) {
+    throw new Error("Waterfowl presentation fixture requires one duck and live dabbling water");
+  }
+  const duck = repositionCoreWildlifeActor(initialDuck, {
+    atTick: tick,
+    heading: initialDuck.address.heading,
+    position: target.position,
+  });
+  patch = replaceCoreEcologyAggregatePatchActor(patch, duck);
+  return { duck, patch };
 }
 
 function rainActivityFixture(
@@ -521,6 +579,7 @@ describe("knowledge-honest wildlife presentation", () => {
     ["fish-crow", "Fish crows"],
     ["northern-harrier", "Northern harrier"],
     ["snowy-egret", "Snowy egret"],
+    ["american-black-duck", "American black duck"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -550,6 +609,8 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(presentation?.formLabel).toBe("Long-winged, low-flying raptor");
     } else if (species === "snowy-egret") {
       expect(presentation?.formLabel).toBe("Slender, long-legged wader");
+    } else if (species === "american-black-duck") {
+      expect(presentation?.formLabel).toBe("Broad-bodied dabbling duck");
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
@@ -650,6 +711,66 @@ describe("knowledge-honest wildlife presentation", () => {
       tileSize: 1,
       activity: { patch, atTick: patch.updatedAtTick },
     })).toBeNull();
+  });
+
+  it("keeps one American black duck on the individual boundary without flock claims", () => {
+    const duck = wildlife("american-black-duck");
+    const presentation = projectWildlifePresentation({
+      actor: duck,
+      observation: directObservation(duck),
+      tileSize: 16,
+    });
+
+    expect(presentation).toMatchObject({
+      actorId: duck.identity.stableId,
+      species: "american-black-duck",
+      quickLabel: "American black duck",
+      identityLabel: "American black duck",
+      formLabel: "Broad-bodied dabbling duck",
+      behavior: "watch",
+      behaviorLabel: "Watching",
+    });
+    expect(presentation).not.toHaveProperty("groupSize");
+    expect(JSON.stringify(presentation))
+      .not.toMatch(/flock|nest|migration|mortality|carcass|populationSize/iu);
+    expect(projectWildlifePresentation({
+      actor: duck,
+      observation: directObservation(duck, 4, { visibleAggregateCount: 2 }),
+      tileSize: 16,
+    })).toBeNull();
+
+    const distant = projectWildlifePresentation({
+      actor: duck,
+      observation: directObservation(duck, 90),
+      tileSize: 1,
+    });
+    expect(distant).toMatchObject({
+      species: "american-black-duck",
+      quickLabel: "Unknown duck",
+      identityLabel: "Unidentified duck",
+      speciesIdentified: false,
+    });
+    expect(distant).not.toHaveProperty("formLabel");
+    expect(distant).not.toHaveProperty("appearanceLabel");
+    expect(distant).not.toHaveProperty("lifeStageLabel");
+  });
+
+  it("projects authenticated surface swimming without exporting the duck's tidal target", () => {
+    const { duck, patch } = waterfowlActivityFixture();
+    const presentation = projectWildlifePresentation({
+      actor: duck,
+      observation: directObservation(duck),
+      tileSize: 16,
+      activity: { patch, atTick: patch.updatedAtTick },
+    });
+
+    expect(presentation).toMatchObject({
+      species: "american-black-duck",
+      behavior: "watch",
+      behaviorLabel: "Swimming",
+    });
+    expect(JSON.stringify(presentation))
+      .not.toMatch(/activity|anchor|dabblingTarget|refuge|tide|waterDepth/iu);
   });
 
   it("rejects activity custody when the presented actor is not the patch-owned revision", () => {

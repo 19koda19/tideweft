@@ -40,11 +40,13 @@ import {
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
+  CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
   canonicalizeCoreEcologyHabitatAssemblage,
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   canonicalizeCoreEcologyRainChorusHabitatAssemblage,
   canonicalizeCoreEcologyTidalTableHabitatAssemblage,
+  canonicalizeCoreEcologyWaterfowlHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
   type CoreEcologyHarborEdgeActivitySignal,
   type CoreEcologyHarborEdgeHabitatAssemblage,
@@ -52,6 +54,7 @@ import {
   type CoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyTidalTableHabitatAssemblage,
+  type CoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
   coreEcologyAggregateSpeciesPolicy,
@@ -71,7 +74,8 @@ import {
 } from "./worldPosition";
 
 export const CORE_ECOLOGY_PATCH_VERSION = 2 as const;
-export const CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 3 as const;
+export const CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 4 as const;
+export const LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 3 as const;
 export const LEGACY_CORE_ECOLOGY_PATCH_VERSION = 1 as const;
 export const CORE_ECOLOGY_MAX_POPULATIONS = 12 as const;
 export const CORE_ECOLOGY_MAX_MEMBERS = 48 as const;
@@ -80,6 +84,8 @@ export const CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS = 4 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_ANCHORS = 4 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_EVIDENCE = 24 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_DISTURBANCES = 16 as const;
+/** Published Tide Table cadence; shared with v3 adoption so processed edges cannot replay. */
+export const CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS = 4 as const;
 export const CORE_ECOLOGY_MAX_STEP_TICKS = 64 as const;
 export const CORE_ECOLOGY_PATCH_MAX_SERIALIZED_BYTES = 16 * 1_024 * 1_024;
 export const CORE_ECOLOGY_AGGREGATE_EVIDENCE_VERSION = 1 as const;
@@ -105,6 +111,7 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "fish-crow",
   "northern-harrier",
   "snowy-egret",
+  "american-black-duck",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -184,6 +191,15 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Frozen pre-habitat actors remain authoritative through the v5 extension. */
       readonly kind: "legacy-fixed-v1-with-habitat-v5";
       readonly habitat: CoreEcologyTidalTableHabitatAssemblage;
+    }>
+  | Readonly<{
+      readonly kind: "habitat-v6";
+      readonly habitat: CoreEcologyWaterfowlHabitatAssemblage;
+    }>
+  | Readonly<{
+      /** Frozen pre-habitat actors remain authoritative through the v6 extension. */
+      readonly kind: "legacy-fixed-v1-with-habitat-v6";
+      readonly habitat: CoreEcologyWaterfowlHabitatAssemblage;
     }>;
 
 export interface CreateCoreEcologyPatchInput {
@@ -316,6 +332,8 @@ export interface CoreEcologyAggregatePopulationState {
   readonly activitySignal: CoreEcologyAggregateActivitySignal;
   readonly evidence: readonly CoreEcologyAggregateEvidence[];
   readonly disturbances: readonly CoreEcologyAggregateDisturbance[];
+  /** Durable transition clock; unlike the bounded disturbance tail it cannot be evicted. */
+  readonly lastTidalRedistributionTick: number | null;
   readonly nextEvidenceOrdinal: number;
   readonly nextDisturbanceOrdinal: number;
 }
@@ -357,6 +375,12 @@ export interface SetCoreEcologyAggregateActivityIntensityInput {
   readonly atTick: number;
   /** Fixed-point current observable population activity in 0..1. */
   readonly intensity: number;
+}
+
+export interface MarkCoreEcologyAggregateTidalRedistributionInput {
+  readonly aggregateId: string;
+  /** Must equal the patch clock; repeated marks at the same tick are idempotent. */
+  readonly atTick: number;
 }
 
 export interface SetCoreEcologyMaterializationInput {
@@ -817,6 +841,8 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v4"
     || derivation.kind === "habitat-v5"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v5"
+    || derivation.kind === "habitat-v6"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v6"
     ? aggregatePopulationsFromHabitat(input.seed, derivation.habitat, tick)
     : Object.freeze([]);
   const candidate = {
@@ -967,7 +993,100 @@ export function deserializeCoreEcologyAggregatePatch(
   }
 }
 
-/** Exact v2-to-v3 adoption; actor/group state is retained and rats are absent. */
+/**
+ * One-way v3-to-v4 adoption. The only new datum is a durable tide-operation
+ * clock inferred from authenticated retained disturbance history and, for a
+ * saved silverside school on a published cadence tick, the completed runtime
+ * tick itself. Every actor, anchor, population unit, event, and causal ordinal
+ * remains exact.
+ */
+export function migrateLegacyCoreEcologyAggregatePatch(
+  text: unknown,
+): CoreEcologyAggregatePatchState | null {
+  if (
+    typeof text !== "string"
+    || text.length === 0
+    || UTF8_ENCODER.encode(text).byteLength > CORE_ECOLOGY_PATCH_MAX_SERIALIZED_BYTES
+  ) return null;
+  try {
+    const value = JSON.parse(text) as unknown;
+    if (
+      !plainRecord(value)
+      || stableStringify(value) !== text
+      || value.version !== LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION
+      || !exactKeys(value, [
+        "aggregatePopulations",
+        "derivation",
+        "groups",
+        "originRegion",
+        "patchKey",
+        "populations",
+        "updatedAtTick",
+        "version",
+      ])
+      || !Array.isArray(value.aggregatePopulations)
+    ) return null;
+    const aggregatePopulations = value.aggregatePopulations.map((population) => {
+      if (
+        !plainRecord(population)
+        || !exactKeys(population, [
+          "activitySignal",
+          "aggregateId",
+          "anchors",
+          "disturbances",
+          "evidence",
+          "habitatCapacity",
+          "nextDisturbanceOrdinal",
+          "nextEvidenceOrdinal",
+          "populationKey",
+          "populationPressure",
+          "populationSize",
+          "representation",
+          "revision",
+          "seedFingerprint",
+          "species",
+          "trend",
+          "trendSignal",
+          "updatedAtTick",
+        ])
+        || !Array.isArray(population.disturbances)
+      ) throw new TypeError("Legacy aggregate population shape is malformed");
+      let lastTidalRedistributionTick: number | null = null;
+      for (const disturbance of population.disturbances) {
+        if (
+          plainRecord(disturbance)
+          && disturbance.causeKind === "tide-pressure"
+          && typeof disturbance.causeReferenceId === "string"
+          && disturbance.causeReferenceId.endsWith(":edge")
+          && nonnegativeSafeInteger(disturbance.atTick)
+          && (lastTidalRedistributionTick === null
+            || disturbance.atTick > lastTidalRedistributionTick)
+        ) lastTidalRedistributionTick = disturbance.atTick;
+      }
+      // Alpha 19 saved only at completed world-tick boundaries, after the
+      // Tide Table had evaluated that tick. Its bounded event tail could be
+      // churned later in the same tick, so absence of an old :edge record is
+      // not proof that the cadence opportunity remains pending.
+      if (
+        population.species === "atlantic-silverside"
+        && nonnegativeSafeInteger(value.updatedAtTick)
+        && value.updatedAtTick > 0
+        && value.updatedAtTick
+          % CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS === 0
+      ) lastTidalRedistributionTick = value.updatedAtTick;
+      return { ...population, lastTidalRedistributionTick };
+    });
+    return canonicalizeCoreEcologyAggregatePatch({
+      ...value,
+      version: CORE_ECOLOGY_AGGREGATE_PATCH_VERSION,
+      aggregatePopulations,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Exact v2 adoption into the current aggregate form; actor/group state is retained. */
 export function migrateCoreEcologyPatchToAggregatePatch(
   value: unknown,
 ): CoreEcologyAggregatePatchState | null {
@@ -987,12 +1106,14 @@ export function migrateCoreEcologyPatchToAggregatePatch(
   });
 }
 
-/** Accepts canonical v3, v2, or v1 text and returns the additive v3 form. */
+/** Accepts canonical v4, v3, v2, or v1 text and returns the additive v4 form. */
 export function deserializeOrMigrateCoreEcologyAggregatePatch(
   text: unknown,
 ): CoreEcologyAggregatePatchState | null {
   const current = deserializeCoreEcologyAggregatePatch(text);
   if (current !== null) return current;
+  const fromV3 = migrateLegacyCoreEcologyAggregatePatch(text);
+  if (fromV3 !== null) return fromV3;
   const fromV2 = migrateCoreEcologyPatchToAggregatePatch(text);
   if (fromV2 !== null) return fromV2;
   const fromV1 = migrateLegacyCoreEcologyPatch(text);
@@ -1070,6 +1191,42 @@ export function setCoreEcologyAggregateActivityIntensity(
     ...patch,
     aggregatePopulations,
   });
+}
+
+/**
+ * Records one completed tidal-edge opportunity outside bounded evidence tails.
+ * This prevents same-tick re-evaluation after unrelated disturbances evict a
+ * causal record, without creating an event or changing population units.
+ */
+export function markCoreEcologyAggregateTidalRedistribution(
+  value: unknown,
+  input: MarkCoreEcologyAggregateTidalRedistributionInput,
+): CoreEcologyAggregatePatchState | null {
+  const patch = canonicalizeCoreEcologyAggregatePatch(value);
+  if (
+    patch === null
+    || !plainRecord(input)
+    || !exactKeys(input, ["aggregateId", "atTick"])
+    || typeof input.aggregateId !== "string"
+    || !nonnegativeSafeInteger(input.atTick)
+    || input.atTick !== patch.updatedAtTick
+  ) return null;
+  const populationIndex = patch.aggregatePopulations.findIndex(({ aggregateId }) => (
+    aggregateId === input.aggregateId
+  ));
+  const population = patch.aggregatePopulations[populationIndex];
+  if (population === undefined || population.species !== "atlantic-silverside") return null;
+  if (population.lastTidalRedistributionTick === input.atTick) return patch;
+  if (
+    population.lastTidalRedistributionTick !== null
+    && input.atTick < population.lastTidalRedistributionTick
+  ) return null;
+  const aggregatePopulations = [...patch.aggregatePopulations];
+  aggregatePopulations[populationIndex] = deepFreeze({
+    ...population,
+    lastTidalRedistributionTick: input.atTick,
+  });
+  return canonicalizeCoreEcologyAggregatePatch({ ...patch, aggregatePopulations });
 }
 
 /**
@@ -1266,7 +1423,7 @@ export function replaceCoreEcologyActor(
   });
 }
 
-/** Replaces one v3-owned individual actor and advances aggregate clocks only. */
+/** Replaces one v4-owned individual actor and advances aggregate clocks only. */
 export function replaceCoreEcologyAggregatePatchActor(
   value: unknown,
   actorValue: unknown,
@@ -1490,7 +1647,7 @@ export function stepCoreEcologyPatch(
 }
 
 /**
- * Steps only v3 individual actors. Rat aggregate distribution, evidence, and
+ * Steps only v4 individual actors. Aggregate distribution, evidence, and
  * disturbance history remain exact; their saved clocks advance to the tick.
  */
 export function stepCoreEcologyAggregatePatch(
@@ -1649,7 +1806,8 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyHarborEdgeHabitatAssemblage
     | CoreEcologyMarshEdgeHabitatAssemblage
     | CoreEcologyRainChorusHabitatAssemblage
-    | CoreEcologyTidalTableHabitatAssemblage,
+    | CoreEcologyTidalTableHabitatAssemblage
+    | CoreEcologyWaterfowlHabitatAssemblage,
   tick: number,
 ): readonly CoreEcologyAggregatePopulationState[] {
   const seedFingerprint = rootSeedFingerprint(seed);
@@ -1721,6 +1879,7 @@ function aggregatePopulationsFromHabitat(
       activitySignal,
       evidence,
       disturbances: [],
+      lastTidalRedistributionTick: null,
       nextEvidenceOrdinal: evidence.length,
       nextDisturbanceOrdinal: 0,
     }));
@@ -1740,6 +1899,7 @@ function canonicalAggregatePopulation(
     "disturbances",
     "evidence",
     "habitatCapacity",
+    "lastTidalRedistributionTick",
     "nextDisturbanceOrdinal",
     "nextEvidenceOrdinal",
     "populationKey",
@@ -1791,6 +1951,10 @@ function canonicalAggregatePopulation(
     || value.disturbances.length > CORE_ECOLOGY_MAX_AGGREGATE_DISTURBANCES
     || !nonnegativeSafeInteger(value.nextEvidenceOrdinal)
     || !nonnegativeSafeInteger(value.nextDisturbanceOrdinal)
+    || (value.lastTidalRedistributionTick !== null
+      && (!nonnegativeSafeInteger(value.lastTidalRedistributionTick)
+        || value.lastTidalRedistributionTick > value.updatedAtTick))
+    || (species !== "atlantic-silverside" && value.lastTidalRedistributionTick !== null)
     || value.revision !== value.nextDisturbanceOrdinal
     || value.nextEvidenceOrdinal !== value.anchors.length + value.nextDisturbanceOrdinal
   ) return null;
@@ -1887,6 +2051,7 @@ function canonicalAggregatePopulation(
     activitySignal,
     evidence,
     disturbances,
+    lastTidalRedistributionTick: value.lastTidalRedistributionTick,
     nextEvidenceOrdinal: value.nextEvidenceOrdinal,
     nextDisturbanceOrdinal: value.nextDisturbanceOrdinal,
   });
@@ -2214,6 +2379,16 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: value.kind, habitat });
   }
+  if (
+    value.kind === "habitat-v6"
+    || value.kind === "legacy-fixed-v1-with-habitat-v6"
+  ) {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyWaterfowlHabitatAssemblage(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: value.kind, habitat });
+  }
   return canonicalDerivation(value);
 }
 
@@ -2271,11 +2446,14 @@ function aggregateDerivationMatchesPopulations(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v4";
   const isTidalTableDerivation = derivation.kind === "habitat-v5"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v5";
+  const isWaterfowlDerivation = derivation.kind === "habitat-v6"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v6";
   if (
     !isHarborEdgeDerivation
     && !isMarshEdgeDerivation
     && !isRainChorusDerivation
     && !isTidalTableDerivation
+    && !isWaterfowlDerivation
   ) {
     return aggregatePopulations.length === 0
       && derivationMatchesPopulations(derivation, populations, originRegion);
@@ -2284,14 +2462,17 @@ function aggregateDerivationMatchesPopulations(
   const preservesLegacyRoster = derivation.kind === "legacy-fixed-v1-with-habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v3"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v4"
-    || derivation.kind === "legacy-fixed-v1-with-habitat-v5";
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v5"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v6";
   const expectedHabitatVersion = isHarborEdgeDerivation
     ? CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
     : isMarshEdgeDerivation
     ? CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION
     : isRainChorusDerivation
     ? CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION
-    : CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION;
+    : isTidalTableDerivation
+    ? CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION
+    : CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION;
   if (
     derivation.habitat.generationVersion !== expectedHabitatVersion
     || derivation.habitat.originRegion.x !== originRegion.x

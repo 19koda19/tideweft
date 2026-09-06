@@ -2,8 +2,10 @@ import { tideAtTick } from "../sim/terrain";
 import { FIXED_POINT } from "../sim/types";
 import {
   CORE_ECOLOGY_MAX_STEP_TICKS,
+  CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS,
   canonicalizeCoreEcologyAggregatePatch,
   displaceCoreEcologyAggregatePopulation,
+  markCoreEcologyAggregateTidalRedistribution,
   setCoreEcologyAggregateActivityIntensity,
   type CoreEcologyAggregateDisturbance,
   type CoreEcologyAggregatePatchState,
@@ -20,7 +22,6 @@ export const CORE_ECOLOGY_TIDAL_TABLE_VERSION = 1 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_OWNER_ID =
   "game:core-ecology-tidal-table:v1" as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS = 7 as const;
-const SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS = 4;
 const SCHOOL_DEPTH_REFERENCE = 140_000;
 const CRAB_INUNDATION_REFERENCE = 120_000;
 const EGRET_PREFERRED_WADING_DEPTH = 34_000;
@@ -106,8 +107,7 @@ export function projectCoreEcologyTidalTable(
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   if (
     patch === null
-    || (patch.derivation.kind !== "habitat-v5"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5")
+    || !isTidalHabitatDerivation(patch)
     || !nonnegativeSafeInteger(atTickValue)
     || atTickValue < patch.updatedAtTick
     || atTickValue - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
@@ -243,12 +243,8 @@ export function stepCoreEcologyTidalTable(
     if (
       currentSchool !== undefined
       && inputValue.atTick > 0
-      && inputValue.atTick % SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS === 0
-      && !currentSchool.disturbances.some((disturbance) => (
-        disturbance.atTick === inputValue.atTick
-        && disturbance.causeKind === "tide-pressure"
-        && disturbance.causeReferenceId === edgeReference
-      ))
+      && inputValue.atTick % CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS === 0
+      && currentSchool.lastTidalRedistributionTick !== inputValue.atTick
     ) {
       const relocation = silversideRelocation(
         currentSchool,
@@ -270,6 +266,12 @@ export function stepCoreEcologyTidalTable(
         nextPatch = displaced.patch;
         redistributions.push(displaced.disturbance);
       }
+      const marked = markCoreEcologyAggregateTidalRedistribution(nextPatch, {
+        aggregateId: currentSchool.aggregateId,
+        atTick: inputValue.atTick,
+      });
+      if (marked === null) return null;
+      nextPatch = marked;
     }
   }
 
@@ -282,8 +284,7 @@ export function stepCoreEcologyTidalTable(
     ));
     if (population === undefined) continue;
     if (
-      patch.derivation.kind !== "habitat-v5"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
+      !isTidalHabitatDerivation(patch)
     ) return null;
     const habitat = patch.derivation.habitat.populations.find((analysis) => (
       analysis.species === species
@@ -338,8 +339,7 @@ function projectSnowyEgretTidalActivity(
   tideLevel: number,
 ): CoreEcologySnowyEgretTidalActivity | null | undefined {
   if (
-    patch.derivation.kind !== "habitat-v5"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
+    !isTidalHabitatDerivation(patch)
   ) return undefined;
   const population = patch.populations.find(({ species }) => species === "snowy-egret");
   const habitatPopulation = patch.derivation.habitat.populations.find(({ species }) => (
@@ -400,8 +400,7 @@ function projectAggregateActivities(
   tideDirection: -1 | 1,
 ): readonly CoreEcologyTidalAggregateActivity[] | null {
   if (
-    patch.derivation.kind !== "habitat-v5"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
+    !isTidalHabitatDerivation(patch)
   ) return null;
   const activities: CoreEcologyTidalAggregateActivity[] = [];
   for (const species of [
@@ -535,6 +534,24 @@ function compareDepthAddress(
     : left.aggregateId > right.aggregateId
       ? 1
       : left.anchorOrdinal - right.anchorOrdinal;
+}
+
+function isTidalHabitatDerivation(
+  patch: CoreEcologyAggregatePatchState,
+): patch is CoreEcologyAggregatePatchState & Readonly<{
+  derivation: Extract<
+    CoreEcologyAggregatePatchState["derivation"],
+    { readonly kind:
+      | "habitat-v5"
+      | "legacy-fixed-v1-with-habitat-v5"
+      | "habitat-v6"
+      | "legacy-fixed-v1-with-habitat-v6" }
+  >;
+}> {
+  return patch.derivation.kind === "habitat-v5"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v5"
+    || patch.derivation.kind === "habitat-v6"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v6";
 }
 
 function samePosition(left: WorldPosition, right: WorldPosition): boolean {

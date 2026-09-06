@@ -37,6 +37,7 @@ export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION = 2 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION = 3 as const;
 export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION = 4 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION = 5 as const;
+export const CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION = 6 as const;
 export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
   "deer",
   "gull",
@@ -64,6 +65,10 @@ export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES = [
   "atlantic-marsh-fiddler-crab",
   "snowy-egret",
 ] as const;
+export const CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES,
+  "american-black-duck",
+] as const;
 export type CoreEcologyWaveAHabitatSpecies =
   (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
 export type CoreEcologyHarborEdgeHabitatSpecies =
@@ -74,6 +79,8 @@ export type CoreEcologyRainChorusHabitatSpecies =
   (typeof CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES)[number];
 export type CoreEcologyTidalTableHabitatSpecies =
   (typeof CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES)[number];
+export type CoreEcologyWaterfowlHabitatSpecies =
+  (typeof CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES)[number];
 export type CoreEcologyHabitatRepresentation =
   | "aggregate-area"
   | "group-actor"
@@ -89,18 +96,25 @@ export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS = 21 as const;
 export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS = 28 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS = 36 as const;
+export const CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS = 37 as const;
 /** Saved, non-population tidal destinations remain deliberately small and bounded. */
 export const CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS = 12 as const;
+export const CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS = 15 as const;
 export const CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH = 20_000 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS = 4 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS = 1 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH = 8_000 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH = 78_000 as const;
+export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS = 2 as const;
+export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_REFUGE_ANCHORS = 1 as const;
+export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH = 18_000 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_FOCUS_RADIUS_TILES = 32 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_EXCLUDED_TILES = 64 as const;
 
@@ -197,6 +211,7 @@ export interface CoreEcologyHarborEdgeActivitySignal {
     | "browsing"
     | "burrow-foraging"
     | "chorusing"
+    | "dabbling"
     | "foraging"
     | "quartering-search"
     | "roaming"
@@ -273,14 +288,30 @@ export interface CoreEcologyTidalTableHabitatPopulationAnalysis {
   readonly allocations: readonly CoreEcologyHabitatAllocation[];
 }
 
+export interface CoreEcologyWaterfowlHabitatPopulationAnalysis {
+  readonly species: CoreEcologyWaterfowlHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
 export type CoreEcologyTidalTableAnchorSpecies =
   | "atlantic-silverside"
   | "atlantic-marsh-fiddler-crab"
-  | "snowy-egret";
+  | "snowy-egret"
+  | "american-black-duck";
 
 export type CoreEcologyTidalTableAnchorPurpose =
   | "population"
   | "wading"
+  | "dabbling"
   | "refuge";
 
 /**
@@ -393,6 +424,25 @@ export interface CoreEcologyTidalTableHabitatAssemblage {
   readonly tidalAnchors: readonly CoreEcologyTidalTableHabitatAnchor[];
 }
 
+/**
+ * Additive waterfowl record. The first thirteen population analyses and every
+ * v5 tidal anchor are retained byte-for-byte and in order; the duck analysis
+ * and its bounded movement destinations are appended only by version 6.
+ */
+export interface CoreEcologyWaterfowlHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS;
+  readonly populations: readonly CoreEcologyWaterfowlHabitatPopulationAnalysis[];
+  readonly tidalAnchors: readonly CoreEcologyTidalTableHabitatAnchor[];
+}
+
 interface HabitatSpeciesRule {
   readonly populationKey: string;
   readonly representation: CoreEcologyHabitatRepresentation;
@@ -408,7 +458,7 @@ interface HabitatSpeciesRule {
 }
 
 export interface CoreEcologyHabitatSpeciesBounds {
-  readonly species: CoreEcologyTidalTableHabitatSpecies;
+  readonly species: CoreEcologyWaterfowlHabitatSpecies;
   readonly representation: CoreEcologyHabitatRepresentation;
   readonly maximumPopulation: number;
   readonly maximumAllocations: number;
@@ -441,7 +491,7 @@ interface HabitatSiteEvaluation {
 }
 
 interface UnallocatedPopulationAnalysis<
-  Species extends CoreEcologyTidalTableHabitatSpecies = CoreEcologyTidalTableHabitatSpecies,
+  Species extends CoreEcologyWaterfowlHabitatSpecies = CoreEcologyWaterfowlHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -455,7 +505,7 @@ interface UnallocatedPopulationAnalysis<
 }
 
 interface AllocatedPopulationAnalysis<
-  Species extends CoreEcologyTidalTableHabitatSpecies = CoreEcologyTidalTableHabitatSpecies,
+  Species extends CoreEcologyWaterfowlHabitatSpecies = CoreEcologyWaterfowlHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -481,7 +531,7 @@ const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
 
-const SPECIES_PURPOSE: Readonly<Record<CoreEcologyTidalTableHabitatSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyWaterfowlHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
@@ -495,9 +545,10 @@ const SPECIES_PURPOSE: Readonly<Record<CoreEcologyTidalTableHabitatSpecies, numb
   "atlantic-silverside": 0x5349_4c56,
   "atlantic-marsh-fiddler-crab": 0x4649_4444,
   "snowy-egret": 0x4547_5245,
+  "american-black-duck": 0x4244_5543,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreEcologyTidalTableHabitatSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyWaterfowlHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
@@ -668,6 +719,19 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyTidalTableHabitatSpecies, Habita
       maximumOccupancyTarget: 1_000_000,
       minimumPopulationWhenViable: 1,
     }),
+    "american-black-duck": Object.freeze({
+      populationKey: "habitat-v6/american-black-duck",
+      representation: "individual-representatives",
+      minimumSiteScore: 435_000,
+      minimumPersistentCapacity: 1,
+      maximumPopulation: 1,
+      tilesPerCapacityUnit: 520,
+      maximumAllocations: 1,
+      minimumAllocationSeparation: 16,
+      minimumOccupancyTarget: 1_000_000,
+      maximumOccupancyTarget: 1_000_000,
+      minimumPopulationWhenViable: 1,
+    }),
   });
 
 /** Shared read-only seam used to prove habitat, identity, and runtime budgets agree. */
@@ -676,9 +740,9 @@ export function coreEcologyHabitatSpeciesBounds(
 ): CoreEcologyHabitatSpeciesBounds | null {
   if (
     typeof value !== "string"
-    || !(CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES as readonly string[]).includes(value)
+    || !(CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES as readonly string[]).includes(value)
   ) return null;
-  const species = value as CoreEcologyTidalTableHabitatSpecies;
+  const species = value as CoreEcologyWaterfowlHabitatSpecies;
   const rule = SPECIES_RULES[species];
   return Object.freeze({
     species,
@@ -689,7 +753,7 @@ export function coreEcologyHabitatSpeciesBounds(
 }
 
 const ACTIVITY_POLICY: Readonly<Record<
-  CoreEcologyTidalTableHabitatSpecies,
+  CoreEcologyWaterfowlHabitatSpecies,
   Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
 >> = Object.freeze({
   deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
@@ -715,6 +779,10 @@ const ACTIVITY_POLICY: Readonly<Record<
   }),
   "snowy-egret": Object.freeze({
     kind: "wading-search",
+    activePeriod: "tide-responsive",
+  }),
+  "american-black-duck": Object.freeze({
+    kind: "dabbling",
     activePeriod: "tide-responsive",
   }),
 });
@@ -887,6 +955,16 @@ const EGRET_SEARCH_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
   "sun-meadow": 240_000,
   "wind-ridge": 120_000,
   glimmerfen: 820_000,
+});
+
+const BLACK_DUCK_FORAGE_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 760_000,
+  "brine-flat": 820_000,
+  "reed-marsh": 1_000_000,
+  "rain-meadow": 420_000,
+  "sun-meadow": 280_000,
+  "wind-ridge": 80_000,
+  glimmerfen: 880_000,
 });
 
 /**
@@ -1347,11 +1425,18 @@ export function deriveCoreEcologyTidalTableHabitatAssemblage(
   input: DeriveCoreEcologyHabitatAssemblageInput,
 ): CoreEcologyTidalTableHabitatAssemblage {
   const context = prepareCoreEcologyHabitatContext(input, "tidal-table");
-  const rainChorus = deriveCoreEcologyRainChorusFromPrepared(input.rootSeed, context);
+  return deriveCoreEcologyTidalTableFromPrepared(input.rootSeed, context);
+}
+
+function deriveCoreEcologyTidalTableFromPrepared(
+  rootSeed: RootSeed,
+  context: PreparedCoreEcologyHabitatContext,
+): CoreEcologyTidalTableHabitatAssemblage {
+  const rainChorus = deriveCoreEcologyRainChorusFromPrepared(rootSeed, context);
   const { addressedTiles, originRegion } = context;
 
   const silversideBase = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "atlantic-silverside",
     addressedTiles,
@@ -1359,7 +1444,7 @@ export function deriveCoreEcologyTidalTableHabitatAssemblage(
     0,
   );
   const fiddlerBase = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "atlantic-marsh-fiddler-crab",
     addressedTiles,
@@ -1379,7 +1464,7 @@ export function deriveCoreEcologyTidalTableHabitatAssemblage(
       + multiplyFixed(fiddlerSupport, 520_000),
   );
   const egret = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "snowy-egret",
     addressedTiles,
@@ -1455,6 +1540,103 @@ export function deriveCoreEcologyTidalTableHabitatAssemblage(
     speciesEvaluations:
       rainChorus.evaluatedTiles * CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length,
     maximumAllocationBudget: CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors,
+  });
+}
+
+/**
+ * Pure waterfowl extension. Habitat-v5 remains the immutable prefix; one
+ * addressable duck may be added only when the same selected patch contains a
+ * persistent water route, a second tide-sensitive feeding surface, and a dry
+ * refuge. Current tide is deliberately absent from identity generation.
+ */
+export function deriveCoreEcologyWaterfowlHabitatAssemblage(
+  input: DeriveCoreEcologyHabitatAssemblageInput,
+): CoreEcologyWaterfowlHabitatAssemblage {
+  const context = prepareCoreEcologyHabitatContext(input, "waterfowl");
+  const tidalTable = deriveCoreEcologyTidalTableFromPrepared(input.rootSeed, context);
+  const { addressedTiles, originRegion } = context;
+  const silverside = tidalTable.populations.find(({ species }) => (
+    species === "atlantic-silverside"
+  ));
+  const fiddler = tidalTable.populations.find(({ species }) => (
+    species === "atlantic-marsh-fiddler-crab"
+  ));
+  if (silverside === undefined || fiddler === undefined) {
+    throw new Error("Core ecology tidal-table aquatic support is missing");
+  }
+  const aquaticSupport = clampFixed(
+    multiplyFixed(
+      ratioFixed(silverside.populationUnits, SPECIES_RULES["atlantic-silverside"].maximumPopulation),
+      560_000,
+    ) + multiplyFixed(
+      ratioFixed(fiddler.populationUnits, SPECIES_RULES["atlantic-marsh-fiddler-crab"].maximumPopulation),
+      440_000,
+    ),
+  );
+  const duck = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "american-black-duck",
+    addressedTiles,
+    aquaticSupport,
+    0,
+  );
+  const individualOccupiedTiles = new Set<number>();
+  for (const population of tidalTable.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) {
+      individualOccupiedTiles.add(allocation.tileIndex);
+    }
+  }
+  const allocatedDuck = allocatePopulation(
+    duck,
+    originRegion,
+    individualOccupiedTiles,
+    [
+      ...silverside.allocations,
+      ...fiddler.allocations,
+    ],
+  );
+  const duckPopulation = Object.freeze({
+    ...allocatedDuck,
+    representation: SPECIES_RULES["american-black-duck"].representation,
+    activitySignal: activitySignalFor(allocatedDuck),
+  });
+  const populations: CoreEcologyWaterfowlHabitatPopulationAnalysis[] = [
+    ...tidalTable.populations,
+    duckPopulation,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology waterfowl habitat allocation budget diverged");
+  }
+  const duckAnchors = createAmericanBlackDuckHabitatAnchors(
+    originRegion,
+    addressedTiles,
+    duck,
+  );
+  const tidalAnchors = Object.freeze([
+    ...tidalTable.tidalAnchors,
+    ...duckAnchors,
+  ]);
+  if (tidalAnchors.length > CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS) {
+    throw new Error("Core ecology waterfowl anchor budget diverged");
+  }
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
+    originRegion: tidalTable.originRegion,
+    regionId: tidalTable.regionId,
+    terrainHash: tidalTable.terrainHash,
+    selection: tidalTable.selection,
+    evaluatedTiles: tidalTable.evaluatedTiles,
+    speciesEvaluations:
+      tidalTable.evaluatedTiles * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS,
     populations: Object.freeze(populations),
     tidalAnchors,
   });
@@ -1871,6 +2053,134 @@ export function canonicalizeCoreEcologyTidalTableHabitatAssemblage(
   });
 }
 
+export function canonicalizeCoreEcologyWaterfowlHabitatAssemblage(
+  value: unknown,
+): CoreEcologyWaterfowlHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "selection",
+    "speciesEvaluations",
+    "tidalAnchors",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length
+    || !Array.isArray(value.tidalAnchors)
+    || value.tidalAnchors.length > CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  if (selection === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const speciesEvaluations = evaluatedTiles * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || value.evaluatedTiles > CORE_ECOLOGY_HABITAT_TILE_BUDGET
+    || value.speciesEvaluations > CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const v5PopulationValues = value.populations.slice(
+    0,
+    CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length,
+  );
+  const v5AnchorCount = expectedTidalTableAnchorCount(v5PopulationValues);
+  if (v5AnchorCount === null) return null;
+  const tidalTable = canonicalizeCoreEcologyTidalTableHabitatAssemblage({
+    generationVersion: CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations: evaluatedTiles * CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS,
+    populations: v5PopulationValues,
+    tidalAnchors: value.tidalAnchors.slice(0, v5AnchorCount),
+  });
+  if (tidalTable === null) return null;
+  const occupied = new Set<number>();
+  for (const population of tidalTable.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) occupied.add(allocation.tileIndex);
+  }
+  const duck = canonicalizeHarborEdgePopulationAnalysis(
+    value.populations[CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length],
+    "american-black-duck",
+    originRegion,
+    selection,
+    evaluatedTiles,
+    occupied,
+  );
+  if (duck === null) return null;
+  const duckAnchors = canonicalizeAmericanBlackDuckHabitatAnchors(
+    value.tidalAnchors.slice(v5AnchorCount),
+    originRegion,
+    selection,
+    duck,
+  );
+  if (duckAnchors === null) return null;
+  const populations: CoreEcologyWaterfowlHabitatPopulationAnalysis[] = [
+    ...tidalTable.populations,
+    duck,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS) return null;
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors: Object.freeze([...tidalTable.tidalAnchors, ...duckAnchors]),
+  });
+}
+
+function expectedTidalTableAnchorCount(
+  populations: readonly unknown[],
+): number | null {
+  const silverside = populations[CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.indexOf(
+    "atlantic-silverside",
+  )];
+  const fiddler = populations[CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.indexOf(
+    "atlantic-marsh-fiddler-crab",
+  )];
+  const egret = populations[CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.indexOf("snowy-egret")];
+  if (
+    !plainRecord(silverside)
+    || !Array.isArray(silverside.allocations)
+    || !plainRecord(fiddler)
+    || !Array.isArray(fiddler.allocations)
+    || !plainRecord(egret)
+    || !nonnegativeSafeInteger(egret.populationUnits)
+  ) return null;
+  return silverside.allocations.length
+    + fiddler.allocations.length
+    + (egret.populationUnits > 0
+      ? CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS + CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS
+      : 0);
+}
+
 function canonicalizeTidalTableHabitatAnchors(
   value: readonly unknown[],
   originRegion: RegionCoord,
@@ -2008,6 +2318,102 @@ function canonicalizeTidalTableHabitatAnchors(
   return Object.freeze(anchors);
 }
 
+function canonicalizeAmericanBlackDuckHabitatAnchors(
+  value: readonly unknown[],
+  originRegion: RegionCoord,
+  selection: CoreEcologyHabitatSelection,
+  duck: VersionedHabitatPopulationAnalysis<"american-black-duck">,
+): readonly CoreEcologyTidalTableHabitatAnchor[] | null {
+  const expected = duck.populationUnits === 0
+    ? []
+    : [
+        ...Array.from(
+          { length: CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS },
+          (_, anchorOrdinal) => ({ purpose: "dabbling" as const, anchorOrdinal }),
+        ),
+        ...Array.from(
+          { length: CORE_ECOLOGY_AMERICAN_BLACK_DUCK_REFUGE_ANCHORS },
+          (_, anchorOrdinal) => ({ purpose: "refuge" as const, anchorOrdinal }),
+        ),
+      ];
+  if (value.length !== expected.length) return null;
+  const anchors: CoreEcologyTidalTableHabitatAnchor[] = [];
+  const seenTiles = new Set<number>();
+  for (let index = 0; index < expected.length; index += 1) {
+    const identity = expected[index];
+    const raw = value[index];
+    if (
+      identity === undefined
+      || !plainRecord(raw)
+      || !exactKeys(raw, [
+        "anchorOrdinal",
+        "biome",
+        "elevation",
+        "globalTile",
+        "position",
+        "purpose",
+        "species",
+        "terrain",
+        "tileIndex",
+      ])
+      || raw.species !== "american-black-duck"
+      || raw.purpose !== identity.purpose
+      || raw.anchorOrdinal !== identity.anchorOrdinal
+      || !nonnegativeSafeInteger(raw.tileIndex)
+      || raw.tileIndex >= CORE_ECOLOGY_HABITAT_TILE_BUDGET
+      || seenTiles.has(raw.tileIndex)
+      || !fixedInteger(raw.elevation)
+      || typeof raw.terrain !== "string"
+      || terrainKindForElevation(raw.elevation) !== raw.terrain
+      || !validTidalAnchorTerrain("american-black-duck", identity.purpose, raw.terrain)
+      || typeof raw.biome !== "string"
+      || !(BIOME_IDS as readonly string[]).includes(raw.biome)
+      || !plainRecord(raw.globalTile)
+      || !exactKeys(raw.globalTile, ["x", "y"])
+      || !canonicalSafeInteger(raw.globalTile.x)
+      || !canonicalSafeInteger(raw.globalTile.y)
+      || !isWorldPosition(raw.position)
+      || !tileInsideSelection(raw.tileIndex, selection)
+    ) return null;
+    const tileX = raw.tileIndex % WORLD_WIDTH;
+    const tileY = Math.trunc(raw.tileIndex / WORLD_WIDTH);
+    const localX = tileX * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    const localY = tileY * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    const globalTile = regionLocalToGlobalTile(originRegion, tileX, tileY);
+    if (
+      raw.position.region.x !== originRegion.x
+      || raw.position.region.y !== originRegion.y
+      || raw.position.localX !== localX
+      || raw.position.localY !== localY
+      || raw.globalTile.x !== globalTile.x
+      || raw.globalTile.y !== globalTile.y
+      || (identity.purpose === "dabbling" && (
+        MAX_TIDE_LEVEL - raw.elevation
+          < CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+        || identity.anchorOrdinal === 0
+          && MIN_TIDE_LEVEL - raw.elevation
+            < CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+      ))
+      || identity.purpose === "refuge" && raw.elevation < MAX_TIDE_LEVEL
+    ) return null;
+    seenTiles.add(raw.tileIndex);
+    anchors.push(Object.freeze({
+      species: "american-black-duck",
+      purpose: identity.purpose,
+      anchorOrdinal: identity.anchorOrdinal,
+      tileIndex: raw.tileIndex,
+      globalTile: Object.freeze({ x: raw.globalTile.x, y: raw.globalTile.y }),
+      position: createWorldPosition(originRegion, localX, localY),
+      elevation: raw.elevation,
+      terrain: raw.terrain as TerrainKind,
+      biome: raw.biome as BiomeId,
+    }));
+  }
+  return Object.freeze(anchors);
+}
+
 function tileInsideSelection(
   tileIndex: number,
   selection: CoreEcologyHabitatSelection,
@@ -2030,13 +2436,13 @@ function terrainKindForElevation(elevation: number): TerrainKind {
 }
 
 type VersionedHabitatPopulationAnalysis<
-  Species extends CoreEcologyTidalTableHabitatSpecies,
+  Species extends CoreEcologyWaterfowlHabitatSpecies,
 > = Omit<CoreEcologyRainChorusHabitatPopulationAnalysis, "species"> & {
   readonly species: Species;
 };
 
 function canonicalizeHarborEdgePopulationAnalysis<
-  Species extends CoreEcologyTidalTableHabitatSpecies,
+  Species extends CoreEcologyWaterfowlHabitatSpecies,
 >(
   value: unknown,
   expectedSpecies: Species,
@@ -2302,7 +2708,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreEcologyTidalTableHabitatSpecies,
+  species: CoreEcologyWaterfowlHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -2386,7 +2792,7 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity<Species extends CoreEcologyTidalTableHabitatSpecies>(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyWaterfowlHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
   species: Species,
@@ -2423,6 +2829,21 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyTidalTableHabit
       || suitable.filter(({ addressed }) => (
         isPotentialSnowyEgretWadingElevation(addressed.tile.elevation)
       )).length < CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS
+    )
+  ) habitatCapacity = 0;
+  if (
+    species === "american-black-duck"
+    && (
+      preySupport < 80_000
+      || !hasAmericanBlackDuckRefuge(addressedTiles)
+      || suitable.filter(({ addressed }) => (
+        MAX_TIDE_LEVEL - addressed.tile.elevation
+          >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+      )).length < CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS
+      || !suitable.some(({ addressed }) => (
+        MIN_TIDE_LEVEL - addressed.tile.elevation
+          >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+      ))
     )
   ) habitatCapacity = 0;
   // A school may spread onto tidal flats at flood, but it cannot persist in a
@@ -2503,7 +2924,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyTidalTableHabit
  * already-derived site/capacity result keeps the exact habitat contract while
  * avoiding a second full species pass for deer, rats, and rabbits.
  */
-function applyPredatorPressure<Species extends CoreEcologyTidalTableHabitatSpecies>(
+function applyPredatorPressure<Species extends CoreEcologyWaterfowlHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   predatorPressure: number,
 ): UnallocatedPopulationAnalysis<Species> {
@@ -2546,7 +2967,17 @@ function hasSnowyEgretRefuge(
   ));
 }
 
-function allocatePopulation<Species extends CoreEcologyTidalTableHabitatSpecies>(
+function hasAmericanBlackDuckRefuge(
+  addressedTiles: readonly AddressedHabitatTile[],
+): boolean {
+  return addressedTiles.some(({ tile, openWaterDistance }) => (
+    tile.elevation >= MAX_TIDE_LEVEL
+    && (tile.terrain === "meadow" || tile.terrain === "ridge")
+    && openWaterDistance <= 10
+  ));
+}
+
+function allocatePopulation<Species extends CoreEcologyWaterfowlHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
@@ -2661,6 +3092,10 @@ const EGRET_WADING_TARGET_ELEVATIONS = Object.freeze([
   MIN_TIDE_LEVEL + 185_000,
   MAX_TIDE_LEVEL - 35_000,
 ] as const);
+const BLACK_DUCK_DABBLING_TARGET_ELEVATIONS = Object.freeze([
+  MIN_TIDE_LEVEL - 70_000,
+  MAX_TIDE_LEVEL - 45_000,
+] as const);
 
 function createTidalTableHabitatAnchors(
   originRegion: RegionCoord,
@@ -2742,6 +3177,70 @@ function createTidalTableHabitatAnchors(
       originRegion,
     ));
   }
+  return Object.freeze(anchors);
+}
+
+function createAmericanBlackDuckHabitatAnchors(
+  originRegion: RegionCoord,
+  addressedTiles: readonly AddressedHabitatTile[],
+  duck: UnallocatedPopulationAnalysis<"american-black-duck">,
+): readonly CoreEcologyTidalTableHabitatAnchor[] {
+  if (duck.populationUnits === 0) return Object.freeze([]);
+  const refuge = addressedTiles.filter(({ tile, openWaterDistance }) => (
+    tile.elevation >= MAX_TIDE_LEVEL
+    && (tile.terrain === "meadow" || tile.terrain === "ridge")
+    && openWaterDistance <= 10
+  )).sort((left, right) => (
+    left.openWaterDistance - right.openWaterDistance
+    || right.tile.elevation - left.tile.elevation
+    || left.tile.index - right.tile.index
+  ))[0];
+  if (refuge === undefined) {
+    throw new Error("Core ecology American black duck lacks a dry refuge");
+  }
+  const selected = new Set<number>([refuge.tile.index]);
+  const candidates = duck.sites.filter(({ addressed, score }) => (
+    score >= SPECIES_RULES["american-black-duck"].minimumSiteScore
+    && MAX_TIDE_LEVEL - addressed.tile.elevation
+      >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+  ));
+  const dabblingSites: HabitatSiteEvaluation[] = [];
+  for (let ordinal = 0; ordinal < BLACK_DUCK_DABBLING_TARGET_ELEVATIONS.length; ordinal += 1) {
+    const targetElevation = BLACK_DUCK_DABBLING_TARGET_ELEVATIONS[ordinal];
+    if (targetElevation === undefined) continue;
+    const candidate = [...candidates]
+      .filter(({ addressed }) => !selected.has(addressed.tile.index))
+      .filter(({ addressed }) => ordinal !== 0 || (
+        MIN_TIDE_LEVEL - addressed.tile.elevation
+          >= CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH
+      ))
+      .sort((left, right) => (
+        Math.abs(left.addressed.tile.elevation - targetElevation)
+          - Math.abs(right.addressed.tile.elevation - targetElevation)
+        || right.placementRank - left.placementRank
+        || left.rankTie - right.rankTie
+        || left.addressed.tile.index - right.addressed.tile.index
+      ))[0];
+    if (candidate === undefined) {
+      throw new Error("Core ecology American black duck lacks bounded dabbling destinations");
+    }
+    selected.add(candidate.addressed.tile.index);
+    dabblingSites.push(candidate);
+  }
+  const anchors = dabblingSites.map((site, anchorOrdinal) => tidalAnchorFromSite(
+    "american-black-duck",
+    "dabbling",
+    anchorOrdinal,
+    site.addressed,
+    originRegion,
+  ));
+  anchors.push(tidalAnchorFromSite(
+    "american-black-duck",
+    "refuge",
+    0,
+    refuge,
+    originRegion,
+  ));
   return Object.freeze(anchors);
 }
 
@@ -2860,7 +3359,7 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreEcologyTidalTableHabitatSpecies,
+  species: CoreEcologyWaterfowlHabitatSpecies,
   addressed: AddressedHabitatTile,
   preySupport: number,
 ): HabitatSiteEvaluation {
@@ -3299,6 +3798,45 @@ function evaluateSite(
         && climateScore >= 300_000;
       break;
     }
+    case "american-black-duck": {
+      eligible = tile.terrain === "deep-water"
+        || tile.terrain === "tidal-flat"
+        || tile.terrain === "marsh";
+      food = clampFixed(
+        multiplyFixed(BLACK_DUCK_FORAGE_BY_BIOME[biome], 700_000)
+          + multiplyFixed(preySupport, 300_000),
+      );
+      water = tile.terrain === "deep-water"
+        ? FIXED_POINT
+        : weightedScore([
+            [distanceScore(addressed.openWaterDistance, 6), 680_000],
+            [tile.moisture, 320_000],
+          ]);
+      cover = weightedScore([
+        [biome === "reed-marsh" || biome === "glimmerfen" ? 940_000 : 620_000, 620_000],
+        [interaction.rainRetention, 220_000],
+        [FIXED_POINT - Math.trunc(climate.exposure / 2), 160_000],
+      ]);
+      nesting = weightedScore([
+        [cover, 620_000],
+        [water, 240_000],
+        [FIXED_POINT - interaction.heatLoad, 140_000],
+      ]);
+      climateScore = blackDuckClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 290_000],
+        [water, 270_000],
+        [cover, 190_000],
+        [nesting, 110_000],
+        [climateScore, 140_000],
+      ]);
+      eligible = eligible
+        && food >= 320_000
+        && water >= 440_000
+        && cover >= 280_000
+        && climateScore >= 300_000;
+      break;
+    }
   }
 
   eligible = eligible && addressed.withinSelection;
@@ -3456,6 +3994,16 @@ function egretClimateScore(climate: BiomeClimate, interaction: BiomeInteraction)
   ]);
 }
 
+function blackDuckClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 560_000, 900_000), 280_000],
+    [centeredTolerance(climate.salinity, 520_000, FIXED_POINT), 260_000],
+    [centeredTolerance(climate.rainfall, 650_000, 900_000), 220_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 120_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 120_000],
+  ]);
+}
+
 function averageSiteInputs(
   sites: readonly HabitatSiteEvaluation[],
 ): Omit<CoreEcologyHabitatCapacityInputs, "eligibleTiles" | "suitableTiles" | "weightedHabitatArea" | "predatorPressure"> {
@@ -3513,7 +4061,12 @@ function distanceField(
 
 function prepareCoreEcologyHabitatContext(
   input: DeriveCoreEcologyHabitatAssemblageInput,
-  extension: "harbor-edge" | "marsh-edge" | "rain-chorus" | "tidal-table",
+  extension:
+    | "harbor-edge"
+    | "marsh-edge"
+    | "rain-chorus"
+    | "tidal-table"
+    | "waterfowl",
 ): PreparedCoreEcologyHabitatContext {
   if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
     throw new TypeError(`Core ecology ${extension} habitat input has an unsupported shape`);
@@ -3777,7 +4330,7 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
 }
 
 function validAllocationTerrain(
-  species: CoreEcologyTidalTableHabitatSpecies,
+  species: CoreEcologyWaterfowlHabitatSpecies,
   terrain: string,
 ): boolean {
   if (species === "gull" || species === "fish-crow") {
@@ -3798,6 +4351,9 @@ function validAllocationTerrain(
   if (species === "snowy-egret") {
     return terrain === "tidal-flat" || terrain === "marsh" || terrain === "meadow";
   }
+  if (species === "american-black-duck") {
+    return terrain === "deep-water" || terrain === "tidal-flat" || terrain === "marsh";
+  }
   return terrain === "marsh" || terrain === "meadow" || terrain === "ridge";
 }
 
@@ -3806,6 +4362,12 @@ function validTidalAnchorTerrain(
   purpose: CoreEcologyTidalTableAnchorPurpose,
   terrain: string,
 ): boolean {
+  if (species === "american-black-duck") {
+    if (purpose === "dabbling") {
+      return terrain === "deep-water" || terrain === "tidal-flat" || terrain === "marsh";
+    }
+    return purpose === "refuge" && (terrain === "meadow" || terrain === "ridge");
+  }
   if (species !== "snowy-egret") {
     return purpose === "population" && validAllocationTerrain(species, terrain);
   }
@@ -3891,9 +4453,18 @@ if (
       (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
       0,
     )
+  || CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
   || CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS
     !== SPECIES_RULES["atlantic-silverside"].maximumAllocations
       + SPECIES_RULES["atlantic-marsh-fiddler-crab"].maximumAllocations
       + CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS
       + CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS
+  || CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS
+    !== CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS
+      + CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS
+      + CORE_ECOLOGY_AMERICAN_BLACK_DUCK_REFUGE_ANCHORS
 ) throw new Error("Core ecology habitat generation constants are incoherent");

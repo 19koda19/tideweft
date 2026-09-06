@@ -287,6 +287,27 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       evidenceKinds: [],
       presentationModel: "individual",
     },
+    "american-black-duck": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "aquatic-locomotion",
+        "diurnal-activity",
+        "food-investigation",
+        "movement-memory",
+        "shared-alarm",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["dabbling-forage", "surface-swimming", "tidal-relocation-flight"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
   });
 
 export const CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES: readonly CoreEcologySpeciesRuntimePolicy[] =

@@ -217,6 +217,7 @@ type WildlifePresentationForm =
   | "fish-crow-flock"
   | "northern-harrier"
   | "snowy-egret"
+  | "american-black-duck"
   | "black-bear"
   | "brown-rat"
   | "domestic-cat"
@@ -426,6 +427,20 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: true,
     baseSizeScale: 0.84,
     observableForm: "Slender, long-legged wader",
+  },
+  "american-black-duck": {
+    form: "american-black-duck",
+    representation: "actor",
+    identificationClarity: 340_000,
+    unidentifiedQuickLabel: "Unknown duck",
+    unidentifiedIdentityLabel: "Unidentified duck",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "plumage",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.78,
+    observableForm: "Broad-bodied dabbling duck",
   },
 });
 const BEHAVIOR_CLARITY = 180_000;
@@ -1107,12 +1122,14 @@ function activityBehavior(
   activity: CoreEcologyActivityProjection | null,
 ): Extract<
   WildlifePresentationBehavior,
-  "flight" | "forage" | "perch" | "quarter" | "rest"
+  "flight" | "forage" | "perch" | "quarter" | "rest" | "watch"
 > | null {
   switch (activity?.presentationSignal) {
     case "perched": return "perch";
     case "low-quartering-flight": return "quarter";
     case "resting": return "rest";
+    case "dabbling-forage": return "forage";
+    case "surface-swimming": return "watch";
     case "tidal-relocation-flight": return "flight";
     case "wading-search": return "forage";
     case "wading-scan": return null;
@@ -1146,6 +1163,8 @@ function observableBehavior(
   intent: CoreWildlifeIntentKind,
   activity: CoreEcologyActivityProjection | null,
 ): string {
+  if (activity?.presentationSignal === "dabbling-forage") return "Dabbling";
+  if (activity?.presentationSignal === "surface-swimming") return "Swimming";
   if (activity?.presentationSignal === "wading-scan") return "Scanning shallows";
   const projected = activityBehavior(activity);
   if (projected === "perch") return "Perched";
@@ -1171,6 +1190,10 @@ function coarseMotion(
   intent: CoreWildlifeIntentKind,
   activity: CoreEcologyActivityProjection | null,
 ): string {
+  if (
+    activity?.presentationSignal === "dabbling-forage"
+    || activity?.presentationSignal === "surface-swimming"
+  ) return "Moving";
   const projected = activityBehavior(activity);
   if (projected === "quarter" || projected === "forage" || projected === "flight") {
     return "Moving";

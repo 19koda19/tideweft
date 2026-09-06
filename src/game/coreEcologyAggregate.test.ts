@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { seedFromText } from "../sim/rng";
 import { createRegionCoord } from "../sim/regions";
+import { stableStringify } from "../sim/util";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   replaceCoreWildlifeActorPhysiology,
@@ -203,7 +204,7 @@ describe("harbor-edge aggregate ecology", () => {
     expect(canonicalizeCoreEcologyAggregatePatch(tampered)).toBeNull();
   });
 
-  it("migrates exact v2 state to v3 with no invented aggregate history", () => {
+  it("migrates exact v2 state to v4 with no invented aggregate history", () => {
     const waveA = createCoreEcologyPatch({
       seed: SEED,
       patchKey: "wave-a:migration",
@@ -229,7 +230,31 @@ describe("harbor-edge aggregate ecology", () => {
     expect(migrated?.populations).toEqual(waveA.populations);
   });
 
-  it("operates individual actors in v3 while preserving aggregate facts and evidence", () => {
+  it("adopts exact v3 aggregate state with a derived durable tide clock only", () => {
+    const current = aggregatePatch();
+    const legacyPopulations = current.aggregatePopulations.map((population) => {
+      const { lastTidalRedistributionTick: _omitted, ...legacy } = population;
+      return legacy;
+    });
+    const legacy = {
+      ...current,
+      version: 3,
+      aggregatePopulations: legacyPopulations,
+    };
+    const migrated = deserializeOrMigrateCoreEcologyAggregatePatch(
+      stableStringify(legacy),
+    );
+    expect(migrated?.version).toBe(CORE_ECOLOGY_AGGREGATE_PATCH_VERSION);
+    expect(migrated?.aggregatePopulations.every(({ lastTidalRedistributionTick }) => (
+      lastTidalRedistributionTick === null
+    ))).toBe(true);
+    expect(migrated?.aggregatePopulations.map((population) => {
+      const { lastTidalRedistributionTick: _omitted, ...retained } = population;
+      return retained;
+    })).toEqual(legacyPopulations);
+  });
+
+  it("operates individual actors in v4 while preserving aggregate facts and evidence", () => {
     const initial = aggregatePatch();
     const cat = initial.populations.find(({ species }) => species === "domestic-cat")
       ?.members[0]?.actor;
@@ -286,7 +311,7 @@ describe("harbor-edge aggregate ecology", () => {
       .toBe(true);
   });
 
-  it("advances v3 social-group cadence without creating aggregate evidence", () => {
+  it("advances v4 social-group cadence without creating aggregate evidence", () => {
     const habitat = harborHabitat();
     const populations = individualInputs();
     const deer = populations.find(({ species }) => species === "deer");

@@ -188,6 +188,15 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 6_000,
     },
   },
+  "american-black-duck": {
+    aboutNoun: "american black duck",
+    senses: {
+      visionAcuity: 920_000,
+      hearingSensitivity: 820_000,
+      scentSensitivity: 220_000,
+      scentBaseRangeUnits: 8_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

@@ -4,6 +4,10 @@ import {
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   livingSpeciesModule,
 } from "./livingSpeciesCatalog";
+import {
+  coreEcologySpeciesRuntimePolicy,
+  type CoreEcologySpeciesRuntimeCapability,
+} from "./coreEcologySpeciesRuntimePolicy";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 
 export const LIVING_SPECIES_RELEASE_GATE_VERSION = 1 as const;
@@ -13,6 +17,7 @@ export const ALPHA16_MARSH_EDGE_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA17_RAIN_CHORUS_BOUNDED_READINESS_VERSION = 1 as const;
 export const WAVE_B_BOUNDED_STARTING_HARBOR_READINESS_VERSION = 1 as const;
 export const WAVE_C_TIDAL_TABLE_BOUNDED_READINESS_VERSION = 1 as const;
+export const ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -242,6 +247,79 @@ export const WAVE_C_TIDAL_TABLE_EXCLUDED_CLAIMS = [
   "full-wave-c",
   "full-directive-04-1",
 ] as const satisfies readonly WaveCTidalTableExcludedClaim[];
+
+export const ALPHA20_AMERICAN_BLACK_DUCK_SPECIES = [
+  "american-black-duck",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha20AmericanBlackDuckSpecies =
+  (typeof ALPHA20_AMERICAN_BLACK_DUCK_SPECIES)[number];
+
+export type Alpha20AmericanBlackDuckBoundedCapability =
+  | "species-profile"
+  | "individual-representation"
+  | "habitat-placement"
+  | "bounded-activity"
+  | "multimodal-locomotion"
+  | "lawful-perception"
+  | "individual-presentation"
+  | "nonlethal-interactions"
+  | "bounded-local-continuity"
+  | "performance-budget"
+  | "excluded-claim-integrity";
+
+export type Alpha20AmericanBlackDuckExcludedClaim =
+  | "mortality"
+  | "carcasses"
+  | "nesting"
+  | "ecological-cross-region-migration"
+  | "full-flock"
+  | "capture"
+  | "consumption"
+  | "reproduction"
+  | "full-wave-c"
+  | "full-directive-04-1";
+
+export const ALPHA20_AMERICAN_BLACK_DUCK_EXCLUDED_CLAIMS = [
+  "mortality",
+  "carcasses",
+  "nesting",
+  "ecological-cross-region-migration",
+  "full-flock",
+  "capture",
+  "consumption",
+  "reproduction",
+  "full-wave-c",
+  "full-directive-04-1",
+] as const satisfies readonly Alpha20AmericanBlackDuckExcludedClaim[];
+
+export interface Alpha20AmericanBlackDuckBoundedReadinessReport {
+  readonly version: typeof ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS_VERSION;
+  readonly unitId: "alpha20-american-black-duck";
+  readonly scope: "one-bounded-waterfowl-individual";
+  readonly speciesIds: readonly Alpha20AmericanBlackDuckSpecies[];
+  readonly evidenceAuthenticated: boolean;
+  readonly speciesProfileReady: boolean;
+  readonly individualRepresentationReady: boolean;
+  readonly habitatPlacementReady: boolean;
+  readonly boundedActivityReady: boolean;
+  readonly multimodalLocomotionReady: boolean;
+  readonly lawfulPerceptionReady: boolean;
+  readonly individualPresentationReady: boolean;
+  readonly nonlethalInteractionsReady: boolean;
+  readonly boundedLocalContinuityReady: boolean;
+  readonly performanceEvidenceReady: boolean;
+  readonly excludedClaimIntegrityReady: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingCapabilities: readonly Alpha20AmericanBlackDuckBoundedCapability[];
+  readonly evidenceOwnerIds: readonly string[];
+  readonly publicationRecordsReady: boolean;
+  readonly exactTestedDeploymentVerified: boolean;
+  readonly published: boolean;
+  readonly fullThirtyCriterionReady: boolean;
+  /** Claims this one-individual technical witness can never authorize. */
+  readonly excludedClaims: readonly Alpha20AmericanBlackDuckExcludedClaim[];
+}
 
 /** The seven deliberately bounded small-world roles shipped across Wave B. */
 export const WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES = [
@@ -1152,6 +1230,143 @@ function tidalTableEvidence(
 }
 
 /**
+ * Build-owned evidence for Alpha-20's single American black duck. The active
+ * rows describe the addressable actor, lawful perception, bounded tidal
+ * activity, multimodal movement, and presentation that exist in this build.
+ * Food-web turnover and broad fuzz coverage remain foundations; sound,
+ * nesting, flock simulation, migration, mortality, and carcasses stay open.
+ */
+function americanBlackDuckEvidence(): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  return [
+    ["species-profile", A, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["ecological-niche", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-ecology-habitat:v6",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+    )],
+    ["appearance", A, owners(
+      "game:wildlife-presentation:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["sound", U, []],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v6",
+      "game:core-ecology:v5",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["food-web", F, owners(
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["perception-senses", F, owners(
+      "game:core-ecology-perception:v1",
+      "game:living-actor-senses:v1",
+      "sim:actor-perception:v2",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["locomotion", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-wildlife-actor:v1",
+      "game:core-wildlife-locomotion-profile:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["human-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["dog-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["same-species-interaction", U, []],
+    ["other-species-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["neutral-behavior", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-wildlife-actor:v1",
+    )],
+    ["disengagement", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-wildlife-actor:v1",
+    )],
+    ["environmental-evidence", U, []],
+    ["about-disclosure", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v6",
+      "game:core-ecology:v5",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-ecology:v5",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["save-load", A, owners(
+      "game:core-ecology:v5",
+      "game:runtime-save:v14",
+    )],
+    // The actor is locally persistent and intentionally cannot make a
+    // cross-region ecological migration claim in this bounded release.
+    ["seamless-region-crossing", U, []],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v6",
+      "game:core-ecology:v5",
+      "game:runtime-core-ecology:v1",
+      "test:core-ecology-waterfowl-performance:v1",
+    )],
+    ["accessibility", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["mobile-parity", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "test:american-black-duck-presentation:v1",
+    )],
+    ["player-independent-scenario", A, owners(
+      "game:core-ecology-activity:v1",
+      "game:core-ecology-habitat:v6",
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-trophic:v1",
+    )],
+    ["fuzz-testing", F, owners(
+      "game:core-ecology-habitat:v6",
+      "game:core-ecology:v5",
+    )],
+    ["clone-diversity", A, ["sim:core-wildlife-identity:v1"]],
+    ["tutorial-truth", U, []],
+    ["patch-note-truth", U, []],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -1233,6 +1448,7 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "atlantic-silverside": tidalTableEvidence("atlantic-silverside"),
   "atlantic-marsh-fiddler-crab": tidalTableEvidence("atlantic-marsh-fiddler-crab"),
   "snowy-egret": tidalTableEvidence("snowy-egret"),
+  "american-black-duck": americanBlackDuckEvidence(),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -1835,6 +2051,224 @@ export function waveCTidalTableBoundedReadiness(): WaveCTidalTableBoundedReadine
 
 export const WAVE_C_TIDAL_TABLE_BOUNDED_READINESS =
   waveCTidalTableBoundedReadiness();
+
+/**
+ * Authenticated Alpha-20 witness for one bounded American black duck actor.
+ * It proves only the active local data/runtime/presentation paths listed here;
+ * excluded life-history, flock, and migration systems are checked as absences.
+ */
+export function alpha20AmericanBlackDuckBoundedReadiness():
+Alpha20AmericanBlackDuckBoundedReadinessReport {
+  const speciesId = ALPHA20_AMERICAN_BLACK_DUCK_SPECIES[0];
+  const gate = LIVING_SPECIES_RELEASE_GATES.gates.find((candidate) => (
+    candidate.speciesId === speciesId
+  ));
+  const report = gate === undefined ? null : auditLivingSpeciesReleaseGate(gate);
+  const module = livingSpeciesModule(speciesId);
+  const runtimePolicy = coreEcologySpeciesRuntimePolicy(speciesId);
+  const ownsRuntimeCapability = (
+    capability: CoreEcologySpeciesRuntimeCapability,
+  ): boolean => runtimePolicy?.capabilities.includes(capability) === true;
+  const criterion = (name: LivingSpeciesReleaseCriterion) => (
+    gate?.criteria.find((state) => state.criterion === name)
+  );
+  const active = (name: LivingSpeciesReleaseCriterion): boolean => (
+    criterion(name)?.status === "active"
+  );
+  const evidenceAuthenticated = gate !== undefined
+    && report?.evidenceAuthenticated === true;
+
+  const speciesProfileReady = module !== null
+    && runtimePolicy !== null
+    && active("species-profile")
+    && active("ecological-niche")
+    && module.profile.implementation === "active"
+    && module.profile.taxonomicClass === "bird"
+    && module.profile.ecologicalClasses.includes("waterfowl")
+    && runtimePolicy.speciesId === speciesId;
+  const individualRepresentationReady = module !== null
+    && runtimePolicy !== null
+    && module.identity.implementation === "active"
+    && module.identity.form === "individual"
+    && module.identity.stableIdNamespace === "DUCK"
+    && module.population.implementation === "active"
+    && module.population.authoritativeUnit === "hybrid"
+    && module.population.materialization === "mixed"
+    && module.population.maxMaterializedPerRegion === 1
+    && module.population.coarseSimulation
+    && runtimePolicy.actorAddressable
+    && runtimePolicy.identityForm === "individual"
+    && runtimePolicy.maximumMaterializedActors === 1
+    && runtimePolicy.presentationModel === "individual"
+    && module.social.group.status === "unimplemented"
+    && !module.social.group.stableIdentity
+    && runtimePolicy.groupStableIdNamespace === null;
+  const habitatPlacementReady = module !== null
+    && active("habitat-placement")
+    && module.habitat.implementation === "active"
+    && module.habitat.ownerId === "game:core-ecology-habitat:v6"
+    && module.habitat.migrationModel === "none";
+  const boundedActivityReady = module !== null
+    && runtimePolicy !== null
+    && active("neutral-behavior")
+    && active("player-independent-scenario")
+    && module.activity.implementation === "active"
+    && module.activity.ownerId === "game:core-ecology-activity:v1"
+    && module.activity.circadian.status === "active"
+    && [
+      "dabbling-forage",
+      "surface-swimming",
+      "tidal-relocation-flight",
+    ].every((signal) => runtimePolicy.activitySignals.includes(signal))
+    && ([
+      "aquatic-foraging",
+      "aquatic-locomotion",
+      "tidal-activity",
+      "water-depth-response",
+    ] as const).every(ownsRuntimeCapability);
+  const multimodalLocomotionReady = module !== null
+    && runtimePolicy !== null
+    && active("locomotion")
+    && module.locomotion.implementation === "active"
+    && module.locomotion.ownerId === "game:core-wildlife-locomotion-profile:v1"
+    && module.locomotion.crossRegion === false
+    && ["air", "deep-water", "shallow-water"].every((medium) => (
+      module.locomotion.media.some((entry) => entry.medium === medium)
+    ))
+    && !module.locomotion.media.some((entry) => entry.medium === "land")
+    && ["dabble", "fly", "relocate", "swim"].every((verb) => (
+      module.locomotion.movementVerbs.includes(verb)
+    ))
+    && !module.locomotion.movementVerbs.includes("walk")
+    && ([
+      "aerial-locomotion",
+      "aquatic-locomotion",
+      "water-depth-response",
+    ] as const).every(ownsRuntimeCapability);
+  const lawfulPerceptionReady = module !== null
+    && runtimePolicy !== null
+    && criterion("perception-senses")?.status === "foundation"
+    && criterion("perception-senses")?.evidenceOwnerIds.includes(
+      "game:core-ecology-perception:v1",
+    ) === true
+    && module.senses.implementation === "foundation"
+    && module.senses.ownerId === "game:living-actor-senses:v1"
+    && (["food-investigation", "movement-memory", "shared-alarm"] as const)
+      .every(ownsRuntimeCapability);
+  const individualPresentationReady = runtimePolicy !== null
+    && runtimePolicy.presentationModel === "individual"
+    && [
+      "appearance",
+      "about-disclosure",
+      "knowledge-honesty",
+      "accessibility",
+      "mobile-parity",
+    ].every((name) => active(name as LivingSpeciesReleaseCriterion));
+  const forbiddenInteractionVerbs = new Set(["attack", "capture", "consume", "kill"]);
+  const nonlethalInteractionsReady = module !== null
+    && active("human-interaction")
+    && active("dog-interaction")
+    && active("other-species-interaction")
+    && module.interactions.targets.length === LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length
+    && module.interactions.targets.every((target, index) => (
+      target.targetClass === LIVING_SPECIES_INTERACTION_TARGET_CLASSES[index]
+      && (target.policy === "available" || target.policy === "intentional-no-response")
+      && target.verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ))
+    && module.interactions.targets.find(({ targetClass }) => (
+      targetClass === "aquatic-animal"
+    ))?.escalationConstraints.includes("nonlethal-pressure-only") === true;
+  const boundedLocalContinuityReady = module !== null
+    && active("population-materialization")
+    && active("full-coarse-transition")
+    && active("save-load")
+    && criterion("seamless-region-crossing")?.status === "unimplemented"
+    && module.population.maxMaterializedPerRegion === 1
+    && module.population.coarseSimulation
+    && module.spatial.signedRegions
+    && module.spatial.extremeRegions
+    && module.locomotion.crossRegion === false;
+  const performanceEvidenceReady = active("performance-budget")
+    && criterion("performance-budget")?.evidenceOwnerIds.includes(
+      "test:core-ecology-waterfowl-performance:v1",
+    ) === true;
+  const excludedClaimIntegrityReady = module !== null
+    && runtimePolicy !== null
+    && module.lifeHistory.mortality === "unimplemented"
+    && module.lifeHistory.reproduction === "unimplemented"
+    && module.health.causalDeath === false
+    && module.aftermath.implementation === "unimplemented"
+    && module.aftermath.carcassModel === "none"
+    && module.social.territory.model === "none"
+    && module.social.territory.anchorKinds.length === 0
+    && module.social.group.status === "unimplemented"
+    && runtimePolicy.maximumMaterializedActors === 1
+    && !runtimePolicy.capabilities.includes("group-coordination")
+    && module.habitat.migrationModel === "none"
+    && module.locomotion.crossRegion === false;
+
+  const capabilities: readonly (
+    readonly [Alpha20AmericanBlackDuckBoundedCapability, boolean]
+  )[] = [
+    ["species-profile", speciesProfileReady],
+    ["individual-representation", individualRepresentationReady],
+    ["habitat-placement", habitatPlacementReady],
+    ["bounded-activity", boundedActivityReady],
+    ["multimodal-locomotion", multimodalLocomotionReady],
+    ["lawful-perception", lawfulPerceptionReady],
+    ["individual-presentation", individualPresentationReady],
+    ["nonlethal-interactions", nonlethalInteractionsReady],
+    ["bounded-local-continuity", boundedLocalContinuityReady],
+    ["performance-budget", performanceEvidenceReady],
+    ["excluded-claim-integrity", excludedClaimIntegrityReady],
+  ];
+  const blockingCapabilities = capabilities
+    .filter(([, ready]) => !ready)
+    .map(([capability]) => capability);
+  const evidenceOwnerIds = gate === undefined
+    ? []
+    : [...new Set(gate.criteria.flatMap(({ evidenceOwnerIds: owners }) => owners))]
+      .sort(compareText);
+  const publicationRecordsReady = evidenceAuthenticated
+    && active("tutorial-truth")
+    && active("patch-note-truth");
+  const exactTestedDeploymentVerified = evidenceAuthenticated
+    && active("exact-tested-deployment");
+  const boundedCandidateReady = evidenceAuthenticated
+    && blockingCapabilities.length === 0;
+
+  return deepFreeze({
+    version: ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS_VERSION,
+    unitId: "alpha20-american-black-duck",
+    scope: "one-bounded-waterfowl-individual",
+    speciesIds: [...ALPHA20_AMERICAN_BLACK_DUCK_SPECIES],
+    evidenceAuthenticated,
+    speciesProfileReady,
+    individualRepresentationReady,
+    habitatPlacementReady,
+    boundedActivityReady,
+    multimodalLocomotionReady,
+    lawfulPerceptionReady,
+    individualPresentationReady,
+    nonlethalInteractionsReady,
+    boundedLocalContinuityReady,
+    performanceEvidenceReady,
+    excludedClaimIntegrityReady,
+    boundedCandidateReady,
+    blockingCapabilities,
+    evidenceOwnerIds,
+    publicationRecordsReady,
+    exactTestedDeploymentVerified,
+    published: boundedCandidateReady
+      && publicationRecordsReady
+      && exactTestedDeploymentVerified,
+    fullThirtyCriterionReady: report?.publicReady === true,
+    excludedClaims: [...ALPHA20_AMERICAN_BLACK_DUCK_EXCLUDED_CLAIMS],
+  });
+}
+
+export const ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS =
+  alpha20AmericanBlackDuckBoundedReadiness();
 
 function canonicalCriterionState(
   value: unknown,

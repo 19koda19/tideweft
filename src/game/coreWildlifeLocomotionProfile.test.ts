@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { createRegionCoord } from "../sim/regions";
 import type { TerrainTileView } from "../sim/types";
+import { createLivingActorAddress } from "./livingActor";
+import {
+  createLivingActorTraversabilitySurface,
+  resolveLivingActorLocomotion,
+} from "./livingActorLocomotion";
 import {
   CORE_WILDLIFE_BASE_MOVE_STEP_UNITS,
   CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION,
@@ -8,6 +14,7 @@ import {
   coreWildlifeTraversabilityCell,
 } from "./coreWildlifeLocomotionProfile";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
+import { createWorldPosition } from "./worldPosition";
 
 function tile(overrides: Partial<TerrainTileView> = {}): TerrainTileView {
   return {
@@ -46,6 +53,89 @@ describe("core wildlife locomotion profiles", () => {
       expect(coreWildlifeTraversabilityCell(species, blockedSurface).travelCost)
         .toBeLessThan(blockedSurface.baseTravelCost);
     }
+  });
+
+  it("selects duck air or surface water through one shared traversability seam", () => {
+    const profile = coreWildlifeLocomotionProfile("american-black-duck");
+    expect(profile.mode).toBe("aerial");
+    expect(profile.aerialTravelCost).toBeGreaterThan(0);
+    expect(profile.surfaceWaterTravelCost).toBeGreaterThan(0);
+
+    const dryLand = tile({ terrain: "meadow", waterDepth: 0 });
+    const shallowWater = tile({ terrain: "marsh", waterDepth: 18_000 });
+    const deepWater = tile({ terrain: "deep-water", waterDepth: 900_000 });
+    expect(coreWildlifeTraversabilityCell(
+      "american-black-duck",
+      dryLand,
+      "air",
+    )).toMatchObject({ access: "open" });
+    expect(coreWildlifeTraversabilityCell(
+      "american-black-duck",
+      dryLand,
+      "surface-water",
+    )).toEqual({ access: "blocked", travelCost: 0 });
+    expect(coreWildlifeTraversabilityCell(
+      "american-black-duck",
+      shallowWater,
+      "surface-water",
+    )).toMatchObject({ access: "open" });
+    expect(coreWildlifeTraversabilityCell(
+      "american-black-duck",
+      deepWater,
+      "surface-water",
+    )).toMatchObject({ access: "open" });
+    expect(() => coreWildlifeTraversabilityCell(
+      "snowy-egret",
+      shallowWater,
+      "surface-water",
+    )).toThrow("lacks a surface-water locomotion profile");
+  });
+
+  it("routes duck surface travel through the bounded living-actor resolver", () => {
+    const tick = 40;
+    const origin = createWorldPosition(createRegionCoord(0, 0), 0, 0);
+    const actor = createLivingActorAddress({
+      actorId: "DUCK-R-v1-locomotion/duck-1",
+      species: "american-black-duck",
+      position: createWorldPosition(createRegionCoord(0, 0), 500, 500),
+      heading: 0,
+      persistence: "regional",
+    });
+    const water = tile({ terrain: "marsh", waterDepth: 24_000 });
+    const land = tile({ terrain: "meadow", waterDepth: 0 });
+    const surface = createLivingActorTraversabilitySurface({
+      forActorId: actor.actorId,
+      sampledAtTick: tick,
+      origin,
+      widthTiles: 3,
+      heightTiles: 2,
+      cells: [
+        ...Array.from({ length: 3 }, () => coreWildlifeTraversabilityCell(
+          "american-black-duck",
+          water,
+          "surface-water",
+        )),
+        ...Array.from({ length: 3 }, () => coreWildlifeTraversabilityCell(
+          "american-black-duck",
+          land,
+          "surface-water",
+        )),
+      ],
+    });
+    const resolution = resolveLivingActorLocomotion({
+      requestId: "duck-surface-water:test/40",
+      tick,
+      actor,
+      targetArea: {
+        center: createWorldPosition(createRegionCoord(0, 0), 2_500, 500),
+        radiusUnits: 0,
+      },
+      maximumStepUnits: 1_000,
+      surface,
+    });
+    expect(resolution).toMatchObject({ kind: "moved", distanceUnits: 1_000 });
+    if (resolution.kind !== "moved") throw new Error("Duck surface route did not move");
+    expect(resolution.trajectory.every(({ localY }) => localY < 1_000)).toBe(true);
   });
 
   it("keeps every established terrestrial species on the exact base cost/step", () => {

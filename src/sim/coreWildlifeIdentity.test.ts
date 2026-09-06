@@ -32,7 +32,7 @@ function input(
 }
 
 describe("core wildlife identity", () => {
-  it("appends the first tidal-ecology contracts without rewriting prior wildlife", () => {
+  it("appends the waterfowl contract without rewriting prior wildlife", () => {
     expect(CORE_WILDLIFE_IDENTITY_VERSION).toBe(1);
     expect(CORE_WILDLIFE_SPECIES).toEqual([
       "deer",
@@ -48,6 +48,7 @@ describe("core wildlife identity", () => {
       "atlantic-silverside",
       "atlantic-marsh-fiddler-crab",
       "snowy-egret",
+      "american-black-duck",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -202,6 +203,36 @@ describe("core wildlife identity", () => {
       locomotionClass: "amphibious",
       taxonomicClass: "bird",
     });
+    expect(getCoreWildlifeProfile("american-black-duck")).toMatchObject({
+      maximumPatchPopulation: 1,
+      roles: ["alarm-source", "prey", "small-prey", "forager", "omnivore"],
+      foodAffinities: {
+        browse: 780_000,
+        "shore-forage": 1_000_000,
+        carrion: 0,
+        "exposed-food": 140_000,
+        "live-prey": 0,
+      },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("american-black-duck")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      dietClass: "omnivore",
+      groupOrganization: null,
+      groupStableIdNamespace: null,
+      locomotionClass: "amphibious",
+      taxonomicClass: "bird",
+    });
+  });
+
+  it("fixes the Alpha-20 duck identity contract as deterministic bytes", () => {
+    expect(JSON.stringify(getCoreWildlifeProfile("american-black-duck"))).toBe(
+      '{"version":1,"species":"american-black-duck","maximumPatchPopulation":1,"roles":["alarm-source","prey","small-prey","forager","omnivore"],"foodAffinities":{"browse":780000,"shore-forage":1000000,"carrion":0,"exposed-food":140000,"live-prey":0},"behavior":{"alarmThreshold":360000,"fleeThreshold":650000,"retreatThreshold":520000,"forageThreshold":260000,"guardThreshold":1000000,"maximumPursuitTicks":0},"morphs":["deep-chocolate","mottled-brown","pale-faced","warm-brown"],"temperamentPairs":[["cautious","watchful"],["patient","watchful"],["social","opportunistic"],["watchful","social"]],"traitRanges":{"vigilance":[620000,960000],"boldness":[100000,520000],"sociability":[240000,700000]}}',
+    );
+    expect(stableCoreWildlifeId(input("american-black-duck"))).toBe(
+      "DUCK-v1-0huwe9o.1ezclkl.0tl4wgd.1kiba8e-njz.p8g-u.american-black-duck:east-marsh-3",
+    );
   });
 
   it("preserves exact pre-Alpha-16 v1 profile and stable-ID bytes", () => {

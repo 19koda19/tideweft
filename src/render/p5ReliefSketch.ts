@@ -198,6 +198,7 @@ type ReliefWildlifeForm =
   | "fish-crow-flock"
   | "northern-harrier"
   | "snowy-egret"
+  | "american-black-duck"
   | "black-bear"
   | "domestic-cat"
   | "marsh-rabbit"
@@ -209,6 +210,7 @@ interface ReliefWildlifeDescriptor {
     readonly primary: string;
     readonly secondary: string;
     readonly dark: string;
+    readonly accent?: string;
   }>;
   readonly hitRadiusScale: number;
   readonly ringRadiusScale: number;
@@ -272,6 +274,18 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     ringRadiusScale: 0.38,
     labelLift: 0.98,
   },
+  "american-black-duck": {
+    form: "american-black-duck",
+    colors: {
+      primary: "#4b382e",
+      secondary: "#76604a",
+      dark: "#211a16",
+      accent: "#4a5f8f",
+    },
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.39,
+    labelLift: 0.74,
+  },
   "black-bear": {
     form: "black-bear",
     colors: {
@@ -326,6 +340,7 @@ const reliefWildlifeColors = (species: WildlifeView["species"]): Readonly<{
   readonly primary: string;
   readonly secondary: string;
   readonly dark: string;
+  readonly accent?: string;
 }> => RELIEF_WILDLIFE[species].colors;
 
 interface ReliefAggregateEvidenceDescriptor {
@@ -4002,6 +4017,76 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawAmericanBlackDuck = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = reliefWildlifeColors("american-black-duck");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.084 * scale;
+      const dabbling = wildlife.behavior === "forage";
+      const flying = wildlife.behavior === "flight";
+      const bodyHalfLength = base * 1.52;
+      const bodyHalfHeight = base * 0.54;
+      const bodyHalfWidth = base * 0.67;
+      const flightLift = flying ? tileSize * 0.56 : RELIEF_WATER_SURFACE_LIFT;
+      const bodyCenterY = surface + flightLift + bodyHalfHeight * 0.72;
+      const headBob = dabbling
+        ? reducedMotion ? base * 0.14 : Math.abs(Math.sin(now * 0.006)) * base * 0.24
+        : 0;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 9, 5);
+
+      if (flying) {
+        const flap = reducedMotion ? 0 : Math.sin(now * 0.006) * base * 0.26;
+        for (const side of [-1, 1] as const) {
+          p.push();
+          p.translate(-base * 0.16, side * flap, 0);
+          p.rotateX(side * 0.12);
+          p.ambientMaterial(colors.secondary);
+          p.ellipsoid(base * 0.76, base * 0.13, base * 2.18, 7, 3);
+          p.pop();
+        }
+      } else {
+        p.push();
+        p.translate(-base * 0.18, -bodyHalfHeight * 0.42, 0);
+        p.ambientMaterial(colors.secondary);
+        p.ellipsoid(base * 0.92, base * 0.18, base * 0.52, 8, 4);
+        p.ambientMaterial(colors.accent ?? colors.dark);
+        p.translate(-base * 0.08, -base * 0.13, -base * 0.36);
+        p.box(base * 0.7, base * 0.1, base * 0.14);
+        p.pop();
+      }
+
+      p.push();
+      p.translate(
+        bodyHalfLength * (dabbling ? 0.56 : 0.72),
+        dabbling ? bodyHalfHeight * 0.5 + headBob : -bodyHalfHeight * 0.32,
+        0,
+      );
+      p.ambientMaterial(colors.secondary);
+      p.sphere(base * 0.48, 7, 5);
+      p.translate(base * 0.62, dabbling ? base * 0.12 : base * 0.03, 0);
+      p.ambientMaterial("#a59655");
+      p.box(base * 0.72, base * 0.16, base * 0.62);
+      p.pop();
+
+      p.push();
+      p.translate(-bodyHalfLength * 0.98, 0, 0);
+      p.rotateZ(p.HALF_PI);
+      p.ambientMaterial(colors.dark);
+      p.cone(base * 0.42, base * 0.62, 5, 1);
+      p.pop();
+      p.pop();
+    };
+
     const drawBlackBear = (
       wildlife: WildlifeView,
       surface: number,
@@ -4501,6 +4586,9 @@ export function createTideweftReliefRenderer(
           return true;
         case "snowy-egret":
           drawSnowyEgret(wildlife, surface, tileSize);
+          return true;
+        case "american-black-duck":
+          drawAmericanBlackDuck(wildlife, surface, tileSize, now);
           return true;
         case "black-bear":
           drawBlackBear(wildlife, surface, tileSize);

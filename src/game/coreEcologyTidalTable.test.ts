@@ -14,6 +14,7 @@ import {
   canonicalizeCoreEcologyAggregatePatch,
   createCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
+  deserializeOrMigrateCoreEcologyAggregatePatch,
   displaceCoreEcologyAggregatePopulation,
   serializeCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
@@ -453,6 +454,107 @@ describe("live tidal-table ecology", () => {
       cargoInteraction: result.cargoInteraction,
       itemConsumption: result.itemConsumption,
     });
+  });
+
+  it("keeps same-tick redistribution idempotent after its bounded event tail is evicted", () => {
+    const { patch } = tidalFixture(4);
+    const initial = stepCoreEcologyTidalTable(patch, { atTick: 4 });
+    if (initial === null || initial.redistributions.length === 0) {
+      throw new Error("missing initial tidal redistribution");
+    }
+    const schoolId = initial.patch.aggregatePopulations.find(({ species }) => (
+      species === "atlantic-silverside"
+    ))?.aggregateId;
+    if (schoolId === undefined) throw new Error("missing school");
+    let churned = initial.patch;
+    for (let ordinal = 0; ordinal < 20; ordinal += 1) {
+      const school = churned.aggregatePopulations.find(({ aggregateId }) => (
+        aggregateId === schoolId
+      ));
+      if (school === undefined) throw new Error("school disappeared");
+      const from = school.anchors.find(({ populationUnits }) => populationUnits > 0);
+      const to = school.anchors.find(({ anchorOrdinal }) => (
+        anchorOrdinal !== from?.anchorOrdinal
+      ));
+      if (from === undefined || to === undefined) throw new Error("missing churn anchors");
+      const displaced = displaceCoreEcologyAggregatePopulation(churned, {
+        aggregateId: schoolId,
+        atTick: 4,
+        causeKind: "animal-disturbance",
+        causeReferenceId: `test:tail-churn:${ordinal.toString(36)}`,
+        fromAnchorOrdinal: from.anchorOrdinal,
+        toAnchorOrdinal: to.anchorOrdinal,
+        populationUnits: 1,
+        pressure: 200_000,
+      });
+      if (displaced === null) throw new Error("tail churn failed");
+      churned = displaced.patch;
+    }
+    const school = churned.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === schoolId
+    ));
+    expect(school?.disturbances.some(({ causeReferenceId }) => (
+      causeReferenceId.endsWith(":edge")
+    ))).toBe(false);
+    expect(school?.lastTidalRedistributionTick).toBe(4);
+
+    const legacy = {
+      ...churned,
+      version: 3,
+      aggregatePopulations: churned.aggregatePopulations.map((population) => {
+        const { lastTidalRedistributionTick: _omitted, ...retained } = population;
+        return retained;
+      }),
+    };
+    const migrated = deserializeOrMigrateCoreEcologyAggregatePatch(stableStringify(legacy));
+    const migratedSchool = migrated?.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === schoolId
+    ));
+    expect(migratedSchool?.lastTidalRedistributionTick).toBe(4);
+    if (migrated === null) throw new Error("evicted-tail migration failed");
+    const migratedReplay = stepCoreEcologyTidalTable(migrated, { atTick: 4 });
+    expect(migratedReplay?.redistributions).toEqual([]);
+    expect(migratedReplay?.patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === schoolId
+    ))?.nextDisturbanceOrdinal).toBe(migratedSchool?.nextDisturbanceOrdinal);
+
+    const replayed = stepCoreEcologyTidalTable(churned, { atTick: 4 });
+    expect(replayed?.redistributions).toEqual([]);
+    expect(replayed?.patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === schoolId
+    ))?.nextDisturbanceOrdinal).toBe(school?.nextDisturbanceOrdinal);
+    const settledReplay = replayed === null
+      ? null
+      : stepCoreEcologyTidalTable(replayed.patch, { atTick: 4 });
+    expect(settledReplay?.redistributions).toEqual([]);
+    expect(settledReplay?.patch).toEqual(replayed?.patch);
+  });
+
+  it("adopts a retained v3 tide edge into the durable operation clock", () => {
+    const { patch } = tidalFixture(4);
+    const stepped = stepCoreEcologyTidalTable(patch, { atTick: 4 });
+    if (stepped === null || stepped.redistributions.length === 0) {
+      throw new Error("missing legacy tide edge");
+    }
+    const legacy = {
+      ...stepped.patch,
+      version: 3,
+      aggregatePopulations: stepped.patch.aggregatePopulations.map((population) => {
+        const { lastTidalRedistributionTick: _omitted, ...retained } = population;
+        return retained;
+      }),
+    };
+    const migrated = deserializeOrMigrateCoreEcologyAggregatePatch(stableStringify(legacy));
+    const school = migrated?.aggregatePopulations.find(({ species }) => (
+      species === "atlantic-silverside"
+    ));
+    expect(school?.lastTidalRedistributionTick).toBe(4);
+    if (migrated === null) throw new Error("legacy tide edge migration failed");
+    const replayed = stepCoreEcologyTidalTable(migrated, { atTick: 4 });
+    expect(replayed?.redistributions).toEqual([]);
+    expect(replayed?.patch.aggregatePopulations.find(({ species }) => (
+      species === "atlantic-silverside"
+    ))?.nextDisturbanceOrdinal).toBe(school?.nextDisturbanceOrdinal);
   });
 
   it("makes schooling strongest in deeper rising water and crab foraging strongest on an ebbing flat", () => {

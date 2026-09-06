@@ -157,6 +157,12 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN WADER",
     representation: "individual",
   },
+  "american-black-duck": {
+    identifiedName: "American black duck",
+    identifiedHeading: "AMERICAN BLACK DUCK",
+    unidentifiedHeading: "UNKNOWN DUCK",
+    representation: "individual",
+  },
 });
 
 /**

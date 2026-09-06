@@ -80,7 +80,6 @@ import type { PorterResponseState } from "./porterResponse";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
-  serializeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import {
@@ -299,10 +298,10 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   if (
     current === null
     || (
-      current.derivation.kind !== "habitat-v5"
-      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
+      current.derivation.kind !== "habitat-v6"
+      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
     )
-  ) throw new Error("fixture requires a canonical Tide Table ecology save");
+  ) throw new Error("fixture requires a canonical waterfowl ecology save");
 
   const { tidalAnchors: _tidalAnchors, ...rainChorusHabitat } = current.derivation.habitat;
   const marshEdgeHabitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage({
@@ -321,7 +320,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   }
   const ecology = canonicalizeCoreEcologyAggregatePatch({
     ...current,
-    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v5"
+    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
       ? {
           kind: "legacy-fixed-v1-with-habitat-v3",
           habitat: marshEdgeHabitat,
@@ -340,6 +339,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
       species !== "fish-crow"
       && species !== "northern-harrier"
       && species !== "snowy-egret"
+      && species !== "american-black-duck"
     )),
     aggregatePopulations: current.aggregatePopulations.filter(
       ({ species }) => species !== "southern-leopard-frog"
@@ -350,7 +350,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-16 ecology");
 
   envelope.version = 11;
-  envelope.coreEcology = serializeCoreEcologyAggregatePatch(ecology);
+  envelope.coreEcology = serializePublishedAggregateV3(ecology);
   resealGameSave(envelope);
   return Object.freeze({
     ecology,
@@ -360,6 +360,19 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
       updatedAt: Math.min(Number.MAX_SAFE_INTEGER, record.updatedAt + 1),
       worldJson: JSON.stringify(envelope),
     },
+  });
+}
+
+function serializePublishedAggregateV3(
+  ecology: CoreEcologyAggregatePatchState,
+): string {
+  return stableStringify({
+    ...ecology,
+    version: 3,
+    aggregatePopulations: ecology.aggregatePopulations.map((population) => {
+      const { lastTidalRedistributionTick: _omitted, ...legacy } = population;
+      return legacy;
+    }),
   });
 }
 
@@ -1439,11 +1452,11 @@ describe("perpetual new worlds", () => {
     const originalEcology = deserializeCoreEcologyAggregatePatch(
       originalEnvelope.coreEcology,
     );
-    expect(originalEnvelope.version).toBe(13);
-    expect(originalRecord.payloadVersion).toBe(13);
-    expect(originalEcology?.derivation.kind).toBe("habitat-v5");
-    if (originalEcology?.derivation.kind !== "habitat-v5") {
-      throw new Error("fixture did not create current Tide Table ecology");
+    expect(originalEnvelope.version).toBe(14);
+    expect(originalRecord.payloadVersion).toBe(14);
+    expect(originalEcology?.derivation.kind).toBe("habitat-v6");
+    if (originalEcology?.derivation.kind !== "habitat-v6") {
+      throw new Error("fixture did not create current waterfowl ecology");
     }
 
     const originalCrow = originalEcology.populations.find(
@@ -1494,11 +1507,11 @@ describe("perpetual new worlds", () => {
     const migratedEcology = deserializeCoreEcologyAggregatePatch(
       migratedEnvelope.coreEcology,
     );
-    expect(migratedEnvelope.version).toBe(13);
-    expect(migratedRecord.payloadVersion).toBe(13);
-    expect(migratedEcology?.derivation.kind).toBe("habitat-v5");
-    if (migratedEcology?.derivation.kind !== "habitat-v5") {
-      throw new Error("v11 migration did not produce canonical v13 ecology");
+    expect(migratedEnvelope.version).toBe(14);
+    expect(migratedRecord.payloadVersion).toBe(14);
+    expect(migratedEcology?.derivation.kind).toBe("habitat-v6");
+    if (migratedEcology?.derivation.kind !== "habitat-v6") {
+      throw new Error("v11 migration did not produce canonical v14 ecology");
     }
 
     for (const oldPopulation of predecessor.ecology.populations) {
@@ -1562,11 +1575,11 @@ describe("perpetual new worlds", () => {
     expect(migratedEnvelope.physicalCargo).toEqual(originalEnvelope.physicalCargo);
     expect(migratedEnvelope.bio0Ecology).toBe(originalEnvelope.bio0Ecology);
 
-    const firstV13Ecology = migratedEnvelope.coreEcology;
+    const firstV14Ecology = migratedEnvelope.coreEcology;
     migratedRuntime.destroy();
     const reloaded = await createTideweftRuntime(repository);
     await reloaded.save();
-    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstV13Ecology);
+    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstV14Ecology);
     reloaded.destroy();
   });
 
@@ -1881,7 +1894,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(13);
+    expect(prepared.version).toBe(14);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2090,8 +2103,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(13);
-    expect(durableRecord.payloadVersion).toBe(13);
+    expect(durable.version).toBe(14);
+    expect(durableRecord.payloadVersion).toBe(14);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");
