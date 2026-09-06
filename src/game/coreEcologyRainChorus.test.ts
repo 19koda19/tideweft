@@ -19,7 +19,10 @@ import {
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
-  coreEcologyAggregateVisualSourceKind,
+  CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS,
+  coreEcologyAggregateLivingSourceKind,
+  coreEcologyAggregateLivingSourceSpecies,
+  resolveCoreEcologyAggregateLivingResponse,
   resolveCoreEcologyAggregateActivityIntensity,
   resolveCoreEcologyAggregateDisturbanceActivity,
 } from "./coreEcologyAggregatePolicy";
@@ -37,6 +40,7 @@ import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
 } from "./worldPosition";
+import { LIVING_ACTOR_SPECIES } from "./livingSpeciesRegistry";
 
 const SEED = seedFromText("alpha seventeen rain chorus shadow overhead");
 const ORIGIN = createRegionCoord(0, 0);
@@ -85,13 +89,50 @@ function individualInputs(
 }
 
 describe("rain-chorus habitat v4", () => {
-  it("maps aggregate pressure through one shared species vocabulary", () => {
-    expect(coreEcologyAggregateVisualSourceKind("domestic-cat")).toBe("cat");
-    expect(coreEcologyAggregateVisualSourceKind("gull")).toBe("gull");
-    expect(coreEcologyAggregateVisualSourceKind("fish-crow")).toBe("fish-crow");
-    expect(coreEcologyAggregateVisualSourceKind("northern-harrier"))
-      .toBe("northern-harrier");
-    expect(coreEcologyAggregateVisualSourceKind("marsh-rabbit")).toBeNull();
+  it("resolves aggregate pressure by shared roles and capabilities without a pair table", () => {
+    expect(new Set(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS).size)
+      .toBe(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.length);
+    expect(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS).toContain("cat");
+    expect(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS).toContain("dog");
+    expect(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS).not.toContain("domestic-cat");
+    expect(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS).not.toContain("domestic-dog");
+    expect(coreEcologyAggregateLivingSourceSpecies("cat")).toBe("domestic-cat");
+    expect(coreEcologyAggregateLivingSourceSpecies("dog")).toBe("domestic-dog");
+    expect(coreEcologyAggregateLivingSourceSpecies("domestic-cat")).toBeNull();
+    expect(coreEcologyAggregateLivingSourceSpecies("domestic-dog")).toBeNull();
+    expect(coreEcologyAggregateLivingSourceKind("domestic-cat")).toBe("cat");
+    expect(coreEcologyAggregateLivingSourceKind("domestic-dog")).toBe("dog");
+    expect(coreEcologyAggregateLivingSourceKind("marsh-fox")).toBe("marsh-fox");
+    expect(coreEcologyAggregateLivingSourceKind("marsh-rabbit")).toBe("marsh-rabbit");
+    expect(resolveCoreEcologyAggregateLivingResponse("brown-rat", "marsh-fox"))
+      .toMatchObject({ sourceKind: "marsh-fox", causeKind: "predator-pressure" });
+    expect(resolveCoreEcologyAggregateLivingResponse(
+      "southern-leopard-frog",
+      "marsh-fox",
+    )).toMatchObject({ sourceKind: "marsh-fox", causeKind: "predator-pressure" });
+    expect(resolveCoreEcologyAggregateLivingResponse("brown-rat", "marsh-rabbit"))
+      .toBeNull();
+    expect(resolveCoreEcologyAggregateLivingResponse(
+      "southern-leopard-frog",
+      "marsh-rabbit",
+    )).toBeNull();
+
+    // Property coverage over the roster: the role resolver is total,
+    // deterministic, and never turns an aggregate source into a visual actor.
+    for (const target of ["brown-rat", "southern-leopard-frog"] as const) {
+      for (const source of LIVING_ACTOR_SPECIES) {
+        const first = resolveCoreEcologyAggregateLivingResponse(target, source);
+        expect(resolveCoreEcologyAggregateLivingResponse(target, source)).toEqual(first);
+        if (source === "brown-rat" || source === "southern-leopard-frog") {
+          expect(first).toBeNull();
+        } else if (first !== null) {
+          expect(first).toMatchObject({
+            sourceSpecies: source,
+            response: "pressure",
+          });
+        }
+      }
+    }
   });
 
   it("appends crow, harrier, and frog after the exact v3 prefix", () => {

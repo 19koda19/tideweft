@@ -171,7 +171,7 @@ export function projectCoreEcologyWildlife(
   }
 
   const visible: VisibleMember[] = [];
-  const directVisibleGroupsByPopulation = new Map<string, number>();
+  const directVisibleGroupsBySpecies = new Map<CoreWildlifeSpecies, Map<string, number>>();
   for (const population of patch.populations) {
     for (const member of population.members) {
       if (member.materialization !== "materialized") continue;
@@ -188,10 +188,13 @@ export function projectCoreEcologyWildlife(
       visible.push(Object.freeze({ population, member, presentation }));
       if (coreEcologySpeciesRuntimePolicy(population.species)?.presentationModel
         === "visible-flock") {
-        directVisibleGroupsByPopulation.set(
+        const speciesPopulations = directVisibleGroupsBySpecies.get(population.species)
+          ?? new Map<string, number>();
+        speciesPopulations.set(
           population.populationKey,
-          (directVisibleGroupsByPopulation.get(population.populationKey) ?? 0) + 1,
+          (speciesPopulations.get(population.populationKey) ?? 0) + 1,
         );
+        directVisibleGroupsBySpecies.set(population.species, speciesPopulations);
       }
     }
   }
@@ -203,7 +206,9 @@ export function projectCoreEcologyWildlife(
       presentations.push(presentation);
       continue;
     }
-    const visibleAggregateCount = directVisibleGroupsByPopulation.get(population.populationKey);
+    const visibleAggregateCount = directVisibleGroupsBySpecies
+      .get(population.species)
+      ?.get(population.populationKey);
     if (visibleAggregateCount === undefined) return null;
     const withVisibleCount = projectWildlifePresentation({
       actor: member.actor,

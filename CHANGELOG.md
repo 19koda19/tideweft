@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.18 — 2026-09-06
+
+Build: `0.3.3-alpha.18` · Gameplay contract: 20 · Tutorial: 28
+
+One Marsh, Many Eyes closes the seven-role Wave-B ecology inside the bounded starting-harbor assemblage through shared species and interaction contracts, while making visible flock estimates and unidentified chorus direction agree across world, sound, captions, and ABOUT.
+
+### Gameplay
+
+- Aggregate visual contact now carries a canonical living species into one shared role-and-trophic response policy. A lawfully perceived marsh fox can therefore create predator pressure for eligible brown-rat and southern-leopard-frog population areas, while a neutral marsh rabbit creates no disturbance merely by being nearby.
+- Every brown-rat, domestic-cat, marsh-rabbit, marsh-fox, fish-crow, northern-harrier, and southern-leopard-frog module now declares every broad ecological target class as either an available interaction or an intentional non-response. Future species can compose through the same contract instead of acquiring private species-pair detection code.
+- The bounded starting-harbor Wave-B roster now has one representation-aware closure witness across individual actors, a persistent flock, and aggregate population areas. This closes that local seven-role release wave without claiming worldwide ecology or complete 30-criterion readiness for every species.
+
+### Fixes
+
+- Aggregate perception no longer depends on a concrete runtime allow-list of cats, dogs, gulls, crows, and harriers. Source identity remains canonical at the sensory boundary and the shared ecological policy derives supported pressure or no response from declared species roles and capabilities.
+- Selecting a visible gull or fish crow now carries the already filtered visible flock estimate into quick and full ABOUT. The inspection therefore agrees with the birds actually in sight and never drops the group summary merely because the player selected one representative.
+- The rain-responsive chorus caption no longer identifies frogs before the player has learned that fact. It now reports an anonymous nearby or distant chorus and only the direction justified by the shared heard-bearing uncertainty; co-located or heavily masked sound says all around or direction unclear instead of inventing a cardinal fact.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. The shared bridge changes which lawful nearby species can influence an aggregate; it does not grant player bonuses, add combat, or turn neutral co-presence into automatic danger.
+- Existing population, representative, group, stimulus, evidence, and save-size caps remain unchanged. Aggregate response still moves at most one conserved unit on a fixed opportunity and cannot consume cargo, create an animal, or produce mortality.
+- Broad contract invariants, role-derived outcomes, and representative fox-to-aggregate and neutral-rabbit cases stand in for an exhaustive animal-by-animal test matrix. Emergent combinations remain free to use the same bounded scaffold.
+
+### Interface
+
+- Chart 2D and Relief 3D keep the same knowledge boundary. When multiple visible gulls or fish crows are summarized, the world label, quick inspection, and full ABOUT use the same approximate visible count rather than implying unseen flock members.
+- Equivalent chorus captions and uncertainty-attenuated stereo pan now derive from the same lawful audible-bearing contact. A cardinal direction appears only when hearing resolves it; the caption remains species-anonymous and contains no hidden population identity.
+- Field Manual version 28 explains the completed bounded Wave-B role scaffold, role-derived aggregate pressure, intentional neutral responses, visible-flock parity, anonymous directional chorus, and the limits of this local closure.
+
+### Save changes
+
+- The outer session remains version 12 and core ecology remains habitat version 4. No schema migration or rewrite of existing records is required; future lawful Alpha 18 aggregate responses persist through the existing version-4 aggregate fields rather than a new save shape.
+- Existing stable animal, flock, population-area, evidence, cargo, and custody identities remain authoritative across save, reload, coarse travel, full-detail return, signed region seams, and extreme coordinates. The shared response bridge cannot reroll or duplicate them.
+- Legacy cat and dog aliases remain canonical in transient Settlement Shadows stimulus/event payloads and retain the version-2 compatibility shape for pre-existing rat interactions. Newly admitted species pressure uses the additive version-3 small-world event shape, while the sensory boundary rejects duplicate domestic-cat or domestic-dog spellings.
+
+### Known limitations
+
+- Wave B is closed only as a bounded starting-harbor assemblage. Distant regions do not yet own their own habitat populations, so this is not worldwide ecology, ecological migration, or the full 75-to-150-profile biodiversity target.
+- Animals still do not attack, receive injuries, die, leave carcasses, or consume live prey. Fox and harrier pursuit remains finite and nonlethal, and aggregate response remains conserved movement or activity rather than hidden mortality.
+- Complete scent fields and tracking, foliage consumption, broad social information, complete sleep and circadian schedules, reproduction, promotion beyond current rules, additional species, and full species readiness remain future work.
+
 ## 0.3.3-alpha.17 — 2026-09-05
 
 Build: `0.3.3-alpha.17` · Gameplay contract: 20 · Tutorial: 27

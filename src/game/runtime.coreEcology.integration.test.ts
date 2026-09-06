@@ -958,6 +958,9 @@ describe("runtime core-ecology vertical slice", () => {
       behavior: "perch",
     });
     if (renderCrow === undefined) throw new Error("Crow ABOUT fixture could not see its crow");
+    if (renderCrow.groupSize === undefined) {
+      throw new Error("Crow ABOUT fixture requires more than one visible flock representative");
+    }
     runtime.dispatchRenderer({
       type: "select",
       entity: "living-actor",
@@ -966,7 +969,12 @@ describe("runtime core-ecology vertical slice", () => {
       point: renderCrow.position,
     });
     const selection = runtime.getUIView().selectedLivingActor;
+    expect(selection?.quick.summary).toContain(`About ${renderCrow.groupSize} visible`);
     expect(selection?.quick.summary).toContain("Perched");
+    expect(selection?.about.observed).toContainEqual({
+      label: "Visible group",
+      value: `About ${renderCrow.groupSize}`,
+    });
     expect(selection?.about.observed).toContainEqual({
       label: "Behavior",
       value: "Perched",

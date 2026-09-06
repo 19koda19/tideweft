@@ -1321,6 +1321,10 @@ describe("Chart Wave-B wildlife presentation", () => {
     }
     expect((p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
       .not.toContain(actor.actorId);
+    if (species === "fish-crow") {
+      expect((p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
+        .toContain("Fish crows · ~3 visible");
+    }
 
     canvas.emit("pointerdown", {
       clientX: 100,

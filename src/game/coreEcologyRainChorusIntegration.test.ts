@@ -405,9 +405,10 @@ describe("Rain Chorus / Shadow Overhead integration", () => {
     expect(heard).toHaveLength(1);
     expect(heard?.[0]).toMatchObject({
       cue: "frog-chorus",
-      caption: "[frog chorus nearby]",
+      caption: "[chorus nearby — direction unclear]",
     });
     expect(heard?.[0]?.pan).toBeGreaterThan(0);
+    expect(heard?.[0]?.caption).not.toMatch(/frog/iu);
     expect(JSON.stringify(heard)).not.toContain(frogs.aggregateId);
     expect(JSON.stringify(heard)).not.toContain("actorId");
   });

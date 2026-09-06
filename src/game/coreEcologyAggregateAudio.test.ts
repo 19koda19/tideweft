@@ -10,7 +10,10 @@ import {
   setCoreEcologyAggregateActivityIntensity,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
-import { projectCoreEcologyAggregateHeardCues } from "./coreEcologyAggregateAudio";
+import {
+  coreEcologyChorusDirection,
+  projectCoreEcologyAggregateHeardCues,
+} from "./coreEcologyAggregateAudio";
 import {
   deriveCoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
@@ -42,13 +45,57 @@ describe("aggregate ecology heard cues", () => {
     expect(first).toHaveLength(1);
     expect(first?.[0]).toMatchObject({
       cue: "frog-chorus",
-      caption: "[frog chorus nearby]",
+      caption: "[chorus nearby — direction unclear]",
     });
     expect(first?.[0]?.pan).toBeGreaterThan(0);
     expect(first?.[0]?.contact.certainty).toBeGreaterThan(0);
+    expect(first?.[0]?.caption).not.toMatch(/frog/iu);
     expect(JSON.stringify(first)).not.toContain("FROG-AREA");
     expect(JSON.stringify(first)).not.toContain("aggregateId");
     expect(serializeCoreEcologyAggregatePatch(current.patch)).toBe(before);
+  });
+
+  it("keeps the anonymous caption and stereo rooted in one heard-bearing contact", () => {
+    const westward = projectCoreEcologyAggregateHeardCues(
+      fixture("rain", 900_000, 0, -1),
+    );
+
+    expect(westward?.[0]).toMatchObject({
+      caption: "[chorus nearby — direction unclear]",
+    });
+    expect(westward?.[0]?.pan).toBeLessThan(0);
+    expect(westward?.[0]?.caption).not.toMatch(/frog/iu);
+  });
+
+  it("qualifies uncertain and co-located bearings instead of inventing a cardinal fact", () => {
+    expect(coreEcologyChorusDirection({
+      bearing: { centerRadians: 0, uncertaintyRadians: Math.PI },
+      distanceBand: { minimum: 0, maximum: 0 },
+      certainty: 1,
+    })).toBe("all around");
+    expect(coreEcologyChorusDirection({
+      bearing: { centerRadians: 0, uncertaintyRadians: (3 * Math.PI) / 4 },
+      distanceBand: { minimum: 1, maximum: 10 },
+      certainty: 0.2,
+    })).toBe("direction unclear");
+    expect(coreEcologyChorusDirection({
+      bearing: { centerRadians: Math.PI / 8, uncertaintyRadians: 0.001 },
+      distanceBand: { minimum: 1, maximum: 2 },
+      certainty: 0.99,
+    })).toBe("direction unclear");
+    expect(coreEcologyChorusDirection({
+      bearing: { centerRadians: 0, uncertaintyRadians: 0.001 },
+      distanceBand: { minimum: 1, maximum: 2 },
+      certainty: 0.99,
+    })).toBe("east");
+
+    const coLocated = projectCoreEcologyAggregateHeardCues(
+      fixture("clear", 0, 0, 0),
+    );
+    expect(coLocated?.[0]).toMatchObject({
+      caption: "[chorus nearby — all around]",
+      pan: 0,
+    });
   });
 
   it("lets rain mask a distant chorus and keeps emission cadence bounded", () => {

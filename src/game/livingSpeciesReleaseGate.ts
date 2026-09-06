@@ -1,6 +1,7 @@
 import {
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_CATALOG_VERSION,
+  LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   livingSpeciesModule,
 } from "./livingSpeciesCatalog";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
@@ -10,6 +11,7 @@ export const LIVING_SPECIES_READINESS_REPORT_VERSION = 1 as const;
 export const MAX_RELEASE_EVIDENCE_OWNERS = 8 as const;
 export const ALPHA16_MARSH_EDGE_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA17_RAIN_CHORUS_BOUNDED_READINESS_VERSION = 1 as const;
+export const WAVE_B_BOUNDED_STARTING_HARBOR_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -119,6 +121,133 @@ export const ALPHA17_RAIN_CHORUS_SPECIES = [
 ] as const satisfies readonly LivingActorSpecies[];
 
 export type Alpha17RainChorusSpecies = (typeof ALPHA17_RAIN_CHORUS_SPECIES)[number];
+
+/** The seven deliberately bounded small-world roles shipped across Wave B. */
+export const WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES = [
+  "brown-rat",
+  "domestic-cat",
+  "marsh-rabbit",
+  "marsh-fox",
+  "fish-crow",
+  "northern-harrier",
+  "southern-leopard-frog",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type WaveBBoundedStartingHarborSpecies =
+  (typeof WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES)[number];
+export type WaveBBoundedRole =
+  | "rodent"
+  | "cat"
+  | "rabbit-hare"
+  | "small-opportunist"
+  | "corvid"
+  | "raptor"
+  | "amphibian";
+export type WaveBBoundedRepresentation = "individual" | "group" | "aggregate";
+export type WaveBBoundedContinuity =
+  | "individual-full-coarse"
+  | "group-full-coarse"
+  | "aggregate-authoritative";
+export type WaveBBoundedExcludedClaim =
+  | "worldwide-ecology"
+  | "wildlife-promotion"
+  | "cross-region-migration"
+  | "full-thirty-criterion-readiness"
+  | "directive-completion";
+
+export interface WaveBBoundedRoleReadiness {
+  readonly role: WaveBBoundedRole;
+  readonly speciesId: WaveBBoundedStartingHarborSpecies;
+  readonly representation: WaveBBoundedRepresentation;
+  readonly continuity: WaveBBoundedContinuity;
+  /** The species gate is an exact match for this build's evidence. */
+  readonly evidenceAuthenticated: boolean;
+  /** Catalog representation agrees with the role's declared authority model. */
+  readonly representationAuthenticated: boolean;
+  /** Every broad target is explicitly supported or intentionally neutral. */
+  readonly interactionContractAuthenticated: boolean;
+  /** Required materialization, save, and signed-seam evidence is present. */
+  readonly continuityAuthenticated: boolean;
+  readonly ready: boolean;
+  readonly evidenceOwnerIds: readonly string[];
+}
+
+export interface WaveBBoundedStartingHarborReadinessReport {
+  readonly version: typeof WAVE_B_BOUNDED_STARTING_HARBOR_READINESS_VERSION;
+  readonly unitId: "wave-b-small-world";
+  readonly scope: "bounded-starting-harbor";
+  readonly speciesIds: readonly WaveBBoundedStartingHarborSpecies[];
+  readonly roles: readonly WaveBBoundedRoleReadiness[];
+  readonly evidenceAuthenticated: boolean;
+  readonly roleCoverageReady: boolean;
+  readonly broadInteractionCoverageReady: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingRoles: readonly WaveBBoundedRole[];
+  /** Full per-species release readiness remains independently fail-closed. */
+  readonly fullThirtyCriterionReady: boolean;
+  /** These claims are deliberately outside this bounded report's authority. */
+  readonly excludedClaims: readonly WaveBBoundedExcludedClaim[];
+}
+
+interface WaveBBoundedRoleDefinition {
+  readonly role: WaveBBoundedRole;
+  readonly speciesId: WaveBBoundedStartingHarborSpecies;
+  readonly representation: WaveBBoundedRepresentation;
+  readonly continuity: WaveBBoundedContinuity;
+}
+
+const WAVE_B_BOUNDED_ROLE_DEFINITIONS: readonly WaveBBoundedRoleDefinition[] = [
+  {
+    role: "rodent",
+    speciesId: "brown-rat",
+    representation: "aggregate",
+    continuity: "aggregate-authoritative",
+  },
+  {
+    role: "cat",
+    speciesId: "domestic-cat",
+    representation: "individual",
+    continuity: "individual-full-coarse",
+  },
+  {
+    role: "rabbit-hare",
+    speciesId: "marsh-rabbit",
+    representation: "individual",
+    continuity: "individual-full-coarse",
+  },
+  {
+    role: "small-opportunist",
+    speciesId: "marsh-fox",
+    representation: "individual",
+    continuity: "individual-full-coarse",
+  },
+  {
+    role: "corvid",
+    speciesId: "fish-crow",
+    representation: "group",
+    continuity: "group-full-coarse",
+  },
+  {
+    role: "raptor",
+    speciesId: "northern-harrier",
+    representation: "individual",
+    continuity: "individual-full-coarse",
+  },
+  {
+    role: "amphibian",
+    speciesId: "southern-leopard-frog",
+    representation: "aggregate",
+    continuity: "aggregate-authoritative",
+  },
+] as const;
+
+export const WAVE_B_BOUNDED_EXCLUDED_CLAIMS = [
+  "worldwide-ecology",
+  "wildlife-promotion",
+  "cross-region-migration",
+  "full-thirty-criterion-readiness",
+  "directive-completion",
+] as const satisfies readonly WaveBBoundedExcludedClaim[];
 
 /**
  * Technical claims owned by the bounded Alpha-16 rabbit/fox implementation.
@@ -1091,6 +1220,144 @@ export function alpha17RainChorusBoundedReadiness(): Alpha17RainChorusBoundedRea
 
 export const ALPHA17_RAIN_CHORUS_BOUNDED_READINESS =
   alpha17RainChorusBoundedReadiness();
+
+/**
+ * Authenticated closure witness for Wave B's seven-role starting-harbor
+ * ecology only. Aggregate populations remain aggregates; a social flock owns
+ * group continuity; other mobile roles retain individual full/coarse records.
+ * This report cannot attest an ecology atlas, migration, promotion, the full
+ * 30-criterion gate, or completion of the broader biodiversity directive.
+ */
+export function waveBBoundedStartingHarborReadiness(): WaveBBoundedStartingHarborReadinessReport {
+  const roles = WAVE_B_BOUNDED_ROLE_DEFINITIONS.map((definition): WaveBBoundedRoleReadiness => {
+    const gate = LIVING_SPECIES_RELEASE_GATES.gates.find(({ speciesId }) => (
+      speciesId === definition.speciesId
+    ));
+    const report = gate === undefined ? null : auditLivingSpeciesReleaseGate(gate);
+    const module = livingSpeciesModule(definition.speciesId);
+    const evidenceAuthenticated = gate !== undefined
+      && report?.evidenceAuthenticated === true;
+    const criterion = (name: LivingSpeciesReleaseCriterion) => (
+      gate?.criteria.find((state) => state.criterion === name)
+    );
+    const active = (name: LivingSpeciesReleaseCriterion): boolean => (
+      criterion(name)?.status === "active"
+    );
+    const activeOrFoundation = (name: LivingSpeciesReleaseCriterion): boolean => {
+      const status = criterion(name)?.status;
+      return status === "active" || status === "foundation";
+    };
+
+    const individualRepresentation = module !== null
+      && module.identity.form === "individual"
+      && module.population.authoritativeUnit === "hybrid"
+      && module.population.materialization === "mixed"
+      && module.population.coarseSimulation;
+    const representationAuthenticated = definition.representation === "aggregate"
+      ? module !== null
+        && module.identity.form === "aggregate"
+        && module.population.authoritativeUnit === "population-patch"
+        && module.population.materialization === "threshold"
+        && module.population.coarseSimulation
+      : definition.representation === "group"
+        ? individualRepresentation
+          && module?.social.groupModel === "group"
+          && module.social.group.status === "active"
+          && module.social.group.representation === "hybrid"
+          && module.social.group.stableIdentity
+          && module.social.group.membership
+        : individualRepresentation;
+    const interactionContractAuthenticated = module !== null
+      && module.interactions.targets.length === LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length
+      && module.interactions.targets.every((target, index) => (
+        target.targetClass === LIVING_SPECIES_INTERACTION_TARGET_CLASSES[index]
+        && (
+          target.policy === "available"
+          || target.policy === "intentional-no-response"
+        )
+      ));
+
+    const commonContinuity = active("population-materialization") && active("save-load");
+    const continuityAuthenticated = definition.representation === "aggregate"
+      ? commonContinuity
+        && activeOrFoundation("full-coarse-transition")
+        && activeOrFoundation("seamless-region-crossing")
+      : commonContinuity
+        && active("full-coarse-transition")
+        && active("seamless-region-crossing")
+        && (definition.representation !== "group" || active("same-species-interaction"));
+
+    const evidenceCriteria: readonly LivingSpeciesReleaseCriterion[] = definition.representation === "group"
+      ? [
+          "population-materialization",
+          "full-coarse-transition",
+          "save-load",
+          "seamless-region-crossing",
+          "same-species-interaction",
+        ]
+      : [
+          "population-materialization",
+          "full-coarse-transition",
+          "save-load",
+          "seamless-region-crossing",
+        ];
+    const evidenceOwnerIds = [
+      module?.identity.ownerId,
+      module?.population.ownerId,
+      ...(definition.representation === "group" ? [module?.social.group.ownerId] : []),
+      ...evidenceCriteria.flatMap((name) => criterion(name)?.evidenceOwnerIds ?? []),
+    ].filter((ownerId): ownerId is string => ownerId !== null && ownerId !== undefined);
+
+    return deepFreeze({
+      role: definition.role,
+      speciesId: definition.speciesId,
+      representation: definition.representation,
+      continuity: definition.continuity,
+      evidenceAuthenticated,
+      representationAuthenticated,
+      interactionContractAuthenticated,
+      continuityAuthenticated,
+      ready: evidenceAuthenticated
+        && representationAuthenticated
+        && interactionContractAuthenticated
+        && continuityAuthenticated,
+      evidenceOwnerIds: [...new Set(evidenceOwnerIds)].sort(compareText),
+    });
+  });
+  const roleCoverageReady = roles.length === WAVE_B_BOUNDED_ROLE_DEFINITIONS.length
+    && roles.every((role, index) => (
+      role.role === WAVE_B_BOUNDED_ROLE_DEFINITIONS[index]?.role
+      && role.speciesId === WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES[index]
+    ));
+  const evidenceAuthenticated = roles.every((role) => role.evidenceAuthenticated);
+  const broadInteractionCoverageReady = roles.every((role) => (
+    role.interactionContractAuthenticated
+  ));
+  const blockingRoles = roles.filter((role) => !role.ready).map(({ role }) => role);
+  const fullThirtyCriterionReady = roles.every(({ speciesId }) => (
+    livingSpeciesReadinessReport(speciesId)?.publicReady === true
+  ));
+  return deepFreeze({
+    version: WAVE_B_BOUNDED_STARTING_HARBOR_READINESS_VERSION,
+    unitId: "wave-b-small-world",
+    scope: "bounded-starting-harbor",
+    speciesIds: [...WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES],
+    roles,
+    evidenceAuthenticated,
+    roleCoverageReady,
+    broadInteractionCoverageReady,
+    boundedCandidateReady: evidenceAuthenticated
+      && roleCoverageReady
+      && broadInteractionCoverageReady
+      && blockingRoles.length === 0,
+    blockingRoles,
+    fullThirtyCriterionReady,
+    excludedClaims: [...WAVE_B_BOUNDED_EXCLUDED_CLAIMS],
+  });
+}
+
+export const WAVE_B_BOUNDED_STARTING_HARBOR_READINESS =
+  waveBBoundedStartingHarborReadiness();
 
 function canonicalCriterionState(
   value: unknown,

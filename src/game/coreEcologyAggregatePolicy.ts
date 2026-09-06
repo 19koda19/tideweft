@@ -1,5 +1,12 @@
 import { FIXED_POINT } from "../sim/types";
-import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
+import { coreEcologyTrophicPerceivedClass } from "./coreEcologyTrophic";
+import { coreEcologySpeciesHasRuntimeCapability } from "./coreEcologySpeciesRuntimePolicy";
+import {
+  LIVING_ACTOR_SPECIES,
+  isLivingActorSpecies,
+  isLivingSpeciesActorAddressable,
+  type LivingActorSpecies,
+} from "./livingSpeciesRegistry";
 
 export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
   "brown-rat",
@@ -23,22 +30,43 @@ export type CoreEcologyAggregatePolicyEvidenceKind =
   | "shelter-sign"
   | "tracks";
 
-export type CoreEcologyAggregatePolicyVisualSourceKind =
+/**
+ * `cat` and `dog` are frozen Alpha-16 stimulus/event spellings. New perception
+ * input always carries a canonical living species; only the transient
+ * aggregate-facing payload retains those aliases so its v2 compatibility shape
+ * remains stable.
+ */
+export type CoreEcologyAggregateLivingSourceKind =
   | "cat"
   | "dog"
-  | "fish-crow"
-  | "gull"
-  | "human"
-  | "northern-harrier";
+  | Exclude<
+      LivingActorSpecies,
+      "domestic-cat" | "domestic-dog" | CoreEcologyAggregateSpecies
+    >;
 
-const AGGREGATE_VISUAL_SOURCE_BY_SPECIES: Readonly<
-  Partial<Record<CoreWildlifeSpecies, CoreEcologyAggregatePolicyVisualSourceKind>>
-> = Object.freeze({
-  "domestic-cat": "cat",
-  gull: "gull",
-  "fish-crow": "fish-crow",
-  "northern-harrier": "northern-harrier",
-});
+export const CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS:
+readonly CoreEcologyAggregateLivingSourceKind[] = Object.freeze(
+  LIVING_ACTOR_SPECIES.flatMap((sourceSpecies): CoreEcologyAggregateLivingSourceKind[] => {
+    if (!isLivingSpeciesActorAddressable(sourceSpecies)) return [];
+    return [(sourceSpecies === "domestic-cat"
+      ? "cat"
+      : sourceSpecies === "domestic-dog"
+        ? "dog"
+        : sourceSpecies) as CoreEcologyAggregateLivingSourceKind];
+  }),
+);
+
+export type CoreEcologyAggregateLivingResponseCause =
+  | "animal-disturbance"
+  | "human-disturbance"
+  | "predator-pressure";
+
+export interface CoreEcologyAggregateLivingResponse {
+  readonly sourceSpecies: LivingActorSpecies;
+  readonly sourceKind: CoreEcologyAggregateLivingSourceKind;
+  readonly response: "pressure";
+  readonly causeKind: CoreEcologyAggregateLivingResponseCause;
+}
 
 export interface CoreEcologyAggregateSpeciesPolicy {
   readonly species: CoreEcologyAggregateSpecies;
@@ -51,8 +79,6 @@ export interface CoreEcologyAggregateSpeciesPolicy {
     readonly activePeriod: CoreEcologyAggregateActivePeriod;
   }>;
   readonly initialEvidenceKinds: readonly CoreEcologyAggregatePolicyEvidenceKind[];
-  readonly visualPressureSourceKinds:
-    readonly CoreEcologyAggregatePolicyVisualSourceKind[];
   readonly exposedFoodAttraction: boolean;
   readonly rainResponse: "attraction" | "pressure";
 }
@@ -74,12 +100,6 @@ const POLICIES: Readonly<
       "tracks",
       "shelter-sign",
     ] as const),
-    visualPressureSourceKinds: Object.freeze([
-      "cat",
-      "dog",
-      "human",
-      "gull",
-    ] as const),
     exposedFoodAttraction: true,
     rainResponse: "pressure",
   }),
@@ -93,14 +113,6 @@ const POLICIES: Readonly<
       activePeriod: "rain-responsive",
     }),
     initialEvidenceKinds: Object.freeze(["frog-track"] as const),
-    visualPressureSourceKinds: Object.freeze([
-      "cat",
-      "dog",
-      "human",
-      "gull",
-      "fish-crow",
-      "northern-harrier",
-    ] as const),
     exposedFoodAttraction: false,
     rainResponse: "attraction",
   }),
@@ -119,15 +131,98 @@ export function coreEcologyAggregateSpeciesPolicy(
   return POLICIES[species];
 }
 
+/** Frozen event spelling for one canonical materialized living source. */
+export function coreEcologyAggregateLivingSourceKind(
+  sourceSpecies: LivingActorSpecies,
+): CoreEcologyAggregateLivingSourceKind | null {
+  if (!isLivingSpeciesActorAddressable(sourceSpecies)) return null;
+  return sourceSpecies === "domestic-cat"
+    ? "cat"
+    : sourceSpecies === "domestic-dog"
+      ? "dog"
+      : sourceSpecies as CoreEcologyAggregateLivingSourceKind;
+}
+
+/** Reverse only the compatibility spelling; unknown kinds fail closed. */
+export function coreEcologyAggregateLivingSourceSpecies(
+  sourceKind: unknown,
+): LivingActorSpecies | null {
+  if (sourceKind === "cat") return "domestic-cat";
+  if (sourceKind === "dog") return "domestic-dog";
+  if (
+    !isLivingActorSpecies(sourceKind)
+    || sourceKind === "domestic-cat"
+    || sourceKind === "domestic-dog"
+    || !isLivingSpeciesActorAddressable(sourceKind)
+  ) return null;
+  return sourceKind;
+}
+
 /**
- * Maps an individually simulated species into the shared aggregate sensory
- * vocabulary. Species without a declared aggregate interaction remain absent
- * instead of acquiring pressure through a runtime fallback.
+ * Shared role/capability/trophic bridge for every materialized living actor.
+ * Neutral co-presence intentionally has no response. A new species therefore
+ * participates through its living registry and shared ecological declarations,
+ * not by being appended to an aggregate pair allowlist.
  */
-export function coreEcologyAggregateVisualSourceKind(
-  species: CoreWildlifeSpecies,
-): CoreEcologyAggregatePolicyVisualSourceKind | null {
-  return AGGREGATE_VISUAL_SOURCE_BY_SPECIES[species] ?? null;
+export function resolveCoreEcologyAggregateLivingResponse(
+  targetSpecies: CoreEcologyAggregateSpecies,
+  sourceSpecies: LivingActorSpecies,
+): CoreEcologyAggregateLivingResponse | null {
+  if (
+    !coreEcologySpeciesHasRuntimeCapability(targetSpecies, "aggregate-response")
+    || !isLivingSpeciesActorAddressable(sourceSpecies)
+  ) return null;
+  const sourceKind = coreEcologyAggregateLivingSourceKind(sourceSpecies);
+  if (sourceKind === null) return null;
+  if (sourceSpecies === "human") {
+    return Object.freeze({
+      sourceSpecies,
+      sourceKind,
+      response: "pressure",
+      causeKind: "human-disturbance",
+    });
+  }
+
+  const relationship = coreEcologyTrophicPerceivedClass(
+    targetSpecies,
+    sourceSpecies,
+  );
+  if (
+    relationship === "predator"
+    || relationship === "large-predator"
+    || relationship === "aerial-predator"
+  ) {
+    return Object.freeze({
+      sourceSpecies,
+      sourceKind,
+      response: "pressure",
+      causeKind: "predator-pressure",
+    });
+  }
+  if (relationship === "food-competitor" || relationship === "mobbing-pressure") {
+    return Object.freeze({
+      sourceSpecies,
+      sourceKind,
+      response: "pressure",
+      causeKind: "animal-disturbance",
+    });
+  }
+
+  // Nearby aerial food investigators disturb a small aggregate after shared
+  // LOS resolves. This preserves gull/crow disturbance through capabilities,
+  // while neutral terrestrial prey such as rabbits remain neutral.
+  if (
+    coreEcologySpeciesHasRuntimeCapability(sourceSpecies, "aerial-locomotion")
+    && coreEcologySpeciesHasRuntimeCapability(sourceSpecies, "food-investigation")
+  ) {
+    return Object.freeze({
+      sourceSpecies,
+      sourceKind,
+      response: "pressure",
+      causeKind: "animal-disturbance",
+    });
+  }
+  return null;
 }
 
 /**

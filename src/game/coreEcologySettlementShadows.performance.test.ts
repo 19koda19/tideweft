@@ -42,6 +42,7 @@ import {
   type CoreEcologySettlementShadowsStimulusFrame,
 } from "./coreEcologySmallWorld";
 import { CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE } from "./coreWildlifeActor";
+import { livingSpeciesRegistryEntry } from "./livingSpeciesRegistry";
 import { LOOSE_CARGO_MAX_ENTITIES } from "./looseCargo";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
@@ -314,15 +315,20 @@ function individualInputs(
 }
 
 function maximumVisualSources(position: WorldPosition): readonly CoreEcologyAggregateVisualSource[] {
-  const sourceKinds = ["cat", "dog", "human", "gull"] as const;
+  const sourceSpecies = ["domestic-cat", "domestic-dog", "human", "gull"] as const;
   return Object.freeze(Array.from(
     { length: CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES },
-    (_, index) => Object.freeze({
-      sourceReferenceId: `performance:visual:${index.toString(36)}`,
-      sourceKind: sourceKinds[index % sourceKinds.length]!,
-      position,
-      movementSalience: FIXED_POINT,
-    }),
+    (_, index) => {
+      const species = sourceSpecies[index % sourceSpecies.length]!;
+      const prefix = livingSpeciesRegistryEntry(species)?.actorIdPrefix;
+      if (prefix === undefined) throw new Error(`Missing ${species} registry prefix`);
+      return Object.freeze({
+        sourceReferenceId: `${prefix}performance-${index.toString(36)}`,
+        sourceSpecies: species,
+        position,
+        movementSalience: FIXED_POINT,
+      });
+    },
   ));
 }
 

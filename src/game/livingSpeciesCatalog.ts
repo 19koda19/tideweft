@@ -1192,6 +1192,219 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
   },
 });
 
+/**
+ * Exhaustive authored policy rows for every currently shipped wildlife
+ * species. These rows are deliberately verbose: adding either a species or a
+ * broad target class must fail TypeScript until its policy is reviewed. The
+ * target builder below also rejects any disagreement between an `available`
+ * row and the species' actual role/capability-derived contract.
+ */
+const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
+  deer: {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  gull: {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "black-bear": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "available",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "brown-rat": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "available",
+  },
+  "domestic-cat": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "available",
+    water: "intentional-no-response",
+    weather: "available",
+  },
+  "marsh-rabbit": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "marsh-fox": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "available",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "fish-crow": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "available",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "northern-harrier": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "available",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "southern-leopard-frog": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "available",
+  },
+} as const satisfies Readonly<Record<
+  CoreWildlifeSpecies,
+  Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
+>>);
+
 function coreWildlifeInteractionTargets(
   species: CoreWildlifeSpecies,
   includeDogInteraction: boolean,
@@ -1273,6 +1486,28 @@ function coreWildlifeInteractionTargets(
       escalationConstraints: ["direct-perception-required", "physical-resource-conservation"],
       disengagementVerbs: ["disengage"],
     });
+  } else if (coreEcologySpeciesHasRuntimeCapability(species, "group-coordination")) {
+    targets.push({
+      targetClass: "same-species",
+      policy: "available",
+      perceptionChannels: ["hearing", "vision"],
+      appraisals: ["group-signal"],
+      motivationAxes: ["cohesion"],
+      verbs: ["alarm", "coordinate"],
+      escalationConstraints: ["direct-perception-required", "shared-group-required"],
+      disengagementVerbs: ["disengage"],
+    });
+  } else if (coreEcologySpeciesHasRuntimeCapability(species, "aggregate-response")) {
+    targets.push({
+      targetClass: "same-species",
+      policy: "available",
+      perceptionChannels: ["vision"],
+      appraisals: ["population-density"],
+      motivationAxes: ["spacing"],
+      verbs: ["redistribute"],
+      escalationConstraints: ["aggregate-unit-conservation", "bounded-redistribution"],
+      disengagementVerbs: ["disengage"],
+    });
   }
 
   if (coreEcologySpeciesHasRuntimeCapability(species, "mobbing")) {
@@ -1292,7 +1527,51 @@ function coreWildlifeInteractionTargets(
     });
   }
 
-  return targets.sort((left, right) => compareText(left.targetClass, right.targetClass));
+  if (CORE_WILDLIFE_CATALOG_VALUES[species].weather.status === "active") {
+    targets.push({
+      targetClass: "weather",
+      policy: "available",
+      perceptionChannels: ["hearing", "vision"],
+      appraisals: ["exposure"],
+      motivationAxes: ["safety"],
+      verbs: species === "southern-leopard-frog"
+        ? ["chorus", "redistribute"]
+        : species === "brown-rat"
+          ? ["redistribute"]
+          : ["retreat"],
+      escalationConstraints: ["bounded-response", "current-weather-required"],
+      disengagementVerbs: ["disengage"],
+    });
+  }
+
+  const declared = new Map(targets.map((target) => [target.targetClass, target]));
+  if (declared.size !== targets.length) {
+    throw new Error(`Duplicate interaction target contract for ${species}.`);
+  }
+  const policyRow = CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES[species];
+  return LIVING_SPECIES_INTERACTION_TARGET_CLASSES.map((targetClass) => {
+    const policy = policyRow[targetClass];
+    const target = declared.get(targetClass);
+    if (policy === "available") {
+      if (target === undefined) {
+        throw new Error(`Missing available ${targetClass} interaction contract for ${species}.`);
+      }
+      return target;
+    }
+    if (target !== undefined) {
+      throw new Error(`Unexpected ${targetClass} interaction contract for ${species}.`);
+    }
+    return {
+      targetClass,
+      policy,
+      perceptionChannels: [],
+      appraisals: [],
+      motivationAxes: [],
+      verbs: [],
+      escalationConstraints: [],
+      disengagementVerbs: [],
+    };
+  });
 }
 
 function sensesFromRegistry(

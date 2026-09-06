@@ -418,8 +418,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "whats-new-five-actor-contract",
         audience: "all",
-        title: "Rain sings beneath a shadow overhead",
-        body: "The validated species catalog now covers humans, domestic dogs, deer, gulls, black bears, brown rats, domestic cats, marsh rabbits, marsh foxes, fish crows, northern harriers, and southern leopard frogs. Where local habitat permits, this build adds a persistent crow flock, one solitary quartering harrier, and a conserved rain-responsive frog population area without turning frogs into fake individual actors. Direct crow alarm and mobbing, finite nonlethal harrier pursuit, physical crow food custody, bounded daily activity, the directional frog chorus, and knowledge-honest ABOUT all use the same Chart, Relief, mouse, and touch boundary.",
+        title: "One marsh, many eyes",
+        body: "The bounded starting-harbor ecology now closes its seven Wave-B roles through one shared species contract: brown rats, domestic cats, marsh rabbits, marsh foxes, fish crows, northern harriers, and southern leopard frogs. Every one declares the same broad interaction classes as supported or intentionally neutral instead of receiving a private pair script. A lawfully perceived fox can pressure rat and frog population areas through its ecological role, while neutral rabbit co-presence does nothing. Visible flock estimates now agree between the world and ABOUT, and an unidentified chorus caption derives from the same heard-bearing contact as its stereo sound without naming frogs or claiming a direction hearing cannot resolve.",
       },
     ],
     callouts: [
@@ -1042,7 +1042,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "people-select",
         audience: "all",
         title: "Inspect only what you can actually see",
-        body: "Click or tap a directly visible resident, traveling porter, dog, deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, brown-rat sign, or frog-population sign. ABOUT closes when that actor or sign leaves exact sight; it is a live field observation, not a remote tracker. Several visible gulls or crows may be summarized as a flock without revealing birds outside your sight, while frog evidence never invents an individual frog.",
+        body: "Click or tap a directly visible resident, traveling porter, dog, deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, brown-rat sign, or frog-population sign. ABOUT closes when that actor or sign leaves exact sight; it is a live field observation, not a remote tracker. Several visible gulls or crows may be summarized with the same approximate visible flock count shown in the world, without revealing birds outside your sight; frog evidence never invents an individual frog.",
         controlId: "inspect-person",
       },
       {
@@ -1102,8 +1102,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "settlement-shadows-pressure",
         audience: "all",
-        title: "Rats respond as a population, not an inventory trick",
-        body: "Lawfully perceived cats, dogs, people, and gulls can press rat activity away from one saved habitat anchor; exposed loose provisions can attract it toward another, while rain and terrain exposure also change the pressure. On each fixed eight-tick opportunity, at most one rat population unit moves within its existing area. No rat is spawned, killed, or turned into loot, and attraction does not eat, move, or duplicate the physical food.",
+        title: "Population areas respond to roles, not name lists",
+        body: "Lawfully perceived predators, dogs, people, and other supported animal roles can pressure an eligible rat or frog population area through the shared ecological resolver; a neutral animal such as a rabbit cannot disturb one merely by being nearby. Exposed loose provisions can attract the rat area, while rain and terrain exposure also change lawful pressure. On each fixed eight-tick opportunity, at most one existing population unit moves between saved anchors. No rat or frog is spawned, killed, or turned into loot, and attraction does not eat, move, or duplicate the physical food.",
       },
       {
         id: "settlement-shadows-signs",
@@ -1121,7 +1121,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "settlement-shadows-sound",
         audience: "all",
         title: "Only witnessed activity reaches you",
-        body: "A rat rustle, cat call, rabbit thump, fox yip, or fish-crow double call is a restrained cue for a newly visible event. A frog chorus instead travels through shared directional hearing from its actual strongest heard anchor; rain can both stir the frogs and mask the sound. Offscreen movement and hidden animal decisions remain world state rather than entering EVENTS or granting remote hearing. Anonymous bottom-right captions carry the same limited information, and the northern harrier has no invented cry in this build.",
+        body: "A rat rustle, cat call, rabbit thump, fox yip, or fish-crow double call is a restrained cue for a newly visible event. A chorus instead travels through shared directional hearing from its actual strongest heard anchor; rain can both stir it and mask the sound. Until you learn its source, the bottom-right caption remains anonymous. It gives a coarse direction only when the shared hearing band supports one, otherwise saying direction unclear or all around; stereo pan is softened by that same uncertainty. Offscreen movement and hidden animal decisions remain world state rather than entering EVENTS or granting remote hearing, and the northern harrier has no invented cry in this build.",
       },
       {
         id: "rain-chorus-aggregate",
@@ -1208,8 +1208,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "people-slice-boundary",
         audience: "all",
         tone: "boundary",
-        title: "This remains one small living web",
-        body: "The released wildlife scope is one bounded habitat-derived assemblage near the stable starting harbor. Fish crows, one northern harrier, and a conserved southern leopard-frog population add flocking, direct mobbing pressure, low quartering, bounded day/rest activity, rain-responsive chorus, and physical crow food custody beside the existing rabbit–fox and rat–cat web. Animals do not attack, receive injuries, die, leave carcasses, or consume live prey in this build. Complete scent and evidence tracking, foliage consumption, complete circadian behavior, further species, worldwide populations, the full bestiary, and an exhaustive species-pair interaction matrix are not live yet.",
+        title: "Wave B is bounded, not worldwide",
+        body: "The seven Wave-B ecological roles are closed only for one bounded habitat-derived assemblage near the stable starting harbor. Their shared role, perception, movement, group, aggregate, and presentation contracts replace hardcoded pair lists, but do not create ecology in every distant region. Animals do not attack, receive injuries, die, leave carcasses, or consume live prey in this build. Complete scent and evidence tracking, foliage consumption, complete circadian behavior, further species, worldwide populations, the full bestiary, and an exhaustive species-pair interaction matrix are not live yet.",
       },
     ],
   },
@@ -1459,7 +1459,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 27 as const;
+export const TUTORIAL_CONTENT_VERSION = 28 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

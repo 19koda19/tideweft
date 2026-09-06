@@ -61,6 +61,7 @@ import {
 } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
+import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { createRendererTelemetry } from "./rendererTelemetry";
 import {
   createTerrainPerceptionMemoryStore,
@@ -211,7 +212,6 @@ interface ReliefWildlifeDescriptor {
   readonly hitRadiusScale: number;
   readonly ringRadiusScale: number;
   readonly labelLift: number;
-  readonly visibleGroupNoun: "flock" | null;
 }
 
 /** Exhaustive visual and targeting policy; species never inherit another silhouette. */
@@ -226,7 +226,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.48,
     ringRadiusScale: 0.4,
     labelLift: 0.78,
-    visibleGroupNoun: null,
   },
   gull: {
     form: "gull-flock",
@@ -238,7 +237,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.44,
     ringRadiusScale: 0.34,
     labelLift: 1.16,
-    visibleGroupNoun: "flock",
   },
   "fish-crow": {
     form: "fish-crow-flock",
@@ -250,7 +248,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.46,
     ringRadiusScale: 0.36,
     labelLift: 1.08,
-    visibleGroupNoun: "flock",
   },
   "northern-harrier": {
     form: "northern-harrier",
@@ -262,7 +259,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.52,
     ringRadiusScale: 0.42,
     labelLift: 1.18,
-    visibleGroupNoun: null,
   },
   "black-bear": {
     form: "black-bear",
@@ -274,7 +270,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.62,
     ringRadiusScale: 0.52,
     labelLift: 0.78,
-    visibleGroupNoun: null,
   },
   "domestic-cat": {
     form: "domestic-cat",
@@ -286,7 +281,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.44,
     ringRadiusScale: 0.36,
     labelLift: 0.68,
-    visibleGroupNoun: null,
   },
   "marsh-rabbit": {
     form: "marsh-rabbit",
@@ -298,7 +292,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.44,
     ringRadiusScale: 0.34,
     labelLift: 0.7,
-    visibleGroupNoun: null,
   },
   "marsh-fox": {
     form: "marsh-fox",
@@ -310,7 +303,6 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.48,
     ringRadiusScale: 0.4,
     labelLift: 0.72,
-    visibleGroupNoun: null,
   },
 };
 
@@ -1222,11 +1214,7 @@ export function createTideweftReliefRenderer(
         cache.mesh.verticalScale,
         true,
       );
-      const approximateGroup = descriptor.visibleGroupNoun !== null
-        && wildlife.groupSize !== undefined
-        && wildlife.groupSize > 1
-        ? ` · ~${clampInteger(wildlife.groupSize, 2, 999)} visible`
-        : "";
+      const approximateGroup = visibleWildlifeGroupSuffix(wildlife);
       const observableCondition = wildlife.conditionLabels
         .slice(0, 2)
         .map((label) => label.toLocaleLowerCase())

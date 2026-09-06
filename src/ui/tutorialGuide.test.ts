@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(27);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(28);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,13 +63,13 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("fish crows, northern harriers, and southern leopard frogs");
-    expect(copy).toContain("persistent crow flock");
-    expect(copy).toContain("solitary quartering harrier");
-    expect(copy).toContain("conserved rain-responsive frog population area");
-    expect(copy).toContain("Direct crow alarm and mobbing");
-    expect(copy).toContain("directional frog chorus");
-    expect(copy).toContain("Chart, Relief, mouse, and touch");
+    expect(copy).toContain("seven Wave-B roles");
+    expect(copy).toContain("supported or intentionally neutral");
+    expect(copy).toContain("fox can pressure rat and frog population areas");
+    expect(copy).toContain("neutral rabbit co-presence does nothing");
+    expect(copy).toContain("Visible flock estimates");
+    expect(copy).toContain("same heard-bearing contact as its stereo sound");
+    expect(copy).toContain("claiming a direction hearing cannot resolve");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -380,9 +380,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("deer persist in herds, gulls in flocks, and up to three fish-crow representatives in one CROW-FLOCK");
     expect(copy).toContain("Black bears and the single northern-harrier representative stay solitary");
     expect(copy).toContain("Brown rats and southern leopard frogs remain conserved population-area aggregates");
-    expect(copy).toContain("Lawfully perceived cats, dogs, people, and gulls");
-    expect(copy).toContain("exposed loose provisions can attract it");
-    expect(copy).toContain("at most one rat population unit moves");
+    expect(copy).toContain("Lawfully perceived predators, dogs, people, and other supported animal roles");
+    expect(copy).toContain("neutral animal such as a rabbit cannot disturb one merely by being nearby");
+    expect(copy).toContain("Exposed loose provisions can attract the rat area");
+    expect(copy).toContain("at most one existing population unit moves");
     expect(copy).toContain("does not eat, move, or duplicate the physical food");
     expect(copy).toContain("Another visible cat can make it guard that food instead");
     expect(copy).toContain("leave bounded wet pawprints");
@@ -392,7 +393,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never reveals an exact count, hidden anchor, pressure value, cause, or individual rat identity");
     expect(copy).toContain("fish-crow double call");
     expect(copy).toContain("shared directional hearing from its actual strongest heard anchor");
-    expect(copy).toContain("rain can both stir the frogs and mask the sound");
+    expect(copy).toContain("rain can both stir it and mask the sound");
+    expect(copy).toContain("caption remains anonymous");
+    expect(copy).toContain("direction unclear or all around");
+    expect(copy).toContain("stereo pan is softened by that same uncertainty");
     expect(copy).toContain("northern harrier has no invented cry");
     expect(copy).toContain("Offscreen movement and hidden animal decisions");
     expect(copy).toContain("directly perceives a fox can alarm and then flee");
@@ -424,6 +428,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("foliage consumption");
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species, worldwide populations, the full bestiary");
+    expect(copy).toContain("seven Wave-B ecological roles are closed only for one bounded");
     expect(copy).toContain("exhaustive species-pair interaction matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);

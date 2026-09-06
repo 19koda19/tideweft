@@ -515,7 +515,10 @@ describe("Living Weft species module catalog", () => {
       },
     });
     expect(rabbit?.interactions.targets.find(({ targetClass }) => targetClass === "smaller-prey"))
-      .toBeUndefined();
+      .toMatchObject({
+        policy: "intentional-no-response",
+        verbs: [],
+      });
 
     expect(fox).toMatchObject({
       profile: {
@@ -1084,6 +1087,46 @@ describe("Living Weft species module catalog", () => {
         targets: closedCoverage,
       },
     })?.interactions.targets).toHaveLength(LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length);
+  });
+
+  it("closes every Wave-B broad interaction row without pair-specific scripts", () => {
+    const waveBSpecies = [
+      "brown-rat",
+      "domestic-cat",
+      "fish-crow",
+      "marsh-fox",
+      "marsh-rabbit",
+      "northern-harrier",
+      "southern-leopard-frog",
+    ] as const;
+
+    for (const species of waveBSpecies) {
+      const module = livingSpeciesModule(species);
+      expect(module).not.toBeNull();
+      expect(module?.interactions.targets.map(({ targetClass }) => targetClass))
+        .toEqual(LIVING_SPECIES_INTERACTION_TARGET_CLASSES);
+      expect(module?.interactions.targets.every(({ policy }) => (
+        policy === "available" || policy === "intentional-no-response"
+      ))).toBe(true);
+    }
+
+    expect(livingSpeciesModule("marsh-fox")?.interactions.targets.find(
+      ({ targetClass }) => targetClass === "smaller-prey",
+    )?.policy).toBe("available");
+    expect(livingSpeciesModule("marsh-rabbit")?.interactions.targets.find(
+      ({ targetClass }) => targetClass === "smaller-prey",
+    )?.policy).toBe("intentional-no-response");
+    for (const [species, targetClass] of [
+      ["brown-rat", "same-species"],
+      ["brown-rat", "weather"],
+      ["southern-leopard-frog", "same-species"],
+      ["southern-leopard-frog", "weather"],
+      ["fish-crow", "same-species"],
+    ] as const) {
+      expect(livingSpeciesModule(species)?.interactions.targets.find(
+        (target) => target.targetClass === targetClass,
+      )?.policy).toBe("available");
+    }
   });
 
   it("requires deep ecology contracts rather than accepting decorative bestiary rows", () => {

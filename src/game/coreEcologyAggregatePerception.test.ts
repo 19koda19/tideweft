@@ -5,6 +5,8 @@ import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type TerrainTileView, type WeatherKind, type WorldView } from "../sim/types";
 import {
   CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_FOOD_SOURCES,
+  CORE_ECOLOGY_AGGREGATE_MIN_VISUAL_STIMULI_PER_POPULATION,
+  coreEcologyAggregateVisualStimulusBudget,
   deriveCoreEcologySettlementShadowsStimulusFrame,
   selectCoreEcologyAggregateExposedFoodSources,
   type CoreEcologyAggregateExposedFoodSource,
@@ -12,6 +14,7 @@ import {
   type CoreEcologyAggregateVisualSource,
 } from "./coreEcologyAggregatePerception";
 import {
+  CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS,
   createCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
@@ -24,8 +27,17 @@ import {
 } from "./coreEcologyHabitat";
 import {
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI,
+  stepCoreEcologySettlementShadows,
   type CoreEcologySettlementShadowsStimulus,
 } from "./coreEcologySmallWorld";
+import {
+  CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS,
+  CORE_ECOLOGY_AGGREGATE_SPECIES,
+} from "./coreEcologyAggregatePolicy";
+import {
+  LOCAL_PLAYER_LIVING_ACTOR_ID,
+  livingSpeciesRegistryEntry,
+} from "./livingSpeciesRegistry";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import {
@@ -53,6 +65,20 @@ interface Fixture {
 }
 
 describe("aggregate ecology shared-perception adapter", () => {
+  it("shares a deterministic visual budget without truncating today's lawful species", () => {
+    expect(CORE_ECOLOGY_AGGREGATE_MIN_VISUAL_STIMULI_PER_POPULATION).toBeGreaterThan(0);
+    for (let count = 1; count <= CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS; count += 1) {
+      const budget = coreEcologyAggregateVisualStimulusBudget(count);
+      expect(budget).toBeGreaterThanOrEqual(
+        CORE_ECOLOGY_AGGREGATE_MIN_VISUAL_STIMULI_PER_POPULATION,
+      );
+      expect(count * (budget + 2))
+        .toBeLessThanOrEqual(CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI);
+    }
+    expect(coreEcologyAggregateVisualStimulusBudget(CORE_ECOLOGY_AGGREGATE_SPECIES.length))
+      .toBeGreaterThanOrEqual(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.length);
+  });
+
   it("is deterministic and applies the shared LOS occlusion surface to visual pressure", () => {
     const clear = fixture();
     const rats = ratPopulation(clear.patch);
@@ -64,7 +90,7 @@ describe("aggregate ecology shared-perception adapter", () => {
     );
     const source: CoreEcologyAggregateVisualSource = {
       sourceReferenceId: "CAT-v1-shared-los",
-      sourceKind: "cat",
+      sourceSpecies: "domestic-cat",
       position: sourcePosition,
       movementSalience: FIXED_POINT,
     };
@@ -81,6 +107,23 @@ describe("aggregate ecology shared-perception adapter", () => {
     ), { terrain: "ridge", elevation: FIXED_POINT, roughness: 0 });
     const hidden = deriveCoreEcologySettlementShadowsStimulusFrame(input(blocked, [source]));
     expect(visualInfluence(hidden, rats.aggregateId, anchor.anchorOrdinal)).toBe(0);
+  });
+
+  it("binds every visual source ID to its canonical species namespace", () => {
+    const current = fixture();
+    const anchor = ratPopulation(current.patch).anchors[0]!;
+    expect(deriveCoreEcologySettlementShadowsStimulusFrame(input(current, [{
+      sourceReferenceId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+      sourceSpecies: "human",
+      position: anchor.position,
+      movementSalience: FIXED_POINT,
+    }]))).not.toBeNull();
+    expect(deriveCoreEcologySettlementShadowsStimulusFrame(input(current, [{
+      sourceReferenceId: "RABBIT-wrongly-labeled-as-fox",
+      sourceSpecies: "marsh-fox",
+      position: anchor.position,
+      movementSalience: FIXED_POINT,
+    }]))).toBeNull();
   });
 
   it("uses the shared wind/rain-aware scent evaluator without consuming or mutating food", () => {
@@ -137,13 +180,17 @@ describe("aggregate ecology shared-perception adapter", () => {
   it("is source-order independent and emits at most one strongest source of each kind", () => {
     const current = fixture();
     const anchor = ratPopulation(current.patch).anchors[0]!;
-    const visualSources = (["cat", "dog", "human", "gull"] as const).flatMap(
-      (sourceKind) => ["b", "a"].map((suffix) => ({
-        sourceReferenceId: `${sourceKind}:${suffix}`,
-        sourceKind,
-        position: anchor.position,
-        movementSalience: FIXED_POINT,
-      })),
+    const visualSources = (["domestic-cat", "domestic-dog", "human", "gull"] as const).flatMap(
+      (sourceSpecies) => {
+        const prefix = livingSpeciesRegistryEntry(sourceSpecies)?.actorIdPrefix;
+        if (prefix === undefined) throw new Error(`Missing ${sourceSpecies} registry prefix`);
+        return ["b", "a"].map((suffix) => ({
+          sourceReferenceId: `${prefix}aggregate-${suffix}`,
+          sourceSpecies,
+          position: anchor.position,
+          movementSalience: FIXED_POINT,
+        }));
+      },
     );
     const exposedFoodSources = Array.from(
       { length: CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_FOOD_SOURCES },
@@ -170,7 +217,8 @@ describe("aggregate ecology shared-perception adapter", () => {
     expect(new Set(forward?.stimuli.map(({ targetAggregateId, sourceKind }) => (
       `${targetAggregateId}/${sourceKind}`
     ))).size).toBe(forward?.stimuli.length);
-    expect(forward?.stimuli.map(({ sourceReferenceId }) => sourceReferenceId)).toContain("cat:a");
+    expect(forward?.stimuli.map(({ sourceReferenceId }) => sourceReferenceId))
+      .toContain("CAT-aggregate-a");
     expect(forward?.stimuli.map(({ sourceReferenceId }) => sourceReferenceId)).toContain("food:00");
     expect(deriveCoreEcologySettlementShadowsStimulusFrame(input(
       current,
@@ -237,7 +285,7 @@ describe("aggregate ecology shared-perception adapter", () => {
     };
     const harrier: CoreEcologyAggregateVisualSource = {
       sourceReferenceId: "HARRIER-v1-frog-quieting",
-      sourceKind: "northern-harrier",
+      sourceSpecies: "northern-harrier",
       position: frogAnchor.position,
       movementSalience: FIXED_POINT,
     };
@@ -269,6 +317,100 @@ describe("aggregate ecology shared-perception adapter", () => {
       kind: "rustle-scratch",
       activePeriod: "nocturnal",
     });
+  });
+
+  it("lets fox pressure cross the shared role bridge while nearby rabbit presence stays neutral", () => {
+    const current = rainChorusFixture();
+    Object.assign(current.world.weather, { kind: "clear", intensity: 0 });
+    const rats = ratPopulation(current.patch);
+    const frogs = current.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    const occupiedRat = rats.anchors.find(({ populationUnits }) => populationUnits > 0);
+    const occupiedFrog = frogs?.anchors.find(({ populationUnits }) => populationUnits > 0);
+    if (frogs === undefined || frogs.anchors.length < 2 || occupiedRat === undefined || occupiedFrog === undefined) {
+      throw new Error("Role-bridge fixture requires movable rat and frog aggregates");
+    }
+    const foxes: readonly CoreEcologyAggregateVisualSource[] = [
+      {
+        sourceReferenceId: "FOX-role-pressure-rat",
+        sourceSpecies: "marsh-fox",
+        position: occupiedRat.position,
+        movementSalience: FIXED_POINT,
+      },
+      {
+        sourceReferenceId: "FOX-role-pressure-frog",
+        sourceSpecies: "marsh-fox",
+        position: occupiedFrog.position,
+        movementSalience: FIXED_POINT,
+      },
+    ];
+    const rabbits: readonly CoreEcologyAggregateVisualSource[] = [
+      {
+        sourceReferenceId: "RABBIT-neutral-rat",
+        sourceSpecies: "marsh-rabbit",
+        position: occupiedRat.position,
+        movementSalience: FIXED_POINT,
+      },
+      {
+        sourceReferenceId: "RABBIT-neutral-frog",
+        sourceSpecies: "marsh-rabbit",
+        position: occupiedFrog.position,
+        movementSalience: FIXED_POINT,
+      },
+    ];
+    const baseline = deriveCoreEcologySettlementShadowsStimulusFrame(input(current));
+    const rabbitFrame = deriveCoreEcologySettlementShadowsStimulusFrame(
+      input(current, rabbits),
+    );
+    const foxFrame = deriveCoreEcologySettlementShadowsStimulusFrame(input(current, foxes));
+
+    expect(rabbitFrame).toEqual(baseline);
+    expect(foxFrame?.stimuli.filter(({ sourceKind }) => sourceKind === "marsh-fox"))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          targetAggregateId: rats.aggregateId,
+          response: "pressure",
+          channels: ["vision"],
+        }),
+        expect.objectContaining({
+          targetAggregateId: frogs.aggregateId,
+          response: "pressure",
+          channels: ["vision"],
+        }),
+      ]));
+    expect(JSON.stringify(foxFrame)).not.toContain("marsh-rabbit");
+
+    const result = stepCoreEcologySettlementShadows(current.patch, 0, foxFrame);
+    if (result === null) throw new Error("Canonical fox aggregate pressure was rejected");
+    expect(result.events.filter(({ sourceKind }) => sourceKind === "marsh-fox"))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          version: 3,
+          targetSpecies: "brown-rat",
+          mortality: "none",
+        }),
+        expect.objectContaining({
+          version: 3,
+          targetSpecies: "southern-leopard-frog",
+          causeKind: "predator-pressure",
+          mortality: "none",
+        }),
+      ]));
+    const afterFrogs = result.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    expect(afterFrogs?.activitySignal.intensity).toBeLessThan(
+      frogs.activitySignal.intensity,
+    );
+    for (const before of [rats, frogs]) {
+      const after = result.patch.aggregatePopulations.find(({ aggregateId }) => (
+        aggregateId === before.aggregateId
+      ));
+      expect(after?.populationSize).toBe(before.populationSize);
+      expect(after?.anchors.reduce((sum, anchor) => sum + anchor.populationUnits, 0))
+        .toBe(before.populationSize);
+    }
   });
 });
 

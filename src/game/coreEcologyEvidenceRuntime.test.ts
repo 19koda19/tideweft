@@ -19,11 +19,13 @@ import { CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE } from "./coreWildlifeActor";
 import {
   canonicalizeCoreEcologyAggregateEvidenceTarget,
   projectCoreEcologyAggregateEvidence,
+  selectWitnessedBrownRatRedistribution,
   sameCoreEcologyAggregateEvidenceTarget,
   type CoreEcologyAggregateEvidenceTarget,
 } from "./coreEcologyEvidenceRuntime";
 import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
+import type { CoreEcologySettlementShadowsEvent } from "./coreEcologySmallWorld";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
   REGIONAL_TRAVEL_COLUMNS,
@@ -175,6 +177,52 @@ function catRainEvidenceFixture() {
 }
 
 describe("core ecology aggregate-evidence runtime adapter", () => {
+  it("never projects a frog redistribution through the rat-rustle witness", () => {
+    const sharedEventFields = {
+      kind: "aggregate-redistributed",
+      atTick: 24,
+      stimulusId: "stimulus:shared",
+      sourceReferenceId: "HARRIER-v1-source",
+      response: "pressure",
+      channels: ["vision"] as const,
+      causeKind: "predator-pressure",
+      aggregateId: "aggregate:shared",
+      evidenceId: "evidence:shared",
+      fromAnchorOrdinal: 0,
+      toAnchorOrdinal: 1,
+      displacedUnits: 1,
+      playerKnowledge: "none",
+      mortality: "none",
+      cargoInteraction: false,
+      itemConsumption: "none",
+    } as const;
+    const frogEvent = {
+      ...sharedEventFields,
+      version: 3,
+      eventId: "aggregate-event:a-frog",
+      sourceKind: "northern-harrier",
+      targetSpecies: "southern-leopard-frog",
+    } satisfies CoreEcologySettlementShadowsEvent;
+    const ratEvent = {
+      ...sharedEventFields,
+      version: 2,
+      eventId: "aggregate-event:z-rat",
+      sourceKind: "human",
+      targetSpecies: "brown-rat",
+    } satisfies CoreEcologySettlementShadowsEvent;
+
+    expect(selectWitnessedBrownRatRedistribution([frogEvent], [{
+      species: "southern-leopard-frog",
+      aggregateId: frogEvent.aggregateId,
+      evidenceId: frogEvent.evidenceId,
+    }])).toBeUndefined();
+    expect(selectWitnessedBrownRatRedistribution([frogEvent, ratEvent], [{
+      species: "brown-rat",
+      aggregateId: ratEvent.aggregateId,
+      evidenceId: ratEvent.evidenceId,
+    }])).toEqual(ratEvent);
+  });
+
   it("binds one directly perceived rat sign to render and close-only ABOUT without an actor", () => {
     const { evidence, patch, population, target } = fixture();
     const observed = observationAt(evidence.position);

@@ -480,6 +480,45 @@ describe("core ecology pure runtime seam", () => {
     expect(Object.isFrozen(views)).toBe(true);
   });
 
+  it("keeps visible flock counts separate when two species share a population key", () => {
+    const window = windowAt();
+    const sharedPopulationKey = "shared:visible-flock";
+    const state = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "runtime:species-scoped-visible-flocks",
+      originRegion: ORIGIN,
+      derivation: { kind: "bounded-input-v1" },
+      populations: [
+        population("gull", sharedPopulationKey, [
+          positionAt(window, 65, 60),
+          positionAt(window, 66, 60),
+          positionAt(window, 67, 60),
+          positionAt(window, 68, 60),
+        ]),
+        population("fish-crow", sharedPopulationKey, [
+          positionAt(window, 64, 58),
+          positionAt(window, 66, 58),
+        ]),
+      ],
+    });
+    const materialized = setCoreEcologyMaterializationForWindow(state, window, 1);
+    if (materialized === null) throw new Error("Shared-key flock materialization failed");
+    const views = projectCoreEcologyWildlife({
+      patch: materialized,
+      window,
+      perception: directPerception(window),
+      tileSize: 16,
+    });
+    if (views === null) throw new Error("Shared-key flock projection failed");
+
+    const gulls = views.filter(({ species }) => species === "gull");
+    const crows = views.filter(({ species }) => species === "fish-crow");
+    expect(gulls).toHaveLength(4);
+    expect(gulls.every(({ groupSize }) => groupSize === 5)).toBe(true);
+    expect(crows).toHaveLength(2);
+    expect(crows.every(({ groupSize }) => groupSize === 2)).toBe(true);
+  });
+
   it("looks up only an exact materialized species-and-stable-ID target", () => {
     const window = windowAt();
     const state = patch([

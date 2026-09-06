@@ -13,6 +13,7 @@ import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
+import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { createRendererTelemetry } from "./rendererTelemetry";
 import {
   createTerrainPerceptionMemoryStore,
@@ -3555,9 +3556,10 @@ export function createTideweftRenderer(
         const condition = actor.conditionLabels.slice(0, 2)
           .map((label) => label.toLocaleLowerCase())
           .join(" · ");
+        const approximateGroup = visibleWildlifeGroupSuffix(actor);
         const label = condition.length > 0
-          ? `${actor.quickLabel} · ${condition}`
-          : actor.quickLabel;
+          ? `${actor.quickLabel}${approximateGroup} · ${condition}`
+          : `${actor.quickLabel}${approximateGroup}`;
         const width = Math.min(Math.max(1, p.width - 16), p.textWidth(label) + 12);
         const labelX = clamp(screen.x, 8 + width / 2, Math.max(8 + width / 2, p.width - 8 - width / 2));
         const labelY = clamp(screen.y + 20, 11, Math.max(11, p.height - 11));

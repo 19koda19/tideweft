@@ -39,9 +39,8 @@ export interface CoreEcologyAggregateAudioFrameInput {
 
 export interface CoreEcologyAggregateHeardCue {
   readonly cue: "frog-chorus";
-  readonly caption:
-    | "[frog chorus nearby]"
-    | "[frog chorus in the distance]";
+  /** Player-facing sound equivalent; the species remains unknown in this slice. */
+  readonly caption: `[chorus ${"nearby" | "in the distance"} — ${ChorusDirection}]`;
   /** Stereo pan only; this is not a map bearing or an entity disclosure. */
   readonly pan: number;
   readonly volume: number;
@@ -132,11 +131,8 @@ export function projectCoreEcologyAggregateHeardCues(
         aggregateId: population.aggregateId,
         cue: Object.freeze({
           cue: "frog-chorus",
-          caption: contact.distanceBand.maximum
-              <= 8 * WORLD_POSITION_UNITS_PER_TILE
-            ? "[frog chorus nearby]"
-            : "[frog chorus in the distance]",
-          pan: panFromBearing(contact.bearing.centerRadians),
+          caption: chorusCaption(contact),
+          pan: panFromContact(contact),
           volume: clampUnit(0.2 + contact.certainty * 0.32),
           variantSeed: variantSeed(population.aggregateId, anchor.anchorOrdinal, input.tick),
           contact,
@@ -194,8 +190,75 @@ function variantSeed(aggregateId: string, anchorOrdinal: number, tick: number): 
     >>> 0;
 }
 
-function panFromBearing(bearingRadians: number): number {
-  return clampPan(Math.cos(bearingRadians));
+type CardinalDirection =
+  | "east"
+  | "south-east"
+  | "south"
+  | "south-west"
+  | "west"
+  | "north-west"
+  | "north"
+  | "north-east";
+type ChorusDirection = CardinalDirection | "all around" | "direction unclear";
+
+const CARDINAL_DIRECTIONS: readonly CardinalDirection[] = Object.freeze([
+  "east",
+  "south-east",
+  "south",
+  "south-west",
+  "west",
+  "north-west",
+  "north",
+  "north-east",
+]);
+
+function chorusCaption(
+  contact: AudibleContact,
+): CoreEcologyAggregateHeardCue["caption"] {
+  const distance = contact.distanceBand.maximum <= 8 * WORLD_POSITION_UNITS_PER_TILE
+    ? "nearby"
+    : "in the distance";
+  return `[chorus ${distance} — ${coreEcologyChorusDirection(contact)}]`;
+}
+
+/**
+ * Converts the shared hearing band into only the direction that band can
+ * honestly support. A co-located source surrounds the listener; a band that
+ * crosses an octant boundary remains explicitly uncertain.
+ */
+export function coreEcologyChorusDirection(
+  contact: AudibleContact,
+): ChorusDirection {
+  const uncertainty = contact.bearing.uncertaintyRadians;
+  if (uncertainty >= Math.PI - 1e-6) return "all around";
+  const octant = Math.round(normalizeRadians(contact.bearing.centerRadians) / (Math.PI / 4)) % 8;
+  const center = octant * (Math.PI / 4);
+  const offsetFromOctantCenter = angularDistance(
+    normalizeRadians(contact.bearing.centerRadians),
+    center,
+  );
+  if (uncertainty + offsetFromOctantCenter >= Math.PI / 8) {
+    return "direction unclear";
+  }
+  return CARDINAL_DIRECTIONS[octant] ?? "direction unclear";
+}
+
+function normalizeRadians(value: number): number {
+  const fullTurn = Math.PI * 2;
+  return ((value % fullTurn) + fullTurn) % fullTurn;
+}
+
+function angularDistance(left: number, right: number): number {
+  const difference = Math.abs(normalizeRadians(left) - normalizeRadians(right));
+  return Math.min(difference, Math.PI * 2 - difference);
+}
+
+function panFromContact(contact: AudibleContact): number {
+  const maximumDirectionalUncertainty = (3 * Math.PI) / 4;
+  const directionWeight = clampUnit(
+    1 - contact.bearing.uncertaintyRadians / maximumDirectionalUncertainty,
+  );
+  return clampPan(Math.cos(contact.bearing.centerRadians) * directionWeight);
 }
 
 function clampUnit(value: number): number {

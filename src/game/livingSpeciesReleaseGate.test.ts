@@ -11,6 +11,9 @@ import {
   ALPHA17_RAIN_CHORUS_SPECIES,
   LIVING_SPECIES_RELEASE_CRITERIA,
   LIVING_SPECIES_RELEASE_GATES,
+  WAVE_B_BOUNDED_EXCLUDED_CLAIMS,
+  WAVE_B_BOUNDED_STARTING_HARBOR_READINESS,
+  WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES,
   alpha16MarshEdgeBoundedReadiness,
   alpha17RainChorusBoundedReadiness,
   auditLivingSpeciesReleaseGate,
@@ -18,6 +21,7 @@ import {
   canonicalizeLivingSpeciesReleaseGateSet,
   createLivingSpeciesReleaseGateSet,
   livingSpeciesReadinessReport,
+  waveBBoundedStartingHarborReadiness,
   type LivingSpeciesReleaseGate,
 } from "./livingSpeciesReleaseGate";
 
@@ -317,6 +321,116 @@ describe("Living Weft species release gate", () => {
         "game:wildlife-presentation:v1",
       ],
     });
+  });
+
+  it("authenticates only the seven-role bounded starting-harbor Wave-B roster", () => {
+    const readiness = waveBBoundedStartingHarborReadiness();
+
+    expect(readiness).toEqual(WAVE_B_BOUNDED_STARTING_HARBOR_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "wave-b-small-world",
+      scope: "bounded-starting-harbor",
+      speciesIds: [
+        "brown-rat",
+        "domestic-cat",
+        "marsh-rabbit",
+        "marsh-fox",
+        "fish-crow",
+        "northern-harrier",
+        "southern-leopard-frog",
+      ],
+      evidenceAuthenticated: true,
+      roleCoverageReady: true,
+      broadInteractionCoverageReady: true,
+      boundedCandidateReady: true,
+      blockingRoles: [],
+      fullThirtyCriterionReady: false,
+      excludedClaims: [
+        "worldwide-ecology",
+        "wildlife-promotion",
+        "cross-region-migration",
+        "full-thirty-criterion-readiness",
+        "directive-completion",
+      ],
+    });
+    expect(readiness.speciesIds).toEqual(WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES);
+    expect(readiness.excludedClaims).toEqual(WAVE_B_BOUNDED_EXCLUDED_CLAIMS);
+    expect(readiness.roles.map((role) => ({
+      role: role.role,
+      speciesId: role.speciesId,
+      representation: role.representation,
+      continuity: role.continuity,
+    }))).toEqual([
+      {
+        role: "rodent",
+        speciesId: "brown-rat",
+        representation: "aggregate",
+        continuity: "aggregate-authoritative",
+      },
+      {
+        role: "cat",
+        speciesId: "domestic-cat",
+        representation: "individual",
+        continuity: "individual-full-coarse",
+      },
+      {
+        role: "rabbit-hare",
+        speciesId: "marsh-rabbit",
+        representation: "individual",
+        continuity: "individual-full-coarse",
+      },
+      {
+        role: "small-opportunist",
+        speciesId: "marsh-fox",
+        representation: "individual",
+        continuity: "individual-full-coarse",
+      },
+      {
+        role: "corvid",
+        speciesId: "fish-crow",
+        representation: "group",
+        continuity: "group-full-coarse",
+      },
+      {
+        role: "raptor",
+        speciesId: "northern-harrier",
+        representation: "individual",
+        continuity: "individual-full-coarse",
+      },
+      {
+        role: "amphibian",
+        speciesId: "southern-leopard-frog",
+        representation: "aggregate",
+        continuity: "aggregate-authoritative",
+      },
+    ]);
+
+    for (const role of readiness.roles) {
+      expect(role).toMatchObject({
+        evidenceAuthenticated: true,
+        representationAuthenticated: true,
+        interactionContractAuthenticated: true,
+        continuityAuthenticated: true,
+        ready: true,
+      });
+      expect(role.evidenceOwnerIds).toEqual([...role.evidenceOwnerIds].sort());
+      expect(new Set(role.evidenceOwnerIds).size).toBe(role.evidenceOwnerIds.length);
+      expect(Object.isFrozen(role)).toBe(true);
+      expect(Object.isFrozen(role.evidenceOwnerIds)).toBe(true);
+      expect(livingSpeciesReadinessReport(role.speciesId)?.publicReady).toBe(false);
+    }
+    expect(readiness.roles.find(({ role }) => role === "corvid")?.evidenceOwnerIds)
+      .toContain("game:core-ecology-groups:v1");
+    expect(readiness.roles.find(({ role }) => role === "rodent")?.evidenceOwnerIds)
+      .toContain("game:core-ecology:v3");
+    expect(readiness.roles.find(({ role }) => role === "amphibian")?.evidenceOwnerIds)
+      .toContain("game:core-ecology:v4");
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.roles)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.blockingRoles)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
   });
 
   it("keeps mortality, carcasses, living cover, and circadian schedules explicit future work", () => {

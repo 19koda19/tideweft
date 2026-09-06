@@ -10,6 +10,7 @@ import {
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
+import type { CoreEcologySettlementShadowsEvent } from "./coreEcologySmallWorld";
 import type { PerceptionResult } from "./perception";
 import {
   projectWildlifePopulationEvidencePresentations,
@@ -35,6 +36,32 @@ export interface ProjectCoreEcologyAggregateEvidenceInput {
 export interface CoreEcologyAggregateEvidenceRuntimeProjection {
   readonly renderEvidence: readonly AggregateWildlifeEvidenceView[];
   readonly selectedAbout: WildlifeEvidenceAboutProjection | null;
+}
+
+/**
+ * Select one directly witnessed brown-rat redistribution for the restrained
+ * rustle cue. Other aggregate species may share the evidence projection, but
+ * they must never inherit a rat-specific sound merely because their IDs match
+ * visible evidence.
+ */
+export function selectWitnessedBrownRatRedistribution(
+  events: readonly CoreEcologySettlementShadowsEvent[],
+  visibleEvidence: readonly Pick<
+    AggregateWildlifeEvidenceView,
+    "aggregateId" | "evidenceId" | "species"
+  >[],
+): CoreEcologySettlementShadowsEvent | undefined {
+  return events
+    .filter((event) => event.targetSpecies === "brown-rat")
+    .slice()
+    .sort((left, right) => (
+      left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0
+    ))
+    .find((event) => visibleEvidence.some((evidence) => (
+      evidence.species === "brown-rat"
+      && evidence.aggregateId === event.aggregateId
+      && evidence.evidenceId === event.evidenceId
+    )));
 }
 
 /**

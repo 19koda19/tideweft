@@ -9,7 +9,10 @@ import {
   type CoreEcologyAggregatePatchState,
   type CoreEcologyAggregateSpecies,
 } from "./coreEcology";
-import { coreEcologyAggregateSpeciesPolicy } from "./coreEcologyAggregatePolicy";
+import {
+  coreEcologyAggregateSpeciesPolicy,
+  resolveCoreEcologyAggregateLivingResponse,
+} from "./coreEcologyAggregatePolicy";
 import {
   coreEcologyPerceptionCells,
   coreEcologyTargetLightVisibility,
@@ -25,6 +28,13 @@ import {
   type CoreEcologySettlementShadowsStimulusFrame,
 } from "./coreEcologySmallWorld";
 import { livingActorSenseProfile } from "./livingActorSenses";
+import {
+  LIVING_ACTOR_SPECIES,
+  isLivingActorSpecies,
+  isLivingSpeciesActorAddressable,
+  livingSpeciesActorIdMatchesNamespace,
+  type LivingActorSpecies,
+} from "./livingSpeciesRegistry";
 import { evaluateVisualContact } from "./perception";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
@@ -43,23 +53,39 @@ import {
 export const CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES = 32 as const;
 export const CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_FOOD_SOURCES = 128 as const;
 export const CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_FOOD_CANDIDATES = 1_024 as const;
+const CORE_ECOLOGY_AGGREGATE_RESERVED_NONVISUAL_STIMULI_PER_POPULATION = 2;
+export const CORE_ECOLOGY_AGGREGATE_MIN_VISUAL_STIMULI_PER_POPULATION = Math.floor(
+  CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI
+    / CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS,
+) - CORE_ECOLOGY_AGGREGATE_RESERVED_NONVISUAL_STIMULI_PER_POPULATION;
 
-export const CORE_ECOLOGY_AGGREGATE_VISUAL_SOURCE_KINDS = [
-  "cat",
-  "dog",
-  "human",
-  "gull",
-  "fish-crow",
-  "northern-harrier",
-] as const;
-
-export type CoreEcologyAggregateVisualSourceKind =
-  (typeof CORE_ECOLOGY_AGGREGATE_VISUAL_SOURCE_KINDS)[number];
+/**
+ * Share the fixed frame budget across only the aggregate populations that are
+ * actually present. Two reserved slots per population cover its strongest
+ * food and rain candidates even when a species does not use both. This keeps
+ * today's two-population web from discarding lawful species while the maximum
+ * four-population patch remains bounded by construction.
+ */
+export function coreEcologyAggregateVisualStimulusBudget(
+  aggregatePopulationCount: number,
+): number {
+  if (
+    !Number.isSafeInteger(aggregatePopulationCount)
+    || aggregatePopulationCount < 1
+    || aggregatePopulationCount > CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS
+  ) return 0;
+  return Math.max(0, Math.floor(
+    (CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI
+      - aggregatePopulationCount
+        * CORE_ECOLOGY_AGGREGATE_RESERVED_NONVISUAL_STIMULI_PER_POPULATION)
+      / aggregatePopulationCount,
+  ));
+}
 
 /** One materialized individual supplied by the runtime's active-window owner. */
 export interface CoreEcologyAggregateVisualSource {
   readonly sourceReferenceId: string;
-  readonly sourceKind: CoreEcologyAggregateVisualSourceKind;
+  readonly sourceSpecies: LivingActorSpecies;
   readonly position: WorldPosition;
   /** Fixed-point 0..1 target movement salience; this is not inferred from intent. */
   readonly movementSalience: number;
@@ -147,9 +173,6 @@ interface StimulusCandidate {
   readonly anchorInfluences: readonly CoreEcologySettlementShadowsAnchorInfluence[];
 }
 
-const VISUAL_SOURCE_KIND_SET = new Set<string>(
-  CORE_ECOLOGY_AGGREGATE_VISUAL_SOURCE_KINDS,
-);
 const STABLE_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
 const COLLECTIVE_VISUAL_CLOSE_RANGE_TILES = 2;
 const COLLECTIVE_VISUAL_DIRECT_RANGE_TILES = 10;
@@ -172,31 +195,38 @@ export function deriveCoreEcologySettlementShadowsStimulusFrame(
   const populations = [...input.patch.aggregatePopulations].sort((left, right) => (
     compareText(left.aggregateId, right.aggregateId)
   ));
+  const visualStimulusBudget = coreEcologyAggregateVisualStimulusBudget(populations.length);
 
   for (const population of populations) {
     const policy = coreEcologyAggregateSpeciesPolicy(population.species);
     const profile = livingActorSenseProfile(population.species);
-    const bestVisual = new Map<CoreEcologyAggregateVisualSourceKind, StimulusCandidate>();
+    const bestVisual = new Map<LivingActorSpecies, StimulusCandidate>();
     for (const source of input.visualSources) {
-      if (!(policy.visualPressureSourceKinds as readonly string[]).includes(source.sourceKind)) {
-        continue;
-      }
+      const response = resolveCoreEcologyAggregateLivingResponse(
+        population.species,
+        source.sourceSpecies,
+      );
+      if (response === null) continue;
       const candidate = visualCandidate(
         input,
         population.species,
         population.aggregateId,
         population.anchors,
         source,
+        response.sourceKind,
       );
       if (candidate === null) continue;
-      const previous = bestVisual.get(source.sourceKind);
+      const previous = bestVisual.get(source.sourceSpecies);
       if (previous === undefined || compareCandidateStrength(candidate, previous) < 0) {
-        bestVisual.set(source.sourceKind, candidate);
+        bestVisual.set(source.sourceSpecies, candidate);
       }
     }
-    for (const sourceKind of CORE_ECOLOGY_AGGREGATE_VISUAL_SOURCE_KINDS) {
-      const candidate = bestVisual.get(sourceKind);
-      if (candidate !== undefined) stimuli.push(toStimulus(input.tick, population.aggregateId, candidate));
+    const selectedVisual = [...bestVisual.entries()].sort((left, right) => (
+      compareCandidateStrength(left[1], right[1])
+      || LIVING_ACTOR_SPECIES.indexOf(left[0]) - LIVING_ACTOR_SPECIES.indexOf(right[0])
+    )).slice(0, visualStimulusBudget);
+    for (const [, candidate] of selectedVisual) {
+      stimuli.push(toStimulus(input.tick, population.aggregateId, candidate));
     }
 
     if (policy.exposedFoodAttraction) {
@@ -245,6 +275,7 @@ function visualCandidate(
   aggregateId: string,
   anchors: readonly CoreEcologyAggregateAreaAnchor[],
   source: CoreEcologyAggregateVisualSource,
+  sourceKind: CoreEcologySettlementShadowsSourceKind,
 ): StimulusCandidate | null {
   const sourceTileIndex = tileIndexInFrame(input.frame, input.world, source.position);
   if (sourceTileIndex === null) return null;
@@ -278,7 +309,7 @@ function visualCandidate(
   if (!hasPositiveInfluence(anchorInfluences)) return null;
   return Object.freeze({
     sourceReferenceId: source.sourceReferenceId,
-    sourceKind: source.sourceKind,
+    sourceKind,
     response: "pressure",
     channels: Object.freeze(["vision"] as const),
     anchorInfluences: Object.freeze(anchorInfluences),
@@ -414,9 +445,14 @@ function canonicalVisualSources(value: readonly unknown[]): readonly CoreEcology
   for (const source of value) {
     if (
       !plainRecord(source)
-      || !exactKeys(source, ["movementSalience", "position", "sourceKind", "sourceReferenceId"])
+      || !exactKeys(source, ["movementSalience", "position", "sourceReferenceId", "sourceSpecies"])
       || !stableReference(source.sourceReferenceId)
-      || !VISUAL_SOURCE_KIND_SET.has(source.sourceKind as string)
+      || !isLivingActorSpecies(source.sourceSpecies)
+      || !isLivingSpeciesActorAddressable(source.sourceSpecies)
+      || !livingSpeciesActorIdMatchesNamespace(
+        source.sourceReferenceId,
+        source.sourceSpecies,
+      )
       || !isWorldPosition(source.position)
       || !fixedPoint(source.movementSalience)
       || references.has(source.sourceReferenceId)
@@ -424,7 +460,7 @@ function canonicalVisualSources(value: readonly unknown[]): readonly CoreEcology
     references.add(source.sourceReferenceId);
     sources.push(Object.freeze({
       sourceReferenceId: source.sourceReferenceId,
-      sourceKind: source.sourceKind as CoreEcologyAggregateVisualSourceKind,
+      sourceSpecies: source.sourceSpecies,
       position: createWorldPosition(
         source.position.region,
         source.position.localX,
@@ -434,8 +470,8 @@ function canonicalVisualSources(value: readonly unknown[]): readonly CoreEcology
     }));
   }
   sources.sort((left, right) => (
-    CORE_ECOLOGY_AGGREGATE_VISUAL_SOURCE_KINDS.indexOf(left.sourceKind)
-      - CORE_ECOLOGY_AGGREGATE_VISUAL_SOURCE_KINDS.indexOf(right.sourceKind)
+    LIVING_ACTOR_SPECIES.indexOf(left.sourceSpecies)
+      - LIVING_ACTOR_SPECIES.indexOf(right.sourceSpecies)
     || compareText(left.sourceReferenceId, right.sourceReferenceId)
   ));
   return Object.freeze(sources);

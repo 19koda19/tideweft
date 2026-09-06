@@ -18,8 +18,10 @@ import {
 } from "./coreEcologyHabitat";
 import { resolveCoreEcologyAggregateActivityIntensity } from "./coreEcologyAggregatePolicy";
 import {
+  CORE_ECOLOGY_SMALL_WORLD_VERSION,
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS,
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION,
+  CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION,
   canonicalizeCoreEcologySettlementShadowsStimulusFrame,
   stepCoreEcologySettlementShadows,
   type CoreEcologySettlementShadowsChannel,
@@ -224,7 +226,7 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
     expect(result.events).toHaveLength(1);
     const event = result.events[0];
     expect(event).toMatchObject({
-      version: 2,
+      version: CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION,
       kind: "aggregate-redistributed",
       atTick: 0,
       sourceReferenceId: cat,
@@ -317,6 +319,17 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
       ...valid,
       response: "attraction",
     }]))).toBeNull();
+    for (const noncanonicalAlias of ["domestic-cat", "domestic-dog"] as const) {
+      expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame({
+        version: CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION,
+        atTick: 0,
+        stimuli: [{
+          ...valid,
+          sourceKind: noncanonicalAlias,
+          sourceReferenceId: `${noncanonicalAlias}:1`,
+        }],
+      })).toBeNull();
+    }
     expect(stepCoreEcologySettlementShadows(initial, 0, frame(0, [{
       ...valid,
       anchorInfluences: [{ anchorOrdinal: 99, intensity: 500_000 }],
@@ -342,7 +355,7 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
     const result = stepCoreEcologySettlementShadows(initial, 0, canonical);
     if (result === null) throw new Error("Valid frog rain attraction failed");
     expect(result.events).toEqual([expect.objectContaining({
-      version: 3,
+      version: CORE_ECOLOGY_SMALL_WORLD_VERSION,
       sourceKind: "rain",
       response: "attraction",
       causeKind: "weather-pressure",
@@ -496,7 +509,7 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
     }
   });
 
-  it("rejects frog food attraction and prevents new bird pressure from leaking into rats", () => {
+  it("rejects frog food, versions new aerial rat pressure as v3, and keeps rabbits neutral", () => {
     const initial = rainChorusFixture();
     const frogFood = stimulus(
       initial,
@@ -511,14 +524,35 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
     expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [frogFood])))
       .toBeNull();
 
-    const crowAtRats = stimulus(
+    for (const sourceKind of ["fish-crow", "northern-harrier"] as const) {
+      const aerialPressure = stimulus(
+        initial,
+        sourceKind,
+        `${sourceKind}:rat-capability`,
+        ["vision"],
+        "pressure",
+      );
+      expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [aerialPressure])))
+        .not.toBeNull();
+      expect(stepCoreEcologySettlementShadows(initial, 0, frame(0, [aerialPressure]))?.events)
+        .toEqual([expect.objectContaining({
+          version: CORE_ECOLOGY_SMALL_WORLD_VERSION,
+          sourceKind,
+          causeKind: sourceKind === "northern-harrier"
+            ? "predator-pressure"
+            : "animal-disturbance",
+          mortality: "none",
+        })]);
+    }
+
+    const rabbitAtRats = stimulus(
       initial,
-      "fish-crow",
-      "fish-crow:rat-non-policy",
+      "marsh-rabbit",
+      "RABBIT-neutral",
       ["vision"],
       "pressure",
     );
-    expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [crowAtRats])))
+    expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [rabbitAtRats])))
       .toBeNull();
   });
 

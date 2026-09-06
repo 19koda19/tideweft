@@ -13,25 +13,32 @@ import {
   type CoreEcologyAggregateSpecies,
 } from "./coreEcology";
 import {
+  CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS,
   CORE_ECOLOGY_AGGREGATE_SPECIES,
+  coreEcologyAggregateLivingSourceSpecies,
   coreEcologyAggregateSpeciesPolicy,
+  resolveCoreEcologyAggregateLivingResponse,
   resolveCoreEcologyAggregateActivityIntensity,
   resolveCoreEcologyAggregateDisturbanceActivity,
-  type CoreEcologyAggregatePolicyVisualSourceKind,
+  type CoreEcologyAggregateLivingSourceKind,
 } from "./coreEcologyAggregatePolicy";
-import { coreEcologyTrophicPerceivedClass } from "./coreEcologyTrophic";
-import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 
 export const CORE_ECOLOGY_SMALL_WORLD_VERSION = 3 as const;
 export const CORE_ECOLOGY_SMALL_WORLD_OWNER_ID =
   "game:core-ecology-small-world:v3" as const;
-/** Landed rat event revision remains byte-compatible with Alpha 16. */
+/** Landed rat event revision remains stable for its legacy source vocabulary. */
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION = 2 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION = 1 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS = 8 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI = 32 as const;
 
-export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS = [
+export type CoreEcologySettlementShadowsSourceKind =
+  | "same-species"
+  | "rain"
+  | "exposed-food"
+  | CoreEcologyAggregateLivingSourceKind;
+
+const LEGACY_SETTLEMENT_SHADOWS_SOURCE_KINDS = [
   "same-species",
   "cat",
   "dog",
@@ -42,11 +49,37 @@ export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS = [
   "fish-crow",
   "northern-harrier",
 ] as const;
+const LEGACY_SETTLEMENT_SHADOWS_SOURCE_KIND_SET = new Set<string>(
+  LEGACY_SETTLEMENT_SHADOWS_SOURCE_KINDS,
+);
+/** Source kinds that already produced brown-rat redistribution events before Alpha 18. */
+const LEGACY_RAT_EVENT_SOURCE_KIND_SET = new Set<string>([
+  "same-species",
+  "cat",
+  "dog",
+  "human",
+  "gull",
+  "rain",
+  "exposed-food",
+]);
+export type CoreEcologySettlementShadowsLegacyRatEventSourceKind =
+  | "same-species"
+  | "cat"
+  | "dog"
+  | "human"
+  | "gull"
+  | "rain"
+  | "exposed-food";
+export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS:
+readonly CoreEcologySettlementShadowsSourceKind[] = Object.freeze([
+  ...LEGACY_SETTLEMENT_SHADOWS_SOURCE_KINDS,
+  ...CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.filter((sourceKind) => (
+    !LEGACY_SETTLEMENT_SHADOWS_SOURCE_KIND_SET.has(sourceKind)
+  )),
+]);
 
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_CHANNELS = OBSERVATION_CHANNELS;
 
-export type CoreEcologySettlementShadowsSourceKind =
-  (typeof CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS)[number];
 export type CoreEcologySettlementShadowsChannel = ObservationChannel;
 export type CoreEcologySettlementShadowsResponse = "pressure" | "attraction";
 export type CoreEcologySmallWorldSourceKind = CoreEcologySettlementShadowsSourceKind;
@@ -82,20 +115,15 @@ export interface CoreEcologySettlementShadowsStimulusFrame {
   readonly stimuli: readonly CoreEcologySettlementShadowsStimulus[];
 }
 
-export interface CoreEcologySettlementShadowsEvent {
-  readonly version:
-    | typeof CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION
-    | typeof CORE_ECOLOGY_SMALL_WORLD_VERSION;
+interface CoreEcologySettlementShadowsEventFields {
   readonly eventId: string;
   readonly kind: "aggregate-redistributed";
   readonly atTick: number;
   readonly stimulusId: string;
   readonly sourceReferenceId: string;
-  readonly sourceKind: CoreEcologySettlementShadowsSourceKind;
   readonly response: CoreEcologySettlementShadowsResponse;
   readonly channels: readonly CoreEcologySettlementShadowsChannel[];
   readonly causeKind: Exclude<CoreEcologyAggregateEvidenceCause, "population-activity">;
-  readonly targetSpecies: CoreEcologyAggregateSpecies;
   readonly aggregateId: string;
   readonly evidenceId: string;
   readonly fromAnchorOrdinal: number;
@@ -106,6 +134,21 @@ export interface CoreEcologySettlementShadowsEvent {
   readonly cargoInteraction: false;
   readonly itemConsumption: "none";
 }
+
+export type CoreEcologySettlementShadowsEvent =
+  & CoreEcologySettlementShadowsEventFields
+  & (
+    | Readonly<{
+        version: typeof CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION;
+        sourceKind: CoreEcologySettlementShadowsLegacyRatEventSourceKind;
+        targetSpecies: "brown-rat";
+      }>
+    | Readonly<{
+        version: typeof CORE_ECOLOGY_SMALL_WORLD_VERSION;
+        sourceKind: CoreEcologySettlementShadowsSourceKind;
+        targetSpecies: CoreEcologyAggregateSpecies;
+      }>
+  );
 
 export interface CoreEcologySettlementShadowsStepResult {
   readonly patch: CoreEcologyAggregatePatchState;
@@ -154,29 +197,13 @@ const SAME_SPECIES_CHANNELS = new Set<CoreEcologySettlementShadowsChannel>([
   "touch",
   "evidence",
 ]);
-const SOURCE_PROFILES: Readonly<Record<
-  CoreEcologySettlementShadowsSourceKind,
+const STATIC_SOURCE_PROFILES: Readonly<Record<
+  "same-species" | "rain" | "exposed-food",
   Readonly<Omit<SourcePolicy, "response">>
 >> = Object.freeze({
   "same-species": Object.freeze({
     causeKind: "animal-disturbance",
     channels: SAME_SPECIES_CHANNELS,
-  }),
-  cat: Object.freeze({
-    causeKind: "predator-pressure",
-    channels: ANIMAL_CHANNELS,
-  }),
-  dog: Object.freeze({
-    causeKind: "predator-pressure",
-    channels: ANIMAL_CHANNELS,
-  }),
-  human: Object.freeze({
-    causeKind: "human-disturbance",
-    channels: ANIMAL_CHANNELS,
-  }),
-  gull: Object.freeze({
-    causeKind: "animal-disturbance",
-    channels: ANIMAL_CHANNELS,
   }),
   rain: Object.freeze({
     causeKind: "weather-pressure",
@@ -185,14 +212,6 @@ const SOURCE_PROFILES: Readonly<Record<
   "exposed-food": Object.freeze({
     causeKind: "food-attraction",
     channels: FOOD_CHANNELS,
-  }),
-  "fish-crow": Object.freeze({
-    causeKind: "animal-disturbance",
-    channels: ANIMAL_CHANNELS,
-  }),
-  "northern-harrier": Object.freeze({
-    causeKind: "predator-pressure",
-    channels: ANIMAL_CHANNELS,
   }),
 });
 const SOURCE_KIND_SET = new Set<string>(CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS);
@@ -311,20 +330,15 @@ export function stepCoreEcologySettlementShadows(
     });
     if (displaced === null) return null;
     patch = displaced.patch;
-    events.push(deepFreeze({
-      version: population.species === "brown-rat"
-        ? CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION
-        : CORE_ECOLOGY_SMALL_WORLD_VERSION,
+    const eventFields: CoreEcologySettlementShadowsEventFields = {
       eventId: `settlement-shadows:${population.aggregateId}:${displaced.disturbance.disturbanceOrdinal.toString(36)}`,
       kind: "aggregate-redistributed",
       atTick,
       stimulusId: selected.stimulus.stimulusId,
       sourceReferenceId: selected.stimulus.sourceReferenceId,
-      sourceKind: selected.stimulus.sourceKind,
       response: selected.stimulus.response,
       channels: selected.stimulus.channels,
       causeKind: selected.causeKind,
-      targetSpecies: population.species,
       aggregateId: population.aggregateId,
       evidenceId: displaced.evidence.evidenceId,
       fromAnchorOrdinal: selected.fromAnchorOrdinal,
@@ -334,7 +348,25 @@ export function stepCoreEcologySettlementShadows(
       mortality: "none",
       cargoInteraction: false,
       itemConsumption: "none",
-    }));
+    };
+    if (
+      population.species === "brown-rat"
+      && isLegacyRatEventSourceKind(selected.stimulus.sourceKind)
+    ) {
+      events.push(deepFreeze({
+        ...eventFields,
+        version: CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION,
+        sourceKind: selected.stimulus.sourceKind,
+        targetSpecies: "brown-rat",
+      } satisfies CoreEcologySettlementShadowsEvent));
+    } else {
+      events.push(deepFreeze({
+        ...eventFields,
+        version: CORE_ECOLOGY_SMALL_WORLD_VERSION,
+        sourceKind: selected.stimulus.sourceKind,
+        targetSpecies: population.species,
+      } satisfies CoreEcologySettlementShadowsEvent));
+    }
   }
 
   // Activity is a current environmental projection, not a relocation side
@@ -351,6 +383,12 @@ export const canonicalizeCoreEcologySmallWorldStimulusFrame =
   canonicalizeCoreEcologySettlementShadowsStimulusFrame;
 /** Generalized name for new consumers; both names execute the same deterministic kernel. */
 export const stepCoreEcologySmallWorld = stepCoreEcologySettlementShadows;
+
+function isLegacyRatEventSourceKind(
+  value: CoreEcologySettlementShadowsSourceKind,
+): value is CoreEcologySettlementShadowsLegacyRatEventSourceKind {
+  return LEGACY_RAT_EVENT_SOURCE_KIND_SET.has(value);
+}
 
 function projectRainResponsiveActivity(
   patch: CoreEcologyAggregatePatchState,
@@ -589,49 +627,38 @@ function sourcePolicy(
   sourceKind: CoreEcologySettlementShadowsSourceKind,
 ): SourcePolicy | null {
   const target = coreEcologyAggregateSpeciesPolicy(targetSpecies);
-  const profile = SOURCE_PROFILES[sourceKind];
   if (sourceKind === "same-species") {
-    return Object.freeze({ ...profile, response: "pressure" });
+    return Object.freeze({
+      ...STATIC_SOURCE_PROFILES["same-species"],
+      response: "pressure",
+    });
   }
   if (sourceKind === "rain") {
-    return Object.freeze({ ...profile, response: target.rainResponse });
+    return Object.freeze({
+      ...STATIC_SOURCE_PROFILES.rain,
+      response: target.rainResponse,
+    });
   }
   if (sourceKind === "exposed-food") {
     return target.exposedFoodAttraction
-      ? Object.freeze({ ...profile, response: "attraction" })
+      ? Object.freeze({
+          ...STATIC_SOURCE_PROFILES["exposed-food"],
+          response: "attraction",
+        })
       : null;
   }
-  if (!target.visualPressureSourceKinds.includes(
-    sourceKind as CoreEcologyAggregatePolicyVisualSourceKind,
-  )) return null;
+  const sourceSpecies = coreEcologyAggregateLivingSourceSpecies(sourceKind);
+  if (sourceSpecies === null) return null;
+  const response = resolveCoreEcologyAggregateLivingResponse(
+    targetSpecies,
+    sourceSpecies,
+  );
+  if (response === null) return null;
   return Object.freeze({
-    ...profile,
-    causeKind: aggregateAnimalCause(targetSpecies, sourceKind, profile.causeKind),
-    response: "pressure",
+    channels: ANIMAL_CHANNELS,
+    causeKind: response.causeKind,
+    response: response.response,
   });
-}
-
-function aggregateAnimalCause(
-  targetSpecies: CoreEcologyAggregateSpecies,
-  sourceKind: CoreEcologySettlementShadowsSourceKind,
-  fallback: SourcePolicy["causeKind"],
-): SourcePolicy["causeKind"] {
-  const sourceSpecies: LivingActorSpecies | null = sourceKind === "cat"
-    ? "domestic-cat"
-    : sourceKind === "dog"
-    ? "domestic-dog"
-    : sourceKind === "human"
-    ? "human"
-    : sourceKind === "gull" || sourceKind === "fish-crow" || sourceKind === "northern-harrier"
-    ? sourceKind
-    : null;
-  if (sourceSpecies === null || sourceSpecies === "human") return fallback;
-  const relationship = coreEcologyTrophicPerceivedClass(targetSpecies, sourceSpecies);
-  return relationship === "predator"
-      || relationship === "large-predator"
-      || relationship === "aerial-predator"
-    ? "predator-pressure"
-    : fallback;
 }
 
 function aggregateSpeciesForTargetId(

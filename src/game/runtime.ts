@@ -206,7 +206,10 @@ import {
   selectedCoreEcologyActor,
   setCoreEcologyMaterializationForWindow,
 } from "./coreEcologyRuntime";
-import { projectCoreEcologyAggregateEvidence } from "./coreEcologyEvidenceRuntime";
+import {
+  projectCoreEcologyAggregateEvidence,
+  selectWitnessedBrownRatRedistribution,
+} from "./coreEcologyEvidenceRuntime";
 import {
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
@@ -219,7 +222,6 @@ import {
   type CoreEcologyAggregateVisualSource,
 } from "./coreEcologyAggregatePerception";
 import { projectCoreEcologyAggregateHeardCues } from "./coreEcologyAggregateAudio";
-import { coreEcologyAggregateVisualSourceKind } from "./coreEcologyAggregatePolicy";
 import { resolveFallCargo } from "./fallCargo";
 import {
   capturePlayerRegionalTravel,
@@ -2919,8 +2921,6 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
 }>): readonly CoreEcologyAggregateVisualSource[] {
   const sources: CoreEcologyAggregateVisualSource[] = [];
   for (const population of input.afterPatch.populations) {
-    const sourceKind = coreEcologyAggregateVisualSourceKind(population.species);
-    if (sourceKind === null) continue;
     for (const member of population.members) {
       if (member.materialization !== "materialized") continue;
       const before = coreEcologyAggregatePatchActor(
@@ -2929,7 +2929,7 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
       );
       sources.push(Object.freeze({
         sourceReferenceId: member.actor.identity.stableId,
-        sourceKind,
+        sourceSpecies: population.species,
         position: member.actor.address.position,
         movementSalience: before !== null
           && !sameRuntimeWorldPosition(before.address.position, member.actor.address.position)
@@ -2941,7 +2941,7 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
   sources.push(
     Object.freeze({
       sourceReferenceId: input.afterDog.actorId,
-      sourceKind: "dog",
+      sourceSpecies: "domestic-dog",
       position: input.afterDog.position,
       movementSalience: sameRuntimeWorldPosition(
         input.beforeDog.position,
@@ -2950,7 +2950,7 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
     }),
     Object.freeze({
       sourceReferenceId: input.afterPorter.actorId,
-      sourceKind: "human",
+      sourceSpecies: "human",
       position: input.afterPorter.position,
       movementSalience: sameRuntimeWorldPosition(
         input.beforePorter.position,
@@ -2959,15 +2959,15 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
     }),
     Object.freeze({
       sourceReferenceId: input.player.actorId,
-      sourceKind: "human",
+      sourceSpecies: "human",
       position: input.player.position,
       movementSalience: input.playerMoved ? CORE_ECOLOGY_MOVING_SOURCE_SALIENCE : 0,
     }),
   );
   sources.sort((left, right) => (
-    left.sourceKind < right.sourceKind
+    left.sourceSpecies < right.sourceSpecies
       ? -1
-      : left.sourceKind > right.sourceKind
+      : left.sourceSpecies > right.sourceSpecies
         ? 1
         : left.sourceReferenceId < right.sourceReferenceId
           ? -1
@@ -3427,11 +3427,20 @@ export async function createTideweftRuntime(
       )
       ? { patch: coreEcology, atTick: coreEcology.updatedAtTick }
       : undefined;
+    const selectedWildlifePresentation = selectedWildlife === null
+      ? undefined
+      : wildlifePresentation.find(({ actorId, species }) => (
+          actorId === selectedWildlife.identity.stableId
+          && species === selectedWildlife.identity.species
+        ));
     const wildlifeInspection = selectedWildlife === null
       ? null
       : projectWildlifeLivingActorInspection(selectedWildlife, {
           perception,
           window: actorWindow,
+          ...(selectedWildlifePresentation?.groupSize === undefined
+            ? {}
+            : { visibleAggregateCount: selectedWildlifePresentation.groupSize }),
         }, selectedWildlifeActivity);
     const coreActorAddresses = coreEcology.populations.flatMap(({ members }) => members
       .filter(({ materialization }) => materialization === "materialized")
@@ -4412,13 +4421,10 @@ export async function createTideweftRuntime(
           ecologyConsequenceAnnounced = true;
         }
       }
-      const witnessedRatDisplacement = settlementShadows.events
-        .slice()
-        .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
-        .find((event) => witnessedAggregateEvidence.some((evidence) => (
-          evidence.aggregateId === event.aggregateId
-          && evidence.evidenceId === event.evidenceId
-        )));
+      const witnessedRatDisplacement = selectWitnessedBrownRatRedistribution(
+        settlementShadows.events,
+        witnessedAggregateEvidence,
+      );
       const witnessedCatTransition = coreStep.events
         .filter((event) => event.species === "domestic-cat")
         .slice()
