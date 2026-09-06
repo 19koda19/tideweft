@@ -32,6 +32,9 @@ describe("core ecology species runtime policy", () => {
       "fish-crow",
       "northern-harrier",
       "southern-leopard-frog",
+      "atlantic-silverside",
+      "atlantic-marsh-fiddler-crab",
+      "snowy-egret",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -49,6 +52,9 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanOwnActorAddress("fish-crow")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("northern-harrier")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("southern-leopard-frog")).toBe(false);
+    expect(coreEcologySpeciesCanOwnActorAddress("atlantic-silverside")).toBe(false);
+    expect(coreEcologySpeciesCanOwnActorAddress("atlantic-marsh-fiddler-crab")).toBe(false);
+    expect(coreEcologySpeciesCanOwnActorAddress("snowy-egret")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("invented-frog")).toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("southern-leopard-frog")).toMatchObject({
       actorAddressable: false,
@@ -62,6 +68,72 @@ describe("core ecology species runtime policy", () => {
       },
       presentationModel: "aggregate-activity",
     });
+  });
+
+  it("declares the bounded tidal-school, crab-area, and wader capability seams", () => {
+    expect(coreEcologySpeciesRuntimePolicy("atlantic-silverside")).toMatchObject({
+      actorAddressable: false,
+      identityForm: "aggregate",
+      representation: "aggregate",
+      locomotionClass: "aquatic",
+      groupOrganization: "school",
+      groupStableIdNamespace: "SILVERSIDE-SCHOOL",
+      maximumMaterializedActors: 0,
+      aggregate: {
+        maximumAnchors: 3,
+        responseCadenceTicks: 4,
+        responseVerbs: ["redistribute", "school", "tighten"],
+      },
+      capabilities: expect.arrayContaining([
+        "aggregate-response",
+        "aquatic-locomotion",
+        "school-coordination",
+        "tidal-activity",
+        "water-depth-response",
+      ]),
+      presentationModel: "aggregate-school",
+    });
+    expect(coreEcologySpeciesRuntimePolicy("atlantic-marsh-fiddler-crab")).toMatchObject({
+      actorAddressable: false,
+      identityForm: "aggregate",
+      representation: "aggregate",
+      locomotionClass: "amphibious",
+      groupOrganization: null,
+      maximumMaterializedActors: 0,
+      aggregate: {
+        maximumAnchors: 4,
+        responseCadenceTicks: 8,
+        responseVerbs: ["emerge", "quiet", "retreat-to-burrow"],
+      },
+      capabilities: expect.arrayContaining([
+        "aggregate-response",
+        "amphibious-locomotion",
+        "tidal-activity",
+        "water-depth-response",
+      ]),
+      presentationModel: "aggregate-activity",
+    });
+    expect(coreEcologySpeciesRuntimePolicy("snowy-egret")).toMatchObject({
+      actorAddressable: true,
+      identityForm: "individual",
+      representation: "individual",
+      locomotionClass: "amphibious",
+      groupOrganization: null,
+      maximumMaterializedActors: 1,
+      aggregate: null,
+      capabilities: expect.arrayContaining([
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "tidal-activity",
+        "wading",
+        "water-depth-response",
+      ]),
+      presentationModel: "individual",
+    });
+    expect(coreEcologySpeciesHasRuntimeCapability("snowy-egret", "small-prey-pursuit"))
+      .toBe(false);
   });
 
   it("keeps mobbing and aerial predation orthogonal to prey identity", () => {

@@ -39,16 +39,19 @@ import {
   CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
+  CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
   canonicalizeCoreEcologyHabitatAssemblage,
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   canonicalizeCoreEcologyRainChorusHabitatAssemblage,
+  canonicalizeCoreEcologyTidalTableHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
   type CoreEcologyHarborEdgeActivitySignal,
   type CoreEcologyHarborEdgeHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatPopulationAnalysis,
   type CoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
+  type CoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
   coreEcologyAggregateSpeciesPolicy,
@@ -101,6 +104,7 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "marsh-fox",
   "fish-crow",
   "northern-harrier",
+  "snowy-egret",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -171,6 +175,15 @@ export type CoreEcologyAggregatePatchDerivation =
        */
       readonly kind: "legacy-fixed-v1-with-habitat-v4";
       readonly habitat: CoreEcologyRainChorusHabitatAssemblage;
+    }>
+  | Readonly<{
+      readonly kind: "habitat-v5";
+      readonly habitat: CoreEcologyTidalTableHabitatAssemblage;
+    }>
+  | Readonly<{
+      /** Frozen pre-habitat actors remain authoritative through the v5 extension. */
+      readonly kind: "legacy-fixed-v1-with-habitat-v5";
+      readonly habitat: CoreEcologyTidalTableHabitatAssemblage;
     }>;
 
 export interface CreateCoreEcologyPatchInput {
@@ -236,9 +249,12 @@ export interface CoreEcologyAggregateActivitySignal {
 }
 
 export type CoreEcologyAggregateEvidenceKind =
+  | "burrow-opening"
+  | "feeding-scrape"
   | "frog-track"
   | "gnaw-mark"
   | "shelter-sign"
+  | "surface-dimple"
   | "tracks";
 export type CoreEcologyAggregateEvidenceCause =
   | "animal-disturbance"
@@ -246,6 +262,7 @@ export type CoreEcologyAggregateEvidenceCause =
   | "human-disturbance"
   | "predator-pressure"
   | "population-activity"
+  | "tide-pressure"
   | "weather-pressure";
 
 /** Physical sign state; this is not itself a player observation or report. */
@@ -286,7 +303,7 @@ export interface CoreEcologyAggregatePopulationState {
   /** Lossless seed fingerprint authenticating the stable area ID. */
   readonly seedFingerprint: string;
   readonly species: CoreEcologyAggregateSpecies;
-  readonly representation: "aggregate-area";
+  readonly representation: "aggregate-area" | "group-actor";
   readonly populationKey: string;
   readonly revision: number;
   readonly updatedAtTick: number;
@@ -399,9 +416,12 @@ const ACTOR_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
 const SEED_FINGERPRINT_PATTERN = /^[0-9a-z]{7}(?:\.[0-9a-z]{7}){3}$/u;
 const MATERIALIZATION = new Set<string>(["coarse", "materialized"]);
 const AGGREGATE_EVIDENCE_KINDS = new Set<string>([
+  "burrow-opening",
+  "feeding-scrape",
   "frog-track",
   "gnaw-mark",
   "shelter-sign",
+  "surface-dimple",
   "tracks",
 ]);
 const AGGREGATE_EVIDENCE_CAUSES = new Set<string>([
@@ -410,6 +430,7 @@ const AGGREGATE_EVIDENCE_CAUSES = new Set<string>([
   "human-disturbance",
   "predator-pressure",
   "population-activity",
+  "tide-pressure",
   "weather-pressure",
 ]);
 const AGGREGATE_DISTURBANCE_CAUSES = new Set<string>([
@@ -417,6 +438,7 @@ const AGGREGATE_DISTURBANCE_CAUSES = new Set<string>([
   "food-attraction",
   "human-disturbance",
   "predator-pressure",
+  "tide-pressure",
   "weather-pressure",
 ]);
 
@@ -793,6 +815,8 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v3"
     || derivation.kind === "habitat-v4"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v4"
+    || derivation.kind === "habitat-v5"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v5"
     ? aggregatePopulationsFromHabitat(input.seed, derivation.habitat, tick)
     : Object.freeze([]);
   const candidate = {
@@ -1088,6 +1112,10 @@ export function displaceCoreEcologyAggregatePopulation(
     population.aggregateId === input.aggregateId);
   const population = patch.aggregatePopulations[populationIndex];
   if (population === undefined) return null;
+  if (
+    input.causeKind === "tide-pressure"
+    && coreEcologyAggregateSpeciesPolicy(population.species).tideResponse === "neutral"
+  ) return null;
   const fromAnchor = population.anchors.find((anchor) =>
     anchor.anchorOrdinal === input.fromAnchorOrdinal);
   const toAnchor = population.anchors.find((anchor) =>
@@ -1620,14 +1648,16 @@ function aggregatePopulationsFromHabitat(
   habitat:
     | CoreEcologyHarborEdgeHabitatAssemblage
     | CoreEcologyMarshEdgeHabitatAssemblage
-    | CoreEcologyRainChorusHabitatAssemblage,
+    | CoreEcologyRainChorusHabitatAssemblage
+    | CoreEcologyTidalTableHabitatAssemblage,
   tick: number,
 ): readonly CoreEcologyAggregatePopulationState[] {
   const seedFingerprint = rootSeedFingerprint(seed);
   const aggregatePopulations: CoreEcologyAggregatePopulationState[] = [];
   for (const analysis of habitat.populations) {
     if (
-      analysis.representation !== "aggregate-area"
+      (analysis.representation !== "aggregate-area"
+        && analysis.representation !== "group-actor")
       || !isCoreEcologyAggregateSpecies(analysis.species)
       || analysis.populationUnits === 0
     ) continue;
@@ -1678,7 +1708,7 @@ function aggregatePopulationsFromHabitat(
       aggregateId,
       seedFingerprint,
       species,
-      representation: "aggregate-area" as const,
+      representation: policy.representation,
       populationKey: analysis.populationKey,
       revision: 0,
       updatedAtTick: tick,
@@ -1727,7 +1757,7 @@ function canonicalAggregatePopulation(
   const species = value.species;
   const policy = coreEcologyAggregateSpeciesPolicy(species);
   if (
-    value.representation !== "aggregate-area"
+    value.representation !== policy.representation
     || typeof value.aggregateId !== "string"
     || !ACTOR_REFERENCE_PATTERN.test(value.aggregateId)
     || typeof value.seedFingerprint !== "string"
@@ -1822,6 +1852,7 @@ function canonicalAggregatePopulation(
     const canonical = canonicalAggregateDisturbance(
       raw,
       value.aggregateId,
+      species,
       anchors.length,
       value.updatedAtTick,
       value.populationSize,
@@ -1843,7 +1874,7 @@ function canonicalAggregatePopulation(
     aggregateId: value.aggregateId,
     seedFingerprint: value.seedFingerprint,
     species,
-    representation: "aggregate-area",
+    representation: policy.representation,
     populationKey: value.populationKey,
     revision: value.revision,
     updatedAtTick: value.updatedAtTick,
@@ -1920,6 +1951,8 @@ function canonicalAggregateEvidence(
     || !fixedInteger(value.strength)
     || value.strength === 0
     || !AGGREGATE_EVIDENCE_CAUSES.has(value.causeKind as string)
+    || (value.causeKind === "tide-pressure"
+      && coreEcologyAggregateSpeciesPolicy(species).tideResponse === "neutral")
     || typeof value.causeReferenceId !== "string"
     || !ACTOR_REFERENCE_PATTERN.test(value.causeReferenceId)
     || value.itemConsumption !== "none"
@@ -1943,6 +1976,7 @@ function canonicalAggregateEvidence(
 function canonicalAggregateDisturbance(
   value: unknown,
   aggregateId: string,
+  species: CoreEcologyAggregateSpecies,
   anchorCount: number,
   maximumTick: number,
   maximumUnits: number,
@@ -1968,6 +2002,8 @@ function canonicalAggregateDisturbance(
     || !nonnegativeSafeInteger(value.atTick)
     || value.atTick > maximumTick
     || !AGGREGATE_DISTURBANCE_CAUSES.has(value.causeKind as string)
+    || (value.causeKind === "tide-pressure"
+      && coreEcologyAggregateSpeciesPolicy(species).tideResponse === "neutral")
     || typeof value.causeReferenceId !== "string"
     || !ACTOR_REFERENCE_PATTERN.test(value.causeReferenceId)
     || !nonnegativeSafeInteger(value.fromAnchorOrdinal)
@@ -2168,6 +2204,16 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: value.kind, habitat });
   }
+  if (
+    value.kind === "habitat-v5"
+    || value.kind === "legacy-fixed-v1-with-habitat-v5"
+  ) {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyTidalTableHabitatAssemblage(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: value.kind, habitat });
+  }
   return canonicalDerivation(value);
 }
 
@@ -2223,10 +2269,13 @@ function aggregateDerivationMatchesPopulations(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v3";
   const isRainChorusDerivation = derivation.kind === "habitat-v4"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v4";
+  const isTidalTableDerivation = derivation.kind === "habitat-v5"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v5";
   if (
     !isHarborEdgeDerivation
     && !isMarshEdgeDerivation
     && !isRainChorusDerivation
+    && !isTidalTableDerivation
   ) {
     return aggregatePopulations.length === 0
       && derivationMatchesPopulations(derivation, populations, originRegion);
@@ -2234,12 +2283,15 @@ function aggregateDerivationMatchesPopulations(
   if (!("habitat" in derivation)) return false;
   const preservesLegacyRoster = derivation.kind === "legacy-fixed-v1-with-habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v3"
-    || derivation.kind === "legacy-fixed-v1-with-habitat-v4";
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v4"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v5";
   const expectedHabitatVersion = isHarborEdgeDerivation
     ? CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
     : isMarshEdgeDerivation
     ? CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION
-    : CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION;
+    : isRainChorusDerivation
+    ? CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION
+    : CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION;
   if (
     derivation.habitat.generationVersion !== expectedHabitatVersion
     || derivation.habitat.originRegion.x !== originRegion.x
@@ -2255,7 +2307,10 @@ function aggregateDerivationMatchesPopulations(
   ] as const));
   for (const analysis of derivation.habitat.populations) {
     const key = `${analysis.species}:${analysis.populationKey}`;
-    if (analysis.representation === "aggregate-area") {
+    if (
+      analysis.representation === "aggregate-area"
+      || analysis.representation === "group-actor"
+    ) {
       if (!isCoreEcologyAggregateSpecies(analysis.species)) return false;
       const policy = coreEcologyAggregateSpeciesPolicy(analysis.species);
       const population = aggregatesByKey.get(key);
@@ -2265,6 +2320,8 @@ function aggregateDerivationMatchesPopulations(
       }
       if (
         population === undefined
+        || population.representation !== analysis.representation
+        || population.representation !== policy.representation
         || population.populationSize !== analysis.populationUnits
         || population.habitatCapacity !== analysis.habitatCapacity
         || population.populationPressure !== analysis.populationPressure
@@ -2524,6 +2581,7 @@ function playerAbsentGroupDisturbances(
     && patch.derivation.kind !== "habitat-v2"
     && patch.derivation.kind !== "habitat-v3"
     && patch.derivation.kind !== "habitat-v4"
+    && patch.derivation.kind !== "habitat-v5"
   ) return Object.freeze([]);
   const population = patch.populations.find((candidate) => (
     candidate.species === group.identity.species
@@ -2854,6 +2912,10 @@ function disturbanceEvidenceKind(
   cause: CoreEcologyAggregateDisturbance["causeKind"],
 ): CoreEcologyAggregateEvidenceKind {
   if (species === "southern-leopard-frog") return "frog-track";
+  if (species === "atlantic-silverside") return "surface-dimple";
+  if (species === "atlantic-marsh-fiddler-crab") {
+    return cause === "tide-pressure" ? "feeding-scrape" : "burrow-opening";
+  }
   return cause === "weather-pressure" ? "shelter-sign" : "tracks";
 }
 

@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.18",
-      buildIdentity: "0.3.3-alpha.18",
+      version: "0.3.3-alpha.19",
+      buildIdentity: "0.3.3-alpha.19",
       gameplayContractVersion: 20,
-      tutorialVersion: 28,
+      tutorialVersion: 29,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the bounded Wave-B closure and retains earlier habitat work", () => {
+  it("scopes the bounded Tide Table and retains earlier habitat work", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const closureRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.18",
+    );
+    const closureCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => closureRelease?.categories[category] ?? [])
       .join(" ");
     const rainRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.17",
@@ -113,24 +120,37 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("canonical living species");
-    expect(activeCopy).toContain("marsh fox");
-    expect(activeCopy).toContain("brown-rat and southern-leopard-frog population areas");
-    expect(activeCopy).toContain("neutral marsh rabbit creates no disturbance");
-    expect(activeCopy).toContain("available interaction or an intentional non-response");
-    expect(activeCopy).toContain("without claiming worldwide ecology");
-    expect(activeCopy).toContain("visible flock estimate");
-    expect(activeCopy).toContain("anonymous nearby or distant chorus");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session remains version 12");
+    expect(activeCopy).toContain("Atlantic-silverside school aggregate");
+    expect(activeCopy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
+    expect(activeCopy).toContain("persistent snowy-egret representative");
+    expect(activeCopy).toContain("current anonymous aquatic-activity observation");
+    expect(activeCopy).toContain("nonlethal pressure and conserved avoidance");
+    expect(activeCopy).toContain("Surface dimples, brief school glints, burrow openings, and feeding scrapes");
+    expect(activeCopy).toContain("does not claim an exhaustive animal-by-animal interaction matrix");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 13");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" "))
-      .toContain("No schema migration or rewrite of existing records is required");
+      .toContain("sealed version-12 save migrates exactly once");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" "))
-      .toContain("persist through the existing version-4 aggregate fields");
+      .toContain("Every habitat-version-4 population byte");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("first bounded Wave-C unit");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, leave carcasses, or consume live prey");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete scent fields and tracking");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("foliage consumption");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("complete sleep and circadian schedules");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("full sleep and circadian schedules");
+    expect(closureCopy).toContain("canonical living species");
+    expect(closureCopy).toContain("marsh fox");
+    expect(closureCopy).toContain("brown-rat and southern-leopard-frog population areas");
+    expect(closureCopy).toContain("neutral marsh rabbit creates no disturbance");
+    expect(closureCopy).toContain("available interaction or an intentional non-response");
+    expect(closureCopy).toContain("without claiming worldwide ecology");
+    expect(closureCopy).toContain("visible flock estimate");
+    expect(closureCopy).toContain("anonymous nearby or distant chorus");
+    expect(closureRelease?.categories.saves.join(" ")).toContain("outer session remains version 12");
+    expect(closureRelease?.categories.saves.join(" "))
+      .toContain("No schema migration or rewrite of existing records is required");
+    expect(closureRelease?.categories.saves.join(" "))
+      .toContain("persist through the existing version-4 aggregate fields");
     expect(rainCopy).toContain("Habitat version 4");
     expect(rainCopy).toContain("preserves every version-3 population byte-for-byte as its exact prefix");
     expect(rainCopy).toContain("fish-crow, northern-harrier, and southern leopard-frog populations");

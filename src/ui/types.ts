@@ -8,6 +8,7 @@ import type {
 } from "../render/types";
 import type { RendererTelemetrySnapshot } from "../render/rendererTelemetry";
 import type { LivingActorSpecies } from "../game/livingActor";
+import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 
 export type SessionShape = "drift" | "weave" | "wander";
 /**
@@ -233,7 +234,7 @@ export interface ResidentAboutFactUIView {
 /** Species with a lawful individual actor address; aggregate wildlife are excluded. */
 export type LivingActorTargetSpeciesUIView = Exclude<
   LivingActorSpecies,
-  "brown-rat" | "southern-leopard-frog"
+  CoreEcologyAggregateSpecies
 >;
 
 /**
@@ -299,7 +300,11 @@ export interface SelectedLivingActorUIView {
 
 /** Stable identity for one physical sign belonging to an aggregate population. */
 export interface WildlifeEvidenceTargetUIView {
-  readonly species: "brown-rat" | "southern-leopard-frog";
+  readonly species:
+    | "atlantic-marsh-fiddler-crab"
+    | "atlantic-silverside"
+    | "brown-rat"
+    | "southern-leopard-frog";
   readonly aggregateId: string;
   readonly evidenceId: string;
 }

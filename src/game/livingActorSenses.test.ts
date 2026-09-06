@@ -63,6 +63,8 @@ describe("shared living actor sensory profiles", () => {
 
   it("derives every production sensory profile from the versioned species catalog", () => {
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId)).toEqual([
+      "atlantic-marsh-fiddler-crab",
+      "atlantic-silverside",
       "black-bear",
       "brown-rat",
       "deer",
@@ -74,6 +76,7 @@ describe("shared living actor sensory profiles", () => {
       "marsh-fox",
       "marsh-rabbit",
       "northern-harrier",
+      "snowy-egret",
       "southern-leopard-frog",
     ]);
     for (const module of LIVING_SPECIES_CATALOG.modules) {

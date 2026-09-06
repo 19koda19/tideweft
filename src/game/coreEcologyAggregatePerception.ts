@@ -51,6 +51,7 @@ import {
 } from "./worldPosition";
 
 export const CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES = 32 as const;
+export const CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_CANDIDATES = 4_096 as const;
 export const CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_FOOD_SOURCES = 128 as const;
 export const CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_FOOD_CANDIDATES = 1_024 as const;
 const CORE_ECOLOGY_AGGREGATE_RESERVED_NONVISUAL_STIMULI_PER_POPULATION = 2;
@@ -108,6 +109,51 @@ export interface CoreEcologyAggregatePerceptionFrameInput {
   readonly tick: number;
   readonly visualSources: readonly CoreEcologyAggregateVisualSource[];
   readonly exposedFoodSources: readonly CoreEcologyAggregateExposedFoodSource[];
+}
+
+/**
+ * Bound a dense living-actor projection before the aggregate sensory cross
+ * product. Selection is an exact world-space top-K against every extant
+ * aggregate anchor, then favors a currently moving source at equal distance
+ * and uses canonical species/ID order as the final deterministic tie-break.
+ * Array order and the current camera never participate.
+ */
+export function selectCoreEcologyAggregateVisualSources(
+  patchValue: unknown,
+  sourcesValue: unknown,
+): readonly CoreEcologyAggregateVisualSource[] | null {
+  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
+  if (
+    patch === null
+    || !Array.isArray(sourcesValue)
+    || sourcesValue.length > CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_CANDIDATES
+  ) return null;
+  const sources = canonicalVisualSources(sourcesValue);
+  if (sources === null) return null;
+  const anchors = patch.aggregatePopulations.flatMap(({ anchors: populationAnchors }) => (
+    populationAnchors
+  ));
+  if (anchors.length === 0) return Object.freeze([]);
+  const ranked = sources.map((source) => Object.freeze({
+    source,
+    distanceSquared: anchors.reduce<bigint | null>((nearest, anchor) => {
+      const distance = exactWorldDistanceSquared(anchor.position, source.position);
+      return nearest === null || distance < nearest ? distance : nearest;
+    }, null) ?? 0n,
+  }));
+  ranked.sort((left, right) => (
+    left.distanceSquared < right.distanceSquared
+      ? -1
+      : left.distanceSquared > right.distanceSquared
+        ? 1
+        : right.source.movementSalience - left.source.movementSalience
+          || LIVING_ACTOR_SPECIES.indexOf(left.source.sourceSpecies)
+            - LIVING_ACTOR_SPECIES.indexOf(right.source.sourceSpecies)
+          || compareText(left.source.sourceReferenceId, right.source.sourceReferenceId)
+  ));
+  return Object.freeze(ranked
+    .slice(0, CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES)
+    .map(({ source }) => source));
 }
 
 /**
@@ -248,13 +294,15 @@ export function deriveCoreEcologySettlementShadowsStimulusFrame(
       if (bestFood !== null) stimuli.push(toStimulus(input.tick, population.aggregateId, bestFood));
     }
 
-    const rain = rainCandidate(
-      input,
-      population.aggregateId,
-      population.anchors,
-      policy.rainResponse,
-    );
-    if (rain !== null) stimuli.push(toStimulus(input.tick, population.aggregateId, rain));
+    if (policy.rainSensitive) {
+      const rain = rainCandidate(
+        input,
+        population.aggregateId,
+        population.anchors,
+        policy.rainResponse,
+      );
+      if (rain !== null) stimuli.push(toStimulus(input.tick, population.aggregateId, rain));
+    }
   }
 
   if (stimuli.length > CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI) return null;

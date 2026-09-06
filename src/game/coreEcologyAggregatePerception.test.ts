@@ -4,11 +4,14 @@ import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type TerrainTileView, type WeatherKind, type WorldView } from "../sim/types";
 import {
+  CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_CANDIDATES,
+  CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES,
   CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_FOOD_SOURCES,
   CORE_ECOLOGY_AGGREGATE_MIN_VISUAL_STIMULI_PER_POPULATION,
   coreEcologyAggregateVisualStimulusBudget,
   deriveCoreEcologySettlementShadowsStimulusFrame,
   selectCoreEcologyAggregateExposedFoodSources,
+  selectCoreEcologyAggregateVisualSources,
   type CoreEcologyAggregateExposedFoodSource,
   type CoreEcologyAggregatePerceptionFrameInput,
   type CoreEcologyAggregateVisualSource,
@@ -65,7 +68,7 @@ interface Fixture {
 }
 
 describe("aggregate ecology shared-perception adapter", () => {
-  it("shares a deterministic visual budget without truncating today's lawful species", () => {
+  it("shares a deterministic visual budget as the lawful roster grows", () => {
     expect(CORE_ECOLOGY_AGGREGATE_MIN_VISUAL_STIMULI_PER_POPULATION).toBeGreaterThan(0);
     for (let count = 1; count <= CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS; count += 1) {
       const budget = coreEcologyAggregateVisualStimulusBudget(count);
@@ -75,8 +78,10 @@ describe("aggregate ecology shared-perception adapter", () => {
       expect(count * (budget + 2))
         .toBeLessThanOrEqual(CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI);
     }
-    expect(coreEcologyAggregateVisualStimulusBudget(CORE_ECOLOGY_AGGREGATE_SPECIES.length))
+    expect(CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES)
       .toBeGreaterThanOrEqual(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.length);
+    expect(coreEcologyAggregateVisualStimulusBudget(CORE_ECOLOGY_AGGREGATE_SPECIES.length))
+      .toBeLessThanOrEqual(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.length);
   });
 
   it("is deterministic and applies the shared LOS occlusion surface to visual pressure", () => {
@@ -265,6 +270,48 @@ describe("aggregate ecology shared-perception adapter", () => {
     expect(frame).not.toBeNull();
     expect(frame?.stimuli.find(({ sourceKind }) => sourceKind === "exposed-food")
       ?.sourceReferenceId).toBe(near.sourceReferenceId);
+  });
+
+  it("selects dense visual candidates by exact spatial relevance independent of input order", () => {
+    const current = fixture();
+    const anchor = ratPopulation(current.patch).anchors[0]!;
+    const sources = Array.from({ length: 48 }, (_, index) => ({
+      sourceReferenceId: `DEER-dense-${index.toString(36).padStart(2, "0")}`,
+      sourceSpecies: "deer" as const,
+      position: translateWorldPosition(
+        anchor.position,
+        (index + 1) * WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ),
+      movementSalience: index === 0 ? 0 : FIXED_POINT,
+    } satisfies CoreEcologyAggregateVisualSource));
+    const sameDistanceMoving = {
+      ...sources[0]!,
+      sourceReferenceId: "DEER-dense-moving",
+      movementSalience: FIXED_POINT,
+    } satisfies CoreEcologyAggregateVisualSource;
+    const candidates = [...sources, sameDistanceMoving];
+    const selected = selectCoreEcologyAggregateVisualSources(current.patch, candidates);
+    const reversed = selectCoreEcologyAggregateVisualSources(
+      current.patch,
+      [...candidates].reverse(),
+    );
+
+    expect(reversed).toEqual(selected);
+    expect(selected).toHaveLength(CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES);
+    expect(selected?.[0]?.sourceReferenceId).toBe("DEER-dense-moving");
+    expect(selected?.some(({ sourceReferenceId }) => sourceReferenceId === "DEER-dense-1b"))
+      .toBe(false);
+    expect(selectCoreEcologyAggregateVisualSources(
+      current.patch,
+      Array.from(
+        { length: CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_CANDIDATES + 1 },
+        (_, index) => ({
+          ...sources[index % sources.length]!,
+          sourceReferenceId: `DEER-overflow-${index.toString(36)}`,
+        }),
+      ),
+    )).toBeNull();
   });
 
   it("keeps frog rain activity separate from rat food and nocturnal pressure", () => {

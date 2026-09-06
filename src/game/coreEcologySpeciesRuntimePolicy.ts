@@ -25,6 +25,9 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "aggregate-response",
   "aerial-locomotion",
   "aerial-predator",
+  "amphibious-locomotion",
+  "aquatic-foraging",
+  "aquatic-locomotion",
   "chorus",
   "diurnal-activity",
   "food-investigation",
@@ -37,8 +40,12 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "quieting",
   "rain-activity",
   "same-species-food-guard",
+  "school-coordination",
   "shared-alarm",
   "small-prey-pursuit",
+  "tidal-activity",
+  "wading",
+  "water-depth-response",
 ] as const);
 
 export type CoreEcologySpeciesRuntimeCapability =
@@ -47,7 +54,8 @@ export type CoreEcologySpeciesIdentityForm = "individual" | "aggregate";
 export type CoreEcologySpeciesPresentationModel =
   | "individual"
   | "visible-flock"
-  | "aggregate-activity";
+  | "aggregate-activity"
+  | "aggregate-school";
 
 export interface CoreEcologyAggregateRuntimePolicy {
   /** A hard presentation/simulation bound; zero is never interpreted as unbounded. */
@@ -65,7 +73,12 @@ export interface CoreEcologySpeciesRuntimePolicy {
   readonly representation: LivingSpeciesRepresentation;
   readonly locomotionClass: LivingSpeciesLocomotionClass;
   readonly groupOrganization: LivingSpeciesGroupOrganization | null;
-  readonly groupStableIdNamespace: "HERD" | "FLOCK" | "CROW-FLOCK" | null;
+  readonly groupStableIdNamespace:
+    | "HERD"
+    | "FLOCK"
+    | "CROW-FLOCK"
+    | "SILVERSIDE-SCHOOL"
+    | null;
   readonly maximumMaterializedActors: number;
   readonly aggregate: CoreEcologyAggregateRuntimePolicy | null;
   readonly capabilities: readonly CoreEcologySpeciesRuntimeCapability[];
@@ -223,6 +236,57 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       evidenceKinds: ["frog-track"],
       presentationModel: "aggregate-activity",
     },
+    "atlantic-silverside": {
+      maximumAggregateAnchors: 3,
+      aggregateResponseCadenceTicks: 4,
+      aggregateResponseVerbs: ["redistribute", "school", "tighten"],
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "school-coordination",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["schooling-glint", "school-tightening", "surface-dimple"],
+      evidenceKinds: ["surface-dimple"],
+      presentationModel: "aggregate-school",
+    },
+    "atlantic-marsh-fiddler-crab": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 8,
+      aggregateResponseVerbs: ["emerge", "quiet", "retreat-to-burrow"],
+      capabilities: [
+        "aggregate-response",
+        "amphibious-locomotion",
+        "population-activity-evidence",
+        "quieting",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["burrow-foraging", "burrow-retreat", "surface-quieting"],
+      evidenceKinds: ["burrow-opening", "feeding-scrape"],
+      presentationModel: "aggregate-activity",
+    },
+    "snowy-egret": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "diurnal-activity",
+        "movement-memory",
+        "tidal-activity",
+        "wading",
+        "water-depth-response",
+      ],
+      activitySignals: ["shallow-water-probing", "wading-forage"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
   });
 
 export const CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES: readonly CoreEcologySpeciesRuntimePolicy[] =
@@ -334,10 +398,9 @@ export function validateCoreEcologySpeciesRuntimePolicies(
       || policy.identityForm !== module.identity.form
       || policy.representation !== registry.representation
     ) errors.push(`${policy.speciesId}:identity-policy-mismatch`);
-    const catalogHasAir = module.locomotion.media.some(({ medium }) => medium === "air");
     if (
       policy.locomotionClass !== registry.locomotionClass
-      || (policy.locomotionClass === "aerial") !== catalogHasAir
+      || !locomotionContractMatchesClass(policy.locomotionClass, module.locomotion.media)
     ) errors.push(`${policy.speciesId}:locomotion-policy-mismatch`);
     if (
       policy.groupOrganization !== registry.groupOrganization
@@ -367,6 +430,22 @@ export function validateCoreEcologySpeciesRuntimePolicies(
     ) errors.push(`${policy.speciesId}:mobbing-predator-capability-collision`);
   }
   return Object.freeze(errors.sort(compareText));
+}
+
+function locomotionContractMatchesClass(
+  locomotionClass: LivingSpeciesLocomotionClass,
+  media: LivingSpeciesCatalog["modules"][number]["locomotion"]["media"],
+): boolean {
+  const supported = new Set(media.map(({ medium }) => medium));
+  const hasWater = supported.has("deep-water") || supported.has("shallow-water");
+  if (locomotionClass === "aerial") return supported.has("air");
+  if (locomotionClass === "aquatic") {
+    return hasWater && !supported.has("air") && !supported.has("land");
+  }
+  if (locomotionClass === "amphibious") {
+    return hasWater && (supported.has("air") || supported.has("land"));
+  }
+  return supported.has("land") && !supported.has("air");
 }
 
 export function assertCoreEcologySpeciesRuntimePolicies(

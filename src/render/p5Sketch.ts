@@ -3089,6 +3089,93 @@ export function createTideweftRenderer(
       );
     };
 
+    const drawChartSnowyEgret = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const probing = actor.behavior === "forage" || actor.behavior === "pursue";
+      const flying = actor.behavior === "flight";
+      const headDip = !probing
+        ? 0
+        : reducedMotion
+          ? base * 0.22
+          : Math.abs(Math.sin(now * 0.006)) * base * 0.34;
+      const bodyLength = base * 2.48;
+      const bodyHeight = base * 0.82;
+      const headX = bodyLength * 0.82;
+      const headY = -bodyHeight * 0.9 + headDip;
+
+      if (!flying) {
+        p.stroke(withAlpha(PALETTE.ink, 240));
+        p.strokeWeight(Math.max(0.8, base * 0.16));
+        for (const legY of [-0.3, 0.3]) {
+          p.line(-base * 0.54, base * legY, -base * 1.48, base * legY);
+          p.stroke("#d3ad4f");
+          p.line(-base * 1.48, base * legY, -base * 1.78, base * (legY + 0.18));
+          p.stroke(withAlpha(PALETTE.ink, 240));
+        }
+      }
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 240));
+      p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.24);
+      p.fill("#f4f1df");
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      if (flying) {
+        const wingLift = reducedMotion ? 0 : Math.sin(now * 0.006) * base * 0.3;
+        p.triangle(
+          -base * 0.2, 0,
+          -base * 0.35, -base * 2.2 + wingLift,
+          base * 0.62, -base * 0.16,
+        );
+        p.triangle(
+          -base * 0.2, 0,
+          -base * 0.35, base * 2.2 - wingLift,
+          base * 0.62, base * 0.16,
+        );
+      }
+
+      p.noFill();
+      p.stroke(withAlpha(PALETTE.ink, 240));
+      p.strokeWeight(Math.max(1.1, base * 0.42));
+      p.bezier(
+        bodyLength * 0.34,
+        -bodyHeight * 0.18,
+        bodyLength * 0.56,
+        -bodyHeight * 1.24,
+        headX - base * 0.52,
+        headY,
+        headX,
+        headY,
+      );
+      p.stroke("#f4f1df");
+      p.strokeWeight(Math.max(0.7, base * 0.25));
+      p.bezier(
+        bodyLength * 0.34,
+        -bodyHeight * 0.18,
+        bodyLength * 0.56,
+        -bodyHeight * 1.24,
+        headX - base * 0.52,
+        headY,
+        headX,
+        headY,
+      );
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 240));
+      p.circle(headX, headY, base * 0.72);
+      p.fill("#f4f1df");
+      p.circle(headX, headY, base * 0.57);
+      p.fill("#1d2525");
+      p.triangle(
+        headX + base * 0.22,
+        headY - base * 0.12,
+        headX + base * 1.22,
+        headY,
+        headX + base * 0.22,
+        headY + base * 0.12,
+      );
+    };
+
     const drawChartDeer = (actor: WildlifeView, base: number): void => {
       const fleeing = actor.behavior === "flee" || actor.behavior === "retreat";
       const bodyLength = base * 3.15;
@@ -3346,6 +3433,9 @@ export function createTideweftRenderer(
         case "northern-harrier":
           drawChartNorthernHarrier(actor, base, now);
           return true;
+        case "snowy-egret":
+          drawChartSnowyEgret(actor, base, now);
+          return true;
         case "black-bear":
           drawChartBlackBear(actor, base);
           return true;
@@ -3477,6 +3567,64 @@ export function createTideweftRenderer(
                 p.line(base * 0.12, 0, base * 0.62, base * toe);
               }
               p.pop();
+            }
+            break;
+          case "surface-dimples": {
+            const shimmer = reducedMotion ? 0 : Math.sin(now * 0.006) * base * 0.12;
+            p.noFill();
+            p.stroke(withAlpha(PALETTE.tide, 225));
+            p.strokeWeight(Math.max(0.7, base * 0.12));
+            for (const [x, y, width] of [
+              [-0.72, 0.24, 1.16],
+              [0.54, -0.28, 0.9],
+              [0.92, 0.42, 0.62],
+            ] as const) {
+              p.ellipse(base * x, base * y, base * width, base * width * 0.42);
+            }
+            p.stroke(PALETTE.foam);
+            p.strokeWeight(Math.max(0.8, base * 0.14));
+            for (const [x, y] of [[-0.36, -0.32], [0.28, 0.18], [0.78, -0.48]] as const) {
+              p.line(
+                base * x - base * 0.22,
+                base * y + shimmer,
+                base * x + base * 0.22,
+                base * y - shimmer,
+              );
+            }
+            break;
+          }
+          case "burrow-openings":
+            p.noStroke();
+            for (const [x, y, scale] of [
+              [-0.78, 0.3, 0.74],
+              [0.14, -0.34, 0.92],
+              [0.84, 0.28, 0.62],
+            ] as const) {
+              p.fill("#2b211b");
+              p.ellipse(base * x, base * y, base * scale, base * scale * 0.68);
+              p.noFill();
+              p.stroke("#b28e68");
+              p.strokeWeight(Math.max(0.6, base * 0.1));
+              p.ellipse(base * x, base * y, base * scale * 1.28, base * scale * 0.94);
+              p.noStroke();
+            }
+            break;
+          case "feeding-scrapes":
+            p.noFill();
+            p.stroke("#b89a71");
+            p.strokeWeight(Math.max(0.65, base * 0.1));
+            for (const angle of [-0.48, -0.16, 0.16, 0.48]) {
+              p.line(
+                -base * 1.18,
+                base * angle,
+                base * 0.92,
+                base * angle * 1.52,
+              );
+            }
+            p.noStroke();
+            p.fill("#735b43");
+            for (const [x, y] of [[-0.84, -0.58], [-0.36, 0.62], [0.22, -0.5], [0.76, 0.54]] as const) {
+              p.circle(base * x, base * y, base * 0.18);
             }
             break;
           case "shelter-sign":

@@ -1458,8 +1458,13 @@ function groupPolicy(species: CoreWildlifeSpecies): Readonly<{
   const policy = coreEcologySpeciesRuntimePolicy(species);
   if (
     policy === null
-    || policy.groupOrganization === null
-    || policy.groupStableIdNamespace === null
+    || !policy.actorAddressable
+    || (policy.groupOrganization !== "herd" && policy.groupOrganization !== "flock")
+    || (
+      policy.groupStableIdNamespace !== "HERD"
+      && policy.groupStableIdNamespace !== "FLOCK"
+      && policy.groupStableIdNamespace !== "CROW-FLOCK"
+    )
     || !policy.capabilities.includes("group-coordination")
   ) return null;
   return Object.freeze({

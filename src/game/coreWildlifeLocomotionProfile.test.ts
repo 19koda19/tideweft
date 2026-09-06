@@ -33,7 +33,12 @@ describe("core wildlife locomotion profiles", () => {
       waterDepth: ADRIFT_STAND_DEPTH + 900_000,
       baseTravelCost: 1_000_000,
     });
-    for (const species of ["gull", "fish-crow", "northern-harrier"] as const) {
+    for (const species of [
+      "gull",
+      "fish-crow",
+      "northern-harrier",
+      "snowy-egret",
+    ] as const) {
       expect(coreWildlifeLocomotionProfile(species).mode).toBe("aerial");
       expect(coreWildlifeTraversabilityCell(species, blockedSurface)).toMatchObject({
         access: "open",
@@ -76,6 +81,8 @@ describe("core wildlife locomotion profiles", () => {
       .toBeGreaterThan(coreWildlifeMaximumStepUnits("northern-harrier", "observe"));
     expect(coreWildlifeMaximumStepUnits("fish-crow", "alarm")).toBeLessThan(1_000);
     expect(coreWildlifeMaximumStepUnits("northern-harrier", "pursue")).toBeLessThan(1_000);
+    expect(coreWildlifeMaximumStepUnits("snowy-egret", "observe")).toBeGreaterThan(0);
+    expect(coreWildlifeMaximumStepUnits("snowy-egret", "observe")).toBeLessThan(1_000);
   });
 
   it("rejects nonstandable water identically before gait can matter", () => {

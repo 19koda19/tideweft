@@ -11,7 +11,7 @@ import { clampInteger } from "./util";
 
 const TERRAIN_DOMAIN = 0x5445_5252;
 const TIDE_PERIOD_TICKS = 720;
-const MIN_TIDE_LEVEL = 230_000;
+export const MIN_TIDE_LEVEL = 230_000;
 export const MAX_TIDE_LEVEL = 560_000;
 
 const GRADIENTS = [

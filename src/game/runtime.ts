@@ -20,7 +20,10 @@ import {
   type WorldState,
   type WorldView,
 } from "../sim/public";
-import { findTilePath, MAX_TIDE_LEVEL } from "../sim/terrain";
+import {
+  findTilePath,
+  MAX_TIDE_LEVEL,
+} from "../sim/terrain";
 import { hashCanonical, stableStringify } from "../sim/util";
 import { stableDogId, type DogIdentityGenerationInput } from "../sim/dogIdentity";
 import {
@@ -211,6 +214,7 @@ import {
   selectWitnessedBrownRatRedistribution,
 } from "./coreEcologyEvidenceRuntime";
 import {
+  collectCoreEcologyAggregateActivityObservationBatches,
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
   type CoreEcologyObservationBatch,
@@ -218,6 +222,7 @@ import {
 import {
   deriveCoreEcologySettlementShadowsStimulusFrame,
   selectCoreEcologyAggregateExposedFoodSources,
+  selectCoreEcologyAggregateVisualSources,
   type CoreEcologyAggregateExposedFoodSource,
   type CoreEcologyAggregateVisualSource,
 } from "./coreEcologyAggregatePerception";
@@ -309,10 +314,12 @@ import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyMarshEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyTidalTableHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatAssemblage,
   type CoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
+  type CoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
   createCoreEcologyGroup,
@@ -321,7 +328,13 @@ import {
 } from "./coreEcologyGroups";
 import { stepCoreEcologySettlementShadows } from "./coreEcologySmallWorld";
 import {
+  stepCoreEcologyTidalTable,
+  type CoreEcologyTidalTableProjection,
+} from "./coreEcologyTidalTable";
+import {
+  coreEcologySpeciesHasBoundedActivityProjection,
   projectCoreEcologyActivity,
+  projectCoreEcologyDayPhase,
   stepCoreEcologyActivityMotion,
 } from "./coreEcologyActivity";
 import {
@@ -425,7 +438,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 12;
+const GAME_SAVE_VERSION = 13;
+const RAIN_CHORUS_GAME_SAVE_VERSION = 12;
 const MARSH_EDGE_GAME_SAVE_VERSION = 11;
 const HARBOR_EDGE_GAME_SAVE_VERSION = 10;
 const WAVE_A_GAME_SAVE_VERSION = 9;
@@ -550,6 +564,8 @@ const LEGACY_CORE_ECOLOGY_POPULATION_TOPOLOGY = Object.freeze([
 const CORE_ECOLOGY_FORAGE_PROVISION = "dried-fish" as const;
 const RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT = 24;
 const runtimeCoreEcologyHabitatCache =
+  new Map<string, CoreEcologyTidalTableHabitatAssemblage>();
+const runtimeRainChorusCoreEcologyHabitatCache =
   new Map<string, CoreEcologyRainChorusHabitatAssemblage>();
 const runtimeMarshEdgeCoreEcologyHabitatCache =
   new Map<string, CoreEcologyMarshEdgeHabitatAssemblage>();
@@ -713,6 +729,91 @@ function createRuntimeCoreEcology(
     patchKey: CORE_ECOLOGY_PATCH_KEY,
     originRegion: habitat.originRegion,
     tick: world.meta.completedTick,
+    derivation: { kind: "habitat-v5", habitat },
+    groups,
+    populations: habitat.populations
+      .filter(({ populationUnits, representation }) => (
+        populationUnits > 0
+        && representation === "individual-representatives"
+      ))
+      .filter(({ species }) => coreEcologySpeciesCanOwnActorAddress(species))
+      .map((population) => ({
+        species: population.species,
+        populationKey: population.populationKey,
+        populationSize: population.populationUnits,
+        members: population.allocations.map((allocation) => ({
+          populationOrdinal: allocation.allocationOrdinal,
+          representedUnits: allocation.representedUnits,
+          position: allocation.position,
+          materialization: "materialized" as const,
+        })),
+      })),
+  });
+  const bearMember = patch.populations
+    .find(({ species }) => species === "black-bear")
+    ?.members[0];
+  if (bearMember !== undefined) {
+    const hungryBear = replaceCoreWildlifeActorPhysiology(bearMember.actor, {
+      atTick: world.meta.completedTick,
+      needs: { ...bearMember.actor.needs, hunger: Math.max(680_000, bearMember.actor.needs.hunger) },
+      condition: bearMember.actor.condition,
+    });
+    patch = replaceCoreEcologyAggregatePatchActor(patch, hungryBear);
+  }
+  const tidal = stepCoreEcologyTidalTable(patch, {
+    atTick: world.meta.completedTick,
+  });
+  if (tidal === null) throw new Error("Initial tidal ecology projection failed validation");
+  const initialized = initializeRuntimeTidalActivityActor(
+    tidal.patch,
+    tidal.projection,
+    world.meta.completedTick,
+  );
+  if (initialized === null) throw new Error("Initial tidal actor placement failed validation");
+  return initialized;
+}
+
+/**
+ * A newly minted egret has no travel history to preserve, so its first saved
+ * address begins at the current tide/day destination rather than spending its
+ * opening frames crossing from a baseline habitat sample that was never live.
+ */
+function initializeRuntimeTidalActivityActor(
+  patch: CoreEcologyAggregatePatchState,
+  projection: CoreEcologyTidalTableProjection,
+  atTick: number,
+): CoreEcologyAggregatePatchState | null {
+  if (projection.snowyEgret === null) return patch;
+  const actor = coreEcologyAggregatePatchActor(patch, projection.snowyEgret.actorId);
+  const day = projectCoreEcologyDayPhase(atTick);
+  if (actor === null || day === null || actor.identity.species !== "snowy-egret") return null;
+  const target = day.phase === "daylight" && projection.snowyEgret.wadingTarget !== null
+    ? projection.snowyEgret.wadingTarget
+    : projection.snowyEgret.refugeTarget;
+  try {
+    return replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+      atTick,
+      position: target.targetPosition,
+      heading: actor.address.heading,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/** Frozen Alpha-18 constructor used only to authenticate and extend v12 saves. */
+function createRuntimeRainChorusCoreEcology(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView = createWorldView(world),
+): CoreEcologyAggregatePatchState {
+  const habitat = deriveRuntimeRainChorusCoreEcologyHabitat(world, bio0, economy);
+  const groups = createRuntimeCoreEcologyGroups(world, habitat);
+  let patch = createCoreEcologyAggregatePatch({
+    seed: world.meta.rootSeed,
+    patchKey: CORE_ECOLOGY_PATCH_KEY,
+    originRegion: habitat.originRegion,
+    tick: world.meta.completedTick,
     derivation: { kind: "habitat-v4", habitat },
     groups,
     populations: habitat.populations
@@ -845,6 +946,61 @@ function deriveRuntimeCoreEcologyHabitat(
   world: WorldState,
   bio0: Bio0EcologyState,
   economy: WorldView,
+): CoreEcologyTidalTableHabitatAssemblage {
+  const porter = runtimeBio0Porter(economy, bio0.porterAddress.actorId);
+  const startingSettlement = economy.settlements.find(
+    ({ id }) => id === porter.resident.homeSettlementId,
+  ) ?? economy.settlements[0];
+  const startingTile = startingSettlement === undefined
+    ? undefined
+    : economy.terrain.tiles[startingSettlement.tileIndex];
+  const focus = startingTile === undefined
+    ? bio0.porterAddress.position
+    : createWorldPosition(
+        bio0.porterAddress.position.region,
+        Math.min(
+          REGION_WIDTH_UNITS - 1,
+          (startingTile.x + 6) * WORLD_POSITION_UNITS_PER_TILE
+            + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+        ),
+        startingTile.y * WORLD_POSITION_UNITS_PER_TILE
+          + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+      );
+  const excludedTileIndices = economy.settlements
+    .map(({ tileIndex }) => tileIndex)
+    .filter((tileIndex) => Number.isSafeInteger(tileIndex) && tileIndex >= 0)
+    .sort((left, right) => left - right);
+  const cacheKey = hashCanonical([
+    "runtime-core-ecology-habitat/v5",
+    world.meta.rootSeed,
+    focus,
+    32,
+    excludedTileIndices,
+  ]);
+  const cached = runtimeCoreEcologyHabitatCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const habitat = deriveCoreEcologyTidalTableHabitatAssemblage({
+    rootSeed: world.meta.rootSeed,
+    originRegion: focus.region,
+    focus: {
+      position: focus,
+      radiusTiles: 32,
+      excludedTileIndices,
+    },
+  });
+  runtimeCoreEcologyHabitatCache.set(cacheKey, habitat);
+  if (runtimeCoreEcologyHabitatCache.size > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT) {
+    const oldest = runtimeCoreEcologyHabitatCache.keys().next().value as string | undefined;
+    if (oldest !== undefined) runtimeCoreEcologyHabitatCache.delete(oldest);
+  }
+  return habitat;
+}
+
+/** Frozen Alpha-18 habitat authority used only to authenticate v12 saves. */
+function deriveRuntimeRainChorusCoreEcologyHabitat(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView,
 ): CoreEcologyRainChorusHabitatAssemblage {
   const porter = runtimeBio0Porter(economy, bio0.porterAddress.actorId);
   const startingSettlement = economy.settlements.find(
@@ -876,7 +1032,7 @@ function deriveRuntimeCoreEcologyHabitat(
     32,
     excludedTileIndices,
   ]);
-  const cached = runtimeCoreEcologyHabitatCache.get(cacheKey);
+  const cached = runtimeRainChorusCoreEcologyHabitatCache.get(cacheKey);
   if (cached !== undefined) return cached;
   const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
     rootSeed: world.meta.rootSeed,
@@ -887,10 +1043,12 @@ function deriveRuntimeCoreEcologyHabitat(
       excludedTileIndices,
     },
   });
-  runtimeCoreEcologyHabitatCache.set(cacheKey, habitat);
-  if (runtimeCoreEcologyHabitatCache.size > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT) {
-    const oldest = runtimeCoreEcologyHabitatCache.keys().next().value as string | undefined;
-    if (oldest !== undefined) runtimeCoreEcologyHabitatCache.delete(oldest);
+  runtimeRainChorusCoreEcologyHabitatCache.set(cacheKey, habitat);
+  if (runtimeRainChorusCoreEcologyHabitatCache.size > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT) {
+    const oldest = runtimeRainChorusCoreEcologyHabitatCache.keys().next().value as
+      | string
+      | undefined;
+    if (oldest !== undefined) runtimeRainChorusCoreEcologyHabitatCache.delete(oldest);
   }
   return habitat;
 }
@@ -1068,13 +1226,15 @@ function createRuntimeCoreEcologyGroups(
     | CoreEcologyHabitatAssemblage
     | CoreEcologyHarborEdgeHabitatAssemblage
     | CoreEcologyMarshEdgeHabitatAssemblage
-    | CoreEcologyRainChorusHabitatAssemblage,
+    | CoreEcologyRainChorusHabitatAssemblage
+    | CoreEcologyTidalTableHabitatAssemblage,
 ) {
   const groups: CoreEcologyGroupState[] = [];
   for (const population of habitat.populations) {
     const policy = coreEcologySpeciesRuntimePolicy(population.species);
     if (
       policy === null
+      || !policy.actorAddressable
       || policy.groupOrganization === null
       || policy.groupStableIdNamespace === null
       || !coreEcologySpeciesHasRuntimeCapability(population.species, "group-coordination")
@@ -1114,12 +1274,12 @@ function canonicalRuntimeCoreEcology(
     || state.derivation.kind === "bounded-input-v1"
   ) return null;
   if (
-    state.derivation.kind === "habitat-v4"
-    || state.derivation.kind === "legacy-fixed-v1-with-habitat-v4"
+    state.derivation.kind === "habitat-v5"
+    || state.derivation.kind === "legacy-fixed-v1-with-habitat-v5"
   ) {
     const expectedHabitat = deriveRuntimeCoreEcologyHabitat(world, bio0, createWorldView(world));
     if (stableStringify(state.derivation.habitat) !== stableStringify(expectedHabitat)) return null;
-    if (state.derivation.kind === "habitat-v4") {
+    if (state.derivation.kind === "habitat-v5") {
       const expectedGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat);
       if (!runtimeCoreGroupTopologyMatches(state.groups.groups, expectedGroups.groups)) return null;
     } else {
@@ -1134,9 +1294,74 @@ function canonicalRuntimeCoreEcology(
       ) return null;
     }
   } else {
-    // Current envelopes always carry their authenticated v4 habitat. Earlier
+    // Current envelopes always carry their authenticated v5 habitat. Earlier
     // derivations are admitted only through the explicit one-way migrators.
     return null;
+  }
+  for (const population of state.populations) {
+    if (!coreEcologySpeciesCanOwnActorAddress(population.species)) return null;
+    for (const member of population.members) {
+      const expectedIdentity = generateCoreWildlifeIdentity({
+        seed: world.meta.rootSeed,
+        species: population.species,
+        originRegion: state.originRegion,
+        populationKey: population.populationKey,
+        populationOrdinal: member.populationOrdinal,
+      });
+      if (stableStringify(member.actor.identity) !== stableStringify(expectedIdentity)) return null;
+    }
+  }
+  for (const population of state.aggregatePopulations) {
+    if (population.aggregateId !== stableCoreEcologyAggregatePopulationId({
+      seed: world.meta.rootSeed,
+      originRegion: state.originRegion,
+      populationKey: population.populationKey,
+      species: population.species,
+    })) return null;
+  }
+  return state;
+}
+
+/** Authenticate the exact Rain Chorus / Shadow Overhead contract shipped by Alpha 18. */
+function canonicalRuntimeRainChorusCoreEcology(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+): CoreEcologyAggregatePatchState | null {
+  const state = canonicalizeCoreEcologyAggregatePatch(value);
+  if (
+    state === null
+    || state.updatedAtTick !== world.meta.completedTick
+    || state.patchKey !== CORE_ECOLOGY_PATCH_KEY
+  ) return null;
+  const origin = bio0.porterAddress.position.region;
+  if (
+    state.originRegion.x !== origin.x
+    || state.originRegion.y !== origin.y
+    || (
+      state.derivation.kind !== "habitat-v4"
+      && state.derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
+    )
+  ) return null;
+  const expectedHabitat = deriveRuntimeRainChorusCoreEcologyHabitat(
+    world,
+    bio0,
+    createWorldView(world),
+  );
+  if (stableStringify(state.derivation.habitat) !== stableStringify(expectedHabitat)) return null;
+  if (state.derivation.kind === "habitat-v4") {
+    const expectedGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat);
+    if (!runtimeCoreGroupTopologyMatches(state.groups.groups, expectedGroups.groups)) return null;
+  } else {
+    const legacyPopulations = state.populations.filter(({ species }) => (
+      species === "deer" || species === "gull" || species === "black-bear"
+    ));
+    const expectedExtensionGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat)
+      .groups.filter(({ identity }) => identity.species === "fish-crow");
+    if (
+      !legacyRuntimeCoreEcologyTopologyMatches(legacyPopulations)
+      || !runtimeCoreGroupTopologyMatches(state.groups.groups, expectedExtensionGroups)
+    ) return null;
   }
   for (const population of state.populations) {
     if (!coreEcologySpeciesCanOwnActorAddress(population.species)) return null;
@@ -1434,7 +1659,7 @@ function migrateRuntimeCoreEcologyFromMarshEdge(
 ): CoreEcologyAggregatePatchState | null {
   const marshEdge = canonicalRuntimeMarshEdgeCoreEcology(value, world, bio0);
   if (marshEdge === null) return null;
-  const template = createRuntimeCoreEcology(world, bio0, createWorldView(world));
+  const template = createRuntimeRainChorusCoreEcology(world, bio0, createWorldView(world));
   if (template.derivation.kind !== "habitat-v4") return null;
   const extensionPopulations = template.populations.filter(({ species }) => (
     species === "fish-crow" || species === "northern-harrier"
@@ -1477,6 +1702,60 @@ function migrateRuntimeCoreEcologyFromMarshEdge(
     if (stableStringify(retained) !== stableStringify(oldGroup)) return null;
   }
   for (const oldAggregate of marshEdge.aggregatePopulations) {
+    const retained = migrated.aggregatePopulations.find(
+      ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
+    );
+    if (stableStringify(retained) !== stableStringify(oldAggregate)) return null;
+  }
+  const rainChorus = canonicalRuntimeRainChorusCoreEcology(migrated, world, bio0);
+  return rainChorus === null
+    ? null
+    : migrateRuntimeCoreEcologyFromRainChorus(rainChorus, world, bio0);
+}
+
+/**
+ * Append the first tidal-table ecology without rewriting any Alpha-18 actor,
+ * group, aggregate population, disturbance, or evidence state.
+ */
+function migrateRuntimeCoreEcologyFromRainChorus(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+): CoreEcologyAggregatePatchState | null {
+  const rainChorus = canonicalRuntimeRainChorusCoreEcology(value, world, bio0);
+  if (rainChorus === null) return null;
+  const template = createRuntimeCoreEcology(world, bio0, createWorldView(world));
+  if (template.derivation.kind !== "habitat-v5") return null;
+  const extensionPopulations = template.populations.filter(({ species }) => (
+    species === "snowy-egret"
+  ));
+  const extensionAggregates = template.aggregatePopulations.filter(({ species }) => (
+    species === "atlantic-silverside"
+      || species === "atlantic-marsh-fiddler-crab"
+  ));
+  const migrated = canonicalizeCoreEcologyAggregatePatch({
+    ...rainChorus,
+    derivation: rainChorus.derivation.kind === "legacy-fixed-v1-with-habitat-v4"
+      ? {
+          kind: "legacy-fixed-v1-with-habitat-v5",
+          habitat: template.derivation.habitat,
+        }
+      : template.derivation,
+    populations: [...rainChorus.populations, ...extensionPopulations],
+    aggregatePopulations: [
+      ...rainChorus.aggregatePopulations,
+      ...extensionAggregates,
+    ],
+  });
+  if (migrated === null) return null;
+  if (stableStringify(migrated.groups) !== stableStringify(rainChorus.groups)) return null;
+  for (const oldPopulation of rainChorus.populations) {
+    const retained = migrated.populations.find(({ species, populationKey }) => (
+      species === oldPopulation.species && populationKey === oldPopulation.populationKey
+    ));
+    if (stableStringify(retained) !== stableStringify(oldPopulation)) return null;
+  }
+  for (const oldAggregate of rainChorus.aggregatePopulations) {
     const retained = migrated.aggregatePopulations.find(
       ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
     );
@@ -2108,9 +2387,8 @@ function resolveRuntimeCoreLocomotion(
     .sort((left, right) => left.actor.identity.stableId < right.actor.identity.stableId ? -1 : 1)) {
     const actor = coreEcologyAggregatePatchActor(patch, member.actor.identity.stableId);
     if (actor === null) return null;
-    const ownsActivity = coreEcologySpeciesHasRuntimeCapability(
+    const ownsActivity = coreEcologySpeciesHasBoundedActivityProjection(
       actor.identity.species,
-      "diurnal-activity",
     );
     if (ownsActivity) {
       const activityMotion = stepCoreEcologyActivityMotion(patch, {
@@ -2297,9 +2575,8 @@ function stepRuntimeCoreEcology(
       movementView,
       world.meta.completedTick,
     );
-    const ownsActivity = coreEcologySpeciesHasRuntimeCapability(
+    const ownsActivity = coreEcologySpeciesHasBoundedActivityProjection(
       actor.identity.species,
-      "diurnal-activity",
     );
     const activity = ownsActivity
       ? projectCoreEcologyActivity(state, {
@@ -2364,7 +2641,11 @@ function stepRuntimeCoreEcology(
     if (stepped === null) return null;
   }
   if (moved === null) return null;
-  const canonical = canonicalRuntimeCoreEcology(moved, world, bio0);
+  const tidalStep = stepCoreEcologyTidalTable(moved, {
+    atTick: world.meta.completedTick,
+  });
+  if (tidalStep === null) return null;
+  const canonical = canonicalRuntimeCoreEcology(tidalStep.patch, world, bio0);
   return canonical === null ? null : Object.freeze({
     patch: canonical,
     events: stepped.events,
@@ -2973,7 +3254,11 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
           ? -1
           : left.sourceReferenceId > right.sourceReferenceId ? 1 : 0
   ));
-  return Object.freeze(sources);
+  const selected = selectCoreEcologyAggregateVisualSources(input.afterPatch, sources);
+  if (selected === null) {
+    throw new Error("Core ecology living-source projection could not be bounded");
+  }
+  return selected;
 }
 
 function sameRuntimeWorldPosition(
@@ -4046,6 +4331,14 @@ export async function createTideweftRuntime(
       if (coreVisualObservations === null) {
         throw new Error("Core ecology visual perception could not be resolved");
       }
+      const coreAggregateActivityObservations =
+        collectCoreEcologyAggregateActivityObservationBatches({
+          ...corePerceptionFrame,
+          patch: coreEcologyForStep,
+        });
+      if (coreAggregateActivityObservations === null) {
+        throw new Error("Core ecology aggregate activity perception could not be resolved");
+      }
       const coreAlarmObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [];
       for (const alarm of runtimeCoreAlarmEvents(coreEcologyForStep)) {
         const propagated = propagateCoreEcologyAlarmObservationBatches(
@@ -4059,6 +4352,7 @@ export async function createTideweftRuntime(
       }
       const coreObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [
         coreVisualObservations,
+        coreAggregateActivityObservations,
         ...coreAlarmObservationBatches,
       ];
       const bio0Simulation = resolveLivingActorSimulationPolicy({
@@ -7866,6 +8160,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== WAVE_A_GAME_SAVE_VERSION
         && decoded.version !== HARBOR_EDGE_GAME_SAVE_VERSION
         && decoded.version !== MARSH_EDGE_GAME_SAVE_VERSION
+        && decoded.version !== RAIN_CHORUS_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -7887,6 +8182,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === RAIN_CHORUS_GAME_SAVE_VERSION
         || decoded.version === MARSH_EDGE_GAME_SAVE_VERSION
         || decoded.version === HARBOR_EDGE_GAME_SAVE_VERSION
         || decoded.version === WAVE_A_GAME_SAVE_VERSION
@@ -8058,7 +8354,13 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           world,
           bio0Ecology,
         )
-      : decoded.version === MARSH_EDGE_GAME_SAVE_VERSION
+      : decoded.version === RAIN_CHORUS_GAME_SAVE_VERSION
+        ? migrateRuntimeCoreEcologyFromRainChorus(
+            deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
+            world,
+            bio0Ecology,
+          )
+        : decoded.version === MARSH_EDGE_GAME_SAVE_VERSION
         ? migrateRuntimeCoreEcologyFromMarshEdge(
             deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
             world,

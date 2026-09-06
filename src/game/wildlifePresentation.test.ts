@@ -11,6 +11,7 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
+  setCoreEcologyAggregateActivityIntensity,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
@@ -26,8 +27,10 @@ import {
 import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
+import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import {
   isWildlifeWorldPositionDirectlyObserved,
   projectWildlifePopulationEvidencePresentations,
@@ -179,6 +182,61 @@ function frogEvidenceFixture() {
     throw new Error("Frog evidence fixture requires a supported aggregate population");
   }
   return { evidence, patch, population };
+}
+
+function tidalEvidenceFixture(tick = 10) {
+  const seed = seedFromText("tidal-triad-1");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyTidalTableHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: population.species === "snowy-egret"
+              ? "materialized" as const
+              : "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "presentation-tidal-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v5", habitat },
+    tick,
+  });
+  const silverside = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-silverside",
+  );
+  const crab = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-marsh-fiddler-crab",
+  );
+  const egret = patch.populations.find(({ species }) => species === "snowy-egret")
+    ?.members[0]?.actor;
+  if (silverside === undefined || crab === undefined || egret === undefined) {
+    throw new Error("Tidal presentation fixture requires both aggregates and one egret");
+  }
+  return { crab, egret, patch, silverside };
 }
 
 function rainActivityFixture(
@@ -462,6 +520,7 @@ describe("knowledge-honest wildlife presentation", () => {
     ["marsh-fox", "Marsh fox"],
     ["fish-crow", "Fish crows"],
     ["northern-harrier", "Northern harrier"],
+    ["snowy-egret", "Snowy egret"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -489,6 +548,8 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(presentation?.formLabel).toBe("Compact, broad-winged corvids");
     } else if (species === "northern-harrier") {
       expect(presentation?.formLabel).toBe("Long-winged, low-flying raptor");
+    } else if (species === "snowy-egret") {
+      expect(presentation?.formLabel).toBe("Slender, long-legged wader");
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
@@ -541,6 +602,56 @@ describe("knowledge-honest wildlife presentation", () => {
     })).toEqual(baseline);
   });
 
+  it("keeps the patch-owned snowy egret on the individual actor boundary", () => {
+    const fixture = tidalEvidenceFixture(360);
+    const target = projectCoreEcologyTidalTable(
+      fixture.patch,
+      fixture.patch.updatedAtTick,
+    )?.snowyEgret?.wadingTarget;
+    if (target === null || target === undefined) throw new Error("missing wading target");
+    const egret = repositionCoreWildlifeActor(fixture.egret, {
+      atTick: fixture.patch.updatedAtTick,
+      heading: fixture.egret.address.heading,
+      position: target.targetPosition,
+    });
+    const patch = replaceCoreEcologyAggregatePatchActor(fixture.patch, egret);
+    const presentation = projectWildlifePresentation({
+      actor: egret,
+      observation: directObservation(egret),
+      tileSize: 16,
+      activity: { patch, atTick: patch.updatedAtTick },
+    });
+    expect(presentation).toMatchObject({
+      actorId: egret.identity.stableId,
+      species: "snowy-egret",
+      quickLabel: "Snowy egret",
+      formLabel: "Slender, long-legged wader",
+      behavior: "watch",
+      behaviorLabel: "Scanning shallows",
+    });
+    expect(presentation).not.toHaveProperty("groupSize");
+    expect(JSON.stringify(presentation)).not.toMatch(/silverside|fiddler|populationSize/iu);
+
+    expect(projectWildlifePresentation({
+      actor: egret,
+      observation: directObservation(egret, 90),
+      tileSize: 1,
+      activity: { patch, atTick: patch.updatedAtTick },
+    })).toMatchObject({
+      species: "snowy-egret",
+      quickLabel: "Unknown wader",
+      speciesIdentified: false,
+      behavior: "watch",
+      behaviorLabel: "Still",
+    });
+    expect(projectWildlifePresentation({
+      actor: egret,
+      observation: directObservation(egret, 4, { visibleAggregateCount: 2 }),
+      tileSize: 1,
+      activity: { patch, atTick: patch.updatedAtTick },
+    })).toBeNull();
+  });
+
   it("rejects activity custody when the presented actor is not the patch-owned revision", () => {
     const { actor, patch } = rainActivityFixture("fish-crow", 1_200);
     const moved = repositionCoreWildlifeActor(actor, {
@@ -578,6 +689,21 @@ describe("knowledge-honest wildlife presentation", () => {
     };
     expect(projectWildlifePresentation({
       actor: aggregateShaped,
+      observation: directObservation(actor),
+      tileSize: 16,
+    })).toBeNull();
+  });
+
+  it.each([
+    "atlantic-silverside",
+    "atlantic-marsh-fiddler-crab",
+  ] as const)("does not fabricate a %s actor presentation", (species) => {
+    const actor = wildlife("deer");
+    expect(projectWildlifePresentation({
+      actor: {
+        ...actor,
+        identity: { ...actor.identity, species, stableId: `FABRICATED-${species}` },
+      },
       observation: directObservation(actor),
       tileSize: 16,
     })).toBeNull();
@@ -639,6 +765,188 @@ describe("knowledge-honest wildlife presentation", () => {
     expect(frog).not.toHaveProperty("actorId");
     expect(frog).not.toHaveProperty("populationSize");
     expect(frog).not.toHaveProperty("activitySignal");
+  });
+
+  it.each([
+    ["atlantic-silverside", "surface-dimples", "Silverside surface dimples and school glints"],
+    ["atlantic-marsh-fiddler-crab", "burrow-openings", "Fiddler crab burrow openings"],
+    ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "Fiddler crab feeding scrapes"],
+  ] as const)("projects directly observed %s population evidence as %s", (
+    species,
+    form,
+    evidenceLabel,
+  ) => {
+    const fixture = tidalEvidenceFixture();
+    const population = species === "atlantic-silverside" ? fixture.silverside : fixture.crab;
+    const evidence = population.evidence.find((candidate) => (
+      form === "surface-dimples"
+        ? candidate.kind === "surface-dimple"
+        : form === "burrow-openings"
+          ? candidate.kind === "burrow-opening"
+          : candidate.kind === "feeding-scrape"
+    ));
+    expect(evidence).toBeDefined();
+    const presentation = projectWildlifePopulationEvidencePresentations({
+      patch: fixture.patch,
+      observation: evidenceObservation(evidence!.position),
+      tileSize: 16,
+      selectedEvidenceId: evidence!.evidenceId,
+    })?.find(({ evidenceId }) => evidenceId === evidence!.evidenceId);
+
+    expect(presentation).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence!.evidenceId,
+      species,
+      representation: "population-evidence",
+      form,
+      evidenceLabel,
+      speciesIdentified: true,
+      selected: true,
+    });
+    const encoded = JSON.stringify(presentation);
+    expect(encoded).not.toMatch(/actorId|populationSize|representedUnits|activitySignal|intensity/iu);
+    expect(encoded).not.toMatch(/dead|death|mortality|carcass/iu);
+
+    const uncertain = projectWildlifePopulationEvidencePresentations({
+      patch: fixture.patch,
+      observation: evidenceObservation(evidence!.position, 60),
+      tileSize: 1,
+    })?.find(({ evidenceId }) => evidenceId === evidence!.evidenceId);
+    expect(uncertain).toMatchObject({
+      species,
+      speciesIdentified: false,
+      quickLabel: species === "atlantic-silverside" ? "Water-surface signs" : "Mudflat signs",
+      identityLabel: species === "atlantic-silverside"
+        ? "Unidentified water-surface activity"
+        : "Unidentified mudflat activity",
+      evidenceLabel: form === "surface-dimples"
+        ? "Surface dimples and brief glints"
+        : form === "burrow-openings"
+          ? "Small burrow openings"
+          : "Fine mud feeding scrapes",
+    });
+  });
+
+  it("hides a saved school cue after that edge is exposed and keeps an occupied wet cue", () => {
+    const fixture = tidalEvidenceFixture(0);
+    const projection = projectCoreEcologyTidalTable(fixture.patch, 0);
+    const depths = projection?.anchorDepths.filter(({ aggregateId }) => (
+      aggregateId === fixture.silverside.aggregateId
+    ));
+    const exposed = depths?.find(({ activityUsable }) => !activityUsable);
+    const wet = depths?.find(({ activityUsable }) => activityUsable);
+    if (exposed === undefined || wet === undefined) throw new Error("missing mixed school depth");
+    const exposedEvidence = fixture.silverside.evidence.find(({ position }) => (
+      position.region.x === exposed.position.region.x
+      && position.region.y === exposed.position.region.y
+      && position.localX === exposed.position.localX
+      && position.localY === exposed.position.localY
+    ));
+    const wetEvidence = fixture.silverside.evidence.find(({ position }) => (
+      position.region.x === wet.position.region.x
+      && position.region.y === wet.position.region.y
+      && position.localX === wet.position.localX
+      && position.localY === wet.position.localY
+    ));
+    if (exposedEvidence === undefined || wetEvidence === undefined) {
+      throw new Error("missing school evidence at saved anchors");
+    }
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: fixture.patch,
+      observation: evidenceObservation(exposedEvidence.position),
+      tileSize: 16,
+    })?.some(({ evidenceId }) => evidenceId === exposedEvidence.evidenceId)).toBe(false);
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: fixture.patch,
+      observation: evidenceObservation(wetEvidence.position),
+      tileSize: 16,
+    })?.some(({ evidenceId }) => evidenceId === wetEvidence.evidenceId)).toBe(true);
+  });
+
+  it("shows fiddler activity only at currently exposed anchors in a mixed tide", () => {
+    const fixture = tidalEvidenceFixture(90);
+    const projection = projectCoreEcologyTidalTable(fixture.patch, 90);
+    const depths = projection?.anchorDepths.filter(({ aggregateId }) => (
+      aggregateId === fixture.crab.aggregateId
+    ));
+    const inundated = depths?.find(({ activityUsable }) => !activityUsable);
+    const exposed = depths?.find(({ activityUsable }) => activityUsable);
+    if (inundated === undefined || exposed === undefined) throw new Error("missing mixed crab depth");
+    const evidenceAt = (position: WorldPosition) => fixture.crab.evidence.find((evidence) => (
+      evidence.position.region.x === position.region.x
+      && evidence.position.region.y === position.region.y
+      && evidence.position.localX === position.localX
+      && evidence.position.localY === position.localY
+    ));
+    const inundatedEvidence = evidenceAt(inundated.position);
+    const exposedEvidence = evidenceAt(exposed.position);
+    if (inundatedEvidence === undefined || exposedEvidence === undefined) {
+      throw new Error("missing crab evidence at saved anchors");
+    }
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: fixture.patch,
+      observation: evidenceObservation(inundatedEvidence.position),
+      tileSize: 16,
+    })?.some(({ evidenceId }) => evidenceId === inundatedEvidence.evidenceId)).toBe(false);
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch: fixture.patch,
+      observation: evidenceObservation(exposedEvidence.position),
+      tileSize: 16,
+    })?.some(({ evidenceId }) => evidenceId === exposedEvidence.evidenceId)).toBe(true);
+  });
+
+  it.each([
+    ["atlantic-silverside", "surface-dimple"],
+    ["atlantic-marsh-fiddler-crab", "burrow-opening"],
+    ["atlantic-marsh-fiddler-crab", "feeding-scrape"],
+  ] as const)("coarsely gates and scales %s cues from current activity", (species, kind) => {
+    const fixture = tidalEvidenceFixture();
+    const population = species === "atlantic-silverside" ? fixture.silverside : fixture.crab;
+    const evidence = population.evidence.find((candidate) => candidate.kind === kind);
+    expect(evidence).toBeDefined();
+    const projectAt = (intensity: number) => {
+      const patch = setCoreEcologyAggregateActivityIntensity(fixture.patch, {
+        aggregateId: population.aggregateId,
+        atTick: fixture.patch.updatedAtTick,
+        intensity,
+      });
+      expect(patch).not.toBeNull();
+      return projectWildlifePopulationEvidencePresentations({
+        patch,
+        observation: evidenceObservation(evidence!.position),
+        tileSize: 16,
+      })?.find(({ evidenceId }) => evidenceId === evidence!.evidenceId);
+    };
+
+    expect(projectAt(0)).toBeUndefined();
+    const low = projectAt(200_000);
+    const high = projectAt(800_000);
+    expect(low?.sizeScale).toBeLessThan(high?.sizeScale ?? 0);
+    expect(JSON.stringify({ high, low })).not.toMatch(/200000|800000|intensity|activitySignal/u);
+  });
+
+  it.each([
+    ["rat", ratEvidenceFixture],
+    ["frog", frogEvidenceFixture],
+  ] as const)("preserves pre-tidal %s evidence exactly when aggregate activity changes", (
+    _name,
+    fixtureFactory,
+  ) => {
+    const { evidence, patch, population } = fixtureFactory();
+    const input = {
+      observation: evidenceObservation(evidence.position),
+      tileSize: 16,
+    } as const;
+    const before = projectWildlifePopulationEvidencePresentations({ patch, ...input });
+    const quiet = setCoreEcologyAggregateActivityIntensity(patch, {
+      aggregateId: population.aggregateId,
+      atTick: patch.updatedAtTick,
+      intensity: 0,
+    });
+    expect(quiet).not.toBeNull();
+    const after = projectWildlifePopulationEvidencePresentations({ patch: quiet, ...input });
+    expect(after).toEqual(before);
+    expect(JSON.stringify(after)).toBe(JSON.stringify(before));
   });
 
   it("projects saved cat rain tracks only through signed direct detail", () => {

@@ -16,6 +16,7 @@ import {
   type RegionCoord,
 } from "../sim/regions";
 import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import { MAX_TIDE_LEVEL, MIN_TIDE_LEVEL } from "../sim/terrain";
 import {
   FIXED_POINT,
   WORLD_HEIGHT,
@@ -35,6 +36,7 @@ export const CORE_ECOLOGY_HABITAT_VERSION = 1 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION = 2 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION = 3 as const;
 export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION = 4 as const;
+export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION = 5 as const;
 export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
   "deer",
   "gull",
@@ -56,6 +58,12 @@ export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES = [
   "northern-harrier",
   "southern-leopard-frog",
 ] as const;
+export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES,
+  "atlantic-silverside",
+  "atlantic-marsh-fiddler-crab",
+  "snowy-egret",
+] as const;
 export type CoreEcologyWaveAHabitatSpecies =
   (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
 export type CoreEcologyHarborEdgeHabitatSpecies =
@@ -64,8 +72,11 @@ export type CoreEcologyMarshEdgeHabitatSpecies =
   (typeof CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES)[number];
 export type CoreEcologyRainChorusHabitatSpecies =
   (typeof CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES)[number];
+export type CoreEcologyTidalTableHabitatSpecies =
+  (typeof CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES)[number];
 export type CoreEcologyHabitatRepresentation =
   | "aggregate-area"
+  | "group-actor"
   | "individual-representatives";
 export const CORE_ECOLOGY_HABITAT_TILE_BUDGET = WORLD_WIDTH * WORLD_HEIGHT;
 export const CORE_ECOLOGY_HABITAT_SPECIES_EVALUATION_BUDGET =
@@ -76,10 +87,20 @@ export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS = 21 as const;
 export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS = 28 as const;
+export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS = 36 as const;
+/** Saved, non-population tidal destinations remain deliberately small and bounded. */
+export const CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS = 12 as const;
+export const CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH = 20_000 as const;
+export const CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS = 4 as const;
+export const CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS = 1 as const;
+export const CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH = 8_000 as const;
+export const CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH = 78_000 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_FOCUS_RADIUS_TILES = 32 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_EXCLUDED_TILES = 64 as const;
 
@@ -174,13 +195,16 @@ export interface CoreEcologyHabitatPopulationAnalysis {
 export interface CoreEcologyHarborEdgeActivitySignal {
   readonly kind:
     | "browsing"
+    | "burrow-foraging"
     | "chorusing"
     | "foraging"
     | "quartering-search"
     | "roaming"
+    | "schooling"
     | "shared-alarm"
     | "shelter-use"
-    | "shore-feeding";
+    | "shore-feeding"
+    | "wading-search";
   /** Habitat-derived fixed-point likelihood/intensity, never direct perception. */
   readonly intensity: number;
   readonly activePeriod:
@@ -188,6 +212,7 @@ export interface CoreEcologyHarborEdgeActivitySignal {
     | "diurnal"
     | "nocturnal"
     | "rain-responsive"
+    | "tide-responsive"
     | "variable";
   readonly source: "habitat-derived";
 }
@@ -232,6 +257,48 @@ export interface CoreEcologyRainChorusHabitatPopulationAnalysis {
   readonly trendSignal: number;
   readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
   readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
+export interface CoreEcologyTidalTableHabitatPopulationAnalysis {
+  readonly species: CoreEcologyTidalTableHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
+export type CoreEcologyTidalTableAnchorSpecies =
+  | "atlantic-silverside"
+  | "atlantic-marsh-fiddler-crab"
+  | "snowy-egret";
+
+export type CoreEcologyTidalTableAnchorPurpose =
+  | "population"
+  | "wading"
+  | "refuge";
+
+/**
+ * Seed/region/habitat-derived tidal destination. Elevation is persisted so
+ * live tide can derive local depth without trusting camera state or rebuilding
+ * terrain every tick. Population anchors mirror fish/crab allocations;
+ * wading/refuge anchors are movement destinations and never mint population.
+ */
+export interface CoreEcologyTidalTableHabitatAnchor {
+  readonly species: CoreEcologyTidalTableAnchorSpecies;
+  readonly purpose: CoreEcologyTidalTableAnchorPurpose;
+  readonly anchorOrdinal: number;
+  readonly tileIndex: number;
+  readonly globalTile: GlobalTileCoord;
+  readonly position: WorldPosition;
+  readonly elevation: number;
+  readonly terrain: TerrainKind;
+  readonly biome: BiomeId;
 }
 
 export interface CoreEcologyHabitatAssemblage {
@@ -304,6 +371,28 @@ export interface CoreEcologyRainChorusHabitatAssemblage {
   readonly populations: readonly CoreEcologyRainChorusHabitatPopulationAnalysis[];
 }
 
+/**
+ * Additive tidal-table record. The first ten analyses are the exact v4
+ * rain-chorus records. Silverside school, fiddler-crab area, and snowy-egret
+ * analyses are appended in fixed order; live tide never participates in this
+ * baseline identity/capacity derivation.
+ */
+export interface CoreEcologyTidalTableHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS;
+  /** Fixed versioned order, including honest absences. */
+  readonly populations: readonly CoreEcologyTidalTableHabitatPopulationAnalysis[];
+  /** Stable live-tide depth sources and lawful egret movement destinations. */
+  readonly tidalAnchors: readonly CoreEcologyTidalTableHabitatAnchor[];
+}
+
 interface HabitatSpeciesRule {
   readonly populationKey: string;
   readonly representation: CoreEcologyHabitatRepresentation;
@@ -316,6 +405,13 @@ interface HabitatSpeciesRule {
   readonly minimumOccupancyTarget: number;
   readonly maximumOccupancyTarget: number;
   readonly minimumPopulationWhenViable: number;
+}
+
+export interface CoreEcologyHabitatSpeciesBounds {
+  readonly species: CoreEcologyTidalTableHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly maximumPopulation: number;
+  readonly maximumAllocations: number;
 }
 
 interface AddressedHabitatTile {
@@ -345,7 +441,7 @@ interface HabitatSiteEvaluation {
 }
 
 interface UnallocatedPopulationAnalysis<
-  Species extends CoreEcologyRainChorusHabitatSpecies = CoreEcologyRainChorusHabitatSpecies,
+  Species extends CoreEcologyTidalTableHabitatSpecies = CoreEcologyTidalTableHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -359,7 +455,7 @@ interface UnallocatedPopulationAnalysis<
 }
 
 interface AllocatedPopulationAnalysis<
-  Species extends CoreEcologyRainChorusHabitatSpecies = CoreEcologyRainChorusHabitatSpecies,
+  Species extends CoreEcologyTidalTableHabitatSpecies = CoreEcologyTidalTableHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -385,7 +481,7 @@ const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
 
-const SPECIES_PURPOSE: Readonly<Record<CoreEcologyRainChorusHabitatSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyTidalTableHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
@@ -396,9 +492,12 @@ const SPECIES_PURPOSE: Readonly<Record<CoreEcologyRainChorusHabitatSpecies, numb
   "fish-crow": 0x4352_4f57,
   "northern-harrier": 0x4841_5252,
   "southern-leopard-frog": 0x4652_4f47,
+  "atlantic-silverside": 0x5349_4c56,
+  "atlantic-marsh-fiddler-crab": 0x4649_4444,
+  "snowy-egret": 0x4547_5245,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreEcologyRainChorusHabitatSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyTidalTableHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
@@ -530,10 +629,67 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyRainChorusHabitatSpecies, Habita
       maximumOccupancyTarget: 1_000_000,
       minimumPopulationWhenViable: 64,
     }),
+    "atlantic-silverside": Object.freeze({
+      populationKey: "habitat-v5/atlantic-silverside",
+      representation: "group-actor",
+      minimumSiteScore: 430_000,
+      minimumPersistentCapacity: 24,
+      maximumPopulation: 48,
+      tilesPerCapacityUnit: 4,
+      maximumAllocations: 3,
+      minimumAllocationSeparation: 3,
+      minimumOccupancyTarget: 760_000,
+      maximumOccupancyTarget: 980_000,
+      minimumPopulationWhenViable: 24,
+    }),
+    "atlantic-marsh-fiddler-crab": Object.freeze({
+      populationKey: "habitat-v5/atlantic-marsh-fiddler-crab",
+      representation: "aggregate-area",
+      minimumSiteScore: 410_000,
+      minimumPersistentCapacity: 32,
+      maximumPopulation: 80,
+      tilesPerCapacityUnit: 5,
+      maximumAllocations: 4,
+      minimumAllocationSeparation: 3,
+      minimumOccupancyTarget: 740_000,
+      maximumOccupancyTarget: 980_000,
+      minimumPopulationWhenViable: 32,
+    }),
+    "snowy-egret": Object.freeze({
+      populationKey: "habitat-v5/snowy-egret",
+      representation: "individual-representatives",
+      minimumSiteScore: 450_000,
+      minimumPersistentCapacity: 1,
+      maximumPopulation: 1,
+      tilesPerCapacityUnit: 480,
+      maximumAllocations: 1,
+      minimumAllocationSeparation: 16,
+      minimumOccupancyTarget: 1_000_000,
+      maximumOccupancyTarget: 1_000_000,
+      minimumPopulationWhenViable: 1,
+    }),
   });
 
+/** Shared read-only seam used to prove habitat, identity, and runtime budgets agree. */
+export function coreEcologyHabitatSpeciesBounds(
+  value: unknown,
+): CoreEcologyHabitatSpeciesBounds | null {
+  if (
+    typeof value !== "string"
+    || !(CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES as readonly string[]).includes(value)
+  ) return null;
+  const species = value as CoreEcologyTidalTableHabitatSpecies;
+  const rule = SPECIES_RULES[species];
+  return Object.freeze({
+    species,
+    representation: rule.representation,
+    maximumPopulation: rule.maximumPopulation,
+    maximumAllocations: rule.maximumAllocations,
+  });
+}
+
 const ACTIVITY_POLICY: Readonly<Record<
-  CoreEcologyRainChorusHabitatSpecies,
+  CoreEcologyTidalTableHabitatSpecies,
   Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
 >> = Object.freeze({
   deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
@@ -548,6 +704,18 @@ const ACTIVITY_POLICY: Readonly<Record<
   "southern-leopard-frog": Object.freeze({
     kind: "chorusing",
     activePeriod: "rain-responsive",
+  }),
+  "atlantic-silverside": Object.freeze({
+    kind: "schooling",
+    activePeriod: "tide-responsive",
+  }),
+  "atlantic-marsh-fiddler-crab": Object.freeze({
+    kind: "burrow-foraging",
+    activePeriod: "tide-responsive",
+  }),
+  "snowy-egret": Object.freeze({
+    kind: "wading-search",
+    activePeriod: "tide-responsive",
   }),
 });
 
@@ -689,6 +857,36 @@ const FROG_COVER_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
   "sun-meadow": 320_000,
   "wind-ridge": 80_000,
   glimmerfen: 940_000,
+});
+
+const SILVERSIDE_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 1_000_000,
+  "brine-flat": 780_000,
+  "reed-marsh": 820_000,
+  "rain-meadow": 80_000,
+  "sun-meadow": 60_000,
+  "wind-ridge": 0,
+  glimmerfen: 520_000,
+});
+
+const FIDDLER_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 100_000,
+  "brine-flat": 1_000_000,
+  "reed-marsh": 920_000,
+  "rain-meadow": 180_000,
+  "sun-meadow": 120_000,
+  "wind-ridge": 0,
+  glimmerfen: 640_000,
+});
+
+const EGRET_SEARCH_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 420_000,
+  "brine-flat": 940_000,
+  "reed-marsh": 1_000_000,
+  "rain-meadow": 340_000,
+  "sun-meadow": 240_000,
+  "wind-ridge": 120_000,
+  glimmerfen: 820_000,
 });
 
 /**
@@ -1028,12 +1226,19 @@ export function deriveCoreEcologyRainChorusHabitatAssemblage(
   input: DeriveCoreEcologyHabitatAssemblageInput,
 ): CoreEcologyRainChorusHabitatAssemblage {
   const context = prepareCoreEcologyHabitatContext(input, "rain-chorus");
-  const marshEdge = deriveCoreEcologyMarshEdgeFromPrepared(input.rootSeed, context);
+  return deriveCoreEcologyRainChorusFromPrepared(input.rootSeed, context);
+}
+
+function deriveCoreEcologyRainChorusFromPrepared(
+  rootSeed: RootSeed,
+  context: PreparedCoreEcologyHabitatContext,
+): CoreEcologyRainChorusHabitatAssemblage {
+  const marshEdge = deriveCoreEcologyMarshEdgeFromPrepared(rootSeed, context);
   const { addressedTiles } = context;
   const { originRegion } = marshEdge;
 
   const frogBase = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "southern-leopard-frog",
     addressedTiles,
@@ -1055,7 +1260,7 @@ export function deriveCoreEcologyRainChorusHabitatAssemblage(
       + multiplyFixed(rabbitSupport, 500_000),
   );
   const fishCrow = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "fish-crow",
     addressedTiles,
@@ -1063,7 +1268,7 @@ export function deriveCoreEcologyRainChorusHabitatAssemblage(
     0,
   );
   const harrier = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "northern-harrier",
     addressedTiles,
@@ -1129,6 +1334,129 @@ export function deriveCoreEcologyRainChorusHabitatAssemblage(
       marshEdge.evaluatedTiles * CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length,
     maximumAllocationBudget: CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS,
     populations: Object.freeze(populations),
+  });
+}
+
+/**
+ * Pure tidal-table extension. The baseline remains independent of the current
+ * tide so save/load and visiting the same signed region at another hour cannot
+ * reroll population identity. A separate live-tide owner decides which of
+ * these stable anchors are active or pressured.
+ */
+export function deriveCoreEcologyTidalTableHabitatAssemblage(
+  input: DeriveCoreEcologyHabitatAssemblageInput,
+): CoreEcologyTidalTableHabitatAssemblage {
+  const context = prepareCoreEcologyHabitatContext(input, "tidal-table");
+  const rainChorus = deriveCoreEcologyRainChorusFromPrepared(input.rootSeed, context);
+  const { addressedTiles, originRegion } = context;
+
+  const silversideBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "atlantic-silverside",
+    addressedTiles,
+    0,
+    0,
+  );
+  const fiddlerBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "atlantic-marsh-fiddler-crab",
+    addressedTiles,
+    0,
+    0,
+  );
+  const silversideSupport = ratioFixed(
+    silversideBase.populationUnits,
+    SPECIES_RULES["atlantic-silverside"].maximumPopulation,
+  );
+  const fiddlerSupport = ratioFixed(
+    fiddlerBase.populationUnits,
+    SPECIES_RULES["atlantic-marsh-fiddler-crab"].maximumPopulation,
+  );
+  const aquaticSupport = clampFixed(
+    multiplyFixed(silversideSupport, 620_000)
+      + multiplyFixed(fiddlerSupport, 520_000),
+  );
+  const egret = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "snowy-egret",
+    addressedTiles,
+    aquaticSupport,
+    0,
+  );
+  const egretPressure = multiplyFixed(
+    ratioFixed(egret.populationUnits, SPECIES_RULES["snowy-egret"].maximumPopulation),
+    140_000,
+  );
+  const silverside = applyPredatorPressure(silversideBase, egretPressure);
+  const fiddler = applyPredatorPressure(fiddlerBase, egretPressure);
+
+  const individualOccupiedTiles = new Set<number>();
+  for (const population of rainChorus.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) {
+      individualOccupiedTiles.add(allocation.tileIndex);
+    }
+  }
+  const allocatedSilverside = allocatePopulation(
+    silverside,
+    originRegion,
+    new Set<number>(),
+  );
+  const allocatedFiddler = allocatePopulation(
+    fiddler,
+    originRegion,
+    new Set<number>(),
+  );
+  const allocatedEgret = allocatePopulation(
+    egret,
+    originRegion,
+    individualOccupiedTiles,
+    [...allocatedSilverside.allocations, ...allocatedFiddler.allocations],
+  );
+  const extension = [allocatedSilverside, allocatedFiddler, allocatedEgret].map(
+    (population) => Object.freeze({
+      ...population,
+      representation: SPECIES_RULES[population.species].representation,
+      activitySignal: activitySignalFor(population),
+    }),
+  );
+  const populations: CoreEcologyTidalTableHabitatPopulationAnalysis[] = [
+    ...rainChorus.populations,
+    ...extension,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology tidal-table habitat allocation budget diverged");
+  }
+  const tidalAnchors = createTidalTableHabitatAnchors(
+    originRegion,
+    addressedTiles,
+    allocatedSilverside,
+    allocatedFiddler,
+    egret,
+  );
+  if (tidalAnchors.length > CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS) {
+    throw new Error("Core ecology tidal-table anchor budget diverged");
+  }
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
+    originRegion: rainChorus.originRegion,
+    regionId: rainChorus.regionId,
+    terrainHash: rainChorus.terrainHash,
+    selection: rainChorus.selection,
+    evaluatedTiles: rainChorus.evaluatedTiles,
+    speciesEvaluations:
+      rainChorus.evaluatedTiles * CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors,
   });
 }
 
@@ -1440,14 +1768,275 @@ export function canonicalizeCoreEcologyRainChorusHabitatAssemblage(
   });
 }
 
+export function canonicalizeCoreEcologyTidalTableHabitatAssemblage(
+  value: unknown,
+): CoreEcologyTidalTableHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "selection",
+    "speciesEvaluations",
+    "tidalAnchors",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length
+    || !Array.isArray(value.tidalAnchors)
+    || value.tidalAnchors.length > CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  if (selection === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const speciesEvaluations =
+    evaluatedTiles * CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || value.evaluatedTiles > CORE_ECOLOGY_HABITAT_TILE_BUDGET
+    || value.speciesEvaluations > CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const individualOccupiedTiles = new Set<number>();
+  const aggregateOccupiedTiles = new Map<
+    Extract<
+      CoreEcologyTidalTableHabitatSpecies,
+      | "brown-rat"
+      | "southern-leopard-frog"
+      | "atlantic-silverside"
+      | "atlantic-marsh-fiddler-crab"
+    >,
+    Set<number>
+  >([
+    ["brown-rat", new Set<number>()],
+    ["southern-leopard-frog", new Set<number>()],
+    ["atlantic-silverside", new Set<number>()],
+    ["atlantic-marsh-fiddler-crab", new Set<number>()],
+  ]);
+  const populations: CoreEcologyTidalTableHabitatPopulationAnalysis[] = [];
+  for (let index = 0; index < CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.length; index += 1) {
+    const species = CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES[index];
+    if (species === undefined) return null;
+    const occupied = aggregateOccupiedTiles.get(species as Extract<
+      CoreEcologyTidalTableHabitatSpecies,
+      "brown-rat" | "southern-leopard-frog" | "atlantic-silverside" | "atlantic-marsh-fiddler-crab"
+    >) ?? individualOccupiedTiles;
+    const population = canonicalizeHarborEdgePopulationAnalysis(
+      value.populations[index],
+      species,
+      originRegion,
+      selection,
+      evaluatedTiles,
+      occupied,
+    );
+    if (population === null) return null;
+    populations.push(population);
+  }
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS) return null;
+  const tidalAnchors = canonicalizeTidalTableHabitatAnchors(
+    value.tidalAnchors,
+    originRegion,
+    selection,
+    populations,
+  );
+  if (tidalAnchors === null) return null;
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors,
+  });
+}
+
+function canonicalizeTidalTableHabitatAnchors(
+  value: readonly unknown[],
+  originRegion: RegionCoord,
+  selection: CoreEcologyHabitatSelection,
+  populations: readonly CoreEcologyTidalTableHabitatPopulationAnalysis[],
+): readonly CoreEcologyTidalTableHabitatAnchor[] | null {
+  const silverside = populations.find(({ species }) => species === "atlantic-silverside");
+  const fiddler = populations.find(({ species }) => species === "atlantic-marsh-fiddler-crab");
+  const egret = populations.find(({ species }) => species === "snowy-egret");
+  if (silverside === undefined || fiddler === undefined || egret === undefined) return null;
+  const expected = [
+    ...silverside.allocations.map((allocation) => ({
+      species: "atlantic-silverside" as const,
+      purpose: "population" as const,
+      anchorOrdinal: allocation.allocationOrdinal,
+      allocation,
+    })),
+    ...fiddler.allocations.map((allocation) => ({
+      species: "atlantic-marsh-fiddler-crab" as const,
+      purpose: "population" as const,
+      anchorOrdinal: allocation.allocationOrdinal,
+      allocation,
+    })),
+    ...(egret.populationUnits === 0
+      ? []
+      : [
+          ...Array.from(
+            { length: CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS },
+            (_, anchorOrdinal) => ({
+              species: "snowy-egret" as const,
+              purpose: "wading" as const,
+              anchorOrdinal,
+              allocation: null,
+            }),
+          ),
+          ...Array.from(
+            { length: CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS },
+            (_, anchorOrdinal) => ({
+              species: "snowy-egret" as const,
+              purpose: "refuge" as const,
+              anchorOrdinal,
+              allocation: null,
+            }),
+          ),
+        ]),
+  ];
+  if (value.length !== expected.length) return null;
+
+  const anchors: CoreEcologyTidalTableHabitatAnchor[] = [];
+  const egretTiles = new Set<number>();
+  for (let index = 0; index < value.length; index += 1) {
+    const raw = value[index];
+    const identity = expected[index];
+    if (
+      identity === undefined
+      || !plainRecord(raw)
+      || !exactKeys(raw, [
+        "anchorOrdinal",
+        "biome",
+        "elevation",
+        "globalTile",
+        "position",
+        "purpose",
+        "species",
+        "terrain",
+        "tileIndex",
+      ])
+      || raw.species !== identity.species
+      || raw.purpose !== identity.purpose
+      || raw.anchorOrdinal !== identity.anchorOrdinal
+      || !nonnegativeSafeInteger(raw.tileIndex)
+      || raw.tileIndex >= CORE_ECOLOGY_HABITAT_TILE_BUDGET
+      || !fixedInteger(raw.elevation)
+      || typeof raw.terrain !== "string"
+      || terrainKindForElevation(raw.elevation) !== raw.terrain
+      || !validTidalAnchorTerrain(identity.species, identity.purpose, raw.terrain)
+      || typeof raw.biome !== "string"
+      || !(BIOME_IDS as readonly string[]).includes(raw.biome)
+      || !plainRecord(raw.globalTile)
+      || !exactKeys(raw.globalTile, ["x", "y"])
+      || !canonicalSafeInteger(raw.globalTile.x)
+      || !canonicalSafeInteger(raw.globalTile.y)
+      || !isWorldPosition(raw.position)
+    ) return null;
+    const tileX = raw.tileIndex % WORLD_WIDTH;
+    const tileY = Math.trunc(raw.tileIndex / WORLD_WIDTH);
+    const localX = tileX * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    const localY = tileY * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    const globalTile = regionLocalToGlobalTile(originRegion, tileX, tileY);
+    if (
+      raw.position.region.x !== originRegion.x
+      || raw.position.region.y !== originRegion.y
+      || raw.position.localX !== localX
+      || raw.position.localY !== localY
+      || raw.globalTile.x !== globalTile.x
+      || raw.globalTile.y !== globalTile.y
+      || !tileInsideSelection(raw.tileIndex, selection)
+    ) return null;
+    if (identity.allocation !== null && (
+      raw.tileIndex !== identity.allocation.tileIndex
+      || raw.position.localX !== identity.allocation.position.localX
+      || raw.position.localY !== identity.allocation.position.localY
+      || raw.terrain !== identity.allocation.terrain
+      || raw.biome !== identity.allocation.biome
+    )) return null;
+    if (identity.species === "snowy-egret") {
+      if (egretTiles.has(raw.tileIndex)) return null;
+      egretTiles.add(raw.tileIndex);
+      if (
+        identity.purpose === "wading"
+        && !isPotentialSnowyEgretWadingElevation(raw.elevation)
+      ) return null;
+      if (identity.purpose === "refuge" && raw.elevation < MAX_TIDE_LEVEL) return null;
+    }
+    anchors.push(Object.freeze({
+      species: identity.species,
+      purpose: identity.purpose,
+      anchorOrdinal: identity.anchorOrdinal,
+      tileIndex: raw.tileIndex,
+      globalTile: Object.freeze({ x: raw.globalTile.x, y: raw.globalTile.y }),
+      position: createWorldPosition(originRegion, localX, localY),
+      elevation: raw.elevation,
+      terrain: raw.terrain as TerrainKind,
+      biome: raw.biome as BiomeId,
+    }));
+  }
+  const lowTideRefuge = anchors.some((anchor) => (
+    anchor.species === "atlantic-silverside"
+    && anchor.purpose === "population"
+    && MIN_TIDE_LEVEL - anchor.elevation >= CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH
+  ));
+  if ((silverside.populationUnits > 0) !== lowTideRefuge) return null;
+  return Object.freeze(anchors);
+}
+
+function tileInsideSelection(
+  tileIndex: number,
+  selection: CoreEcologyHabitatSelection,
+): boolean {
+  if (selection.focusPosition === null || selection.radiusTiles === null) return true;
+  if (selection.excludedTileIndices.includes(tileIndex)) return false;
+  const tileX = tileIndex % WORLD_WIDTH;
+  const tileY = Math.trunc(tileIndex / WORLD_WIDTH);
+  const focusX = Math.trunc(selection.focusPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const focusY = Math.trunc(selection.focusPosition.localY / WORLD_POSITION_UNITS_PER_TILE);
+  return Math.abs(tileX - focusX) + Math.abs(tileY - focusY) <= selection.radiusTiles;
+}
+
+function terrainKindForElevation(elevation: number): TerrainKind {
+  if (elevation < 180_000) return "deep-water";
+  if (elevation < 330_000) return "tidal-flat";
+  if (elevation < 470_000) return "marsh";
+  if (elevation < 760_000) return "meadow";
+  return "ridge";
+}
+
 type VersionedHabitatPopulationAnalysis<
-  Species extends CoreEcologyRainChorusHabitatSpecies,
+  Species extends CoreEcologyTidalTableHabitatSpecies,
 > = Omit<CoreEcologyRainChorusHabitatPopulationAnalysis, "species"> & {
   readonly species: Species;
 };
 
 function canonicalizeHarborEdgePopulationAnalysis<
-  Species extends CoreEcologyRainChorusHabitatSpecies,
+  Species extends CoreEcologyTidalTableHabitatSpecies,
 >(
   value: unknown,
   expectedSpecies: Species,
@@ -1713,7 +2302,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreEcologyRainChorusHabitatSpecies,
+  species: CoreEcologyTidalTableHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -1797,7 +2386,7 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity<Species extends CoreEcologyRainChorusHabitatSpecies>(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyTidalTableHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
   species: Species,
@@ -1826,6 +2415,27 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyRainChorusHabit
   ) habitatCapacity = 0;
   if (species === "marsh-fox" && preySupport < 120_000) habitatCapacity = 0;
   if (species === "northern-harrier" && preySupport < 150_000) habitatCapacity = 0;
+  if (
+    species === "snowy-egret"
+    && (
+      preySupport < 120_000
+      || !hasSnowyEgretRefuge(addressedTiles)
+      || suitable.filter(({ addressed }) => (
+        isPotentialSnowyEgretWadingElevation(addressed.tile.elevation)
+      )).length < CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS
+    )
+  ) habitatCapacity = 0;
+  // A school may spread onto tidal flats at flood, but it cannot persist in a
+  // patch without one habitat-authenticated refuge that remains wet at the
+  // lowest tide. This prevents baseline fish identity from being minted on
+  // flats that become wholly dry before the first live-tide projection.
+  if (
+    species === "atlantic-silverside"
+    && !suitable.some(({ addressed }) => (
+      MIN_TIDE_LEVEL - addressed.tile.elevation
+        >= CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH
+    ))
+  ) habitatCapacity = 0;
 
   const capacityInputs = Object.freeze({
     eligibleTiles: eligible.length,
@@ -1893,7 +2503,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyRainChorusHabit
  * already-derived site/capacity result keeps the exact habitat contract while
  * avoiding a second full species pass for deer, rats, and rabbits.
  */
-function applyPredatorPressure<Species extends CoreEcologyRainChorusHabitatSpecies>(
+function applyPredatorPressure<Species extends CoreEcologyTidalTableHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   predatorPressure: number,
 ): UnallocatedPopulationAnalysis<Species> {
@@ -1926,7 +2536,17 @@ function applyPredatorPressure<Species extends CoreEcologyRainChorusHabitatSpeci
   });
 }
 
-function allocatePopulation<Species extends CoreEcologyRainChorusHabitatSpecies>(
+function hasSnowyEgretRefuge(
+  addressedTiles: readonly AddressedHabitatTile[],
+): boolean {
+  return addressedTiles.some(({ tile, wetDistance }) => (
+    tile.elevation >= MAX_TIDE_LEVEL
+    && (tile.terrain === "meadow" || tile.terrain === "ridge")
+    && wetDistance <= 12
+  ));
+}
+
+function allocatePopulation<Species extends CoreEcologyTidalTableHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
@@ -1939,9 +2559,36 @@ function allocatePopulation<Species extends CoreEcologyRainChorusHabitatSpecies>
   const rankedSites = [...analysis.sites].sort((left, right) =>
     compareSitesWithPreferredAllocations(left, right, preferredAllocations));
   const selected: HabitatSiteEvaluation[] = [];
+  if (analysis.species === "atlantic-silverside" && allocationCount > 0) {
+    const lowTideRefuge = rankedSites.find(({ addressed }) => (
+      MIN_TIDE_LEVEL - addressed.tile.elevation
+        >= CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH
+      && !occupiedTileIndices.has(addressed.tile.index)
+    ));
+    if (lowTideRefuge === undefined) {
+      throw new Error("Core ecology silverside population lacks its low-tide refuge");
+    }
+    selected.push(lowTideRefuge);
+    if (allocationCount > 1) {
+      const tidalEdge = rankedSites.find(({ addressed }) => (
+        MIN_TIDE_LEVEL - addressed.tile.elevation
+          < CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH
+        && MAX_TIDE_LEVEL - addressed.tile.elevation
+          >= CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH
+        && !occupiedTileIndices.has(addressed.tile.index)
+        && addressed.tile.index !== lowTideRefuge.addressed.tile.index
+        && manhattanTiles(addressed.tile, lowTideRefuge.addressed.tile)
+          >= rule.minimumAllocationSeparation
+      ));
+      if (tidalEdge !== undefined) selected.push(tidalEdge);
+    }
+  }
   for (const site of rankedSites) {
     if (selected.length >= allocationCount) break;
     if (occupiedTileIndices.has(site.addressed.tile.index)) continue;
+    if (selected.some((other) => other.addressed.tile.index === site.addressed.tile.index)) {
+      continue;
+    }
     if (
       selected.every((other) =>
         manhattanTiles(site.addressed.tile, other.addressed.tile)
@@ -2005,6 +2652,124 @@ function allocatePopulation<Species extends CoreEcologyRainChorusHabitatSpecies>
     trend: analysis.trend,
     trendSignal: analysis.trendSignal,
     allocations: Object.freeze(allocations),
+  });
+}
+
+const EGRET_WADING_TARGET_ELEVATIONS = Object.freeze([
+  MIN_TIDE_LEVEL - 35_000,
+  MIN_TIDE_LEVEL + 75_000,
+  MIN_TIDE_LEVEL + 185_000,
+  MAX_TIDE_LEVEL - 35_000,
+] as const);
+
+function createTidalTableHabitatAnchors(
+  originRegion: RegionCoord,
+  addressedTiles: readonly AddressedHabitatTile[],
+  silverside: AllocatedPopulationAnalysis<"atlantic-silverside">,
+  fiddler: AllocatedPopulationAnalysis<"atlantic-marsh-fiddler-crab">,
+  egret: UnallocatedPopulationAnalysis<"snowy-egret">,
+): readonly CoreEcologyTidalTableHabitatAnchor[] {
+  const addressedByTile = new Map(addressedTiles.map((addressed) => (
+    [addressed.tile.index, addressed] as const
+  )));
+  const anchors: CoreEcologyTidalTableHabitatAnchor[] = [];
+  for (const population of [silverside, fiddler] as const) {
+    for (const allocation of population.allocations) {
+      const addressed = addressedByTile.get(allocation.tileIndex);
+      if (addressed === undefined) {
+        throw new Error(`Core ecology ${population.species} tidal anchor lost terrain custody`);
+      }
+      anchors.push(tidalAnchorFromSite(
+        population.species,
+        "population",
+        allocation.allocationOrdinal,
+        addressed,
+        originRegion,
+      ));
+    }
+  }
+
+  if (egret.populationUnits > 0) {
+    const refuge = addressedTiles.filter(({ tile, wetDistance }) => (
+      tile.elevation >= MAX_TIDE_LEVEL
+      && (tile.terrain === "meadow" || tile.terrain === "ridge")
+      && wetDistance <= 12
+    )).sort((left, right) => (
+      left.wetDistance - right.wetDistance
+      || right.tile.elevation - left.tile.elevation
+      || left.tile.index - right.tile.index
+    ))[0];
+    if (refuge === undefined || refuge.tile.elevation < MAX_TIDE_LEVEL) {
+      throw new Error("Core ecology snowy egret lacks a high-tide refuge");
+    }
+    const selected = new Set<number>([refuge.tile.index]);
+    const wadingSites: HabitatSiteEvaluation[] = [];
+    for (const targetElevation of EGRET_WADING_TARGET_ELEVATIONS) {
+      const candidate = [...egret.sites]
+        .filter(({ addressed }) => !selected.has(addressed.tile.index))
+        .filter(({ addressed }) => (
+          isPotentialSnowyEgretWadingElevation(addressed.tile.elevation)
+        ))
+        .sort((left, right) => (
+          Math.abs(left.addressed.tile.elevation - targetElevation)
+            - Math.abs(right.addressed.tile.elevation - targetElevation)
+          || right.placementRank - left.placementRank
+          || left.rankTie - right.rankTie
+          || left.addressed.tile.index - right.addressed.tile.index
+        ))[0];
+      if (candidate === undefined) {
+        throw new Error("Core ecology snowy egret lacks bounded wading destinations");
+      }
+      selected.add(candidate.addressed.tile.index);
+      wadingSites.push(candidate);
+    }
+    for (let index = 0; index < wadingSites.length; index += 1) {
+      const site = wadingSites[index];
+      if (site === undefined) throw new Error("Core ecology snowy egret wading anchor vanished");
+      anchors.push(tidalAnchorFromSite(
+        "snowy-egret",
+        "wading",
+        index,
+        site.addressed,
+        originRegion,
+      ));
+    }
+    anchors.push(tidalAnchorFromSite(
+      "snowy-egret",
+      "refuge",
+      0,
+      refuge,
+      originRegion,
+    ));
+  }
+  return Object.freeze(anchors);
+}
+
+function tidalAnchorFromSite(
+  species: CoreEcologyTidalTableAnchorSpecies,
+  purpose: CoreEcologyTidalTableAnchorPurpose,
+  anchorOrdinal: number,
+  addressed: AddressedHabitatTile,
+  originRegion: RegionCoord,
+): CoreEcologyTidalTableHabitatAnchor {
+  const tile = addressed.tile;
+  const localX = tile.x * WORLD_POSITION_UNITS_PER_TILE
+    + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+  const localY = tile.y * WORLD_POSITION_UNITS_PER_TILE
+    + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+  return Object.freeze({
+    species,
+    purpose,
+    anchorOrdinal,
+    tileIndex: tile.index,
+    globalTile: Object.freeze({
+      x: addressed.globalTile.x,
+      y: addressed.globalTile.y,
+    }),
+    position: createWorldPosition(originRegion, localX, localY),
+    elevation: tile.elevation,
+    terrain: tile.terrain,
+    biome: addressed.biome,
   });
 }
 
@@ -2095,7 +2860,7 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreEcologyRainChorusHabitatSpecies,
+  species: CoreEcologyTidalTableHabitatSpecies,
   addressed: AddressedHabitatTile,
   preySupport: number,
 ): HabitatSiteEvaluation {
@@ -2436,6 +3201,104 @@ function evaluateSite(
         && climateScore >= 300_000;
       break;
     }
+    case "atlantic-silverside": {
+      eligible = tile.terrain === "deep-water" || tile.terrain === "tidal-flat";
+      food = SILVERSIDE_FOOD_BY_BIOME[biome];
+      water = tile.terrain === "deep-water"
+        ? FIXED_POINT
+        : weightedScore([
+            [distanceScore(addressed.openWaterDistance, 4), 720_000],
+            [tile.moisture, 280_000],
+          ]);
+      // Cover represents channel refuge and broken current rather than
+      // terrestrial concealment. It is a stable habitat property; live tide
+      // selects which school anchors are usable in the separate tidal layer.
+      cover = weightedScore([
+        [tile.terrain === "deep-water" ? 880_000 : 560_000, 620_000],
+        [tile.roughness, 220_000],
+        [interaction.rainRetention, 160_000],
+      ]);
+      nesting = weightedScore([
+        [water, 680_000],
+        [cover, 320_000],
+      ]);
+      climateScore = silversideClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 260_000],
+        [water, 300_000],
+        [cover, 170_000],
+        [nesting, 100_000],
+        [climateScore, 170_000],
+      ]);
+      eligible = eligible
+        && food >= 420_000
+        && water >= 500_000
+        && climateScore >= 300_000;
+      break;
+    }
+    case "atlantic-marsh-fiddler-crab": {
+      eligible = tile.terrain === "tidal-flat" || tile.terrain === "marsh";
+      food = FIDDLER_FOOD_BY_BIOME[biome];
+      water = weightedScore([
+        [distanceScore(addressed.openWaterDistance, 5), 620_000],
+        [tile.moisture, 380_000],
+      ]);
+      // Burrowable intertidal substrate is useful at every tide even though
+      // surface-foraging activity changes strongly with exposure.
+      cover = weightedScore([
+        [tile.terrain === "tidal-flat" ? 960_000 : 760_000, 720_000],
+        [FIXED_POINT - Math.trunc(tile.roughness / 2), 280_000],
+      ]);
+      nesting = weightedScore([
+        [cover, 720_000],
+        [interaction.rainRetention, 280_000],
+      ]);
+      climateScore = fiddlerClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 270_000],
+        [water, 210_000],
+        [cover, 230_000],
+        [nesting, 160_000],
+        [climateScore, 130_000],
+      ]);
+      eligible = eligible
+        && food >= 440_000
+        && water >= 380_000
+        && cover >= 480_000
+        && climateScore >= 300_000;
+      break;
+    }
+    case "snowy-egret": {
+      eligible = tile.terrain === "tidal-flat"
+        || tile.terrain === "marsh"
+        || tile.terrain === "meadow";
+      food = preySupport;
+      water = distanceScore(addressed.openWaterDistance, 8);
+      const openSearch = clampFixed(
+        multiplyFixed(EGRET_SEARCH_BY_BIOME[biome], 760_000)
+          + multiplyFixed(FIXED_POINT - tile.roughness, 240_000),
+      );
+      cover = openSearch;
+      nesting = weightedScore([
+        [EGRET_SEARCH_BY_BIOME[biome], 520_000],
+        [water, 300_000],
+        [FIXED_POINT - Math.trunc(climate.exposure / 2), 180_000],
+      ]);
+      climateScore = egretClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 390_000],
+        [water, 230_000],
+        [cover, 190_000],
+        [nesting, 80_000],
+        [climateScore, 110_000],
+      ]);
+      eligible = eligible
+        && preySupport >= 120_000
+        && water >= 380_000
+        && cover >= 420_000
+        && climateScore >= 300_000;
+      break;
+    }
   }
 
   eligible = eligible && addressed.withinSelection;
@@ -2560,6 +3423,39 @@ function frogClimateScore(climate: BiomeClimate, interaction: BiomeInteraction):
   ]);
 }
 
+function silversideClimateScore(
+  climate: BiomeClimate,
+  interaction: BiomeInteraction,
+): number {
+  return weightedScore([
+    [centeredTolerance(climate.salinity, 680_000, 760_000), 390_000],
+    [centeredTolerance(climate.heat, 620_000, 820_000), 260_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 170_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 180_000],
+  ]);
+}
+
+function fiddlerClimateScore(
+  climate: BiomeClimate,
+  interaction: BiomeInteraction,
+): number {
+  return weightedScore([
+    [centeredTolerance(climate.salinity, 720_000, 700_000), 360_000],
+    [centeredTolerance(climate.heat, 680_000, 760_000), 260_000],
+    [interaction.rainRetention, 180_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 200_000],
+  ]);
+}
+
+function egretClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 640_000, 840_000), 330_000],
+    [centeredTolerance(climate.salinity, 580_000, 900_000), 260_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 170_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 240_000],
+  ]);
+}
+
 function averageSiteInputs(
   sites: readonly HabitatSiteEvaluation[],
 ): Omit<CoreEcologyHabitatCapacityInputs, "eligibleTiles" | "suitableTiles" | "weightedHabitatArea" | "predatorPressure"> {
@@ -2617,7 +3513,7 @@ function distanceField(
 
 function prepareCoreEcologyHabitatContext(
   input: DeriveCoreEcologyHabitatAssemblageInput,
-  extension: "harbor-edge" | "marsh-edge" | "rain-chorus",
+  extension: "harbor-edge" | "marsh-edge" | "rain-chorus" | "tidal-table",
 ): PreparedCoreEcologyHabitatContext {
   if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
     throw new TypeError(`Core ecology ${extension} habitat input has an unsupported shape`);
@@ -2881,7 +3777,7 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
 }
 
 function validAllocationTerrain(
-  species: CoreEcologyRainChorusHabitatSpecies,
+  species: CoreEcologyTidalTableHabitatSpecies,
   terrain: string,
 ): boolean {
   if (species === "gull" || species === "fish-crow") {
@@ -2893,7 +3789,37 @@ function validAllocationTerrain(
   if (species === "southern-leopard-frog") {
     return terrain === "marsh" || terrain === "meadow";
   }
+  if (species === "atlantic-silverside") {
+    return terrain === "deep-water" || terrain === "tidal-flat";
+  }
+  if (species === "atlantic-marsh-fiddler-crab") {
+    return terrain === "tidal-flat" || terrain === "marsh";
+  }
+  if (species === "snowy-egret") {
+    return terrain === "tidal-flat" || terrain === "marsh" || terrain === "meadow";
+  }
   return terrain === "marsh" || terrain === "meadow" || terrain === "ridge";
+}
+
+function validTidalAnchorTerrain(
+  species: CoreEcologyTidalTableAnchorSpecies,
+  purpose: CoreEcologyTidalTableAnchorPurpose,
+  terrain: string,
+): boolean {
+  if (species !== "snowy-egret") {
+    return purpose === "population" && validAllocationTerrain(species, terrain);
+  }
+  if (purpose === "wading") {
+    return terrain === "tidal-flat" || terrain === "marsh" || terrain === "meadow";
+  }
+  return purpose === "refuge" && (terrain === "meadow" || terrain === "ridge");
+}
+
+function isPotentialSnowyEgretWadingElevation(elevation: number): boolean {
+  return elevation
+      >= MIN_TIDE_LEVEL - CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH
+    && elevation
+      <= MAX_TIDE_LEVEL - CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH;
 }
 
 function isTerrainKind(value: string): value is TerrainKind {
@@ -2960,4 +3886,14 @@ if (
       (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
       0,
     )
+  || CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
+  || CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS
+    !== SPECIES_RULES["atlantic-silverside"].maximumAllocations
+      + SPECIES_RULES["atlantic-marsh-fiddler-crab"].maximumAllocations
+      + CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS
+      + CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS
 ) throw new Error("Core ecology habitat generation constants are incoherent");

@@ -7,12 +7,17 @@ import {
 } from "../sim/actorPerception";
 import { CORE_WILDLIFE_SPECIES } from "../sim/coreWildlifeIdentity";
 import { FIXED_POINT, type TerrainTileView, type WorldView } from "../sim/types";
-import { hashCanonical } from "../sim/util";
+import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
+  CORE_ECOLOGY_MAX_STEP_TICKS,
   coreEcologyAlarmSignalProfile,
+  coreEcologyAggregatePatchActor,
   createCoreEcologyAlarmObservation,
+  canonicalizeCoreEcologyAggregatePatch,
+  type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
+import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import {
   canonicalizeCoreWildlifeActorState,
   type CoreWildlifeActorState,
@@ -43,9 +48,14 @@ import {
   type PerceptionCell,
 } from "./perception";
 import type { RegionalTerrainWindow } from "./regionalTravel";
-import { regionalWindowForWorld } from "./regionalWorldView";
+import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
 import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  createSpatialFrame,
+  createWorldPosition,
   isWorldPosition,
+  worldPositionToSpatialFrame,
+  type SpatialFrame,
   type SpatialFramePoint,
   type WorldPosition,
 } from "./worldPosition";
@@ -75,6 +85,12 @@ export interface CoreEcologyObservationBatch {
   readonly observations: readonly ActorObservation[];
 }
 
+export interface CoreEcologyAggregateActivityPerceptionFrameInput
+  extends CoreEcologyPerceptionFrameInput {
+  /** Habitat-v5 aggregate custody; school/area actors are never fabricated. */
+  readonly patch: CoreEcologyAggregatePatchState;
+}
+
 interface CanonicalPerceptionFrame {
   readonly actors: readonly CoreWildlifeActorState[];
   readonly actorIds: ReadonlySet<string>;
@@ -84,6 +100,7 @@ interface CanonicalPerceptionFrame {
     readonly point: SpatialFramePoint;
     readonly tileIndex: number;
   }>>;
+  readonly spatialFrame: SpatialFrame;
   readonly cells: readonly PerceptionCell[];
   readonly world: WorldView;
   readonly window: RegionalTerrainWindow;
@@ -178,6 +195,114 @@ export function collectCoreEcologyVisualObservationBatches(
   }
 
   return Object.freeze(batches);
+}
+
+/**
+ * Converts currently visible, occupied tidal aggregate activity into one
+ * anonymous visual fact for the materialized snowy egret. Fish schools and
+ * crab areas remain non-addressable: this bridge never creates an actor ID or
+ * exposes hidden population truth through an occluded/inactive anchor.
+ */
+export function collectCoreEcologyAggregateActivityObservationBatches(
+  value: unknown,
+): readonly CoreEcologyObservationBatch[] | null {
+  const input = canonicalAggregateActivityPerceptionInput(value);
+  if (input === null) return null;
+  const { frame, patch } = input;
+  const tidal = projectCoreEcologyTidalTable(patch, frame.tick);
+  if (tidal === null) return null;
+  if (tidal.snowyEgret === null) return Object.freeze([]);
+
+  const egretMember = patch.populations
+    .find(({ species }) => species === "snowy-egret")
+    ?.members.find(({ actor }) => (
+      actor.identity.stableId === tidal.snowyEgret?.actorId
+    ));
+  if (egretMember === undefined) return null;
+  const frameEgret = frame.actorStates.get(egretMember.actor.identity.stableId);
+  if (egretMember.materialization === "coarse") {
+    return frameEgret === undefined ? Object.freeze([]) : null;
+  }
+  const patchEgret = coreEcologyAggregatePatchActor(
+    patch,
+    egretMember.actor.identity.stableId,
+  );
+  if (
+    patchEgret === null
+    || frameEgret === undefined
+    || stableStringify(frameEgret) !== stableStringify(patchEgret)
+  ) return null;
+  const observerPlacement = frame.placements.get(frameEgret.identity.stableId);
+  if (observerPlacement === undefined) return null;
+
+  const observations: ActorObservation[] = [];
+  for (const depth of tidal.anchorDepths) {
+    const population = patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === depth.aggregateId
+    ));
+    const anchor = population?.anchors[depth.anchorOrdinal];
+    const activity = tidal.aggregateActivities.find(({ aggregateId }) => (
+      aggregateId === depth.aggregateId
+    ));
+    if (
+      population === undefined
+      || anchor === undefined
+      || activity === undefined
+      || anchor.populationUnits <= 0
+      || activity.intensity <= 0
+      || !depth.activityUsable
+      || !sameWorldPosition(anchor.position, depth.position)
+    ) continue;
+    const targetTileIndex = tileIndexInSpatialFrame(
+      frame.spatialFrame,
+      frame.world,
+      depth.position,
+    );
+    if (targetTileIndex === null) continue;
+    const targetTile = frame.world.terrain.tiles[targetTileIndex];
+    if (targetTile === undefined) return null;
+    const sight = evaluateVisualContact({
+      columns: frame.world.terrain.width,
+      rows: frame.world.terrain.height,
+      cells: frame.cells,
+      observerTileIndex: observerPlacement.tileIndex,
+      targetTileIndex,
+      observerFacingRadians: headingToRadians(frameEgret.address.heading),
+      weatherVisibility: coreEcologyWeatherVisibility(frame.world),
+      targetMovementSalience: activity.intensity / FIXED_POINT,
+      targetLightVisibility: coreEcologyTargetLightVisibility(targetTile),
+    });
+    if (sight === null || sight.grade !== VISIBILITY_DIRECT) continue;
+    const confidence = scaleContact(sight.confidence);
+    const observation = createActorObservation({
+      id: `ecology-aquatic:${hashCanonical({
+        aggregateId: population.aggregateId,
+        anchorOrdinal: depth.anchorOrdinal,
+        observerId: frameEgret.identity.stableId,
+        tick: frame.tick,
+      })}`,
+      observerId: frameEgret.identity.stableId,
+      observedAtTick: frame.tick,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: { center: depth.position, radiusUnits: 0 },
+      confidence,
+      salience: Math.min(
+        ACTOR_PERCEPTION_SCALE,
+        Math.round((confidence + activity.intensity) / 2),
+      ),
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (observation === null) return null;
+    observations.push(observation);
+  }
+  const canonical = canonicalizeActorObservations(observations);
+  if (canonical.length !== observations.length) return null;
+  return Object.freeze([
+    Object.freeze({ observerId: frameEgret.identity.stableId, observations: canonical }),
+  ]);
 }
 
 /**
@@ -305,18 +430,41 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
     }));
   }
   const cells = coreEcologyPerceptionCells(world);
-  if (cells === null) return null;
+  const spatialFrame = spatialFrameForWorld(world);
+  if (cells === null || spatialFrame === null) return null;
   return Object.freeze({
     actors: Object.freeze(actors),
     actorIds: coreIds,
     actorStates,
     observers: Object.freeze(observers),
     placements,
+    spatialFrame,
     cells,
     world,
     window,
     tick,
   });
+}
+
+function canonicalAggregateActivityPerceptionInput(
+  value: unknown,
+): Readonly<{
+  readonly frame: CanonicalPerceptionFrame;
+  readonly patch: CoreEcologyAggregatePatchState;
+}> | null {
+  if (!plainRecord(value) || !Object.hasOwn(value, "patch")) return null;
+  const { patch: patchValue, ...frameValue } = value;
+  const frame = canonicalPerceptionFrame(frameValue);
+  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
+  if (
+    frame === null
+    || patch === null
+    || (patch.derivation.kind !== "habitat-v5"
+      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5")
+    || frame.tick < patch.updatedAtTick
+    || frame.tick - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
+  ) return null;
+  return Object.freeze({ frame, patch });
 }
 
 function canonicalAlarmEvent(
@@ -572,6 +720,37 @@ function sameWorldPosition(left: WorldPosition, right: WorldPosition): boolean {
     && left.region.y === right.region.y
     && left.localX === right.localX
     && left.localY === right.localY;
+}
+
+function tileIndexInSpatialFrame(
+  frame: SpatialFrame,
+  world: WorldView,
+  position: WorldPosition,
+): number | null {
+  const point = worldPositionToSpatialFrame(frame, position);
+  if (point === null) return null;
+  const x = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
+  const y = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
+  if (x < 0 || y < 0 || x >= world.terrain.width || y >= world.terrain.height) return null;
+  return y * world.terrain.width + x;
+}
+
+function spatialFrameForWorld(world: WorldView): SpatialFrame | null {
+  const origin = regionalAddressAt(world, 0);
+  if (origin === null) return null;
+  try {
+    return createSpatialFrame(
+      createWorldPosition(
+        origin.region,
+        origin.localX * WORLD_POSITION_UNITS_PER_TILE,
+        origin.localY * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      world.terrain.width * WORLD_POSITION_UNITS_PER_TILE,
+      world.terrain.height * WORLD_POSITION_UNITS_PER_TILE,
+    );
+  } catch {
+    return null;
+  }
 }
 
 function allowedFrameKeys(value: Readonly<Record<string, unknown>>): boolean {

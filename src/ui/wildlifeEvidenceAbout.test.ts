@@ -5,11 +5,13 @@ import { seedFromText } from "../sim/rng";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
+  setCoreEcologyAggregateActivityIntensity,
   type CoreEcologyPopulationInput,
 } from "../game/coreEcology";
 import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyTidalTableHabitatAssemblage,
 } from "../game/coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "../game/perception";
 import type { WildlifePopulationEvidenceAboutObservation } from "../game/wildlifeAbout";
@@ -129,6 +131,57 @@ function frogEvidenceFixture() {
     evidenceId: evidence.evidenceId,
   };
   return { evidence, patch, population, target };
+}
+
+function tidalEvidenceFixture() {
+  const seed = seedFromText("tidal-triad-1");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyTidalTableHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "ui-tidal-evidence-about",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v5", habitat },
+    tick: 12,
+  });
+  const silverside = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-silverside",
+  );
+  const crab = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-marsh-fiddler-crab",
+  );
+  if (silverside === undefined || crab === undefined) {
+    throw new Error("UI tidal fixture requires both aggregate populations");
+  }
+  return { crab, patch, silverside };
 }
 
 function evidenceObservation(
@@ -264,6 +317,64 @@ describe("aggregate wildlife evidence ABOUT UI boundary", () => {
     expect(JSON.stringify(selected)).not.toMatch(
       /actorId|populationSize|populationPressure|activitySignal|rainIntensity/iu,
     );
+  });
+
+  it.each([
+    ["atlantic-silverside", "ATLANTIC SILVERSIDE SCHOOL SIGNS", "Atlantic silverside"],
+    [
+      "atlantic-marsh-fiddler-crab",
+      "ATLANTIC MARSH FIDDLER CRAB SIGNS",
+      "Atlantic marsh fiddler crab",
+    ],
+  ] as const)("routes directly observed %s evidence through the close-only ABOUT surface", (
+    species,
+    heading,
+    speciesLabel,
+  ) => {
+    const fixture = tidalEvidenceFixture();
+    const population = species === "atlantic-silverside" ? fixture.silverside : fixture.crab;
+    const evidence = population.evidence[0];
+    expect(evidence).toBeDefined();
+    const target: WildlifeEvidenceTargetUIView = {
+      species,
+      aggregateId: population.aggregateId,
+      evidenceId: evidence!.evidenceId,
+    };
+    const observation = evidenceObservation(evidence!.position);
+    const selected = projectWildlifeEvidenceAboutProjection(
+      fixture.patch,
+      target,
+      observation,
+    );
+
+    expect(selected).toMatchObject({
+      target,
+      about: {
+        heading,
+        knowledgeLabel: "Recognized",
+        observed: expect.arrayContaining([
+          { label: "Species", value: speciesLabel },
+          { label: "Scale", value: "Population-level signs" },
+        ]),
+        known: [],
+      },
+    });
+    expect(resolveWildlifeEvidenceAboutSurface({ selectedWildlifeEvidence: selected! }))
+      .toMatchObject({
+        species,
+        representation: "population-evidence",
+        closeCommand: { target },
+      });
+    const encoded = JSON.stringify(selected);
+    expect(encoded).not.toMatch(/actorId|populationSize|representedUnits|activitySignal|intensity/iu);
+    expect(encoded).not.toMatch(/dead|death|mortality|carcass/iu);
+
+    const quiet = setCoreEcologyAggregateActivityIntensity(fixture.patch, {
+      aggregateId: population.aggregateId,
+      atTick: fixture.patch.updatedAtTick,
+      intensity: 0,
+    });
+    expect(projectWildlifeEvidenceAboutProjection(quiet, target, observation)).toBeNull();
   });
 
   it("retains OBSERVED/KNOWN honesty when the sign cannot yet identify a species", () => {
@@ -424,3 +535,14 @@ type FrogIsNotAUILivingActor = "southern-leopard-frog" extends LivingActorTarget
   : true;
 const frogIsNotAUILivingActor: FrogIsNotAUILivingActor = true;
 void frogIsNotAUILivingActor;
+
+type SilversideIsNotAUILivingActor = "atlantic-silverside" extends LivingActorTargetSpeciesUIView
+  ? false
+  : true;
+const silversideIsNotAUILivingActor: SilversideIsNotAUILivingActor = true;
+void silversideIsNotAUILivingActor;
+
+type FiddlerCrabIsNotAUILivingActor =
+  "atlantic-marsh-fiddler-crab" extends LivingActorTargetSpeciesUIView ? false : true;
+const fiddlerCrabIsNotAUILivingActor: FiddlerCrabIsNotAUILivingActor = true;
+void fiddlerCrabIsNotAUILivingActor;

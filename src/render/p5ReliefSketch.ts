@@ -197,6 +197,7 @@ type ReliefWildlifeForm =
   | "gull-flock"
   | "fish-crow-flock"
   | "northern-harrier"
+  | "snowy-egret"
   | "black-bear"
   | "domestic-cat"
   | "marsh-rabbit"
@@ -259,6 +260,17 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.52,
     ringRadiusScale: 0.42,
     labelLift: 1.18,
+  },
+  "snowy-egret": {
+    form: "snowy-egret",
+    colors: {
+      primary: "#f4f1df",
+      secondary: "#d3ad4f",
+      dark: "#1d2525",
+    },
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.38,
+    labelLift: 0.98,
   },
   "black-bear": {
     form: "black-bear",
@@ -329,6 +341,22 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
   AggregateWildlifeEvidenceView["form"],
   ReliefAggregateEvidenceDescriptor
 >> = {
+  "burrow-openings": {
+    primary: "#4c392b",
+    secondary: "#b28e68",
+    dark: "#171310",
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.38,
+    liftScale: 0.24,
+  },
+  "feeding-scrapes": {
+    primary: "#735b43",
+    secondary: "#b89a71",
+    dark: "#292018",
+    hitRadiusScale: 0.46,
+    ringRadiusScale: 0.37,
+    liftScale: 0.2,
+  },
   "gnaw-marks": {
     primary: "#76563e",
     secondary: "#dec29b",
@@ -377,11 +405,20 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
     ringRadiusScale: 0.37,
     liftScale: 0.26,
   },
+  "surface-dimples": {
+    primary: "#55c7dc",
+    secondary: "#e5fbff",
+    dark: "#173b46",
+    hitRadiusScale: 0.5,
+    ringRadiusScale: 0.4,
+    liftScale: 0.18,
+  },
 };
 
 const DEFAULT_YAW = -0.36;
 const DEFAULT_PITCH = Math.PI * 0.29;
 const DEFAULT_FOV = Math.PI / 3.5;
+const RELIEF_WATER_SURFACE_LIFT = 0.45;
 export const MIN_RELIEF_MANUAL_ZOOM = 0.38;
 export const MAX_RELIEF_MANUAL_ZOOM = 3.2;
 
@@ -2404,7 +2441,7 @@ export function createTideweftReliefRenderer(
               { x: x0 + tileSize / 2, y: z0 + tileSize / 2 },
               cache.mesh.verticalScale,
               true,
-            ) + 0.45;
+            ) + RELIEF_WATER_SURFACE_LIFT;
             p.normal(0, -1, 0);
             p.vertex(x0, -surface, z0);
             p.vertex(x1, -surface, z0);
@@ -3903,6 +3940,68 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawSnowyEgret = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+    ): void => {
+      const colors = reliefWildlifeColors("snowy-egret");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.078 * scale;
+      const probing = wildlife.behavior === "forage" || wildlife.behavior === "pursue";
+      const flying = wildlife.behavior === "flight";
+      const bodyHalfLength = base * 1.34;
+      const bodyHalfHeight = base * 0.46;
+      const bodyHalfWidth = base * 0.52;
+      const legHeight = base * 1.5;
+      const bodyCenterY = flying
+        ? surface + tileSize * 0.58
+        : surface + bodyHalfHeight + legHeight * 0.88;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+
+      if (!flying) {
+        p.ambientMaterial(colors.dark);
+        for (const legZ of [-base * 0.28, base * 0.28]) {
+          p.push();
+          p.translate(-bodyHalfLength * 0.34, legHeight * 0.64, legZ);
+          p.box(base * 0.1, legHeight, base * 0.1);
+          p.translate(-base * 0.28, legHeight * 0.5, 0);
+          p.ambientMaterial(colors.secondary);
+          p.box(base * 0.62, base * 0.08, base * 0.12);
+          p.pop();
+        }
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 9, 5);
+      if (flying) {
+        for (const side of [-1, 1] as const) {
+          p.push();
+          p.rotateX(side * 0.16);
+          p.ellipsoid(base * 0.72, base * 0.12, base * 2.35, 7, 3);
+          p.pop();
+        }
+      }
+      p.push();
+      p.translate(bodyHalfLength * 0.62, -bodyHalfHeight * 0.56, 0);
+      p.rotateZ(probing ? 0.58 : -0.28);
+      p.ellipsoid(base * 0.25, base * 1.02, base * 0.23, 7, 5);
+      p.translate(0, -base * 0.94, 0);
+      p.sphere(base * 0.34, 7, 5);
+      p.push();
+      p.translate(base * 0.45, base * 0.04, 0);
+      p.rotateZ(-p.HALF_PI);
+      p.ambientMaterial(colors.dark);
+      p.cone(base * 0.11, base * 0.9, 5, 1);
+      p.pop();
+      p.pop();
+      p.pop();
+    };
+
     const drawBlackBear = (
       wildlife: WildlifeView,
       surface: number,
@@ -4265,6 +4364,66 @@ export function createTideweftReliefRenderer(
           }
           p.noStroke();
           break;
+        case "surface-dimples":
+          for (const [x, z, scale] of [
+            [-0.72, 0.24, 0.62],
+            [0.48, -0.32, 0.48],
+            [0.9, 0.38, 0.34],
+          ] as const) {
+            p.push();
+            p.translate(base * x, -base * 0.04, base * z);
+            p.rotateX(p.HALF_PI);
+            p.ambientMaterial(descriptor.primary);
+            p.torus(base * scale, base * 0.055, 8, 4);
+            p.pop();
+            p.push();
+            p.translate(base * (x + scale * 0.34), -base * 0.09, base * z);
+            p.ambientMaterial(descriptor.secondary);
+            p.box(base * 0.34, base * 0.06, base * 0.08);
+            p.pop();
+          }
+          break;
+        case "burrow-openings":
+          for (const [x, z, scale] of [
+            [-0.72, 0.32, 0.68],
+            [0.12, -0.34, 0.86],
+            [0.82, 0.28, 0.56],
+          ] as const) {
+            p.push();
+            p.translate(base * x, 0, base * z);
+            p.ambientMaterial(descriptor.primary);
+            p.ellipsoid(base * scale * 1.18, base * 0.08, base * scale * 0.86, 8, 3);
+            p.ambientMaterial(descriptor.dark);
+            p.translate(0, -base * 0.04, 0);
+            p.ellipsoid(base * scale, base * 0.1, base * scale * 0.7, 8, 3);
+            p.rotateX(p.HALF_PI);
+            p.ambientMaterial(descriptor.secondary);
+            p.torus(base * scale * 0.66, base * 0.07, 8, 4);
+            p.pop();
+          }
+          break;
+        case "feeding-scrapes":
+          p.stroke(descriptor.secondary);
+          p.strokeWeight(Math.max(1, base * 0.09));
+          for (const offset of [-0.48, -0.16, 0.16, 0.48]) {
+            p.line(
+              -base * 1.18,
+              -base * 0.03,
+              base * offset,
+              base * 0.92,
+              -base * 0.03,
+              base * offset * 1.42,
+            );
+          }
+          p.noStroke();
+          p.ambientMaterial(descriptor.primary);
+          for (const [x, z] of [[-0.82, -0.6], [-0.32, 0.6], [0.26, -0.5], [0.78, 0.52]] as const) {
+            p.push();
+            p.translate(base * x, -base * 0.04, base * z);
+            p.sphere(base * 0.09, 5, 3);
+            p.pop();
+          }
+          break;
         case "shelter-sign":
           p.ambientMaterial(descriptor.primary);
           p.cone(base * 1.45, base * 1.15, 6, 1);
@@ -4306,11 +4465,16 @@ export function createTideweftReliefRenderer(
             205,
           );
         }
-        const surface = discoveredReliefSurfaceHeightAt(
+        const terrainSurface = discoveredReliefSurfaceHeightAt(
           view.terrain,
           evidence.position,
           cache.mesh.verticalScale,
           true,
+        );
+        // Silverside dimples belong on the same water sheet as the live tide,
+        // while mudflat signs remain fixed to their physical ground surface.
+        const surface = terrainSurface + (
+          evidence.form === "surface-dimples" ? RELIEF_WATER_SURFACE_LIFT : 0
         );
         drawAggregateWildlifeEvidenceForm(evidence, surface, tileSize);
       }
@@ -4334,6 +4498,9 @@ export function createTideweftReliefRenderer(
           return true;
         case "northern-harrier":
           drawNorthernHarrier(wildlife, surface, tileSize, now);
+          return true;
+        case "snowy-egret":
+          drawSnowyEgret(wildlife, surface, tileSize);
           return true;
         case "black-bear":
           drawBlackBear(wildlife, surface, tileSize);

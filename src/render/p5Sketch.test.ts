@@ -248,6 +248,7 @@ const wildlifeView = (
     "marsh-fox": "Marsh fox",
     "fish-crow": "Fish crows",
     "northern-harrier": "Northern harrier",
+    "snowy-egret": "Snowy egret",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -258,6 +259,7 @@ const wildlifeView = (
     "marsh-fox": "FOX-",
     "fish-crow": "CROW-",
     "northern-harrier": "HARRIER-",
+    "snowy-egret": "EGRET-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -1126,6 +1128,141 @@ describe("Chart Wave-B wildlife presentation", () => {
     renderer.destroy();
   });
 
+  it.each([
+    ["atlantic-silverside", "surface-dimples", "Silverside surface dimples and school glints", "ellipse"],
+    ["atlantic-marsh-fiddler-crab", "burrow-openings", "Fiddler crab burrow openings", "ellipse"],
+    ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "Fiddler crab feeding scrapes", "line"],
+  ] as const)("draws and touch-selects low-cost %s %s without an actor alias", (
+    species,
+    form,
+    evidenceLabel,
+    structuralMethod,
+  ) => {
+    vi.stubGlobal("performance", { now: () => 2_117 });
+    p5Harness.reducedMotion = true;
+    const base = view(`chart-tidal-${form}`, { x: 12, y: 12 });
+    const evidence = aggregateWildlifeEvidenceView({
+      aggregateId: `TIDAL-AREA-${species}`,
+      evidenceId: `TIDAL-EVIDENCE-${form}`,
+      species,
+      form,
+      quickLabel: species === "atlantic-silverside"
+        ? "Atlantic silverside signs"
+        : "Atlantic marsh fiddler crab signs",
+      identityLabel: species === "atlantic-silverside"
+        ? "Atlantic silverside school signs"
+        : "Atlantic marsh fiddler crab area signs",
+      evidenceLabel,
+      selected: true,
+    });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: `chart-tidal-${form}-direct-detail`,
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 1,
+        detailDirectTileCount: 1,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "mudflat",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    expect(p5Harness.instance?.[structuralMethod]).toHaveBeenCalled();
+    const visibleText = (p5Harness.instance?.text as ReturnType<typeof vi.fn>)
+      .mock.calls.flat().map(String).join(" ");
+    expect(visibleText).not.toContain(evidence.aggregateId);
+    expect(visibleText).not.toContain(evidence.evidenceId);
+    expect(visibleText).not.toMatch(/\b48\b|actorId|mortality|carcass/iu);
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 207,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 207,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species,
+      aggregateId: evidence.aggregateId,
+      evidenceId: evidence.evidenceId,
+      point: { x: 12, y: 12 },
+    });
+    expect(dispatch.mock.calls.some(([command]) => (
+      command.type === "select" && command.entity === "living-actor"
+    ))).toBe(false);
+    renderer.destroy();
+  });
+
+  it("preserves a static snowy-egret probing posture under reduced motion", () => {
+    let now = 120;
+    vi.stubGlobal("performance", { now: () => now });
+    p5Harness.reducedMotion = true;
+    const base = view("chart-snowy-egret-reduced-posture", { x: 12, y: 12 });
+    let current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "mudflat",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [wildlifeView("snowy-egret", { behavior: "forage" })],
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+    const bezier = p5Harness.instance?.bezier as ReturnType<typeof vi.fn>;
+    const probing = bezier.mock.calls.map((call) => [...call]);
+
+    bezier.mockClear();
+    now = 2_120;
+    draw();
+    expect(bezier.mock.calls).toEqual(probing);
+
+    bezier.mockClear();
+    current = {
+      ...current,
+      wildlife: [wildlifeView("snowy-egret", { behavior: "watch" })],
+    };
+    draw();
+    expect(bezier.mock.calls).not.toEqual(probing);
+    renderer.destroy();
+  });
+
   it("draws direct cat pawprints without inventing a selectable cat actor", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("chart-cat-rain-evidence", { x: 12, y: 12 });
@@ -1275,7 +1412,8 @@ describe("Chart Wave-B wildlife presentation", () => {
   it.each([
     ["fish-crow", "CROW-", "#284b52", "triangle"],
     ["northern-harrier", "HARRIER-", "#8d765f", "quad"],
-  ] as const)("draws and touch-selects the distinct aerial %s form with reduced motion", (
+    ["snowy-egret", "EGRET-", "#f4f1df", "bezier"],
+  ] as const)("draws and touch-selects the distinct aerial or wader %s form with reduced motion", (
     species,
     prefix,
     primaryColor,
@@ -1285,7 +1423,11 @@ describe("Chart Wave-B wildlife presentation", () => {
     p5Harness.reducedMotion = true;
     const base = view(`chart-${species}`, { x: 12, y: 12 });
     const actor = wildlifeView(species, {
-      behavior: species === "fish-crow" ? "alarm" : "pursue",
+      behavior: species === "fish-crow"
+        ? "alarm"
+        : species === "snowy-egret"
+          ? "forage"
+          : "pursue",
       selected: true,
       ...(species === "fish-crow" ? { groupSize: 3 } : {}),
     });

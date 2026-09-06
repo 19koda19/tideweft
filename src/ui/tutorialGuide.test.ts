@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(28);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(29);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,13 +63,14 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("seven Wave-B roles");
-    expect(copy).toContain("supported or intentionally neutral");
-    expect(copy).toContain("fox can pressure rat and frog population areas");
-    expect(copy).toContain("neutral rabbit co-presence does nothing");
-    expect(copy).toContain("Visible flock estimates");
-    expect(copy).toContain("same heard-bearing contact as its stereo sound");
-    expect(copy).toContain("claiming a direction hearing cannot resolve");
+    expect(copy).toContain("first bounded Wave-C unit");
+    expect(copy).toContain("Atlantic-silverside school aggregate");
+    expect(copy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
+    expect(copy).toContain("at most one snowy egret");
+    expect(copy).toContain("tide changes water depth");
+    expect(copy).toContain("without rerolling any population");
+    expect(copy).toContain("lawfully see anonymous aquatic activity");
+    expect(copy).toContain("never a hidden capture, kill, carcass, fishing result, or consumed animal");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -245,10 +246,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 12");
-    expect(copy).toContain("sealed version 11 save migrates exactly once");
-    expect(copy).toContain("every established habitat-version-3 population byte, actor, group, aggregate population, item, Promise, evidence record, and world fact stays exact");
-    expect(copy).toContain("cannot add another population, reroll an animal, duplicate a group or consumed provision, or rewrite older ecology");
+    expect(copy).toContain("Outer save version 13");
+    expect(copy).toContain("sealed version 12 save migrates exactly once");
+    expect(copy).toContain("every established habitat-version-4 population byte, actor, group, aggregate population, item, Promise, disturbance, evidence record, and world fact stays exact");
+    expect(copy).toContain("cannot add another population, reroll an animal or tidal anchor, duplicate a group or consumed provision, or rewrite older ecology");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -331,6 +332,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("fish crows");
     expect(plannedCopy).toContain("northern harrier");
     expect(plannedCopy).toContain("southern leopard-frog population area");
+    expect(plannedCopy).toContain("Atlantic-silverside school aggregate");
+    expect(plannedCopy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
+    expect(plannedCopy).toContain("at most one snowy egret");
+    expect(plannedCopy).toContain("Rats, frogs, silversides, and fiddler crabs");
     expect(plannedCopy).toContain("aggregate populations rather than individual actors");
     expect(plannedCopy).toContain("Further dogs and wildlife species");
     expect(plannedCopy).toContain("worldwide populations");
@@ -356,7 +361,7 @@ describe("TIDEWEFT field-manual content", () => {
         ].join(" ");
 
     expect(tutorialControlById("inspect-person")).toMatchObject({
-      input: "Click / tap a visible person, dog, wild animal, or rat/frog population sign",
+      input: "Click / tap a visible person, dog, wild animal, or population sign",
       audience: "all",
     });
     expect(copy).toContain("OBSERVED");
@@ -368,7 +373,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ROUTE AROUND THIS SPOT");
     expect(copy).toContain("exactly one dried-fish unit");
     expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
-    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, or northern harrier");
+    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, or snowy egret");
     expect(copy).toContain("A heard animal alarm gives an uncertain direction");
     expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("your previous route and choice history remain unchanged");
@@ -378,8 +383,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("bounded set of representatives");
     expect(copy).toContain("genuinely absent instead of being rerolled");
     expect(copy).toContain("deer persist in herds, gulls in flocks, and up to three fish-crow representatives in one CROW-FLOCK");
-    expect(copy).toContain("Black bears and the single northern-harrier representative stay solitary");
-    expect(copy).toContain("Brown rats and southern leopard frogs remain conserved population-area aggregates");
+    expect(copy).toContain("Black bears, the northern harrier, and at most one snowy egret stay solitary");
+    expect(copy).toContain("Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs remain conserved");
     expect(copy).toContain("Lawfully perceived predators, dogs, people, and other supported animal roles");
     expect(copy).toContain("neutral animal such as a rabbit cannot disturb one merely by being nearby");
     expect(copy).toContain("Exposed loose provisions can attract the rat area");
@@ -411,12 +416,19 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("movement can leave canid pawprints");
     expect(copy).toContain("saved sign stays at that movement site");
     expect(copy).toContain("is not selectable or usable as a remote locator");
-    expect(copy).toContain("Rat- and frog-sign ABOUT are close-only because a population sign is not an actor");
+    expect(copy).toContain("Rat, frog, silverside, and fiddler-crab sign ABOUT is close-only because a population sign is not an actor");
     expect(copy).toContain("standable shallow water");
     expect(copy).toContain("remaining saved intent to physiology");
     expect(copy).toContain("ages existing perception without adding facts");
     expect(copy).toContain("conserves 64–72 units across no more than three saved wetland anchors");
     expect(copy).toContain("Weather alone cannot create, kill, duplicate, or reroll frogs");
+    expect(copy).toContain("one conserved non-addressable school aggregate");
+    expect(copy).toContain("one conserved non-addressable area aggregate");
+    expect(copy).toContain("Fish evacuate a drying anchor into saved wet refuge immediately");
+    expect(copy).toContain("Surface dimples, brief school glints, burrow openings, and feeding scrapes");
+    expect(copy).toContain("shared vision gives it a current anonymous AQUATIC ACTIVITY observation");
+    expect(copy).toContain("only then can shared locomotion carry it toward that observed edge");
+    expect(copy).toContain("cannot capture, injure, kill, consume, create a carcass, or implement fishing");
     expect(copy).toContain("deterministic low quartering search");
     expect(copy).toContain("only a crow actually mobbing it becomes pressure that can break the pursuit");
     expect(copy).toContain("At rest time, crows seek authenticated habitat perches");
@@ -424,14 +436,28 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("nonlethal player-absent aftermath");
     expect(copy).toContain("no harm or cargo interaction");
     expect(copy).toContain("Animals do not attack, receive injuries, die, leave carcasses, or consume live prey");
-    expect(copy).toContain("Complete scent and evidence tracking");
+    expect(copy).toContain("complete scent and evidence tracking");
     expect(copy).toContain("foliage consumption");
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species, worldwide populations, the full bestiary");
-    expect(copy).toContain("seven Wave-B ecological roles are closed only for one bounded");
+    expect(copy).toContain("seven Wave-B ecological roles remain closed only for one bounded");
+    expect(copy).toContain("first bounded Wave-C tidal unit");
+    expect(copy).toContain("do not create ecology in every distant region or complete Wave C");
     expect(copy).toContain("exhaustive species-pair interaction matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
+  });
+
+  it("teaches the current Tide Table save adoption without rewriting older ecology", () => {
+    const saves = tutorialSectionById("saves-and-quiet-hour");
+    const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
+    expect(copy).toContain("Outer save version 13 preserves habitat version 5");
+    expect(copy).toContain("all four aggregate populations");
+    expect(copy).toContain("tidal-anchor elevations");
+    expect(copy).toContain("sealed version 12 save migrates exactly once");
+    expect(copy).toContain("every established habitat-version-4 population byte");
+    expect(copy).toContain("Atlantic-silverside, Atlantic-marsh-fiddler-crab, and snowy-egret ecology");
+    expect(copy).toContain("cannot add another population, reroll an animal or tidal anchor");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

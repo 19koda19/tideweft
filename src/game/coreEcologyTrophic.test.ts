@@ -83,6 +83,31 @@ describe("core ecology trophic capability resolver", () => {
       .toBe("large-predator");
   });
 
+  it("recognizes aquatic-foraging pressure through shared capabilities without creating pursuit", () => {
+    expect(coreEcologyTrophicPerceivedClass(
+      "atlantic-silverside",
+      "snowy-egret",
+    )).toBe("aquatic-foraging-pressure");
+    expect(coreEcologyTrophicPerceivedClass(
+      "atlantic-marsh-fiddler-crab",
+      "snowy-egret",
+    )).toBe("aquatic-foraging-pressure");
+    expect(coreEcologyTrophicPerceivedClass(
+      "snowy-egret",
+      "atlantic-silverside",
+    )).toBeNull();
+    expect(coreEcologyTrophicPerceivedClass(
+      "snowy-egret",
+      "atlantic-marsh-fiddler-crab",
+    )).toBeNull();
+    expect(coreEcologyCanPursueLivingActor("snowy-egret", "atlantic-silverside"))
+      .toBe(false);
+    expect(coreEcologyCanPursueLivingActor(
+      "snowy-egret",
+      "atlantic-marsh-fiddler-crab",
+    )).toBe(false);
+  });
+
   it("is total and deterministic across the declared roster", () => {
     const first = new Map<string, unknown>();
     for (const observer of LIVING_ACTOR_SPECIES) {

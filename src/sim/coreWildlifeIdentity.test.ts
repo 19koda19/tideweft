@@ -32,7 +32,7 @@ function input(
 }
 
 describe("core wildlife identity", () => {
-  it("appends the rain-chorus identity profiles without rewriting prior wildlife", () => {
+  it("appends the first tidal-ecology contracts without rewriting prior wildlife", () => {
     expect(CORE_WILDLIFE_IDENTITY_VERSION).toBe(1);
     expect(CORE_WILDLIFE_SPECIES).toEqual([
       "deer",
@@ -45,6 +45,9 @@ describe("core wildlife identity", () => {
       "fish-crow",
       "northern-harrier",
       "southern-leopard-frog",
+      "atlantic-silverside",
+      "atlantic-marsh-fiddler-crab",
+      "snowy-egret",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -155,6 +158,49 @@ describe("core wildlife identity", () => {
       groupOrganization: null,
       locomotionClass: "terrestrial",
       taxonomicClass: "amphibian",
+    });
+    expect(getCoreWildlifeProfile("atlantic-silverside")).toMatchObject({
+      maximumPatchPopulation: 48,
+      roles: ["prey", "small-prey", "forager"],
+      foodAffinities: { "shore-forage": 1_000_000, "live-prey": 0 },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("atlantic-silverside")).toMatchObject({
+      actorRepresentation: "aggregate",
+      catalogIdentityForm: "aggregate",
+      dietClass: "carnivore",
+      groupOrganization: "school",
+      groupStableIdNamespace: "SILVERSIDE-SCHOOL",
+      locomotionClass: "aquatic",
+      taxonomicClass: "fish",
+    });
+    expect(getCoreWildlifeProfile("atlantic-marsh-fiddler-crab")).toMatchObject({
+      maximumPatchPopulation: 80,
+      roles: ["prey", "small-prey", "forager", "detritivore"],
+      foodAffinities: { "shore-forage": 1_000_000, "live-prey": 0 },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("atlantic-marsh-fiddler-crab")).toMatchObject({
+      actorRepresentation: "aggregate",
+      catalogIdentityForm: "aggregate",
+      dietClass: "detritivore",
+      groupOrganization: null,
+      locomotionClass: "amphibious",
+      taxonomicClass: "invertebrate",
+    });
+    expect(getCoreWildlifeProfile("snowy-egret")).toMatchObject({
+      maximumPatchPopulation: 1,
+      roles: ["forager"],
+      foodAffinities: { "shore-forage": 1_000_000, "live-prey": 0 },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("snowy-egret")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      dietClass: "carnivore",
+      groupOrganization: null,
+      locomotionClass: "amphibious",
+      taxonomicClass: "bird",
     });
   });
 

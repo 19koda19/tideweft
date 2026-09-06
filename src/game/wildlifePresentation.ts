@@ -30,6 +30,7 @@ import {
   coreEcologySpeciesCanOwnActorAddress,
   coreEcologySpeciesHasRuntimeCapability,
 } from "./coreEcologySpeciesRuntimePolicy";
+import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import {
   VISIBILITY_DIRECT,
   hasValidPerceptionSignature,
@@ -54,7 +55,7 @@ export const WILDLIFE_DIRECT_DETAIL_MAX_DISTANCE_UNITS = 96_000 as const;
 /** Species with authoritative individual actor materialization. */
 export type IndividualWildlifeSpecies = Exclude<
   CoreWildlifeSpecies,
-  "brown-rat" | "southern-leopard-frog"
+  CoreEcologyAggregateSpecies
 >;
 
 /** Species whose authoritative identity is a conserved population area. */
@@ -71,6 +72,7 @@ export type WildlifePresentationBehavior =
   | "retreat"
   | "rest"
   | "perch"
+  | "flight"
   | "quarter";
 
 /** Signed current player perception plus an optional count of visible group representatives. */
@@ -128,12 +130,15 @@ export interface WildlifePopulationEvidenceObservation {
 }
 
 export type WildlifePopulationEvidenceForm =
+  | "burrow-openings"
+  | "feeding-scrapes"
   | "gnaw-marks"
   | "shelter-sign"
   | "small-tracks"
   | "paired-tracks"
   | "canid-pawprints"
-  | "frog-tracks";
+  | "frog-tracks"
+  | "surface-dimples";
 
 interface WildlifePopulationEvidencePresentationBase {
   readonly version: typeof WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION;
@@ -211,12 +216,15 @@ type WildlifePresentationForm =
   | "gull-flock"
   | "fish-crow-flock"
   | "northern-harrier"
+  | "snowy-egret"
   | "black-bear"
   | "brown-rat"
   | "domestic-cat"
   | "marsh-rabbit"
   | "marsh-fox"
-  | "southern-leopard-frog";
+  | "southern-leopard-frog"
+  | "atlantic-silverside"
+  | "atlantic-marsh-fiddler-crab";
 
 interface WildlifeSpeciesPresentationDescriptor {
   readonly form: WildlifePresentationForm;
@@ -377,6 +385,48 @@ const PRESENTATION_BY_SPECIES: Readonly<
     baseSizeScale: 0.24,
     observableForm: null,
   },
+  "atlantic-silverside": {
+    form: "atlantic-silverside",
+    representation: "population-area",
+    identificationClarity: 480_000,
+    unidentifiedQuickLabel: "Water-surface activity",
+    unidentifiedIdentityLabel: "Unidentified water-surface activity",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.3,
+    observableForm: null,
+  },
+  "atlantic-marsh-fiddler-crab": {
+    form: "atlantic-marsh-fiddler-crab",
+    representation: "population-area",
+    identificationClarity: 500_000,
+    unidentifiedQuickLabel: "Mudflat activity",
+    unidentifiedIdentityLabel: "Unidentified mudflat activity",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.28,
+    observableForm: null,
+  },
+  "snowy-egret": {
+    form: "snowy-egret",
+    representation: "actor",
+    identificationClarity: 330_000,
+    unidentifiedQuickLabel: "Unknown wader",
+    unidentifiedIdentityLabel: "Unidentified wading bird",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "plumage",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.84,
+    observableForm: "Slender, long-legged wader",
+  },
 });
 const BEHAVIOR_CLARITY = 180_000;
 const CONDITION_CLARITY = 260_000;
@@ -446,6 +496,43 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
         identifiedLabel: "Leopard frog mud impressions",
         unidentifiedLabel: "Small wetland impressions",
         sizeScale: 0.78,
+      },
+    },
+  },
+  "atlantic-silverside": {
+    identifiedQuickLabel: "Atlantic silverside signs",
+    unidentifiedQuickLabel: "Water-surface signs",
+    identifiedIdentityLabel: "Atlantic silverside school signs",
+    unidentifiedIdentityLabel: "Unidentified water-surface activity",
+    byKind: {
+      "surface-dimple": {
+        form: "surface-dimples",
+        minimumClarity: 280_000,
+        identifiedLabel: "Silverside surface dimples and school glints",
+        unidentifiedLabel: "Surface dimples and brief glints",
+        sizeScale: 1.05,
+      },
+    },
+  },
+  "atlantic-marsh-fiddler-crab": {
+    identifiedQuickLabel: "Atlantic marsh fiddler crab signs",
+    unidentifiedQuickLabel: "Mudflat signs",
+    identifiedIdentityLabel: "Atlantic marsh fiddler crab area signs",
+    unidentifiedIdentityLabel: "Unidentified mudflat activity",
+    byKind: {
+      "burrow-opening": {
+        form: "burrow-openings",
+        minimumClarity: 300_000,
+        identifiedLabel: "Fiddler crab burrow openings",
+        unidentifiedLabel: "Small burrow openings",
+        sizeScale: 0.94,
+      },
+      "feeding-scrape": {
+        form: "feeding-scrapes",
+        minimumClarity: 340_000,
+        identifiedLabel: "Fiddler crab feeding scrapes",
+        unidentifiedLabel: "Fine mud feeding scrapes",
+        sizeScale: 0.9,
       },
     },
   },
@@ -590,6 +677,13 @@ function isIndividualWildlifeSpecies(
   return coreEcologySpeciesCanOwnActorAddress(species);
 }
 
+function sameWorldPosition(left: WorldPosition, right: WorldPosition): boolean {
+  return left.region.x === right.region.x
+    && left.region.y === right.region.y
+    && left.localX === right.localX
+    && left.localY === right.localY;
+}
+
 /**
  * Projects only canonical physical evidence that is in the signed direct-detail
  * field. Habitat anchors, actor cognition, activity likelihood, counts, causes,
@@ -612,12 +706,42 @@ export function projectWildlifePopulationEvidencePresentations(
   const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
   const context = directEvidenceObservationContext(input.observation);
   if (patch === null || context === null) return null;
+  const ownsTidalHabitat = patch.derivation.kind === "habitat-v5"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v5";
+  const tidal = ownsTidalHabitat
+    ? projectCoreEcologyTidalTable(patch, patch.updatedAtTick)
+    : null;
+  if (ownsTidalHabitat && tidal === null) return null;
 
   const presentations: WildlifePopulationEvidencePresentation[] = [];
   for (const population of patch.aggregatePopulations) {
     if (!isAggregateWildlifeSpecies(population.species)) continue;
     const speciesDescriptor = POPULATION_EVIDENCE_BY_SPECIES[population.species];
+    const activityScale = populationEvidenceActivityScale(
+      population.species,
+      population.activitySignal.intensity,
+    );
+    // The Wave-C cues describe present activity, not a permanent census mark.
+    // Zero activity therefore yields no cue. Older rat/frog signs retain their
+    // exact pre-Wave-C projection behavior through the neutral scale below.
+    if (activityScale === null) continue;
     for (const evidence of population.evidence) {
+      if (
+        population.species === "atlantic-silverside"
+        || population.species === "atlantic-marsh-fiddler-crab"
+      ) {
+        const occupiedAnchor = population.anchors.find((anchor) => (
+          sameWorldPosition(anchor.position, evidence.position)
+          && anchor.populationUnits > 0
+        ));
+        const depth = occupiedAnchor === undefined
+          ? undefined
+          : tidal?.anchorDepths.find((candidate) => (
+              candidate.aggregateId === population.aggregateId
+              && candidate.anchorOrdinal === occupiedAnchor.anchorOrdinal
+            ));
+        if (depth?.activityUsable !== true) continue;
+      }
       const detail = directEvidenceDetail(evidence.position, context);
       const descriptor = speciesDescriptor.byKind[evidence.kind];
       if (descriptor === undefined) continue;
@@ -645,7 +769,9 @@ export function projectWildlifePopulationEvidencePresentations(
           x: detail.point.x * input.tileSize / WORLD_POSITION_UNITS_PER_TILE,
           y: detail.point.y * input.tileSize / WORLD_POSITION_UNITS_PER_TILE,
         },
-        sizeScale: descriptor.sizeScale,
+        sizeScale: activityScale === 1
+          ? descriptor.sizeScale
+          : Math.round(descriptor.sizeScale * activityScale * 1_000) / 1_000,
         distanceUnits: detail.distanceUnits,
         selected: evidence.evidenceId === input.selectedEvidenceId,
       }));
@@ -717,6 +843,25 @@ function isIndividualEvidenceSpecies(
   return species === "domestic-cat"
     || species === "marsh-rabbit"
     || species === "marsh-fox";
+}
+
+/**
+ * Present tidal activity is reduced to coarse visual bands. This lets ebb and
+ * flood quiet or strengthen the cue without exporting the fixed-point signal
+ * (or any population count) through renderer geometry.
+ */
+function populationEvidenceActivityScale(
+  species: AggregateWildlifeSpecies,
+  intensity: number,
+): number | null {
+  if (
+    species !== "atlantic-silverside"
+    && species !== "atlantic-marsh-fiddler-crab"
+  ) return 1;
+  if (intensity <= 0) return null;
+  if (intensity <= 333_333) return 0.76;
+  if (intensity <= 666_666) return 0.92;
+  return 1.08;
 }
 
 function directDetail(
@@ -960,11 +1105,17 @@ function resolvePresentationActivity(
 
 function activityBehavior(
   activity: CoreEcologyActivityProjection | null,
-): Extract<WildlifePresentationBehavior, "perch" | "quarter" | "rest"> | null {
+): Extract<
+  WildlifePresentationBehavior,
+  "flight" | "forage" | "perch" | "quarter" | "rest"
+> | null {
   switch (activity?.presentationSignal) {
     case "perched": return "perch";
     case "low-quartering-flight": return "quarter";
     case "resting": return "rest";
+    case "tidal-relocation-flight": return "flight";
+    case "wading-search": return "forage";
+    case "wading-scan": return null;
     case null:
     case undefined:
       return null;
@@ -995,10 +1146,13 @@ function observableBehavior(
   intent: CoreWildlifeIntentKind,
   activity: CoreEcologyActivityProjection | null,
 ): string {
+  if (activity?.presentationSignal === "wading-scan") return "Scanning shallows";
   const projected = activityBehavior(activity);
   if (projected === "perch") return "Perched";
   if (projected === "quarter") return "Quartering low";
+  if (projected === "flight") return "Flying";
   if (projected === "rest") return "Resting";
+  if (projected === "forage") return "Foraging";
   switch (intent) {
     case "observe": return "Watching";
     case "disengage": return "Moving away";
@@ -1018,7 +1172,9 @@ function coarseMotion(
   activity: CoreEcologyActivityProjection | null,
 ): string {
   const projected = activityBehavior(activity);
-  if (projected === "quarter") return "Moving";
+  if (projected === "quarter" || projected === "forage" || projected === "flight") {
+    return "Moving";
+  }
   if (projected === "perch" || projected === "rest") return "Still";
   return intent === "observe" || intent === "guard" || intent === "rest"
     ? "Still"

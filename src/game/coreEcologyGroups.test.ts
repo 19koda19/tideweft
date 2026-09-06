@@ -6,6 +6,7 @@ import {
   CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
   CORE_ECOLOGY_GROUP_MAX_SIGNALS,
   CORE_ECOLOGY_GROUP_REJOIN_COMPLETE_COHESION,
+  CORE_ECOLOGY_GROUP_SPECIES,
   canonicalizeCoreEcologyGroup,
   canonicalizeCoreEcologyGroupSet,
   coreEcologyGroupComponentForMember,
@@ -77,7 +78,8 @@ function disturbance(
 }
 
 describe("core ecology social groups", () => {
-  it("creates stable order-independent deer herds, gull flocks, and fish-crow flocks while solitary species fail closed", () => {
+  it("admits only actor-backed herds/flocks and fails aggregate schools or solitary species closed", () => {
+    expect(CORE_ECOLOGY_GROUP_SPECIES).toEqual(["deer", "gull", "fish-crow"]);
     const deer = deerGroup({ memberOrdinals: [7, 2, 5] });
     const reordered = deerGroup({ memberOrdinals: [5, 7, 2] });
     const gull = createCoreEcologyGroup({
@@ -149,6 +151,9 @@ describe("core ecology social groups", () => {
       "marsh-fox",
       "northern-harrier",
       "southern-leopard-frog",
+      "atlantic-silverside",
+      "atlantic-marsh-fiddler-crab",
+      "snowy-egret",
     ] as const) {
       expect(() => createCoreEcologyGroup({
         seed: SEED,

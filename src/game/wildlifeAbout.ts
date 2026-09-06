@@ -139,6 +139,24 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "WETLAND-ANIMAL SIGNS",
     representation: "population-area",
   },
+  "atlantic-silverside": {
+    identifiedName: "Atlantic silverside",
+    identifiedHeading: "ATLANTIC SILVERSIDE SCHOOL SIGNS",
+    unidentifiedHeading: "WATER-SURFACE ACTIVITY",
+    representation: "population-area",
+  },
+  "atlantic-marsh-fiddler-crab": {
+    identifiedName: "Atlantic marsh fiddler crab",
+    identifiedHeading: "ATLANTIC MARSH FIDDLER CRAB SIGNS",
+    unidentifiedHeading: "MUDFLAT ACTIVITY",
+    representation: "population-area",
+  },
+  "snowy-egret": {
+    identifiedName: "Snowy egret",
+    identifiedHeading: "SNOWY EGRET",
+    unidentifiedHeading: "UNKNOWN WADER",
+    representation: "individual",
+  },
 });
 
 /**

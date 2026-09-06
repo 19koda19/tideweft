@@ -20,6 +20,7 @@ import {
  */
 export type CoreEcologyTrophicPerceivedClass =
   | "aerial-predator"
+  | "aquatic-foraging-pressure"
   | "food-competitor"
   | "large-predator"
   | "live-prey"
@@ -73,6 +74,22 @@ export function coreEcologyTrophicPerceivedClass(
   const subjectIsSmallPredator = hasRole(subject, "small-predator");
   const subjectIsPredator = subjectIsSmallPredator || hasRole(subject, "predator");
   const subjectIsAddressable = isLivingSpeciesActorAddressable(subject);
+
+  // Aquatic foraging is a reusable observed-role relationship rather than a
+  // declaration that every wader is a general predator. Small aquatic or
+  // amphibious prey can recognize pressure from any addressable actor that
+  // owns this capability. The reverse direction remains non-pursuit because
+  // aggregate prey has no actor address and this resolver creates no capture,
+  // consumption, mortality, or custody outcome.
+  if (
+    observerIsSmallPrey
+    && (
+      coreEcologySpeciesHasRuntimeCapability(observer, "aquatic-locomotion")
+      || coreEcologySpeciesHasRuntimeCapability(observer, "amphibious-locomotion")
+    )
+    && subjectIsAddressable
+    && coreEcologySpeciesHasRuntimeCapability(subject, "aquatic-foraging")
+  ) return "aquatic-foraging-pressure";
 
   // A broad predator is currently the large-predator capability. It pressures
   // smaller predators, prey, domestic dogs and humans without implying combat.

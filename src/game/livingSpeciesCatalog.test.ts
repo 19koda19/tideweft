@@ -35,6 +35,8 @@ describe("Living Weft species module catalog", () => {
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
       .toEqual([...LIVING_ACTOR_SPECIES].sort());
     expect(LIVING_SPECIES_CATALOG.modules.map(({ moduleId }) => moduleId)).toEqual([
+      "living-species:atlantic-marsh-fiddler-crab:v1",
+      "living-species:atlantic-silverside:v1",
       "living-species:black-bear:v1",
       "living-species:brown-rat:v1",
       "living-species:deer:v1",
@@ -46,6 +48,7 @@ describe("Living Weft species module catalog", () => {
       "living-species:marsh-fox:v1",
       "living-species:marsh-rabbit:v1",
       "living-species:northern-harrier:v1",
+      "living-species:snowy-egret:v1",
       "living-species:southern-leopard-frog:v1",
     ]);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
@@ -664,6 +667,150 @@ describe("Living Weft species module catalog", () => {
       health: { implementation: "unimplemented", causalDeath: false },
       aftermath: { implementation: "unimplemented", carcassModel: "none" },
     });
+  });
+
+  it("defines the first Wave-C tidal contracts without actor-addressing aggregate animals", () => {
+    const silverside = livingSpeciesModule("atlantic-silverside");
+    const crab = livingSpeciesModule("atlantic-marsh-fiddler-crab");
+    const egret = livingSpeciesModule("snowy-egret");
+
+    expect(silverside).toMatchObject({
+      profile: {
+        implementation: "foundation",
+        taxonomicClass: "fish",
+        ecologicalClasses: ["forage-fish", "forager", "prey", "small-prey"],
+      },
+      identity: { form: "aggregate", stableIdNamespace: "SILVERSIDE-AREA" },
+      spatial: { positionModel: "segmented-area", authoritativeHeading: true },
+      population: {
+        strategy: "aggregate-field",
+        materialization: "threshold",
+        maxMaterializedPerRegion: 0,
+        authoritativeUnit: "group-records",
+        dematerialization: "reconcile-group-state",
+      },
+      locomotion: {
+        decisionModel: "aggregate",
+        media: [
+          { medium: "deep-water", relativeCapability: 850_000 },
+          { medium: "shallow-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+        ],
+        movementVerbs: ["school", "swim"],
+      },
+      social: {
+        implementation: "foundation",
+        groupModel: "group",
+        group: {
+          status: "foundation",
+          representation: "group-actor",
+          organizationKinds: ["school"],
+          stableIdNamespace: "SILVERSIDE-SCHOOL",
+          membership: true,
+          informationPropagation: false,
+          splitMerge: true,
+          separationReunion: true,
+          sharedMemory: false,
+        },
+      },
+    });
+    expect(crab).toMatchObject({
+      profile: {
+        implementation: "foundation",
+        taxonomicClass: "invertebrate",
+        ecologicalClasses: ["deposit-feeder", "detritivore", "forager", "prey", "small-prey"],
+      },
+      identity: { form: "aggregate", stableIdNamespace: "FIDDLER-AREA" },
+      spatial: { positionModel: "segmented-area", authoritativeHeading: false },
+      population: { maxMaterializedPerRegion: 0, authoritativeUnit: "population-patch" },
+      locomotion: {
+        decisionModel: "aggregate",
+        media: [
+          { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "shallow-water", relativeCapability: 420_000 },
+        ],
+        movementVerbs: ["burrow", "emerge", "scuttle"],
+      },
+      social: { groupModel: "colony", group: { status: "unimplemented" } },
+    });
+    expect(egret).toMatchObject({
+      profile: {
+        implementation: "foundation",
+        taxonomicClass: "bird",
+        ecologicalClasses: ["aquatic-forager", "forager", "wader"],
+      },
+      identity: { form: "individual", stableIdNamespace: "EGRET" },
+      spatial: { positionModel: "segmented-point", authoritativeHeading: true },
+      population: { maxMaterializedPerRegion: 1 },
+      locomotion: {
+        decisionModel: "individual",
+        media: [
+          { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "land", relativeCapability: 720_000 },
+          { medium: "shallow-water", relativeCapability: 880_000 },
+        ],
+        movementVerbs: ["fly", "relocate", "wade"],
+      },
+      social: { groupModel: "solitary", group: { status: "unimplemented" } },
+    });
+
+    expect(silverside?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
+      .toEqual(["waterborne-vibration"]);
+    expect(silverside?.senses.channels.find(({ channel }) => channel === "scent")?.modalities)
+      .toEqual(["dissolved-chemical"]);
+    expect(crab?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
+      .toEqual(["substrate-vibration", "waterborne-vibration"]);
+    expect(crab?.senses.channels.find(({ channel }) => channel === "scent")?.modalities)
+      .toEqual(["dissolved-chemical"]);
+    expect(egret?.senses.channels.find(({ channel }) => channel === "hearing")?.modalities)
+      .toEqual(["airborne-sound"]);
+
+    for (const module of [silverside, crab, egret]) {
+      expect(module).not.toBeNull();
+      expect(module?.environment.water).toMatchObject({ status: "foundation" });
+      expect(module?.environment.tide).toMatchObject({ status: "foundation" });
+      expect(module?.health).toEqual({
+        implementation: "unimplemented",
+        ownerId: null,
+        vitalityAxis: null,
+        injuryAxis: null,
+        incapacitation: false,
+        causalDeath: false,
+        recovery: false,
+      });
+      expect(module?.lifeHistory.mortality).toBe("unimplemented");
+      expect(module?.aftermath).toMatchObject({
+        implementation: "unimplemented",
+        carcassModel: "none",
+      });
+      expect(module?.interactions.targets.map(({ targetClass }) => targetClass))
+        .toEqual(LIVING_SPECIES_INTERACTION_TARGET_CLASSES);
+      expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+        verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+      ))).toBe(false);
+    }
+
+    const availableTargets = (module: LivingSpeciesModule | null) => module?.interactions.targets
+      .filter(({ policy }) => policy === "available")
+      .map(({ targetClass }) => targetClass);
+    expect(availableTargets(silverside)).toEqual([
+      "aquatic-animal", "dog", "food", "human", "predator", "same-species", "water",
+    ]);
+    expect(availableTargets(crab)).toEqual([
+      "aquatic-animal", "dog", "food", "human", "predator", "same-species", "water",
+    ]);
+    expect(availableTargets(egret)).toEqual([
+      "aquatic-animal", "dog", "food", "human", "predator", "water",
+    ]);
+    expect(egret?.interactions.targets.find(({ targetClass }) => targetClass === "aquatic-animal"))
+      .toMatchObject({
+        verbs: ["approach", "probe"],
+        escalationConstraints: [
+          "aggregate-unit-conservation",
+          "direct-perception-required",
+          "no-health-or-mortality-outcome",
+          "nonlethal-pressure-only",
+        ],
+      });
   });
 
   it("makes registration order irrelevant while persisted catalog order is canonical", () => {
@@ -1310,6 +1457,8 @@ describe("Living Weft species module catalog", () => {
     for (const module of LIVING_SPECIES_CATALOG.modules) {
       expect(module.spatial).toMatchObject({
         positionModel: module.speciesId === "brown-rat"
+          || module.speciesId === "atlantic-marsh-fiddler-crab"
+          || module.speciesId === "atlantic-silverside"
           || module.speciesId === "southern-leopard-frog"
           ? "segmented-area"
           : "segmented-point",
@@ -1322,7 +1471,10 @@ describe("Living Weft species module catalog", () => {
           : "unimplemented",
       );
       expect(module.evidence.status).toBe(
-        module.speciesId === "brown-rat"
+        module.speciesId === "atlantic-marsh-fiddler-crab"
+          || module.speciesId === "atlantic-silverside"
+          ? "foundation"
+          : module.speciesId === "brown-rat"
           || module.speciesId === "domestic-cat"
           || module.speciesId === "marsh-rabbit"
           || module.speciesId === "marsh-fox"
@@ -1334,7 +1486,13 @@ describe("Living Weft species module catalog", () => {
       expect(module.environment.livingCover.status).toBe("unimplemented");
       expect(module.environment.possibility.status).toBe("unimplemented");
       expect(module.environment.terrain.status).toBe("unimplemented");
-      expect(module.environment.tide.status).toBe("unimplemented");
+      const tidalFoundation = module.speciesId === "atlantic-marsh-fiddler-crab"
+        || module.speciesId === "atlantic-silverside"
+        || module.speciesId === "snowy-egret";
+      expect(module.environment.tide.status).toBe(
+        tidalFoundation ? "foundation" : "unimplemented",
+      );
+      if (tidalFoundation) expect(module.environment.water.status).toBe("foundation");
       expect(module.persistence.generationMigration).toBe("preserve-materialized-identity");
       expect(module.senses.implementation).toBe("foundation");
       expect(module.social.communicationChannels).toEqual(
@@ -1347,11 +1505,13 @@ describe("Living Weft species module catalog", () => {
           : [],
       );
       expect(module.social.group.status).toBe(
-        module.speciesId === "deer"
-          || module.speciesId === "gull"
-          || module.speciesId === "fish-crow"
-          ? "active"
-          : "unimplemented",
+        module.speciesId === "atlantic-silverside"
+          ? "foundation"
+          : module.speciesId === "deer"
+            || module.speciesId === "gull"
+            || module.speciesId === "fish-crow"
+            ? "active"
+            : "unimplemented",
       );
       expect(module.inventory.implementation).toBe("unimplemented");
       expect(module.locomotion.crossRegion).toBe(

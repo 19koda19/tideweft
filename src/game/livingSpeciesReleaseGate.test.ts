@@ -14,6 +14,9 @@ import {
   WAVE_B_BOUNDED_EXCLUDED_CLAIMS,
   WAVE_B_BOUNDED_STARTING_HARBOR_READINESS,
   WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES,
+  WAVE_C_TIDAL_TABLE_BOUNDED_READINESS,
+  WAVE_C_TIDAL_TABLE_EXCLUDED_CLAIMS,
+  WAVE_C_TIDAL_TABLE_SPECIES,
   alpha16MarshEdgeBoundedReadiness,
   alpha17RainChorusBoundedReadiness,
   auditLivingSpeciesReleaseGate,
@@ -22,6 +25,7 @@ import {
   createLivingSpeciesReleaseGateSet,
   livingSpeciesReadinessReport,
   waveBBoundedStartingHarborReadiness,
+  waveCTidalTableBoundedReadiness,
   type LivingSpeciesReleaseGate,
 } from "./livingSpeciesReleaseGate";
 
@@ -426,6 +430,139 @@ describe("Living Weft species release gate", () => {
       .toContain("game:core-ecology:v3");
     expect(readiness.roles.find(({ role }) => role === "amphibian")?.evidenceOwnerIds)
       .toContain("game:core-ecology:v4");
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.roles)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.blockingRoles)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("authenticates the bounded Tide Table without claiming migration or publication", () => {
+    const readiness = waveCTidalTableBoundedReadiness();
+
+    expect(readiness).toEqual(WAVE_C_TIDAL_TABLE_BOUNDED_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "tidal-table",
+      scope: "bounded-starting-harbor-tidal",
+      speciesIds: [
+        "atlantic-silverside",
+        "atlantic-marsh-fiddler-crab",
+        "snowy-egret",
+      ],
+      evidenceAuthenticated: true,
+      roleCoverageReady: true,
+      broadInteractionCoverageReady: true,
+      tidalResponseReady: true,
+      signedFrameAggregateContinuityReady: true,
+      localWaderContinuityReady: true,
+      performanceEvidenceReady: true,
+      boundedCandidateReady: true,
+      blockingRoles: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+    });
+    expect(readiness.speciesIds).toEqual(WAVE_C_TIDAL_TABLE_SPECIES);
+    expect(readiness.excludedClaims).toEqual(WAVE_C_TIDAL_TABLE_EXCLUDED_CLAIMS);
+    expect(readiness.excludedClaims).toEqual([
+      "worldwide-ecology",
+      "wildlife-promotion",
+      "ecological-cross-region-migration",
+      "mortality",
+      "capture",
+      "consumption",
+      "carcasses",
+      "fishing",
+      "harvest",
+      "waterfowl",
+      "otter-like-predator",
+      "full-wave-c",
+      "full-directive-04-1",
+    ]);
+    expect(readiness.roles.map(({ role, speciesId, representation, continuity }) => ({
+      role,
+      speciesId,
+      representation,
+      continuity,
+    }))).toEqual([
+      {
+        role: "forage-fish-school",
+        speciesId: "atlantic-silverside",
+        representation: "school-aggregate",
+        continuity: "signed-frame-aggregate-continuity",
+      },
+      {
+        role: "intertidal-crab-area",
+        speciesId: "atlantic-marsh-fiddler-crab",
+        representation: "area-aggregate",
+        continuity: "signed-frame-aggregate-continuity",
+      },
+      {
+        role: "wader",
+        speciesId: "snowy-egret",
+        representation: "individual-wader",
+        continuity: "bounded-local-individual-continuity",
+      },
+    ]);
+
+    for (const role of readiness.roles) {
+      expect(role).toMatchObject({
+        evidenceAuthenticated: true,
+        representationAuthenticated: true,
+        interactionContractAuthenticated: true,
+        tidalResponseAuthenticated: true,
+        continuityAuthenticated: true,
+        performanceEvidenceAuthenticated: true,
+        ready: true,
+      });
+      expect(role.evidenceOwnerIds)
+        .toContain("test:core-ecology-tidal-table-performance:v1");
+      expect(role.evidenceOwnerIds).toEqual([...role.evidenceOwnerIds].sort());
+      expect(new Set(role.evidenceOwnerIds).size).toBe(role.evidenceOwnerIds.length);
+      expect(Object.isFrozen(role)).toBe(true);
+      expect(Object.isFrozen(role.evidenceOwnerIds)).toBe(true);
+      expect(livingSpeciesReadinessReport(role.speciesId)?.publicReady).toBe(false);
+    }
+
+    for (const speciesId of [
+      "atlantic-silverside",
+      "atlantic-marsh-fiddler-crab",
+    ] as const) {
+      const module = livingSpeciesModule(speciesId);
+      const crossing = gate(speciesId).criteria.find(({ criterion }) => (
+        criterion === "seamless-region-crossing"
+      ));
+      expect(module?.locomotion.crossRegion).toBe(false);
+      expect(crossing).toMatchObject({
+        status: "foundation",
+        evidenceOwnerIds: expect.arrayContaining([
+          "test:core-ecology-tidal-table-signed-frame-continuity:v1",
+        ]),
+      });
+    }
+    const egretModule = livingSpeciesModule("snowy-egret");
+    const egretCrossing = gate("snowy-egret").criteria.find(({ criterion }) => (
+      criterion === "seamless-region-crossing"
+    ));
+    expect(egretModule?.locomotion.crossRegion).toBe(false);
+    expect(egretCrossing).toMatchObject({
+      status: "unimplemented",
+      evidenceOwnerIds: [],
+    });
+
+    for (const speciesId of WAVE_C_TIDAL_TABLE_SPECIES) {
+      const releaseGate = gate(speciesId);
+      for (const criterion of [
+        "tutorial-truth",
+        "patch-note-truth",
+        "exact-tested-deployment",
+      ] as const) {
+        expect(releaseGate.criteria.find((state) => state.criterion === criterion))
+          .toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+      }
+    }
     expect(Object.isFrozen(readiness)).toBe(true);
     expect(Object.isFrozen(readiness.roles)).toBe(true);
     expect(Object.isFrozen(readiness.speciesIds)).toBe(true);

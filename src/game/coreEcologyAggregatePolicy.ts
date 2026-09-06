@@ -11,23 +11,31 @@ import {
 export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
   "brown-rat",
   "southern-leopard-frog",
+  "atlantic-silverside",
+  "atlantic-marsh-fiddler-crab",
 ] as const);
 
 export type CoreEcologyAggregateSpecies =
   (typeof CORE_ECOLOGY_AGGREGATE_SPECIES)[number];
 
 export type CoreEcologyAggregateActivityKind =
+  | "burrow-foraging"
   | "rain-chorus"
-  | "rustle-scratch";
+  | "rustle-scratch"
+  | "schooling-glint";
 
 export type CoreEcologyAggregateActivePeriod =
   | "nocturnal"
-  | "rain-responsive";
+  | "rain-responsive"
+  | "tide-responsive";
 
 export type CoreEcologyAggregatePolicyEvidenceKind =
+  | "burrow-opening"
+  | "feeding-scrape"
   | "frog-track"
   | "gnaw-mark"
   | "shelter-sign"
+  | "surface-dimple"
   | "tracks";
 
 /**
@@ -71,7 +79,12 @@ export interface CoreEcologyAggregateLivingResponse {
 export interface CoreEcologyAggregateSpeciesPolicy {
   readonly species: CoreEcologyAggregateSpecies;
   /** Prefix only. The digest payload remains frozen for existing rat IDs. */
-  readonly stableIdPrefix: "FROG-AREA-v1-" | "RAT-AREA-v1-";
+  readonly stableIdPrefix:
+    | "FIDDLER-AREA-v1-"
+    | "FROG-AREA-v1-"
+    | "RAT-AREA-v1-"
+    | "SILVERSIDE-SCHOOL-v1-";
+  readonly representation: "aggregate-area" | "group-actor";
   readonly maximumAnchors: number;
   readonly anchorRadiusTiles: number;
   readonly activity: Readonly<{
@@ -80,7 +93,9 @@ export interface CoreEcologyAggregateSpeciesPolicy {
   }>;
   readonly initialEvidenceKinds: readonly CoreEcologyAggregatePolicyEvidenceKind[];
   readonly exposedFoodAttraction: boolean;
+  readonly rainSensitive: boolean;
   readonly rainResponse: "attraction" | "pressure";
+  readonly tideResponse: "ebb-active" | "flood-active" | "neutral";
 }
 
 const POLICIES: Readonly<
@@ -89,6 +104,7 @@ const POLICIES: Readonly<
   "brown-rat": Object.freeze({
     species: "brown-rat",
     stableIdPrefix: "RAT-AREA-v1-",
+    representation: "aggregate-area",
     maximumAnchors: 4,
     anchorRadiusTiles: 2,
     activity: Object.freeze({
@@ -101,11 +117,14 @@ const POLICIES: Readonly<
       "shelter-sign",
     ] as const),
     exposedFoodAttraction: true,
+    rainSensitive: true,
     rainResponse: "pressure",
+    tideResponse: "neutral",
   }),
   "southern-leopard-frog": Object.freeze({
     species: "southern-leopard-frog",
     stableIdPrefix: "FROG-AREA-v1-",
+    representation: "aggregate-area",
     maximumAnchors: 3,
     anchorRadiusTiles: 3,
     activity: Object.freeze({
@@ -114,7 +133,44 @@ const POLICIES: Readonly<
     }),
     initialEvidenceKinds: Object.freeze(["frog-track"] as const),
     exposedFoodAttraction: false,
+    rainSensitive: true,
     rainResponse: "attraction",
+    tideResponse: "neutral",
+  }),
+  "atlantic-silverside": Object.freeze({
+    species: "atlantic-silverside",
+    stableIdPrefix: "SILVERSIDE-SCHOOL-v1-",
+    representation: "group-actor",
+    maximumAnchors: 3,
+    anchorRadiusTiles: 3,
+    activity: Object.freeze({
+      kind: "schooling-glint",
+      activePeriod: "tide-responsive",
+    }),
+    initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "flood-active",
+  }),
+  "atlantic-marsh-fiddler-crab": Object.freeze({
+    species: "atlantic-marsh-fiddler-crab",
+    stableIdPrefix: "FIDDLER-AREA-v1-",
+    representation: "aggregate-area",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 2,
+    activity: Object.freeze({
+      kind: "burrow-foraging",
+      activePeriod: "tide-responsive",
+    }),
+    initialEvidenceKinds: Object.freeze([
+      "burrow-opening",
+      "feeding-scrape",
+    ] as const),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "ebb-active",
   }),
 });
 
@@ -191,6 +247,7 @@ export function resolveCoreEcologyAggregateLivingResponse(
     relationship === "predator"
     || relationship === "large-predator"
     || relationship === "aerial-predator"
+    || relationship === "aquatic-foraging-pressure"
   ) {
     return Object.freeze({
       sourceSpecies,
@@ -240,6 +297,9 @@ export function resolveCoreEcologyAggregateActivityIntensity(
   if (species === "brown-rat") {
     return habitatIntensity;
   }
+  if (species !== "southern-leopard-frog") {
+    return habitatIntensity;
+  }
   return Math.min(
     FIXED_POINT,
     multiplyFixed(habitatIntensity, 150_000)
@@ -256,13 +316,17 @@ export function resolveCoreEcologyAggregateDisturbanceActivity(
     | "food-attraction"
     | "human-disturbance"
     | "predator-pressure"
+    | "tide-pressure"
     | "weather-pressure",
   pressure: number,
 ): number {
   if (!fixedPoint(currentIntensity) || !fixedPoint(pressure)) {
     throw new RangeError("Aggregate disturbance activity must use fixed-point 0..1 values");
   }
-  if (species === "brown-rat" || causeKind === "weather-pressure") {
+  if (
+    species === "brown-rat"
+    || species === "southern-leopard-frog" && causeKind === "weather-pressure"
+  ) {
     // This is the frozen rat behavior. Rain activates frog redistribution and
     // chorus rather than borrowing the rat's shelter response.
     return Math.max(currentIntensity, pressure);

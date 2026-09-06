@@ -22,6 +22,7 @@ import {
   resolveCoreEcologyAggregateDisturbanceActivity,
   type CoreEcologyAggregateLivingSourceKind,
 } from "./coreEcologyAggregatePolicy";
+import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 
 export const CORE_ECOLOGY_SMALL_WORLD_VERSION = 3 as const;
 export const CORE_ECOLOGY_SMALL_WORLD_OWNER_ID =
@@ -272,6 +273,10 @@ export function stepCoreEcologySettlementShadows(
     ? emptyStimulusFrame(atTick)
     : canonicalizeCoreEcologySettlementShadowsStimulusFrame(stimulusFrame);
   if (frame === null || frame.atTick !== atTick) return null;
+  const ownsTidalHabitat = patch.derivation.kind === "habitat-v5"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v5";
+  const tidal = ownsTidalHabitat ? projectCoreEcologyTidalTable(patch, atTick) : null;
+  if (ownsTidalHabitat && tidal === null) return null;
   const aggregatesById = new Map(patch.aggregatePopulations.map((population) => (
     [population.aggregateId, population] as const
   )));
@@ -294,11 +299,21 @@ export function stepCoreEcologySettlementShadows(
   ));
   for (const population of aggregates) {
     if (population.anchors.length < 2) continue;
+    const lawfulDestinations = population.species === "atlantic-silverside"
+      ? new Set(tidal?.anchorDepths.filter(({ aggregateId, activityUsable }) => (
+          aggregateId === population.aggregateId && activityUsable
+        )).map(({ anchorOrdinal }) => anchorOrdinal) ?? [])
+      : null;
     const relevantStimuli = frame.stimuli.filter(({ targetAggregateId }) => (
       targetAggregateId === population.aggregateId
     ));
     const candidates = relevantStimuli.flatMap((stimulus) => {
-      const movement = relocationCandidate(stimulus, population.species, population.anchors);
+      const movement = relocationCandidate(
+        stimulus,
+        population.species,
+        population.anchors,
+        lawfulDestinations,
+      );
       return movement === null ? [] : [movement];
     });
     // A population-area aggregate still needs one genuine same-species rule.
@@ -311,7 +326,12 @@ export function stepCoreEcologySettlementShadows(
       const density = aggregateDensityStimulus(population, atTick);
       const movement = density === null
         ? null
-        : relocationCandidate(density, population.species, population.anchors);
+        : relocationCandidate(
+            density,
+            population.species,
+            population.anchors,
+            lawfulDestinations,
+          );
       if (movement !== null) candidates.push(movement);
     }
     candidates.sort(compareRelocationCandidate);
@@ -466,6 +486,8 @@ function habitatActivityIntensity(
   if (
     derivation.kind !== "habitat-v4"
     && derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
+    && derivation.kind !== "habitat-v5"
+    && derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
   ) return population.activitySignal.intensity;
   const analysis = derivation.habitat.populations.find((candidate) => (
     candidate.species === population.species
@@ -591,6 +613,7 @@ function relocationCandidate(
   stimulus: CoreEcologySettlementShadowsStimulus,
   targetSpecies: CoreEcologyAggregateSpecies,
   anchors: readonly CoreEcologyAggregateAreaAnchor[],
+  lawfulDestinations: ReadonlySet<number> | null = null,
 ): RelocationCandidate | null {
   const policy = sourcePolicy(targetSpecies, stimulus.sourceKind);
   if (policy === null || stimulus.response !== policy.response) return null;
@@ -603,6 +626,7 @@ function relocationCandidate(
     const fromInfluence = influenceByAnchor.get(from.anchorOrdinal) ?? 0;
     for (const to of anchors) {
       if (from.anchorOrdinal === to.anchorOrdinal) continue;
+      if (lawfulDestinations !== null && !lawfulDestinations.has(to.anchorOrdinal)) continue;
       const toInfluence = influenceByAnchor.get(to.anchorOrdinal) ?? 0;
       const relocationSignal = stimulus.response === "pressure"
         ? fromInfluence - toInfluence
@@ -634,6 +658,7 @@ function sourcePolicy(
     });
   }
   if (sourceKind === "rain") {
+    if (!target.rainSensitive) return null;
     return Object.freeze({
       ...STATIC_SOURCE_PROFILES.rain,
       response: target.rainResponse,

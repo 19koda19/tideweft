@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.19",
+      "releaseDate": "2026-09-06",
+      "buildIdentity": "0.3.3-alpha.19",
+      "summary": "The Tide Table begins bounded Wave-C tidal ecology near the stable starting harbor with a conserved Atlantic-silverside school, a conserved Atlantic-marsh-fiddler-crab area, and at most one snowy egret whose visible activity follows the live tide and lawful perception.",
+      "gameplayContractVersion": 20,
+      "tutorialVersion": 29,
+      "categories": {
+        "gameplay": [
+          "Habitat version 5 preserves the entire version-4 population analysis as its exact prefix, then deterministically appends an Atlantic-silverside school aggregate, an Atlantic-marsh-fiddler-crab area aggregate, and at most one persistent snowy-egret representative where the bounded starting-harbor habitat supports them. Unsupported roles remain honestly absent rather than being forced or rerolled.",
+          "Each tidal aggregate owns stable saved anchors with baseline elevation. The authoritative tide derives current water depth, usable habitat, schooling or emergence activity, and bounded redistribution from those anchors without changing aggregate identity or total population. Fish evacuate a drying anchor into saved wet refuge immediately; ordinary edge movement transfers only one existing unit on its fixed opportunity.",
+          "The snowy egret owns a saved dry refuge and depth-safe wading edges. During daylight it can relocate toward observed aquatic activity only after shared vision creates a current anonymous aquatic-activity observation; if no lawful cue exists, it holds a valid wading position or returns to refuge instead of using hidden population knowledge. A lawfully visible egret can create nonlethal pressure and conserved avoidance for both tidal aggregates through shared role-and-capability policy."
+        ],
+        "fixes": [
+          "Aggregate locomotion now rejects a currently depth-unusable fish destination, including a same-tick destination invalidated by the tide, so ordinary pressure cannot move conserved school units onto dry ground. Tidal depth comes only from authenticated saved elevation and the target tick's authoritative tide.",
+          "Fish and crab evidence now follows current occupied, active, depth-usable anchors. Surface dimples, brief school glints, burrow openings, and feeding scrapes cannot reveal an empty or unusable anchor, fabricate an individual animal, disclose a hidden population count, or remain a remote tracker after direct-detail sight is lost.",
+          "Snowy-egret activity, movement, rendering, hit targets, and ABOUT behavior authenticate the same actor and current activity projection. Stale, occluded, mismatched, or absent aggregate activity cannot be borrowed as a wading target, and save/reload preserves the same cognition, position, refuge, and aggregate identities."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Tides change where activity is viable and where a wader can safely stand, but the first tidal interaction is pressure and avoidance only: it cannot capture, injure, kill, consume, create a carcass, implement fishing, or alter cargo.",
+          "The Tide Table is bounded by at most three silverside anchors, four fiddler-crab anchors, four egret wading anchors, one egret refuge, and one egret representative. Fixed-cadence aggregate movement and shared bounded visual-source selection prevent an unbounded all-pairs or camera-driven ecology loop.",
+          "Shared invariants, deterministic properties, bounded interaction scenarios, runtime integration, save-adoption witnesses, and a dedicated performance budget validate the reusable architecture. The release does not claim an exhaustive animal-by-animal interaction matrix."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D render silverside surface activity, fiddler-crab burrows or feeding scrapes, and the snowy egret with distinct color-independent forms, matching mouse and touch targets, reduced-motion parity, and the same direct-sight knowledge boundary.",
+          "ABOUT identifies only a lawfully observed egret or close aggregate sign. It may describe visible form, current behavior, evidence kind, or a coarse activity scale, but never an exact school or crab count, hidden anchor, private target, pressure value, or invented individual fish or crab.",
+          "Field Manual version 29 explains the live Tide Table, stable aggregate identity, tide-derived depth and activity, lawful egret observation and relocation, direct evidence, version-13 save adoption, and the explicit limits of this first bounded Wave-C unit."
+        ],
+        "saves": [
+          "The outer session advances to version 13 and core ecology advances to habitat version 5. It authenticates stable tidal elevations and anchors, conserved fish and crab aggregates, the snowy-egret identity and refuge, activity evidence, cognition, and motion beside all established actors, groups, aggregates, items, Promises, custody, and world history.",
+          "A sealed version-12 save migrates exactly once. Every habitat-version-4 population byte, actor, group, aggregate, item, Promise, evidence record, disturbance, and world fact stays exact while the deterministic Tide Table extension is appended once; older supported saves continue through their frozen migration authorities into the same current result.",
+          "Save, reload, coarse travel, full-detail return, signed moving-frame continuity, negative coordinates, and extreme coordinates preserve the same tidal identities and totals. Refresh cannot reroll or duplicate a school, crab area, egret, anchor, population unit, evidence record, or save-adoption append."
+        ],
+        "knownLimitations": [
+          "This is only the first bounded Wave-C unit near the stable starting harbor. It is not worldwide ecology, ecological cross-region migration, completion of Wave C, the full biodiversity directive, or the complete 75-to-150-profile bestiary.",
+          "Animals still do not attack, receive injuries, die, leave carcasses, or consume live prey. Egret pressure is conserved avoidance rather than capture or feeding, and fishing, harvest, waterfowl, otters, reproduction, and population mortality remain outside this release.",
+          "Complete scent fields and tracking, foliage consumption, broad social information, full sleep and circadian schedules, wildlife promotion beyond current rules, additional tidal species, and full species readiness remain future work."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.18",
       "releaseDate": "2026-09-06",
       "buildIdentity": "0.3.3-alpha.18",

@@ -751,6 +751,7 @@ const noHealth = (): LivingSpeciesHealthContract => ({
 
 interface CoreWildlifeCatalogValues {
   readonly implementation: "active" | "foundation";
+  readonly ecologicalClasses?: readonly string[];
   readonly habitatOwnerId: string;
   readonly ecologyOwnerId: string;
   readonly spatialOwnerId: string;
@@ -774,6 +775,10 @@ interface CoreWildlifeCatalogValues {
   readonly sound: LivingSpeciesSoundContract;
   readonly evidence: Omit<LivingSpeciesEvidenceContract, "produces">;
   readonly weather: LivingSpeciesEnvironmentResponseContract;
+  readonly water?: LivingSpeciesEnvironmentResponseContract;
+  readonly tide?: LivingSpeciesEnvironmentResponseContract;
+  readonly health?: LivingSpeciesHealthContract;
+  readonly conditionAxes?: readonly LivingSpeciesStateAxisContract[];
   readonly aboutObservableFields: readonly string[];
 }
 
@@ -1190,6 +1195,159 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     },
     aboutObservableFields: ["activity", "evidence-kind", "evidence-scale", "species"],
   },
+  "atlantic-silverside": {
+    implementation: "foundation",
+    ecologicalClasses: ["forage-fish", "forager", "prey", "small-prey"],
+    habitatOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    ecologyOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    spatialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    dynamicOverlays: ["tide-availability", "visible-activity"],
+    morphologyDimensions: ["activity-area", "school-density"],
+    appearanceTraits: ["school-flash", "school-shape", "surface-density"],
+    habitatClasses: ["estuarine-channel", "flooded-marsh-edge", "shallow-water", "tidal-creek"],
+    movementMedia: [
+      { medium: "deep-water", relativeCapability: 850_000 },
+      { medium: "shallow-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["school", "swim"],
+    terrainAffordances: [
+      "connected-water",
+      "swimmable-deep-water",
+      "swimmable-shallow-water",
+    ],
+    consumedBy: ["aerial-predator", "wading-predator"],
+    competesWith: [],
+    ecologicalEffects: ["forage-fish-support", "tidal-food-web-support"],
+    includeDogInteraction: true,
+    groupModel: "group",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      decayOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["current-strength", "water-connectivity", "water-depth"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["tide-direction", "tide-height"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    health: noHealth(),
+    aboutObservableFields: ["activity-pattern", "approximate-school-size", "species"],
+  },
+  "atlantic-marsh-fiddler-crab": {
+    implementation: "foundation",
+    ecologicalClasses: ["deposit-feeder", "detritivore", "forager", "prey", "small-prey"],
+    habitatOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    ecologyOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    spatialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    dynamicOverlays: ["tide-availability", "visible-activity"],
+    morphologyDimensions: ["activity-area", "burrow-density"],
+    appearanceTraits: ["burrow-density", "claw-display", "surface-activity"],
+    habitatClasses: ["intertidal-marsh", "mudflat", "tidal-flat"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "shallow-water", relativeCapability: 420_000 },
+    ],
+    movementVerbs: ["burrow", "emerge", "scuttle"],
+    terrainAffordances: ["exposed-mud", "intertidal-burrow", "standable-shallow-water"],
+    consumedBy: ["aerial-predator", "wading-predator"],
+    competesWith: [],
+    ecologicalEffects: ["detrital-processing", "sediment-aeration", "small-prey-support"],
+    includeDogInteraction: true,
+    groupModel: "colony",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      decayOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["burrow-inundation", "water-depth"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["mudflat-exposure", "tide-direction", "tide-height"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    health: noHealth(),
+    aboutObservableFields: ["activity-pattern", "evidence-kind", "evidence-scale", "species"],
+  },
+  "snowy-egret": {
+    implementation: "foundation",
+    ecologicalClasses: ["aquatic-forager", "forager", "wader"],
+    habitatOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    ecologyOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    dynamicOverlays: ["visible-condition", "wading-depth"],
+    morphologyDimensions: ["body-size", "plume-state"],
+    appearanceTraits: ["dark-legs", "white-plumage", "yellow-feet"],
+    habitatClasses: ["flooded-marsh-edge", "marsh", "shallow-water", "tidal-flat"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "land", relativeCapability: 720_000 },
+      { medium: "shallow-water", relativeCapability: 880_000 },
+    ],
+    movementVerbs: ["fly", "relocate", "wade"],
+    terrainAffordances: ["open-air", "standable-shallow-water", "tidal-foraging-edge"],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["nonlethal-foraging-pressure", "prey-redistribution"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["forage-edge-depth", "water-depth"],
+      outputs: ["stress"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["forage-edge-availability", "tide-direction", "tide-height"],
+      outputs: ["stress"],
+    },
+    health: noHealth(),
+    conditionAxes: [fixed("exhaustion"), fixed("stress")],
+    aboutObservableFields: ["appearance", "behavior", "species"],
+  },
 });
 
 /**
@@ -1400,6 +1558,66 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     water: "intentional-no-response",
     weather: "available",
   },
+  "atlantic-silverside": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
+  "atlantic-marsh-fiddler-crab": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
+  "snowy-egret": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
 } as const satisfies Readonly<Record<
   CoreWildlifeSpecies,
   Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
@@ -1411,6 +1629,47 @@ function coreWildlifeInteractionTargets(
 ): readonly LivingSpeciesInteractionTargetContract[] {
   const profile = getCoreWildlifeProfile(species);
   const targets: LivingSpeciesInteractionTargetContract[] = [];
+
+  if (coreEcologySpeciesHasRuntimeCapability(species, "aquatic-foraging")) {
+    targets.push({
+      targetClass: "aquatic-animal",
+      policy: "available",
+      perceptionChannels: ["vision"],
+      appraisals: ["forage-opportunity"],
+      motivationAxes: ["forage-drive"],
+      verbs: ["approach", "probe"],
+      escalationConstraints: [
+        "aggregate-unit-conservation",
+        "direct-perception-required",
+        "no-health-or-mortality-outcome",
+        "nonlethal-pressure-only",
+      ],
+      disengagementVerbs: ["disengage", "retreat"],
+    });
+  } else if (
+    coreEcologySpeciesHasRuntimeCapability(species, "aggregate-response")
+    && (
+      coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
+      || coreEcologySpeciesHasRuntimeCapability(species, "amphibious-locomotion")
+    )
+  ) {
+    const isSchool = coreEcologySpeciesHasRuntimeCapability(species, "school-coordination");
+    targets.push({
+      targetClass: "aquatic-animal",
+      policy: "available",
+      perceptionChannels: ["hearing", "vision"],
+      appraisals: ["disturbance-pressure"],
+      motivationAxes: ["safety"],
+      verbs: isSchool ? ["redistribute", "tighten"] : ["quiet", "retreat-to-burrow"],
+      escalationConstraints: [
+        "aggregate-unit-conservation",
+        "bounded-response",
+        "direct-perception-required",
+        "nonlethal-pressure-only",
+      ],
+      disengagementVerbs: ["disengage"],
+    });
+  }
 
   if (includeDogInteraction) {
     targets.push({
@@ -1486,6 +1745,21 @@ function coreWildlifeInteractionTargets(
       escalationConstraints: ["direct-perception-required", "physical-resource-conservation"],
       disengagementVerbs: ["disengage"],
     });
+  } else if (coreEcologySpeciesHasRuntimeCapability(species, "school-coordination")) {
+    targets.push({
+      targetClass: "same-species",
+      policy: "available",
+      perceptionChannels: ["hearing", "vision"],
+      appraisals: ["school-cohesion"],
+      motivationAxes: ["cohesion"],
+      verbs: ["coordinate", "tighten"],
+      escalationConstraints: [
+        "aggregate-unit-conservation",
+        "bounded-redistribution",
+        "no-individual-fish-addresses",
+      ],
+      disengagementVerbs: ["disengage"],
+    });
   } else if (coreEcologySpeciesHasRuntimeCapability(species, "group-coordination")) {
     targets.push({
       targetClass: "same-species",
@@ -1544,6 +1818,28 @@ function coreWildlifeInteractionTargets(
     });
   }
 
+  if (coreEcologySpeciesHasRuntimeCapability(species, "water-depth-response")) {
+    const verbs = coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
+      ? ["redistribute", "swim"]
+      : coreEcologySpeciesHasRuntimeCapability(species, "wading")
+        ? ["relocate", "wade"]
+        : ["emerge", "retreat-to-burrow"];
+    targets.push({
+      targetClass: "water",
+      policy: "available",
+      perceptionChannels: ["vision"],
+      appraisals: ["depth", "habitat-connectivity"],
+      motivationAxes: ["safety"],
+      verbs,
+      escalationConstraints: [
+        "bounded-response",
+        "current-water-required",
+        "no-population-reroll",
+      ],
+      disengagementVerbs: ["disengage"],
+    });
+  }
+
   const declared = new Map(targets.map((target) => [target.targetClass, target]));
   if (declared.size !== targets.length) {
     throw new Error(`Duplicate interaction target contract for ${species}.`);
@@ -1582,6 +1878,19 @@ function sensesFromRegistry(
   if (registryEntry === null) {
     throw new Error(`Missing Living Weft registry entry for ${species}.`);
   }
+  const aquaticAggregate = !registryEntry.actorAddressable
+    && (
+      registryEntry.locomotionClass === "aquatic"
+      || registryEntry.locomotionClass === "amphibious"
+    );
+  const hearingModalities = registryEntry.locomotionClass === "aquatic"
+    ? ["waterborne-vibration"]
+    : aquaticAggregate
+      ? ["substrate-vibration", "waterborne-vibration"]
+      : ["airborne-sound"];
+  const chemicalModalities = aquaticAggregate
+    ? ["dissolved-chemical"]
+    : [...scentModalities];
   return {
     implementation: "foundation",
     ownerId: "game:living-actor-senses:v1",
@@ -1590,12 +1899,12 @@ function sensesFromRegistry(
       {
         channel: "hearing",
         relativeCapability: registryEntry.senses.hearingSensitivity,
-        modalities: ["airborne-sound"],
+        modalities: hearingModalities,
       },
       {
         channel: "scent",
         relativeCapability: registryEntry.senses.scentSensitivity,
-        modalities: [...scentModalities],
+        modalities: chemicalModalities,
       },
       {
         channel: "vision",
@@ -1623,6 +1932,8 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const implementation = values.implementation;
   const identityForm = runtimePolicy.identityForm;
   const aggregate = identityForm === "aggregate";
+  const aggregateSchool = aggregate
+    && coreEcologySpeciesHasRuntimeCapability(species, "school-coordination");
 
   const foodResources = CORE_WILDLIFE_FOOD_CLASSES.filter(
     (resourceClass) => profile.foodAffinities[resourceClass] > 0,
@@ -1631,7 +1942,29 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     .map((resourceClass) => ({ resourceClass, role: "nutrition" as const }));
   const group = runtimePolicy.groupOrganization === null
     ? noGroupSystem()
-    : {
+    : aggregateSchool
+      ? {
+          status: "foundation" as const,
+          ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+          representation: "group-actor" as const,
+          organizationKinds: [runtimePolicy.groupOrganization],
+          stateAxes: [
+            fixed("cohesion"),
+            fixed("movement-heading"),
+            safeIntegerAxis("population-size", profile.maximumPatchPopulation),
+          ],
+          leadershipModel: "none" as const,
+          coordinationVerbs: ["redistribute", "school", "tighten"],
+          stableIdentity: true,
+          stableIdNamespace: runtimePolicy.groupStableIdNamespace,
+          generationVersion: 1,
+          membership: true,
+          informationPropagation: false,
+          splitMerge: true,
+          separationReunion: true,
+          sharedMemory: false,
+        }
+      : {
         status: "active" as const,
         ownerId: "game:core-ecology-groups:v1",
         representation: "hybrid" as const,
@@ -1658,7 +1991,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       ownerId: "sim:core-wildlife-identity:v1",
       displayNameKey: `species.${species}`,
       taxonomicClass: metadata.taxonomicClass,
-      ecologicalClasses: [...profile.roles].sort(compareText),
+      ecologicalClasses: values.ecologicalClasses ?? [...profile.roles].sort(compareText),
       companionEligibility: "never",
     },
     morphology: {
@@ -1700,7 +2033,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       positionModel: aggregate ? "segmented-area" : "segmented-point",
       signedRegions: true,
       extremeRegions: true,
-      authoritativeHeading: !aggregate,
+      authoritativeHeading: !aggregate || aggregateSchool,
     },
     population: {
       implementation,
@@ -1709,8 +2042,16 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       materialization: aggregate ? "threshold" : "mixed",
       maxMaterializedPerRegion: runtimePolicy.maximumMaterializedActors,
       coarseSimulation: true,
-      authoritativeUnit: aggregate ? "population-patch" : "hybrid",
-      dematerialization: aggregate ? "reconcile-population-state" : "reconcile-hybrid-state",
+      authoritativeUnit: aggregateSchool
+        ? "group-records"
+        : aggregate
+          ? "population-patch"
+          : "hybrid",
+      dematerialization: aggregateSchool
+        ? "reconcile-group-state"
+        : aggregate
+          ? "reconcile-population-state"
+          : "reconcile-hybrid-state",
       stateAxes: [
         safeIntegerAxis("habitat-capacity", profile.maximumPatchPopulation),
         fixed("population-pressure"),
@@ -1739,9 +2080,9 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       needs: aggregate
         ? [fixed("food-pressure"), fixed("safety-pressure")]
         : [fixed("hunger"), fixed("rest"), fixed("safety")],
-      conditions: aggregate
+      conditions: values.conditionAxes ?? (aggregate
         ? [fixed("activity-pressure"), fixed("displacement-pressure")]
-        : [fixed("exhaustion"), fixed("health"), fixed("stress")],
+        : [fixed("exhaustion"), fixed("health"), fixed("stress")]),
     },
     locomotion: {
       implementation,
@@ -1778,7 +2119,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       reproduction: "unimplemented",
       mortality: "unimplemented",
     },
-    health: aggregate
+    health: values.health ?? (aggregate
       ? noHealth()
       : {
           implementation: "foundation",
@@ -1788,7 +2129,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
           incapacitation: false,
           causalDeath: false,
           recovery: false,
-        },
+        }),
     activity: {
       implementation,
       ownerId: values.activityOwnerId,
@@ -1859,10 +2200,10 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       fire: absentResponse(),
       livingCover: absentResponse(),
       weather: values.weather,
-      water: absentResponse(),
+      water: values.water ?? absentResponse(),
       possibility: absentResponse(),
       terrain: absentResponse(),
-      tide: absentResponse(),
+      tide: values.tide ?? absentResponse(),
     },
     inventory: {
       implementation: "unimplemented",

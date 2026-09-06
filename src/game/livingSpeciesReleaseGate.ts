@@ -12,6 +12,7 @@ export const MAX_RELEASE_EVIDENCE_OWNERS = 8 as const;
 export const ALPHA16_MARSH_EDGE_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA17_RAIN_CHORUS_BOUNDED_READINESS_VERSION = 1 as const;
 export const WAVE_B_BOUNDED_STARTING_HARBOR_READINESS_VERSION = 1 as const;
+export const WAVE_C_TIDAL_TABLE_BOUNDED_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -121,6 +122,126 @@ export const ALPHA17_RAIN_CHORUS_SPECIES = [
 ] as const satisfies readonly LivingActorSpecies[];
 
 export type Alpha17RainChorusSpecies = (typeof ALPHA17_RAIN_CHORUS_SPECIES)[number];
+
+export const WAVE_C_TIDAL_TABLE_SPECIES = [
+  "atlantic-silverside",
+  "atlantic-marsh-fiddler-crab",
+  "snowy-egret",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type WaveCTidalTableSpecies = (typeof WAVE_C_TIDAL_TABLE_SPECIES)[number];
+
+export type WaveCTidalTableRole =
+  | "forage-fish-school"
+  | "intertidal-crab-area"
+  | "wader";
+export type WaveCTidalTableRepresentation =
+  | "school-aggregate"
+  | "area-aggregate"
+  | "individual-wader";
+export type WaveCTidalTableContinuity =
+  | "signed-frame-aggregate-continuity"
+  | "bounded-local-individual-continuity";
+export type WaveCTidalTableExcludedClaim =
+  | "worldwide-ecology"
+  | "wildlife-promotion"
+  | "ecological-cross-region-migration"
+  | "mortality"
+  | "capture"
+  | "consumption"
+  | "carcasses"
+  | "fishing"
+  | "harvest"
+  | "waterfowl"
+  | "otter-like-predator"
+  | "full-wave-c"
+  | "full-directive-04-1";
+
+export interface WaveCTidalTableRoleReadiness {
+  readonly role: WaveCTidalTableRole;
+  readonly speciesId: WaveCTidalTableSpecies;
+  readonly representation: WaveCTidalTableRepresentation;
+  /**
+   * Aggregates prove conserved signed-frame state, not ecological migration.
+   * The egret proves only bounded local individual continuity.
+   */
+  readonly continuity: WaveCTidalTableContinuity;
+  readonly evidenceAuthenticated: boolean;
+  readonly representationAuthenticated: boolean;
+  readonly interactionContractAuthenticated: boolean;
+  readonly tidalResponseAuthenticated: boolean;
+  readonly continuityAuthenticated: boolean;
+  readonly performanceEvidenceAuthenticated: boolean;
+  readonly ready: boolean;
+  readonly evidenceOwnerIds: readonly string[];
+}
+
+export interface WaveCTidalTableBoundedReadinessReport {
+  readonly version: typeof WAVE_C_TIDAL_TABLE_BOUNDED_READINESS_VERSION;
+  readonly unitId: "tidal-table";
+  readonly scope: "bounded-starting-harbor-tidal";
+  readonly speciesIds: readonly WaveCTidalTableSpecies[];
+  readonly roles: readonly WaveCTidalTableRoleReadiness[];
+  readonly evidenceAuthenticated: boolean;
+  readonly roleCoverageReady: boolean;
+  readonly broadInteractionCoverageReady: boolean;
+  readonly tidalResponseReady: boolean;
+  readonly signedFrameAggregateContinuityReady: boolean;
+  readonly localWaderContinuityReady: boolean;
+  readonly performanceEvidenceReady: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingRoles: readonly WaveCTidalTableRole[];
+  readonly publicationRecordsReady: boolean;
+  readonly exactTestedDeploymentVerified: boolean;
+  readonly published: boolean;
+  readonly fullThirtyCriterionReady: boolean;
+  /** Claims that this deliberately bounded report can never authorize. */
+  readonly excludedClaims: readonly WaveCTidalTableExcludedClaim[];
+}
+
+interface WaveCTidalTableRoleDefinition {
+  readonly role: WaveCTidalTableRole;
+  readonly speciesId: WaveCTidalTableSpecies;
+  readonly representation: WaveCTidalTableRepresentation;
+  readonly continuity: WaveCTidalTableContinuity;
+}
+
+const WAVE_C_TIDAL_TABLE_ROLE_DEFINITIONS: readonly WaveCTidalTableRoleDefinition[] = [
+  {
+    role: "forage-fish-school",
+    speciesId: "atlantic-silverside",
+    representation: "school-aggregate",
+    continuity: "signed-frame-aggregate-continuity",
+  },
+  {
+    role: "intertidal-crab-area",
+    speciesId: "atlantic-marsh-fiddler-crab",
+    representation: "area-aggregate",
+    continuity: "signed-frame-aggregate-continuity",
+  },
+  {
+    role: "wader",
+    speciesId: "snowy-egret",
+    representation: "individual-wader",
+    continuity: "bounded-local-individual-continuity",
+  },
+] as const;
+
+export const WAVE_C_TIDAL_TABLE_EXCLUDED_CLAIMS = [
+  "worldwide-ecology",
+  "wildlife-promotion",
+  "ecological-cross-region-migration",
+  "mortality",
+  "capture",
+  "consumption",
+  "carcasses",
+  "fishing",
+  "harvest",
+  "waterfowl",
+  "otter-like-predator",
+  "full-wave-c",
+  "full-directive-04-1",
+] as const satisfies readonly WaveCTidalTableExcludedClaim[];
 
 /** The seven deliberately bounded small-world roles shipped across Wave B. */
 export const WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES = [
@@ -886,6 +1007,151 @@ function rainChorusEvidence(
 }
 
 /**
+ * Build-owned evidence for the first bounded Wave-C unit. This records only
+ * the conserved school/area, one wader, tide response, and nonlethal pressure
+ * that exist now; mortality, harvest, fishing, and full Wave C remain absent.
+ */
+function tidalTableEvidence(
+  species: WaveCTidalTableSpecies,
+): readonly ClaimTuple[] {
+  const aggregate = species !== "snowy-egret";
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  const behaviorOwner = aggregate
+    ? "game:core-ecology-small-world:v3"
+    : "game:core-ecology-activity:v1";
+  return [
+    ["species-profile", A, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["ecological-niche", A, owners(
+      "game:core-ecology-habitat:v5",
+      "game:core-ecology-tidal-table:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+    )],
+    ["appearance", A, owners(
+      ...(aggregate ? ["game:core-ecology:v4"] : ["sim:core-wildlife-identity:v1"]),
+      "game:wildlife-presentation:v1",
+    )],
+    ["sound", U, []],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v5",
+      "game:core-ecology-tidal-table:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["food-web", F, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+    )],
+    ["perception-senses", F, owners(
+      ...(aggregate
+        ? ["game:core-ecology-aggregate-perception:v1"]
+        : ["game:core-ecology-perception:v1", "game:living-actor-senses:v1"]),
+      "sim:actor-perception:v2",
+    )],
+    ["locomotion", A, owners(
+      behaviorOwner,
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-tidal-table:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["human-interaction", F, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["dog-interaction", F, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+    )],
+    ["same-species-interaction", aggregate ? A : U, aggregate
+      ? ["game:core-ecology-small-world:v3"]
+      : []],
+    ["other-species-interaction", A, owners(
+      "game:core-ecology-small-world:v3",
+      "game:core-ecology-trophic:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["neutral-behavior", A, [behaviorOwner]],
+    ["disengagement", aggregate ? F : A, [behaviorOwner]],
+    ["environmental-evidence", aggregate ? A : U, aggregate
+      ? owners(
+          "game:core-ecology-evidence-runtime:v1",
+          "game:core-ecology:v4",
+          "game:wildlife-presentation:v1",
+        )
+      : []],
+    ["about-disclosure", A, owners(
+      "game:core-ecology-evidence-runtime:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v5",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["save-load", A, owners("game:core-ecology:v4", "game:runtime-save:v13")],
+    // Neither Tide Table aggregate migrates between regions. Their foundation
+    // evidence proves only conserved aggregate identity at signed frames. The
+    // bounded egret is likewise local (`crossRegion: false`) and therefore
+    // cannot claim this full release criterion at all.
+    ["seamless-region-crossing", aggregate ? F : U, aggregate
+      ? owners(
+          "game:core-ecology:v4",
+          "game:runtime-core-ecology:v1",
+          "game:world-position:v1",
+          "test:core-ecology-tidal-table-signed-frame-continuity:v1",
+        )
+      : []],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v5",
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+      "test:core-ecology-tidal-table-performance:v1",
+    )],
+    ["accessibility", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["mobile-parity", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["player-independent-scenario", A, owners(
+      behaviorOwner,
+      "game:core-ecology-tidal-table:v1",
+      "game:core-ecology-trophic:v1",
+    )],
+    ["fuzz-testing", F, owners(
+      "game:core-ecology-habitat:v5",
+      "game:core-ecology:v4",
+    )],
+    ["clone-diversity", A, owners(
+      ...(aggregate ? ["game:core-ecology:v4"] : []),
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["tutorial-truth", U, []],
+    ["patch-note-truth", U, []],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -964,6 +1230,9 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "fish-crow": rainChorusEvidence("fish-crow"),
   "northern-harrier": rainChorusEvidence("northern-harrier"),
   "southern-leopard-frog": rainChorusEvidence("southern-leopard-frog"),
+  "atlantic-silverside": tidalTableEvidence("atlantic-silverside"),
+  "atlantic-marsh-fiddler-crab": tidalTableEvidence("atlantic-marsh-fiddler-crab"),
+  "snowy-egret": tidalTableEvidence("snowy-egret"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -1358,6 +1627,214 @@ export function waveBBoundedStartingHarborReadiness(): WaveBBoundedStartingHarbo
 
 export const WAVE_B_BOUNDED_STARTING_HARBOR_READINESS =
   waveBBoundedStartingHarborReadiness();
+
+/**
+ * Authenticated technical witness for the first bounded Wave-C release unit.
+ * Its aggregate continuity claim is deliberately narrower than the full
+ * `seamless-region-crossing` criterion: the saved school/area remains exact at
+ * signed spatial frames, but no population migrates across a region seam. The
+ * snowy egret remains one local individual and likewise makes no migration
+ * claim. Publication and deployment are reported separately and fail closed.
+ */
+export function waveCTidalTableBoundedReadiness(): WaveCTidalTableBoundedReadinessReport {
+  const roles = WAVE_C_TIDAL_TABLE_ROLE_DEFINITIONS.map(
+    (definition): WaveCTidalTableRoleReadiness => {
+      const gate = LIVING_SPECIES_RELEASE_GATES.gates.find(({ speciesId }) => (
+        speciesId === definition.speciesId
+      ));
+      const report = gate === undefined ? null : auditLivingSpeciesReleaseGate(gate);
+      const module = livingSpeciesModule(definition.speciesId);
+      const criterion = (name: LivingSpeciesReleaseCriterion) => (
+        gate?.criteria.find((state) => state.criterion === name)
+      );
+      const active = (name: LivingSpeciesReleaseCriterion): boolean => (
+        criterion(name)?.status === "active"
+      );
+      const evidenceAuthenticated = gate !== undefined
+        && report?.evidenceAuthenticated === true;
+
+      const representationAuthenticated = definition.representation === "school-aggregate"
+        ? module !== null
+          && module.identity.form === "aggregate"
+          && module.population.authoritativeUnit === "group-records"
+          && module.population.materialization === "threshold"
+          && module.population.coarseSimulation
+          && module.social.group.status === "foundation"
+          && module.social.group.representation === "group-actor"
+          && module.social.group.stableIdentity
+        : definition.representation === "area-aggregate"
+          ? module !== null
+            && module.identity.form === "aggregate"
+            && module.population.authoritativeUnit === "population-patch"
+            && module.population.materialization === "threshold"
+            && module.population.coarseSimulation
+          : module !== null
+            && module.identity.form === "individual"
+            && module.population.authoritativeUnit === "hybrid"
+            && module.population.materialization === "mixed"
+            && module.population.coarseSimulation;
+      const interactionContractAuthenticated = module !== null
+        && module.interactions.targets.length === LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length
+        && module.interactions.targets.every((target, index) => (
+          target.targetClass === LIVING_SPECIES_INTERACTION_TARGET_CLASSES[index]
+          && (target.policy === "available" || target.policy === "intentional-no-response")
+        ));
+      const tidalResponseAuthenticated = module !== null
+        && module.environment.tide.status === "foundation"
+        && module.environment.tide.ownerId === "game:core-ecology-species-runtime-policy:v1"
+        && module.environment.tide.inputs.length > 0
+        && module.environment.tide.outputs.length > 0
+        && [
+          "ecological-niche",
+          "habitat-placement",
+          "locomotion",
+          "player-independent-scenario",
+        ].every((name) => {
+          const state = criterion(name as LivingSpeciesReleaseCriterion);
+          return state?.status === "active"
+            && state.evidenceOwnerIds.includes("game:core-ecology-tidal-table:v1");
+        });
+      const signedFrameFoundation = criterion("seamless-region-crossing");
+      const commonContinuity = module !== null
+        && module.locomotion.crossRegion === false
+        && module.spatial.signedRegions
+        && module.spatial.extremeRegions
+        && active("population-materialization")
+        && active("full-coarse-transition")
+        && active("save-load");
+      const continuityAuthenticated = definition.continuity
+        === "signed-frame-aggregate-continuity"
+        ? commonContinuity
+          && signedFrameFoundation?.status === "foundation"
+          && signedFrameFoundation.evidenceOwnerIds.includes(
+            "test:core-ecology-tidal-table-signed-frame-continuity:v1",
+          )
+        : commonContinuity
+          && signedFrameFoundation?.status === "unimplemented"
+          && signedFrameFoundation.evidenceOwnerIds.length === 0;
+      const performanceState = criterion("performance-budget");
+      const performanceEvidenceAuthenticated = performanceState?.status === "active"
+        && performanceState.evidenceOwnerIds.includes(
+          "test:core-ecology-tidal-table-performance:v1",
+        );
+      const evidenceOwnerIds = [
+        module?.identity.ownerId,
+        module?.population.ownerId,
+        module?.environment.tide.ownerId,
+        ...[
+          "ecological-niche",
+          "habitat-placement",
+          "locomotion",
+          "other-species-interaction",
+          "population-materialization",
+          "full-coarse-transition",
+          "save-load",
+          "seamless-region-crossing",
+          "performance-budget",
+          "player-independent-scenario",
+        ].flatMap((name) => (
+          criterion(name as LivingSpeciesReleaseCriterion)?.evidenceOwnerIds ?? []
+        )),
+      ].filter((ownerId): ownerId is string => ownerId !== null && ownerId !== undefined);
+
+      return deepFreeze({
+        role: definition.role,
+        speciesId: definition.speciesId,
+        representation: definition.representation,
+        continuity: definition.continuity,
+        evidenceAuthenticated,
+        representationAuthenticated,
+        interactionContractAuthenticated,
+        tidalResponseAuthenticated,
+        continuityAuthenticated,
+        performanceEvidenceAuthenticated,
+        ready: evidenceAuthenticated
+          && representationAuthenticated
+          && interactionContractAuthenticated
+          && tidalResponseAuthenticated
+          && continuityAuthenticated
+          && performanceEvidenceAuthenticated,
+        evidenceOwnerIds: [...new Set(evidenceOwnerIds)].sort(compareText),
+      });
+    },
+  );
+  const roleCoverageReady = roles.length === WAVE_C_TIDAL_TABLE_ROLE_DEFINITIONS.length
+    && roles.every((role, index) => (
+      role.role === WAVE_C_TIDAL_TABLE_ROLE_DEFINITIONS[index]?.role
+      && role.speciesId === WAVE_C_TIDAL_TABLE_SPECIES[index]
+    ));
+  const evidenceAuthenticated = roles.every((role) => role.evidenceAuthenticated);
+  const broadInteractionCoverageReady = roles.every(
+    (role) => role.interactionContractAuthenticated,
+  );
+  const tidalResponseReady = roles.every((role) => role.tidalResponseAuthenticated);
+  const signedFrameAggregateRoles = roles.filter(({ continuity }) => (
+    continuity === "signed-frame-aggregate-continuity"
+  ));
+  const signedFrameAggregateContinuityReady = signedFrameAggregateRoles.length === 2
+    && signedFrameAggregateRoles.every((role) => role.continuityAuthenticated);
+  const localWaderRoles = roles.filter(({ continuity }) => (
+    continuity === "bounded-local-individual-continuity"
+  ));
+  const localWaderContinuityReady = localWaderRoles.length === 1
+    && localWaderRoles.every((role) => role.continuityAuthenticated);
+  const performanceEvidenceReady = roles.every(
+    (role) => role.performanceEvidenceAuthenticated,
+  );
+  const blockingRoles = roles.filter((role) => !role.ready).map(({ role }) => role);
+  const publicationRecordsReady = evidenceAuthenticated && [
+    "tutorial-truth",
+    "patch-note-truth",
+  ].every((name) => roles.every(({ speciesId }) => (
+    LIVING_SPECIES_RELEASE_GATES.gates
+      .find((gate) => gate.speciesId === speciesId)
+      ?.criteria.find(({ criterion }) => criterion === name)?.status === "active"
+  )));
+  const exactTestedDeploymentVerified = evidenceAuthenticated && roles.every(({ speciesId }) => (
+    LIVING_SPECIES_RELEASE_GATES.gates
+      .find((gate) => gate.speciesId === speciesId)
+      ?.criteria.find(({ criterion }) => criterion === "exact-tested-deployment")
+      ?.status === "active"
+  ));
+  const fullThirtyCriterionReady = roles.every(({ speciesId }) => (
+    livingSpeciesReadinessReport(speciesId)?.publicReady === true
+  ));
+  const boundedCandidateReady = evidenceAuthenticated
+    && roleCoverageReady
+    && broadInteractionCoverageReady
+    && tidalResponseReady
+    && signedFrameAggregateContinuityReady
+    && localWaderContinuityReady
+    && performanceEvidenceReady
+    && blockingRoles.length === 0;
+
+  return deepFreeze({
+    version: WAVE_C_TIDAL_TABLE_BOUNDED_READINESS_VERSION,
+    unitId: "tidal-table",
+    scope: "bounded-starting-harbor-tidal",
+    speciesIds: [...WAVE_C_TIDAL_TABLE_SPECIES],
+    roles,
+    evidenceAuthenticated,
+    roleCoverageReady,
+    broadInteractionCoverageReady,
+    tidalResponseReady,
+    signedFrameAggregateContinuityReady,
+    localWaderContinuityReady,
+    performanceEvidenceReady,
+    boundedCandidateReady,
+    blockingRoles,
+    publicationRecordsReady,
+    exactTestedDeploymentVerified,
+    published: boundedCandidateReady
+      && publicationRecordsReady
+      && exactTestedDeploymentVerified,
+    fullThirtyCriterionReady,
+    excludedClaims: [...WAVE_C_TIDAL_TABLE_EXCLUDED_CLAIMS],
+  });
+}
+
+export const WAVE_C_TIDAL_TABLE_BOUNDED_READINESS =
+  waveCTidalTableBoundedReadiness();
 
 function canonicalCriterionState(
   value: unknown,

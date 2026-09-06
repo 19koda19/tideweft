@@ -24,8 +24,11 @@ import {
 } from "./coreEcologyActivity";
 import {
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyTidalTableHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
+  type CoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES } from "./coreEcologySpeciesRuntimePolicy";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
@@ -57,7 +60,11 @@ describe("core ecology bounded activity", () => {
 
   it("fails the policy gate if a declared diurnal species lacks this runtime owner", () => {
     expect(validateCoreEcologyActivityPolicies()).toEqual([]);
-    expect(CORE_ECOLOGY_ACTIVITY_SPECIES).toEqual(["fish-crow", "northern-harrier"]);
+    expect(CORE_ECOLOGY_ACTIVITY_SPECIES).toEqual([
+      "fish-crow",
+      "northern-harrier",
+      "snowy-egret",
+    ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
     const withoutHarrier = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(
@@ -364,6 +371,97 @@ describe("core ecology bounded activity", () => {
     expect(seeking.motion.targetArea.center).toEqual(perched.perch.anchor);
   });
 
+  it("holds without prey evidence and returns from wading ground to its dry refuge", () => {
+    let highPatch = tidalActivityPatch(360);
+    const highEgret = memberFor(highPatch, "snowy-egret").actor;
+    const highTide = projectCoreEcologyTidalTable(highPatch, 360)?.snowyEgret;
+    if (highTide?.wadingTarget === null || highTide?.wadingTarget === undefined) {
+      throw new Error("Fixture lacks a high-tide egret wading target");
+    }
+    highPatch = replaceCoreEcologyAggregatePatchActor(highPatch, repositionCoreWildlifeActor(
+      highEgret,
+      {
+        atTick: 360,
+        position: highTide.refugeTarget.targetPosition,
+        heading: highEgret.address.heading,
+      },
+    ));
+    const seekingWater = projectCoreEcologyActivity(highPatch, {
+      actorId: highEgret.identity.stableId,
+      atTick: 360,
+    });
+    expect(seekingWater).toMatchObject({
+      state: "waiting-on-tide",
+      presentationSignal: null,
+      sourceObservationId: null,
+      motion: { kind: "hold-position" },
+    });
+    const moved = stepCoreEcologyActivityMotion(highPatch, {
+      actorId: highEgret.identity.stableId,
+      atTick: 360,
+      maximumStepUnits: 1_000,
+    });
+    expect(moved?.resolution).toBe("held");
+
+    const atWater = replaceCoreEcologyAggregatePatchActor(highPatch, repositionCoreWildlifeActor(
+      highEgret,
+      {
+        atTick: 360,
+        position: highTide.wadingTarget.targetPosition,
+        heading: highEgret.address.heading,
+      },
+    ));
+    expect(projectCoreEcologyActivity(atWater, {
+      actorId: highEgret.identity.stableId,
+      atTick: 360,
+    })).toMatchObject({
+      state: "wading-scan",
+      presentationSignal: "wading-scan",
+      sourceObservationId: null,
+      motion: { kind: "hold-position" },
+    });
+
+    let restPatch = tidalActivityPatch(0);
+    const restingEgret = memberFor(restPatch, "snowy-egret").actor;
+    const restTide = projectCoreEcologyTidalTable(restPatch, 0)?.snowyEgret;
+    if (restTide?.wadingTarget === null || restTide?.wadingTarget === undefined) {
+      throw new Error("Fixture lacks a low-tide egret edge");
+    }
+    restPatch = replaceCoreEcologyAggregatePatchActor(restPatch, repositionCoreWildlifeActor(
+      restingEgret,
+      {
+        atTick: 0,
+        position: restTide.wadingTarget.targetPosition,
+        heading: restingEgret.address.heading,
+      },
+    ));
+    expect(projectCoreEcologyActivity(restPatch, {
+      actorId: restingEgret.identity.stableId,
+      atTick: 0,
+    })).toMatchObject({
+      state: "seeking-tidal-refuge",
+      presentationSignal: "tidal-relocation-flight",
+      motion: { kind: "target-area", verb: "seek-tidal-refuge" },
+    });
+    const atRefuge = replaceCoreEcologyAggregatePatchActor(restPatch, repositionCoreWildlifeActor(
+      restingEgret,
+      {
+        atTick: 0,
+        position: restTide.refugeTarget.targetPosition,
+        heading: restingEgret.address.heading,
+      },
+    ));
+    expect(projectCoreEcologyActivity(atRefuge, {
+      actorId: restingEgret.identity.stableId,
+      atTick: 0,
+    })).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      presentationSignal: "resting",
+      motion: { kind: "hold-position" },
+    });
+  });
+
   it("leaves coarse and non-policy actors untouched", () => {
     const coarse = activityPatch(360, "coarse");
     const crow = memberFor(coarse, "fish-crow");
@@ -405,6 +503,34 @@ function activityPatch(
     memberFor(patch, "fish-crow");
     memberFor(patch, "northern-harrier");
   }
+  return patch;
+}
+
+function tidalActivityPatch(tick: number): CoreEcologyAggregatePatchState {
+  const seed = seedFromText("tidal-triad-1");
+  const habitat = deriveCoreEcologyTidalTableHabitatAssemblage({
+    rootSeed: seed,
+    originRegion: ORIGIN,
+    focus: {
+      position: createWorldPosition(
+        ORIGIN,
+        Math.trunc(WORLD_WIDTH / 2) * WORLD_POSITION_UNITS_PER_TILE
+          + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+        Math.trunc(WORLD_HEIGHT / 2) * WORLD_POSITION_UNITS_PER_TILE
+          + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: `tidal-activity:${tick}`,
+    originRegion: ORIGIN,
+    tick,
+    populations: tidalIndividualInputs(habitat),
+    derivation: { kind: "habitat-v5", habitat },
+  });
+  memberFor(patch, "snowy-egret");
   return patch;
 }
 
@@ -468,6 +594,27 @@ function individualInputs(
             representedUnits: allocation.representedUnits,
             position: allocation.position,
             materialization,
+          })),
+        }]
+  ));
+}
+
+function tidalIndividualInputs(
+  habitat: CoreEcologyTidalTableHabitatAssemblage,
+): readonly CoreEcologyPopulationInput[] {
+  return habitat.populations.flatMap((population) => (
+    population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "materialized" as const,
           })),
         }]
   ));

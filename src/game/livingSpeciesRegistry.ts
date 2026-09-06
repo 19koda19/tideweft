@@ -18,8 +18,12 @@ export const LIVING_SPECIES_REGISTRY_VERSION = 1 as const;
 export const LOCAL_PLAYER_LIVING_ACTOR_ID = "player:local" as const;
 
 export type LivingSpeciesRepresentation = "individual" | "aggregate";
-export type LivingSpeciesLocomotionClass = "terrestrial" | "aerial";
-export type LivingSpeciesGroupOrganization = "herd" | "flock";
+export type LivingSpeciesLocomotionClass =
+  | "terrestrial"
+  | "aerial"
+  | "aquatic"
+  | "amphibious";
+export type LivingSpeciesGroupOrganization = "herd" | "flock" | "school";
 
 export interface LivingSpeciesSensoryValues {
   /** Relative capability only; line-of-sight still governs actual vision. */
@@ -40,7 +44,12 @@ interface LivingSpeciesRegistryInput<Species extends string = string> {
   readonly representation: LivingSpeciesRepresentation;
   readonly locomotionClass: LivingSpeciesLocomotionClass;
   readonly groupOrganization: LivingSpeciesGroupOrganization | null;
-  readonly groupStableIdNamespace: "HERD" | "FLOCK" | "CROW-FLOCK" | null;
+  readonly groupStableIdNamespace:
+    | "HERD"
+    | "FLOCK"
+    | "CROW-FLOCK"
+    | "SILVERSIDE-SCHOOL"
+    | null;
   /** Lowercase noun; presentation decides capitalization and knowledge qualifiers. */
   readonly aboutNoun: string;
   readonly senses: LivingSpeciesSensoryValues;
@@ -150,6 +159,33 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       hearingSensitivity: 700_000,
       scentSensitivity: 400_000,
       scentBaseRangeUnits: 8_000,
+    },
+  },
+  "atlantic-silverside": {
+    aboutNoun: "atlantic silverside school",
+    senses: {
+      visionAcuity: 760_000,
+      hearingSensitivity: 720_000,
+      scentSensitivity: 620_000,
+      scentBaseRangeUnits: 10_000,
+    },
+  },
+  "atlantic-marsh-fiddler-crab": {
+    aboutNoun: "atlantic marsh fiddler crab activity",
+    senses: {
+      visionAcuity: 640_000,
+      hearingSensitivity: 780_000,
+      scentSensitivity: 680_000,
+      scentBaseRangeUnits: 8_000,
+    },
+  },
+  "snowy-egret": {
+    aboutNoun: "snowy egret",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 720_000,
+      scentSensitivity: 100_000,
+      scentBaseRangeUnits: 6_000,
     },
   },
 });

@@ -124,6 +124,20 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       retreat: 900_000,
     }),
   }),
+  "snowy-egret": Object.freeze({
+    // The egret stands and probes at authenticated tidal anchors, but travels
+    // between those anchors in flight through the shared aerial path surface.
+    mode: "aerial",
+    aerialTravelCost: 250_000,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 740_000,
+    intentStepFactors: Object.freeze({
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(

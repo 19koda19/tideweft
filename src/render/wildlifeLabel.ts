@@ -9,6 +9,7 @@ const SHOW_VISIBLE_GROUP_COUNT = Object.freeze({
   "marsh-fox": false,
   "fish-crow": true,
   "northern-harrier": false,
+  "snowy-egret": false,
 } satisfies Readonly<Record<WildlifeView["species"], boolean>>);
 
 /** Shared Chart/Relief suffix for an already knowledge-filtered visible count. */

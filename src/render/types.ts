@@ -1,6 +1,7 @@
 /** Presentation-only contracts consumed by the p5 renderer. */
 
 import type { DogPresentation } from "../game/dogPresentation";
+import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 import type { LivingActorSpecies } from "../game/livingActor";
 import type { RendererTelemetrySnapshot } from "./rendererTelemetry";
 
@@ -455,7 +456,7 @@ export type DogView = DogPresentation;
  */
 export type LivingActorViewSpecies = Exclude<
   LivingActorSpecies,
-  "human" | "brown-rat" | "southern-leopard-frog"
+  "human" | CoreEcologyAggregateSpecies
 >;
 
 export type WildlifeBehaviorView =
@@ -471,6 +472,7 @@ export type WildlifeBehaviorView =
   | "retreat"
   | "rest"
   | "perch"
+  | "flight"
   | "quarter";
 
 /**
@@ -493,8 +495,7 @@ export interface WildlifeView {
 
 /** Species represented by conserved population areas rather than actor IDs. */
 export type AggregateWildlifeEvidenceSpecies =
-  | "brown-rat"
-  | "southern-leopard-frog";
+  CoreEcologyAggregateSpecies;
 export type IndividualWildlifeEvidenceSpecies =
   | "domestic-cat"
   | "marsh-rabbit"
@@ -503,12 +504,15 @@ export type WildlifeEvidenceViewSpecies =
   | AggregateWildlifeEvidenceSpecies
   | IndividualWildlifeEvidenceSpecies;
 export type AggregateWildlifeEvidenceForm =
+  | "burrow-openings"
+  | "feeding-scrapes"
   | "gnaw-marks"
   | "shelter-sign"
   | "small-tracks"
   | "paired-tracks"
   | "canid-pawprints"
-  | "frog-tracks";
+  | "frog-tracks"
+  | "surface-dimples";
 
 /**
  * One directly observed physical wildlife sign. This separate view deliberately

@@ -17,14 +17,30 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "fish-crow",
   "northern-harrier",
   "southern-leopard-frog",
+  "atlantic-silverside",
+  "atlantic-marsh-fiddler-crab",
+  "snowy-egret",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
 export type CoreWildlifeRepresentation = "individual" | "aggregate";
-export type CoreWildlifeTaxonomicClass = "amphibian" | "bird" | "mammal";
-export type CoreWildlifeDietClass = "herbivore" | "omnivore" | "carnivore";
-export type CoreWildlifeLocomotionClass = "terrestrial" | "aerial";
-export type CoreWildlifeGroupOrganization = "herd" | "flock";
+export type CoreWildlifeTaxonomicClass =
+  | "amphibian"
+  | "bird"
+  | "fish"
+  | "invertebrate"
+  | "mammal";
+export type CoreWildlifeDietClass =
+  | "herbivore"
+  | "omnivore"
+  | "carnivore"
+  | "detritivore";
+export type CoreWildlifeLocomotionClass =
+  | "terrestrial"
+  | "aerial"
+  | "aquatic"
+  | "amphibious";
+export type CoreWildlifeGroupOrganization = "herd" | "flock" | "school";
 export type CoreWildlifeEcologicalRole =
   | "alarm-source"
   | "prey"
@@ -33,7 +49,8 @@ export type CoreWildlifeEcologicalRole =
   | "scavenger"
   | "predator"
   | "small-predator"
-  | "omnivore";
+  | "omnivore"
+  | "detritivore";
 export type CoreWildlifeFoodClass =
   | "browse"
   | "shore-forage"
@@ -72,6 +89,9 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "CROW-"
     | "HARRIER-"
     | "FROG-"
+    | "SILVERSIDE-"
+    | "FIDDLER-"
+    | "EGRET-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -84,6 +104,9 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "fish-crow": "CROW-",
   "northern-harrier": "HARRIER-",
   "southern-leopard-frog": "FROG-",
+  "atlantic-silverside": "SILVERSIDE-",
+  "atlantic-marsh-fiddler-crab": "FIDDLER-",
+  "snowy-egret": "EGRET-",
 });
 
 /**
@@ -99,7 +122,12 @@ export interface CoreWildlifeSpeciesMetadata {
   readonly dietClass: CoreWildlifeDietClass;
   readonly locomotionClass: CoreWildlifeLocomotionClass;
   readonly groupOrganization: CoreWildlifeGroupOrganization | null;
-  readonly groupStableIdNamespace: "HERD" | "FLOCK" | "CROW-FLOCK" | null;
+  readonly groupStableIdNamespace:
+    | "HERD"
+    | "FLOCK"
+    | "CROW-FLOCK"
+    | "SILVERSIDE-SCHOOL"
+    | null;
 }
 
 export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
@@ -202,6 +230,36 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     taxonomicClass: "amphibian",
     dietClass: "carnivore",
     locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "atlantic-silverside": {
+    species: "atlantic-silverside",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "fish",
+    dietClass: "carnivore",
+    locomotionClass: "aquatic",
+    groupOrganization: "school",
+    groupStableIdNamespace: "SILVERSIDE-SCHOOL",
+  },
+  "atlantic-marsh-fiddler-crab": {
+    species: "atlantic-marsh-fiddler-crab",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "invertebrate",
+    dietClass: "detritivore",
+    locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "snowy-egret": {
+    species: "snowy-egret",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "amphibious",
     groupOrganization: null,
     groupStableIdNamespace: null,
   },
@@ -618,6 +676,105 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       vigilance: [620_000, 980_000],
       boldness: [40_000, 360_000],
       sociability: [300_000, 860_000],
+    },
+  },
+  "atlantic-silverside": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "atlantic-silverside",
+    maximumPatchPopulation: 48,
+    roles: ["prey", "small-prey", "forager"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 460_000,
+      retreatThreshold: 380_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["bright-sided", "olive-backed", "pale-sided", "silver-green"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["social", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 960_000],
+      boldness: [80_000, 420_000],
+      sociability: [820_000, 1_000_000],
+    },
+  },
+  "atlantic-marsh-fiddler-crab": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "atlantic-marsh-fiddler-crab",
+    maximumPatchPopulation: 80,
+    roles: ["prey", "small-prey", "forager", "detritivore"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 420_000,
+      retreatThreshold: 340_000,
+      forageThreshold: 220_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-carapace", "mottled-brown", "olive-brown", "pale-clawed"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["patient", "social"],
+      ["reserved", "watchful"],
+      ["cautious", "social"],
+    ],
+    traitRanges: {
+      vigilance: [660_000, 980_000],
+      boldness: [40_000, 360_000],
+      sociability: [380_000, 860_000],
+    },
+  },
+  "snowy-egret": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "snowy-egret",
+    maximumPatchPopulation: 1,
+    roles: ["forager"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 780_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["breeding-plumes", "clean-white", "gray-lored", "worn-plumes"],
+    temperamentPairs: [
+      ["patient", "watchful"],
+      ["cautious", "patient"],
+      ["bold", "watchful"],
+      ["reserved", "patient"],
+    ],
+    traitRanges: {
+      vigilance: [680_000, 980_000],
+      boldness: [160_000, 660_000],
+      sociability: [120_000, 540_000],
     },
   },
 });

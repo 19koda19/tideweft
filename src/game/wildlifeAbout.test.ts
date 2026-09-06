@@ -6,6 +6,7 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
+  setCoreEcologyAggregateActivityIntensity,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
@@ -17,6 +18,7 @@ import {
 import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
@@ -179,6 +181,61 @@ function frogEvidenceFixture() {
   return { evidence, patch, population };
 }
 
+function tidalEvidenceFixture(tick = 12) {
+  const seed = seedFromText("tidal-triad-1");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyTidalTableHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: population.species === "snowy-egret"
+              ? "materialized" as const
+              : "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "about-tidal-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v5", habitat },
+    tick,
+  });
+  const silverside = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-silverside",
+  );
+  const crab = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-marsh-fiddler-crab",
+  );
+  const egret = patch.populations.find(({ species }) => species === "snowy-egret")
+    ?.members[0]?.actor;
+  if (silverside === undefined || crab === undefined || egret === undefined) {
+    throw new Error("Tidal ABOUT fixture requires both aggregates and one egret");
+  }
+  return { crab, egret, patch, silverside };
+}
+
 function activityFixture(
   species: "fish-crow" | "northern-harrier",
   tick: number,
@@ -300,6 +357,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["marsh-fox", "MARSH FOX", "Marsh fox"],
     ["fish-crow", "FISH CROW FLOCK", "Fish crow"],
     ["northern-harrier", "NORTHERN HARRIER", "Northern harrier"],
+    ["snowy-egret", "SNOWY EGRET", "Snowy egret"],
   ] as const)("identifies a clear %s without claiming an individual identity", (species, heading, label) => {
     const actor = wildlife(species);
     const visible = observation(
@@ -344,11 +402,19 @@ describe("knowledge-honest wildlife ABOUT", () => {
   it.each([
     ["marsh-rabbit", "Compact, long-eared"],
     ["marsh-fox", "Lean, low-tailed canid"],
+    ["snowy-egret", "Slender, long-legged wader"],
   ] as const)("shows only directly observable close-range %s facts", (species, form) => {
     const actor = wildlife(species);
     const selected = projectWildlifeLivingActorInspection(actor, observation(actor));
     expect(selected?.about.observed).toEqual(expect.arrayContaining([
-      { label: "Species", value: species === "marsh-rabbit" ? "Marsh rabbit" : "Marsh fox" },
+      {
+        label: "Species",
+        value: species === "marsh-rabbit"
+          ? "Marsh rabbit"
+          : species === "marsh-fox"
+            ? "Marsh fox"
+            : "Snowy egret",
+      },
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },
       { label: "Appearance", value: expect.any(String) },
@@ -403,6 +469,18 @@ describe("knowledge-honest wildlife ABOUT", () => {
     expect(projectWildlifeQuickInspect(moved, visible, staleActivity)).toBeNull();
     expect(projectWildlifeAbout(moved, visible, staleActivity)).toBeNull();
     expect(projectWildlifeLivingActorInspection(moved, visible, staleActivity)).toBeNull();
+  });
+
+  it("keeps the snowy egret's tidal relocation in quick/full ABOUT parity", () => {
+    const { egret, patch } = tidalEvidenceFixture(720);
+    const visible = observation(egret);
+    const activity = { patch, atTick: patch.updatedAtTick };
+    const quick = projectWildlifeQuickInspect(egret, visible, activity);
+    const about = projectWildlifeAbout(egret, visible, activity);
+
+    expect(quick).toMatchObject({ species: "snowy-egret", summary: "Flying" });
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Flying" });
+    expect(about?.known).toEqual([]);
   });
 
   it("describes directly visible brown-rat evidence as population-level signs", () => {
@@ -505,6 +583,78 @@ describe("knowledge-honest wildlife ABOUT", () => {
     });
     expect(JSON.stringify({ about, quick }))
       .not.toMatch(/actorId|populationSize|activitySignal|rainIntensity|hidden/iu);
+  });
+
+  it.each([
+    ["atlantic-silverside", "ATLANTIC SILVERSIDE SCHOOL SIGNS", "Atlantic silverside"],
+    [
+      "atlantic-marsh-fiddler-crab",
+      "ATLANTIC MARSH FIDDLER CRAB SIGNS",
+      "Atlantic marsh fiddler crab",
+    ],
+  ] as const)("describes directly observed %s cues without an actor or census", (
+    species,
+    heading,
+    speciesLabel,
+  ) => {
+    const fixture = tidalEvidenceFixture();
+    const population = species === "atlantic-silverside" ? fixture.silverside : fixture.crab;
+    const evidence = population.evidence[0];
+    expect(evidence).toBeDefined();
+    const visible = evidenceObservation(evidence!.position);
+    const quick = projectWildlifePopulationEvidenceQuickInspect(
+      fixture.patch,
+      evidence!.evidenceId,
+      visible,
+    );
+    const about = projectWildlifePopulationEvidenceAbout(
+      fixture.patch,
+      evidence!.evidenceId,
+      visible,
+    );
+
+    expect(quick).toMatchObject({ species, heading });
+    expect(about).toMatchObject({
+      species,
+      heading,
+      knowledge: "Recognized",
+      observed: expect.arrayContaining([
+        { label: "Species", value: speciesLabel },
+        { label: "Scale", value: "Population-level signs" },
+      ]),
+      known: [],
+    });
+    const encoded = JSON.stringify({ about, quick });
+    expect(encoded).not.toMatch(/actorId|populationSize|representedUnits|activitySignal|intensity/iu);
+    expect(encoded).not.toMatch(/dead|death|mortality|carcass/iu);
+
+    const uncertain = projectWildlifePopulationEvidenceAbout(
+      fixture.patch,
+      evidence!.evidenceId,
+      evidenceObservation(evidence!.position, 60),
+    );
+    expect(uncertain).toMatchObject({
+      heading: species === "atlantic-silverside"
+        ? "WATER-SURFACE ACTIVITY"
+        : "MUDFLAT ACTIVITY",
+      identity: species === "atlantic-silverside"
+        ? "Unidentified water-surface activity"
+        : "Unidentified mudflat activity",
+      knowledge: "Unfamiliar",
+      known: [],
+    });
+    expect(uncertain?.observed.map(({ label }) => label)).not.toContain("Species");
+
+    const quiet = setCoreEcologyAggregateActivityIntensity(fixture.patch, {
+      aggregateId: population.aggregateId,
+      atTick: fixture.patch.updatedAtTick,
+      intensity: 0,
+    });
+    expect(projectWildlifePopulationEvidenceAbout(
+      quiet,
+      evidence!.evidenceId,
+      visible,
+    )).toBeNull();
   });
 
   it("keeps species, appearance, condition, and life stage hidden below clarity", () => {

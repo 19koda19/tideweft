@@ -10,6 +10,7 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregateActivityIntensity,
   setCoreEcologyAggregatePatchMaterializedActors,
   serializeCoreEcologyAggregatePatch,
   stepCoreEcologyAggregatePatch,
@@ -23,7 +24,10 @@ import {
   sameCoreEcologyAggregateEvidenceTarget,
   type CoreEcologyAggregateEvidenceTarget,
 } from "./coreEcologyEvidenceRuntime";
-import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
+import {
+  deriveCoreEcologyHarborEdgeHabitatAssemblage,
+  deriveCoreEcologyTidalTableHabitatAssemblage,
+} from "./coreEcologyHabitat";
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
 import type { CoreEcologySettlementShadowsEvent } from "./coreEcologySmallWorld";
 import { evaluatePerception, type PerceptionCell } from "./perception";
@@ -31,7 +35,7 @@ import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
 } from "./regionalTravel";
-import type { WorldPosition } from "./worldPosition";
+import { createWorldPosition, type WorldPosition } from "./worldPosition";
 
 function fixture() {
   const seed = seedFromText("runtime aggregate evidence projection");
@@ -75,6 +79,57 @@ function fixture() {
     evidenceId: evidence.evidenceId,
   };
   return { evidence, patch, population, target };
+}
+
+function tidalFixture() {
+  const seed = seedFromText("tidal-triad-1");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyTidalTableHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "runtime/tidal-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v5", habitat },
+    tick: 17,
+  });
+  const silverside = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-silverside",
+  );
+  const crab = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-marsh-fiddler-crab",
+  );
+  if (silverside === undefined || crab === undefined) {
+    throw new Error("Runtime tidal fixture requires both aggregate populations");
+  }
+  return { crab, patch, silverside };
 }
 
 function observationAt(
@@ -259,6 +314,62 @@ describe("core ecology aggregate-evidence runtime adapter", () => {
     expect(encoded).not.toMatch(/actorId|RAT-v|groupSize|populationSize|populationPressure/iu);
     expect(encoded).not.toMatch(/activitySignal|causeKind|causeReferenceId|strength|createdAtTick/iu);
     expect(encoded).not.toMatch(/interaction|currentIntent|hidden/iu);
+  });
+
+  it.each([
+    ["atlantic-silverside", "surface-dimple", "surface-dimples"],
+    ["atlantic-marsh-fiddler-crab", "burrow-opening", "burrow-openings"],
+  ] as const)("binds directly perceived %s evidence through render and ABOUT", (
+    species,
+    kind,
+    form,
+  ) => {
+    const fixture = tidalFixture();
+    const population = species === "atlantic-silverside" ? fixture.silverside : fixture.crab;
+    const evidence = population.evidence.find((candidate) => candidate.kind === kind);
+    expect(evidence).toBeDefined();
+    const target: CoreEcologyAggregateEvidenceTarget = {
+      species,
+      aggregateId: population.aggregateId,
+      evidenceId: evidence!.evidenceId,
+    };
+    const observed = observationAt(evidence!.position);
+    const projection = projectCoreEcologyAggregateEvidence({
+      patch: fixture.patch,
+      ...observed,
+      tileSize: 16,
+      selectedTarget: target,
+    });
+
+    expect(projection?.renderEvidence).toContainEqual(expect.objectContaining({
+      species,
+      form,
+      representation: "population-evidence",
+      selected: true,
+    }));
+    expect(projection?.selectedAbout).toMatchObject({
+      target,
+      about: { target, known: [] },
+    });
+    const encoded = JSON.stringify(projection);
+    expect(encoded).not.toMatch(/actorId|populationSize|representedUnits|activitySignal|intensity/iu);
+    expect(encoded).not.toMatch(/dead|death|mortality|carcass/iu);
+
+    const quiet = setCoreEcologyAggregateActivityIntensity(fixture.patch, {
+      aggregateId: population.aggregateId,
+      atTick: fixture.patch.updatedAtTick,
+      intensity: 0,
+    });
+    const quietProjection = projectCoreEcologyAggregateEvidence({
+      patch: quiet,
+      ...observed,
+      tileSize: 16,
+      selectedTarget: target,
+    });
+    expect(quietProjection?.renderEvidence.some(({ evidenceId }) => (
+      evidenceId === evidence!.evidenceId
+    ))).toBe(false);
+    expect(quietProjection?.selectedAbout).toBeNull();
   });
 
   it("drops stale or no-longer-visible selection without remembering the sign", () => {

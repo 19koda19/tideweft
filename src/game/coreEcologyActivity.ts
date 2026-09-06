@@ -11,6 +11,10 @@ import {
 } from "./coreEcology";
 import type { CoreEcologyHabitatAllocation } from "./coreEcologyHabitat";
 import {
+  projectCoreEcologyTidalTable,
+  type CoreEcologySnowyEgretTidalTarget,
+} from "./coreEcologyTidalTable";
+import {
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES,
   coreEcologySpeciesRuntimePolicy,
   isCoreEcologySpeciesRuntimePolicy,
@@ -44,6 +48,7 @@ export const CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS = 4 as const;
 export const CORE_ECOLOGY_ACTIVITY_SPECIES = Object.freeze([
   "fish-crow",
   "northern-harrier",
+  "snowy-egret",
 ] as const);
 
 export type CoreEcologyActivitySpecies =
@@ -55,7 +60,12 @@ export type CoreEcologyActivityState =
   | "perched"
   | "responding"
   | "resting"
-  | "seeking-perch";
+  | "seeking-perch"
+  | "seeking-tidal-refuge"
+  | "seeking-wading-ground"
+  | "waiting-on-tide"
+  | "wading-scan"
+  | "wading-search";
 
 export interface CoreEcologyDayPhaseProjection {
   readonly dayTick: number;
@@ -67,7 +77,11 @@ export type CoreEcologyActivityMotion =
   | Readonly<{ readonly kind: "hold-position" }>
   | Readonly<{
       readonly kind: "target-area";
-      readonly verb: "quarter" | "seek-perch";
+      readonly verb:
+        | "quarter"
+        | "seek-perch"
+        | "seek-tidal-refuge"
+        | "seek-wading-ground";
       readonly targetArea: ObservedArea;
     }>;
 
@@ -84,8 +98,17 @@ export interface CoreEcologyActivityProjection {
   readonly state: CoreEcologyActivityState;
   /** Immediate threat, food, alarm, and pursuit intents always outrank neutral activity. */
   readonly responsiveToImmediateIntent: boolean;
+  /** Exact current observation authorizing a foraging claim; null means neutral scanning. */
+  readonly sourceObservationId: string | null;
   readonly preferredNeutralIntent: Extract<CoreWildlifeIntentKind, "observe" | "rest"> | null;
-  readonly presentationSignal: "low-quartering-flight" | "perched" | "resting" | null;
+  readonly presentationSignal:
+    | "low-quartering-flight"
+    | "perched"
+    | "resting"
+    | "tidal-relocation-flight"
+    | "wading-scan"
+    | "wading-search"
+    | null;
   readonly perch: Readonly<{
     readonly availability: "not-applicable" | "available-at-anchor" | "available-here";
     readonly anchor: WorldPosition | null;
@@ -126,6 +149,7 @@ const REQUIRED_COMMON_CAPABILITIES = Object.freeze([
 ] satisfies readonly CoreEcologySpeciesRuntimeCapability[]);
 const PERCH_ARRIVAL_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
 const QUARTERING_TARGET_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+const WADING_ARRIVAL_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 3);
 const QUARTERING_OFFSETS = Object.freeze([
   Object.freeze({ x: -2_400, y: -1_100 }),
   Object.freeze({ x: -800, y: -2_200 }),
@@ -311,6 +335,129 @@ function projectCanonicalCoreEcologyActivity(
     });
   }
 
+  if (owned.species === "snowy-egret") {
+    const tidal = projectCoreEcologyTidalTable(patch, input.atTick);
+    const egret = tidal?.snowyEgret;
+    if (egret === null || egret === undefined || egret.actorId !== input.actorId) return null;
+    if (inRestWindow || actorNeedsRest) {
+      const atRefuge = withinWorldRadius(
+        owned.member.actor.address.position,
+        egret.refugeTarget.targetPosition,
+        WADING_ARRIVAL_RADIUS_UNITS,
+      );
+      return activityProjection(owned, input.atTick, day, {
+        state: atRefuge ? "resting" : "seeking-tidal-refuge",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: inRestWindow && atRefuge ? "rest" : "observe",
+        presentationSignal: atRefuge ? "resting" : "tidal-relocation-flight",
+        perch: noPerchProjection(),
+        motion: atRefuge
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-tidal-refuge",
+              targetArea: frozenArea(
+                egret.refugeTarget.targetPosition,
+                WADING_ARRIVAL_RADIUS_UNITS,
+              ),
+            }),
+      });
+    }
+    if (egret.wadingTarget === null) {
+      const atRefuge = withinWorldRadius(
+        owned.member.actor.address.position,
+        egret.refugeTarget.targetPosition,
+        WADING_ARRIVAL_RADIUS_UNITS,
+      );
+      return activityProjection(owned, input.atTick, day, {
+        state: atRefuge ? "waiting-on-tide" : "seeking-tidal-refuge",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: "observe",
+        presentationSignal: atRefuge ? null : "tidal-relocation-flight",
+        perch: noPerchProjection(),
+        motion: atRefuge
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-tidal-refuge",
+              targetArea: frozenArea(
+                egret.refugeTarget.targetPosition,
+                WADING_ARRIVAL_RADIUS_UNITS,
+              ),
+            }),
+      });
+    }
+    const aquaticObservation = currentAquaticActivityObservation(
+      owned.member.actor,
+      input.atTick,
+    );
+    const observedTarget = aquaticObservation === null
+      ? null
+      : nearestWadingTarget(aquaticObservation.area.center, egret.wadingTargets);
+    if (aquaticObservation === null || observedTarget === null) {
+      const currentWadingTarget = egret.wadingTargets.find((target) => withinWorldRadius(
+        owned.member.actor.address.position,
+        target.targetPosition,
+        WADING_ARRIVAL_RADIUS_UNITS,
+      ));
+      const atRefuge = withinWorldRadius(
+        owned.member.actor.address.position,
+        egret.refugeTarget.targetPosition,
+        WADING_ARRIVAL_RADIUS_UNITS,
+      );
+      return activityProjection(owned, input.atTick, day, {
+        state: currentWadingTarget !== undefined
+          ? "wading-scan"
+          : atRefuge ? "waiting-on-tide" : "seeking-tidal-refuge",
+        responsiveToImmediateIntent: false,
+        sourceObservationId: null,
+        preferredNeutralIntent: "observe",
+        presentationSignal: currentWadingTarget !== undefined
+          ? "wading-scan"
+          : atRefuge ? null : "tidal-relocation-flight",
+        perch: noPerchProjection(),
+        motion: currentWadingTarget !== undefined || atRefuge
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-tidal-refuge",
+              targetArea: frozenArea(
+                egret.refugeTarget.targetPosition,
+                WADING_ARRIVAL_RADIUS_UNITS,
+              ),
+            }),
+      });
+    }
+    const wadingTarget = observedTarget;
+    const atWadingGround = withinWorldRadius(
+      owned.member.actor.address.position,
+      wadingTarget.targetPosition,
+      WADING_ARRIVAL_RADIUS_UNITS,
+    );
+    return activityProjection(owned, input.atTick, day, {
+      state: atWadingGround
+        ? "wading-search"
+        : "seeking-wading-ground",
+      responsiveToImmediateIntent: false,
+      sourceObservationId: aquaticObservation.sourceObservationId,
+      preferredNeutralIntent: "observe",
+      presentationSignal: atWadingGround
+        ? "wading-search"
+        : "tidal-relocation-flight",
+      perch: noPerchProjection(),
+      motion: atWadingGround
+        ? Object.freeze({ kind: "hold-position" })
+        : Object.freeze({
+            kind: "target-area",
+            verb: "seek-wading-ground",
+            targetArea: frozenArea(
+              wadingTarget.targetPosition,
+              WADING_ARRIVAL_RADIUS_UNITS,
+            ),
+          }),
+    });
+  }
+
   if (inRestWindow || actorNeedsRest) {
     return activityProjection(owned, input.atTick, day, {
       state: "resting",
@@ -390,8 +537,14 @@ export function validateCoreEcologyActivityPolicies(
     if (policy.identityForm !== "individual" || !policy.actorAddressable) {
       errors.push(`${species}:activity-requires-addressable-individual`);
     }
-    if (policy.locomotionClass !== "aerial") {
-      errors.push(`${species}:activity-requires-aerial-locomotion`);
+    if (
+      species !== "snowy-egret"
+      && policy.locomotionClass !== "aerial"
+    ) {
+      errors.push(`${species}:activity-requires-aerial-locomotion-class`);
+    }
+    if (species === "snowy-egret" && policy.locomotionClass !== "amphibious") {
+      errors.push("snowy-egret:activity-requires-amphibious-locomotion-class");
     }
   }
   const crow = bySpecies.get("fish-crow");
@@ -419,6 +572,24 @@ export function validateCoreEcologyActivityPolicies(
       errors.push("northern-harrier:missing-low-quartering-signal");
     }
   }
+  const egret = bySpecies.get("snowy-egret");
+  if (egret !== undefined) {
+    for (const capability of [
+      "tidal-activity",
+      "wading",
+      "water-depth-response",
+    ] as const) {
+      if (!egret.capabilities.includes(capability)) {
+        errors.push(`snowy-egret:missing-${capability}`);
+      }
+    }
+    if (!egret.activitySignals.includes("wading-forage")) {
+      errors.push("snowy-egret:missing-wading-forage-signal");
+    }
+    if (egret.capabilities.includes("aerial-predator")) {
+      errors.push("snowy-egret:must-not-own-aerial-predator");
+    }
+  }
   return Object.freeze(errors.sort(compareText));
 }
 
@@ -441,7 +612,7 @@ function activityProjection(
     | "presentationSignal"
     | "responsiveToImmediateIntent"
     | "state"
-  >,
+  > & Readonly<{ readonly sourceObservationId?: string | null }>,
 ): CoreEcologyActivityProjection {
   return deepFreeze({
     version: CORE_ECOLOGY_ACTIVITY_VERSION,
@@ -453,7 +624,51 @@ function activityProjection(
     dayTick: day.dayTick,
     dayPhase: day.phase,
     ...activity,
+    sourceObservationId: activity.sourceObservationId ?? null,
   });
+}
+
+function currentAquaticActivityObservation(
+  actor: OwnedActivityActor["member"]["actor"],
+  atTick: number,
+) {
+  return [...actor.perception.beliefs]
+    .filter((belief) => (
+      belief.channel === "vision"
+      && belief.perceivedClass === "aquatic-activity"
+      && belief.subjectId === null
+      && belief.identification === "classified"
+      && belief.area.radiusUnits === 0
+      && belief.lastObservedTick === atTick
+    ))
+    .sort((left, right) => (
+      right.salience - left.salience
+      || right.confidence - left.confidence
+      || compareText(left.sourceObservationId, right.sourceObservationId)
+    ))[0] ?? null;
+}
+
+function nearestWadingTarget(
+  origin: WorldPosition,
+  targets: readonly CoreEcologySnowyEgretTidalTarget[],
+): CoreEcologySnowyEgretTidalTarget | null {
+  return [...targets].sort((left, right) => {
+    const leftDistance = worldDistanceSquared(origin, left.targetPosition);
+    const rightDistance = worldDistanceSquared(origin, right.targetPosition);
+    return leftDistance < rightDistance
+      ? -1
+      : leftDistance > rightDistance
+        ? 1
+        : left.targetAnchorOrdinal - right.targetAnchorOrdinal;
+  })[0] ?? null;
+}
+
+function worldDistanceSquared(left: WorldPosition, right: WorldPosition): bigint {
+  const deltaX = (BigInt(right.region.x) - BigInt(left.region.x))
+    * BigInt(REGION_WIDTH_UNITS) + BigInt(right.localX - left.localX);
+  const deltaY = (BigInt(right.region.y) - BigInt(left.region.y))
+    * BigInt(REGION_HEIGHT_UNITS) + BigInt(right.localY - left.localY);
+  return deltaX * deltaX + deltaY * deltaY;
 }
 
 interface OwnedActivityActor {
@@ -486,6 +701,8 @@ function authenticatedHabitatAllocation(
   if (
     patch.derivation.kind !== "habitat-v4"
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
+    && patch.derivation.kind !== "habitat-v5"
+    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
   ) return null;
   const analysis = patch.derivation.habitat.populations.find((candidate) => (
     candidate.species === population.species
@@ -508,7 +725,12 @@ function runtimePolicyOwnsActivity(
   return species === "fish-crow"
     ? policy.capabilities.includes("perch")
       && policy.groupStableIdNamespace === "CROW-FLOCK"
-    : policy.capabilities.includes("aerial-predator")
+    : species === "snowy-egret"
+      ? policy.capabilities.includes("tidal-activity")
+        && policy.capabilities.includes("wading")
+        && policy.capabilities.includes("water-depth-response")
+        && policy.activitySignals.includes("wading-forage")
+      : policy.capabilities.includes("aerial-predator")
       && policy.capabilities.includes("small-prey-pursuit")
       && policy.activitySignals.includes("low-quartering-flight");
 }
@@ -578,9 +800,13 @@ function withinWorldRadius(
   return deltaX * deltaX + deltaY * deltaY <= radius * radius;
 }
 
-function isActivitySpecies(species: CoreWildlifeSpecies): species is CoreEcologyActivitySpecies {
+export function coreEcologySpeciesHasBoundedActivityProjection(
+  species: CoreWildlifeSpecies,
+): species is CoreEcologyActivitySpecies {
   return ACTIVITY_SPECIES.has(species);
 }
+
+const isActivitySpecies = coreEcologySpeciesHasBoundedActivityProjection;
 
 function nonnegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number"
