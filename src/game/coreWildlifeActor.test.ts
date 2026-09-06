@@ -149,6 +149,45 @@ describe("core Wave-A wildlife actor", () => {
     }
   });
 
+  it("lets an owned activity window choose only the otherwise-neutral posture", () => {
+    const harrier = actor("northern-harrier");
+    const resting = stepCoreWildlifeActor(harrier, {
+      tick: 1,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    expect(resting?.decision).toMatchObject({
+      intent: "rest",
+      cause: { kind: "condition", referenceId: "activity:rest-window" },
+    });
+
+    const crow = actor("fish-crow");
+    const predator = observation(crow, 1, {
+      id: "obs:activity-window-predator",
+      perceivedClass: "aerial-predator",
+      subjectId: harrier.identity.stableId,
+    });
+    const responding = stepCoreWildlifeActor(crow, {
+      tick: 1,
+      observations: [predator],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    expect(responding?.decision.intent).not.toBe("rest");
+    expect(responding?.decision.cause.referenceId).toBe(predator.id);
+
+    expect(stepCoreWildlifeActor(harrier, {
+      tick: 1,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "pursue",
+    })).toBeNull();
+  });
+
   it("roundtrips canonical saves and rejects mutation or noncanonical text", () => {
     const state = actor("black-bear");
     const encoded = serializeCoreWildlifeActorState(state);
@@ -761,6 +800,138 @@ describe("core Wave-A wildlife actor", () => {
     expect(["flee", "retreat"]).toContain(interrupted.decision.intent);
     expect(interrupted.decision.focusObservationId).toBe(dogSeen.id);
     expect(interrupted.resourceClaims).toEqual([]);
+  });
+
+  it("gives a harrier one finite declared-small-prey pursuit and lets dog pressure interrupt it", () => {
+    const harrier = hungry(actor("northern-harrier"), ACTOR_PERCEPTION_SCALE);
+    const rabbitSeen = observation(harrier, 1, {
+      id: "obs:harrier-sees-rabbit",
+      perceivedClass: "live-prey",
+      subjectId: "RABBIT-harrier-test",
+    });
+    const rabbit = food(rabbitSeen.id, "RABBIT-harrier-test", "live-prey", {
+      effort: 180_000,
+      risk: 100_000,
+    });
+    const pursuing = step(harrier, 1, [rabbitSeen], [rabbit]);
+    expect(pursuing.decision).toMatchObject({ intent: "pursue", expiresAtTick: 9 });
+    expect(pursuing.resourceClaims).toEqual([]);
+
+    const rabbitAtLimit = observation(pursuing.actor, 9, {
+      id: rabbitSeen.id,
+      perceivedClass: "live-prey",
+      subjectId: "RABBIT-harrier-test",
+    });
+    const exhausted = step(pursuing.actor, 9, [rabbitAtLimit], [rabbit]);
+    expect(exhausted.decision.intent).toBe("disengage");
+    expect(exhausted.resourceClaims).toEqual([]);
+
+    const dogSeen = observation(pursuing.actor, 2, {
+      id: "obs:harrier-sees-dog",
+      perceivedClass: "predator",
+      subjectId: "D-R-v1-harrier-dog",
+    });
+    const rabbitSeenAgain = observation(pursuing.actor, 2, {
+      id: rabbitSeen.id,
+      perceivedClass: "live-prey",
+      subjectId: "RABBIT-harrier-test",
+    });
+    const interrupted = step(
+      pursuing.actor,
+      2,
+      [rabbitSeenAgain, dogSeen],
+      [{ ...rabbit, observationId: rabbitSeenAgain.id }],
+    );
+    expect(["flee", "retreat"]).toContain(interrupted.decision.intent);
+    expect(interrupted.decision.focusObservationId).toBe(dogSeen.id);
+    expect(interrupted.resourceClaims).toEqual([]);
+  });
+
+  it("lets a perceived crow mobbing signal interrupt harrier pursuit without making crow prey", () => {
+    const harrier = hungry(actor("northern-harrier"), ACTOR_PERCEPTION_SCALE);
+    const rabbitSeen = observation(harrier, 1, {
+      id: "obs:harrier-rabbit-before-mob",
+      perceivedClass: "live-prey",
+      subjectId: "RABBIT-mob-test",
+    });
+    const rabbit = food(rabbitSeen.id, "RABBIT-mob-test", "live-prey");
+    const pursuing = step(harrier, 1, [rabbitSeen], [rabbit]);
+    expect(pursuing.decision.intent).toBe("pursue");
+
+    const mobbingCrow = observation(pursuing.actor, 2, {
+      id: "obs:harrier-crow-mobbing",
+      perceivedClass: "mobbing-pressure",
+      subjectId: "CROW-mob-test",
+    });
+    const interrupted = step(pursuing.actor, 2, [mobbingCrow]);
+    expect(["flee", "retreat"]).toContain(interrupted.decision.intent);
+    expect(interrupted.decision.focusObservationId).toBe(mobbingCrow.id);
+    expect(interrupted.resourceClaims).toEqual([]);
+  });
+
+  it("lets directly perceived bear pressure interrupt harrier pursuit", () => {
+    const harrier = hungry(actor("northern-harrier"), ACTOR_PERCEPTION_SCALE);
+    const rabbitSeen = observation(harrier, 1, {
+      id: "obs:harrier-rabbit-before-bear",
+      perceivedClass: "live-prey",
+      subjectId: "RABBIT-bear-pressure-test",
+    });
+    const rabbit = food(rabbitSeen.id, "RABBIT-bear-pressure-test", "live-prey");
+    const pursuing = step(harrier, 1, [rabbitSeen], [rabbit]);
+    const bearSeen = observation(pursuing.actor, 2, {
+      id: "obs:harrier-sees-bear",
+      perceivedClass: "large-predator",
+      subjectId: "BEAR-harrier-test",
+    });
+    const mobbingCrow = observation(pursuing.actor, 2, {
+      id: "obs:harrier-also-sees-mobbing-crow",
+      perceivedClass: "mobbing-pressure",
+      subjectId: "CROW-harrier-order-test",
+    });
+    const interrupted = step(pursuing.actor, 2, [bearSeen, mobbingCrow]);
+    const reordered = step(pursuing.actor, 2, [mobbingCrow, bearSeen]);
+    expect(reordered).toEqual(interrupted);
+    expect(["flee", "retreat"]).toContain(interrupted.decision.intent);
+    expect([bearSeen.id, mobbingCrow.id]).toContain(interrupted.decision.focusObservationId);
+    expect(interrupted.resourceClaims).toEqual([]);
+  });
+
+  it("lets a fish crow alarm at a perceived aerial predator and a rabbit heed the shared alarm", () => {
+    const crow = actor("fish-crow");
+    const harrierSeen = observation(crow, 1, {
+      id: "obs:crow-sees-aerial-predator",
+      perceivedClass: "aerial-predator",
+      subjectId: "HARRIER-crow-test",
+    });
+    const alarmed = step(crow, 1, [harrierSeen]);
+    expect(alarmed.decision).toMatchObject({
+      intent: "alarm",
+      cause: { kind: "perception", referenceId: harrierSeen.id },
+      focusObservationId: harrierSeen.id,
+    });
+    expect(alarmed.resourceClaims).toEqual([]);
+
+    const rabbit = actor("marsh-rabbit");
+    const sharedAlarm = observation(rabbit, 1, {
+      id: "obs:rabbit-hears-crow-alarm",
+      perceivedClass: "animal-alarm",
+      channel: "hearing",
+    });
+    const reacted = step(rabbit, 1, [sharedAlarm]);
+    expect(reacted.decision.intent).toBe("flee");
+    expect(reacted.decision.focusObservationId).toBe(sharedAlarm.id);
+  });
+
+  it("does not fabricate ground evidence for crow or harrier flight", () => {
+    for (const species of ["fish-crow", "northern-harrier"] as const) {
+      const source = step(actor(species), 1).actor;
+      expect(() => repositionCoreWildlifeActorWithMovementEvidence(source, {
+        atTick: 1,
+        position: translateWorldPosition(source.address.position, 500, 0),
+        heading: source.address.heading,
+        strength: 600_000,
+      })).toThrow(/does not produce/u);
+    }
   });
 
   it("canonicalizes input order and fails closed on unlawful contacts", () => {

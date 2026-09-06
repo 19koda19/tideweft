@@ -15,6 +15,7 @@ import {
   LIVING_SPECIES_REGISTRY_VERSION,
   LOCAL_PLAYER_LIVING_ACTOR_ID,
   isLivingActorSpecies,
+  isLivingSpeciesActorAddressable,
   livingSpeciesActorIdMatchesNamespace,
   livingSpeciesRegistryEntry,
 } from "./livingSpeciesRegistry";
@@ -33,6 +34,9 @@ describe("lean runtime living-species registry", () => {
       "domestic-cat",
       "marsh-rabbit",
       "marsh-fox",
+      "fish-crow",
+      "northern-harrier",
+      "southern-leopard-frog",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -41,6 +45,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
         aboutNoun: "person",
         senses: {
           visionAcuity: 850_000,
@@ -55,6 +61,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
         aboutNoun: "dog",
         senses: {
           visionAcuity: 680_000,
@@ -69,6 +77,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
+        groupOrganization: "herd",
+        groupStableIdNamespace: "HERD",
         aboutNoun: "deer",
         senses: {
           visionAcuity: 820_000,
@@ -83,6 +93,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "aggregate",
         locomotionClass: "aerial",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "FLOCK",
         aboutNoun: "gull",
         senses: {
           visionAcuity: 980_000,
@@ -97,6 +109,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
         aboutNoun: "black bear",
         senses: {
           visionAcuity: 720_000,
@@ -111,6 +125,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: false,
         representation: "aggregate",
         locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
         aboutNoun: "brown rat",
         senses: {
           visionAcuity: 480_000,
@@ -125,6 +141,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
         aboutNoun: "domestic cat",
         senses: {
           visionAcuity: 900_000,
@@ -139,6 +157,8 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
         aboutNoun: "marsh rabbit",
         senses: {
           visionAcuity: 860_000,
@@ -153,12 +173,62 @@ describe("lean runtime living-species registry", () => {
         actorAddressable: true,
         representation: "individual",
         locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
         aboutNoun: "marsh fox",
         senses: {
           visionAcuity: 880_000,
           hearingSensitivity: 920_000,
           scentSensitivity: 940_000,
           scentBaseRangeUnits: 34_000,
+        },
+      },
+      {
+        species: "fish-crow",
+        actorIdPrefix: "CROW-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "CROW-FLOCK",
+        aboutNoun: "fish crow",
+        senses: {
+          visionAcuity: 940_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: 300_000,
+          scentBaseRangeUnits: 12_000,
+        },
+      },
+      {
+        species: "northern-harrier",
+        actorIdPrefix: "HARRIER-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "northern harrier",
+        senses: {
+          visionAcuity: ACTOR_PERCEPTION_SCALE,
+          hearingSensitivity: 820_000,
+          scentSensitivity: 120_000,
+          scentBaseRangeUnits: 8_000,
+        },
+      },
+      {
+        species: "southern-leopard-frog",
+        actorIdPrefix: "FROG-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "southern leopard frog",
+        senses: {
+          visionAcuity: 580_000,
+          hearingSensitivity: 700_000,
+          scentSensitivity: 400_000,
+          scentBaseRangeUnits: 8_000,
         },
       },
     ]);
@@ -229,6 +299,18 @@ describe("lean runtime living-species registry", () => {
       });
     }
     expect(livingSpeciesActorIdMatchesNamespace("RAT-v1-synthetic", "brown-rat")).toBe(false);
+    expect(isLivingSpeciesActorAddressable("southern-leopard-frog")).toBe(false);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "FROG-v1-synthetic",
+      "southern-leopard-frog",
+    )).toBe(false);
+    expect(() => createLivingActorAddress({
+      actorId: "FROG-v1-synthetic",
+      species: "southern-leopard-frog",
+      position,
+      persistence: "regional",
+    })).toThrow("Living actor ID namespace does not match its species");
+    expect(isLivingSpeciesActorAddressable("unknown-frog")).toBe(false);
     expect(livingSpeciesActorIdMatchesNamespace("OTTER-v1", "otter")).toBe(false);
   });
 });

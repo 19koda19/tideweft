@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { TerrainTileView } from "../sim/types";
 import {
   CORE_WILDLIFE_BASE_MOVE_STEP_UNITS,
+  CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION,
+  coreWildlifeLocomotionProfile,
   coreWildlifeMaximumStepUnits,
   coreWildlifeTraversabilityCell,
 } from "./coreWildlifeLocomotionProfile";
@@ -24,6 +26,23 @@ function tile(overrides: Partial<TerrainTileView> = {}): TerrainTileView {
 }
 
 describe("core wildlife locomotion profiles", () => {
+  it("generalizes bounded aerial travel without reading surface impedance", () => {
+    expect(CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION).toBe(1);
+    const blockedSurface = tile({
+      terrain: "deep-water",
+      waterDepth: ADRIFT_STAND_DEPTH + 900_000,
+      baseTravelCost: 1_000_000,
+    });
+    for (const species of ["gull", "fish-crow", "northern-harrier"] as const) {
+      expect(coreWildlifeLocomotionProfile(species).mode).toBe("aerial");
+      expect(coreWildlifeTraversabilityCell(species, blockedSurface)).toMatchObject({
+        access: "open",
+      });
+      expect(coreWildlifeTraversabilityCell(species, blockedSurface).travelCost)
+        .toBeLessThan(blockedSurface.baseTravelCost);
+    }
+  });
+
   it("keeps every established terrestrial species on the exact base cost/step", () => {
     for (const species of ["deer", "black-bear", "domestic-cat"] as const) {
       expect(coreWildlifeTraversabilityCell(species, tile()).travelCost).toBe(500_000);
@@ -50,6 +69,15 @@ describe("core wildlife locomotion profiles", () => {
     expect(coreWildlifeMaximumStepUnits("marsh-fox", "pursue")).toBeLessThan(1_000);
   });
 
+  it("gives crow alarm flight and harrier pursuit distinct bounded aerial cadence", () => {
+    expect(coreWildlifeMaximumStepUnits("fish-crow", "alarm"))
+      .toBeGreaterThan(coreWildlifeMaximumStepUnits("fish-crow", "forage"));
+    expect(coreWildlifeMaximumStepUnits("northern-harrier", "pursue"))
+      .toBeGreaterThan(coreWildlifeMaximumStepUnits("northern-harrier", "observe"));
+    expect(coreWildlifeMaximumStepUnits("fish-crow", "alarm")).toBeLessThan(1_000);
+    expect(coreWildlifeMaximumStepUnits("northern-harrier", "pursue")).toBeLessThan(1_000);
+  });
+
   it("rejects nonstandable water identically before gait can matter", () => {
     for (const species of ["marsh-rabbit", "marsh-fox"] as const) {
       expect(coreWildlifeTraversabilityCell(species, tile({
@@ -57,5 +85,10 @@ describe("core wildlife locomotion profiles", () => {
         waterDepth: ADRIFT_STAND_DEPTH + 1,
       }))).toEqual({ access: "deep-water", travelCost: 0 });
     }
+  });
+
+  it("fails closed when an unregistered species is forced across the typed boundary", () => {
+    expect(() => coreWildlifeLocomotionProfile("invented-bird" as never))
+      .toThrow("Unknown core wildlife species invented-bird");
   });
 });

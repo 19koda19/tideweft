@@ -2,17 +2,24 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import {
   projectWildlifePopulationEvidencePresentations,
   projectWildlifePresentation,
+  type AggregateWildlifeSpecies,
   type WildlifeDirectObservation,
   type IndividualWildlifeSpecies,
   type WildlifePopulationEvidenceObservation,
   type WildlifePopulationEvidencePresentation,
   type WildlifePresentation,
+  type WildlifePresentationInput,
 } from "./wildlifePresentation";
 
 export const WILDLIFE_ABOUT_VERSION = 1 as const;
 
 export type WildlifeAboutObservation = WildlifeDirectObservation;
+export type WildlifeAboutActivityContext = NonNullable<WildlifePresentationInput["activity"]>;
 export type WildlifePopulationEvidenceAboutObservation = WildlifePopulationEvidenceObservation;
+type AggregatePopulationEvidencePresentation = Extract<
+  WildlifePopulationEvidencePresentation,
+  { readonly representation: "population-evidence" }
+>;
 
 export interface WildlifeAboutFact {
   readonly label: string;
@@ -43,7 +50,7 @@ export interface WildlifePopulationEvidenceQuickInspect {
   readonly version: typeof WILDLIFE_ABOUT_VERSION;
   readonly aggregateId: string;
   readonly evidenceId: string;
-  readonly species: "brown-rat";
+  readonly species: AggregateWildlifeSpecies;
   readonly heading: string;
   readonly summary: string;
   readonly distanceUnits: number;
@@ -53,7 +60,7 @@ export interface WildlifePopulationEvidenceAboutView {
   readonly version: typeof WILDLIFE_ABOUT_VERSION;
   readonly aggregateId: string;
   readonly evidenceId: string;
-  readonly species: "brown-rat";
+  readonly species: AggregateWildlifeSpecies;
   readonly heading: string;
   readonly identity: string;
   readonly knowledge: "Unfamiliar" | "Recognized";
@@ -114,14 +121,36 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN CANID",
     representation: "individual",
   },
+  "fish-crow": {
+    identifiedName: "Fish crow",
+    identifiedHeading: "FISH CROW FLOCK",
+    unidentifiedHeading: "UNKNOWN BIRDS",
+    representation: "visible-flock",
+  },
+  "northern-harrier": {
+    identifiedName: "Northern harrier",
+    identifiedHeading: "NORTHERN HARRIER",
+    unidentifiedHeading: "UNKNOWN RAPTOR",
+    representation: "individual",
+  },
+  "southern-leopard-frog": {
+    identifiedName: "Southern leopard frog",
+    identifiedHeading: "SOUTHERN LEOPARD FROG SIGNS",
+    unidentifiedHeading: "WETLAND-ANIMAL SIGNS",
+    representation: "population-area",
+  },
 });
 
-/** Compact current-sight summary; stable identity is retained only for routing. */
+/**
+ * Compact current-sight summary; stable identity is retained only for routing.
+ * Optional activity custody is authenticated by the shared presentation projector.
+ */
 export function projectWildlifeQuickInspect(
   actor: unknown,
   observation: unknown,
+  activity?: WildlifeAboutActivityContext,
 ): WildlifeQuickInspect | null {
-  const presentation = observe(actor, observation);
+  const presentation = observe(actor, observation, activity);
   if (presentation === null) return null;
   const details: string[] = [];
   if (presentation.groupSize !== undefined) {
@@ -143,13 +172,15 @@ export function projectWildlifeQuickInspect(
 /**
  * Full ABOUT remains a direct-observation projection. Core needs, meters,
  * causes, targets, memories, population truth, and generation keys never enter
- * this record.
+ * this record. When supplied, bounded activity custody is authenticated before
+ * its directly observable posture can enter ABOUT.
  */
 export function projectWildlifeAbout(
   actor: unknown,
   observation: unknown,
+  activity?: WildlifeAboutActivityContext,
 ): WildlifeAboutView | null {
-  const presentation = observe(actor, observation);
+  const presentation = observe(actor, observation, activity);
   if (presentation === null) return null;
   const observed: WildlifeAboutFact[] = [];
   if (presentation.speciesIdentified) {
@@ -198,7 +229,7 @@ export function projectWildlifePopulationEvidenceQuickInspect(
     version: WILDLIFE_ABOUT_VERSION,
     aggregateId: presentation.aggregateId,
     evidenceId: presentation.evidenceId,
-    species: "brown-rat",
+    species: presentation.species,
     heading: populationEvidenceHeading(presentation),
     summary: presentation.evidenceLabel,
     distanceUnits: presentation.distanceUnits,
@@ -218,7 +249,10 @@ export function projectWildlifePopulationEvidenceAbout(
   if (presentation === null) return null;
   const observed: WildlifeAboutFact[] = [];
   if (presentation.speciesIdentified) {
-    observed.push(fact("Species", "Brown rat"));
+    observed.push(fact(
+      "Species",
+      ABOUT_BY_SPECIES[presentation.species].identifiedName,
+    ));
   }
   observed.push(fact("Evidence", presentation.evidenceLabel));
   observed.push(fact("Scale", "Population-level signs"));
@@ -226,7 +260,7 @@ export function projectWildlifePopulationEvidenceAbout(
     version: WILDLIFE_ABOUT_VERSION,
     aggregateId: presentation.aggregateId,
     evidenceId: presentation.evidenceId,
-    species: "brown-rat",
+    species: presentation.species,
     heading: populationEvidenceHeading(presentation),
     identity: presentation.identityLabel,
     knowledge: presentation.speciesIdentified ? "Recognized" : "Unfamiliar",
@@ -235,12 +269,17 @@ export function projectWildlifePopulationEvidenceAbout(
   });
 }
 
-function observe(actor: unknown, observation: unknown): WildlifePresentation | null {
+function observe(
+  actor: unknown,
+  observation: unknown,
+  activity?: WildlifeAboutActivityContext,
+): WildlifePresentation | null {
   return projectWildlifePresentation({
     actor,
     observation: observation as WildlifeDirectObservation,
     // Geometry is discarded here; this keeps the shared projector authoritative.
     tileSize: 1,
+    ...(activity === undefined ? {} : { activity }),
   });
 }
 
@@ -248,7 +287,7 @@ function observePopulationEvidence(
   patch: unknown,
   evidenceId: unknown,
   observation: unknown,
-): WildlifePopulationEvidencePresentation | null {
+): AggregatePopulationEvidencePresentation | null {
   if (typeof evidenceId !== "string" || evidenceId.length === 0 || evidenceId.length > 256) {
     return null;
   }

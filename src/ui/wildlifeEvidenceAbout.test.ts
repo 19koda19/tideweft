@@ -7,10 +7,13 @@ import {
   createCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
 } from "../game/coreEcology";
-import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "../game/coreEcologyHabitat";
+import {
+  deriveCoreEcologyHarborEdgeHabitatAssemblage,
+  deriveCoreEcologyRainChorusHabitatAssemblage,
+} from "../game/coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "../game/perception";
 import type { WildlifePopulationEvidenceAboutObservation } from "../game/wildlifeAbout";
-import type { WorldPosition } from "../game/worldPosition";
+import { createWorldPosition, type WorldPosition } from "../game/worldPosition";
 import {
   handleActorAboutEscape,
   residentAboutActionPresentation,
@@ -68,6 +71,60 @@ function ratEvidenceFixture() {
   }
   const target: WildlifeEvidenceTargetUIView = {
     species: "brown-rat",
+    aggregateId: population.aggregateId,
+    evidenceId: evidence.evidenceId,
+  };
+  return { evidence, patch, population, target };
+}
+
+function frogEvidenceFixture() {
+  const seed = seedFromText("ui-alpha-seventeen-rain-chorus");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "ui-frog-evidence-about",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v4", habitat },
+    tick: 12,
+  });
+  const population = patch.aggregatePopulations.find(
+    ({ species }) => species === "southern-leopard-frog",
+  );
+  const evidence = population?.evidence[0];
+  if (population === undefined || evidence === undefined) {
+    throw new Error("UI fixture requires one southern-leopard-frog population sign");
+  }
+  const target: WildlifeEvidenceTargetUIView = {
+    species: "southern-leopard-frog",
     aggregateId: population.aggregateId,
     evidenceId: evidence.evidenceId,
   };
@@ -175,6 +232,38 @@ describe("aggregate wildlife evidence ABOUT UI boundary", () => {
     expect(surface).not.toHaveProperty("interactions");
     expect(encoded).not.toMatch(/actorId|RAT-v|interaction|populationSize|populationPressure/iu);
     expect(encoded).not.toMatch(/activitySignal|causeReferenceId|strength|createdAtTick/iu);
+  });
+
+  it("routes directly observed frog-area evidence without inventing a frog actor", () => {
+    const { evidence, patch, target } = frogEvidenceFixture();
+    const selected = projectWildlifeEvidenceAboutProjection(
+      patch,
+      target,
+      evidenceObservation(evidence.position),
+    );
+
+    expect(selected).toMatchObject({
+      target,
+      quick: {
+        heading: "SOUTHERN LEOPARD FROG SIGNS",
+        target,
+      },
+      about: {
+        heading: "SOUTHERN LEOPARD FROG SIGNS",
+        identityLine: "Southern leopard frog population signs",
+        knowledgeLabel: "Recognized",
+        target,
+        observed: expect.arrayContaining([
+          { label: "Species", value: "Southern leopard frog" },
+          { label: "Scale", value: "Population-level signs" },
+        ]),
+        known: [],
+      },
+    });
+    expect(hasCoherentWildlifeEvidenceAboutProjection(selected!)).toBe(true);
+    expect(JSON.stringify(selected)).not.toMatch(
+      /actorId|populationSize|populationPressure|activitySignal|rainIntensity/iu,
+    );
   });
 
   it("retains OBSERVED/KNOWN honesty when the sign cannot yet identify a species", () => {
@@ -329,3 +418,9 @@ type BrownRatIsNotAUILivingActor = "brown-rat" extends LivingActorTargetSpeciesU
   : true;
 const brownRatIsNotAUILivingActor: BrownRatIsNotAUILivingActor = true;
 void brownRatIsNotAUILivingActor;
+
+type FrogIsNotAUILivingActor = "southern-leopard-frog" extends LivingActorTargetSpeciesUIView
+  ? false
+  : true;
+const frogIsNotAUILivingActor: FrogIsNotAUILivingActor = true;
+void frogIsNotAUILivingActor;

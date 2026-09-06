@@ -56,9 +56,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V10GameSaveEnvelope {
+interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 11;
+  readonly version: 12;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -142,16 +142,16 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function decodeCurrent(record: SaveRecord): V10GameSaveEnvelope {
-  const value = JSON.parse(record.worldJson) as V10GameSaveEnvelope;
+function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
+  const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 11
-    || record.payloadVersion !== 11
-  ) throw new Error("fixture did not produce a current v11 regional save");
+    || value.version !== 12
+    || record.payloadVersion !== 12
+  ) throw new Error("fixture did not produce a current v12 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v11 outer envelope does not match its integrity seal");
+    throw new Error("fixture v12 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
@@ -176,17 +176,17 @@ function decodeCurrent(record: SaveRecord): V10GameSaveEnvelope {
 
 function replaceEnvelope(
   repository: MemoryRepository,
-  envelope: V10GameSaveEnvelope,
+  envelope: CurrentGameSaveEnvelope,
 ): void {
   const { integrity: _priorIntegrity, ...unsealed } = envelope;
-  const sealed: V10GameSaveEnvelope = {
+  const sealed: CurrentGameSaveEnvelope = {
     ...unsealed,
     integrity: gameSaveEnvelopeIntegrity(unsealed),
   };
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 11,
+    payloadVersion: 12,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -336,8 +336,8 @@ function adjacentCompatibilityTrace(
 }
 
 function relocateToEastSeam(
-  envelope: V10GameSaveEnvelope,
-): V10GameSaveEnvelope {
+  envelope: CurrentGameSaveEnvelope,
+): CurrentGameSaveEnvelope {
   const world = deserializeWorld(envelope.world);
   const economy = createWorldView(world);
   const travel = restorePlayerRegionalTravel(
@@ -419,7 +419,7 @@ function relocateToEastSeam(
   };
 }
 
-function restoredTravel(envelope: V10GameSaveEnvelope): RegionalPlayerTravelState {
+function restoredTravel(envelope: CurrentGameSaveEnvelope): RegionalPlayerTravelState {
   const world = deserializeWorld(envelope.world);
   const travel = restorePlayerRegionalTravel(
     world.meta.rootSeed,

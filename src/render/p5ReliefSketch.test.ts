@@ -355,7 +355,7 @@ function dogView(overrides: Partial<DogView> = {}): DogView {
   };
 }
 
-type IndividualWildlifeViewSpecies = Exclude<WildlifeView["species"], "brown-rat">;
+type IndividualWildlifeViewSpecies = WildlifeView["species"];
 
 function wildlifeView(
   species: IndividualWildlifeViewSpecies,
@@ -368,6 +368,8 @@ function wildlifeView(
     "domestic-cat": "Domestic cat",
     "marsh-rabbit": "Marsh rabbit",
     "marsh-fox": "Marsh fox",
+    "fish-crow": "Fish crows",
+    "northern-harrier": "Northern harrier",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -376,6 +378,8 @@ function wildlifeView(
     "domestic-cat": "CAT-",
     "marsh-rabbit": "RABBIT-",
     "marsh-fox": "FOX-",
+    "fish-crow": "CROW-",
+    "northern-harrier": "HARRIER-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -410,7 +414,7 @@ function aggregateWildlifeEvidenceView(
     distanceUnits: 4_000,
     selected: false,
     ...overrides,
-  };
+  } as AggregateWildlifeEvidenceView;
 }
 
 function pointer(
@@ -1370,6 +1374,77 @@ describe("Relief wildlife presentation", () => {
     harness.renderer.destroy();
   });
 
+  it("renders and touch-selects frog impressions without fabricating frog actors", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-frog-evidence", { x: 48, y: 48 });
+    const evidence = aggregateWildlifeEvidenceView({
+      aggregateId: "FROG-AREA-v1-relief-aggregate",
+      evidenceId: "FROG-AREA-v1-relief-aggregate:evidence:0",
+      species: "southern-leopard-frog",
+      representation: "population-evidence",
+      form: "frog-tracks",
+      quickLabel: "Southern leopard frog signs",
+      identityLabel: "Southern leopard frog population signs",
+      evidenceLabel: "Leopard frog mud impressions",
+      sizeScale: 0.78,
+      selected: true,
+    });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "relief-frog-evidence-direct-detail",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 16,
+        detailDirectTileCount: 16,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+        })),
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    expect(layer?.children.some((child) => (
+      child.textContent === "Southern leopard frog signs · leopard frog mud impressions"
+      && !child.removed
+    ))).toBe(true);
+    expect(p5Harness.materialTrace.some(({ method, args }) => (
+      method === "ambientMaterial" && args[0] === "#536b3d"
+    ))).toBe(true);
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 186,
+      pointerType: "touch",
+    }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 186,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species: "southern-leopard-frog",
+      aggregateId: evidence.aggregateId,
+      evidenceId: evidence.evidenceId,
+      point: { x: 12, y: 12 },
+    });
+    expect(harness.dispatch.mock.calls.some(([command]) => (
+      (command as { entity?: unknown }).entity === "living-actor"
+    ))).toBe(false);
+    harness.renderer.destroy();
+  });
+
   it("renders direct cat pawprints in Relief without creating an evidence selection target", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-cat-rain-evidence", { x: 48, y: 48 });
@@ -1583,6 +1658,21 @@ describe("Relief wildlife presentation", () => {
           conditionLabels: ["TENSE"],
           selected: true,
         }),
+        wildlifeView("fish-crow", {
+          actorId: "CROW-VISIBLE",
+          position: { x: 30, y: 24 },
+          groupSize: 3,
+          behavior: "alarm",
+          conditionLabels: ["WATCHFUL"],
+          selected: true,
+        }),
+        wildlifeView("northern-harrier", {
+          actorId: "HARRIER-VISIBLE",
+          position: { x: 66, y: 24 },
+          behavior: "pursue",
+          conditionLabels: ["ALERT"],
+          selected: true,
+        }),
       ],
     };
     const harness = renderHarness(current);
@@ -1599,10 +1689,21 @@ describe("Relief wildlife presentation", () => {
       "Domestic cat · watchful",
       "Marsh rabbit · alert",
       "Marsh fox · tense",
+      "Fish crows · ~3 visible · watchful",
+      "Northern harrier · alert",
     ]));
     expect(layer?.children.map((child) => child.textContent).join(" "))
-      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE|RABBIT-VISIBLE|FOX-VISIBLE/u);
-    for (const color of ["#9d744f", "#e2e8df", "#202827", "#746153", "#806c52", "#995138"]) {
+      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE|RABBIT-VISIBLE|FOX-VISIBLE|CROW-VISIBLE|HARRIER-VISIBLE/u);
+    for (const color of [
+      "#9d744f",
+      "#e2e8df",
+      "#202827",
+      "#746153",
+      "#806c52",
+      "#995138",
+      "#17262a",
+      "#88715d",
+    ]) {
       expect(p5Harness.materialTrace.some(({ method, args }) =>
         method === "ambientMaterial" && args[0] === color
       )).toBe(true);
@@ -1680,6 +1781,91 @@ describe("Relief wildlife presentation", () => {
     harness.renderer.destroy();
   });
 
+  it("keeps representative aerial silhouettes static under reduced motion", () => {
+    let now = 120;
+    vi.stubGlobal("performance", { now: () => now });
+    p5Harness.reducedMotion = true;
+    const base = view("relief-aerial-reduced", { x: 48, y: 48 });
+    const harness = renderHarness({
+      ...base,
+      wildlife: [
+        wildlifeView("fish-crow", {
+          position: { x: 12, y: 12 },
+          behavior: "alarm",
+          groupSize: 3,
+        }),
+        wildlifeView("northern-harrier", {
+          position: { x: 36, y: 12 },
+          behavior: "pursue",
+        }),
+      ],
+    });
+    const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
+    harness.draw();
+    // There is one body per aerial representative. Crow `groupSize` must not
+    // multiply its individually owned body again.
+    expect(harness.instance.ellipsoid).toHaveBeenCalledTimes(2);
+    const firstFrame = translate.mock.calls.map((call) => [...call]);
+    translate.mockClear();
+    now = 2_120;
+    harness.draw();
+    expect(translate.mock.calls).toEqual(firstFrame);
+    harness.renderer.destroy();
+  });
+
+  it("places perched crows on the surface and quartering harriers in low flight", () => {
+    vi.stubGlobal("performance", { now: () => 2_117 });
+    const base = view("relief-aerial-activity", { x: 48, y: 48 });
+    const harness = renderHarness({
+      ...base,
+      wildlife: [wildlifeView("fish-crow", {
+        position: { x: 12, y: 12 },
+        behavior: "alarm",
+      })],
+    });
+    const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
+    harness.draw();
+    translate.mockClear();
+    harness.draw();
+    const flyingCrow = translate.mock.calls.find((call) => call[0] === 12 && call[2] === 12);
+
+    translate.mockClear();
+    harness.setView({
+      ...base,
+      wildlife: [wildlifeView("fish-crow", {
+        position: { x: 12, y: 12 },
+        behavior: "perch",
+      })],
+    });
+    harness.draw();
+    const perchedCrow = translate.mock.calls.find((call) => call[0] === 12 && call[2] === 12);
+    expect(perchedCrow?.[1]).not.toBe(flyingCrow?.[1]);
+
+    translate.mockClear();
+    harness.setView({
+      ...base,
+      wildlife: [wildlifeView("northern-harrier", {
+        position: { x: 36, y: 12 },
+        behavior: "quarter",
+      })],
+    });
+    harness.draw();
+    const lowHarrier = translate.mock.calls.find((call) => call[0] === 36 && call[2] === 12);
+
+    translate.mockClear();
+    harness.setView({
+      ...base,
+      wildlife: [wildlifeView("northern-harrier", {
+        position: { x: 36, y: 12 },
+        behavior: "pursue",
+      })],
+    });
+    harness.draw();
+    const highHarrier = translate.mock.calls.find((call) => call[0] === 36 && call[2] === 12);
+    expect(lowHarrier?.[1]).not.toBe(highHarrier?.[1]);
+    harness.renderer.destroy();
+  });
+
   it("hovers and selects every individually represented wildlife species", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-wildlife-targets", { x: 48, y: 48 });
@@ -1691,6 +1877,8 @@ describe("Relief wildlife presentation", () => {
       "domestic-cat",
       "marsh-rabbit",
       "marsh-fox",
+      "fish-crow",
+      "northern-harrier",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -1699,6 +1887,8 @@ describe("Relief wildlife presentation", () => {
       "domestic-cat": "CAT-",
       "marsh-rabbit": "RABBIT-",
       "marsh-fox": "FOX-",
+      "fish-crow": "CROW-",
+      "northern-harrier": "HARRIER-",
     };
 
     for (const kind of species) {

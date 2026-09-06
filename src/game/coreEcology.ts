@@ -19,6 +19,7 @@ import {
   type CoreWildlifeActorState,
   type CoreWildlifeCausalEvent,
   type CoreWildlifeFoodOpportunity,
+  type CoreWildlifeNeutralActivityPreference,
   type CoreWildlifeResourceClaim,
 } from "./coreWildlifeActor";
 import {
@@ -37,15 +38,28 @@ import {
 import {
   CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
+  CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
   canonicalizeCoreEcologyHabitatAssemblage,
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
+  canonicalizeCoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
   type CoreEcologyHarborEdgeActivitySignal,
   type CoreEcologyHarborEdgeHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatPopulationAnalysis,
   type CoreEcologyMarshEdgeHabitatAssemblage,
+  type CoreEcologyRainChorusHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import {
+  coreEcologyAggregateSpeciesPolicy,
+  isCoreEcologyAggregateSpecies,
+  resolveCoreEcologyAggregateActivityIntensity,
+  resolveCoreEcologyAggregateDisturbanceActivity,
+  type CoreEcologyAggregateActivityKind,
+  type CoreEcologyAggregateActivePeriod,
+  type CoreEcologyAggregateSpecies,
+} from "./coreEcologyAggregatePolicy";
+import { coreEcologySpeciesRuntimePolicy } from "./coreEcologySpeciesRuntimePolicy";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -85,10 +99,12 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "domestic-cat",
   "marsh-rabbit",
   "marsh-fox",
+  "fish-crow",
+  "northern-harrier",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
-export type CoreEcologyAggregateSpecies = "brown-rat";
+export type { CoreEcologyAggregateSpecies } from "./coreEcologyAggregatePolicy";
 
 export type CoreWildlifeMaterialization = "coarse" | "materialized";
 
@@ -143,6 +159,18 @@ export type CoreEcologyAggregatePatchDerivation =
        */
       readonly kind: "legacy-fixed-v1-with-habitat-v3";
       readonly habitat: CoreEcologyMarshEdgeHabitatAssemblage;
+    }>
+  | Readonly<{
+      readonly kind: "habitat-v4";
+      readonly habitat: CoreEcologyRainChorusHabitatAssemblage;
+    }>
+  | Readonly<{
+      /**
+       * Frozen pre-habitat actors remain authoritative while v4 contributes
+       * every post-Wave-A individual and aggregate population.
+       */
+      readonly kind: "legacy-fixed-v1-with-habitat-v4";
+      readonly habitat: CoreEcologyRainChorusHabitatAssemblage;
     }>;
 
 export interface CreateCoreEcologyPatchInput {
@@ -200,14 +228,15 @@ export interface CoreEcologyAggregateAreaAnchor {
 }
 
 export interface CoreEcologyAggregateActivitySignal {
-  readonly kind: "rustle-scratch";
+  readonly kind: CoreEcologyAggregateActivityKind;
   readonly intensity: number;
-  readonly activePeriod: "nocturnal";
+  readonly activePeriod: CoreEcologyAggregateActivePeriod;
   readonly updatedAtTick: number;
   readonly source: "aggregate-state";
 }
 
 export type CoreEcologyAggregateEvidenceKind =
+  | "frog-track"
   | "gnaw-mark"
   | "shelter-sign"
   | "tracks";
@@ -305,6 +334,14 @@ export interface DisplaceCoreEcologyAggregatePopulationResult {
   readonly evidence: CoreEcologyAggregateEvidence;
 }
 
+export interface SetCoreEcologyAggregateActivityIntensityInput {
+  readonly aggregateId: string;
+  /** Must equal the patch clock; this transition cannot advance simulation time. */
+  readonly atTick: number;
+  /** Fixed-point current observable population activity in 0..1. */
+  readonly intensity: number;
+}
+
 export interface SetCoreEcologyMaterializationInput {
   readonly atTick: number;
   /** Exact desired materialized set; omission dematerializes while retaining state. */
@@ -316,6 +353,7 @@ export interface CoreEcologyActorStepInput {
   readonly observations: readonly ActorObservation[];
   readonly foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
   readonly accessibility: CoreWildlifeActionAccessibility;
+  readonly neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
 }
 
 export interface CoreEcologyPatchStepInput {
@@ -361,6 +399,7 @@ const ACTOR_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
 const SEED_FINGERPRINT_PATTERN = /^[0-9a-z]{7}(?:\.[0-9a-z]{7}){3}$/u;
 const MATERIALIZATION = new Set<string>(["coarse", "materialized"]);
 const AGGREGATE_EVIDENCE_KINDS = new Set<string>([
+  "frog-track",
   "gnaw-mark",
   "shelter-sign",
   "tracks",
@@ -752,6 +791,8 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2"
     || derivation.kind === "habitat-v3"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v3"
+    || derivation.kind === "habitat-v4"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v4"
     ? aggregatePopulationsFromHabitat(input.seed, derivation.habitat, tick)
     : Object.freeze([]);
   const candidate = {
@@ -938,17 +979,21 @@ export function stableCoreEcologyAggregatePopulationId(input: Readonly<{
   readonly seed: RootSeed;
   readonly originRegion: RegionCoord;
   readonly populationKey: string;
+  readonly species?: CoreEcologyAggregateSpecies;
 }>): string {
   if (
     !plainRecord(input)
+    || !allowedKeys(input, ["originRegion", "populationKey", "seed", "species"])
     || !canonicalRootSeed(input.seed)
     || !isRegionCoord(input.originRegion)
     || !validPatchKey(input.populationKey)
+    || input.species !== undefined && !isCoreEcologyAggregateSpecies(input.species)
   ) throw new RangeError("Core ecology aggregate identity input is malformed");
   return stableAggregateIdFromFields({
     seedFingerprint: rootSeedFingerprint(input.seed),
     originRegion: input.originRegion,
     populationKey: input.populationKey,
+    species: input.species ?? "brown-rat",
   });
 }
 
@@ -960,6 +1005,47 @@ export function coreEcologyAggregatePopulation(
   if (patch === null || typeof aggregateId !== "string") return null;
   return patch.aggregatePopulations.find((population) =>
     population.aggregateId === aggregateId) ?? null;
+}
+
+/**
+ * Replaces only the current activity of one conserved population area. The
+ * caller owns the environmental/sensory derivation; this boundary guarantees
+ * that identity, population units, anchors, evidence, and disturbances do not
+ * change merely because a chorus becomes louder or quieter.
+ */
+export function setCoreEcologyAggregateActivityIntensity(
+  value: unknown,
+  input: SetCoreEcologyAggregateActivityIntensityInput,
+): CoreEcologyAggregatePatchState | null {
+  const patch = canonicalizeCoreEcologyAggregatePatch(value);
+  if (
+    patch === null
+    || !plainRecord(input)
+    || !exactKeys(input, ["aggregateId", "atTick", "intensity"])
+    || typeof input.aggregateId !== "string"
+    || !nonnegativeSafeInteger(input.atTick)
+    || input.atTick !== patch.updatedAtTick
+    || !fixedInteger(input.intensity)
+  ) return null;
+  const populationIndex = patch.aggregatePopulations.findIndex(({ aggregateId }) => (
+    aggregateId === input.aggregateId
+  ));
+  const population = patch.aggregatePopulations[populationIndex];
+  if (population === undefined) return null;
+  if (population.activitySignal.intensity === input.intensity) return patch;
+  const aggregatePopulations = [...patch.aggregatePopulations];
+  aggregatePopulations[populationIndex] = deepFreeze({
+    ...population,
+    activitySignal: {
+      ...population.activitySignal,
+      intensity: input.intensity,
+      updatedAtTick: input.atTick,
+    },
+  });
+  return canonicalizeCoreEcologyAggregatePatch({
+    ...patch,
+    aggregatePopulations,
+  });
 }
 
 /**
@@ -1033,7 +1119,7 @@ export function displaceCoreEcologyAggregatePopulation(
     version: CORE_ECOLOGY_AGGREGATE_EVIDENCE_VERSION,
     evidenceId: `${population.aggregateId}:evidence:${evidenceOrdinal.toString(36)}`,
     evidenceOrdinal,
-    kind: disturbanceEvidenceKind(input.causeKind),
+    kind: disturbanceEvidenceKind(population.species, input.causeKind),
     position: createWorldPosition(
       toAnchor.position.region,
       toAnchor.position.localX,
@@ -1061,7 +1147,12 @@ export function displaceCoreEcologyAggregatePopulation(
     anchors: Object.freeze(anchors),
     activitySignal: Object.freeze({
       ...population.activitySignal,
-      intensity: Math.max(population.activitySignal.intensity, input.pressure),
+      intensity: resolveCoreEcologyAggregateDisturbanceActivity(
+        population.species,
+        population.activitySignal.intensity,
+        input.causeKind,
+        input.pressure,
+      ),
       updatedAtTick: input.atTick,
     }),
     evidence: retainAggregateEvidence([...population.evidence, evidence]),
@@ -1331,6 +1422,9 @@ export function stepCoreEcologyPatch(
         observations: stepInput.observations,
         foodOpportunities: stepInput.foodOpportunities,
         accessibility: stepInput.accessibility,
+        ...(stepInput.neutralActivityPreference === undefined
+          ? {}
+          : { neutralActivityPreference: stepInput.neutralActivityPreference }),
       });
       if (result === null) return null;
       members.push(Object.freeze({ ...member, actor: result.actor }));
@@ -1402,6 +1496,9 @@ export function stepCoreEcologyAggregatePatch(
         observations: stepInput.observations,
         foodOpportunities: stepInput.foodOpportunities,
         accessibility: stepInput.accessibility,
+        ...(stepInput.neutralActivityPreference === undefined
+          ? {}
+          : { neutralActivityPreference: stepInput.neutralActivityPreference }),
       });
       if (result === null) return null;
       members.push(Object.freeze({ ...member, actor: result.actor }));
@@ -1520,69 +1617,85 @@ export function coreEcologyAlarmSignalProfile(
 
 function aggregatePopulationsFromHabitat(
   seed: RootSeed,
-  habitat: CoreEcologyHarborEdgeHabitatAssemblage | CoreEcologyMarshEdgeHabitatAssemblage,
+  habitat:
+    | CoreEcologyHarborEdgeHabitatAssemblage
+    | CoreEcologyMarshEdgeHabitatAssemblage
+    | CoreEcologyRainChorusHabitatAssemblage,
   tick: number,
 ): readonly CoreEcologyAggregatePopulationState[] {
-  const analysis = habitat.populations.find((population) =>
-    population.species === "brown-rat");
-  if (analysis === undefined || analysis.populationUnits === 0) return Object.freeze([]);
   const seedFingerprint = rootSeedFingerprint(seed);
-  const aggregateId = stableAggregateIdFromFields({
-    seedFingerprint,
-    originRegion: habitat.originRegion,
-    populationKey: analysis.populationKey,
-  });
-  const anchors = analysis.allocations.map((allocation) => Object.freeze({
-    anchorOrdinal: allocation.allocationOrdinal,
-    position: createWorldPosition(
-      allocation.position.region,
-      allocation.position.localX,
-      allocation.position.localY,
-    ),
-    radiusUnits: WORLD_POSITION_UNITS_PER_TILE * 2,
-    populationUnits: allocation.representedUnits,
-  }));
-  const activitySignal = aggregateActivitySignalFromHabitat(analysis.activitySignal, tick);
-  const evidence = anchors.map((anchor) => {
-    const evidenceOrdinal = anchor.anchorOrdinal;
-    return Object.freeze({
-      version: CORE_ECOLOGY_AGGREGATE_EVIDENCE_VERSION,
-      evidenceId: `${aggregateId}:evidence:${evidenceOrdinal.toString(36)}`,
-      evidenceOrdinal,
-      kind: initialAggregateEvidenceKind(aggregateId, evidenceOrdinal),
-      position: createWorldPosition(
-        anchor.position.region,
-        anchor.position.localX,
-        anchor.position.localY,
-      ),
-      createdAtTick: tick,
-      strength: Math.max(1, activitySignal.intensity),
-      causeKind: "population-activity" as const,
-      causeReferenceId: aggregateId,
-      itemConsumption: "none" as const,
-      disclosure: "direct-observation-required" as const,
+  const aggregatePopulations: CoreEcologyAggregatePopulationState[] = [];
+  for (const analysis of habitat.populations) {
+    if (
+      analysis.representation !== "aggregate-area"
+      || !isCoreEcologyAggregateSpecies(analysis.species)
+      || analysis.populationUnits === 0
+    ) continue;
+    const species = analysis.species;
+    const policy = coreEcologyAggregateSpeciesPolicy(species);
+    const aggregateId = stableAggregateIdFromFields({
+      seedFingerprint,
+      originRegion: habitat.originRegion,
+      populationKey: analysis.populationKey,
+      species,
     });
-  });
-  return Object.freeze([deepFreeze({
-    aggregateId,
-    seedFingerprint,
-    species: "brown-rat" as const,
-    representation: "aggregate-area" as const,
-    populationKey: analysis.populationKey,
-    revision: 0,
-    updatedAtTick: tick,
-    habitatCapacity: analysis.habitatCapacity,
-    populationSize: analysis.populationUnits,
-    populationPressure: analysis.populationPressure,
-    trend: analysis.trend,
-    trendSignal: analysis.trendSignal,
-    anchors,
-    activitySignal,
-    evidence,
-    disturbances: [],
-    nextEvidenceOrdinal: evidence.length,
-    nextDisturbanceOrdinal: 0,
-  })]);
+    const anchors = analysis.allocations.map((allocation) => Object.freeze({
+      anchorOrdinal: allocation.allocationOrdinal,
+      position: createWorldPosition(
+        allocation.position.region,
+        allocation.position.localX,
+        allocation.position.localY,
+      ),
+      radiusUnits: WORLD_POSITION_UNITS_PER_TILE * policy.anchorRadiusTiles,
+      populationUnits: allocation.representedUnits,
+    }));
+    const activitySignal = aggregateActivitySignalFromHabitat(
+      species,
+      analysis.activitySignal,
+      tick,
+    );
+    const evidence = anchors.map((anchor) => {
+      const evidenceOrdinal = anchor.anchorOrdinal;
+      return Object.freeze({
+        version: CORE_ECOLOGY_AGGREGATE_EVIDENCE_VERSION,
+        evidenceId: `${aggregateId}:evidence:${evidenceOrdinal.toString(36)}`,
+        evidenceOrdinal,
+        kind: initialAggregateEvidenceKind(species, aggregateId, evidenceOrdinal),
+        position: createWorldPosition(
+          anchor.position.region,
+          anchor.position.localX,
+          anchor.position.localY,
+        ),
+        createdAtTick: tick,
+        strength: Math.max(1, activitySignal.intensity),
+        causeKind: "population-activity" as const,
+        causeReferenceId: aggregateId,
+        itemConsumption: "none" as const,
+        disclosure: "direct-observation-required" as const,
+      });
+    });
+    aggregatePopulations.push(deepFreeze({
+      aggregateId,
+      seedFingerprint,
+      species,
+      representation: "aggregate-area" as const,
+      populationKey: analysis.populationKey,
+      revision: 0,
+      updatedAtTick: tick,
+      habitatCapacity: analysis.habitatCapacity,
+      populationSize: analysis.populationUnits,
+      populationPressure: analysis.populationPressure,
+      trend: analysis.trend,
+      trendSignal: analysis.trendSignal,
+      anchors,
+      activitySignal,
+      evidence,
+      disturbances: [],
+      nextEvidenceOrdinal: evidence.length,
+      nextDisturbanceOrdinal: 0,
+    }));
+  }
+  return Object.freeze(aggregatePopulations);
 }
 
 function canonicalAggregatePopulation(
@@ -1610,9 +1723,11 @@ function canonicalAggregatePopulation(
     "trendSignal",
     "updatedAtTick",
   ])) return null;
+  if (!isCoreEcologyAggregateSpecies(value.species)) return null;
+  const species = value.species;
+  const policy = coreEcologyAggregateSpeciesPolicy(species);
   if (
-    value.species !== "brown-rat"
-    || value.representation !== "aggregate-area"
+    value.representation !== "aggregate-area"
     || typeof value.aggregateId !== "string"
     || !ACTOR_REFERENCE_PATTERN.test(value.aggregateId)
     || typeof value.seedFingerprint !== "string"
@@ -1622,12 +1737,13 @@ function canonicalAggregatePopulation(
       seedFingerprint: value.seedFingerprint,
       originRegion,
       populationKey: value.populationKey,
+      species,
     })
     || !nonnegativeSafeInteger(value.revision)
     || !nonnegativeSafeInteger(value.updatedAtTick)
     || value.updatedAtTick > maximumTick
     || !positiveSafeInteger(value.habitatCapacity)
-    || value.habitatCapacity > getCoreWildlifeProfile("brown-rat").maximumPatchPopulation
+    || value.habitatCapacity > getCoreWildlifeProfile(species).maximumPatchPopulation
     || !positiveSafeInteger(value.populationSize)
     || value.populationSize > value.habitatCapacity
     || !fixedInteger(value.populationPressure)
@@ -1637,6 +1753,7 @@ function canonicalAggregatePopulation(
     || !Array.isArray(value.anchors)
     || value.anchors.length === 0
     || value.anchors.length > CORE_ECOLOGY_MAX_AGGREGATE_ANCHORS
+    || value.anchors.length > policy.maximumAnchors
     || !Array.isArray(value.evidence)
     || value.evidence.length === 0
     || value.evidence.length > CORE_ECOLOGY_MAX_AGGREGATE_EVIDENCE
@@ -1659,8 +1776,7 @@ function canonicalAggregatePopulation(
       || !isWorldPosition(raw.position)
       || raw.position.region.x !== originRegion.x
       || raw.position.region.y !== originRegion.y
-      || !positiveSafeInteger(raw.radiusUnits)
-      || raw.radiusUnits > WORLD_POSITION_UNITS_PER_TILE * 8
+      || raw.radiusUnits !== WORLD_POSITION_UNITS_PER_TILE * policy.anchorRadiusTiles
       || !nonnegativeSafeInteger(raw.populationUnits)
     ) return null;
     representedPopulation += raw.populationUnits;
@@ -1676,6 +1792,7 @@ function canonicalAggregatePopulation(
   const activitySignal = canonicalAggregateActivitySignal(
     value.activitySignal,
     value.updatedAtTick,
+    species,
   );
   if (activitySignal === null) return null;
 
@@ -1687,6 +1804,7 @@ function canonicalAggregatePopulation(
       value.aggregateId,
       originRegion,
       value.updatedAtTick,
+      species,
     );
     if (
       canonical === null
@@ -1724,7 +1842,7 @@ function canonicalAggregatePopulation(
   return deepFreeze({
     aggregateId: value.aggregateId,
     seedFingerprint: value.seedFingerprint,
-    species: "brown-rat",
+    species,
     representation: "aggregate-area",
     populationKey: value.populationKey,
     revision: value.revision,
@@ -1746,20 +1864,22 @@ function canonicalAggregatePopulation(
 function canonicalAggregateActivitySignal(
   value: unknown,
   expectedTick: number,
+  species: CoreEcologyAggregateSpecies,
 ): CoreEcologyAggregateActivitySignal | null {
+  const expected = coreEcologyAggregateSpeciesPolicy(species).activity;
   if (
     !plainRecord(value)
     || !exactKeys(value, ["activePeriod", "intensity", "kind", "source", "updatedAtTick"])
-    || value.kind !== "rustle-scratch"
-    || value.activePeriod !== "nocturnal"
+    || value.kind !== expected.kind
+    || value.activePeriod !== expected.activePeriod
     || value.source !== "aggregate-state"
     || !fixedInteger(value.intensity)
     || value.updatedAtTick !== expectedTick
   ) return null;
   return Object.freeze({
-    kind: "rustle-scratch",
+    kind: expected.kind,
     intensity: value.intensity,
-    activePeriod: "nocturnal",
+    activePeriod: expected.activePeriod,
     updatedAtTick: expectedTick,
     source: "aggregate-state",
   });
@@ -1770,6 +1890,7 @@ function canonicalAggregateEvidence(
   aggregateId: string,
   originRegion: RegionCoord,
   maximumTick: number,
+  species: CoreEcologyAggregateSpecies,
 ): CoreEcologyAggregateEvidence | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "causeKind",
@@ -1789,6 +1910,8 @@ function canonicalAggregateEvidence(
     || !nonnegativeSafeInteger(value.evidenceOrdinal)
     || value.evidenceId !== `${aggregateId}:evidence:${value.evidenceOrdinal.toString(36)}`
     || !AGGREGATE_EVIDENCE_KINDS.has(value.kind as string)
+    || !coreEcologyAggregateSpeciesPolicy(species).initialEvidenceKinds
+      .includes(value.kind as CoreEcologyAggregateEvidenceKind)
     || !isWorldPosition(value.position)
     || value.position.region.x !== originRegion.x
     || value.position.region.y !== originRegion.y
@@ -1969,22 +2092,29 @@ function canonicalPatchStepInput(
   if (value.actorSteps.length !== materializedIds.length) return null;
   const actorSteps: CoreEcologyActorStepInput[] = [];
   for (const raw of value.actorSteps) {
-    if (!plainRecord(raw) || !exactKeys(raw, [
-      "accessibility",
-      "actorId",
-      "foodOpportunities",
-      "observations",
-    ])) return null;
+    if (!plainRecord(raw) || !requiredAndOptionalKeys(
+      raw,
+      ["accessibility", "actorId", "foodOpportunities", "observations"],
+      ["neutralActivityPreference"],
+    )) return null;
     if (
       typeof raw.actorId !== "string"
       || !Array.isArray(raw.observations)
       || !Array.isArray(raw.foodOpportunities)
+    ) return null;
+    if (
+      raw.neutralActivityPreference !== undefined
+      && raw.neutralActivityPreference !== "observe"
+      && raw.neutralActivityPreference !== "rest"
     ) return null;
     actorSteps.push({
       actorId: raw.actorId,
       observations: raw.observations as readonly ActorObservation[],
       foodOpportunities: raw.foodOpportunities as readonly CoreWildlifeFoodOpportunity[],
       accessibility: raw.accessibility as CoreWildlifeActionAccessibility,
+      ...(raw.neutralActivityPreference === undefined
+        ? {}
+        : { neutralActivityPreference: raw.neutralActivityPreference }),
     });
   }
   actorSteps.sort((left, right) => compareText(left.actorId, right.actorId));
@@ -2024,6 +2154,16 @@ function canonicalAggregateDerivation(
   ) {
     if (!exactKeys(value, ["habitat", "kind"])) return null;
     const habitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: value.kind, habitat });
+  }
+  if (
+    value.kind === "habitat-v4"
+    || value.kind === "legacy-fixed-v1-with-habitat-v4"
+  ) {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyRainChorusHabitatAssemblage(value.habitat);
     return habitat === null
       ? null
       : Object.freeze({ kind: value.kind, habitat });
@@ -2081,19 +2221,25 @@ function aggregateDerivationMatchesPopulations(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2";
   const isMarshEdgeDerivation = derivation.kind === "habitat-v3"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v3";
+  const isRainChorusDerivation = derivation.kind === "habitat-v4"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v4";
   if (
     !isHarborEdgeDerivation
     && !isMarshEdgeDerivation
+    && !isRainChorusDerivation
   ) {
     return aggregatePopulations.length === 0
       && derivationMatchesPopulations(derivation, populations, originRegion);
   }
   if (!("habitat" in derivation)) return false;
   const preservesLegacyRoster = derivation.kind === "legacy-fixed-v1-with-habitat-v2"
-    || derivation.kind === "legacy-fixed-v1-with-habitat-v3";
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v3"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v4";
   const expectedHabitatVersion = isHarborEdgeDerivation
     ? CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
-    : CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION;
+    : isMarshEdgeDerivation
+    ? CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION
+    : CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION;
   if (
     derivation.habitat.generationVersion !== expectedHabitatVersion
     || derivation.habitat.originRegion.x !== originRegion.x
@@ -2110,7 +2256,8 @@ function aggregateDerivationMatchesPopulations(
   for (const analysis of derivation.habitat.populations) {
     const key = `${analysis.species}:${analysis.populationKey}`;
     if (analysis.representation === "aggregate-area") {
-      if (analysis.species !== "brown-rat") return false;
+      if (!isCoreEcologyAggregateSpecies(analysis.species)) return false;
+      const policy = coreEcologyAggregateSpeciesPolicy(analysis.species);
       const population = aggregatesByKey.get(key);
       if (analysis.populationUnits === 0) {
         if (population !== undefined) return false;
@@ -2136,7 +2283,7 @@ function aggregateDerivationMatchesPopulations(
           || anchor.position.region.y !== allocation.position.region.y
           || anchor.position.localX !== allocation.position.localX
           || anchor.position.localY !== allocation.position.localY
-          || anchor.radiusUnits !== WORLD_POSITION_UNITS_PER_TILE * 2
+          || anchor.radiusUnits !== WORLD_POSITION_UNITS_PER_TILE * policy.anchorRadiusTiles
           || (population.revision === 0
             && anchor.populationUnits !== allocation.representedUnits)
         ) return false;
@@ -2376,6 +2523,7 @@ function playerAbsentGroupDisturbances(
     patch.derivation.kind !== "habitat-v1"
     && patch.derivation.kind !== "habitat-v2"
     && patch.derivation.kind !== "habitat-v3"
+    && patch.derivation.kind !== "habitat-v4"
   ) return Object.freeze([]);
   const population = patch.populations.find((candidate) => (
     candidate.species === group.identity.species
@@ -2665,28 +2813,35 @@ function isCurrentIndividualSpecies(value: unknown): value is CoreWildlifeSpecie
     && (CORE_ECOLOGY_INDIVIDUAL_SPECIES as readonly string[]).includes(value);
 }
 
-function isGroupIndividualSpecies(value: unknown): value is "deer" | "gull" {
-  return value === "deer" || value === "gull";
+function isGroupIndividualSpecies(value: unknown): value is CoreWildlifeSpecies {
+  return typeof value === "string"
+    && coreEcologySpeciesRuntimePolicy(value)?.groupOrganization !== null;
 }
 
 function aggregateActivitySignalFromHabitat(
+  species: CoreEcologyAggregateSpecies,
   signal: CoreEcologyHarborEdgeActivitySignal,
   tick: number,
 ): CoreEcologyAggregateActivitySignal {
+  const policy = coreEcologyAggregateSpeciesPolicy(species).activity;
   return Object.freeze({
-    kind: "rustle-scratch",
-    intensity: signal.intensity,
-    activePeriod: "nocturnal",
+    kind: policy.kind,
+    // Habitat suitability is the stable baseline, not a claim that a
+    // rain-responsive population is already chorusing. The first frame must
+    // be truthful even before runtime has projected live weather stimuli.
+    intensity: resolveCoreEcologyAggregateActivityIntensity(species, signal.intensity, 0),
+    activePeriod: policy.activePeriod,
     updatedAtTick: tick,
     source: "aggregate-state",
   });
 }
 
 function initialAggregateEvidenceKind(
+  species: CoreEcologyAggregateSpecies,
   aggregateId: string,
   evidenceOrdinal: number,
 ): CoreEcologyAggregateEvidenceKind {
-  const kinds = ["gnaw-mark", "tracks", "shelter-sign"] as const;
+  const kinds = coreEcologyAggregateSpeciesPolicy(species).initialEvidenceKinds;
   const selection = Number.parseInt(
     hashCanonical([aggregateId, "initial-evidence", evidenceOrdinal]).slice(0, 8),
     16,
@@ -2695,8 +2850,10 @@ function initialAggregateEvidenceKind(
 }
 
 function disturbanceEvidenceKind(
+  species: CoreEcologyAggregateSpecies,
   cause: CoreEcologyAggregateDisturbance["causeKind"],
 ): CoreEcologyAggregateEvidenceKind {
+  if (species === "southern-leopard-frog") return "frog-track";
   return cause === "weather-pressure" ? "shelter-sign" : "tracks";
 }
 
@@ -2720,8 +2877,9 @@ function stableAggregateIdFromFields(input: Readonly<{
   seedFingerprint: string;
   originRegion: RegionCoord;
   populationKey: string;
+  species: CoreEcologyAggregateSpecies;
 }>): string {
-  return `RAT-AREA-v1-${hashCanonical([
+  return `${coreEcologyAggregateSpeciesPolicy(input.species).stableIdPrefix}${hashCanonical([
     input.seedFingerprint,
     input.originRegion.x,
     input.originRegion.y,
@@ -2790,6 +2948,15 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boo
 function allowedKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const allowed = new Set(keys);
   return Object.keys(value).every((key) => allowed.has(key));
+}
+
+function requiredAndOptionalKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[],
+): boolean {
+  return required.every((key) => Object.hasOwn(value, key))
+    && allowedKeys(value, [...required, ...optional]);
 }
 
 function deepFreeze<T>(value: T): T {

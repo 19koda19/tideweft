@@ -18,6 +18,8 @@ export type SoundCue =
   | "cat-call"
   | "rabbit-thump"
   | "fox-yip"
+  | "crow-nasal-double-call"
+  | "frog-chorus"
   | "paddle"
   | "recover"
   | "title"
@@ -35,6 +37,12 @@ export type SmallWildlifeCue =
   | "cat-call"
   | "rabbit-thump"
   | "fox-yip";
+
+/** Event-bound animal voices; these are never ambient population disclosure. */
+export type EcologyVoiceCue =
+  | SmallWildlifeCue
+  | "crow-nasal-double-call"
+  | "frog-chorus";
 
 export interface AudioSettings {
   enabled: boolean;
@@ -55,6 +63,11 @@ export interface AmbienceParameters {
   readonly resonance: number;
   readonly levelScale: number;
   readonly pan: number;
+}
+
+/** Map an east-positive world bearing to a bounded stereo field. */
+export function spatialPanForBearing(bearingRadians: number): number {
+  return Number.isFinite(bearingRadians) ? clampPan(Math.cos(bearingRadians)) : 0;
 }
 
 /** Pure mapping used by the looping noise graph and presentation tests. */
@@ -143,18 +156,30 @@ export class TideweftSoundscape {
     this.ambienceGain.gain.setTargetAtTime(level, now, 0.9);
   }
 
-  play(cue: SoundCue, intensity = 0.7, variantSeed = 0): void {
+  play(cue: SoundCue, intensity = 0.7, variantSeed = 0, pan?: number): void {
     if (!this.context || !this.effectsGain || !this.settings.enabled || this.context.state !== "running") return;
     const strength = clamp01(intensity);
     const now = this.context.currentTime;
+    const spatialPan = pan === undefined ? null : clampPan(pan);
+    let output: AudioNode = this.effectsGain;
+    if (spatialPan !== null) {
+      const panner = this.context.createStereoPanner();
+      panner.pan.setValueAtTime(spatialPan, now);
+      panner.connect(this.effectsGain);
+      output = panner;
+      // Every call owns its own node, so simultaneous animal voices cannot
+      // retarget each other. All current one-shot patterns finish well before
+      // this bounded cleanup horizon.
+      globalThis.setTimeout(() => panner.disconnect(), 2_200);
+    }
     if (cue === "step") {
       if (now - this.lastStep < 0.09) return;
       this.lastStep = now;
-      this.noiseBurst(now, 0.025, 250, 0.018 * strength);
+      this.noiseBurst(now, 0.025, 250, 0.018 * strength, output);
       return;
     }
     if (cue === "choir") {
-      this.choir(now, strength);
+      this.choir(now, strength, output);
       return;
     }
 
@@ -193,10 +218,12 @@ export class TideweftSoundscape {
       impact: incidentSoundPattern("impact", variantSeed),
       sweep: incidentSoundPattern("sweep", variantSeed),
       "wildlife-alarm": wildlifeAlarmPattern(),
-      "rat-rustle": smallWildlifePattern("rat-rustle", variantSeed),
-      "cat-call": smallWildlifePattern("cat-call", variantSeed),
-      "rabbit-thump": smallWildlifePattern("rabbit-thump", variantSeed),
-      "fox-yip": smallWildlifePattern("fox-yip", variantSeed),
+      "rat-rustle": ecologyVoicePattern("rat-rustle", variantSeed),
+      "cat-call": ecologyVoicePattern("cat-call", variantSeed),
+      "rabbit-thump": ecologyVoicePattern("rabbit-thump", variantSeed),
+      "fox-yip": ecologyVoicePattern("fox-yip", variantSeed),
+      "crow-nasal-double-call": ecologyVoicePattern("crow-nasal-double-call", variantSeed),
+      "frog-chorus": ecologyVoicePattern("frog-chorus", variantSeed),
       paddle: [
         toneStep(210, 0, "triangle", 0.055),
         toneStep(164, 0.045, "sine", 0.095),
@@ -207,18 +234,29 @@ export class TideweftSoundscape {
     };
 
     for (const { frequency, delay, type, duration } of patterns[cue]) {
-      this.tone(frequency, now + delay, duration, type, (0.025 + duration * 0.035) * strength);
+      this.tone(
+        frequency,
+        now + delay,
+        duration,
+        type,
+        (0.025 + duration * 0.035) * strength,
+        output,
+      );
     }
     if (cue === "title") {
-      this.noiseBurst(now + 0.06, 0.72, 720, 0.0038 * strength);
+      this.noiseBurst(now + 0.06, 0.72, 720, 0.0038 * strength, output);
     } else if (cue === "rat-rustle") {
-      this.noiseBurst(now, 0.13, 1_850, 0.012 * strength);
+      this.noiseBurst(now, 0.13, 1_850, 0.012 * strength, output);
     } else if (cue === "cat-call") {
-      this.noiseBurst(now + 0.035, 0.11, 980, 0.0045 * strength);
+      this.noiseBurst(now + 0.035, 0.11, 980, 0.0045 * strength, output);
     } else if (cue === "rabbit-thump") {
-      this.noiseBurst(now, 0.085, 185, 0.011 * strength);
+      this.noiseBurst(now, 0.085, 185, 0.011 * strength, output);
     } else if (cue === "fox-yip") {
-      this.noiseBurst(now + 0.025, 0.1, 1_220, 0.004 * strength);
+      this.noiseBurst(now + 0.025, 0.1, 1_220, 0.004 * strength, output);
+    } else if (cue === "crow-nasal-double-call") {
+      this.noiseBurst(now, 0.18, 690, 0.0065 * strength, output);
+    } else if (cue === "frog-chorus") {
+      this.noiseBurst(now, 0.32, 430, 0.005 * strength, output);
     }
   }
 
@@ -280,8 +318,9 @@ export class TideweftSoundscape {
     duration: number,
     type: OscillatorType,
     level: number,
+    output: AudioNode = this.effectsGain as AudioNode,
   ): void {
-    if (!this.context || !this.effectsGain) return;
+    if (!this.context || !this.effectsGain || !output) return;
     const oscillator = this.context.createOscillator();
     const envelope = this.context.createGain();
     oscillator.type = type;
@@ -291,12 +330,12 @@ export class TideweftSoundscape {
     envelope.gain.exponentialRampToValueAtTime(level, start + Math.min(0.025, duration * 0.3));
     envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
     oscillator.connect(envelope);
-    envelope.connect(this.effectsGain);
+    envelope.connect(output);
     oscillator.start(start);
     oscillator.stop(start + duration + 0.02);
   }
 
-  private choir(start: number, strength: number): void {
+  private choir(start: number, strength: number, output: AudioNode): void {
     // An open, overlapping D/A chord makes the choir read as several distant
     // harbors answering one another instead of another short UI arpeggio.
     const voices: readonly [number, number, OscillatorType, number, number][] = [
@@ -309,13 +348,19 @@ export class TideweftSoundscape {
       [880, 0.7, "sine", 0.5, 0.015],
     ];
     for (const [frequency, delay, type, duration, level] of voices) {
-      this.tone(frequency, start + delay, duration, type, level * strength);
+      this.tone(frequency, start + delay, duration, type, level * strength, output);
     }
-    this.noiseBurst(start + 0.12, 0.34, 1_450, 0.0065 * strength);
+    this.noiseBurst(start + 0.12, 0.34, 1_450, 0.0065 * strength, output);
   }
 
-  private noiseBurst(start: number, duration: number, frequency: number, level: number): void {
-    if (!this.context || !this.effectsGain) return;
+  private noiseBurst(
+    start: number,
+    duration: number,
+    frequency: number,
+    level: number,
+    output: AudioNode = this.effectsGain as AudioNode,
+  ): void {
+    if (!this.context || !this.effectsGain || !output) return;
     const length = Math.max(1, Math.floor(this.context.sampleRate * duration));
     const buffer = this.context.createBuffer(1, length, this.context.sampleRate);
     const samples = buffer.getChannelData(0);
@@ -335,7 +380,7 @@ export class TideweftSoundscape {
     source.buffer = buffer;
     source.connect(filter);
     filter.connect(envelope);
-    envelope.connect(this.effectsGain);
+    envelope.connect(output);
     source.start(start);
   }
 }
@@ -372,6 +417,17 @@ export function smallWildlifePattern(
   cue: SmallWildlifeCue,
   variantSeed: number,
 ): readonly SoundToneStep[] {
+  return ecologyVoicePattern(cue, variantSeed);
+}
+
+/**
+ * Short deterministic voices for witnessed ecology events. Keeping the cue
+ * policy pure lets runtime hearing/visibility decide whether any voice exists.
+ */
+export function ecologyVoicePattern(
+  cue: EcologyVoiceCue,
+  variantSeed: number,
+): readonly SoundToneStep[] {
   const seed = Number.isSafeInteger(variantSeed) ? variantSeed >>> 0 : 0;
   const shift = ((seed % 9) - 4) * 4;
   if (cue === "rat-rustle") {
@@ -394,10 +450,23 @@ export function smallWildlifePattern(
       toneStep(82 + Math.trunc(shift / 3), 0.052, "sine", 0.085),
     ];
   }
+  if (cue === "fox-yip") {
+    return [
+      toneStep(698.46 + shift, 0, "triangle", 0.075),
+      toneStep(987.77 + shift, 0.062, "square", 0.055),
+      toneStep(659.25 + shift, 0.13, "sine", 0.105),
+    ];
+  }
+  if (cue === "crow-nasal-double-call") {
+    return [
+      toneStep(246.94 + shift, 0, "sawtooth", 0.105),
+      toneStep(220 + shift, 0.135, "triangle", 0.12),
+    ];
+  }
   return [
-    toneStep(698.46 + shift, 0, "triangle", 0.075),
-    toneStep(987.77 + shift, 0.062, "square", 0.055),
-    toneStep(659.25 + shift, 0.13, "sine", 0.105),
+    toneStep(174.61 + Math.trunc(shift / 2), 0, "triangle", 0.17),
+    toneStep(196 + Math.trunc(shift / 2), 0.082, "sine", 0.2),
+    toneStep(164.81 + Math.trunc(shift / 3), 0.18, "triangle", 0.18),
   ];
 }
 
@@ -449,4 +518,9 @@ function toneStep(
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+function clampPan(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(-1, Math.min(1, value));
 }

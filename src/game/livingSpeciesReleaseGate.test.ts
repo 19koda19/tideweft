@@ -6,9 +6,13 @@ import {
   ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA,
   ALPHA16_MARSH_EDGE_BOUNDED_READINESS,
   ALPHA16_MARSH_EDGE_SPECIES,
+  ALPHA17_RAIN_CHORUS_BOUNDED_CRITERIA,
+  ALPHA17_RAIN_CHORUS_BOUNDED_READINESS,
+  ALPHA17_RAIN_CHORUS_SPECIES,
   LIVING_SPECIES_RELEASE_CRITERIA,
   LIVING_SPECIES_RELEASE_GATES,
   alpha16MarshEdgeBoundedReadiness,
+  alpha17RainChorusBoundedReadiness,
   auditLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGateSet,
@@ -256,6 +260,63 @@ describe("Living Weft species release gate", () => {
     for (const species of readiness.speciesIds) {
       expect(livingSpeciesReadinessReport(species)?.publicReady).toBe(false);
     }
+  });
+
+  it("authenticates the bounded Alpha-17 slice without inventing flight evidence or publication", () => {
+    const readiness = alpha17RainChorusBoundedReadiness();
+    expect(readiness).toEqual(ALPHA17_RAIN_CHORUS_BOUNDED_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "alpha17-rain-chorus",
+      speciesIds: ["fish-crow", "northern-harrier", "southern-leopard-frog"],
+      evidenceAuthenticated: true,
+      boundedCandidateReady: true,
+      blockingBoundedCriteria: [],
+      publicationRecordsReady: true,
+      exactTestedDeploymentVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+      fullGateBlockingCriteria: [
+        "sound",
+        "food-web",
+        "perception-senses",
+        "same-species-interaction",
+        "environmental-evidence",
+        "exact-tested-deployment",
+      ],
+    });
+    expect(readiness.boundedCriteria).toEqual(ALPHA17_RAIN_CHORUS_BOUNDED_CRITERIA);
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.boundedCriteria)).toBe(true);
+    expect(Object.isFrozen(readiness.fullGateBlockingCriteria)).toBe(true);
+
+    for (const species of ALPHA17_RAIN_CHORUS_SPECIES) {
+      expect(livingSpeciesReadinessReport(species)).toMatchObject({
+        evidenceAuthenticated: true,
+        state: "blocked",
+        publicReady: false,
+      });
+    }
+    expect(gate("fish-crow").criteria.find(({ criterion }) => (
+      criterion === "environmental-evidence"
+    ))).toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    expect(gate("northern-harrier").criteria.find(({ criterion }) => (
+      criterion === "environmental-evidence"
+    ))).toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    expect(gate("northern-harrier").criteria.find(({ criterion }) => (
+      criterion === "sound"
+    ))).toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    expect(gate("southern-leopard-frog").criteria.find(({ criterion }) => (
+      criterion === "environmental-evidence"
+    ))).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: [
+        "game:core-ecology-evidence-runtime:v1",
+        "game:core-ecology:v4",
+        "game:wildlife-presentation:v1",
+      ],
+    });
   });
 
   it("keeps mortality, carcasses, living cover, and circadian schedules explicit future work", () => {

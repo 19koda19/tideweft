@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(26);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(27);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,10 +63,12 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("humans, domestic dogs, deer, gulls, black bears, brown rats, domestic cats, marsh rabbits, and marsh foxes");
-    expect(copy).toContain("deterministic habitat-derived populations");
-    expect(copy).toContain("nonlethal alarm, flight, finite pursuit");
-    expect(copy).toContain("direct movement signs");
+    expect(copy).toContain("fish crows, northern harriers, and southern leopard frogs");
+    expect(copy).toContain("persistent crow flock");
+    expect(copy).toContain("solitary quartering harrier");
+    expect(copy).toContain("conserved rain-responsive frog population area");
+    expect(copy).toContain("Direct crow alarm and mobbing");
+    expect(copy).toContain("directional frog chorus");
     expect(copy).toContain("Chart, Relief, mouse, and touch");
   });
 
@@ -243,10 +245,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 11");
-    expect(copy).toContain("sealed version 10 save migrates exactly once");
-    expect(copy).toContain("every established actor, group, aggregate population, item, Promise, evidence record, and world fact stays exact");
-    expect(copy).toContain("cannot add another population, reroll an animal, duplicate movement signs, or rewrite older ecology");
+    expect(copy).toContain("Outer save version 12");
+    expect(copy).toContain("sealed version 11 save migrates exactly once");
+    expect(copy).toContain("every established habitat-version-3 population byte, actor, group, aggregate population, item, Promise, evidence record, and world fact stays exact");
+    expect(copy).toContain("cannot add another population, reroll an animal, duplicate a group or consumed provision, or rewrite older ecology");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -326,7 +328,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("free-ranging domestic cats");
     expect(plannedCopy).toContain("marsh rabbits");
     expect(plannedCopy).toContain("marsh foxes");
-    expect(plannedCopy).toContain("aggregate population rather than individual actors");
+    expect(plannedCopy).toContain("fish crows");
+    expect(plannedCopy).toContain("northern harrier");
+    expect(plannedCopy).toContain("southern leopard-frog population area");
+    expect(plannedCopy).toContain("aggregate populations rather than individual actors");
     expect(plannedCopy).toContain("Further dogs and wildlife species");
     expect(plannedCopy).toContain("worldwide populations");
     expect(plannedCopy).toContain("animal death and carcasses");
@@ -351,7 +356,7 @@ describe("TIDEWEFT field-manual content", () => {
         ].join(" ");
 
     expect(tutorialControlById("inspect-person")).toMatchObject({
-      input: "Click / tap a visible person, dog, or wild animal",
+      input: "Click / tap a visible person, dog, wild animal, or rat/frog population sign",
       audience: "all",
     });
     expect(copy).toContain("OBSERVED");
@@ -363,7 +368,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ROUTE AROUND THIS SPOT");
     expect(copy).toContain("exactly one dried-fish unit");
     expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
-    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, or marsh fox");
+    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, or northern harrier");
     expect(copy).toContain("A heard animal alarm gives an uncertain direction");
     expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("your previous route and choice history remain unchanged");
@@ -372,9 +377,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("mixed-resolution model records capacity, population pressure, and trend");
     expect(copy).toContain("bounded set of representatives");
     expect(copy).toContain("genuinely absent instead of being rerolled");
-    expect(copy).toContain("deer persist in herds and gulls in flocks");
-    expect(copy).toContain("black bears stay solitary");
-    expect(copy).toContain("Brown rats remain one population-area aggregate");
+    expect(copy).toContain("deer persist in herds, gulls in flocks, and up to three fish-crow representatives in one CROW-FLOCK");
+    expect(copy).toContain("Black bears and the single northern-harrier representative stay solitary");
+    expect(copy).toContain("Brown rats and southern leopard frogs remain conserved population-area aggregates");
     expect(copy).toContain("Lawfully perceived cats, dogs, people, and gulls");
     expect(copy).toContain("exposed loose provisions can attract it");
     expect(copy).toContain("at most one rat population unit moves");
@@ -385,8 +390,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("are not selectable");
     expect(copy).toContain("Gnaw marks, small tracks, and shelter signs");
     expect(copy).toContain("never reveals an exact count, hidden anchor, pressure value, cause, or individual rat identity");
-    expect(copy).toContain("A rat rustle, cat call, rabbit thump, or fox yip");
-    expect(copy).toContain("Offscreen redistribution, movement, and hidden animal decisions");
+    expect(copy).toContain("fish-crow double call");
+    expect(copy).toContain("shared directional hearing from its actual strongest heard anchor");
+    expect(copy).toContain("rain can both stir the frogs and mask the sound");
+    expect(copy).toContain("northern harrier has no invented cry");
+    expect(copy).toContain("Offscreen movement and hidden animal decisions");
     expect(copy).toContain("directly perceives a fox can alarm and then flee");
     expect(copy).toContain("hungry marsh fox can pursue a rabbit it directly perceives");
     expect(copy).toContain("dog or black bear can become the more urgent pressure");
@@ -399,16 +407,22 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("movement can leave canid pawprints");
     expect(copy).toContain("saved sign stays at that movement site");
     expect(copy).toContain("is not selectable or usable as a remote locator");
-    expect(copy).toContain("Rat-sign ABOUT is close-only because a sign is not an actor");
+    expect(copy).toContain("Rat- and frog-sign ABOUT are close-only because a population sign is not an actor");
     expect(copy).toContain("standable shallow water");
     expect(copy).toContain("remaining saved intent to physiology");
     expect(copy).toContain("ages existing perception without adding facts");
+    expect(copy).toContain("conserves 64–72 units across no more than three saved wetland anchors");
+    expect(copy).toContain("Weather alone cannot create, kill, duplicate, or reroll frogs");
+    expect(copy).toContain("deterministic low quartering search");
+    expect(copy).toContain("only a crow actually mobbing it becomes pressure that can break the pursuit");
+    expect(copy).toContain("At rest time, crows seek authenticated habitat perches");
+    expect(copy).toContain("danger and immediate needs still take priority");
     expect(copy).toContain("nonlethal player-absent aftermath");
     expect(copy).toContain("no harm or cargo interaction");
     expect(copy).toContain("Animals do not attack, receive injuries, die, leave carcasses, or consume live prey");
     expect(copy).toContain("Complete scent and evidence tracking");
     expect(copy).toContain("foliage consumption");
-    expect(copy).toContain("circadian behavior");
+    expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species, worldwide populations, the full bestiary");
     expect(copy).toContain("exhaustive species-pair interaction matrix");
     expect(copy).toContain("not live yet");

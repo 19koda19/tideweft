@@ -19,6 +19,7 @@ export const LOCAL_PLAYER_LIVING_ACTOR_ID = "player:local" as const;
 
 export type LivingSpeciesRepresentation = "individual" | "aggregate";
 export type LivingSpeciesLocomotionClass = "terrestrial" | "aerial";
+export type LivingSpeciesGroupOrganization = "herd" | "flock";
 
 export interface LivingSpeciesSensoryValues {
   /** Relative capability only; line-of-sight still governs actual vision. */
@@ -38,6 +39,8 @@ interface LivingSpeciesRegistryInput<Species extends string = string> {
   readonly actorAddressable: boolean;
   readonly representation: LivingSpeciesRepresentation;
   readonly locomotionClass: LivingSpeciesLocomotionClass;
+  readonly groupOrganization: LivingSpeciesGroupOrganization | null;
+  readonly groupStableIdNamespace: "HERD" | "FLOCK" | "CROW-FLOCK" | null;
   /** Lowercase noun; presentation decides capitalization and knowledge qualifiers. */
   readonly aboutNoun: string;
   readonly senses: LivingSpeciesSensoryValues;
@@ -122,6 +125,33 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 34_000,
     },
   },
+  "fish-crow": {
+    aboutNoun: "fish crow",
+    senses: {
+      visionAcuity: 940_000,
+      hearingSensitivity: 900_000,
+      scentSensitivity: 300_000,
+      scentBaseRangeUnits: 12_000,
+    },
+  },
+  "northern-harrier": {
+    aboutNoun: "northern harrier",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 820_000,
+      scentSensitivity: 120_000,
+      scentBaseRangeUnits: 8_000,
+    },
+  },
+  "southern-leopard-frog": {
+    aboutNoun: "southern leopard frog",
+    senses: {
+      visionAcuity: 580_000,
+      hearingSensitivity: 700_000,
+      scentSensitivity: 400_000,
+      scentBaseRangeUnits: 8_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([
@@ -131,6 +161,8 @@ export const LIVING_SPECIES_REGISTRY = Object.freeze([
     actorAddressable: true,
     representation: "individual",
     locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
     aboutNoun: "person",
     senses: {
       visionAcuity: 850_000,
@@ -145,6 +177,8 @@ export const LIVING_SPECIES_REGISTRY = Object.freeze([
     actorAddressable: true,
     representation: "individual",
     locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
     aboutNoun: "dog",
     senses: {
       visionAcuity: 680_000,
@@ -162,6 +196,8 @@ export const LIVING_SPECIES_REGISTRY = Object.freeze([
       actorAddressable: metadata.catalogIdentityForm !== "aggregate",
       representation: metadata.actorRepresentation,
       locomotionClass: metadata.locomotionClass,
+      groupOrganization: metadata.groupOrganization,
+      groupStableIdNamespace: metadata.groupStableIdNamespace,
       aboutNoun: values.aboutNoun,
       senses: values.senses,
     });
@@ -189,6 +225,15 @@ export function isLivingActorSpecies(value: unknown): value is LivingActorSpecie
   return livingSpeciesRegistryEntry(value) !== null;
 }
 
+/**
+ * Actor addressability is a registered capability, not an inference from an
+ * ID-looking string. Unknown species and population-only aggregates fail
+ * closed.
+ */
+export function isLivingSpeciesActorAddressable(species: unknown): boolean {
+  return livingSpeciesRegistryEntry(species)?.actorAddressable === true;
+}
+
 export function livingSpeciesActorIdMatchesNamespace(
   actorId: unknown,
   species: unknown,
@@ -196,7 +241,7 @@ export function livingSpeciesActorIdMatchesNamespace(
   const entry = livingSpeciesRegistryEntry(species);
   return typeof actorId === "string"
     && entry !== null
-    && entry.actorAddressable
+    && isLivingSpeciesActorAddressable(species)
     && (
       actorId.startsWith(entry.actorIdPrefix)
       || (species === RESIDENT_SPECIES && actorId === LOCAL_PLAYER_LIVING_ACTOR_ID)

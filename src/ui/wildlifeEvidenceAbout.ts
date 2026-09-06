@@ -3,6 +3,7 @@ import {
   projectWildlifePopulationEvidenceQuickInspect,
   type WildlifePopulationEvidenceAboutObservation,
 } from "../game/wildlifeAbout";
+import { isCoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 import type {
   ResidentAboutFactUIView,
   TideweftUIView,
@@ -19,7 +20,7 @@ export type WildlifeEvidenceAboutCloseCommand = {
 /** Flattened, close-only surface consumed by the shared non-modal ABOUT card. */
 export interface ResolvedWildlifeEvidenceAboutSurface {
   readonly selectionKey: string;
-  readonly species: "brown-rat";
+  readonly species: WildlifeEvidenceTargetUIView["species"];
   readonly representation: "population-evidence";
   readonly heading: string;
   readonly identityLine: string;
@@ -31,8 +32,8 @@ export interface ResolvedWildlifeEvidenceAboutSurface {
 }
 
 /**
- * Adapt the authoritative direct-detail game projection without synthesizing a
- * rat actor. Both stable IDs and the species tag must still match the selected
+ * Adapt the authoritative direct-detail game projection without synthesizing
+ * an aggregate animal actor. Both stable IDs and the species tag must still match the selected
  * render target after the game projector revalidates current perception.
  */
 export function projectWildlifeEvidenceAboutProjection(
@@ -91,7 +92,7 @@ export function resolveWildlifeEvidenceAboutSurface(
   }
   return {
     selectionKey: evidenceSelectionKey(selected.target),
-    species: "brown-rat",
+    species: selected.target.species,
     representation: "population-evidence",
     heading: selected.about.heading,
     identityLine: selected.about.identityLine,
@@ -175,9 +176,15 @@ function validFacts(value: unknown): value is readonly ResidentAboutFactUIView[]
 
 function validTarget(value: unknown): value is WildlifeEvidenceTargetUIView {
   return plainRecordWithKeys(value, ["aggregateId", "evidenceId", "species"])
-    && value.species === "brown-rat"
+    && isAggregateWildlifeEvidenceSpecies(value.species)
     && validStableId(value.aggregateId)
     && validStableId(value.evidenceId);
+}
+
+function isAggregateWildlifeEvidenceSpecies(
+  value: unknown,
+): value is WildlifeEvidenceTargetUIView["species"] {
+  return isCoreEcologyAggregateSpecies(value);
 }
 
 function sameSourceTarget(

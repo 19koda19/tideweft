@@ -5,6 +5,7 @@ import {
   type CoreWildlifeLifeStage,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
+import { stableStringify } from "../sim/util";
 import {
   canonicalizeCoreWildlifeActorState,
   coreWildlifeEnvironmentalEvidenceStrengthAtTick,
@@ -12,9 +13,23 @@ import {
   type CoreWildlifeIntentKind,
 } from "./coreWildlifeActor";
 import {
+  CORE_ECOLOGY_MAX_STEP_TICKS,
   canonicalizeCoreEcologyAggregatePatch,
+  coreEcologyAggregatePatchActor,
   type CoreEcologyAggregateEvidenceKind,
 } from "./coreEcology";
+import {
+  projectCoreEcologyActivity,
+  type CoreEcologyActivityProjection,
+} from "./coreEcologyActivity";
+import {
+  isCoreEcologyAggregateSpecies,
+  type CoreEcologyAggregateSpecies,
+} from "./coreEcologyAggregatePolicy";
+import {
+  coreEcologySpeciesCanOwnActorAddress,
+  coreEcologySpeciesHasRuntimeCapability,
+} from "./coreEcologySpeciesRuntimePolicy";
 import {
   VISIBILITY_DIRECT,
   hasValidPerceptionSignature,
@@ -37,7 +52,13 @@ export const WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION = 1 as const;
 export const WILDLIFE_DIRECT_DETAIL_MAX_DISTANCE_UNITS = 96_000 as const;
 
 /** Species with authoritative individual actor materialization. */
-export type IndividualWildlifeSpecies = Exclude<CoreWildlifeSpecies, "brown-rat">;
+export type IndividualWildlifeSpecies = Exclude<
+  CoreWildlifeSpecies,
+  "brown-rat" | "southern-leopard-frog"
+>;
+
+/** Species whose authoritative identity is a conserved population area. */
+export type AggregateWildlifeSpecies = CoreEcologyAggregateSpecies;
 
 export type WildlifePresentationBehavior =
   | "watch"
@@ -48,9 +69,11 @@ export type WildlifePresentationBehavior =
   | "pursue"
   | "guard"
   | "retreat"
-  | "rest";
+  | "rest"
+  | "perch"
+  | "quarter";
 
-/** Signed current player perception plus an optional count of visible gull representatives. */
+/** Signed current player perception plus an optional count of visible group representatives. */
 export interface WildlifeDirectObservation {
   readonly window: Readonly<{
     readonly origin: Readonly<{ x: number; y: number }>;
@@ -80,7 +103,7 @@ export interface WildlifePresentation {
   readonly formLabel?: string;
   readonly appearanceLabel?: string;
   readonly lifeStageLabel?: string;
-  /** Coarse visible bucket for a gull aggregate; absent for individuals or unknown count. */
+  /** Coarse visible bucket for a social group; absent for solitary actors or unknown count. */
   readonly groupSize?: number;
   readonly distanceUnits: number;
   readonly selected: boolean;
@@ -91,6 +114,11 @@ export interface WildlifePresentationInput {
   readonly observation: WildlifeDirectObservation;
   readonly tileSize: number;
   readonly selected?: boolean;
+  /** Optional canonical ecology custody for bounded, policy-owned activity. */
+  readonly activity?: Readonly<{
+    readonly patch: unknown;
+    readonly atTick: number;
+  }>;
 }
 
 /** Signed direct-detail frame for physical wildlife evidence, with no count channel. */
@@ -104,17 +132,15 @@ export type WildlifePopulationEvidenceForm =
   | "shelter-sign"
   | "small-tracks"
   | "paired-tracks"
-  | "canid-pawprints";
+  | "canid-pawprints"
+  | "frog-tracks";
 
-/** One directly visible physical sign. It is neither an actor nor a population census. */
-export interface WildlifePopulationEvidencePresentation {
+interface WildlifePopulationEvidencePresentationBase {
   readonly version: typeof WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION;
   /** Stable source routing identity; never a player-facing label. */
   readonly aggregateId: string;
   /** Stable physical-evidence routing identity. */
   readonly evidenceId: string;
-  readonly species: "brown-rat" | "domestic-cat" | "marsh-rabbit" | "marsh-fox";
-  readonly representation: "population-evidence" | "individual-evidence";
   readonly form: WildlifePopulationEvidenceForm;
   readonly quickLabel: string;
   readonly identityLabel: string;
@@ -125,6 +151,19 @@ export interface WildlifePopulationEvidencePresentation {
   readonly distanceUnits: number;
   readonly selected: boolean;
 }
+
+/** One directly visible physical sign. It is neither an actor nor a population census. */
+export type WildlifePopulationEvidencePresentation =
+  WildlifePopulationEvidencePresentationBase & (
+    | {
+        readonly species: AggregateWildlifeSpecies;
+        readonly representation: "population-evidence";
+      }
+    | {
+        readonly species: IndividualEvidenceSpecies;
+        readonly representation: "individual-evidence";
+      }
+  );
 
 export interface WildlifePopulationEvidencePresentationInput {
   readonly patch: unknown;
@@ -170,11 +209,14 @@ interface DirectEvidenceDetail {
 type WildlifePresentationForm =
   | "deer"
   | "gull-flock"
+  | "fish-crow-flock"
+  | "northern-harrier"
   | "black-bear"
   | "brown-rat"
   | "domestic-cat"
   | "marsh-rabbit"
-  | "marsh-fox";
+  | "marsh-fox"
+  | "southern-leopard-frog";
 
 interface WildlifeSpeciesPresentationDescriptor {
   readonly form: WildlifePresentationForm;
@@ -293,6 +335,48 @@ const PRESENTATION_BY_SPECIES: Readonly<
     baseSizeScale: 0.82,
     observableForm: "Lean, low-tailed canid",
   },
+  "fish-crow": {
+    form: "fish-crow-flock",
+    representation: "actor",
+    identificationClarity: 280_000,
+    unidentifiedQuickLabel: "Unknown birds",
+    unidentifiedIdentityLabel: "Unidentified birds",
+    identifiedNounNumber: "plural",
+    groupNoun: "flock",
+    appearanceStyle: "plumage",
+    conditionStyle: "flock",
+    exposesLifeStage: false,
+    baseSizeScale: 0.58,
+    observableForm: "Compact, broad-winged corvids",
+  },
+  "northern-harrier": {
+    form: "northern-harrier",
+    representation: "actor",
+    identificationClarity: 350_000,
+    unidentifiedQuickLabel: "Unknown raptor",
+    unidentifiedIdentityLabel: "Unidentified raptor",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "plumage",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.86,
+    observableForm: "Long-winged, low-flying raptor",
+  },
+  "southern-leopard-frog": {
+    form: "southern-leopard-frog",
+    representation: "population-area",
+    identificationClarity: 520_000,
+    unidentifiedQuickLabel: "Wetland animal signs",
+    unidentifiedIdentityLabel: "Unidentified wetland-animal signs",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.24,
+    observableForm: null,
+  },
 });
 const BEHAVIOR_CLARITY = 180_000;
 const CONDITION_CLARITY = 260_000;
@@ -308,29 +392,62 @@ interface PopulationEvidenceDescriptor {
   readonly sizeScale: number;
 }
 
-const POPULATION_EVIDENCE_BY_KIND: Readonly<
-  Record<CoreEcologyAggregateEvidenceKind, PopulationEvidenceDescriptor>
+interface PopulationEvidenceSpeciesDescriptor {
+  readonly identifiedQuickLabel: string;
+  readonly unidentifiedQuickLabel: string;
+  readonly identifiedIdentityLabel: string;
+  readonly unidentifiedIdentityLabel: string;
+  readonly byKind: Readonly<Partial<
+    Record<CoreEcologyAggregateEvidenceKind, PopulationEvidenceDescriptor>
+  >>;
+}
+
+const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
+  Record<AggregateWildlifeSpecies, PopulationEvidenceSpeciesDescriptor>
 > = deepFreeze({
-  "gnaw-mark": {
-    form: "gnaw-marks",
-    minimumClarity: 300_000,
-    identifiedLabel: "Rat gnaw marks",
-    unidentifiedLabel: "Small gnaw marks",
-    sizeScale: 0.82,
+  "brown-rat": {
+    identifiedQuickLabel: "Brown rat signs",
+    unidentifiedQuickLabel: "Small-animal signs",
+    identifiedIdentityLabel: "Brown rat population signs",
+    unidentifiedIdentityLabel: "Unidentified small-animal signs",
+    byKind: {
+      "gnaw-mark": {
+        form: "gnaw-marks",
+        minimumClarity: 300_000,
+        identifiedLabel: "Rat gnaw marks",
+        unidentifiedLabel: "Small gnaw marks",
+        sizeScale: 0.82,
+      },
+      "shelter-sign": {
+        form: "shelter-sign",
+        minimumClarity: 260_000,
+        identifiedLabel: "Brown rat shelter signs",
+        unidentifiedLabel: "Small-animal shelter signs",
+        sizeScale: 1,
+      },
+      tracks: {
+        form: "small-tracks",
+        minimumClarity: 340_000,
+        identifiedLabel: "Brown rat tracks",
+        unidentifiedLabel: "Small tracks",
+        sizeScale: 0.72,
+      },
+    },
   },
-  "shelter-sign": {
-    form: "shelter-sign",
-    minimumClarity: 260_000,
-    identifiedLabel: "Brown rat shelter signs",
-    unidentifiedLabel: "Small-animal shelter signs",
-    sizeScale: 1,
-  },
-  tracks: {
-    form: "small-tracks",
-    minimumClarity: 340_000,
-    identifiedLabel: "Brown rat tracks",
-    unidentifiedLabel: "Small tracks",
-    sizeScale: 0.72,
+  "southern-leopard-frog": {
+    identifiedQuickLabel: "Southern leopard frog signs",
+    unidentifiedQuickLabel: "Wetland-animal signs",
+    identifiedIdentityLabel: "Southern leopard frog population signs",
+    unidentifiedIdentityLabel: "Unidentified wetland-animal signs",
+    byKind: {
+      "frog-track": {
+        form: "frog-tracks",
+        minimumClarity: 300_000,
+        identifiedLabel: "Leopard frog mud impressions",
+        unidentifiedLabel: "Small wetland impressions",
+        sizeScale: 0.78,
+      },
+    },
   },
 });
 
@@ -420,12 +537,14 @@ export function projectWildlifePresentation(
   if (descriptor.representation !== "actor") return null;
   const detail = directDetail(actor, input.observation);
   if (detail === null) return null;
+  const activity = resolvePresentationActivity(actor, input.activity);
+  if (!activity.valid) return null;
 
   const speciesIdentified = detail.visualClarity >= descriptor.identificationClarity;
-  const behavior = presentationBehavior(actor.intent.kind);
+  const behavior = presentationBehavior(actor.intent.kind, activity.projection);
   const behaviorLabel = detail.visualClarity >= BEHAVIOR_CLARITY
-    ? observableBehavior(actor.intent.kind)
-    : coarseMotion(actor.intent.kind);
+    ? observableBehavior(actor.intent.kind, activity.projection)
+    : coarseMotion(actor.intent.kind, activity.projection);
   const conditionLabels = detail.visualClarity >= CONDITION_CLARITY
     ? observableConditionLabels(actor)
     : Object.freeze([]);
@@ -468,7 +587,7 @@ export function projectWildlifePresentation(
 function isIndividualWildlifeSpecies(
   species: CoreWildlifeSpecies,
 ): species is IndividualWildlifeSpecies {
-  return species !== "brown-rat";
+  return coreEcologySpeciesCanOwnActorAddress(species);
 }
 
 /**
@@ -496,9 +615,12 @@ export function projectWildlifePopulationEvidencePresentations(
 
   const presentations: WildlifePopulationEvidencePresentation[] = [];
   for (const population of patch.aggregatePopulations) {
+    if (!isAggregateWildlifeSpecies(population.species)) continue;
+    const speciesDescriptor = POPULATION_EVIDENCE_BY_SPECIES[population.species];
     for (const evidence of population.evidence) {
       const detail = directEvidenceDetail(evidence.position, context);
-      const descriptor = POPULATION_EVIDENCE_BY_KIND[evidence.kind];
+      const descriptor = speciesDescriptor.byKind[evidence.kind];
+      if (descriptor === undefined) continue;
       if (detail === null || detail.visualClarity < descriptor.minimumClarity) continue;
       const speciesIdentified = detail.visualClarity
         >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
@@ -506,13 +628,15 @@ export function projectWildlifePopulationEvidencePresentations(
         version: WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION,
         aggregateId: population.aggregateId,
         evidenceId: evidence.evidenceId,
-        species: "brown-rat",
+        species: population.species,
         representation: "population-evidence",
         form: descriptor.form,
-        quickLabel: speciesIdentified ? "Brown rat signs" : "Small-animal signs",
+        quickLabel: speciesIdentified
+          ? speciesDescriptor.identifiedQuickLabel
+          : speciesDescriptor.unidentifiedQuickLabel,
         identityLabel: speciesIdentified
-          ? "Brown rat population signs"
-          : "Unidentified small-animal signs",
+          ? speciesDescriptor.identifiedIdentityLabel
+          : speciesDescriptor.unidentifiedIdentityLabel,
         evidenceLabel: speciesIdentified
           ? descriptor.identifiedLabel
           : descriptor.unidentifiedLabel,
@@ -579,6 +703,12 @@ export function projectWildlifePopulationEvidencePresentations(
   }
   presentations.sort((left, right) => compareText(left.evidenceId, right.evidenceId));
   return Object.freeze(presentations);
+}
+
+function isAggregateWildlifeSpecies(
+  species: CoreWildlifeSpecies,
+): species is AggregateWildlifeSpecies {
+  return isCoreEcologyAggregateSpecies(species);
 }
 
 function isIndividualEvidenceSpecies(
@@ -791,7 +921,62 @@ function observableConditionLabels(actor: CoreWildlifeActorState): readonly stri
   return Object.freeze(labels);
 }
 
-function presentationBehavior(intent: CoreWildlifeIntentKind): WildlifePresentationBehavior {
+interface PresentationActivityResolution {
+  readonly valid: boolean;
+  readonly projection: CoreEcologyActivityProjection | null;
+}
+
+function resolvePresentationActivity(
+  actor: CoreWildlifeActorState,
+  value: WildlifePresentationInput["activity"],
+): PresentationActivityResolution {
+  if (!coreEcologySpeciesHasRuntimeCapability(actor.identity.species, "diurnal-activity")) {
+    return Object.freeze({ valid: true, projection: null });
+  }
+  if (value === undefined) return Object.freeze({ valid: true, projection: null });
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, ["atTick", "patch"])
+    || !nonnegativeSafeInteger(value.atTick)
+  ) return Object.freeze({ valid: false, projection: null });
+  const patch = canonicalizeCoreEcologyAggregatePatch(value.patch);
+  if (
+    patch === null
+    || value.atTick < patch.updatedAtTick
+    || value.atTick - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
+  ) return Object.freeze({ valid: false, projection: null });
+  const ownedActor = coreEcologyAggregatePatchActor(patch, actor.identity.stableId);
+  if (ownedActor === null || stableStringify(ownedActor) !== stableStringify(actor)) {
+    return Object.freeze({ valid: false, projection: null });
+  }
+  return Object.freeze({
+    valid: true,
+    projection: projectCoreEcologyActivity(patch, {
+      actorId: actor.identity.stableId,
+      atTick: value.atTick,
+    }),
+  });
+}
+
+function activityBehavior(
+  activity: CoreEcologyActivityProjection | null,
+): Extract<WildlifePresentationBehavior, "perch" | "quarter" | "rest"> | null {
+  switch (activity?.presentationSignal) {
+    case "perched": return "perch";
+    case "low-quartering-flight": return "quarter";
+    case "resting": return "rest";
+    case null:
+    case undefined:
+      return null;
+  }
+}
+
+function presentationBehavior(
+  intent: CoreWildlifeIntentKind,
+  activity: CoreEcologyActivityProjection | null,
+): WildlifePresentationBehavior {
+  const projected = activityBehavior(activity);
+  if (projected !== null) return projected;
   switch (intent) {
     case "observe": return "watch";
     case "disengage":
@@ -806,7 +991,14 @@ function presentationBehavior(intent: CoreWildlifeIntentKind): WildlifePresentat
   }
 }
 
-function observableBehavior(intent: CoreWildlifeIntentKind): string {
+function observableBehavior(
+  intent: CoreWildlifeIntentKind,
+  activity: CoreEcologyActivityProjection | null,
+): string {
+  const projected = activityBehavior(activity);
+  if (projected === "perch") return "Perched";
+  if (projected === "quarter") return "Quartering low";
+  if (projected === "rest") return "Resting";
   switch (intent) {
     case "observe": return "Watching";
     case "disengage": return "Moving away";
@@ -821,7 +1013,13 @@ function observableBehavior(intent: CoreWildlifeIntentKind): string {
   }
 }
 
-function coarseMotion(intent: CoreWildlifeIntentKind): string {
+function coarseMotion(
+  intent: CoreWildlifeIntentKind,
+  activity: CoreEcologyActivityProjection | null,
+): string {
+  const projected = activityBehavior(activity);
+  if (projected === "quarter") return "Moving";
+  if (projected === "perch" || projected === "rest") return "Still";
   return intent === "observe" || intent === "guard" || intent === "rest"
     ? "Still"
     : "Moving";
@@ -858,9 +1056,9 @@ function validWindow(value: unknown): value is WildlifeDirectObservation["window
 }
 
 function allowedInputKeys(value: Record<string, unknown>): boolean {
-  const expected = value.selected === undefined
-    ? ["actor", "observation", "tileSize"]
-    : ["actor", "observation", "selected", "tileSize"];
+  const expected = ["actor", "observation", "tileSize"];
+  if (value.activity !== undefined) expected.push("activity");
+  if (value.selected !== undefined) expected.push("selected");
   return exactKeys(value, expected);
 }
 

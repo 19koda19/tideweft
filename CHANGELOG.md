@@ -4,6 +4,50 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.17 — 2026-09-05
+
+Build: `0.3.3-alpha.17` · Gameplay contract: 20 · Tutorial: 27
+
+Rain Chorus / Shadow Overhead adds persistent fish crows, a solitary northern harrier, and a conserved southern leopard-frog population with a rain-responsive chorus through one shared species-capability scaffold, with bounded daily activity and knowledge-honest sound and presentation.
+
+### Gameplay
+
+- Habitat version 4 preserves every version-3 population byte-for-byte as its exact prefix and deterministically appends fish-crow, northern-harrier, and southern leopard-frog populations when the local habitat supports them. Fish crows use up to three persistent individual representatives in one saved CROW-FLOCK, the harrier remains a single solitary representative, and 64–72 frog population units share at most three aggregate habitat anchors without manufacturing individual frog actors.
+- Fish crows can seek an authenticated habitat perch during their bounded rest window, form a persistent flock, physically reach and consume exactly one loose provision through ordinary custody, and raise a nasal double-call alarm only after directly identifying an aerial predator. A crow that is actually mobbing can become perceived pressure that interrupts the harrier's finite nonlethal pursuit; neutral co-presence alone cannot fabricate that response.
+- The northern harrier rests outside its bounded daytime window and otherwise follows a deterministic low quartering search through the shared aerial locomotion boundary. Immediate hunger, perceived threats, and other lawful needs retain priority over this neutral activity; the schedule is a narrow day/rest owner rather than a claim of complete circadian life.
+- The southern leopard-frog population becomes more active in rain, can quiet or redistribute one conserved unit under lawful local pressure, and can produce one bounded chorus from its strongest currently heard anchor. Weather changes activity and hearing conditions, never the aggregate's stable identity, anchor capacity, or total population by itself.
+
+### Fixes
+
+- A versioned species runtime policy now decides whether a species may own an actor address, group state, individual locomotion, aggregate response, activity projection, evidence, and presentation. The frog is therefore conserved as an aggregate everywhere, while crows and harriers retain individual identity through the same shared boundary instead of accumulating species-specific detection and rendering shortcuts.
+- The frog chorus and fish-crow double call use original low-cost sound cues and anonymous equivalent captions. A chorus enters the shared directional hearing model from its actual saved anchor, rain can both increase frog activity and mask what is heard, simultaneous directional cues retain independent stereo placement, and hidden events do not become omniscient player EVENTS.
+- Crow perch and harrier quartering presentation now require the current actor's authenticated activity projection. A stale or mismatched actor cannot borrow another population's perch, rest, target, label, hit target, or ABOUT state.
+- Neutral scheduled movement uses the shared bounded aerial movement and validated world-position boundary, and yields to immediate pursuit, escape, forage, and scavenging movement. An unrepresentable activity target fails closed without corrupting or reclassifying the actor, and a bird can leave a saved night-rest posture when its daylight window begins.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Rain Chorus adds ecological warning, food pressure, weather-responsive chorus, and overhead pursuit without attacks, injury, death, carcasses, hunting rewards, live-prey consumption, or a companion bonus.
+- The new slice is explicitly bounded: at most three crow representatives, one harrier representative, three frog anchors, one conserved frog-unit redistribution on its fixed opportunity, finite pursuit, and fixed-cadence activity and sound. Region streaming and coarse simulation preserve identities without an unbounded all-pairs interaction loop.
+- Shared invariants, capability contracts, bounded fuzzing, performance budgets, and representative crow–harrier–rabbit–dog–human–frog scenarios validate emergent composition. The release does not pretend to enumerate or script every possible animal pair.
+
+### Interface
+
+- Chart 2D and Relief 3D now render fish crows, the northern harrier, and frog-population evidence with distinct color-independent forms, matching mouse and touch targets, reduced-motion parity, and the same direct-sight knowledge boundary.
+- ABOUT may identify a visible crow or harrier and describe only observable form, condition, and current behavior. Perched and low-quartering labels appear only when their authenticated activity is current; frog ABOUT describes only directly visible population-level signs without inventing an individual frog, exact population count, hidden anchor, private pressure, or remote tracker.
+- The crow's nasal double call and the frog chorus use restrained audio plus anonymous bottom-right captions. The northern harrier has no fabricated vocal cue in this release. Field Manual version 27 explains the new populations, aggregate chorus, bounded activity, physical custody, save migration, and explicit limits.
+
+### Save changes
+
+- The outer session advances to version 12 and its core-ecology record authenticates habitat version 4, fish-crow flock membership, northern-harrier identity, the conserved frog population area, new evidence, and physical crow provision custody beside all earlier actors, groups, aggregates, cargo, Promises, and world history.
+- A sealed version-11 save migrates exactly once. Every established habitat-version-3 population byte, actor, group, aggregate, item, custody record, Promise, disturbance, evidence record, and world fact remains exact while the deterministic crow, harrier, and frog extension is appended once.
+- Save, reload, coarse travel, full-detail return, signed region boundaries, and extreme coordinates preserve the same new actors, flock, aggregate population units, saved intent, evidence, and item history. Refresh cannot reroll or duplicate a bird, frog unit, chorus anchor, group, consumed provision, or migration append.
+
+### Known limitations
+
+- This remains one bounded habitat assemblage near the original harbor, not worldwide wildlife generation or the full bestiary. Broader populations, ecological migration, reproduction, and complete sleep or circadian schedules are not live.
+- Animals still do not attack, receive injuries, die, leave carcasses, or consume live prey. Harrier pursuit is finite and nonlethal, frog pressure is conserved redistribution, and the harrier has no authored vocal cue yet.
+- The frog chorus, crow alarm, narrow food custody, direct evidence, and activity windows are focused extensions of shared systems. Complete scent fields and tracking, foliage consumption, broad rumor or social-information flow, mortality, and an exhaustive species-pair interaction matrix are not live.
+
 ## 0.3.3-alpha.16 — 2026-09-05
 
 Build: `0.3.3-alpha.16` · Gameplay contract: 20 · Tutorial: 26

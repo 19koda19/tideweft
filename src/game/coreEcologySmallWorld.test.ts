@@ -12,8 +12,11 @@ import {
 } from "./coreEcology";
 import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
+  deriveCoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatAssemblage,
+  type CoreEcologyRainChorusHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import { resolveCoreEcologyAggregateActivityIntensity } from "./coreEcologyAggregatePolicy";
 import {
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS,
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION,
@@ -30,7 +33,7 @@ const SEED = seedFromText("settlement shadows interaction");
 const ORIGIN = createRegionCoord(-17, 23);
 
 function individualInputs(
-  habitat: CoreEcologyHarborEdgeHabitatAssemblage,
+  habitat: CoreEcologyHarborEdgeHabitatAssemblage | CoreEcologyRainChorusHabitatAssemblage,
 ): readonly CoreEcologyPopulationInput[] {
   return habitat.populations.flatMap((population) => (
     population.representation !== "individual-representatives"
@@ -48,6 +51,32 @@ function individualInputs(
           })),
         }]
   ));
+}
+
+function rainChorusFixture(
+  tick = 0,
+  origin: RegionCoord = ORIGIN,
+  seed: RootSeed = seedFromText("rain chorus small-world interaction"),
+): CoreEcologyAggregatePatchState {
+  const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
+    rootSeed: seed,
+    originRegion: origin,
+  });
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "wave-b3:rain-chorus",
+    originRegion: origin,
+    tick,
+    populations: individualInputs(habitat),
+    derivation: { kind: "habitat-v4", habitat },
+  });
+  const frogs = patch.aggregatePopulations.find(({ species }) => (
+    species === "southern-leopard-frog"
+  ));
+  if (frogs === undefined || frogs.anchors.length < 2) {
+    throw new Error("Rain-chorus fixture requires two frog anchors");
+  }
+  return patch;
 }
 
 function fixture(
@@ -82,14 +111,15 @@ function stimulus(
   response: CoreEcologySettlementShadowsResponse,
   strength = 720_000,
   stimulusId = `stimulus:${sourceKind}`,
+  targetSpecies: "brown-rat" | "southern-leopard-frog" = "brown-rat",
 ): CoreEcologySettlementShadowsStimulus {
-  const rats = patch.aggregatePopulations.find(({ species }) => species === "brown-rat");
-  const from = rats?.anchors.find(({ populationUnits }) => populationUnits > 0);
-  const to = rats?.anchors.find(({ anchorOrdinal }) => (
+  const population = patch.aggregatePopulations.find(({ species }) => species === targetSpecies);
+  const from = population?.anchors.find(({ populationUnits }) => populationUnits > 0);
+  const to = population?.anchors.find(({ anchorOrdinal }) => (
     anchorOrdinal !== from?.anchorOrdinal
   ));
-  if (rats === undefined || from === undefined || to === undefined) {
-    throw new Error("Settlement-shadows stimulus requires a movable rat unit");
+  if (population === undefined || from === undefined || to === undefined) {
+    throw new Error(`Small-world stimulus requires a movable ${targetSpecies} unit`);
   }
   return {
     version: CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION,
@@ -97,7 +127,7 @@ function stimulus(
     sourceReferenceId,
     sourceKind,
     response,
-    targetAggregateId: rats.aggregateId,
+    targetAggregateId: population.aggregateId,
     channels,
     anchorInfluences: response === "pressure"
       ? [
@@ -194,6 +224,7 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
     expect(result.events).toHaveLength(1);
     const event = result.events[0];
     expect(event).toMatchObject({
+      version: 2,
       kind: "aggregate-redistributed",
       atTick: 0,
       sourceReferenceId: cat,
@@ -290,6 +321,205 @@ describe("Settlement Shadows aggregate stimulus ecology", () => {
       ...valid,
       anchorInfluences: [{ anchorOrdinal: 99, intensity: 500_000 }],
     }]))).toBeNull();
+  });
+
+  it("uses target-species policy so rain attracts frogs without changing rat rain pressure", () => {
+    const initial = rainChorusFixture();
+    const frogRain = stimulus(
+      initial,
+      "rain",
+      "weather:rain-frog",
+      ["hearing", "touch"],
+      "attraction",
+      780_000,
+      "stimulus:frog-rain",
+      "southern-leopard-frog",
+    );
+    const canonical = canonicalizeCoreEcologySettlementShadowsStimulusFrame(
+      frame(0, [frogRain]),
+    );
+    expect(canonical).toEqual(frame(0, [frogRain]));
+    const result = stepCoreEcologySettlementShadows(initial, 0, canonical);
+    if (result === null) throw new Error("Valid frog rain attraction failed");
+    expect(result.events).toEqual([expect.objectContaining({
+      version: 3,
+      sourceKind: "rain",
+      response: "attraction",
+      causeKind: "weather-pressure",
+      targetSpecies: "southern-leopard-frog",
+      mortality: "none",
+      cargoInteraction: false,
+      itemConsumption: "none",
+    })]);
+    const before = initial.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    const after = result.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    expect(after?.populationSize).toBe(before?.populationSize);
+    expect(after?.anchors.reduce((sum, anchor) => sum + anchor.populationUnits, 0))
+      .toBe(before?.populationSize);
+    const frogHabitatIntensity = initial.derivation.kind === "habitat-v4"
+      ? initial.derivation.habitat.populations.find(({ species }) => (
+          species === "southern-leopard-frog"
+        ))?.activitySignal.intensity ?? 0
+      : 0;
+    expect(after?.activitySignal.intensity).toBe(
+      resolveCoreEcologyAggregateActivityIntensity(
+        "southern-leopard-frog",
+        frogHabitatIntensity,
+        780_000,
+      ),
+    );
+
+    const ratRain = stimulus(
+      initial,
+      "rain",
+      "weather:rain-rat",
+      ["touch"],
+      "pressure",
+    );
+    expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [ratRain])))
+      .not.toBeNull();
+    expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [{
+      ...ratRain,
+      response: "attraction",
+    }]))).toBeNull();
+  });
+
+  it("quiets and redistributes frogs only from submitted lawful crow or harrier perception", () => {
+    for (const sourceKind of ["fish-crow", "northern-harrier"] as const) {
+      const initial = rainChorusFixture();
+      const before = initial.aggregatePopulations.find(({ species }) => (
+        species === "southern-leopard-frog"
+      ));
+      const perceivedPressure = stimulus(
+        initial,
+        sourceKind,
+        `${sourceKind}:perceived`,
+        ["vision"],
+        "pressure",
+        850_000,
+        `stimulus:frog:${sourceKind}`,
+        "southern-leopard-frog",
+      );
+      const result = stepCoreEcologySettlementShadows(
+        initial,
+        0,
+        frame(0, [perceivedPressure]),
+      );
+      if (result === null) throw new Error(`Valid frog ${sourceKind} pressure failed`);
+      expect(result.events).toEqual([expect.objectContaining({
+        sourceKind,
+        response: "pressure",
+        targetSpecies: "southern-leopard-frog",
+        mortality: "none",
+        cargoInteraction: false,
+        itemConsumption: "none",
+      })]);
+      const after = result.patch.aggregatePopulations.find(({ species }) => (
+        species === "southern-leopard-frog"
+      ));
+      expect(after?.populationSize).toBe(before?.populationSize);
+      expect(before?.activitySignal.intensity).toBeGreaterThan(0);
+      expect(after?.activitySignal.intensity).toBeLessThan(
+        before?.activitySignal.intensity ?? FIXED_POINT,
+      );
+    }
+  });
+
+  it("changes a frog chorus from live rain and pressure without moving or regenerating frogs", () => {
+    const initial = rainChorusFixture(1);
+    const frogs = initial.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    if (frogs === undefined) throw new Error("Rain activity fixture requires frogs");
+    const rain = stimulus(
+      initial,
+      "rain",
+      "weather:steady-rain",
+      ["hearing", "touch"],
+      "attraction",
+      900_000,
+      "stimulus:steady-rain",
+      "southern-leopard-frog",
+    );
+    const crow = stimulus(
+      initial,
+      "fish-crow",
+      "CROW-visible",
+      ["vision"],
+      "pressure",
+      700_000,
+      "stimulus:visible-crow",
+      "southern-leopard-frog",
+    );
+    const dryResult = stepCoreEcologySettlementShadows(initial, 1, frame(1, []));
+    const rainResult = stepCoreEcologySettlementShadows(initial, 1, frame(1, [rain]));
+    const pressuredResult = stepCoreEcologySettlementShadows(
+      initial,
+      1,
+      frame(1, [rain, crow]),
+    );
+    if (dryResult === null || rainResult === null || pressuredResult === null) {
+      throw new Error("Valid live frog activity projection failed");
+    }
+    const dryFrogs = dryResult.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    const rainFrogs = rainResult.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    const pressuredFrogs = pressuredResult.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    expect(dryResult.events).toEqual([]);
+    expect(rainResult.events).toEqual([]);
+    expect(pressuredResult.events).toEqual([]);
+    expect(rainFrogs?.activitySignal.intensity).toBeGreaterThan(
+      dryFrogs?.activitySignal.intensity ?? FIXED_POINT,
+    );
+    expect(pressuredFrogs?.activitySignal.intensity).toBeLessThan(
+      rainFrogs?.activitySignal.intensity ?? 0,
+    );
+    for (const projected of [dryFrogs, rainFrogs, pressuredFrogs]) {
+      expect(projected).toMatchObject({
+        aggregateId: frogs.aggregateId,
+        species: frogs.species,
+        populationSize: frogs.populationSize,
+        anchors: frogs.anchors,
+        evidence: frogs.evidence,
+        disturbances: frogs.disturbances,
+        revision: frogs.revision,
+      });
+    }
+  });
+
+  it("rejects frog food attraction and prevents new bird pressure from leaking into rats", () => {
+    const initial = rainChorusFixture();
+    const frogFood = stimulus(
+      initial,
+      "exposed-food",
+      "cargo:frog-food",
+      ["scent"],
+      "attraction",
+      800_000,
+      "stimulus:frog-food",
+      "southern-leopard-frog",
+    );
+    expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [frogFood])))
+      .toBeNull();
+
+    const crowAtRats = stimulus(
+      initial,
+      "fish-crow",
+      "fish-crow:rat-non-policy",
+      ["vision"],
+      "pressure",
+    );
+    expect(canonicalizeCoreEcologySettlementShadowsStimulusFrame(frame(0, [crowAtRats])))
+      .toBeNull();
   });
 
   it("selects the strongest lawful gradient once, independent of input order", () => {

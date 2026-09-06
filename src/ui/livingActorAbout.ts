@@ -6,6 +6,7 @@ import {
 import {
   projectWildlifeAbout,
   projectWildlifeQuickInspect,
+  type WildlifeAboutActivityContext,
   type WildlifeAboutObservation,
 } from "../game/wildlifeAbout";
 import {
@@ -92,13 +93,18 @@ export function projectDogLivingActorInspection(
   });
 }
 
-/** Adapt one directly observed core-wildlife actor to the shared tagged UI contract. */
+/**
+ * Adapt one directly observed core-wildlife actor to the shared tagged UI contract.
+ * Quick and full ABOUT share the same optional activity custody so their visible
+ * posture cannot disagree with Chart/Relief presentation.
+ */
 export function projectWildlifeLivingActorInspection(
   actor: unknown,
   currentObservation: WildlifeAboutObservation,
+  activity?: WildlifeAboutActivityContext,
 ): SelectedLivingActorUIView | null {
-  const quick = projectWildlifeQuickInspect(actor, currentObservation);
-  const about = projectWildlifeAbout(actor, currentObservation);
+  const quick = projectWildlifeQuickInspect(actor, currentObservation, activity);
+  const about = projectWildlifeAbout(actor, currentObservation, activity);
   if (
     quick === null
     || about === null

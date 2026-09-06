@@ -15,6 +15,16 @@ describe("core ecology trophic capability resolver", () => {
     expect(coreEcologyCanPursueLivingActor("marsh-fox", "deer"))
       .toBe(false);
     expect(coreEcologyTrophicPerceivedClass("marsh-fox", "deer")).toBeNull();
+    expect(coreEcologyTrophicPerceivedClass("northern-harrier", "marsh-rabbit"))
+      .toBe("live-prey");
+    expect(coreEcologyCanPursueLivingActor("northern-harrier", "marsh-rabbit"))
+      .toBe(true);
+    expect(coreEcologyCanPursueLivingActor("northern-harrier", "southern-leopard-frog"))
+      .toBe(false);
+    expect(coreEcologyTrophicPerceivedClass(
+      "northern-harrier",
+      "southern-leopard-frog",
+    )).toBeNull();
   });
 
   it("makes pressure reciprocal without declaring a lethal outcome", () => {
@@ -45,6 +55,32 @@ describe("core ecology trophic capability resolver", () => {
   it("corrects the former size-blind cat and deer classification", () => {
     expect(coreEcologyTrophicPerceivedClass("domestic-cat", "deer")).toBeNull();
     expect(coreEcologyTrophicPerceivedClass("deer", "domestic-cat")).toBeNull();
+  });
+
+  it("keeps crow mobbing separate from prey identity and requires observed mobbing for reverse pressure", () => {
+    expect(coreEcologyTrophicPerceivedClass("fish-crow", "northern-harrier"))
+      .toBe("aerial-predator");
+    expect(coreEcologyTrophicPerceivedClass("northern-harrier", "fish-crow"))
+      .toBeNull();
+    expect(coreEcologyCanPursueLivingActor("northern-harrier", "fish-crow"))
+      .toBe(false);
+    expect(coreEcologyTrophicPerceivedClass(
+      "northern-harrier",
+      "fish-crow",
+      { subjectActivity: "mobbing" },
+    )).toBe("mobbing-pressure");
+    expect(coreEcologyTrophicPerceivedClass(
+      "marsh-fox",
+      "fish-crow",
+      { subjectActivity: "mobbing" },
+    )).toBeNull();
+  });
+
+  it("lets lawful dog and bear pressure interrupt a harrier without inventing harm", () => {
+    expect(coreEcologyTrophicPerceivedClass("northern-harrier", "domestic-dog"))
+      .toBe("predator");
+    expect(coreEcologyTrophicPerceivedClass("northern-harrier", "black-bear"))
+      .toBe("large-predator");
   });
 
   it("is total and deterministic across the declared roster", () => {

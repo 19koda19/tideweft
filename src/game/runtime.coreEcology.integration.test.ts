@@ -12,11 +12,16 @@ import {
   serializeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
+import { projectCoreEcologyActivity } from "./coreEcologyActivity";
 import {
   CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES,
   CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
+  CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES,
+  CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
+  canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import {
@@ -60,6 +65,7 @@ import {
   translateWorldPosition,
   worldPositionDelta,
 } from "./worldPosition";
+import { livingActorAddressInRegionalWindow } from "./livingActor";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -75,7 +81,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 11;
+  readonly version: 12;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -136,6 +142,7 @@ describe("runtime core-ecology vertical slice", () => {
     await initial.save();
     const currentRecord = repository.snapshot();
     const current = requiredEnvelope(repository);
+    const currentCore = requiredCore(current);
     const legacy = publishedV8CoreEcologyFixture(current);
     const { integrity: _currentIntegrity, ...currentBase } = current;
     const v8Base = { ...currentBase, version: 8 as const, coreEcology: legacy.text };
@@ -156,9 +163,11 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(11);
-    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v3");
-    expect(adoptedCore.groups.groups).toEqual([]);
+    expect(repository.snapshot().payloadVersion).toBe(12);
+    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v4");
+    expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
+      ({ identity }) => identity.species === "fish-crow",
+    ));
     const retainedPopulations = adoptedCore.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
     ));
@@ -168,10 +177,26 @@ describe("runtime core-ecology vertical slice", () => {
       population.populationSize === population.members.length
       && population.members.every(({ representedUnits }) => representedUnits === 1)
     ))).toBe(true);
-    expect(adoptedCore.populations.filter(({ species }) => species === "domestic-cat"))
-      .toHaveLength(1);
-    expect(adoptedCore.aggregatePopulations.filter(({ species }) => species === "brown-rat"))
-      .toHaveLength(1);
+    for (const species of [
+      "domestic-cat",
+      "marsh-rabbit",
+      "marsh-fox",
+      "fish-crow",
+      "northern-harrier",
+    ] as const) {
+      expect(adoptedCore.populations.find(
+        (population) => population.species === species,
+      )).toEqual(currentCore.populations.find(
+        (population) => population.species === species,
+      ));
+    }
+    for (const species of ["brown-rat", "southern-leopard-frog"] as const) {
+      expect(adoptedCore.aggregatePopulations.find(
+        (population) => population.species === species,
+      )).toEqual(currentCore.aggregatePopulations.find(
+        (population) => population.species === species,
+      ));
+    }
     expect(new Set(coreActors(adoptedCore).map(({ identity }) => identity.stableId)).size)
       .toBe(coreActors(adoptedCore).length);
     expect(adopted.physicalCargo).toEqual(current.physicalCargo);
@@ -213,33 +238,138 @@ describe("runtime core-ecology vertical slice", () => {
     const migrated = await createTideweftRuntime(repository);
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
-    const v11Record = repository.snapshot();
-    const v11Envelope = requiredEnvelope(repository);
-    const v11Ecology = requiredCore(v11Envelope);
-    expect(v11Record.payloadVersion).toBe(11);
-    expect(v11Ecology.derivation.kind).toBe("habitat-v3");
-    expect(v11Envelope.world).toBe(v10Envelope.world);
-    expect(v11Envelope.player).toEqual(v10Envelope.player);
-    expect(v11Envelope.physicalCargo).toEqual(v10Envelope.physicalCargo);
-    expect(v11Envelope.promiseJourney).toEqual(v10Envelope.promiseJourney);
-    expect(v11Envelope.bio0Ecology).toBe(v10Envelope.bio0Ecology);
-    expect(v11Ecology.groups).toEqual(v10Ecology.groups);
-    expect(v11Ecology.aggregatePopulations).toEqual(v10Ecology.aggregatePopulations);
+    const v12Record = repository.snapshot();
+    const v12Envelope = requiredEnvelope(repository);
+    const v12Ecology = requiredCore(v12Envelope);
+    expect(v12Record.payloadVersion).toBe(12);
+    expect(v12Ecology.derivation.kind).toBe("habitat-v4");
+    expect(v12Envelope.world).toBe(v10Envelope.world);
+    expect(v12Envelope.player).toEqual(v10Envelope.player);
+    expect(v12Envelope.physicalCargo).toEqual(v10Envelope.physicalCargo);
+    expect(v12Envelope.promiseJourney).toEqual(v10Envelope.promiseJourney);
+    expect(v12Envelope.bio0Ecology).toBe(v10Envelope.bio0Ecology);
+    for (const oldGroup of v10Ecology.groups.groups) {
+      expect(v12Ecology.groups.groups.find(
+        ({ identity }) => identity.stableId === oldGroup.identity.stableId,
+      )).toEqual(oldGroup);
+    }
+    for (const oldAggregate of v10Ecology.aggregatePopulations) {
+      expect(v12Ecology.aggregatePopulations.find(
+        ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
+      )).toEqual(oldAggregate);
+    }
     for (const oldPopulation of v10Ecology.populations) {
-      expect(v11Ecology.populations.find(({ species, populationKey }) => (
+      expect(v12Ecology.populations.find(({ species, populationKey }) => (
         species === oldPopulation.species && populationKey === oldPopulation.populationKey
       ))).toEqual(oldPopulation);
     }
     if (
-      v11Ecology.derivation.kind !== "habitat-v3"
+      v12Ecology.derivation.kind !== "habitat-v4"
       || v10Ecology.derivation.kind !== "habitat-v2"
     ) throw new Error("migration did not retain canonical habitat derivations");
-    expect(v11Ecology.derivation.habitat.populations.slice(
+    expect(v12Ecology.derivation.habitat.populations.slice(
       0,
       CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length,
     )).toEqual(v10Ecology.derivation.habitat.populations);
 
-    const stableEcology = v11Envelope.coreEcology;
+    const stableEcology = v12Envelope.coreEcology;
+    migrated.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(stableEcology);
+    resumed.destroy();
+  });
+
+  it("migrates a sealed v11 habitat by preserving Alpha-16 state and appending Rain Chorus once", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "rain-chorus-runtime-2",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const currentRecord = repository.snapshot();
+    const currentEnvelope = requiredEnvelope(repository);
+    const currentEcology = requiredCore(currentEnvelope);
+    if (currentEcology.derivation.kind !== "habitat-v4") {
+      throw new Error("current fixture omitted its Rain Chorus habitat");
+    }
+    const v11Record = marshEdgeV11Record(currentRecord);
+    const v11Envelope = JSON.parse(v11Record.worldJson) as CurrentEnvelope;
+    const v11Ecology = deserializeCoreEcologyAggregatePatch(v11Envelope.coreEcology);
+    if (v11Ecology === null || v11Ecology.derivation.kind !== "habitat-v3") {
+      throw new Error("v11 fixture omitted its authenticated marsh-edge ecology");
+    }
+    expect(v11Ecology.populations.some(({ species }) => (
+      species === "fish-crow" || species === "northern-harrier"
+    ))).toBe(false);
+    expect(v11Ecology.groups.groups.some(
+      ({ identity }) => identity.species === "fish-crow",
+    )).toBe(false);
+    expect(v11Ecology.aggregatePopulations.some(
+      ({ species }) => species === "southern-leopard-frog",
+    )).toBe(false);
+    await repository.save(v11Record);
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const v12Record = repository.snapshot();
+    const v12Envelope = requiredEnvelope(repository);
+    const v12Ecology = requiredCore(v12Envelope);
+    expect(v12Record.payloadVersion).toBe(12);
+    expect(v12Ecology.derivation.kind).toBe("habitat-v4");
+    expect(v12Envelope.world).toBe(v11Envelope.world);
+    expect(v12Envelope.player).toEqual(v11Envelope.player);
+    expect(v12Envelope.physicalCargo).toEqual(v11Envelope.physicalCargo);
+    expect(v12Envelope.promiseJourney).toEqual(v11Envelope.promiseJourney);
+    expect(v12Envelope.bio0Ecology).toBe(v11Envelope.bio0Ecology);
+    for (const oldPopulation of v11Ecology.populations) {
+      expect(stableStringify(v12Ecology.populations.find(({ species, populationKey }) => (
+        species === oldPopulation.species && populationKey === oldPopulation.populationKey
+      )))).toBe(stableStringify(oldPopulation));
+    }
+    for (const oldGroup of v11Ecology.groups.groups) {
+      expect(stableStringify(v12Ecology.groups.groups.find(
+        ({ identity }) => identity.stableId === oldGroup.identity.stableId,
+      ))).toBe(stableStringify(oldGroup));
+    }
+    for (const oldAggregate of v11Ecology.aggregatePopulations) {
+      expect(stableStringify(v12Ecology.aggregatePopulations.find(
+        ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
+      ))).toBe(stableStringify(oldAggregate));
+    }
+    if (v12Ecology.derivation.kind !== "habitat-v4") {
+      throw new Error("v11 migration did not retain a canonical v4 derivation");
+    }
+    expect(v12Ecology.derivation.habitat.populations.slice(
+      0,
+      CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+    )).toEqual(v11Ecology.derivation.habitat.populations);
+    for (const species of ["fish-crow", "northern-harrier"] as const) {
+      expect(stableStringify(v12Ecology.populations.find(
+        (population) => population.species === species,
+      ))).toBe(stableStringify(currentEcology.populations.find(
+        (population) => population.species === species,
+      )));
+    }
+    expect(stableStringify(v12Ecology.aggregatePopulations.find(
+      ({ species }) => species === "southern-leopard-frog",
+    ))).toBe(stableStringify(currentEcology.aggregatePopulations.find(
+      ({ species }) => species === "southern-leopard-frog",
+    )));
+    expect(v12Ecology.groups.groups.filter(
+      ({ identity }) => identity.species === "fish-crow",
+    )).toEqual(currentEcology.groups.groups.filter(
+      ({ identity }) => identity.species === "fish-crow",
+    ));
+
+    const stableEcology = v12Envelope.coreEcology;
     migrated.destroy();
     scheduledFrame = undefined;
     const resumed = await createTideweftRuntime(repository);
@@ -284,7 +414,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v11 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v12 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -350,7 +480,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(11);
+    expect(before.version).toBe(12);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -388,8 +518,12 @@ describe("runtime core-ecology vertical slice", () => {
         kind === "food" && referenceId === seededProvisions[0]!.id
       ))
       .map((memory) => ({ actor, memory })));
-    expect(foodMemories).toHaveLength(1);
-    expect(foodMemories[0]?.actor.identity.species).toBe("black-bear");
+    // Food memories record lawful perception/intent, not custody. Rain Chorus
+    // adds another scavenger which may notice the same parcel before the
+    // sorted physical claim resolver awards its single unit to the bear.
+    expect(foodMemories.length).toBeGreaterThan(0);
+    expect(foodMemories.some(({ actor }) => actor.identity.species === "black-bear"))
+      .toBe(true);
 
     const durableCore = after.coreEcology;
     const durableCargo = after.physicalCargo;
@@ -413,6 +547,431 @@ describe("runtime core-ecology vertical slice", () => {
     expect(consumptionHistory(replayedCargo)).toHaveLength(1);
     expect(replayedCargo.expectedManifest.totalQuantity).toBe(0);
     resumed.destroy();
+  });
+
+  it("lets one fish crow physically reach and consume one persistent provision exactly once", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "rain-chorus-runtime-2",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    makeWorldDryAndClear(world);
+    let patch = requiredCore(envelope);
+    const crow = patch.populations.find(
+      ({ species }) => species === "fish-crow",
+    )?.members[0]?.actor;
+    if (crow === undefined) throw new Error("Rain Chorus fixture omitted its fish crow");
+    const cargo = requiredCargo(envelope);
+    const provision = forageProvisions(cargo)[0];
+    if (provision === undefined) throw new Error("crow fixture omitted its physical provision");
+    const located = locatePhysicalCargoEntity(cargo, provision.id);
+    if (located === null) throw new Error("crow fixture could not locate its physical provision");
+    const looseUnitsPerWorldUnit = LOOSE_CARGO_TILE_UNITS / WORLD_POSITION_UNITS_PER_TILE;
+    const provisionPosition = createWorldPosition(
+      located.world.region,
+      Math.trunc(provision.x / looseUnitsPerWorldUnit),
+      Math.trunc(provision.y / looseUnitsPerWorldUnit),
+    );
+    const crowStart = translateWorldPosition(
+      provisionPosition,
+      -2 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    const hungryCrow = replaceCoreWildlifeActorPhysiology(crow, {
+      atTick: patch.updatedAtTick,
+      needs: { ...crow.needs, hunger: 900_000 },
+      condition: crow.condition,
+    });
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(hungryCrow, {
+      atTick: patch.updatedAtTick,
+      position: crowStart,
+      heading: 0,
+    }));
+    for (const actor of coreActors(patch)) {
+      if (actor.identity.stableId === crow.identity.stableId) continue;
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+        atTick: patch.updatedAtTick,
+        position: translateWorldPosition(
+          provisionPosition,
+          (80 + actor.identity.populationOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+          20 * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+        heading: actor.address.heading,
+      }));
+    }
+    const prepared = resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
+    });
+    await repository.save({ ...record, worldJson: JSON.stringify(prepared) });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const runtime = await createTideweftRuntime(repository);
+    const baselineManifest = cargo.expectedManifest.totalQuantity;
+    const baselineHistory = consumptionHistory(cargo).length;
+    expect(baselineManifest).toBe(1);
+    expect(baselineHistory).toBe(0);
+
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const beforeContactEnvelope = requiredEnvelope(repository);
+    const beforeContactCargo = requiredCargo(beforeContactEnvelope);
+    const beforeContactCrow = coreActors(requiredCore(beforeContactEnvelope)).find(
+      ({ identity }) => identity.stableId === crow.identity.stableId,
+    );
+    if (beforeContactCrow === undefined) throw new Error("crow vanished before physical contact");
+    expect(locatePhysicalCargoEntity(beforeContactCargo, provision.id)).not.toBeNull();
+    expect(consumptionHistory(beforeContactCargo)).toHaveLength(baselineHistory);
+    expect(beforeContactCargo.expectedManifest.totalQuantity).toBe(baselineManifest);
+    expect(beforeContactCrow.needs.hunger).toBeGreaterThanOrEqual(hungryCrow.needs.hunger);
+    const initialDistance = worldPositionDelta(crowStart, provisionPosition);
+    const approachedDistance = worldPositionDelta(
+      beforeContactCrow.address.position,
+      provisionPosition,
+    );
+    expect(Math.hypot(approachedDistance.x, approachedDistance.y))
+      .toBeLessThan(Math.hypot(initialDistance.x, initialDistance.y));
+
+    let contactEnvelope: CurrentEnvelope | null = null;
+    let lastPreContactHunger = beforeContactCrow.needs.hunger;
+    for (let tick = 0; tick < 4 && contactEnvelope === null; tick += 1) {
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const candidate = requiredEnvelope(repository);
+      const candidateCargo = requiredCargo(candidate);
+      const candidateCrow = coreActors(requiredCore(candidate)).find(
+        ({ identity }) => identity.stableId === crow.identity.stableId,
+      );
+      if (candidateCrow === undefined) throw new Error("crow vanished during its food approach");
+      if (locatePhysicalCargoEntity(candidateCargo, provision.id) === null) {
+        expect(candidateCrow.needs.hunger).toBeLessThan(lastPreContactHunger);
+        contactEnvelope = candidate;
+      } else {
+        expect(candidateCrow.needs.hunger).toBeGreaterThanOrEqual(lastPreContactHunger);
+        expect(consumptionHistory(candidateCargo)).toHaveLength(baselineHistory);
+        expect(candidateCargo.expectedManifest.totalQuantity).toBe(baselineManifest);
+        lastPreContactHunger = candidateCrow.needs.hunger;
+      }
+    }
+    if (contactEnvelope === null) throw new Error("fish crow never reached the physical provision");
+    const consumedCargo = requiredCargo(contactEnvelope);
+    const consumedCore = requiredCore(contactEnvelope);
+    expect(forageProvisions(consumedCargo)).toEqual([]);
+    expect(consumedCargo.expectedManifest.totalQuantity).toBe(baselineManifest - 1);
+    expect(consumptionHistory(consumedCargo)).toHaveLength(baselineHistory + 1);
+    expect(consumptionHistory(consumedCargo).at(-1)).toMatchObject({
+      entityIds: [provision.id],
+      quantity: 1,
+      causes: ["animal-consumption"],
+    });
+    const crowFoodMemories = coreActors(consumedCore).flatMap((actor) => actor.memories
+      .filter(({ kind, referenceId }) => kind === "food" && referenceId === provision.id)
+      .map((memory) => ({ actor, memory })));
+    expect(crowFoodMemories.length).toBeGreaterThan(0);
+    expect(crowFoodMemories.every(
+      ({ actor }) => actor.identity.stableId === crow.identity.stableId,
+    )).toBe(true);
+
+    const durableCore = contactEnvelope.coreEcology;
+    const durableCargo = contactEnvelope.physicalCargo;
+    const durableCrowFoodMemoryCount = crowFoodMemories.length;
+    runtime.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    const reloaded = requiredEnvelope(repository);
+    expect(reloaded.coreEcology).toBe(durableCore);
+    expect(reloaded.physicalCargo).toEqual(durableCargo);
+
+    advancePlayerSteps(resumed, 10);
+    await resumed.save();
+    const replayed = requiredEnvelope(repository);
+    const replayedCargo = requiredCargo(replayed);
+    const replayedCrowMemories = coreActors(requiredCore(replayed)).flatMap((actor) => (
+      actor.memories.filter(({ kind, referenceId }) => (
+        kind === "food" && referenceId === provision.id
+      ))
+    ));
+    expect(locatePhysicalCargoEntity(replayedCargo, provision.id)).toBeNull();
+    expect(forageProvisions(replayedCargo)).toEqual([]);
+    expect(replayedCargo.expectedManifest.totalQuantity).toBe(baselineManifest - 1);
+    expect(consumptionHistory(replayedCargo)).toHaveLength(baselineHistory + 1);
+    expect(replayedCrowMemories).toHaveLength(durableCrowFoodMemoryCount);
+    resumed.destroy();
+  });
+
+  it("does not let a hungry northern harrier inspect or consume a loose provision", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "rain-chorus-runtime-2",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    makeWorldDryAndClear(world);
+    let patch = requiredCore(envelope);
+    const harrier = patch.populations.find(({ species }) => species === "northern-harrier")
+      ?.members[0]?.actor;
+    if (harrier === undefined) throw new Error("Harrier food-boundary fixture omitted its actor");
+    const cargo = requiredCargo(envelope);
+    const provision = forageProvisions(cargo)[0];
+    if (provision === undefined) throw new Error("Harrier food-boundary fixture omitted provision");
+    const located = locatePhysicalCargoEntity(cargo, provision.id);
+    if (located === null) throw new Error("Harrier food-boundary fixture lost provision custody");
+    const provisionPosition = createWorldPosition(
+      located.world.region,
+      Math.trunc(provision.x / (LOOSE_CARGO_TILE_UNITS / WORLD_POSITION_UNITS_PER_TILE)),
+      Math.trunc(provision.y / (LOOSE_CARGO_TILE_UNITS / WORLD_POSITION_UNITS_PER_TILE)),
+    );
+    const hungryHarrier = replaceCoreWildlifeActorPhysiology(harrier, {
+      atTick: patch.updatedAtTick,
+      needs: { ...harrier.needs, hunger: 1_000_000 },
+      condition: harrier.condition,
+    });
+    patch = replaceCoreEcologyAggregatePatchActor(
+      patch,
+      repositionCoreWildlifeActor(hungryHarrier, {
+        atTick: patch.updatedAtTick,
+        position: provisionPosition,
+        heading: harrier.address.heading,
+      }),
+    );
+    let displacedOrdinal = 0;
+    for (const actor of coreActors(patch)) {
+      if (actor.identity.stableId === harrier.identity.stableId) continue;
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+        atTick: patch.updatedAtTick,
+        position: translateWorldPosition(
+          provisionPosition,
+          (80 + displacedOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+          20 * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+        heading: actor.address.heading,
+      }));
+      displacedOrdinal += 1;
+    }
+    const prepared = resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
+    });
+    await repository.save({ ...record, worldJson: JSON.stringify(prepared) });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const runtime = await createTideweftRuntime(repository);
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const savedCargo = requiredCargo(saved);
+    const savedHarrier = coreActors(requiredCore(saved)).find(
+      ({ identity }) => identity.stableId === harrier.identity.stableId,
+    );
+    if (savedHarrier === undefined) throw new Error("Harrier vanished at food boundary");
+    expect(locatePhysicalCargoEntity(savedCargo, provision.id)).not.toBeNull();
+    expect(savedCargo.expectedManifest.totalQuantity).toBe(cargo.expectedManifest.totalQuantity);
+    expect(consumptionHistory(savedCargo)).toEqual(consumptionHistory(cargo));
+    expect(savedHarrier.memories.some(({ kind, referenceId }) => (
+      kind === "food" && referenceId === provision.id
+    ))).toBe(false);
+    expect(savedHarrier.needs.hunger).toBeGreaterThanOrEqual(hungryHarrier.needs.hunger);
+    runtime.destroy();
+  });
+
+  it("executes a displaced crow's authenticated perch return, rest, and reload", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "rain-chorus-runtime-2",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    makeWorldDryAndClear(world);
+    let patch = requiredCore(envelope);
+    const crow = patch.populations.find(({ species }) => species === "fish-crow")
+      ?.members[0]?.actor;
+    if (crow === undefined) throw new Error("Perch runtime fixture omitted its fish crow");
+    const perch = crow.address.position;
+    const calmCrow = replaceCoreWildlifeActorPhysiology(crow, {
+      atTick: patch.updatedAtTick,
+      needs: { hunger: 0, safety: 0, rest: 0 },
+      condition: { health: 1_000_000, exhaustion: 0, stress: 0 },
+    });
+    const crowStart = translateWorldPosition(
+      perch,
+      2 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(calmCrow, {
+      atTick: patch.updatedAtTick,
+      position: crowStart,
+      heading: crow.address.heading,
+    }));
+    let displacedOrdinal = 0;
+    for (const actor of coreActors(patch)) {
+      if (actor.identity.stableId === crow.identity.stableId) continue;
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+        atTick: patch.updatedAtTick,
+        position: translateWorldPosition(
+          perch,
+          (80 + displacedOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+          20 * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+        heading: actor.address.heading,
+      }));
+      displacedOrdinal += 1;
+    }
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: crow.identity.stableId,
+      atTick: patch.updatedAtTick,
+    })).toMatchObject({
+      state: "seeking-perch",
+      motion: { kind: "target-area", verb: "seek-perch" },
+    });
+    const prepared = resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
+    });
+    await repository.save({ ...record, worldJson: JSON.stringify(prepared) });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const runtime = await createTideweftRuntime(repository);
+    const initialDelta = worldPositionDelta(crowStart, perch);
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    let saved = requiredEnvelope(repository);
+    let savedCore = requiredCore(saved);
+    let savedCrow = coreActors(savedCore).find(
+      ({ identity }) => identity.stableId === crow.identity.stableId,
+    );
+    if (savedCrow === undefined) throw new Error("Crow vanished during perch return");
+    let delta = worldPositionDelta(savedCrow.address.position, perch);
+    expect(Math.hypot(delta.x, delta.y))
+      .toBeLessThan(Math.hypot(initialDelta.x, initialDelta.y));
+
+    for (let step = 0; step < 3; step += 1) {
+      const activity = projectCoreEcologyActivity(savedCore, {
+        actorId: crow.identity.stableId,
+        atTick: savedCore.updatedAtTick,
+      });
+      if (activity?.state === "perched" && savedCrow.intent.kind === "rest") break;
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      saved = requiredEnvelope(repository);
+      savedCore = requiredCore(saved);
+      savedCrow = coreActors(savedCore).find(
+        ({ identity }) => identity.stableId === crow.identity.stableId,
+      );
+      if (savedCrow === undefined) throw new Error("Crow vanished before resting at its perch");
+    }
+    delta = worldPositionDelta(savedCrow.address.position, perch);
+    expect(Math.hypot(delta.x, delta.y)).toBeLessThanOrEqual(
+      Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+    );
+    expect(savedCrow.intent.kind).toBe("rest");
+    expect(projectCoreEcologyActivity(savedCore, {
+      actorId: crow.identity.stableId,
+      atTick: savedCore.updatedAtTick,
+    })).toMatchObject({
+      state: "perched",
+      preferredNeutralIntent: "rest",
+      motion: { kind: "hold-position" },
+    });
+
+    const durableCore = saved.coreEcology;
+    runtime.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(durableCore);
+    resumed.destroy();
+  });
+
+  it("keeps a selected perched crow's runtime ABOUT posture in render parity", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "rain-chorus-runtime-2",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    const player = structuredClone(envelope.player);
+    const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
+    if (regional === null) throw new Error("Crow ABOUT fixture lost its regional frame");
+    const patch = requiredCore(envelope);
+    const crow = patch.populations.find(({ species }) => species === "fish-crow")
+      ?.members[0]?.actor;
+    if (crow === undefined) throw new Error("Crow ABOUT fixture omitted its fish crow");
+    const placement = livingActorAddressInRegionalWindow(crow.address, regional.window);
+    if (placement === null) throw new Error("Crow ABOUT fixture placed its crow outside the frame");
+    const crowTileX = Math.trunc(placement.point.x / WORLD_POSITION_UNITS_PER_TILE);
+    const crowTileY = Math.trunc(placement.point.y / WORLD_POSITION_UNITS_PER_TILE);
+    const playerTileX = crowTileX > 0 ? crowTileX - 1 : crowTileX + 1;
+    const playerTileIndex = crowTileY * regional.window.terrain.width + playerTileX;
+    player.x = playerTileX * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    player.y = crowTileY * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+    player.previousX = player.x;
+    player.previousY = player.y;
+    player.velocityX = 0;
+    player.velocityY = 0;
+    player.facingMilliRadians = playerTileX < crowTileX
+      ? 0
+      : Math.round(Math.PI * 1_000);
+    player.currentTrace = [playerTileIndex];
+    player.surveyTrace = [playerTileIndex];
+    const prepared = resealedEnvelope(envelope, { player });
+    await repository.save({ ...record, worldJson: JSON.stringify(prepared) });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const runtime = await createTideweftRuntime(repository);
+    const renderCrow = runtime.getRenderView().wildlife?.find(({ actorId }) => (
+      actorId === crow.identity.stableId
+    ));
+    expect(renderCrow).toMatchObject({
+      species: "fish-crow",
+      behavior: "perch",
+    });
+    if (renderCrow === undefined) throw new Error("Crow ABOUT fixture could not see its crow");
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "living-actor",
+      species: "fish-crow",
+      id: renderCrow.actorId,
+      point: renderCrow.position,
+    });
+    const selection = runtime.getUIView().selectedLivingActor;
+    expect(selection?.quick.summary).toContain("Perched");
+    expect(selection?.about.observed).toContainEqual({
+      label: "Behavior",
+      value: "Perched",
+    });
+    runtime.destroy();
   });
 
   it("renders and inspects brown-rat signs without synthesizing a rat actor", async () => {
@@ -1063,8 +1622,8 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
   const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
   const envelope = decoded as unknown as CurrentEnvelope;
   let ecology = requiredCore(envelope);
-  if (ecology.derivation.kind !== "habitat-v3") {
-    throw new Error("fresh migration source omitted marsh-edge habitat v3");
+  if (ecology.derivation.kind !== "habitat-v4") {
+    throw new Error("fresh migration source omitted rain-chorus habitat v4");
   }
   const habitat = ecology.derivation.habitat;
   const harborEdgeHabitat = canonicalizeCoreEcologyHarborEdgeHabitatAssemblage({
@@ -1086,7 +1645,9 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
     throw new Error("marsh-edge habitat did not preserve its frozen v2 prefix");
   }
   const establishedActor = ecology.populations.find(({ species }) => (
-    species !== "marsh-rabbit" && species !== "marsh-fox"
+    CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.includes(
+      species as (typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES)[number],
+    )
   ))?.members[0]?.actor;
   if (establishedActor === undefined) {
     throw new Error("v10 migration fixture omitted every established actor");
@@ -1107,8 +1668,19 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
     ...ecology,
     derivation: { kind: "habitat-v2", habitat: harborEdgeHabitat },
     populations: ecology.populations.filter(({ species }) => (
-      species !== "marsh-rabbit" && species !== "marsh-fox"
+      CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.includes(
+        species as (typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES)[number],
+      )
     )),
+    groups: {
+      ...ecology.groups,
+      groups: ecology.groups.groups.filter(({ identity }) => (
+        identity.species !== "fish-crow"
+      )),
+    },
+    aggregatePopulations: ecology.aggregatePopulations.filter(
+      ({ species }) => species === "brown-rat",
+    ),
   });
   if (v10Ecology === null) {
     throw new Error("fixture could not reconstruct the canonical v10 ecology state");
@@ -1130,10 +1702,71 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
   };
 }
 
+function marshEdgeV11Record(current: SaveRecord): SaveRecord {
+  const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+  const envelope = decoded as unknown as CurrentEnvelope;
+  const ecology = requiredCore(envelope);
+  if (
+    ecology.derivation.kind !== "habitat-v4"
+    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
+  ) throw new Error("fresh migration source omitted rain-chorus habitat v4");
+  const habitat = ecology.derivation.habitat;
+  const marshEdgeHabitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage({
+    ...habitat,
+    generationVersion: CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
+    speciesEvaluations:
+      habitat.evaluatedTiles * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: habitat.populations.slice(
+      0,
+      CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+    ),
+  });
+  if (marshEdgeHabitat === null) {
+    throw new Error("rain-chorus habitat did not preserve its frozen v3 prefix");
+  }
+  const v11Ecology = canonicalizeCoreEcologyAggregatePatch({
+    ...ecology,
+    derivation: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v4"
+      ? { kind: "legacy-fixed-v1-with-habitat-v3", habitat: marshEdgeHabitat }
+      : { kind: "habitat-v3", habitat: marshEdgeHabitat },
+    populations: ecology.populations.filter(({ species }) => (
+      species !== "fish-crow" && species !== "northern-harrier"
+    )),
+    groups: {
+      ...ecology.groups,
+      groups: ecology.groups.groups.filter(
+        ({ identity }) => identity.species !== "fish-crow",
+      ),
+    },
+    aggregatePopulations: ecology.aggregatePopulations.filter(
+      ({ species }) => species !== "southern-leopard-frog",
+    ),
+  });
+  if (v11Ecology === null) {
+    throw new Error("fixture could not reconstruct the canonical v11 ecology state");
+  }
+  const { integrity: _integrity, ...currentBase } = decoded;
+  const v11Base = {
+    ...currentBase,
+    version: 11,
+    coreEcology: serializeCoreEcologyAggregatePatch(v11Ecology),
+  };
+  return {
+    ...current,
+    payloadVersion: 11,
+    updatedAt: current.updatedAt + 1,
+    worldJson: JSON.stringify({
+      ...v11Base,
+      integrity: gameSaveEnvelopeIntegrity(v11Base),
+    }),
+  };
+}
+
 function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
-  if (value.format !== "tideweft-session" || value.version !== 11) {
-    throw new Error("core-ecology runtime fixture did not save a v11 envelope");
+  if (value.format !== "tideweft-session" || value.version !== 12) {
+    throw new Error("core-ecology runtime fixture did not save a v12 envelope");
   }
   return value;
 }
@@ -1372,7 +2005,7 @@ function findOpenHorizontalRegionSeam(
 
 function requiredCore(envelope: CurrentEnvelope): CoreEcologyAggregatePatchState {
   const state = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
-  if (state === null) throw new Error("v11 save omitted canonical core ecology");
+  if (state === null) throw new Error("v12 save omitted canonical core ecology");
   return state;
 }
 
@@ -1395,8 +2028,8 @@ function publishedV8CoreEcologyFixture(
 ): Readonly<{ text: string; actors: readonly CoreWildlifeActorState[] }> {
   const world = deserializeWorld(envelope.world);
   const current = requiredCore(envelope);
-  if (current.derivation.kind !== "habitat-v3") {
-    throw new Error("fresh marsh-edge fixture has no v3 habitat derivation");
+  if (current.derivation.kind !== "habitat-v4") {
+    throw new Error("fresh rain-chorus fixture has no v4 habitat derivation");
   }
   const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
   if (bio0 === null) throw new Error("fresh fixture has no canonical Alpha-13 BIO0 state");

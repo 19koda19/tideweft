@@ -92,6 +92,7 @@ import {
 } from "./spatialFrame";
 
 import type {
+  AggregateWildlifeEvidenceSpecies,
   AggregateWildlifeEvidenceView,
   CameraView,
   DogView,
@@ -192,7 +193,7 @@ type HoverTarget =
     }
   | {
       readonly entity: "aggregate-wildlife-evidence";
-      readonly species: "brown-rat";
+      readonly species: AggregateWildlifeEvidenceSpecies;
       readonly aggregateId: string;
       readonly evidenceId: string;
     }
@@ -683,7 +684,7 @@ export function createTideweftRenderer(
         nearest = {
           target: {
             entity: "aggregate-wildlife-evidence",
-            species: "brown-rat",
+            species: evidence.species,
             aggregateId: evidence.aggregateId,
             evidenceId: evidence.evidenceId,
           },
@@ -3002,27 +3003,89 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawChartGulls = (actor: WildlifeView, base: number, now: number): void => {
-      const visible = Math.min(5, Math.max(1, actor.groupSize ?? 1));
+    const drawChartGulls = (_actor: WildlifeView, base: number, now: number): void => {
       const flap = reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
-      for (let index = 0; index < visible; index += 1) {
-        const column = index % 3;
-        const row = Math.floor(index / 3);
-        const x = (column - 1) * base * 1.75 + row * base * 0.6;
-        const y = (row - 0.35) * base * 1.4 + (column % 2) * base * 0.25;
-        p.push();
-        p.translate(x, y);
-        p.noFill();
-        p.stroke(withAlpha(PALETTE.ink, 235));
-        p.strokeWeight(Math.max(1, base * 0.42));
-        p.line(-base * 1.05, flap * base, 0, -base * 0.18);
-        p.line(0, -base * 0.18, base * 1.05, flap * base);
-        p.stroke(PALETTE.foam);
-        p.strokeWeight(Math.max(0.55, base * 0.23));
-        p.line(-base * 1.02, flap * base, 0, -base * 0.18);
-        p.line(0, -base * 0.18, base * 1.02, flap * base);
-        p.pop();
-      }
+      p.noFill();
+      p.stroke(withAlpha(PALETTE.ink, 235));
+      p.strokeWeight(Math.max(1, base * 0.42));
+      p.line(-base * 1.05, flap * base, 0, -base * 0.18);
+      p.line(0, -base * 0.18, base * 1.05, flap * base);
+      p.stroke(PALETTE.foam);
+      p.strokeWeight(Math.max(0.55, base * 0.23));
+      p.line(-base * 1.02, flap * base, 0, -base * 0.18);
+      p.line(0, -base * 0.18, base * 1.02, flap * base);
+    };
+
+    const drawChartFishCrows = (actor: WildlifeView, base: number, now: number): void => {
+      const perched = actor.behavior === "perch" || actor.behavior === "rest";
+      const flap = perched
+        ? 0
+        : reducedMotion ? 0.08 : Math.sin(now * 0.008) * 0.38;
+      const wingReach = perched ? 0.68 : 1.32;
+      const wingDrop = perched ? 0.16 : 0.45 + flap;
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 245));
+      p.ellipse(0, 0, base * 1.32, base * 0.7);
+      p.fill("#284b52");
+      p.triangle(
+        -base * 0.12,
+        -base * 0.04,
+        -base * wingReach,
+        base * wingDrop,
+        -base * 0.48,
+        base * 0.08,
+      );
+      p.triangle(
+        base * 0.04,
+        -base * 0.04,
+        base * wingReach,
+        base * wingDrop,
+        base * 0.48,
+        base * 0.08,
+      );
+      p.fill("#071012");
+      p.triangle(-base * 0.55, 0, -base * 1.02, -base * 0.28, -base * 0.82, base * 0.24);
+    };
+
+    const drawChartNorthernHarrier = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const quartering = actor.behavior === "quarter";
+      const bank = reducedMotion
+        ? 0
+        : Math.sin(now * (quartering ? 0.0052 : 0.0038))
+          * base * (quartering ? 0.32 : 0.18);
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 240));
+      p.ellipse(0, 0, base * 1.02, base * 2.7);
+      p.fill("#8d765f");
+      p.ellipse(0, 0, base * 0.76, base * 2.34);
+      p.fill("#6f5948");
+      p.quad(
+        -base * 0.12, -base * 0.36,
+        -base * 3.15, -base * 0.82 + bank,
+        -base * 2.05, base * 0.18 + bank,
+        -base * 0.1, base * 0.32,
+      );
+      p.quad(
+        base * 0.12, -base * 0.36,
+        base * 3.15, -base * 0.82 - bank,
+        base * 2.05, base * 0.18 - bank,
+        base * 0.1, base * 0.32,
+      );
+      p.fill("#ded5c2");
+      p.rect(-base * 0.38, base * 0.58, base * 0.76, base * 0.28, base * 0.08);
+      p.fill("#3a302a");
+      p.triangle(
+        -base * 0.36,
+        base * 0.86,
+        base * 0.36,
+        base * 0.86,
+        0,
+        base * 1.72,
+      );
     };
 
     const drawChartDeer = (actor: WildlifeView, base: number): void => {
@@ -3276,6 +3339,12 @@ export function createTideweftRenderer(
         case "gull":
           drawChartGulls(actor, base, now);
           return true;
+        case "fish-crow":
+          drawChartFishCrows(actor, base, now);
+          return true;
+        case "northern-harrier":
+          drawChartNorthernHarrier(actor, base, now);
+          return true;
         case "black-bear":
           drawChartBlackBear(actor, base);
           return true;
@@ -3385,6 +3454,29 @@ export function createTideweftRenderer(
             p.stroke("#d0b694");
             p.strokeWeight(Math.max(0.65, base * 0.1));
             p.line(-base * 1.45, base * 0.7, base * 1.45, -base * 0.7);
+            break;
+          case "frog-tracks":
+            p.noFill();
+            p.stroke(withAlpha(PALETTE.ink, 235));
+            p.strokeWeight(Math.max(0.7, base * 0.12));
+            p.line(-base * 1.35, base * 0.72, base * 1.35, -base * 0.72);
+            for (const [x, y, facing] of [
+              [-0.68, 0.34, -1],
+              [0.62, -0.28, 1],
+            ] as const) {
+              p.push();
+              p.translate(base * x, base * y);
+              p.scale(facing, 1);
+              p.fill("#6f8750");
+              p.noStroke();
+              p.ellipse(0, 0, base * 0.46, base * 0.32);
+              p.stroke("#b8cb83");
+              p.strokeWeight(Math.max(0.55, base * 0.09));
+              for (const toe of [-0.42, 0, 0.42]) {
+                p.line(base * 0.12, 0, base * 0.62, base * toe);
+              }
+              p.pop();
+            }
             break;
           case "shelter-sign":
             p.noStroke();

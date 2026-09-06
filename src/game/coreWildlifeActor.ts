@@ -204,6 +204,16 @@ export type CoreWildlifeActionAccessibility = Readonly<
   Record<CoreWildlifeIntentKind, boolean>
 >;
 
+/**
+ * A bounded schedule may choose only the actor's otherwise-neutral posture.
+ * Threats, food, physiological needs, and every immediate intent remain owned
+ * by the normal decision policy above this preference.
+ */
+export type CoreWildlifeNeutralActivityPreference = Extract<
+  CoreWildlifeIntentKind,
+  "observe" | "rest"
+>;
+
 export const CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE: CoreWildlifeActionAccessibility =
   Object.freeze(Object.fromEntries(
     CORE_WILDLIFE_INTENTS.map((intent) => [intent, true]),
@@ -214,6 +224,7 @@ export interface CoreWildlifeActorStepInput {
   readonly observations: readonly ActorObservation[];
   readonly foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
   readonly accessibility: CoreWildlifeActionAccessibility;
+  readonly neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
 }
 
 export interface CoreWildlifeDecision {
@@ -286,6 +297,8 @@ const THREAT_CLASSES = new Set([
   "threat",
   "predator",
   "large-predator",
+  "aerial-predator",
+  "mobbing-pressure",
   "hostile-human",
   "danger-sound",
 ]);
@@ -794,6 +807,12 @@ function decide(
       referenceId: "need:rest",
     }, null, null);
   }
+  if (step.neutralActivityPreference === "rest" && step.accessibility.rest) {
+    return decisionFor(state, step.tick, "rest", {
+      kind: "condition",
+      referenceId: "activity:rest-window",
+    }, null, null);
+  }
   return decisionFor(state, step.tick, "observe", threatReference === null
     ? { kind: "condition", referenceId: "condition:neutral-watch" }
     : { kind: "perception", referenceId: threatReference }, threatReference, null);
@@ -846,12 +865,11 @@ function canonicalStepInput(
   value: unknown,
   state: CoreWildlifeActorState,
 ): CoreWildlifeActorStepInput | null {
-  if (!plainRecord(value) || !exactKeys(value, [
-    "accessibility",
-    "foodOpportunities",
-    "observations",
-    "tick",
-  ])) return null;
+  if (!plainRecord(value) || !requiredAndOptionalKeys(
+    value,
+    ["accessibility", "foodOpportunities", "observations", "tick"],
+    ["neutralActivityPreference"],
+  )) return null;
   if (
     !nonnegativeSafeInteger(value.tick)
     || value.tick <= state.updatedAtTick
@@ -868,11 +886,18 @@ function canonicalStepInput(
   ) return null;
   const accessibility = canonicalAccessibility(value.accessibility);
   if (accessibility === null || !accessibility.observe) return null;
+  const neutralActivityPreference = value.neutralActivityPreference;
+  if (
+    neutralActivityPreference !== undefined
+    && neutralActivityPreference !== "observe"
+    && neutralActivityPreference !== "rest"
+  ) return null;
   return {
     tick: value.tick,
     observations,
     foodOpportunities: value.foodOpportunities as readonly CoreWildlifeFoodOpportunity[],
     accessibility,
+    ...(neutralActivityPreference === undefined ? {} : { neutralActivityPreference }),
   };
 }
 
@@ -1522,6 +1547,16 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boo
   const expected = [...keys].sort();
   return actual.length === expected.length
     && actual.every((key, index) => key === expected[index]);
+}
+
+function requiredAndOptionalKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[],
+): boolean {
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => Object.hasOwn(value, key))
+    && Object.keys(value).every((key) => allowed.has(key));
 }
 
 function deepFreeze<T>(value: T): T {

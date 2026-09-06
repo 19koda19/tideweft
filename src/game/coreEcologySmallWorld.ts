@@ -6,12 +6,26 @@ import { FIXED_POINT } from "../sim/types";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   displaceCoreEcologyAggregatePopulation,
+  setCoreEcologyAggregateActivityIntensity,
   type CoreEcologyAggregateAreaAnchor,
   type CoreEcologyAggregateEvidenceCause,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyAggregateSpecies,
 } from "./coreEcology";
+import {
+  CORE_ECOLOGY_AGGREGATE_SPECIES,
+  coreEcologyAggregateSpeciesPolicy,
+  resolveCoreEcologyAggregateActivityIntensity,
+  resolveCoreEcologyAggregateDisturbanceActivity,
+  type CoreEcologyAggregatePolicyVisualSourceKind,
+} from "./coreEcologyAggregatePolicy";
+import { coreEcologyTrophicPerceivedClass } from "./coreEcologyTrophic";
+import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 
+export const CORE_ECOLOGY_SMALL_WORLD_VERSION = 3 as const;
+export const CORE_ECOLOGY_SMALL_WORLD_OWNER_ID =
+  "game:core-ecology-small-world:v3" as const;
+/** Landed rat event revision remains byte-compatible with Alpha 16. */
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION = 2 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION = 1 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS = 8 as const;
@@ -25,6 +39,8 @@ export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS = [
   "gull",
   "rain",
   "exposed-food",
+  "fish-crow",
+  "northern-harrier",
 ] as const;
 
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_CHANNELS = OBSERVATION_CHANNELS;
@@ -33,6 +49,9 @@ export type CoreEcologySettlementShadowsSourceKind =
   (typeof CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS)[number];
 export type CoreEcologySettlementShadowsChannel = ObservationChannel;
 export type CoreEcologySettlementShadowsResponse = "pressure" | "attraction";
+export type CoreEcologySmallWorldSourceKind = CoreEcologySettlementShadowsSourceKind;
+export type CoreEcologySmallWorldChannel = CoreEcologySettlementShadowsChannel;
+export type CoreEcologySmallWorldResponse = CoreEcologySettlementShadowsResponse;
 
 export interface CoreEcologySettlementShadowsAnchorInfluence {
   readonly anchorOrdinal: number;
@@ -64,7 +83,9 @@ export interface CoreEcologySettlementShadowsStimulusFrame {
 }
 
 export interface CoreEcologySettlementShadowsEvent {
-  readonly version: typeof CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION;
+  readonly version:
+    | typeof CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION
+    | typeof CORE_ECOLOGY_SMALL_WORLD_VERSION;
   readonly eventId: string;
   readonly kind: "aggregate-redistributed";
   readonly atTick: number;
@@ -90,6 +111,11 @@ export interface CoreEcologySettlementShadowsStepResult {
   readonly patch: CoreEcologyAggregatePatchState;
   readonly events: readonly CoreEcologySettlementShadowsEvent[];
 }
+
+export type CoreEcologySmallWorldStimulus = CoreEcologySettlementShadowsStimulus;
+export type CoreEcologySmallWorldStimulusFrame = CoreEcologySettlementShadowsStimulusFrame;
+export type CoreEcologySmallWorldEvent = CoreEcologySettlementShadowsEvent;
+export type CoreEcologySmallWorldStepResult = CoreEcologySettlementShadowsStepResult;
 
 interface SourcePolicy {
   readonly response: CoreEcologySettlementShadowsResponse;
@@ -128,44 +154,45 @@ const SAME_SPECIES_CHANNELS = new Set<CoreEcologySettlementShadowsChannel>([
   "touch",
   "evidence",
 ]);
-const SOURCE_POLICIES: Readonly<Record<
+const SOURCE_PROFILES: Readonly<Record<
   CoreEcologySettlementShadowsSourceKind,
-  SourcePolicy
+  Readonly<Omit<SourcePolicy, "response">>
 >> = Object.freeze({
   "same-species": Object.freeze({
-    response: "pressure",
     causeKind: "animal-disturbance",
     channels: SAME_SPECIES_CHANNELS,
   }),
   cat: Object.freeze({
-    response: "pressure",
     causeKind: "predator-pressure",
     channels: ANIMAL_CHANNELS,
   }),
   dog: Object.freeze({
-    response: "pressure",
     causeKind: "predator-pressure",
     channels: ANIMAL_CHANNELS,
   }),
   human: Object.freeze({
-    response: "pressure",
     causeKind: "human-disturbance",
     channels: ANIMAL_CHANNELS,
   }),
   gull: Object.freeze({
-    response: "pressure",
     causeKind: "animal-disturbance",
     channels: ANIMAL_CHANNELS,
   }),
   rain: Object.freeze({
-    response: "pressure",
     causeKind: "weather-pressure",
     channels: WEATHER_CHANNELS,
   }),
   "exposed-food": Object.freeze({
-    response: "attraction",
     causeKind: "food-attraction",
     channels: FOOD_CHANNELS,
+  }),
+  "fish-crow": Object.freeze({
+    causeKind: "animal-disturbance",
+    channels: ANIMAL_CHANNELS,
+  }),
+  "northern-harrier": Object.freeze({
+    causeKind: "predator-pressure",
+    channels: ANIMAL_CHANNELS,
   }),
 });
 const SOURCE_KIND_SET = new Set<string>(CORE_ECOLOGY_SETTLEMENT_SHADOWS_SOURCE_KINDS);
@@ -232,11 +259,13 @@ export function stepCoreEcologySettlementShadows(
   if (frame.stimuli.some((stimulus) => {
     const population = aggregatesById.get(stimulus.targetAggregateId);
     return population === undefined
+      || sourcePolicy(population.species, stimulus.sourceKind) === null
       || !stimuliFitPopulation([stimulus], population.anchors);
   })) {
     return null;
   }
   if (atTick % CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS !== 0) {
+    patch = projectRainResponsiveActivity(patch, frame);
     return Object.freeze({ patch, events: Object.freeze([]) });
   }
 
@@ -250,7 +279,7 @@ export function stepCoreEcologySettlementShadows(
       targetAggregateId === population.aggregateId
     ));
     const candidates = relevantStimuli.flatMap((stimulus) => {
-      const movement = relocationCandidate(stimulus, population.anchors);
+      const movement = relocationCandidate(stimulus, population.species, population.anchors);
       return movement === null ? [] : [movement];
     });
     // A population-area aggregate still needs one genuine same-species rule.
@@ -263,7 +292,7 @@ export function stepCoreEcologySettlementShadows(
       const density = aggregateDensityStimulus(population, atTick);
       const movement = density === null
         ? null
-        : relocationCandidate(density, population.anchors);
+        : relocationCandidate(density, population.species, population.anchors);
       if (movement !== null) candidates.push(movement);
     }
     candidates.sort(compareRelocationCandidate);
@@ -283,7 +312,9 @@ export function stepCoreEcologySettlementShadows(
     if (displaced === null) return null;
     patch = displaced.patch;
     events.push(deepFreeze({
-      version: CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION,
+      version: population.species === "brown-rat"
+        ? CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION
+        : CORE_ECOLOGY_SMALL_WORLD_VERSION,
       eventId: `settlement-shadows:${population.aggregateId}:${displaced.disturbance.disturbanceOrdinal.toString(36)}`,
       kind: "aggregate-redistributed",
       atTick,
@@ -306,7 +337,106 @@ export function stepCoreEcologySettlementShadows(
     }));
   }
 
+  // Activity is a current environmental projection, not a relocation side
+  // effect. Resolve it after any bounded movement so a pressure response is
+  // applied once, while rain can still raise a chorus on a one-anchor patch
+  // where redistribution is impossible.
+  patch = projectRainResponsiveActivity(patch, frame);
+
   return Object.freeze({ patch, events: Object.freeze(events) });
+}
+
+/** Generalized name for new consumers; the Settlement Shadows export remains compatible. */
+export const canonicalizeCoreEcologySmallWorldStimulusFrame =
+  canonicalizeCoreEcologySettlementShadowsStimulusFrame;
+/** Generalized name for new consumers; both names execute the same deterministic kernel. */
+export const stepCoreEcologySmallWorld = stepCoreEcologySettlementShadows;
+
+function projectRainResponsiveActivity(
+  patch: CoreEcologyAggregatePatchState,
+  frame: CoreEcologySettlementShadowsStimulusFrame,
+): CoreEcologyAggregatePatchState {
+  for (const population of patch.aggregatePopulations) {
+    const aggregatePolicy = coreEcologyAggregateSpeciesPolicy(population.species);
+    // The v2 rat activity byte contract is frozen. Only species which opt into
+    // live rain response pass through this additive projection boundary.
+    if (aggregatePolicy.activity.activePeriod !== "rain-responsive") continue;
+    const habitatIntensity = habitatActivityIntensity(patch, population.aggregateId);
+    let rainIntensity = 0;
+    let strongestPressure: Readonly<{
+      causeKind: SourcePolicy["causeKind"];
+      intensity: number;
+    }> | null = null;
+    for (const stimulus of frame.stimuli) {
+      if (stimulus.targetAggregateId !== population.aggregateId) continue;
+      const intensity = stimulus.anchorInfluences.reduce((maximum, influence) => (
+        Math.max(maximum, influence.intensity)
+      ), 0);
+      if (stimulus.sourceKind === "rain") {
+        rainIntensity = Math.max(rainIntensity, intensity);
+        continue;
+      }
+      if (stimulus.response !== "pressure") continue;
+      const policy = sourcePolicy(population.species, stimulus.sourceKind);
+      if (
+        policy !== null
+        && (strongestPressure === null || intensity > strongestPressure.intensity)
+      ) {
+        strongestPressure = Object.freeze({
+          causeKind: policy.causeKind,
+          intensity,
+        });
+      }
+    }
+    let intensity = resolveCoreEcologyAggregateActivityIntensity(
+      population.species,
+      habitatIntensity,
+      rainIntensity,
+    );
+    if (strongestPressure !== null) {
+      intensity = resolveCoreEcologyAggregateDisturbanceActivity(
+        population.species,
+        intensity,
+        strongestPressure.causeKind,
+        strongestPressure.intensity,
+      );
+    }
+    const next = setCoreEcologyAggregateActivityIntensity(patch, {
+      aggregateId: population.aggregateId,
+      atTick: frame.atTick,
+      intensity,
+    });
+    if (next === null) {
+      throw new Error("Rain-responsive aggregate activity projection broke invariants");
+    }
+    patch = next;
+  }
+  return patch;
+}
+
+function habitatActivityIntensity(
+  patch: CoreEcologyAggregatePatchState,
+  aggregateId: string,
+): number {
+  const population = patch.aggregatePopulations.find((candidate) => (
+    candidate.aggregateId === aggregateId
+  ));
+  if (population === undefined) {
+    throw new Error("Aggregate activity projection lost its population");
+  }
+  const derivation = patch.derivation;
+  if (
+    derivation.kind !== "habitat-v4"
+    && derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
+  ) return population.activitySignal.intensity;
+  const analysis = derivation.habitat.populations.find((candidate) => (
+    candidate.species === population.species
+    && candidate.populationKey === population.populationKey
+  ));
+  if (analysis === undefined) {
+    throw new Error("Rain-responsive aggregate is absent from its habitat derivation");
+  }
+  return analysis.activitySignal.intensity;
 }
 
 function aggregateDensityStimulus(
@@ -363,7 +493,10 @@ function canonicalStimulus(value: unknown): CoreEcologySettlementShadowsStimulus
     || value.anchorInfluences.length > 4
   ) return null;
   const sourceKind = value.sourceKind as CoreEcologySettlementShadowsSourceKind;
-  const policy = SOURCE_POLICIES[sourceKind];
+  const targetSpecies = aggregateSpeciesForTargetId(value.targetAggregateId);
+  if (targetSpecies === null) return null;
+  const policy = sourcePolicy(targetSpecies, sourceKind);
+  if (policy === null) return null;
   if (value.response !== policy.response) return null;
 
   const channels: CoreEcologySettlementShadowsChannel[] = [];
@@ -418,9 +551,11 @@ function canonicalStimulus(value: unknown): CoreEcologySettlementShadowsStimulus
 
 function relocationCandidate(
   stimulus: CoreEcologySettlementShadowsStimulus,
+  targetSpecies: CoreEcologyAggregateSpecies,
   anchors: readonly CoreEcologyAggregateAreaAnchor[],
 ): RelocationCandidate | null {
-  const policy = SOURCE_POLICIES[stimulus.sourceKind];
+  const policy = sourcePolicy(targetSpecies, stimulus.sourceKind);
+  if (policy === null || stimulus.response !== policy.response) return null;
   const influenceByAnchor = new Map(stimulus.anchorInfluences.map((influence) => (
     [influence.anchorOrdinal, influence.intensity] as const
   )));
@@ -447,6 +582,67 @@ function relocationCandidate(
     }
   }
   return best;
+}
+
+function sourcePolicy(
+  targetSpecies: CoreEcologyAggregateSpecies,
+  sourceKind: CoreEcologySettlementShadowsSourceKind,
+): SourcePolicy | null {
+  const target = coreEcologyAggregateSpeciesPolicy(targetSpecies);
+  const profile = SOURCE_PROFILES[sourceKind];
+  if (sourceKind === "same-species") {
+    return Object.freeze({ ...profile, response: "pressure" });
+  }
+  if (sourceKind === "rain") {
+    return Object.freeze({ ...profile, response: target.rainResponse });
+  }
+  if (sourceKind === "exposed-food") {
+    return target.exposedFoodAttraction
+      ? Object.freeze({ ...profile, response: "attraction" })
+      : null;
+  }
+  if (!target.visualPressureSourceKinds.includes(
+    sourceKind as CoreEcologyAggregatePolicyVisualSourceKind,
+  )) return null;
+  return Object.freeze({
+    ...profile,
+    causeKind: aggregateAnimalCause(targetSpecies, sourceKind, profile.causeKind),
+    response: "pressure",
+  });
+}
+
+function aggregateAnimalCause(
+  targetSpecies: CoreEcologyAggregateSpecies,
+  sourceKind: CoreEcologySettlementShadowsSourceKind,
+  fallback: SourcePolicy["causeKind"],
+): SourcePolicy["causeKind"] {
+  const sourceSpecies: LivingActorSpecies | null = sourceKind === "cat"
+    ? "domestic-cat"
+    : sourceKind === "dog"
+    ? "domestic-dog"
+    : sourceKind === "human"
+    ? "human"
+    : sourceKind === "gull" || sourceKind === "fish-crow" || sourceKind === "northern-harrier"
+    ? sourceKind
+    : null;
+  if (sourceSpecies === null || sourceSpecies === "human") return fallback;
+  const relationship = coreEcologyTrophicPerceivedClass(targetSpecies, sourceSpecies);
+  return relationship === "predator"
+      || relationship === "large-predator"
+      || relationship === "aerial-predator"
+    ? "predator-pressure"
+    : fallback;
+}
+
+function aggregateSpeciesForTargetId(
+  targetAggregateId: string,
+): CoreEcologyAggregateSpecies | null {
+  for (const species of CORE_ECOLOGY_AGGREGATE_SPECIES) {
+    if (targetAggregateId.startsWith(coreEcologyAggregateSpeciesPolicy(species).stableIdPrefix)) {
+      return species;
+    }
+  }
+  return null;
 }
 
 function stimuliFitPopulation(

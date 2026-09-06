@@ -14,11 +14,14 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "domestic-cat",
   "marsh-rabbit",
   "marsh-fox",
+  "fish-crow",
+  "northern-harrier",
+  "southern-leopard-frog",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
 export type CoreWildlifeRepresentation = "individual" | "aggregate";
-export type CoreWildlifeTaxonomicClass = "bird" | "mammal";
+export type CoreWildlifeTaxonomicClass = "amphibian" | "bird" | "mammal";
 export type CoreWildlifeDietClass = "herbivore" | "omnivore" | "carnivore";
 export type CoreWildlifeLocomotionClass = "terrestrial" | "aerial";
 export type CoreWildlifeGroupOrganization = "herd" | "flock";
@@ -59,7 +62,16 @@ export type CoreWildlifeLifeStage = "juvenile" | "adult" | "older";
 export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   Record<
     CoreWildlifeSpecies,
-    "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-" | "RABBIT-" | "FOX-"
+    | "DEER-"
+    | "GULL-"
+    | "BEAR-"
+    | "RAT-"
+    | "CAT-"
+    | "RABBIT-"
+    | "FOX-"
+    | "CROW-"
+    | "HARRIER-"
+    | "FROG-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -69,6 +81,9 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "domestic-cat": "CAT-",
   "marsh-rabbit": "RABBIT-",
   "marsh-fox": "FOX-",
+  "fish-crow": "CROW-",
+  "northern-harrier": "HARRIER-",
+  "southern-leopard-frog": "FROG-",
 });
 
 /**
@@ -84,7 +99,7 @@ export interface CoreWildlifeSpeciesMetadata {
   readonly dietClass: CoreWildlifeDietClass;
   readonly locomotionClass: CoreWildlifeLocomotionClass;
   readonly groupOrganization: CoreWildlifeGroupOrganization | null;
-  readonly groupStableIdNamespace: "HERD" | "FLOCK" | null;
+  readonly groupStableIdNamespace: "HERD" | "FLOCK" | "CROW-FLOCK" | null;
 }
 
 export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
@@ -156,6 +171,36 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     catalogIdentityForm: "individual",
     taxonomicClass: "mammal",
     dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "fish-crow": {
+    species: "fish-crow",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "omnivore",
+    locomotionClass: "aerial",
+    groupOrganization: "flock",
+    groupStableIdNamespace: "CROW-FLOCK",
+  },
+  "northern-harrier": {
+    species: "northern-harrier",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "aerial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "southern-leopard-frog": {
+    species: "southern-leopard-frog",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "amphibian",
+    dietClass: "carnivore",
     locomotionClass: "terrestrial",
     groupOrganization: null,
     groupStableIdNamespace: null,
@@ -476,6 +521,105 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [80_000, 420_000],
     },
   },
+  "fish-crow": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "fish-crow",
+    maximumPatchPopulation: 3,
+    roles: ["alarm-source", "forager", "scavenger", "omnivore"],
+    foodAffinities: {
+      browse: 40_000,
+      "shore-forage": 780_000,
+      carrion: 620_000,
+      "exposed-food": 940_000,
+      "live-prey": 180_000,
+    },
+    behavior: {
+      alarmThreshold: 360_000,
+      fleeThreshold: 760_000,
+      retreatThreshold: 580_000,
+      forageThreshold: 280_000,
+      guardThreshold: 560_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["blue-iridescent", "brownish-young", "glossy-black", "worn-feathers"],
+    temperamentPairs: [
+      ["bold", "social"],
+      ["watchful", "opportunistic"],
+      ["cautious", "social"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 960_000],
+      boldness: [300_000, 860_000],
+      sociability: [660_000, 980_000],
+    },
+  },
+  "northern-harrier": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "northern-harrier",
+    maximumPatchPopulation: 1,
+    roles: ["forager", "predator", "small-predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 260_000,
+      carrion: 100_000,
+      "exposed-food": 40_000,
+      "live-prey": 1_000_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 820_000,
+      retreatThreshold: 620_000,
+      forageThreshold: 250_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 8,
+    },
+    morphs: ["cinnamon-streaked", "dark-mottled", "pale-gray", "warm-brown"],
+    temperamentPairs: [
+      ["patient", "watchful"],
+      ["cautious", "patient"],
+      ["bold", "watchful"],
+      ["reserved", "patient"],
+    ],
+    traitRanges: {
+      vigilance: [700_000, 980_000],
+      boldness: [180_000, 700_000],
+      sociability: [20_000, 220_000],
+    },
+  },
+  "southern-leopard-frog": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "southern-leopard-frog",
+    maximumPatchPopulation: 72,
+    roles: ["prey", "small-prey", "forager"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 620_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 860_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 480_000,
+      retreatThreshold: 400_000,
+      forageThreshold: 300_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["bronze-backed", "brown-spotted", "green-spotted", "pale-lipped"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["reserved", "watchful"],
+      ["patient", "cautious"],
+      ["watchful", "social"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 980_000],
+      boldness: [40_000, 360_000],
+      sociability: [300_000, 860_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -500,7 +644,7 @@ export function getCoreWildlifeSpeciesMetadata(
 
 export function coreWildlifeIdPrefix(
   species: CoreWildlifeSpecies,
-): "DEER-" | "GULL-" | "BEAR-" | "RAT-" | "CAT-" | "RABBIT-" | "FOX-" {
+): (typeof CORE_WILDLIFE_ID_PREFIX_BY_SPECIES)[CoreWildlifeSpecies] {
   const prefix = CORE_WILDLIFE_ID_PREFIX_BY_SPECIES[species];
   if (prefix === undefined) throw new TypeError(`Unsupported core wildlife species ${String(species)}`);
   return prefix;

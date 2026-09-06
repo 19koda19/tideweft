@@ -230,10 +230,10 @@ export interface ResidentAboutFactUIView {
   readonly tone?: "neutral" | "warning" | "danger" | "good";
 }
 
-/** Species with a lawful individual actor address; aggregate rats are excluded. */
+/** Species with a lawful individual actor address; aggregate wildlife are excluded. */
 export type LivingActorTargetSpeciesUIView = Exclude<
   LivingActorSpecies,
-  "brown-rat"
+  "brown-rat" | "southern-leopard-frog"
 >;
 
 /**
@@ -299,7 +299,7 @@ export interface SelectedLivingActorUIView {
 
 /** Stable identity for one physical sign belonging to an aggregate population. */
 export interface WildlifeEvidenceTargetUIView {
-  readonly species: "brown-rat";
+  readonly species: "brown-rat" | "southern-leopard-frog";
   readonly aggregateId: string;
   readonly evidenceId: string;
 }

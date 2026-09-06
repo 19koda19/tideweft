@@ -21,13 +21,16 @@ import {
   canonicalizeCoreEcologyPatch,
   coreEcologyActor,
   createCoreEcologyAlarmObservation,
+  createCoreEcologyAggregatePatch,
   createCoreEcologyPatch,
   deserializeCoreEcologyPatch,
   migrateLegacyCoreEcologyPatch,
   replaceCoreEcologyActor,
   serializeCoreEcologyPatch,
   setCoreEcologyMaterializedActors,
+  stepCoreEcologyAggregatePatch,
   stepCoreEcologyPatch,
+  type CoreEcologyIndividualSpecies,
   type CoreEcologyPatchState,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
@@ -46,7 +49,7 @@ const ORIGIN = createRegionCoord(-14, 27);
 const SEED = seedFromText("bounded player-independent ecology patch");
 
 function population(
-  species: "deer" | "gull" | "black-bear",
+  species: CoreEcologyIndividualSpecies,
   ordinals: readonly number[] = [0],
   materialized = true,
 ): CoreEcologyPopulationInput {
@@ -81,13 +84,13 @@ function patch(
   });
 }
 
-function members(state: CoreEcologyPatchState) {
+function members(state: Pick<CoreEcologyPatchState, "populations">) {
   return state.populations.flatMap(({ members: populationMembers }) => populationMembers);
 }
 
 function bySpecies(
   state: CoreEcologyPatchState,
-  species: "deer" | "gull" | "black-bear",
+  species: CoreEcologyIndividualSpecies,
 ): CoreWildlifeActorState {
   const result = members(state).find(({ actor }) => actor.identity.species === species)?.actor;
   if (result === undefined) throw new Error(`Patch fixture has no ${species}`);
@@ -130,7 +133,7 @@ function actorStep(
   };
 }
 
-function emptySteps(state: CoreEcologyPatchState) {
+function emptySteps(state: Pick<CoreEcologyPatchState, "populations">) {
   return members(state)
     .filter(({ materialization }) => materialization === "materialized")
     .map(({ actor }) => actorStep(actor));
@@ -330,6 +333,23 @@ describe("bounded core ecology patch", () => {
     expect(state.updatedAtTick).toBe(0);
   });
 
+  it("carries an optional neutral activity preference through the patch owner", () => {
+    const state = patch([population("gull")]);
+    const gull = bySpecies(state, "gull");
+    const result = stepCoreEcologyPatch(state, {
+      tick: 1,
+      actorSteps: [{ ...actorStep(gull), neutralActivityPreference: "rest" }],
+    });
+    expect(bySpecies(result!.patch, "gull").intent).toMatchObject({
+      kind: "rest",
+      cause: { referenceId: "activity:rest-window" },
+    });
+    expect(stepCoreEcologyPatch(state, {
+      tick: 1,
+      actorSteps: [{ ...actorStep(gull), neutralActivityPreference: "pursue" }],
+    })).toBeNull();
+  });
+
   it("advances coarse physiology and cognition without granting hidden perception or movement", () => {
     const state = patch([population("deer", [0], false)]);
     const before = bySpecies(state, "deer");
@@ -518,6 +538,59 @@ describe("bounded core ecology patch", () => {
       ({ causeReferenceId }) => causeReferenceId === alarm.eventId,
     );
     expect(propagated?.reachedMemberOrdinals).toEqual([0, 1]);
+  });
+
+  it("routes a fish-crow alarm through the shared group signal policy", () => {
+    const crowPopulation = population("fish-crow", [0, 1, 2]);
+    const flock = createCoreEcologyGroup({
+      seed: SEED,
+      species: "fish-crow",
+      originRegion: ORIGIN,
+      populationKey: crowPopulation.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1, 2],
+      anchor: crowPopulation.members[0]!.position,
+    });
+    const state = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "east-marsh:crow-signal",
+      originRegion: ORIGIN,
+      derivation: { kind: "bounded-input-v1" },
+      populations: [crowPopulation],
+      groups: createCoreEcologyGroupSet([flock]),
+    });
+    const firstCrow = state.populations[0]!.members[0]!.actor;
+    const predator = directObservation(
+      firstCrow,
+      1,
+      "obs:crow-aerial-predator",
+      "aerial-predator",
+      "HARRIER-crow-edge",
+    );
+    const first = stepCoreEcologyAggregatePatch(state, {
+      tick: 1,
+      actorSteps: state.populations[0]!.members.map(({ actor }) => (
+        actorStep(actor, actor.identity.stableId === firstCrow.identity.stableId
+          ? [predator]
+          : [])
+      )),
+    });
+    if (first === null) throw new Error("Fish-crow flock alarm step failed");
+    const alarm = first.events.find(({ actorId, kind }) => (
+      actorId === firstCrow.identity.stableId && kind === "alarm"
+    ));
+    if (alarm === undefined) throw new Error("Fish-crow alarm was not emitted");
+    expect(first.patch.groups.groups[0]?.signals.find(
+      ({ causeReferenceId }) => causeReferenceId === alarm.eventId,
+    )?.reachedMemberOrdinals).toEqual([0]);
+
+    const propagated = stepCoreEcologyAggregatePatch(first.patch, {
+      tick: 8,
+      actorSteps: emptySteps(first.patch),
+    });
+    expect(propagated?.patch.groups.groups[0]?.signals.find(
+      ({ causeReferenceId }) => causeReferenceId === alarm.eventId,
+    )?.reachedMemberOrdinals).toEqual([0, 1]);
   });
 
   it("surfaces conflicting physical claims without mutating or resolving the item", () => {

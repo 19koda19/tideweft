@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { LIVING_ACTOR_SPECIES } from "./livingActor";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
+import { coreEcologySpeciesHasRuntimeCapability } from "./coreEcologySpeciesRuntimePolicy";
+import { CORE_ECOLOGY_ACTIVITY_OWNER_ID } from "./coreEcologyActivity";
 import {
   LIVING_SPECIES_CAPABILITY_SCALE,
   LIVING_SPECIES_CATALOG,
@@ -38,10 +40,13 @@ describe("Living Weft species module catalog", () => {
       "living-species:deer:v1",
       "living-species:domestic-cat:v1",
       "living-species:domestic-dog:v1",
+      "living-species:fish-crow:v1",
       "living-species:gull:v1",
       "living-species:human:v1",
       "living-species:marsh-fox:v1",
       "living-species:marsh-rabbit:v1",
+      "living-species:northern-harrier:v1",
+      "living-species:southern-leopard-frog:v1",
     ]);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
@@ -551,6 +556,111 @@ describe("Living Weft species module catalog", () => {
         verbs: ["pursue"],
         escalationConstraints: ["bounded-pursuit", "direct-perception-required"],
       });
+  });
+
+  it("declares the active rain-chorus trio through shared capabilities", () => {
+    const crow = livingSpeciesModule("fish-crow");
+    const harrier = livingSpeciesModule("northern-harrier");
+    const frog = livingSpeciesModule("southern-leopard-frog");
+
+    expect(crow).toMatchObject({
+      profile: {
+        implementation: "active",
+        taxonomicClass: "bird",
+        ecologicalClasses: ["alarm-source", "forager", "omnivore", "scavenger"],
+      },
+      identity: { form: "individual", stableIdNamespace: "CROW" },
+      population: { maxMaterializedPerRegion: 3 },
+      locomotion: {
+        media: [{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }],
+        movementVerbs: ["fly", "glide", "perch"],
+      },
+      social: {
+        groupModel: "group",
+        group: {
+          status: "active",
+          organizationKinds: ["flock"],
+          stableIdNamespace: "CROW-FLOCK",
+        },
+      },
+      activity: { ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID },
+      sound: {
+        implementation: "active",
+        repertoire: ["crow-nasal-double-call"],
+        communicationSignals: ["crow-nasal-double-call"],
+      },
+      evidence: { status: "unimplemented", produces: [] },
+    });
+    expect(crow?.foodWeb.consumedBy).toEqual([]);
+    expect(crow?.profile.ecologicalClasses).not.toContain("prey");
+    expect(crow?.interactions.targets.find(({ targetClass }) => targetClass === "flying-animal"))
+      .toMatchObject({
+        appraisals: ["aerial-threat"],
+        verbs: ["mob"],
+        escalationConstraints: [
+          "aerial-predator-capability-required",
+          "direct-perception-required",
+          "finite-mobbing",
+        ],
+      });
+
+    expect(harrier).toMatchObject({
+      profile: {
+        implementation: "active",
+        taxonomicClass: "bird",
+        ecologicalClasses: ["forager", "predator", "small-predator"],
+      },
+      identity: { form: "individual", stableIdNamespace: "HARRIER" },
+      population: { maxMaterializedPerRegion: 1 },
+      locomotion: {
+        media: [{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }],
+        movementVerbs: ["fly", "glide", "quarter"],
+      },
+      activity: {
+        ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
+        circadian: { status: "active", rhythm: "diurnal" },
+      },
+      social: { groupModel: "solitary", group: { status: "unimplemented" } },
+      sound: {
+        implementation: "unimplemented",
+        repertoire: [],
+        communicationSignals: [],
+      },
+      evidence: { status: "unimplemented", produces: [] },
+    });
+    expect(harrier?.interactions.targets.find(({ targetClass }) => targetClass === "smaller-prey"))
+      .toMatchObject({
+        verbs: ["pursue"],
+        escalationConstraints: ["bounded-pursuit", "direct-perception-required"],
+      });
+
+    expect(frog).toMatchObject({
+      profile: { implementation: "active", taxonomicClass: "amphibian" },
+      identity: { form: "aggregate", stableIdNamespace: "FROG-AREA" },
+      spatial: { positionModel: "segmented-area", authoritativeHeading: false },
+      population: {
+        strategy: "aggregate-field",
+        materialization: "threshold",
+        maxMaterializedPerRegion: 0,
+        authoritativeUnit: "population-patch",
+      },
+      activity: { decisionModel: "aggregate", offscreenModel: "aggregate" },
+      sound: {
+        implementation: "active",
+        repertoire: ["rain-chorus"],
+        communicationSignals: ["rain-chorus"],
+      },
+      evidence: { status: "active", produces: ["frog-track"] },
+      environment: {
+        weather: {
+          status: "active",
+          inputs: ["rain-intensity", "retained-wetness", "terrain-exposure"],
+          outputs: ["activity-pressure", "displacement-pressure"],
+        },
+      },
+      health: { implementation: "unimplemented", causalDeath: false },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+    });
   });
 
   it("makes registration order irrelevant while persisted catalog order is canonical", () => {
@@ -1156,16 +1266,24 @@ describe("Living Weft species module catalog", () => {
   it("declares current deliberate seams instead of pretending they are implemented", () => {
     for (const module of LIVING_SPECIES_CATALOG.modules) {
       expect(module.spatial).toMatchObject({
-        positionModel: module.speciesId === "brown-rat" ? "segmented-area" : "segmented-point",
+        positionModel: module.speciesId === "brown-rat"
+          || module.speciesId === "southern-leopard-frog"
+          ? "segmented-area"
+          : "segmented-point",
         signedRegions: true,
         extremeRegions: true,
       });
-      expect(module.activity.circadian.status).toBe("unimplemented");
+      expect(module.activity.circadian.status).toBe(
+        coreEcologySpeciesHasRuntimeCapability(module.speciesId, "diurnal-activity")
+          ? "active"
+          : "unimplemented",
+      );
       expect(module.evidence.status).toBe(
         module.speciesId === "brown-rat"
           || module.speciesId === "domestic-cat"
           || module.speciesId === "marsh-rabbit"
           || module.speciesId === "marsh-fox"
+          || module.speciesId === "southern-leopard-frog"
           ? "active"
           : "unimplemented",
       );
@@ -1179,12 +1297,16 @@ describe("Living Weft species module catalog", () => {
       expect(module.social.communicationChannels).toEqual(
         module.speciesId === "deer"
           || module.speciesId === "gull"
+          || module.speciesId === "fish-crow"
           || module.speciesId === "marsh-rabbit"
+          || module.speciesId === "southern-leopard-frog"
           ? ["hearing"]
           : [],
       );
       expect(module.social.group.status).toBe(
-        module.speciesId === "deer" || module.speciesId === "gull"
+        module.speciesId === "deer"
+          || module.speciesId === "gull"
+          || module.speciesId === "fish-crow"
           ? "active"
           : "unimplemented",
       );
@@ -1192,7 +1314,9 @@ describe("Living Weft species module catalog", () => {
       expect(module.locomotion.crossRegion).toBe(
         module.speciesId === "domestic-cat"
           || module.speciesId === "marsh-rabbit"
-          || module.speciesId === "marsh-fox",
+          || module.speciesId === "marsh-fox"
+          || module.speciesId === "fish-crow"
+          || module.speciesId === "northern-harrier",
       );
     }
     expect(livingSpeciesModule("brown-rat")?.environment.weather.status).toBe("active");

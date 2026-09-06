@@ -77,7 +77,7 @@ function disturbance(
 }
 
 describe("core ecology social groups", () => {
-  it("creates stable order-independent deer herds and gull flocks while bears stay solitary", () => {
+  it("creates stable order-independent deer herds, gull flocks, and fish-crow flocks while solitary species fail closed", () => {
     const deer = deerGroup({ memberOrdinals: [7, 2, 5] });
     const reordered = deerGroup({ memberOrdinals: [5, 7, 2] });
     const gull = createCoreEcologyGroup({
@@ -89,6 +89,24 @@ describe("core ecology social groups", () => {
       memberOrdinals: [4, 1, 9],
       anchor: position(70_000, 8_000),
     });
+    const crow = createCoreEcologyGroup({
+      seed: SEED,
+      species: "fish-crow",
+      originRegion: ORIGIN,
+      populationKey: "fish-crow:wave-b3",
+      groupOrdinal: 1,
+      memberOrdinals: [2, 0, 1],
+      anchor: position(64_000, 9_000),
+    });
+    const reorderedCrow = createCoreEcologyGroup({
+      seed: SEED,
+      species: "fish-crow",
+      originRegion: ORIGIN,
+      populationKey: "fish-crow:wave-b3",
+      groupOrdinal: 1,
+      memberOrdinals: [1, 2, 0],
+      anchor: position(64_000, 9_000),
+    });
 
     expect(deer).toEqual(reordered);
     expect(deer.memberOrdinals).toEqual([2, 5, 7]);
@@ -96,6 +114,16 @@ describe("core ecology social groups", () => {
     expect(deer.identity.stableId).toMatch(/^HERD-v1-/u);
     expect(gull.identity.organization).toBe("flock");
     expect(gull.identity.stableId).toMatch(/^FLOCK-v1-/u);
+    expect(crow).toEqual(reorderedCrow);
+    expect(crow.identity.organization).toBe("flock");
+    expect(crow.identity.stableId).toMatch(/^CROW-FLOCK-v1-/u);
+    expect(stableCoreEcologyGroupId({
+      seed: SEED,
+      species: "fish-crow",
+      originRegion: ORIGIN,
+      populationKey: "fish-crow:wave-b3",
+      groupOrdinal: 1,
+    })).toBe(crow.identity.stableId);
     expect(Object.isFrozen(deer.components[0]?.memberOrdinals)).toBe(true);
 
     expect(() => createCoreEcologyGroup({
@@ -113,8 +141,15 @@ describe("core ecology social groups", () => {
       originRegion: ORIGIN,
       populationKey: "black-bear:wave-a",
       groupOrdinal: 0,
-    })).toThrow(/social deer and gull/u);
-    for (const solitarySpecies of ["brown-rat", "domestic-cat"] as const) {
+    })).toThrow(/group-eligible social populations/u);
+    for (const solitarySpecies of [
+      "brown-rat",
+      "domestic-cat",
+      "marsh-rabbit",
+      "marsh-fox",
+      "northern-harrier",
+      "southern-leopard-frog",
+    ] as const) {
       expect(() => createCoreEcologyGroup({
         seed: SEED,
         species: solitarySpecies,

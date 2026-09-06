@@ -18,6 +18,7 @@ import {
   isLivingActorSpecies,
   livingSpeciesActorIdMatchesNamespace,
 } from "../game/livingSpeciesRegistry";
+import { isCoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 
 export type WorldTapTarget =
   | {
@@ -128,7 +129,7 @@ const directlyPerceivedAggregateWildlifeEvidence = (
   evidenceId: string,
 ): AggregateWildlifeEvidenceView | null => {
   if (
-    species !== "brown-rat"
+    !isCoreEcologyAggregateSpecies(species)
     || view.perception === undefined
     || !stableAggregateEvidenceId(aggregateId)
     || !stableAggregateEvidenceId(evidenceId)

@@ -449,13 +449,13 @@ export type DogView = DogPresentation;
 
 /**
  * Living species rendered through the universal actor boundary rather than
- * compatibility residents. Brown rats are intentionally excluded: their
- * authoritative representation is a population area with physical evidence,
- * never a fabricated individual actor.
+ * compatibility residents. Aggregate wildlife are intentionally excluded:
+ * their authoritative representation is a population area with physical
+ * evidence, never a fabricated individual actor.
  */
 export type LivingActorViewSpecies = Exclude<
   LivingActorSpecies,
-  "human" | "brown-rat"
+  "human" | "brown-rat" | "southern-leopard-frog"
 >;
 
 export type WildlifeBehaviorView =
@@ -470,7 +470,8 @@ export type WildlifeBehaviorView =
   | "guard"
   | "retreat"
   | "rest"
-  | "perch";
+  | "perch"
+  | "quarter";
 
 /**
  * Directly observed wildlife only. Hidden needs, targets, identities, and
@@ -490,31 +491,34 @@ export interface WildlifeView {
   readonly selected?: boolean;
 }
 
-/** Selectable aggregate-evidence commands remain rat-only in this slice. */
-export type AggregateWildlifeEvidenceSpecies = "brown-rat";
-export type WildlifeEvidenceViewSpecies =
-  | AggregateWildlifeEvidenceSpecies
+/** Species represented by conserved population areas rather than actor IDs. */
+export type AggregateWildlifeEvidenceSpecies =
+  | "brown-rat"
+  | "southern-leopard-frog";
+export type IndividualWildlifeEvidenceSpecies =
   | "domestic-cat"
   | "marsh-rabbit"
   | "marsh-fox";
+export type WildlifeEvidenceViewSpecies =
+  | AggregateWildlifeEvidenceSpecies
+  | IndividualWildlifeEvidenceSpecies;
 export type AggregateWildlifeEvidenceForm =
   | "gnaw-marks"
   | "shelter-sign"
   | "small-tracks"
   | "paired-tracks"
-  | "canid-pawprints";
+  | "canid-pawprints"
+  | "frog-tracks";
 
 /**
  * One directly observed physical wildlife sign. This separate view deliberately
  * exposes no individual state, exact population count, hidden activity, cause,
  * or interaction affordance.
  */
-export interface AggregateWildlifeEvidenceView {
+interface WildlifeEvidenceViewBase {
   readonly version: 1;
   readonly aggregateId: string;
   readonly evidenceId: string;
-  readonly species: WildlifeEvidenceViewSpecies;
-  readonly representation: "population-evidence" | "individual-evidence";
   readonly form: AggregateWildlifeEvidenceForm;
   readonly quickLabel: string;
   readonly identityLabel: string;
@@ -525,6 +529,17 @@ export interface AggregateWildlifeEvidenceView {
   readonly distanceUnits: number;
   readonly selected: boolean;
 }
+
+export type AggregateWildlifeEvidenceView = WildlifeEvidenceViewBase & (
+  | {
+      readonly species: AggregateWildlifeEvidenceSpecies;
+      readonly representation: "population-evidence";
+    }
+  | {
+      readonly species: IndividualWildlifeEvidenceSpecies;
+      readonly representation: "individual-evidence";
+    }
+);
 
 export interface ParticleView {
   readonly id: string;

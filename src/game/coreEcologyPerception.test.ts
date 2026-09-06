@@ -15,8 +15,10 @@ import {
   type CoreEcologyPerceptionFrameInput,
 } from "./coreEcologyPerception";
 import {
+  CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   CORE_WILDLIFE_EVENT_VERSION,
   createCoreWildlifeActorState,
+  stepCoreWildlifeActor,
   type CoreWildlifeActorState,
   type CoreWildlifeCausalEvent,
 } from "./coreWildlifeActor";
@@ -147,6 +149,104 @@ describe("core ecology cross-species perception bridge", () => {
         perceivedClass: "food-competitor",
         subjectId: neighbor.identity.stableId,
         identification: "identified",
+      }),
+    ]);
+  });
+
+  it("derives harrier mobbing pressure only from a crow's causal direct-predator alarm", () => {
+    const current = fixture("crow mobbing remains knowledge honest");
+    const crow = wildlife(current, "fish-crow", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const harrier = wildlife(
+      current,
+      "northern-harrier",
+      OBSERVER_X + 4,
+      OBSERVER_Y,
+      500_000,
+      0,
+    );
+    const neutral = collectCoreEcologyVisualObservationBatches(frame(current, [
+      harrier,
+      crow,
+    ]));
+    expect(observationsFor(neutral, harrier.identity.stableId)).toEqual([
+      expect.objectContaining({
+        channel: "vision",
+        perceivedClass: "fish-crow",
+        subjectId: crow.identity.stableId,
+      }),
+    ]);
+    const predatorSight = observationsFor(neutral, crow.identity.stableId)[0];
+    expect(predatorSight).toMatchObject({
+      channel: "vision",
+      perceivedClass: "aerial-predator",
+      subjectId: harrier.identity.stableId,
+      identification: "identified",
+    });
+
+    const alarmed = stepCoreWildlifeActor(crow, {
+      tick: 1,
+      observations: predatorSight === undefined ? [] : [predatorSight],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+    });
+    expect(alarmed?.decision).toMatchObject({
+      intent: "alarm",
+      cause: { kind: "perception", referenceId: predatorSight?.id },
+      focusObservationId: predatorSight?.id,
+    });
+
+    const mobbing = collectCoreEcologyVisualObservationBatches({
+      ...frame(current, [harrier, alarmed!.actor]),
+      tick: 2,
+    });
+    expect(observationsFor(mobbing, harrier.identity.stableId)).toEqual([
+      expect.objectContaining({
+        channel: "vision",
+        perceivedClass: "mobbing-pressure",
+        subjectId: crow.identity.stableId,
+      }),
+    ]);
+    expect(observationsFor(mobbing, crow.identity.stableId)).toEqual([
+      expect.objectContaining({
+        perceivedClass: "aerial-predator",
+        subjectId: harrier.identity.stableId,
+      }),
+    ]);
+
+    const unsupportedAlarm = {
+      ...crow,
+      intent: {
+        kind: "alarm" as const,
+        cause: { kind: "perception" as const, referenceId: "obs:caller-claim" },
+        focusObservationId: "obs:caller-claim",
+        resourceReference: null,
+        enteredAtTick: 0,
+        expiresAtTick: 1,
+      },
+    };
+    const unsupported = collectCoreEcologyVisualObservationBatches(frame(current, [
+      harrier,
+      unsupportedAlarm,
+    ]));
+    expect(observationsFor(unsupported, harrier.identity.stableId)).toEqual([
+      expect.objectContaining({
+        perceivedClass: "fish-crow",
+        subjectId: crow.identity.stableId,
+      }),
+    ]);
+
+    const staleAlarm = {
+      ...alarmed!.actor,
+      updatedAtTick: alarmed!.actor.intent.expiresAtTick!,
+    };
+    const stale = collectCoreEcologyVisualObservationBatches({
+      ...frame(current, [harrier, staleAlarm]),
+      tick: staleAlarm.updatedAtTick + 1,
+    });
+    expect(observationsFor(stale, harrier.identity.stableId)).toEqual([
+      expect.objectContaining({
+        perceivedClass: "fish-crow",
+        subjectId: crow.identity.stableId,
       }),
     ]);
   });
@@ -438,7 +538,14 @@ function fixture(
 
 function wildlife(
   current: Fixture,
-  species: "deer" | "gull" | "black-bear" | "domestic-cat" | "marsh-rabbit",
+  species:
+    | "deer"
+    | "gull"
+    | "black-bear"
+    | "domestic-cat"
+    | "marsh-rabbit"
+    | "fish-crow"
+    | "northern-harrier",
   tileX: number,
   tileY: number,
   heading: number,

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   ambienceParameters,
+  ecologyVoicePattern,
   incidentSoundPattern,
   smallWildlifePattern,
+  spatialPanForBearing,
   titleCrescendoPattern,
   wildlifeAlarmPattern,
 } from "./soundscape";
@@ -72,9 +74,31 @@ describe("small-world wildlife cues", () => {
     }
   });
 
+  it("gives the authored corvid and amphibian events distinct bounded voices", () => {
+    const cues = ["crow-nasal-double-call", "frog-chorus"] as const;
+    const patterns = cues.map((cue) => ecologyVoicePattern(cue, 71));
+    expect(new Set(patterns.map((pattern) => JSON.stringify(pattern))).size).toBe(cues.length);
+    for (const [index, cue] of cues.entries()) {
+      const pattern = patterns[index]!;
+      expect(pattern).toEqual(ecologyVoicePattern(cue, 71));
+      expect(pattern.length).toBeGreaterThan(0);
+      expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
+        .toBeLessThanOrEqual(0.4);
+    }
+  });
+
   it("uses malformed variation conservatively", () => {
     expect(smallWildlifePattern("rat-rustle", Number.NaN))
       .toEqual(smallWildlifePattern("rat-rustle", 0));
+  });
+});
+
+describe("spatial ecology cues", () => {
+  it("maps east and west bearings into a bounded stereo field", () => {
+    expect(spatialPanForBearing(0)).toBe(1);
+    expect(spatialPanForBearing(Math.PI)).toBe(-1);
+    expect(Math.abs(spatialPanForBearing(Math.PI / 2))).toBeLessThan(1e-12);
+    expect(spatialPanForBearing(Number.NaN)).toBe(0);
   });
 });
 

@@ -12,6 +12,10 @@ import {
   type CoreEcologyPopulationState,
 } from "./coreEcology";
 import { coreEcologyGroupComponentForMember } from "./coreEcologyGroups";
+import {
+  coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesRuntimePolicy,
+} from "./coreEcologySpeciesRuntimePolicy";
 import type { CoreWildlifeActorState } from "./coreWildlifeActor";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { livingSpeciesActorIdMatchesNamespace } from "./livingSpeciesRegistry";
@@ -138,8 +142,9 @@ export function setCoreEcologyMaterializationForWindow(
 
 /**
  * Project the direct-detail subset of the already-materialized actor set.
- * Gull groupSize comes only from direct-visible representatives belonging to
- * the same saved population; populationSize and coarse members are not read.
+ * Visible social-group size comes only from direct-visible representatives
+ * belonging to the same saved population; populationSize and coarse members
+ * are not read.
  */
 export function projectCoreEcologyWildlife(
   input: ProjectCoreEcologyWildlifeInput,
@@ -166,7 +171,7 @@ export function projectCoreEcologyWildlife(
   }
 
   const visible: VisibleMember[] = [];
-  const directGullsByPopulation = new Map<string, number>();
+  const directVisibleGroupsByPopulation = new Map<string, number>();
   for (const population of patch.populations) {
     for (const member of population.members) {
       if (member.materialization !== "materialized") continue;
@@ -175,13 +180,17 @@ export function projectCoreEcologyWildlife(
         observation: { window, perception: input.perception },
         tileSize: input.tileSize,
         selected: targetMatchesActor(selectedTarget, member.actor),
+        ...(coreEcologySpeciesHasRuntimeCapability(population.species, "diurnal-activity")
+          ? { activity: { patch, atTick: patch.updatedAtTick } }
+          : {}),
       });
       if (presentation === null) continue;
       visible.push(Object.freeze({ population, member, presentation }));
-      if (population.species === "gull") {
-        directGullsByPopulation.set(
+      if (coreEcologySpeciesRuntimePolicy(population.species)?.presentationModel
+        === "visible-flock") {
+        directVisibleGroupsByPopulation.set(
           population.populationKey,
-          (directGullsByPopulation.get(population.populationKey) ?? 0) + 1,
+          (directVisibleGroupsByPopulation.get(population.populationKey) ?? 0) + 1,
         );
       }
     }
@@ -189,17 +198,21 @@ export function projectCoreEcologyWildlife(
 
   const presentations: WildlifePresentation[] = [];
   for (const { population, member, presentation } of visible) {
-    if (population.species !== "gull") {
+    if (coreEcologySpeciesRuntimePolicy(population.species)?.presentationModel
+      !== "visible-flock") {
       presentations.push(presentation);
       continue;
     }
-    const visibleAggregateCount = directGullsByPopulation.get(population.populationKey);
+    const visibleAggregateCount = directVisibleGroupsByPopulation.get(population.populationKey);
     if (visibleAggregateCount === undefined) return null;
     const withVisibleCount = projectWildlifePresentation({
       actor: member.actor,
       observation: { window, perception: input.perception, visibleAggregateCount },
       tileSize: input.tileSize,
       selected: targetMatchesActor(selectedTarget, member.actor),
+      ...(coreEcologySpeciesHasRuntimeCapability(population.species, "diurnal-activity")
+        ? { activity: { patch, atTick: patch.updatedAtTick } }
+        : {}),
     });
     if (withVisibleCount === null) return null;
     presentations.push(withVisibleCount);

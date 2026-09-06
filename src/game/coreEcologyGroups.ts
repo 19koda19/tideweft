@@ -1,4 +1,5 @@
 import {
+  CORE_WILDLIFE_SPECIES,
   getCoreWildlifeProfile,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
@@ -11,6 +12,7 @@ import {
   isWorldPosition,
   type WorldPosition,
 } from "./worldPosition";
+import { coreEcologySpeciesRuntimePolicy } from "./coreEcologySpeciesRuntimePolicy";
 
 export const CORE_ECOLOGY_GROUP_VERSION = 1 as const;
 export const CORE_ECOLOGY_GROUP_SET_VERSION = 1 as const;
@@ -28,8 +30,12 @@ export const CORE_ECOLOGY_GROUP_REJOIN_START_COHESION = 650_000 as const;
 export const CORE_ECOLOGY_GROUP_REJOIN_COMPLETE_COHESION = 850_000 as const;
 export const CORE_ECOLOGY_GROUP_COHESION_RECOVERY = 100_000 as const;
 
-export const CORE_ECOLOGY_GROUP_SPECIES = ["deer", "gull"] as const;
-export type CoreEcologyGroupSpecies = (typeof CORE_ECOLOGY_GROUP_SPECIES)[number];
+/** Derived from the shared species policy so future social species need no group-kernel branch. */
+export const CORE_ECOLOGY_GROUP_SPECIES: readonly CoreWildlifeSpecies[] = Object.freeze(
+  CORE_WILDLIFE_SPECIES.filter((species) => groupPolicy(species) !== null),
+);
+/** Runtime admission remains policy-gated; this alias avoids duplicating the policy roster in types. */
+export type CoreEcologyGroupSpecies = CoreWildlifeSpecies;
 export type CoreEcologyGroupOrganization = "herd" | "flock";
 export type CoreEcologyGroupPhase = "cohesive" | "separated" | "rejoining";
 export type CoreEcologyGroupSignalKind = "alarm" | "movement";
@@ -243,14 +249,6 @@ const DISTURBANCE_CAUSES = new Set<string>([
   "weather-pressure",
 ]);
 const AFTERMATH_KINDS = new Set<string>(["displacement", "reunion", "separation"]);
-const GROUP_SPECIES_POLICY: Readonly<Record<CoreEcologyGroupSpecies, Readonly<{
-  organization: CoreEcologyGroupOrganization;
-  stableIdPrefix: "HERD" | "FLOCK";
-}>>> = Object.freeze({
-  deer: Object.freeze({ organization: "herd", stableIdPrefix: "HERD" }),
-  gull: Object.freeze({ organization: "flock", stableIdPrefix: "FLOCK" }),
-});
-
 export function stableCoreEcologyGroupId(input: Readonly<{
   readonly seed: RootSeed;
   readonly species: CoreWildlifeSpecies;
@@ -260,7 +258,7 @@ export function stableCoreEcologyGroupId(input: Readonly<{
 }>): string {
   const generation = canonicalGenerationInput(input);
   if (generation === null || !isGroupSpecies(generation.species)) {
-    throw new RangeError("Only explicitly group-eligible social deer and gull populations can own core ecology groups");
+    throw new RangeError("Only explicitly group-eligible social populations can own core ecology groups");
   }
   return stableGroupIdFromFields({
     seedFingerprint: rootSeedFingerprint(generation.seed),
@@ -1427,7 +1425,9 @@ function stableGroupIdFromFields(input: Readonly<{
   populationKey: string;
   groupOrdinal: number;
 }>): string {
-  const prefix = GROUP_SPECIES_POLICY[input.species].stableIdPrefix;
+  const policy = groupPolicy(input.species);
+  if (policy === null) throw new RangeError("Core ecology species is not group-eligible");
+  const prefix = policy.stableIdPrefix;
   return `${prefix}-v1-${input.seedFingerprint}-${encodeSigned(input.originRegion.x)}.${encodeSigned(input.originRegion.y)}-${input.populationKey.length.toString(36)}.${input.populationKey}-${input.groupOrdinal.toString(36)}`;
 }
 
@@ -1436,7 +1436,9 @@ function rootSeedFingerprint(seed: RootSeed): string {
 }
 
 function organizationFor(species: CoreEcologyGroupSpecies): CoreEcologyGroupOrganization {
-  return GROUP_SPECIES_POLICY[species].organization;
+  const policy = groupPolicy(species);
+  if (policy === null) throw new RangeError("Core ecology species is not group-eligible");
+  return policy.organization;
 }
 
 function isGroupSpecies(value: unknown): value is CoreEcologyGroupSpecies {
@@ -1445,11 +1447,25 @@ function isGroupSpecies(value: unknown): value is CoreEcologyGroupSpecies {
 }
 
 function isCoreWildlifeSpecies(value: unknown): value is CoreWildlifeSpecies {
-  return value === "deer"
-    || value === "gull"
-    || value === "black-bear"
-    || value === "brown-rat"
-    || value === "domestic-cat";
+  return typeof value === "string"
+    && (CORE_WILDLIFE_SPECIES as readonly string[]).includes(value);
+}
+
+function groupPolicy(species: CoreWildlifeSpecies): Readonly<{
+  organization: CoreEcologyGroupOrganization;
+  stableIdPrefix: "HERD" | "FLOCK" | "CROW-FLOCK";
+}> | null {
+  const policy = coreEcologySpeciesRuntimePolicy(species);
+  if (
+    policy === null
+    || policy.groupOrganization === null
+    || policy.groupStableIdNamespace === null
+    || !policy.capabilities.includes("group-coordination")
+  ) return null;
+  return Object.freeze({
+    organization: policy.groupOrganization,
+    stableIdPrefix: policy.groupStableIdNamespace,
+  });
 }
 
 function memberLimit(species: CoreEcologyGroupSpecies): number {

@@ -23,7 +23,10 @@ import {
   repositionCoreWildlifeActorWithMovementEvidence,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
-import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
+import {
+  deriveCoreEcologyHarborEdgeHabitatAssemblage,
+  deriveCoreEcologyRainChorusHabitatAssemblage,
+} from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
   isWildlifeWorldPositionDirectlyObserved,
@@ -127,6 +130,103 @@ function ratEvidenceFixture() {
     throw new Error("Rat evidence fixture requires a supported aggregate population");
   }
   return { evidence, patch, population };
+}
+
+function frogEvidenceFixture() {
+  const seed = seedFromText("alpha seventeen rain chorus shadow overhead");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "presentation-frog-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v4", habitat },
+    tick: 10,
+  });
+  const population = patch.aggregatePopulations.find(
+    ({ species }) => species === "southern-leopard-frog",
+  );
+  const evidence = population?.evidence[0];
+  if (population === undefined || evidence === undefined) {
+    throw new Error("Frog evidence fixture requires a supported aggregate population");
+  }
+  return { evidence, patch, population };
+}
+
+function rainActivityFixture(
+  species: "fish-crow" | "northern-harrier",
+  tick: number,
+) {
+  const seed = seedFromText("rain chorus bounded diurnal activity owner");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "materialized" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: `presentation-activity:${species}:${tick}`,
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v4", habitat },
+    tick,
+  });
+  const actor = patch.populations.find((population) => population.species === species)
+    ?.members[0]?.actor;
+  if (actor === undefined) throw new Error(`Activity presentation requires ${species}`);
+  return { actor, patch };
 }
 
 function catEvidenceFixture(currentTick = 11) {
@@ -360,6 +460,8 @@ describe("knowledge-honest wildlife presentation", () => {
     ["domestic-cat", "Domestic cat"],
     ["marsh-rabbit", "Marsh rabbit"],
     ["marsh-fox", "Marsh fox"],
+    ["fish-crow", "Fish crows"],
+    ["northern-harrier", "Northern harrier"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -383,13 +485,102 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(presentation?.formLabel).toBe("Compact, long-eared");
     } else if (species === "marsh-fox") {
       expect(presentation?.formLabel).toBe("Lean, low-tailed canid");
+    } else if (species === "fish-crow") {
+      expect(presentation?.formLabel).toBe("Compact, broad-winged corvids");
+    } else if (species === "northern-harrier") {
+      expect(presentation?.formLabel).toBe("Long-winged, low-flying raptor");
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
-    if (species === "gull") expect(presentation).not.toHaveProperty("lifeStageLabel");
+    if (species === "gull" || species === "fish-crow") {
+      expect(presentation).not.toHaveProperty("lifeStageLabel");
+    }
     else expect(presentation?.lifeStageLabel).toBeDefined();
     expect(Object.isFrozen(presentation)).toBe(true);
     expect(Object.isFrozen(presentation?.conditionLabels)).toBe(true);
+  });
+
+  it.each([
+    ["fish-crow", 1_200, "perch", "Perched"],
+    ["northern-harrier", 360, "quarter", "Quartering low"],
+  ] as const)(
+    "presents only authenticated %s activity from the canonical ecology patch",
+    (species, atTick, behavior, behaviorLabel) => {
+      const { actor, patch } = rainActivityFixture(species, atTick);
+      const legacy = projectWildlifePresentation({
+        actor,
+        observation: directObservation(actor),
+        tileSize: 16,
+      });
+      const projected = projectWildlifePresentation({
+        actor,
+        observation: directObservation(actor),
+        tileSize: 16,
+        activity: { patch, atTick },
+      });
+
+      expect(legacy).toMatchObject({ behavior: "watch", behaviorLabel: "Watching" });
+      expect(projected).toMatchObject({ behavior, behaviorLabel });
+      expect(projected).not.toHaveProperty("activity");
+      expect(projected).not.toHaveProperty("dayPhase");
+    },
+  );
+
+  it("does not resolve an activity payload for a species without the capability", () => {
+    const actor = wildlife("deer");
+    const baseline = projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor),
+      tileSize: 16,
+    });
+    expect(projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor),
+      tileSize: 16,
+      activity: { patch: "irrelevant-to-this-species", atTick: -1 },
+    })).toEqual(baseline);
+  });
+
+  it("rejects activity custody when the presented actor is not the patch-owned revision", () => {
+    const { actor, patch } = rainActivityFixture("fish-crow", 1_200);
+    const moved = repositionCoreWildlifeActor(actor, {
+      atTick: 1_200,
+      heading: actor.address.heading,
+      position: createWorldPosition(
+        actor.address.position.region,
+        actor.address.position.localX + 1,
+        actor.address.position.localY,
+      ),
+    });
+    expect(projectWildlifePresentation({
+      actor: moved,
+      observation: directObservation(moved),
+      tileSize: 16,
+      activity: { patch, atTick: 1_200 },
+    })).toBeNull();
+    expect(projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor),
+      tileSize: 16,
+      activity: undefined,
+    } as unknown as Parameters<typeof projectWildlifePresentation>[0])).toBeNull();
+  });
+
+  it("keeps aggregate frogs out of the individual actor presentation boundary", () => {
+    const actor = wildlife("deer");
+    const aggregateShaped = {
+      ...actor,
+      identity: {
+        ...actor.identity,
+        species: "southern-leopard-frog",
+        stableId: "FROG-v1-fabricated",
+      },
+    };
+    expect(projectWildlifePresentation({
+      actor: aggregateShaped,
+      observation: directObservation(actor),
+      tileSize: 16,
+    })).toBeNull();
   });
 
   it("projects canonical brown-rat physical evidence without inventing actors or counts", () => {
@@ -421,6 +612,33 @@ describe("knowledge-honest wildlife presentation", () => {
     expect(presentations?.[0]).not.toHaveProperty("strength");
     expect(Object.isFrozen(presentations)).toBe(true);
     expect(Object.isFrozen(presentations?.[0])).toBe(true);
+  });
+
+  it("projects frog-area evidence without inventing an individual frog or census", () => {
+    const { evidence, patch, population } = frogEvidenceFixture();
+    const presentations = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position),
+      tileSize: 16,
+      selectedEvidenceId: evidence.evidenceId,
+    });
+
+    const frog = presentations?.find(({ species }) => species === "southern-leopard-frog");
+    expect(frog).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "southern-leopard-frog",
+      representation: "population-evidence",
+      form: "frog-tracks",
+      quickLabel: "Southern leopard frog signs",
+      identityLabel: "Southern leopard frog population signs",
+      evidenceLabel: "Leopard frog mud impressions",
+      speciesIdentified: true,
+      selected: true,
+    });
+    expect(frog).not.toHaveProperty("actorId");
+    expect(frog).not.toHaveProperty("populationSize");
+    expect(frog).not.toHaveProperty("activitySignal");
   });
 
   it("projects saved cat rain tracks only through signed direct detail", () => {

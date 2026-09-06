@@ -515,6 +515,63 @@ describe("world tap intent", () => {
     });
   });
 
+  it("selects frog-area evidence through the same aggregate boundary", () => {
+    const direct = perceivedView();
+    const aggregateId = "frog-population:world-tap";
+    const evidenceId = "frog-evidence:tracks:world-tap";
+    const frogEvidence = {
+      ...direct,
+      aggregateWildlifeEvidence: [{
+        version: 1 as const,
+        aggregateId,
+        evidenceId,
+        species: "southern-leopard-frog" as const,
+        representation: "population-evidence" as const,
+        form: "frog-tracks" as const,
+        quickLabel: "Leopard frog mud impressions",
+        identityLabel: "Southern leopard frog population signs",
+        evidenceLabel: "Leopard frog mud impressions",
+        speciesIdentified: true,
+        position: { x: 15, y: 5 },
+        sizeScale: 0.42,
+        distanceUnits: 4_000,
+        selected: false,
+      }],
+    };
+    const expected = {
+      type: "select" as const,
+      entity: "aggregate-wildlife-evidence" as const,
+      species: "southern-leopard-frog" as const,
+      aggregateId,
+      evidenceId,
+      point: { x: 15, y: 5 },
+    };
+    const target = {
+      entity: "aggregate-wildlife-evidence" as const,
+      species: "southern-leopard-frog" as const,
+      aggregateId,
+      evidenceId,
+    };
+
+    expect(commandForWorldTap(frogEvidence, target, { x: 14, y: 4 }, false))
+      .toEqual(expected);
+    expect(validatePerceivedEntityCommand(frogEvidence, {
+      ...expected,
+      point: { x: 999, y: 999 },
+    })).toEqual(expected);
+    expect(validatePerceivedEntityCommand(frogEvidence, {
+      ...expected,
+      species: "brown-rat",
+    })).toBeNull();
+    expect(validatePerceivedEntityCommand(frogEvidence, {
+      type: "select",
+      entity: "living-actor",
+      species: "southern-leopard-frog",
+      id: "FROG-v1-fabricated",
+      point: expected.point,
+    } as unknown as Parameters<typeof validatePerceivedEntityCommand>[1])).toBeNull();
+  });
+
   it("rejects stale, ambiguous, hidden, or actor-shaped rat evidence selection", () => {
     const direct = perceivedView();
     const command = {
@@ -886,3 +943,9 @@ type BrownRatIsNotARenderLivingActor = "brown-rat" extends LivingActorViewSpecie
   : true;
 const brownRatIsNotARenderLivingActor: BrownRatIsNotARenderLivingActor = true;
 void brownRatIsNotARenderLivingActor;
+
+type FrogIsNotARenderLivingActor = "southern-leopard-frog" extends LivingActorViewSpecies
+  ? false
+  : true;
+const frogIsNotARenderLivingActor: FrogIsNotARenderLivingActor = true;
+void frogIsNotARenderLivingActor;

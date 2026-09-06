@@ -260,9 +260,9 @@ export const TUTORIAL_CONTROLS = [
   {
     id: "inspect-person",
     audience: "all",
-    input: "Click / tap a visible person, dog, or wild animal",
-    action: "Open its live ABOUT view",
-    detail: "ABOUT shows only what is observable or already learned. It does not pause danger or preserve an actor after sight is lost.",
+    input: "Click / tap a visible person, dog, wild animal, or rat/frog population sign",
+    action: "Open the live ABOUT view",
+    detail: "ABOUT shows only what is observable or already learned. It does not pause danger or preserve an actor or population sign after sight is lost.",
   },
   {
     id: "cancel-destination",
@@ -315,8 +315,8 @@ export const TUTORIAL_PLANNED_MECHANICS = [
     id: "planned-universal-npcs",
     status: "planned",
     title: "Broader people, dogs, and wildlife",
-    clarification: "The original harbor country's 42 humans remain the current human population, alongside one independently generated dog. Near the stable starting harbor, one bounded habitat-derived local assemblage now includes deer, gulls, black bears, brown-rat population areas, free-ranging domestic cats, marsh rabbits, and marsh foxes. Rats remain an aggregate population rather than individual actors; the other listed wildlife use bounded persistent representatives. Further dogs and wildlife species, worldwide populations, reproduction, animal death and carcasses, attacks, complete scent and evidence tracking, rumors, companions, circadian life, and the full bestiary remain planned.",
-    keywords: ["npc", "dog", "cat", "rat", "rabbit", "fox", "bear", "bird", "wildlife", "companion", "identity", "about", "perception", "ecology", "habitat", "population", "herd", "flock", "signs", "pursuit"],
+    clarification: "The original harbor country's 42 humans remain the current human population, alongside one independently generated dog. Near the stable starting harbor, one bounded habitat-derived local assemblage now includes deer, gulls, black bears, brown-rat population areas, free-ranging domestic cats, marsh rabbits, marsh foxes, fish crows, one northern harrier, and a southern leopard-frog population area. Rats and frogs remain conserved aggregate populations rather than individual actors; the other listed wildlife use bounded persistent representatives. Further dogs and wildlife species, worldwide populations, reproduction, animal death and carcasses, attacks, complete scent and evidence tracking, rumors, companions, complete circadian life, and the full bestiary remain planned.",
+    keywords: ["npc", "dog", "cat", "rat", "rabbit", "fox", "crow", "harrier", "frog", "bear", "bird", "wildlife", "companion", "identity", "about", "perception", "ecology", "habitat", "population", "herd", "flock", "chorus", "signs", "pursuit"],
   },
   {
     id: "planned-regional-biomes",
@@ -418,8 +418,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "whats-new-five-actor-contract",
         audience: "all",
-        title: "A pursuit reaches the marsh edge",
-        body: "The validated species catalog now covers humans, domestic dogs, deer, gulls, black bears, brown rats, domestic cats, marsh rabbits, and marsh foxes. Rabbits and foxes use deterministic habitat-derived populations and persistent representatives. Their nonlethal alarm, flight, finite pursuit, direct movement signs, visible-event sound, and knowledge-honest ABOUT work through the same Chart, Relief, mouse, and touch boundary.",
+        title: "Rain sings beneath a shadow overhead",
+        body: "The validated species catalog now covers humans, domestic dogs, deer, gulls, black bears, brown rats, domestic cats, marsh rabbits, marsh foxes, fish crows, northern harriers, and southern leopard frogs. Where local habitat permits, this build adds a persistent crow flock, one solitary quartering harrier, and a conserved rain-responsive frog population area without turning frogs into fake individual actors. Direct crow alarm and mobbing, finite nonlethal harrier pursuit, physical crow food custody, bounded daily activity, the directional frog chorus, and knowledge-honest ABOUT all use the same Chart, Relief, mouse, and touch boundary.",
       },
     ],
     callouts: [
@@ -1034,15 +1034,15 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "12",
     title: "Meet people and visible animals as individuals",
     shortTitle: "People, wildlife & ABOUT",
-    summary: "The original harbor country's 42 humans, its first independent dog, persistent visible wildlife, and directly observed brown-rat signs use one knowledge-honest boundary; ABOUT reveals only what you can see or have learned.",
-    keywords: ["person", "resident", "porter", "dog", "cat", "rat", "rabbit", "fox", "pursuit", "paired tracks", "pawprints", "signs", "deer", "gull", "black bear", "wildlife", "alarm", "food", "scavenge", "scent", "help", "wait", "reroute", "leave", "persistence", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather", "vision", "hearing", "attention", "search", "habitat", "population", "herd", "flock", "shallow water", "aftermath", "absence"],
+    summary: "The original harbor country's 42 humans, its first independent dog, persistent visible wildlife, and directly observed rat or frog population signs use one knowledge-honest boundary; ABOUT reveals only what you can see or have learned.",
+    keywords: ["person", "resident", "porter", "dog", "cat", "rat", "rabbit", "fox", "crow", "harrier", "frog", "chorus", "quartering", "perch", "mobbing", "pursuit", "paired tracks", "pawprints", "signs", "deer", "gull", "black bear", "wildlife", "alarm", "food", "scavenge", "scent", "help", "wait", "reroute", "leave", "persistence", "npc", "about", "inspect", "greet", "observed", "known", "identity", "emotion", "weather", "vision", "hearing", "attention", "search", "habitat", "population", "herd", "flock", "shallow water", "aftermath", "absence"],
     controlIds: ["inspect-person"],
     steps: [
       {
         id: "people-select",
         audience: "all",
         title: "Inspect only what you can actually see",
-        body: "Click or tap a directly visible resident, traveling porter, dog, deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, or brown-rat sign. ABOUT closes when that actor or sign leaves exact sight; it is a live field observation, not a remote tracker. Several visible gulls may be summarized as a flock without revealing birds outside your sight.",
+        body: "Click or tap a directly visible resident, traveling porter, dog, deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, brown-rat sign, or frog-population sign. ABOUT closes when that actor or sign leaves exact sight; it is a live field observation, not a remote tracker. Several visible gulls or crows may be summarized as a flock without revealing birds outside your sight, while frog evidence never invents an individual frog.",
         controlId: "inspect-person",
       },
       {
@@ -1097,7 +1097,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "wildlife-habitat-populations",
         audience: "all",
         title: "Habitat supports a population—or honest absence",
-        body: "Near the stable starting harbor, terrain and habitat derive each local population rather than forcing a fixed roster. The mixed-resolution model records capacity, population pressure, and trend while materializing only a bounded set of representatives; a species with too little support is genuinely absent instead of being rerolled. When present in numbers, deer persist in herds and gulls in flocks; black bears stay solitary, while free-ranging domestic cats, marsh rabbits, and marsh foxes use individual representatives. Brown rats remain one population-area aggregate and never become a cloud of rat actors.",
+        body: "Near the stable starting harbor, terrain and habitat derive each local population rather than forcing a fixed roster. The mixed-resolution model records capacity, population pressure, and trend while materializing only a bounded set of representatives; a species with too little support is genuinely absent instead of being rerolled. When present in numbers, deer persist in herds, gulls in flocks, and up to three fish-crow representatives in one CROW-FLOCK. Black bears and the single northern-harrier representative stay solitary; free-ranging domestic cats, marsh rabbits, and marsh foxes also use persistent individual representatives. Brown rats and southern leopard frogs remain conserved population-area aggregates and never become clouds of fake actors.",
       },
       {
         id: "settlement-shadows-pressure",
@@ -1121,7 +1121,19 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "settlement-shadows-sound",
         audience: "all",
         title: "Only witnessed activity reaches you",
-        body: "A rat rustle, cat call, rabbit thump, or fox yip is a restrained cue for a newly visible event. Offscreen redistribution, movement, and hidden animal decisions remain world state rather than entering EVENTS or granting remote hearing. The anonymous bottom-right caption carries the same limited information; none of these cues is an omniscient tracker.",
+        body: "A rat rustle, cat call, rabbit thump, fox yip, or fish-crow double call is a restrained cue for a newly visible event. A frog chorus instead travels through shared directional hearing from its actual strongest heard anchor; rain can both stir the frogs and mask the sound. Offscreen movement and hidden animal decisions remain world state rather than entering EVENTS or granting remote hearing. Anonymous bottom-right captions carry the same limited information, and the northern harrier has no invented cry in this build.",
+      },
+      {
+        id: "rain-chorus-aggregate",
+        audience: "all",
+        title: "Rain changes the chorus, not the frogs' identity",
+        body: "The southern leopard-frog population conserves 64–72 units across no more than three saved wetland anchors when supported. Rain raises bounded activity; lawful local pressure can quiet the chorus or redistribute at most one existing unit on its fixed opportunity. Weather alone cannot create, kill, duplicate, or reroll frogs, and ABOUT never exposes an exact hidden count or anchor.",
+      },
+      {
+        id: "shadow-overhead",
+        audience: "all",
+        title: "A shadow overhead can change the whole web",
+        body: "During its bounded daytime window, the northern harrier follows a deterministic low quartering search and may begin a finite nonlethal pursuit of a directly perceived small prey animal. A fish crow must first directly identify the aerial predator before alarming; only a crow actually mobbing it becomes pressure that can break the pursuit. Mere proximity cannot fake the interaction. At rest time, crows seek authenticated habitat perches and the harrier settles, but danger and immediate needs still take priority.",
       },
       {
         id: "marsh-edge-pursuit",
@@ -1145,7 +1157,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "wildlife-player-choices",
         audience: "all",
         title: "Watch, route around, or leave",
-        body: "A directly visible deer, gull, black bear, domestic cat, marsh rabbit, or marsh fox offers WAIT AND WATCH, ROUTE AROUND THIS SPOT, and LEAVE. WAIT briefly stops the current automatic route. ROUTE AROUND must keep the same destination and find a real line outside the observed animal's area; if that fails, your previous route and choice history remain unchanged. LEAVE closes the observation rather than moving the animal. Rat-sign ABOUT is close-only because a sign is not an actor; rabbit and fox movement signs are not targetable.",
+        body: "A directly visible deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, or northern harrier offers WAIT AND WATCH, ROUTE AROUND THIS SPOT, and LEAVE. WAIT briefly stops the current automatic route. ROUTE AROUND must keep the same destination and find a real line outside the observed animal's area; if that fails, your previous route and choice history remain unchanged. LEAVE closes the observation rather than moving the animal. Rat- and frog-sign ABOUT are close-only because a population sign is not an actor; rabbit and fox movement signs are not targetable.",
       },
       {
         id: "wildlife-standable-water",
@@ -1157,13 +1169,13 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "wildlife-physical-scavenging",
         audience: "all",
         title: "Exposed food remains physical",
-        body: "When the local assemblage includes a hungry black bear, it can reach and consume one exposed dried-fish parcel. It must make physical contact, consumes that entire one-unit object, and leaves one animal-consumption record. The same parcel cannot be consumed twice or silently reappear after reload.",
+        body: "When the local assemblage includes a hungry black bear or fish crow, it can reach and consume one exposed dried-fish parcel through ordinary physical custody. It must make contact, consumes that entire one-unit object, and leaves one animal-consumption record. The same parcel cannot be consumed twice or silently reappear after reload.",
       },
       {
         id: "wildlife-persistence",
         audience: "all",
         title: "Distance changes detail, not identity",
-        body: "Each representative—including every free-ranging cat, marsh rabbit, and marsh fox—keeps its stable identity and population membership. Outside the active field, an individual coarse step applies only the remaining saved intent to physiology, ages existing perception without adding facts, and invents no movement, target, food, or player event. Returning restores the same saved actors rather than rolling replacements because the camera moved. Rat population areas preserve their own stable aggregate identity instead of pretending to be individuals.",
+        body: "Each representative—including every free-ranging cat, marsh rabbit, marsh fox, fish crow, and northern harrier—keeps its stable identity and population membership. Outside the active field, an individual coarse step applies only the remaining saved intent to physiology, ages existing perception without adding facts, and invents no hidden perception, target, food, or player event. Returning restores the same saved actors rather than rolling replacements because the camera moved. Rat and frog population areas preserve their own stable aggregate identities instead of pretending to be individuals.",
       },
       {
         id: "wildlife-player-absent-aftermath",
@@ -1197,7 +1209,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         tone: "boundary",
         title: "This remains one small living web",
-        body: "The released wildlife scope is one bounded habitat-derived assemblage near the stable starting harbor. Marsh rabbits and marsh foxes add nonlethal alarm, flight, finite pursuit, direct movement signs, and visible-event cues beside the existing rat-and-cat web. Animals do not attack, receive injuries, die, leave carcasses, or consume live prey in this build. Complete scent and evidence tracking, foliage consumption, circadian behavior, further species, worldwide populations, the full bestiary, and an exhaustive species-pair interaction matrix are not live yet.",
+        body: "The released wildlife scope is one bounded habitat-derived assemblage near the stable starting harbor. Fish crows, one northern harrier, and a conserved southern leopard-frog population add flocking, direct mobbing pressure, low quartering, bounded day/rest activity, rain-responsive chorus, and physical crow food custody beside the existing rabbit–fox and rat–cat web. Animals do not attack, receive injuries, die, leave carcasses, or consume live prey in this build. Complete scent and evidence tracking, foliage consumption, complete circadian behavior, further species, worldwide populations, the full bestiary, and an exhaustive species-pair interaction matrix are not live yet.",
       },
     ],
   },
@@ -1298,7 +1310,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-local",
         audience: "all",
         title: "The save stays on this device",
-        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins. Outer save version 11 preserves the habitat-derived local assemblage, rat population areas and signs, persistent groups, bounded representatives, movement evidence, and physical food history. A sealed version 10 save migrates exactly once: every established actor, group, aggregate population, item, Promise, evidence record, and world fact stays exact while seed-derived marsh-rabbit and marsh-fox ecology is appended once. Re-saving and reloading cannot add another population, reroll an animal, duplicate movement signs, or rewrite older ecology.",
+        body: "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins. Outer save version 12 preserves habitat version 4, rat and frog population areas and signs, persistent herds and flocks, bounded representatives and their saved intent, movement evidence, and physical food history. Bounded bird activity is derived again from those authoritative facts and world time. A sealed version 11 save migrates exactly once: every established habitat-version-3 population byte, actor, group, aggregate population, item, Promise, evidence record, and world fact stays exact while seed-derived fish-crow, northern-harrier, and southern leopard-frog ecology is appended once. Re-saving and reloading cannot add another population, reroll an animal, duplicate a group or consumed provision, or rewrite older ecology.",
       },
       {
         id: "saves-no-offline-time",
@@ -1420,13 +1432,13 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "boundaries-live-weather",
         audience: "all",
         title: "Live now",
-        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, ABOUT inspection, occluded sight, anonymous directional hearing, bounded attention/suspicion, and last-known-area searching for the original harbor country's 42 humans are active. One generated independent dog adds physical movement, food scent, rain/cold condition, knowledge-honest ABOUT, five player choices, exact one-unit provision transfer, bounded memory, and promotion beside one existing porter. One bounded habitat-derived assemblage near the stable starting harbor adds deer, gull, black-bear, brown-rat, domestic-cat, marsh-rabbit, and marsh-fox ecology: honest absence, persistent individual representatives, deer herds, gull flocks, a rat population-area aggregate, direct physical signs, shared lawful visual contacts, narrow exposed-food scent pressure, rabbit alarm and flight, nonlethal finite fox pursuit, dog and large-predator pressure, shared terrain locomotion, visible-event-only animal cues, and knowledge-honest Chart/Relief ABOUT with mouse and touch. Rat redistribution is bounded and never consumes or moves cargo; fox pursuit never attacks or consumes prey. The outer game save uses version 11 with exact one-time sealed-version-10 adoption of seed-derived rabbit and fox ecology while preserving established actors, groups, aggregate populations, items, Promises, evidence, and prior wildlife state; embedded simulation snapshots remain perception-aware format 4 and rules 6. Perpetual play remains active.",
+        body: "One continuous deterministic world, a bounded moving presentation frame, exact negative coordinates, seamless player and parcel travel beyond the old map extent, seven visual biomes, the original estuary's deterministic field resources, one-unit gathering, exact combined inventory load, component and gear recipes, durable condition, mending and dismantling, authoritative Marsh wraps, Float sash, Ridge cleats and Weather cape effects, persistent Wayknots, tides, global weather, downward screen-space Relief rain, deterministic local river strength and turbulence, ordinary surface streamlines and scan-only analytical arrows, direct terrain-responsive stability percentage, separate broad-terrain and short-detail perception fog, a brief terrain-only visual memory shared by Chart and Relief, transient uncharted sight, dim explored memory, observation-safe EVENTS, cross-layout HUD facts, discovery, depth sounding, player-controlled ADRIFT recovery, promises, reports, routes, projects, and persistent identities, weather condition, restrained emotion cues, greetings, ABOUT inspection, occluded sight, anonymous directional hearing, bounded attention/suspicion, and last-known-area searching for the original harbor country's 42 humans are active. One generated independent dog adds physical movement, food scent, rain/cold condition, knowledge-honest ABOUT, five player choices, exact one-unit provision transfer, bounded memory, and promotion beside one existing porter. One bounded habitat-derived assemblage near the stable starting harbor adds deer, gull, black-bear, brown-rat, domestic-cat, marsh-rabbit, marsh-fox, fish-crow, northern-harrier, and southern leopard-frog ecology: honest absence, persistent individual representatives, deer herds, gull and crow flocks, rat and frog population-area aggregates, direct physical signs, shared lawful visual contacts, narrow exposed-food scent pressure, rabbit and crow alarms, nonlethal finite fox and harrier pursuit, crow mobbing pressure, bounded perch/quarter/rest activity, rain-responsive directional chorus, shared terrain locomotion, and knowledge-honest Chart/Relief ABOUT with mouse and touch. Aggregate redistribution is bounded and never duplicates population units; fox and harrier pursuit never attacks or consumes prey. The outer game save uses version 12 with exact one-time sealed-version-11 adoption of the habitat-version-4 extension while preserving established actors, groups, aggregate populations, items, Promises, evidence, and prior wildlife state; embedded simulation snapshots remain perception-aware format 4 and rules 6. Perpetual play remains active.",
       },
       {
         id: "boundaries-planned-ecology",
         audience: "all",
         title: "Broader ecology is planned",
-        body: "The seven named biomes and their rainfall, heat, salinity, exposure, and magical-water signals are visible now. Current rain affects the first dog's condition and food-scent web, masks shared perception, and can pressure the local rat aggregate; exposed loose provisions can create bounded rat scent attraction without being consumed. Further wildlife species and worldwide populations, the full bestiary, reproduction, injury, death, attacks, carcasses, complete scent fields and tracking, foliage consumption, circadian behavior, cat ownership or companionship, courier exposure, and material-specific magical-water reactions remain planned. The scaffold is exercised through shared invariants and representative scenarios rather than an exhaustive animal-by-animal pair matrix; absent systems do not alter a delivery behind the HUD's back.",
+        body: "The seven named biomes and their rainfall, heat, salinity, exposure, and magical-water signals are visible now. Current rain affects the first dog's condition and food-scent web, masks shared perception, can pressure the local rat aggregate, and raises bounded southern leopard-frog activity and chorus without changing frog identity. Exposed loose provisions can create bounded rat scent attraction without being consumed, while a crow must physically reach a provision before one whole item can transfer and be consumed. Further wildlife species and worldwide populations, the full bestiary, reproduction, injury, death, attacks, carcasses, complete scent fields and tracking, foliage consumption, complete circadian behavior, cat ownership or companionship, courier exposure, and material-specific magical-water reactions remain planned. The scaffold is exercised through shared invariants and representative scenarios rather than an exhaustive animal-by-animal pair matrix; absent systems do not alter a delivery behind the HUD's back.",
       },
       {
         id: "boundaries-planned-physics",
@@ -1447,7 +1459,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 26 as const;
+export const TUTORIAL_CONTENT_VERSION = 27 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

@@ -18,7 +18,9 @@ import {
 } from "./coreEcology";
 import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
+  deriveCoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatAssemblage,
+  type CoreEcologyRainChorusHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI,
@@ -216,6 +218,58 @@ describe("aggregate ecology shared-perception adapter", () => {
     expect(frame?.stimuli.find(({ sourceKind }) => sourceKind === "exposed-food")
       ?.sourceReferenceId).toBe(near.sourceReferenceId);
   });
+
+  it("keeps frog rain activity separate from rat food and nocturnal pressure", () => {
+    const current = rainChorusFixture();
+    const frogs = current.patch.aggregatePopulations.find(
+      ({ species }) => species === "southern-leopard-frog",
+    );
+    const rats = ratPopulation(current.patch);
+    const frogAnchor = frogs?.anchors[0];
+    if (frogs === undefined || frogAnchor === undefined) {
+      throw new Error("Rain-chorus fixture requires a frog population area");
+    }
+    const food: CoreEcologyAggregateExposedFoodSource = {
+      sourceReferenceId: "food:beside-frogs",
+      position: frogAnchor.position,
+      sourceStrength: FIXED_POINT,
+      packagingLeakage: FIXED_POINT,
+    };
+    const harrier: CoreEcologyAggregateVisualSource = {
+      sourceReferenceId: "HARRIER-v1-frog-quieting",
+      sourceKind: "northern-harrier",
+      position: frogAnchor.position,
+      movementSalience: FIXED_POINT,
+    };
+    const frame = deriveCoreEcologySettlementShadowsStimulusFrame(
+      input(current, [harrier], [food]),
+    );
+
+    expect(frame).not.toBeNull();
+    expect(frame?.stimuli.some(({ sourceKind, targetAggregateId }) => (
+      sourceKind === "exposed-food" && targetAggregateId === frogs.aggregateId
+    ))).toBe(false);
+    expect(frame?.stimuli.find(({ sourceKind, targetAggregateId }) => (
+      sourceKind === "rain" && targetAggregateId === frogs.aggregateId
+    ))).toMatchObject({ response: "attraction" });
+    expect(frame?.stimuli.find(({ sourceKind, targetAggregateId }) => (
+      sourceKind === "rain" && targetAggregateId === rats.aggregateId
+    ))).toMatchObject({ response: "pressure" });
+    expect(frame?.stimuli.find(({ sourceKind, targetAggregateId }) => (
+      sourceKind === "northern-harrier" && targetAggregateId === frogs.aggregateId
+    ))).toMatchObject({ response: "pressure", channels: ["vision"] });
+    expect(frame?.stimuli.some(({ sourceKind, targetAggregateId }) => (
+      sourceKind === "northern-harrier" && targetAggregateId === rats.aggregateId
+    ))).toBe(false);
+    expect(frogs.activitySignal).toMatchObject({
+      kind: "rain-chorus",
+      activePeriod: "rain-responsive",
+    });
+    expect(rats.activitySignal).toMatchObject({
+      kind: "rustle-scratch",
+      activePeriod: "nocturnal",
+    });
+  });
 });
 
 function fixture(
@@ -259,8 +313,43 @@ function fixture(
   return { patch, world, window };
 }
 
+function rainChorusFixture(): Fixture {
+  const state = createWorld(SEED_TEXT, "standard");
+  state.weather = {
+    ...state.weather,
+    kind: "rain",
+    intensity: 900_000,
+    windX: 0,
+    windY: 0,
+  };
+  const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
+    rootSeed: state.meta.rootSeed,
+    originRegion: ORIGIN,
+  });
+  const patch = createCoreEcologyAggregatePatch({
+    seed: state.meta.rootSeed,
+    patchKey: "wave-b:rain-chorus-perception",
+    originRegion: ORIGIN,
+    populations: individualInputs(habitat),
+    derivation: { kind: "habitat-v4", habitat },
+  });
+  if (patch.aggregatePopulations.flatMap(({ anchors }) => anchors).length === 0) {
+    throw new Error("Rain-chorus fixture has no aggregate anchor");
+  }
+  const window = createRegionalTerrainWindow(
+    state.meta.rootSeed,
+    createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed, center: ORIGIN }),
+  );
+  const world = createRegionalWorldView(
+    createWorldView(state),
+    window,
+    projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+  );
+  return { patch, world, window };
+}
+
 function individualInputs(
-  habitat: CoreEcologyHarborEdgeHabitatAssemblage,
+  habitat: CoreEcologyHarborEdgeHabitatAssemblage | CoreEcologyRainChorusHabitatAssemblage,
 ): readonly CoreEcologyPopulationInput[] {
   return habitat.populations.flatMap((population) => (
     population.representation !== "individual-representatives"

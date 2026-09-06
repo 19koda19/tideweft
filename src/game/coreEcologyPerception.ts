@@ -31,7 +31,10 @@ import {
 } from "./livingActorVisualContact";
 import { livingActorSenseProfile } from "./livingActorSenses";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
-import { coreEcologyTrophicPerceivedClass } from "./coreEcologyTrophic";
+import {
+  coreEcologyTrophicPerceivedClass,
+  type CoreEcologyTrophicObservationContext,
+} from "./coreEcologyTrophic";
 import {
   VISIBILITY_DIRECT,
   calculateAmbientNoise,
@@ -75,6 +78,7 @@ export interface CoreEcologyObservationBatch {
 interface CanonicalPerceptionFrame {
   readonly actors: readonly CoreWildlifeActorState[];
   readonly actorIds: ReadonlySet<string>;
+  readonly actorStates: ReadonlyMap<string, CoreWildlifeActorState>;
   readonly observers: readonly LivingActorAddress[];
   readonly placements: ReadonlyMap<string, Readonly<{
     readonly point: SpatialFramePoint;
@@ -87,6 +91,10 @@ interface CanonicalPerceptionFrame {
 }
 
 const EMPTY_OBSERVATIONS: readonly ActorObservation[] = Object.freeze([]);
+const NO_TROPHIC_ACTIVITY: CoreEcologyTrophicObservationContext = Object.freeze({});
+const MOBBING_ACTIVITY: CoreEcologyTrophicObservationContext = Object.freeze({
+  subjectActivity: "mobbing",
+});
 
 /**
  * Builds pairwise visual facts and bounded local weather cues for the exact
@@ -139,7 +147,11 @@ export function collectCoreEcologyVisualObservationBatches(
           tick: frame.tick,
         })}`,
         perceivedClass: direct
-          ? perceivedVisualClass(observer.species, subject.species)
+          ? perceivedVisualClass(
+              observer.species,
+              subject.species,
+              frame.actorStates.get(subject.actorId) ?? null,
+            )
           : "animal-silhouette",
         subject,
         lineOfSight: direct ? "clear" as const : "partial" as const,
@@ -261,6 +273,9 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
     left.identity.stableId,
     right.identity.stableId,
   ));
+  const actorStates = new Map<string, CoreWildlifeActorState>(actors.map((actor) => (
+    [actor.identity.stableId, actor]
+  )));
 
   const observers: LivingActorAddress[] = actors.map(({ address }) => address);
   const dog = canonicalOptionalAddress(value, "dogAddress", "domestic-dog");
@@ -294,6 +309,7 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
   return Object.freeze({
     actors: Object.freeze(actors),
     actorIds: coreIds,
+    actorStates,
     observers: Object.freeze(observers),
     placements,
     cells,
@@ -348,8 +364,52 @@ function canonicalOptionalAddress(
 function perceivedVisualClass(
   observer: LivingActorSpecies,
   subject: LivingActorSpecies,
+  subjectState: CoreWildlifeActorState | null,
 ): string {
-  return coreEcologyTrophicPerceivedClass(observer, subject) ?? subject;
+  return coreEcologyTrophicPerceivedClass(
+    observer,
+    subject,
+    fishCrowObservedActivity(subjectState),
+  ) ?? subject;
+}
+
+/**
+ * Mobbing is observable behavior, not a species label or a caller-provided
+ * assertion. A crow exposes it only while its current alarm intent is tied to
+ * the exact retained visual belief that made an aerial predator salient.
+ * This keeps neutral co-presence neutral and prevents a stale or unrelated
+ * alarm state from pressuring a harrier.
+ */
+function fishCrowObservedActivity(
+  subject: CoreWildlifeActorState | null,
+): CoreEcologyTrophicObservationContext {
+  if (
+    subject === null
+    || subject.identity.species !== "fish-crow"
+    || subject.intent.kind !== "alarm"
+    || subject.intent.cause.kind !== "perception"
+    || subject.intent.focusObservationId === null
+    || subject.intent.cause.referenceId !== subject.intent.focusObservationId
+    || subject.intent.enteredAtTick !== subject.updatedAtTick
+    || subject.intent.expiresAtTick === null
+    || subject.updatedAtTick >= subject.intent.expiresAtTick
+    || subject.perception.tick !== subject.updatedAtTick
+  ) return NO_TROPHIC_ACTIVITY;
+
+  const source = subject.perception.beliefs.find(({ sourceObservationId }) => (
+    sourceObservationId === subject.intent.focusObservationId
+  ));
+  if (
+    source === undefined
+    || source.channel !== "vision"
+    || source.perceivedClass !== "aerial-predator"
+    || source.identification !== "identified"
+    || source.subjectId === null
+    || source.area.radiusUnits !== 0
+    || source.lastObservedTick !== subject.intent.enteredAtTick
+  ) return NO_TROPHIC_ACTIVITY;
+
+  return MOBBING_ACTIVITY;
 }
 
 /**

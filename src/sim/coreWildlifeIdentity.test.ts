@@ -32,7 +32,7 @@ function input(
 }
 
 describe("core wildlife identity", () => {
-  it("publishes the Wave-A identities plus the first coherent Wave-B web", () => {
+  it("appends the rain-chorus identity profiles without rewriting prior wildlife", () => {
     expect(CORE_WILDLIFE_IDENTITY_VERSION).toBe(1);
     expect(CORE_WILDLIFE_SPECIES).toEqual([
       "deer",
@@ -42,6 +42,9 @@ describe("core wildlife identity", () => {
       "domestic-cat",
       "marsh-rabbit",
       "marsh-fox",
+      "fish-crow",
+      "northern-harrier",
+      "southern-leopard-frog",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -89,6 +92,22 @@ describe("core wildlife identity", () => {
     ]);
     expect(getCoreWildlifeProfile("marsh-fox").behavior.maximumPursuitTicks).toBe(7);
     expect(getCoreWildlifeProfile("marsh-fox").maximumPatchPopulation).toBe(3);
+    expect(getCoreWildlifeProfile("fish-crow")).toMatchObject({
+      maximumPatchPopulation: 3,
+      roles: ["alarm-source", "forager", "scavenger", "omnivore"],
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeProfile("fish-crow").roles).not.toContain("prey");
+    expect(getCoreWildlifeProfile("northern-harrier")).toMatchObject({
+      maximumPatchPopulation: 1,
+      roles: ["forager", "predator", "small-predator"],
+      behavior: { maximumPursuitTicks: 8 },
+    });
+    expect(getCoreWildlifeProfile("southern-leopard-frog")).toMatchObject({
+      maximumPatchPopulation: 72,
+      roles: ["prey", "small-prey", "forager"],
+      behavior: { maximumPursuitTicks: 0 },
+    });
     expect(getCoreWildlifeSpeciesMetadata("brown-rat")).toMatchObject({
       actorRepresentation: "aggregate",
       catalogIdentityForm: "aggregate",
@@ -114,6 +133,29 @@ describe("core wildlife identity", () => {
         taxonomicClass: "mammal",
       });
     }
+    expect(getCoreWildlifeSpeciesMetadata("fish-crow")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      groupOrganization: "flock",
+      groupStableIdNamespace: "CROW-FLOCK",
+      locomotionClass: "aerial",
+      taxonomicClass: "bird",
+    });
+    expect(getCoreWildlifeSpeciesMetadata("northern-harrier")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      groupOrganization: null,
+      locomotionClass: "aerial",
+      taxonomicClass: "bird",
+    });
+    expect(getCoreWildlifeSpeciesMetadata("southern-leopard-frog")).toMatchObject({
+      actorRepresentation: "aggregate",
+      catalogIdentityForm: "aggregate",
+      dietClass: "carnivore",
+      groupOrganization: null,
+      locomotionClass: "terrestrial",
+      taxonomicClass: "amphibian",
+    });
   });
 
   it("preserves exact pre-Alpha-16 v1 profile and stable-ID bytes", () => {

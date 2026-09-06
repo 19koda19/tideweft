@@ -34,6 +34,7 @@ import {
 export const CORE_ECOLOGY_HABITAT_VERSION = 1 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION = 2 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION = 3 as const;
+export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION = 4 as const;
 export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
   "deer",
   "gull",
@@ -49,12 +50,20 @@ export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES = [
   "marsh-rabbit",
   "marsh-fox",
 ] as const;
+export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES,
+  "fish-crow",
+  "northern-harrier",
+  "southern-leopard-frog",
+] as const;
 export type CoreEcologyWaveAHabitatSpecies =
   (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
 export type CoreEcologyHarborEdgeHabitatSpecies =
   (typeof CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES)[number];
 export type CoreEcologyMarshEdgeHabitatSpecies =
   (typeof CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES)[number];
+export type CoreEcologyRainChorusHabitatSpecies =
+  (typeof CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES)[number];
 export type CoreEcologyHabitatRepresentation =
   | "aggregate-area"
   | "individual-representatives";
@@ -65,9 +74,12 @@ export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_HARBOR_EDGE_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS = 21 as const;
+export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS = 28 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_FOCUS_RADIUS_TILES = 32 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_EXCLUDED_TILES = 64 as const;
 
@@ -162,13 +174,21 @@ export interface CoreEcologyHabitatPopulationAnalysis {
 export interface CoreEcologyHarborEdgeActivitySignal {
   readonly kind:
     | "browsing"
+    | "chorusing"
     | "foraging"
+    | "quartering-search"
     | "roaming"
+    | "shared-alarm"
     | "shelter-use"
     | "shore-feeding";
   /** Habitat-derived fixed-point likelihood/intensity, never direct perception. */
   readonly intensity: number;
-  readonly activePeriod: "crepuscular" | "diurnal" | "nocturnal" | "variable";
+  readonly activePeriod:
+    | "crepuscular"
+    | "diurnal"
+    | "nocturnal"
+    | "rain-responsive"
+    | "variable";
   readonly source: "habitat-derived";
 }
 
@@ -188,6 +208,20 @@ export interface CoreEcologyHarborEdgeHabitatPopulationAnalysis {
 
 export interface CoreEcologyMarshEdgeHabitatPopulationAnalysis {
   readonly species: CoreEcologyMarshEdgeHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
+export interface CoreEcologyRainChorusHabitatPopulationAnalysis {
+  readonly species: CoreEcologyRainChorusHabitatSpecies;
   readonly representation: CoreEcologyHabitatRepresentation;
   readonly populationKey: string;
   readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
@@ -251,6 +285,25 @@ export interface CoreEcologyMarshEdgeHabitatAssemblage {
   readonly populations: readonly CoreEcologyMarshEdgeHabitatPopulationAnalysis[];
 }
 
+/**
+ * Additive rain-chorus record. The first seven analyses are the exact v3
+ * marsh-edge records; crow, harrier, and frog analyses are appended in that
+ * fixed order. Frog allocations are non-addressable population-area anchors.
+ */
+export interface CoreEcologyRainChorusHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS;
+  /** Fixed versioned order, including honest absences. */
+  readonly populations: readonly CoreEcologyRainChorusHabitatPopulationAnalysis[];
+}
+
 interface HabitatSpeciesRule {
   readonly populationKey: string;
   readonly representation: CoreEcologyHabitatRepresentation;
@@ -260,6 +313,9 @@ interface HabitatSpeciesRule {
   readonly tilesPerCapacityUnit: number;
   readonly maximumAllocations: number;
   readonly minimumAllocationSeparation: number;
+  readonly minimumOccupancyTarget: number;
+  readonly maximumOccupancyTarget: number;
+  readonly minimumPopulationWhenViable: number;
 }
 
 interface AddressedHabitatTile {
@@ -289,7 +345,7 @@ interface HabitatSiteEvaluation {
 }
 
 interface UnallocatedPopulationAnalysis<
-  Species extends CoreEcologyMarshEdgeHabitatSpecies = CoreEcologyMarshEdgeHabitatSpecies,
+  Species extends CoreEcologyRainChorusHabitatSpecies = CoreEcologyRainChorusHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -303,7 +359,7 @@ interface UnallocatedPopulationAnalysis<
 }
 
 interface AllocatedPopulationAnalysis<
-  Species extends CoreEcologyMarshEdgeHabitatSpecies = CoreEcologyMarshEdgeHabitatSpecies,
+  Species extends CoreEcologyRainChorusHabitatSpecies = CoreEcologyRainChorusHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -329,7 +385,7 @@ const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
 
-const SPECIES_PURPOSE: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyRainChorusHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
@@ -337,9 +393,12 @@ const SPECIES_PURPOSE: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, numbe
   "domestic-cat": 0x4341_5453,
   "marsh-rabbit": 0x5241_4242,
   "marsh-fox": 0x464f_584d,
+  "fish-crow": 0x4352_4f57,
+  "northern-harrier": 0x4841_5252,
+  "southern-leopard-frog": 0x4652_4f47,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyRainChorusHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
@@ -350,6 +409,9 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, Habitat
       tilesPerCapacityUnit: 180,
       maximumAllocations: 4,
       minimumAllocationSeparation: 4,
+      minimumOccupancyTarget: 450_000,
+      maximumOccupancyTarget: 950_000,
+      minimumPopulationWhenViable: 1,
     }),
     gull: Object.freeze({
       populationKey: "habitat-v1/gull",
@@ -360,6 +422,9 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, Habitat
       tilesPerCapacityUnit: 120,
       maximumAllocations: 5,
       minimumAllocationSeparation: 3,
+      minimumOccupancyTarget: 450_000,
+      maximumOccupancyTarget: 950_000,
+      minimumPopulationWhenViable: 1,
     }),
     "black-bear": Object.freeze({
       populationKey: "habitat-v1/black-bear",
@@ -370,6 +435,9 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, Habitat
       tilesPerCapacityUnit: 700,
       maximumAllocations: 2,
       minimumAllocationSeparation: 12,
+      minimumOccupancyTarget: 450_000,
+      maximumOccupancyTarget: 950_000,
+      minimumPopulationWhenViable: 1,
     }),
     "brown-rat": Object.freeze({
       populationKey: "habitat-v2/brown-rat",
@@ -380,6 +448,9 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, Habitat
       tilesPerCapacityUnit: 20,
       maximumAllocations: 3,
       minimumAllocationSeparation: 2,
+      minimumOccupancyTarget: 450_000,
+      maximumOccupancyTarget: 950_000,
+      minimumPopulationWhenViable: 1,
     }),
     "domestic-cat": Object.freeze({
       populationKey: "habitat-v2/domestic-cat",
@@ -390,6 +461,9 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, Habitat
       tilesPerCapacityUnit: 420,
       maximumAllocations: 2,
       minimumAllocationSeparation: 8,
+      minimumOccupancyTarget: 450_000,
+      maximumOccupancyTarget: 950_000,
+      minimumPopulationWhenViable: 1,
     }),
     "marsh-rabbit": Object.freeze({
       populationKey: "habitat-v3/marsh-rabbit",
@@ -400,6 +474,9 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, Habitat
       tilesPerCapacityUnit: 84,
       maximumAllocations: 3,
       minimumAllocationSeparation: 4,
+      minimumOccupancyTarget: 450_000,
+      maximumOccupancyTarget: 950_000,
+      minimumPopulationWhenViable: 1,
     }),
     "marsh-fox": Object.freeze({
       populationKey: "habitat-v3/marsh-fox",
@@ -410,11 +487,53 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyMarshEdgeHabitatSpecies, Habitat
       tilesPerCapacityUnit: 460,
       maximumAllocations: 2,
       minimumAllocationSeparation: 10,
+      minimumOccupancyTarget: 450_000,
+      maximumOccupancyTarget: 950_000,
+      minimumPopulationWhenViable: 1,
+    }),
+    "fish-crow": Object.freeze({
+      populationKey: "habitat-v4/fish-crow",
+      representation: "individual-representatives",
+      minimumSiteScore: 410_000,
+      minimumPersistentCapacity: 1,
+      maximumPopulation: 3,
+      tilesPerCapacityUnit: 280,
+      maximumAllocations: 3,
+      minimumAllocationSeparation: 4,
+      minimumOccupancyTarget: 650_000,
+      maximumOccupancyTarget: 1_000_000,
+      minimumPopulationWhenViable: 1,
+    }),
+    "northern-harrier": Object.freeze({
+      populationKey: "habitat-v4/northern-harrier",
+      representation: "individual-representatives",
+      minimumSiteScore: 440_000,
+      minimumPersistentCapacity: 1,
+      maximumPopulation: 1,
+      tilesPerCapacityUnit: 760,
+      maximumAllocations: 1,
+      minimumAllocationSeparation: 16,
+      minimumOccupancyTarget: 1_000_000,
+      maximumOccupancyTarget: 1_000_000,
+      minimumPopulationWhenViable: 1,
+    }),
+    "southern-leopard-frog": Object.freeze({
+      populationKey: "habitat-v4/southern-leopard-frog",
+      representation: "aggregate-area",
+      minimumSiteScore: 390_000,
+      minimumPersistentCapacity: 64,
+      maximumPopulation: 72,
+      tilesPerCapacityUnit: 5,
+      maximumAllocations: 3,
+      minimumAllocationSeparation: 3,
+      minimumOccupancyTarget: 890_000,
+      maximumOccupancyTarget: 1_000_000,
+      minimumPopulationWhenViable: 64,
     }),
   });
 
 const ACTIVITY_POLICY: Readonly<Record<
-  CoreEcologyMarshEdgeHabitatSpecies,
+  CoreEcologyRainChorusHabitatSpecies,
   Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
 >> = Object.freeze({
   deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
@@ -424,6 +543,12 @@ const ACTIVITY_POLICY: Readonly<Record<
   "domestic-cat": Object.freeze({ kind: "roaming", activePeriod: "crepuscular" }),
   "marsh-rabbit": Object.freeze({ kind: "foraging", activePeriod: "crepuscular" }),
   "marsh-fox": Object.freeze({ kind: "roaming", activePeriod: "variable" }),
+  "fish-crow": Object.freeze({ kind: "shared-alarm", activePeriod: "diurnal" }),
+  "northern-harrier": Object.freeze({ kind: "quartering-search", activePeriod: "diurnal" }),
+  "southern-leopard-frog": Object.freeze({
+    kind: "chorusing",
+    activePeriod: "rain-responsive",
+  }),
 });
 
 const DEER_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
@@ -514,6 +639,56 @@ const CAT_COVER_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
   "sun-meadow": 620_000,
   "wind-ridge": 740_000,
   glimmerfen: 720_000,
+});
+
+const FISH_CROW_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 340_000,
+  "brine-flat": 820_000,
+  "reed-marsh": 900_000,
+  "rain-meadow": 720_000,
+  "sun-meadow": 620_000,
+  "wind-ridge": 420_000,
+  glimmerfen: 860_000,
+});
+
+const FISH_CROW_PERCH_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 560_000,
+  "reed-marsh": 820_000,
+  "rain-meadow": 780_000,
+  "sun-meadow": 720_000,
+  "wind-ridge": 900_000,
+  glimmerfen: 820_000,
+});
+
+const HARRIER_SEARCH_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 420_000,
+  "reed-marsh": 960_000,
+  "rain-meadow": 900_000,
+  "sun-meadow": 720_000,
+  "wind-ridge": 580_000,
+  glimmerfen: 880_000,
+});
+
+const FROG_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 80_000,
+  "reed-marsh": 1_000_000,
+  "rain-meadow": 880_000,
+  "sun-meadow": 420_000,
+  "wind-ridge": 100_000,
+  glimmerfen: 960_000,
+});
+
+const FROG_COVER_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
+  "tide-channel": 0,
+  "brine-flat": 60_000,
+  "reed-marsh": 960_000,
+  "rain-meadow": 760_000,
+  "sun-meadow": 320_000,
+  "wind-ridge": 80_000,
+  glimmerfen: 940_000,
 });
 
 /**
@@ -744,19 +919,24 @@ function deriveCoreEcologyHarborEdgeFromPrepared(
 export function deriveCoreEcologyMarshEdgeHabitatAssemblage(
   input: DeriveCoreEcologyHabitatAssemblageInput,
 ): CoreEcologyMarshEdgeHabitatAssemblage {
-  // Prepare terrain, its canonical hash, selection, distance fields, and
-  // biome/climate addressing once. The frozen v2 prefix and additive v3
-  // analyses consume the same immutable context instead of independently
-  // regenerating and re-addressing the region.
   const context = prepareCoreEcologyHabitatContext(input, "marsh-edge");
-  const harborEdge = deriveCoreEcologyHarborEdgeFromPrepared(input.rootSeed, context);
+  return deriveCoreEcologyMarshEdgeFromPrepared(input.rootSeed, context);
+}
+
+function deriveCoreEcologyMarshEdgeFromPrepared(
+  rootSeed: RootSeed,
+  context: PreparedCoreEcologyHabitatContext,
+): CoreEcologyMarshEdgeHabitatAssemblage {
+  // Terrain, its canonical hash, selection, distance fields, and biome/climate
+  // addressing are shared by the frozen v2 prefix and additive analyses.
+  const harborEdge = deriveCoreEcologyHarborEdgeFromPrepared(rootSeed, context);
   const originRegion = harborEdge.originRegion;
   const addressedTiles = context.addressedTiles;
   const rat = harborEdge.populations.find(({ species }) => species === "brown-rat");
   if (rat === undefined) throw new Error("Core ecology harbor-edge rat analysis is missing");
 
   const rabbitBase = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "marsh-rabbit",
     addressedTiles,
@@ -776,7 +956,7 @@ export function deriveCoreEcologyMarshEdgeHabitatAssemblage(
       + multiplyFixed(ratSupport, 400_000),
   );
   const fox = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "marsh-fox",
     addressedTiles,
@@ -834,6 +1014,120 @@ export function deriveCoreEcologyMarshEdgeHabitatAssemblage(
     speciesEvaluations:
       harborEdge.evaluatedTiles * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
     maximumAllocationBudget: CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+  });
+}
+
+/**
+ * Pure rain-chorus extension. Its first seven records are exactly the v3
+ * marsh-edge result. New individual birds share the existing individual
+ * occupancy plane, while the frog population area has its own bounded anchor
+ * plane and therefore never manufactures frog actors.
+ */
+export function deriveCoreEcologyRainChorusHabitatAssemblage(
+  input: DeriveCoreEcologyHabitatAssemblageInput,
+): CoreEcologyRainChorusHabitatAssemblage {
+  const context = prepareCoreEcologyHabitatContext(input, "rain-chorus");
+  const marshEdge = deriveCoreEcologyMarshEdgeFromPrepared(input.rootSeed, context);
+  const { addressedTiles } = context;
+  const { originRegion } = marshEdge;
+
+  const frogBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "southern-leopard-frog",
+    addressedTiles,
+    0,
+    0,
+  );
+  const rabbit = marshEdge.populations.find(({ species }) => species === "marsh-rabbit");
+  if (rabbit === undefined) throw new Error("Core ecology marsh-edge rabbit analysis is missing");
+  const frogSupport = ratioFixed(
+    frogBase.populationUnits,
+    SPECIES_RULES["southern-leopard-frog"].maximumPopulation,
+  );
+  const rabbitSupport = ratioFixed(
+    rabbit.populationUnits,
+    SPECIES_RULES["marsh-rabbit"].maximumPopulation,
+  );
+  const smallPreySupport = clampFixed(
+    multiplyFixed(frogSupport, 620_000)
+      + multiplyFixed(rabbitSupport, 500_000),
+  );
+  const fishCrow = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "fish-crow",
+    addressedTiles,
+    0,
+    0,
+  );
+  const harrier = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    originRegion,
+    "northern-harrier",
+    addressedTiles,
+    smallPreySupport,
+    0,
+  );
+  const harrierPressure = multiplyFixed(
+    ratioFixed(
+      harrier.populationUnits,
+      SPECIES_RULES["northern-harrier"].maximumPopulation,
+    ),
+    180_000,
+  );
+  const frog = applyPredatorPressure(frogBase, harrierPressure);
+
+  const individualOccupiedTiles = new Set<number>();
+  for (const population of marshEdge.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) {
+      individualOccupiedTiles.add(allocation.tileIndex);
+    }
+  }
+  const allocatedFishCrow = allocatePopulation(
+    fishCrow,
+    originRegion,
+    individualOccupiedTiles,
+  );
+  const frogOccupiedTiles = new Set<number>();
+  const allocatedFrog = allocatePopulation(frog, originRegion, frogOccupiedTiles);
+  const allocatedHarrier = allocatePopulation(
+    harrier,
+    originRegion,
+    individualOccupiedTiles,
+    [...rabbit.allocations, ...allocatedFrog.allocations],
+  );
+  const extension = [allocatedFishCrow, allocatedHarrier, allocatedFrog].map(
+    (population) => Object.freeze({
+      ...population,
+      representation: SPECIES_RULES[population.species].representation,
+      activitySignal: activitySignalFor(population),
+    }),
+  );
+  const populations: CoreEcologyRainChorusHabitatPopulationAnalysis[] = [
+    ...marshEdge.populations,
+    ...extension,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology rain-chorus habitat allocation budget diverged");
+  }
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
+    originRegion: marshEdge.originRegion,
+    regionId: marshEdge.regionId,
+    terrainHash: marshEdge.terrainHash,
+    selection: marshEdge.selection,
+    evaluatedTiles: marshEdge.evaluatedTiles,
+    speciesEvaluations:
+      marshEdge.evaluatedTiles * CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS,
     populations: Object.freeze(populations),
   });
 }
@@ -1062,14 +1356,98 @@ export function canonicalizeCoreEcologyMarshEdgeHabitatAssemblage(
   });
 }
 
+export function canonicalizeCoreEcologyRainChorusHabitatAssemblage(
+  value: unknown,
+): CoreEcologyRainChorusHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "selection",
+    "speciesEvaluations",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  if (selection === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const speciesEvaluations =
+    evaluatedTiles * CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || value.evaluatedTiles > CORE_ECOLOGY_HABITAT_TILE_BUDGET
+    || value.speciesEvaluations > CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const individualOccupiedTiles = new Set<number>();
+  const aggregateOccupiedTiles = new Map<
+    Extract<CoreEcologyRainChorusHabitatSpecies, "brown-rat" | "southern-leopard-frog">,
+    Set<number>
+  >([
+    ["brown-rat", new Set<number>()],
+    ["southern-leopard-frog", new Set<number>()],
+  ]);
+  const populations: CoreEcologyRainChorusHabitatPopulationAnalysis[] = [];
+  for (let index = 0; index < CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.length; index += 1) {
+    const species = CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES[index];
+    if (species === undefined) return null;
+    const occupied = species === "brown-rat" || species === "southern-leopard-frog"
+      ? aggregateOccupiedTiles.get(species)
+      : individualOccupiedTiles;
+    if (occupied === undefined) return null;
+    const population = canonicalizeHarborEdgePopulationAnalysis(
+      value.populations[index],
+      species,
+      originRegion,
+      selection,
+      evaluatedTiles,
+      occupied,
+    );
+    if (population === null) return null;
+    populations.push(population);
+  }
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS) return null;
+
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+  });
+}
+
 type VersionedHabitatPopulationAnalysis<
-  Species extends CoreEcologyMarshEdgeHabitatSpecies,
-> = Omit<CoreEcologyMarshEdgeHabitatPopulationAnalysis, "species"> & {
+  Species extends CoreEcologyRainChorusHabitatSpecies,
+> = Omit<CoreEcologyRainChorusHabitatPopulationAnalysis, "species"> & {
   readonly species: Species;
 };
 
 function canonicalizeHarborEdgePopulationAnalysis<
-  Species extends CoreEcologyMarshEdgeHabitatSpecies,
+  Species extends CoreEcologyRainChorusHabitatSpecies,
 >(
   value: unknown,
   expectedSpecies: Species,
@@ -1335,7 +1713,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreEcologyMarshEdgeHabitatSpecies,
+  species: CoreEcologyRainChorusHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -1419,7 +1797,7 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity<Species extends CoreEcologyMarshEdgeHabitatSpecies>(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyRainChorusHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
   species: Species,
@@ -1447,6 +1825,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyMarshEdgeHabita
     && averages.food < 620_000
   ) habitatCapacity = 0;
   if (species === "marsh-fox" && preySupport < 120_000) habitatCapacity = 0;
+  if (species === "northern-harrier" && preySupport < 150_000) habitatCapacity = 0;
 
   const capacityInputs = Object.freeze({
     eligibleTiles: eligible.length,
@@ -1466,13 +1845,16 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyMarshEdgeHabita
     originRegion.x,
     originRegion.y,
     POPULATION_PRESSURE_PURPOSE ^ SPECIES_PURPOSE[species],
-    450_000,
-    950_000,
+    rule.minimumOccupancyTarget,
+    rule.maximumOccupancyTarget,
   );
   const populationUnits = viable
     ? Math.min(
         habitatCapacity,
-        Math.max(1, Math.trunc((habitatCapacity * occupancyTarget + 500_000) / FIXED_POINT)),
+        Math.max(
+          rule.minimumPopulationWhenViable,
+          Math.trunc((habitatCapacity * occupancyTarget + 500_000) / FIXED_POINT),
+        ),
       )
     : 0;
   const populationPressure = habitatCapacity === 0
@@ -1511,7 +1893,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyMarshEdgeHabita
  * already-derived site/capacity result keeps the exact habitat contract while
  * avoiding a second full species pass for deer, rats, and rabbits.
  */
-function applyPredatorPressure<Species extends CoreEcologyMarshEdgeHabitatSpecies>(
+function applyPredatorPressure<Species extends CoreEcologyRainChorusHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   predatorPressure: number,
 ): UnallocatedPopulationAnalysis<Species> {
@@ -1544,7 +1926,7 @@ function applyPredatorPressure<Species extends CoreEcologyMarshEdgeHabitatSpecie
   });
 }
 
-function allocatePopulation<Species extends CoreEcologyMarshEdgeHabitatSpecies>(
+function allocatePopulation<Species extends CoreEcologyRainChorusHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
@@ -1713,7 +2095,7 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreEcologyMarshEdgeHabitatSpecies,
+  species: CoreEcologyRainChorusHabitatSpecies,
   addressed: AddressedHabitatTile,
   preySupport: number,
 ): HabitatSiteEvaluation {
@@ -1955,6 +2337,105 @@ function evaluateSite(
         && climateScore >= 300_000;
       break;
     }
+    case "fish-crow": {
+      eligible = tile.terrain !== "deep-water";
+      food = clampFixed(
+        multiplyFixed(FISH_CROW_FOOD_BY_BIOME[biome], 780_000)
+          + multiplyFixed(interaction.rainRetention, 220_000),
+      );
+      water = Math.max(
+        distanceScore(addressed.openWaterDistance, 14),
+        multiplyFixed(climate.rainfall, 520_000),
+      );
+      cover = clampFixed(
+        multiplyFixed(FISH_CROW_PERCH_BY_BIOME[biome], 760_000)
+          + multiplyFixed(tile.roughness, 240_000),
+      );
+      nesting = weightedScore([
+        [FISH_CROW_PERCH_BY_BIOME[biome], 760_000],
+        [FIXED_POINT - climate.exposure, 240_000],
+      ]);
+      climateScore = fishCrowClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 310_000],
+        [water, 180_000],
+        [cover, 190_000],
+        [nesting, 180_000],
+        [climateScore, 140_000],
+      ]);
+      eligible = eligible
+        && food >= 260_000
+        && water >= 180_000
+        && nesting >= 300_000
+        && climateScore >= 300_000;
+      break;
+    }
+    case "northern-harrier": {
+      eligible = tile.terrain === "marsh"
+        || tile.terrain === "meadow"
+        || tile.terrain === "ridge";
+      food = preySupport;
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 18),
+        multiplyFixed(climate.rainfall, 420_000),
+      );
+      const openSearch = clampFixed(
+        multiplyFixed(HARRIER_SEARCH_BY_BIOME[biome], 780_000)
+          + multiplyFixed(FIXED_POINT - tile.roughness, 220_000),
+      );
+      cover = openSearch;
+      nesting = weightedScore([
+        [HARRIER_SEARCH_BY_BIOME[biome], 700_000],
+        [FIXED_POINT - Math.trunc(climate.exposure / 2), 300_000],
+      ]);
+      climateScore = harrierClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 390_000],
+        [water, 80_000],
+        [cover, 260_000],
+        [nesting, 130_000],
+        [climateScore, 140_000],
+      ]);
+      eligible = eligible
+        && preySupport >= 150_000
+        && cover >= 360_000
+        && climateScore >= 300_000;
+      break;
+    }
+    case "southern-leopard-frog": {
+      eligible = tile.terrain === "marsh" || tile.terrain === "meadow";
+      food = multiplyFixed(
+        FROG_FOOD_BY_BIOME[biome],
+        FIXED_POINT - Math.trunc(interaction.saltStress * 3 / 4),
+      );
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 8),
+        interaction.rainRetention,
+      );
+      cover = weightedScore([
+        [FROG_COVER_BY_BIOME[biome], 680_000],
+        [tile.moisture, 320_000],
+      ]);
+      nesting = weightedScore([
+        [interaction.rainRetention, 620_000],
+        [water, 380_000],
+      ]);
+      climateScore = frogClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 220_000],
+        [water, 280_000],
+        [cover, 180_000],
+        [nesting, 190_000],
+        [climateScore, 130_000],
+      ]);
+      eligible = eligible
+        && food >= 280_000
+        && water >= 400_000
+        && cover >= 300_000
+        && nesting >= 380_000
+        && climateScore >= 300_000;
+      break;
+    }
   }
 
   eligible = eligible && addressed.withinSelection;
@@ -2052,6 +2533,33 @@ function foxClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): 
   ]);
 }
 
+function fishCrowClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 620_000, 900_000), 320_000],
+    [centeredTolerance(climate.rainfall, 620_000, 900_000), 260_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 180_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 240_000],
+  ]);
+}
+
+function harrierClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 540_000, 900_000), 320_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 300_000],
+    [FIXED_POINT - Math.trunc(interaction.heatLoad / 2), 190_000],
+    [FIXED_POINT - Math.trunc(interaction.saltStress / 2), 190_000],
+  ]);
+}
+
+function frogClimateScore(climate: BiomeClimate, interaction: BiomeInteraction): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 700_000, 620_000), 300_000],
+    [centeredTolerance(climate.rainfall, 820_000, 500_000), 300_000],
+    [interaction.rainRetention, 260_000],
+    [FIXED_POINT - interaction.saltStress, 140_000],
+  ]);
+}
+
 function averageSiteInputs(
   sites: readonly HabitatSiteEvaluation[],
 ): Omit<CoreEcologyHabitatCapacityInputs, "eligibleTiles" | "suitableTiles" | "weightedHabitatArea" | "predatorPressure"> {
@@ -2109,7 +2617,7 @@ function distanceField(
 
 function prepareCoreEcologyHabitatContext(
   input: DeriveCoreEcologyHabitatAssemblageInput,
-  extension: "harbor-edge" | "marsh-edge",
+  extension: "harbor-edge" | "marsh-edge" | "rain-chorus",
 ): PreparedCoreEcologyHabitatContext {
   if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
     throw new TypeError(`Core ecology ${extension} habitat input has an unsupported shape`);
@@ -2373,12 +2881,17 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
 }
 
 function validAllocationTerrain(
-  species: CoreEcologyMarshEdgeHabitatSpecies,
+  species: CoreEcologyRainChorusHabitatSpecies,
   terrain: string,
 ): boolean {
-  if (species === "gull") return terrain !== "deep-water" && isTerrainKind(terrain);
+  if (species === "gull" || species === "fish-crow") {
+    return terrain !== "deep-water" && isTerrainKind(terrain);
+  }
   if (species === "brown-rat" || species === "domestic-cat") {
     return terrain !== "deep-water" && isTerrainKind(terrain);
+  }
+  if (species === "southern-leopard-frog") {
+    return terrain === "marsh" || terrain === "meadow";
   }
   return terrain === "marsh" || terrain === "meadow" || terrain === "ridge";
 }
@@ -2439,6 +2952,11 @@ if (
     )
   || CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS
     !== CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
+  || CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES.reduce(
       (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
       0,
     )

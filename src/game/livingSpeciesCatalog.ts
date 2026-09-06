@@ -19,6 +19,12 @@ import {
   LIVING_SPECIES_REGISTRY_VERSION,
   livingSpeciesRegistryEntry,
 } from "./livingSpeciesRegistry";
+import {
+  CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+  assertCoreEcologySpeciesRuntimePolicies,
+  coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesRuntimePolicy,
+} from "./coreEcologySpeciesRuntimePolicy";
 
 /**
  * Versioned capability boundary for Living Weft species modules. This is not a
@@ -751,6 +757,7 @@ interface CoreWildlifeCatalogValues {
   readonly behaviorOwnerId: string;
   readonly locomotionOwnerId: string;
   readonly socialOwnerId: string;
+  readonly activityOwnerId: string;
   readonly dynamicOverlays: readonly string[];
   readonly morphologyDimensions: readonly string[];
   readonly appearanceTraits: readonly string[];
@@ -764,6 +771,10 @@ interface CoreWildlifeCatalogValues {
   readonly includeDogInteraction: boolean;
   readonly groupModel: LivingSpeciesGroupModel;
   readonly crossRegion: boolean;
+  readonly sound: LivingSpeciesSoundContract;
+  readonly evidence: Omit<LivingSpeciesEvidenceContract, "produces">;
+  readonly weather: LivingSpeciesEnvironmentResponseContract;
+  readonly aboutObservableFields: readonly string[];
 }
 
 /** Complete per-species data; adding a species cannot inherit a deer/bear fallback. */
@@ -778,6 +789,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-wildlife-actor:v1",
     locomotionOwnerId: "game:runtime-core-ecology:v1",
     socialOwnerId: "game:core-ecology-groups:v1",
+    activityOwnerId: "game:core-ecology:v2",
     dynamicOverlays: ["visible-condition"],
     morphologyDimensions: ["life-stage-size"],
     appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
@@ -794,6 +806,17 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: false,
     groupModel: "group",
     crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "approximate-size", "behavior", "condition", "life-stage", "morph", "species",
+    ],
   },
   gull: {
     implementation: "active",
@@ -803,6 +826,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-wildlife-actor:v1",
     locomotionOwnerId: "game:runtime-core-ecology:v1",
     socialOwnerId: "game:core-ecology-groups:v1",
+    activityOwnerId: "game:core-ecology:v2",
     dynamicOverlays: ["visible-condition", "visible-flock-summary"],
     morphologyDimensions: ["life-stage-size"],
     appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
@@ -816,6 +840,17 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: false,
     groupModel: "group",
     crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "approximate-size", "behavior", "condition", "life-stage", "morph", "species",
+    ],
   },
   "black-bear": {
     implementation: "active",
@@ -825,6 +860,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-wildlife-actor:v1",
     locomotionOwnerId: "game:runtime-core-ecology:v1",
     socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-ecology:v2",
     dynamicOverlays: ["visible-condition"],
     morphologyDimensions: ["life-stage-size"],
     appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
@@ -841,6 +877,17 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: false,
     groupModel: "solitary",
     crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "approximate-size", "behavior", "condition", "life-stage", "morph", "species",
+    ],
   },
   "brown-rat": {
     implementation: "active",
@@ -850,6 +897,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-ecology-small-world:v2",
     locomotionOwnerId: "game:core-ecology-small-world:v2",
     socialOwnerId: "game:core-ecology-small-world:v2",
+    activityOwnerId: "game:core-ecology:v3",
     dynamicOverlays: ["visible-activity"],
     morphologyDimensions: ["activity-area", "population-density"],
     appearanceTraits: ["activity-signs", "population-pressure"],
@@ -865,6 +913,26 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "variable",
     crossRegion: false,
+    sound: {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["rat-rustle"],
+      communicationSignals: [],
+      accessibilityCues: ["direct-observation-caption"],
+    },
+    evidence: {
+      status: "active",
+      ownerId: "game:core-ecology:v3",
+      decayOwnerId: "game:core-ecology:v3",
+      interprets: [],
+    },
+    weather: {
+      status: "active",
+      ownerId: "game:core-ecology-small-world:v2",
+      inputs: ["rain-intensity", "terrain-exposure"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    aboutObservableFields: ["evidence-kind", "evidence-scale", "species"],
   },
   "domestic-cat": {
     implementation: "active",
@@ -874,6 +942,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-wildlife-actor:v1",
     locomotionOwnerId: "game:runtime-core-ecology:v1",
     socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-wildlife-actor:v1",
     dynamicOverlays: ["visible-condition"],
     morphologyDimensions: ["life-stage-size"],
     appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
@@ -890,6 +959,26 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "solitary",
     crossRegion: true,
+    sound: {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["cat-call"],
+      communicationSignals: [],
+      accessibilityCues: ["direct-observation-caption"],
+    },
+    evidence: {
+      status: "active",
+      ownerId: "game:core-wildlife-actor:v1",
+      decayOwnerId: "game:core-wildlife-actor:v1",
+      interprets: [],
+    },
+    weather: {
+      status: "active",
+      ownerId: "game:core-ecology-perception:v1",
+      inputs: ["rain-intensity"],
+      outputs: ["stress"],
+    },
+    aboutObservableFields: ["appearance", "behavior", "condition", "life-stage", "species"],
   },
   "marsh-rabbit": {
     implementation: "active",
@@ -899,6 +988,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-wildlife-actor:v1",
     locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
     socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-wildlife-actor:v1",
     dynamicOverlays: ["visible-condition"],
     morphologyDimensions: ["life-stage-size"],
     appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
@@ -915,6 +1005,23 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "variable",
     crossRegion: true,
+    sound: {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["rabbit-thump"],
+      communicationSignals: ["rabbit-thump"],
+      accessibilityCues: ["direct-observation-caption"],
+    },
+    evidence: {
+      status: "active",
+      ownerId: "game:core-wildlife-actor:v1",
+      decayOwnerId: "game:core-wildlife-actor:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "approximate-size", "behavior", "condition", "life-stage", "morph", "species",
+    ],
   },
   "marsh-fox": {
     implementation: "active",
@@ -924,6 +1031,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-wildlife-actor:v1",
     locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
     socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-wildlife-actor:v1",
     dynamicOverlays: ["visible-condition"],
     morphologyDimensions: ["life-stage-size"],
     appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
@@ -940,6 +1048,147 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "solitary",
     crossRegion: true,
+    sound: {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["fox-yip"],
+      communicationSignals: [],
+      accessibilityCues: ["direct-observation-caption"],
+    },
+    evidence: {
+      status: "active",
+      ownerId: "game:core-wildlife-actor:v1",
+      decayOwnerId: "game:core-wildlife-actor:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "approximate-size", "behavior", "condition", "life-stage", "morph", "species",
+    ],
+  },
+  "fish-crow": {
+    implementation: "active",
+    habitatOwnerId: "game:core-ecology-habitat:v4",
+    ecologyOwnerId: "game:core-ecology:v4",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-groups:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition", "visible-flock-summary"],
+    morphologyDimensions: ["life-stage-size"],
+    appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
+    habitatClasses: ["marsh", "meadow", "settlement-edge", "tidal-flat"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["fly", "glide", "perch"],
+    terrainAffordances: ["open-air", "perch"],
+    consumedBy: [],
+    competesWith: ["gull"],
+    ecologicalEffects: ["aerial-mobbing", "alarm-information", "bounded-food-pressure"],
+    includeDogInteraction: true,
+    groupModel: "group",
+    crossRegion: true,
+    sound: {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["crow-nasal-double-call"],
+      communicationSignals: ["crow-nasal-double-call"],
+      accessibilityCues: ["direct-observation-caption"],
+    },
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "approximate-size", "behavior", "condition", "life-stage", "morph", "species",
+    ],
+  },
+  "northern-harrier": {
+    implementation: "active",
+    habitatOwnerId: "game:core-ecology-habitat:v4",
+    ecologyOwnerId: "game:core-ecology:v4",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["life-stage-size"],
+    appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
+    habitatClasses: ["marsh", "meadow", "ridge", "tidal-flat"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["fly", "glide", "quarter"],
+    terrainAffordances: ["low-open-air", "open-air"],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["small-prey-pressure"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: true,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "approximate-size", "behavior", "condition", "life-stage", "morph", "species",
+    ],
+  },
+  "southern-leopard-frog": {
+    implementation: "active",
+    habitatOwnerId: "game:core-ecology-habitat:v4",
+    ecologyOwnerId: "game:core-ecology:v4",
+    spatialOwnerId: "game:core-ecology:v4",
+    behaviorOwnerId: "game:core-ecology-small-world:v3",
+    locomotionOwnerId: "game:core-ecology-small-world:v3",
+    socialOwnerId: "game:core-ecology-small-world:v3",
+    activityOwnerId: "game:core-ecology-small-world:v3",
+    dynamicOverlays: ["visible-activity"],
+    morphologyDimensions: ["activity-area", "population-density"],
+    appearanceTraits: ["activity-signs", "population-pressure"],
+    habitatClasses: ["marsh", "retained-wet", "tidal-flat"],
+    movementMedia: [
+      { medium: "land", relativeCapability: 400_000 },
+      { medium: "shallow-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["hop", "redistribute", "swim"],
+    terrainAffordances: ["retained-wetland", "standable-shallow-water"],
+    consumedBy: ["aerial-predator", "small-predator"],
+    competesWith: [],
+    ecologicalEffects: ["rain-chorus", "small-prey-support"],
+    includeDogInteraction: true,
+    groupModel: "variable",
+    crossRegion: false,
+    sound: {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["rain-chorus"],
+      communicationSignals: ["rain-chorus"],
+      accessibilityCues: ["directional-hearing-caption"],
+    },
+    evidence: {
+      status: "active",
+      ownerId: "game:core-ecology:v4",
+      decayOwnerId: "game:core-ecology:v4",
+      interprets: [],
+    },
+    weather: {
+      status: "active",
+      ownerId: "game:core-ecology-small-world:v3",
+      inputs: ["rain-intensity", "retained-wetness", "terrain-exposure"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    aboutObservableFields: ["activity", "evidence-kind", "evidence-scale", "species"],
   },
 });
 
@@ -1013,7 +1262,7 @@ function coreWildlifeInteractionTargets(
     });
   }
 
-  if (species === "domestic-cat") {
+  if (coreEcologySpeciesHasRuntimeCapability(species, "same-species-food-guard")) {
     targets.push({
       targetClass: "same-species",
       policy: "available",
@@ -1023,6 +1272,23 @@ function coreWildlifeInteractionTargets(
       verbs: ["guard"],
       escalationConstraints: ["direct-perception-required", "physical-resource-conservation"],
       disengagementVerbs: ["disengage"],
+    });
+  }
+
+  if (coreEcologySpeciesHasRuntimeCapability(species, "mobbing")) {
+    targets.push({
+      targetClass: "flying-animal",
+      policy: "available",
+      perceptionChannels: ["hearing", "vision"],
+      appraisals: ["aerial-threat"],
+      motivationAxes: ["safety"],
+      verbs: ["mob"],
+      escalationConstraints: [
+        "aerial-predator-capability-required",
+        "direct-perception-required",
+        "finite-mobbing",
+      ],
+      disengagementVerbs: ["disengage", "retreat"],
     });
   }
 
@@ -1070,29 +1336,32 @@ function sensesFromRegistry(
 function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const profile = getCoreWildlifeProfile(species);
   const metadata = getCoreWildlifeSpeciesMetadata(species);
+  const runtimePolicy = coreEcologySpeciesRuntimePolicy(species);
+  if (runtimePolicy === null) {
+    throw new Error(`Missing core ecology species runtime policy for ${species}`);
+  }
   const values = CORE_WILDLIFE_CATALOG_VALUES[species];
   const implementation = values.implementation;
-  const identityForm = metadata.catalogIdentityForm;
+  const identityForm = runtimePolicy.identityForm;
   const aggregate = identityForm === "aggregate";
-  const marshEdgeIndividual = species === "marsh-rabbit" || species === "marsh-fox";
 
   const foodResources = CORE_WILDLIFE_FOOD_CLASSES.filter(
     (resourceClass) => profile.foodAffinities[resourceClass] > 0,
   )
     .sort(compareText)
     .map((resourceClass) => ({ resourceClass, role: "nutrition" as const }));
-  const group = metadata.groupOrganization === null
+  const group = runtimePolicy.groupOrganization === null
     ? noGroupSystem()
     : {
         status: "active" as const,
         ownerId: "game:core-ecology-groups:v1",
         representation: "hybrid" as const,
-        organizationKinds: [metadata.groupOrganization],
+        organizationKinds: [runtimePolicy.groupOrganization],
         stateAxes: [fixed("cohesion"), fixed("movement-heading"), enumAxis("phase")],
         leadershipModel: "none" as const,
         coordinationVerbs: ["alarm", "displace", "rejoin", "split"],
         stableIdentity: true,
-        stableIdNamespace: metadata.groupStableIdNamespace,
+        stableIdNamespace: runtimePolicy.groupStableIdNamespace,
         generationVersion: 1,
         membership: true,
         informationPropagation: true,
@@ -1159,7 +1428,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       ownerId: values.ecologyOwnerId,
       strategy: aggregate ? "aggregate-field" : "hybrid-population",
       materialization: aggregate ? "threshold" : "mixed",
-      maxMaterializedPerRegion: aggregate ? 0 : profile.maximumPatchPopulation,
+      maxMaterializedPerRegion: runtimePolicy.maximumMaterializedActors,
       coarseSimulation: true,
       authoritativeUnit: aggregate ? "population-patch" : "hybrid",
       dematerialization: aggregate ? "reconcile-population-state" : "reconcile-hybrid-state",
@@ -1243,44 +1512,36 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
         },
     activity: {
       implementation,
-      ownerId: species === "domestic-cat" || marshEdgeIndividual
-        ? values.behaviorOwnerId
-        : values.ecologyOwnerId,
+      ownerId: values.activityOwnerId,
       decisionModel: identityForm,
       decisionCadenceTicks: 1,
       offscreenModel: identityForm,
-      circadian: noCircadianSchedule(),
+      circadian: coreEcologySpeciesHasRuntimeCapability(species, "diurnal-activity")
+        ? {
+            status: "active",
+            ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+            rhythm: "diurnal",
+            cadenceTicks: 4,
+            phaseBias: 800_000,
+          }
+        : noCircadianSchedule(),
     },
     social: {
-      implementation: implementation === "active" && metadata.groupOrganization !== null
+      implementation: implementation === "active" && runtimePolicy.groupOrganization !== null
         ? "active"
         : "foundation",
       ownerId: values.socialOwnerId,
       groupModel: values.groupModel,
       actorToActorRelationships: false,
       relationshipAxes: [],
-      communicationChannels: profile.roles.includes("alarm-source") ? ["hearing"] : [],
+      communicationChannels: profile.roles.includes("alarm-source")
+        || values.sound.communicationSignals.length > 0
+        ? ["hearing"]
+        : [],
       group,
       territory: noTerritory(),
     },
-    sound: species === "brown-rat"
-      || species === "domestic-cat"
-      || species === "marsh-rabbit"
-      || species === "marsh-fox"
-      ? {
-          implementation: "active",
-          ownerId: "audio:soundscape:v1",
-          repertoire: [species === "brown-rat"
-            ? "rat-rustle"
-            : species === "domestic-cat"
-              ? "cat-call"
-              : species === "marsh-rabbit"
-                ? "rabbit-thump"
-                : "fox-yip"],
-          communicationSignals: species === "marsh-rabbit" ? ["rabbit-thump"] : [],
-          accessibilityCues: ["direct-observation-caption"],
-        }
-      : noSound(),
+    sound: values.sound,
     cognition: {
       implementation: aggregate ? "foundation" : implementation,
       ownerId: values.behaviorOwnerId,
@@ -1294,45 +1555,20 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
             "disengagement",
             "food",
             "guard",
-            ...(marshEdgeIndividual ? ["movement"] : []),
+            ...(coreEcologySpeciesHasRuntimeCapability(species, "movement-memory")
+              ? ["movement"]
+              : []),
             "pursuit",
             "threat",
-            ...(species === "domestic-cat" ? ["weather"] : []),
+            ...(values.weather.status === "active" ? ["weather"] : []),
           ],
       knowledgeSources: aggregate ? [] : ["direct-observation"],
       inference: false,
     },
-    evidence: species === "brown-rat"
-      ? {
-          status: "active",
-          ownerId: "game:core-ecology:v3",
-          decayOwnerId: "game:core-ecology:v3",
-          produces: ["gnaw-mark", "shelter-sign", "tracks"],
-          interprets: [],
-        }
-        : species === "domestic-cat"
-        ? {
-            status: "active",
-            ownerId: "game:core-wildlife-actor:v1",
-            decayOwnerId: "game:core-wildlife-actor:v1",
-            produces: ["wet-tracks"],
-            interprets: [],
-          }
-        : species === "marsh-rabbit" || species === "marsh-fox"
-          ? {
-              status: "active",
-              ownerId: "game:core-wildlife-actor:v1",
-              decayOwnerId: "game:core-wildlife-actor:v1",
-              produces: [species === "marsh-rabbit" ? "paired-tracks" : "canid-pawprints"],
-              interprets: [],
-            }
-        : {
-          status: "unimplemented",
-          ownerId: null,
-          decayOwnerId: null,
-          produces: [],
-          interprets: [],
-        },
+    evidence: {
+      ...values.evidence,
+      produces: runtimePolicy.evidenceKinds,
+    },
     aftermath: noAftermath(),
     interactions: {
       implementation: "foundation",
@@ -1343,21 +1579,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     environment: {
       fire: absentResponse(),
       livingCover: absentResponse(),
-      weather: species === "brown-rat"
-        ? {
-            status: "active",
-            ownerId: "game:core-ecology-small-world:v2",
-            inputs: ["rain-intensity", "terrain-exposure"],
-            outputs: ["activity-pressure", "displacement-pressure"],
-          }
-        : species === "domestic-cat"
-          ? {
-              status: "active",
-              ownerId: "game:core-ecology-perception:v1",
-              inputs: ["rain-intensity"],
-              outputs: ["stress"],
-            }
-          : absentResponse(),
+      weather: values.weather,
       water: absentResponse(),
       possibility: absentResponse(),
       terrain: absentResponse(),
@@ -1374,11 +1596,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       implementation,
       ownerId: "game:wildlife-about:v1",
       directObservationRequired: true,
-      observableFields: species === "brown-rat"
-        ? ["evidence-kind", "evidence-scale", "species"]
-        : species === "domestic-cat"
-          ? ["appearance", "behavior", "condition", "life-stage", "species"]
-          : ["approximate-size", "behavior", "condition", "life-stage", "morph", "species"],
+      observableFields: values.aboutObservableFields,
       learnedFields: [],
     },
     persistence: {
@@ -1981,6 +2199,11 @@ if (!sameStringArray(currentSpecies, expectedSpecies)) {
 
 /** Only implemented identity owners are present; this is deliberately not a planned roster. */
 export const LIVING_SPECIES_CATALOG: LivingSpeciesCatalog = currentCatalog;
+
+// The catalog and runtime policy are one fail-closed contract. A species may
+// not silently acquire actor addressing, flight, grouping, or aggregate
+// presentation merely because a caller recognizes its name.
+assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG);
 
 export function livingSpeciesModule(speciesId: string): LivingSpeciesModule | null {
   if (!canonicalId(speciesId, 64)) return null;

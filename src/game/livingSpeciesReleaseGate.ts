@@ -9,6 +9,7 @@ export const LIVING_SPECIES_RELEASE_GATE_VERSION = 1 as const;
 export const LIVING_SPECIES_READINESS_REPORT_VERSION = 1 as const;
 export const MAX_RELEASE_EVIDENCE_OWNERS = 8 as const;
 export const ALPHA16_MARSH_EDGE_BOUNDED_READINESS_VERSION = 1 as const;
+export const ALPHA17_RAIN_CHORUS_BOUNDED_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -111,6 +112,14 @@ export const ALPHA16_MARSH_EDGE_SPECIES = [
 
 export type Alpha16MarshEdgeSpecies = (typeof ALPHA16_MARSH_EDGE_SPECIES)[number];
 
+export const ALPHA17_RAIN_CHORUS_SPECIES = [
+  "fish-crow",
+  "northern-harrier",
+  "southern-leopard-frog",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha17RainChorusSpecies = (typeof ALPHA17_RAIN_CHORUS_SPECIES)[number];
+
 /**
  * Technical claims owned by the bounded Alpha-16 rabbit/fox implementation.
  * Deferred universal systems and release records remain visible in the full
@@ -163,6 +172,52 @@ export interface Alpha16MarshEdgeBoundedReadinessReport {
   readonly exactTestedDeploymentVerified: boolean;
   readonly published: boolean;
   /** Both species have all 30 criteria active/N-A; not the whole biodiversity program. */
+  readonly fullThirtyCriterionReady: boolean;
+  readonly fullGateBlockingCriteria: readonly LivingSpeciesReleaseCriterion[];
+}
+
+/**
+ * Technical boundary for Rain Chorus / Shadow Overhead. Deferred mortality,
+ * carcasses, exhaustive species-pair matrices, and live-build attestation are
+ * intentionally outside this result.
+ */
+export const ALPHA17_RAIN_CHORUS_BOUNDED_CRITERIA = [
+  "species-profile",
+  "ecological-niche",
+  "appearance",
+  "sound",
+  "habitat-placement",
+  "locomotion",
+  "human-interaction",
+  "dog-interaction",
+  "other-species-interaction",
+  "neutral-behavior",
+  "disengagement",
+  "about-disclosure",
+  "knowledge-honesty",
+  "population-materialization",
+  "full-coarse-transition",
+  "save-load",
+  "seamless-region-crossing",
+  "performance-budget",
+  "accessibility",
+  "mobile-parity",
+  "player-independent-scenario",
+  "fuzz-testing",
+  "clone-diversity",
+] as const satisfies readonly LivingSpeciesReleaseCriterion[];
+
+export interface Alpha17RainChorusBoundedReadinessReport {
+  readonly version: typeof ALPHA17_RAIN_CHORUS_BOUNDED_READINESS_VERSION;
+  readonly unitId: "alpha17-rain-chorus";
+  readonly speciesIds: readonly Alpha17RainChorusSpecies[];
+  readonly boundedCriteria: readonly LivingSpeciesReleaseCriterion[];
+  readonly evidenceAuthenticated: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingBoundedCriteria: readonly LivingSpeciesReleaseCriterion[];
+  readonly publicationRecordsReady: boolean;
+  readonly exactTestedDeploymentVerified: boolean;
+  readonly published: boolean;
   readonly fullThirtyCriterionReady: boolean;
   readonly fullGateBlockingCriteria: readonly LivingSpeciesReleaseCriterion[];
 }
@@ -544,6 +599,164 @@ function marshEdgeEvidence(
 }
 
 /**
+ * Build-owned evidence for Rain Chorus / Shadow Overhead. Shared policy and
+ * representative interaction owners replace a quadratic species-pair table.
+ * Mortality, carcasses, and fabricated in-flight tracks remain absent.
+ */
+function rainChorusEvidence(
+  species: Alpha17RainChorusSpecies,
+): readonly ClaimTuple[] {
+  const crow = species === "fish-crow";
+  const harrier = species === "northern-harrier";
+  const frog = species === "southern-leopard-frog";
+  const behaviorOwner = frog
+    ? "game:core-ecology-small-world:v3"
+    : "game:core-wildlife-actor:v1";
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  return [
+    ["species-profile", A, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["ecological-niche", A, owners(
+      "game:core-ecology-habitat:v4",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["appearance", A, owners(
+      ...(frog ? ["game:core-ecology:v4"] : ["sim:core-wildlife-identity:v1"]),
+      "game:wildlife-presentation:v1",
+    )],
+    ["sound", harrier ? U : A, harrier
+      ? []
+      : owners("audio:soundscape:v1", "game:runtime-core-ecology:v1")],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v4",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["food-web", F, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["perception-senses", F, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-actor-senses:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["locomotion", A, owners(
+      behaviorOwner,
+      ...(frog ? [] : [
+        "game:core-ecology-activity:v1",
+        "game:core-wildlife-locomotion-profile:v1",
+      ]),
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["human-interaction", A, owners(
+      behaviorOwner,
+      "game:core-ecology-perception:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["dog-interaction", A, owners(
+      behaviorOwner,
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-trophic:v1",
+    )],
+    ["same-species-interaction", harrier ? U : A, harrier ? [] : owners(
+      crow ? "game:core-ecology-groups:v1" : "game:core-ecology-small-world:v3",
+    )],
+    ["other-species-interaction", A, owners(
+      behaviorOwner,
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["neutral-behavior", A, owners(
+      behaviorOwner,
+      ...(frog ? [] : ["game:core-ecology-activity:v1"]),
+    )],
+    ["disengagement", A, [behaviorOwner]],
+    ["environmental-evidence", frog ? A : U, frog ? owners(
+      "game:core-ecology-evidence-runtime:v1",
+      "game:core-ecology:v4",
+      "game:wildlife-presentation:v1",
+    ) : []],
+    ["about-disclosure", A, owners(
+      ...(frog ? ["game:core-ecology-evidence-runtime:v1"] : []),
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v4",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      ...(crow ? ["game:core-ecology-groups:v1"] : []),
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["save-load", A, owners("game:core-ecology:v4", "game:runtime-save:v12")],
+    ["seamless-region-crossing", A, owners(
+      ...(frog ? ["game:core-ecology:v4"] : ["game:living-actor-address:v1"]),
+      "game:runtime-core-ecology:v1",
+      "game:world-position:v1",
+    )],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v4",
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+      "test:core-ecology-rain-chorus-performance:v1",
+    )],
+    ["accessibility", A, owners(
+      ...(!harrier ? ["audio:soundscape:v1"] : []),
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["mobile-parity", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "test:core-ecology-rain-chorus-mobile:v1",
+    )],
+    ["player-independent-scenario", A, owners(
+      behaviorOwner,
+      ...(frog ? [] : ["game:core-ecology-activity:v1"]),
+      ...(crow ? ["game:core-ecology-groups:v1"] : []),
+      ...(frog ? [] : ["game:core-ecology-small-world:v3"]),
+      "game:core-ecology-trophic:v1",
+    )],
+    ["fuzz-testing", A, owners(
+      "game:core-ecology-habitat:v4",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology:v4",
+      "sim:core-wildlife-identity:v1",
+      "test:core-ecology-rain-chorus-fuzz:v1",
+    )],
+    ["clone-diversity", A, owners(
+      ...(frog ? ["game:core-ecology:v4"] : []),
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v27"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha17:v1"]],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -619,6 +832,9 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "domestic-cat": settlementShadowsEvidence("domestic-cat"),
   "marsh-rabbit": marshEdgeEvidence("marsh-rabbit"),
   "marsh-fox": marshEdgeEvidence("marsh-fox"),
+  "fish-crow": rainChorusEvidence("fish-crow"),
+  "northern-harrier": rainChorusEvidence("northern-harrier"),
+  "southern-leopard-frog": rainChorusEvidence("southern-leopard-frog"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -813,6 +1029,68 @@ export function alpha16MarshEdgeBoundedReadiness(): Alpha16MarshEdgeBoundedReadi
 
 export const ALPHA16_MARSH_EDGE_BOUNDED_READINESS =
   alpha16MarshEdgeBoundedReadiness();
+
+/**
+ * Derive the bounded Alpha-17 candidate only from authenticated build-owned
+ * evidence. Publication still additionally requires records and the exact
+ * deployed build, while deferred full-gate work remains visible.
+ */
+export function alpha17RainChorusBoundedReadiness(): Alpha17RainChorusBoundedReadinessReport {
+  const reports = ALPHA17_RAIN_CHORUS_SPECIES.map((speciesId) => ({
+    speciesId,
+    gate: LIVING_SPECIES_RELEASE_GATES.gates.find((candidate) => (
+      candidate.speciesId === speciesId
+    )),
+    report: livingSpeciesReadinessReport(speciesId),
+  }));
+  const evidenceAuthenticated = reports.every(({ gate, report }) => (
+    gate !== undefined && report?.evidenceAuthenticated === true
+  ));
+  const blockingBoundedCriteria = ALPHA17_RAIN_CHORUS_BOUNDED_CRITERIA.filter((criterion) => (
+    reports.some(({ speciesId, gate }) => (
+      // Rain Chorus owns the crow's authored call and the frogs' chorus. The
+      // harrier has no authored vocal event in this bounded slice, so a silent
+      // runtime remains an explicit full-gate seam rather than a fabricated cry.
+      !(speciesId === "northern-harrier" && criterion === "sound")
+      &&
+      gate?.criteria.find((state) => state.criterion === criterion)?.status !== "active"
+    ))
+  ));
+  const publicationRecordsReady = evidenceAuthenticated && [
+    "tutorial-truth",
+    "patch-note-truth",
+  ].every((criterion) => reports.every(({ gate }) => (
+    gate?.criteria.find((state) => state.criterion === criterion)?.status === "active"
+  )));
+  const exactTestedDeploymentVerified = evidenceAuthenticated && reports.every(({ gate }) => (
+    gate?.criteria.find(({ criterion }) => criterion === "exact-tested-deployment")?.status === "active"
+  ));
+  const fullGateBlockingCriteria = LIVING_SPECIES_RELEASE_CRITERIA.filter((criterion) => (
+    reports.some(({ report }) => report?.blockingCriteria.includes(criterion) ?? true)
+  ));
+  const boundedCandidateReady = evidenceAuthenticated && blockingBoundedCriteria.length === 0;
+  const fullThirtyCriterionReady = evidenceAuthenticated
+    && reports.every(({ report }) => report?.publicReady === true);
+  return deepFreeze({
+    version: ALPHA17_RAIN_CHORUS_BOUNDED_READINESS_VERSION,
+    unitId: "alpha17-rain-chorus",
+    speciesIds: [...ALPHA17_RAIN_CHORUS_SPECIES],
+    boundedCriteria: [...ALPHA17_RAIN_CHORUS_BOUNDED_CRITERIA],
+    evidenceAuthenticated,
+    boundedCandidateReady,
+    blockingBoundedCriteria,
+    publicationRecordsReady,
+    exactTestedDeploymentVerified,
+    published: boundedCandidateReady
+      && publicationRecordsReady
+      && exactTestedDeploymentVerified,
+    fullThirtyCriterionReady,
+    fullGateBlockingCriteria,
+  });
+}
+
+export const ALPHA17_RAIN_CHORUS_BOUNDED_READINESS =
+  alpha17RainChorusBoundedReadiness();
 
 function canonicalCriterionState(
   value: unknown,

@@ -9,6 +9,7 @@ import {
 import { seedFromText } from "../sim/rng";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import {
+  createCoreEcologyAggregatePatch,
   createCoreEcologyPatch,
   migrateCoreEcologyPatchToAggregatePatch,
   type CoreEcologyAggregatePatchState,
@@ -414,9 +415,14 @@ describe("core ecology pure runtime seam", () => {
     ]);
   });
 
-  it("projects only direct-detail materialized actors and counts visible gulls per population", () => {
+  it("projects only direct-detail actors and counts visible flock representatives by policy", () => {
     const window = windowAt();
-    const state = patch([
+    const state = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "runtime:visible-flock-policy",
+      originRegion: ORIGIN,
+      derivation: { kind: "bounded-input-v1" },
+      populations: [
       population("deer", "deer:visible", [positionAt(window, 65, 60)]),
       population("gull", "gull:first", [
         positionAt(window, 66, 60),
@@ -428,8 +434,14 @@ describe("core ecology pure runtime seam", () => {
         positionAt(window, 67, 63),
         positionAt(window, 140, 63),
       ]),
+      population("fish-crow", "crow:first", [
+        positionAt(window, 66, 58),
+        positionAt(window, 68, 57),
+        positionAt(window, 140, 58),
+      ]),
       population("black-bear", "bear:visible", [positionAt(window, 69, 62)]),
-    ]);
+      ],
+    });
     const materialized = setCoreEcologyMaterializationForWindow(state, window, 1);
     if (materialized === null) throw new Error("Projection fixture materialization failed");
     const deer = member(materialized, "deer:visible", 0).actor;
@@ -450,6 +462,12 @@ describe("core ecology pure runtime seam", () => {
     }
     const secondVisibleId = member(materialized, "gull:second", 0).actor.identity.stableId;
     expect(views.find((view) => view.actorId === secondVisibleId)).not.toHaveProperty("groupSize");
+    for (const ordinal of [0, 1]) {
+      const crowId = member(materialized, "crow:first", ordinal).actor.identity.stableId;
+      expect(views.find((view) => view.actorId === crowId)?.groupSize).toBe(2);
+    }
+    expect(views.find((view) => view.actorId === deer.identity.stableId))
+      .not.toHaveProperty("groupSize");
     expect(views.some((view) =>
       view.actorId === member(materialized, "gull:first", 2).actor.identity.stableId
     )).toBe(false);

@@ -233,7 +233,7 @@ const dogView = (overrides: Partial<DogView> = {}): DogView => ({
   ...overrides,
 });
 
-type IndividualWildlifeViewSpecies = Exclude<WildlifeView["species"], "brown-rat">;
+type IndividualWildlifeViewSpecies = WildlifeView["species"];
 
 const wildlifeView = (
   species: IndividualWildlifeViewSpecies,
@@ -246,6 +246,8 @@ const wildlifeView = (
     "domestic-cat": "Domestic cat",
     "marsh-rabbit": "Marsh rabbit",
     "marsh-fox": "Marsh fox",
+    "fish-crow": "Fish crows",
+    "northern-harrier": "Northern harrier",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -254,6 +256,8 @@ const wildlifeView = (
     "domestic-cat": "CAT-",
     "marsh-rabbit": "RABBIT-",
     "marsh-fox": "FOX-",
+    "fish-crow": "CROW-",
+    "northern-harrier": "HARRIER-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -287,7 +291,7 @@ const aggregateWildlifeEvidenceView = (
   distanceUnits: 4_000,
   selected: false,
   ...overrides,
-});
+} as AggregateWildlifeEvidenceView);
 
 let canvas: MockCanvas;
 
@@ -1043,6 +1047,85 @@ describe("Chart Wave-B wildlife presentation", () => {
     renderer.destroy();
   });
 
+  it("draws and touch-selects frog impressions through the aggregate population target", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("chart-frog-evidence", { x: 12, y: 12 });
+    const evidence = aggregateWildlifeEvidenceView({
+      aggregateId: "FROG-AREA-v1-chart-aggregate",
+      evidenceId: "FROG-AREA-v1-chart-aggregate:evidence:0",
+      species: "southern-leopard-frog",
+      representation: "population-evidence",
+      form: "frog-tracks",
+      quickLabel: "Southern leopard frog signs",
+      identityLabel: "Southern leopard frog population signs",
+      evidenceLabel: "Leopard frog mud impressions",
+      sizeScale: 0.78,
+      selected: true,
+    });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "chart-frog-evidence-direct-detail",
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 1,
+        detailDirectTileCount: 1,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      aggregateWildlifeEvidence: [evidence],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    expect((p5Harness.instance?.text as ReturnType<typeof vi.fn>).mock.calls.some(([copy]) => (
+      copy === "Southern leopard frog signs · leopard frog mud impressions"
+    ))).toBe(true);
+    expect(p5Harness.instance?.line).toHaveBeenCalled();
+    expect(p5Harness.instance?.ellipse).toHaveBeenCalled();
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 206,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 206,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species: "southern-leopard-frog",
+      aggregateId: evidence.aggregateId,
+      evidenceId: evidence.evidenceId,
+      point: { x: 12, y: 12 },
+    });
+    expect(dispatch.mock.calls.some(([command]) => (
+      (command as { entity?: unknown }).entity === "living-actor"
+    ))).toBe(false);
+    renderer.destroy();
+  });
+
   it("draws direct cat pawprints without inventing a selectable cat actor", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("chart-cat-rain-evidence", { x: 12, y: 12 });
@@ -1186,6 +1269,125 @@ describe("Chart Wave-B wildlife presentation", () => {
     expect(dispatch.mock.calls.some(([command]) => (
       command.type === "select"
     ))).toBe(false);
+    renderer.destroy();
+  });
+
+  it.each([
+    ["fish-crow", "CROW-", "#284b52", "triangle"],
+    ["northern-harrier", "HARRIER-", "#8d765f", "quad"],
+  ] as const)("draws and touch-selects the distinct aerial %s form with reduced motion", (
+    species,
+    prefix,
+    primaryColor,
+    structuralMethod,
+  ) => {
+    vi.stubGlobal("performance", { now: () => 2_117 });
+    p5Harness.reducedMotion = true;
+    const base = view(`chart-${species}`, { x: 12, y: 12 });
+    const actor = wildlifeView(species, {
+      behavior: species === "fish-crow" ? "alarm" : "pursue",
+      selected: true,
+      ...(species === "fish-crow" ? { groupSize: 3 } : {}),
+    });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [actor],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+
+    const p = p5Harness.instance;
+    expect((p?.fill as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(primaryColor);
+    expect((p?.[structuralMethod] as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    if (species === "fish-crow") {
+      // Each persistent representative owns one body. `groupSize` describes
+      // flock context and must not multiply every representative again.
+      expect((p?.ellipse as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(3);
+    }
+    expect((p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
+      .not.toContain(actor.actorId);
+
+    canvas.emit("pointerdown", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 212,
+      pointerType: "touch",
+    });
+    canvas.emit("pointerup", {
+      clientX: 100,
+      clientY: 50,
+      pointerId: 212,
+      pointerType: "touch",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species,
+      id: `${prefix}R-v1-chart-${species}`,
+      point: { x: 12, y: 12 },
+    });
+    renderer.destroy();
+  });
+
+  it("gives authenticated perch and low-quartering states distinct aerial silhouettes", () => {
+    vi.stubGlobal("performance", { now: () => 2_117 });
+    const base = view("chart-aerial-activity", { x: 12, y: 12 });
+    let current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{ kind: "meadow", elevation: 0.2, discovered: 1 }],
+      },
+      wildlife: [wildlifeView("fish-crow", { behavior: "perch" })],
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+    const triangle = p5Harness.instance?.triangle as ReturnType<typeof vi.fn>;
+    const perchedCrow = triangle.mock.calls.map((call) => [...call]);
+
+    triangle.mockClear();
+    current = {
+      ...current,
+      wildlife: [wildlifeView("fish-crow", { behavior: "alarm" })],
+    };
+    draw();
+    expect(triangle.mock.calls).not.toEqual(perchedCrow);
+
+    const quad = p5Harness.instance?.quad as ReturnType<typeof vi.fn>;
+    quad.mockClear();
+    current = {
+      ...current,
+      wildlife: [wildlifeView("northern-harrier", { behavior: "quarter" })],
+    };
+    draw();
+    const quarteringHarrier = quad.mock.calls.map((call) => [...call]);
+
+    quad.mockClear();
+    current = {
+      ...current,
+      wildlife: [wildlifeView("northern-harrier", { behavior: "pursue" })],
+    };
+    draw();
+    expect(quad.mock.calls).not.toEqual(quarteringHarrier);
     renderer.destroy();
   });
 

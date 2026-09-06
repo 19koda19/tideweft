@@ -24,7 +24,7 @@ import {
   type WorldState,
 } from "../sim/public";
 import { tideAtTick } from "../sim/terrain";
-import { hashCanonical } from "../sim/util";
+import { hashCanonical, stableStringify } from "../sim/util";
 import {
   createRegionCoord,
   regionLocalToGlobalTile,
@@ -77,6 +77,18 @@ import {
 } from "./regionalPlayerTravel";
 import type { RegionalPromiseJourneyState } from "./regionalPromiseJourney";
 import type { PorterResponseState } from "./porterResponse";
+import {
+  canonicalizeCoreEcologyAggregatePatch,
+  deserializeCoreEcologyAggregatePatch,
+  serializeCoreEcologyAggregatePatch,
+  type CoreEcologyAggregatePatchState,
+} from "./coreEcology";
+import {
+  CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES,
+  CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
+  canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
+} from "./coreEcologyHabitat";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -276,6 +288,75 @@ function decodeGameSave(record: SaveRecord): TestGameSaveEnvelope {
 
 function resealGameSave(envelope: TestGameSaveEnvelope): void {
   envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
+}
+
+function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
+  record: SaveRecord;
+  ecology: CoreEcologyAggregatePatchState;
+}> {
+  const envelope = decodeGameSave(record);
+  const current = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
+  if (
+    current === null
+    || (
+      current.derivation.kind !== "habitat-v4"
+      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
+    )
+  ) throw new Error("fixture requires a canonical Rain Chorus ecology save");
+
+  const rainChorusHabitat = current.derivation.habitat;
+  const marshEdgeHabitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage({
+    ...rainChorusHabitat,
+    generationVersion: CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
+    speciesEvaluations:
+      rainChorusHabitat.evaluatedTiles * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
+    populations: rainChorusHabitat.populations.slice(
+      0,
+      CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+    ),
+  });
+  if (marshEdgeHabitat === null) {
+    throw new Error("Rain Chorus habitat did not retain the exact Marsh Edge prefix");
+  }
+  const ecology = canonicalizeCoreEcologyAggregatePatch({
+    ...current,
+    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v4"
+      ? {
+          kind: "legacy-fixed-v1-with-habitat-v3",
+          habitat: marshEdgeHabitat,
+        }
+      : {
+          kind: "habitat-v3",
+          habitat: marshEdgeHabitat,
+        },
+    groups: {
+      ...current.groups,
+      groups: current.groups.groups.filter(
+        ({ identity }) => identity.species !== "fish-crow",
+      ),
+    },
+    populations: current.populations.filter(({ species }) => (
+      species !== "fish-crow" && species !== "northern-harrier"
+    )),
+    aggregatePopulations: current.aggregatePopulations.filter(
+      ({ species }) => species !== "southern-leopard-frog",
+    ),
+  });
+  if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-16 ecology");
+
+  envelope.version = 11;
+  envelope.coreEcology = serializeCoreEcologyAggregatePatch(ecology);
+  resealGameSave(envelope);
+  return Object.freeze({
+    ecology,
+    record: {
+      ...record,
+      payloadVersion: 11,
+      updatedAt: Math.min(Number.MAX_SAFE_INTEGER, record.updatedAt + 1),
+      worldJson: JSON.stringify(envelope),
+    },
+  });
 }
 
 function runtimeSaveRecord(
@@ -1339,6 +1420,136 @@ describe("perpetual new worlds", () => {
     runtime.destroy();
   });
 
+  it("migrates Alpha-16 ecology by preserving every old entity and deterministically appending Rain Chorus state", async () => {
+    const repository = new MemoryRepository();
+    const setup = await createTideweftRuntime(repository);
+    setup.dispatchUI({
+      type: "new-world",
+      seed: "rain-chorus-runtime-2",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await setup.save();
+    const originalRecord = repository.snapshot();
+    const originalEnvelope = decodeGameSave(originalRecord);
+    const originalEcology = deserializeCoreEcologyAggregatePatch(
+      originalEnvelope.coreEcology,
+    );
+    expect(originalEnvelope.version).toBe(12);
+    expect(originalRecord.payloadVersion).toBe(12);
+    expect(originalEcology?.derivation.kind).toBe("habitat-v4");
+    if (originalEcology?.derivation.kind !== "habitat-v4") {
+      throw new Error("fixture did not create current Rain Chorus ecology");
+    }
+
+    const originalCrow = originalEcology.populations.find(
+      ({ species }) => species === "fish-crow",
+    );
+    const originalHarrier = originalEcology.populations.find(
+      ({ species }) => species === "northern-harrier",
+    );
+    const originalFrogs = originalEcology.aggregatePopulations.find(
+      ({ species }) => species === "southern-leopard-frog",
+    );
+    const originalCrowGroups = originalEcology.groups.groups.filter(
+      ({ identity }) => identity.species === "fish-crow",
+    );
+    expect(originalCrow?.members.length).toBeGreaterThanOrEqual(2);
+    expect(originalCrow?.members.length).toBeLessThanOrEqual(3);
+    expect(originalHarrier?.members).toHaveLength(1);
+    expect(originalFrogs?.populationSize).toBeGreaterThanOrEqual(64);
+    expect(originalFrogs?.populationSize).toBeLessThanOrEqual(72);
+    expect(originalFrogs?.anchors).toHaveLength(3);
+    expect(originalCrowGroups).toHaveLength(1);
+    expect(originalCrowGroups[0]?.memberOrdinals).toEqual(
+      originalCrow?.members.map(({ populationOrdinal }) => populationOrdinal),
+    );
+    expect(originalEcology.populations.some(
+      ({ species }) => species === "southern-leopard-frog",
+    )).toBe(false);
+
+    const predecessor = rainChorusSaveAsMarshEdgeV11(originalRecord);
+    expect(predecessor.ecology.derivation.kind).toBe("habitat-v3");
+    expect(predecessor.ecology.populations.some(({ species }) => (
+      species === "fish-crow" || species === "northern-harrier"
+    ))).toBe(false);
+    expect(predecessor.ecology.aggregatePopulations.some(
+      ({ species }) => species === "southern-leopard-frog",
+    )).toBe(false);
+    expect(predecessor.ecology.groups.groups.some(
+      ({ identity }) => identity.species === "fish-crow",
+    )).toBe(false);
+    setup.destroy();
+    repository.replace(predecessor.record);
+
+    const migratedRuntime = await createTideweftRuntime(repository);
+    expect(migratedRuntime.getUIView().saveWarning).toBeUndefined();
+    await migratedRuntime.save();
+    const migratedRecord = repository.snapshot();
+    const migratedEnvelope = decodeGameSave(migratedRecord);
+    const migratedEcology = deserializeCoreEcologyAggregatePatch(
+      migratedEnvelope.coreEcology,
+    );
+    expect(migratedEnvelope.version).toBe(12);
+    expect(migratedRecord.payloadVersion).toBe(12);
+    expect(migratedEcology?.derivation.kind).toBe("habitat-v4");
+    if (migratedEcology?.derivation.kind !== "habitat-v4") {
+      throw new Error("v11 migration did not produce canonical v12 ecology");
+    }
+
+    for (const oldPopulation of predecessor.ecology.populations) {
+      const retained = migratedEcology.populations.find(({ species, populationKey }) => (
+        species === oldPopulation.species && populationKey === oldPopulation.populationKey
+      ));
+      expect(stableStringify(retained)).toBe(stableStringify(oldPopulation));
+    }
+    for (const oldGroup of predecessor.ecology.groups.groups) {
+      const retained = migratedEcology.groups.groups.find(
+        ({ identity }) => identity.stableId === oldGroup.identity.stableId,
+      );
+      expect(stableStringify(retained)).toBe(stableStringify(oldGroup));
+    }
+    for (const oldAggregate of predecessor.ecology.aggregatePopulations) {
+      const retained = migratedEcology.aggregatePopulations.find(
+        ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
+      );
+      expect(stableStringify(retained)).toBe(stableStringify(oldAggregate));
+    }
+
+    expect(migratedEcology.derivation.habitat.populations.slice(
+      0,
+      CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+    )).toEqual(
+      predecessor.ecology.derivation.kind === "habitat-v3"
+        ? predecessor.ecology.derivation.habitat.populations
+        : [],
+    );
+    for (const species of ["fish-crow", "northern-harrier"] as const) {
+      expect(stableStringify(migratedEcology.populations.find(
+        (population) => population.species === species,
+      ))).toBe(stableStringify(originalEcology.populations.find(
+        (population) => population.species === species,
+      )));
+    }
+    expect(stableStringify(migratedEcology.aggregatePopulations.find(
+      ({ species }) => species === "southern-leopard-frog",
+    ))).toBe(stableStringify(originalFrogs));
+    expect(migratedEcology.groups.groups.filter(
+      ({ identity }) => identity.species === "fish-crow",
+    )).toEqual(originalCrowGroups);
+    expect(migratedEnvelope.world).toBe(originalEnvelope.world);
+    expect(migratedEnvelope.player).toEqual(originalEnvelope.player);
+    expect(migratedEnvelope.physicalCargo).toEqual(originalEnvelope.physicalCargo);
+    expect(migratedEnvelope.bio0Ecology).toBe(originalEnvelope.bio0Ecology);
+
+    const firstV12Ecology = migratedEnvelope.coreEcology;
+    migratedRuntime.destroy();
+    const reloaded = await createTideweftRuntime(repository);
+    await reloaded.save();
+    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstV12Ecology);
+    reloaded.destroy();
+  });
+
   it("loads and re-saves legacy shape values without restoring their quota objective", async () => {
     const world = createWorld("legacy shape runtime", "calm");
     const view = createWorldView(world);
@@ -1650,7 +1861,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(11);
+    expect(prepared.version).toBe(12);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -1859,8 +2070,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(11);
-    expect(durableRecord.payloadVersion).toBe(11);
+    expect(durable.version).toBe(12);
+    expect(durableRecord.payloadVersion).toBe(12);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

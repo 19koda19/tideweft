@@ -3,9 +3,14 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import type { CoreWildlifeIntentKind } from "./coreWildlifeActor";
 import type { LivingActorTraversabilityCell } from "./livingActorLocomotion";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
+import {
+  coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesRuntimePolicy,
+} from "./coreEcologySpeciesRuntimePolicy";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 
 const LOCOMOTION_FACTOR_SCALE = 1_000_000;
+export const CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION = 1 as const;
 
 interface DampCoverPreference {
   readonly terrain: "meadow";
@@ -15,7 +20,10 @@ interface DampCoverPreference {
   readonly multiplier: number;
 }
 
-interface CoreWildlifeLocomotionProfile {
+export interface CoreWildlifeLocomotionProfile {
+  readonly mode: "terrestrial" | "aerial";
+  /** Aerial travel does not inherit the surface tile's ground impedance. */
+  readonly aerialTravelCost: number | null;
   readonly baseTerrainMultiplier: number;
   readonly terrainMultipliers: Readonly<Partial<Record<TerrainTileView["terrain"], number>>>;
   readonly dampCoverPreference: DampCoverPreference | null;
@@ -24,6 +32,8 @@ interface CoreWildlifeLocomotionProfile {
 }
 
 const DEFAULT_LOCOMOTION_PROFILE: CoreWildlifeLocomotionProfile = Object.freeze({
+  mode: "terrestrial",
+  aerialTravelCost: null,
   baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
   terrainMultipliers: Object.freeze({}),
   dampCoverPreference: null,
@@ -40,7 +50,18 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
   CoreWildlifeSpecies,
   CoreWildlifeLocomotionProfile
 >>> = Object.freeze({
+  gull: Object.freeze({
+    mode: "aerial",
+    aerialTravelCost: 260_000,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 750_000,
+    intentStepFactors: Object.freeze({}),
+  }),
   "marsh-rabbit": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
     baseTerrainMultiplier: 920_000,
     terrainMultipliers: Object.freeze({
       marsh: 720_000,
@@ -62,6 +83,8 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
     }),
   }),
   "marsh-fox": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
     baseTerrainMultiplier: 880_000,
     terrainMultipliers: Object.freeze({
       marsh: 1_180_000,
@@ -73,6 +96,32 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
     intentStepFactors: Object.freeze({
       flee: 850_000,
       pursue: 800_000,
+    }),
+  }),
+  "fish-crow": Object.freeze({
+    mode: "aerial",
+    aerialTravelCost: 240_000,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 760_000,
+    intentStepFactors: Object.freeze({
+      alarm: 820_000,
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
+  "northern-harrier": Object.freeze({
+    mode: "aerial",
+    aerialTravelCost: 220_000,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 820_000,
+    intentStepFactors: Object.freeze({
+      disengage: 860_000,
+      pursue: 960_000,
+      retreat: 900_000,
     }),
   }),
 });
@@ -90,11 +139,17 @@ export function coreWildlifeTraversabilityCell(
   species: CoreWildlifeSpecies,
   tile: TerrainTileView,
 ): LivingActorTraversabilityCell {
+  const profile = coreWildlifeLocomotionProfile(species);
+  if (coreEcologySpeciesHasRuntimeCapability(species, "aerial-locomotion")) {
+    if (profile.mode !== "aerial" || profile.aerialTravelCost === null) {
+      throw new Error(`Aerial species ${species} lacks an aerial locomotion profile`);
+    }
+    return Object.freeze({ access: "open", travelCost: profile.aerialTravelCost });
+  }
   if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
     return Object.freeze({ access: "deep-water", travelCost: 0 });
   }
   const base = clamp(tile.baseTravelCost, 1, 1_000_000);
-  const profile = LOCOMOTION_PROFILES[species] ?? DEFAULT_LOCOMOTION_PROFILE;
   const preference = profile.dampCoverPreference;
   const preferredCover = preference !== null
     && tile.terrain === preference.terrain
@@ -111,8 +166,23 @@ export function coreWildlifeMaximumStepUnits(
   species: CoreWildlifeSpecies,
   intent: CoreWildlifeIntentKind,
 ): number {
-  const profile = LOCOMOTION_PROFILES[species] ?? DEFAULT_LOCOMOTION_PROFILE;
+  const profile = coreWildlifeLocomotionProfile(species);
   return stepUnits(profile.intentStepFactors[intent] ?? profile.baseStepFactor);
+}
+
+/** Complete fail-closed lookup for shared actor locomotion consumers. */
+export function coreWildlifeLocomotionProfile(
+  species: CoreWildlifeSpecies,
+): CoreWildlifeLocomotionProfile {
+  if (coreEcologySpeciesRuntimePolicy(species) === null) {
+    throw new Error(`Unknown core wildlife species ${String(species)}`);
+  }
+  const profile = LOCOMOTION_PROFILES[species] ?? DEFAULT_LOCOMOTION_PROFILE;
+  const aerial = coreEcologySpeciesHasRuntimeCapability(species, "aerial-locomotion");
+  if (aerial !== (profile.mode === "aerial") || aerial !== (profile.aerialTravelCost !== null)) {
+    throw new Error(`Core wildlife locomotion policy mismatch for ${species}`);
+  }
+  return profile;
 }
 
 function scaledCost(base: number, multiplier: number): number {

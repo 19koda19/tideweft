@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.16",
-      buildIdentity: "0.3.3-alpha.16",
+      version: "0.3.3-alpha.17",
+      buildIdentity: "0.3.3-alpha.17",
       gameplayContractVersion: 20,
-      tutorialVersion: 26,
+      tutorialVersion: 27,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,7 +68,7 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Marsh-edge Pursuit and retains earlier habitat work without claiming worldwide ecology", () => {
+  it("scopes Rain Chorus and retains earlier habitat work without claiming worldwide ecology", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
@@ -106,29 +106,33 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("Habitat version 3");
-    expect(activeCopy).toContain("deterministic marsh-rabbit and marsh-fox populations");
-    expect(activeCopy).toContain("honestly absent");
-    expect(activeCopy).toContain("alarm and then flee");
-    expect(activeCopy).toContain("pursue a directly perceived rabbit");
-    expect(activeCopy).toContain("dog or large predator");
-    expect(activeCopy).toContain("finite duration and disengages");
-    expect(activeCopy).toContain("never commits an attack, injury, kill, carcass, or prey-consumption transaction");
-    expect(activeCopy).toContain("paired tracks or canid pawprints");
-    expect(activeCopy).toContain("saved movement site");
-    expect(activeCopy).toContain("rabbit thump or fox yip");
-    expect(activeCopy).toContain("current direct-detail sight");
-    expect(activeCopy).toContain("SMALL ANIMAL or UNKNOWN CANID");
-    expect(activeCopy).toContain("role, size, perception, decision, and locomotion contracts");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("advances to version 11");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-10 save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("preserving every established actor");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("cannot reroll or duplicate the new populations, actors, or evidence");
+    expect(activeCopy).toContain("Habitat version 4");
+    expect(activeCopy).toContain("preserves every version-3 population byte-for-byte as its exact prefix");
+    expect(activeCopy).toContain("fish-crow, northern-harrier, and southern leopard-frog populations");
+    expect(activeCopy).toContain("persistent individual representatives");
+    expect(activeCopy).toContain("frog population units");
+    expect(activeCopy).toContain("without manufacturing individual frog actors");
+    expect(activeCopy).toContain("CROW-FLOCK");
+    expect(activeCopy).toContain("physically reach and consume exactly one loose provision");
+    expect(activeCopy).toContain("directly identifying an aerial predator");
+    expect(activeCopy).toContain("neutral co-presence alone cannot fabricate that response");
+    expect(activeCopy).toContain("deterministic low quartering search");
+    expect(activeCopy).toContain("Immediate hunger, perceived threats, and other lawful needs retain priority");
+    expect(activeCopy).toContain("more active in rain");
+    expect(activeCopy).toContain("one bounded chorus from its strongest currently heard anchor");
+    expect(activeCopy).toContain("versioned species runtime policy");
+    expect(activeCopy).toContain("Shared invariants, capability contracts, bounded fuzzing");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("advances to version 12");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-11 save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Every established habitat-version-3 population byte");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("cannot reroll or duplicate a bird, frog unit, chorus anchor, group, consumed provision, or migration append");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide wildlife generation or the full bestiary");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, leave carcasses, or consume live prey");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete scent fields and tracking");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("foliage consumption");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("exhaustive species-pair interaction matrix");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("complete sleep or circadian schedules");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harrier has no authored vocal cue yet");
     expect(settlementCopy).toContain("brown rats and domestic cats");
     expect(settlementCopy).toContain("population-area aggregate with no individual rat actors");
     expect(settlementCopy).toContain("free-ranging domestic cats");
@@ -168,7 +172,7 @@ describe("canonical offline patch notes", () => {
     expect(wildlifeCopy).toContain("WAIT AND WATCH");
     expect(wildlifeCopy).toContain("leaves the prior route intact");
     expect(wildlifeCopy).toContain("same stable actors cross between full and coarse representation");
-    expect(activeCopy).not.toMatch(/complete universal perception|lethal pursuit|worldwide populations are live/iu);
+    expect(activeCopy).not.toMatch(/complete universal perception|\blethal pursuit|worldwide populations are live/iu);
     expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("not a full bestiary");
     expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, or leave carcasses");
     expect(allCategoryCopy("gameplay")).toContain("Stability now resolves directly");

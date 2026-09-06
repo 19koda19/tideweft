@@ -11,9 +11,13 @@ import {
 import {
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
+  repositionCoreWildlifeActor,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
-import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
+import {
+  deriveCoreEcologyHarborEdgeHabitatAssemblage,
+  deriveCoreEcologyRainChorusHabitatAssemblage,
+} from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
   projectWildlifePopulationEvidenceAbout,
@@ -22,7 +26,10 @@ import {
   projectWildlifeQuickInspect,
   type WildlifeAboutObservation,
 } from "./wildlifeAbout";
-import type { WildlifePopulationEvidenceObservation } from "./wildlifePresentation";
+import {
+  projectWildlifePresentation,
+  type WildlifePopulationEvidenceObservation,
+} from "./wildlifePresentation";
 import { createWorldPosition, type WorldPosition } from "./worldPosition";
 import {
   hasCoherentLivingActorInspection,
@@ -123,6 +130,103 @@ function ratEvidenceFixture() {
   return { evidence, patch, population };
 }
 
+function frogEvidenceFixture() {
+  const seed = seedFromText("alpha seventeen rain chorus shadow overhead");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "about-frog-evidence",
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v4", habitat },
+    tick: 12,
+  });
+  const population = patch.aggregatePopulations.find(
+    ({ species }) => species === "southern-leopard-frog",
+  );
+  const evidence = population?.evidence[0];
+  if (population === undefined || evidence === undefined) {
+    throw new Error("Frog ABOUT fixture requires one population sign");
+  }
+  return { evidence, patch, population };
+}
+
+function activityFixture(
+  species: "fish-crow" | "northern-harrier",
+  tick: number,
+) {
+  const seed = seedFromText("rain chorus bounded diurnal activity owner");
+  const originRegion = createRegionCoord(0, 0);
+  const habitat = deriveCoreEcologyRainChorusHabitatAssemblage({
+    rootSeed: seed,
+    originRegion,
+    focus: {
+      position: createWorldPosition(
+        originRegion,
+        Math.trunc(WORLD_WIDTH / 2) * 1_000 + 500,
+        Math.trunc(WORLD_HEIGHT / 2) * 1_000 + 500,
+      ),
+      radiusTiles: 32,
+    },
+  });
+  const populations: readonly CoreEcologyPopulationInput[] = habitat.populations.flatMap(
+    (population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "materialized" as const,
+          })),
+        }],
+  );
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: `about-activity:${species}:${tick}`,
+    originRegion,
+    populations,
+    derivation: { kind: "habitat-v4", habitat },
+    tick,
+  });
+  const actor = patch.populations.find((population) => population.species === species)
+    ?.members[0]?.actor;
+  if (actor === undefined) throw new Error(`Activity ABOUT fixture requires ${species}`);
+  return { actor, patch };
+}
+
 function evidenceObservation(
   position: WorldPosition,
   distanceTiles = 4,
@@ -194,9 +298,15 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["domestic-cat", "DOMESTIC CAT", "Domestic cat"],
     ["marsh-rabbit", "MARSH RABBIT", "Marsh rabbit"],
     ["marsh-fox", "MARSH FOX", "Marsh fox"],
+    ["fish-crow", "FISH CROW FLOCK", "Fish crow"],
+    ["northern-harrier", "NORTHERN HARRIER", "Northern harrier"],
   ] as const)("identifies a clear %s without claiming an individual identity", (species, heading, label) => {
     const actor = wildlife(species);
-    const visible = observation(actor, 4, species === "gull" ? 7 : undefined);
+    const visible = observation(
+      actor,
+      4,
+      species === "gull" ? 7 : species === "fish-crow" ? 3 : undefined,
+    );
     const quick = projectWildlifeQuickInspect(actor, visible);
     const about = projectWildlifeAbout(actor, visible);
 
@@ -247,6 +357,52 @@ describe("knowledge-honest wildlife ABOUT", () => {
     expect(selected?.about.identityLine).not.toContain(actor.identity.stableId);
     expect(selected?.about.known).toEqual([]);
     expect(hasCoherentLivingActorInspection(selected!)).toBe(true);
+  });
+
+  it.each([
+    ["fish-crow", 1_200, "perch", "Perched"],
+    ["northern-harrier", 360, "quarter", "Quartering low"],
+  ] as const)(
+    "keeps selected %s quick/full ABOUT behavior in parity with its activity presentation",
+    (species, atTick, behavior, behaviorLabel) => {
+      const { actor, patch } = activityFixture(species, atTick);
+      const visible = observation(actor, 4, species === "fish-crow" ? 1 : undefined);
+      const activity = { patch, atTick };
+      const presentation = projectWildlifePresentation({
+        actor,
+        observation: visible,
+        tileSize: 16,
+        activity,
+      });
+      const selected = projectWildlifeLivingActorInspection(actor, visible, activity);
+
+      expect(presentation).toMatchObject({ behavior, behaviorLabel });
+      expect(selected?.quick.summary).toContain(behaviorLabel);
+      expect(selected?.about.observed).toContainEqual({
+        label: "Behavior",
+        value: behaviorLabel,
+      });
+      expect(hasCoherentLivingActorInspection(selected!)).toBe(true);
+    },
+  );
+
+  it("rejects stale activity custody at the quick/full ABOUT boundary", () => {
+    const { actor, patch } = activityFixture("fish-crow", 1_200);
+    const moved = repositionCoreWildlifeActor(actor, {
+      atTick: 1_200,
+      heading: actor.address.heading,
+      position: createWorldPosition(
+        actor.address.position.region,
+        actor.address.position.localX + 1,
+        actor.address.position.localY,
+      ),
+    });
+    const visible = observation(moved, 4, 1);
+    const staleActivity = { patch, atTick: 1_200 };
+
+    expect(projectWildlifeQuickInspect(moved, visible, staleActivity)).toBeNull();
+    expect(projectWildlifeAbout(moved, visible, staleActivity)).toBeNull();
+    expect(projectWildlifeLivingActorInspection(moved, visible, staleActivity)).toBeNull();
   });
 
   it("describes directly visible brown-rat evidence as population-level signs", () => {
@@ -313,6 +469,42 @@ describe("knowledge-honest wildlife ABOUT", () => {
       "missing-evidence",
       visible,
     )).toBeNull();
+  });
+
+  it("describes frog evidence as area-level signs without inventing a frog dossier", () => {
+    const { evidence, patch, population } = frogEvidenceFixture();
+    const visible = evidenceObservation(evidence.position);
+    const quick = projectWildlifePopulationEvidenceQuickInspect(
+      patch,
+      evidence.evidenceId,
+      visible,
+    );
+    const about = projectWildlifePopulationEvidenceAbout(
+      patch,
+      evidence.evidenceId,
+      visible,
+    );
+
+    expect(quick).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "southern-leopard-frog",
+      heading: "SOUTHERN LEOPARD FROG SIGNS",
+      summary: "Leopard frog mud impressions",
+    });
+    expect(about).toMatchObject({
+      species: "southern-leopard-frog",
+      heading: "SOUTHERN LEOPARD FROG SIGNS",
+      identity: "Southern leopard frog population signs",
+      knowledge: "Recognized",
+      observed: expect.arrayContaining([
+        { label: "Species", value: "Southern leopard frog" },
+        { label: "Scale", value: "Population-level signs" },
+      ]),
+      known: [],
+    });
+    expect(JSON.stringify({ about, quick }))
+      .not.toMatch(/actorId|populationSize|activitySignal|rainIntensity|hidden/iu);
   });
 
   it("keeps species, appearance, condition, and life stage hidden below clarity", () => {

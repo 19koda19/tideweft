@@ -4,6 +4,7 @@ import type {
   WildlifeEvidenceTargetUIView,
 } from "../ui/types";
 import { projectWildlifeEvidenceAboutProjection } from "../ui/wildlifeEvidenceAbout";
+import { isCoreEcologyAggregateSpecies } from "./coreEcologyAggregatePolicy";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
@@ -117,12 +118,12 @@ export function canonicalizeCoreEcologyAggregateEvidenceTarget(
   if (
     !plainRecord(value)
     || !exactKeys(value, ["aggregateId", "evidenceId", "species"])
-    || value.species !== "brown-rat"
+    || !isAggregateWildlifeEvidenceSpecies(value.species)
     || !stableId(value.aggregateId)
     || !stableId(value.evidenceId)
   ) return null;
   return Object.freeze({
-    species: "brown-rat",
+    species: value.species,
     aggregateId: value.aggregateId,
     evidenceId: value.evidenceId,
   });
@@ -136,8 +137,15 @@ export function sameCoreEcologyAggregateEvidenceTarget(
   const canonicalRight = canonicalizeCoreEcologyAggregateEvidenceTarget(right);
   return canonicalLeft !== null
     && canonicalRight !== null
+    && canonicalLeft.species === canonicalRight.species
     && canonicalLeft.aggregateId === canonicalRight.aggregateId
     && canonicalLeft.evidenceId === canonicalRight.evidenceId;
+}
+
+function isAggregateWildlifeEvidenceSpecies(
+  value: unknown,
+): value is CoreEcologyAggregateEvidenceTarget["species"] {
+  return isCoreEcologyAggregateSpecies(value);
 }
 
 function aggregateEvidenceTargetExists(

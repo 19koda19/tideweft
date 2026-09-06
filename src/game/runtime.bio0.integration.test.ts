@@ -92,6 +92,7 @@ import {
   canonicalizeCoreEcologyHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import { createCoreEcologyGroupSet } from "./coreEcologyGroups";
 import { replaceCoreWildlifeActorPhysiology } from "./coreWildlifeActor";
 import { repositionDogActor, replaceDogActorPhysiology } from "./dogActor";
 import { LOCAL_PLAYER_SUBJECT_ID } from "./humanPerception";
@@ -193,8 +194,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(11);
-    expect(firstRepository.snapshot().payloadVersion).toBe(11);
+    expect(firstEnvelope.version).toBe(12);
+    expect(firstRepository.snapshot().payloadVersion).toBe(12);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
 
@@ -331,7 +332,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(11);
+    expect(migratedEnvelope.version).toBe(12);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -373,7 +374,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(11);
+    expect(envelope.version).toBe(12);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -417,14 +418,16 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(11);
-    expect(firstRepository.snapshot().payloadVersion).toBe(11);
+    expect(firstEnvelope.version).toBe(12);
+    expect(firstRepository.snapshot().payloadVersion).toBe(12);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
     const ecology = requiredCoreEcology(firstEnvelope);
+    expect(ecology.derivation.kind).toBe("habitat-v4");
     expect(ecology.populations.map(({ species }) => species).sort()).toEqual([
       "black-bear",
       "deer",
       "domestic-cat",
+      "fish-crow",
       "gull",
       "marsh-rabbit",
     ]);
@@ -477,12 +480,18 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(11);
-    expect(firstRepository.snapshot().payloadVersion).toBe(11);
+    expect(firstEnvelope.version).toBe(12);
+    expect(firstRepository.snapshot().payloadVersion).toBe(12);
     expect(firstEnvelope.coreEcology).toBe(secondEnvelope.coreEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
-    expect(migrated.groups).toEqual(waveAGroups);
+    expect(migrated.derivation.kind).toBe("habitat-v4");
+    expect(migrated.groups.groups.filter(({ identity }) => (
+      identity.species !== "fish-crow"
+    ))).toEqual(waveAGroups.groups);
+    expect(migrated.groups.groups.filter(({ identity }) => (
+      identity.species === "fish-crow"
+    ))).toHaveLength(1);
     expect(migrated.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
     ))).toEqual(waveAPopulations);
@@ -548,7 +557,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(11);
+    expect(firstEnvelope.version).toBe(12);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual(v9Envelope.player);
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -1013,7 +1022,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v11 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v12 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1026,7 +1035,7 @@ describe("runtime BIO0 ecology persistence", () => {
     rejected.destroy();
   });
 
-  it("rejects a resealed v11 ecology whose rat identity is self-consistent but belongs to another seed", async () => {
+  it("rejects a resealed v12 ecology whose rat identity is self-consistent but belongs to another seed", async () => {
     const repository = new MemoryRepository(legacyRecord("rat aggregate seed authentication"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1383,8 +1392,8 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
 function waveAHabitatFromCurrentEcology(
   ecology: CoreEcologyAggregatePatchState,
 ): CoreEcologyHabitatAssemblage {
-  if (ecology.derivation.kind !== "habitat-v3") {
-    throw new Error("current migration fixture omitted habitat-v3 derivation");
+  if (ecology.derivation.kind !== "habitat-v4") {
+    throw new Error("current migration fixture omitted habitat-v4 derivation");
   }
   const habitat = ecology.derivation.habitat;
   const candidate = {
@@ -1502,7 +1511,9 @@ function waveAV9Record(current: SaveRecord): SaveRecord {
       kind: "habitat-v1",
       habitat: waveAHabitatFromCurrentEcology(coreEcology),
     },
-    groups: coreEcology.groups,
+    groups: createCoreEcologyGroupSet(coreEcology.groups.groups.filter(({ identity }) => (
+      CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.some((species) => species === identity.species)
+    ))),
     populations: coreEcology.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
     )),

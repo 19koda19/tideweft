@@ -7,7 +7,9 @@ import {
   canonicalizeCoreEcologyAggregatePatch,
   type CoreEcologyAggregateAreaAnchor,
   type CoreEcologyAggregatePatchState,
+  type CoreEcologyAggregateSpecies,
 } from "./coreEcology";
+import { coreEcologyAggregateSpeciesPolicy } from "./coreEcologyAggregatePolicy";
 import {
   coreEcologyPerceptionCells,
   coreEcologyTargetLightVisibility,
@@ -47,6 +49,8 @@ export const CORE_ECOLOGY_AGGREGATE_VISUAL_SOURCE_KINDS = [
   "dog",
   "human",
   "gull",
+  "fish-crow",
+  "northern-harrier",
 ] as const;
 
 export type CoreEcologyAggregateVisualSourceKind =
@@ -82,7 +86,8 @@ export interface CoreEcologyAggregatePerceptionFrameInput {
 
 /**
  * Bound a dense physical-food projection before the sensory cross product.
- * Nearest means exact squared world distance to any rat-area anchor, with the
+ * Nearest means exact squared world distance to any food-responsive aggregate
+ * anchor, with the
  * persistent source ID as the deterministic tie-break. No source is consumed,
  * cloned, or re-authored here.
  */
@@ -98,7 +103,11 @@ export function selectCoreEcologyAggregateExposedFoodSources(
   ) return null;
   const sources = canonicalFoodSources(sourcesValue);
   if (sources === null) return null;
-  const anchors = patch.aggregatePopulations.flatMap((population) => population.anchors);
+  const anchors = patch.aggregatePopulations.flatMap((population) => (
+    coreEcologyAggregateSpeciesPolicy(population.species).exposedFoodAttraction
+      ? population.anchors
+      : []
+  ));
   if (anchors.length === 0) return Object.freeze([]);
   const ranked = sources.map((source) => Object.freeze({
     source,
@@ -149,8 +158,9 @@ const FULL_CIRCLE_RADIANS = Math.PI * 2;
 /**
  * Resolves world truth into the bounded aggregate stimulus contract. This is
  * the only bridge in the Settlement Shadows slice that may turn current
- * materialized actors, physical food, or weather into rat-area pressure.
- * It creates no rat actor/address, cognition, player knowledge, or custody
+ * materialized actors, physical food, or weather into species-authorized
+ * aggregate pressure/activity. It creates no synthetic actor/address,
+ * cognition, player knowledge, or custody
  * mutation; scent observations are transient and disclose no source identity.
  */
 export function deriveCoreEcologySettlementShadowsStimulusFrame(
@@ -158,16 +168,26 @@ export function deriveCoreEcologySettlementShadowsStimulusFrame(
 ): CoreEcologySettlementShadowsStimulusFrame | null {
   const input = canonicalInput(value);
   if (input === null || input.cells === null) return null;
-  const profile = livingActorSenseProfile("brown-rat");
   const stimuli: CoreEcologySettlementShadowsStimulus[] = [];
   const populations = [...input.patch.aggregatePopulations].sort((left, right) => (
     compareText(left.aggregateId, right.aggregateId)
   ));
 
   for (const population of populations) {
+    const policy = coreEcologyAggregateSpeciesPolicy(population.species);
+    const profile = livingActorSenseProfile(population.species);
     const bestVisual = new Map<CoreEcologyAggregateVisualSourceKind, StimulusCandidate>();
     for (const source of input.visualSources) {
-      const candidate = visualCandidate(input, population.aggregateId, population.anchors, source);
+      if (!(policy.visualPressureSourceKinds as readonly string[]).includes(source.sourceKind)) {
+        continue;
+      }
+      const candidate = visualCandidate(
+        input,
+        population.species,
+        population.aggregateId,
+        population.anchors,
+        source,
+      );
       if (candidate === null) continue;
       const previous = bestVisual.get(source.sourceKind);
       if (previous === undefined || compareCandidateStrength(candidate, previous) < 0) {
@@ -179,24 +199,31 @@ export function deriveCoreEcologySettlementShadowsStimulusFrame(
       if (candidate !== undefined) stimuli.push(toStimulus(input.tick, population.aggregateId, candidate));
     }
 
-    let bestFood: StimulusCandidate | null = null;
-    for (const source of input.exposedFoodSources) {
-      const candidate = foodCandidate(
-        input,
-        population.aggregateId,
-        population.anchors,
-        source,
-        profile.scentSensitivity,
-        profile.scentBaseRangeUnits,
-      );
-      if (candidate === null) continue;
-      if (bestFood === null || compareCandidateStrength(candidate, bestFood) < 0) {
-        bestFood = candidate;
+    if (policy.exposedFoodAttraction) {
+      let bestFood: StimulusCandidate | null = null;
+      for (const source of input.exposedFoodSources) {
+        const candidate = foodCandidate(
+          input,
+          population.aggregateId,
+          population.anchors,
+          source,
+          profile.scentSensitivity,
+          profile.scentBaseRangeUnits,
+        );
+        if (candidate === null) continue;
+        if (bestFood === null || compareCandidateStrength(candidate, bestFood) < 0) {
+          bestFood = candidate;
+        }
       }
+      if (bestFood !== null) stimuli.push(toStimulus(input.tick, population.aggregateId, bestFood));
     }
-    if (bestFood !== null) stimuli.push(toStimulus(input.tick, population.aggregateId, bestFood));
 
-    const rain = rainCandidate(input, population.aggregateId, population.anchors);
+    const rain = rainCandidate(
+      input,
+      population.aggregateId,
+      population.anchors,
+      policy.rainResponse,
+    );
     if (rain !== null) stimuli.push(toStimulus(input.tick, population.aggregateId, rain));
   }
 
@@ -208,8 +235,13 @@ export function deriveCoreEcologySettlementShadowsStimulusFrame(
   });
 }
 
+/** Species-neutral name for new callers; the historical export stays stable. */
+export const deriveCoreEcologyAggregateStimulusFrame =
+  deriveCoreEcologySettlementShadowsStimulusFrame;
+
 function visualCandidate(
   input: CanonicalAggregatePerceptionFrame,
+  species: CoreEcologyAggregateSpecies,
   aggregateId: string,
   anchors: readonly CoreEcologyAggregateAreaAnchor[],
   source: CoreEcologyAggregateVisualSource,
@@ -218,7 +250,7 @@ function visualCandidate(
   if (sourceTileIndex === null) return null;
   const sourceTile = input.world.terrain.tiles[sourceTileIndex];
   if (sourceTile === undefined) return null;
-  const profile = livingActorSenseProfile("brown-rat");
+  const profile = livingActorSenseProfile(species);
   const acuity = profile.visionAcuity / FIXED_POINT;
   const anchorInfluences = anchors.map((anchor) => {
     const observerTileIndex = tileIndexInFrame(input.frame, input.world, anchor.position);
@@ -301,6 +333,7 @@ function rainCandidate(
   input: CanonicalAggregatePerceptionFrame,
   aggregateId: string,
   anchors: readonly CoreEcologyAggregateAreaAnchor[],
+  response: "attraction" | "pressure",
 ): StimulusCandidate | null {
   const precipitation = precipitationIntensity(input.world);
   if (precipitation === 0) return null;
@@ -321,7 +354,7 @@ function rainCandidate(
   return Object.freeze({
     sourceReferenceId: `weather:rain:${input.tick.toString(36)}`,
     sourceKind: "rain",
-    response: "pressure",
+    response,
     channels: Object.freeze(["touch", "evidence"] as const),
     anchorInfluences: Object.freeze(anchorInfluences),
   });

@@ -194,6 +194,8 @@ const RELIEF_DOG_COAT_COLORS: Readonly<Record<DogView["coat"]["primary"], string
 type ReliefWildlifeForm =
   | "deer"
   | "gull-flock"
+  | "fish-crow-flock"
+  | "northern-harrier"
   | "black-bear"
   | "domestic-cat"
   | "marsh-rabbit"
@@ -237,6 +239,30 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     ringRadiusScale: 0.34,
     labelLift: 1.16,
     visibleGroupNoun: "flock",
+  },
+  "fish-crow": {
+    form: "fish-crow-flock",
+    colors: {
+      primary: "#17262a",
+      secondary: "#31545b",
+      dark: "#050a0b",
+    },
+    hitRadiusScale: 0.46,
+    ringRadiusScale: 0.36,
+    labelLift: 1.08,
+    visibleGroupNoun: "flock",
+  },
+  "northern-harrier": {
+    form: "northern-harrier",
+    colors: {
+      primary: "#88715d",
+      secondary: "#ddd5c3",
+      dark: "#302a26",
+    },
+    hitRadiusScale: 0.52,
+    ringRadiusScale: 0.42,
+    labelLift: 1.18,
+    visibleGroupNoun: null,
   },
   "black-bear": {
     form: "black-bear",
@@ -350,6 +376,14 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
     hitRadiusScale: 0.47,
     ringRadiusScale: 0.38,
     liftScale: 0.3,
+  },
+  "frog-tracks": {
+    primary: "#536b3d",
+    secondary: "#b8cb83",
+    dark: "#1e2a1a",
+    hitRadiusScale: 0.46,
+    ringRadiusScale: 0.37,
+    liftScale: 0.26,
   },
 };
 
@@ -1538,7 +1572,7 @@ export function createTideweftReliefRenderer(
         nearest = {
           target: {
             entity: "aggregate-wildlife-evidence",
-            species: "brown-rat",
+            species: evidence.species,
             aggregateId: evidence.aggregateId,
             evidenceId: evidence.evidenceId,
           },
@@ -3742,63 +3776,143 @@ export function createTideweftReliefRenderer(
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
       const base = tileSize * 0.07 * scale;
       const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
-      const representativeCount = clampInteger(wildlife.groupSize ?? 1, 1, 5);
-      const offsets: readonly (readonly [number, number, number])[] = [
-        [0, 0, 0],
-        [-0.72, 0.24, 0.54],
-        [0.68, 0.34, -0.48],
-        [-0.38, 0.54, -0.72],
-        [0.42, 0.65, 0.74],
-      ];
+      const flightLift = perched ? base * 0.42 : tileSize * 0.72;
+      const flap = perched || reducedMotion
+        ? 0
+        : Math.sin(now * 0.007) * base * 0.68;
+      p.push();
+      p.translate(wildlife.position.x, -surface - flightLift, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(base * 0.92, base * 0.34, base * 0.3, 7, 4);
+      p.push();
+      p.translate(base * 0.78, -base * 0.12, 0);
+      p.sphere(base * 0.31, 6, 4);
+      p.ambientMaterial(RELIEF_PALETTE.amber);
+      p.translate(base * 0.34, base * 0.02, 0);
+      p.rotateZ(-p.HALF_PI);
+      p.cone(base * 0.12, base * 0.34, 4, 1);
+      p.pop();
 
-      for (let index = 0; index < representativeCount; index += 1) {
-        const offset = offsets[index] ?? offsets[0]!;
-        const flightLift = perched
-          ? base * 0.42
-          : tileSize * (0.72 + offset[1] * 0.28);
-        const flap = perched || reducedMotion
-          ? 0
-          : Math.sin(now * 0.007 + index * 1.83) * base * 0.68;
+      p.stroke(colors.secondary);
+      p.strokeWeight(Math.max(1, base * 0.17));
+      p.line(
+        -base * 0.12,
+        0,
+        -base * 0.12,
+        -base * 0.38,
+        -flap,
+        -base * 1.62,
+      );
+      p.line(
+        -base * 0.12,
+        0,
+        base * 0.12,
+        -base * 0.38,
+        -flap,
+        base * 1.62,
+      );
+      p.noStroke();
+      p.pop();
+    };
+
+    const drawFishCrows = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = reliefWildlifeColors("fish-crow");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.066 * scale;
+      const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
+      const lift = perched ? base * 0.42 : tileSize * 0.62;
+      const flap = perched || reducedMotion
+        ? 0
+        : Math.sin(now * 0.009) * base * 0.78;
+      p.push();
+      p.translate(wildlife.position.x, -surface - lift, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(base * 1.04, base * 0.38, base * 0.32, 7, 4);
+      p.push();
+      p.translate(base * 0.83, -base * 0.14, 0);
+      p.sphere(base * 0.34, 6, 4);
+      p.ambientMaterial(colors.dark);
+      p.translate(base * 0.35, base * 0.01, 0);
+      p.rotateZ(-p.HALF_PI);
+      p.cone(base * 0.11, base * 0.42, 4, 1);
+      p.pop();
+      p.stroke(colors.secondary);
+      p.strokeWeight(Math.max(1, base * 0.21));
+      p.line(-base * 0.12, 0, -base * 0.11, -base * 0.4, -flap, -base * 1.5);
+      p.line(-base * 0.12, 0, base * 0.11, -base * 0.4, -flap, base * 1.5);
+      p.noStroke();
+      p.ambientMaterial(colors.dark);
+      p.push();
+      p.translate(-base * 0.92, base * 0.04, 0);
+      p.box(base * 0.62, base * 0.12, base * 0.72);
+      p.pop();
+      p.pop();
+    };
+
+    const drawNorthernHarrier = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = reliefWildlifeColors("northern-harrier");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.082 * scale;
+      const resting = wildlife.behavior === "rest" || wildlife.behavior === "perch";
+      const quartering = wildlife.behavior === "quarter";
+      const bank = reducedMotion || resting
+        ? 0
+        : Math.sin(now * (quartering ? 0.0052 : 0.0038))
+          * base * (quartering ? 0.46 : 0.28);
+      const lift = resting
+        ? base * 0.5
+        : quartering ? tileSize * 0.34 : tileSize * 0.62;
+      p.push();
+      p.translate(wildlife.position.x, -surface - lift, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(base * 1.42, base * 0.3, base * 0.32, 8, 4);
+      p.push();
+      p.translate(base * 1.12, -base * 0.1, 0);
+      p.sphere(base * 0.36, 7, 4);
+      p.ambientMaterial(colors.dark);
+      p.translate(base * 0.35, base * 0.04, 0);
+      p.rotateZ(-p.HALF_PI);
+      p.cone(base * 0.12, base * 0.38, 4, 1);
+      p.pop();
+      for (const side of [-1, 1] as const) {
         p.push();
-        p.translate(
-          wildlife.position.x + offset[0] * tileSize * 0.34,
-          -surface - flightLift,
-          wildlife.position.y + offset[2] * tileSize * 0.34,
-        );
-        p.rotateY(-wildlife.facing + (index - 2) * 0.055);
-        p.noStroke();
+        p.translate(-base * 0.08, side * bank, 0);
         p.ambientMaterial(colors.primary);
-        p.ellipsoid(base * 0.92, base * 0.34, base * 0.3, 7, 4);
-        p.push();
-        p.translate(base * 0.78, -base * 0.12, 0);
-        p.sphere(base * 0.31, 6, 4);
-        p.ambientMaterial(RELIEF_PALETTE.amber);
-        p.translate(base * 0.34, base * 0.02, 0);
-        p.rotateZ(-p.HALF_PI);
-        p.cone(base * 0.12, base * 0.34, 4, 1);
-        p.pop();
-
-        p.stroke(colors.secondary);
-        p.strokeWeight(Math.max(1, base * 0.17));
-        p.line(
-          -base * 0.12,
-          0,
-          -base * 0.12,
-          -base * 0.38,
-          -flap,
-          -base * 1.62,
-        );
-        p.line(
-          -base * 0.12,
-          0,
-          base * 0.12,
-          -base * 0.38,
-          -flap,
-          base * 1.62,
-        );
-        p.noStroke();
+        p.beginShape();
+        p.vertex(base * 0.34, 0, side * base * 0.12);
+        p.vertex(-base * 0.15, 0, side * base * 3.2);
+        p.vertex(-base * 0.98, 0, side * base * 2.24);
+        p.vertex(-base * 0.4, 0, side * base * 0.18);
+        p.endShape(p.CLOSE);
         p.pop();
       }
+      p.ambientMaterial(colors.secondary);
+      p.push();
+      p.translate(-base * 0.93, 0, 0);
+      p.box(base * 0.34, base * 0.12, base * 0.74);
+      p.pop();
+      p.ambientMaterial(colors.dark);
+      p.push();
+      p.translate(-base * 1.32, base * 0.02, 0);
+      p.box(base * 0.72, base * 0.1, base * 0.9);
+      p.pop();
+      p.pop();
     };
 
     const drawBlackBear = (
@@ -4135,6 +4249,34 @@ export function createTideweftReliefRenderer(
           p.line(-base * 1.45, 0, base * 0.7, base * 1.45, 0, -base * 0.7);
           p.noStroke();
           break;
+        case "frog-tracks":
+          p.stroke(descriptor.dark);
+          p.strokeWeight(Math.max(1, base * 0.1));
+          p.line(-base * 1.35, 0, base * 0.72, base * 1.35, 0, -base * 0.72);
+          for (const [x, z, facing] of [
+            [-0.68, 0.34, -1],
+            [0.62, -0.28, 1],
+          ] as const) {
+            p.push();
+            p.translate(base * x, 0, base * z);
+            p.ambientMaterial(descriptor.primary);
+            p.ellipsoid(base * 0.28, base * 0.065, base * 0.2, 6, 3);
+            p.stroke(descriptor.secondary);
+            p.strokeWeight(Math.max(1, base * 0.08));
+            for (const toe of [-0.42, 0, 0.42]) {
+              p.line(
+                facing * base * 0.1,
+                -base * 0.02,
+                0,
+                facing * base * 0.58,
+                -base * 0.02,
+                base * toe,
+              );
+            }
+            p.pop();
+          }
+          p.noStroke();
+          break;
         case "shelter-sign":
           p.ambientMaterial(descriptor.primary);
           p.cone(base * 1.45, base * 1.15, 6, 1);
@@ -4198,6 +4340,12 @@ export function createTideweftReliefRenderer(
           return true;
         case "gull-flock":
           drawGulls(wildlife, surface, tileSize, now);
+          return true;
+        case "fish-crow-flock":
+          drawFishCrows(wildlife, surface, tileSize, now);
+          return true;
+        case "northern-harrier":
+          drawNorthernHarrier(wildlife, surface, tileSize, now);
           return true;
         case "black-bear":
           drawBlackBear(wildlife, surface, tileSize);
