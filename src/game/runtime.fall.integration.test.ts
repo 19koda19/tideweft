@@ -52,7 +52,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 18;
+  readonly version: 19;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -65,6 +65,8 @@ interface CurrentGameSaveEnvelope {
   readonly bio0Ecology: string;
   readonly coreEcology: string;
   readonly settlementEcology: string;
+  readonly dogActorRoster: string;
+  readonly settlementWorkingAnimals: string;
   readonly porterResponse: PorterResponseState;
   readonly integrity: string;
 }
@@ -145,10 +147,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 18
-    || record.payloadVersion !== 18
+    || envelope.version !== 19
+    || record.payloadVersion !== 19
   ) {
-    throw new Error("fixture did not produce a current v18 regional session save");
+    throw new Error("fixture did not produce a current v19 regional session save");
   }
   return envelope;
 }
@@ -169,7 +171,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 18,
+    payloadVersion: 19,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -517,7 +519,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 18,
+      version: 19,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,

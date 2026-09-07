@@ -10,6 +10,9 @@ import { FIXED_POINT, type WorldState, type WorldView } from "../sim/types";
 import {
   CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS,
   CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY,
+  CORE_ECOLOGY_PERCEPTION_MAX_EXTERNAL_PARTICIPANTS,
+  CORE_ECOLOGY_PERCEPTION_MAX_VISUAL_CONTACT_RANGE_TILES,
+  CORE_ECOLOGY_PERCEPTION_VISUAL_BUCKET_SIZE_TILES,
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
   type CoreEcologyPerceptionFrameInput,
@@ -128,6 +131,135 @@ describe("core ecology cross-species perception bridge", () => {
     ]);
     expect(observationsFor(batches, cat.identity.stableId)[0]?.perceivedClass)
       .not.toBe("live-prey");
+  });
+
+  it("admits bounded external rosters through one ordered species-neutral policy", () => {
+    const current = fixture("plural dogs share wildlife perception");
+    const prey = wildlife(current, "marsh-rabbit", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const firstDog = actorAddress(
+      "D-core-ecology-plural-a",
+      "domestic-dog",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      0,
+    );
+    const secondDog = actorAddress(
+      "D-core-ecology-plural-b",
+      "domestic-dog",
+      OBSERVER_X + 4,
+      OBSERVER_Y,
+      500_000,
+    );
+    const porter = actorAddress(
+      "H-core-ecology-plural-handler",
+      "human",
+      OBSERVER_X + 3,
+      OBSERVER_Y,
+      500_000,
+    );
+    const forward = collectCoreEcologyVisualObservationBatches(frame(current, [prey], {
+      participants: [
+        { address: firstDog, contactScope: "all-participants" },
+        { address: secondDog, contactScope: "all-participants" },
+        { address: porter, contactScope: "core-only" },
+      ],
+    }));
+    const reversed = collectCoreEcologyVisualObservationBatches(frame(current, [prey], {
+      participants: [
+        { address: porter, contactScope: "core-only" },
+        { address: secondDog, contactScope: "all-participants" },
+        { address: firstDog, contactScope: "all-participants" },
+      ],
+    }));
+
+    expect(forward).toEqual(reversed);
+    expect(observationsFor(forward, prey.identity.stableId)
+      .map(({ subjectId }) => subjectId)
+    ).toEqual(expect.arrayContaining([firstDog.actorId, secondDog.actorId]));
+    expect(observationsFor(forward, firstDog.actorId)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ subjectId: secondDog.actorId }),
+      expect.objectContaining({ subjectId: porter.actorId }),
+    ]));
+    expect(observationsFor(forward, secondDog.actorId)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ subjectId: firstDog.actorId }),
+      expect.objectContaining({ subjectId: porter.actorId }),
+      expect.objectContaining({ subjectId: prey.identity.stableId }),
+    ]));
+    expect(observationsFor(forward, porter.actorId)).toEqual([
+      expect.objectContaining({ subjectId: prey.identity.stableId }),
+    ]);
+    expect(collectCoreEcologyVisualObservationBatches(frame(current, [prey], {
+      participants: [
+        { address: firstDog, contactScope: "all-participants" },
+        { address: firstDog, contactScope: "core-only" },
+      ],
+    }))).toBeNull();
+    expect(collectCoreEcologyVisualObservationBatches(frame(current, [prey], {
+      dogAddress: firstDog,
+      dogAddresses: [secondDog],
+    }))).toBeNull();
+    expect(collectCoreEcologyVisualObservationBatches(frame(current, [prey], {
+      participants: Array.from(
+        { length: CORE_ECOLOGY_PERCEPTION_MAX_EXTERNAL_PARTICIPANTS + 1 },
+        (_, index) => ({
+          address: actorAddress(
+            `D-core-ecology-overflow-${index}`,
+            "domestic-dog",
+            OBSERVER_X + 3,
+            OBSERVER_Y,
+            500_000,
+          ),
+          contactScope: "all-participants" as const,
+        }),
+      ),
+    }))).toBeNull();
+  });
+
+  it("keeps deterministic contacts across bucket edges and excludes distant candidates", () => {
+    const current = fixture("bounded visual spatial candidates");
+    const observerWindowX = OBSERVER_X - current.window.origin.x;
+    const bucketEdgeWindowX = Math.floor(
+      observerWindowX / CORE_ECOLOGY_PERCEPTION_VISUAL_BUCKET_SIZE_TILES,
+    )
+      * CORE_ECOLOGY_PERCEPTION_VISUAL_BUCKET_SIZE_TILES
+      + CORE_ECOLOGY_PERCEPTION_VISUAL_BUCKET_SIZE_TILES - 1;
+    const bucketEdgeX = current.window.origin.x + bucketEdgeWindowX;
+    const deer = wildlife(current, "deer", bucketEdgeX, OBSERVER_Y, 0, 0);
+    const neighboringBear = wildlife(
+      current,
+      "black-bear",
+      bucketEdgeX + 1,
+      OBSERVER_Y,
+      500_000,
+      0,
+    );
+    const distantGull = wildlife(
+      current,
+      "gull",
+      bucketEdgeX + CORE_ECOLOGY_PERCEPTION_MAX_VISUAL_CONTACT_RANGE_TILES + 1,
+      OBSERVER_Y,
+      500_000,
+      0,
+    );
+
+    const forward = collectCoreEcologyVisualObservationBatches(
+      frame(current, [distantGull, deer, neighboringBear]),
+    );
+    const reversed = collectCoreEcologyVisualObservationBatches(
+      frame(current, [neighboringBear, deer, distantGull]),
+    );
+
+    expect(forward).toEqual(reversed);
+    expect(observationsFor(forward, deer.identity.stableId)).toEqual([
+      expect.objectContaining({
+        perceivedClass: "large-predator",
+        subjectId: neighboringBear.identity.stableId,
+      }),
+    ]);
+    expect(observationsFor(forward, deer.identity.stableId).some(({ subjectId }) => (
+      subjectId === distantGull.identity.stableId
+    ))).toBe(false);
+    expect(observationsFor(forward, distantGull.identity.stableId)).toEqual([]);
   });
 
   it("classifies a directly seen cat as a lawful food competitor to another cat", () => {
@@ -586,7 +718,9 @@ function frame(
   current: Fixture,
   actors: readonly CoreWildlifeActorState[],
   optional: Readonly<{
+    readonly participants?: NonNullable<CoreEcologyPerceptionFrameInput["participants"]>;
     readonly dogAddress?: LivingActorAddress | null;
+    readonly dogAddresses?: readonly LivingActorAddress[];
     readonly playerAddress?: LivingActorAddress | null;
     readonly porterAddress?: LivingActorAddress | null;
   }> = {},

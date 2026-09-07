@@ -25,10 +25,15 @@ import {
   MAX_TIDE_LEVEL,
 } from "../sim/terrain";
 import { hashCanonical, stableStringify } from "../sim/util";
-import { stableDogId, type DogIdentityGenerationInput } from "../sim/dogIdentity";
+import {
+  stableDogId,
+  type DogIdentityGenerationInput,
+  type GeneratedDogState,
+} from "../sim/dogIdentity";
 import {
   canonicalizeActorObservations,
   createActorObservation,
+  stepActorPerception,
   type ActorObservation,
 } from "../sim/actorPerception";
 import {
@@ -358,6 +363,20 @@ import {
   type SettlementEcologyState,
 } from "./settlementEcology";
 import {
+  canonicalizeSettlementWorkingAnimalState,
+  createSettlementWorkingAnimalState,
+  deserializeSettlementWorkingAnimalState,
+  recoverPendingSettlementWorkingAnimalActivity,
+  resolveSettlementWorkingAnimalActivity,
+  serializeSettlementWorkingAnimalState,
+  stageSettlementWorkingAnimalActivity,
+  type SettlementWorkingAnimalActorDisposition,
+  type SettlementWorkingAnimalActivityDecision,
+  type SettlementWorkingAnimalActivityTransaction,
+  type SettlementWorkingAnimalAssignment,
+  type SettlementWorkingAnimalState,
+} from "./settlementWorkingAnimals";
+import {
   stepCoreEcologyTidalTable,
   type CoreEcologyTidalTableProjection,
 } from "./coreEcologyTidalTable";
@@ -394,9 +413,34 @@ import {
   coreEcologySpeciesHasRuntimeCapability,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
-import { repositionDogActor } from "./dogActor";
-import type { DogActionAccessibility } from "./dogBehavior";
-import { DOG_EXPOSURE_VERSION, type DogExposureSample } from "./dogExposure";
+import {
+  applyDogBehaviorDecision,
+  createDogActorState,
+  repositionDogActor,
+  replaceDogActorPerception,
+  replaceDogActorPhysiology,
+  type DogActorState,
+} from "./dogActor";
+import {
+  canonicalizeDogActorRoster,
+  createDogActorRoster,
+  deserializeDogActorRoster,
+  dogActorRosterActor,
+  replaceDogActorInRoster,
+  serializeDogActorRoster,
+  type DogActorRosterState,
+} from "./dogActorRoster";
+import {
+  evaluateDogBehavior,
+  type DogActionAccessibility,
+  type DogBehaviorDecision,
+} from "./dogBehavior";
+import {
+  DOG_EXPOSURE_VERSION,
+  stepDogExposure,
+  type DogExposureSample,
+} from "./dogExposure";
+import { DOG_NEEDS_STEP_VERSION, stepDogNeeds } from "./dogNeeds";
 import {
   createLivingActorAddress,
   headingFromRadians,
@@ -416,13 +460,17 @@ import {
   worldPositionDelta,
   worldPositionToSpatialFrame,
 } from "./worldPosition";
-import { projectDogPresentation } from "./dogPresentation";
+import {
+  projectDogPresentation,
+  type DogWorkActivityContext,
+} from "./dogPresentation";
 import {
   isWildlifeWorldPositionDirectlyObserved,
   projectWildlifePresentation,
 } from "./wildlifePresentation";
 import {
   createLivingActorTraversabilitySurface,
+  deriveLivingActorEscapeTargets,
   deriveLivingActorSearchProbe,
   resolveLivingActorLocomotion,
   type LivingActorTraversabilitySurface,
@@ -475,7 +523,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 18;
+const GAME_SAVE_VERSION = 19;
+const DOMESTIC_PEN_GAME_SAVE_VERSION = 18;
 const DOMESTIC_YARD_GAME_SAVE_VERSION = 17;
 const STOREHOUSE_GAME_SAVE_VERSION = 16;
 const TIDAL_CONVERGENCE_GAME_SAVE_VERSION = 15;
@@ -540,6 +589,8 @@ interface GameSaveEnvelope {
   bio0Ecology: string;
   coreEcology: string;
   settlementEcology: string;
+  dogActorRoster: string;
+  settlementWorkingAnimals: string;
   porterResponse: PorterResponseState;
   livingActorPlayerChoice: LivingActorPlayerChoiceState;
   integrity: string;
@@ -1272,6 +1323,104 @@ function deriveRuntimeCoreEcologyHabitat(
   return habitat;
 }
 
+function runtimeGuardianDogGeneration(
+  world: WorldState,
+  core: CoreEcologyAggregatePatchState,
+): DogIdentityGenerationInput | null {
+  if (
+    core.derivation.kind !== "habitat-v9"
+    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
+  ) return null;
+  const pen = core.derivation.habitat.domesticPenAnchor;
+  const identity = hashCanonical([
+    "settlement-working-dog/v1",
+    world.meta.rootSeed,
+    pen.anchorId,
+  ]);
+  return Object.freeze({
+    seed: world.meta.rootSeed,
+    originRegion: pen.position.region,
+    originNamespace: "regional" as const,
+    habitatClass: "settlement-edge" as const,
+    habitatKey: `guardian:${identity}`,
+    populationKey: `working-dogs:${identity}`,
+    populationOrdinal: 0,
+  });
+}
+
+/**
+ * The first working dog is a separate individual beside the livestock pen.
+ * It is deliberately not grafted onto the unowned BIO0 dog's history.
+ */
+function createRuntimeDogActorRoster(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  core: CoreEcologyAggregatePatchState,
+): DogActorRosterState {
+  const generation = runtimeGuardianDogGeneration(world, core);
+  if (
+    generation === null
+    || (
+      core.derivation.kind !== "habitat-v9"
+      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
+    )
+  ) throw new Error("Working-dog roster requires the authenticated livestock pen");
+  const guardian = createDogActorState({
+    ...generation,
+    position: core.derivation.habitat.domesticPenAnchor.position,
+    tick: world.meta.completedTick,
+  });
+  if (guardian.identity.stableId === bio0.dog.identity.stableId) {
+    throw new Error("Working dog collided with the independent BIO0 dog identity");
+  }
+  return createDogActorRoster([guardian]);
+}
+
+function canonicalRuntimeDogActorRoster(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  core: CoreEcologyAggregatePatchState,
+): DogActorRosterState | null {
+  const state = canonicalizeDogActorRoster(value);
+  const generation = runtimeGuardianDogGeneration(world, core);
+  if (state === null || generation === null || state.actors.length !== 1) return null;
+  const actor = state.actors[0];
+  if (
+    actor === undefined
+    || actor.updatedAtTick !== world.meta.completedTick
+    || actor.identity.stableId === bio0.dog.identity.stableId
+    || actor.identity.stableId !== stableDogId(generation)
+    || stableStringify(actor.identity.originRegion) !== stableStringify(generation.originRegion)
+    || actor.identity.habitatKey !== generation.habitatKey
+    || actor.identity.populationKey !== generation.populationKey
+    || actor.identity.populationOrdinal !== generation.populationOrdinal
+  ) return null;
+  return state;
+}
+
+function runtimeDogActors(
+  bio0: Bio0EcologyState,
+  roster: DogActorRosterState,
+): readonly DogActorState[] {
+  const actors = [bio0.dog, ...roster.actors];
+  if (new Set(actors.map(({ identity }) => identity.stableId)).size !== actors.length) {
+    throw new Error("Dog actor authorities contain a duplicate stable identity");
+  }
+  return Object.freeze(actors);
+}
+
+function runtimeDogActorById(
+  bio0: Bio0EcologyState,
+  roster: DogActorRosterState,
+  actorId: string | null,
+): DogActorState | null {
+  if (actorId === null) return null;
+  return runtimeDogActors(bio0, roster).find(({ identity }) => (
+    identity.stableId === actorId
+  )) ?? null;
+}
+
 /** Frozen Alpha-24 habitat authority used only to authenticate v17 saves. */
 function deriveRuntimeDomesticYardCoreEcologyHabitat(
   world: WorldState,
@@ -1918,6 +2067,7 @@ function createRuntimeSettlementEcology(
   world: WorldState,
   bio0: Bio0EcologyState,
   core: CoreEcologyAggregatePatchState,
+  dogRoster: DogActorRosterState,
   economy: WorldView = createWorldView(world),
 ): SettlementEcologyState {
   const keeper = runtimeBio0Porter(economy, bio0.porterAddress.actorId);
@@ -1989,6 +2139,27 @@ function createRuntimeSettlementEcology(
     }
     established = next;
   }
+  const guardian = dogRoster.actors[0];
+  if (guardian === undefined) {
+    throw new Error("Domestic guardian custody requires one authenticated dog actor");
+  }
+  const guardianCustody = establishSettlementDomesticAnimalCustody(established, {
+    custodyOrdinal: 2,
+    owner: { kind: "settlement", id: settlementId },
+    caretakerActorId: keeper.address.actorId,
+    species: "domestic-dog",
+    memberActorIds: [guardian.identity.stableId],
+    memberGroupId: null,
+    homeStructure: {
+      kind: "kennel",
+      position: core.derivation.habitat.domesticPenAnchor.position,
+      radiusUnits: 3 * WORLD_POSITION_UNITS_PER_TILE,
+    },
+  });
+  if (guardianCustody === null) {
+    throw new Error("Domestic guardian custody could not bind to its actor");
+  }
+  established = guardianCustody;
   return established;
 }
 
@@ -1997,6 +2168,7 @@ function canonicalRuntimeSettlementEcology(
   world: WorldState,
   bio0: Bio0EcologyState,
   core: CoreEcologyAggregatePatchState,
+  dogRoster: DogActorRosterState,
   economy: WorldView = createWorldView(world),
 ): SettlementEcologyState | null {
   const state = canonicalizeSettlementEcologyState(value);
@@ -2012,7 +2184,7 @@ function canonicalRuntimeSettlementEcology(
   try {
     const keeper = runtimeBio0Porter(economy, state.identity.keeperActorId);
     if (keeper.address.actorId !== bio0.porterAddress.actorId) return null;
-    const expected = createRuntimeSettlementEcology(world, bio0, core, economy);
+    const expected = createRuntimeSettlementEcology(world, bio0, core, dogRoster, economy);
     return stableStringify(state.identity) === stableStringify(expected.identity)
       && stableStringify(state.domesticCustodies) === stableStringify(expected.domesticCustodies)
       ? state
@@ -2056,6 +2228,114 @@ function establishRuntimeDomesticCustodies(
     === stableStringify(expected.domesticCustodies)
     ? adopted
     : null;
+}
+
+function createRuntimeSettlementWorkingAnimals(
+  world: WorldState,
+  settlement: SettlementEcologyState,
+  dogRoster: DogActorRosterState,
+  createdAtTick: number = world.meta.completedTick,
+): SettlementWorkingAnimalState {
+  const guardian = dogRoster.actors[0];
+  const workerCustody = guardian === undefined
+    ? undefined
+    : settlement.domesticCustodies.find((custody) => (
+        custody.species === "domestic-dog"
+        && custody.memberActorIds.length === 1
+        && custody.memberActorIds[0] === guardian.identity.stableId
+      ));
+  const protectedCustody = settlement.domesticCustodies.find((custody) => (
+    custody.species === "domestic-goat"
+    && custody.memberGroupId !== null
+  ));
+  if (
+    guardian === undefined
+    || workerCustody === undefined
+    || protectedCustody === undefined
+    || protectedCustody.memberGroupId === null
+    || !Number.isSafeInteger(createdAtTick)
+    || createdAtTick < 0
+    || createdAtTick > world.meta.completedTick
+  ) {
+    throw new Error("Guardian work requires authenticated dog and livestock custody");
+  }
+  return createSettlementWorkingAnimalState({
+    settlementId: settlement.identity.settlementId,
+    assignments: [{
+      assignmentOrdinal: 0,
+      workerActorId: guardian.identity.stableId,
+      workerSpecies: "domestic-dog",
+      handlerActorId: settlement.identity.keeperActorId,
+      workerCustodyRelationshipId: workerCustody.relationshipId,
+      protectedCustodyRelationshipId: protectedCustody.relationshipId,
+      protectedGroupId: protectedCustody.memberGroupId,
+      role: "guardian",
+      worksiteId: protectedCustody.homeStructure.structureId,
+      dutyArea: {
+        center: protectedCustody.homeStructure.position,
+        radiusUnits: Math.max(
+          protectedCustody.homeStructure.radiusUnits,
+          8 * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+      },
+      createdAtTick,
+    }],
+  });
+}
+
+function workingAssignmentIdentityView(assignment: SettlementWorkingAnimalAssignment) {
+  return Object.freeze({
+    version: assignment.version,
+    assignmentOrdinal: assignment.assignmentOrdinal,
+    assignmentId: assignment.assignmentId,
+    settlementId: assignment.settlementId,
+    workerActorId: assignment.workerActorId,
+    workerSpecies: assignment.workerSpecies,
+    handlerActorId: assignment.handlerActorId,
+    workerCustodyRelationshipId: assignment.workerCustodyRelationshipId,
+    protectedCustodyRelationshipId: assignment.protectedCustodyRelationshipId,
+    protectedGroupId: assignment.protectedGroupId,
+    role: assignment.role,
+    worksiteId: assignment.worksiteId,
+    dutyArea: assignment.dutyArea,
+    createdAtTick: assignment.createdAtTick,
+  });
+}
+
+function canonicalRuntimeSettlementWorkingAnimals(
+  value: unknown,
+  world: WorldState,
+  settlement: SettlementEcologyState,
+  dogRoster: DogActorRosterState,
+): SettlementWorkingAnimalState | null {
+  const state = canonicalizeSettlementWorkingAnimalState(value);
+  const assignment = state?.assignments[0];
+  if (
+    state === null
+    || assignment === undefined
+    || state.assignments.length !== 1
+    || state.settlementId !== settlement.identity.settlementId
+    || assignment.createdAtTick > world.meta.completedTick
+    || assignment.currentActivity.acceptedAtTick > world.meta.completedTick
+    || (assignment.pendingActivity?.acceptedAtTick ?? 0) > world.meta.completedTick
+    || dogActorRosterActor(dogRoster, assignment.workerActorId) === null
+  ) return null;
+  try {
+    const expected = createRuntimeSettlementWorkingAnimals(
+      world,
+      settlement,
+      dogRoster,
+      assignment.createdAtTick,
+    );
+    const expectedAssignment = expected.assignments[0];
+    return expectedAssignment !== undefined
+      && stableStringify(workingAssignmentIdentityView(assignment))
+        === stableStringify(workingAssignmentIdentityView(expectedAssignment))
+      ? state
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Authenticate the exact tidal-web contract shipped by Alpha 21–23. */
@@ -3354,59 +3634,10 @@ function runtimeCoreMovementTargets(
     || actor.intent.kind === "forage"
   ) return focus === null ? Object.freeze([]) : Object.freeze([focus.area]);
   if (!RUNTIME_CORE_ESCAPE_INTENTS.has(actor.intent.kind)) return Object.freeze([]);
-
-  let preferredX = 0;
-  let preferredY = 0;
-  if (focus !== null) {
-    try {
-      const delta = worldPositionDelta(actor.address.position, focus.area.center);
-      preferredX = -delta.x;
-      preferredY = -delta.y;
-    } catch {
-      return Object.freeze([]);
-    }
-  }
-  if (preferredX === 0 && preferredY === 0) {
-    const facing = headingToRadians(actor.address.heading);
-    preferredX = -Math.cos(facing);
-    preferredY = -Math.sin(facing);
-  }
-
-  const directions = [
-    { x: -1, y: -1, ordinal: 0 },
-    { x: 0, y: -1, ordinal: 1 },
-    { x: 1, y: -1, ordinal: 2 },
-    { x: -1, y: 0, ordinal: 3 },
-    { x: 1, y: 0, ordinal: 4 },
-    { x: -1, y: 1, ordinal: 5 },
-    { x: 0, y: 1, ordinal: 6 },
-    { x: 1, y: 1, ordinal: 7 },
-  ].map((direction) => ({
-    ...direction,
-    alignment: (direction.x * preferredX + direction.y * preferredY)
-      / Math.hypot(direction.x, direction.y),
-  })).sort((left, right) => right.alignment - left.alignment || left.ordinal - right.ordinal);
-  const targets: Array<Readonly<{
-    center: CoreWildlifeActorState["address"]["position"];
-    radiusUnits: number;
-  }>> = [];
-  for (const direction of directions) {
-    for (let distanceTiles = 4; distanceTiles >= 1; distanceTiles -= 1) {
-      try {
-        targets.push(Object.freeze({
-          center: translateWorldPosition(
-            actor.address.position,
-            direction.x * distanceTiles * WORLD_POSITION_UNITS_PER_TILE,
-            direction.y * distanceTiles * WORLD_POSITION_UNITS_PER_TILE,
-          ),
-          radiusUnits: 0,
-        }));
-      } catch {
-        // The remaining signed-world candidates may still be canonical.
-      }
-    }
-  }
-  return Object.freeze(targets);
+  return deriveLivingActorEscapeTargets({
+    actor: actor.address,
+    focusArea: focus?.area ?? null,
+  }) ?? Object.freeze([]);
 }
 
 function createRuntimeCoreTraversability(
@@ -4406,10 +4637,18 @@ function createRuntimeBio0Traversability(
   world: WorldView,
   sampledAtTick: number,
 ): LivingActorTraversabilitySurface | null {
+  return createRuntimeDogTraversability(state.dog, world, sampledAtTick);
+}
+
+function createRuntimeDogTraversability(
+  actor: DogActorState,
+  world: WorldView,
+  sampledAtTick: number,
+): LivingActorTraversabilitySurface | null {
   const origin = regionalAddressAt(world, 0);
   if (origin === null) return null;
   return createLivingActorTraversabilitySurface({
-    forActorId: state.dog.identity.stableId,
+    forActorId: actor.identity.stableId,
     sampledAtTick,
     origin: createWorldPosition(
       origin.region,
@@ -4433,6 +4672,13 @@ function runtimeBio0ActorTileIndex(
   state: Bio0EcologyState,
   surface: LivingActorTraversabilitySurface,
 ): number | null {
+  return runtimeDogActorTileIndex(state.dog, surface);
+}
+
+function runtimeDogActorTileIndex(
+  actor: DogActorState,
+  surface: LivingActorTraversabilitySurface,
+): number | null {
   let frame;
   try {
     frame = createSpatialFrame(
@@ -4443,18 +4689,160 @@ function runtimeBio0ActorTileIndex(
   } catch {
     return null;
   }
-  const point = worldPositionToSpatialFrame(frame, state.dog.address.position);
+  const point = worldPositionToSpatialFrame(frame, actor.address.position);
   if (point === null) return null;
   const x = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
   const y = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
   return y * surface.widthTiles + x;
 }
 
+function runtimeDogActorTileIndexInWorld(
+  actor: DogActorState,
+  world: WorldView,
+): number | null {
+  const point = runtimeWorldPositionTileInWorld(actor.address.position, world);
+  return point === null ? null : point.y * world.terrain.width + point.x;
+}
+
+function runtimeWorldPositionTileInWorld(
+  position: LivingActorAddress["position"],
+  world: WorldView,
+): Readonly<{ readonly x: number; readonly y: number }> | null {
+  const origin = regionalAddressAt(world, 0);
+  if (origin === null) return null;
+  let frame;
+  try {
+    frame = createSpatialFrame(
+      createWorldPosition(
+        origin.region,
+        origin.localX * WORLD_POSITION_UNITS_PER_TILE,
+        origin.localY * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      world.terrain.width * WORLD_POSITION_UNITS_PER_TILE,
+      world.terrain.height * WORLD_POSITION_UNITS_PER_TILE,
+    );
+  } catch {
+    return null;
+  }
+  const point = worldPositionToSpatialFrame(frame, position);
+  if (point === null) return null;
+  const x = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
+  const y = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
+  return x >= 0
+    && x < world.terrain.width
+    && y >= 0
+    && y < world.terrain.height
+    ? Object.freeze({ x, y })
+    : null;
+}
+
+/**
+ * A working animal only needs the bounded corridor between its physical body
+ * and its cognition-owned task area. Keeping this surface local avoids paying
+ * for the entire streamed region on every investigative step.
+ */
+function createRuntimeWorkingDogTraversability(
+  actor: DogActorState,
+  world: WorldView,
+  sampledAtTick: number,
+  targetArea: Readonly<{ readonly center: LivingActorAddress["position"] }>,
+): LivingActorTraversabilitySurface | null {
+  const actorTile = runtimeWorldPositionTileInWorld(actor.address.position, world);
+  const targetTile = runtimeWorldPositionTileInWorld(targetArea.center, world);
+  if (actorTile === null || targetTile === null) return null;
+  const padding = 4;
+  const minimumX = Math.max(0, Math.min(actorTile.x, targetTile.x) - padding);
+  const maximumX = Math.min(
+    world.terrain.width - 1,
+    Math.max(actorTile.x, targetTile.x) + padding,
+  );
+  const minimumY = Math.max(0, Math.min(actorTile.y, targetTile.y) - padding);
+  const maximumY = Math.min(
+    world.terrain.height - 1,
+    Math.max(actorTile.y, targetTile.y) + padding,
+  );
+  const originAddress = regionalAddressAt(
+    world,
+    minimumY * world.terrain.width + minimumX,
+  );
+  if (originAddress === null) return null;
+  const cells = [];
+  for (let y = minimumY; y <= maximumY; y += 1) {
+    for (let x = minimumX; x <= maximumX; x += 1) {
+      const tile = world.terrain.tiles[y * world.terrain.width + x];
+      if (tile === undefined) return null;
+      cells.push(
+        tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH
+          ? { access: "deep-water" as const, travelCost: 0 }
+          : {
+              access: "open" as const,
+              travelCost: clamp(tile.baseTravelCost, 1, 1_000_000),
+            },
+      );
+    }
+  }
+  try {
+    return createLivingActorTraversabilitySurface({
+      forActorId: actor.identity.stableId,
+      sampledAtTick,
+      origin: createWorldPosition(
+        originAddress.region,
+        originAddress.localX * WORLD_POSITION_UNITS_PER_TILE,
+        originAddress.localY * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      widthTiles: maximumX - minimumX + 1,
+      heightTiles: maximumY - minimumY + 1,
+      cells,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function runtimeDogWorldTileOpen(world: WorldView, tileIndex: number): boolean {
+  const tile = world.terrain.tiles[tileIndex];
+  return tile !== undefined
+    && tile.terrain !== "deep-water"
+    && tile.waterDepth <= ADRIFT_STAND_DEPTH;
+}
+
+function runtimeDogHasTraversableStepInWorld(
+  actor: DogActorState,
+  world: WorldView,
+): boolean {
+  const index = runtimeDogActorTileIndexInWorld(actor, world);
+  if (index === null || !runtimeDogWorldTileOpen(world, index)) return false;
+  const x = index % world.terrain.width;
+  const y = Math.floor(index / world.terrain.width);
+  return [
+    { x: x - 1, y },
+    { x: x + 1, y },
+    { x, y: y - 1 },
+    { x, y: y + 1 },
+  ].some((neighbor) => (
+    neighbor.x >= 0
+    && neighbor.x < world.terrain.width
+    && neighbor.y >= 0
+    && neighbor.y < world.terrain.height
+    && runtimeDogWorldTileOpen(
+      world,
+      neighbor.y * world.terrain.width + neighbor.x,
+    )
+  ));
+}
+
 function runtimeBio0HasTraversableStep(
   state: Bio0EcologyState,
   surface: LivingActorTraversabilitySurface,
 ): boolean {
-  const index = runtimeBio0ActorTileIndex(state, surface);
+  return runtimeDogHasTraversableStep(state.dog, surface);
+}
+
+function runtimeDogHasTraversableStep(
+  actor: DogActorState,
+  surface: LivingActorTraversabilitySurface,
+): boolean {
+  const index = runtimeDogActorTileIndex(actor, surface);
   if (index === null) return false;
   if (surface.cells[index]?.access !== "open") return false;
   const x = index % surface.widthTiles;
@@ -4558,6 +4946,503 @@ function resolveRuntimeBio0Locomotion(
   return canonicalizeBio0EcologyState({ ...state, dog });
 }
 
+function runtimePositionInsideArea(
+  position: LivingActorAddress["position"],
+  area: Readonly<{
+    readonly center: LivingActorAddress["position"];
+    readonly radiusUnits: number;
+  }>,
+): boolean {
+  const dx = (BigInt(position.region.x) - BigInt(area.center.region.x))
+      * BigInt(REGION_WIDTH_UNITS)
+    + BigInt(position.localX) - BigInt(area.center.localX);
+  const dy = (BigInt(position.region.y) - BigInt(area.center.region.y))
+      * BigInt(REGION_HEIGHT_UNITS)
+    + BigInt(position.localY) - BigInt(area.center.localY);
+  const radius = BigInt(area.radiusUnits);
+  return dx * dx + dy * dy <= radius * radius;
+}
+
+function runtimeWorkingDogStepUnits(actor: DogActorState): number {
+  const factor = actor.identity.body.size === "tiny"
+    ? 360
+    : actor.identity.body.size === "small"
+      ? 440
+      : actor.identity.body.size === "medium"
+        ? 540
+        : actor.identity.body.size === "large" ? 620 : 680;
+  return Math.trunc(WORLD_POSITION_UNITS_PER_TILE * factor / 1_000);
+}
+
+function runtimeGeneratedDogView(dog: DogActorState): GeneratedDogState {
+  return {
+    identity: dog.identity,
+    needs: { ...dog.needs },
+    condition: {
+      ...dog.condition,
+      injuries: [...dog.condition.injuries],
+    },
+    humanFamiliarity: { ...dog.humanFamiliarity },
+  };
+}
+
+function runtimeWorkingDogActionAccessibility(input: Readonly<{
+  readonly actorOnOpenTerrain: boolean;
+  readonly hasTraversableStep: boolean;
+}>): DogActionAccessibility {
+  return Object.freeze({
+    retreat: input.hasTraversableStep,
+    "seek-shelter": input.hasTraversableStep,
+    "avoid-human": input.hasTraversableStep,
+    // Working-dog feeding is deliberately dormant until the same physical
+    // settlement inventory owner can commit both the item and nutrition.
+    eat: false,
+    "approach-food": false,
+    rest: input.actorOnOpenTerrain,
+    observe: true,
+  });
+}
+
+/**
+ * Ordinary dog cognition publishes whether assigned work may proceed. Runtime
+ * never reclassifies a threat or infers obedience from handler/custody IDs.
+ */
+function stepRuntimeWorkingDogAutonomy(input: Readonly<{
+  readonly dog: DogActorState;
+  readonly tick: number;
+  readonly exposure: DogExposureSample;
+  readonly accessibility: DogActionAccessibility;
+}>): Readonly<{
+  readonly dog: DogActorState;
+  readonly disposition: SettlementWorkingAnimalActorDisposition;
+  /** Actor-owned fallback offered only while assigned work can consume it. */
+  readonly assignmentCompatibleFallback: DogBehaviorDecision | null;
+}> | null {
+  const evaluation = evaluateDogBehavior({
+    tick: input.tick,
+    dog: runtimeGeneratedDogView(input.dog),
+    perception: input.dog.perception,
+    weather: {
+      coldPressure: input.exposure.ambientCold,
+      heatPressure: input.exposure.ambientHeat,
+      rainIntensity: input.exposure.rain,
+      windPressure: input.exposure.wind,
+    },
+    accessibility: input.accessibility,
+    foodContact: { directlyConfirmed: false, accessible: false },
+    current: {
+      intent: input.dog.intent.kind,
+      enteredAtTick: input.dog.intent.enteredAtTick,
+    },
+  });
+  if (evaluation === null) return null;
+  const { decision, assignmentReadiness } = evaluation;
+  const behaviorDue = input.tick >= input.dog.intent.nextThinkTick;
+  const actorPriorityInterrupt = assignmentReadiness.kind === "defer-to-actor"
+    && decision.intent !== input.dog.intent.kind;
+  const assignmentCompatibleFallback = assignmentReadiness.kind === "available"
+    && decision.intent !== "observe"
+    ? decision
+    : null;
+  let dog = input.dog;
+  // A yieldable alert is consumed by the assignment arbiter below; persisting
+  // the dog's fallback retreat here would create a second competing authority.
+  if (
+    actorPriorityInterrupt
+    || (
+      behaviorDue
+      && (assignmentReadiness.kind === "defer-to-actor" || decision.intent === "observe")
+    )
+  ) {
+    dog = applyDogBehaviorDecision(dog, decision);
+  }
+  const disposition: SettlementWorkingAnimalActorDisposition = (
+    assignmentReadiness.kind === "available" && dog.intent.kind === "observe"
+  )
+    ? Object.freeze({ kind: "available" })
+    : Object.freeze({
+        kind: "defer-to-actor",
+        referenceId: assignmentReadiness.kind === "defer-to-actor"
+          ? assignmentReadiness.referenceId
+          : `actor-intent:${dog.intent.kind}`,
+      });
+  return Object.freeze({ dog, disposition, assignmentCompatibleFallback });
+}
+
+/**
+ * Assigned work may suppress an actor-owned fallback only when it accepts the
+ * exact lawful observation behind that fallback. Area overlap or a different
+ * stronger signal is insufficient.
+ */
+function runtimeWorkConsumesDogFallback(
+  dog: DogActorState,
+  fallback: DogBehaviorDecision,
+  work: SettlementWorkingAnimalActivityDecision,
+): boolean {
+  if (
+    fallback.focusBeliefKey === null
+    || work.activity !== "investigate"
+    || work.cause.kind !== "perception"
+    || work.perceivedArea === null
+  ) return false;
+  const belief = dog.perception.beliefs.find(({ key }) => key === fallback.focusBeliefKey);
+  return belief !== undefined
+    && belief.sourceObservationId === work.cause.referenceId
+    && stableStringify(belief.area) === stableStringify(work.perceivedArea);
+}
+
+/**
+ * Prove that the exact cognition-owned investigation accepted by work has a
+ * traversable first step before work is allowed to consume the dog's own
+ * response to that observation. This is a route check, not hidden-target
+ * knowledge: both the surface and search probe terminate at perceived space.
+ */
+function runtimeWorkingDogInvestigationReachable(input: Readonly<{
+  readonly dog: DogActorState;
+  readonly regionalView: WorldView;
+  readonly tick: number;
+  readonly activity: SettlementWorkingAnimalActivityTransaction;
+}>): boolean | null {
+  const { activity } = input;
+  if (
+    activity.activity !== "investigate"
+    || activity.cause.kind !== "perception"
+    || activity.perceivedArea === null
+  ) return false;
+  const belief = input.dog.perception.beliefs.find(({ sourceObservationId, area }) => (
+    sourceObservationId === activity.cause.referenceId
+    && stableStringify(area) === stableStringify(activity.perceivedArea)
+  ));
+  if (belief === undefined) return null;
+  const surface = createRuntimeWorkingDogTraversability(
+    input.dog,
+    input.regionalView,
+    input.tick,
+    activity.perceivedArea,
+  );
+  if (surface === null) return false;
+  const searchProbe = deriveLivingActorSearchProbe({
+    requestId: activity.transactionId,
+    beliefKey: belief.key,
+    probeOrdinal: 0,
+    sourceArea: activity.perceivedArea,
+  });
+  if (searchProbe === null) return null;
+  const movement = resolveLivingActorLocomotion({
+    requestId: activity.transactionId,
+    tick: input.tick,
+    actor: input.dog.address,
+    targetArea: activity.perceivedArea,
+    searchProbe,
+    maximumStepUnits: runtimeWorkingDogStepUnits(input.dog),
+    surface,
+  });
+  if (movement.kind === "moved") return true;
+  if (movement.reason === "invalid-input") return null;
+  return movement.reason === "already-at-search-probe";
+}
+
+function stepRuntimeSettlementWorkingDog(input: Readonly<{
+  readonly roster: DogActorRosterState;
+  readonly workingAnimals: SettlementWorkingAnimalState;
+  readonly settlement: SettlementEcologyState;
+  readonly world: WorldState;
+  readonly regionalView: WorldView;
+  readonly weather: WeatherState;
+  readonly observationBatches: readonly (readonly CoreEcologyObservationBatch[])[];
+}>): Readonly<{
+  readonly roster: DogActorRosterState;
+  readonly workingAnimals: SettlementWorkingAnimalState;
+}> | null {
+  const assignment = input.workingAnimals.assignments[0];
+  if (assignment === undefined || input.workingAnimals.assignments.length !== 1) return null;
+  let dog = dogActorRosterActor(input.roster, assignment.workerActorId);
+  if (dog === null) return null;
+  const tick = input.world.meta.completedTick;
+  const observations = mergeRuntimeCoreObservationBatches(
+    dog.identity.stableId,
+    input.observationBatches,
+  );
+  if (observations === null) return null;
+  const perception = stepActorPerception(dog.perception, { tick, observations });
+  if (perception === null || perception.tick !== tick) return null;
+  dog = replaceDogActorPerception(dog, perception);
+
+  const workerCustody = input.settlement.domesticCustodies.find(({ relationshipId }) => (
+    relationshipId === assignment.workerCustodyRelationshipId
+  ));
+  const protectedCustody = input.settlement.domesticCustodies.find(({ relationshipId }) => (
+    relationshipId === assignment.protectedCustodyRelationshipId
+  ));
+  if (
+    workerCustody === undefined
+    || protectedCustody === undefined
+    || workerCustody.homeStructure.kind !== "kennel"
+    || protectedCustody.homeStructure.structureId !== assignment.worksiteId
+  ) return null;
+
+  const shelter = runtimePositionInsideArea(dog.address.position, {
+    center: workerCustody.homeStructure.position,
+    radiusUnits: workerCustody.homeStructure.radiusUnits,
+  }) ? 720_000 : 0;
+  const currentActivity = assignment.currentActivity.activity;
+  const exertion = currentActivity === "investigate" || currentActivity === "return"
+    ? 260_000
+    : currentActivity === "watch" ? 40_000 : 0;
+  const exposure = {
+    ...bio0ExposureFromCompletedWeather(input.weather),
+    shelter,
+    exertion,
+  };
+  const condition = stepDogExposure(
+    { ...dog.condition, injuries: [...dog.condition.injuries] },
+    dog.identity.weatherAdaptation,
+    exposure,
+  );
+  const steppedNeeds = stepDogNeeds(dog.needs, condition, {
+    version: DOG_NEEDS_STEP_VERSION,
+    exertion,
+    ambientHeat: exposure.ambientHeat,
+    threatPressure: perception.suspicionPressure,
+    shelter,
+    resting: FIXED_POINT - exertion,
+    socialContact: 0,
+  });
+  // Hunger/thirst are not actionable for this roster dog until a physical
+  // settlement feeding/drinking transaction exists. Do not activate a need
+  // whose remedy the simulated actor cannot actually reach.
+  const needs = Object.freeze({
+    ...steppedNeeds,
+    hunger: dog.needs.hunger,
+    thirst: dog.needs.thirst,
+  });
+  dog = replaceDogActorPhysiology(dog, {
+    needs,
+    condition,
+    humanFamiliarity: dog.humanFamiliarity,
+    atTick: tick,
+  });
+
+  const actorTileIndex = runtimeDogActorTileIndexInWorld(dog, input.regionalView);
+  const actorOnOpenTerrain = actorTileIndex !== null
+    && runtimeDogWorldTileOpen(input.regionalView, actorTileIndex);
+  const hasTraversableStep = runtimeDogHasTraversableStepInWorld(
+    dog,
+    input.regionalView,
+  );
+  const actionAccessibility = runtimeWorkingDogActionAccessibility({
+    actorOnOpenTerrain,
+    hasTraversableStep,
+  });
+  const autonomy = stepRuntimeWorkingDogAutonomy({
+    dog,
+    tick,
+    exposure,
+    accessibility: actionAccessibility,
+  });
+  if (autonomy === null) return null;
+  dog = autonomy.dog;
+  const workerInsideDutyArea = runtimePositionInsideArea(
+    dog.address.position,
+    assignment.dutyArea,
+  );
+  const workEvaluation = {
+    assignmentId: assignment.assignmentId,
+    tick,
+    perception: dog.perception,
+    welfare: {
+      injuryPressure: Math.min(
+        FIXED_POINT,
+        FIXED_POINT - dog.condition.health + dog.condition.injuries.length * 100_000,
+      ),
+      coldPressure: dog.condition.coldStress,
+      heatPressure: dog.condition.heatStress,
+      exhaustionPressure: Math.max(dog.condition.exhaustion, dog.needs.rest),
+      hungerPressure: dog.needs.hunger,
+      thirstPressure: dog.needs.thirst,
+    },
+    actorDisposition: autonomy.disposition,
+    accessibility: {
+      watch: true,
+      investigate: actorOnOpenTerrain && hasTraversableStep,
+      return: actorOnOpenTerrain && hasTraversableStep,
+    },
+    workerInsideDutyArea,
+  } as const;
+  let staged = stageSettlementWorkingAnimalActivity(
+    input.workingAnimals,
+    workEvaluation,
+  );
+  if (staged === null) return null;
+  const stagedAssignment = staged.state.assignments.find(({ assignmentId }) => (
+    assignmentId === assignment.assignmentId
+  ));
+  if (stagedAssignment === undefined) return null;
+  const acceptedCandidate = staged.transaction ?? stagedAssignment.currentActivity;
+  if (staged.decision.activity === "investigate") {
+    const routeReachable = runtimeWorkingDogInvestigationReachable({
+      dog,
+      regionalView: input.regionalView,
+      tick,
+      activity: acceptedCandidate,
+    });
+    if (routeReachable === null) return null;
+    if (!routeReachable) {
+      // No task may become authoritative when it cannot take even one lawful
+      // step toward the cognition-owned search area.
+      staged = stageSettlementWorkingAnimalActivity(
+        input.workingAnimals,
+        {
+          ...workEvaluation,
+          accessibility: {
+            ...workEvaluation.accessibility,
+            investigate: false,
+          },
+        },
+      );
+      if (staged === null || staged.decision.activity === "investigate") return null;
+    }
+  }
+  if (
+    autonomy.assignmentCompatibleFallback !== null
+  ) {
+    const consumesFallback = runtimeWorkConsumesDogFallback(
+      dog,
+      autonomy.assignmentCompatibleFallback,
+      staged.decision,
+    );
+    if (!consumesFallback) {
+      dog = applyDogBehaviorDecision(dog, autonomy.assignmentCompatibleFallback);
+      // Re-propose against the original authoritative work state. The
+      // speculative stage above was immutable and never became committed.
+      staged = stageSettlementWorkingAnimalActivity(
+        input.workingAnimals,
+        {
+          ...workEvaluation,
+          accessibility: {
+            ...workEvaluation.accessibility,
+            investigate: false,
+          },
+          actorDisposition: {
+            kind: "defer-to-actor",
+            referenceId: `actor-intent:${dog.intent.kind}`,
+          },
+        },
+      );
+      if (staged === null) return null;
+    }
+  }
+  let workingAnimals = staged.state;
+  if (staged.transaction !== null) {
+    const resolved = resolveSettlementWorkingAnimalActivity(
+      staged.state,
+      staged.transaction,
+    );
+    if (resolved === null) return null;
+    workingAnimals = resolved.state;
+  }
+
+  const acceptedAssignment = workingAnimals.assignments[0];
+  if (acceptedAssignment === undefined) return null;
+  const acceptedActivity = acceptedAssignment.currentActivity;
+  const targetAreas: Array<Readonly<{
+    center: LivingActorAddress["position"];
+    radiusUnits: number;
+  }>> = [];
+  if (acceptedActivity.activity === "investigate" && acceptedActivity.perceivedArea !== null) {
+    targetAreas.push(acceptedActivity.perceivedArea);
+  } else if (acceptedActivity.activity === "return") {
+    targetAreas.push({
+      center: protectedCustody.homeStructure.position,
+      radiusUnits: WORLD_POSITION_UNITS_PER_TILE,
+    });
+  } else if (
+    acceptedActivity.activity === "survival-override"
+    || (acceptedActivity.activity === "defer-to-actor" && dog.intent.kind === "seek-shelter")
+  ) {
+    targetAreas.push({
+      center: workerCustody.homeStructure.position,
+      radiusUnits: WORLD_POSITION_UNITS_PER_TILE,
+    });
+  } else if (
+    acceptedActivity.activity === "defer-to-actor"
+    && (dog.intent.kind === "retreat" || dog.intent.kind === "avoid-human")
+  ) {
+    const actorIntentCause = dog.intent.cause;
+    const focus = actorIntentCause.kind === "perception"
+      ? dog.perception.beliefs.find(({ key }) => key === actorIntentCause.referenceId) ?? null
+      : null;
+    const escapeTargets = deriveLivingActorEscapeTargets({
+      actor: dog.address,
+      focusArea: focus?.area ?? null,
+    });
+    if (escapeTargets === null) return null;
+    targetAreas.push(...escapeTargets);
+  }
+
+  for (let targetOrdinal = 0; targetOrdinal < targetAreas.length; targetOrdinal += 1) {
+    const targetArea = targetAreas[targetOrdinal];
+    if (targetArea === undefined || runtimePositionInsideArea(dog.address.position, targetArea)) break;
+    const surface = createRuntimeWorkingDogTraversability(
+      dog,
+      input.regionalView,
+      tick,
+      targetArea,
+    );
+    const isEscape = acceptedActivity.activity === "defer-to-actor"
+      && (dog.intent.kind === "retreat" || dog.intent.kind === "avoid-human");
+    if (surface === null) {
+      if (isEscape) continue;
+      return null;
+    }
+    const requestId = isEscape
+      ? `work-move:${hashCanonical([
+          acceptedActivity.transactionId,
+          dog.intent.kind,
+          targetOrdinal,
+          targetArea,
+        ])}`
+      : acceptedActivity.transactionId;
+    const investigationBelief = acceptedActivity.activity === "investigate"
+      && acceptedActivity.cause.kind === "perception"
+      ? dog.perception.beliefs.find(({ sourceObservationId, area }) => (
+          sourceObservationId === acceptedActivity.cause.referenceId
+          && stableStringify(area) === stableStringify(targetArea)
+        )) ?? null
+      : null;
+    const searchProbe = acceptedActivity.activity === "investigate"
+      && investigationBelief !== null
+      ? deriveLivingActorSearchProbe({
+          requestId,
+          beliefKey: investigationBelief.key,
+          probeOrdinal: 0,
+          sourceArea: targetArea,
+        })
+      : null;
+    if (acceptedActivity.activity === "investigate" && searchProbe === null) return null;
+    const movement = resolveLivingActorLocomotion({
+      requestId,
+      tick,
+      actor: dog.address,
+      targetArea,
+      ...(searchProbe === null ? {} : { searchProbe }),
+      maximumStepUnits: runtimeWorkingDogStepUnits(dog),
+      surface,
+    });
+    if (movement.kind === "no-move" && movement.reason === "invalid-input") return null;
+    if (movement.kind === "moved") {
+      dog = repositionDogActor(dog, {
+        position: movement.actor.position,
+        heading: movement.actor.heading,
+        atTick: tick,
+      });
+      break;
+    }
+  }
+  const roster = replaceDogActorInRoster(input.roster, dog);
+  return roster === null ? null : Object.freeze({ roster, workingAnimals });
+}
+
 function physicalCargoPartitionsForView(
   state: PhysicalCargoState,
   view: WorldView,
@@ -4605,8 +5490,8 @@ function runtimeCoreAggregateExposedFoodSources(
 function runtimeCoreAggregateVisualSources(input: Readonly<{
   readonly beforePatch: CoreEcologyAggregatePatchState;
   readonly afterPatch: CoreEcologyAggregatePatchState;
-  readonly beforeDog: LivingActorAddress;
-  readonly afterDog: LivingActorAddress;
+  readonly beforeDogs: readonly LivingActorAddress[];
+  readonly afterDogs: readonly LivingActorAddress[];
   readonly beforePorter: Bio0PorterAddress;
   readonly afterPorter: Bio0PorterAddress;
   readonly player: LivingActorAddress;
@@ -4631,16 +5516,22 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
       }));
     }
   }
-  sources.push(
-    Object.freeze({
-      sourceReferenceId: input.afterDog.actorId,
+  for (const afterDog of input.afterDogs) {
+    const beforeDog = input.beforeDogs.find(({ actorId }) => actorId === afterDog.actorId);
+    if (beforeDog === undefined || afterDog.species !== "domestic-dog") {
+      throw new Error("Aggregate perception received incoherent dog source custody");
+    }
+    sources.push(Object.freeze({
+      sourceReferenceId: afterDog.actorId,
       sourceSpecies: "domestic-dog",
-      position: input.afterDog.position,
+      position: afterDog.position,
       movementSalience: sameRuntimeWorldPosition(
-        input.beforeDog.position,
-        input.afterDog.position,
+        beforeDog.position,
+        afterDog.position,
       ) ? 0 : CORE_ECOLOGY_MOVING_SOURCE_SALIENCE,
-    }),
+    }));
+  }
+  sources.push(
     Object.freeze({
       sourceReferenceId: input.afterPorter.actorId,
       sourceSpecies: "human",
@@ -4717,6 +5608,16 @@ function projectRuntimeSettlementFoodStore(
   };
 }
 
+function runtimeDogWorkActivityContext(
+  actorId: string,
+  state: SettlementWorkingAnimalState,
+  atTick: number,
+): DogWorkActivityContext | undefined {
+  return state.assignments.some(({ workerActorId }) => workerActorId === actorId)
+    ? Object.freeze({ state, atTick })
+    : undefined;
+}
+
 export async function createTideweftRuntime(
   repository: SaveRepository = createSaveRepository(),
 ): Promise<TideweftRuntime> {
@@ -4724,11 +5625,18 @@ export async function createTideweftRuntime(
   let economyView = createWorldView(world);
   let bio0Ecology = createRuntimeBio0Ecology(world, economyView);
   let coreEcology = createRuntimeCoreEcology(world, bio0Ecology);
+  let dogActorRoster = createRuntimeDogActorRoster(world, bio0Ecology, coreEcology);
   let settlementEcology = createRuntimeSettlementEcology(
     world,
     bio0Ecology,
     coreEcology,
+    dogActorRoster,
     economyView,
+  );
+  let settlementWorkingAnimals = createRuntimeSettlementWorkingAnimals(
+    world,
+    settlementEcology,
+    dogActorRoster,
   );
   let porterResponse = createRuntimePorterResponse(bio0Ecology);
   let livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
@@ -4755,18 +5663,28 @@ export async function createTideweftRuntime(
   let session = createSessionState(world.meta.seedText, HARD_POSTURE);
   let perception = projectPerception(worldView, player);
   const initialCargoPartitions = physicalCargoPartitionsForView(physicalCargo, worldView);
-  const initialDogPresentation = projectDogPresentation({
-    actor: bio0Ecology.dog,
-    window: {
-      origin: regionalTravel.window.origin,
-      terrain: {
-        width: worldView.terrain.width,
-        height: worldView.terrain.height,
-      },
-    },
-    tileSize: RENDER_TILE_SIZE,
-    detailVisibilityGrades: perception.detailVisibilityGrades,
-  });
+  const initialDogPresentations = runtimeDogActors(bio0Ecology, dogActorRoster)
+    .flatMap((actor) => {
+      const activity = runtimeDogWorkActivityContext(
+        actor.identity.stableId,
+        settlementWorkingAnimals,
+        world.meta.completedTick,
+      );
+      const presentation = projectDogPresentation({
+        actor,
+        window: {
+          origin: regionalTravel.window.origin,
+          terrain: {
+            width: worldView.terrain.width,
+            height: worldView.terrain.height,
+          },
+        },
+        tileSize: RENDER_TILE_SIZE,
+        detailVisibilityGrades: perception.detailVisibilityGrades,
+        ...(activity === undefined ? {} : { activity }),
+      });
+      return presentation === null ? [] : [presentation];
+    });
   let renderView = projectRuntimeSettlementFoodStore(
     {
       ...projectGameView(worldView, player, {
@@ -4776,7 +5694,7 @@ export async function createTideweftRuntime(
         looseCargoWorlds: initialCargoPartitions,
         perception,
       }),
-      dogs: initialDogPresentation === null ? [] : [initialDogPresentation],
+      dogs: initialDogPresentations,
     },
     settlementEcology,
     worldView,
@@ -4949,7 +5867,9 @@ export async function createTideweftRuntime(
     economyView = createWorldView(world);
     bio0Ecology = loaded.bio0Ecology;
     coreEcology = loaded.coreEcology;
+    dogActorRoster = loaded.dogActorRoster;
     settlementEcology = loaded.settlementEcology;
+    settlementWorkingAnimals = loaded.settlementWorkingAnimals;
     porterResponse = loaded.porterResponse;
     livingActorPlayerChoice = loaded.livingActorPlayerChoice;
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -5073,14 +5993,27 @@ export async function createTideweftRuntime(
         : trackedContract?.status === "offered"
           ? "pickup" as const
           : undefined;
-    const dogPresentation = projectDogPresentation({
-      actor: bio0Ecology.dog,
-      window: actorWindow,
-      tileSize: RENDER_TILE_SIZE,
-      detailVisibilityGrades: perception.detailVisibilityGrades,
-      selected: selectedDogActorId === bio0Ecology.dog.identity.stableId,
-    });
-    if (selectedDogActorId !== null && dogPresentation === null) {
+    const dogPresentations = runtimeDogActors(bio0Ecology, dogActorRoster)
+      .flatMap((actor) => {
+        const activity = runtimeDogWorkActivityContext(
+          actor.identity.stableId,
+          settlementWorkingAnimals,
+          world.meta.completedTick,
+        );
+        const presentation = projectDogPresentation({
+          actor,
+          window: actorWindow,
+          tileSize: RENDER_TILE_SIZE,
+          detailVisibilityGrades: perception.detailVisibilityGrades,
+          selected: selectedDogActorId === actor.identity.stableId,
+          ...(activity === undefined ? {} : { activity }),
+        });
+        return presentation === null ? [] : [presentation];
+      });
+    if (
+      selectedDogActorId !== null
+      && !dogPresentations.some(({ actorId }) => actorId === selectedDogActorId)
+    ) {
       selectedDogActorId = null;
     }
     const wildlifePresentation = projectCoreEcologyWildlife({
@@ -5137,7 +6070,7 @@ export async function createTideweftRuntime(
           perception,
           paused: session.paused || session.titleVisible || session.quietHourVisible,
         }),
-        dogs: dogPresentation === null ? [] : [dogPresentation],
+        dogs: dogPresentations,
         wildlife: wildlifePresentation,
         aggregateWildlifeEvidence: aggregateEvidenceProjection.renderEvidence,
       },
@@ -5154,18 +6087,33 @@ export async function createTideweftRuntime(
     ) {
       selectedResidentId = null;
     }
-    const dogInspection = selectedDogActorId === bio0Ecology.dog.identity.stableId
-      ? projectDogLivingActorInspection(bio0Ecology.dog, {
+    const selectedDog = runtimeDogActorById(
+      bio0Ecology,
+      dogActorRoster,
+      selectedDogActorId,
+    );
+    const selectedDogIsBio0 = selectedDog?.identity.stableId
+      === bio0Ecology.dog.identity.stableId;
+    const dogInspection = selectedDog === null
+      ? null
+      : projectDogLivingActorInspection(selectedDog, {
           perception,
           window: actorWindow,
-      })
-      : null;
+        }, runtimeDogWorkActivityContext(
+          selectedDog.identity.stableId,
+          settlementWorkingAnimals,
+          world.meta.completedTick,
+        ));
     const rawDogInteractions = dogInspection === null
       ? null
       : projectLivingActorInteractionChoices({
           target: dogInspection.target,
-          requestRecipientActorId: bio0Ecology.porterAddress.actorId,
-          actors: [bio0Ecology.dog.address, bio0Ecology.porterAddress],
+          requestRecipientActorId: selectedDogIsBio0
+            ? bio0Ecology.porterAddress.actorId
+            : null,
+          actors: selectedDogIsBio0
+            ? [selectedDog!.address, bio0Ecology.porterAddress]
+            : [selectedDog!.address],
           observation: {
             window: actorWindow,
             perception,
@@ -5779,6 +6727,7 @@ export async function createTideweftRuntime(
         economyView,
         bio0Ecology.porterAddress.actorId,
       );
+      const priorWorkingDogs = dogActorRoster.actors.map(({ address }) => address);
       const coreEcologyForStep = setCoreEcologyMaterializationForWindow(
         coreEcology,
         {
@@ -5816,9 +6765,14 @@ export async function createTideweftRuntime(
       });
       const corePerceptionFrame = {
         actors: materializedCoreActors,
-        dogAddress: bio0Ecology.dog.address,
-        porterAddress: priorPorter.address,
-        playerAddress,
+        participants: [
+          ...runtimeDogActors(bio0Ecology, dogActorRoster).map(({ address }) => ({
+            address,
+            contactScope: "all-participants" as const,
+          })),
+          { address: priorPorter.address, contactScope: "core-only" as const },
+          { address: playerAddress, contactScope: "core-only" as const },
+        ],
         world: worldView,
         window: regionalTravel.window,
         tick: targetTick,
@@ -6034,6 +6988,20 @@ export async function createTideweftRuntime(
         throw new Error(`BIO0 ecology step rejected: ${bio0Step.reason}`);
       }
       bio0Ecology = acceptedBio0;
+      const workingDogStep = stepRuntimeSettlementWorkingDog({
+        roster: dogActorRoster,
+        workingAnimals: settlementWorkingAnimals,
+        settlement: settlementEcology,
+        world,
+        regionalView: completedRegionalView,
+        weather: elapsedWeather,
+        observationBatches: coreObservationBatches,
+      });
+      if (workingDogStep === null) {
+        throw new Error("Settlement working dog step rejected");
+      }
+      dogActorRoster = workingDogStep.roster;
+      settlementWorkingAnimals = workingDogStep.workingAnimals;
       const coreStep = stepRuntimeCoreEcology(
         coreEcologyForStep,
         world,
@@ -6097,8 +7065,11 @@ export async function createTideweftRuntime(
         visualSources: runtimeCoreAggregateVisualSources({
           beforePatch: coreEcologyForStep,
           afterPatch: resolvedCoreResources.patch,
-          beforeDog: ecologyForStep.dog.address,
-          afterDog: bio0Ecology.dog.address,
+          beforeDogs: [ecologyForStep.dog.address, ...priorWorkingDogs],
+          afterDogs: [
+            bio0Ecology.dog.address,
+            ...dogActorRoster.actors.map(({ address }) => address),
+          ],
           beforePorter: priorPorter.address,
           afterPorter: porter.address,
           player: playerAddress,
@@ -6887,7 +7858,11 @@ export async function createTideweftRuntime(
         } else if (
           perceivedCommand.entity === "living-actor"
           && perceivedCommand.species === "domestic-dog"
-          && perceivedCommand.id === bio0Ecology.dog.identity.stableId
+          && runtimeDogActorById(
+            bio0Ecology,
+            dogActorRoster,
+            perceivedCommand.id,
+          ) !== null
           && renderView.dogs?.some(({ actorId }) => actorId === perceivedCommand.id)
         ) {
           selectedDogActorId = perceivedCommand.id;
@@ -7028,9 +8003,11 @@ export async function createTideweftRuntime(
 
   function planLivingActorReroute(effect: RerouteEffect): number[] | null {
     if (autopilotPath.length === 0) return null;
-    const focusAddress = effect.focusActorId === bio0Ecology.dog.identity.stableId
-      ? bio0Ecology.dog.address
-      : coreEcologyAggregatePatchActor(coreEcology, effect.focusActorId)?.address;
+    const focusAddress = runtimeDogActorById(
+      bio0Ecology,
+      dogActorRoster,
+      effect.focusActorId,
+    )?.address ?? coreEcologyAggregatePatchActor(coreEcology, effect.focusActorId)?.address;
     if (focusAddress === undefined) return null;
     const destination = autopilotPath.at(-1);
     if (destination === undefined) return null;
@@ -7086,9 +8063,12 @@ export async function createTideweftRuntime(
   function handleLivingActorInteraction(
     command: Extract<TideweftUICommand, { readonly type: "living-actor"; readonly action: "interact" }>,
   ): void {
-    const isDog = command.target.species === "domestic-dog"
+    const selectedDog = command.target.species === "domestic-dog"
       && command.target.actorId === selectedDogActorId
-      && command.target.actorId === bio0Ecology.dog.identity.stableId;
+      ? runtimeDogActorById(bio0Ecology, dogActorRoster, command.target.actorId)
+      : null;
+    const isDog = selectedDog !== null;
+    const isBio0Dog = selectedDog?.identity.stableId === bio0Ecology.dog.identity.stableId;
     const wildlifeActor = command.target.species === "domestic-dog"
       ? null
       : selectedWildlifeTarget?.species === command.target.species
@@ -7105,7 +8085,7 @@ export async function createTideweftRuntime(
     ) return;
 
     let porter: RuntimeBio0Porter | null = null;
-    if (isDog) {
+    if (isBio0Dog) {
       try {
         porter = runtimeBio0Porter(economyView, bio0Ecology.porterAddress.actorId);
       } catch {
@@ -7113,15 +8093,15 @@ export async function createTideweftRuntime(
       }
     }
     const focusActorId = isDog
-      ? bio0Ecology.dog.identity.stableId
+      ? selectedDog!.identity.stableId
       : wildlifeActor!.identity.stableId;
-    const focusAddress = isDog ? bio0Ecology.dog.address : wildlifeActor!.address;
+    const focusAddress = isDog ? selectedDog!.address : wildlifeActor!.address;
     const currentPerception = projectPerception(worldView, player);
     const issuedAtTick = world.meta.completedTick;
     let spec: LivingActorPlayerChoiceSpec;
     switch (command.interaction) {
       case "help":
-        if (!isDog || porter === null) return;
+        if (!isBio0Dog || porter === null) return;
         spec = {
           kind: "ask-offer-provision",
           issuedAtTick,
@@ -7131,7 +8111,7 @@ export async function createTideweftRuntime(
         };
         break;
       case "secure-food":
-        if (!isDog || porter === null) return;
+        if (!isBio0Dog || porter === null) return;
         spec = {
           kind: "ask-secure-provisions",
           issuedAtTick,
@@ -7169,7 +8149,7 @@ export async function createTideweftRuntime(
       {
         actors: porter === null
           ? [focusAddress]
-          : [bio0Ecology.dog.address, porter.address],
+          : [selectedDog!.address, porter.address],
         cargo: bio0Ecology.cargo,
         observation: {
           window: {
@@ -7892,11 +8872,18 @@ export async function createTideweftRuntime(
     economyView = createWorldView(world);
     bio0Ecology = createRuntimeBio0Ecology(world, economyView);
     coreEcology = createRuntimeCoreEcology(world, bio0Ecology);
+    dogActorRoster = createRuntimeDogActorRoster(world, bio0Ecology, coreEcology);
     settlementEcology = createRuntimeSettlementEcology(
       world,
       bio0Ecology,
       coreEcology,
+      dogActorRoster,
       economyView,
+    );
+    settlementWorkingAnimals = createRuntimeSettlementWorkingAnimals(
+      world,
+      settlementEcology,
+      dogActorRoster,
     );
     porterResponse = createRuntimePorterResponse(bio0Ecology);
     livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
@@ -9236,14 +10223,33 @@ export async function createTideweftRuntime(
     if (coreEcologySnapshot === null) {
       throw new Error("Refusing to save inconsistent core ecology state");
     }
+    const dogActorRosterSnapshot = canonicalRuntimeDogActorRoster(
+      dogActorRoster,
+      worldSnapshot,
+      bio0EcologySnapshot,
+      coreEcologySnapshot,
+    );
+    if (dogActorRosterSnapshot === null) {
+      throw new Error("Refusing to save inconsistent dog actor roster");
+    }
     const settlementEcologySnapshot = canonicalRuntimeSettlementEcology(
       settlementEcology,
       worldSnapshot,
       bio0EcologySnapshot,
       coreEcologySnapshot,
+      dogActorRosterSnapshot,
     );
     if (settlementEcologySnapshot === null) {
       throw new Error("Refusing to save inconsistent settlement ecology state");
+    }
+    const settlementWorkingAnimalsSnapshot = canonicalRuntimeSettlementWorkingAnimals(
+      settlementWorkingAnimals,
+      worldSnapshot,
+      settlementEcologySnapshot,
+      dogActorRosterSnapshot,
+    );
+    if (settlementWorkingAnimalsSnapshot === null) {
+      throw new Error("Refusing to save inconsistent settlement working-animal state");
     }
     const porterResponseSnapshot = canonicalRuntimePorterResponse(
       porterResponse,
@@ -9280,6 +10286,10 @@ export async function createTideweftRuntime(
       bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
       coreEcology: serializeCoreEcologyAggregatePatch(coreEcologySnapshot),
       settlementEcology: serializeSettlementEcologyState(settlementEcologySnapshot),
+      dogActorRoster: serializeDogActorRoster(dogActorRosterSnapshot),
+      settlementWorkingAnimals: serializeSettlementWorkingAnimalState(
+        settlementWorkingAnimalsSnapshot,
+      ),
       porterResponse: porterResponseSnapshot,
       livingActorPlayerChoice: livingActorPlayerChoiceSnapshot,
     };
@@ -9552,7 +10562,9 @@ type LoadedAutosave = {
   readonly physicalCargo: PhysicalCargoState;
   readonly bio0Ecology: Bio0EcologyState;
   readonly coreEcology: CoreEcologyAggregatePatchState;
+  readonly dogActorRoster: DogActorRosterState;
   readonly settlementEcology: SettlementEcologyState;
+  readonly settlementWorkingAnimals: SettlementWorkingAnimalState;
   readonly porterResponse: PorterResponseState;
   readonly livingActorPlayerChoice: LivingActorPlayerChoiceState;
   readonly regionalTravel: RegionalPlayerTravelState;
@@ -9774,6 +10786,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== TIDAL_CONVERGENCE_GAME_SAVE_VERSION
         && decoded.version !== STOREHOUSE_GAME_SAVE_VERSION
         && decoded.version !== DOMESTIC_YARD_GAME_SAVE_VERSION
+        && decoded.version !== DOMESTIC_PEN_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -9793,8 +10806,38 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         typeof decoded.integrity !== "string"
         || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
       ) throw new Error("Save envelope integrity does not match its contents");
-      if (
-        decoded.version === GAME_SAVE_VERSION
+      if (decoded.version === GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "bio0Ecology",
+            "coreEcology",
+            "dogActorRoster",
+            "fieldResources",
+            "format",
+            "integrity",
+            "livingActorPlayerChoice",
+            "perceptionCarry",
+            "physicalCargo",
+            "player",
+            "porterResponse",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "settlementEcology",
+            "settlementWorkingAnimals",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+          || typeof decoded.bio0Ecology !== "string"
+          || typeof decoded.coreEcology !== "string"
+          || typeof decoded.settlementEcology !== "string"
+          || typeof decoded.dogActorRoster !== "string"
+          || typeof decoded.settlementWorkingAnimals !== "string"
+        ) throw new Error(`Version ${decoded.version} save envelope is not canonical`);
+      } else if (
+        decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
         || decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
         || decoded.version === STOREHOUSE_GAME_SAVE_VERSION
       ) {
@@ -9963,6 +11006,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || Object.hasOwn(decoded, "bio0Ecology")
         || Object.hasOwn(decoded, "coreEcology")
         || Object.hasOwn(decoded, "settlementEcology")
+        || Object.hasOwn(decoded, "dogActorRoster")
+        || Object.hasOwn(decoded, "settlementWorkingAnimals")
         || Object.hasOwn(decoded, "porterResponse")
         || Object.hasOwn(decoded, "livingActorPlayerChoice")
       ) {
@@ -9977,6 +11022,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       || Object.hasOwn(decoded, "bio0Ecology")
       || Object.hasOwn(decoded, "coreEcology")
       || Object.hasOwn(decoded, "settlementEcology")
+      || Object.hasOwn(decoded, "dogActorRoster")
+      || Object.hasOwn(decoded, "settlementWorkingAnimals")
       || Object.hasOwn(decoded, "porterResponse")
       || Object.hasOwn(decoded, "livingActorPlayerChoice")
     ) {
@@ -9995,7 +11042,10 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (bio0Ecology === null) {
       throw new Error("Current save contains invalid BIO0 ecology state");
     }
-    const coreEcology = decoded.version === GAME_SAVE_VERSION
+    const coreEcology = (
+      decoded.version === GAME_SAVE_VERSION
+      || decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
+    )
       ? canonicalRuntimeCoreEcology(
           deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
           world,
@@ -10058,8 +11108,20 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (coreEcology === null) {
       throw new Error("Current save contains invalid core ecology state");
     }
+    const dogActorRoster = decoded.version === GAME_SAVE_VERSION
+      ? canonicalRuntimeDogActorRoster(
+          deserializeDogActorRoster(decoded.dogActorRoster),
+          world,
+          bio0Ecology,
+          coreEcology,
+        )
+      : createRuntimeDogActorRoster(world, bio0Ecology, coreEcology);
+    if (dogActorRoster === null) {
+      throw new Error("Current save contains invalid dog actor roster");
+    }
     const settlementEcology = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
       || decoded.version === STOREHOUSE_GAME_SAVE_VERSION
     )
@@ -10073,6 +11135,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             world,
             bio0Ecology,
             coreEcology,
+            dogActorRoster,
             compatibilityView,
           );
           const adopted = establishRuntimeDomesticCustodies(migrated, expected);
@@ -10082,6 +11145,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             world,
             bio0Ecology,
             coreEcology,
+            dogActorRoster,
             compatibilityView,
           );
           if (accepted === null) return null;
@@ -10100,6 +11164,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             world,
             bio0Ecology,
             coreEcology,
+            dogActorRoster,
             compatibilityView,
           );
         })()
@@ -10107,10 +11172,52 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           world,
           bio0Ecology,
           coreEcology,
+          dogActorRoster,
           compatibilityView,
         );
     if (settlementEcology === null) {
       throw new Error("Current save contains invalid settlement ecology state");
+    }
+    const settlementWorkingAnimals = decoded.version === GAME_SAVE_VERSION
+      ? (() => {
+          const deserialized = deserializeSettlementWorkingAnimalState(
+            decoded.settlementWorkingAnimals,
+          );
+          if (
+            deserialized === null
+            || serializeSettlementWorkingAnimalState(deserialized)
+              !== decoded.settlementWorkingAnimals
+          ) return null;
+          let accepted = canonicalRuntimeSettlementWorkingAnimals(
+            deserialized,
+            world,
+            settlementEcology,
+            dogActorRoster,
+          );
+          if (accepted === null) return null;
+          for (const assignment of accepted.assignments) {
+            if (assignment.pendingActivity === null) continue;
+            const recovered = recoverPendingSettlementWorkingAnimalActivity(
+              accepted,
+              assignment.assignmentId,
+            );
+            if (recovered === null) return null;
+            accepted = recovered.state;
+          }
+          return canonicalRuntimeSettlementWorkingAnimals(
+            accepted,
+            world,
+            settlementEcology,
+            dogActorRoster,
+          );
+        })()
+      : createRuntimeSettlementWorkingAnimals(
+          world,
+          settlementEcology,
+          dogActorRoster,
+        );
+    if (settlementWorkingAnimals === null) {
+      throw new Error("Current save contains invalid settlement working-animal state");
     }
     const porterResponse = decoded.version >= LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION
       ? canonicalRuntimePorterResponse(decoded.porterResponse, bio0Ecology, world)
@@ -10289,7 +11396,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       physicalCargo: loadedPhysicalCargo,
       bio0Ecology,
       coreEcology,
+      dogActorRoster,
       settlementEcology,
+      settlementWorkingAnimals,
       porterResponse,
       livingActorPlayerChoice,
       regionalTravel,

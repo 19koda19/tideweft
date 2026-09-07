@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.25",
-      buildIdentity: "0.3.3-alpha.25",
-      gameplayContractVersion: 23,
-      tutorialVersion: 35,
+      version: "0.3.3-alpha.26",
+      buildIdentity: "0.3.3-alpha.26",
+      gameplayContractVersion: 24,
+      tutorialVersion: 36,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes The Far Paddock and retains the earlier habitat releases", () => {
+  it("scopes The Paddock Watch and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const farPaddockRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.25",
+    );
+    const farPaddockCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => farPaddockRelease?.categories[category] ?? [])
       .join(" ");
     const yardRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.24",
@@ -155,27 +162,41 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("exactly two individually identified domestic goats");
-    expect(activeCopy).toContain("existing wildlife actor, direct perception, attention, terrestrial locomotion, broad ecological-role, and group-alarm owners");
-    expect(activeCopy).toContain("several canonical domestic custody relationships and typed coop or pen homes");
-    expect(activeCopy).toContain("physical reach, current need, and stable actor identity");
-    expect(activeCopy).toContain("replace a bespoke test suite for every animal or an N-squared pair matrix");
+    expect(activeCopy).toContain("exactly one additional seed-stable domestic dog");
+    expect(activeCopy).toContain("distinct from the original independent porter-scene dog");
+    expect(activeCopy).toContain("generic persisted settlement-working-animal owner");
+    expect(activeCopy).toContain("ordinary dog cognition, needs, weather exposure, condition, perception, and locomotion");
+    expect(activeCopy).toContain("ordered species-neutral participant boundary");
+    expect(activeCopy).toContain("rabbit's anonymous alarm can recruit the dog");
+    expect(activeCopy).toContain("fox changes course only after it actually gains lawful sight");
+    expect(activeCopy).toContain("actor with bounded senses, exposure, needs, route access, and self-preservation");
+    expect(activeCopy).toContain("representative runtime and emergence chains replace species-by-species fixtures or an N-squared interaction matrix");
+    expect(farPaddockCopy).toContain("exactly two individually identified domestic goats");
+    expect(farPaddockCopy).toContain("existing wildlife actor, direct perception, attention, terrestrial locomotion, broad ecological-role, and group-alarm owners");
+    expect(farPaddockCopy).toContain("several canonical domestic custody relationships and typed coop or pen homes");
+    expect(farPaddockCopy).toContain("physical reach, current need, and stable actor identity");
+    expect(farPaddockCopy).toContain("replace a bespoke test suite for every animal or an N-squared pair matrix");
     expect(yardCopy).toContain("one deterministic flock of two or three individual domestic chickens");
     expect(yardCopy).toContain("shared wildlife actor, direct perception, attention, terrestrial locomotion, and group contracts");
     expect(yardCopy).toContain("consume one authenticated unit per resolved event");
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 18");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis advances to version 9");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 19");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis remains version 9");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology advances to version 3");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-17 Yard Flock save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor goat herd");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide livestock");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no authored call");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, foliage browsing, milk, wool, reproduction");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Guardian and herding behavior");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology advances to version 4");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-18 Far Paddock save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("exactly one bounded starting-harbor working dog");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not a worldwide dog population");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("does not attack, injure, kill, herd, breed, rescue livestock");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Fox deterrence is incidental and perception-driven");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no invisible protection radius");
+    expect(farPaddockRelease?.categories.saves.join(" ")).toContain("outer session advances to version 18");
+    expect(farPaddockRelease?.categories.saves.join(" ")).toContain("habitat analysis advances to version 9");
+    expect(farPaddockRelease?.categories.saves.join(" ")).toContain("settlement ecology advances to version 3");
+    expect(farPaddockRelease?.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor goat herd");
+    expect(farPaddockRelease?.categories.knownLimitations.join(" ")).toContain("Guardian and herding behavior");
     expect(storehouseCopy).toContain("persistent physical fresh-produce lot");
     expect(storehouseCopy).toContain("not a second view of the settlement's abstract food economy");
     expect(storehouseCopy).toContain("existing scent owner");

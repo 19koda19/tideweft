@@ -2,6 +2,7 @@ import type { ObservedArea } from "../sim/actorPerception";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   createLivingActorAddress,
+  headingToRadians,
   isLivingActorAddress,
   type LivingActorAddress,
 } from "./livingActor";
@@ -92,6 +93,13 @@ export interface LivingActorSearchProbeInput {
   readonly beliefKey: string;
   readonly probeOrdinal: number;
   readonly sourceArea: ObservedArea;
+}
+
+export interface LivingActorEscapeTargetInput {
+  readonly actor: LivingActorAddress;
+  /** Cognition-owned perceived threat area, or null when only facing is known. */
+  readonly focusArea: ObservedArea | null;
+  readonly maximumDistanceTiles?: number;
 }
 
 /**
@@ -236,6 +244,79 @@ export function deriveLivingActorSearchProbe(
     sourceArea,
     probeArea,
   });
+}
+
+/**
+ * Produce a deterministic ordered fan of destinations away from perceived
+ * danger. It is species-neutral and consumes only actor posture plus lawful
+ * perceived space; pathfinding still decides which candidate is traversable.
+ */
+export function deriveLivingActorEscapeTargets(
+  value: unknown,
+): readonly ObservedArea[] | null {
+  if (!plainRecord(value)) return null;
+  const expectedKeys = Object.hasOwn(value, "maximumDistanceTiles")
+    ? ["actor", "focusArea", "maximumDistanceTiles"]
+    : ["actor", "focusArea"];
+  if (!exactKeys(value, expectedKeys) || !isLivingActorAddress(value.actor)) return null;
+  const focusArea = value.focusArea === null ? null : canonicalArea(value.focusArea);
+  if (value.focusArea !== null && focusArea === null) return null;
+  const maximumDistanceTiles = value.maximumDistanceTiles ?? 4;
+  if (
+    !positiveSafeInteger(maximumDistanceTiles)
+    || maximumDistanceTiles > MAX_LIVING_ACTOR_TRAVERSABILITY_AXIS_TILES
+  ) return null;
+
+  let preferredX = 0;
+  let preferredY = 0;
+  if (focusArea !== null) {
+    try {
+      const delta = worldPositionDelta(value.actor.position, focusArea.center);
+      preferredX = -delta.x;
+      preferredY = -delta.y;
+    } catch {
+      return null;
+    }
+  }
+  if (preferredX === 0 && preferredY === 0) {
+    const facing = headingToRadians(value.actor.heading);
+    preferredX = -Math.cos(facing);
+    preferredY = -Math.sin(facing);
+  }
+
+  const directions = [
+    { x: -1, y: -1, ordinal: 0 },
+    { x: 0, y: -1, ordinal: 1 },
+    { x: 1, y: -1, ordinal: 2 },
+    { x: -1, y: 0, ordinal: 3 },
+    { x: 1, y: 0, ordinal: 4 },
+    { x: -1, y: 1, ordinal: 5 },
+    { x: 0, y: 1, ordinal: 6 },
+    { x: 1, y: 1, ordinal: 7 },
+  ].map((direction) => Object.freeze({
+    ...direction,
+    alignment: (direction.x * preferredX + direction.y * preferredY)
+      / Math.hypot(direction.x, direction.y),
+  })).sort((left, right) => right.alignment - left.alignment || left.ordinal - right.ordinal);
+
+  const targets: ObservedArea[] = [];
+  for (const direction of directions) {
+    for (let distanceTiles = maximumDistanceTiles; distanceTiles >= 1; distanceTiles -= 1) {
+      try {
+        targets.push(Object.freeze({
+          center: translateWorldPosition(
+            value.actor.position,
+            direction.x * distanceTiles * WORLD_POSITION_UNITS_PER_TILE,
+            direction.y * distanceTiles * WORLD_POSITION_UNITS_PER_TILE,
+          ),
+          radiusUnits: 0,
+        }));
+      } catch {
+        // Other signed-world candidates may remain canonical near a hard edge.
+      }
+    }
+  }
+  return Object.freeze(targets);
 }
 
 /**

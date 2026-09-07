@@ -49,7 +49,9 @@ import {
 /** Pure persisted kernel for settlement storehouse ecology and domestic custody. */
 export const SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION = 1 as const;
 export const SETTLEMENT_ECOLOGY_PRIOR_VERSION = 2 as const;
-export const SETTLEMENT_ECOLOGY_VERSION = 3 as const;
+/** Frozen plural-custody payload accepted only through one-way migration. */
+export const SETTLEMENT_ECOLOGY_PLURAL_CUSTODY_VERSION = 3 as const;
+export const SETTLEMENT_ECOLOGY_VERSION = 4 as const;
 /** Store IDs predate v2 and must remain stable across the state migration. */
 export const SETTLEMENT_ECOLOGY_IDENTITY_VERSION = 1 as const;
 export const SETTLEMENT_ECOLOGY_PLAYER_REPORT_VERSION = 1 as const;
@@ -116,6 +118,7 @@ const SETTLEMENT_ECOLOGY_V3_STATE_KEYS = [
   "lastResolvedDomesticFoodUseTransactionId",
   "pendingDomesticFoodUse",
 ] as const;
+const SETTLEMENT_ECOLOGY_V4_STATE_KEYS = [...SETTLEMENT_ECOLOGY_V3_STATE_KEYS] as const;
 
 export type SettlementFoodStoreClosure = "open" | "secured";
 export type SettlementFoodStoreRisk = "food-exposed" | "rat-activity";
@@ -125,7 +128,7 @@ export type SettlementDomesticAnimalOwner =
   | Readonly<{ readonly kind: "actor"; readonly id: string }>
   | Readonly<{ readonly kind: "settlement"; readonly id: number }>;
 
-export type SettlementDomesticHomeStructureKind = "coop" | "pen";
+export type SettlementDomesticHomeStructureKind = "coop" | "kennel" | "pen";
 
 export interface SettlementDomesticHomeStructureRecord {
   readonly version: typeof SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION;
@@ -485,7 +488,7 @@ export function createSettlementEcologyState(
 export function canonicalizeSettlementEcologyState(value: unknown): SettlementEcologyState | null {
   if (
     !plainRecord(value)
-    || !exactKeys(value, SETTLEMENT_ECOLOGY_V3_STATE_KEYS)
+    || !exactKeys(value, SETTLEMENT_ECOLOGY_V4_STATE_KEYS)
     || value.version !== SETTLEMENT_ECOLOGY_VERSION
     || !nonnegativeSafeInteger(value.revision)
     || !validClosure(value.closure)
@@ -599,12 +602,14 @@ export function canonicalizeSettlementEcologyState(value: unknown): SettlementEc
 }
 
 /**
- * Strictly migrates the frozen v1 then v2 payload shapes. Current payloads are
- * returned canonically, while future/extra fields fail closed.
+ * Strictly migrates the frozen v1, v2, then v3 payload shapes. Current payloads
+ * are returned canonically, while future/extra fields fail closed.
  */
 export function migrateSettlementEcologyState(value: unknown): SettlementEcologyState | null {
   const current = canonicalizeSettlementEcologyState(value);
   if (current !== null) return current;
+  const pluralCustody = migrateSettlementEcologyStateV3ToV4(value);
+  if (pluralCustody !== null) return pluralCustody;
   const prior = canonicalizeSettlementEcologyStateV2(value)
     ?? migrateSettlementEcologyStateV1ToV2(value);
   if (prior === null) return null;
@@ -616,6 +621,30 @@ export function migrateSettlementEcologyState(value: unknown): SettlementEcology
     ...shared,
     version: SETTLEMENT_ECOLOGY_VERSION,
     domesticCustodies,
+  });
+}
+
+/**
+ * V3 already owns plural custody, so migration changes only the envelope
+ * version. Kennels remain impossible in the frozen V3 vocabulary.
+ */
+function migrateSettlementEcologyStateV3ToV4(
+  value: unknown,
+): SettlementEcologyState | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, SETTLEMENT_ECOLOGY_V3_STATE_KEYS)
+    || value.version !== SETTLEMENT_ECOLOGY_PLURAL_CUSTODY_VERSION
+    || !Array.isArray(value.domesticCustodies)
+    || !value.domesticCustodies.every((custody) => (
+      plainRecord(custody)
+      && plainRecord(custody.homeStructure)
+      && validPriorDomesticHomeStructureKind(custody.homeStructure.kind)
+    ))
+  ) return null;
+  return canonicalizeSettlementEcologyState({
+    ...value,
+    version: SETTLEMENT_ECOLOGY_VERSION,
   });
 }
 
@@ -2322,6 +2351,7 @@ function domesticHomeStructureId(
 ): string {
   const prefix: Readonly<Record<SettlementDomesticHomeStructureKind, string>> = {
     coop: "DOMESTIC-COOP",
+    kennel: "DOMESTIC-KENNEL",
     pen: "DOMESTIC-PEN",
   };
   return `${prefix[kind]}-${custodyDigest}`;
@@ -2462,6 +2492,12 @@ function validRisk(value: unknown): value is SettlementFoodStoreRisk {
 function validDomesticHomeStructureKind(
   value: unknown,
 ): value is SettlementDomesticHomeStructureKind {
+  return value === "coop" || value === "kennel" || value === "pen";
+}
+
+function validPriorDomesticHomeStructureKind(
+  value: unknown,
+): value is Exclude<SettlementDomesticHomeStructureKind, "kennel"> {
   return value === "coop" || value === "pen";
 }
 

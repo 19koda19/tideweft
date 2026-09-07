@@ -229,7 +229,36 @@ Exact release commit `29af7793346c0c3977a5ca727b79feb3a50b83bb` passed CI
 run `34108539228` and Pages run `34108539255`; five cache-bypassed live
 artifacts match the tested local production build byte-for-byte.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, and Alpha 25 is the verified Far Paddock release. None completes worldwide Wave C, full Wave D, or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The `0.3.3-alpha.26 — The Paddock Watch` source candidate tests a twelfth
+scaling lesson: a domestic job should be a persisted relationship over an
+ordinary actor, not a second cognition system or a statistical livestock buff.
+Exactly one separate seed-stable dog keeps the existing dog actor's needs,
+condition, exposure, perception, intent, and self-preservation. Its kennel is a
+third settlement custody, while a generic working-animal assignment records the
+existing keeper as handler, the dog's custody, the protected goat custody and
+herd, the pen worksite, and one exact current or pending activity.
+
+The perception boundary now accepts bounded species-neutral external
+participants and uses a deterministic local candidate index. Work may consume
+only canonical cognition: an anonymous alarm contributes its observation ID
+and uncertain area, never the hidden emitter or target. Investigation, escape,
+and return reuse shared locomotion, and actor-owned retreat, shelter, avoidance,
+rest, welfare, or an inaccessible route can defer duty. Save staging and crash
+recovery commit the accepted transition exactly once. Direct-detail Chart,
+Relief, and ABOUT may show only current observable activity.
+
+The representative emergence proof is intentionally causal rather than
+guaranteed. A rabbit alarm can recruit the dog toward perceived space; the fox
+continues until it actually sees the dog, after which shared appraisal can
+redirect it. No guardian aura, attack, injury, death, herding, bark, or remote
+livestock knowledge is implied. Outer save 19 and settlement ecology 4 adopt a
+sealed version-18 Far Paddock state while habitat 9 and aggregate ecology 4
+remain unchanged. Evidence comes from shared assignment/perception/locomotion,
+conservation, signed-world, migration/replay, bounded-performance, runtime, and
+emergence invariants—not one test for each species or pair. This candidate has
+not yet been CI-, Pages-, or live-verified.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, and Alpha 26 is the current Paddock Watch source candidate. None completes worldwide Wave C, full Wave D, or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

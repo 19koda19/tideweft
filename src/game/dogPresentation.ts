@@ -2,12 +2,26 @@ import type { DogCoatColor, DogCoatLength, DogCoatPattern, DogSize } from "../si
 import { VISIBILITY_DIRECT, type VisibilityGrade } from "./perception";
 import { canonicalizeDogActorState, type DogActorState, type DogActorIntent } from "./dogActor";
 import {
+  canonicalizeSettlementWorkingAnimalState,
+  type SettlementWorkingAnimalState,
+} from "./settlementWorkingAnimals";
+import {
   headingToRadians,
   livingActorAddressInRegionalWindow,
 } from "./livingActor";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 
 export const DOG_PRESENTATION_VERSION = 1 as const;
+
+export type DogPresentationBehavior = DogActorIntent
+  | "work-investigate"
+  | "work-return";
+
+/** Authenticated optional work custody; autonomous dog intent remains separate. */
+export interface DogWorkActivityContext {
+  readonly state: unknown;
+  readonly atTick: number;
+}
 
 /**
  * Renderer-neutral dog data. It contains only directly observable qualities;
@@ -30,7 +44,7 @@ export interface DogPresentation {
   }>;
   readonly wetness: number;
   readonly conditionLabels: readonly string[];
-  readonly behavior: DogActorIntent;
+  readonly behavior: DogPresentationBehavior;
   readonly selected: boolean;
 }
 
@@ -43,6 +57,7 @@ export interface DogPresentationInput {
   readonly tileSize: number;
   readonly detailVisibilityGrades: readonly VisibilityGrade[] | Uint8Array;
   readonly selected?: boolean;
+  readonly activity?: DogWorkActivityContext;
 }
 
 /**
@@ -74,6 +89,8 @@ export function projectDogPresentation(input: DogPresentationInput): DogPresenta
   const recognizable = actor.playerKnowledge.facts.some(
     ({ fact }) => fact === "recognizable-individual",
   );
+  const behavior = projectDogObservedBehavior(actor, input.activity);
+  if (behavior === null) return null;
 
   return deepFreeze({
     version: DOG_PRESENTATION_VERSION,
@@ -94,9 +111,56 @@ export function projectDogPresentation(input: DogPresentationInput): DogPresenta
     },
     wetness: actor.condition.wetness,
     conditionLabels: observableConditionLabels(actor),
-    behavior: actor.intent.kind,
+    behavior,
     selected: input.selected ?? false,
   });
+}
+
+/**
+ * Composes optional assigned work into visible activity without rewriting the
+ * dog's actor-owned cognition. The work root must canonically own this exact
+ * actor and be current at the requested tick.
+ */
+export function projectDogObservedBehavior(
+  actorValue: unknown,
+  activityValue?: DogWorkActivityContext,
+): DogPresentationBehavior | null {
+  const actor = canonicalizeDogActorState(actorValue);
+  if (actor === null) return null;
+  if (activityValue === undefined) return actor.intent.kind;
+  const work = canonicalDogWorkActivity(activityValue, actor);
+  if (work === null) return null;
+  switch (work.activity) {
+    case "investigate": return "work-investigate";
+    case "return": return "work-return";
+    case "watch":
+    case "survival-override":
+    case "defer-to-actor":
+      return actor.intent.kind;
+  }
+}
+
+function canonicalDogWorkActivity(
+  value: unknown,
+  actor: DogActorState,
+): SettlementWorkingAnimalState["assignments"][number]["currentActivity"] | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, ["atTick", "state"])
+    || !safeInteger(value.atTick)
+    || value.atTick < 0
+    || actor.updatedAtTick !== value.atTick
+  ) return null;
+  const state = canonicalizeSettlementWorkingAnimalState(value.state);
+  const assignment = state?.assignments.find(({ workerActorId, workerSpecies }) => (
+    workerActorId === actor.identity.stableId && workerSpecies === "domestic-dog"
+  ));
+  if (
+    assignment === undefined
+    || assignment.currentActivity.acceptedAtTick > value.atTick
+    || assignment.createdAtTick > value.atTick
+  ) return null;
+  return assignment.currentActivity;
 }
 
 function observableConditionLabels(actor: DogActorState): readonly string[] {
@@ -141,9 +205,10 @@ function validWindow(value: unknown): value is DogPresentationInput["window"] {
 
 function allowedInputKeys(value: Record<string, unknown>): boolean {
   const keys = Object.keys(value).sort();
-  const expected = value.selected === undefined
-    ? ["actor", "detailVisibilityGrades", "tileSize", "window"]
-    : ["actor", "detailVisibilityGrades", "selected", "tileSize", "window"];
+  const expected = ["actor", "detailVisibilityGrades", "tileSize", "window"];
+  if (value.activity !== undefined) expected.push("activity");
+  if (value.selected !== undefined) expected.push("selected");
+  expected.sort();
   return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
 }
 

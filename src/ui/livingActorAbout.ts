@@ -3,6 +3,7 @@ import {
   projectDogQuickInspect,
   type DogAboutObservation,
 } from "../game/dogAbout";
+import type { DogWorkActivityContext } from "../game/dogPresentation";
 import {
   projectWildlifeAbout,
   projectWildlifeQuickInspect,
@@ -65,9 +66,10 @@ export interface ResolvedActorAboutSurface {
 export function projectDogLivingActorInspection(
   actor: unknown,
   currentObservation: DogAboutObservation,
+  activity?: DogWorkActivityContext,
 ): SelectedLivingActorUIView | null {
   const quick = projectDogQuickInspect(actor, currentObservation);
-  const about = projectDogAbout(actor, currentObservation);
+  const about = projectDogAbout(actor, currentObservation, activity);
   if (quick === null || about === null || quick.actorId !== about.actorId) return null;
 
   const target = freezeTarget({

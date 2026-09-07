@@ -10,6 +10,11 @@ import {
   type PerceptionResult,
 } from "./perception";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
+import {
+  projectDogObservedBehavior,
+  type DogPresentationBehavior,
+  type DogWorkActivityContext,
+} from "./dogPresentation";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 
 export const DOG_ABOUT_VERSION = 1 as const;
@@ -92,11 +97,14 @@ export function projectDogQuickInspect(
 export function projectDogAbout(
   actorValue: unknown,
   observationValue: unknown,
+  activity?: DogWorkActivityContext,
 ): DogAboutView | null {
   const actor = canonicalizeDogActorState(actorValue);
   if (actor === null) return null;
   const observation = canonicalObservation(actor, observationValue);
   if (observation === null) return null;
+  const behavior = projectDogObservedBehavior(actor, activity);
+  if (behavior === null) return null;
 
   const known = new Set(actor.playerKnowledge.facts.map(({ fact }) => fact));
   const observed: DogAboutFact[] = [
@@ -110,7 +118,7 @@ export function projectDogAbout(
     observed.push(fact("Condition", observableCondition(actor)));
   }
   if (observation.visualClarity >= 240_000) {
-    observed.push(fact("Behavior", observableBehavior(actor.intent.kind)));
+    observed.push(fact("Behavior", observableBehavior(behavior)));
   }
 
   if (observation.visualClarity >= 360_000) {
@@ -280,7 +288,7 @@ function primaryObservableCondition(actor: DogActorState): string {
   return observableCondition(actor).split(" · ")[0] ?? "Appears healthy";
 }
 
-function observableBehavior(intent: DogActorState["intent"]["kind"]): string {
+function observableBehavior(intent: DogPresentationBehavior): string {
   switch (intent) {
     case "approach-food": return "Following a food scent";
     case "eat": return "Eating";
@@ -289,6 +297,8 @@ function observableBehavior(intent: DogActorState["intent"]["kind"]): string {
     case "retreat": return "Retreating";
     case "rest": return "Resting";
     case "observe": return "Watching";
+    case "work-investigate": return "Investigating something nearby";
+    case "work-return": return "Returning nearby";
   }
 }
 

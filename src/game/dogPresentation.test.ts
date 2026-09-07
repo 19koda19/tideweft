@@ -1,14 +1,24 @@
 import { describe, expect, it } from "vitest";
+import {
+  createActorObservation,
+  stepActorPerception,
+} from "../sim/actorPerception";
 import { createRegionCoord } from "../sim/regions";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   appendDogActorMemory,
   createDogActorState,
   learnDogPlayerKnowledge,
+  replaceDogActorPerception,
   replaceDogActorPhysiology,
 } from "./dogActor";
 import type { VisibilityGrade } from "./perception";
 import { projectDogPresentation } from "./dogPresentation";
+import {
+  createSettlementWorkingAnimalState,
+  resolveSettlementWorkingAnimalActivity,
+  stageSettlementWorkingAnimalActivity,
+} from "./settlementWorkingAnimals";
 import { createWorldPosition } from "./worldPosition";
 
 function dog() {
@@ -39,6 +49,69 @@ function input(actor: unknown = dog()) {
     },
     tileSize: 24,
     detailVisibilityGrades: Array.from({ length: 64 }, () => 2 as VisibilityGrade),
+  };
+}
+
+function investigatingWork(actor: ReturnType<typeof dog>) {
+  const initial = createSettlementWorkingAnimalState({
+    settlementId: 1,
+    assignments: [{
+      assignmentOrdinal: 0,
+      workerActorId: actor.identity.stableId,
+      workerSpecies: "domestic-dog",
+      handlerActorId: "H-test-presentation-keeper",
+      workerCustodyRelationshipId: "DOMESTIC-REL-0000000000000001",
+      protectedCustodyRelationshipId: "DOMESTIC-REL-0000000000000002",
+      protectedGroupId: "GOAT-HERD-presentation",
+      role: "guardian",
+      worksiteId: "DOMESTIC-PEN-presentation",
+      dutyArea: { center: actor.address.position, radiusUnits: 6_000 },
+      createdAtTick: actor.updatedAtTick,
+    }],
+  });
+  const observation = createActorObservation({
+    id: "OBS-presentation-alarm",
+    observerId: actor.identity.stableId,
+    observedAtTick: 5,
+    channel: "hearing",
+    perceivedClass: "animal-alarm",
+    subjectId: null,
+    area: { center: actor.address.position, radiusUnits: 500 },
+    confidence: 900_000,
+    salience: 900_000,
+    identification: "anonymous",
+    interrupt: "strong",
+  });
+  if (observation === null) throw new Error("Presentation work observation was malformed");
+  const perception = stepActorPerception(actor.perception, {
+    tick: 5,
+    observations: [observation],
+  });
+  if (perception === null) throw new Error("Presentation work perception was malformed");
+  const staged = stageSettlementWorkingAnimalActivity(initial, {
+    assignmentId: initial.assignments[0]!.assignmentId,
+    tick: 5,
+    perception,
+    welfare: {
+      injuryPressure: 0,
+      coldPressure: 0,
+      heatPressure: 0,
+      exhaustionPressure: 0,
+      hungerPressure: 0,
+      thirstPressure: 0,
+    },
+    accessibility: { watch: true, investigate: true, return: true },
+    actorDisposition: { kind: "available" },
+    workerInsideDutyArea: true,
+  });
+  if (staged?.transaction === null || staged?.transaction === undefined) {
+    throw new Error("Presentation work activity was not staged");
+  }
+  const resolved = resolveSettlementWorkingAnimalActivity(staged.state, staged.transaction);
+  if (resolved === null) throw new Error("Presentation work activity was not resolved");
+  return {
+    actor: replaceDogActorPerception(actor, perception),
+    state: resolved.state,
   };
 }
 
@@ -89,6 +162,22 @@ describe("dog presentation", () => {
     expect(JSON.stringify(view)).not.toContain("event:recognized-dog");
     expect(view).not.toHaveProperty("name");
     expect(view).not.toHaveProperty("owner");
+  });
+
+  it("composes authenticated assigned movement without rewriting autonomous intent", () => {
+    const original = dog();
+    const work = investigatingWork(original);
+    const view = projectDogPresentation({
+      ...input(work.actor),
+      activity: { state: work.state, atTick: 5 },
+    });
+
+    expect(work.actor.intent.kind).toBe(original.intent.kind);
+    expect(view?.behavior).toBe("work-investigate");
+    expect(projectDogPresentation({
+      ...input(work.actor),
+      activity: { state: work.state, atTick: 4 },
+    })).toBeNull();
   });
 
   it("requires direct detail perception and never leaks a peripheral actor", () => {

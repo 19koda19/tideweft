@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.26",
+      "releaseDate": "2026-09-07",
+      "buildIdentity": "0.3.3-alpha.26",
+      "summary": "The Paddock Watch adds one separate settlement guardian dog with its own kennel and custody, composing a persisted working-animal assignment with ordinary cognition, shared perception and pathing, and the existing two-goat herd.",
+      "gameplayContractVersion": 24,
+      "tutorialVersion": 36,
+      "categories": {
+        "gameplay": [
+          "The starting harbor now has exactly one additional seed-stable domestic dog assigned to watch the existing two-goat herd and pen. This working dog is distinct from the original independent porter-scene dog, belongs to one settlement custody relationship, and has its own kennel rather than silently converting an established unowned animal into settlement property.",
+          "A generic persisted settlement-working-animal owner binds the dog, the existing keeper as handler, the dog's custody, the protected goat custody and herd, and the pen worksite. Its exact-once activity record can watch, investigate a lawful uncertain alarm area, return to duty, or yield to the actor without creating a guardian-only brain.",
+          "The working dog keeps ordinary dog cognition, needs, weather exposure, condition, perception, and locomotion. Its own retreat, shelter, avoidance, rest, or other self-preserving response can outrank work, while unavailable feeding and drinking remedies remain dormant rather than becoming free settlement resources."
+        ],
+        "fixes": [
+          "Core-ecology sight now admits bounded external actors through one ordered species-neutral participant boundary and a deterministic local spatial index. The new dog, the original dog, people, and materialized wildlife can share lawful contact policy without a dog-only detector or an all-pairs species table.",
+          "Working-animal activity accepts only the worker's canonical cognition: an alarm investigation stores its source observation and uncertain perceived area, never a hidden emitter, predator identity, or exact target. Staging, commit, crash recovery, and replay preserve one accepted transition without duplicating movement or authority.",
+          "A representative emergent chain proves the intended incidental deterrence: a rabbit's anonymous alarm can recruit the dog toward perceived space, and a pursuing fox changes course only after it actually gains lawful sight of that dog. No guardian aura, remote livestock knowledge, attack, injury, or scripted fox outcome is introduced."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. The Paddock Watch is a physical actor with bounded senses, exposure, needs, route access, and self-preservation—not a settlement statistic, combat upgrade, or guaranteed livestock-defense bonus.",
+          "The assignment ships only one guardian role and one local dog. Investigation can fail or defer when evidence, actor readiness, or a traversable first step is absent; the dog does not herd goats, attack predators, obey player commands, or know threats beyond its own perception.",
+          "Validation remains architecture-led: shared assignment, perception, locomotion, conservation, save, signed-world, and bounded-performance invariants plus representative runtime and emergence chains replace species-by-species fixtures or an N-squared interaction matrix."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D project the same directly perceived working dog through the existing dog renderer and selection path. Losing direct-detail sight removes its marker and actions instead of leaving a guardian indicator or remote settlement tracker.",
+          "Quick inspection remains direct-detail and condition honest. Pane-free ABOUT may describe only current visible activity such as watching, investigating something nearby, or returning nearby; neither discloses the hidden alarm source, protected target, assignment graph, or internal need values.",
+          "Field Manual version 36 explains The Paddock Watch, the separate dog and kennel custody, the generic work relationship, anonymous alarm investigation, actor-owned self-preservation, conditional fox deterrence, exact save adoption, and the larger animal systems that remain future work."
+        ],
+        "saves": [
+          "The outer session advances to version 19, habitat analysis remains version 9, settlement ecology advances to version 4, and aggregate ecology remains version 4. Current records seal the separate dog roster, kennel custody, generic working-animal assignment and activity transaction beside every Alpha-25 actor, herd, flock, item, Promise, and world fact.",
+          "A sealed version-18 Far Paddock save migrates exactly once. Its complete habitat-9 record, both goat identities, herd, pen, chicken flock, coop, prior custody, store and food-use history, actors, aggregates, items, and Promises remain exact before the deterministic working dog, kennel, third custody, and guardian assignment are appended.",
+          "Current saves strictly authenticate both new roots and recover an accepted pending work transition exactly once. Save, reload, failed-step rollback, and representative regional travel preserve the same dog identity, relationship, assignment, cognition, activity ordinal, and physical position without rerolling or duplication."
+        ],
+        "knownLimitations": [
+          "This is exactly one bounded starting-harbor working dog and one guardian assignment beside the existing two-goat herd, not a worldwide dog population, guaranteed livestock defense, complete Wave D settlement ecology, ecological cross-region animal migration, or completion of Directive 04_1.",
+          "The dog does not attack, injure, kill, herd, breed, rescue livestock, follow a complete schedule, or add barking or another sound system. This release adds no injury, mortality, carcass, live-prey capture or consumption, new track evidence, companion training, player commands, or autonomous kennel-return routine.",
+          "Fox deterrence is incidental and perception-driven: a fox can react only when it actually perceives the dog. The assignment grants no invisible protection radius, remote predator knowledge, promise of a successful defense, wider ownership network, or cross-region animal ecology."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.25",
       "releaseDate": "2026-09-07",
       "buildIdentity": "0.3.3-alpha.25",

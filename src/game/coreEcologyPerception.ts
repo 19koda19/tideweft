@@ -42,6 +42,7 @@ import {
   type CoreEcologyTrophicObservationContext,
 } from "./coreEcologyTrophic";
 import {
+  DEFAULT_DETAIL_PERCEPTION_RANGES,
   VISIBILITY_DIRECT,
   calculateAmbientNoise,
   evaluateAudibleContact,
@@ -63,14 +64,44 @@ import {
 
 export const CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS = 14_000 as const;
 export const CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY = 180_000 as const;
+/** Compatibility ceiling for the original dog-only adapters below. */
+export const CORE_ECOLOGY_PERCEPTION_MAX_DOG_OBSERVERS = 8 as const;
+/**
+ * Bounded, species-neutral participants owned outside the core wildlife patch.
+ * New actor rosters join through this boundary rather than adding a species
+ * field or detection function to this module.
+ */
+export const CORE_ECOLOGY_PERCEPTION_MAX_EXTERNAL_PARTICIPANTS = 16 as const;
 export const CORE_ECOLOGY_PERCEPTION_MAX_OBSERVERS =
-  CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS + 3;
+  CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
+    + CORE_ECOLOGY_PERCEPTION_MAX_EXTERNAL_PARTICIPANTS;
+/** Conservative tile envelope for the detail-contact query used below. */
+export const CORE_ECOLOGY_PERCEPTION_MAX_VISUAL_CONTACT_RANGE_TILES = Math.ceil(
+  Math.max(
+    DEFAULT_DETAIL_PERCEPTION_RANGES.closePeripheralRange,
+    DEFAULT_DETAIL_PERCEPTION_RANGES.directSightRange,
+  ),
+);
+/** One maximum-range cell keeps each observer query to at most nine buckets. */
+export const CORE_ECOLOGY_PERCEPTION_VISUAL_BUCKET_SIZE_TILES =
+  CORE_ECOLOGY_PERCEPTION_MAX_VISUAL_CONTACT_RANGE_TILES;
 
 const CORE_SPECIES = new Set<string>(CORE_WILDLIFE_SPECIES);
+
+export interface CoreEcologyPerceptionParticipant {
+  readonly address: LivingActorAddress;
+  /** Whether this participant receives contacts for other external actors. */
+  readonly contactScope: "core-only" | "all-participants";
+}
 
 export interface CoreEcologyPerceptionFrameInput {
   /** The exact current materialized wildlife set; coarse actors do not enter this bridge. */
   readonly actors: readonly CoreWildlifeActorState[];
+  /** Preferred bounded boundary for any externally owned living actor. */
+  readonly participants?: readonly CoreEcologyPerceptionParticipant[];
+  /** @deprecated Dog-only compatibility adapter; new integrations use participants. */
+  readonly dogAddresses?: readonly LivingActorAddress[];
+  /** @deprecated Compatibility input for the original single BIO0 dog. */
   readonly dogAddress?: LivingActorAddress | null;
   readonly porterAddress?: LivingActorAddress | null;
   readonly playerAddress?: LivingActorAddress | null;
@@ -97,15 +128,25 @@ interface CanonicalPerceptionFrame {
   readonly actorIds: ReadonlySet<string>;
   readonly actorStates: ReadonlyMap<string, CoreWildlifeActorState>;
   readonly observers: readonly LivingActorAddress[];
+  readonly allParticipantContactObserverIds: ReadonlySet<string>;
   readonly placements: ReadonlyMap<string, Readonly<{
     readonly point: SpatialFramePoint;
     readonly tileIndex: number;
   }>>;
+  readonly visualCandidateIndex: PerceptionVisualCandidateIndex;
   readonly spatialFrame: SpatialFrame;
   readonly cells: readonly PerceptionCell[];
   readonly world: WorldView;
   readonly window: RegionalTerrainWindow;
   readonly tick: number;
+}
+
+interface PerceptionVisualCandidateIndex {
+  readonly columns: number;
+  readonly rows: number;
+  readonly bucketColumns: number;
+  readonly bucketRows: number;
+  readonly buckets: ReadonlyMap<number, readonly LivingActorAddress[]>;
 }
 
 const EMPTY_OBSERVATIONS: readonly ActorObservation[] = Object.freeze([]);
@@ -117,9 +158,10 @@ const MOBBING_ACTIVITY: CoreEcologyTrophicObservationContext = Object.freeze({
 /**
  * Builds pairwise visual facts and bounded local weather cues for the exact
  * current wildlife materialization.
- * Optional dog, porter, and player addresses observe wildlife and may be
- * observed by wildlife, but this bridge deliberately does not duplicate
- * contacts among those non-core actors.
+ * External participants observe wildlife and may be observed by wildlife.
+ * A participant opts into peer contacts through a generic contact scope;
+ * existing human-to-dog contact remains in its prior owner, so current human
+ * adapters remain core-only and do not duplicate that established evidence.
  */
 export function collectCoreEcologyVisualObservationBatches(
   value: unknown,
@@ -132,11 +174,24 @@ export function collectCoreEcologyVisualObservationBatches(
     const observerPlacement = frame.placements.get(observer.actorId);
     if (observerPlacement === undefined) return null;
     const observerIsCore = frame.actorIds.has(observer.actorId);
+    const observesAllParticipants = frame.allParticipantContactObserverIds.has(
+      observer.actorId,
+    );
     const contacts = [];
-    for (const subject of frame.observers) {
+    const subjects = queryPerceptionVisualCandidates(
+      frame.visualCandidateIndex,
+      frame.placements,
+      observerPlacement,
+    );
+    if (subjects === null) return null;
+    for (const subject of subjects) {
       if (
         subject.actorId === observer.actorId
-        || (!observerIsCore && !frame.actorIds.has(subject.actorId))
+        || (
+          !observerIsCore
+          && !observesAllParticipants
+          && !frame.actorIds.has(subject.actorId)
+        )
       ) continue;
       const subjectPlacement = frame.placements.get(subject.actorId);
       if (subjectPlacement === undefined) return null;
@@ -428,16 +483,20 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
   )));
 
   const observers: LivingActorAddress[] = actors.map(({ address }) => address);
-  const dog = canonicalOptionalAddress(value, "dogAddress", "domestic-dog");
-  const porter = canonicalOptionalAddress(value, "porterAddress", "human");
-  const player = canonicalOptionalAddress(value, "playerAddress", "human");
-  if (dog === false || porter === false || player === false) return null;
-  for (const optional of [dog, porter, player]) {
-    if (optional === null) continue;
+  const participants = canonicalPerceptionParticipants(value);
+  if (participants === null) return null;
+  const allParticipantContactObserverIds = new Set<string>();
+  for (const participant of participants) {
+    const optional = participant.address;
     if (coreIds.has(optional.actorId) || observers.some(({ actorId }) => actorId === optional.actorId)) {
       return null;
     }
-    if (livingActorAddressInRegionalWindow(optional, window) !== null) observers.push(optional);
+    if (livingActorAddressInRegionalWindow(optional, window) !== null) {
+      observers.push(optional);
+      if (participant.contactScope === "all-participants") {
+        allParticipantContactObserverIds.add(optional.actorId);
+      }
+    }
   }
   observers.sort((left, right) => compareText(left.actorId, right.actorId));
   if (observers.length > CORE_ECOLOGY_PERCEPTION_MAX_OBSERVERS) return null;
@@ -454,21 +513,145 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
       tileIndex: placement.tileIndex,
     }));
   }
+  const visualCandidateIndex = createPerceptionVisualCandidateIndex(
+    observers,
+    placements,
+    world.terrain.width,
+    world.terrain.height,
+  );
   const cells = coreEcologyPerceptionCells(world);
   const spatialFrame = spatialFrameForWorld(world);
-  if (cells === null || spatialFrame === null) return null;
+  if (visualCandidateIndex === null || cells === null || spatialFrame === null) return null;
   return Object.freeze({
     actors: Object.freeze(actors),
     actorIds: coreIds,
     actorStates,
     observers: Object.freeze(observers),
+    allParticipantContactObserverIds,
     placements,
+    visualCandidateIndex,
     spatialFrame,
     cells,
     world,
     window,
     tick,
   });
+}
+
+/**
+ * Deterministic species-neutral index for bounded actor-detail candidates.
+ * Addresses have already crossed the segmented-world/window boundary; buckets
+ * therefore use registered regional-frame tile indices without flattening
+ * world coordinates or treating a region seam as distance.
+ */
+function createPerceptionVisualCandidateIndex(
+  observers: readonly LivingActorAddress[],
+  placements: CanonicalPerceptionFrame["placements"],
+  columns: number,
+  rows: number,
+): PerceptionVisualCandidateIndex | null {
+  const bucketSize = CORE_ECOLOGY_PERCEPTION_VISUAL_BUCKET_SIZE_TILES;
+  if (
+    !positiveSafeInteger(bucketSize)
+    || !positiveSafeInteger(columns)
+    || !positiveSafeInteger(rows)
+    || observers.length > CORE_ECOLOGY_PERCEPTION_MAX_OBSERVERS
+  ) return null;
+  const tileCount = columns * rows;
+  if (!positiveSafeInteger(tileCount)) return null;
+  const bucketColumns = Math.ceil(columns / bucketSize);
+  const bucketRows = Math.ceil(rows / bucketSize);
+  if (!positiveSafeInteger(bucketColumns) || !positiveSafeInteger(bucketRows)) return null;
+
+  const mutableBuckets = new Map<number, LivingActorAddress[]>();
+  const actorIds = new Set<string>();
+  for (const observer of observers) {
+    const placement = placements.get(observer.actorId);
+    if (
+      placement === undefined
+      || actorIds.has(observer.actorId)
+      || !nonnegativeSafeInteger(placement.tileIndex)
+      || placement.tileIndex >= tileCount
+    ) return null;
+    actorIds.add(observer.actorId);
+    const tileX = placement.tileIndex % columns;
+    const tileY = Math.floor(placement.tileIndex / columns);
+    const bucketX = Math.floor(tileX / bucketSize);
+    const bucketY = Math.floor(tileY / bucketSize);
+    const bucketKey = bucketY * bucketColumns + bucketX;
+    const bucket = mutableBuckets.get(bucketKey);
+    if (bucket === undefined) mutableBuckets.set(bucketKey, [observer]);
+    else bucket.push(observer);
+  }
+  if (actorIds.size !== observers.length || actorIds.size !== placements.size) return null;
+
+  const buckets = new Map<number, readonly LivingActorAddress[]>();
+  for (const [key, bucket] of [...mutableBuckets.entries()].sort((left, right) => (
+    left[0] - right[0]
+  ))) {
+    bucket.sort((left, right) => compareText(left.actorId, right.actorId));
+    buckets.set(key, Object.freeze([...bucket]));
+  }
+  return Object.freeze({ columns, rows, bucketColumns, bucketRows, buckets });
+}
+
+function queryPerceptionVisualCandidates(
+  index: PerceptionVisualCandidateIndex,
+  placements: CanonicalPerceptionFrame["placements"],
+  observerPlacement: Readonly<{ readonly tileIndex: number }>,
+): readonly LivingActorAddress[] | null {
+  const bucketSize = CORE_ECOLOGY_PERCEPTION_VISUAL_BUCKET_SIZE_TILES;
+  const maximumRange = CORE_ECOLOGY_PERCEPTION_MAX_VISUAL_CONTACT_RANGE_TILES;
+  const tileCount = index.columns * index.rows;
+  if (
+    !positiveSafeInteger(index.columns)
+    || !positiveSafeInteger(index.rows)
+    || !positiveSafeInteger(index.bucketColumns)
+    || !positiveSafeInteger(index.bucketRows)
+    || !positiveSafeInteger(tileCount)
+    || !nonnegativeSafeInteger(observerPlacement.tileIndex)
+    || observerPlacement.tileIndex >= tileCount
+  ) return null;
+  const observerX = observerPlacement.tileIndex % index.columns;
+  const observerY = Math.floor(observerPlacement.tileIndex / index.columns);
+  const minimumBucketX = Math.max(0, Math.floor((observerX - maximumRange) / bucketSize));
+  const maximumBucketX = Math.min(
+    index.bucketColumns - 1,
+    Math.floor((observerX + maximumRange) / bucketSize),
+  );
+  const minimumBucketY = Math.max(0, Math.floor((observerY - maximumRange) / bucketSize));
+  const maximumBucketY = Math.min(
+    index.bucketRows - 1,
+    Math.floor((observerY + maximumRange) / bucketSize),
+  );
+
+  const candidates: LivingActorAddress[] = [];
+  const actorIds = new Set<string>();
+  for (let bucketY = minimumBucketY; bucketY <= maximumBucketY; bucketY += 1) {
+    for (let bucketX = minimumBucketX; bucketX <= maximumBucketX; bucketX += 1) {
+      const bucket = index.buckets.get(bucketY * index.bucketColumns + bucketX) ?? [];
+      for (const candidate of bucket) {
+        const placement = placements.get(candidate.actorId);
+        if (
+          placement === undefined
+          || actorIds.has(candidate.actorId)
+          || !nonnegativeSafeInteger(placement.tileIndex)
+          || placement.tileIndex >= tileCount
+        ) return null;
+        actorIds.add(candidate.actorId);
+        const candidateX = placement.tileIndex % index.columns;
+        const candidateY = Math.floor(placement.tileIndex / index.columns);
+        if (
+          Math.abs(candidateX - observerX) > maximumRange
+          || Math.abs(candidateY - observerY) > maximumRange
+        ) continue;
+        candidates.push(candidate);
+      }
+    }
+  }
+  if (candidates.length > CORE_ECOLOGY_PERCEPTION_MAX_OBSERVERS) return null;
+  candidates.sort((left, right) => compareText(left.actorId, right.actorId));
+  return Object.freeze(candidates);
 }
 
 function canonicalAggregateActivityPerceptionInput(
@@ -533,13 +716,102 @@ function canonicalAlarmEvent(
 
 function canonicalOptionalAddress(
   owner: Readonly<Record<string, unknown>>,
-  key: "dogAddress" | "porterAddress" | "playerAddress",
-  species: "domestic-dog" | "human",
+  key: "porterAddress" | "playerAddress",
+  species: "human",
 ): LivingActorAddress | null | false {
   if (!Object.hasOwn(owner, key) || owner[key] === null) return null;
   const value = owner[key];
   if (!isLivingActorAddress(value) || value.species !== species) return false;
   return createLivingActorAddress(value);
+}
+
+function canonicalPerceptionParticipants(
+  owner: Readonly<Record<string, unknown>>,
+): readonly CoreEcologyPerceptionParticipant[] | null {
+  const hasParticipants = Object.hasOwn(owner, "participants");
+  const hasCompatibilityInput = Object.hasOwn(owner, "dogAddresses")
+    || Object.hasOwn(owner, "dogAddress")
+    || Object.hasOwn(owner, "porterAddress")
+    || Object.hasOwn(owner, "playerAddress");
+  if (hasParticipants && hasCompatibilityInput) return null;
+
+  const participants: CoreEcologyPerceptionParticipant[] = [];
+  if (hasParticipants) {
+    if (
+      !Array.isArray(owner.participants)
+      || owner.participants.length > CORE_ECOLOGY_PERCEPTION_MAX_EXTERNAL_PARTICIPANTS
+    ) return null;
+    for (const raw of owner.participants) {
+      if (
+        !plainRecord(raw)
+        || !exactKeys(raw, ["address", "contactScope"])
+        || !isLivingActorAddress(raw.address)
+        || (raw.contactScope !== "core-only" && raw.contactScope !== "all-participants")
+      ) return null;
+      participants.push(Object.freeze({
+        address: createLivingActorAddress(raw.address),
+        contactScope: raw.contactScope,
+      }));
+    }
+  } else {
+    const dogs = canonicalDogAddresses(owner);
+    const porter = canonicalOptionalAddress(owner, "porterAddress", "human");
+    const player = canonicalOptionalAddress(owner, "playerAddress", "human");
+    if (dogs === false || porter === false || player === false) return null;
+    participants.push(...dogs.map((address) => Object.freeze({
+      address,
+      contactScope: "all-participants" as const,
+    })));
+    for (const address of [porter, player]) {
+      if (address === null) continue;
+      participants.push(Object.freeze({
+        address,
+        contactScope: "core-only" as const,
+      }));
+    }
+  }
+
+  participants.sort((left, right) => compareText(
+    left.address.actorId,
+    right.address.actorId,
+  ));
+  if (participants.some((participant, index) => (
+    index > 0
+    && participant.address.actorId === participants[index - 1]?.address.actorId
+  ))) return null;
+  return Object.freeze(participants);
+}
+
+function canonicalDogAddresses(
+  owner: Readonly<Record<string, unknown>>,
+): readonly LivingActorAddress[] | false {
+  const hasPlural = Object.hasOwn(owner, "dogAddresses");
+  const hasSingular = Object.hasOwn(owner, "dogAddress");
+  if (hasPlural && hasSingular) return false;
+  if (hasSingular) {
+    const value = owner.dogAddress;
+    if (value === null) return Object.freeze([]);
+    if (!isLivingActorAddress(value) || value.species !== "domestic-dog") return false;
+    return Object.freeze([createLivingActorAddress(value)]);
+  }
+  if (!hasPlural) return Object.freeze([]);
+  if (
+    !Array.isArray(owner.dogAddresses)
+    || owner.dogAddresses.length > CORE_ECOLOGY_PERCEPTION_MAX_DOG_OBSERVERS
+  ) return false;
+  const dogs: LivingActorAddress[] = [];
+  const actorIds = new Set<string>();
+  for (const value of owner.dogAddresses) {
+    if (
+      !isLivingActorAddress(value)
+      || value.species !== "domestic-dog"
+      || actorIds.has(value.actorId)
+    ) return false;
+    actorIds.add(value.actorId);
+    dogs.push(createLivingActorAddress(value));
+  }
+  dogs.sort((left, right) => compareText(left.actorId, right.actorId));
+  return Object.freeze(dogs);
 }
 
 function perceivedVisualClass(
@@ -788,6 +1060,8 @@ function spatialFrameForWorld(world: WorldView): SpatialFrame | null {
 
 function allowedFrameKeys(value: Readonly<Record<string, unknown>>): boolean {
   const expected = ["actors", "tick", "window", "world"];
+  if (Object.hasOwn(value, "participants")) expected.push("participants");
+  if (Object.hasOwn(value, "dogAddresses")) expected.push("dogAddresses");
   if (Object.hasOwn(value, "dogAddress")) expected.push("dogAddress");
   if (Object.hasOwn(value, "porterAddress")) expected.push("porterAddress");
   if (Object.hasOwn(value, "playerAddress")) expected.push("playerAddress");

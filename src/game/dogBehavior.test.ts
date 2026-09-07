@@ -23,6 +23,7 @@ import {
   DOG_BEHAVIOR_VERSION,
   DOG_INTENT_SWITCH_MARGIN,
   decideDogBehavior,
+  evaluateDogBehavior,
   type DogActionAccessibility,
   type DogBehaviorDecision,
   type DogBehaviorInput,
@@ -186,7 +187,8 @@ const BEAR: ObservationSpec = {
 
 describe("pure deterministic dog behavior", () => {
   it("returns a canonical fixed-point neutral observation decision", () => {
-    const decision = decide(behaviorInput(dog()));
+    const input = behaviorInput(dog());
+    const decision = decide(input);
 
     expect(decision).toMatchObject({
       version: DOG_BEHAVIOR_VERSION,
@@ -206,6 +208,7 @@ describe("pure deterministic dog behavior", () => {
     }
     expect(Object.isFrozen(decision)).toBe(true);
     expect(Object.isFrozen(decision.scores)).toBe(true);
+    expect(evaluateDogBehavior(input)?.assignmentReadiness).toEqual({ kind: "available" });
   });
 
   it("lets classified food scent justify approach without granting exact food contact", () => {
@@ -250,14 +253,15 @@ describe("pure deterministic dog behavior", () => {
     state.needs.hunger = ACTOR_PERCEPTION_SCALE;
     state.condition.wetness = ACTOR_PERCEPTION_SCALE;
     state.condition.coldStress = 900_000;
-    const decision = decide(behaviorInput(state, [FOOD_SCENT], {
+    const input = behaviorInput(state, [FOOD_SCENT], {
       weather: {
         coldPressure: ACTOR_PERCEPTION_SCALE,
         heatPressure: 0,
         rainIntensity: ACTOR_PERCEPTION_SCALE,
         windPressure: 900_000,
       },
-    }));
+    });
+    const decision = decide(input);
 
     expect(decision.intent).toBe("seek-shelter");
     expect(decision.cause).toEqual({
@@ -265,34 +269,45 @@ describe("pure deterministic dog behavior", () => {
       referenceId: "condition:weather-exposure",
     });
     expect(score(decision, "seek-shelter")).toBeGreaterThan(score(decision, "approach-food"));
+    expect(evaluateDogBehavior(input)?.assignmentReadiness).toEqual({
+      kind: "defer-to-actor",
+      referenceId: "actor-intent:seek-shelter",
+    });
   });
 
   it("retreats from a strong perceived threat despite hunger", () => {
     const state = dog();
     state.needs.hunger = ACTOR_PERCEPTION_SCALE;
     state.needs.safety = ACTOR_PERCEPTION_SCALE;
-    const decision = decide(behaviorInput(state, [FOOD_SCENT, BEAR]));
+    const input = behaviorInput(state, [FOOD_SCENT, BEAR]);
+    const decision = decide(input);
 
     expect(decision.intent).toBe("retreat");
     expect(decision.cause.kind).toBe("perception");
     expect(decision.focusBeliefKey).toContain("bear-seen");
     expect(score(decision, "retreat")).toBeGreaterThan(score(decision, "approach-food"));
+    expect(evaluateDogBehavior(input)?.assignmentReadiness).toEqual({
+      kind: "defer-to-actor",
+      referenceId: "actor-intent:retreat",
+    });
   });
 
   it("treats a lawfully heard wildlife alarm as danger without inventing its source", () => {
     const state = dog();
     state.needs.safety = ACTOR_PERCEPTION_SCALE;
-    const decision = decide(behaviorInput(state, [{
+    const input = behaviorInput(state, [{
       id: "heard-herd-alarm",
       perceivedClass: "animal-alarm",
       channel: "hearing",
       confidence: 860_000,
       salience: 940_000,
-    }]));
+    }]);
+    const decision = decide(input);
 
     expect(decision.intent).toBe("retreat");
     expect(decision.cause.kind).toBe("perception");
     expect(decision.focusBeliefKey).toContain("heard-herd-alarm");
+    expect(evaluateDogBehavior(input)?.assignmentReadiness).toEqual({ kind: "available" });
   });
 
   it("uses human familiarity and accepted human perception for avoidance", () => {
@@ -315,11 +330,16 @@ describe("pure deterministic dog behavior", () => {
     const state = dog();
     state.needs.rest = 950_000;
     state.condition.exhaustion = 900_000;
-    const decision = decide(behaviorInput(state));
+    const input = behaviorInput(state);
+    const decision = decide(input);
 
     expect(decision.intent).toBe("rest");
     expect(decision.cause).toEqual({ kind: "need", referenceId: "need:rest" });
     expect(score(decision, "rest")).toBeGreaterThan(score(decision, "observe"));
+    expect(evaluateDogBehavior(input)?.assignmentReadiness).toEqual({
+      kind: "defer-to-actor",
+      referenceId: "actor-intent:rest",
+    });
   });
 
   it("holds approach and retreat briefly, then disengages neutrally when evidence disappears", () => {

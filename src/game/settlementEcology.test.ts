@@ -28,6 +28,7 @@ import {
   SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
   SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY,
   SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES,
+  SETTLEMENT_ECOLOGY_PLURAL_CUSTODY_VERSION,
   SETTLEMENT_ECOLOGY_PRIOR_VERSION,
   SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION,
   SETTLEMENT_ECOLOGY_VERSION,
@@ -66,6 +67,7 @@ const SEED = seedFromText("alpha 23 storehouse door");
 const ORIGIN = createRegionCoord(-91, 37);
 const KEEPER_ID = "H-v1-alpha23-keeper";
 const CAT_ID = "CAT-v1-alpha23-store";
+const DOMESTIC_DOG_ID = "D-v1-alpha26-settlement-dog";
 const DOMESTIC_MEMBER_IDS = [
   "CHICKEN-v1-alpha24-hen-a",
   "CHICKEN-v1-alpha24-hen-b",
@@ -239,6 +241,41 @@ describe("settlement food-store ecology kernel", () => {
     expect(migrateSettlementEcologyState({ ...prior, domesticCustodies: [] })).toBeNull();
   });
 
+  it("migrates exact v3 state to v4 once without changing custody, knowledge, or transactions", () => {
+    const initial = store(fixturePatch());
+    const report = createSettlementPlayerStoreReport(initial, 2);
+    const informed = recordSettlementKeeperKnowledge(initial, 2, {
+      kind: "player-report",
+      report,
+    });
+    const withCustodies = establishSettlementDomesticAnimalCustody(
+      establishSettlementDomesticAnimalCustody(informed, domesticCustodyInput(initial)),
+      secondDomesticCustodyInput(initial),
+    );
+    if (withCustodies === null) throw new Error("Could not establish v3 custody fixture");
+    const staged = stageSettlementDomesticFoodUse(
+      withCustodies,
+      domesticFoodUseRequest(withCustodies, 3),
+    );
+    if (staged === null) throw new Error("Could not stage v3 transaction fixture");
+    const prior = priorSettlementEcologyV3Payload(staged.state);
+    const migrated = migrateSettlementEcologyState(prior);
+    if (migrated === null) throw new Error("Could not migrate exact v3 fixture");
+    const { version: priorVersion, ...priorBody } = prior;
+    const { version: migratedVersion, ...migratedBody } = migrated;
+
+    expect(priorVersion).toBe(SETTLEMENT_ECOLOGY_PLURAL_CUSTODY_VERSION);
+    expect(migratedVersion).toBe(SETTLEMENT_ECOLOGY_VERSION);
+    expect(migratedBody).toEqual(priorBody);
+    expect(migrated.domesticCustodies).toEqual(staged.state.domesticCustodies);
+    expect(migrated.keeperKnowledge).toEqual(staged.state.keeperKnowledge);
+    expect(migrated.carrier).toEqual(staged.state.carrier);
+    expect(migrated.pendingDomesticFoodUse).toEqual(staged.state.pendingDomesticFoodUse);
+    expect(migrateSettlementEcologyState(migrated)).toEqual(migrated);
+    expect(deserializeSettlementEcologyState(JSON.stringify(prior))).toEqual(migrated);
+    expect(migrateSettlementEcologyState({ ...prior, futureField: true })).toBeNull();
+  });
+
   it("binds canonical domestic custody without copying actor simulation state", () => {
     const initial = store(fixturePatch());
     const input = domesticCustodyInput(initial);
@@ -361,6 +398,20 @@ describe("settlement food-store ecology kernel", () => {
       duplicateGroup.domesticCustodies[0]!.memberGroupId;
     expect(canonicalizeSettlementEcologyState(duplicateGroup)).toBeNull();
 
+    const duplicateRelationship = JSON.parse(serializeSettlementEcologyState(coopThenPen)) as {
+      domesticCustodies: Array<{ relationshipId: string }>;
+    };
+    duplicateRelationship.domesticCustodies[1]!.relationshipId =
+      duplicateRelationship.domesticCustodies[0]!.relationshipId;
+    expect(canonicalizeSettlementEcologyState(duplicateRelationship)).toBeNull();
+
+    const duplicateHome = JSON.parse(serializeSettlementEcologyState(coopThenPen)) as {
+      domesticCustodies: Array<{ homeId: string }>;
+    };
+    duplicateHome.domesticCustodies[1]!.homeId =
+      duplicateHome.domesticCustodies[0]!.homeId;
+    expect(canonicalizeSettlementEcologyState(duplicateHome)).toBeNull();
+
     const mismatchedHome = JSON.parse(serializeSettlementEcologyState(coopThenPen)) as {
       domesticCustodies: Array<{
         homeStructure: { kind: "coop" | "pen"; structureId: string };
@@ -399,6 +450,48 @@ describe("settlement food-store ecology kernel", () => {
       memberActorIds: [
         `CHICKEN-v1-shared-custody-bound-${SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES}`,
       ],
+    })).toBeNull();
+  });
+
+  it("binds one individual dog to a deterministic kennel at signed extreme coordinates", () => {
+    const initial = store(fixturePatch());
+    const extremeHomes = [
+      createWorldPosition(createRegionCoord(-REGION_COORD_LIMIT, REGION_COORD_LIMIT), 1, 2),
+      createWorldPosition(createRegionCoord(REGION_COORD_LIMIT, -REGION_COORD_LIMIT), 3, 4),
+    ];
+
+    for (const homePosition of extremeHomes) {
+      const input = dogCustodyInput(initial, homePosition);
+      const record = createSettlementDomesticAnimalCustody(initial, input);
+      const established = establishSettlementDomesticAnimalCustody(initial, input);
+
+      expect(record).toMatchObject({
+        custodyOrdinal: 2,
+        settlementId: initial.identity.settlementId,
+        owner: { kind: "settlement", id: initial.identity.settlementId },
+        caretakerActorId: KEEPER_ID,
+        species: "domestic-dog",
+        memberActorIds: [DOMESTIC_DOG_ID],
+        memberGroupId: null,
+        homeStructure: {
+          version: SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
+          kind: "kennel",
+          position: homePosition,
+          radiusUnits: 3 * WORLD_POSITION_UNITS_PER_TILE,
+        },
+      });
+      expect(record?.homeStructure.structureId)
+        .toBe(`DOMESTIC-KENNEL-${record?.relationshipId.slice("DOMESTIC-REL-".length)}`);
+      expect(established?.domesticCustodies).toEqual([record]);
+      expect(deserializeSettlementEcologyState(
+        serializeSettlementEcologyState(established),
+      )).toEqual(established);
+      expect("guardianRole" in established!.domesticCustodies[0]!).toBe(false);
+    }
+
+    expect(establishSettlementDomesticAnimalCustody(initial, {
+      ...dogCustodyInput(initial, extremeHomes[0]!),
+      memberGroupId: DOMESTIC_GROUP_ID,
     })).toBeNull();
   });
 
@@ -906,6 +999,16 @@ function priorSettlementEcologyV2Payload(
   };
 }
 
+function priorSettlementEcologyV3Payload(
+  state: SettlementEcologyState,
+): Record<string, unknown> & { version: typeof SETTLEMENT_ECOLOGY_PLURAL_CUSTODY_VERSION } {
+  const value = structuredClone(state) as unknown as Record<string, unknown>;
+  value.version = SETTLEMENT_ECOLOGY_PLURAL_CUSTODY_VERSION;
+  return value as Record<string, unknown> & {
+    version: typeof SETTLEMENT_ECOLOGY_PLURAL_CUSTODY_VERSION;
+  };
+}
+
 function domesticCustodyInput(
   state: SettlementEcologyState,
 ): CreateSettlementDomesticAnimalCustodyInput {
@@ -950,6 +1053,25 @@ function secondDomesticCustodyInput(
         -2 * WORLD_POSITION_UNITS_PER_TILE,
       ),
       radiusUnits: 8 * WORLD_POSITION_UNITS_PER_TILE,
+    },
+  };
+}
+
+function dogCustodyInput(
+  state: SettlementEcologyState,
+  homePosition: WorldPosition,
+): CreateSettlementDomesticAnimalCustodyInput {
+  return {
+    custodyOrdinal: 2,
+    owner: { kind: "settlement", id: state.identity.settlementId },
+    caretakerActorId: KEEPER_ID,
+    species: "domestic-dog",
+    memberActorIds: [DOMESTIC_DOG_ID],
+    memberGroupId: null,
+    homeStructure: {
+      kind: "kennel",
+      position: homePosition,
+      radiusUnits: 3 * WORLD_POSITION_UNITS_PER_TILE,
     },
   };
 }

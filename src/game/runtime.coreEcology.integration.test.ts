@@ -102,13 +102,15 @@ export const PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 18;
+  readonly version: 19;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly bio0Ecology: string;
   readonly coreEcology: string;
   readonly settlementEcology: string;
+  readonly dogActorRoster: string;
+  readonly settlementWorkingAnimals: string;
   readonly regionalTravel: string;
   readonly integrity: string;
   readonly [key: string]: unknown;
@@ -169,6 +171,8 @@ describe("runtime core-ecology vertical slice", () => {
     const {
       integrity: _currentIntegrity,
       settlementEcology: _currentSettlementEcology,
+      dogActorRoster: _currentDogActorRoster,
+      settlementWorkingAnimals: _currentSettlementWorkingAnimals,
       ...currentBase
     } = current;
     const v8Base = { ...currentBase, version: 8 as const, coreEcology: legacy.text };
@@ -189,7 +193,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(18);
+    expect(repository.snapshot().payloadVersion).toBe(19);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v9");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -299,7 +303,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(18);
+    expect(v13Record.payloadVersion).toBe(19);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
@@ -380,7 +384,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(18);
+    expect(v13Record.payloadVersion).toBe(19);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
@@ -478,7 +482,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(18);
+    expect(v13Record.payloadVersion).toBe(19);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
@@ -565,7 +569,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(18);
+    expect(adoptedRecord.payloadVersion).toBe(19);
     expect(adopted.derivation.kind).toBe("habitat-v9");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
@@ -626,7 +630,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(18);
+    expect(adoptedRecord.payloadVersion).toBe(19);
     expect(adopted.derivation.kind).toBe("habitat-v9");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
@@ -774,6 +778,8 @@ describe("runtime core-ecology vertical slice", () => {
       const {
         integrity: _currentIntegrity,
         settlementEcology: _currentSettlementEcology,
+        dogActorRoster: _currentDogActorRoster,
+        settlementWorkingAnimals: _currentSettlementWorkingAnimals,
         ...currentBase
       } = current;
       const v8Base = { ...currentBase, version: 8 as const, coreEcology: legacy.text };
@@ -797,7 +803,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v18 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v19 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -822,7 +828,7 @@ describe("runtime core-ecology vertical slice", () => {
     rejected.destroy();
   });
 
-  it("quarantines an Alpha-19 aggregate record masquerading inside a current v18 envelope", async () => {
+  it("quarantines an Alpha-19 aggregate record masquerading inside a current v19 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -862,6 +868,8 @@ describe("runtime core-ecology vertical slice", () => {
     const {
       integrity: _integrity,
       settlementEcology: _currentSettlementEcology,
+      dogActorRoster: _currentDogActorRoster,
+      settlementWorkingAnimals: _currentSettlementWorkingAnimals,
       ...currentBase
     } = current;
     const masqueradingBase = { ...currentBase, version: 13 as const };
@@ -924,7 +932,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(18);
+    expect(before.version).toBe(19);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -2240,6 +2248,8 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
   const {
     integrity: _integrity,
     settlementEcology: _currentSettlementEcology,
+    dogActorRoster: _currentDogActorRoster,
+    settlementWorkingAnimals: _currentSettlementWorkingAnimals,
     ...currentBase
   } = decoded;
   const v10Base = {
@@ -2316,6 +2326,8 @@ function marshEdgeV11Record(current: SaveRecord): SaveRecord {
   const {
     integrity: _integrity,
     settlementEcology: _currentSettlementEcology,
+    dogActorRoster: _currentDogActorRoster,
+    settlementWorkingAnimals: _currentSettlementWorkingAnimals,
     ...currentBase
   } = decoded;
   const v11Base = {
@@ -2390,6 +2402,8 @@ function rainChorusV12Record(current: SaveRecord): SaveRecord {
   const {
     integrity: _integrity,
     settlementEcology: _currentSettlementEcology,
+    dogActorRoster: _currentDogActorRoster,
+    settlementWorkingAnimals: _currentSettlementWorkingAnimals,
     ...currentBase
   } = decoded;
   const v12Base = {
@@ -2462,6 +2476,8 @@ function tidalTableV13Record(current: SaveRecord): SaveRecord {
   const {
     integrity: _integrity,
     settlementEcology: _currentSettlementEcology,
+    dogActorRoster: _currentDogActorRoster,
+    settlementWorkingAnimals: _currentSettlementWorkingAnimals,
     ...currentBase
   } = decoded;
   const v13Base = {
@@ -2534,6 +2550,8 @@ function waterfowlV14Record(current: SaveRecord): SaveRecord {
   const {
     integrity: _integrity,
     settlementEcology: _currentSettlementEcology,
+    dogActorRoster: _currentDogActorRoster,
+    settlementWorkingAnimals: _currentSettlementWorkingAnimals,
     ...currentBase
   } = decoded;
   const v14Base = {
@@ -2567,8 +2585,8 @@ function serializePublishedAggregateV3(
 
 function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
-  if (value.format !== "tideweft-session" || value.version !== 18) {
-    throw new Error("core-ecology runtime fixture did not save a v18 envelope");
+  if (value.format !== "tideweft-session" || value.version !== 19) {
+    throw new Error("core-ecology runtime fixture did not save a v19 envelope");
   }
   return value;
 }

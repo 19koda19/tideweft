@@ -6,6 +6,7 @@ import {
   LIVING_ACTOR_LOCOMOTION_VERSION,
   MAX_LIVING_ACTOR_LOCOMOTION_STEP_UNITS,
   createLivingActorTraversabilitySurface,
+  deriveLivingActorEscapeTargets,
   deriveLivingActorSearchProbe,
   resolveLivingActorLocomotion,
   type LivingActorLocomotionInput,
@@ -87,6 +88,26 @@ function fixture(
 }
 
 describe("species-neutral living actor locomotion", () => {
+  it("derives a shared ordered escape fan from perceived space rather than species rules", () => {
+    const actor = actorAt(createWorldPosition(createRegionCoord(0, 0), 500, 500));
+    const threat = area(translateWorldPosition(actor.position, 2_000, 0));
+    const targets = deriveLivingActorEscapeTargets({
+      actor,
+      focusArea: threat,
+      maximumDistanceTiles: 2,
+    });
+
+    expect(targets).not.toBeNull();
+    if (targets === null) throw new Error("Expected escape targets");
+    expect(worldPositionDelta(actor.position, targets[0]?.center ?? actor.position)).toEqual({
+      x: -2_000,
+      y: 0,
+    });
+    expect(targets).toHaveLength(16);
+    expect(deriveLivingActorEscapeTargets({ actor, focusArea: threat, maximumDistanceTiles: 0 }))
+      .toBeNull();
+  });
+
   it("takes a straight bounded step without changing stable identity", () => {
     const input = fixture();
     const result = resolveLivingActorLocomotion(input);

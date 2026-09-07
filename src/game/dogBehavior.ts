@@ -95,6 +95,23 @@ export interface DogBehaviorDecision {
   readonly scores: readonly DogIntentScore[];
 }
 
+/**
+ * Actor-owned arbitration boundary for optional assigned work. External work
+ * systems consume this result; they must not reinterpret perceived classes or
+ * infer obedience from custody/handler identity.
+ */
+export type DogBehaviorAssignmentReadiness =
+  | Readonly<{ readonly kind: "available" }>
+  | Readonly<{
+      readonly kind: "defer-to-actor";
+      readonly referenceId: `actor-intent:${DogBehaviorIntent}`;
+    }>;
+
+export interface DogBehaviorEvaluation {
+  readonly decision: DogBehaviorDecision;
+  readonly assignmentReadiness: DogBehaviorAssignmentReadiness;
+}
+
 interface ScoredCandidate {
   readonly intent: DogBehaviorIntent;
   readonly score: number;
@@ -131,6 +148,17 @@ const THREAT_CLASSES = new Set([
   "aggressive-dog",
   "large-predator",
   "bear",
+  "animal-alarm",
+  "herd-alarm",
+  "alarm-call",
+]);
+
+/**
+ * These are indirect, ambiguous alerts a currently available dog may lawfully
+ * investigate as assigned work. Direct threats and an already-active personal
+ * intent always remain actor-owned.
+ */
+const ASSIGNMENT_COMPATIBLE_ALERT_CLASSES = new Set([
   "animal-alarm",
   "herd-alarm",
   "alarm-call",
@@ -173,6 +201,31 @@ const FAMILIARITY_AVOIDANCE: Readonly<
 export function decideDogBehavior(input: DogBehaviorInput): DogBehaviorDecision | null {
   const canonical = canonicalInput(input);
   if (canonical === null) return null;
+
+  return decideCanonicalDogBehavior(canonical);
+}
+
+/**
+ * Evaluate ordinary cognition and publish whether optional assigned work may
+ * proceed. This keeps self-preservation policy inside the dog rather than in a
+ * guardian-, handler-, or species-pair-specific runtime branch.
+ */
+export function evaluateDogBehavior(
+  input: DogBehaviorInput,
+): DogBehaviorEvaluation | null {
+  const canonical = canonicalInput(input);
+  if (canonical === null) return null;
+  const decision = decideCanonicalDogBehavior(canonical);
+  if (decision === null) return null;
+  return Object.freeze({
+    decision,
+    assignmentReadiness: assignmentReadiness(canonical, decision),
+  });
+}
+
+function decideCanonicalDogBehavior(
+  canonical: DogBehaviorInput,
+): DogBehaviorDecision | null {
 
   const attention = queryActorAttention(canonical.perception);
   const signals = perceivedSignals(attention);
@@ -219,6 +272,29 @@ export function decideDogBehavior(input: DogBehaviorInput): DogBehaviorDecision 
     cause: causeFor(selected, signals),
     focusBeliefKey: selected.focusBeliefKey,
     scores: Object.freeze(scored),
+  });
+}
+
+function assignmentReadiness(
+  input: DogBehaviorInput,
+  decision: DogBehaviorDecision,
+): DogBehaviorAssignmentReadiness {
+  if (decision.intent === "observe") return Object.freeze({ kind: "available" });
+
+  if (
+    input.current.intent === "observe"
+    && decision.intent === "retreat"
+    && decision.focusBeliefKey !== null
+  ) {
+    const focus = input.perception.beliefs.find(({ key }) => key === decision.focusBeliefKey);
+    if (focus !== undefined && ASSIGNMENT_COMPATIBLE_ALERT_CLASSES.has(focus.perceivedClass)) {
+      return Object.freeze({ kind: "available" });
+    }
+  }
+
+  return Object.freeze({
+    kind: "defer-to-actor",
+    referenceId: `actor-intent:${decision.intent}`,
   });
 }
 

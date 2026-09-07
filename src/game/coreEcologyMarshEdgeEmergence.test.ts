@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACTOR_PERCEPTION_SCALE,
   canonicalizeActorObservations,
+  stepActorPerception,
   type ActorObservation,
 } from "../sim/actorPerception";
 import { type CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
@@ -13,6 +14,7 @@ import {
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
   type CoreEcologyObservationBatch,
+  type CoreEcologyPerceptionParticipant,
   type CoreEcologyPerceptionFrameInput,
 } from "./coreEcologyPerception";
 import {
@@ -24,7 +26,14 @@ import {
   type CoreWildlifeActorStepResult,
   type CoreWildlifeFoodOpportunity,
 } from "./coreWildlifeActor";
-import { createLivingActorAddress, type LivingActorAddress } from "./livingActor";
+import { createDogActorState, replaceDogActorPerception } from "./dogActor";
+import { evaluateDogBehavior } from "./dogBehavior";
+import { type LivingActorAddress } from "./livingActor";
+import {
+  createLivingActorTraversabilitySurface,
+  deriveLivingActorSearchProbe,
+  resolveLivingActorLocomotion,
+} from "./livingActorLocomotion";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import {
@@ -33,9 +42,19 @@ import {
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
-import { WORLD_POSITION_UNITS_PER_TILE, createWorldPosition } from "./worldPosition";
+import {
+  createSettlementWorkingAnimalState,
+  decideSettlementWorkingAnimalActivity,
+} from "./settlementWorkingAnimals";
+import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  createWorldPosition,
+  worldPositionDelta,
+} from "./worldPosition";
 
 const REGION = createRegionCoord(0, 0);
+const GUARDIAN_START_X = 40;
+const GUARDIAN_START_Y = 33;
 const RABBIT_X = 38;
 const FOX_X = 42;
 const ROW = 30;
@@ -47,7 +66,7 @@ interface Fixture {
 }
 
 describe("marsh-edge representative emergence", () => {
-  it("lets direct perception drive rabbit escape and fox pursuit until a seen dog interrupts", () => {
+  it("lets a rabbit alarm recruit guardian investigation while the same dog deters fox pursuit", () => {
     const current = fixture("rabbit fox dog representative triad");
     const rabbit = wildlife(current, "marsh-rabbit", RABBIT_X, ROW, 0, 0);
     const fox = hungry(wildlife(current, "marsh-fox", FOX_X, ROW, 500_000, 0));
@@ -73,85 +92,258 @@ describe("marsh-edge representative emergence", () => {
     expect(alarmed.resourceClaims).toEqual([]);
     expect(pursuing.resourceClaims).toEqual([]);
 
-    const pairFrame = frame(current, [alarmed.actor, pursuing.actor], 2);
-    const pairVisual = requiredBatches(
-      collectCoreEcologyVisualObservationBatches(pairFrame),
+    let guardianDog = createDogActorState({
+      seed: current.state.meta.rootSeed,
+      originRegion: REGION,
+      originNamespace: "regional",
+      habitatClass: "settlement-edge",
+      habitatKey: "marsh-edge-guardian",
+      populationKey: "working-dogs:marsh-edge",
+      // This representative individual begins available for duty. Other dogs
+      // may lawfully finish resting or self-preservation before accepting the
+      // same alarm; the shared cognition/work arbiter covers that boundary.
+      populationOrdinal: 1,
+      position: worldPosition(GUARDIAN_START_X, GUARDIAN_START_Y),
+      heading: 0,
+    });
+    const dog = guardianDog.address;
+    const participants = [participant(dog)];
+    const beforeMoveFrame = frame(current, [alarmed.actor, pursuing.actor], 2, participants);
+    const beforeMoveVisual = requiredBatches(
+      collectCoreEcologyVisualObservationBatches(beforeMoveFrame),
     );
-    const pairAlarm = requiredBatches(
-      propagateCoreEcologyAlarmObservationBatches(alarmed.event, pairFrame),
+    const beforeMoveAlarm = requiredBatches(
+      propagateCoreEcologyAlarmObservationBatches(alarmed.event, beforeMoveFrame),
     );
-    const secondRabbitPrey = requiredObservation(
-      pairVisual,
+    const beforeMoveFoxObservations = combineObservations(
+      observationsFor(beforeMoveVisual, pursuing.actor),
+      observationsFor(beforeMoveAlarm, pursuing.actor),
+    );
+    const beforeMoveRabbitPrey = requiredObservation(
+      beforeMoveVisual,
       pursuing.actor,
       "live-prey",
       alarmed.actor.identity.stableId,
     );
-    const pairFoxObservations = combineObservations(
-      observationsFor(pairVisual, pursuing.actor),
-      observationsFor(pairAlarm, pursuing.actor),
-    );
-    expect(pairFoxObservations).toEqual(expect.arrayContaining([
+    expect(beforeMoveFoxObservations).toEqual(expect.arrayContaining([
       expect.objectContaining({
         channel: "hearing",
         perceivedClass: "animal-alarm",
         subjectId: null,
       }),
     ]));
+    expect(beforeMoveFoxObservations.some(({ subjectId }) => subjectId === dog.actorId))
+      .toBe(false);
+    const beforeMoveFoxDistance = worldPositionDelta(
+      dog.position,
+      pursuing.actor.address.position,
+    );
+    expect(Math.hypot(beforeMoveFoxDistance.x, beforeMoveFoxDistance.y))
+      .toBeCloseTo(Math.sqrt(13) * WORLD_POSITION_UNITS_PER_TILE);
 
     const continued = requiredStep(
       pursuing.actor,
       2,
-      pairFoxObservations,
-      [livePreyOpportunity(secondRabbitPrey, alarmed.actor)],
+      beforeMoveFoxObservations,
+      [livePreyOpportunity(beforeMoveRabbitPrey, alarmed.actor)],
     );
     const fleeingRabbit = requiredStep(
       alarmed.actor,
       2,
-      observationsFor(pairVisual, alarmed.actor),
+      observationsFor(beforeMoveVisual, alarmed.actor),
       [],
     );
     expect(continued.decision.intent).toBe("pursue");
     expect(fleeingRabbit.decision.intent).toBe("flee");
 
-    const dog = createLivingActorAddress({
-      actorId: "D-marsh-edge-triad",
-      species: "domestic-dog",
-      position: worldPosition(FOX_X - 2, ROW),
-      heading: 0,
-      persistence: "regional",
-    });
-    const triadFrame = frame(current, [alarmed.actor, pursuing.actor], 2, dog);
-    const triadVisual = requiredBatches(
-      collectCoreEcologyVisualObservationBatches(triadFrame),
+    const guardianAlarm = observationsForObserver(beforeMoveAlarm, dog.actorId).find((observation) => (
+      observation.channel === "hearing"
+        && observation.perceivedClass === "animal-alarm"
+        && observation.subjectId === null
+    ));
+    if (guardianAlarm === undefined) throw new Error("Guardian did not hear the rabbit alarm");
+    const guardianPerception = stepActorPerception(
+      guardianDog.perception,
+      { tick: 2, observations: [guardianAlarm] },
     );
-    const triadAlarm = requiredBatches(
-      propagateCoreEcologyAlarmObservationBatches(alarmed.event, triadFrame),
+    if (guardianPerception === null) throw new Error("Guardian rejected lawful shared perception");
+    guardianDog = replaceDogActorPerception(guardianDog, guardianPerception);
+    const guardianBehavior = evaluateDogBehavior({
+      tick: 2,
+      dog: {
+        identity: guardianDog.identity,
+        needs: { ...guardianDog.needs },
+        condition: {
+          ...guardianDog.condition,
+          injuries: [...guardianDog.condition.injuries],
+        },
+        humanFamiliarity: { ...guardianDog.humanFamiliarity },
+      },
+      perception: guardianDog.perception,
+      weather: {
+        coldPressure: 0,
+        heatPressure: 0,
+        rainIntensity: 0,
+        windPressure: 0,
+      },
+      accessibility: {
+        retreat: true,
+        "seek-shelter": true,
+        "avoid-human": true,
+        eat: false,
+        "approach-food": false,
+        rest: true,
+        observe: true,
+      },
+      foodContact: { directlyConfirmed: false, accessible: false },
+      current: {
+        intent: guardianDog.intent.kind,
+        enteredAtTick: guardianDog.intent.enteredAtTick,
+      },
+    });
+    if (guardianBehavior === null) throw new Error("Guardian cognition rejected lawful alarm");
+    const guardianBelief = guardianPerception.beliefs.find(({ sourceObservationId }) => (
+      sourceObservationId === guardianAlarm.id
+    ));
+    if (guardianBelief === undefined) throw new Error("Guardian did not retain alarm belief");
+    const guardianAssignment = createSettlementWorkingAnimalState({
+      settlementId: 1,
+      assignments: [{
+        assignmentOrdinal: 0,
+        workerActorId: dog.actorId,
+        workerSpecies: "domestic-dog",
+        handlerActorId: "H-marsh-edge-keeper",
+        workerCustodyRelationshipId: "DOMESTIC-REL-0000000000000001",
+        protectedCustodyRelationshipId: "DOMESTIC-REL-0000000000000002",
+        protectedGroupId: "GOAT-HERD-marsh-edge",
+        role: "guardian",
+        worksiteId: "DOMESTIC-PEN-marsh-edge",
+        dutyArea: { center: worldPosition(RABBIT_X, ROW), radiusUnits: 6_000 },
+        createdAtTick: 0,
+      }],
+    }).assignments[0];
+    if (guardianAssignment === undefined) throw new Error("Guardian assignment was not created");
+    const guardianDecision = decideSettlementWorkingAnimalActivity({
+      assignment: guardianAssignment,
+      tick: 2,
+      perception: guardianPerception,
+      welfare: {
+        injuryPressure: 0,
+        coldPressure: 0,
+        heatPressure: 0,
+        exhaustionPressure: 0,
+        hungerPressure: 0,
+        thirstPressure: 0,
+      },
+      accessibility: { watch: true, investigate: true, return: true },
+      actorDisposition: guardianBehavior.assignmentReadiness,
+      workerInsideDutyArea: true,
+    });
+    if (guardianDecision === null) throw new Error("Guardian work decision was rejected");
+    expect(guardianDecision).toMatchObject({
+      activity: "investigate",
+      cause: { kind: "perception", referenceId: guardianAlarm.id },
+      perceivedArea: guardianAlarm.area,
+    });
+    expect(guardianBehavior.assignmentReadiness).toEqual({ kind: "available" });
+    expect(guardianBehavior.decision.cause).toEqual({
+      kind: "perception",
+      referenceId: guardianBelief.key,
+    });
+    if (guardianDecision.activity !== "investigate" || guardianDecision.perceivedArea === null) {
+      throw new Error("Guardian did not accept the anonymous alarm investigation");
+    }
+    const requestId = "WORK-marsh-edge-alarm-investigation";
+    const searchProbe = deriveLivingActorSearchProbe({
+      requestId,
+      beliefKey: guardianBelief.key,
+      probeOrdinal: 0,
+      sourceArea: guardianDecision.perceivedArea,
+    });
+    if (searchProbe === null) throw new Error("Guardian search probe was not derivable");
+    const guardianSurface = createLivingActorTraversabilitySurface({
+      forActorId: dog.actorId,
+      sampledAtTick: 2,
+      origin: createWorldPosition(
+        REGION,
+        (RABBIT_X - 1) * WORLD_POSITION_UNITS_PER_TILE,
+        (ROW - 1) * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      widthTiles: FOX_X - RABBIT_X + 3,
+      heightTiles: GUARDIAN_START_Y - ROW + 2,
+      cells: Array.from(
+        {
+          length: (FOX_X - RABBIT_X + 3) * (GUARDIAN_START_Y - ROW + 2),
+        },
+        () => ({ access: "open" as const, travelCost: WORLD_POSITION_UNITS_PER_TILE }),
+      ),
+    });
+    const guardianMovement = resolveLivingActorLocomotion({
+      requestId,
+      tick: 2,
+      actor: dog,
+      targetArea: guardianDecision.perceivedArea,
+      searchProbe,
+      maximumStepUnits: 5 * WORLD_POSITION_UNITS_PER_TILE,
+      surface: guardianSurface,
+    });
+    expect(guardianMovement).toMatchObject({
+      kind: "moved",
+      targetArea: guardianDecision.perceivedArea,
+      searchProbe,
+    });
+    if (guardianMovement.kind !== "moved") {
+      throw new Error(`Guardian did not move toward alarm: ${guardianMovement.reason}`);
+    }
+    const beforeMoveAlarmDistance = worldPositionDelta(
+      dog.position,
+      guardianDecision.perceivedArea.center,
+    );
+    const afterMoveAlarmDistance = worldPositionDelta(
+      guardianMovement.actor.position,
+      guardianDecision.perceivedArea.center,
+    );
+    expect(Math.hypot(afterMoveAlarmDistance.x, afterMoveAlarmDistance.y)).toBeLessThan(
+      Math.hypot(beforeMoveAlarmDistance.x, beforeMoveAlarmDistance.y),
+    );
+
+    const afterMoveFrame = frame(
+      current,
+      [fleeingRabbit.actor, continued.actor],
+      3,
+      [participant(guardianMovement.actor)],
+    );
+    const afterMoveVisual = requiredBatches(
+      collectCoreEcologyVisualObservationBatches(afterMoveFrame),
     );
     const seenDog = requiredObservation(
-      triadVisual,
-      pursuing.actor,
+      afterMoveVisual,
+      continued.actor,
       "predator",
-      dog.actorId,
+      guardianMovement.actor.actorId,
     );
-    const triadRabbitPrey = requiredObservation(
-      triadVisual,
-      pursuing.actor,
+    const afterMoveRabbitPrey = requiredObservation(
+      afterMoveVisual,
+      continued.actor,
       "live-prey",
-      alarmed.actor.identity.stableId,
+      fleeingRabbit.actor.identity.stableId,
     );
     const interrupted = requiredStep(
-      pursuing.actor,
-      2,
-      combineObservations(
-        observationsFor(triadVisual, pursuing.actor),
-        observationsFor(triadAlarm, pursuing.actor),
-      ),
-      [livePreyOpportunity(triadRabbitPrey, alarmed.actor)],
+      continued.actor,
+      3,
+      observationsFor(afterMoveVisual, continued.actor),
+      [livePreyOpportunity(afterMoveRabbitPrey, fleeingRabbit.actor)],
     );
 
     expect(["flee", "retreat"]).toContain(interrupted.decision.intent);
     expect(interrupted.decision.focusObservationId).toBe(seenDog.id);
     expect(interrupted.resourceClaims).toEqual([]);
+    expect(guardianAlarm).toMatchObject({
+      identification: "anonymous",
+      interrupt: "none",
+    });
+    expect(JSON.stringify(guardianDecision)).not.toContain(rabbit.identity.stableId);
+    expect(JSON.stringify(guardianDecision)).not.toContain(fox.identity.stableId);
     expect(alarmed.actor.condition.health).toBe(rabbit.condition.health);
     expect(fleeingRabbit.actor.condition.health).toBe(rabbit.condition.health);
     expect(pursuing.actor.condition.health).toBe(fox.condition.health);
@@ -189,13 +381,20 @@ function fixture(seedText: string): Fixture {
     windY: 0,
   };
   for (const settlement of state.settlements) settlement.tileIndex = 0;
-  for (let x = RABBIT_X - 1; x <= FOX_X + 1; x += 1) {
-    const tile = state.terrain.tiles[ROW * state.terrain.width + x];
-    if (tile === undefined) throw new Error("Marsh-edge fixture corridor left terrain");
-    tile.terrain = "meadow";
-    tile.elevation = 0;
-    tile.roughness = 0;
+  for (let y = ROW - 1; y <= GUARDIAN_START_Y + 1; y += 1) {
+    for (let x = RABBIT_X - 1; x <= FOX_X + 1; x += 1) {
+      const tile = state.terrain.tiles[y * state.terrain.width + x];
+      if (tile === undefined) throw new Error("Marsh-edge fixture corridor left terrain");
+      tile.terrain = "meadow";
+      tile.elevation = 0;
+      tile.roughness = 0;
+    }
   }
+  const alarmTile = state.terrain.tiles[ROW * state.terrain.width + RABBIT_X];
+  if (alarmTile === undefined) throw new Error("Marsh-edge alarm tile left terrain");
+  // The exposed lip keeps an actor standing at the alarm origin directly
+  // legible; the guardian still begins outside the pursuing fox's sight cone.
+  alarmTile.terrain = "ridge";
   const economy = createWorldView(state);
   const window = createRegionalTerrainWindow(
     state.meta.rootSeed,
@@ -241,15 +440,19 @@ function frame(
   current: Fixture,
   actors: readonly CoreWildlifeActorState[],
   tick: number,
-  dogAddress: LivingActorAddress | null = null,
+  participants: readonly CoreEcologyPerceptionParticipant[] = [],
 ): CoreEcologyPerceptionFrameInput {
   return {
     actors,
-    dogAddress,
+    participants,
     world: current.world,
     window: current.window,
     tick,
   };
+}
+
+function participant(address: LivingActorAddress): CoreEcologyPerceptionParticipant {
+  return Object.freeze({ address, contactScope: "all-participants" });
 }
 
 function worldPosition(tileX: number, tileY: number) {
@@ -271,8 +474,16 @@ function observationsFor(
   batches: readonly CoreEcologyObservationBatch[],
   actor: CoreWildlifeActorState,
 ): readonly ActorObservation[] {
-  const batch = batches.find(({ observerId }) => observerId === actor.identity.stableId);
-  if (batch === undefined) throw new Error(`Missing observation batch for ${actor.identity.species}`);
+  return observationsForObserver(batches, actor.identity.stableId, actor.identity.species);
+}
+
+function observationsForObserver(
+  batches: readonly CoreEcologyObservationBatch[],
+  observerId: string,
+  observerLabel = observerId,
+): readonly ActorObservation[] {
+  const batch = batches.find(({ observerId: candidateId }) => candidateId === observerId);
+  if (batch === undefined) throw new Error(`Missing observation batch for ${observerLabel}`);
   return batch.observations;
 }
 

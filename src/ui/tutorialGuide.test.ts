@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(35);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(36);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,16 +63,18 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("exactly two individual domestic goats");
-    expect(copy).toContain("habitat-derived pen separated from the storehouse yard");
-    expect(copy).toContain("direct perception, attention, terrestrial movement, broad ecological roles, and group alarm");
-    expect(copy).toContain("several canonical custody relationships and typed coop or pen homes");
-    expect(copy).toContain("physical reach, current need, and stable identity");
-    expect(copy).toContain("Outer save 18 adopts one sealed version-17 world exactly once");
-    expect(copy).toContain("habitat 9 and settlement ecology 3");
+    expect(copy).toContain("exactly one separate settlement working dog beside the existing two-goat herd");
+    expect(copy).toContain("own kennel and custody");
+    expect(copy).toContain("generic persisted working-animal assignment");
+    expect(copy).toContain("ordinary dog cognition, needs, weather exposure, perception, and shared terrestrial locomotion");
+    expect(copy).toContain("lawful anonymous herd or wildlife alarm");
+    expect(copy).toContain("retreat, shelter, avoidance, or rest can take priority");
+    expect(copy).toContain("fox to change course only after it actually perceives the dog");
+    expect(copy).toContain("Outer save 19 adopts one sealed version-18 world exactly once");
+    expect(copy).toContain("habitat stays version 9, settlement ecology advances to version 4");
     expect(copy).toContain("there is no species-by-species or N² pair matrix");
-    expect(copy).toContain("one local herd and flock, not worldwide livestock");
-    expect(copy).toContain("mortality, carcasses, milk, wool, reproduction");
+    expect(copy).toContain("one local working relationship, not worldwide dogs or livestock");
+    expect(copy).toContain("attacks, injury, mortality, carcasses, new sound, guaranteed livestock defense");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -248,11 +250,12 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 18");
-    expect(copy).toContain("sealed version 17 Yard Flock save migrates exactly once");
-    expect(copy).toContain("every established habitat-8 population and anchor, actor, group, aggregate unit, store and lot identity");
-    expect(copy).toContain("two-goat herd, pen, and second custody relationship are appended");
-    expect(copy).toContain("cannot reroll a chicken, goat, or anchor, duplicate a group or provision, assign one group to two homes, reopen a secured door, replay a store loss, chicken meal, or tidal-edge opportunity");
+    expect(copy).toContain("Outer save version 19");
+    expect(copy).toContain("sealed version 18 Far Paddock save migrates exactly once");
+    expect(copy).toContain("every established habitat-9 population and anchor, actor, group, aggregate unit, store and lot identity");
+    expect(copy).toContain("working dog, kennel, third custody relationship, and guardian assignment are appended");
+    expect(copy).toContain("cannot reroll a chicken, goat, dog, or anchor");
+    expect(copy).toContain("saved pending work transition recovers exactly once without repeating perception or movement");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -326,7 +329,8 @@ describe("TIDEWEFT field-manual content", () => {
       .map((mechanic) => `${mechanic.title} ${mechanic.clarification}`)
       .join(" ");
     expect(plannedCopy).toContain("Seven stable visual biomes");
-    expect(plannedCopy).toContain("one independently generated dog");
+    expect(plannedCopy).toContain("One independently generated dog");
+    expect(plannedCopy).toContain("one separate settlement-custodied working dog");
     expect(plannedCopy).toContain("bounded habitat-derived local assemblage");
     expect(plannedCopy).toContain("brown-rat population areas");
     expect(plannedCopy).toContain("free-ranging domestic cats");
@@ -342,13 +346,13 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("at most one habitat-supported North American river otter");
     expect(plannedCopy).toContain("one stable two-to-three-member domestic chicken flock");
     expect(plannedCopy).toContain("exactly two domestic goats in one separate herd and pen");
-    expect(plannedCopy).toContain("Each chicken and goat is an individual inside a stable group and settlement-custody relationship");
+    expect(plannedCopy).toContain("Each chicken, goat, and dog remains an individual");
     expect(plannedCopy).toContain("Rats, frogs, silversides, and fiddler crabs");
     expect(plannedCopy).toContain("aggregate populations rather than individual actors");
-    expect(plannedCopy).toContain("Further dogs and wildlife species");
+    expect(plannedCopy).toContain("Additional dogs and wildlife species beyond this bounded roster");
     expect(plannedCopy).toContain("worldwide populations");
     expect(plannedCopy).toContain("animal death and carcasses");
-    expect(plannedCopy).toContain("complete sound, general scent and evidence tracking");
+    expect(plannedCopy).toContain("a new guardian sound, general scent and evidence tracking");
     expect(plannedCopy).toContain("full bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
@@ -413,10 +417,15 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("An unseen loss does not appear in EVENTS merely because you return later");
     expect(copy).toContain("Two or three domestic chickens share one stable flock, coop, and settlement-custody relationship");
     expect(copy).toContain("Exactly two domestic goats share a different herd, pen, and custody relationship");
-    expect(copy).toContain("ordinary animal senses, attention, group alarm, terrain movement, and broad ecological roles");
+    expect(copy).toContain("ordinary actors using shared senses, attention, terrain movement, and broad ecological roles");
+    expect(copy).toContain("One distinct domestic dog has a third custody relationship and kennel");
+    expect(copy).toContain("generic working-animal assignment binds that dog and the existing keeper to the protected goat custody, herd, and pen worksite");
+    expect(copy).toContain("investigate only a lawful alarm belief and uncertain area");
+    expect(copy).toContain("yields when its own cognition or welfare requires self-preservation");
+    expect(copy).toContain("fox is deterred only if it actually perceives the dog");
     expect(copy).toContain("walk into its structural access area, and consume one physical unit through a staged transaction");
     expect(copy).toContain("A secured store cannot become food knowledge or a claim");
-    expect(copy).toContain("A goat cannot claim that store lot");
+    expect(copy).toContain("A goat and the working dog cannot claim that store lot");
     expect(copy).toContain("reach, current need, and stable identity settle one winner");
     expect(copy).toContain("feeding event only when it is directly in view at that moment");
     expect(copy).toContain("Another visible cat can make it guard that food instead");
@@ -484,31 +493,33 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species");
     expect(copy).toContain("worldwide populations and storehouses, and the full bestiary");
-    expect(copy).toContain("seven Wave-B roles, Wave-C tidal roles, and first Wave-D flock-and-herd slices remain one bounded");
-    expect(copy).toContain("domestic chickens, and domestic goats share versioned role, perception, movement, group, aggregate, tide, physical-item, plural-custody, typed-home, and presentation contracts");
-    expect(copy).toContain("do not create storage or livestock ecology in every settlement");
-    expect(copy).toContain("Chickens and goats have no authored call, track evidence, reproduction, complete schedule, autonomous home return, guardian behavior, herding behavior, or cross-region migration");
+    expect(copy).toContain("seven Wave-B roles, Wave-C tidal roles, and first Wave-D flock, herd, and working-animal slices remain one bounded");
+    expect(copy).toContain("domestic goats, and one separate working dog share versioned role, perception, movement, group, aggregate, tide, physical-item, plural-custody, typed-home, working-assignment, and presentation contracts");
+    expect(copy).toContain("do not create storage, livestock, or dog ecology in every settlement");
+    expect(copy).toContain("working dog adds no bark or other sound, attack, harmful protection, herding, companion bond, player command, guaranteed defense, worldwide population, or cross-region animal ecology");
     expect(copy).toContain("does not create ecology in every distant region or complete Directive 04_1");
     expect(copy).toContain("instead of requiring a species-by-species or N² pair matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the current domestic-livestock adoption without rewriting older ecology", () => {
+  it("teaches the current working-animal adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 18 preserves habitat version 9");
+    expect(copy).toContain("Outer save version 19 preserves habitat version 9");
     expect(copy).toContain("aggregate ecology record version 4");
-    expect(copy).toContain("settlement ecology version 3");
+    expect(copy).toContain("settlement ecology version 4");
     expect(copy).toContain("all four aggregate populations");
     expect(copy).toContain("tidal, waterfowl, otter, domestic-yard, and domestic-pen anchors");
-    expect(copy).toContain("deterministic top-K materialization state");
+    expect(copy).toContain("deterministic top-K core-wildlife materialization state");
     expect(copy).toContain("durable tide-operation clock");
     expect(copy).toContain("starting-harbor store's plural domestic custody and food-use history");
-    expect(copy).toContain("sealed version 17 Yard Flock save migrates exactly once");
-    expect(copy).toContain("two-goat herd, pen, and second custody relationship are appended");
+    expect(copy).toContain("one separate dog roster, and one generic settlement-working-animal assignment root");
+    expect(copy).toContain("sealed version 18 Far Paddock save migrates exactly once");
+    expect(copy).toContain("working dog, kennel, third custody relationship, and guardian assignment are appended");
     expect(copy).toContain("store lot remains distinct from abstract settlement food");
-    expect(copy).toContain("cannot reroll a chicken, goat, or anchor, duplicate a group or provision, assign one group to two homes, reopen a secured door, replay a store loss, chicken meal, or tidal-edge opportunity");
+    expect(copy).toContain("cannot reroll a chicken, goat, dog, or anchor");
+    expect(copy).toContain("saved pending work transition recovers exactly once without repeating perception or movement");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

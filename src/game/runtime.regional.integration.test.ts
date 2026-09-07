@@ -58,7 +58,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 18;
+  readonly version: 19;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -71,6 +71,8 @@ interface CurrentGameSaveEnvelope {
   readonly bio0Ecology: string;
   readonly coreEcology: string;
   readonly settlementEcology: string;
+  readonly dogActorRoster: string;
+  readonly settlementWorkingAnimals: string;
   readonly porterResponse: PorterResponseState;
   readonly integrity: string;
 }
@@ -147,16 +149,17 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 18
-    || record.payloadVersion !== 18
-  ) throw new Error("fixture did not produce a current v18 regional save");
+    || value.version !== 19
+    || record.payloadVersion !== 19
+  ) throw new Error("fixture did not produce a current v19 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v18 outer envelope does not match its integrity seal");
+    throw new Error("fixture v19 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
     "coreEcology",
+    "dogActorRoster",
     "fieldResources",
     "format",
     "integrity",
@@ -169,6 +172,7 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
     "regionalTravel",
     "session",
     "settlementEcology",
+    "settlementWorkingAnimals",
     "traversalFeedback",
     "version",
     "world",
@@ -188,7 +192,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 18,
+    payloadVersion: 19,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
