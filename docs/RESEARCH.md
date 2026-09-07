@@ -111,7 +111,7 @@ The **LIVE_VERIFIED** `0.3.3-alpha.21 — The Living Channel` release tests a se
 
 The release advances outer save format to 15 and adopts an authenticated version-14 envelope exactly once without rewriting its habitat-version-6 prefix. Chart, Relief, ABOUT, mouse, touch, and reduced-motion presentation project the same knowledge-honest individual. Exact feature commit `5514c24619fc6d41b34cbdd6315f4ae8d936f2dc` passed CI run `34067577935` and Pages run `34067577893`; the five fetched live assets match the tested committed build byte-for-byte. It deliberately adds no live-prey capture or consumption, harmful attacks, injury, mortality, carcasses, fishing, new sound or persistent evidence, reproduction, ecological migration, worldwide ecology, full Wave C, Directive 04_1 completion, or exhaustive pair testing.
 
-The `0.3.3-alpha.22 — Tidal Convergence` source candidate tests an eighth scaling
+The **LIVE_VERIFIED** `0.3.3-alpha.22 — Tidal Convergence` release tests an eighth scaling
 hypothesis without adding a species: activities that already crossed different
 media should converge behind reusable affordances before the roster grows
 again. Six profiles now compose perch watching, low quartering, tidal wading,
@@ -126,7 +126,7 @@ gull is the useful counterexample: it may fly toward and circle that observed
 area, then return by air to an authenticated habitat anchor to rest, without
 acquiring aquatic locomotion, an aquatic-foraging role, aggregate pressure, a
 species/count disclosure, or a private prey target. Immediate lawful threat,
-alarm, pursuit, and physical-food intent continues to outrank neutral activity.
+alarm, pursuit, and physical-food intents continue to outrank neutral activity.
 
 This convergence leaves outer save 15, habitat 7, aggregate schema 4, the
 seventeen-record catalog, aggregate-unit totals, physical-item custody, and the
@@ -134,14 +134,16 @@ nearest-24 materialization ceiling unchanged. Its validation strategy is the
 scalable one: abstraction and property checks, conservation, bounded
 interaction-graph fuzzing, performance budgets, and a small set of
 representative emergence witnesses rather than species fixtures or an N² pair
-matrix. It closes only the bounded starting-harbor Wave-C integration seam. It
-is not the live deployment, has no exact CI/Pages/asset attestation, and does
-not complete worldwide Wave C or Directive 04_1. Mortality, carcasses, harmful
+matrix. It closes only the bounded starting-harbor Wave-C integration seam.
+Exact feature commit `4dacd99e95a018314d65a72183b82cba8583774f`
+passed CI run `34074045801` and Pages run `34074045818`; the five cache-bypassed
+live assets match the tested committed build byte-for-byte. It does not
+complete worldwide Wave C or Directive 04_1. Mortality, carcasses, harmful
 attacks, live-prey capture or consumption, fishing, nesting, reproduction,
 ecological cross-region migration, full circadian life, and a general
 scent/sound/evidence system remain absent.
 
-Design implication: future worldwide populations should expand this aggregate/representative and shared-policy boundary rather than multiplying full actors. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, and Alpha 21 is the verified final bounded starting-harbor Wave-C role slice. Alpha 22 is only a source candidate for the bounded integration seam across those roles; it does not supersede Alpha 21's live evidence. None completes worldwide Wave C or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+Design implication: future worldwide populations should expand this aggregate/representative and shared-policy boundary rather than multiplying full actors. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, and Alpha 22 is the verified bounded integration closure across those roles. None completes worldwide Wave C or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)
