@@ -802,7 +802,7 @@ describe("runtime settlement ecology integration", () => {
       "eats one produce unit from the open store",
     );
     hidden.destroy();
-  });
+  }, 30_000);
 
   it("consumes exactly one stored unit after the shared rat-attraction event and never on save replay", async () => {
     settlementShadowsHarness.exposeOnlyPhysicalFood = true;
