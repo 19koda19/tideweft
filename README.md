@@ -5,10 +5,8 @@
 **Play the current Alpha:** https://19koda19.github.io/tideweft/
 
 The current public deployment is the **LIVE_VERIFIED**
-`0.3.3-alpha.20 — Between Water and Sky` release described below.
-The repository currently contains the unverified source candidate
-`0.3.3-alpha.21 — The Living Channel`; it is not described as deployed until
-its exact commit, CI, Pages, and live assets have been verified.
+`0.3.3-alpha.21 — The Living Channel` release described below. Its exact
+feature commit, CI, Pages deployment, and fetched live assets are verified.
 
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
 
@@ -131,7 +129,7 @@ The game exposes one local autosave and enters it automatically on launch—ther
 
 Saves are local-first and remain on the player's device. IndexedDB is the primary store and localStorage carries a mirrored fallback. Healthy primary writes mirror the complete record, while compact version/fingerprint fences detect known rollback and same-version divergence. A launch adopts a record only after both configured stores can be read and compared; a partial or total read outage fails closed even when one survivor looks plausible. Reads compare save era, generation, timestamp, and world tick in that order; overlapping lifecycle/autosave requests coalesce behind an in-flight write, and a durable deletion marker prevents a stale primary copy from resurrecting after reconciliation. A stale tab or fork is not allowed to keep retrying over a different or newer durable record: saving stops, the warning persists across the field and all major dialogs, and the player is told to reload. Ordinary write failures after a safely loaded world still retry with bounded backoff and a fresh world snapshot, but the warning clears only when the latest requested snapshot in the current era and generation is durable.
 
-Each deliberate replacement advances the backward-compatible two-part era/generation version before timestamp/tick comparison, including a safe carry into the next era if the generation counter is saturated. If both counters are already at JavaScript's largest safe integer, the game refuses to wrap them and visibly asks the player to clear Tideweft's stored site data before beginning again. The current Alpha 0.3 release uses outer session version 14. It retains the sealed physical-cargo, traversal, Promise, cartography, perception, dog/porter, living-actor, and core-ecology roots while authenticating the current habitat-version-6 record. A sealed version-13 Tide Table save migrates exactly once: every established habitat-version-5 population and tidal anchor, actor, group, aggregate unit, item, custody record, Promise, disturbance, evidence record, player fact, and world fact remains exact while deterministic zero-or-one American-black-duck ecology is appended. The internal aggregate patch advances to schema version 4 with a durable completed tide-edge operation marker outside the bounded disturbance tail, so evicting an old visible event cannot permit a same-tick redistribution reroll. Earlier supported versions retain their established save migrations without inventing observations or duplicating actors or cargo. Current payload fences reject half-completed actor or ecology transactions, mismatched ownership, stale chart, downgrade, rollback, duplication, or silent deletion before adoption. Older valid sessions keep their contents and original estuary intact; unreadable or structurally incompatible records are quarantined rather than silently loaded or overwritten. New worlds use perpetual `wander`; valid older `drift` and `weave` fields remain readable without regaining timed semantics.
+Each deliberate replacement advances the backward-compatible two-part era/generation version before timestamp/tick comparison, including a safe carry into the next era if the generation counter is saturated. If both counters are already at JavaScript's largest safe integer, the game refuses to wrap them and visibly asks the player to clear Tideweft's stored site data before beginning again. The current Alpha 0.3 release uses outer session version 15. It retains the sealed physical-cargo, traversal, Promise, cartography, perception, dog/porter, living-actor, and core-ecology roots while authenticating the current habitat-version-7 record. A sealed version-14 Between Water and Sky save migrates exactly once: every established habitat-version-6 population and tidal anchor, actor, group, aggregate unit, item, custody record, Promise, disturbance, evidence record, player fact, and world fact remains exact while deterministic zero-or-one North American river otter ecology, one foraging-water anchor, and one distinct dry haulout are appended. The internal aggregate patch remains schema version 4 with its durable completed tide-edge operation markers outside the bounded disturbance tail. Deterministic nearest-24 spatial materialization ranks lawful candidates by local distance with stable-ID ties, so source order cannot duplicate, erase, or reroll representatives. Earlier supported versions retain their established save migrations without inventing observations or duplicating actors or cargo. Current payload fences reject half-completed actor or ecology transactions, mismatched ownership, stale chart, downgrade, rollback, duplication, or silent deletion before adoption. Older valid sessions keep their contents and original estuary intact; unreadable or structurally incompatible records are quarantined rather than silently loaded or overwritten. New worlds use perpetual `wander`; valid older `drift` and `weave` fields remain readable without regaining timed semantics.
 
 Tide Harps are still recomputed from fixed-ID inherited-Wayknot placements and terrain dimensions. The Harp derivation itself adds no currency, stored topology, timer, or migration burden; an older save that resumes with compatible Wayknot placements derives the same selected instruments.
 
@@ -231,7 +229,7 @@ or Directive 04_1 completion. Exact feature commit
 `34061008077`, main CI run `34061513043`, and Pages run `34061512986`; the five
 inspected public assets match the tested local build byte-for-byte.
 
-Source candidate `0.3.3-alpha.21 — The Living Channel` is the final bounded
+Source version `0.3.3-alpha.21 — The Living Channel` is the **LIVE_VERIFIED** final bounded
 starting-harbor Wave-C role slice, but it does not claim Wave-C or Directive
 04_1 completion. Habitat version 7 retains the entire habitat-version-6
 population and anchor record as an exact prefix, then may append one stable
@@ -243,20 +241,22 @@ through ordinary terrain-occluded vision; broad role policy supplies
 nonlethal fish/crab pressure; and the generic physical-item claim owner
 resolves a representative loose-food contest without duplication.
 
-The candidate also replaces source-order truncation with deterministic spatial
+The release also replaces source-order truncation with deterministic spatial
 top-K materialization: every lawful intersecting individual is ranked by local
 distance, stable actor ID breaks ties, at most 24 enter full detail, and all
 others retain identity and coarse state. Chart, Relief, quick inspection, and
 ABOUT share the same otter projection, touch target, and reduced-motion
 boundary. Outer save 15 adopts authenticated version 14 exactly once without
-rewriting its v6 ecology. The candidate deliberately adds no live-prey capture
+rewriting its v6 ecology. The release deliberately adds no live-prey capture
 or consumption, harmful attacks, injury, mortality, carcasses, fishing,
 new otter call or persistent track evidence, reproduction, migration,
 worldwide ecology, complete Wave C, or Directive completion. Its confidence
 comes from shared invariants, deterministic properties, bounded fuzzing,
 conservation, and representative interaction witnesses—not a bespoke test for
-every species or every pair. No commit, CI, Pages, or exact-live attestation is
-claimed until those external gates complete.
+every species or every pair. Exact feature commit
+`5514c24619fc6d41b34cbdd6315f4ae8d936f2dc` passed CI run `34067577935` and
+Pages run `34067577893`; the deployed HTML, icon, manifest, JavaScript, and CSS
+match the tested committed build byte-for-byte.
 
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 
@@ -264,17 +264,17 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 [The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The current Alpha 20 feature is **LIVE_VERIFIED** at exact commit
-`c11e4de0563876839158fb13a69ddfb4dadd6dbe`. Feature CI run `34061008077`, main
-CI run `34061513043`, and Pages run `34061512986` succeeded. Five fetched live
+The current Alpha 21 feature is **LIVE_VERIFIED** at exact commit
+`5514c24619fc6d41b34cbdd6315f4ae8d936f2dc`. CI run `34067577935` and Pages
+run `34067577893` succeeded. Five fetched live
 assets match the local production build exactly:
 
 | Asset | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `index.html` | 4,168 | `c52fbd4d90dd90eeba2f469ece33f2926e8d5ab71790b7c2c37e0f26591c2afb` |
+| `index.html` | 4,168 | `8323d1935b0dd09fe0830cff0c53769de96b4a3a2a6f3f24d7eabb1ddccee1d8` |
 | `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
 | `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
-| `assets/index-Cc6w0HGm.js` | 2,860,493 | `d2ae9dbdb0172a2baa868dc3444ca3404b12481be661a9562331bd8f1db808bc` |
+| `assets/index-DRkcCfiR.js` | 2,895,391 | `84667d9cc23f90045ac4f8bb765449c1a82bf4eecd47ccd509709b31dcf3fa90` |
 | `assets/index-COpU8VyR.css` | 106,764 | `497a256d81af07819174d3c1c44048ff0343e14dc21ca2c1e82fdc3cef9be530` |
 
 For future releases:
