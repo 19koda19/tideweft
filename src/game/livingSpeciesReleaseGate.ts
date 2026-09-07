@@ -5,7 +5,18 @@ import {
   livingSpeciesModule,
 } from "./livingSpeciesCatalog";
 import {
+  CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID,
+  CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES,
+  CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES,
+  CORE_ECOLOGY_ACTIVITY_ARCHETYPES,
+  validateCoreEcologyActivityAffordances,
+} from "./coreEcologyActivityAffordance";
+import { CORE_ECOLOGY_ACTIVITY_OWNER_ID } from "./coreEcologyActivity";
+import {
+  CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES,
+  CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
   coreEcologySpeciesRuntimePolicy,
+  validateCoreEcologySpeciesRuntimePolicies,
   type CoreEcologySpeciesRuntimeCapability,
 } from "./coreEcologySpeciesRuntimePolicy";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
@@ -19,6 +30,7 @@ export const WAVE_B_BOUNDED_STARTING_HARBOR_READINESS_VERSION = 1 as const;
 export const WAVE_C_TIDAL_TABLE_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS_VERSION = 1 as const;
+export const ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -406,6 +418,93 @@ export interface Alpha21RiverOtterBoundedReadinessReport {
   readonly fullThirtyCriterionReady: boolean;
   /** Claims this bounded shore-water witness can never authorize. */
   readonly excludedClaims: readonly Alpha21RiverOtterExcludedClaim[];
+}
+
+export const ALPHA22_TIDAL_CONVERGENCE_SPECIES = [
+  "atlantic-silverside",
+  "atlantic-marsh-fiddler-crab",
+  "snowy-egret",
+  "american-black-duck",
+  "north-american-river-otter",
+  "gull",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha22TidalConvergenceSpecies =
+  (typeof ALPHA22_TIDAL_CONVERGENCE_SPECIES)[number];
+
+export type Alpha22TidalConvergenceSourceCapability =
+  | "historical-slice-evidence"
+  | "registry-coherence"
+  | "reusable-activity-archetypes"
+  | "capability-driven-surface-observation"
+  | "representative-emergence"
+  | "bounded-abstraction-fuzz"
+  | "performance-budget"
+  | "resource-conservation"
+  | "excluded-claim-integrity";
+
+export type Alpha22TidalConvergenceExcludedClaim =
+  | "mortality"
+  | "carcasses"
+  | "harmful-attack"
+  | "live-prey-capture"
+  | "live-prey-consumption"
+  | "fishing"
+  | "nesting"
+  | "reproduction"
+  | "ecological-cross-region-migration"
+  | "full-circadian-life"
+  | "general-scent-sound-evidence"
+  | "worldwide-ecology"
+  | "wave-d-settlement-animals"
+  | "full-wave-c"
+  | "full-directive-04-1";
+
+export const ALPHA22_TIDAL_CONVERGENCE_EXCLUDED_CLAIMS = [
+  "mortality",
+  "carcasses",
+  "harmful-attack",
+  "live-prey-capture",
+  "live-prey-consumption",
+  "fishing",
+  "nesting",
+  "reproduction",
+  "ecological-cross-region-migration",
+  "full-circadian-life",
+  "general-scent-sound-evidence",
+  "worldwide-ecology",
+  "wave-d-settlement-animals",
+  "full-wave-c",
+  "full-directive-04-1",
+] as const satisfies readonly Alpha22TidalConvergenceExcludedClaim[];
+
+export interface Alpha22TidalConvergenceSourceCandidateReadinessReport {
+  readonly version: typeof ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_VERSION;
+  readonly unitId: "alpha22-tidal-convergence";
+  readonly scope: "bounded-starting-harbor-wave-c-integration";
+  readonly speciesIds: readonly Alpha22TidalConvergenceSpecies[];
+  readonly evidenceAuthenticated: boolean;
+  readonly historicalSliceEvidenceReady: boolean;
+  readonly registryCoherenceReady: boolean;
+  readonly reusableActivityArchetypesReady: boolean;
+  readonly capabilityDrivenSurfaceObservationReady: boolean;
+  readonly representativeEmergenceReady: boolean;
+  readonly boundedAbstractionFuzzReady: boolean;
+  readonly performanceEvidenceReady: boolean;
+  readonly resourceConservationReady: boolean;
+  readonly excludedClaimIntegrityReady: boolean;
+  readonly sourceCandidateReady: boolean;
+  readonly blockingCapabilities: readonly Alpha22TidalConvergenceSourceCapability[];
+  readonly evidenceOwnerIds: readonly string[];
+  /** Source readiness cannot authenticate copy, deployment, or a live build. */
+  readonly publicationRecordsReady: false;
+  readonly exactTestedDeploymentVerified: false;
+  readonly liveVerified: false;
+  readonly published: false;
+  readonly fullThirtyCriterionReady: false;
+  readonly fullWaveCReady: false;
+  readonly fullDirective041Ready: false;
+  readonly excludedClaims: readonly Alpha22TidalConvergenceExcludedClaim[];
 }
 
 /** The seven deliberately bounded small-world roles shipped across Wave B. */
@@ -2773,6 +2872,301 @@ Alpha21RiverOtterBoundedReadinessReport {
 
 export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS =
   alpha21RiverOtterBoundedReadiness();
+
+/**
+ * Source-only integration witness for the Alpha-22 tidal convergence. It
+ * authenticates the already-landed bounded slices, then checks that their
+ * shared policy, activity-affordance, perception, and conservation seams are
+ * coherent. It deliberately cannot authorize publication, a live build,
+ * worldwide ecology, or completion of Wave C / Directive 04_1.
+ */
+export function alpha22TidalConvergenceSourceCandidateReadiness():
+Alpha22TidalConvergenceSourceCandidateReadinessReport {
+  const tidalTable = waveCTidalTableBoundedReadiness();
+  const blackDuck = alpha20AmericanBlackDuckBoundedReadiness();
+  const riverOtter = alpha21RiverOtterBoundedReadiness();
+  const candidateSpecies = new Set<string>(ALPHA22_TIDAL_CONVERGENCE_SPECIES);
+  const candidateGates = ALPHA22_TIDAL_CONVERGENCE_SPECIES.map((speciesId) => (
+    LIVING_SPECIES_RELEASE_GATES.gates.find((gate) => gate.speciesId === speciesId) ?? null
+  ));
+  const candidateModules = ALPHA22_TIDAL_CONVERGENCE_SPECIES.map(livingSpeciesModule);
+  const historicalSliceEvidenceReady = [
+    tidalTable.evidenceAuthenticated && tidalTable.boundedCandidateReady,
+    blackDuck.evidenceAuthenticated && blackDuck.boundedCandidateReady,
+    riverOtter.evidenceAuthenticated && riverOtter.boundedCandidateReady,
+  ].every(Boolean);
+  const evidenceAuthenticated = historicalSliceEvidenceReady
+    && candidateGates.every((gate) => (
+      gate !== null && auditLivingSpeciesReleaseGate(gate)?.evidenceAuthenticated === true
+    ));
+
+  const runtimePolicyErrors = validateCoreEcologySpeciesRuntimePolicies(
+    LIVING_SPECIES_CATALOG,
+  );
+  const activityAffordanceErrors = validateCoreEcologyActivityAffordances();
+  const activityCatalogCoherenceReady =
+    CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every((profile) => {
+      const module = livingSpeciesModule(profile.speciesId);
+      if (
+        module === null
+        || module.activity.ownerId !== CORE_ECOLOGY_ACTIVITY_OWNER_ID
+        || module.activity.decisionModel !== "individual"
+      ) return false;
+      const media = new Set(module.locomotion.media.map(({ medium }) => medium));
+      return profile.allowedTravelMedia.every((medium) => (
+        medium === "air"
+          ? media.has("air")
+          : medium === "surface-water"
+            ? media.has("shallow-water") || media.has("deep-water")
+            : media.has("land")
+              && (media.has("shallow-water") || media.has("deep-water"))
+      ));
+    });
+  const registryCoherenceReady = runtimePolicyErrors.length === 0
+    && activityAffordanceErrors.length === 0
+    && activityCatalogCoherenceReady
+    && new Set(ALPHA22_TIDAL_CONVERGENCE_SPECIES).size
+      === ALPHA22_TIDAL_CONVERGENCE_SPECIES.length
+    && candidateModules.every((module) => module !== null)
+    && CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every(({ ownerId }) => (
+      ownerId === CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID
+    ));
+
+  const activityProfileSpecies = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES
+    .map(({ speciesId }) => speciesId);
+  const activityProfileSpeciesSet = new Set<string>(activityProfileSpecies);
+  const diurnalPolicySpecies = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES
+    .filter(({ capabilities }) => capabilities.includes("diurnal-activity"))
+    .map(({ speciesId }) => speciesId);
+  const reusableActivityArchetypesReady = activityAffordanceErrors.length === 0
+    && CORE_ECOLOGY_ACTIVITY_ARCHETYPES.length > 1
+    && CORE_ECOLOGY_ACTIVITY_ARCHETYPES.every(({ archetypeId }) => (
+      CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.some((profile) => (
+        profile.archetypeId === archetypeId
+      ))
+    ))
+    && activityProfileSpecies.length === CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES.length
+    && activityProfileSpecies.every((speciesId, index) => (
+      speciesId === CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES[index]
+    ))
+    && diurnalPolicySpecies.length === activityProfileSpecies.length
+    && diurnalPolicySpecies.every((speciesId) => activityProfileSpeciesSet.has(speciesId))
+    && CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every(({ scheduleScope }) => (
+      scheduleScope === "bounded-diurnal-window"
+    ));
+
+  const surfaceProfiles = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.filter(
+    ({ observationAffordance }) => observationAffordance.kind === "current-anonymous-area",
+  );
+  const surfacePolicies = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(
+    ({ capabilities }) => capabilities.includes("surface-opportunity"),
+  );
+  const surfaceProfileSpecies = surfaceProfiles
+    .map(({ speciesId }) => speciesId)
+    .sort(compareText);
+  const surfacePolicySpecies = surfacePolicies
+    .map(({ speciesId }) => speciesId)
+    .sort(compareText);
+  const requiredSurfaceCapabilities = [
+    "actor-address",
+    "surface-opportunity",
+    "tidal-activity",
+  ] as const satisfies readonly CoreEcologySpeciesRuntimeCapability[];
+  const supportsAerialObservationWithoutAquaticClaims = surfaceProfiles.some((profile) => {
+    const policy = coreEcologySpeciesRuntimePolicy(profile.speciesId);
+    return profile.locomotionClass === "aerial"
+      && profile.allowedTravelMedia.length === 1
+      && profile.allowedTravelMedia[0] === "air"
+      && policy !== null
+      && !policy.capabilities.includes("amphibious-locomotion")
+      && !policy.capabilities.includes("aquatic-foraging")
+      && !policy.capabilities.includes("aquatic-locomotion")
+      && !policy.capabilities.includes("wading");
+  });
+  const capabilityDrivenSurfaceObservationReady = surfaceProfiles.length > 0
+    && surfaceProfileSpecies.length === surfacePolicySpecies.length
+    && surfaceProfileSpecies.every((speciesId, index) => (
+      speciesId === surfacePolicySpecies[index]
+    ))
+    && surfaceProfiles.every((profile) => {
+      const policy = coreEcologySpeciesRuntimePolicy(profile.speciesId);
+      const perceptionState = LIVING_SPECIES_RELEASE_GATES.gates
+        .find(({ speciesId }) => speciesId === profile.speciesId)
+        ?.criteria.find(({ criterion }) => criterion === "perception-senses");
+      const observation = profile.observationAffordance;
+      return candidateSpecies.has(profile.speciesId)
+        && policy !== null
+        && requiredSurfaceCapabilities.every((capability) => (
+          profile.requiredCapabilities.includes(capability)
+          && policy.capabilities.includes(capability)
+        ))
+        && observation.kind === "current-anonymous-area"
+        && observation.channel === "vision"
+        && observation.perceivedClass === "aquatic-activity"
+        && observation.subjectIdentity === "anonymous"
+        && observation.freshness === "same-tick"
+        && observation.requiresLineOfSight
+        && (perceptionState?.status === "active" || perceptionState?.status === "foundation")
+        && perceptionState.evidenceOwnerIds.includes("game:core-ecology-perception:v1");
+    })
+    && supportsAerialObservationWithoutAquaticClaims;
+
+  const representativeTravelMedia = new Set(
+    surfaceProfiles.flatMap(({ allowedTravelMedia }) => allowedTravelMedia),
+  );
+  const representativeEmergenceReady = historicalSliceEvidenceReady
+    && reusableActivityArchetypesReady
+    && capabilityDrivenSurfaceObservationReady
+    && ["air", "surface-water", "amphibious"].every((medium) => (
+      representativeTravelMedia.has(medium as "air" | "surface-water" | "amphibious")
+    ))
+    && candidateGates.every((gate) => (
+      gate?.criteria.find(({ criterion }) => criterion === "player-independent-scenario")
+        ?.status === "active"
+    ));
+
+  // The matching build-owned witness perturbs profiles, observations, motion,
+  // coordinate signs, and input order through these shared boundaries. This
+  // remains one abstraction fuzz, not a species-pair behavior matrix.
+  const boundedAbstractionFuzzReady = registryCoherenceReady
+    && reusableActivityArchetypesReady
+    && capabilityDrivenSurfaceObservationReady
+    && representativeEmergenceReady
+    && surfaceProfiles.some(({ speciesId, locomotionClass, allowedTravelMedia }) => (
+      speciesId === "gull"
+      && locomotionClass === "aerial"
+      && allowedTravelMedia.length === 1
+      && allowedTravelMedia[0] === "air"
+    ));
+
+  const performanceEvidenceReady = tidalTable.performanceEvidenceReady
+    && blackDuck.performanceEvidenceReady
+    && riverOtter.performanceEvidenceReady
+    && boundedAbstractionFuzzReady
+    && candidateGates.every((gate) => {
+      const state = gate?.criteria.find(({ criterion }) => criterion === "performance-budget");
+      return state?.status === "active" || state?.status === "foundation";
+    });
+
+  const activityModules = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES
+    .map(({ speciesId }) => livingSpeciesModule(speciesId));
+  const surfaceAquaticTargets = surfaceProfiles.flatMap(({ speciesId }) => {
+    const target = livingSpeciesModule(speciesId)?.interactions.targets.find((candidate) => (
+      candidate.targetClass === "aquatic-animal" && candidate.policy === "available"
+    ));
+    return target === undefined ? [] : [target];
+  });
+  const candidateAquaticTargets = candidateModules.flatMap((module) => {
+    const target = module?.interactions.targets.find((candidate) => (
+      candidate.targetClass === "aquatic-animal" && candidate.policy === "available"
+    ));
+    return target === undefined ? [] : [target];
+  });
+  const forbiddenInteractionVerbs = new Set(["attack", "capture", "consume", "kill"]);
+  const resourceConservationReady = historicalSliceEvidenceReady
+    && boundedAbstractionFuzzReady
+    && activityModules.every((module) => {
+    const food = module?.interactions.targets.find(({ targetClass }) => targetClass === "food");
+    return food?.policy === "available"
+      && food.escalationConstraints.includes("physical-resource-conservation");
+  })
+    && candidateAquaticTargets.length > 0
+    && candidateAquaticTargets.every(({ escalationConstraints, verbs }) => (
+      escalationConstraints.includes("aggregate-unit-conservation")
+      && escalationConstraints.includes("direct-perception-required")
+      && escalationConstraints.includes("nonlethal-pressure-only")
+      && verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ))
+    && surfaceAquaticTargets.length > 0
+    && surfaceAquaticTargets.every(({ escalationConstraints }) => (
+      escalationConstraints.includes("no-health-or-mortality-outcome")
+    ));
+
+  const excludedClaimIntegrityReady = candidateModules.every((module) => (
+    module !== null
+    && module.lifeHistory.mortality === "unimplemented"
+    && module.lifeHistory.reproduction === "unimplemented"
+    && module.health.causalDeath === false
+    && module.aftermath.implementation === "unimplemented"
+    && module.aftermath.carcassModel === "none"
+    && module.habitat.migrationModel === "none"
+    && module.locomotion.crossRegion === false
+    && module.sound.implementation === "unimplemented"
+    && module.interactions.targets.every(({ verbs }) => (
+      verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ))
+  ))
+    && CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every(({ scheduleScope }) => (
+      scheduleScope === "bounded-diurnal-window"
+    ))
+    && surfaceProfiles.every(({ observationAffordance }) => (
+      observationAffordance.kind === "current-anonymous-area"
+      && observationAffordance.channel === "vision"
+    ));
+
+  const capabilities: readonly (
+    readonly [Alpha22TidalConvergenceSourceCapability, boolean]
+  )[] = [
+    ["historical-slice-evidence", historicalSliceEvidenceReady],
+    ["registry-coherence", registryCoherenceReady],
+    ["reusable-activity-archetypes", reusableActivityArchetypesReady],
+    ["capability-driven-surface-observation", capabilityDrivenSurfaceObservationReady],
+    ["representative-emergence", representativeEmergenceReady],
+    ["bounded-abstraction-fuzz", boundedAbstractionFuzzReady],
+    ["performance-budget", performanceEvidenceReady],
+    ["resource-conservation", resourceConservationReady],
+    ["excluded-claim-integrity", excludedClaimIntegrityReady],
+  ];
+  const blockingCapabilities = capabilities
+    .filter(([, ready]) => !ready)
+    .map(([capability]) => capability);
+  const evidenceOwnerIds = [...new Set([
+    ...tidalTable.roles.flatMap(({ evidenceOwnerIds: values }) => values),
+    ...blackDuck.evidenceOwnerIds,
+    ...riverOtter.evidenceOwnerIds,
+    CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID,
+    CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    "game:core-ecology-perception:v1",
+    "test:alpha22-tidal-convergence-source-candidate:v1",
+    "test:alpha22-tidal-convergence-abstraction-fuzz:v1",
+    "test:alpha22-tidal-convergence-performance:v1",
+    "test:core-ecology-tidal-table-performance:v1",
+    "test:core-ecology-waterfowl-performance:v1",
+    "test:runtime-core-ecology-physical-provision-conservation:v1",
+  ])].sort(compareText);
+  const sourceCandidateReady = evidenceAuthenticated && blockingCapabilities.length === 0;
+
+  return deepFreeze({
+    version: ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_VERSION,
+    unitId: "alpha22-tidal-convergence",
+    scope: "bounded-starting-harbor-wave-c-integration",
+    speciesIds: [...ALPHA22_TIDAL_CONVERGENCE_SPECIES],
+    evidenceAuthenticated,
+    historicalSliceEvidenceReady,
+    registryCoherenceReady,
+    reusableActivityArchetypesReady,
+    capabilityDrivenSurfaceObservationReady,
+    representativeEmergenceReady,
+    boundedAbstractionFuzzReady,
+    performanceEvidenceReady,
+    resourceConservationReady,
+    excludedClaimIntegrityReady,
+    sourceCandidateReady,
+    blockingCapabilities,
+    evidenceOwnerIds,
+    publicationRecordsReady: false,
+    exactTestedDeploymentVerified: false,
+    liveVerified: false,
+    published: false,
+    fullThirtyCriterionReady: false,
+    fullWaveCReady: false,
+    fullDirective041Ready: false,
+    excludedClaims: [...ALPHA22_TIDAL_CONVERGENCE_EXCLUDED_CLAIMS],
+  });
+}
+
+export const ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_READINESS =
+  alpha22TidalConvergenceSourceCandidateReadiness();
 
 function canonicalCriterionState(
   value: unknown,

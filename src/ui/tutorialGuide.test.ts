@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(31);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(32);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,17 +63,17 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("final bounded starting-harbor Wave-C role slice");
-    expect(copy).toContain("at most one persistent North American river otter");
-    expect(copy).toContain("fish, crab, usable water, and a dry shore haulout");
+    expect(copy).toContain("Tidal Convergence adds no species");
+    expect(copy).toContain("versioned activity-affordance registry");
+    expect(copy).toContain("perch/watch, low quartering, tidal wading, dabbling waterfowl, shore-water foraging, and aerial surface opportunity");
     expect(copy).toContain("AQUATIC ACTIVITY");
     expect(copy).toContain("shared terrain-occluded vision");
-    expect(copy).toContain("Shared amphibious locomotion");
-    expect(copy).toContain("nonlethal fish and crab pressure");
-    expect(copy).toContain("ordinary physical-item claims");
-    expect(copy).toContain("Exact spatial top-K selection keeps the active field at 24 individuals");
+    expect(copy).toContain("ordinary air movement");
+    expect(copy).toContain("Threat, escape, alarm, food, guard, pursuit, retreat, and scavenging intents still outrank neutral activity");
+    expect(copy).toContain("outer save remains version 15");
     expect(copy).toContain("instead of a species-by-species or N² test matrix");
-    expect(copy).toContain("does not add live-prey capture or consumption, harmful attacks, injury, mortality, carcasses, fishing, sound or track evidence, reproduction, migration, worldwide ecology, completed Wave C, or completed Directive 04_1");
+    expect(copy).toContain("closes only the bounded starting-harbor Wave-C integration seam");
+    expect(copy).toContain("does not add harmful attacks, injury, mortality, carcasses, live-prey capture or consumption, fishing, reproduction, migration, complete circadian life, general sound, scent or evidence, worldwide ecology, the full bestiary, or completed Directive 04_1");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -448,6 +448,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Its broad roles can create nonlethal fish or crab pressure");
     expect(copy).toContain("common physical-item claim resolver can settle one loose-food contest without cloning the item");
     expect(copy).toContain("None of this is a live-prey capture or meal, harmful attack, injury, death, carcass, fishing, call, or track-evidence system");
+    expect(copy).toContain("perch/watch, low-quartering, tidal-wader, dabbling-waterfowl, shore-water-forager, and aerial-surface-opportunist profiles");
+    expect(copy).toContain("The gull is the aerial surface opportunist");
+    expect(copy).toContain("It does not swim, wade, aquatic-forage, capture prey, or inherit another profile's powers");
+    expect(copy).toContain("Any immediate lawful threat, escape, alarm, food, guard, pursuit, retreat, or scavenging intent outranks this neutral routine");
     expect(copy).toContain("deterministic low quartering search");
     expect(copy).toContain("only a crow actually mobbing it becomes pressure that can break the pursuit");
     expect(copy).toContain("At rest time, crows seek authenticated habitat perches");
@@ -459,12 +463,13 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("foliage consumption");
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species");
-    expect(copy).toContain("worldwide populations, the full bestiary");
-    expect(copy).toContain("seven Wave-B ecological roles remain closed only for one bounded");
-    expect(copy).toContain("three bounded Wave-C slices");
+    expect(copy).toContain("worldwide populations, and the full bestiary");
+    expect(copy).toContain("seven Wave-B ecological roles and the Wave-C tidal roles are closed only as one bounded");
+    expect(copy).toContain("Wave-C tidal roles are closed only as one bounded habitat-derived integration");
+    expect(copy).toContain("Tidal Convergence now share versioned role, activity-profile, perception, movement, group, aggregate, tide, item-claim, and presentation contracts");
     expect(copy).toContain("duck has no flock, nesting, reproduction, migration, capture, mortality, carcass, or consumption state");
     expect(copy).toContain("otter likewise has no capture, live-prey consumption, harmful attack, injury, mortality, carcass, fishing, call, track-evidence, reproduction, or migration state");
-    expect(copy).toContain("do not create ecology in every distant region or complete Wave C");
+    expect(copy).toContain("does not create ecology in every distant region or complete Directive 04_1");
     expect(copy).toContain("instead of requiring a species-by-species or N² pair matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);

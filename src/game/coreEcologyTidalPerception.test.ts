@@ -34,6 +34,7 @@ import {
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   repositionCoreWildlifeActor,
+  stepCoreWildlifeActor,
 } from "./coreWildlifeActor";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
@@ -53,7 +54,7 @@ const SEED = seedFromText(SEED_TEXT);
 const REGION = createRegionCoord(0, 0);
 
 describe("capability-selected perception of tidal aggregates", () => {
-  it("selects every materialized aquatic forager with stable anonymous capped output", () => {
+  it("selects eligible surface observers, excludes other actors, and is permutation-stable", () => {
     const seedText = "otter habitat 0";
     const seed = seedFromText(seedText);
     const habitat = deriveCoreEcologyTidalWebHabitatAssemblage({
@@ -65,7 +66,10 @@ describe("capability-selected perception of tidal aggregates", () => {
       patchKey: "tidal-perception:tidal-web",
       originRegion: REGION,
       tick: 360,
-      populations: individualInputs(habitat),
+      populations: individualInputs(habitat, {
+        includeGull: true,
+        includeIneligibleActor: true,
+      }),
       derivation: { kind: "habitat-v7", habitat },
     });
     const tidalStep = stepCoreEcologyTidalTable(created, { atTick: 360 });
@@ -85,6 +89,7 @@ describe("capability-selected perception of tidal aggregates", () => {
       "snowy-egret",
       "american-black-duck",
       "north-american-river-otter",
+      "gull",
     ] as const) {
       const actor = patch.populations.find((population) => population.species === species)
         ?.members[0]?.actor;
@@ -129,20 +134,26 @@ describe("capability-selected perception of tidal aggregates", () => {
     const otter = patch.populations.find(
       ({ species }) => species === "north-american-river-otter",
     )?.members[0]?.actor;
-    if (duck === undefined || otter === undefined) {
-      throw new Error("Tidal-web fixture lacks an admitted aquatic forager");
+    const gull = patch.populations.find(({ species }) => species === "gull")
+      ?.members[0]?.actor;
+    const harrier = patch.populations.find(({ species }) => species === "northern-harrier")
+      ?.members[0]?.actor;
+    if (duck === undefined || otter === undefined || gull === undefined || harrier === undefined) {
+      throw new Error("Tidal-web fixture lacks a representative observer or exclusion actor");
     }
     const batches = collectCoreEcologyAggregateActivityObservationBatches({
-      actors: [egret, duck, otter].reverse(),
+      actors: [egret, duck, otter, gull, harrier].reverse(),
       patch,
       tick: 361,
       window,
       world,
     });
     expect(batches?.map(({ observerId }) => observerId)).toEqual(
-      [duck.identity.stableId, egret.identity.stableId, otter.identity.stableId].sort(),
+      [duck.identity.stableId, egret.identity.stableId, gull.identity.stableId, otter.identity.stableId]
+        .sort(),
     );
-    expect(batches).toHaveLength(3);
+    expect(batches).toHaveLength(4);
+    expect(batches?.some(({ observerId }) => observerId === harrier.identity.stableId)).toBe(false);
     for (const batch of batches ?? []) {
       expect(batch.observations.length).toBeGreaterThan(0);
       expect(batch.observations.every((observation) => (
@@ -156,13 +167,37 @@ describe("capability-selected perception of tidal aggregates", () => {
       expect(serialized).not.toContain("FIDDLE-AREA");
     }
     const repeated = collectCoreEcologyAggregateActivityObservationBatches({
-      actors: [duck, egret, otter],
+      actors: [harrier, gull, otter, egret, duck],
       patch,
       tick: 361,
       window,
       world,
     });
     expect(repeated).toEqual(batches);
+
+    const gullBatch = batches?.find(({ observerId }) => (
+      observerId === gull.identity.stableId
+    ));
+    const observedGull = gullBatch === undefined
+      ? null
+      : stepCoreWildlifeActor(gull, {
+          tick: 361,
+          observations: gullBatch.observations,
+          foodOpportunities: [],
+          accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+          neutralActivityPreference: "observe",
+        });
+    if (observedGull === null) throw new Error("Shared surface cue did not reach the gull");
+    const observedPatch = replaceCoreEcologyAggregatePatchActor(patch, observedGull.actor);
+    expect(projectCoreEcologyActivity(observedPatch, {
+      actorId: gull.identity.stableId,
+      atTick: 361,
+    })).toMatchObject({
+      state: "surface-circling",
+      sourceObservationId: gullBatch?.observations[0]?.id,
+      presentationSignal: "surface-opportunity-flight",
+      motion: { kind: "hold-position" },
+    });
   });
 
   it("creates only a current anonymous visual fact for an occupied, active, depth-usable anchor", () => {
@@ -508,6 +543,10 @@ function individualInputs(
     | ReturnType<typeof deriveCoreEcologyTidalTableHabitatAssemblage>
     | ReturnType<typeof deriveCoreEcologyWaterfowlHabitatAssemblage>
     | ReturnType<typeof deriveCoreEcologyTidalWebHabitatAssemblage>,
+  options: Readonly<{
+    includeGull?: boolean;
+    includeIneligibleActor?: boolean;
+  }> = {},
 ): readonly CoreEcologyPopulationInput[] {
   return habitat.populations.flatMap((population) => (
     population.representation !== "individual-representatives"
@@ -521,9 +560,17 @@ function individualInputs(
             populationOrdinal: allocation.allocationOrdinal,
             representedUnits: allocation.representedUnits,
             position: allocation.position,
-            materialization: population.species === "snowy-egret"
+            materialization: (
+              population.species === "snowy-egret"
               || population.species === "american-black-duck"
               || population.species === "north-american-river-otter"
+              || (options.includeGull === true
+                && population.species === "gull"
+                && allocation.allocationOrdinal === 0)
+              || (options.includeIneligibleActor === true
+                && population.species === "northern-harrier"
+                && allocation.allocationOrdinal === 0)
+            )
               ? "materialized" as const
               : "coarse" as const,
           })),

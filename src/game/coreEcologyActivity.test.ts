@@ -19,12 +19,16 @@ import {
   CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS,
   CORE_ECOLOGY_ACTIVITY_OWNER_ID,
   CORE_ECOLOGY_ACTIVITY_SPECIES,
+  coreEcologyActivityDestinationSemantic,
   coreEcologyActivityTravelMedium,
   projectCoreEcologyActivity,
   projectCoreEcologyDayPhase,
   stepCoreEcologyActivityMotion,
+  validateCoreEcologyActivityProjectionAffordance,
   validateCoreEcologyActivityPolicies,
+  type CoreEcologyActivityProjection,
 } from "./coreEcologyActivity";
+import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
   CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
   deriveCoreEcologyRainChorusHabitatAssemblage,
@@ -76,6 +80,7 @@ describe("core ecology bounded activity", () => {
       "snowy-egret",
       "american-black-duck",
       "north-american-river-otter",
+      "gull",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
@@ -136,6 +141,212 @@ describe("core ecology bounded activity", () => {
       presentationSignal: "resting",
       motion: { kind: "hold-position" },
     });
+  });
+
+  it("lets an aerial surface opportunist follow only a current anonymous sighting", () => {
+    let patch = activityPatch(360);
+    const gull = memberFor(patch, "gull").actor;
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: gull.identity.stableId,
+      atTick: 360,
+    })).toMatchObject({
+      state: "active-watch",
+      sourceObservationId: null,
+      preferredNeutralIntent: "observe",
+      presentationSignal: null,
+      motion: { kind: "defer-to-intent" },
+    });
+
+    const observedArea = translateWorldPosition(
+      gull.address.position,
+      4 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    const observation = createActorObservation({
+      id: "gull-surface-opportunity:361",
+      observerId: gull.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: { center: observedArea, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (observation === null) throw new Error("Gull surface observation fixture failed");
+    const observed = stepCoreWildlifeActor(gull, {
+      tick: 361,
+      observations: [observation],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (observed === null) throw new Error("Gull cognition rejected lawful surface activity");
+    patch = replaceCoreEcologyAggregatePatchActor(patch, observed.actor);
+
+    const surfaceProjection = projectCoreEcologyActivity(patch, {
+      actorId: gull.identity.stableId,
+      atTick: 361,
+    });
+    expect(surfaceProjection).toMatchObject({
+      state: "seeking-surface-opportunity",
+      sourceObservationId: observation.id,
+      presentationSignal: "surface-opportunity-flight",
+      motion: {
+        kind: "target-area",
+        verb: "seek-surface-opportunity",
+      },
+    });
+    const activityProfile = coreEcologyActivityAffordanceProfile("gull");
+    if (surfaceProjection === null || activityProfile === null) {
+      throw new Error("Gull activity affordance fixture failed");
+    }
+    expect(validateCoreEcologyActivityProjectionAffordance(
+      activityProfile,
+      observed.actor,
+      surfaceProjection,
+    )).toEqual([]);
+    expect(validateCoreEcologyActivityProjectionAffordance(
+      activityProfile,
+      observed.actor,
+      {
+        ...surfaceProjection,
+        presentationSignal: "perched",
+      } as CoreEcologyActivityProjection,
+    )).toContain("undeclared-presentation-signal");
+    expect(validateCoreEcologyActivityProjectionAffordance(
+      activityProfile,
+      observed.actor,
+      {
+        ...surfaceProjection,
+        motion: {
+          ...surfaceProjection.motion,
+          travelMedium: "surface-water",
+        },
+      } as CoreEcologyActivityProjection,
+    )).toEqual(expect.arrayContaining([
+      "destination-rejects-travel-medium",
+      "undeclared-travel-medium",
+    ]));
+    expect(validateCoreEcologyActivityProjectionAffordance(
+      activityProfile,
+      observed.actor,
+      { ...surfaceProjection, sourceObservationId: "unknown-observation" },
+    )).toEqual(expect.arrayContaining([
+      "invalid-or-stale-observation-source",
+      "observed-destination-without-current-source",
+    ]));
+    expect(validateCoreEcologyActivityProjectionAffordance(
+      activityProfile,
+      observed.actor,
+      {
+        ...surfaceProjection,
+        motion: {
+          kind: "target-area",
+          verb: "seek-perch",
+          targetArea: surfaceProjection.motion.kind === "target-area"
+            ? surfaceProjection.motion.targetArea
+            : observation.area,
+        },
+      },
+    )).toContain("undeclared-destination-semantic");
+    expect(stepCoreEcologyActivityMotion(patch, {
+      actorId: gull.identity.stableId,
+      atTick: 361,
+      maximumStepUnits: 700,
+    })).toMatchObject({ resolution: "moved" });
+
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: gull.identity.stableId,
+      atTick: 362,
+    })).toMatchObject({
+      state: "active-watch",
+      sourceObservationId: null,
+      presentationSignal: null,
+      motion: { kind: "defer-to-intent" },
+    });
+
+    const restPatch = activityPatch(1_200);
+    const restingGull = memberFor(restPatch, "gull").actor;
+    expect(projectCoreEcologyActivity(restPatch, {
+      actorId: restingGull.identity.stableId,
+      atTick: 1_200,
+    })).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      presentationSignal: "resting",
+      motion: { kind: "hold-position" },
+    });
+
+    const displacedRestingGull = repositionCoreWildlifeActor(restingGull, {
+      atTick: 1_200,
+      position: translateWorldPosition(
+        restingGull.address.position,
+        4 * WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ),
+      heading: restingGull.address.heading,
+    });
+    const displacedRestPatch = replaceCoreEcologyAggregatePatchActor(
+      restPatch,
+      displacedRestingGull,
+    );
+    expect(projectCoreEcologyActivity(displacedRestPatch, {
+      actorId: restingGull.identity.stableId,
+      atTick: 1_200,
+    })).toMatchObject({
+      state: "seeking-habitat-anchor",
+      preferredNeutralIntent: "observe",
+      presentationSignal: "tidal-relocation-flight",
+      motion: {
+        kind: "target-area",
+        verb: "seek-habitat-anchor",
+      },
+    });
+    expect(stepCoreEcologyActivityMotion(displacedRestPatch, {
+      actorId: restingGull.identity.stableId,
+      atTick: 1_200,
+      maximumStepUnits: 700,
+    })).toMatchObject({ resolution: "moved" });
+  });
+
+  it("maps every executable target verb onto one reusable destination contract", () => {
+    const targetArea = Object.freeze({
+      center: createWorldPosition(ORIGIN, 0, 0),
+      radiusUnits: 0,
+    });
+    const legacy = [
+      ["quarter", "deterministic-local-quartering-area"],
+      ["seek-habitat-anchor", "authenticated-habitat-anchor"],
+      ["seek-perch", "authenticated-habitat-perch"],
+      ["seek-surface-opportunity", "observed-surface-opportunity"],
+      ["seek-tidal-refuge", "authenticated-tidal-refuge"],
+      ["seek-wading-ground", "authenticated-depth-safe-wading-ground"],
+    ] as const;
+    for (const [verb, semantic] of legacy) {
+      expect(coreEcologyActivityDestinationSemantic({
+        kind: "target-area",
+        verb,
+        targetArea,
+      })).toBe(semantic);
+    }
+    const explicit = [
+      ["seek-dabbling-water", "authenticated-depth-safe-dabbling-water", "surface-water"],
+      ["seek-otter-foraging-water", "authenticated-foraging-water", "amphibious"],
+      ["seek-otter-haulout", "authenticated-dry-haulout", "amphibious"],
+      ["seek-waterfowl-refuge", "authenticated-tidal-refuge", "air"],
+    ] as const;
+    for (const [verb, semantic, travelMedium] of explicit) {
+      expect(coreEcologyActivityDestinationSemantic({
+        kind: "target-area",
+        verb,
+        targetArea,
+        travelMedium,
+      })).toBe(semantic);
+    }
+    expect(coreEcologyActivityDestinationSemantic({ kind: "hold-position" })).toBeNull();
   });
 
   it("does not let a completed rest posture trap a bird after daylight returns", () => {

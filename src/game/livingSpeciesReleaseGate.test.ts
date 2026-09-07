@@ -9,6 +9,9 @@ import {
   ALPHA21_RIVER_OTTER_BOUNDED_READINESS,
   ALPHA21_RIVER_OTTER_EXCLUDED_CLAIMS,
   ALPHA21_RIVER_OTTER_SPECIES,
+  ALPHA22_TIDAL_CONVERGENCE_EXCLUDED_CLAIMS,
+  ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_READINESS,
+  ALPHA22_TIDAL_CONVERGENCE_SPECIES,
   ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA,
   ALPHA16_MARSH_EDGE_BOUNDED_READINESS,
   ALPHA16_MARSH_EDGE_SPECIES,
@@ -27,6 +30,7 @@ import {
   alpha17RainChorusBoundedReadiness,
   alpha20AmericanBlackDuckBoundedReadiness,
   alpha21RiverOtterBoundedReadiness,
+  alpha22TidalConvergenceSourceCandidateReadiness,
   auditLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGateSet,
@@ -837,6 +841,65 @@ describe("Living Weft species release gate", () => {
     expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
       verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
     ))).toBe(false);
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);
+    expect(Object.isFrozen(readiness.evidenceOwnerIds)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("authenticates Alpha-22 source convergence at shared abstraction boundaries only", () => {
+    const readiness = alpha22TidalConvergenceSourceCandidateReadiness();
+
+    expect(readiness).toEqual(ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "alpha22-tidal-convergence",
+      scope: "bounded-starting-harbor-wave-c-integration",
+      evidenceAuthenticated: true,
+      historicalSliceEvidenceReady: true,
+      registryCoherenceReady: true,
+      reusableActivityArchetypesReady: true,
+      capabilityDrivenSurfaceObservationReady: true,
+      representativeEmergenceReady: true,
+      boundedAbstractionFuzzReady: true,
+      performanceEvidenceReady: true,
+      resourceConservationReady: true,
+      excludedClaimIntegrityReady: true,
+      sourceCandidateReady: true,
+      blockingCapabilities: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      liveVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+      fullWaveCReady: false,
+      fullDirective041Ready: false,
+    });
+    expect(readiness.speciesIds).toEqual(ALPHA22_TIDAL_CONVERGENCE_SPECIES);
+    expect(readiness.excludedClaims).toEqual(ALPHA22_TIDAL_CONVERGENCE_EXCLUDED_CLAIMS);
+    expect(readiness.excludedClaims).toEqual(expect.arrayContaining([
+      "general-scent-sound-evidence",
+      "worldwide-ecology",
+      "full-wave-c",
+      "full-directive-04-1",
+    ]));
+    expect(readiness.evidenceOwnerIds).toEqual([...readiness.evidenceOwnerIds].sort());
+    expect(new Set(readiness.evidenceOwnerIds).size).toBe(readiness.evidenceOwnerIds.length);
+    expect(readiness.evidenceOwnerIds).toEqual(expect.arrayContaining([
+      "game:core-ecology-activity-affordance:v1",
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "test:alpha22-tidal-convergence-abstraction-fuzz:v1",
+      "test:alpha22-tidal-convergence-performance:v1",
+      "test:alpha22-tidal-convergence-source-candidate:v1",
+      "test:core-ecology-tidal-table-performance:v1",
+      "test:core-ecology-waterfowl-performance:v1",
+      "test:runtime-core-ecology-physical-provision-conservation:v1",
+    ]));
+    expect(ALPHA21_RIVER_OTTER_BOUNDED_READINESS.evidenceOwnerIds.every((ownerId) => (
+      readiness.evidenceOwnerIds.includes(ownerId)
+    ))).toBe(true);
     expect(Object.isFrozen(readiness)).toBe(true);
     expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
     expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);

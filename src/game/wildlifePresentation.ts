@@ -1148,6 +1148,7 @@ function activityBehavior(
     case "resting": return "rest";
     case "dabbling-forage": return "forage";
     case "surface-swimming": return "swim";
+    case "surface-opportunity-flight": return "flight";
     case "tidal-relocation-flight": return "flight";
     case "wading-search": return "forage";
     case "wading-scan": return null;
@@ -1186,6 +1187,11 @@ function observableBehavior(
 ): string {
   if (activity?.presentationSignal === "dabbling-forage") return "Dabbling";
   if (activity?.presentationSignal === "surface-swimming") return "Swimming";
+  if (activity?.presentationSignal === "surface-opportunity-flight") {
+    return activity.state === "surface-circling"
+      ? "Circling over surface activity"
+      : "Flying";
+  }
   if (activity?.presentationSignal === "wading-scan") return "Scanning shallows";
   if (activity?.presentationSignal === "aquatic-foraging") return "Foraging in water";
   if (activity?.presentationSignal === "shore-water-relocation") {
@@ -1219,6 +1225,7 @@ function coarseMotion(
   if (
     activity?.presentationSignal === "dabbling-forage"
     || activity?.presentationSignal === "surface-swimming"
+    || activity?.presentationSignal === "surface-opportunity-flight"
     || activity?.presentationSignal === "aquatic-foraging"
     || activity?.presentationSignal === "shore-water-relocation"
     || activity?.presentationSignal === "surface-diving"

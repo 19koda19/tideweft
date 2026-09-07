@@ -73,6 +73,33 @@ describe("core ecology species runtime policy", () => {
     });
   });
 
+  it("admits a diurnal aerial gull to tidal surface opportunities without aquatic powers", () => {
+    expect(coreEcologySpeciesRuntimePolicy("gull")).toMatchObject({
+      locomotionClass: "aerial",
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "diurnal-activity",
+        "food-investigation",
+        "group-coordination",
+        "perch",
+        "shared-alarm",
+        "surface-opportunity",
+        "tidal-activity",
+      ],
+      activitySignals: ["surface-opportunity-flight", "tidal-relocation-flight"],
+    });
+    for (const capability of [
+      "amphibious-locomotion",
+      "aquatic-foraging",
+      "aquatic-locomotion",
+      "small-prey-pursuit",
+      "wading",
+    ] as const) {
+      expect(coreEcologySpeciesHasRuntimeCapability("gull", capability)).toBe(false);
+    }
+  });
+
   it("declares the bounded Wave-C aquatic capability seams", () => {
     expect(coreEcologySpeciesRuntimePolicy("atlantic-silverside")).toMatchObject({
       actorAddressable: false,
@@ -129,6 +156,7 @@ describe("core ecology species runtime policy", () => {
         "aerial-locomotion",
         "amphibious-locomotion",
         "aquatic-foraging",
+        "surface-opportunity",
         "tidal-activity",
         "wading",
         "water-depth-response",
@@ -156,6 +184,7 @@ describe("core ecology species runtime policy", () => {
         "food-investigation",
         "movement-memory",
         "shared-alarm",
+        "surface-opportunity",
         "tidal-activity",
         "water-depth-response",
       ],
@@ -186,6 +215,7 @@ describe("core ecology species runtime policy", () => {
         "movement-memory",
         "shore-water-activity",
         "small-prey-pursuit",
+        "surface-opportunity",
         "tidal-activity",
         "water-depth-response",
       ],

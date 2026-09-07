@@ -28,7 +28,9 @@ import {
   coreEcologyActivityTravelMedium,
   projectCoreEcologyActivity,
   stepCoreEcologyActivityMotion,
+  validateCoreEcologyActivityProjectionAffordance,
 } from "./coreEcologyActivity";
+import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
   CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
   CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS,
@@ -80,6 +82,8 @@ import {
 } from "./worldPosition";
 
 export const OWNER_INTENT = "test:core-ecology-waterfowl-performance:v1" as const;
+export const ALPHA22_TIDAL_CONVERGENCE_PERFORMANCE_OWNER_INTENT =
+  "test:alpha22-tidal-convergence-performance:v1" as const;
 
 const SEED_TEXT = "waterfowl habitat 1";
 const SEED = seedFromText(SEED_TEXT);
@@ -176,14 +180,16 @@ describe("Alpha-20 waterfowl shared-abstraction budgets", () => {
     });
 
     const candidateWorld = observationWorld();
-    let materialized = setCoreEcologyMaterializationForWindow(
+    const postSoakMaterialized = setCoreEcologyMaterializationForWindow(
       soak.patch,
       candidateWorld.window,
       soak.patch.updatedAtTick,
     );
-    if (materialized === null) throw new Error("Waterfowl materialization failed closed");
-    const currentTide = stepCoreEcologyTidalTable(materialized, {
-      atTick: materialized.updatedAtTick,
+    if (postSoakMaterialized === null) {
+      throw new Error("Waterfowl post-soak materialization failed closed");
+    }
+    const currentTide = stepCoreEcologyTidalTable(postSoakMaterialized, {
+      atTick: postSoakMaterialized.updatedAtTick,
     });
     if (currentTide === null) throw new Error("Waterfowl post-soak tide step failed closed");
     expect(currentTide).toMatchObject({
@@ -192,12 +198,25 @@ describe("Alpha-20 waterfowl shared-abstraction budgets", () => {
       mortality: "none",
       patch: { derivation: { kind: "habitat-v6" } },
     });
-    materialized = currentTide.patch;
+    // The observation/activity witness uses a fresh daylight candidate so its
+    // neutral gull response is measured independently of the full-tide soak's
+    // intentionally accumulated rest pressure.
+    let materialized = setCoreEcologyMaterializationForWindow(
+      candidate.patch,
+      candidateWorld.window,
+      candidate.patch.updatedAtTick,
+    );
+    if (materialized === null) {
+      throw new Error("Waterfowl observation materialization failed closed");
+    }
     const bridgeTick = materialized.updatedAtTick + 1;
     const bridgeProjection = projectCoreEcologyTidalTable(materialized, bridgeTick);
+    if (bridgeProjection === null) {
+      throw new Error("Waterfowl observation bridge lacks its tidal projection");
+    }
     const cue = activeOccupiedAquaticCue(materialized, bridgeProjection);
     if (cue === null) throw new Error("Waterfowl bridge fixture lacks active aquatic activity");
-    for (const actor of materializedWildlife(materialized).filter(isAquaticForager)) {
+    for (const actor of materializedWildlife(materialized).filter(isTidalSurfaceObserver)) {
       materialized = replaceCoreEcologyAggregatePatchActor(
         materialized,
         repositionCoreWildlifeActor(actor, {
@@ -215,8 +234,16 @@ describe("Alpha-20 waterfowl shared-abstraction budgets", () => {
     if (duckBridgeActor === undefined) {
       throw new Error("Waterfowl observation bridge lacks its representative duck actor");
     }
+    const gullBridgeActor = bridgeActors.find(({ identity }) => identity.species === "gull");
+    if (gullBridgeActor === undefined) {
+      throw new Error("Alpha-22 observation bridge lacks its representative gull actor");
+    }
     const aquaticForagerIds = bridgeActors
       .filter(isAquaticForager)
+      .map(({ identity }) => identity.stableId)
+      .sort(compareText);
+    const tidalSurfaceObserverIds = bridgeActors
+      .filter(isTidalSurfaceObserver)
       .map(({ identity }) => identity.stableId)
       .sort(compareText);
     const bridgeInput = Object.freeze({
@@ -228,10 +255,26 @@ describe("Alpha-20 waterfowl shared-abstraction budgets", () => {
     });
     const initialBatches = collectCoreEcologyAggregateActivityObservationBatches(bridgeInput);
     if (initialBatches === null) throw new Error("Waterfowl observation bridge failed closed");
-    expect(initialBatches.map(({ observerId }) => observerId)).toEqual(aquaticForagerIds);
+    expect(initialBatches.map(({ observerId }) => observerId)).toEqual(tidalSurfaceObserverIds);
     expect(initialBatches.find(({ observerId }) => (
       observerId === duckBridgeActor.identity.stableId
     ))?.observations.length ?? 0).toBeGreaterThan(0);
+    const gullBatch = initialBatches.find(({ observerId }) => (
+      observerId === gullBridgeActor.identity.stableId
+    ));
+    if (gullBatch === undefined) {
+      throw new Error("Alpha-22 gull did not receive a shared surface-opportunity batch");
+    }
+    expect(gullBatch.observations.length).toBeGreaterThan(0);
+    expect(gullBatch.observations.every((observation) => (
+      observation.observerId === gullBridgeActor.identity.stableId
+      && observation.observedAtTick === bridgeTick
+      && observation.channel === "vision"
+      && observation.perceivedClass === "aquatic-activity"
+      && observation.subjectId === null
+      && observation.identification === "classified"
+      && observation.area.radiusUnits === 0
+    ))).toBe(true);
     expect(initialBatches.length).toBeGreaterThan(0);
     expect(initialBatches.every(({ observations }) => (
       observations.length > 0
@@ -273,6 +316,64 @@ describe("Alpha-20 waterfowl shared-abstraction budgets", () => {
     if (observedStep === null) throw new Error("Waterfowl shared actor step failed closed");
     expect(observedStep.resourceClaims).toEqual([]);
 
+    const observedGull = materializedWildlife(observedStep.patch).find(({ identity }) => (
+      identity.stableId === gullBridgeActor.identity.stableId
+    ));
+    if (observedGull === undefined) {
+      throw new Error("Alpha-22 shared actor step lost its representative gull");
+    }
+    const gullProjectionInput = Object.freeze({
+      actorId: gullBridgeActor.identity.stableId,
+      atTick: bridgeTick,
+    });
+    const gullActivityProjection = projectCoreEcologyActivity(
+      observedStep.patch,
+      gullProjectionInput,
+    );
+    const gullActivityProfile = coreEcologyActivityAffordanceProfile("gull");
+    if (gullActivityProjection === null || gullActivityProfile === null) {
+      throw new Error("Alpha-22 gull activity projection failed closed");
+    }
+    expect(validateCoreEcologyActivityProjectionAffordance(
+      gullActivityProfile,
+      observedGull,
+      gullActivityProjection,
+    )).toEqual([]);
+    expect(gullActivityProjection).toMatchObject({
+      species: "gull",
+      presentationSignal: "surface-opportunity-flight",
+    });
+    expect(gullBatch.observations.some(({ id }) => (
+      id === gullActivityProjection.sourceObservationId
+    ))).toBe(true);
+    if (gullActivityProjection.motion.kind === "target-area") {
+      expect(gullActivityProjection.motion.verb).toBe("seek-surface-opportunity");
+    } else {
+      expect(gullActivityProjection.motion.kind).toBe("hold-position");
+    }
+    const hiddenAquaticIdentityTokens = bridgeProjection.aggregateActivities.flatMap(
+      ({ aggregateId, intensity }) => {
+        if (intensity <= 0) return [];
+        const population = materialized.aggregatePopulations.find((candidate) => (
+          candidate.aggregateId === aggregateId
+        ));
+        return population === undefined
+          ? []
+          : [population.aggregateId, population.populationKey, population.species];
+      },
+    );
+    expect(hiddenAquaticIdentityTokens.length).toBeGreaterThan(0);
+    const gullWitnessPayload = JSON.stringify({
+      observations: gullBatch.observations,
+      projection: gullActivityProjection,
+    });
+    expect(gullWitnessPayload).not.toContain('"aggregateId"');
+    expect(gullWitnessPayload).not.toContain('"populationKey"');
+    expect(gullWitnessPayload).not.toContain('"preyId"');
+    for (const hiddenIdentity of hiddenAquaticIdentityTokens) {
+      expect(gullWitnessPayload).not.toContain(hiddenIdentity);
+    }
+
     const motion = surfaceMotionFixture(candidate.habitat);
     const projectionStarted = performance.now();
     for (let frame = 0; frame < PROJECTION_FRAMES; frame += 1) {
@@ -285,6 +386,14 @@ describe("Alpha-20 waterfowl shared-abstraction budgets", () => {
       if (projectCoreEcologyActivity(motion.surfacePatch, motion.input) === null) {
         throw new Error(`Waterfowl surface activity projection ${frame} failed closed`);
       }
+      const gullProjection = projectCoreEcologyActivity(
+        observedStep.patch,
+        gullProjectionInput,
+      );
+      if (
+        gullProjection === null
+        || gullProjection.sourceObservationId !== gullActivityProjection.sourceObservationId
+      ) throw new Error(`Alpha-22 gull activity projection ${frame} failed closed`);
     }
     const projectionMs = performance.now() - projectionStarted;
 
@@ -371,6 +480,7 @@ describe("Alpha-20 waterfowl shared-abstraction budgets", () => {
     );
 
     console.info("[waterfowl-performance]", JSON.stringify({
+      alpha22OwnerIntent: ALPHA22_TIDAL_CONVERGENCE_PERFORMANCE_OWNER_INTENT,
       ownerIntent: OWNER_INTENT,
       allocationCount,
       aquaticForagers: aquaticForagerIds.length,
@@ -645,6 +755,12 @@ function materializedWildlife(
 
 function isAquaticForager(actor: CoreWildlifeActorState): boolean {
   return coreEcologySpeciesHasRuntimeCapability(actor.identity.species, "aquatic-foraging");
+}
+
+function isTidalSurfaceObserver(actor: CoreWildlifeActorState): boolean {
+  return coreEcologySpeciesHasRuntimeCapability(actor.identity.species, "actor-address")
+    && coreEcologySpeciesHasRuntimeCapability(actor.identity.species, "surface-opportunity")
+    && coreEcologySpeciesHasRuntimeCapability(actor.identity.species, "tidal-activity");
 }
 
 function actorPosition(patch: CoreEcologyAggregatePatchState, actorId: string) {

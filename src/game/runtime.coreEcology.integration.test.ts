@@ -92,6 +92,9 @@ vi.mock("../audio/soundscape", () => ({
 
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
+export const PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT =
+  "test:runtime-core-ecology-physical-provision-conservation:v1" as const;
+
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
   readonly version: 15;
@@ -912,7 +915,7 @@ describe("runtime core-ecology vertical slice", () => {
     resumed.destroy();
   });
 
-  it("lets one fish crow physically reach and consume one persistent provision exactly once", async () => {
+  it(`${PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT} lets one fish crow physically reach and consume one persistent provision exactly once`, async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({

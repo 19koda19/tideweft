@@ -3004,17 +3004,25 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawChartGulls = (_actor: WildlifeView, base: number, now: number): void => {
-      const flap = reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
+    const drawChartGulls = (actor: WildlifeView, base: number, now: number): void => {
+      const perched = actor.behavior === "perch" || actor.behavior === "rest";
+      const flap = perched ? 0 : reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
+      const wingReach = perched ? 0.62 : 1.05;
+      const wingY = perched ? base * 0.08 : flap * base;
       p.noFill();
       p.stroke(withAlpha(PALETTE.ink, 235));
       p.strokeWeight(Math.max(1, base * 0.42));
-      p.line(-base * 1.05, flap * base, 0, -base * 0.18);
-      p.line(0, -base * 0.18, base * 1.05, flap * base);
+      p.line(-base * wingReach, wingY, 0, -base * 0.18);
+      p.line(0, -base * 0.18, base * wingReach, wingY);
       p.stroke(PALETTE.foam);
       p.strokeWeight(Math.max(0.55, base * 0.23));
-      p.line(-base * 1.02, flap * base, 0, -base * 0.18);
-      p.line(0, -base * 0.18, base * 1.02, flap * base);
+      p.line(-base * (perched ? 0.59 : 1.02), wingY, 0, -base * 0.18);
+      p.line(0, -base * 0.18, base * (perched ? 0.59 : 1.02), wingY);
+      if (perched) {
+        p.noStroke();
+        p.fill(PALETTE.foam);
+        p.ellipse(0, base * 0.08, base * 0.72, base * 0.42);
+      }
     };
 
     const drawChartFishCrows = (actor: WildlifeView, base: number, now: number): void => {

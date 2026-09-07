@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.21",
-      buildIdentity: "0.3.3-alpha.21",
+      version: "0.3.3-alpha.22",
+      buildIdentity: "0.3.3-alpha.22",
       gameplayContractVersion: 20,
-      tutorialVersion: 31,
+      tutorialVersion: 32,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,7 +68,7 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the bounded Living Channel unit and retains earlier habitat work", () => {
+  it("scopes Tidal Convergence and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
@@ -76,6 +76,13 @@ describe("canonical offline patch notes", () => {
     const closureRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.18",
     );
+    const livingChannelRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.21",
+    );
+    const livingChannelCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => livingChannelRelease?.categories[category] ?? [])
+      .join(" ");
     const tidalRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.19",
     );
@@ -127,28 +134,44 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("North American river otter");
-    expect(activeCopy).toContain("version-6 population and anchor record as its exact prefix");
-    expect(activeCopy).toContain("silverside school, fiddler-crab area");
-    expect(activeCopy).toContain("anonymous aquatic-activity observation");
-    expect(activeCopy).toContain("shared locomotion and path resolver");
-    expect(activeCopy).toContain("nonlethal pressure");
-    expect(activeCopy).toContain("physical-item claim boundary");
-    expect(activeCopy).toContain("nearest 24");
-    expect(activeCopy).toContain("does not require a bespoke test for every species or every possible animal pair");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 15");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" "))
+    expect(activeCopy).toContain("versioned activity-affordance registry");
+    expect(activeCopy).toContain("perch/watch, low quartering, tidal wading, dabbling waterfowl, shore-water foraging, and aerial surface opportunity");
+    expect(activeCopy).toContain("No new species or population is added");
+    expect(activeCopy).toContain("current anonymous tidal surface activity");
+    expect(activeCopy).toContain("shared terrain-occluded vision");
+    expect(activeCopy).toContain("ordinary bounded air travel");
+    expect(activeCopy).toContain("Immediate lawful threat, escape, alarm, food, guard, pursuit, retreat, and scavenging intents");
+    expect(activeCopy).toContain("does not require a bespoke test for every species or an N-squared matrix of animal pairs");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session remains version 15");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("No new save migration");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("not serialized as a second source of truth");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("closes only the bounded starting-harbor Wave-C integration seam");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("complete 75-to-150-profile bestiary");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, migration");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete sound propagation, general scent fields, broad persistent evidence and tracking");
+    expect(livingChannelCopy).toContain("North American river otter");
+    expect(livingChannelCopy).toContain("version-6 population and anchor record as its exact prefix");
+    expect(livingChannelCopy).toContain("silverside school, fiddler-crab area");
+    expect(livingChannelCopy).toContain("anonymous aquatic-activity observation");
+    expect(livingChannelCopy).toContain("shared locomotion and path resolver");
+    expect(livingChannelCopy).toContain("nonlethal pressure");
+    expect(livingChannelCopy).toContain("physical-item claim boundary");
+    expect(livingChannelCopy).toContain("nearest 24");
+    expect(livingChannelCopy).toContain("does not require a bespoke test for every species or every possible animal pair");
+    expect(livingChannelRelease?.categories.saves.join(" ")).toContain("outer session advances to version 15");
+    expect(livingChannelRelease?.categories.saves.join(" "))
       .toContain("sealed version-14 Between Water and Sky save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" "))
+    expect(livingChannelRelease?.categories.saves.join(" "))
       .toContain("Every earlier population, habitat anchor, actor, group, aggregate unit");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("final bounded starting-harbor Wave-C role slice");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not completion of Wave C");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("worldwide ecology");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("cannot capture or consume live prey");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, fishing, reproduction, migration");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("No otter-specific call");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("complete sound propagation");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("new persistent track or evidence type");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("final bounded starting-harbor Wave-C role slice");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("not completion of Wave C");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("worldwide ecology");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("cannot capture or consume live prey");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, fishing, reproduction, migration");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("No otter-specific call");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("complete sound propagation");
+    expect(livingChannelRelease?.categories.knownLimitations.join(" ")).toContain("new persistent track or evidence type");
     expect(tidalCopy).toContain("Atlantic-silverside school aggregate");
     expect(tidalCopy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
     expect(tidalCopy).toContain("persistent snowy-egret representative");

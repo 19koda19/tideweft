@@ -22,6 +22,7 @@ import {
   createCoreWildlifeActorState,
   repositionCoreWildlifeActor,
   repositionCoreWildlifeActorWithMovementEvidence,
+  stepCoreWildlifeActor,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
 import {
@@ -41,7 +42,12 @@ import {
   type WildlifeDirectObservation,
   type WildlifePopulationEvidenceObservation,
 } from "./wildlifePresentation";
-import { createWorldPosition, type WorldPosition } from "./worldPosition";
+import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  createWorldPosition,
+  translateWorldPosition,
+  type WorldPosition,
+} from "./worldPosition";
 import { tideAtTick } from "../sim/terrain";
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
@@ -97,6 +103,46 @@ function directObservation(
     ...(options.visibleAggregateCount === undefined
       ? {}
       : { visibleAggregateCount: options.visibleAggregateCount }),
+  });
+}
+
+/** Player sees the actor four tiles ahead, while opaque cover hides its farther target. */
+function directObservationWithFarSideCover(
+  actor: CoreWildlifeActorState,
+): WildlifeDirectObservation {
+  const actorGlobalX = actor.address.position.region.x * WORLD_WIDTH
+    + Math.floor(actor.address.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const actorGlobalY = actor.address.position.region.y * WORLD_HEIGHT
+    + Math.floor(actor.address.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const width = 100;
+  const cells: PerceptionCell[] = Array.from(
+    { length: width },
+    () => ({ elevation: 0, obstruction: 0 }),
+  );
+  cells[6] = { elevation: 0, obstruction: 1 };
+  return Object.freeze({
+    window: {
+      origin: { x: actorGlobalX - 4, y: actorGlobalY },
+      terrain: { width, height: 1 },
+    },
+    perception: evaluatePerception({
+      columns: width,
+      rows: 1,
+      cells,
+      playerTileIndex: 0,
+      facingRadians: 0,
+      weatherVisibility: 1,
+      rangeOverrides: {
+        closePeripheralRange: 2,
+        directSightRange: 128,
+        forwardConeRadians: Math.PI / 2,
+      },
+      detailRangeOverrides: {
+        closePeripheralRange: 2,
+        directSightRange: 128,
+        forwardConeRadians: Math.PI / 2,
+      },
+    }),
   });
 }
 
@@ -357,7 +403,7 @@ function waterfowlActivityFixture(tick = 360) {
 }
 
 function rainActivityFixture(
-  species: "fish-crow" | "northern-harrier",
+  species: "fish-crow" | "gull" | "northern-harrier",
   tick: number,
 ) {
   const seed = seedFromText("rain chorus bounded diurnal activity owner");
@@ -709,6 +755,83 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(projected).not.toHaveProperty("dayPhase");
     },
   );
+
+  it("presents one lawfully observed surface opportunity without naming hidden prey", () => {
+    const { actor, patch } = rainActivityFixture("gull", 359);
+    const observation = createActorObservation({
+      id: "presentation-surface-opportunity:360",
+      observerId: actor.identity.stableId,
+      observedAtTick: 360,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: {
+        center: translateWorldPosition(
+          actor.address.position,
+          4 * WORLD_POSITION_UNITS_PER_TILE,
+          0,
+        ),
+        radiusUnits: 0,
+      },
+      confidence: 900_000,
+      salience: 900_000,
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (observation === null) throw new Error("Surface opportunity fixture failed");
+    const observed = stepCoreWildlifeActor(actor, {
+      tick: 360,
+      observations: [observation],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (observed === null) throw new Error("Gull cognition rejected current observation");
+    const observedPatch = replaceCoreEcologyAggregatePatchActor(patch, observed.actor);
+    const transitObservation = directObservationWithFarSideCover(observed.actor);
+    expect(isWildlifeWorldPositionDirectlyObserved(
+      observed.actor.address.position,
+      transitObservation,
+    )).toBe(true);
+    expect(isWildlifeWorldPositionDirectlyObserved(
+      observation.area.center,
+      transitObservation,
+    )).toBe(false);
+    const transitPresentation = projectWildlifePresentation({
+      actor: observed.actor,
+      observation: transitObservation,
+      tileSize: 16,
+      activity: { patch: observedPatch, atTick: 360 },
+    });
+
+    expect(transitPresentation).toMatchObject({
+      species: "gull",
+      behavior: "flight",
+      // The gull knows why it is flying; the player only sees flight until the
+      // activity itself becomes visually inferable at the destination.
+      behaviorLabel: "Flying",
+    });
+
+    const arrived = repositionCoreWildlifeActor(observed.actor, {
+      atTick: 360,
+      position: observation.area.center,
+      heading: observed.actor.address.heading,
+    });
+    const arrivedPatch = replaceCoreEcologyAggregatePatchActor(observedPatch, arrived);
+    const arrivedPresentation = projectWildlifePresentation({
+      actor: arrived,
+      observation: directObservation(arrived),
+      tileSize: 16,
+      activity: { patch: arrivedPatch, atTick: 360 },
+    });
+    expect(arrivedPresentation).toMatchObject({
+      species: "gull",
+      behavior: "flight",
+      behaviorLabel: "Circling over surface activity",
+    });
+    expect(JSON.stringify([transitPresentation, arrivedPresentation]))
+      .not.toMatch(/silverside|fiddler|prey|population/iu);
+  });
 
   it("does not resolve an activity payload for a species without the capability", () => {
     const actor = wildlife("deer");

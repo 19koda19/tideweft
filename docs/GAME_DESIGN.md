@@ -105,6 +105,11 @@ When a bear is present, it may choose an easier exposed provision instead of pur
 
 Habitat analysis stores carrying capacity inputs, aggregate population units, pressure, trend, and deterministic placement anchors even though only a bounded set of individual representatives materializes. Habitat version 5 preserves the exact version-4 population prefix and appends only the Atlantic-silverside, Atlantic-marsh-fiddler-crab, and snowy-egret analyses. Habitat version 6 in released Alpha 20 preserves that entire version-5 population and tidal-anchor record as its exact prefix, then appends only the American-black-duck analysis. Habitat version 7 in released Alpha 21 preserves the complete version-6 population and anchor record as its exact prefix, then may append only the North American river otter analysis plus one foraging-water anchor and one distinct dry haulout. Empty population is a valid ecological result, not a failed spawn. The otter remains absent unless both tidal aggregates and suitable shore-water habitat exist. Group-sized deer, gull, and fish-crow populations receive stable herd/flock membership, cohesion, group components, anonymous alarm-signal state, and split/rejoin lineage; crows use their own `CROW-FLOCK` namespace. Black bears and northern harriers remain solitary, while the snowy egret, black duck, and river otter are each represented by at most one individual; domestic cats, marsh rabbits, and marsh foxes remain individual. Brown-rat, southern-leopard-frog, Atlantic-silverside, and Atlantic-marsh-fiddler-crab population units are conserved across saved aggregate anchors without ever materializing any aggregate as actors. Tidal anchors persist baseline elevation; current water depth and usability are derived later from the authoritative tide rather than participating in generation.
 
+The Alpha 22 Tidal Convergence source candidate changes none of those population
+or anchor facts. It adds no species and retains outer save 15, habitat 7, and
+aggregate schema 4, so the activity integration requires no migration and
+cannot use a reload to reroll an actor, anchor, aggregate, or item.
+
 The rat aggregate can redistribute at most one population unit on each fixed eight-tick opportunity. Its stimulus must first be derived through shared owners: terrain-occluded sight of a canonical addressable living species whose role and trophic relationship lawfully create pressure; wind- and rain-shaped scent from an exposed loose provision that still physically exists; or direct rain and terrain-exposure pressure. A nearby marsh fox therefore pressures this small-prey aggregate, while neutral marsh-rabbit co-presence does nothing. With no stronger external relocation, a substantially crowded anchor can space one conserved unit toward a quieter anchor. Attraction does not consume, move, damage, or duplicate the food. No stimulus causes mortality, cargo transfer, or automatic player knowledge. Gnaw marks, small tracks, and shelter signs become player-facing only under current direct-detail sight, and their ABOUT view reports evidence rather than an invented rat identity or hidden population census.
 
 The frog aggregate conserves 64–72 units across no more than three suitable wetland anchors. Rain raises its bounded activity while lawful nearby pressure can quiet it or redistribute at most one existing unit on the fixed opportunity. Marsh-fox pressure reaches it through the same small-prey trophic rule as the rat aggregate; nearby rabbit presence remains neutral. The same rain that encourages chorus also masks hearing, so an extant strongest audible anchor may produce one directional stereo chorus and an anonymous nearby/distant caption with a coarse direction derived from that same heard bearing. The current caption says only **chorus**, not **frog**, and discloses neither aggregate identity, exact location, nor hidden population count. Weather alone cannot create, kill, duplicate, or reroll frogs.
@@ -139,6 +144,20 @@ owners resolve a representative loose-food contest. The otter has no live-prey
 capture or consumption, harmful attack, injury, mortality, carcass, fishing,
 call, new track evidence, reproduction, migration, or full circadian system.
 
+The Alpha 22 source candidate composes those already-bounded activities as six
+reusable profiles: **perch-watch**, **low-quartering**, **tidal-wader**,
+**dabbling-waterfowl**, **shore-water-forager**, and
+**aerial-surface-opportunist**. A current anonymous aquatic surface observation
+is offered by shared perception only when the observer is an addressable actor
+with both surface-opportunity and tidal-activity capabilities and an occupied,
+active, depth-usable aggregate anchor passes ordinary terrain-occluded line of
+sight. This same rule now permits a gull to fly toward and circle a currently
+observed surface opportunity, or return by air to its authenticated habitat
+anchor during the rest window. It does not give the gull water locomotion,
+aquatic-foraging pressure, aggregate identity, an exact count, or a private prey
+target. Immediate lawful threat, alarm, pursuit, and physical-food intent takes
+priority over all six neutral profiles.
+
 Materialized detail is now a spatial decision rather than source-array
 truncation. Every lawful individual intersecting the active field is ranked by
 exact local squared distance with stable actor ID as the tie break; the nearest
@@ -148,7 +167,7 @@ not increase the existing materialization ceiling or population totals.
 
 Player-facing rat rustles, domestic-cat calls, rabbit thumps, fox yips, and fish-crow double calls occur only for activity visible at event time. The frog chorus instead passes through shared directional hearing from its actual aggregate anchor. Its anonymous bottom-right caption and attenuated stereo pan derive from the same heard-bearing uncertainty; it names a cardinal direction only when that contact supports one. The northern harrier, snowy egret, American black duck, and North American river otter have no fabricated calls. These are redundant cues, not long-range simulation knowledge. Cats, rabbits, foxes, fish crows, the harrier, the egret, the duck, and the otter preserve individual identity, bounded state, and already-authoritative intent through full/coarse/full transitions and accept the same **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE** choices as other visible wildlife, but cannot be owned, bonded, named, tamed, or recruited. A selected gull or fish-crow representative's ABOUT view uses the same visible flock estimate already present in projection; it does not recount hidden members. The duck and otter never display a group suffix or hidden census. Rat, frog, silverside, and fiddler-crab signs are close-only observations because none represents an addressable actor; cat, rabbit, and fox tracks are visible context rather than inspectable actor proxies.
 
-Shared species policy composes representation, capabilities, group eligibility, locomotion, travel medium, decision verbs, activity, evidence, sound, tide, item claims, materialization, and projection instead of adding a separate detector or decision tree for each animal. Aggregate visual pressure and aquatic observation likewise accept canonical species and resolve shared roles/capabilities/trophic classes instead of maintaining a pair allowlist. Every core-wildlife catalog module declares every broad interaction target class as either supported or an intentional no-response, so adding a species cannot silently inherit an unspecified behavior. These broad rows are a fail-closed contract, not a claim that every species pair has bespoke coverage. The current activity owner remains intentionally narrow: a bounded daytime window authorizes ordinary fish-crow activity, the harrier's deterministic low-quartering search, egret wading observation, duck waterfowl activity, and otter shore-water activity, while authenticated habitat supplies each applicable refuge or haulout unless an immediate lawful need takes precedence. Future species should remain data and capability declarations over these shared owners. Correctness comes from shared invariants, deterministic properties, conservation, representative scenarios, bounded interaction-graph fuzzing, and performance witnesses—not species-by-species fixtures or a hand-authored N² animal-pair matrix. This is not a full sleep, denning, ecological migration, feeding, or circadian-life simulation.
+Shared species policy composes representation, capabilities, group eligibility, locomotion, travel medium, decision verbs, activity, evidence, sound, tide, item claims, materialization, and projection instead of adding a separate detector or decision tree for each animal. Aggregate visual pressure and aquatic observation likewise accept canonical species and resolve shared roles/capabilities/trophic classes instead of maintaining a pair allowlist. Every core-wildlife catalog module declares every broad interaction target class as either supported or an intentional no-response, so adding a species cannot silently inherit an unspecified behavior. These broad rows are a fail-closed contract, not a claim that every species pair has bespoke coverage. In the Alpha 22 source candidate the intentionally narrow activity owner consumes the six reusable profiles above: a bounded daytime/rest window covers fish-crow perching, harrier low quartering, egret wading, duck dabbling, otter shore-water activity, and gull air-only surface circling or habitat-anchor rest. Authenticated habitat or a current lawful observation supplies each destination unless a higher-priority immediate intent takes precedence. Future species should remain data and capability declarations over these shared owners. Correctness comes from shared invariants, deterministic properties, conservation, representative scenarios, bounded interaction-graph fuzzing, and performance witnesses—not species-by-species fixtures or a hand-authored N² animal-pair matrix. This is not a full sleep, denning, ecological migration, capture, consumption, feeding, or circadian-life simulation.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
@@ -425,6 +444,29 @@ completion, and exhaustive pair coverage remain absent. Exact feature commit
 `5514c24619fc6d41b34cbdd6315f4ae8d936f2dc` passed CI run `34067577935` and
 Pages run `34067577893`; the deployed HTML, icon, manifest, JavaScript, and CSS
 match the tested committed build byte-for-byte.
+
+Source candidate `0.3.3-alpha.22 — Tidal Convergence` adds no species and does
+not replace the verified Alpha 21 public deployment. It closes only the bounded
+starting-harbor Wave-C activity-integration seam: the six current activity-
+bearing roles use reusable archetype/profile data; current anonymous aquatic
+surface observation is selected by actor-address, surface-opportunity, and
+tidal-activity capabilities; and gulls can respond through air-only surface
+circling and authenticated habitat-anchor rest. Immediate threat, alarm,
+pursuit, and physical-food intent still outranks neutral activity. Chart,
+Relief, and ABOUT expose only the behavior supported by that current
+observation, never its hidden fish/crab identity, exact count, or private
+target.
+
+The candidate keeps outer save 15, habitat 7, aggregate schema 4, the existing
+seventeen-record catalog, physical food custody, aggregate-unit conservation,
+and the 24-actor materialization ceiling unchanged. Validation is deliberately
+architectural: shared abstraction and property checks, conservation, bounded
+fuzzing, performance budgets, and representative scenarios stand in for
+species-by-species or N² pair coverage. No live deployment has yet been
+attested. Worldwide Wave C, Directive 04_1, mortality, carcasses, harmful
+attacks, live-prey capture or consumption, fishing, nesting, reproduction,
+ecological cross-region migration, full circadian life, and general
+scent/sound/evidence remain incomplete.
 
 The release architecture extends species as data and capabilities over shared habitat,
 perception, activity, locomotion, persistence, and presentation owners. It is

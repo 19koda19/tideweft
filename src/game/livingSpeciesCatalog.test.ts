@@ -4,6 +4,7 @@ import { LIVING_ACTOR_SPECIES } from "./livingActor";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 import { coreEcologySpeciesHasRuntimeCapability } from "./coreEcologySpeciesRuntimePolicy";
 import { CORE_ECOLOGY_ACTIVITY_OWNER_ID } from "./coreEcologyActivity";
+import { CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES } from "./coreEcologyActivityAffordance";
 import {
   LIVING_SPECIES_CAPABILITY_SCALE,
   LIVING_SPECIES_CATALOG,
@@ -962,6 +963,35 @@ describe("Living Weft species module catalog", () => {
     expect(duck?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
       verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
     ))).toBe(false);
+  });
+
+  it("keeps shared activity ownership and locomotion media coherent by contract", () => {
+    for (const profile of CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES) {
+      const module = livingSpeciesModule(profile.speciesId);
+      expect(module, profile.speciesId).not.toBeNull();
+      expect(module?.activity.ownerId, profile.speciesId).toBe(CORE_ECOLOGY_ACTIVITY_OWNER_ID);
+      expect(module?.activity.decisionModel, profile.speciesId).toBe("individual");
+
+      const catalogMedia = new Set(
+        module?.locomotion.media.map(({ medium }) => medium) ?? [],
+      );
+      for (const medium of profile.allowedTravelMedia) {
+        if (medium === "air") {
+          expect(catalogMedia.has("air"), profile.speciesId).toBe(true);
+        } else if (medium === "surface-water") {
+          expect(
+            catalogMedia.has("shallow-water") || catalogMedia.has("deep-water"),
+            profile.speciesId,
+          ).toBe(true);
+        } else {
+          expect(catalogMedia.has("land"), profile.speciesId).toBe(true);
+          expect(
+            catalogMedia.has("shallow-water") || catalogMedia.has("deep-water"),
+            profile.speciesId,
+          ).toBe(true);
+        }
+      }
+    }
   });
 
   it("makes registration order irrelevant while persisted catalog order is canonical", () => {

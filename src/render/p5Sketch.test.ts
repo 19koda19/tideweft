@@ -1624,7 +1624,7 @@ describe("Chart Wave-B wildlife presentation", () => {
     renderer.destroy();
   });
 
-  it("gives authenticated perch and low-quartering states distinct aerial silhouettes", () => {
+  it("gives shared resting, perch, and low-quartering states distinct aerial silhouettes", () => {
     vi.stubGlobal("performance", { now: () => 2_117 });
     const base = view("chart-aerial-activity", { x: 12, y: 12 });
     let current: TideweftView = {
@@ -1668,6 +1668,23 @@ describe("Chart Wave-B wildlife presentation", () => {
     };
     draw();
     expect(quad.mock.calls).not.toEqual(quarteringHarrier);
+
+    const line = p5Harness.instance?.line as ReturnType<typeof vi.fn>;
+    line.mockClear();
+    current = {
+      ...current,
+      wildlife: [wildlifeView("gull", { behavior: "rest" })],
+    };
+    draw();
+    const restingGull = line.mock.calls.map((call) => [...call]);
+
+    line.mockClear();
+    current = {
+      ...current,
+      wildlife: [wildlifeView("gull", { behavior: "flight" })],
+    };
+    draw();
+    expect(line.mock.calls).not.toEqual(restingGull);
     renderer.destroy();
   });
 

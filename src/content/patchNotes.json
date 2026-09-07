@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.22",
+      "releaseDate": "2026-09-06",
+      "buildIdentity": "0.3.3-alpha.22",
+      "summary": "Tidal Convergence closes the bounded starting-harbor Wave-C integration seam without adding a species, replacing species-switched neutral activity with six reusable, capability-validated activity affordances.",
+      "gameplayContractVersion": 20,
+      "tutorialVersion": 32,
+      "categories": {
+        "gameplay": [
+          "A versioned activity-affordance registry now composes perch/watch, low quartering, tidal wading, dabbling waterfowl, shore-water foraging, and aerial surface opportunity across the existing fish crow, northern harrier, snowy egret, American black duck, North American river otter, and gull. No new species or population is added.",
+          "A gull may act on current anonymous tidal surface activity only after shared terrain-occluded vision supplies that observation. It approaches through ordinary bounded air travel, circles visibly when it arrives, and returns to its authenticated habitat anchor during the bounded rest window.",
+          "Immediate lawful threat, escape, alarm, food, guard, pursuit, retreat, and scavenging intents continue to outrank neutral activity. Profiles reuse the same perception, tide, locomotion, physical custody, and aggregate-conservation owners instead of bypassing them with species-specific behavior."
+        ],
+        "fixes": [
+          "Neutral activity is now selected through six named archetypes instead of fish-crow, harrier, egret, duck, or otter branches. Each profile declares required capabilities, locomotion class and allowed media, authenticated destination semantics, observation affordance, presentation signals, and its bounded schedule scope.",
+          "The registry and runtime projection firewall fail closed when a profile is missing, duplicated, reordered, incompatible with its canonical runtime policy, or emits an undeclared signal, travel medium, destination meaning, perch claim, or stale observation source. Unknown species inherit no default activity, destination, observation, or presentation signal.",
+          "Gull surface response uses the same current anonymous AQUATIC ACTIVITY observation already admitted through terrain-occluded vision. A stale, hidden, identified-as-prey, or otherwise unlawful tidal cue cannot become its destination or disclose a fish, crab, count, or private target."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Tidal Convergence changes no courier statistic, cargo value, Promise outcome, population total, habitat allocation, or materialization ceiling.",
+          "The gull's new neutral response is air-only. It does not gain swimming, wading, amphibious travel, aquatic foraging, small-prey pursuit, capture, or a harmful attack merely because surface activity is visible.",
+          "Shared properties, aggregate and item conservation, bounded fuzzing, performance budgets, and representative multimodal scenes validate the reusable activity architecture. The release deliberately does not require a bespoke test for every species or an N-squared matrix of animal pairs."
+        ],
+        "interface": [
+          "A lawfully visible gull can now show CIRCLING OVER SURFACE ACTIVITY in Chart, Relief, quick inspection, and ABOUT only after reaching the observed area. Transit remains the observation-honest FLYING, and Chart now gives habitat-resting gulls the same grounded posture Relief uses instead of an airborne flap.",
+          "The existing fish crow, harrier, egret, duck, and otter retain their current visible perch, quartering, wading, dabbling, surface, and shore-water signals while those signals are now owned by their reusable activity profiles.",
+          "Field Manual version 32 explains Tidal Convergence, the six existing-species activity profiles, the gull's anonymous terrain-occluded surface observation and air-only response, immediate-intent priority, unchanged save version, and the systems that remain absent."
+        ],
+        "saves": [
+          "The outer session remains version 15, habitat analysis remains version 7, and the aggregate ecology record remains version 4. Activity-affordance profiles are derived from existing stable species identity and are not serialized as a second source of truth.",
+          "No new save migration, population append, actor identity, habitat anchor, aggregate unit, item, Promise, custody record, evidence record, or world-history root is introduced by Tidal Convergence.",
+          "Save, reload, coarse travel, full-detail return, negative coordinates, and extreme signed coordinates retain the same identities and conserved state. A profile can act only on the current lawful observation and authenticated destinations available after return; reload cannot create or reroll a tidal cue."
+        ],
+        "knownLimitations": [
+          "This closes only the bounded starting-harbor Wave-C integration seam. It is not worldwide ecology, ecological cross-region migration, the complete 75-to-150-profile bestiary, or completion of Directive 04_1.",
+          "Animals still have no harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, migration, or complete circadian-life system. Existing finite pursuit and pressure remain nonlethal.",
+          "Complete sound propagation, general scent fields, broad persistent evidence and tracking, foliage consumption, social information, and exhaustive species-by-species or animal-pair coverage remain outside this release."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.21",
       "releaseDate": "2026-09-06",
       "buildIdentity": "0.3.3-alpha.21",

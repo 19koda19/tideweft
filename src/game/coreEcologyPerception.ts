@@ -200,10 +200,10 @@ export function collectCoreEcologyVisualObservationBatches(
 
 /**
  * Converts currently visible, occupied tidal aggregate activity into anonymous
- * visual facts for capability-selected materialized aquatic foragers. Fish
- * schools and crab areas remain non-addressable: this bridge never creates an
- * actor ID or exposes hidden population truth through an occluded/inactive
- * anchor.
+ * visual facts for capability-selected materialized surface-activity
+ * observers. Fish schools and crab areas remain non-addressable: this bridge
+ * never creates an actor ID or exposes hidden population truth through an
+ * occluded/inactive anchor.
  */
 export function collectCoreEcologyAggregateActivityObservationBatches(
   value: unknown,
@@ -214,11 +214,11 @@ export function collectCoreEcologyAggregateActivityObservationBatches(
   const tidal = projectCoreEcologyTidalTable(patch, frame.tick);
   if (tidal === null) return null;
   const observers = frame.actors.filter(({ identity }) => (
-    coreEcologySpeciesHasRuntimeCapability(identity.species, "aquatic-foraging")
+    canObserveTidalSurfaceActivity(identity.species)
   ));
   const ownedObserverIds = patch.populations
     .filter(({ species }) => (
-      coreEcologySpeciesHasRuntimeCapability(species, "aquatic-foraging")
+      canObserveTidalSurfaceActivity(species)
     ))
     .flatMap(({ members }) => members
       .filter(({ materialization }) => materialization === "materialized")
@@ -322,6 +322,12 @@ export function collectCoreEcologyAggregateActivityObservationBatches(
     }));
   }
   return Object.freeze(batches);
+}
+
+function canObserveTidalSurfaceActivity(species: unknown): boolean {
+  return coreEcologySpeciesHasRuntimeCapability(species, "actor-address")
+    && coreEcologySpeciesHasRuntimeCapability(species, "surface-opportunity")
+    && coreEcologySpeciesHasRuntimeCapability(species, "tidal-activity");
 }
 
 /**
