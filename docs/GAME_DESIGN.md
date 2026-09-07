@@ -112,7 +112,7 @@ cannot use a reload to reroll an actor, anchor, aggregate, or item.
 
 The rat aggregate can redistribute at most one population unit on each fixed eight-tick opportunity. Its stimulus must first be derived through shared owners: terrain-occluded sight of a canonical addressable living species whose role and trophic relationship lawfully create pressure; wind- and rain-shaped scent from an exposed loose provision that still physically exists; or direct rain and terrain-exposure pressure. A nearby marsh fox therefore pressures this small-prey aggregate, while neutral marsh-rabbit co-presence does nothing. With no stronger external relocation, a substantially crowded anchor can space one conserved unit toward a quieter anchor. Ordinary loose-provision attraction does not consume, move, damage, or duplicate that food. No stimulus causes mortality or automatic player knowledge. Gnaw marks, small tracks, and shelter signs become player-facing only under current direct-detail sight, and their ABOUT view reports evidence rather than an invented rat identity or hidden population census.
 
-The Alpha 23 source candidate composes that aggregate boundary with one
+Released Alpha 23 composes that aggregate boundary with one
 starting-harbor storehouse. The settlement owns one stable physical
 fresh-produce lot through the ordinary settlement-cargo carrier contract; it is
 not a mirror of the settlement's abstract food inventory. An open door projects
@@ -279,7 +279,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Nothing decays or advances while the game is closed.
 - The released Alpha 20 uses outer save format 14. It preserves the sealed partial fixed-step phase and bounded player sensory samples introduced by version 5, plus dog ecology, porter response, player-choice history, provision custody, bounded memory, promotion, and the aggregate-capable habitat/population/group ecology record. Exact version-13 sessions authenticate and preserve every existing actor, group, aggregate population, cargo object, Promise, disturbance, evidence record, tidal anchor, and ecology fact before adopting the seed-derived zero-or-one American-black-duck extension once. A current version-14 envelope must already contain the canonical internal aggregate schema version 4 and habitat-version-6 derivation; reload cannot reroll or duplicate its exact version-5 prefix, duck actor, destinations, refuge, prior tidal ecology, evidence, or physical food history. The aggregate schema's durable completed tide-edge marker prevents same-tick redistribution from being replayed after the bounded disturbance tail evicts an older event. Earlier supported saves continue through their frozen save-adoption paths. Committed human cognition remains in embedded simulation format 4 and `tideweft-sim/6`.
 - Released Alpha 21 uses outer save format 15. An authenticated version-14 envelope is adopted once: its complete habitat-version-6 population/anchor record remains exact before the deterministic zero-or-one otter analysis, water-foraging anchor, and dry haulout are appended. Existing actors, groups, aggregate units, items, Promises, custody, evidence, and world facts remain unchanged. Spatial top-K materialization is deterministic at the existing 24-actor ceiling, so save/reload cannot reorder the input to duplicate, erase, or reroll a representative.
-- The Alpha 23 source candidate uses outer save format 16 while habitat version 7 and aggregate schema 4 remain unchanged. An authenticated sealed version-15 envelope derives the same starting-harbor store, existing keeper and rat binding, physical fresh-produce carrier, open door, and empty bounded loss history once while preserving every earlier actor, aggregate unit, item, Promise, custody record, evidence record, and world fact. Store identity, closure, remaining units, keeper knowledge, and completed loss ordinals persist across reload and failed-tick rollback; the physical lot never mutates the separate abstract settlement food stock.
+- Released Alpha 23 uses outer save format 16 while habitat version 7 and aggregate schema 4 remain unchanged. An authenticated sealed version-15 envelope derives the same starting-harbor store, existing keeper and rat binding, physical fresh-produce carrier, open door, and empty bounded loss history once while preserving every earlier actor, aggregate unit, item, Promise, custody record, evidence record, and world fact. Store identity, closure, remaining units, keeper knowledge, and completed loss ordinals persist across reload and failed-tick rollback; the physical lot never mutates the separate abstract settlement food stock.
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
@@ -313,7 +313,7 @@ Released Alpha 22 advances the manual to version 32 with the six reusable
 activity-affordance profiles, capability-selected anonymous tidal-surface
 observation, gull air-only response, unchanged outer save 15, and explicit
 shared-property, conservation, bounded-fuzz, performance, and representative
-validation in place of a species or pair matrix. The Alpha 23 source candidate
+validation in place of a species or pair matrix. Released Alpha 23
 advances the manual to version 33 with one settlement-owned physical produce
 store, open-door weather-shaped scent, a bounded authenticated loss, existing
 visible-cat pressure, an in-person keeper request, persistent closure,
@@ -518,8 +518,8 @@ validated with shared invariants, conservation, representative deterministic
 scenarios, bounded fuzzing, and performance witnesses rather than bespoke
 tests for every possible animal pairing.
 
-Source version `0.3.3-alpha.23 — The Storehouse Door` is the current local
-release candidate and is not yet **LIVE_VERIFIED**. It keeps the seventeen-record
+Source version `0.3.3-alpha.23 — The Storehouse Door` is **LIVE_VERIFIED**. It
+keeps the seventeen-record
 species catalog, habitat 7, aggregate schema 4, and nearest-24 materialization
 ceiling unchanged. One starting-harbor store owns a stable physical produce lot;
 open-door scent is resolved by the existing weather-aware sensory owner, one
@@ -535,8 +535,11 @@ shared fuzz and performance gates remain in regression instead of expanding
 into exhaustive species and pair tests. The slice is not
 worldwide settlement ecology, livestock, schedules, mortality, carcasses,
 live-prey consumption, rumors, the full bestiary, or Directive completion.
+Exact feature commit `245997219eff02e4edcf75331dc7fd4850432efb` passed CI run
+`34080936761` and Pages run `34080936748`; the deployed HTML, icon, manifest,
+JavaScript, and CSS match the tested local production build byte-for-byte.
 
-Verified through Alpha 22; Alpha 23 remains a local source candidate:
+Verified through Alpha 23:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;

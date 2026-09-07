@@ -143,7 +143,7 @@ attacks, live-prey capture or consumption, fishing, nesting, reproduction,
 ecological cross-region migration, full circadian life, and a general
 scent/sound/evidence system remain absent.
 
-The `0.3.3-alpha.23 — The Storehouse Door` source candidate tests a ninth
+The **LIVE_VERIFIED** `0.3.3-alpha.23 — The Storehouse Door` release tests a ninth
 scaling lesson without adding a species: settlement ecology should compose
 existing physical custody, sensory projection, aggregate response, human
 knowledge, and presentation owners rather than create a store-specific animal
@@ -169,12 +169,14 @@ unchanged. Confidence comes from shared abstraction checks, a bounded signed-
 coordinate property sweep, exact item and aggregate conservation, deterministic
 replay/migration, and one representative store-rat-visible-cat composition.
 Existing shared fuzz and performance gates remain in regression rather than
-expanding into an exhaustive species or pair matrix. This remains a local source
-candidate, not a live-verification claim, worldwide store ecology, schedules,
-livestock, broad rumors, mortality, carcasses, live-prey consumption, the full
-bestiary, or Directive 04_1 completion.
+expanding into an exhaustive species or pair matrix. Exact feature commit
+`245997219eff02e4edcf75331dc7fd4850432efb` passed CI run `34080936761` and
+Pages run `34080936748`; the five cache-bypassed live artifacts match the tested
+local build byte-for-byte. This remains a bounded composition, not worldwide
+store ecology, schedules, livestock, broad rumors, mortality, carcasses,
+live-prey consumption, the full bestiary, or Directive 04_1 completion.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, and Alpha 23 is the local source candidate for one bounded storehouse composition. None completes worldwide Wave C or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, and Alpha 23 is the verified bounded storehouse composition. None completes worldwide Wave C or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)
