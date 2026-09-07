@@ -404,7 +404,7 @@ carcasses, herding, a new guardian sound, guaranteed livestock defense,
 worldwide dogs or livestock, ecological cross-region animal migration, full
 Wave D, Directive 04_1 completion, and exhaustive species/pair testing.
 
-Source-candidate Alpha 27 advances the manual to version 37 with the existing
+Released Alpha 27 advances the manual to version 37 with the existing
 working dog's bounded investigation-to-return task, deterministic
 cognition-owned search probe, mutual-sight keeper recall, actor/welfare
 suspension and resumption, physical pen return, handler acknowledgement, latest
@@ -699,7 +699,7 @@ animal ecology, full Wave D, or Directive 04_1 completion. Evidence remains
 shared-invariant and representative-chain based rather than species-by-species
 or N².
 
-Release `0.3.3-alpha.27 — The Watch Returns` is a **SOURCE_CANDIDATE**. It
+Release `0.3.3-alpha.27 — The Watch Returns` is **LIVE_VERIFIED**. It
 advances only the existing guardian relationship: a committed investigation
 opens one bounded task, travels to one cognition-derived search probe, records
 completion or a mutually seen keeper cancellation, returns physically to the
@@ -709,9 +709,10 @@ save 20 adopts version 19 exactly once, while all species, actors, habitats,
 homes, custodies, groups, items, Promises, and world facts remain conserved.
 No herding, livestock recovery, schedule, kennel-life routine, player command,
 attack, injury, mortality, carcass, or guaranteed defense is added. Exact
-commit, CI, Pages, and live-asset attestations remain pending; confidence comes
-from shared invariants and representative emergence rather than per-species or
-N² interaction tests.
+release/main commit `f2c55413c64a8e6b8e3cc1fab06e50252df2399f` passed
+feature CI `34158217494`, main CI `34158968284`, Pages `34158968401`, and
+an exact five-file live comparison. Confidence comes from shared invariants and
+representative emergence rather than per-species or N² interaction tests.
 
 Released through Alpha 26:
 

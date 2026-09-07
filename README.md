@@ -465,7 +465,7 @@ kennel schedule, worldwide dog population, cross-region animal ecology, full
 Wave D, or Directive 04_1 completion. Validation remains shared-invariant and
 representative-chain driven rather than species-by-species or N².
 
-Release `0.3.3-alpha.27 — The Watch Returns` is a **SOURCE_CANDIDATE**. It adds
+Release `0.3.3-alpha.27 — The Watch Returns` is **LIVE_VERIFIED**. It adds
 no species, actor, population, habitat, home, or custody relationship. One
 additive task owner gives the existing working dog a bounded investigation,
 physical return, and handler-acknowledgement lifecycle over the already-shared
@@ -473,12 +473,15 @@ perception, cognition, welfare, and locomotion seams. Handler recall requires
 fresh reciprocal identified sight; work may suspend for actor-owned or welfare
 pressure and resume without inventing evidence. Outer save 20 adopts sealed
 version 19 exactly once and retains only the latest closed task outcome. This
-candidate does not add herding, separated-livestock search or rescue, full
+release does not add herding, separated-livestock search or rescue, full
 schedules, autonomous kennel life, attack, injury, mortality, carcasses,
 player commands, worldwide ecology, or guaranteed defense. Validation targets
 shared invariants and representative emergence, not a bespoke species/pair
-matrix. Exact commit, CI, Pages, and live-asset attestations remain pending and
-must not be inferred from the Alpha 26 evidence above.
+matrix. Exact release/main commit
+`f2c55413c64a8e6b8e3cc1fab06e50252df2399f` passed feature CI
+`34158217494`, main CI `34158968284`, and Pages `34158968401`; a
+cache-bypassed comparison matched all five deployed files to the tested build
+byte-for-byte.
 
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 
