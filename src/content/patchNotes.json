@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.24",
+      "releaseDate": "2026-09-07",
+      "buildIdentity": "0.3.3-alpha.24",
+      "summary": "The Yard Flock adds one persistent two-to-three-chicken flock to the starting harbor, composing domestic custody, shared animal perception and movement, flock response, and the Storehouse Door's physical food through existing Living Weft owners.",
+      "gameplayContractVersion": 22,
+      "tutorialVersion": 34,
+      "categories": {
+        "gameplay": [
+          "The starting harbor now supports one deterministic flock of two or three individual domestic chickens. Each bird and the flock itself have stable identities; the settlement's existing keeper, storehouse yard, and one bounded home relationship own their custody without becoming a second animal-AI system.",
+          "Chickens use the shared wildlife actor, direct perception, attention, terrestrial locomotion, and group contracts. They can react to lawfully perceived humans, dogs, predators, flock alarms, and accessible food through broad ecological roles rather than chicken-to-species scripts.",
+          "A hungry flock member can notice the exact physical produce lot only while the store is open, approach through ordinary terrain, and consume one authenticated unit per resolved event. Securing the door removes that opportunity; hidden activity remains world truth without becoming player narration."
+        ],
+        "fixes": [
+          "Habitat version 8 preserves the complete version-7 tidal-web population and anchor record as an exact prefix, then appends only the bounded domestic yard anchor and its supported two-to-three-bird flock. The same seed, signed coordinates, and generation version reproduce the same individuals and group.",
+          "Domestic food use is staged, resolved, and recoverable against the existing store lot, custody relationship, member identity, event identity, and ordinal. A reload, interrupted save, competing claim, or replay cannot duplicate a chicken, duplicate food, consume a secured lot, or charge the same event twice.",
+          "The store access footprint and movement destination now share one Euclidean contact law, so a bird that lawfully reaches the yard can resolve the same physical opportunity it approached instead of stopping at a mismatched distance boundary."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Chickens add ecological pressure and information, not free provisions, player statistics, Promise rewards, abstract settlement-stock changes, or a combat resource.",
+          "The first flock is deliberately small, local, and settlement-bound. Birds can use land and standable shallow water, but receive no flight, deep-water, cross-region, guardian, herding, or autonomous long-range migration capability.",
+          "Validation remains abstraction-led: shared invariants, signed-coordinate properties, migration and replay attacks, physical conservation, bounded performance, and one representative visible-yard composition replace a bespoke suite for every species or an animal-pair matrix."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D render the same directly perceived chickens with a distinct compact bird form. Selection, quick inspection, and pane-free ABOUT disclose only visible identity, approximate size, appearance, condition, current behavior, and the currently visible flock estimate.",
+          "A directly witnessed store feeding can enter EVENTS with the visible bird and exact physical consequence. Facing away, leaving detail range, later returning, or merely knowing the store exists does not grant a retroactive report or hidden flock knowledge.",
+          "Field Manual version 34 explains the bounded yard flock, stable settlement custody, shared behavior, physical open-store feeding, secured-store boundary, knowledge-honest presentation, and the larger domestic systems that remain future work."
+        ],
+        "saves": [
+          "The outer session advances to version 17, habitat analysis advances to version 8, settlement ecology advances to version 2, and aggregate ecology remains version 4. Current records seal the flock identities, stable group, domestic yard anchor, custody relationship, food-use history, and every established actor, item, Promise, and world fact.",
+          "A sealed version-16 Storehouse Door save migrates exactly once. Its complete version-7 habitat, store and lot identities, keeper knowledge, closure state, remaining food, loss history, actors, groups, aggregates, items, and Promises remain exact before the deterministic flock and custody relationship are appended.",
+          "Save, reload, full/coarse/full continuity, negative coordinates, and extreme signed coordinates preserve the same flock, custody, store state, and food-use ordinals. Reload cannot reroll flock size, change an established bird, reopen a secured store, or replay a consumed unit."
+        ],
+        "knownLimitations": [
+          "This is one bounded starting-harbor chicken flock and one reusable domestic-custody seam, not worldwide livestock, full Wave D settlement ecology, ecological cross-region migration, or completion of Directive 04_1.",
+          "Chickens have no authored call, persistent tracks or environmental evidence, harmful attack, injury, mortality, carcass, live-prey capture or consumption, eggs, nesting, reproduction, complete circadian schedule, or autonomous home-return behavior in this release.",
+          "Guardian and herding behavior, livestock search/rescue, wider ownership, broad schedules, complete sound and scent fields, full settlement food loops, and exhaustive species or pair coverage remain outside this release."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.23",
       "releaseDate": "2026-09-07",
       "buildIdentity": "0.3.3-alpha.23",

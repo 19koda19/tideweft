@@ -70,6 +70,7 @@ describe("shared living actor sensory profiles", () => {
       "brown-rat",
       "deer",
       "domestic-cat",
+      "domestic-chicken",
       "domestic-dog",
       "fish-crow",
       "gull",

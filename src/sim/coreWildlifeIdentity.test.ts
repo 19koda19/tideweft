@@ -32,7 +32,7 @@ function input(
 }
 
 describe("core wildlife identity", () => {
-  it("appends the Wave-C otter contract without rewriting prior wildlife", () => {
+  it("appends each species contract without rewriting the published v1 prefix", () => {
     expect(CORE_WILDLIFE_IDENTITY_VERSION).toBe(1);
     expect(CORE_WILDLIFE_SPECIES).toEqual([
       "deer",
@@ -50,6 +50,7 @@ describe("core wildlife identity", () => {
       "snowy-egret",
       "american-black-duck",
       "north-american-river-otter",
+      "domestic-chicken",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -246,6 +247,21 @@ describe("core wildlife identity", () => {
       locomotionClass: "amphibious",
       taxonomicClass: "mammal",
     });
+    expect(getCoreWildlifeProfile("domestic-chicken")).toMatchObject({
+      maximumPatchPopulation: 3,
+      roles: ["alarm-source", "prey", "small-prey", "forager", "omnivore"],
+      foodAffinities: { "exposed-food": 1_000_000, "live-prey": 0 },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("domestic-chicken")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      dietClass: "omnivore",
+      groupOrganization: "flock",
+      groupStableIdNamespace: "CHICKEN-FLOCK",
+      locomotionClass: "terrestrial",
+      taxonomicClass: "bird",
+    });
   });
 
   it("fixes the Alpha-20 duck identity contract as deterministic bytes", () => {
@@ -263,6 +279,15 @@ describe("core wildlife identity", () => {
     );
     expect(stableCoreWildlifeId(input("north-american-river-otter"))).toBe(
       "OTTER-v1-0huwe9o.1ezclkl.0tl4wgd.1kiba8e-njz.p8g-11.north-american-river-otter:east-marsh-3",
+    );
+  });
+
+  it("fixes the Wave-D chicken identity admission as deterministic bytes", () => {
+    expect(JSON.stringify(getCoreWildlifeProfile("domestic-chicken"))).toBe(
+      '{"version":1,"species":"domestic-chicken","maximumPatchPopulation":3,"roles":["alarm-source","prey","small-prey","forager","omnivore"],"foodAffinities":{"browse":680000,"shore-forage":420000,"carrion":0,"exposed-food":1000000,"live-prey":0},"behavior":{"alarmThreshold":320000,"fleeThreshold":520000,"retreatThreshold":440000,"forageThreshold":240000,"guardThreshold":1000000,"maximumPursuitTicks":0},"morphs":["black-feathered","buff-feathered","red-brown","white-speckled"],"temperamentPairs":[["cautious","social"],["watchful","social"],["bold","opportunistic"],["patient","watchful"]],"traitRanges":{"vigilance":[580000,960000],"boldness":[120000,700000],"sociability":[680000,980000]}}',
+    );
+    expect(stableCoreWildlifeId(input("domestic-chicken"))).toBe(
+      "CHICKEN-v1-0huwe9o.1ezclkl.0tl4wgd.1kiba8e-njz.p8g-r.domestic-chicken:east-marsh-3",
     );
   });
 

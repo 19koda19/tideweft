@@ -29,6 +29,7 @@ import {
 import {
   coreEcologySpeciesCanOwnActorAddress,
   coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import {
@@ -221,6 +222,7 @@ type WildlifePresentationForm =
   | "northern-harrier"
   | "snowy-egret"
   | "american-black-duck"
+  | "domestic-chicken"
   | "north-american-river-otter"
   | "black-bear"
   | "brown-rat"
@@ -445,6 +447,20 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: true,
     baseSizeScale: 0.78,
     observableForm: "Broad-bodied dabbling duck",
+  },
+  "domestic-chicken": {
+    form: "domestic-chicken",
+    representation: "actor",
+    identificationClarity: 320_000,
+    unidentifiedQuickLabel: "Unknown bird",
+    unidentifiedIdentityLabel: "Unidentified bird",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "plumage",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.58,
+    observableForm: "Compact ground bird with comb and upright tail",
   },
   "north-american-river-otter": {
     form: "north-american-river-otter",
@@ -924,10 +940,9 @@ function directDetail(
 
   let groupSize: number | undefined;
   if (value.visibleAggregateCount !== undefined) {
-    const descriptor = PRESENTATION_BY_SPECIES[actor.identity.species];
     const maximum = getCoreWildlifeProfile(actor.identity.species).maximumPatchPopulation;
     if (
-      descriptor.groupNoun === null
+      coreEcologySpeciesRuntimePolicy(actor.identity.species)?.presentationModel !== "visible-flock"
       || !positiveSafeInteger(value.visibleAggregateCount)
       || value.visibleAggregateCount > maximum
     ) return null;

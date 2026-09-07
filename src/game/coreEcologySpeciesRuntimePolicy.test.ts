@@ -37,6 +37,7 @@ describe("core ecology species runtime policy", () => {
       "snowy-egret",
       "american-black-duck",
       "north-american-river-otter",
+      "domestic-chicken",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -58,6 +59,7 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanOwnActorAddress("atlantic-marsh-fiddler-crab")).toBe(false);
     expect(coreEcologySpeciesCanOwnActorAddress("snowy-egret")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("american-black-duck")).toBe(true);
+    expect(coreEcologySpeciesCanOwnActorAddress("domestic-chicken")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("invented-frog")).toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("southern-leopard-frog")).toMatchObject({
       actorAddressable: false,
@@ -71,6 +73,32 @@ describe("core ecology species runtime policy", () => {
       },
       presentationModel: "aggregate-activity",
     });
+  });
+
+  it("plugs the domestic flock into shared actor, food, alarm, and group capabilities", () => {
+    expect(coreEcologySpeciesRuntimePolicy("domestic-chicken")).toMatchObject({
+      actorAddressable: true,
+      identityForm: "individual",
+      representation: "individual",
+      locomotionClass: "terrestrial",
+      groupOrganization: "flock",
+      groupStableIdNamespace: "CHICKEN-FLOCK",
+      maximumMaterializedActors: 3,
+      aggregate: null,
+      capabilities: [
+        "actor-address",
+        "food-investigation",
+        "group-coordination",
+        "shared-alarm",
+      ],
+      activitySignals: ["shared-alarm"],
+      evidenceKinds: [],
+      presentationModel: "visible-flock",
+    });
+    expect(coreEcologySpeciesHasRuntimeCapability("domestic-chicken", "diurnal-activity"))
+      .toBe(false);
+    expect(coreEcologySpeciesHasRuntimeCapability("domestic-chicken", "small-prey-pursuit"))
+      .toBe(false);
   });
 
   it("admits a diurnal aerial gull to tidal surface opportunities without aquatic powers", () => {

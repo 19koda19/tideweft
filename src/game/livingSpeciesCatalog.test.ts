@@ -43,6 +43,7 @@ describe("Living Weft species module catalog", () => {
       "living-species:brown-rat:v1",
       "living-species:deer:v1",
       "living-species:domestic-cat:v1",
+      "living-species:domestic-chicken:v1",
       "living-species:domestic-dog:v1",
       "living-species:fish-crow:v1",
       "living-species:gull:v1",
@@ -1679,6 +1680,7 @@ describe("Living Weft species module catalog", () => {
       expect(module.social.communicationChannels).toEqual(
         module.speciesId === "deer"
           || module.speciesId === "american-black-duck"
+          || module.speciesId === "domestic-chicken"
           || module.speciesId === "gull"
           || module.speciesId === "fish-crow"
           || module.speciesId === "marsh-rabbit"
@@ -1692,6 +1694,7 @@ describe("Living Weft species module catalog", () => {
           : module.speciesId === "deer"
             || module.speciesId === "gull"
             || module.speciesId === "fish-crow"
+            || module.speciesId === "domestic-chicken"
             ? "active"
             : "unimplemented",
       );

@@ -176,7 +176,31 @@ local build byte-for-byte. This remains a bounded composition, not worldwide
 store ecology, schedules, livestock, broad rumors, mortality, carcasses,
 live-prey consumption, the full bestiary, or Directive 04_1 completion.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, and Alpha 23 is the verified bounded storehouse composition. None completes worldwide Wave C or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The `0.3.3-alpha.24 — The Yard Flock` source candidate tests a tenth scaling
+lesson: domestic species should reuse the Living Weft and add custody as a
+relationship, not receive a private livestock simulation. Habitat version 8
+keeps the entire version-7 ecology and tidal record as an exact prefix, then
+appends one bounded yard anchor, two or three stable chicken actors, and one
+stable flock. Settlement ecology version 2 ties those identities to the
+starting harbor and existing keeper. Each bird continues through the ordinary
+perception, attention, group, locomotion, materialization, item-opportunity,
+and presentation owners.
+
+This composition also tests physical conservation across two systems. Only an
+authenticated custody member can receive the open store's exact food
+opportunity. The bird must reach the shared structural-access area, then a
+staged transaction removes exactly one unit from the existing physical lot.
+Closed stock yields no belief or claim, failed/replayed ticks cannot duplicate
+or reconsume the unit, and offscreen activity cannot become retrospective
+player knowledge. Outer save 17 adopts sealed version 16 once and preserves all
+earlier actor, group, aggregate, item, Promise, store, closure, loss, evidence,
+and world-fact identity. Confidence again comes from shared invariants,
+signed-coordinate properties, conservation, replay/migration attacks, bounded
+performance, and one representative visible-yard witness—not a chicken-only
+test suite or a species-pair matrix. Exact CI, Pages, and deployed-artifact
+claims remain intentionally absent until external verification succeeds.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified bounded storehouse composition, and Alpha 24 is the current Yard Flock publication candidate. None completes worldwide Wave C, full Wave D, or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

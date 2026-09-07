@@ -200,6 +200,7 @@ type ReliefWildlifeForm =
   | "northern-harrier"
   | "snowy-egret"
   | "american-black-duck"
+  | "domestic-chicken"
   | "north-american-river-otter"
   | "black-bear"
   | "domestic-cat"
@@ -287,6 +288,18 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.48,
     ringRadiusScale: 0.39,
     labelLift: 0.74,
+  },
+  "domestic-chicken": {
+    form: "domestic-chicken",
+    colors: {
+      primary: "#a66a3f",
+      secondary: "#d6b37e",
+      dark: "#34241d",
+      accent: "#b34735",
+    },
+    hitRadiusScale: 0.44,
+    ringRadiusScale: 0.35,
+    labelLift: 0.7,
   },
   "north-american-river-otter": {
     form: "north-american-river-otter",
@@ -4137,6 +4150,86 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawDomesticChicken = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = reliefWildlifeColors("domestic-chicken");
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.082 * scale;
+      const foraging = wildlife.behavior === "forage";
+      const headDip = foraging
+        ? reducedMotion
+          ? base * 0.55
+          : base * (0.24 + Math.abs(Math.sin(now * 0.007)) * 0.42)
+        : 0;
+      const bodyHalfLength = base * 1.48;
+      const bodyHalfHeight = base * 0.72;
+      const bodyHalfWidth = base * 0.64;
+      const legHeight = base * 0.76;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.72;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+
+      p.ambientMaterial("#d8a84b");
+      for (const legZ of [-bodyHalfWidth * 0.38, bodyHalfWidth * 0.38]) {
+        p.push();
+        p.translate(bodyHalfLength * 0.02, legHeight * 0.68, legZ);
+        p.box(base * 0.11, legHeight, base * 0.11);
+        p.translate(base * 0.2, legHeight * 0.5, 0);
+        p.box(base * 0.54, base * 0.08, base * 0.1);
+        p.pop();
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 9, 5);
+      p.push();
+      p.translate(-base * 0.16, -bodyHalfHeight * 0.4, 0);
+      p.ambientMaterial(colors.secondary);
+      p.ellipsoid(base * 0.84, base * 0.22, base * 0.55, 8, 4);
+      p.pop();
+
+      // A high, narrow fan tail keeps the silhouette grounded and distinct
+      // from the low floating duck, even when color perception is limited.
+      for (const [tailZ, angle] of [
+        [-base * 0.26, -0.48],
+        [0, -0.7],
+        [base * 0.26, -0.48],
+      ] as const) {
+        p.push();
+        p.translate(-bodyHalfLength * 0.9, -bodyHalfHeight * 0.45, tailZ);
+        p.rotateZ(angle);
+        p.ambientMaterial(colors.dark);
+        p.cone(base * 0.28, base * 1.18, 5, 1);
+        p.pop();
+      }
+
+      p.push();
+      p.translate(bodyHalfLength * 0.8, -bodyHalfHeight * 0.76 + headDip, 0);
+      p.ambientMaterial(colors.primary);
+      p.sphere(base * 0.5, 7, 5);
+      for (const combX of [-0.22, 0, 0.22]) {
+        p.push();
+        p.translate(base * combX, -base * 0.49, 0);
+        p.ambientMaterial(colors.accent ?? colors.dark);
+        p.cone(base * 0.12, base * 0.34, 5, 1);
+        p.pop();
+      }
+      p.push();
+      p.translate(base * 0.58, base * 0.04, 0);
+      p.rotateZ(-p.HALF_PI);
+      p.ambientMaterial("#d8a84b");
+      p.cone(base * 0.17, base * 0.56, 5, 1);
+      p.pop();
+      p.pop();
+      p.pop();
+    };
+
     const drawNorthAmericanRiverOtter = (
       wildlife: WildlifeView,
       surface: number,
@@ -4737,6 +4830,9 @@ export function createTideweftReliefRenderer(
           return true;
         case "american-black-duck":
           drawAmericanBlackDuck(wildlife, surface, tileSize, now);
+          return true;
+        case "domestic-chicken":
+          drawDomesticChicken(wildlife, surface, tileSize, now);
           return true;
         case "north-american-river-otter":
           drawNorthAmericanRiverOtter(wildlife, surface, tileSize, now);

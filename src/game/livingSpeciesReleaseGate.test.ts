@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { LIVING_SPECIES_CATALOG, livingSpeciesModule } from "./livingSpeciesCatalog";
+import {
+  LIVING_SPECIES_CATALOG,
+  LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
+  livingSpeciesModule,
+} from "./livingSpeciesCatalog";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 import {
   ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS,
@@ -12,6 +16,9 @@ import {
   ALPHA22_TIDAL_CONVERGENCE_EXCLUDED_CLAIMS,
   ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_READINESS,
   ALPHA22_TIDAL_CONVERGENCE_SPECIES,
+  ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS,
+  ALPHA24_DOMESTIC_CHICKEN_EXCLUDED_CLAIMS,
+  ALPHA24_DOMESTIC_CHICKEN_SPECIES,
   ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA,
   ALPHA16_MARSH_EDGE_BOUNDED_READINESS,
   ALPHA16_MARSH_EDGE_SPECIES,
@@ -31,6 +38,7 @@ import {
   alpha20AmericanBlackDuckBoundedReadiness,
   alpha21RiverOtterBoundedReadiness,
   alpha22TidalConvergenceSourceCandidateReadiness,
+  alpha24DomesticChickenBoundedReadiness,
   auditLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGateSet,
@@ -905,6 +913,253 @@ describe("Living Weft species release gate", () => {
     expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);
     expect(Object.isFrozen(readiness.evidenceOwnerIds)).toBe(true);
     expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("authenticates Alpha-24 as one bounded domestic flock over shared owners", () => {
+    const readiness = alpha24DomesticChickenBoundedReadiness();
+    const releaseGate = gate("domestic-chicken");
+    const state = (criterion: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+      releaseGate.criteria.find((candidate) => candidate.criterion === criterion)
+    );
+
+    expect(readiness).toEqual(ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "alpha24-domestic-chicken",
+      scope: "one-bounded-settlement-flock",
+      speciesIds: ["domestic-chicken"],
+      evidenceAuthenticated: true,
+      speciesProfileReady: true,
+      individualFlockRepresentationReady: true,
+      domesticCustodyReady: true,
+      habitatPlacementReady: true,
+      boundedActivityReady: true,
+      terrestrialLocomotionReady: true,
+      lawfulPerceptionReady: true,
+      flockCoordinationReady: true,
+      broadClassInteractionsReady: true,
+      physicalFoodConservationReady: true,
+      saveMigrationReady: true,
+      knowledgeHonestPresentationReady: true,
+      boundedLocalContinuityReady: true,
+      sharedInvariantCoverageReady: true,
+      performanceEvidenceReady: true,
+      ownerCoherenceReady: true,
+      excludedClaimIntegrityReady: true,
+      boundedCandidateReady: true,
+      blockingCapabilities: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+    });
+    expect(readiness.speciesIds).toEqual(ALPHA24_DOMESTIC_CHICKEN_SPECIES);
+    expect(readiness.excludedClaims).toEqual(ALPHA24_DOMESTIC_CHICKEN_EXCLUDED_CLAIMS);
+    expect(readiness.excludedClaims).toEqual([
+      "sound",
+      "environmental-evidence",
+      "harmful-attack",
+      "injury",
+      "mortality",
+      "carcasses",
+      "live-prey-capture",
+      "live-prey-consumption",
+      "eggs",
+      "nesting",
+      "reproduction",
+      "herding-behavior",
+      "guardian-behavior",
+      "full-circadian-schedules",
+      "autonomous-home-return",
+      "ecological-cross-region-migration",
+      "worldwide-livestock",
+      "full-wave-d",
+      "full-directive-04-1",
+    ]);
+    expect(readiness.evidenceOwnerIds).toEqual([...readiness.evidenceOwnerIds].sort());
+    expect(new Set(readiness.evidenceOwnerIds).size).toBe(readiness.evidenceOwnerIds.length);
+    expect(readiness.evidenceOwnerIds).toEqual(expect.arrayContaining([
+      "game:core-ecology-groups:v1",
+      "game:core-ecology-habitat:v8",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "game:runtime-save:v17",
+      "game:settlement-ecology:v2",
+      "test:alpha24-domestic-chicken-performance:v1",
+      "test:alpha24-domestic-chicken-shared-invariants:v1",
+    ]));
+
+    expect(livingSpeciesReadinessReport("domestic-chicken")).toMatchObject({
+      evidenceAuthenticated: true,
+      state: "blocked",
+      publicReady: false,
+      counts: {
+        active: 22,
+        foundation: 2,
+        unimplemented: 6,
+        notApplicable: 0,
+        total: 30,
+      },
+      blockingCriteria: [
+        "sound",
+        "food-web",
+        "perception-senses",
+        "environmental-evidence",
+        "seamless-region-crossing",
+        "tutorial-truth",
+        "patch-note-truth",
+        "exact-tested-deployment",
+      ],
+    });
+    expect(state("habitat-placement")).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: expect.arrayContaining([
+        "game:core-ecology-habitat:v8",
+        "game:settlement-ecology:v2",
+      ]),
+    });
+    expect(state("food-web")).toMatchObject({
+      status: "foundation",
+      evidenceOwnerIds: expect.arrayContaining([
+        "game:core-wildlife-actor:v1",
+        "game:settlement-ecology:v2",
+      ]),
+    });
+    expect(state("perception-senses")).toMatchObject({
+      status: "foundation",
+      evidenceOwnerIds: expect.arrayContaining([
+        "game:core-ecology-perception:v1",
+        "sim:actor-perception:v2",
+      ]),
+    });
+    for (const criterion of [
+      "sound",
+      "environmental-evidence",
+      "seamless-region-crossing",
+      "tutorial-truth",
+      "patch-note-truth",
+      "exact-tested-deployment",
+    ] as const) {
+      expect(state(criterion)).toMatchObject({ status: "unimplemented", evidenceOwnerIds: [] });
+    }
+
+    const module = livingSpeciesModule("domestic-chicken");
+    expect(module).toMatchObject({
+      profile: {
+        implementation: "active",
+        taxonomicClass: "bird",
+        ecologicalClasses: [
+          "alarm-source",
+          "domestic-livestock",
+          "forager",
+          "omnivore",
+          "prey",
+          "small-prey",
+        ],
+      },
+      identity: { form: "individual", stableIdNamespace: "CHICKEN" },
+      population: {
+        materialization: "mixed",
+        maxMaterializedPerRegion: 3,
+        coarseSimulation: true,
+      },
+      habitat: {
+        ownerId: "game:core-ecology-habitat:v8",
+        migrationModel: "none",
+      },
+      activity: {
+        ownerId: "game:core-wildlife-actor:v1",
+        circadian: { status: "unimplemented" },
+      },
+      social: {
+        ownerId: "game:core-ecology-groups:v1",
+        actorToActorRelationships: false,
+        group: {
+          status: "active",
+          stableIdNamespace: "CHICKEN-FLOCK",
+          stableIdentity: true,
+        },
+        territory: { model: "none" },
+      },
+      sound: { implementation: "unimplemented", repertoire: [] },
+      evidence: { status: "unimplemented", produces: [] },
+      lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
+      health: {
+        implementation: "foundation",
+        injuryAxis: null,
+        incapacitation: false,
+        causalDeath: false,
+        recovery: false,
+      },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      inventory: { implementation: "unimplemented", acceptsCustody: false },
+      about: { learnedFields: [] },
+    });
+    expect(module?.habitat.placementInputs).toContain("domestic-animal-anchor");
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);
+    expect(Object.isFrozen(readiness.evidenceOwnerIds)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("covers chicken interactions by shared broad class and capability invariants", () => {
+    const module = livingSpeciesModule("domestic-chicken");
+    expect(module).not.toBeNull();
+    expect(module?.interactions.targets.map(({ targetClass }) => targetClass))
+      .toEqual(LIVING_SPECIES_INTERACTION_TARGET_CLASSES);
+
+    const availableTargets = module?.interactions.targets.filter(({ policy }) => (
+      policy === "available"
+    )) ?? [];
+    expect(availableTargets.map(({ targetClass }) => targetClass)).toEqual([
+      "dog",
+      "food",
+      "human",
+      "predator",
+      "same-species",
+    ]);
+    expect(module?.interactions.targets.every(({ policy }) => (
+      policy === "available" || policy === "intentional-no-response"
+    ))).toBe(true);
+    expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+      verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+    ))).toBe(false);
+    expect(module?.interactions.targets.find(({ targetClass }) => targetClass === "food"))
+      .toMatchObject({
+        policy: "available",
+        verbs: ["forage"],
+        escalationConstraints: expect.arrayContaining([
+          "direct-confirmation",
+          "physical-resource-conservation",
+        ]),
+      });
+    expect(module?.interactions.targets.find(({ targetClass }) => (
+      targetClass === "same-species"
+    ))).toMatchObject({
+      policy: "available",
+      verbs: ["alarm", "coordinate"],
+      escalationConstraints: expect.arrayContaining([
+        "direct-perception-required",
+        "shared-group-required",
+      ]),
+    });
+
+    const behaviorOwners = [
+      module?.activity.ownerId,
+      module?.cognition.ownerId,
+      module?.interactions.ownerId,
+      module?.population.ownerId,
+    ];
+    expect(behaviorOwners).toEqual([
+      "game:core-wildlife-actor:v1",
+      "game:core-wildlife-actor:v1",
+      "game:core-wildlife-actor:v1",
+      "game:core-wildlife-actor:v1",
+    ]);
+    expect(module?.social.ownerId).toBe("game:core-ecology-groups:v1");
+    expect(module?.interactions.ownerId).not.toMatch(/chicken/iu);
   });
 
   it("keeps mortality, carcasses, living cover, and circadian schedules explicit future work", () => {

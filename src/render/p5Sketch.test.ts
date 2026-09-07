@@ -250,6 +250,7 @@ const wildlifeView = (
     "northern-harrier": "Northern harrier",
     "snowy-egret": "Snowy egret",
     "american-black-duck": "American black duck",
+    "domestic-chicken": "Domestic chicken",
     "north-american-river-otter": "North American river otter",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
@@ -263,6 +264,7 @@ const wildlifeView = (
     "northern-harrier": "HARRIER-",
     "snowy-egret": "EGRET-",
     "american-black-duck": "DUCK-",
+    "domestic-chicken": "CHICKEN-",
     "north-american-river-otter": "OTTER-",
   };
   return {
@@ -1267,6 +1269,49 @@ describe("Chart Wave-B wildlife presentation", () => {
     renderer.destroy();
   });
 
+  it("preserves a static domestic-chicken forage posture under reduced motion", () => {
+    let now = 120;
+    vi.stubGlobal("performance", { now: () => now });
+    p5Harness.reducedMotion = true;
+    const base = view("chart-domestic-chicken-reduced-posture", { x: 12, y: 12 });
+    let current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [wildlifeView("domestic-chicken", { behavior: "forage" })],
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+    const triangle = p5Harness.instance?.triangle as ReturnType<typeof vi.fn>;
+    const foraging = triangle.mock.calls.map((call) => [...call]);
+
+    triangle.mockClear();
+    now = 2_120;
+    draw();
+    expect(triangle.mock.calls).toEqual(foraging);
+
+    triangle.mockClear();
+    current = {
+      ...current,
+      wildlife: [wildlifeView("domestic-chicken", { behavior: "watch" })],
+    };
+    draw();
+    expect(triangle.mock.calls).not.toEqual(foraging);
+    renderer.destroy();
+  });
+
   it("draws direct cat pawprints without inventing a selectable cat actor", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("chart-cat-rain-evidence", { x: 12, y: 12 });
@@ -1750,6 +1795,7 @@ describe("Chart Wave-B wildlife presentation", () => {
   it.each([
     ["marsh-rabbit", "RABBIT-", "#816b52", "triangle"],
     ["marsh-fox", "FOX-", "#9d5136", "bezier"],
+    ["domestic-chicken", "CHICKEN-", "#a66a3f", "triangle"],
   ] as const)("draws and touch-selects the color-independent %s form with reduced motion", (
     species,
     prefix,
@@ -1760,7 +1806,11 @@ describe("Chart Wave-B wildlife presentation", () => {
     p5Harness.reducedMotion = true;
     const base = view(`chart-${species}`, { x: 12, y: 12 });
     const actor = wildlifeView(species, {
-      behavior: species === "marsh-rabbit" ? "flee" : "pursue",
+      behavior: species === "marsh-rabbit"
+        ? "flee"
+        : species === "marsh-fox"
+          ? "pursue"
+          : "forage",
       selected: true,
     });
     const current: TideweftView = {

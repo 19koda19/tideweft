@@ -359,6 +359,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["northern-harrier", "NORTHERN HARRIER", "Northern harrier"],
     ["snowy-egret", "SNOWY EGRET", "Snowy egret"],
     ["american-black-duck", "AMERICAN BLACK DUCK", "American black duck"],
+    ["domestic-chicken", "DOMESTIC CHICKEN", "Domestic chicken"],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -390,6 +391,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
   it.each([
     ["marsh-rabbit", "SMALL ANIMAL", "Unidentified small animal", 60],
     ["marsh-fox", "UNKNOWN CANID", "Unidentified canid", 60],
+    ["domestic-chicken", "UNKNOWN BIRD", "Unidentified bird", 80],
     [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",
@@ -417,6 +419,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["marsh-fox", "Lean, low-tailed canid"],
     ["snowy-egret", "Slender, long-legged wader"],
     ["american-black-duck", "Broad-bodied dabbling duck"],
+    ["domestic-chicken", "Compact ground bird with comb and upright tail"],
     ["north-american-river-otter", "Long-bodied, low-slung swimmer"],
   ] as const)("shows only directly observable close-range %s facts", (species, form) => {
     const actor = wildlife(species);
@@ -432,7 +435,9 @@ describe("knowledge-honest wildlife ABOUT", () => {
               ? "Snowy egret"
               : species === "american-black-duck"
                 ? "American black duck"
-                : "North American river otter",
+                : species === "domestic-chicken"
+                  ? "Domestic chicken"
+                  : "North American river otter",
       },
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },
@@ -442,6 +447,42 @@ describe("knowledge-honest wildlife ABOUT", () => {
     expect(selected?.about.identityLine).not.toContain(actor.identity.stableId);
     expect(selected?.about.known).toEqual([]);
     expect(hasCoherentLivingActorInspection(selected!)).toBe(true);
+  });
+
+  it("shows a domestic chicken as one observed bird without inventing ownership or needs", () => {
+    const chicken = wildlife("domestic-chicken");
+    const visible = observation(chicken);
+    const quick = projectWildlifeQuickInspect(chicken, visible);
+    const about = projectWildlifeAbout(chicken, visible);
+
+    expect(quick).toMatchObject({
+      species: "domestic-chicken",
+      heading: "DOMESTIC CHICKEN",
+      summary: "Watching",
+    });
+    expect(about).toMatchObject({
+      species: "domestic-chicken",
+      heading: "DOMESTIC CHICKEN",
+      identity: "Domestic chicken",
+      knowledge: "Recognized",
+      known: [],
+    });
+    expect(about?.observed).toEqual(expect.arrayContaining([
+      { label: "Species", value: "Domestic chicken" },
+      { label: "Behavior", value: "Watching" },
+      { label: "Form", value: "Compact ground bird with comb and upright tail" },
+      { label: "Appearance", value: expect.any(String) },
+      { label: "Life stage", value: expect.any(String) },
+    ]));
+    const observedLabels = about?.observed.map(({ label }) => label) ?? [];
+    for (const hiddenLabel of ["Owner", "Sex", "Hunger", "Target"]) {
+      expect(observedLabels).not.toContain(hiddenLabel);
+    }
+    expect(JSON.stringify({ quick, about }))
+      .not.toMatch(/owner|flock|food target|hunger|settlement|mortality|carcass/iu);
+    const groupedAbout = projectWildlifeAbout(chicken, observation(chicken, 4, 2));
+    expect(groupedAbout?.identity).toBe("Domestic chicken");
+    expect(groupedAbout?.observed).toContainEqual({ label: "Visible group", value: "About 2" });
   });
 
   it.each([

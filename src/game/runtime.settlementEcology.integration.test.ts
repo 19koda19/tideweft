@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
+import {
+  deserializeCoreEcologyAggregatePatch,
+  serializeCoreEcologyAggregatePatch,
+} from "./coreEcology";
+import {
+  CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES,
+  CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
+} from "./coreEcologyHabitat";
 import type { CoreEcologySettlementShadowsStimulusFrame } from "./coreEcologySmallWorld";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
@@ -9,8 +18,29 @@ import {
   deserializeSettlementEcologyState,
   serializeSettlementEcologyState,
 } from "./settlementEcology";
+import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 
-const settlementShadowsHarness = vi.hoisted(() => ({ exposeOnlyPhysicalFood: false }));
+const settlementShadowsHarness = vi.hoisted(() => ({
+  excludePhysicalFood: false,
+  exposeOnlyPhysicalFood: false,
+}));
+const runtimeEcologyHarness = vi.hoisted(() => ({
+  disableDomesticFoodInvestigation: false,
+}));
+
+vi.mock("./coreEcologySpeciesRuntimePolicy", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./coreEcologySpeciesRuntimePolicy")>();
+  return {
+    ...actual,
+    coreEcologySpeciesHasRuntimeCapability: (
+      ...args: Parameters<typeof actual.coreEcologySpeciesHasRuntimeCapability>
+    ) => runtimeEcologyHarness.disableDomesticFoodInvestigation
+        && args[0] === "domestic-chicken"
+        && args[1] === "food-investigation"
+      ? false
+      : actual.coreEcologySpeciesHasRuntimeCapability(...args),
+  };
+});
 
 vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./coreEcologySmallWorld")>();
@@ -22,13 +52,21 @@ vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
     stepCoreEcologySettlementShadows: (
       ...args: Parameters<typeof actual.stepCoreEcologySettlementShadows>
     ) => {
-      if (!settlementShadowsHarness.exposeOnlyPhysicalFood || args[2] === undefined) {
+      if (
+        !settlementShadowsHarness.exposeOnlyPhysicalFood
+        && !settlementShadowsHarness.excludePhysicalFood
+        || args[2] === undefined
+      ) {
         return actual.stepCoreEcologySettlementShadows(...args);
       }
       const frame = args[2] as CoreEcologySettlementShadowsStimulusFrame;
       return actual.stepCoreEcologySettlementShadows(args[0], args[1], {
         ...frame,
-        stimuli: frame.stimuli.filter(({ sourceKind }) => sourceKind === "exposed-food"),
+        stimuli: frame.stimuli.filter(({ sourceKind }) => (
+          settlementShadowsHarness.exposeOnlyPhysicalFood
+            ? sourceKind === "exposed-food"
+            : sourceKind !== "exposed-food"
+        )),
       });
     },
   };
@@ -84,18 +122,25 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  settlementShadowsHarness.excludePhysicalFood = false;
   settlementShadowsHarness.exposeOnlyPhysicalFood = false;
+  runtimeEcologyHarness.disableDomesticFoodInvestigation = false;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
+function advancePlayerSteps(
+  runtime: TideweftRuntime,
+  count: number,
+  afterFrame?: () => void,
+): void {
   runtime.start();
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
     if (!callback) throw new Error("runtime did not schedule its next frame");
     scheduledFrame = undefined;
     callback(nextFrameTime);
+    afterFrame?.();
     nextFrameTime += 100;
   }
   runtime.stop();
@@ -133,6 +178,194 @@ function moveBeyondStoreDetailVisibility(runtime: TideweftRuntime): boolean {
   return false;
 }
 
+const PRIOR_SETTLEMENT_ECOLOGY_FIELDS = [
+  "carrier",
+  "closure",
+  "identity",
+  "keeperKnowledge",
+  "lastClosureTransactionId",
+  "lastResolvedCauseEventId",
+  "lastResolvedCauseEventTick",
+  "lastResolvedLossOrdinal",
+  "lastResolvedTransactionId",
+  "pendingLoss",
+] as const;
+
+function savedEnvelope(repository: MemoryRepository): Record<string, unknown> {
+  return JSON.parse(repository.snapshot().worldJson) as Record<string, unknown>;
+}
+
+function withPlayerFacing(record: SaveRecord, facingMilliRadians: number): SaveRecord {
+  const current = JSON.parse(record.worldJson) as Record<string, unknown>;
+  const { integrity: _integrity, ...currentFields } = current;
+  if (
+    typeof current.player !== "object"
+    || current.player === null
+    || Array.isArray(current.player)
+  ) throw new Error("runtime fixture omitted its player state");
+  const facedBase = {
+    ...currentFields,
+    player: {
+      ...current.player,
+      facingMilliRadians,
+    },
+  };
+  return {
+    ...record,
+    worldJson: JSON.stringify({
+      ...facedBase,
+      integrity: gameSaveEnvelopeIntegrity(facedBase),
+    }),
+  };
+}
+
+function requireCoreEcology(encoded: unknown) {
+  const state = deserializeCoreEcologyAggregatePatch(encoded);
+  if (state === null) throw new Error("runtime fixture omitted canonical core ecology");
+  return state;
+}
+
+function storedFoodQuantity(
+  state: ReturnType<typeof deserializeSettlementEcologyState>,
+): number {
+  const lot = state.carrier.lots.find(({ id }) => id === state.identity.foodLotId);
+  return lot?.payload.kind === "provision" ? lot.payload.quantity : 0;
+}
+
+function downgradeSettlementEcologyToV1(encoded: unknown): string {
+  if (typeof encoded !== "string") {
+    throw new Error("current fixture omitted settlement ecology");
+  }
+  const prior = JSON.parse(encoded) as Record<string, unknown>;
+  for (const field of [
+    "domesticCustody",
+    "lastResolvedDomesticFoodUseCauseEventId",
+    "lastResolvedDomesticFoodUseCauseEventTick",
+    "lastResolvedDomesticFoodUseMemberActorId",
+    "lastResolvedDomesticFoodUseOrdinal",
+    "lastResolvedDomesticFoodUseTransactionId",
+    "pendingDomesticFoodUse",
+  ]) delete prior[field];
+  if (typeof prior.revision !== "number" || prior.revision < 1) {
+    throw new Error("current settlement fixture omitted its domestic revision");
+  }
+  prior.revision -= 1;
+  prior.version = 1;
+  return JSON.stringify(prior);
+}
+
+function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
+  const current = requireCoreEcology(encoded);
+  if (
+    current.derivation.kind !== "habitat-v8"
+    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
+  ) throw new Error("current fixture did not use the domestic-yard habitat");
+  const { domesticAnchor: _domesticAnchor, ...habitatFields } = current.derivation.habitat;
+  const populations = habitatFields.populations.filter(({ species }) => (
+    species !== "domestic-chicken"
+  ));
+  return serializeCoreEcologyAggregatePatch({
+    ...current,
+    derivation: {
+      kind: current.derivation.kind === "habitat-v8"
+        ? "habitat-v7"
+        : "legacy-fixed-v1-with-habitat-v7",
+      habitat: {
+        ...habitatFields,
+        generationVersion: CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
+        maximumAllocationBudget: CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
+        populations,
+        speciesEvaluations:
+          habitatFields.evaluatedTiles * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length,
+      },
+    },
+    groups: {
+      ...current.groups,
+      groups: current.groups.groups.filter(({ identity }) => (
+        identity.species !== "domestic-chicken"
+      )),
+    },
+    populations: current.populations.filter(({ species }) => (
+      species !== "domestic-chicken"
+    )),
+  });
+}
+
+function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
+  const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
+  if (current.version !== 17) throw new Error("fixture is not a current save");
+  const { integrity: _integrity, ...currentFields } = current;
+  const priorBase = {
+    ...currentFields,
+    version: 16,
+    coreEcology: downgradeCoreEcologyToTidalWeb(current.coreEcology),
+    settlementEcology: downgradeSettlementEcologyToV1(current.settlementEcology),
+  };
+  return {
+    ...currentRecord,
+    payloadVersion: 16,
+    worldJson: JSON.stringify({
+      ...priorBase,
+      integrity: gameSaveEnvelopeIntegrity(priorBase),
+    }),
+  };
+}
+
+async function advanceUntilDomesticFoodUse(
+  runtime: TideweftRuntime,
+  repository: MemoryRepository,
+  maximumWorldTicks = 64,
+): Promise<Readonly<{
+  envelope: Record<string, unknown>;
+  state: ReturnType<typeof deserializeSettlementEcologyState>;
+  worldTicks: number;
+  announcement: string | undefined;
+}>> {
+  let lastEnvelope: Record<string, unknown> | undefined;
+  let witnessedFoodUseAnnouncement: string | undefined;
+  for (let worldTicks = 1; worldTicks <= maximumWorldTicks; worldTicks += 1) {
+    advancePlayerSteps(runtime, 10, () => {
+      const message = runtime.getUIView().announcement?.message;
+      if (message?.includes("eats one produce unit from the open store")) {
+        witnessedFoodUseAnnouncement = message;
+      }
+    });
+    await runtime.save();
+    const envelope = savedEnvelope(repository);
+    lastEnvelope = envelope;
+    const state = deserializeSettlementEcologyState(envelope.settlementEcology);
+    if (state.lastResolvedDomesticFoodUseOrdinal > 0) {
+      return {
+        envelope,
+        state,
+        worldTicks,
+        announcement: witnessedFoodUseAnnouncement
+          ?? runtime.getUIView().announcement?.message,
+      };
+    }
+  }
+  const store = lastEnvelope === undefined
+    ? undefined
+    : deserializeSettlementEcologyState(lastEnvelope.settlementEcology);
+  const core = lastEnvelope === undefined ? undefined : requireCoreEcology(lastEnvelope.coreEcology);
+  throw new Error(`domestic chicken did not reach the open store: ${JSON.stringify({
+    store: store === undefined ? undefined : {
+      closure: store.closure,
+      position: store.identity.position,
+      custody: store.domesticCustody?.memberActorIds,
+    },
+    chickens: core?.populations.find(({ species }) => species === "domestic-chicken")?.members
+      .map(({ actor, materialization }) => ({
+        id: actor.identity.stableId,
+        materialization,
+        position: actor.address.position,
+        hunger: actor.needs.hunger,
+        intent: actor.intent,
+        beliefs: actor.perception.beliefs,
+      })),
+  })}`);
+}
+
 describe("runtime settlement ecology integration", () => {
   it("projects and secures one directly witnessed physical store through the keeper action", async () => {
     const repository = new MemoryRepository();
@@ -166,8 +399,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(16);
-    expect(envelope.version).toBe(16);
+    expect(record.payloadVersion).toBe(17);
+    expect(envelope.version).toBe(17);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "coreEcology",
@@ -230,9 +463,9 @@ describe("runtime settlement ecology integration", () => {
     source.destroy();
 
     const currentRecord = sourceRepository.snapshot();
-    const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-    const currentStore = current.settlementEcology;
-    const controlRepository = new MemoryRepository(currentRecord);
+    const storehouseRecord = asStorehouseV16Record(currentRecord);
+    const storehouse = JSON.parse(storehouseRecord.worldJson) as Record<string, unknown>;
+    const controlRepository = new MemoryRepository(storehouseRecord);
     const control = await createTideweftRuntime(controlRepository);
     await control.save();
     control.destroy();
@@ -243,10 +476,10 @@ describe("runtime settlement ecology integration", () => {
       integrity: _currentIntegrity,
       settlementEcology: _futureRoot,
       ...v15Fields
-    } = current;
+    } = storehouse;
     const v15Base = { ...v15Fields, version: 15 };
     const v15Record: SaveRecord = {
-      ...currentRecord,
+      ...storehouseRecord,
       payloadVersion: 15,
       worldJson: JSON.stringify({
         ...v15Base,
@@ -260,9 +493,9 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(16);
-    expect(migratedEnvelope.version).toBe(16);
-    expect(migratedEnvelope.settlementEcology).toBe(currentStore);
+    expect(migratedRecord.payloadVersion).toBe(17);
+    expect(migratedEnvelope.version).toBe(17);
+    expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
       "player",
@@ -282,9 +515,9 @@ describe("runtime settlement ecology integration", () => {
     }
     migrated.destroy();
 
-    const illegalV15Base = { ...current, version: 15 };
+    const illegalV15Base = { ...storehouse, version: 15 };
     const illegalRepository = new MemoryRepository({
-      ...currentRecord,
+      ...storehouseRecord,
       payloadVersion: 15,
       worldJson: JSON.stringify({
         ...illegalV15Base,
@@ -296,8 +529,284 @@ describe("runtime settlement ecology integration", () => {
     quarantined.destroy();
   });
 
+  it("migrates an exact v16 store and appends authenticated domestic custody once", async () => {
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world",
+      seed: "domestic custody v16 migration",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    expect(source.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
+    source.dispatchUI({ type: "interact" });
+    await source.save();
+    source.destroy();
+
+    const v16Record = asStorehouseV16Record(sourceRepository.snapshot());
+    const v16Envelope = JSON.parse(v16Record.worldJson) as Record<string, unknown>;
+    if (typeof v16Envelope.settlementEcology !== "string") {
+      throw new Error("v16 fixture omitted its storehouse state");
+    }
+    const priorStore = JSON.parse(v16Envelope.settlementEcology) as Record<string, unknown>;
+    const priorCore = requireCoreEcology(v16Envelope.coreEcology);
+    expect(v16Record.payloadVersion).toBe(16);
+    expect(v16Envelope.version).toBe(16);
+    expect(priorStore.version).toBe(1);
+    expect(Object.hasOwn(priorStore, "domesticCustody")).toBe(false);
+    expect(priorCore.populations.some(({ species }) => species === "domestic-chicken"))
+      .toBe(false);
+    expect(priorCore.groups.groups.some(({ identity }) => (
+      identity.species === "domestic-chicken"
+    ))).toBe(false);
+
+    const migratedRepository = new MemoryRepository(v16Record);
+    const migrated = await createTideweftRuntime(migratedRepository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const migratedRecord = migratedRepository.snapshot();
+    const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
+    const migratedStore = deserializeSettlementEcologyState(
+      migratedEnvelope.settlementEcology,
+    );
+    const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
+    const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
+    expect(migratedRecord.payloadVersion).toBe(17);
+    expect(migratedEnvelope.version).toBe(17);
+    expect(migratedStore.version).toBe(2);
+    for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
+      expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
+    }
+    expect(migratedStore.revision).toBe((priorStore.revision as number) + 1);
+    expect(migratedStore.identity).toEqual(priorStore.identity);
+    expect(migratedStore.carrier).toEqual(priorStore.carrier);
+    expect(migratedStore.closure).toBe("secured");
+    expect(migratedStore.keeperKnowledge).toHaveLength(1);
+
+    const chickenPopulations = migratedCore.populations.filter(({ species }) => (
+      species === "domestic-chicken"
+    ));
+    const chickenGroups = migratedCore.groups.groups.filter(({ identity }) => (
+      identity.species === "domestic-chicken"
+    ));
+    expect(chickenPopulations).toHaveLength(1);
+    expect(chickenGroups).toHaveLength(1);
+    const chickenPopulation = chickenPopulations[0];
+    const chickenGroup = chickenGroups[0];
+    const custody = migratedStore.domesticCustody;
+    if (
+      chickenPopulation === undefined
+      || chickenGroup === undefined
+      || custody === null
+      || (
+        migratedCore.derivation.kind !== "habitat-v8"
+        && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
+      )
+    ) throw new Error("v16 migration omitted its authenticated domestic append");
+    expect(custody).toMatchObject({
+      custodyOrdinal: 0,
+      owner: { kind: "settlement", id: migratedStore.identity.settlementId },
+      caretakerActorId: migratedStore.identity.keeperActorId,
+      species: "domestic-chicken",
+      memberGroupId: chickenGroup.identity.stableId,
+      homePosition: migratedCore.derivation.habitat.domesticAnchor.position,
+      homeRadiusUnits:
+        migratedCore.derivation.habitat.domesticAnchor.radiusTiles
+          * WORLD_POSITION_UNITS_PER_TILE,
+    });
+    expect(custody.memberActorIds).toEqual(chickenPopulation.members
+      .map(({ actor }) => actor.identity.stableId)
+      .sort());
+    expect(migratedCore.populations.filter(({ species }) => (
+      species !== "domestic-chicken"
+    ))).toEqual(priorCore.populations);
+    expect(migratedCore.groups.groups.filter(({ identity }) => (
+      identity.species !== "domestic-chicken"
+    ))).toEqual(priorCore.groups.groups);
+    expect(migratedCore.aggregatePopulations).toEqual(priorCore.aggregatePopulations);
+    if (
+      priorCore.derivation.kind !== "habitat-v7"
+      && priorCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
+    ) throw new Error("v16 fixture lost its tidal-web derivation");
+    expect(migratedCore.derivation.habitat.populations.slice(
+      0,
+      priorCore.derivation.habitat.populations.length,
+    )).toEqual(priorCore.derivation.habitat.populations);
+    expect(migratedCore.derivation.habitat.tidalAnchors)
+      .toEqual(priorCore.derivation.habitat.tidalAnchors);
+    for (const field of [
+      "world",
+      "player",
+      "fieldResources",
+      "traversalFeedback",
+      "physicalCargo",
+      "regionalTravel",
+      "promiseJourney",
+      "perceptionCarry",
+      "bio0Ecology",
+      "porterResponse",
+      "livingActorPlayerChoice",
+    ]) {
+      expect(migratedEnvelope[field], field).toEqual(v16Envelope[field]);
+    }
+
+    const committedCore = migratedEnvelope.coreEcology;
+    const committedStore = migratedEnvelope.settlementEcology;
+    migrated.destroy();
+    const reloaded = await createTideweftRuntime(migratedRepository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    await reloaded.save();
+    const replayEnvelope = savedEnvelope(migratedRepository);
+    expect(replayEnvelope.coreEcology).toBe(committedCore);
+    expect(replayEnvelope.settlementEcology).toBe(committedStore);
+    const replayCore = requireCoreEcology(replayEnvelope.coreEcology);
+    const replayStore = deserializeSettlementEcologyState(replayEnvelope.settlementEcology);
+    expect(replayCore.populations.filter(({ species }) => (
+      species === "domestic-chicken"
+    ))).toHaveLength(1);
+    expect(replayCore.groups.groups.filter(({ identity }) => (
+      identity.species === "domestic-chicken"
+    ))).toHaveLength(1);
+    expect(replayStore.domesticCustody).toEqual(custody);
+    reloaded.destroy();
+  });
+
+  it("lets a witnessed domestic chicken perceive and consume one open-store unit while a secured store stays sealed", async () => {
+    settlementShadowsHarness.excludePhysicalFood = true;
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world",
+      seed: "domestic chicken shared store claim",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await source.save();
+    // The flock approaches from the west in this deterministic fixture. Face
+    // the ordinary player perception cone toward the yard without moving the
+    // player, forcing the narration to earn direct event-time sight.
+    const initialRecord = withPlayerFacing(sourceRepository.snapshot(), -3_142);
+    const initialEnvelope = JSON.parse(initialRecord.worldJson) as Record<string, unknown>;
+    const initialStore = deserializeSettlementEcologyState(initialEnvelope.settlementEcology);
+    const initialCore = requireCoreEcology(initialEnvelope.coreEcology);
+    const initialCustody = initialStore.domesticCustody;
+    if (initialCustody === null) throw new Error("runtime omitted domestic custody");
+    expect(initialStore.closure).toBe("open");
+    expect(initialStore.lastResolvedDomesticFoodUseOrdinal).toBe(0);
+    expect(storedFoodQuantity(initialStore)).toBe(8);
+    const initialChickenIds = initialCore.populations
+      .filter(({ species }) => species === "domestic-chicken")
+      .flatMap(({ members }) => members)
+      .map(({ actor }) => actor.identity.stableId);
+    expect(initialChickenIds).toHaveLength(initialCustody.memberActorIds.length);
+    expect(initialChickenIds.length).toBeGreaterThanOrEqual(2);
+    source.destroy();
+
+    const witnessedRepository = new MemoryRepository(initialRecord);
+    const witnessed = await createTideweftRuntime(witnessedRepository);
+    const witnessedUse = await advanceUntilDomesticFoodUse(
+      witnessed,
+      witnessedRepository,
+    );
+    expect(witnessedUse.state).toMatchObject({
+      closure: "open",
+      lastResolvedLossOrdinal: 0,
+      lastResolvedDomesticFoodUseOrdinal: 1,
+      pendingDomesticFoodUse: null,
+    });
+    expect(storedFoodQuantity(witnessedUse.state)).toBe(7);
+    expect(witnessedUse.state.lastResolvedDomesticFoodUseTransactionId)
+      .toMatch(/^STORE-DOMESTIC-FOOD-USE-/u);
+    expect(witnessedUse.state.lastResolvedDomesticFoodUseCauseEventId).not.toBeNull();
+    expect(witnessedUse.state.lastResolvedDomesticFoodUseCauseEventTick).not.toBeNull();
+    const consumingActorId = witnessedUse.state.lastResolvedDomesticFoodUseMemberActorId;
+    expect(initialCustody.memberActorIds).toContain(consumingActorId);
+    if (consumingActorId === null) throw new Error("domestic food use omitted its actor");
+    const witnessedCore = requireCoreEcology(witnessedUse.envelope.coreEcology);
+    const consumingActor = witnessedCore.populations
+      .flatMap(({ members }) => members)
+      .find(({ actor }) => actor.identity.stableId === consumingActorId)?.actor;
+    if (consumingActor === undefined) {
+      throw new Error("domestic food use actor left its authoritative population");
+    }
+    expect(consumingActor.intent).toMatchObject({
+      kind: "forage",
+      resourceReference: {
+        resourceId: witnessedUse.state.identity.foodLotId,
+        sourceKind: "physical-item",
+        observedAvailableUnits: 8,
+      },
+    });
+    expect(consumingActor.perception.beliefs).toContainEqual(expect.objectContaining({
+      channel: "vision",
+      perceivedClass: "exposed-food",
+      subjectId: witnessedUse.state.identity.foodLotId,
+      identification: "identified",
+    }));
+    expect(consumingActor.memories).toContainEqual(expect.objectContaining({
+      kind: "food",
+      referenceId: witnessedUse.state.identity.foodLotId,
+    }));
+    expect(witnessedUse.announcement).toContain(
+      "eats one produce unit from the open store. The physical stock is reduced.",
+    );
+    witnessed.destroy();
+
+    const securedRepository = new MemoryRepository(withPlayerFacing(initialRecord, 0));
+    const secured = await createTideweftRuntime(securedRepository);
+    expect(secured.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
+    secured.dispatchUI({ type: "interact" });
+    for (let worldTick = 0; worldTick < witnessedUse.worldTicks + 8; worldTick += 1) {
+      advancePlayerSteps(secured, 10);
+    }
+    await secured.save();
+    const securedEnvelope = savedEnvelope(securedRepository);
+    const securedStore = deserializeSettlementEcologyState(securedEnvelope.settlementEcology);
+    const securedCore = requireCoreEcology(securedEnvelope.coreEcology);
+    expect(securedStore.closure).toBe("secured");
+    expect(securedStore.lastResolvedDomesticFoodUseOrdinal).toBe(0);
+    expect(securedStore.lastResolvedLossOrdinal).toBe(0);
+    expect(storedFoodQuantity(securedStore)).toBe(8);
+    expect(secured.getRenderView().settlements.find(({ foodStore }) => (
+      foodStore?.id === securedStore.identity.storeId
+    ))?.foodStore?.closure).toBe("secured");
+    for (const memberActorId of initialCustody.memberActorIds) {
+      const actor = securedCore.populations
+        .flatMap(({ members }) => members)
+        .find(({ actor: candidate }) => candidate.identity.stableId === memberActorId)?.actor;
+      expect(actor?.perception.beliefs.some(({ subjectId }) => (
+        subjectId === securedStore.identity.foodLotId
+      ))).toBe(false);
+    }
+    expect(secured.getUIView().announcement?.message).not.toContain(
+      "eats one produce unit from the open store",
+    );
+    secured.destroy();
+
+    const hiddenRepository = new MemoryRepository(initialRecord);
+    const hidden = await createTideweftRuntime(hiddenRepository);
+    runtimeEcologyHarness.disableDomesticFoodInvestigation = true;
+    expect(moveBeyondStoreDetailVisibility(hidden)).toBe(true);
+    runtimeEcologyHarness.disableDomesticFoodInvestigation = false;
+    await hidden.save();
+    const hiddenBefore = deserializeSettlementEcologyState(
+      savedEnvelope(hiddenRepository).settlementEcology,
+    );
+    expect(hiddenBefore.lastResolvedDomesticFoodUseOrdinal).toBe(0);
+    expect(storedFoodQuantity(hiddenBefore)).toBe(8);
+    const hiddenUse = await advanceUntilDomesticFoodUse(hidden, hiddenRepository);
+    expect(hiddenUse.state.lastResolvedDomesticFoodUseOrdinal).toBe(1);
+    expect(hiddenUse.state.lastResolvedLossOrdinal).toBe(0);
+    expect(storedFoodQuantity(hiddenUse.state)).toBe(7);
+    expect(hiddenUse.announcement).not.toContain(
+      "eats one produce unit from the open store",
+    );
+    hidden.destroy();
+  });
+
   it("consumes exactly one stored unit after the shared rat-attraction event and never on save replay", async () => {
     settlementShadowsHarness.exposeOnlyPhysicalFood = true;
+    runtimeEcologyHarness.disableDomesticFoodInvestigation = true;
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({
@@ -389,6 +898,7 @@ describe("runtime settlement ecology integration", () => {
   });
 
   it("keeps an unwitnessed physical store loss out of the player's announcements", async () => {
+    runtimeEcologyHarness.disableDomesticFoodInvestigation = true;
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({

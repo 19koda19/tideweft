@@ -79,7 +79,12 @@ function disturbance(
 
 describe("core ecology social groups", () => {
   it("admits only actor-backed herds/flocks and fails aggregate schools or solitary species closed", () => {
-    expect(CORE_ECOLOGY_GROUP_SPECIES).toEqual(["deer", "gull", "fish-crow"]);
+    expect(CORE_ECOLOGY_GROUP_SPECIES).toEqual([
+      "deer",
+      "gull",
+      "fish-crow",
+      "domestic-chicken",
+    ]);
     const deer = deerGroup({ memberOrdinals: [7, 2, 5] });
     const reordered = deerGroup({ memberOrdinals: [5, 7, 2] });
     const gull = createCoreEcologyGroup({
@@ -109,6 +114,15 @@ describe("core ecology social groups", () => {
       memberOrdinals: [1, 2, 0],
       anchor: position(64_000, 9_000),
     });
+    const chickens = createCoreEcologyGroup({
+      seed: SEED,
+      species: "domestic-chicken",
+      originRegion: ORIGIN,
+      populationKey: "habitat-v8/domestic-chicken",
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1, 2],
+      anchor: position(36_000, 44_000),
+    });
 
     expect(deer).toEqual(reordered);
     expect(deer.memberOrdinals).toEqual([2, 5, 7]);
@@ -119,6 +133,8 @@ describe("core ecology social groups", () => {
     expect(crow).toEqual(reorderedCrow);
     expect(crow.identity.organization).toBe("flock");
     expect(crow.identity.stableId).toMatch(/^CROW-FLOCK-v1-/u);
+    expect(chickens.identity.organization).toBe("flock");
+    expect(chickens.identity.stableId).toMatch(/^CHICKEN-FLOCK-v1-/u);
     expect(stableCoreEcologyGroupId({
       seed: SEED,
       species: "fish-crow",

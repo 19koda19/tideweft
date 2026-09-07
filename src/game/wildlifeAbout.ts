@@ -163,6 +163,12 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN DUCK",
     representation: "individual",
   },
+  "domestic-chicken": {
+    identifiedName: "Domestic chicken",
+    identifiedHeading: "DOMESTIC CHICKEN",
+    unidentifiedHeading: "UNKNOWN BIRD",
+    representation: "individual",
+  },
   "north-american-river-otter": {
     identifiedName: "North American river otter",
     identifiedHeading: "NORTH AMERICAN RIVER OTTER",

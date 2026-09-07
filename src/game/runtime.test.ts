@@ -80,13 +80,18 @@ import type { PorterResponseState } from "./porterResponse";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
+  serializeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import {
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
+  CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES,
+  CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
+  canonicalizeCoreEcologyTidalWebHabitatAssemblage,
 } from "./coreEcologyHabitat";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
@@ -290,6 +295,92 @@ function resealGameSave(envelope: TestGameSaveEnvelope): void {
   envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
 }
 
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v17/v8 save. */
+function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
+  record: SaveRecord;
+  ecology: CoreEcologyAggregatePatchState;
+}> {
+  const envelope = decodeGameSave(record);
+  const current = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
+  if (
+    envelope.version !== 17
+    || record.payloadVersion !== 17
+    || current === null
+    || (
+      current.derivation.kind !== "habitat-v8"
+      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
+    )
+  ) throw new Error("fixture requires a canonical current domestic-yard save");
+
+  const { domesticAnchor: _domesticAnchor, ...domesticYardHabitat } =
+    current.derivation.habitat;
+  const tidalWebHabitat = canonicalizeCoreEcologyTidalWebHabitatAssemblage({
+    ...domesticYardHabitat,
+    generationVersion: CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
+    speciesEvaluations:
+      domesticYardHabitat.evaluatedTiles * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
+    populations: domesticYardHabitat.populations.slice(
+      0,
+      CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length,
+    ),
+  });
+  if (tidalWebHabitat === null) {
+    throw new Error("Domestic Yard habitat did not retain the exact Tidal Web prefix");
+  }
+  const ecology = canonicalizeCoreEcologyAggregatePatch({
+    ...current,
+    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v8"
+      ? {
+          kind: "legacy-fixed-v1-with-habitat-v7",
+          habitat: tidalWebHabitat,
+        }
+      : {
+          kind: "habitat-v7",
+          habitat: tidalWebHabitat,
+        },
+    groups: {
+      ...current.groups,
+      groups: current.groups.groups.filter(
+        ({ identity }) => identity.species !== "domestic-chicken",
+      ),
+    },
+    populations: current.populations.filter(
+      ({ species }) => species !== "domestic-chicken",
+    ),
+  });
+  if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-23 ecology");
+
+  if (envelope.settlementEcology === undefined) {
+    throw new Error("current fixture omitted its settlement ecology sidecar");
+  }
+  const currentSettlement = JSON.parse(envelope.settlementEcology) as Record<string, unknown>;
+  const {
+    domesticCustody: _domesticCustody,
+    lastResolvedDomesticFoodUseCauseEventId: _domesticCauseEventId,
+    lastResolvedDomesticFoodUseCauseEventTick: _domesticCauseEventTick,
+    lastResolvedDomesticFoodUseMemberActorId: _domesticMemberActorId,
+    lastResolvedDomesticFoodUseOrdinal: _domesticOrdinal,
+    lastResolvedDomesticFoodUseTransactionId: _domesticTransactionId,
+    pendingDomesticFoodUse: _pendingDomesticFoodUse,
+    ...priorSettlement
+  } = currentSettlement;
+
+  envelope.version = 16;
+  envelope.coreEcology = serializeCoreEcologyAggregatePatch(ecology);
+  envelope.settlementEcology = stableStringify({ ...priorSettlement, version: 1 });
+  resealGameSave(envelope);
+  return Object.freeze({
+    ecology,
+    record: {
+      ...record,
+      payloadVersion: 16,
+      updatedAt: Math.min(Number.MAX_SAFE_INTEGER, record.updatedAt + 1),
+      worldJson: JSON.stringify(envelope),
+    },
+  });
+}
+
 function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
@@ -302,7 +393,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
       current.derivation.kind !== "habitat-v7"
       && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
     )
-  ) throw new Error("fixture requires a canonical waterfowl ecology save");
+  ) throw new Error("fixture requires a canonical tidal-web ecology save");
 
   const { tidalAnchors: _tidalAnchors, ...rainChorusHabitat } = current.derivation.habitat;
   const marshEdgeHabitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage({
@@ -349,7 +440,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
         && species !== "atlantic-marsh-fiddler-crab",
     ),
   });
-  if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-16 ecology");
+  if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-11 ecology");
 
   envelope.version = 11;
   envelope.coreEcology = serializePublishedAggregateV3(ecology);
@@ -1450,7 +1541,20 @@ describe("perpetual new worlds", () => {
       sessionShape: "wander",
     });
     await setup.save();
-    const originalRecord = repository.snapshot();
+    const currentRecord = repository.snapshot();
+    const currentEnvelope = decodeGameSave(currentRecord);
+    const currentEcology = deserializeCoreEcologyAggregatePatch(
+      currentEnvelope.coreEcology,
+    );
+    expect(currentEnvelope.version).toBe(17);
+    expect(currentRecord.payloadVersion).toBe(17);
+    expect(currentEcology?.derivation.kind).toBe("habitat-v8");
+    if (currentEcology?.derivation.kind !== "habitat-v8") {
+      throw new Error("fixture did not create current domestic-yard ecology");
+    }
+
+    const alpha16 = domesticYardSaveAsTidalWebV16(currentRecord);
+    const originalRecord = alpha16.record;
     const originalEnvelope = decodeGameSave(originalRecord);
     const originalEcology = deserializeCoreEcologyAggregatePatch(
       originalEnvelope.coreEcology,
@@ -1510,10 +1614,10 @@ describe("perpetual new worlds", () => {
     const migratedEcology = deserializeCoreEcologyAggregatePatch(
       migratedEnvelope.coreEcology,
     );
-    expect(migratedEnvelope.version).toBe(16);
-    expect(migratedRecord.payloadVersion).toBe(16);
-    expect(migratedEcology?.derivation.kind).toBe("habitat-v7");
-    if (migratedEcology?.derivation.kind !== "habitat-v7") {
+    expect(migratedEnvelope.version).toBe(17);
+    expect(migratedRecord.payloadVersion).toBe(17);
+    expect(migratedEcology?.derivation.kind).toBe("habitat-v8");
+    if (migratedEcology?.derivation.kind !== "habitat-v8") {
       throw new Error("v11 migration did not produce canonical current ecology");
     }
 
@@ -1554,7 +1658,7 @@ describe("perpetual new worlds", () => {
     expect(stableStringify(migratedEcology.aggregatePopulations.find(
       ({ species }) => species === "southern-leopard-frog",
     ))).toBe(stableStringify(originalFrogs));
-    expect(migratedEcology.derivation.habitat).toEqual(originalEcology.derivation.habitat);
+    expect(migratedEcology.derivation.habitat).toEqual(currentEcology.derivation.habitat);
     for (const species of [
       "atlantic-silverside",
       "atlantic-marsh-fiddler-crab",
@@ -1897,7 +2001,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(16);
+    expect(prepared.version).toBe(17);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2107,8 +2211,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(16);
-    expect(durableRecord.payloadVersion).toBe(16);
+    expect(durable.version).toBe(17);
+    expect(durableRecord.payloadVersion).toBe(17);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

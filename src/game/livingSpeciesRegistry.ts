@@ -49,6 +49,7 @@ interface LivingSpeciesRegistryInput<Species extends string = string> {
     | "FLOCK"
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
+    | "CHICKEN-FLOCK"
     | null;
   /** Lowercase noun; presentation decides capitalization and knowledge qualifiers. */
   readonly aboutNoun: string;
@@ -204,6 +205,15 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       hearingSensitivity: 900_000,
       scentSensitivity: 840_000,
       scentBaseRangeUnits: 28_000,
+    },
+  },
+  "domestic-chicken": {
+    aboutNoun: "domestic chicken",
+    senses: {
+      visionAcuity: 820_000,
+      hearingSensitivity: 800_000,
+      scentSensitivity: 260_000,
+      scentBaseRangeUnits: 8_000,
     },
   },
 });

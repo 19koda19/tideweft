@@ -52,7 +52,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 16;
+  readonly version: 17;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -145,10 +145,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 16
-    || record.payloadVersion !== 16
+    || envelope.version !== 17
+    || record.payloadVersion !== 17
   ) {
-    throw new Error("fixture did not produce a current v16 regional session save");
+    throw new Error("fixture did not produce a current v17 regional session save");
   }
   return envelope;
 }
@@ -169,7 +169,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 16,
+    payloadVersion: 17,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -375,7 +375,7 @@ function relocateToRidgeAtZeroStability(
   };
 }
 
-async function createV8Fixture(
+async function createCurrentFixture(
   repository: MemoryRepository,
   seed: string,
   acceptPromise: boolean,
@@ -453,9 +453,9 @@ function renderedTileIndex(view: TideweftView): number {
 }
 
 describe("production terrain fall and physical cargo", () => {
-  it("rejects a resealed v8 player snapshot whose regional cartography was left stale", async () => {
+  it("rejects a resealed current player snapshot whose regional cartography was left stale", async () => {
     const repository = new MemoryRepository();
-    await createV8Fixture(repository, "stale regional fall fixture", false);
+    await createCurrentFixture(repository, "stale regional fall fixture", false);
     const stale = structuredClone(decodeCurrent(repository.snapshot()));
     const unseenIndex = stale.player.discovered.findIndex((value) => value !== FIXED_POINT);
     if (unseenIndex < 0) throw new Error("fixture unexpectedly discovered its entire regional window");
@@ -478,7 +478,7 @@ describe("production terrain fall and physical cargo", () => {
 
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {
     const repository = new MemoryRepository();
-    const fixture = await createV8Fixture(
+    const fixture = await createCurrentFixture(
       repository,
       "fall cargo exact test",
       true,
@@ -517,7 +517,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 16,
+      version: 17,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -622,7 +622,7 @@ describe("production terrain fall and physical cargo", () => {
 
   it("applies one terrain fall to an empty porter without inventing player cargo", async () => {
     const repository = new MemoryRepository();
-    const fixture = await createV8Fixture(
+    const fixture = await createCurrentFixture(
       repository,
       "fall cargo exact test",
       false,

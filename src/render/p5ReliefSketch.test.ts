@@ -372,6 +372,7 @@ function wildlifeView(
     "northern-harrier": "Northern harrier",
     "snowy-egret": "Snowy egret",
     "american-black-duck": "American black duck",
+    "domestic-chicken": "Domestic chicken",
     "north-american-river-otter": "North American river otter",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
@@ -385,6 +386,7 @@ function wildlifeView(
     "northern-harrier": "HARRIER-",
     "snowy-egret": "EGRET-",
     "american-black-duck": "DUCK-",
+    "domestic-chicken": "CHICKEN-",
     "north-american-river-otter": "OTTER-",
   };
   return {
@@ -1781,6 +1783,13 @@ describe("Relief wildlife presentation", () => {
           conditionLabels: ["WATCHFUL"],
           selected: true,
         }),
+        wildlifeView("domestic-chicken", {
+          actorId: "CHICKEN-VISIBLE",
+          position: { x: 84, y: 72 },
+          behavior: "forage",
+          conditionLabels: ["WATCHFUL"],
+          selected: true,
+        }),
         wildlifeView("north-american-river-otter", {
           actorId: "OTTER-VISIBLE",
           position: { x: 48, y: 84 },
@@ -1808,10 +1817,11 @@ describe("Relief wildlife presentation", () => {
       "Northern harrier · alert",
       "Snowy egret · watchful",
       "American black duck · watchful",
+      "Domestic chicken · watchful",
       "North American river otter · watchful",
     ]));
     expect(layer?.children.map((child) => child.textContent).join(" "))
-      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE|RABBIT-VISIBLE|FOX-VISIBLE|CROW-VISIBLE|HARRIER-VISIBLE|EGRET-VISIBLE|DUCK-VISIBLE|OTTER-VISIBLE/u);
+      .not.toMatch(/DEER-VISIBLE|GULL-FLOCK|BEAR-VISIBLE|CAT-VISIBLE|RABBIT-VISIBLE|FOX-VISIBLE|CROW-VISIBLE|HARRIER-VISIBLE|EGRET-VISIBLE|DUCK-VISIBLE|CHICKEN-VISIBLE|OTTER-VISIBLE/u);
     for (const color of [
       "#9d744f",
       "#e2e8df",
@@ -1825,6 +1835,8 @@ describe("Relief wildlife presentation", () => {
       "#d3ad4f",
       "#4b382e",
       "#4a5f8f",
+      "#a66a3f",
+      "#b34735",
       "#5b402e",
       "#9b7957",
     ]) {
@@ -1874,6 +1886,46 @@ describe("Relief wildlife presentation", () => {
     )).map((child) => child.textContent) ?? [];
     expect(labels).toContain("American black duck · watchful");
     expect(labels.join(" ")).not.toMatch(/DUCK-INDIVIDUAL|~7 visible|flock/iu);
+    harness.renderer.destroy();
+  });
+
+  it("renders one grounded chicken with a static forage posture under reduced motion", () => {
+    let now = 320;
+    vi.stubGlobal("performance", { now: () => now });
+    p5Harness.reducedMotion = true;
+    const base = view("relief-domestic-chicken", { x: 48, y: 48 });
+    const chicken = wildlifeView("domestic-chicken", {
+      actorId: "CHICKEN-INDIVIDUAL",
+      behavior: "forage",
+      conditionLabels: ["WATCHFUL"],
+      groupSize: 3,
+      selected: true,
+    });
+    const harness = renderHarness({ ...base, wildlife: [chicken] });
+    const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
+    harness.draw();
+
+    for (const color of ["#a66a3f", "#d6b37e", "#34241d", "#b34735", "#d8a84b"]) {
+      expect(p5Harness.materialTrace.some(({ method, args }) => (
+        method === "ambientMaterial" && args[0] === color
+      ))).toBe(true);
+    }
+    expect((harness.instance.cone as ReturnType<typeof vi.fn>).mock.calls.length)
+      .toBeGreaterThanOrEqual(7);
+    expect((harness.instance.box as ReturnType<typeof vi.fn>).mock.calls.length)
+      .toBeGreaterThanOrEqual(4);
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const labels = layer?.children.filter((child) => (
+      child.dataset.tone === "wildlife" && !child.removed
+    )).map((child) => child.textContent) ?? [];
+    expect(labels).toContain("Domestic chicken · watchful");
+    expect(labels.join(" ")).not.toMatch(/CHICKEN-INDIVIDUAL|~3 visible|flock|owner|hunger/iu);
+
+    const firstFrame = translate.mock.calls.map((call) => [...call]);
+    translate.mockClear();
+    now = 2_320;
+    harness.draw();
+    expect(translate.mock.calls).toEqual(firstFrame);
     harness.renderer.destroy();
   });
 
@@ -1941,7 +1993,7 @@ describe("Relief wildlife presentation", () => {
     foxHarness.renderer.destroy();
   });
 
-  it("keeps rabbit and fox geometry static and targetable under reduced motion", () => {
+  it("keeps grounded wildlife geometry static and targetable under reduced motion", () => {
     let now = 120;
     vi.stubGlobal("performance", { now: () => now });
     p5Harness.reducedMotion = true;
@@ -1951,6 +2003,7 @@ describe("Relief wildlife presentation", () => {
       wildlife: [
         wildlifeView("marsh-rabbit", { position: { x: 12, y: 12 }, behavior: "flee" }),
         wildlifeView("marsh-fox", { position: { x: 36, y: 12 }, behavior: "pursue" }),
+        wildlifeView("domestic-chicken", { position: { x: 60, y: 12 }, behavior: "forage" }),
       ],
     });
     const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
@@ -2077,6 +2130,7 @@ describe("Relief wildlife presentation", () => {
       "northern-harrier",
       "snowy-egret",
       "american-black-duck",
+      "domestic-chicken",
       "north-american-river-otter",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
@@ -2090,6 +2144,7 @@ describe("Relief wildlife presentation", () => {
       "northern-harrier": "HARRIER-",
       "snowy-egret": "EGRET-",
       "american-black-duck": "DUCK-",
+      "domestic-chicken": "CHICKEN-",
       "north-american-river-otter": "OTTER-",
     };
 

@@ -22,6 +22,7 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "snowy-egret",
   "american-black-duck",
   "north-american-river-otter",
+  "domestic-chicken",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -96,6 +97,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "EGRET-"
     | "DUCK-"
     | "OTTER-"
+    | "CHICKEN-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -113,6 +115,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "snowy-egret": "EGRET-",
   "american-black-duck": "DUCK-",
   "north-american-river-otter": "OTTER-",
+  "domestic-chicken": "CHICKEN-",
 });
 
 /**
@@ -133,6 +136,7 @@ export interface CoreWildlifeSpeciesMetadata {
     | "FLOCK"
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
+    | "CHICKEN-FLOCK"
     | null;
 }
 
@@ -288,6 +292,16 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     locomotionClass: "amphibious",
     groupOrganization: null,
     groupStableIdNamespace: null,
+  },
+  "domestic-chicken": {
+    species: "domestic-chicken",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: "flock",
+    groupStableIdNamespace: "CHICKEN-FLOCK",
   },
 });
 
@@ -867,6 +881,39 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       vigilance: [520_000, 900_000],
       boldness: [240_000, 820_000],
       sociability: [180_000, 700_000],
+    },
+  },
+  "domestic-chicken": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "domestic-chicken",
+    maximumPatchPopulation: 3,
+    roles: ["alarm-source", "prey", "small-prey", "forager", "omnivore"],
+    foodAffinities: {
+      browse: 680_000,
+      "shore-forage": 420_000,
+      carrion: 0,
+      "exposed-food": 1_000_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 320_000,
+      fleeThreshold: 520_000,
+      retreatThreshold: 440_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["black-feathered", "buff-feathered", "red-brown", "white-speckled"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["bold", "opportunistic"],
+      ["patient", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [580_000, 960_000],
+      boldness: [120_000, 700_000],
+      sociability: [680_000, 980_000],
     },
   },
 });

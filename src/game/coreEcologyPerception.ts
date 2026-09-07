@@ -489,7 +489,9 @@ function canonicalAggregateActivityPerceptionInput(
       && patch.derivation.kind !== "habitat-v6"
       && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
       && patch.derivation.kind !== "habitat-v7"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v7")
+      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
+      && patch.derivation.kind !== "habitat-v8"
+      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v8")
     || frame.tick < patch.updatedAtTick
     || frame.tick - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
   ) return null;

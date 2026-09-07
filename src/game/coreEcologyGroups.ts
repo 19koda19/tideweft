@@ -1453,7 +1453,7 @@ function isCoreWildlifeSpecies(value: unknown): value is CoreWildlifeSpecies {
 
 function groupPolicy(species: CoreWildlifeSpecies): Readonly<{
   organization: CoreEcologyGroupOrganization;
-  stableIdPrefix: "HERD" | "FLOCK" | "CROW-FLOCK";
+  stableIdPrefix: "HERD" | "FLOCK" | "CROW-FLOCK" | "CHICKEN-FLOCK";
 }> | null {
   const policy = coreEcologySpeciesRuntimePolicy(species);
   if (
@@ -1464,6 +1464,7 @@ function groupPolicy(species: CoreWildlifeSpecies): Readonly<{
       policy.groupStableIdNamespace !== "HERD"
       && policy.groupStableIdNamespace !== "FLOCK"
       && policy.groupStableIdNamespace !== "CROW-FLOCK"
+      && policy.groupStableIdNamespace !== "CHICKEN-FLOCK"
     )
     || !policy.capabilities.includes("group-coordination")
   ) return null;

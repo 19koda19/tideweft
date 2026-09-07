@@ -547,7 +547,9 @@ function isTidalHabitatDerivation(
       | "habitat-v6"
       | "legacy-fixed-v1-with-habitat-v6"
       | "habitat-v7"
-      | "legacy-fixed-v1-with-habitat-v7" }
+      | "legacy-fixed-v1-with-habitat-v7"
+      | "habitat-v8"
+      | "legacy-fixed-v1-with-habitat-v8" }
   >;
 }> {
   return patch.derivation.kind === "habitat-v5"
@@ -555,7 +557,9 @@ function isTidalHabitatDerivation(
     || patch.derivation.kind === "habitat-v6"
     || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
     || patch.derivation.kind === "habitat-v7"
-    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v7";
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
+    || patch.derivation.kind === "habitat-v8"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v8";
 }
 
 function samePosition(left: WorldPosition, right: WorldPosition): boolean {

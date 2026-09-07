@@ -31,6 +31,7 @@ export const WAVE_C_TIDAL_TABLE_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_VERSION = 1 as const;
+export const ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -505,6 +506,109 @@ export interface Alpha22TidalConvergenceSourceCandidateReadinessReport {
   readonly fullWaveCReady: false;
   readonly fullDirective041Ready: false;
   readonly excludedClaims: readonly Alpha22TidalConvergenceExcludedClaim[];
+}
+
+export const ALPHA24_DOMESTIC_CHICKEN_SPECIES = [
+  "domestic-chicken",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha24DomesticChickenSpecies =
+  (typeof ALPHA24_DOMESTIC_CHICKEN_SPECIES)[number];
+
+export type Alpha24DomesticChickenBoundedCapability =
+  | "species-profile"
+  | "individual-flock-representation"
+  | "domestic-custody"
+  | "habitat-placement"
+  | "bounded-activity"
+  | "terrestrial-locomotion"
+  | "lawful-perception"
+  | "flock-coordination"
+  | "broad-class-interactions"
+  | "physical-food-conservation"
+  | "save-migration"
+  | "knowledge-honest-presentation"
+  | "bounded-local-continuity"
+  | "shared-invariant-coverage"
+  | "performance-budget"
+  | "owner-coherence"
+  | "excluded-claim-integrity";
+
+export type Alpha24DomesticChickenExcludedClaim =
+  | "sound"
+  | "environmental-evidence"
+  | "harmful-attack"
+  | "injury"
+  | "mortality"
+  | "carcasses"
+  | "live-prey-capture"
+  | "live-prey-consumption"
+  | "eggs"
+  | "nesting"
+  | "reproduction"
+  | "herding-behavior"
+  | "guardian-behavior"
+  | "full-circadian-schedules"
+  | "autonomous-home-return"
+  | "ecological-cross-region-migration"
+  | "worldwide-livestock"
+  | "full-wave-d"
+  | "full-directive-04-1";
+
+export const ALPHA24_DOMESTIC_CHICKEN_EXCLUDED_CLAIMS = [
+  "sound",
+  "environmental-evidence",
+  "harmful-attack",
+  "injury",
+  "mortality",
+  "carcasses",
+  "live-prey-capture",
+  "live-prey-consumption",
+  "eggs",
+  "nesting",
+  "reproduction",
+  "herding-behavior",
+  "guardian-behavior",
+  "full-circadian-schedules",
+  "autonomous-home-return",
+  "ecological-cross-region-migration",
+  "worldwide-livestock",
+  "full-wave-d",
+  "full-directive-04-1",
+] as const satisfies readonly Alpha24DomesticChickenExcludedClaim[];
+
+export interface Alpha24DomesticChickenBoundedReadinessReport {
+  readonly version: typeof ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS_VERSION;
+  readonly unitId: "alpha24-domestic-chicken";
+  readonly scope: "one-bounded-settlement-flock";
+  readonly speciesIds: readonly Alpha24DomesticChickenSpecies[];
+  readonly evidenceAuthenticated: boolean;
+  readonly speciesProfileReady: boolean;
+  readonly individualFlockRepresentationReady: boolean;
+  readonly domesticCustodyReady: boolean;
+  readonly habitatPlacementReady: boolean;
+  readonly boundedActivityReady: boolean;
+  readonly terrestrialLocomotionReady: boolean;
+  readonly lawfulPerceptionReady: boolean;
+  readonly flockCoordinationReady: boolean;
+  readonly broadClassInteractionsReady: boolean;
+  readonly physicalFoodConservationReady: boolean;
+  readonly saveMigrationReady: boolean;
+  readonly knowledgeHonestPresentationReady: boolean;
+  readonly boundedLocalContinuityReady: boolean;
+  readonly sharedInvariantCoverageReady: boolean;
+  readonly performanceEvidenceReady: boolean;
+  readonly ownerCoherenceReady: boolean;
+  readonly excludedClaimIntegrityReady: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingCapabilities: readonly Alpha24DomesticChickenBoundedCapability[];
+  readonly evidenceOwnerIds: readonly string[];
+  readonly publicationRecordsReady: boolean;
+  readonly exactTestedDeploymentVerified: boolean;
+  readonly published: boolean;
+  readonly fullThirtyCriterionReady: boolean;
+  /** Claims this bounded domestic flock can never authorize. */
+  readonly excludedClaims: readonly Alpha24DomesticChickenExcludedClaim[];
 }
 
 /** The seven deliberately bounded small-world roles shipped across Wave B. */
@@ -1693,6 +1797,164 @@ function riverOtterEvidence(): readonly ClaimTuple[] {
 }
 
 /**
+ * Build-owned evidence for Alpha-24's bounded domestic chicken flock. The
+ * chicken plugs into the shared wildlife actor, flock, perception, habitat,
+ * and physical settlement-store owners; there is deliberately no
+ * chicken-specific AI or pairwise interaction owner. Life history, sound,
+ * evidence, harmful outcomes, schedules, home-return, and worldwide livestock
+ * remain explicit absences.
+ */
+function domesticChickenEvidence(): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  const sharedInvariantOwner = "test:alpha24-domestic-chicken-shared-invariants:v1";
+  return [
+    ["species-profile", A, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["ecological-niche", A, owners(
+      "game:core-ecology-habitat:v8",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-species-catalog:v1",
+      "game:settlement-ecology:v2",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["appearance", A, owners(
+      "game:wildlife-presentation:v1",
+      "sim:core-wildlife-identity:v1",
+    )],
+    ["sound", U, []],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v8",
+      "game:runtime-core-ecology:v1",
+      "game:settlement-ecology:v2",
+      sharedInvariantOwner,
+    )],
+    ["food-web", F, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:living-species-catalog:v1",
+      "game:settlement-ecology:v2",
+      "sim:core-wildlife-identity:v1",
+      sharedInvariantOwner,
+    )],
+    ["perception-senses", F, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:living-actor-senses:v1",
+      "game:runtime-core-ecology:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["locomotion", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:core-wildlife-locomotion-profile:v1",
+      "game:runtime-core-ecology:v1",
+      sharedInvariantOwner,
+    )],
+    ["human-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["dog-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["same-species-interaction", A, owners(
+      "game:core-ecology-groups:v1",
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["other-species-interaction", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      sharedInvariantOwner,
+    )],
+    ["neutral-behavior", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+    )],
+    ["disengagement", A, ["game:core-wildlife-actor:v1"]],
+    ["environmental-evidence", U, []],
+    ["about-disclosure", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v8",
+      "game:core-ecology-groups:v1",
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+      "game:settlement-ecology:v2",
+      sharedInvariantOwner,
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-ecology-groups:v1",
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+      sharedInvariantOwner,
+    )],
+    ["save-load", A, owners(
+      "game:core-ecology:v4",
+      "game:runtime-save:v17",
+      "game:settlement-ecology:v2",
+      sharedInvariantOwner,
+    )],
+    ["seamless-region-crossing", U, []],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v8",
+      "game:core-ecology:v4",
+      "game:runtime-core-ecology:v1",
+      "test:alpha24-domestic-chicken-performance:v1",
+    )],
+    ["accessibility", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+    )],
+    ["mobile-parity", A, owners(
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      sharedInvariantOwner,
+    )],
+    ["player-independent-scenario", A, owners(
+      "game:core-ecology-habitat:v8",
+      "game:core-ecology-groups:v1",
+      "game:core-ecology-perception:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "game:settlement-ecology:v2",
+      sharedInvariantOwner,
+    )],
+    ["fuzz-testing", A, owners(
+      "game:core-ecology-habitat:v8",
+      "game:core-ecology-groups:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:settlement-ecology:v2",
+      "sim:core-wildlife-identity:v1",
+      sharedInvariantOwner,
+    )],
+    ["clone-diversity", A, ["sim:core-wildlife-identity:v1"]],
+    ["tutorial-truth", U, []],
+    ["patch-note-truth", U, []],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -1776,6 +2038,7 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "snowy-egret": tidalTableEvidence("snowy-egret"),
   "american-black-duck": americanBlackDuckEvidence(),
   "north-american-river-otter": riverOtterEvidence(),
+  "domestic-chicken": domesticChickenEvidence(),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -3167,6 +3430,476 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
 
 export const ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_READINESS =
   alpha22TidalConvergenceSourceCandidateReadiness();
+
+/**
+ * Authenticated source witness for Alpha-24's one bounded settlement flock.
+ * The witness follows broad interaction classes and shared runtime
+ * capabilities, so adding another species does not add a species-pair matrix.
+ * Settlement custody owns the home/caretaker relationship and physical store;
+ * it does not become a second chicken cognition, movement, or inventory owner.
+ */
+export function alpha24DomesticChickenBoundedReadiness():
+Alpha24DomesticChickenBoundedReadinessReport {
+  const speciesId = ALPHA24_DOMESTIC_CHICKEN_SPECIES[0];
+  const gate = LIVING_SPECIES_RELEASE_GATES.gates.find((candidate) => (
+    candidate.speciesId === speciesId
+  ));
+  const report = gate === undefined ? null : auditLivingSpeciesReleaseGate(gate);
+  const module = livingSpeciesModule(speciesId);
+  const runtimePolicy = coreEcologySpeciesRuntimePolicy(speciesId);
+  const criterion = (name: LivingSpeciesReleaseCriterion) => (
+    gate?.criteria.find((state) => state.criterion === name)
+  );
+  const active = (name: LivingSpeciesReleaseCriterion): boolean => (
+    criterion(name)?.status === "active"
+  );
+  const hasOwner = (name: LivingSpeciesReleaseCriterion, ownerId: string): boolean => (
+    criterion(name)?.evidenceOwnerIds.includes(ownerId) === true
+  );
+  const ownsRuntimeCapability = (
+    capability: CoreEcologySpeciesRuntimeCapability,
+  ): boolean => runtimePolicy?.capabilities.includes(capability) === true;
+  const evidenceAuthenticated = gate !== undefined
+    && report?.evidenceAuthenticated === true;
+  const sharedInvariantOwner = "test:alpha24-domestic-chicken-shared-invariants:v1";
+  const performanceOwner = "test:alpha24-domestic-chicken-performance:v1";
+
+  const requiredEcologicalClasses = [
+    "alarm-source",
+    "domestic-livestock",
+    "forager",
+    "omnivore",
+    "prey",
+    "small-prey",
+  ] as const;
+  const requiredRuntimeCapabilities = [
+    "actor-address",
+    "food-investigation",
+    "group-coordination",
+    "shared-alarm",
+  ] as const satisfies readonly CoreEcologySpeciesRuntimeCapability[];
+  const speciesProfileReady = module !== null
+    && runtimePolicy !== null
+    && active("species-profile")
+    && active("ecological-niche")
+    && module.profile.implementation === "active"
+    && module.profile.taxonomicClass === "bird"
+    && requiredEcologicalClasses.every((ecologicalClass) => (
+      module.profile.ecologicalClasses.includes(ecologicalClass)
+    ))
+    && runtimePolicy.speciesId === speciesId
+    && runtimePolicy.representation === "individual"
+    && runtimePolicy.locomotionClass === "terrestrial"
+    && runtimePolicy.capabilities.length === requiredRuntimeCapabilities.length
+    && requiredRuntimeCapabilities.every(ownsRuntimeCapability);
+
+  const individualFlockRepresentationReady = module !== null
+    && runtimePolicy !== null
+    && module.identity.implementation === "active"
+    && module.identity.form === "individual"
+    && module.identity.stableIdNamespace === "CHICKEN"
+    && module.population.implementation === "active"
+    && module.population.authoritativeUnit === "hybrid"
+    && module.population.materialization === "mixed"
+    && module.population.maxMaterializedPerRegion === 3
+    && module.population.coarseSimulation
+    && runtimePolicy.actorAddressable
+    && runtimePolicy.identityForm === "individual"
+    && runtimePolicy.maximumMaterializedActors === 3
+    && runtimePolicy.presentationModel === "visible-flock"
+    && runtimePolicy.aggregate === null
+    && runtimePolicy.groupOrganization === "flock"
+    && runtimePolicy.groupStableIdNamespace === "CHICKEN-FLOCK"
+    && module.social.group.status === "active"
+    && module.social.group.stableIdentity
+    && module.social.group.stableIdNamespace === "CHICKEN-FLOCK"
+    && module.social.group.membership;
+
+  const domesticCustodyReady = module !== null
+    && active("ecological-niche")
+    && active("habitat-placement")
+    && active("save-load")
+    && hasOwner("ecological-niche", "game:settlement-ecology:v2")
+    && hasOwner("habitat-placement", "game:settlement-ecology:v2")
+    && hasOwner("save-load", "game:settlement-ecology:v2")
+    && hasOwner("player-independent-scenario", "game:settlement-ecology:v2")
+    && module.habitat.placementInputs.includes("domestic-animal-anchor")
+    && ["settlement-edge", "storehouse-yard"].every((habitatClass) => (
+      module.habitat.habitatClasses.includes(habitatClass)
+    ))
+    // Custody is external social/home authority, not learned animal identity,
+    // a territorial AI, or an inventory silently mirroring the physical store.
+    && !module.social.actorToActorRelationships
+    && module.social.relationshipAxes.length === 0
+    && module.social.territory.model === "none"
+    && module.about.learnedFields.length === 0
+    && module.inventory.implementation === "unimplemented"
+    && !module.inventory.acceptsCustody;
+
+  const habitatPlacementReady = module !== null
+    && active("habitat-placement")
+    && module.habitat.implementation === "active"
+    && module.habitat.ownerId === "game:core-ecology-habitat:v8"
+    && module.habitat.migrationModel === "none"
+    && hasOwner("habitat-placement", "game:runtime-core-ecology:v1")
+    && hasOwner("habitat-placement", sharedInvariantOwner);
+
+  const boundedActivityReady = module !== null
+    && runtimePolicy !== null
+    && active("neutral-behavior")
+    && active("player-independent-scenario")
+    && module.activity.implementation === "active"
+    && module.activity.ownerId === "game:core-wildlife-actor:v1"
+    && module.activity.decisionModel === "individual"
+    && module.activity.offscreenModel === "individual"
+    && module.activity.circadian.status === "unimplemented"
+    && runtimePolicy.activitySignals.length === 1
+    && runtimePolicy.activitySignals[0] === "shared-alarm"
+    && ownsRuntimeCapability("food-investigation")
+    && ownsRuntimeCapability("shared-alarm")
+    && !ownsRuntimeCapability("diurnal-activity");
+
+  const locomotionMedia = module === null
+    ? []
+    : module.locomotion.media.map(({ medium }) => medium);
+  const terrestrialLocomotionReady = module !== null
+    && runtimePolicy !== null
+    && active("locomotion")
+    && module.locomotion.implementation === "active"
+    && module.locomotion.ownerId === "game:core-wildlife-locomotion-profile:v1"
+    && module.locomotion.decisionModel === "individual"
+    && !module.locomotion.crossRegion
+    && locomotionMedia.length === 2
+    && locomotionMedia.includes("land")
+    && locomotionMedia.includes("shallow-water")
+    && module.locomotion.movementVerbs.length === 2
+    && module.locomotion.movementVerbs.includes("forage")
+    && module.locomotion.movementVerbs.includes("walk")
+    && module.locomotion.terrainAffordances.includes("land")
+    && module.locomotion.terrainAffordances.includes("standable-shallow-water")
+    && !ownsRuntimeCapability("aerial-locomotion")
+    && !ownsRuntimeCapability("amphibious-locomotion")
+    && !ownsRuntimeCapability("aquatic-locomotion")
+    && !ownsRuntimeCapability("water-depth-response");
+
+  const lawfulPerceptionReady = module !== null
+    && runtimePolicy !== null
+    && criterion("perception-senses")?.status === "foundation"
+    && hasOwner("perception-senses", "game:core-ecology-perception:v1")
+    && hasOwner("perception-senses", "sim:actor-perception:v2")
+    && module.senses.implementation === "foundation"
+    && module.senses.ownerId === "game:living-actor-senses:v1"
+    && module.cognition.implementation === "active"
+    && module.cognition.ownerId === "game:core-wildlife-actor:v1"
+    && module.cognition.attentionOwnerId === "sim:actor-perception:v2"
+    && module.cognition.knowledgeSources.length === 1
+    && module.cognition.knowledgeSources[0] === "direct-observation"
+    && !module.cognition.inference
+    && ownsRuntimeCapability("actor-address")
+    && ownsRuntimeCapability("food-investigation")
+    && ownsRuntimeCapability("shared-alarm");
+
+  const sameSpeciesTarget = module?.interactions.targets.find(({ targetClass }) => (
+    targetClass === "same-species"
+  ));
+  const flockCoordinationReady = module !== null
+    && runtimePolicy !== null
+    && active("same-species-interaction")
+    && module.social.implementation === "active"
+    && module.social.ownerId === "game:core-ecology-groups:v1"
+    && module.social.group.ownerId === "game:core-ecology-groups:v1"
+    && module.social.group.organizationKinds.length === 1
+    && module.social.group.organizationKinds[0] === "flock"
+    && module.social.group.informationPropagation
+    && module.social.group.separationReunion
+    && module.social.group.splitMerge
+    && module.social.group.sharedMemory
+    && ownsRuntimeCapability("group-coordination")
+    && sameSpeciesTarget?.policy === "available"
+    && sameSpeciesTarget.verbs.length === 2
+    && sameSpeciesTarget.verbs.includes("alarm")
+    && sameSpeciesTarget.verbs.includes("coordinate")
+    && sameSpeciesTarget.escalationConstraints.includes("direct-perception-required")
+    && sameSpeciesTarget.escalationConstraints.includes("shared-group-required");
+
+  const availableTargetClasses = module === null
+    ? []
+    : module.interactions.targets
+      .filter(({ policy }) => policy === "available")
+      .map(({ targetClass }) => targetClass);
+  const expectedAvailableTargetClasses = [
+    "dog",
+    "food",
+    "human",
+    "predator",
+    "same-species",
+  ] as const;
+  const forbiddenInteractionVerbs = new Set(["attack", "capture", "consume", "kill"]);
+  const broadClassInteractionsReady = module !== null
+    && active("human-interaction")
+    && active("dog-interaction")
+    && active("same-species-interaction")
+    && active("other-species-interaction")
+    && module.interactions.targets.length === LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length
+    && module.interactions.targets.every((target, index) => (
+      target.targetClass === LIVING_SPECIES_INTERACTION_TARGET_CLASSES[index]
+      && (target.policy === "available" || target.policy === "intentional-no-response")
+      && target.verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ))
+    && availableTargetClasses.length === expectedAvailableTargetClasses.length
+    && expectedAvailableTargetClasses.every((targetClass, index) => (
+      availableTargetClasses[index] === targetClass
+    ));
+
+  const foodTarget = module?.interactions.targets.find(({ targetClass }) => (
+    targetClass === "food"
+  ));
+  const physicalFoodConservationReady = module !== null
+    && runtimePolicy !== null
+    && criterion("food-web")?.status === "foundation"
+    && hasOwner("food-web", "game:settlement-ecology:v2")
+    && hasOwner("food-web", sharedInvariantOwner)
+    && hasOwner("player-independent-scenario", sharedInvariantOwner)
+    && module.diet.implementation === "foundation"
+    && module.diet.requiresPhysicalResource
+    && module.diet.resources.some(({ resourceClass, role }) => (
+      resourceClass === "exposed-food" && role === "nutrition"
+    ))
+    && ownsRuntimeCapability("food-investigation")
+    && foodTarget?.policy === "available"
+    && foodTarget.verbs.length === 1
+    && foodTarget.verbs[0] === "forage"
+    && foodTarget.escalationConstraints.includes("direct-confirmation")
+    && foodTarget.escalationConstraints.includes("physical-resource-conservation")
+    && module.inventory.implementation === "unimplemented"
+    && module.inventory.model === "none"
+    && !module.inventory.acceptsCustody
+    && !module.inventory.conservationRequired;
+
+  const saveMigrationReady = module !== null
+    && active("save-load")
+    && hasOwner("save-load", "game:core-ecology:v4")
+    && hasOwner("save-load", "game:runtime-save:v17")
+    && hasOwner("save-load", "game:settlement-ecology:v2")
+    && hasOwner("save-load", sharedInvariantOwner)
+    && module.persistence.implementation === "active"
+    && module.persistence.generationMigration === "preserve-materialized-identity";
+
+  const knowledgeHonestPresentationReady = module !== null
+    && runtimePolicy !== null
+    && runtimePolicy.presentationModel === "visible-flock"
+    && module.about.implementation === "active"
+    && module.about.ownerId === "game:wildlife-about:v1"
+    && module.about.directObservationRequired
+    && module.about.learnedFields.length === 0
+    && [
+      "appearance",
+      "about-disclosure",
+      "knowledge-honesty",
+      "accessibility",
+      "mobile-parity",
+    ].every((name) => active(name as LivingSpeciesReleaseCriterion))
+    && hasOwner("mobile-parity", sharedInvariantOwner);
+
+  const boundedLocalContinuityReady = module !== null
+    && active("population-materialization")
+    && active("full-coarse-transition")
+    && active("save-load")
+    && criterion("seamless-region-crossing")?.status === "unimplemented"
+    && module.population.maxMaterializedPerRegion === 3
+    && module.population.coarseSimulation
+    && module.spatial.signedRegions
+    && module.spatial.extremeRegions
+    && module.social.group.stableIdentity
+    && !module.locomotion.crossRegion;
+
+  const sharedInvariantCoverageReady = module !== null
+    && validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG).length === 0
+    && active("fuzz-testing")
+    && hasOwner("fuzz-testing", sharedInvariantOwner)
+    && hasOwner("population-materialization", sharedInvariantOwner)
+    && hasOwner("full-coarse-transition", sharedInvariantOwner)
+    && broadClassInteractionsReady
+    && physicalFoodConservationReady
+    && individualFlockRepresentationReady;
+
+  const performanceEvidenceReady = active("performance-budget")
+    && hasOwner("performance-budget", performanceOwner);
+
+  const ownerCoherent = (status: string, ownerId: string | null): boolean => (
+    status === "unimplemented"
+      ? ownerId === null
+      : (status === "active" || status === "foundation")
+        && typeof ownerId === "string"
+        && ownerId.length > 0
+  );
+  const ownerCoherenceReady = module !== null
+    && [
+      [module.profile.implementation, module.profile.ownerId],
+      [module.morphology.implementation, module.morphology.ownerId],
+      [module.habitat.implementation, module.habitat.ownerId],
+      [module.identity.implementation, module.identity.ownerId],
+      [module.spatial.implementation, module.spatial.ownerId],
+      [module.population.implementation, module.population.ownerId],
+      [module.senses.implementation, module.senses.ownerId],
+      [module.physiology.implementation, module.physiology.ownerId],
+      [module.locomotion.implementation, module.locomotion.ownerId],
+      [module.diet.implementation, module.diet.ownerId],
+      [module.foodWeb.implementation, module.foodWeb.ownerId],
+      [module.lifeHistory.implementation, module.lifeHistory.ownerId],
+      [module.health.implementation, module.health.ownerId],
+      [module.activity.implementation, module.activity.ownerId],
+      [module.social.implementation, module.social.ownerId],
+      [module.social.group.status, module.social.group.ownerId],
+      [module.sound.implementation, module.sound.ownerId],
+      [module.cognition.implementation, module.cognition.ownerId],
+      [module.evidence.status, module.evidence.ownerId],
+      [module.aftermath.implementation, module.aftermath.ownerId],
+      [module.interactions.implementation, module.interactions.ownerId],
+      [module.inventory.implementation, module.inventory.ownerId],
+      [module.about.implementation, module.about.ownerId],
+      [module.persistence.implementation, module.persistence.ownerId],
+      [module.activity.circadian.status, module.activity.circadian.ownerId],
+      [module.environment.fire.status, module.environment.fire.ownerId],
+      [module.environment.livingCover.status, module.environment.livingCover.ownerId],
+      [module.environment.weather.status, module.environment.weather.ownerId],
+      [module.environment.water.status, module.environment.water.ownerId],
+      [module.environment.possibility.status, module.environment.possibility.ownerId],
+      [module.environment.terrain.status, module.environment.terrain.ownerId],
+      [module.environment.tide.status, module.environment.tide.ownerId],
+    ].every(([status, ownerId]) => ownerCoherent(status as string, ownerId as string | null))
+    && module.profile.ownerId === "sim:core-wildlife-identity:v1"
+    && module.habitat.ownerId === "game:core-ecology-habitat:v8"
+    && module.population.ownerId === "game:core-wildlife-actor:v1"
+    && module.locomotion.ownerId === "game:core-wildlife-locomotion-profile:v1"
+    && module.social.ownerId === "game:core-ecology-groups:v1"
+    && module.activity.ownerId === "game:core-wildlife-actor:v1"
+    && module.cognition.ownerId === "game:core-wildlife-actor:v1"
+    && module.interactions.ownerId === "game:core-wildlife-actor:v1"
+    && module.persistence.ownerId === "game:core-wildlife-actor:v1"
+    && hasOwner("ecological-niche", "game:settlement-ecology:v2")
+    && hasOwner("player-independent-scenario", "game:settlement-ecology:v2");
+
+  const smallerPreyTarget = module?.interactions.targets.find(({ targetClass }) => (
+    targetClass === "smaller-prey"
+  ));
+  const livestockTarget = module?.interactions.targets.find(({ targetClass }) => (
+    targetClass === "livestock"
+  ));
+  const excludedClaimIntegrityReady = module !== null
+    && runtimePolicy !== null
+    && criterion("sound")?.status === "unimplemented"
+    && criterion("environmental-evidence")?.status === "unimplemented"
+    && criterion("seamless-region-crossing")?.status === "unimplemented"
+    && module.sound.implementation === "unimplemented"
+    && module.sound.repertoire.length === 0
+    && module.sound.communicationSignals.length === 0
+    && module.evidence.status === "unimplemented"
+    && module.evidence.produces.length === 0
+    && runtimePolicy.evidenceKinds.length === 0
+    && module.health.implementation === "foundation"
+    && module.health.vitalityAxis === "health"
+    && module.health.injuryAxis === null
+    && !module.health.incapacitation
+    && !module.health.causalDeath
+    && !module.health.recovery
+    && module.lifeHistory.mortality === "unimplemented"
+    && module.lifeHistory.reproduction === "unimplemented"
+    && !module.lifeHistory.dynamicAging
+    && module.aftermath.implementation === "unimplemented"
+    && module.aftermath.carcassModel === "none"
+    && module.activity.circadian.status === "unimplemented"
+    && module.social.territory.model === "none"
+    && !module.social.actorToActorRelationships
+    && module.habitat.migrationModel === "none"
+    && !module.locomotion.crossRegion
+    && module.environment.fire.status === "unimplemented"
+    && module.environment.weather.status === "unimplemented"
+    && module.environment.water.status === "unimplemented"
+    && module.environment.tide.status === "unimplemented"
+    && smallerPreyTarget?.policy === "intentional-no-response"
+    && livestockTarget?.policy === "intentional-no-response"
+    && !module.diet.resources.some(({ resourceClass }) => resourceClass === "live-prey")
+    && !ownsRuntimeCapability("small-prey-pursuit")
+    && !ownsRuntimeCapability("diurnal-activity")
+    && module.interactions.targets.every(({ verbs }) => (
+      verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ));
+
+  const capabilities: readonly (
+    readonly [Alpha24DomesticChickenBoundedCapability, boolean]
+  )[] = [
+    ["species-profile", speciesProfileReady],
+    ["individual-flock-representation", individualFlockRepresentationReady],
+    ["domestic-custody", domesticCustodyReady],
+    ["habitat-placement", habitatPlacementReady],
+    ["bounded-activity", boundedActivityReady],
+    ["terrestrial-locomotion", terrestrialLocomotionReady],
+    ["lawful-perception", lawfulPerceptionReady],
+    ["flock-coordination", flockCoordinationReady],
+    ["broad-class-interactions", broadClassInteractionsReady],
+    ["physical-food-conservation", physicalFoodConservationReady],
+    ["save-migration", saveMigrationReady],
+    ["knowledge-honest-presentation", knowledgeHonestPresentationReady],
+    ["bounded-local-continuity", boundedLocalContinuityReady],
+    ["shared-invariant-coverage", sharedInvariantCoverageReady],
+    ["performance-budget", performanceEvidenceReady],
+    ["owner-coherence", ownerCoherenceReady],
+    ["excluded-claim-integrity", excludedClaimIntegrityReady],
+  ];
+  const blockingCapabilities = capabilities
+    .filter(([, ready]) => !ready)
+    .map(([capability]) => capability);
+  const evidenceOwnerIds = gate === undefined
+    ? []
+    : [...new Set(gate.criteria.flatMap(({ evidenceOwnerIds: values }) => values))]
+      .sort(compareText);
+  const publicationRecordsReady = evidenceAuthenticated
+    && active("tutorial-truth")
+    && active("patch-note-truth");
+  const exactTestedDeploymentVerified = evidenceAuthenticated
+    && active("exact-tested-deployment");
+  const boundedCandidateReady = evidenceAuthenticated
+    && blockingCapabilities.length === 0;
+
+  return deepFreeze({
+    version: ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS_VERSION,
+    unitId: "alpha24-domestic-chicken",
+    scope: "one-bounded-settlement-flock",
+    speciesIds: [...ALPHA24_DOMESTIC_CHICKEN_SPECIES],
+    evidenceAuthenticated,
+    speciesProfileReady,
+    individualFlockRepresentationReady,
+    domesticCustodyReady,
+    habitatPlacementReady,
+    boundedActivityReady,
+    terrestrialLocomotionReady,
+    lawfulPerceptionReady,
+    flockCoordinationReady,
+    broadClassInteractionsReady,
+    physicalFoodConservationReady,
+    saveMigrationReady,
+    knowledgeHonestPresentationReady,
+    boundedLocalContinuityReady,
+    sharedInvariantCoverageReady,
+    performanceEvidenceReady,
+    ownerCoherenceReady,
+    excludedClaimIntegrityReady,
+    boundedCandidateReady,
+    blockingCapabilities,
+    evidenceOwnerIds,
+    publicationRecordsReady,
+    exactTestedDeploymentVerified,
+    published: boundedCandidateReady
+      && publicationRecordsReady
+      && exactTestedDeploymentVerified,
+    fullThirtyCriterionReady: report?.publicReady === true,
+    excludedClaims: [...ALPHA24_DOMESTIC_CHICKEN_EXCLUDED_CLAIMS],
+  });
+}
+
+export const ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS =
+  alpha24DomesticChickenBoundedReadiness();
 
 function canonicalCriterionState(
   value: unknown,

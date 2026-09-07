@@ -3290,6 +3290,83 @@ export function createTideweftRenderer(
       );
     };
 
+    const drawChartDomesticChicken = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const foraging = actor.behavior === "forage";
+      // Reduced motion keeps the observable head-down forage posture without
+      // oscillation, so motion preference never erases behavioral meaning.
+      const headDip = foraging
+        ? reducedMotion
+          ? base * 0.54
+          : base * (0.24 + Math.abs(Math.sin(now * 0.007)) * 0.42)
+        : 0;
+      const bodyLength = base * 2.72;
+      const bodyHeight = base * 1.48;
+      const headX = bodyLength * 0.48;
+      const headY = -bodyHeight * 0.72 + headDip;
+      const headRadius = base * 0.5;
+
+      p.stroke(withAlpha(PALETTE.ink, 242));
+      p.strokeWeight(Math.max(0.8, base * 0.14));
+      for (const legX of [-bodyLength * 0.18, bodyLength * 0.2]) {
+        p.line(legX, bodyHeight * 0.26, legX, bodyHeight * 0.88);
+        p.line(legX, bodyHeight * 0.88, legX + base * 0.38, bodyHeight * 0.98);
+      }
+
+      p.noStroke();
+      // The high fan tail, small comb, and grounded legs keep this readable
+      // apart from the floating broad-billed duck even without color.
+      p.fill(withAlpha(PALETTE.ink, 242));
+      p.triangle(
+        -bodyLength * 0.38, -bodyHeight * 0.24,
+        -bodyLength * 0.82, -bodyHeight * 1.18,
+        -bodyLength * 0.66, bodyHeight * 0.12,
+      );
+      p.triangle(
+        -bodyLength * 0.34, -bodyHeight * 0.12,
+        -bodyLength * 0.66, -bodyHeight * 0.82,
+        -bodyLength * 0.58, bodyHeight * 0.24,
+      );
+      p.ellipse(0, 0, bodyLength * 1.1, bodyHeight * 1.26);
+      p.circle(headX, headY, headRadius * 2.3);
+
+      p.fill("#a66a3f");
+      p.triangle(
+        -bodyLength * 0.38, -bodyHeight * 0.2,
+        -bodyLength * 0.77, -bodyHeight * 1.08,
+        -bodyLength * 0.61, bodyHeight * 0.08,
+      );
+      p.triangle(
+        -bodyLength * 0.34, -bodyHeight * 0.08,
+        -bodyLength * 0.62, -bodyHeight * 0.72,
+        -bodyLength * 0.54, bodyHeight * 0.18,
+      );
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.circle(headX, headY, headRadius * 2);
+
+      p.fill("#d6b37e");
+      p.ellipse(-base * 0.12, base * 0.06, bodyLength * 0.58, bodyHeight * 0.64);
+      p.fill("#b34735");
+      for (const combX of [-0.28, 0, 0.28]) {
+        p.triangle(
+          headX + base * (combX - 0.16), headY - headRadius * 0.72,
+          headX + base * combX, headY - headRadius * 1.3,
+          headX + base * (combX + 0.16), headY - headRadius * 0.7,
+        );
+      }
+      p.fill("#d8a84b");
+      p.triangle(
+        headX + headRadius * 0.62, headY - headRadius * 0.13,
+        headX + headRadius * 1.42, headY + headRadius * 0.05,
+        headX + headRadius * 0.6, headY + headRadius * 0.24,
+      );
+      p.fill(withAlpha(PALETTE.ink, 245));
+      p.circle(headX + headRadius * 0.24, headY - headRadius * 0.24, base * 0.12);
+    };
+
     const drawChartNorthAmericanRiverOtter = (
       actor: WildlifeView,
       base: number,
@@ -3656,6 +3733,9 @@ export function createTideweftRenderer(
           return true;
         case "american-black-duck":
           drawChartAmericanBlackDuck(actor, base, now);
+          return true;
+        case "domestic-chicken":
+          drawChartDomesticChicken(actor, base, now);
           return true;
         case "north-american-river-otter":
           drawChartNorthAmericanRiverOtter(actor, base, now);

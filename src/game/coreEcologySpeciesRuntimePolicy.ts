@@ -80,6 +80,7 @@ export interface CoreEcologySpeciesRuntimePolicy {
     | "FLOCK"
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
+    | "CHICKEN-FLOCK"
     | null;
   readonly maximumMaterializedActors: number;
   readonly aggregate: CoreEcologyAggregateRuntimePolicy | null;
@@ -336,6 +337,20 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       activitySignals: ["aquatic-foraging", "shore-water-relocation", "surface-diving"],
       evidenceKinds: [],
       presentationModel: "individual",
+    },
+    "domestic-chicken": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "food-investigation",
+        "group-coordination",
+        "shared-alarm",
+      ],
+      activitySignals: ["shared-alarm"],
+      evidenceKinds: [],
+      presentationModel: "visible-flock",
     },
   });
 

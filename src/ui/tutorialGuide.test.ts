@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(33);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(34);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,21 +63,17 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("The Storehouse Door adds no species");
-    expect(copy).toContain("one persistent physical fresh-produce lot");
-    expect(copy).toContain("separate from the settlement's abstract food economy");
-    expect(copy).toContain("wind, rain, distance, and packaging leakage");
-    expect(copy).toContain("at most one real produce unit");
-    expect(copy).toContain("rat population units remain conserved");
-    expect(copy).toContain("existing cat's lawfully visible presence can pressure that aggregate through shared perception policy");
-    expect(copy).toContain("cat gains no hidden rat knowledge or new investigation behavior");
-    expect(copy).toContain("ask the actual nearby keeper to secure the door");
-    expect(copy).toContain("Closure persists and contains scent");
-    expect(copy).toContain("Unseen losses stay world truth rather than entering EVENTS later");
-    expect(copy).toContain("Outer save 16 adopts one sealed version-15 world exactly once");
-    expect(copy).toContain("habitat 7 and aggregate 4 remain unchanged");
-    expect(copy).toContain("no exhaustive species-by-species or pair matrix is required");
-    expect(copy).toContain("one local store, not worldwide settlement ecology, livestock, schedules, mortality, carcasses, live-prey consumption, broad rumors, the full bestiary, or completed Directive 04_1");
+    expect(copy).toContain("one stable group of two or three individual domestic chickens");
+    expect(copy).toContain("bounded yard anchor, and custody relationship");
+    expect(copy).toContain("directly perceive accessible food");
+    expect(copy).toContain("exactly one produce unit leaves the open store");
+    expect(copy).toContain("Securing the door removes that opportunity");
+    expect(copy).toContain("hidden activity stays world truth rather than becoming player narration");
+    expect(copy).toContain("Outer save 17 adopts one sealed version-16 world exactly once");
+    expect(copy).toContain("habitat 8 and settlement ecology 2");
+    expect(copy).toContain("there is no species-by-species or N² pair matrix");
+    expect(copy).toContain("one local flock, not worldwide livestock");
+    expect(copy).toContain("mortality, carcasses, eggs, nesting, reproduction, live-prey consumption");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -253,11 +249,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 16");
-    expect(copy).toContain("sealed version 15 Tidal Convergence save migrates exactly once");
-    expect(copy).toContain("every established habitat, actor, group, aggregate population, item, Promise, custody record, disturbance, evidence record, and world fact stays exact");
-    expect(copy).toContain("same stable store, keeper and rat binding, physical fresh-produce carrier, open door, and empty bounded loss history are derived once");
-    expect(copy).toContain("cannot reroll an animal or anchor, duplicate a group or provision, reopen a secured door, replay a store loss or tidal-edge opportunity, exceed the 24-actor materialization cap, or rewrite older ecology");
+    expect(copy).toContain("Outer save version 17");
+    expect(copy).toContain("sealed version 16 Storehouse Door save migrates exactly once");
+    expect(copy).toContain("every established habitat-7 population and anchor, actor, group, aggregate unit, store and lot identity");
+    expect(copy).toContain("stable two-to-three-chicken flock and its one settlement relationship are appended");
+    expect(copy).toContain("cannot reroll a chicken or anchor, duplicate a group or provision, reopen a secured door, replay a store loss, chicken meal, or tidal-edge opportunity");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -344,9 +340,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("Atlantic-marsh-fiddler-crab area aggregate");
     expect(plannedCopy).toContain("at most one snowy egret");
     expect(plannedCopy).toContain("at most one American black duck");
-    expect(plannedCopy).toContain("at most one North American river otter");
-    expect(plannedCopy).toContain("fish, crab, water, and dry-shore habitat all support it");
-    expect(plannedCopy).toContain("each one addressable individual, not a flock or hidden family");
+    expect(plannedCopy).toContain("at most one habitat-supported North American river otter");
+    expect(plannedCopy).toContain("one stable two-to-three-member domestic chicken flock");
+    expect(plannedCopy).toContain("Each chicken is an individual inside one stable flock and settlement-custody relationship");
     expect(plannedCopy).toContain("Rats, frogs, silversides, and fiddler crabs");
     expect(plannedCopy).toContain("aggregate populations rather than individual actors");
     expect(plannedCopy).toContain("Further dogs and wildlife species");
@@ -385,7 +381,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ROUTE AROUND THIS SPOT");
     expect(copy).toContain("exactly one dried-fish unit");
     expect(copy).toContain("not ownership, training, naming, affection, or a companion bond");
-    expect(copy).toContain("deer, gull, black bear, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, snowy egret, American black duck, or North American river otter");
+    expect(copy).toContain("deer, gull, black bear, domestic cat, domestic chicken, marsh rabbit, marsh fox, fish crow, northern harrier, snowy egret, American black duck, or North American river otter");
     expect(copy).toContain("A heard animal alarm gives an uncertain direction");
     expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("your previous route and choice history remain unchanged");
@@ -395,8 +391,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("bounded set of representatives");
     expect(copy).toContain("genuinely absent instead of being rerolled");
     expect(copy).toContain("deer persist in herds, gulls in flocks, and up to three fish-crow representatives in one CROW-FLOCK");
-    expect(copy).toContain("at most one snowy egret, at most one American black duck, and at most one North American river otter use persistent individual identities");
-    expect(copy).toContain("same habitat supports fish, crab, usable deep or tidal water, and a distinct dry shore haulout");
+    expect(copy).toContain("one stable two-to-three-member domestic-chicken flock");
+    expect(copy).toContain("each bird retaining its own identity inside the group");
+    expect(copy).toContain("at most one snowy egret, American black duck, and habitat-supported North American river otter use persistent individual identities");
     expect(copy).toContain("deterministic distance and stable identity select the nearest 24");
     expect(copy).toContain("Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs remain conserved");
     expect(copy).toContain("Lawfully perceived predators, dogs, people, and other supported animal roles");
@@ -413,6 +410,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("physically near both store and keeper");
     expect(copy).toContain("Closure persists and contains scent");
     expect(copy).toContain("An unseen loss does not appear in EVENTS merely because you return later");
+    expect(copy).toContain("Two or three domestic chickens share one stable flock and one settlement-custody relationship");
+    expect(copy).toContain("ordinary animal senses, attention, group alarm, terrain movement, and broad ecological roles");
+    expect(copy).toContain("walk into its structural access area, and consume one physical unit through a staged transaction");
+    expect(copy).toContain("A secured store cannot become food knowledge or a claim");
+    expect(copy).toContain("feeding event only when the bird is directly in view at that moment");
     expect(copy).toContain("Another visible cat can make it guard that food instead");
     expect(copy).toContain("leave bounded wet pawprints");
     expect(copy).toContain("tracks appear only in current direct-detail sight");
@@ -478,32 +480,31 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species");
     expect(copy).toContain("worldwide populations and storehouses, and the full bestiary");
-    expect(copy).toContain("seven Wave-B ecological roles and the Wave-C tidal roles are closed only as one bounded");
-    expect(copy).toContain("Wave-C tidal roles are closed only as one bounded habitat-derived integration");
-    expect(copy).toContain("Tidal Convergence share versioned role, activity-profile, perception, movement, group, aggregate, tide, item-claim, and presentation contracts");
-    expect(copy).toContain("Storehouse Door composes those existing owners with one local settlement-owned physical produce store and actual keeper");
-    expect(copy).toContain("duck has no flock, nesting, reproduction, migration, capture, mortality, carcass, or consumption state");
-    expect(copy).toContain("otter likewise has no capture, live-prey consumption, harmful attack, injury, mortality, carcass, fishing, call, track-evidence, reproduction, or migration state");
+    expect(copy).toContain("seven Wave-B roles, Wave-C tidal roles, and first Wave-D yard flock remain one bounded");
+    expect(copy).toContain("domestic chickens share versioned role, perception, movement, group, aggregate, tide, physical-item, custody, and presentation contracts");
+    expect(copy).toContain("do not create storage or livestock ecology in every settlement");
+    expect(copy).toContain("Chickens have no authored call, track evidence, eggs, nesting, reproduction, complete schedule, autonomous home return, guardian behavior, herding behavior, or cross-region migration");
     expect(copy).toContain("does not create ecology in every distant region or complete Directive 04_1");
     expect(copy).toContain("instead of requiring a species-by-species or N² pair matrix");
     expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the current storehouse adoption without rewriting older ecology", () => {
+  it("teaches the current domestic-flock adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 16 preserves habitat version 7");
+    expect(copy).toContain("Outer save version 17 preserves habitat version 8");
     expect(copy).toContain("aggregate ecology record version 4");
+    expect(copy).toContain("settlement ecology version 2");
     expect(copy).toContain("all four aggregate populations");
-    expect(copy).toContain("tidal, waterfowl, and otter anchors");
+    expect(copy).toContain("tidal, waterfowl, otter, and domestic-yard anchors");
     expect(copy).toContain("deterministic top-K materialization state");
     expect(copy).toContain("durable tide-operation clock");
-    expect(copy).toContain("one settlement-ecology root for the starting-harbor store");
-    expect(copy).toContain("sealed version 15 Tidal Convergence save migrates exactly once");
-    expect(copy).toContain("same stable store, keeper and rat binding");
-    expect(copy).toContain("migration neither adds to nor subtracts from that economy");
-    expect(copy).toContain("cannot reroll an animal or anchor, duplicate a group or provision, reopen a secured door, replay a store loss or tidal-edge opportunity");
+    expect(copy).toContain("starting-harbor store's domestic custody and food-use history");
+    expect(copy).toContain("sealed version 16 Storehouse Door save migrates exactly once");
+    expect(copy).toContain("stable two-to-three-chicken flock and its one settlement relationship are appended");
+    expect(copy).toContain("store lot remains distinct from abstract settlement food");
+    expect(copy).toContain("cannot reroll a chicken or anchor, duplicate a group or provision, reopen a secured door, replay a store loss, chicken meal, or tidal-edge opportunity");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

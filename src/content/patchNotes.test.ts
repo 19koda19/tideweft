@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.23",
-      buildIdentity: "0.3.3-alpha.23",
-      gameplayContractVersion: 21,
-      tutorialVersion: 33,
+      version: "0.3.3-alpha.24",
+      buildIdentity: "0.3.3-alpha.24",
+      gameplayContractVersion: 22,
+      tutorialVersion: 34,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes The Storehouse Door and retains the earlier habitat releases", () => {
+  it("scopes The Yard Flock and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const storehouseRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.23",
+    );
+    const storehouseCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => storehouseRelease?.categories[category] ?? [])
       .join(" ");
     const convergenceRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.22",
@@ -141,28 +148,43 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("persistent physical fresh-produce lot");
-    expect(activeCopy).toContain("not a second view of the settlement's abstract food economy");
-    expect(activeCopy).toContain("existing scent owner");
-    expect(activeCopy).toContain("wind, rain, distance, and packaging leakage");
-    expect(activeCopy).toContain("at most one physical produce-unit loss");
-    expect(activeCopy).toContain("existing cat's lawfully visible presence");
-    expect(activeCopy).toContain("gains no hidden rat knowledge or investigation");
-    expect(activeCopy).toContain("only the player's in-person report");
-    expect(activeCopy).toContain("A secured door persists and contains scent");
-    expect(activeCopy).toContain("directly caused or could observe");
-    expect(activeCopy).toContain("Remote selection cannot issue the request");
-    expect(activeCopy).toContain("no exhaustive species-by-species or animal-pair matrix is required");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 16");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis remains version 7");
+    expect(activeCopy).toContain("one deterministic flock of two or three individual domestic chickens");
+    expect(activeCopy).toContain("shared wildlife actor, direct perception, attention, terrestrial locomotion, and group contracts");
+    expect(activeCopy).toContain("consume one authenticated unit per resolved event");
+    expect(activeCopy).toContain("Securing the door removes that opportunity");
+    expect(activeCopy).toContain("hidden activity remains world truth without becoming player narration");
+    expect(activeCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 17");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis advances to version 8");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-15 Tidal Convergence save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("neither subtracts from nor adds to the settlement's abstract food stock");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor storehouse fixture");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide settlement storage");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("No new species is added");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, ecological migration");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("General scent fields, complete sound and evidence tracking, rumors, broad keeper schedules");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology advances to version 2");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-16 Storehouse Door save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor chicken flock");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide livestock");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no authored call");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, eggs, nesting, reproduction");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Guardian and herding behavior");
+    expect(storehouseCopy).toContain("persistent physical fresh-produce lot");
+    expect(storehouseCopy).toContain("not a second view of the settlement's abstract food economy");
+    expect(storehouseCopy).toContain("existing scent owner");
+    expect(storehouseCopy).toContain("wind, rain, distance, and packaging leakage");
+    expect(storehouseCopy).toContain("at most one physical produce-unit loss");
+    expect(storehouseCopy).toContain("existing cat's lawfully visible presence");
+    expect(storehouseCopy).toContain("gains no hidden rat knowledge or investigation");
+    expect(storehouseCopy).toContain("only the player's in-person report");
+    expect(storehouseCopy).toContain("A secured door persists and contains scent");
+    expect(storehouseCopy).toContain("directly caused or could observe");
+    expect(storehouseCopy).toContain("Remote selection cannot issue the request");
+    expect(storehouseCopy).toContain("no exhaustive species-by-species or animal-pair matrix is required");
+    expect(storehouseRelease?.categories.saves.join(" ")).toContain("outer session advances to version 16");
+    expect(storehouseRelease?.categories.saves.join(" ")).toContain("habitat analysis remains version 7");
+    expect(storehouseRelease?.categories.saves.join(" ")).toContain("sealed version-15 Tidal Convergence save migrates exactly once");
+    expect(storehouseRelease?.categories.saves.join(" ")).toContain("neither subtracts from nor adds to the settlement's abstract food stock");
+    expect(storehouseRelease?.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor storehouse fixture");
+    expect(storehouseRelease?.categories.knownLimitations.join(" ")).toContain("not worldwide settlement storage");
+    expect(storehouseRelease?.categories.knownLimitations.join(" ")).toContain("No new species is added");
+    expect(storehouseRelease?.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, ecological migration");
+    expect(storehouseRelease?.categories.knownLimitations.join(" ")).toContain("General scent fields, complete sound and evidence tracking, rumors, broad keeper schedules");
     expect(convergenceCopy).toContain("versioned activity-affordance registry");
     expect(convergenceCopy).toContain("perch/watch, low quartering, tidal wading, dabbling waterfowl, shore-water foraging, and aerial surface opportunity");
     expect(convergenceCopy).toContain("No new species or population is added");

@@ -42,6 +42,7 @@ describe("lean runtime living-species registry", () => {
       "snowy-egret",
       "american-black-duck",
       "north-american-river-otter",
+      "domestic-chicken",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -316,6 +317,22 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 28_000,
         },
       },
+      {
+        species: "domestic-chicken",
+        actorIdPrefix: "CHICKEN-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "CHICKEN-FLOCK",
+        aboutNoun: "domestic chicken",
+        senses: {
+          visionAcuity: 820_000,
+          hearingSensitivity: 800_000,
+          scentSensitivity: 260_000,
+          scentBaseRangeUnits: 8_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -326,6 +343,11 @@ describe("lean runtime living-species registry", () => {
     expect(livingSpeciesActorIdMatchesNamespace(
       "OTTER-v1-wave-c-fixture",
       "north-american-river-otter",
+    )).toBe(true);
+    expect(isLivingSpeciesActorAddressable("domestic-chicken")).toBe(true);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "CHICKEN-v1-wave-d-fixture",
+      "domestic-chicken",
     )).toBe(true);
   });
 

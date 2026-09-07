@@ -22,20 +22,32 @@ import {
 } from "./coreEcologySmallWorld";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
+  SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION,
+  SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
   SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY,
+  SETTLEMENT_ECOLOGY_PRIOR_VERSION,
+  SETTLEMENT_ECOLOGY_VERSION,
   applySettlementKeeperStoreResponse,
   canonicalizeSettlementEcologyState,
+  createSettlementDomesticAnimalCustody,
   createSettlementEcologyState,
   createSettlementPlayerStoreReport,
   deserializeSettlementEcologyState,
+  establishSettlementDomesticAnimalCustody,
+  migrateSettlementEcologyState,
   projectSettlementFoodStoreSource,
   proposeSettlementKeeperStoreResponse,
   proposeSettlementRatAttraction,
   recordSettlementKeeperKnowledge,
+  recoverPendingSettlementDomesticFoodUse,
   recoverPendingSettlementFoodLoss,
+  resolveSettlementDomesticFoodUse,
   resolveSettlementFoodLoss,
   serializeSettlementEcologyState,
+  stageSettlementDomesticFoodUse,
   stageSettlementFoodLoss,
+  type CreateSettlementDomesticAnimalCustodyInput,
+  type SettlementDomesticFoodUseRequest,
   type SettlementEcologyState,
   type SettlementRatAttractionProposal,
 } from "./settlementEcology";
@@ -50,6 +62,11 @@ const SEED = seedFromText("alpha 23 storehouse door");
 const ORIGIN = createRegionCoord(-91, 37);
 const KEEPER_ID = "H-v1-alpha23-keeper";
 const CAT_ID = "CAT-v1-alpha23-store";
+const DOMESTIC_MEMBER_IDS = [
+  "CHICKEN-v1-alpha24-hen-a",
+  "CHICKEN-v1-alpha24-hen-b",
+] as const;
+const DOMESTIC_GROUP_ID = "CHICKEN-FLOCK-v1-alpha24-coop";
 
 describe("settlement food-store ecology kernel", () => {
   it("derives stable identity and binds the nearest existing rat anchor once", () => {
@@ -141,6 +158,181 @@ describe("settlement food-store ecology kernel", () => {
         ))).toBe(true);
       }
     }
+  });
+
+  it("migrates the exact v1 payload without changing store identity or a pending loss", () => {
+    const current = attractionFixture();
+    const staged = stageSettlementFoodLoss(
+      current.state,
+      current.proposal,
+      current.nextPatch,
+      current.event,
+    );
+    if (staged === null) throw new Error("Could not stage prior ecology fixture");
+    const prior = priorSettlementEcologyPayload(staged.state);
+    const migrated = migrateSettlementEcologyState(prior);
+
+    expect(prior.version).toBe(SETTLEMENT_ECOLOGY_PRIOR_VERSION);
+    expect(migrated).toMatchObject({
+      version: SETTLEMENT_ECOLOGY_VERSION,
+      identity: staged.state.identity,
+      carrier: staged.state.carrier,
+      pendingLoss: staged.state.pendingLoss,
+      domesticCustody: null,
+      lastResolvedDomesticFoodUseOrdinal: 0,
+      lastResolvedDomesticFoodUseTransactionId: null,
+      lastResolvedDomesticFoodUseCauseEventId: null,
+      lastResolvedDomesticFoodUseCauseEventTick: null,
+      lastResolvedDomesticFoodUseMemberActorId: null,
+      pendingDomesticFoodUse: null,
+    });
+    expect(deserializeSettlementEcologyState(JSON.stringify(prior))).toEqual(migrated);
+    expect(recoverPendingSettlementFoodLoss(migrated, current.nextPatch)?.applied).toBe(true);
+
+    expect(migrateSettlementEcologyState({ ...prior, domesticCustody: null })).toBeNull();
+    expect(migrateSettlementEcologyState({ ...prior, version: 0 })).toBeNull();
+  });
+
+  it("binds canonical domestic custody without copying actor simulation state", () => {
+    const initial = store(fixturePatch());
+    const input = domesticCustodyInput(initial);
+    const record = createSettlementDomesticAnimalCustody(initial, {
+      ...input,
+      memberActorIds: [...input.memberActorIds].reverse(),
+    });
+    const established = establishSettlementDomesticAnimalCustody(initial, {
+      ...input,
+      memberActorIds: [...input.memberActorIds].reverse(),
+    });
+
+    expect(record).toMatchObject({
+      version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION,
+      custodyOrdinal: 0,
+      settlementId: initial.identity.settlementId,
+      owner: { kind: "actor", id: KEEPER_ID },
+      caretakerActorId: KEEPER_ID,
+      species: "domestic-chicken",
+      memberActorIds: DOMESTIC_MEMBER_IDS,
+      memberGroupId: DOMESTIC_GROUP_ID,
+      homePosition: input.homePosition,
+      homeRadiusUnits: input.homeRadiusUnits,
+    });
+    expect(record?.relationshipId).toMatch(/^DOMESTIC-REL-[0-9a-f]{16}$/u);
+    expect(record?.homeId).toMatch(/^DOMESTIC-HOME-[0-9a-f]{16}$/u);
+    expect(record?.coopId).toMatch(/^DOMESTIC-COOP-[0-9a-f]{16}$/u);
+    expect(established?.domesticCustody).toEqual(record);
+    expect(establishSettlementDomesticAnimalCustody(established, input)).toEqual(established);
+    expect(deserializeSettlementEcologyState(
+      serializeSettlementEcologyState(established),
+    )).toEqual(established);
+    expect("needs" in established!.domesticCustody!).toBe(false);
+    expect("actorPosition" in established!.domesticCustody!).toBe(false);
+    expect("movement" in established!.domesticCustody!).toBe(false);
+
+    const persisted = JSON.parse(serializeSettlementEcologyState(established)) as {
+      domesticCustody: Record<string, unknown> & { memberActorIds: string[] };
+    };
+    persisted.domesticCustody.memberActorIds.reverse();
+    expect(canonicalizeSettlementEcologyState(persisted)).toBeNull();
+    persisted.domesticCustody.memberActorIds.reverse();
+    persisted.domesticCustody.owner = { kind: "settlement", id: 404 };
+    expect(canonicalizeSettlementEcologyState(persisted)).toBeNull();
+
+    expect(establishSettlementDomesticAnimalCustody(initial, {
+      ...input,
+      memberActorIds: [DOMESTIC_MEMBER_IDS[0], DOMESTIC_MEMBER_IDS[0]],
+    })).toBeNull();
+    expect(establishSettlementDomesticAnimalCustody(initial, {
+      ...input,
+      memberActorIds: [CAT_ID],
+    })).toBeNull();
+    expect(establishSettlementDomesticAnimalCustody(initial, {
+      ...input,
+      memberGroupId: "CROW-FLOCK-v1-forged",
+    })).toBeNull();
+    expect(establishSettlementDomesticAnimalCustody(initial, {
+      ...input,
+      memberGroupId: null,
+    })).toBeNull();
+  });
+
+  it("conserves one exact open-store food unit across domestic replay and rat loss", () => {
+    const current = attractionFixture();
+    const domestic = establishSettlementDomesticAnimalCustody(
+      current.state,
+      domesticCustodyInput(current.state),
+    );
+    if (domestic === null || domestic.domesticCustody === null) {
+      throw new Error("Could not establish domestic custody fixture");
+    }
+    const request = domesticFoodUseRequest(domestic, 3);
+    const quantityBefore = foodQuantity(domestic);
+    const staged = stageSettlementDomesticFoodUse(domestic, request);
+    expect(staged?.reusedPendingTransaction).toBe(false);
+    expect(foodQuantity(staged!.state)).toBe(quantityBefore);
+    expect(stageSettlementDomesticFoodUse(
+      staged!.state,
+      request,
+    )?.reusedPendingTransaction).toBe(true);
+    expect(stageSettlementFoodLoss(
+      staged!.state,
+      current.proposal,
+      current.nextPatch,
+      current.event,
+    )).toBeNull();
+
+    const restoredPending = deserializeSettlementEcologyState(
+      serializeSettlementEcologyState(staged!.state),
+    );
+    const fed = recoverPendingSettlementDomesticFoodUse(restoredPending);
+    expect(fed?.applied).toBe(true);
+    expect(fed?.removed).toEqual([
+      expect.objectContaining({
+        id: domestic.identity.foodLotId,
+        payload: expect.objectContaining({ quantity: 1 }),
+      }),
+    ]);
+    expect(foodQuantity(fed!.state)).toBe(quantityBefore - 1);
+    expect(fed!.state).toMatchObject({
+      lastResolvedDomesticFoodUseOrdinal: 1,
+      lastResolvedDomesticFoodUseTransactionId: staged!.transaction.transactionId,
+      lastResolvedDomesticFoodUseCauseEventId: request.causeEventId,
+      lastResolvedDomesticFoodUseCauseEventTick: request.causeEventTick,
+      lastResolvedDomesticFoodUseMemberActorId: request.memberActorId,
+    });
+    expect(resolveSettlementDomesticFoodUse(fed!.state, staged!.transaction)).toEqual({
+      state: fed!.state,
+      applied: false,
+      removed: [],
+    });
+
+    const ratStage = stageSettlementFoodLoss(
+      fed!.state,
+      current.proposal,
+      current.nextPatch,
+      current.event,
+    );
+    const ratLoss = resolveSettlementFoodLoss(ratStage!.state, ratStage!.transaction);
+    expect(ratLoss?.applied).toBe(true);
+    expect(foodQuantity(ratLoss!.state)).toBe(quantityBefore - 2);
+    expect(deserializeSettlementEcologyState(
+      serializeSettlementEcologyState(ratLoss!.state),
+    )).toEqual(ratLoss!.state);
+
+    expect(stageSettlementDomesticFoodUse(domestic, {
+      ...request,
+      memberActorId: "CHICKEN-v1-alpha24-not-a-member",
+    })).toBeNull();
+    expect(stageSettlementDomesticFoodUse(domestic, {
+      ...request,
+      foodLotId: "STORE-FOOD-wrong-lot",
+    })).toBeNull();
+    const secured = secureFromPlayerReport(domestic, 4);
+    expect(stageSettlementDomesticFoodUse(secured, {
+      ...request,
+      causeEventId: "domestic-food-use:secured",
+      causeEventTick: 5,
+    })).toBeNull();
   });
 
   it("projects open/sealed leakage while shared scent owns wind and rain", () => {
@@ -496,6 +688,59 @@ function secureFromPlayerReport(
 function foodQuantity(state: SettlementEcologyState): number {
   const lot = state.carrier.lots.find(({ id }) => id === state.identity.foodLotId);
   return lot?.payload.kind === "provision" ? lot.payload.quantity : 0;
+}
+
+function priorSettlementEcologyPayload(
+  state: SettlementEcologyState,
+): Record<string, unknown> & { version: typeof SETTLEMENT_ECOLOGY_PRIOR_VERSION } {
+  const value = structuredClone(state) as unknown as Record<string, unknown>;
+  delete value.domesticCustody;
+  delete value.lastResolvedDomesticFoodUseOrdinal;
+  delete value.lastResolvedDomesticFoodUseTransactionId;
+  delete value.lastResolvedDomesticFoodUseCauseEventId;
+  delete value.lastResolvedDomesticFoodUseCauseEventTick;
+  delete value.lastResolvedDomesticFoodUseMemberActorId;
+  delete value.pendingDomesticFoodUse;
+  value.version = SETTLEMENT_ECOLOGY_PRIOR_VERSION;
+  return value as Record<string, unknown> & {
+    version: typeof SETTLEMENT_ECOLOGY_PRIOR_VERSION;
+  };
+}
+
+function domesticCustodyInput(
+  state: SettlementEcologyState,
+): CreateSettlementDomesticAnimalCustodyInput {
+  return {
+    custodyOrdinal: 0,
+    owner: { kind: "actor", id: KEEPER_ID },
+    caretakerActorId: KEEPER_ID,
+    species: "domestic-chicken",
+    memberActorIds: DOMESTIC_MEMBER_IDS,
+    memberGroupId: DOMESTIC_GROUP_ID,
+    homePosition: translateWorldPosition(
+      state.identity.position,
+      -3 * WORLD_POSITION_UNITS_PER_TILE,
+      2 * WORLD_POSITION_UNITS_PER_TILE,
+    ),
+    homeRadiusUnits: 6 * WORLD_POSITION_UNITS_PER_TILE,
+  };
+}
+
+function domesticFoodUseRequest(
+  state: SettlementEcologyState,
+  causeEventTick: number,
+): SettlementDomesticFoodUseRequest {
+  if (state.domesticCustody === null) throw new Error("Domestic custody is required");
+  return {
+    version: SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
+    storeId: state.identity.storeId,
+    foodLotId: state.identity.foodLotId,
+    relationshipId: state.domesticCustody.relationshipId,
+    memberActorId: state.domesticCustody.memberActorIds[0]!,
+    requestedQuantity: 1,
+    causeEventId: `domestic-food-use:${causeEventTick}`,
+    causeEventTick,
+  };
 }
 
 function attractionFixture(): Readonly<{

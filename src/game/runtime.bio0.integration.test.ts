@@ -195,8 +195,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(16);
-    expect(firstRepository.snapshot().payloadVersion).toBe(16);
+    expect(firstEnvelope.version).toBe(17);
+    expect(firstRepository.snapshot().payloadVersion).toBe(17);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
 
@@ -334,7 +334,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(16);
+    expect(migratedEnvelope.version).toBe(17);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -377,7 +377,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(16);
+    expect(envelope.version).toBe(17);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -422,20 +422,21 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(16);
-    expect(firstRepository.snapshot().payloadVersion).toBe(16);
+    expect(firstEnvelope.version).toBe(17);
+    expect(firstRepository.snapshot().payloadVersion).toBe(17);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
     const ecology = requiredCoreEcology(firstEnvelope);
-    expect(ecology.derivation.kind).toBe("habitat-v7");
+    expect(ecology.derivation.kind).toBe("habitat-v8");
     expect(ecology.populations.map(({ species }) => species)).toEqual(expect.arrayContaining([
       "black-bear",
       "deer",
       "domestic-cat",
+      "domestic-chicken",
       "fish-crow",
       "gull",
       "marsh-rabbit",
     ]));
-    if (ecology.derivation.kind !== "habitat-v7") throw new Error("missing tidal-web habitat");
+    if (ecology.derivation.kind !== "habitat-v8") throw new Error("missing domestic-yard habitat");
     const duckHabitat = ecology.derivation.habitat.populations.find(({ species }) => (
       species === "american-black-duck"
     ));
@@ -489,23 +490,28 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(16);
-    expect(firstRepository.snapshot().payloadVersion).toBe(16);
+    expect(firstEnvelope.version).toBe(17);
+    expect(firstRepository.snapshot().payloadVersion).toBe(17);
     expect(firstEnvelope.coreEcology).toBe(secondEnvelope.coreEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
-    expect(migrated.derivation.kind).toBe("habitat-v7");
+    expect(migrated.derivation.kind).toBe("habitat-v8");
     expect(migrated.groups.groups.filter(({ identity }) => (
-      identity.species !== "fish-crow"
+      identity.species !== "fish-crow" && identity.species !== "domestic-chicken"
     ))).toEqual(waveAGroups.groups);
     expect(migrated.groups.groups.filter(({ identity }) => (
       identity.species === "fish-crow"
+    ))).toHaveLength(1);
+    expect(migrated.groups.groups.filter(({ identity }) => (
+      identity.species === "domestic-chicken"
     ))).toHaveLength(1);
     expect(migrated.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
     ))).toEqual(waveAPopulations);
     expect(migrated.populations.some(({ species }) => species === "domestic-cat")).toBe(true);
-    if (migrated.derivation.kind !== "habitat-v7") throw new Error("missing tidal-web habitat");
+    if (migrated.derivation.kind !== "habitat-v8") {
+      throw new Error("missing domestic-yard habitat");
+    }
     const migratedDuckHabitat = migrated.derivation.habitat.populations.find(({ species }) => (
       species === "american-black-duck"
     ));
@@ -570,7 +576,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(16);
+    expect(firstEnvelope.version).toBe(17);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual(v9Envelope.player);
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -578,7 +584,13 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(firstEnvelope.bio0Ecology).toBe(v9Envelope.bio0Ecology);
     expect(firstEnvelope.porterResponse).toEqual(v9Envelope.porterResponse);
     expect(firstEnvelope.livingActorPlayerChoice).toEqual(v9Envelope.livingActorPlayerChoice);
-    expect(migrated.groups).toEqual(legacyEcology.groups);
+    expect(migrated.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v8");
+    for (const historicalGroup of legacyEcology.groups.groups) {
+      expect(migrated.groups.groups).toContainEqual(historicalGroup);
+    }
+    expect(migrated.groups.groups.filter(({ identity }) => (
+      identity.species === "domestic-chicken"
+    ))).toHaveLength(1);
     expect(migrated.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
     ))).toEqual(legacyPopulations);
@@ -1035,7 +1047,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v16 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v17 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1048,7 +1060,7 @@ describe("runtime BIO0 ecology persistence", () => {
     rejected.destroy();
   });
 
-  it("rejects a resealed v16 ecology whose rat identity is self-consistent but belongs to another seed", async () => {
+  it("rejects a resealed v17 ecology whose rat identity is self-consistent but belongs to another seed", async () => {
     const repository = new MemoryRepository(legacyRecord("rat aggregate seed authentication"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1405,8 +1417,8 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
 function waveAHabitatFromCurrentEcology(
   ecology: CoreEcologyAggregatePatchState,
 ): CoreEcologyHabitatAssemblage {
-  if (ecology.derivation.kind !== "habitat-v7") {
-    throw new Error("current migration fixture omitted habitat-v7 derivation");
+  if (ecology.derivation.kind !== "habitat-v8") {
+    throw new Error("current migration fixture omitted habitat-v8 derivation");
   }
   const habitat = ecology.derivation.habitat;
   const candidate = {

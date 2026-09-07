@@ -39,6 +39,7 @@ export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION = 4 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION = 5 as const;
 export const CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION = 6 as const;
 export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION = 7 as const;
+export const CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION = 8 as const;
 export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
   "deer",
   "gull",
@@ -74,6 +75,10 @@ export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES = [
   ...CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES,
   "north-american-river-otter",
 ] as const;
+export const CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES,
+  "domestic-chicken",
+] as const;
 export type CoreEcologyWaveAHabitatSpecies =
   (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
 export type CoreEcologyHarborEdgeHabitatSpecies =
@@ -88,6 +93,8 @@ export type CoreEcologyWaterfowlHabitatSpecies =
   (typeof CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES)[number];
 export type CoreEcologyTidalWebHabitatSpecies =
   (typeof CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES)[number];
+export type CoreEcologyDomesticYardHabitatSpecies =
+  (typeof CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES)[number];
 export type CoreEcologyHabitatRepresentation =
   | "aggregate-area"
   | "group-actor"
@@ -107,6 +114,8 @@ export const CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_WATERFOWL_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS = 21 as const;
@@ -114,6 +123,7 @@ export const CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS = 28 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS = 36 as const;
 export const CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS = 37 as const;
 export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS = 38 as const;
+export const CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS = 41 as const;
 /** Saved, non-population tidal destinations remain deliberately small and bounded. */
 export const CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS = 12 as const;
 export const CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS = 15 as const;
@@ -133,6 +143,7 @@ export const CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_FORAGING_DEPTH = 500_000 as const;
 export const CORE_ECOLOGY_RIVER_OTTER_MAXIMUM_HAULOUT_DISTANCE_TILES = 12 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_FOCUS_RADIUS_TILES = 32 as const;
 export const CORE_ECOLOGY_HABITAT_MAX_EXCLUDED_TILES = 64 as const;
+export const CORE_ECOLOGY_DOMESTIC_HABITAT_MAX_RADIUS_TILES = 8 as const;
 
 export const CORE_ECOLOGY_HABITAT_MINIMUM_SITE_SCORE: Readonly<
   Record<CoreEcologyWaveAHabitatSpecies, number>
@@ -162,6 +173,19 @@ export interface DeriveCoreEcologyHabitatAssemblageInput {
   readonly terrain?: TerrainState;
   /** Optional stable local patch window; no player/camera state is consulted. */
   readonly focus?: CoreEcologyHabitatFocusInput;
+}
+
+export interface CoreEcologyDomesticHabitatAnchorInput {
+  /** Stable social/home identity supplied by the settlement-domestic owner. */
+  readonly anchorId: string;
+  readonly species: "domestic-chicken";
+  readonly position: WorldPosition;
+  readonly radiusTiles: number;
+}
+
+export interface DeriveCoreEcologyDomesticYardHabitatAssemblageInput
+  extends DeriveCoreEcologyHabitatAssemblageInput {
+  readonly domesticAnchor: CoreEcologyDomesticHabitatAnchorInput;
 }
 
 export interface CoreEcologyHabitatFocusInput {
@@ -331,6 +355,27 @@ export interface CoreEcologyTidalWebHabitatPopulationAnalysis {
   readonly trendSignal: number;
   readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
   readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
+export interface CoreEcologyDomesticYardHabitatPopulationAnalysis {
+  readonly species: CoreEcologyDomesticYardHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
+export interface CoreEcologyDomesticHabitatAnchor {
+  readonly anchorId: string;
+  readonly species: "domestic-chicken";
+  readonly position: WorldPosition;
+  readonly radiusTiles: number;
 }
 
 export type CoreEcologyTidalTableAnchorSpecies =
@@ -515,6 +560,27 @@ export interface CoreEcologyTidalWebHabitatAssemblage {
   readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
 }
 
+/**
+ * Additive settlement-domestic record. The complete v7 population and tidal
+ * anchor sequences are immutable prefixes. A supplied stable domestic home
+ * anchor may append one bounded two-to-three-member chicken flock; it never
+ * invents ownership or a settlement independently.
+ */
+export interface CoreEcologyDomesticYardHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS;
+  readonly populations: readonly CoreEcologyDomesticYardHabitatPopulationAnalysis[];
+  readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
+  readonly domesticAnchor: CoreEcologyDomesticHabitatAnchor;
+}
+
 interface HabitatSpeciesRule {
   readonly populationKey: string;
   readonly representation: CoreEcologyHabitatRepresentation;
@@ -530,7 +596,7 @@ interface HabitatSpeciesRule {
 }
 
 export interface CoreEcologyHabitatSpeciesBounds {
-  readonly species: CoreEcologyTidalWebHabitatSpecies;
+  readonly species: CoreEcologyDomesticYardHabitatSpecies;
   readonly representation: CoreEcologyHabitatRepresentation;
   readonly maximumPopulation: number;
   readonly maximumAllocations: number;
@@ -563,7 +629,7 @@ interface HabitatSiteEvaluation {
 }
 
 interface UnallocatedPopulationAnalysis<
-  Species extends CoreEcologyTidalWebHabitatSpecies = CoreEcologyTidalWebHabitatSpecies,
+  Species extends CoreEcologyDomesticYardHabitatSpecies = CoreEcologyDomesticYardHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -577,7 +643,7 @@ interface UnallocatedPopulationAnalysis<
 }
 
 interface AllocatedPopulationAnalysis<
-  Species extends CoreEcologyTidalWebHabitatSpecies = CoreEcologyTidalWebHabitatSpecies,
+  Species extends CoreEcologyDomesticYardHabitatSpecies = CoreEcologyDomesticYardHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -603,7 +669,7 @@ const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
 
-const SPECIES_PURPOSE: Readonly<Record<CoreEcologyTidalWebHabitatSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyDomesticYardHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
@@ -619,9 +685,10 @@ const SPECIES_PURPOSE: Readonly<Record<CoreEcologyTidalWebHabitatSpecies, number
   "snowy-egret": 0x4547_5245,
   "american-black-duck": 0x4244_5543,
   "north-american-river-otter": 0x4f54_5452,
+  "domestic-chicken": 0x4348_4943,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreEcologyTidalWebHabitatSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyDomesticYardHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
@@ -818,6 +885,19 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyTidalWebHabitatSpecies, HabitatS
       maximumOccupancyTarget: 1_000_000,
       minimumPopulationWhenViable: 1,
     }),
+    "domestic-chicken": Object.freeze({
+      populationKey: "habitat-v8/domestic-chicken",
+      representation: "individual-representatives",
+      minimumSiteScore: 360_000,
+      minimumPersistentCapacity: 2,
+      maximumPopulation: 3,
+      tilesPerCapacityUnit: 1,
+      maximumAllocations: 3,
+      minimumAllocationSeparation: 1,
+      minimumOccupancyTarget: 1_000_000,
+      maximumOccupancyTarget: 1_000_000,
+      minimumPopulationWhenViable: 2,
+    }),
   });
 
 /** Shared read-only seam used to prove habitat, identity, and runtime budgets agree. */
@@ -826,9 +906,9 @@ export function coreEcologyHabitatSpeciesBounds(
 ): CoreEcologyHabitatSpeciesBounds | null {
   if (
     typeof value !== "string"
-    || !(CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES as readonly string[]).includes(value)
+    || !(CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES as readonly string[]).includes(value)
   ) return null;
-  const species = value as CoreEcologyTidalWebHabitatSpecies;
+  const species = value as CoreEcologyDomesticYardHabitatSpecies;
   const rule = SPECIES_RULES[species];
   return Object.freeze({
     species,
@@ -839,7 +919,7 @@ export function coreEcologyHabitatSpeciesBounds(
 }
 
 const ACTIVITY_POLICY: Readonly<Record<
-  CoreEcologyTidalWebHabitatSpecies,
+  CoreEcologyDomesticYardHabitatSpecies,
   Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
 >> = Object.freeze({
   deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
@@ -875,6 +955,7 @@ const ACTIVITY_POLICY: Readonly<Record<
     kind: "aquatic-foraging",
     activePeriod: "tide-responsive",
   }),
+  "domestic-chicken": Object.freeze({ kind: "foraging", activePeriod: "variable" }),
 });
 
 const DEER_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
@@ -1769,7 +1850,79 @@ export function deriveCoreEcologyTidalWebHabitatAssemblage(
   input: DeriveCoreEcologyHabitatAssemblageInput,
 ): CoreEcologyTidalWebHabitatAssemblage {
   const context = prepareCoreEcologyHabitatContext(input, "tidal-web");
-  const waterfowl = deriveCoreEcologyWaterfowlFromPrepared(input.rootSeed, context);
+  return deriveCoreEcologyTidalWebFromPrepared(input.rootSeed, context);
+}
+
+/**
+ * Pure domestic-yard extension. The social/settlement layer must supply the
+ * stable home anchor; habitat only authenticates its local shape and places a
+ * bounded flock on nearby traversable ground. Food remains a physical actor
+ * opportunity rather than a population-generation shortcut.
+ */
+export function deriveCoreEcologyDomesticYardHabitatAssemblage(
+  input: DeriveCoreEcologyDomesticYardHabitatAssemblageInput,
+): CoreEcologyDomesticYardHabitatAssemblage {
+  const context = prepareCoreEcologyHabitatContext(input, "domestic-yard");
+  const tidalWeb = deriveCoreEcologyTidalWebFromPrepared(input.rootSeed, context);
+  const domesticAnchor = normalizeDomesticHabitatAnchor(
+    input.domesticAnchor,
+    context.originRegion,
+  );
+  const occupiedTileIndices = new Set<number>();
+  for (const population of tidalWeb.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) {
+      occupiedTileIndices.add(allocation.tileIndex);
+    }
+  }
+  const chicken = analyzeDomesticChickenCapacity(
+    input.rootSeed,
+    context,
+    domesticAnchor,
+    occupiedTileIndices,
+  );
+  const allocatedChicken = allocatePopulation(
+    chicken,
+    context.originRegion,
+    occupiedTileIndices,
+  );
+  const chickenPopulation = Object.freeze({
+    ...allocatedChicken,
+    representation: SPECIES_RULES["domestic-chicken"].representation,
+    activitySignal: activitySignalFor(allocatedChicken),
+  });
+  const populations: CoreEcologyDomesticYardHabitatPopulationAnalysis[] = [
+    ...tidalWeb.populations,
+    chickenPopulation,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology domestic-yard habitat allocation budget diverged");
+  }
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION,
+    originRegion: tidalWeb.originRegion,
+    regionId: tidalWeb.regionId,
+    terrainHash: tidalWeb.terrainHash,
+    selection: tidalWeb.selection,
+    evaluatedTiles: tidalWeb.evaluatedTiles,
+    speciesEvaluations:
+      tidalWeb.evaluatedTiles * CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors: tidalWeb.tidalAnchors,
+    domesticAnchor,
+  });
+}
+
+function deriveCoreEcologyTidalWebFromPrepared(
+  rootSeed: RootSeed,
+  context: PreparedCoreEcologyHabitatContext,
+): CoreEcologyTidalWebHabitatAssemblage {
+  const waterfowl = deriveCoreEcologyWaterfowlFromPrepared(rootSeed, context);
   const { addressedTiles, originRegion } = context;
   const silverside = waterfowl.populations.find(({ species }) => (
     species === "atlantic-silverside"
@@ -1798,7 +1951,7 @@ export function deriveCoreEcologyTidalWebHabitatAssemblage(
       )
     : 0;
   const otter = analyzeEnvironmentalCapacity(
-    input.rootSeed,
+    rootSeed,
     originRegion,
     "north-american-river-otter",
     addressedTiles,
@@ -1858,6 +2011,131 @@ export function deriveCoreEcologyTidalWebHabitatAssemblage(
     maximumAllocationBudget: CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
     populations: Object.freeze(populations),
     tidalAnchors,
+  });
+}
+
+function analyzeDomesticChickenCapacity(
+  seed: RootSeed,
+  context: PreparedCoreEcologyHabitatContext,
+  anchor: CoreEcologyDomesticHabitatAnchor,
+  occupiedTileIndices: ReadonlySet<number>,
+): UnallocatedPopulationAnalysis<"domestic-chicken"> {
+  const anchorTileX = Math.trunc(anchor.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const anchorTileY = Math.trunc(anchor.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const evaluated = context.addressedTiles
+    .filter(({ tile }) => (
+      !occupiedTileIndices.has(tile.index)
+      && Math.abs(tile.x - anchorTileX) + Math.abs(tile.y - anchorTileY)
+        <= anchor.radiusTiles
+    ))
+    .map((addressed) => {
+      const site = evaluateSite(
+        seed,
+        context.originRegion,
+        "domestic-chicken",
+        addressed,
+        0,
+      );
+      const anchorDistance = Math.abs(addressed.tile.x - anchorTileX)
+        + Math.abs(addressed.tile.y - anchorTileY);
+      return Object.freeze({
+        ...site,
+        placementRank: site.placementRank
+          + distanceScore(anchorDistance, anchor.radiusTiles + 1),
+      });
+    });
+  const eligible = evaluated.filter(({ eligible }) => eligible);
+  const suitable = eligible.filter(({ score }) => (
+    score >= SPECIES_RULES["domestic-chicken"].minimumSiteScore
+  ));
+  const habitatCapacity = Math.min(
+    SPECIES_RULES["domestic-chicken"].maximumPopulation,
+    suitable.length,
+  );
+  if (habitatCapacity < 2) {
+    throw new RangeError("Core ecology domestic anchor cannot support a two-member flock");
+  }
+  const desiredMembers = keyedRandomInt(
+    seed,
+    HABITAT_RANDOM_DOMAIN,
+    context.originRegion.x,
+    context.originRegion.y,
+    POPULATION_PRESSURE_PURPOSE ^ SPECIES_PURPOSE["domestic-chicken"],
+    2,
+    3,
+    anchorTileY * WORLD_WIDTH + anchorTileX + anchor.radiusTiles,
+  );
+  const populationUnits = Math.min(habitatCapacity, desiredMembers);
+  const weightedHabitatArea = suitable.reduce((sum, { score }) => sum + score, 0);
+  const averages = averageSiteInputs(suitable);
+  const capacityInputs = Object.freeze({
+    eligibleTiles: eligible.length,
+    suitableTiles: suitable.length,
+    weightedHabitatArea,
+    food: averages.food,
+    water: averages.water,
+    cover: averages.cover,
+    nesting: averages.nesting,
+    climate: averages.climate,
+    predatorPressure: 0,
+  });
+  return Object.freeze({
+    species: "domestic-chicken",
+    populationKey: SPECIES_RULES["domestic-chicken"].populationKey,
+    capacityInputs,
+    habitatCapacity,
+    populationUnits,
+    populationPressure: ratioFixed(populationUnits, habitatCapacity),
+    trend: "stable",
+    trendSignal: 0,
+    sites: Object.freeze(suitable),
+  });
+}
+
+function normalizeDomesticHabitatAnchor(
+  value: unknown,
+  originRegion: RegionCoord,
+): CoreEcologyDomesticHabitatAnchor {
+  const anchor = canonicalizeDomesticHabitatAnchor(value, originRegion);
+  if (anchor === null) {
+    throw new RangeError("Core ecology domestic habitat anchor is malformed or outside its region");
+  }
+  return anchor;
+}
+
+function canonicalizeDomesticHabitatAnchor(
+  value: unknown,
+  originRegion: RegionCoord,
+): CoreEcologyDomesticHabitatAnchor | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "anchorId",
+    "position",
+    "radiusTiles",
+    "species",
+  ])) return null;
+  const radiusTiles = value.radiusTiles;
+  if (
+    typeof value.anchorId !== "string"
+    || !/^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u.test(value.anchorId)
+    || value.anchorId !== value.anchorId.normalize("NFC")
+    || value.species !== "domestic-chicken"
+    || !isWorldPosition(value.position)
+    || value.position.region.x !== originRegion.x
+    || value.position.region.y !== originRegion.y
+    || typeof radiusTiles !== "number"
+    || !Number.isSafeInteger(radiusTiles)
+    || radiusTiles < 1
+    || radiusTiles > CORE_ECOLOGY_DOMESTIC_HABITAT_MAX_RADIUS_TILES
+  ) return null;
+  return Object.freeze({
+    anchorId: value.anchorId,
+    species: "domestic-chicken",
+    position: createWorldPosition(
+      originRegion,
+      value.position.localX,
+      value.position.localY,
+    ),
+    radiusTiles,
   });
 }
 
@@ -2493,6 +2771,113 @@ export function canonicalizeCoreEcologyTidalWebHabitatAssemblage(
   });
 }
 
+export function canonicalizeCoreEcologyDomesticYardHabitatAssemblage(
+  value: unknown,
+): CoreEcologyDomesticYardHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "domesticAnchor",
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "selection",
+    "speciesEvaluations",
+    "tidalAnchors",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES.length
+    || !Array.isArray(value.tidalAnchors)
+    || value.tidalAnchors.length > CORE_ECOLOGY_TIDAL_WEB_MAX_ANCHOR_RECORDS
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  const domesticAnchor = canonicalizeDomesticHabitatAnchor(value.domesticAnchor, originRegion);
+  if (selection === null || domesticAnchor === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const speciesEvaluations =
+    evaluatedTiles * CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES.length;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || value.evaluatedTiles > CORE_ECOLOGY_HABITAT_TILE_BUDGET
+    || value.speciesEvaluations
+      > CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const tidalWeb = canonicalizeCoreEcologyTidalWebHabitatAssemblage({
+    generationVersion: CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations: evaluatedTiles * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
+    populations: value.populations.slice(0, CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length),
+    tidalAnchors: value.tidalAnchors,
+  });
+  if (tidalWeb === null) return null;
+  const occupied = new Set<number>();
+  for (const population of tidalWeb.populations) {
+    if (population.representation !== "individual-representatives") continue;
+    for (const allocation of population.allocations) occupied.add(allocation.tileIndex);
+  }
+  const chicken = canonicalizeHarborEdgePopulationAnalysis(
+    value.populations[CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length],
+    "domestic-chicken",
+    originRegion,
+    selection,
+    evaluatedTiles,
+    occupied,
+  );
+  if (chicken === null || chicken.populationUnits < 2 || chicken.populationUnits > 3) return null;
+  const anchorTileX = Math.trunc(
+    domesticAnchor.position.localX / WORLD_POSITION_UNITS_PER_TILE,
+  );
+  const anchorTileY = Math.trunc(
+    domesticAnchor.position.localY / WORLD_POSITION_UNITS_PER_TILE,
+  );
+  if (chicken.allocations.some(({ tileIndex }) => {
+    const tileX = tileIndex % WORLD_WIDTH;
+    const tileY = Math.trunc(tileIndex / WORLD_WIDTH);
+    return Math.abs(tileX - anchorTileX) + Math.abs(tileY - anchorTileY)
+      > domesticAnchor.radiusTiles;
+  })) return null;
+  const populations: CoreEcologyDomesticYardHabitatPopulationAnalysis[] = [
+    ...tidalWeb.populations,
+    chicken,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS) return null;
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors: tidalWeb.tidalAnchors,
+    domesticAnchor,
+  });
+}
+
 function expectedWaterfowlAnchorCount(
   populations: readonly unknown[],
 ): number | null {
@@ -2896,13 +3281,13 @@ function terrainKindForElevation(elevation: number): TerrainKind {
 }
 
 type VersionedHabitatPopulationAnalysis<
-  Species extends CoreEcologyTidalWebHabitatSpecies,
+  Species extends CoreEcologyDomesticYardHabitatSpecies,
 > = Omit<CoreEcologyRainChorusHabitatPopulationAnalysis, "species"> & {
   readonly species: Species;
 };
 
 function canonicalizeHarborEdgePopulationAnalysis<
-  Species extends CoreEcologyTidalWebHabitatSpecies,
+  Species extends CoreEcologyDomesticYardHabitatSpecies,
 >(
   value: unknown,
   expectedSpecies: Species,
@@ -3168,7 +3553,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreEcologyTidalWebHabitatSpecies,
+  species: CoreEcologyDomesticYardHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -3252,7 +3637,7 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity<Species extends CoreEcologyTidalWebHabitatSpecies>(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyDomesticYardHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
   species: Species,
@@ -3391,7 +3776,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyTidalWebHabitat
  * already-derived site/capacity result keeps the exact habitat contract while
  * avoiding a second full species pass for deer, rats, and rabbits.
  */
-function applyPredatorPressure<Species extends CoreEcologyTidalWebHabitatSpecies>(
+function applyPredatorPressure<Species extends CoreEcologyDomesticYardHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   predatorPressure: number,
 ): UnallocatedPopulationAnalysis<Species> {
@@ -3463,7 +3848,7 @@ function hasNorthAmericanRiverOtterAnchorPair(
   )));
 }
 
-function allocatePopulation<Species extends CoreEcologyTidalWebHabitatSpecies>(
+function allocatePopulation<Species extends CoreEcologyDomesticYardHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
@@ -3941,7 +4326,7 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreEcologyTidalWebHabitatSpecies,
+  species: CoreEcologyDomesticYardHabitatSpecies,
   addressed: AddressedHabitatTile,
   preySupport: number,
 ): HabitatSiteEvaluation {
@@ -4111,6 +4496,37 @@ function evaluateSite(
         && food >= 260_000
         && cover >= 300_000
         && climateScore >= 300_000;
+      break;
+    }
+    case "domestic-chicken": {
+      eligible = tile.terrain === "marsh"
+        || tile.terrain === "meadow"
+        || tile.terrain === "ridge";
+      // The supplied home anchor establishes husbandry opportunity. Actual
+      // feeding still requires a physical food entity in the actor runtime.
+      food = 760_000;
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 12),
+        multiplyFixed(climate.rainfall, 520_000),
+      );
+      cover = weightedScore([
+        [FIXED_POINT - Math.trunc(climate.exposure / 2), 620_000],
+        [tile.roughness, 380_000],
+      ]);
+      nesting = 900_000;
+      climateScore = weightedScore([
+        [centeredTolerance(climate.heat, 520_000, 900_000), 520_000],
+        [FIXED_POINT - climate.exposure, 300_000],
+        [FIXED_POINT - interaction.heatLoad, 180_000],
+      ]);
+      score = weightedScore([
+        [food, 260_000],
+        [water, 100_000],
+        [cover, 210_000],
+        [nesting, 260_000],
+        [climateScore, 170_000],
+      ]);
+      eligible = eligible && climateScore >= 240_000;
       break;
     }
     case "marsh-rabbit": {
@@ -4702,9 +5118,13 @@ function prepareCoreEcologyHabitatContext(
     | "rain-chorus"
     | "tidal-table"
     | "waterfowl"
-    | "tidal-web",
+    | "tidal-web"
+    | "domestic-yard",
 ): PreparedCoreEcologyHabitatContext {
-  if (!plainRecord(input) || !allowedKeys(input, ["focus", "originRegion", "rootSeed", "terrain"])) {
+  const allowedInputKeys = extension === "domestic-yard"
+    ? ["domesticAnchor", "focus", "originRegion", "rootSeed", "terrain"]
+    : ["focus", "originRegion", "rootSeed", "terrain"];
+  if (!plainRecord(input) || !allowedKeys(input, allowedInputKeys)) {
     throw new TypeError(`Core ecology ${extension} habitat input has an unsupported shape`);
   }
   if (!isRegionCoord(input.originRegion)) {
@@ -4966,7 +5386,7 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
 }
 
 function validAllocationTerrain(
-  species: CoreEcologyTidalWebHabitatSpecies,
+  species: CoreEcologyDomesticYardHabitatSpecies,
   terrain: string,
 ): boolean {
   if (species === "gull" || species === "fish-crow") {
@@ -4974,6 +5394,9 @@ function validAllocationTerrain(
   }
   if (species === "brown-rat" || species === "domestic-cat") {
     return terrain !== "deep-water" && isTerrainKind(terrain);
+  }
+  if (species === "domestic-chicken") {
+    return terrain === "marsh" || terrain === "meadow" || terrain === "ridge";
   }
   if (species === "southern-leopard-frog") {
     return terrain === "marsh" || terrain === "meadow";
@@ -5128,6 +5551,11 @@ if (
     )
   || CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS
     !== CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
+  || CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES.reduce(
       (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
       0,
     )
