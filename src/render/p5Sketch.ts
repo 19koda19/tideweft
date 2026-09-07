@@ -14,6 +14,7 @@ import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
+import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
 import {
   createTerrainPerceptionMemoryStore,
@@ -2737,6 +2738,38 @@ export function createTideweftRenderer(
         p.strokeWeight(1.15 / camera.zoom);
         p.noFill();
         drawSettlementGlyph(directlyVisible ? settlement.glyph ?? "hearth" : "hearth", radius);
+
+        const foodStore = visibleSettlementFoodStore(settlement, directlyVisible);
+        if (foodStore) {
+          const annexX = radius * 0.72;
+          const annexY = radius * 0.38;
+          const doorWidth = radius * 0.5;
+          const doorHeight = radius * 0.66;
+          p.fill(withAlpha(PALETTE.ink, 238));
+          p.stroke(withAlpha(
+            foodStore.closure === "open" ? PALETTE.warning : PALETTE.tide,
+            232,
+          ));
+          p.strokeWeight(1.05 / camera.zoom);
+          p.rectMode(p.CENTER);
+          p.rect(annexX, annexY, doorWidth, doorHeight, radius * 0.08);
+          if (foodStore.hasCrossbar) {
+            p.line(
+              annexX - doorWidth * 0.38,
+              annexY,
+              annexX + doorWidth * 0.38,
+              annexY,
+            );
+          } else {
+            const leafReach = doorWidth * 0.78;
+            p.line(
+              annexX - doorWidth * 0.42,
+              annexY - doorHeight * 0.42,
+              annexX - doorWidth * 0.42 + Math.sin(foodStore.doorAngle) * leafReach,
+              annexY + Math.cos(foodStore.doorAngle) * leafReach * 0.32,
+            );
+          }
+        }
         p.pop();
 
         // The glyph is durable geographic memory; its name and live Promise

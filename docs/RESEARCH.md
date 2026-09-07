@@ -143,7 +143,38 @@ attacks, live-prey capture or consumption, fishing, nesting, reproduction,
 ecological cross-region migration, full circadian life, and a general
 scent/sound/evidence system remain absent.
 
-Design implication: future worldwide populations should expand this aggregate/representative and shared-policy boundary rather than multiplying full actors. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, and Alpha 22 is the verified bounded integration closure across those roles. None completes worldwide Wave C or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The `0.3.3-alpha.23 — The Storehouse Door` source candidate tests a ninth
+scaling lesson without adding a species: settlement ecology should compose
+existing physical custody, sensory projection, aggregate response, human
+knowledge, and presentation owners rather than create a store-specific animal
+simulation. One bounded starting-harbor store owns one stable physical
+fresh-produce lot that is deliberately separate from abstract settlement food.
+Its open door contributes source strength and packaging leakage; the existing
+scent owner alone decides how wind, rain, distance, and uncertainty shape what
+reaches the existing brown-rat aggregate. A matching attraction may relocate
+one already-existing rat unit through ordinary aggregate policy, and only that
+authenticated event can remove at most one exact physical produce unit. Rat
+population remains conserved, while the physical lot's remaining quantity and
+loss record remain exact across response, save, and reload.
+
+The useful counterexample is the existing cat. Its lawfully visible presence
+may pressure the rat aggregate through the same shared visual/trophic policy,
+but the cat receives no rat-sign cognition, hidden rat knowledge, or new
+investigation behavior. Likewise, Alpha 23's actual keeper secures the persistent
+door only after an in-person player report; the shared kernel authenticates
+direct keeper observations for later autonomous wiring. An unseen loss is
+not reported merely because the player later returns. Outer save 16 adopts a
+sealed version-15 world once while habitat 7 and aggregate schema 4 remain
+unchanged. Confidence comes from shared abstraction checks, a bounded signed-
+coordinate property sweep, exact item and aggregate conservation, deterministic
+replay/migration, and one representative store-rat-visible-cat composition.
+Existing shared fuzz and performance gates remain in regression rather than
+expanding into an exhaustive species or pair matrix. This remains a local source
+candidate, not a live-verification claim, worldwide store ecology, schedules,
+livestock, broad rumors, mortality, carcasses, live-prey consumption, the full
+bestiary, or Directive 04_1 completion.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, and Alpha 23 is the local source candidate for one bounded storehouse composition. None completes worldwide Wave C or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

@@ -63,6 +63,7 @@ interface TestGameSaveEnvelope {
   readonly world: string;
   readonly player: ReturnType<typeof createPlayer>;
   readonly regionalTravel?: string;
+  readonly settlementEcology?: string;
   readonly perceptionCarry?: {
     readonly version: number;
     readonly playerStepsSinceWorldTick: number;
@@ -188,7 +189,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 15,
+      version: 16,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 9,
@@ -235,6 +236,7 @@ describe("runtime existing-human perception path", () => {
       perceptionCarry: _currentPerceptionCarry,
       bio0Ecology: _currentBio0Ecology,
       coreEcology: _currentCoreEcology,
+      settlementEcology: _currentSettlementEcology,
       porterResponse: _currentPorterResponse,
       livingActorPlayerChoice: _currentLivingActorPlayerChoice,
       ...currentBase
@@ -253,7 +255,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 15,
+      version: 16,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 0,

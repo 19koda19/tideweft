@@ -28,7 +28,7 @@ describe("resident ABOUT responsive shell", () => {
     expect(styles).toContain("env(safe-area-inset-bottom)");
     expect(styles).toContain("@media (orientation: landscape) and (max-height: 34rem)");
     expect(styles).toContain("top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem)");
-    expect(styles).toContain("bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 3.65rem)");
+    expect(styles).toContain("bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 4rem)");
   });
 
   it("gives overflowing facts a real touch/wheel scroll target without capturing the whole overlay", () => {

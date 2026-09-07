@@ -258,6 +258,7 @@ interface TestGameSaveEnvelope {
   perceptionCarry?: unknown;
   bio0Ecology?: string;
   coreEcology?: string;
+  settlementEcology?: string;
   porterResponse?: PorterResponseState;
   livingActorPlayerChoice?: unknown;
   integrity?: string;
@@ -352,6 +353,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
 
   envelope.version = 11;
   envelope.coreEcology = serializePublishedAggregateV3(ecology);
+  delete envelope.settlementEcology;
   resealGameSave(envelope);
   return Object.freeze({
     ecology,
@@ -1453,8 +1455,8 @@ describe("perpetual new worlds", () => {
     const originalEcology = deserializeCoreEcologyAggregatePatch(
       originalEnvelope.coreEcology,
     );
-    expect(originalEnvelope.version).toBe(15);
-    expect(originalRecord.payloadVersion).toBe(15);
+    expect(originalEnvelope.version).toBe(16);
+    expect(originalRecord.payloadVersion).toBe(16);
     expect(originalEcology?.derivation.kind).toBe("habitat-v7");
     if (originalEcology?.derivation.kind !== "habitat-v7") {
       throw new Error("fixture did not create current tidal-web ecology");
@@ -1508,11 +1510,11 @@ describe("perpetual new worlds", () => {
     const migratedEcology = deserializeCoreEcologyAggregatePatch(
       migratedEnvelope.coreEcology,
     );
-    expect(migratedEnvelope.version).toBe(15);
-    expect(migratedRecord.payloadVersion).toBe(15);
+    expect(migratedEnvelope.version).toBe(16);
+    expect(migratedRecord.payloadVersion).toBe(16);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v7");
     if (migratedEcology?.derivation.kind !== "habitat-v7") {
-      throw new Error("v11 migration did not produce canonical v15 ecology");
+      throw new Error("v11 migration did not produce canonical current ecology");
     }
 
     for (const oldPopulation of predecessor.ecology.populations) {
@@ -1576,11 +1578,11 @@ describe("perpetual new worlds", () => {
     expect(migratedEnvelope.physicalCargo).toEqual(originalEnvelope.physicalCargo);
     expect(migratedEnvelope.bio0Ecology).toBe(originalEnvelope.bio0Ecology);
 
-    const firstV15Ecology = migratedEnvelope.coreEcology;
+    const firstCurrentEcology = migratedEnvelope.coreEcology;
     migratedRuntime.destroy();
     const reloaded = await createTideweftRuntime(repository);
     await reloaded.save();
-    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstV15Ecology);
+    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstCurrentEcology);
     reloaded.destroy();
   });
 
@@ -1895,7 +1897,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(15);
+    expect(prepared.version).toBe(16);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -1990,6 +1992,7 @@ describe("runtime clarity guards", () => {
     const {
       bio0Ecology: _outdatedBio0Ecology,
       coreEcology: _outdatedCoreEcology,
+      settlementEcology: _outdatedSettlementEcology,
       porterResponse: _outdatedPorterResponse,
       livingActorPlayerChoice: _outdatedLivingActorPlayerChoice,
       integrity: _preparedIntegrity,
@@ -2104,8 +2107,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(15);
-    expect(durableRecord.payloadVersion).toBe(15);
+    expect(durable.version).toBe(16);
+    expect(durableRecord.payloadVersion).toBe(16);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(32);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(33);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,17 +63,21 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Tidal Convergence adds no species");
-    expect(copy).toContain("versioned activity-affordance registry");
-    expect(copy).toContain("perch/watch, low quartering, tidal wading, dabbling waterfowl, shore-water foraging, and aerial surface opportunity");
-    expect(copy).toContain("AQUATIC ACTIVITY");
-    expect(copy).toContain("shared terrain-occluded vision");
-    expect(copy).toContain("ordinary air movement");
-    expect(copy).toContain("Threat, escape, alarm, food, guard, pursuit, retreat, and scavenging intents still outrank neutral activity");
-    expect(copy).toContain("outer save remains version 15");
-    expect(copy).toContain("instead of a species-by-species or N² test matrix");
-    expect(copy).toContain("closes only the bounded starting-harbor Wave-C integration seam");
-    expect(copy).toContain("does not add harmful attacks, injury, mortality, carcasses, live-prey capture or consumption, fishing, reproduction, migration, complete circadian life, general sound, scent or evidence, worldwide ecology, the full bestiary, or completed Directive 04_1");
+    expect(copy).toContain("The Storehouse Door adds no species");
+    expect(copy).toContain("one persistent physical fresh-produce lot");
+    expect(copy).toContain("separate from the settlement's abstract food economy");
+    expect(copy).toContain("wind, rain, distance, and packaging leakage");
+    expect(copy).toContain("at most one real produce unit");
+    expect(copy).toContain("rat population units remain conserved");
+    expect(copy).toContain("existing cat's lawfully visible presence can pressure that aggregate through shared perception policy");
+    expect(copy).toContain("cat gains no hidden rat knowledge or new investigation behavior");
+    expect(copy).toContain("ask the actual nearby keeper to secure the door");
+    expect(copy).toContain("Closure persists and contains scent");
+    expect(copy).toContain("Unseen losses stay world truth rather than entering EVENTS later");
+    expect(copy).toContain("Outer save 16 adopts one sealed version-15 world exactly once");
+    expect(copy).toContain("habitat 7 and aggregate 4 remain unchanged");
+    expect(copy).toContain("no exhaustive species-by-species or pair matrix is required");
+    expect(copy).toContain("one local store, not worldwide settlement ecology, livestock, schedules, mortality, carcasses, live-prey consumption, broad rumors, the full bestiary, or completed Directive 04_1");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -249,10 +253,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 15");
-    expect(copy).toContain("sealed version 14 Between Water and Sky save migrates exactly once");
-    expect(copy).toContain("every established habitat-version-6 population and anchor, actor, group, aggregate population, item, Promise, custody record, disturbance, evidence record, and world fact stays exact");
-    expect(copy).toContain("cannot add another population, reroll an animal or anchor, duplicate a group or provision, exceed the 24-actor materialization cap, replay a completed tidal-edge opportunity, or rewrite older ecology");
+    expect(copy).toContain("Outer save version 16");
+    expect(copy).toContain("sealed version 15 Tidal Convergence save migrates exactly once");
+    expect(copy).toContain("every established habitat, actor, group, aggregate population, item, Promise, custody record, disturbance, evidence record, and world fact stays exact");
+    expect(copy).toContain("same stable store, keeper and rat binding, physical fresh-produce carrier, open door, and empty bounded loss history are derived once");
+    expect(copy).toContain("cannot reroll an animal or anchor, duplicate a group or provision, reopen a secured door, replay a store loss or tidal-edge opportunity, exceed the 24-actor materialization cap, or rewrite older ecology");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -347,7 +352,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("Further dogs and wildlife species");
     expect(plannedCopy).toContain("worldwide populations");
     expect(plannedCopy).toContain("animal death and carcasses");
-    expect(plannedCopy).toContain("complete sound, scent and evidence tracking");
+    expect(plannedCopy).toContain("complete sound, general scent and evidence tracking");
     expect(plannedCopy).toContain("full bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
     expect(plannedCopy).toContain("do not yet transform specific cargo materials");
@@ -398,7 +403,16 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("neutral animal such as a rabbit cannot disturb one merely by being nearby");
     expect(copy).toContain("Exposed loose provisions can attract the rat area");
     expect(copy).toContain("at most one existing population unit moves");
-    expect(copy).toContain("does not eat, move, or duplicate the physical food");
+    expect(copy).toContain("does not eat, move, or duplicate that physical parcel");
+    expect(copy).toContain("One store at the starting harbor owns a persistent physical fresh-produce lot");
+    expect(copy).toContain("not another view of the settlement's abstract food stock");
+    expect(copy).toContain("wind, rain, distance, and packaging leakage shape what reaches the existing brown-rat aggregate");
+    expect(copy).toContain("matching authenticated attraction event can remove at most one actual produce unit");
+    expect(copy).toContain("existing cat's lawfully visible presence can pressure that aggregate through shared perception policy");
+    expect(copy).toContain("cat gains no hidden rat knowledge or new investigation behavior");
+    expect(copy).toContain("physically near both store and keeper");
+    expect(copy).toContain("Closure persists and contains scent");
+    expect(copy).toContain("An unseen loss does not appear in EVENTS merely because you return later");
     expect(copy).toContain("Another visible cat can make it guard that food instead");
     expect(copy).toContain("leave bounded wet pawprints");
     expect(copy).toContain("tracks appear only in current direct-detail sight");
@@ -459,14 +473,15 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("nonlethal player-absent aftermath");
     expect(copy).toContain("no harm or cargo interaction");
     expect(copy).toContain("Animals do not attack, receive injuries, die, leave carcasses, or consume live prey");
-    expect(copy).toContain("Complete sound, scent and evidence tracking");
+    expect(copy).toContain("Complete sound, general scent and evidence tracking");
     expect(copy).toContain("foliage consumption");
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species");
-    expect(copy).toContain("worldwide populations, and the full bestiary");
+    expect(copy).toContain("worldwide populations and storehouses, and the full bestiary");
     expect(copy).toContain("seven Wave-B ecological roles and the Wave-C tidal roles are closed only as one bounded");
     expect(copy).toContain("Wave-C tidal roles are closed only as one bounded habitat-derived integration");
-    expect(copy).toContain("Tidal Convergence now share versioned role, activity-profile, perception, movement, group, aggregate, tide, item-claim, and presentation contracts");
+    expect(copy).toContain("Tidal Convergence share versioned role, activity-profile, perception, movement, group, aggregate, tide, item-claim, and presentation contracts");
+    expect(copy).toContain("Storehouse Door composes those existing owners with one local settlement-owned physical produce store and actual keeper");
     expect(copy).toContain("duck has no flock, nesting, reproduction, migration, capture, mortality, carcass, or consumption state");
     expect(copy).toContain("otter likewise has no capture, live-prey consumption, harmful attack, injury, mortality, carcass, fishing, call, track-evidence, reproduction, or migration state");
     expect(copy).toContain("does not create ecology in every distant region or complete Directive 04_1");
@@ -475,19 +490,20 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the current otter save adoption without rewriting older ecology", () => {
+  it("teaches the current storehouse adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 15 preserves habitat version 7");
+    expect(copy).toContain("Outer save version 16 preserves habitat version 7");
     expect(copy).toContain("aggregate ecology record version 4");
     expect(copy).toContain("all four aggregate populations");
     expect(copy).toContain("tidal, waterfowl, and otter anchors");
     expect(copy).toContain("deterministic top-K materialization state");
     expect(copy).toContain("durable tide-operation clock");
-    expect(copy).toContain("sealed version 14 Between Water and Sky save migrates exactly once");
-    expect(copy).toContain("every established habitat-version-6 population and anchor");
-    expect(copy).toContain("zero-or-one North American river otter population");
-    expect(copy).toContain("cannot add another population, reroll an animal or anchor");
+    expect(copy).toContain("one settlement-ecology root for the starting-harbor store");
+    expect(copy).toContain("sealed version 15 Tidal Convergence save migrates exactly once");
+    expect(copy).toContain("same stable store, keeper and rat binding");
+    expect(copy).toContain("migration neither adds to nor subtracts from that economy");
+    expect(copy).toContain("cannot reroll an animal or anchor, duplicate a group or provision, reopen a secured door, replay a store loss or tidal-edge opportunity");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

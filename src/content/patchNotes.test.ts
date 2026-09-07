@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.22",
-      buildIdentity: "0.3.3-alpha.22",
-      gameplayContractVersion: 20,
-      tutorialVersion: 32,
+      version: "0.3.3-alpha.23",
+      buildIdentity: "0.3.3-alpha.23",
+      gameplayContractVersion: 21,
+      tutorialVersion: 33,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Tidal Convergence and retains the earlier habitat releases", () => {
+  it("scopes The Storehouse Door and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const convergenceRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.22",
+    );
+    const convergenceCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => convergenceRelease?.categories[category] ?? [])
       .join(" ");
     const closureRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.18",
@@ -134,22 +141,44 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("versioned activity-affordance registry");
-    expect(activeCopy).toContain("perch/watch, low quartering, tidal wading, dabbling waterfowl, shore-water foraging, and aerial surface opportunity");
-    expect(activeCopy).toContain("No new species or population is added");
-    expect(activeCopy).toContain("current anonymous tidal surface activity");
-    expect(activeCopy).toContain("shared terrain-occluded vision");
-    expect(activeCopy).toContain("ordinary bounded air travel");
-    expect(activeCopy).toContain("Immediate lawful threat, escape, alarm, food, guard, pursuit, retreat, and scavenging intents");
-    expect(activeCopy).toContain("does not require a bespoke test for every species or an N-squared matrix of animal pairs");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session remains version 15");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("No new save migration");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("not serialized as a second source of truth");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("closes only the bounded starting-harbor Wave-C integration seam");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("complete 75-to-150-profile bestiary");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, migration");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete sound propagation, general scent fields, broad persistent evidence and tracking");
+    expect(activeCopy).toContain("persistent physical fresh-produce lot");
+    expect(activeCopy).toContain("not a second view of the settlement's abstract food economy");
+    expect(activeCopy).toContain("existing scent owner");
+    expect(activeCopy).toContain("wind, rain, distance, and packaging leakage");
+    expect(activeCopy).toContain("at most one physical produce-unit loss");
+    expect(activeCopy).toContain("existing cat's lawfully visible presence");
+    expect(activeCopy).toContain("gains no hidden rat knowledge or investigation");
+    expect(activeCopy).toContain("only the player's in-person report");
+    expect(activeCopy).toContain("A secured door persists and contains scent");
+    expect(activeCopy).toContain("directly caused or could observe");
+    expect(activeCopy).toContain("Remote selection cannot issue the request");
+    expect(activeCopy).toContain("no exhaustive species-by-species or animal-pair matrix is required");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 16");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis remains version 7");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains version 4");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-15 Tidal Convergence save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("neither subtracts from nor adds to the settlement's abstract food stock");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor storehouse fixture");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide settlement storage");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("No new species is added");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, ecological migration");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("General scent fields, complete sound and evidence tracking, rumors, broad keeper schedules");
+    expect(convergenceCopy).toContain("versioned activity-affordance registry");
+    expect(convergenceCopy).toContain("perch/watch, low quartering, tidal wading, dabbling waterfowl, shore-water foraging, and aerial surface opportunity");
+    expect(convergenceCopy).toContain("No new species or population is added");
+    expect(convergenceCopy).toContain("current anonymous tidal surface activity");
+    expect(convergenceCopy).toContain("shared terrain-occluded vision");
+    expect(convergenceCopy).toContain("ordinary bounded air travel");
+    expect(convergenceCopy).toContain("Immediate lawful threat, escape, alarm, food, guard, pursuit, retreat, and scavenging intents");
+    expect(convergenceCopy).toContain("does not require a bespoke test for every species or an N-squared matrix of animal pairs");
+    expect(convergenceRelease?.categories.saves.join(" ")).toContain("outer session remains version 15");
+    expect(convergenceRelease?.categories.saves.join(" ")).toContain("No new save migration");
+    expect(convergenceRelease?.categories.saves.join(" ")).toContain("not serialized as a second source of truth");
+    expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("closes only the bounded starting-harbor Wave-C integration seam");
+    expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
+    expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("complete 75-to-150-profile bestiary");
+    expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, migration");
+    expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("Complete sound propagation, general scent fields, broad persistent evidence and tracking");
     expect(livingChannelCopy).toContain("North American river otter");
     expect(livingChannelCopy).toContain("version-6 population and anchor record as its exact prefix");
     expect(livingChannelCopy).toContain("silverside school, fiddler-crab area");

@@ -147,6 +147,51 @@ describe("information as physical, sourced progress", () => {
     }).player.destinationLabel).toBe(`DELIVER CARGO · ${destination.name}`);
   });
 
+  it("places an authorized store warning after deliveries and reports but before Promise pickup", () => {
+    const world = createWorld("store action priority");
+    const view = createWorldView(world);
+    const offered = view.contracts.find((contract) => contract.status === "offered");
+    if (!offered) throw new Error("missing offered contract");
+    const origin = view.settlements.find(({ id }) => id === offered.originSettlementId);
+    const destination = view.settlements.find(({ id }) => id === offered.destinationSettlementId);
+    if (!origin || !destination) throw new Error("missing Promise settlements");
+    const session = createSessionState(world.meta.seedText);
+    const storeAction = {
+      id: "store-fixture:0",
+      label: "Warn the store keeper",
+      hint: "The food-store door is standing open. Tell the visible keeper to secure it.",
+    } as const;
+    const player = createPlayer(view, origin.id);
+
+    const beforePickup = projectUIView(view, player, session, {
+      settlementFoodStoreAction: storeAction,
+    });
+    expect(beforePickup.controls?.interactLabel).toBe(storeAction.label);
+    expect(beforePickup.controls?.interactHint).toBe(storeAction.hint);
+
+    expect(loadContractCargo(player, offered)).toBe(true);
+    const destinationTile = view.terrain.tiles[destination.tileIndex];
+    if (!destinationTile) throw new Error("missing destination tile");
+    player.x = destinationTile.x * 1_000 + 500;
+    player.y = destinationTile.y * 1_000 + 500;
+    expect(projectUIView(view, player, session, {
+      settlementFoodStoreAction: storeAction,
+    }).controls?.interactLabel).toBe("Deliver cargo");
+
+    const reporter = createPlayer(view, destination.id);
+    reporter.report = {
+      sourceSettlementId: origin.id,
+      targetSettlementId: destination.id,
+      resource: origin.specialization,
+      reportedQuantity: origin.inventory[origin.specialization],
+      observedTick: view.completedTick,
+      confidence: FIXED_POINT,
+    };
+    expect(projectUIView(view, reporter, session, {
+      settlementFoodStoreAction: storeAction,
+    }).controls?.interactLabel).toBe("Deliver report");
+  });
+
   it("locks swept controls and never presents drift as complete before shore", () => {
     const world = createWorld("the current has the helm");
     const view = createWorldView(world);

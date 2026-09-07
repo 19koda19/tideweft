@@ -3815,7 +3815,7 @@ body {
   #game-ui .resident-about {
     top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem);
     right: max(0.55rem, env(safe-area-inset-right));
-    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 3.65rem);
+    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 4rem);
     left: max(0.55rem, env(safe-area-inset-left));
     width: auto;
   }

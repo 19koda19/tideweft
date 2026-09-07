@@ -132,6 +132,12 @@ export interface UIProjectionOptions {
   readonly perception?: PerceptionResult;
   /** Direct physical feedback becomes an observed system entry, not overhead prose. */
   readonly traversalFeedback?: TraversalFeedbackState;
+  /** Runtime-authorized in-person store response; absence reveals no remote store state. */
+  readonly settlementFoodStoreAction?: Readonly<{
+    readonly id: string;
+    readonly label: string;
+    readonly hint: string;
+  }>;
 }
 
 function residentConditionLabels(resident: ResidentState): string[] {
@@ -366,6 +372,7 @@ export function projectUIView(
       options.looseCargoWorld?.revision ?? "no-loose-world",
       options.activePromiseCustody?.carriedQuantity ?? "no-carried-promise",
       options.activePromiseCustody?.looseQuantity ?? "no-loose-promise",
+      options.settlementFoodStoreAction?.id ?? "no-store-action",
       ...(options.inactiveLooseCargoWorlds ?? []).map((cargoWorld) =>
         `${cargoWorld.region.x},${cargoWorld.region.y}:${cargoWorld.revision}`),
     ].join(":"),
@@ -496,6 +503,8 @@ export function projectUIView(
         ? "Deliver cargo"
         : player.report?.targetSettlementId === playerSettlementId
           ? "Deliver report"
+          : options.settlementFoodStoreAction
+            ? options.settlementFoodStoreAction.label
           : player.activeContractId === null && player.report === null && localOffers.length === 1
             ? "Pick up cargo"
             : "Inspect harbor",
@@ -507,6 +516,12 @@ export function projectUIView(
           ? `One ${CRAFTING_STACK_DEFINITIONS[localResource.material].label} unit is underfoot. Desktop: press E. Mobile: tapping its field mark routes here and gathers automatically.`
         : playerSettlementId === null
         ? "Reach a harbor mark first."
+        : activeContract?.destinationSettlementId === playerSettlementId
+          ? "The active Promise cargo can be handed over here."
+        : player.report?.targetSettlementId === playerSettlementId
+          ? "The signed report can be delivered here."
+        : options.settlementFoodStoreAction
+          ? options.settlementFoodStoreAction.hint
         : localOffers.length === 1
           ? "One local promise is ready here; this collects its physical cargo."
           : localOffers.length > 1

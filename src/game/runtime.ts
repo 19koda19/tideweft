@@ -333,6 +333,22 @@ import {
 } from "./coreEcologyGroups";
 import { stepCoreEcologySettlementShadows } from "./coreEcologySmallWorld";
 import {
+  applySettlementKeeperStoreResponse,
+  canonicalizeSettlementEcologyState,
+  createSettlementEcologyState,
+  createSettlementPlayerStoreReport,
+  deserializeSettlementEcologyState,
+  projectSettlementFoodStoreSource,
+  proposeSettlementKeeperStoreResponse,
+  proposeSettlementRatAttraction,
+  recordSettlementKeeperKnowledge,
+  recoverPendingSettlementFoodLoss,
+  resolveSettlementFoodLoss,
+  serializeSettlementEcologyState,
+  stageSettlementFoodLoss,
+  type SettlementEcologyState,
+} from "./settlementEcology";
+import {
   stepCoreEcologyTidalTable,
   type CoreEcologyTidalTableProjection,
 } from "./coreEcologyTidalTable";
@@ -445,7 +461,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 15;
+const GAME_SAVE_VERSION = 16;
+const TIDAL_CONVERGENCE_GAME_SAVE_VERSION = 15;
 const WATERFOWL_GAME_SAVE_VERSION = 14;
 const TIDAL_TABLE_GAME_SAVE_VERSION = 13;
 const RAIN_CHORUS_GAME_SAVE_VERSION = 12;
@@ -506,6 +523,7 @@ interface GameSaveEnvelope {
   perceptionCarry: PlayerPerceptionCarry;
   bio0Ecology: string;
   coreEcology: string;
+  settlementEcology: string;
   porterResponse: PorterResponseState;
   livingActorPlayerChoice: LivingActorPlayerChoiceState;
   integrity: string;
@@ -1657,6 +1675,67 @@ function canonicalRuntimeCoreEcology(
     })) return null;
   }
   return state;
+}
+
+function runtimeSettlementStorePosition(economy: WorldView, settlementId: number) {
+  const settlement = economy.settlements.find(({ id }) => id === settlementId);
+  const tile = settlement === undefined
+    ? undefined
+    : economy.terrain.tiles[settlement.tileIndex];
+  if (settlement === undefined || tile === undefined) {
+    throw new Error("Settlement ecology starting settlement no longer resolves");
+  }
+  return createWorldPosition(
+    createRegionCoord(0, 0),
+    tile.x * WORLD_POSITION_UNITS_PER_TILE + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+    tile.y * WORLD_POSITION_UNITS_PER_TILE + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+  );
+}
+
+function createRuntimeSettlementEcology(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  core: CoreEcologyAggregatePatchState,
+  economy: WorldView = createWorldView(world),
+): SettlementEcologyState {
+  const keeper = runtimeBio0Porter(economy, bio0.porterAddress.actorId);
+  // The BIO0 keeper's home is the stable bootstrap harbor. Current offered
+  // Promises change over time and therefore cannot be a persistence key.
+  const settlementId = keeper.resident.homeSettlementId;
+  return createSettlementEcologyState({
+    rootSeed: world.meta.rootSeed,
+    settlementId,
+    keeperActorId: keeper.address.actorId,
+    position: runtimeSettlementStorePosition(economy, settlementId),
+    aggregatePatch: core,
+  });
+}
+
+function canonicalRuntimeSettlementEcology(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  core: CoreEcologyAggregatePatchState,
+  economy: WorldView = createWorldView(world),
+): SettlementEcologyState | null {
+  const state = canonicalizeSettlementEcologyState(value);
+  if (state === null || stableStringify(state) !== stableStringify(value)) return null;
+  if (
+    state.identity.keeperActorId !== bio0.porterAddress.actorId
+    || state.keeperKnowledge.some(({ learnedAtTick }) => learnedAtTick > world.meta.completedTick)
+    || (state.lastResolvedCauseEventTick ?? 0) > world.meta.completedTick
+    || (state.pendingLoss?.causeEventTick ?? 0) > world.meta.completedTick
+  ) return null;
+  try {
+    const keeper = runtimeBio0Porter(economy, state.identity.keeperActorId);
+    if (keeper.address.actorId !== bio0.porterAddress.actorId) return null;
+    const expected = createRuntimeSettlementEcology(world, bio0, core, economy);
+    return stableStringify(state.identity) === stableStringify(expected.identity)
+      ? state
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Authenticate the exact waterfowl contract shipped by Alpha 20. */
@@ -3769,6 +3848,7 @@ function physicalCargoPartitionsForView(
 
 function runtimeCoreAggregateExposedFoodSources(
   state: PhysicalCargoState,
+  settlementEcology: SettlementEcologyState,
   view: WorldView,
   patch: CoreEcologyAggregatePatchState,
 ): readonly CoreEcologyAggregateExposedFoodSource[] | null {
@@ -3790,6 +3870,10 @@ function runtimeCoreAggregateExposedFoodSources(
         packagingLeakage: FIXED_POINT,
       }));
     }
+  }
+  const foodStore = projectSettlementFoodStoreSource(settlementEcology);
+  if (foodStore !== null && foodStore.source.packagingLeakage > 0) {
+    sources.push(foodStore.source);
   }
   sources.sort((left, right) => (
     left.sourceReferenceId < right.sourceReferenceId
@@ -3887,6 +3971,33 @@ function inactiveCargoPartitions(
   return partitions.filter((world) => world !== state.looseWorld);
 }
 
+function projectRuntimeSettlementFoodStore(
+  view: TideweftView,
+  state: SettlementEcologyState,
+  world: WorldView,
+  perception: ReturnType<typeof projectPerception>,
+): TideweftView {
+  const settlement = world.settlements.find(({ id }) => id === state.identity.settlementId);
+  if (
+    settlement === undefined
+    || perception.detailVisibilityGrades[settlement.tileIndex] !== VISIBILITY_DIRECT
+  ) return view;
+  const settlementViewId = String(settlement.id);
+  if (!view.settlements.some(({ id }) => id === settlementViewId)) return view;
+  return {
+    ...view,
+    settlements: view.settlements.map((candidate) => candidate.id === settlementViewId
+      ? {
+          ...candidate,
+          foodStore: {
+            id: state.identity.storeId,
+            closure: state.closure,
+          },
+        }
+      : candidate),
+  };
+}
+
 export async function createTideweftRuntime(
   repository: SaveRepository = createSaveRepository(),
 ): Promise<TideweftRuntime> {
@@ -3894,6 +4005,12 @@ export async function createTideweftRuntime(
   let economyView = createWorldView(world);
   let bio0Ecology = createRuntimeBio0Ecology(world, economyView);
   let coreEcology = createRuntimeCoreEcology(world, bio0Ecology);
+  let settlementEcology = createRuntimeSettlementEcology(
+    world,
+    bio0Ecology,
+    coreEcology,
+    economyView,
+  );
   let porterResponse = createRuntimePorterResponse(bio0Ecology);
   let livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
   let fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -3931,16 +4048,21 @@ export async function createTideweftRuntime(
     tileSize: RENDER_TILE_SIZE,
     detailVisibilityGrades: perception.detailVisibilityGrades,
   });
-  let renderView = {
-    ...projectGameView(worldView, player, {
-      paused: true,
-      traversalFeedback,
-      looseCargoWorld: physicalCargo.looseWorld,
-      looseCargoWorlds: initialCargoPartitions,
-      perception,
-    }),
-    dogs: initialDogPresentation === null ? [] : [initialDogPresentation],
-  };
+  let renderView = projectRuntimeSettlementFoodStore(
+    {
+      ...projectGameView(worldView, player, {
+        paused: true,
+        traversalFeedback,
+        looseCargoWorld: physicalCargo.looseWorld,
+        looseCargoWorlds: initialCargoPartitions,
+        perception,
+      }),
+      dogs: initialDogPresentation === null ? [] : [initialDogPresentation],
+    },
+    settlementEcology,
+    worldView,
+    perception,
+  );
   let uiView = projectUIView(worldView, player, session, {
     economyWorld: economyView,
     fieldResourceCatalog: fieldResourceProjection.catalog,
@@ -4108,6 +4230,7 @@ export async function createTideweftRuntime(
     economyView = createWorldView(world);
     bio0Ecology = loaded.bio0Ecology;
     coreEcology = loaded.coreEcology;
+    settlementEcology = loaded.settlementEcology;
     porterResponse = loaded.porterResponse;
     livingActorPlayerChoice = loaded.livingActorPlayerChoice;
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -4163,6 +4286,38 @@ export async function createTideweftRuntime(
     fieldResourceProjection = projectCompatibilityFieldResources(fieldResourceCatalog, worldView);
   }
 
+  function settlementStoreKeeperAtPlayer(
+    currentPerception: ReturnType<typeof projectPerception>,
+  ): RuntimeBio0Porter | null {
+    if (
+      settlementEcology.closure !== "open"
+      || projectSettlementFoodStoreSource(settlementEcology) === null
+      || settlementAtPlayer(player, worldView) !== settlementEcology.identity.settlementId
+    ) return null;
+    let keeper: RuntimeBio0Porter;
+    try {
+      keeper = runtimeBio0Porter(economyView, settlementEcology.identity.keeperActorId);
+    } catch {
+      return null;
+    }
+    if (stableStringify(keeper.address) !== stableStringify(bio0Ecology.porterAddress)) return null;
+    const placement = livingActorAddressInRegionalWindow(keeper.address, {
+      origin: regionalTravel.window.origin,
+      terrain: {
+        width: worldView.terrain.width,
+        height: worldView.terrain.height,
+      },
+    });
+    if (
+      placement === null
+      || currentPerception.detailVisibilityGrades[placement.tileIndex] !== VISIBILITY_DIRECT
+    ) return null;
+    const maximumDistance = RESIDENT_CONVERSATION_RANGE_TILES * WORLD_POSITION_UNITS_PER_TILE;
+    const dx = placement.point.x - player.x;
+    const dy = placement.point.y - player.y;
+    return dx * dx + dy * dy <= maximumDistance * maximumDistance ? keeper : null;
+  }
+
   function refreshViews(): void {
     perception = projectPerception(worldView, player);
     captureNewlyObservedEvents();
@@ -4173,6 +4328,7 @@ export async function createTideweftRuntime(
         height: worldView.terrain.height,
       },
     };
+    const settlementStoreKeeper = settlementStoreKeeperAtPlayer(perception);
     const activeContract = player.activeContractId === null
       ? undefined
       : economyView.contracts.find((contract) => contract.id === player.activeContractId);
@@ -4243,28 +4399,33 @@ export async function createTideweftRuntime(
     ) {
       selectedWildlifeEvidenceTarget = null;
     }
-    renderView = {
-      ...projectGameView(worldView, player, {
-        selectedSettlementId: session.selectedSettlementId,
-        selectedResidentId,
-        residentSpeech: activeResidentSpeech(),
-        selectedRouteId: objectiveContract?.routeId ?? null,
-        destinationSettlementId: destinationSettlementId ?? null,
-        ...(destinationKind ? { destinationKind } : {}),
-        fieldResourceCatalog: fieldResourceProjection.catalog,
-        fieldResourceEcology,
-        traversalFeedback,
-        looseCargoWorld: physicalCargo.looseWorld,
-        looseCargoWorlds: visibleCargoPartitions,
-        bracing: manualControl.brace,
-        adriftControl: lastAdriftControl,
-        perception,
-        paused: session.paused || session.titleVisible || session.quietHourVisible,
-      }),
-      dogs: dogPresentation === null ? [] : [dogPresentation],
-      wildlife: wildlifePresentation,
-      aggregateWildlifeEvidence: aggregateEvidenceProjection.renderEvidence,
-    };
+    renderView = projectRuntimeSettlementFoodStore(
+      {
+        ...projectGameView(worldView, player, {
+          selectedSettlementId: session.selectedSettlementId,
+          selectedResidentId,
+          residentSpeech: activeResidentSpeech(),
+          selectedRouteId: objectiveContract?.routeId ?? null,
+          destinationSettlementId: destinationSettlementId ?? null,
+          ...(destinationKind ? { destinationKind } : {}),
+          fieldResourceCatalog: fieldResourceProjection.catalog,
+          fieldResourceEcology,
+          traversalFeedback,
+          looseCargoWorld: physicalCargo.looseWorld,
+          looseCargoWorlds: visibleCargoPartitions,
+          bracing: manualControl.brace,
+          adriftControl: lastAdriftControl,
+          perception,
+          paused: session.paused || session.titleVisible || session.quietHourVisible,
+        }),
+        dogs: dogPresentation === null ? [] : [dogPresentation],
+        wildlife: wildlifePresentation,
+        aggregateWildlifeEvidence: aggregateEvidenceProjection.renderEvidence,
+      },
+      settlementEcology,
+      worldView,
+      perception,
+    );
     // ABOUT is a live sensory affordance, not a durable remote tracker. Once
     // the selected person leaves direct detail perception, that selection is
     // discarded and cannot silently reappear after a region or camera change.
@@ -4379,6 +4540,15 @@ export async function createTideweftRuntime(
         adriftControl: lastAdriftControl,
         traversalFeedback,
         perception,
+        ...(settlementStoreKeeper === null
+          ? {}
+          : {
+              settlementFoodStoreAction: {
+                id: `${settlementEcology.identity.storeId}:${settlementEcology.revision}`,
+                label: "Warn the store keeper",
+                hint: "The food-store door is standing open. Tell the visible keeper to secure it.",
+              },
+            }),
         requiresSeed: replacementSeedRequired,
         worldCreationBlocked: saveRecoveryBlocked,
         ...(runtimeIntegrityFailure
@@ -5190,6 +5360,7 @@ export async function createTideweftRuntime(
       }
       const aggregateFoodSources = runtimeCoreAggregateExposedFoodSources(
         resolvedCoreResources.physicalCargo,
+        settlementEcology,
         completedRegionalView,
         resolvedCoreResources.patch,
       );
@@ -5216,6 +5387,11 @@ export async function createTideweftRuntime(
       if (settlementShadowsFrame === null) {
         throw new Error("Settlement-shadows perception frame could not be resolved");
       }
+      const settlementRatAttraction = proposeSettlementRatAttraction(
+        settlementEcology,
+        resolvedCoreResources.patch,
+        settlementShadowsFrame,
+      );
       const settlementShadows = stepCoreEcologySettlementShadows(
         resolvedCoreResources.patch,
         world.meta.completedTick,
@@ -5223,6 +5399,28 @@ export async function createTideweftRuntime(
       );
       if (settlementShadows === null) {
         throw new Error("Settlement-shadows ecology could not advance atomically");
+      }
+      let settlementFoodLossApplied = false;
+      if (settlementRatAttraction !== null) {
+        const orderedEvents = [...settlementShadows.events].sort((left, right) => (
+          left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0
+        ));
+        for (const event of orderedEvents) {
+          const staged = stageSettlementFoodLoss(
+            settlementEcology,
+            settlementRatAttraction,
+            settlementShadows.patch,
+            event,
+          );
+          if (staged === null) continue;
+          const resolved = resolveSettlementFoodLoss(staged.state, staged.transaction);
+          if (resolved === null) {
+            throw new Error("Settlement storehouse loss could not resolve atomically");
+          }
+          settlementEcology = resolved.state;
+          settlementFoodLossApplied = resolved.applied;
+          break;
+        }
       }
       coreEcology = settlementShadows.patch;
       physicalCargo = resolvedCoreResources.physicalCargo;
@@ -5290,6 +5488,19 @@ export async function createTideweftRuntime(
         throw new Error("Aggregate wildlife hearing could not be projected");
       }
       let ecologyConsequenceAnnounced = false;
+      if (
+        settlementFoodLossApplied
+        && isWildlifeWorldPositionDirectlyObserved(
+          settlementEcology.identity.position,
+          coreEventObservation,
+        )
+      ) {
+        announce(
+          session,
+          "One produce bundle is ruined inside the open storehouse.",
+        );
+        ecologyConsequenceAnnounced = true;
+      }
       for (const consumption of resolvedCoreResources.consumed) {
         const animal = witnessedCoreById.get(consumption.actorId);
         if (animal === undefined) continue;
@@ -6957,6 +7168,12 @@ export async function createTideweftRuntime(
     economyView = createWorldView(world);
     bio0Ecology = createRuntimeBio0Ecology(world, economyView);
     coreEcology = createRuntimeCoreEcology(world, bio0Ecology);
+    settlementEcology = createRuntimeSettlementEcology(
+      world,
+      bio0Ecology,
+      coreEcology,
+      economyView,
+    );
     porterResponse = createRuntimePorterResponse(bio0Ecology);
     livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -7575,6 +7792,50 @@ export async function createTideweftRuntime(
     refreshViews();
   }
 
+  function secureSettlementFoodStore(): boolean {
+    const keeper = settlementStoreKeeperAtPlayer(projectPerception(worldView, player));
+    if (keeper === null) return false;
+    const atTick = world.meta.completedTick;
+    const report = createSettlementPlayerStoreReport(settlementEcology, atTick);
+    const informed = report === null
+      ? null
+      : recordSettlementKeeperKnowledge(settlementEcology, atTick, {
+          kind: "player-report",
+          report,
+        });
+    const proposal = informed === null
+      ? null
+      : proposeSettlementKeeperStoreResponse(informed, atTick);
+    const resolution = informed === null || proposal === null
+      ? null
+      : applySettlementKeeperStoreResponse(informed, proposal);
+    if (resolution === null || !resolution.applied) {
+      announce(session, "The store warning cannot be acted on right now.");
+      soundscape.play("warning", 0.28);
+      refreshViews();
+      return true;
+    }
+    settlementEcology = resolution.state;
+    const keeperSpeech = "I'll bar the storehouse door.";
+    residentSpeech.set(keeper.resident.id, {
+      text: keeperSpeech.slice(0, 72),
+      untilSessionMs: Math.min(
+        Number.MAX_SAFE_INTEGER,
+        Math.max(0, session.sessionPlayMilliseconds) + 4_000,
+      ),
+    });
+    session.sessionChanges.push("You warned a visible store keeper, who secured the physical food stock.");
+    if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
+    announce(
+      session,
+      "You warn the keeper. The storehouse door is barred, and the remaining food stays physically inside.",
+    );
+    soundscape.play("ui", 0.6);
+    refreshViews();
+    saveInBackground();
+    return true;
+  }
+
   function interact(): void {
     if (session.paused || session.titleVisible) return;
     const reachableParcel = physicalCargoPartitionsForView(physicalCargo, worldView)
@@ -7626,6 +7887,7 @@ export async function createTideweftRuntime(
       deliverReport();
       return;
     }
+    if (secureSettlementFoodStore()) return;
     if (player.activeContractId === null && player.report === null) {
       const localOffers = worldView.contracts
         .filter((contract) => contract.status === "offered" && contract.originSettlementId === settlementId)
@@ -8250,6 +8512,15 @@ export async function createTideweftRuntime(
     if (coreEcologySnapshot === null) {
       throw new Error("Refusing to save inconsistent core ecology state");
     }
+    const settlementEcologySnapshot = canonicalRuntimeSettlementEcology(
+      settlementEcology,
+      worldSnapshot,
+      bio0EcologySnapshot,
+      coreEcologySnapshot,
+    );
+    if (settlementEcologySnapshot === null) {
+      throw new Error("Refusing to save inconsistent settlement ecology state");
+    }
     const porterResponseSnapshot = canonicalRuntimePorterResponse(
       porterResponse,
       bio0EcologySnapshot,
@@ -8284,6 +8555,7 @@ export async function createTideweftRuntime(
       }, worldSnapshot.meta.completedTick) ?? invalidPlayerPerceptionCarry(),
       bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
       coreEcology: serializeCoreEcologyAggregatePatch(coreEcologySnapshot),
+      settlementEcology: serializeSettlementEcologyState(settlementEcologySnapshot),
       porterResponse: porterResponseSnapshot,
       livingActorPlayerChoice: livingActorPlayerChoiceSnapshot,
     };
@@ -8386,6 +8658,7 @@ export async function createTideweftRuntime(
       physicalCargo,
       bio0Ecology,
       coreEcology,
+      settlementEcology,
       porterResponse,
       livingActorPlayerChoice,
       regionalTravel,
@@ -8431,6 +8704,7 @@ export async function createTideweftRuntime(
       physicalCargo = prior.physicalCargo;
       bio0Ecology = prior.bio0Ecology;
       coreEcology = prior.coreEcology;
+      settlementEcology = prior.settlementEcology;
       porterResponse = prior.porterResponse;
       livingActorPlayerChoice = prior.livingActorPlayerChoice;
       regionalTravel = prior.regionalTravel;
@@ -8554,6 +8828,7 @@ type LoadedAutosave = {
   readonly physicalCargo: PhysicalCargoState;
   readonly bio0Ecology: Bio0EcologyState;
   readonly coreEcology: CoreEcologyAggregatePatchState;
+  readonly settlementEcology: SettlementEcologyState;
   readonly porterResponse: PorterResponseState;
   readonly livingActorPlayerChoice: LivingActorPlayerChoiceState;
   readonly regionalTravel: RegionalPlayerTravelState;
@@ -8772,6 +9047,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== RAIN_CHORUS_GAME_SAVE_VERSION
         && decoded.version !== TIDAL_TABLE_GAME_SAVE_VERSION
         && decoded.version !== WATERFOWL_GAME_SAVE_VERSION
+        && decoded.version !== TIDAL_CONVERGENCE_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -8791,8 +9067,34 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         typeof decoded.integrity !== "string"
         || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
       ) throw new Error("Save envelope integrity does not match its contents");
-      if (
-        decoded.version === GAME_SAVE_VERSION
+      if (decoded.version === GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "bio0Ecology",
+            "coreEcology",
+            "fieldResources",
+            "format",
+            "integrity",
+            "livingActorPlayerChoice",
+            "perceptionCarry",
+            "physicalCargo",
+            "player",
+            "porterResponse",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "settlementEcology",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+          || typeof decoded.bio0Ecology !== "string"
+          || typeof decoded.coreEcology !== "string"
+          || typeof decoded.settlementEcology !== "string"
+        ) throw new Error("Version 16 save envelope is not canonical");
+      } else if (
+        decoded.version === TIDAL_CONVERGENCE_GAME_SAVE_VERSION
         || decoded.version === WATERFOWL_GAME_SAVE_VERSION
         || decoded.version === TIDAL_TABLE_GAME_SAVE_VERSION
         || decoded.version === RAIN_CHORUS_GAME_SAVE_VERSION
@@ -8930,6 +9232,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || Object.hasOwn(decoded, "perceptionCarry")
         || Object.hasOwn(decoded, "bio0Ecology")
         || Object.hasOwn(decoded, "coreEcology")
+        || Object.hasOwn(decoded, "settlementEcology")
         || Object.hasOwn(decoded, "porterResponse")
         || Object.hasOwn(decoded, "livingActorPlayerChoice")
       ) {
@@ -8943,6 +9246,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       || Object.hasOwn(decoded, "perceptionCarry")
       || Object.hasOwn(decoded, "bio0Ecology")
       || Object.hasOwn(decoded, "coreEcology")
+      || Object.hasOwn(decoded, "settlementEcology")
       || Object.hasOwn(decoded, "porterResponse")
       || Object.hasOwn(decoded, "livingActorPlayerChoice")
     ) {
@@ -8961,7 +9265,10 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (bio0Ecology === null) {
       throw new Error("Current save contains invalid BIO0 ecology state");
     }
-    const coreEcology = decoded.version === GAME_SAVE_VERSION
+    const coreEcology = (
+      decoded.version === GAME_SAVE_VERSION
+      || decoded.version === TIDAL_CONVERGENCE_GAME_SAVE_VERSION
+    )
       ? canonicalRuntimeCoreEcology(
           deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
           world,
@@ -9008,6 +9315,31 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             : createRuntimeCoreEcology(world, bio0Ecology);
     if (coreEcology === null) {
       throw new Error("Current save contains invalid core ecology state");
+    }
+    const settlementEcology = decoded.version === GAME_SAVE_VERSION
+      ? (() => {
+          const state = deserializeSettlementEcologyState(decoded.settlementEcology);
+          if (serializeSettlementEcologyState(state) !== decoded.settlementEcology) return null;
+          const accepted = canonicalRuntimeSettlementEcology(
+            state,
+            world,
+            bio0Ecology,
+            coreEcology,
+            compatibilityView,
+          );
+          if (accepted === null) return null;
+          if (accepted.pendingLoss === null) return accepted;
+          const recovered = recoverPendingSettlementFoodLoss(accepted, coreEcology);
+          return recovered?.state ?? null;
+        })()
+      : createRuntimeSettlementEcology(
+          world,
+          bio0Ecology,
+          coreEcology,
+          compatibilityView,
+        );
+    if (settlementEcology === null) {
+      throw new Error("Current save contains invalid settlement ecology state");
     }
     const porterResponse = decoded.version >= LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION
       ? canonicalRuntimePorterResponse(decoded.porterResponse, bio0Ecology, world)
@@ -9186,6 +9518,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       physicalCargo: loadedPhysicalCargo,
       bio0Ecology,
       coreEcology,
+      settlementEcology,
       porterResponse,
       livingActorPlayerChoice,
       regionalTravel,

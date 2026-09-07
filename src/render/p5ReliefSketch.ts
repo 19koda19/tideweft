@@ -62,6 +62,7 @@ import {
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
+import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
 import {
   createTerrainPerceptionMemoryStore,
@@ -3552,6 +3553,42 @@ export function createTideweftReliefRenderer(
       if (directlyVisible) p.emissiveMaterial(color);
       else p.ambientMaterial(RELIEF_PALETTE.ink);
       p.cone(tileSize * 0.38, tileSize * 0.42, 5, 1);
+      p.pop();
+
+      const foodStore = visibleSettlementFoodStore(settlement, directlyVisible);
+      if (!foodStore) return;
+
+      const annexHeight = tileSize * 0.25;
+      const annexX = settlement.position.x + tileSize * 0.34;
+      p.push();
+      p.noStroke();
+      p.translate(
+        annexX,
+        -surface - annexHeight / 2 - 1,
+        settlement.position.y,
+      );
+      p.ambientMaterial(RELIEF_PALETTE.built);
+      p.box(tileSize * 0.25, annexHeight, tileSize * 0.34);
+      p.pop();
+
+      // The door leaf is structural rather than a floating label. Its angle
+      // distinguishes open from secured even when color is inaccessible.
+      p.push();
+      p.noStroke();
+      p.translate(
+        annexX + tileSize * 0.132,
+        -surface - annexHeight * 0.47 - 1,
+        settlement.position.y,
+      );
+      p.rotateY(-foodStore.doorAngle);
+      p.emissiveMaterial(
+        foodStore.closure === "open" ? RELIEF_PALETTE.amber : RELIEF_PALETTE.tide,
+      );
+      p.box(tileSize * 0.018, annexHeight * 0.72, tileSize * 0.16);
+      if (foodStore.hasCrossbar) {
+        p.translate(tileSize * 0.012, 0, 0);
+        p.box(tileSize * 0.018, annexHeight * 0.12, tileSize * 0.22);
+      }
       p.pop();
     };
 

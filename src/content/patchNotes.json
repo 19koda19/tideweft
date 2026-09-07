@@ -2,6 +2,47 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.23",
+      "releaseDate": "2026-09-07",
+      "buildIdentity": "0.3.3-alpha.23",
+      "summary": "The Storehouse Door adds one bounded starting-harbor food store whose physical produce, weather-shaped scent, existing wildlife pressure, keeper knowledge, and secured door meet through shared authoritative systems.",
+      "gameplayContractVersion": 21,
+      "tutorialVersion": 33,
+      "categories": {
+        "gameplay": [
+          "One starting-harbor store now owns a persistent physical fresh-produce lot through the ordinary settlement-cargo carrier contract. It is a distinct material stock, not a second view of the settlement's abstract food economy; its remaining quantity and every authenticated loss stay accounted for under one stable identity.",
+          "An open store door projects the produce through the existing scent owner, so current wind, rain, distance, and packaging leakage determine whether the existing brown-rat aggregate receives an attraction stimulus. A matching authenticated attraction event can cause at most one physical produce-unit loss; rat relocation itself still conserves the aggregate and does not imply a rat actor, attack, death, or live-prey meal.",
+          "An existing cat's lawfully visible presence can pressure the rat aggregate through shared perception; it gains no hidden rat knowledge or investigation. Alpha 23's keeper response is only the player's in-person report; direct keeper observations are merely authenticated by the shared kernel for later wiring. A secured door persists and contains scent."
+        ],
+        "fixes": [
+          "The store, keeper, rat population, nearest store anchor, produce lot, door state, and loss transaction use stable authenticated identities. A loss is staged and committed against the exact matching attraction event and exact physical unit, so a tick, reload, or interrupted save cannot replay it, duplicate food, or remove an unrelated lot.",
+          "Storehouse presentation is derived from the same authoritative state in Chart and Relief. The directly visible settlement mark shows its small door status, while a nearby contextual action exposes only the in-person keeper request.",
+          "Store losses enter EVENTS only when the courier directly caused or could observe them. Bringing a keeper or store back into view does not disclose an earlier unseen event, hidden rat count, private scent path, or distant simulation history.",
+          "The pane-free ABOUT surface keeps a safe gap above the action dock at the narrowest supported portrait size while retaining its scrollable body and 44-pixel controls."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. The Storehouse Door adds no species, courier statistic, free resource, Promise payout, abstract settlement stock mutation, or general storage benefit.",
+          "An open door creates a bounded ecological vulnerability; securing it contains scent and prevents later store loss without deleting the already-existing rat population or cat pressure. Each authenticated matching event can remove no more than one real produce unit.",
+          "Shared abstraction checks, a bounded signed-coordinate property sweep, physical-item and aggregate conservation, deterministic migration and replay checks, and one representative store-rat-visible-cat witness validate this seam. Existing shared bounded-fuzz and performance gates remain in the regression suite; no exhaustive species-by-species or animal-pair matrix is required."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D present the same small storehouse-door state as part of the directly visible starting-harbor settlement mark. No new field pane or hidden ecology readout is added.",
+          "When the player is physically near the store and its keeper, the contextual action offers the live in-person report that lets that keeper secure the door. Remote selection cannot issue the request, and no keeper reacts as though they heard the world offscreen.",
+          "Field Manual version 33 explains the one physical store, open-door scent, wind and rain ownership, bounded authenticated loss, persistent secured state, direct keeper request, observation-safe EVENTS, unchanged species roster, and systems that remain absent."
+        ],
+        "saves": [
+          "The outer session advances to version 16 while habitat analysis remains version 7 and aggregate ecology remains version 4. The new settlement-ecology root seals the stable store, keeper, rat aggregate and anchor binding, physical produce carrier, door state, knowledge, and bounded loss history.",
+          "A sealed version-15 Tidal Convergence save migrates exactly once by deriving the same one starting-harbor store and physical produce lot from established world identity. Every earlier habitat, actor, aggregate unit, item, Promise, custody record, evidence record, and world fact remains exact; migration neither subtracts from nor adds to the settlement's abstract food stock.",
+          "Save, reload, failed-tick rollback, region unload, negative coordinates, and extreme signed coordinates preserve the same store identity, closure, remaining units, and completed loss ordinals. Reload cannot reopen the door, reroll an event, duplicate the lot, or replay one loss."
+        ],
+        "knownLimitations": [
+          "This is one bounded starting-harbor storehouse fixture and a reusable settlement-ecology boundary, not worldwide settlement storage, a full domestic-life schedule, a complete food economy, livestock, or completion of Directive 04_1.",
+          "No new species is added. Wildlife still has no harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, ecological migration, or complete circadian-life system; store produce loss is a narrow authenticated physical transaction.",
+          "General scent fields, complete sound and evidence tracking, rumors, broad keeper schedules, cat ownership, livestock guardianship or herding, and exhaustive species or pair coverage remain outside this release. Unseen store events remain world truth without becoming player knowledge."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.22",
       "releaseDate": "2026-09-06",
       "buildIdentity": "0.3.3-alpha.22",

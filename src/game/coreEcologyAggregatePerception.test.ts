@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
+import { seedFromText } from "../sim/rng";
 import { FIXED_POINT, type TerrainTileView, type WeatherKind, type WorldView } from "../sim/types";
 import {
   CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_CANDIDATES,
@@ -57,6 +58,12 @@ import {
   worldPositionToSpatialFrame,
   type WorldPosition,
 } from "./worldPosition";
+import {
+  createSettlementEcologyState,
+  projectSettlementFoodStoreSource,
+  proposeSettlementRatAttraction,
+  stageSettlementFoodLoss,
+} from "./settlementEcology";
 
 const ORIGIN = createRegionCoord(-17, 23);
 const SEED_TEXT = "settlement shadows interaction";
@@ -153,6 +160,82 @@ describe("aggregate ecology shared-perception adapter", () => {
     expect(dryFrame?.stimuli.find(({ sourceKind }) => sourceKind === "exposed-food"))
       .toMatchObject({ channels: ["scent"], response: "attraction" });
     expect(JSON.stringify(dryFrame)).not.toContain("food-scent");
+  });
+
+  it("composes an open store and visible cat pressure through one bounded rat resolver", () => {
+    const current = fixture();
+    const ratsBefore = ratPopulation(current.patch);
+    const catAnchor = ratsBefore.anchors.find(({ populationUnits }) => populationUnits > 0);
+    const storeAnchor = ratsBefore.anchors.find(({ anchorOrdinal }) => (
+      anchorOrdinal !== catAnchor?.anchorOrdinal
+    ));
+    if (catAnchor === undefined || storeAnchor === undefined) {
+      throw new Error("Store/cat composition fixture requires two rat anchors");
+    }
+    const store = createSettlementEcologyState({
+      rootSeed: seedFromText(SEED_TEXT),
+      settlementId: 23,
+      keeperActorId: "H-v1-alpha23-composition-keeper",
+      position: storeAnchor.position,
+      aggregatePatch: current.patch,
+    });
+    const projectedStore = projectSettlementFoodStoreSource(store);
+    if (projectedStore === null) throw new Error("Open store did not project physical food");
+    const cat: CoreEcologyAggregateVisualSource = {
+      sourceReferenceId: "CAT-v1-alpha23-composition",
+      sourceSpecies: "domestic-cat",
+      position: catAnchor.position,
+      movementSalience: FIXED_POINT,
+    };
+
+    const frame = deriveCoreEcologySettlementShadowsStimulusFrame(
+      input(current, [cat], [projectedStore.source]),
+    );
+    const ratStimuli = frame?.stimuli.filter(({ targetAggregateId }) => (
+      targetAggregateId === ratsBefore.aggregateId
+    ));
+    expect(ratStimuli).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceKind: "cat",
+        sourceReferenceId: cat.sourceReferenceId,
+        response: "pressure",
+        channels: ["vision"],
+      }),
+      expect.objectContaining({
+        sourceKind: "exposed-food",
+        sourceReferenceId: store.identity.foodLotId,
+        response: "attraction",
+        channels: ["scent"],
+      }),
+    ]));
+    const attraction = proposeSettlementRatAttraction(store, current.patch, frame);
+    expect(attraction).not.toBeNull();
+
+    const first = stepCoreEcologySettlementShadows(current.patch, 0, frame);
+    const replay = stepCoreEcologySettlementShadows(current.patch, 0, frame);
+    expect(replay).toEqual(first);
+    if (first === null || attraction === null) {
+      throw new Error("Shared rat resolver rejected the composed frame");
+    }
+    const ratEvents = first.events.filter(({ aggregateId }) => aggregateId === ratsBefore.aggregateId);
+    expect(ratEvents).toHaveLength(1);
+    expect(ratEvents[0]).toMatchObject({
+      sourceKind: "cat",
+      sourceReferenceId: cat.sourceReferenceId,
+      displacedUnits: 1,
+      mortality: "none",
+      cargoInteraction: false,
+      itemConsumption: "none",
+    });
+    const ratsAfter = ratPopulation(first.patch);
+    expect(ratsAfter.populationSize).toBe(ratsBefore.populationSize);
+    expect(ratsAfter.anchors.reduce((sum, { populationUnits }) => sum + populationUnits, 0))
+      .toBe(ratsBefore.populationSize);
+
+    // Cat pressure won the shared deterministic arbitration. Its event cannot
+    // authenticate a store-food loss, so the sole physical lot stays exact.
+    expect(stageSettlementFoodLoss(store, attraction, first.patch, ratEvents[0])).toBeNull();
+    expect(projectSettlementFoodStoreSource(store)).toEqual(projectedStore);
   });
 
   it("turns actual rain plus mapped terrain exposure into a lawful touch/evidence gradient", () => {

@@ -143,6 +143,17 @@ export type SettlementStatus =
 
 export type SettlementGlyph = "harbor" | "hearth" | "workshop" | "garden" | "relay";
 
+export type SettlementFoodStoreClosure = "open" | "secured";
+
+/**
+ * Directly observable storehouse detail. Its absence is intentional: remote
+ * settlement memory must not disclose whether a physical food store is open.
+ */
+export interface SettlementFoodStoreView {
+  readonly id: string;
+  readonly closure: SettlementFoodStoreClosure;
+}
+
 export interface SettlementView {
   readonly id: string;
   readonly name: string;
@@ -160,6 +171,7 @@ export interface SettlementView {
   readonly currentVisibility?: 0 | 0.5 | 1;
   readonly selected?: boolean;
   readonly label?: string;
+  readonly foodStore?: SettlementFoodStoreView;
 }
 
 export type CargoProperty = "ordinary" | "heavy" | "fragile" | "perishable" | "confidential";
