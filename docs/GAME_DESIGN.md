@@ -318,7 +318,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Released Alpha 23 uses outer save format 16 while habitat version 7 and aggregate schema 4 remain unchanged. An authenticated sealed version-15 envelope derives the same starting-harbor store, existing keeper and rat binding, physical fresh-produce carrier, open door, and empty bounded loss history once while preserving every earlier actor, aggregate unit, item, Promise, custody record, evidence record, and world fact. Store identity, closure, remaining units, keeper knowledge, and completed loss ordinals persist across reload and failed-tick rollback; the physical lot never mutates the separate abstract settlement food stock.
 - Released Alpha 24 uses outer save format 17, habitat version 8, and settlement ecology version 2. An authenticated sealed version-16 envelope retains every prior habitat entry as the exact prefix before deriving the yard anchor, stable chicken individuals, flock, and custody record once. It preserves the store and lot identities, door state, quantities, completed loss ordinals, keeper knowledge, all earlier actors and groups, aggregate units, items, Promises, evidence, and world facts. Pending/resolved domestic-food transactions are canonicalized on load so interruption cannot duplicate or reconsume a unit.
 - Released Alpha 25 uses outer save format 18, habitat version 9, and settlement ecology version 3. An authenticated sealed version-17 envelope retains the complete Alpha-24 habitat, chicken members, flock, coop, keeper, custody, store, food transactions, actors, groups, aggregate units, items, Promises, evidence, and world facts before appending one separate pen, exactly two goats, one herd, and one additional custody relationship. Plural canonical custody rejects duplicate actors, groups, relationships, homes, or structures; reload cannot reroll either domestic population or assign one physical item to two contenders.
-- Source candidate Alpha 26 uses outer save format 19 and settlement ecology version 4 while habitat remains version 9 and aggregate ecology remains version 4. A sealed version-18 envelope preserves the complete Far Paddock habitat, actors, flock, herd, homes, custody, store, food history, groups, aggregate units, items, Promises, evidence, and world facts before appending one deterministic working dog, kennel, third custody, dog-roster root, and generic working-animal assignment. Pending work activity recovers exactly once; reload, rollback, and representative regional travel cannot reroll or duplicate its actor, relationship, assignment, ordinal, or position.
+- Released Alpha 26 uses outer save format 19 and settlement ecology version 4 while habitat remains version 9 and aggregate ecology remains version 4. A sealed version-18 envelope preserves the complete Far Paddock habitat, actors, flock, herd, homes, custody, store, food history, groups, aggregate units, items, Promises, evidence, and world facts before appending one deterministic working dog, kennel, third custody, dog-roster root, and generic working-animal assignment. Pending work activity recovers exactly once; reload, rollback, and representative regional travel cannot reroll or duplicate its actor, relationship, assignment, ordinal, or position.
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
@@ -380,7 +380,7 @@ guardian behavior, full schedules, autonomous home return, cross-region
 ecological migration, worldwide livestock, full Wave D, or Directive 04_1
 completion.
 
-Source candidate Alpha 26 advances the manual to version 36 with one separate
+Released Alpha 26 advances the manual to version 36 with one separate
 settlement working dog, kennel custody, a generic persisted guardian assignment,
 species-neutral perception participants, lawful anonymous alarm investigation,
 shared task/escape pathing, actor-owned self-preservation, knowledge-honest
@@ -653,8 +653,10 @@ Exact release commit `29af7793346c0c3977a5ca727b79feb3a50b83bb` passed CI
 run `34108539228` and Pages run `34108539255`; five cache-bypassed live
 artifacts match the tested local production build byte-for-byte.
 
-Source version `0.3.3-alpha.26 — The Paddock Watch` is a
-**SOURCE_CANDIDATE**, not yet CI-, Pages-, or live-verified. It adds one
+Release `0.3.3-alpha.26 — The Paddock Watch` is **LIVE_VERIFIED** at exact
+commit `e3aae174d962ec609b9463e40320227237c9fa1f`. CI run `34143286763` and
+Pages run `34143286720` succeeded, and five cache-bypassed live artifacts match
+the tested local production build byte-for-byte. It adds one
 separate settlement-custodied dog and kennel beside the existing two-goat herd
 without adding a species, habitat record, dog population, or bespoke guardian
 brain. One versioned working-animal assignment records the dog, existing keeper
@@ -673,7 +675,7 @@ animal ecology, full Wave D, or Directive 04_1 completion. Evidence remains
 shared-invariant and representative-chain based rather than species-by-species
 or N².
 
-Released through Alpha 25:
+Released through Alpha 26:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
@@ -687,6 +689,7 @@ Released through Alpha 25:
 - one bounded Tidal Convergence integration: six existing activity-bearing roles use reusable affordance profiles, capability-selected current surface observation, authenticated destination authority, shared projection firewalls, representative emergence witnesses, and bounded interaction-graph fuzzing without adding a species, changing a save schema, or claiming an N² pair matrix;
 - one bounded Yard Flock release: two or three stable individual domestic chickens, one stable settlement-custody flock, a bounded home anchor, shared perception/attention/terrestrial-movement/group-alarm behavior, an exact staged physical-store claim, knowledge-honest dual-view presentation, and one-time version-16-to-17 adoption;
 - one bounded Far Paddock release: exactly two stable individual domestic goats, one stable herd, a separate pen, plural settlement custody and typed homes, shared perception/attention/terrestrial-movement/group-alarm behavior, deterministic physical-resource arbitration, knowledge-honest dual-view presentation, and one-time version-17-to-18 adoption;
+- one bounded Paddock Watch release: exactly one separate settlement working dog, one kennel and third custody, and one generic persisted guardian assignment over ordinary cognition, perception, self-preservation, and shared locomotion; a representative rabbit-alarm/fox chain remains conditional on lawful perception, and one-time version-18-to-19 adoption preserves every prior actor, item, relationship, and world fact;
 - one versioned production species contract covering exactly nineteen current records—human, domestic dog, deer, gull, black bear, brown rat, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, domestic chicken, and domestic goat—while keeping rat, frog, silverside, and fiddler-crab populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, plural domestic custody, typed homes, deterministic resource contention, and physical item claims; complete scent/evidence tracking, foliage consumption, health/death, full circadian behavior, worldwide habitat breadth, ecological migration/reproduction, complete food-web turnover, and an exhaustive pair matrix remain closed;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;
