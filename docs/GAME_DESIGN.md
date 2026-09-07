@@ -583,6 +583,31 @@ match the tested local production build byte-for-byte. The release adds none of
 the explicitly deferred mortality, reproduction, schedule, migration, or
 worldwide-livestock systems.
 
+Source version `0.3.3-alpha.25 — The Far Paddock` adds exactly two domestic
+goats in one stable herd at a habitat-derived pen deliberately separated from
+the storehouse yard and established animal placements. Each goat remains an
+individual that can be perceived, selected, inspected, materialized, moved,
+and reached by group alarm through the same Living Weft owners as the existing
+animals. Their visible horned and bearded form is distinct in Chart and Relief,
+while ABOUT exposes only current directly observable detail.
+
+The settlement now holds several bounded domestic relationships rather than a
+single hardcoded flock record. Chickens keep their exact keeper, flock, coop,
+and open-store feeding behavior; goats receive a different herd, pen, and
+custody without gaining chicken food access. When lawful animals contend for a
+physical resource, reach wins first, then current need, then stable identity,
+so array order cannot decide ownership. One actor or group cannot belong to two
+homes. This generalization is the progression: a species is a data/profile
+plug-in over reusable identity, senses, needs, attention, group, locomotion,
+custody, conservation, and presentation rules—not a new bespoke AI tree.
+
+This bounded slice does not yet make goats browse foliage, produce milk or
+wool, return home on a schedule, follow a herder, receive guardian protection,
+leave tracks or calls, reproduce, suffer injury, die, or leave carcasses. The
+test strategy deliberately proves shared properties, exact save adoption,
+physical conservation, deterministic contention, and a few representative
+compositions rather than enumerating every animal or animal pair.
+
 Released through Alpha 24:
 
 - the seven-settlement/42-resident deterministic world;

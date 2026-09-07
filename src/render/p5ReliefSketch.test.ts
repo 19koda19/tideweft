@@ -373,6 +373,7 @@ function wildlifeView(
     "snowy-egret": "Snowy egret",
     "american-black-duck": "American black duck",
     "domestic-chicken": "Domestic chicken",
+    "domestic-goat": "Domestic goat",
     "north-american-river-otter": "North American river otter",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
@@ -387,6 +388,7 @@ function wildlifeView(
     "snowy-egret": "EGRET-",
     "american-black-duck": "DUCK-",
     "domestic-chicken": "CHICKEN-",
+    "domestic-goat": "GOAT-",
     "north-american-river-otter": "OTTER-",
   };
   return {
@@ -396,6 +398,7 @@ function wildlifeView(
     position: { x: 48, y: 48 },
     facing: Math.PI * 0.25,
     sizeScale: 1,
+    appearanceKey: species === "domestic-goat" ? "brown-coated" : "test-visible-morph",
     behavior: "watch",
     conditionLabels: [],
     selected: false,
@@ -1929,6 +1932,34 @@ describe("Relief wildlife presentation", () => {
     harness.renderer.destroy();
   });
 
+  it("draws the same authenticated goat coat in Relief without disclosing the key", () => {
+    vi.stubGlobal("performance", { now: () => 320 });
+    const base = view("relief-authenticated-goat-coat", { x: 48, y: 48 });
+    const goat = wildlifeView("domestic-goat", {
+      actorId: "GOAT-AUTHENTICATED-PIED",
+      appearanceKey: "pied-coated",
+      conditionLabels: ["WATCHFUL"],
+      selected: true,
+    });
+    const harness = renderHarness({ ...base, wildlife: [goat] });
+    harness.draw();
+
+    for (const color of ["#e2d6bc", "#55463b", "#211c19", "#b99d72"]) {
+      expect(p5Harness.materialTrace.some(({ method, args }) => (
+        method === "ambientMaterial" && args[0] === color
+      ))).toBe(true);
+    }
+    expect(p5Harness.materialTrace.some(({ method, args }) => (
+      method === "ambientMaterial" && args[0] === "#8f7150"
+    ))).toBe(false);
+    const layer = harness.mount.children.find((child) => (
+      child.className === "relief-label-layer"
+    ));
+    expect(layer?.children.map(({ textContent }) => textContent).join(" "))
+      .not.toContain("pied-coated");
+    harness.renderer.destroy();
+  });
+
   it("renders one long-bodied swimming river otter without a group or private-state label", () => {
     vi.stubGlobal("performance", { now: () => 320 });
     p5Harness.reducedMotion = true;
@@ -2131,6 +2162,7 @@ describe("Relief wildlife presentation", () => {
       "snowy-egret",
       "american-black-duck",
       "domestic-chicken",
+      "domestic-goat",
       "north-american-river-otter",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
@@ -2145,6 +2177,7 @@ describe("Relief wildlife presentation", () => {
       "snowy-egret": "EGRET-",
       "american-black-duck": "DUCK-",
       "domestic-chicken": "CHICKEN-",
+      "domestic-goat": "GOAT-",
       "north-american-river-otter": "OTTER-",
     };
 

@@ -169,6 +169,12 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN BIRD",
     representation: "individual",
   },
+  "domestic-goat": {
+    identifiedName: "Domestic goat",
+    identifiedHeading: "DOMESTIC GOAT",
+    unidentifiedHeading: "UNKNOWN LIVESTOCK",
+    representation: "individual",
+  },
   "north-american-river-otter": {
     identifiedName: "North American river otter",
     identifiedHeading: "NORTH AMERICAN RIVER OTTER",

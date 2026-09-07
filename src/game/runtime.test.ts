@@ -295,7 +295,7 @@ function resealGameSave(envelope: TestGameSaveEnvelope): void {
   envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v17/v8 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v18/v9 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
@@ -303,16 +303,20 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   const envelope = decodeGameSave(record);
   const current = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
   if (
-    envelope.version !== 17
-    || record.payloadVersion !== 17
+    envelope.version !== 18
+    || record.payloadVersion !== 18
     || current === null
     || (
-      current.derivation.kind !== "habitat-v8"
-      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
+      current.derivation.kind !== "habitat-v9"
+      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     )
   ) throw new Error("fixture requires a canonical current domestic-yard save");
 
-  const { domesticAnchor: _domesticAnchor, ...domesticYardHabitat } =
+  const {
+    domesticAnchor: _domesticAnchor,
+    domesticPenAnchor: _domesticPenAnchor,
+    ...domesticYardHabitat
+  } =
     current.derivation.habitat;
   const tidalWebHabitat = canonicalizeCoreEcologyTidalWebHabitatAssemblage({
     ...domesticYardHabitat,
@@ -330,7 +334,7 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   }
   const ecology = canonicalizeCoreEcologyAggregatePatch({
     ...current,
-    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v8"
+    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v9"
       ? {
           kind: "legacy-fixed-v1-with-habitat-v7",
           habitat: tidalWebHabitat,
@@ -342,11 +346,14 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
     groups: {
       ...current.groups,
       groups: current.groups.groups.filter(
-        ({ identity }) => identity.species !== "domestic-chicken",
+        ({ identity }) => (
+          identity.species !== "domestic-chicken"
+          && identity.species !== "domestic-goat"
+        ),
       ),
     },
     populations: current.populations.filter(
-      ({ species }) => species !== "domestic-chicken",
+      ({ species }) => species !== "domestic-chicken" && species !== "domestic-goat",
     ),
   });
   if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-23 ecology");
@@ -355,8 +362,11 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
     throw new Error("current fixture omitted its settlement ecology sidecar");
   }
   const currentSettlement = JSON.parse(envelope.settlementEcology) as Record<string, unknown>;
+  const domesticCustodies = Array.isArray(currentSettlement.domesticCustodies)
+    ? currentSettlement.domesticCustodies
+    : [];
   const {
-    domesticCustody: _domesticCustody,
+    domesticCustodies: _domesticCustodies,
     lastResolvedDomesticFoodUseCauseEventId: _domesticCauseEventId,
     lastResolvedDomesticFoodUseCauseEventTick: _domesticCauseEventTick,
     lastResolvedDomesticFoodUseMemberActorId: _domesticMemberActorId,
@@ -365,10 +375,17 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
     pendingDomesticFoodUse: _pendingDomesticFoodUse,
     ...priorSettlement
   } = currentSettlement;
+  if (typeof priorSettlement.revision !== "number") {
+    throw new Error("current fixture omitted settlement revision");
+  }
 
   envelope.version = 16;
   envelope.coreEcology = serializeCoreEcologyAggregatePatch(ecology);
-  envelope.settlementEcology = stableStringify({ ...priorSettlement, version: 1 });
+  envelope.settlementEcology = stableStringify({
+    ...priorSettlement,
+    revision: priorSettlement.revision - domesticCustodies.length,
+    version: 1,
+  });
   resealGameSave(envelope);
   return Object.freeze({
     ecology,
@@ -1546,11 +1563,11 @@ describe("perpetual new worlds", () => {
     const currentEcology = deserializeCoreEcologyAggregatePatch(
       currentEnvelope.coreEcology,
     );
-    expect(currentEnvelope.version).toBe(17);
-    expect(currentRecord.payloadVersion).toBe(17);
-    expect(currentEcology?.derivation.kind).toBe("habitat-v8");
-    if (currentEcology?.derivation.kind !== "habitat-v8") {
-      throw new Error("fixture did not create current domestic-yard ecology");
+    expect(currentEnvelope.version).toBe(18);
+    expect(currentRecord.payloadVersion).toBe(18);
+    expect(currentEcology?.derivation.kind).toBe("habitat-v9");
+    if (currentEcology?.derivation.kind !== "habitat-v9") {
+      throw new Error("fixture did not create current domestic-pen ecology");
     }
 
     const alpha16 = domesticYardSaveAsTidalWebV16(currentRecord);
@@ -1614,10 +1631,10 @@ describe("perpetual new worlds", () => {
     const migratedEcology = deserializeCoreEcologyAggregatePatch(
       migratedEnvelope.coreEcology,
     );
-    expect(migratedEnvelope.version).toBe(17);
-    expect(migratedRecord.payloadVersion).toBe(17);
-    expect(migratedEcology?.derivation.kind).toBe("habitat-v8");
-    if (migratedEcology?.derivation.kind !== "habitat-v8") {
+    expect(migratedEnvelope.version).toBe(18);
+    expect(migratedRecord.payloadVersion).toBe(18);
+    expect(migratedEcology?.derivation.kind).toBe("habitat-v9");
+    if (migratedEcology?.derivation.kind !== "habitat-v9") {
       throw new Error("v11 migration did not produce canonical current ecology");
     }
 
@@ -2001,7 +2018,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(17);
+    expect(prepared.version).toBe(18);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2211,8 +2228,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(17);
-    expect(durableRecord.payloadVersion).toBe(17);
+    expect(durable.version).toBe(18);
+    expect(durableRecord.payloadVersion).toBe(18);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

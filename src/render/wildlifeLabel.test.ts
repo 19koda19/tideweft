@@ -12,6 +12,7 @@ describe("shared wildlife world-label copy", () => {
     expect(visibleWildlifeGroupSuffix({ species: "snowy-egret", groupSize: 5 })).toBe("");
     expect(visibleWildlifeGroupSuffix({ species: "american-black-duck", groupSize: 5 })).toBe("");
     expect(visibleWildlifeGroupSuffix({ species: "domestic-chicken", groupSize: 5 })).toBe("");
+    expect(visibleWildlifeGroupSuffix({ species: "domestic-goat", groupSize: 5 })).toBe("");
     expect(visibleWildlifeGroupSuffix({
       species: "north-american-river-otter",
       groupSize: 5,

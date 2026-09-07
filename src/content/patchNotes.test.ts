@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.24",
-      buildIdentity: "0.3.3-alpha.24",
-      gameplayContractVersion: 22,
-      tutorialVersion: 34,
+      version: "0.3.3-alpha.25",
+      buildIdentity: "0.3.3-alpha.25",
+      gameplayContractVersion: 23,
+      tutorialVersion: 35,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes The Yard Flock and retains the earlier habitat releases", () => {
+  it("scopes The Far Paddock and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const yardRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.24",
+    );
+    const yardCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => yardRelease?.categories[category] ?? [])
       .join(" ");
     const storehouseRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.23",
@@ -148,21 +155,26 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("one deterministic flock of two or three individual domestic chickens");
-    expect(activeCopy).toContain("shared wildlife actor, direct perception, attention, terrestrial locomotion, and group contracts");
-    expect(activeCopy).toContain("consume one authenticated unit per resolved event");
-    expect(activeCopy).toContain("Securing the door removes that opportunity");
-    expect(activeCopy).toContain("hidden activity remains world truth without becoming player narration");
-    expect(activeCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 17");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis advances to version 8");
+    expect(activeCopy).toContain("exactly two individually identified domestic goats");
+    expect(activeCopy).toContain("existing wildlife actor, direct perception, attention, terrestrial locomotion, broad ecological-role, and group-alarm owners");
+    expect(activeCopy).toContain("several canonical domestic custody relationships and typed coop or pen homes");
+    expect(activeCopy).toContain("physical reach, current need, and stable actor identity");
+    expect(activeCopy).toContain("replace a bespoke test suite for every animal or an N-squared pair matrix");
+    expect(yardCopy).toContain("one deterministic flock of two or three individual domestic chickens");
+    expect(yardCopy).toContain("shared wildlife actor, direct perception, attention, terrestrial locomotion, and group contracts");
+    expect(yardCopy).toContain("consume one authenticated unit per resolved event");
+    expect(yardCopy).toContain("Securing the door removes that opportunity");
+    expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
+    expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 18");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis advances to version 9");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology advances to version 2");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-16 Storehouse Door save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor chicken flock");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology advances to version 3");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-17 Yard Flock save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("one bounded starting-harbor goat herd");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide livestock");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no authored call");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, eggs, nesting, reproduction");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, foliage browsing, milk, wool, reproduction");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Guardian and herding behavior");
     expect(storehouseCopy).toContain("persistent physical fresh-produce lot");
     expect(storehouseCopy).toContain("not a second view of the settlement's abstract food economy");

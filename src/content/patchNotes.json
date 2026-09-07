@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.25",
+      "releaseDate": "2026-09-07",
+      "buildIdentity": "0.3.3-alpha.25",
+      "summary": "The Far Paddock adds one persistent two-goat herd at a habitat-derived pen, while plural custody, typed homes, and deterministic physical-resource arbitration strengthen the shared domestic-animal substrate.",
+      "gameplayContractVersion": 23,
+      "tutorialVersion": 35,
+      "categories": {
+        "gameplay": [
+          "The starting harbor now supports exactly two individually identified domestic goats in one stable herd. Their habitat-derived pen is deliberately separated from the storehouse yard and prior animal placements instead of clustering every new animal around the player.",
+          "Goats compose the existing wildlife actor, direct perception, attention, terrestrial locomotion, broad ecological-role, and group-alarm owners. The herd has persistent membership and identity without a goat-only behavior tree or species-pair script.",
+          "Settlement ecology now supports several canonical domestic custody relationships and typed coop or pen homes. Chickens retain their existing keeper, flock, coop, and physical store-food behavior; goats receive their own herd, pen, and custody while browse and store-provision use remain unavailable."
+        ],
+        "fixes": [
+          "Habitat version 9 preserves the complete version-8 population, tidal-anchor, and chicken-yard record as an exact prefix, then appends only the separated goat pen and its two-member herd. Bounded deterministic site selection works at ordinary, negative, and extreme signed coordinates.",
+          "Physical-resource contention now validates each candidate against its real source and resolves each shared resource by physical reach, current need, and stable actor identity. Source iteration order can no longer decide which lawful contender receives custody.",
+          "Plural domestic custody rejects duplicate custody, relationship, home, structure, group, or member authority. One actor or social group cannot silently belong to two domestic homes."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. The goats add another living source of attention, alarm, and route context; they grant no player statistic, free food, Promise reward, milk, wool, or combat resource.",
+          "The new herd is deliberately bounded to two animals and one local pen. Its members may use land and standable shallow water, but receive no cross-region migration, autonomous home-return schedule, foliage browsing, herding, guardian, injury, or mortality behavior in this slice.",
+          "Validation remains architecture-led: shared invariants, deterministic signed-coordinate properties, exact migration, group and item conservation, fair arbitration, bounded performance, and representative runtime composition replace a bespoke test suite for every animal or an N-squared pair matrix."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D render the same directly perceived goats with a distinct horned, bearded livestock form. Selection, quick inspection, and pane-free ABOUT disclose only visible identity, approximate size, appearance, condition, and current behavior.",
+          "The two goats remain separate selectable actors even though they share one persistent herd. Reduced-motion presentation preserves the identifying silhouette and meaningful posture without adding decorative simulation state.",
+          "Field Manual version 35 explains the Far Paddock, plural custody and homes, the shared behavior boundary, deterministic resource fairness, exact save adoption, and the larger livestock systems that remain future work."
+        ],
+        "saves": [
+          "The outer session advances to version 18, habitat analysis advances to version 9, settlement ecology advances to version 3, and aggregate ecology remains version 4. Current records seal both goat identities, their herd, separated pen, custody relationship, and every previously established actor, group, item, Promise, and world fact.",
+          "A sealed version-17 Yard Flock save migrates exactly once. Its complete habitat-8 record, chicken actors, flock, relationship, home, old coop identity, store state, food-use history, items, and Promises remain byte-identical before the deterministic goat herd, pen, and custody are appended.",
+          "Earlier supported saves retain their established one-way migration chain. Save, reload, full/coarse/full continuity, negative coordinates, and extreme signed coordinates preserve the same livestock identities and homes; reload cannot reroll the herd, duplicate a group, or assign one group to two custodies."
+        ],
+        "knownLimitations": [
+          "This is one bounded starting-harbor goat herd beside the existing chicken flock, not worldwide livestock, complete Wave D settlement ecology, ecological cross-region migration, the full bestiary, or completion of Directive 04_1.",
+          "Goats have no authored call, persistent tracks or environmental evidence, harmful attack, injury, mortality, carcass, live-prey capture or consumption, foliage browsing, milk, wool, reproduction, complete circadian schedule, or autonomous home-return behavior in this release.",
+          "Guardian and herding behavior, livestock search and rescue, wider ownership, full schedules, complete sound and scent fields, living-foliage use, and exhaustive species or pair coverage remain outside this release."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.24",
       "releaseDate": "2026-09-07",
       "buildIdentity": "0.3.3-alpha.24",

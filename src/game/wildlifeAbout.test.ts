@@ -360,6 +360,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["snowy-egret", "SNOWY EGRET", "Snowy egret"],
     ["american-black-duck", "AMERICAN BLACK DUCK", "American black duck"],
     ["domestic-chicken", "DOMESTIC CHICKEN", "Domestic chicken"],
+    ["domestic-goat", "DOMESTIC GOAT", "Domestic goat"],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -392,6 +393,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["marsh-rabbit", "SMALL ANIMAL", "Unidentified small animal", 60],
     ["marsh-fox", "UNKNOWN CANID", "Unidentified canid", 60],
     ["domestic-chicken", "UNKNOWN BIRD", "Unidentified bird", 80],
+    ["domestic-goat", "UNKNOWN LIVESTOCK", "Unidentified livestock", 80],
     [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",
@@ -420,6 +422,7 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["snowy-egret", "Slender, long-legged wader"],
     ["american-black-duck", "Broad-bodied dabbling duck"],
     ["domestic-chicken", "Compact ground bird with comb and upright tail"],
+    ["domestic-goat", "Stocky, cloven-hoofed goat with swept horns"],
     ["north-american-river-otter", "Long-bodied, low-slung swimmer"],
   ] as const)("shows only directly observable close-range %s facts", (species, form) => {
     const actor = wildlife(species);
@@ -437,6 +440,8 @@ describe("knowledge-honest wildlife ABOUT", () => {
                 ? "American black duck"
                 : species === "domestic-chicken"
                   ? "Domestic chicken"
+                  : species === "domestic-goat"
+                    ? "Domestic goat"
                   : "North American river otter",
       },
       { label: "Behavior", value: "Watching" },

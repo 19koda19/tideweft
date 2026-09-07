@@ -47,18 +47,24 @@ import {
 } from "./worldPosition";
 
 /** Pure persisted kernel for settlement storehouse ecology and domestic custody. */
-export const SETTLEMENT_ECOLOGY_PRIOR_VERSION = 1 as const;
-export const SETTLEMENT_ECOLOGY_VERSION = 2 as const;
+export const SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION = 1 as const;
+export const SETTLEMENT_ECOLOGY_PRIOR_VERSION = 2 as const;
+export const SETTLEMENT_ECOLOGY_VERSION = 3 as const;
 /** Store IDs predate v2 and must remain stable across the state migration. */
 export const SETTLEMENT_ECOLOGY_IDENTITY_VERSION = 1 as const;
 export const SETTLEMENT_ECOLOGY_PLAYER_REPORT_VERSION = 1 as const;
-export const SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION = 1 as const;
+/** Persisted relationship identity is frozen independently of record shape. */
+export const SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_IDENTITY_VERSION = 1 as const;
+export const SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_PRIOR_VERSION = 1 as const;
+export const SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION = 2 as const;
+export const SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION = 1 as const;
 export const SETTLEMENT_DOMESTIC_FOOD_USE_VERSION = 1 as const;
 export const SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY = 8 as const;
 export const SETTLEMENT_ECOLOGY_MAX_KEEPER_KNOWLEDGE = 8 as const;
 export const SETTLEMENT_ECOLOGY_MAX_REDISTRIBUTED_UNITS = 1 as const;
 export const SETTLEMENT_ECOLOGY_MAX_LOSS_UNITS = 1 as const;
 export const SETTLEMENT_ECOLOGY_DOMESTIC_FOOD_USE_QUANTITY = 1 as const;
+export const SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES = 8 as const;
 export const SETTLEMENT_ECOLOGY_MAX_DOMESTIC_MEMBERS = 16 as const;
 export const SETTLEMENT_ECOLOGY_MAX_DOMESTIC_HOME_RADIUS_UNITS =
   32 * WORLD_POSITION_UNITS_PER_TILE;
@@ -100,6 +106,16 @@ const SETTLEMENT_ECOLOGY_V2_STATE_KEYS = [
   "lastResolvedDomesticFoodUseTransactionId",
   "pendingDomesticFoodUse",
 ] as const;
+const SETTLEMENT_ECOLOGY_V3_STATE_KEYS = [
+  ...SETTLEMENT_ECOLOGY_V1_STATE_KEYS,
+  "domesticCustodies",
+  "lastResolvedDomesticFoodUseCauseEventId",
+  "lastResolvedDomesticFoodUseCauseEventTick",
+  "lastResolvedDomesticFoodUseMemberActorId",
+  "lastResolvedDomesticFoodUseOrdinal",
+  "lastResolvedDomesticFoodUseTransactionId",
+  "pendingDomesticFoodUse",
+] as const;
 
 export type SettlementFoodStoreClosure = "open" | "secured";
 export type SettlementFoodStoreRisk = "food-exposed" | "rat-activity";
@@ -108,6 +124,16 @@ export type SettlementKeeperKnowledgeSource = "direct-observation" | "player-rep
 export type SettlementDomesticAnimalOwner =
   | Readonly<{ readonly kind: "actor"; readonly id: string }>
   | Readonly<{ readonly kind: "settlement"; readonly id: number }>;
+
+export type SettlementDomesticHomeStructureKind = "coop" | "pen";
+
+export interface SettlementDomesticHomeStructureRecord {
+  readonly version: typeof SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION;
+  readonly structureId: string;
+  readonly kind: SettlementDomesticHomeStructureKind;
+  readonly position: WorldPosition;
+  readonly radiusUnits: number;
+}
 
 /**
  * Settlement-owned social/custody authority only. Actor bodies, needs,
@@ -118,15 +144,13 @@ export interface SettlementDomesticAnimalCustodyRecord {
   readonly custodyOrdinal: number;
   readonly relationshipId: string;
   readonly homeId: string;
-  readonly coopId: string;
   readonly settlementId: number;
   readonly owner: SettlementDomesticAnimalOwner;
   readonly caretakerActorId: string;
   readonly species: LivingActorSpecies;
   readonly memberActorIds: readonly string[];
   readonly memberGroupId: string | null;
-  readonly homePosition: WorldPosition;
-  readonly homeRadiusUnits: number;
+  readonly homeStructure: SettlementDomesticHomeStructureRecord;
 }
 
 export interface CreateSettlementDomesticAnimalCustodyInput {
@@ -136,8 +160,11 @@ export interface CreateSettlementDomesticAnimalCustodyInput {
   readonly species: LivingActorSpecies;
   readonly memberActorIds: readonly string[];
   readonly memberGroupId: string | null;
-  readonly homePosition: WorldPosition;
-  readonly homeRadiusUnits: number;
+  readonly homeStructure: Readonly<{
+    readonly kind: SettlementDomesticHomeStructureKind;
+    readonly position: WorldPosition;
+    readonly radiusUnits: number;
+  }>;
 }
 
 export interface SettlementFoodStoreIdentity {
@@ -215,7 +242,7 @@ export interface SettlementEcologyState {
   readonly lastResolvedCauseEventId: string | null;
   readonly lastResolvedCauseEventTick: number | null;
   readonly pendingLoss: SettlementFoodLossTransaction | null;
-  readonly domesticCustody: SettlementDomesticAnimalCustodyRecord | null;
+  readonly domesticCustodies: readonly SettlementDomesticAnimalCustodyRecord[];
   readonly lastResolvedDomesticFoodUseOrdinal: number;
   readonly lastResolvedDomesticFoodUseTransactionId: string | null;
   readonly lastResolvedDomesticFoodUseCauseEventId: string | null;
@@ -316,6 +343,48 @@ export interface SettlementDomesticFoodUseResolution {
   readonly removed: readonly CarriedCargoLot[];
 }
 
+interface SettlementDomesticAnimalCustodyRecordV1 {
+  readonly version: typeof SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_PRIOR_VERSION;
+  readonly custodyOrdinal: number;
+  readonly relationshipId: string;
+  readonly homeId: string;
+  readonly coopId: string;
+  readonly settlementId: number;
+  readonly owner: SettlementDomesticAnimalOwner;
+  readonly caretakerActorId: string;
+  readonly species: LivingActorSpecies;
+  readonly memberActorIds: readonly string[];
+  readonly memberGroupId: string | null;
+  readonly homePosition: WorldPosition;
+  readonly homeRadiusUnits: number;
+}
+
+type SettlementDomesticCustodyAuthority =
+  | SettlementDomesticAnimalCustodyRecord
+  | SettlementDomesticAnimalCustodyRecordV1;
+
+interface SettlementEcologyStateV2 {
+  readonly version: typeof SETTLEMENT_ECOLOGY_PRIOR_VERSION;
+  readonly revision: number;
+  readonly identity: SettlementFoodStoreIdentity;
+  readonly closure: SettlementFoodStoreClosure;
+  readonly carrier: LooseCargoCarrierState;
+  readonly keeperKnowledge: readonly SettlementKeeperKnowledge[];
+  readonly lastClosureTransactionId: string | null;
+  readonly lastResolvedLossOrdinal: number;
+  readonly lastResolvedTransactionId: string | null;
+  readonly lastResolvedCauseEventId: string | null;
+  readonly lastResolvedCauseEventTick: number | null;
+  readonly pendingLoss: SettlementFoodLossTransaction | null;
+  readonly domesticCustody: SettlementDomesticAnimalCustodyRecordV1 | null;
+  readonly lastResolvedDomesticFoodUseOrdinal: number;
+  readonly lastResolvedDomesticFoodUseTransactionId: string | null;
+  readonly lastResolvedDomesticFoodUseCauseEventId: string | null;
+  readonly lastResolvedDomesticFoodUseCauseEventTick: number | null;
+  readonly lastResolvedDomesticFoodUseMemberActorId: string | null;
+  readonly pendingDomesticFoodUse: SettlementDomesticFoodUseTransaction | null;
+}
+
 /**
  * Completes a transaction that was durably staged before interruption. The
  * saved aggregate patch must still contain the exact physical relocation that
@@ -401,7 +470,7 @@ export function createSettlementEcologyState(
     lastResolvedCauseEventId: null,
     lastResolvedCauseEventTick: null,
     pendingLoss: null,
-    domesticCustody: null,
+    domesticCustodies: [],
     lastResolvedDomesticFoodUseOrdinal: 0,
     lastResolvedDomesticFoodUseTransactionId: null,
     lastResolvedDomesticFoodUseCauseEventId: null,
@@ -416,7 +485,7 @@ export function createSettlementEcologyState(
 export function canonicalizeSettlementEcologyState(value: unknown): SettlementEcologyState | null {
   if (
     !plainRecord(value)
-    || !exactKeys(value, SETTLEMENT_ECOLOGY_V2_STATE_KEYS)
+    || !exactKeys(value, SETTLEMENT_ECOLOGY_V3_STATE_KEYS)
     || value.version !== SETTLEMENT_ECOLOGY_VERSION
     || !nonnegativeSafeInteger(value.revision)
     || !validClosure(value.closure)
@@ -428,13 +497,13 @@ export function canonicalizeSettlementEcologyState(value: unknown): SettlementEc
     || value.lastResolvedDomesticFoodUseOrdinal > SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY
     || value.lastResolvedLossOrdinal + value.lastResolvedDomesticFoodUseOrdinal
       > SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY
+    || !Array.isArray(value.domesticCustodies)
+    || value.domesticCustodies.length > SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES
   ) return null;
   const identity = canonicalIdentity(value.identity);
   if (identity === null) return null;
-  const domesticCustody = value.domesticCustody === null
-    ? null
-    : canonicalDomesticCustody(value.domesticCustody, identity);
-  if (value.domesticCustody !== null && domesticCustody === null) return null;
+  const domesticCustodies = canonicalDomesticCustodies(value.domesticCustodies, identity);
+  if (domesticCustodies === null) return null;
   const carrierValidation = validateLooseCargoCarrier(value.carrier);
   if (!carrierValidation.valid || carrierValidation.carrier === null) return null;
   const carrier = carrierValidation.carrier;
@@ -471,7 +540,7 @@ export function canonicalizeSettlementEcologyState(value: unknown): SettlementEc
   const resolvedDomesticFoodUse = canonicalResolvedDomesticFoodUseFields(
     value,
     identity,
-    domesticCustody,
+    domesticCustodies,
   );
   if (resolvedDomesticFoodUse === null) return null;
   const pending = value.pendingLoss === null
@@ -482,7 +551,7 @@ export function canonicalizeSettlementEcologyState(value: unknown): SettlementEc
     : canonicalDomesticFoodUseTransaction(
         value.pendingDomesticFoodUse,
         identity,
-        domesticCustody,
+        domesticCustodies,
       );
   if (
     value.pendingLoss !== null && pending === null
@@ -495,8 +564,7 @@ export function canonicalizeSettlementEcologyState(value: unknown): SettlementEc
       || liveFoodQuantity(carrier, identity.foodLotId) < pending.quantity
     )
     || pendingDomesticFoodUse !== null && (
-      domesticCustody === null
-      || pendingDomesticFoodUse.ordinal !== value.lastResolvedDomesticFoodUseOrdinal + 1
+      pendingDomesticFoodUse.ordinal !== value.lastResolvedDomesticFoodUseOrdinal + 1
       || pendingDomesticFoodUse.causeEventTick
         <= (resolvedDomesticFoodUse.lastResolvedDomesticFoodUseCauseEventTick ?? -1)
       || value.closure !== "open"
@@ -505,6 +573,167 @@ export function canonicalizeSettlementEcologyState(value: unknown): SettlementEc
   ) return null;
   return deepFreeze({
     version: SETTLEMENT_ECOLOGY_VERSION,
+    revision: value.revision,
+    identity,
+    closure: value.closure,
+    carrier,
+    keeperKnowledge: orderedKnowledge,
+    lastClosureTransactionId: closureTransaction,
+    lastResolvedLossOrdinal: value.lastResolvedLossOrdinal,
+    lastResolvedTransactionId: resolved.lastResolvedTransactionId,
+    lastResolvedCauseEventId: resolved.lastResolvedCauseEventId,
+    lastResolvedCauseEventTick: resolved.lastResolvedCauseEventTick,
+    pendingLoss: pending,
+    domesticCustodies,
+    lastResolvedDomesticFoodUseOrdinal: value.lastResolvedDomesticFoodUseOrdinal,
+    lastResolvedDomesticFoodUseTransactionId:
+      resolvedDomesticFoodUse.lastResolvedDomesticFoodUseTransactionId,
+    lastResolvedDomesticFoodUseCauseEventId:
+      resolvedDomesticFoodUse.lastResolvedDomesticFoodUseCauseEventId,
+    lastResolvedDomesticFoodUseCauseEventTick:
+      resolvedDomesticFoodUse.lastResolvedDomesticFoodUseCauseEventTick,
+    lastResolvedDomesticFoodUseMemberActorId:
+      resolvedDomesticFoodUse.lastResolvedDomesticFoodUseMemberActorId,
+    pendingDomesticFoodUse,
+  });
+}
+
+/**
+ * Strictly migrates the frozen v1 then v2 payload shapes. Current payloads are
+ * returned canonically, while future/extra fields fail closed.
+ */
+export function migrateSettlementEcologyState(value: unknown): SettlementEcologyState | null {
+  const current = canonicalizeSettlementEcologyState(value);
+  if (current !== null) return current;
+  const prior = canonicalizeSettlementEcologyStateV2(value)
+    ?? migrateSettlementEcologyStateV1ToV2(value);
+  if (prior === null) return null;
+  const domesticCustodies = prior.domesticCustody === null
+    ? []
+    : [migrateDomesticCustodyV1ToV2(prior.domesticCustody)];
+  const { domesticCustody: _domesticCustody, ...shared } = prior;
+  return canonicalizeSettlementEcologyState({
+    ...shared,
+    version: SETTLEMENT_ECOLOGY_VERSION,
+    domesticCustodies,
+  });
+}
+
+function migrateSettlementEcologyStateV1ToV2(
+  value: unknown,
+): SettlementEcologyStateV2 | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, SETTLEMENT_ECOLOGY_V1_STATE_KEYS)
+    || value.version !== SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION
+  ) return null;
+  return canonicalizeSettlementEcologyStateV2({
+    ...value,
+    version: SETTLEMENT_ECOLOGY_PRIOR_VERSION,
+    domesticCustody: null,
+    lastResolvedDomesticFoodUseOrdinal: 0,
+    lastResolvedDomesticFoodUseTransactionId: null,
+    lastResolvedDomesticFoodUseCauseEventId: null,
+    lastResolvedDomesticFoodUseCauseEventTick: null,
+    lastResolvedDomesticFoodUseMemberActorId: null,
+    pendingDomesticFoodUse: null,
+  });
+}
+
+function canonicalizeSettlementEcologyStateV2(
+  value: unknown,
+): SettlementEcologyStateV2 | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, SETTLEMENT_ECOLOGY_V2_STATE_KEYS)
+    || value.version !== SETTLEMENT_ECOLOGY_PRIOR_VERSION
+    || !nonnegativeSafeInteger(value.revision)
+    || !validClosure(value.closure)
+    || !Array.isArray(value.keeperKnowledge)
+    || value.keeperKnowledge.length > SETTLEMENT_ECOLOGY_MAX_KEEPER_KNOWLEDGE
+    || !nonnegativeSafeInteger(value.lastResolvedLossOrdinal)
+    || value.lastResolvedLossOrdinal > SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY
+    || !nonnegativeSafeInteger(value.lastResolvedDomesticFoodUseOrdinal)
+    || value.lastResolvedDomesticFoodUseOrdinal > SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY
+    || value.lastResolvedLossOrdinal + value.lastResolvedDomesticFoodUseOrdinal
+      > SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY
+  ) return null;
+  const identity = canonicalIdentity(value.identity);
+  if (identity === null) return null;
+  const domesticCustody = value.domesticCustody === null
+    ? null
+    : canonicalDomesticCustodyV1(value.domesticCustody, identity);
+  if (value.domesticCustody !== null && domesticCustody === null) return null;
+  const authorities = domesticCustody === null ? [] : [domesticCustody];
+  const carrierValidation = validateLooseCargoCarrier(value.carrier);
+  if (!carrierValidation.valid || carrierValidation.carrier === null) return null;
+  const carrier = carrierValidation.carrier;
+  if (!carrierMatchesStore(
+    carrier,
+    identity,
+    value.lastResolvedLossOrdinal,
+    value.lastResolvedDomesticFoodUseOrdinal,
+  )) return null;
+
+  const knowledge: SettlementKeeperKnowledge[] = [];
+  const evidenceIds = new Set<string>();
+  for (const candidate of value.keeperKnowledge) {
+    const record = canonicalKnowledge(candidate, identity);
+    if (record === null || evidenceIds.has(record.evidenceId)) return null;
+    evidenceIds.add(record.evidenceId);
+    knowledge.push(record);
+  }
+  const orderedKnowledge = [...knowledge].sort(compareKnowledge);
+  if (stableStringify(knowledge) !== stableStringify(orderedKnowledge)) return null;
+  const closureTransaction = canonicalNullableId(value.lastClosureTransactionId);
+  const closureKnowledge = closureTransaction === null || closureTransaction === undefined
+    ? undefined
+    : orderedKnowledge.find(({ evidenceId }) => (
+        closureTransaction === closureTransactionId(identity.storeId, evidenceId)
+      ));
+  if (
+    closureTransaction === undefined
+    || value.closure === "open" && closureTransaction !== null
+    || value.closure === "secured" && closureKnowledge === undefined
+  ) return null;
+  const resolved = canonicalResolvedFields(value, identity);
+  if (resolved === null) return null;
+  const resolvedDomesticFoodUse = canonicalResolvedDomesticFoodUseFields(
+    value,
+    identity,
+    authorities,
+  );
+  if (resolvedDomesticFoodUse === null) return null;
+  const pending = value.pendingLoss === null
+    ? null
+    : canonicalLossTransaction(value.pendingLoss, identity);
+  const pendingDomesticFoodUse = value.pendingDomesticFoodUse === null
+    ? null
+    : canonicalDomesticFoodUseTransaction(
+        value.pendingDomesticFoodUse,
+        identity,
+        authorities,
+      );
+  if (
+    value.pendingLoss !== null && pending === null
+    || value.pendingDomesticFoodUse !== null && pendingDomesticFoodUse === null
+    || pending !== null && pendingDomesticFoodUse !== null
+    || pending !== null && (
+      pending.ordinal !== value.lastResolvedLossOrdinal + 1
+      || pending.causeEventTick <= (resolved.lastResolvedCauseEventTick ?? -1)
+      || value.closure !== "open"
+      || liveFoodQuantity(carrier, identity.foodLotId) < pending.quantity
+    )
+    || pendingDomesticFoodUse !== null && (
+      pendingDomesticFoodUse.ordinal !== value.lastResolvedDomesticFoodUseOrdinal + 1
+      || pendingDomesticFoodUse.causeEventTick
+        <= (resolvedDomesticFoodUse.lastResolvedDomesticFoodUseCauseEventTick ?? -1)
+      || value.closure !== "open"
+      || liveFoodQuantity(carrier, identity.foodLotId) < pendingDomesticFoodUse.quantity
+    )
+  ) return null;
+  return deepFreeze({
+    version: SETTLEMENT_ECOLOGY_PRIOR_VERSION,
     revision: value.revision,
     identity,
     closure: value.closure,
@@ -527,31 +756,6 @@ export function canonicalizeSettlementEcologyState(value: unknown): SettlementEc
     lastResolvedDomesticFoodUseMemberActorId:
       resolvedDomesticFoodUse.lastResolvedDomesticFoodUseMemberActorId,
     pendingDomesticFoodUse,
-  });
-}
-
-/**
- * Strictly migrates the only prior payload shape. Current payloads are returned
- * canonically, while future/extra fields fail closed.
- */
-export function migrateSettlementEcologyState(value: unknown): SettlementEcologyState | null {
-  const current = canonicalizeSettlementEcologyState(value);
-  if (current !== null) return current;
-  if (
-    !plainRecord(value)
-    || !exactKeys(value, SETTLEMENT_ECOLOGY_V1_STATE_KEYS)
-    || value.version !== SETTLEMENT_ECOLOGY_PRIOR_VERSION
-  ) return null;
-  return canonicalizeSettlementEcologyState({
-    ...value,
-    version: SETTLEMENT_ECOLOGY_VERSION,
-    domesticCustody: null,
-    lastResolvedDomesticFoodUseOrdinal: 0,
-    lastResolvedDomesticFoodUseTransactionId: null,
-    lastResolvedDomesticFoodUseCauseEventId: null,
-    lastResolvedDomesticFoodUseCauseEventTick: null,
-    lastResolvedDomesticFoodUseMemberActorId: null,
-    pendingDomesticFoodUse: null,
   });
 }
 
@@ -593,8 +797,7 @@ export function createSettlementDomesticAnimalCustody(
     || !exactKeys(inputValue, [
       "caretakerActorId",
       "custodyOrdinal",
-      "homePosition",
-      "homeRadiusUnits",
+      "homeStructure",
       "memberActorIds",
       "memberGroupId",
       "owner",
@@ -609,9 +812,13 @@ export function createSettlementDomesticAnimalCustody(
     || inputValue.memberActorIds.length > SETTLEMENT_ECOLOGY_MAX_DOMESTIC_MEMBERS
     || typeof inputValue.caretakerActorId !== "string"
     || !livingSpeciesActorIdMatchesNamespace(inputValue.caretakerActorId, "human")
-    || !isWorldPosition(inputValue.homePosition)
-    || !positiveSafeInteger(inputValue.homeRadiusUnits)
-    || inputValue.homeRadiusUnits > SETTLEMENT_ECOLOGY_MAX_DOMESTIC_HOME_RADIUS_UNITS
+    || !plainRecord(inputValue.homeStructure)
+    || !exactKeys(inputValue.homeStructure, ["kind", "position", "radiusUnits"])
+    || !validDomesticHomeStructureKind(inputValue.homeStructure.kind)
+    || !isWorldPosition(inputValue.homeStructure.position)
+    || !positiveSafeInteger(inputValue.homeStructure.radiusUnits)
+    || inputValue.homeStructure.radiusUnits
+      > SETTLEMENT_ECOLOGY_MAX_DOMESTIC_HOME_RADIUS_UNITS
   ) return null;
   const owner = canonicalDomesticOwner(inputValue.owner, state.identity.settlementId);
   const memberGroupId = canonicalNullableId(inputValue.memberGroupId);
@@ -637,19 +844,23 @@ export function createSettlementDomesticAnimalCustody(
     custodyOrdinal: inputValue.custodyOrdinal,
     relationshipId: `DOMESTIC-REL-${digest}`,
     homeId: `DOMESTIC-HOME-${digest}`,
-    coopId: `DOMESTIC-COOP-${digest}`,
     settlementId: state.identity.settlementId,
     owner,
     caretakerActorId: inputValue.caretakerActorId,
     species: inputValue.species,
     memberActorIds,
     memberGroupId,
-    homePosition: inputValue.homePosition,
-    homeRadiusUnits: inputValue.homeRadiusUnits,
+    homeStructure: {
+      version: SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
+      structureId: domesticHomeStructureId(inputValue.homeStructure.kind, digest),
+      kind: inputValue.homeStructure.kind,
+      position: inputValue.homeStructure.position,
+      radiusUnits: inputValue.homeStructure.radiusUnits,
+    },
   }, state.identity);
 }
 
-/** Establishes the one bounded domestic relationship owned by this store. */
+/** Establishes one bounded domestic relationship owned by this settlement. */
 export function establishSettlementDomesticAnimalCustody(
   stateValue: unknown,
   inputValue: unknown,
@@ -658,13 +869,17 @@ export function establishSettlementDomesticAnimalCustody(
   if (state === null) return null;
   const custody = createSettlementDomesticAnimalCustody(state, inputValue);
   if (custody === null) return null;
-  if (state.domesticCustody !== null) {
-    return stableStringify(state.domesticCustody) === stableStringify(custody) ? state : null;
+  const existing = state.domesticCustodies.find(({ custodyOrdinal }) => (
+    custodyOrdinal === custody.custodyOrdinal
+  ));
+  if (existing !== undefined) {
+    return stableStringify(existing) === stableStringify(custody) ? state : null;
   }
   return canonicalizeSettlementEcologyState({
     ...state,
     revision: increment(state.revision),
-    domesticCustody: custody,
+    domesticCustodies: [...state.domesticCustodies, custody]
+      .sort(compareDomesticCustody),
   });
 }
 
@@ -689,15 +904,17 @@ export function stageSettlementDomesticFoodUse(
         })
       : null;
   }
-  const custody = state.domesticCustody;
+  const custody = domesticCustodyForMember(
+    state.domesticCustodies,
+    request.memberActorId,
+    request.relationshipId,
+  );
   if (
     custody === null
     || state.pendingLoss !== null
     || state.closure !== "open"
     || request.storeId !== state.identity.storeId
     || request.foodLotId !== state.identity.foodLotId
-    || request.relationshipId !== custody.relationshipId
-    || !custody.memberActorIds.includes(request.memberActorId)
     || !livingSpeciesActorIdMatchesNamespace(request.memberActorId, custody.species)
     || request.causeEventTick <= (state.lastResolvedDomesticFoodUseCauseEventTick ?? -1)
     || request.causeEventId === state.lastResolvedDomesticFoodUseCauseEventId
@@ -744,7 +961,7 @@ export function resolveSettlementDomesticFoodUse(
   const transaction = canonicalDomesticFoodUseTransaction(
     transactionValue,
     state.identity,
-    state.domesticCustody,
+    state.domesticCustodies,
   );
   if (transaction === null) return null;
   if (state.pendingDomesticFoodUse === null) {
@@ -1201,10 +1418,10 @@ function canonicalDomesticOwner(
     : null;
 }
 
-function canonicalDomesticCustody(
+function canonicalDomesticCustodyV1(
   value: unknown,
   identity: SettlementFoodStoreIdentity,
-): SettlementDomesticAnimalCustodyRecord | null {
+): SettlementDomesticAnimalCustodyRecordV1 | null {
   if (
     !plainRecord(value)
     || !exactKeys(value, [
@@ -1222,7 +1439,7 @@ function canonicalDomesticCustody(
       "species",
       "version",
     ])
-    || value.version !== SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION
+    || value.version !== SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_PRIOR_VERSION
     || !nonnegativeSafeInteger(value.custodyOrdinal)
     || value.settlementId !== identity.settlementId
     || !isLivingActorSpecies(value.species)
@@ -1266,7 +1483,7 @@ function canonicalDomesticCustody(
     || value.coopId !== `DOMESTIC-COOP-${digest}`
   ) return null;
   return deepFreeze({
-    version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION,
+    version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_PRIOR_VERSION,
     custodyOrdinal: value.custodyOrdinal,
     relationshipId: value.relationshipId,
     homeId: value.homeId,
@@ -1283,6 +1500,167 @@ function canonicalDomesticCustody(
       value.homePosition.localY,
     ),
     homeRadiusUnits: value.homeRadiusUnits,
+  });
+}
+
+function migrateDomesticCustodyV1ToV2(
+  custody: SettlementDomesticAnimalCustodyRecordV1,
+): SettlementDomesticAnimalCustodyRecord {
+  return deepFreeze({
+    version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION,
+    custodyOrdinal: custody.custodyOrdinal,
+    relationshipId: custody.relationshipId,
+    homeId: custody.homeId,
+    settlementId: custody.settlementId,
+    owner: custody.owner,
+    caretakerActorId: custody.caretakerActorId,
+    species: custody.species,
+    memberActorIds: custody.memberActorIds,
+    memberGroupId: custody.memberGroupId,
+    homeStructure: {
+      version: SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
+      structureId: custody.coopId,
+      kind: "coop",
+      position: custody.homePosition,
+      radiusUnits: custody.homeRadiusUnits,
+    },
+  });
+}
+
+function canonicalDomesticCustodies(
+  values: readonly unknown[],
+  identity: SettlementFoodStoreIdentity,
+): readonly SettlementDomesticAnimalCustodyRecord[] | null {
+  const custodies: SettlementDomesticAnimalCustodyRecord[] = [];
+  const custodyOrdinals = new Set<number>();
+  const relationshipIds = new Set<string>();
+  const homeIds = new Set<string>();
+  const structureIds = new Set<string>();
+  const memberActorIds = new Set<string>();
+  const memberGroupIds = new Set<string>();
+  for (const value of values) {
+    const custody = canonicalDomesticCustody(value, identity);
+    if (
+      custody === null
+      || custodyOrdinals.has(custody.custodyOrdinal)
+      || relationshipIds.has(custody.relationshipId)
+      || homeIds.has(custody.homeId)
+      || structureIds.has(custody.homeStructure.structureId)
+      || (custody.memberGroupId !== null && memberGroupIds.has(custody.memberGroupId))
+      || custody.memberActorIds.some((actorId) => memberActorIds.has(actorId))
+    ) return null;
+    custodyOrdinals.add(custody.custodyOrdinal);
+    relationshipIds.add(custody.relationshipId);
+    homeIds.add(custody.homeId);
+    structureIds.add(custody.homeStructure.structureId);
+    if (custody.memberGroupId !== null) memberGroupIds.add(custody.memberGroupId);
+    for (const actorId of custody.memberActorIds) memberActorIds.add(actorId);
+    custodies.push(custody);
+  }
+  if (memberActorIds.size > SETTLEMENT_ECOLOGY_MAX_DOMESTIC_MEMBERS) return null;
+  const ordered = [...custodies].sort(compareDomesticCustody);
+  return stableStringify(custodies) === stableStringify(ordered)
+    ? deepFreeze(ordered)
+    : null;
+}
+
+function canonicalDomesticCustody(
+  value: unknown,
+  identity: SettlementFoodStoreIdentity,
+): SettlementDomesticAnimalCustodyRecord | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, [
+      "caretakerActorId",
+      "custodyOrdinal",
+      "homeId",
+      "homeStructure",
+      "memberActorIds",
+      "memberGroupId",
+      "owner",
+      "relationshipId",
+      "settlementId",
+      "species",
+      "version",
+    ])
+    || value.version !== SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION
+    || !nonnegativeSafeInteger(value.custodyOrdinal)
+    || value.settlementId !== identity.settlementId
+    || !isLivingActorSpecies(value.species)
+    || value.species === "human"
+    || !isLivingSpeciesActorAddressable(value.species)
+    || typeof value.caretakerActorId !== "string"
+    || !validId(value.caretakerActorId)
+    || !livingSpeciesActorIdMatchesNamespace(value.caretakerActorId, "human")
+    || !Array.isArray(value.memberActorIds)
+    || value.memberActorIds.length === 0
+    || value.memberActorIds.length > SETTLEMENT_ECOLOGY_MAX_DOMESTIC_MEMBERS
+  ) return null;
+  const owner = canonicalDomesticOwner(value.owner, identity.settlementId);
+  const memberGroupId = canonicalNullableId(value.memberGroupId);
+  const digest = domesticCustodyIdentityDigest(identity, value.custodyOrdinal, value.species);
+  const homeStructure = canonicalDomesticHomeStructure(value.homeStructure, digest);
+  if (
+    owner === null
+    || memberGroupId === undefined
+    || !domesticGroupMatchesSpecies(memberGroupId, value.species)
+    || homeStructure === null
+    || value.relationshipId !== `DOMESTIC-REL-${digest}`
+    || value.homeId !== `DOMESTIC-HOME-${digest}`
+  ) return null;
+  const memberActorIds: string[] = [];
+  const seenActorIds = new Set<string>();
+  for (const actorId of value.memberActorIds) {
+    if (
+      typeof actorId !== "string"
+      || !validId(actorId)
+      || !livingSpeciesActorIdMatchesNamespace(actorId, value.species)
+      || seenActorIds.has(actorId)
+    ) return null;
+    seenActorIds.add(actorId);
+    memberActorIds.push(actorId);
+  }
+  const orderedMemberActorIds = [...memberActorIds].sort(compareText);
+  if (stableStringify(memberActorIds) !== stableStringify(orderedMemberActorIds)) return null;
+  return deepFreeze({
+    version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION,
+    custodyOrdinal: value.custodyOrdinal,
+    relationshipId: value.relationshipId,
+    homeId: value.homeId,
+    settlementId: identity.settlementId,
+    owner,
+    caretakerActorId: value.caretakerActorId,
+    species: value.species,
+    memberActorIds: orderedMemberActorIds,
+    memberGroupId,
+    homeStructure,
+  });
+}
+
+function canonicalDomesticHomeStructure(
+  value: unknown,
+  custodyDigest: string,
+): SettlementDomesticHomeStructureRecord | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, ["kind", "position", "radiusUnits", "structureId", "version"])
+    || value.version !== SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION
+    || !validDomesticHomeStructureKind(value.kind)
+    || value.structureId !== domesticHomeStructureId(value.kind, custodyDigest)
+    || !isWorldPosition(value.position)
+    || !positiveSafeInteger(value.radiusUnits)
+    || value.radiusUnits > SETTLEMENT_ECOLOGY_MAX_DOMESTIC_HOME_RADIUS_UNITS
+  ) return null;
+  return deepFreeze({
+    version: SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
+    structureId: value.structureId,
+    kind: value.kind,
+    position: createWorldPosition(
+      value.position.region,
+      value.position.localX,
+      value.position.localY,
+    ),
+    radiusUnits: value.radiusUnits,
   });
 }
 
@@ -1325,11 +1703,15 @@ function canonicalDomesticFoodUseRequest(
 function canonicalDomesticFoodUseTransaction(
   value: unknown,
   identity: SettlementFoodStoreIdentity,
-  custody: SettlementDomesticAnimalCustodyRecord | null,
+  custodies: readonly SettlementDomesticCustodyAuthority[],
 ): SettlementDomesticFoodUseTransaction | null {
+  if (!plainRecord(value)) return null;
+  const custody = typeof value.memberActorId === "string"
+    && typeof value.relationshipId === "string"
+    ? domesticCustodyForMember(custodies, value.memberActorId, value.relationshipId)
+    : null;
   if (
     custody === null
-    || !plainRecord(value)
     || !exactKeys(value, [
       "causeEventId",
       "causeEventTick",
@@ -1456,7 +1838,7 @@ function canonicalResolvedFields(
 function canonicalResolvedDomesticFoodUseFields(
   value: Readonly<Record<string, unknown>>,
   identity: SettlementFoodStoreIdentity,
-  custody: SettlementDomesticAnimalCustodyRecord | null,
+  custodies: readonly SettlementDomesticCustodyAuthority[],
 ): Readonly<{
   lastResolvedDomesticFoodUseTransactionId: string | null;
   lastResolvedDomesticFoodUseCauseEventId: string | null;
@@ -1477,12 +1859,17 @@ function canonicalResolvedDomesticFoodUseFields(
       : null;
   }
   if (
-    custody === null
-    || !validId(value.lastResolvedDomesticFoodUseTransactionId)
+    !validId(value.lastResolvedDomesticFoodUseTransactionId)
     || !validId(value.lastResolvedDomesticFoodUseCauseEventId)
     || !nonnegativeSafeInteger(value.lastResolvedDomesticFoodUseCauseEventTick)
     || typeof value.lastResolvedDomesticFoodUseMemberActorId !== "string"
-    || !custody.memberActorIds.includes(value.lastResolvedDomesticFoodUseMemberActorId)
+  ) return null;
+  const custody = domesticCustodyForMember(
+    custodies,
+    value.lastResolvedDomesticFoodUseMemberActorId,
+  );
+  if (
+    custody === null
     || value.lastResolvedDomesticFoodUseTransactionId !== domesticFoodUseTransactionId(
       identity,
       custody,
@@ -1891,6 +2278,20 @@ function domesticFoodUseRequestMatchesTransaction(
     && request.causeEventTick === transaction.causeEventTick;
 }
 
+function domesticCustodyForMember<
+  Custody extends SettlementDomesticCustodyAuthority,
+>(
+  custodies: readonly Custody[],
+  memberActorId: string,
+  relationshipId?: string,
+): Custody | null {
+  const matches = custodies.filter((custody) => (
+    custody.memberActorIds.includes(memberActorId)
+    && (relationshipId === undefined || custody.relationshipId === relationshipId)
+  ));
+  return matches.length === 1 ? matches[0] ?? null : null;
+}
+
 function domesticGroupMatchesSpecies(
   memberGroupId: string | null,
   species: LivingActorSpecies,
@@ -1911,8 +2312,19 @@ function domesticCustodyIdentityDigest(
     settlementId: identity.settlementId,
     species,
     storeId: identity.storeId,
-    version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION,
+    version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_IDENTITY_VERSION,
   });
+}
+
+function domesticHomeStructureId(
+  kind: SettlementDomesticHomeStructureKind,
+  custodyDigest: string,
+): string {
+  const prefix: Readonly<Record<SettlementDomesticHomeStructureKind, string>> = {
+    coop: "DOMESTIC-COOP",
+    pen: "DOMESTIC-PEN",
+  };
+  return `${prefix[kind]}-${custodyDigest}`;
 }
 
 function storeIdentityDigest(
@@ -1971,7 +2383,7 @@ function lossTransactionId(
 
 function domesticFoodUseTransactionId(
   identity: SettlementFoodStoreIdentity,
-  custody: SettlementDomesticAnimalCustodyRecord,
+  custody: SettlementDomesticCustodyAuthority,
   memberActorId: string,
   ordinal: number,
   causeEventId: string,
@@ -2021,6 +2433,14 @@ function compareKnowledge(left: SettlementKeeperKnowledge, right: SettlementKeep
   return left.learnedAtTick - right.learnedAtTick || compareText(left.evidenceId, right.evidenceId);
 }
 
+function compareDomesticCustody(
+  left: SettlementDomesticAnimalCustodyRecord,
+  right: SettlementDomesticAnimalCustodyRecord,
+): number {
+  return left.custodyOrdinal - right.custodyOrdinal
+    || compareText(left.relationshipId, right.relationshipId);
+}
+
 function canonicalNullableId(value: unknown): string | null | undefined {
   return value === null ? null : validId(value) ? value : undefined;
 }
@@ -2037,6 +2457,12 @@ function validClosure(value: unknown): value is SettlementFoodStoreClosure {
 
 function validRisk(value: unknown): value is SettlementFoodStoreRisk {
   return value === "food-exposed" || value === "rat-activity";
+}
+
+function validDomesticHomeStructureKind(
+  value: unknown,
+): value is SettlementDomesticHomeStructureKind {
+  return value === "coop" || value === "pen";
 }
 
 function validKnowledgeSource(value: unknown): value is SettlementKeeperKnowledgeSource {

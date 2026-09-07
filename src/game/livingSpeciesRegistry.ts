@@ -216,6 +216,15 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 8_000,
     },
   },
+  "domestic-goat": {
+    aboutNoun: "domestic goat",
+    senses: {
+      visionAcuity: 780_000,
+      hearingSensitivity: 900_000,
+      scentSensitivity: 700_000,
+      scentBaseRangeUnits: 20_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

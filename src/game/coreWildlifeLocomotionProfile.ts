@@ -114,6 +114,23 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       pursue: 800_000,
     }),
   }),
+  "domestic-goat": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 900_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_250_000,
+      ridge: 700_000,
+      "tidal-flat": 1_400_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 700_000,
+    intentStepFactors: Object.freeze({
+      flee: 900_000,
+      retreat: 820_000,
+    }),
+  }),
   "fish-crow": Object.freeze({
     mode: "aerial",
     aerialTravelCost: 240_000,

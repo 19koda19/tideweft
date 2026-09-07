@@ -33,6 +33,26 @@ function tile(overrides: Partial<TerrainTileView> = {}): TerrainTileView {
 }
 
 describe("core wildlife locomotion profiles", () => {
+  it("selects authored terrestrial gait data through the shared profile", () => {
+    expect(coreWildlifeLocomotionProfile("domestic-goat")).toEqual({
+      mode: "terrestrial",
+      aerialTravelCost: null,
+      surfaceWaterTravelCost: null,
+      baseTerrainMultiplier: 900_000,
+      terrainMultipliers: { marsh: 1_250_000, ridge: 700_000, "tidal-flat": 1_400_000 },
+      dampCoverPreference: null,
+      baseStepFactor: 700_000,
+      intentStepFactors: { flee: 900_000, retreat: 820_000 },
+    });
+    expect(coreWildlifeTraversabilityCell(
+      "domestic-goat",
+      tile({ terrain: "ridge" }),
+    ).travelCost).toBeLessThan(coreWildlifeTraversabilityCell(
+      "domestic-goat",
+      tile({ terrain: "marsh" }),
+    ).travelCost);
+  });
+
   it("generalizes bounded aerial travel without reading surface impedance", () => {
     expect(CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION).toBe(1);
     const blockedSurface = tile({

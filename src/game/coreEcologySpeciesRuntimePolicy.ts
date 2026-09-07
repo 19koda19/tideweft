@@ -352,6 +352,19 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       evidenceKinds: [],
       presentationModel: "visible-flock",
     },
+    "domestic-goat": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "group-coordination",
+        "shared-alarm",
+      ],
+      activitySignals: ["shared-alarm"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
   });
 
 export const CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES: readonly CoreEcologySpeciesRuntimePolicy[] =

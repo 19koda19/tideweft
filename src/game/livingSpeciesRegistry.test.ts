@@ -43,6 +43,7 @@ describe("lean runtime living-species registry", () => {
       "american-black-duck",
       "north-american-river-otter",
       "domestic-chicken",
+      "domestic-goat",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -333,6 +334,22 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 8_000,
         },
       },
+      {
+        species: "domestic-goat",
+        actorIdPrefix: "GOAT-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: "herd",
+        groupStableIdNamespace: "HERD",
+        aboutNoun: "domestic goat",
+        senses: {
+          visionAcuity: 780_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: 700_000,
+          scentBaseRangeUnits: 20_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -348,6 +365,11 @@ describe("lean runtime living-species registry", () => {
     expect(livingSpeciesActorIdMatchesNamespace(
       "CHICKEN-v1-wave-d-fixture",
       "domestic-chicken",
+    )).toBe(true);
+    expect(isLivingSpeciesActorAddressable("domestic-goat")).toBe(true);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "GOAT-v1-alpha25-fixture",
+      "domestic-goat",
     )).toBe(true);
   });
 

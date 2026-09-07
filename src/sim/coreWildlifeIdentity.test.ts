@@ -51,6 +51,7 @@ describe("core wildlife identity", () => {
       "american-black-duck",
       "north-american-river-otter",
       "domestic-chicken",
+      "domestic-goat",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -252,6 +253,21 @@ describe("core wildlife identity", () => {
       roles: ["alarm-source", "prey", "small-prey", "forager", "omnivore"],
       foodAffinities: { "exposed-food": 1_000_000, "live-prey": 0 },
       behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeProfile("domestic-goat")).toMatchObject({
+      maximumPatchPopulation: 2,
+      roles: ["alarm-source", "prey", "forager"],
+      foodAffinities: { browse: 1_000_000, "exposed-food": 0 },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("domestic-goat")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      dietClass: "herbivore",
+      groupOrganization: "herd",
+      groupStableIdNamespace: "HERD",
+      locomotionClass: "terrestrial",
+      taxonomicClass: "mammal",
     });
     expect(getCoreWildlifeSpeciesMetadata("domestic-chicken")).toMatchObject({
       actorRepresentation: "individual",

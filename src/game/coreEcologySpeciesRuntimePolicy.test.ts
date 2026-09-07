@@ -38,6 +38,7 @@ describe("core ecology species runtime policy", () => {
       "american-black-duck",
       "north-american-river-otter",
       "domestic-chicken",
+      "domestic-goat",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -98,6 +99,27 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesHasRuntimeCapability("domestic-chicken", "diurnal-activity"))
       .toBe(false);
     expect(coreEcologySpeciesHasRuntimeCapability("domestic-chicken", "small-prey-pursuit"))
+      .toBe(false);
+  });
+
+  it("expresses livestock through shared actor and herd capabilities", () => {
+    expect(coreEcologySpeciesRuntimePolicy("domestic-goat")).toMatchObject({
+      actorAddressable: true,
+      identityForm: "individual",
+      representation: "individual",
+      locomotionClass: "terrestrial",
+      groupOrganization: "herd",
+      groupStableIdNamespace: "HERD",
+      maximumMaterializedActors: 2,
+      aggregate: null,
+      capabilities: ["actor-address", "group-coordination", "shared-alarm"],
+      activitySignals: ["shared-alarm"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    });
+    expect(coreEcologySpeciesHasRuntimeCapability("domestic-goat", "food-investigation"))
+      .toBe(false);
+    expect(coreEcologySpeciesHasRuntimeCapability("domestic-goat", "small-prey-pursuit"))
       .toBe(false);
   });
 

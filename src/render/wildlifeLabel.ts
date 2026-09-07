@@ -12,6 +12,7 @@ const SHOW_VISIBLE_GROUP_COUNT = Object.freeze({
   "snowy-egret": false,
   "american-black-duck": false,
   "domestic-chicken": false,
+  "domestic-goat": false,
   "north-american-river-otter": false,
 } satisfies Readonly<Record<WildlifeView["species"], boolean>>);
 

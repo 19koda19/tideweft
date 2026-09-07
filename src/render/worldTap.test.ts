@@ -171,6 +171,7 @@ const perceivedView = ({
     position: { x: 25, y: 5 },
     facing: 0,
     sizeScale: 1,
+    appearanceKey: "black",
     behavior: "watch",
     conditionLabels: [],
   }],

@@ -1520,6 +1520,50 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
       "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
     ],
   },
+  "domestic-goat": {
+    implementation: "active",
+    ecologicalClasses: [
+      "alarm-source",
+      "domestic-livestock",
+      "forager",
+      "herbivore",
+      "prey",
+    ],
+    habitatOwnerId: "game:core-ecology-habitat:v9",
+    ecologyOwnerId: "game:core-wildlife-actor:v1",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-groups:v1",
+    activityOwnerId: "game:core-wildlife-actor:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["body-size", "coat-state"],
+    appearanceTraits: ["coat", "horn-state", "sex", "temperament"],
+    habitatClasses: ["livestock-pen", "settlement-edge"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "shallow-water", relativeCapability: 300_000 },
+    ],
+    movementVerbs: ["walk"],
+    terrainAffordances: ["land", "standable-shallow-water"],
+    consumedBy: ["large-predator"],
+    competesWith: [],
+    ecologicalEffects: ["alarm-information"],
+    includeDogInteraction: true,
+    groupModel: "group",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
+    ],
+  },
 });
 
 /**
@@ -1831,6 +1875,26 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     weather: "intentional-no-response",
   },
   "domestic-chicken": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "domestic-goat": {
     "aquatic-animal": "intentional-no-response",
     carcass: "intentional-no-response",
     dog: "available",
@@ -2247,7 +2311,9 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       ownerId: values.habitatOwnerId,
       habitatClasses: values.habitatClasses,
       placementInputs: [
-        ...(species === "domestic-chicken" ? ["domestic-animal-anchor"] : []),
+        ...(values.ecologicalClasses?.includes("domestic-livestock")
+          ? ["domestic-animal-anchor"]
+          : []),
         "excluded-tile-indices",
         "focus-position",
         "focus-radius",
@@ -3015,19 +3081,25 @@ export function createLivingSpeciesCatalog(values: readonly unknown[]): LivingSp
   modules.sort(compareModule);
   const speciesIds = new Set<string>();
   const moduleIds = new Set<string>();
-  const namespaces = new Set<string>();
+  const identityNamespaces = new Set<string>();
+  const groupNamespaces = new Set<string>();
   for (const module of modules) {
     if (
       speciesIds.has(module.speciesId)
       || moduleIds.has(module.moduleId)
-      || namespaces.has(module.identity.stableIdNamespace)
+      || identityNamespaces.has(module.identity.stableIdNamespace)
+      || groupNamespaces.has(module.identity.stableIdNamespace)
     ) return null;
     speciesIds.add(module.speciesId);
     moduleIds.add(module.moduleId);
-    namespaces.add(module.identity.stableIdNamespace);
+    identityNamespaces.add(module.identity.stableIdNamespace);
     if (module.social.group.stableIdNamespace !== null) {
-      if (namespaces.has(module.social.group.stableIdNamespace)) return null;
-      namespaces.add(module.social.group.stableIdNamespace);
+      // Group namespaces name shared organization families (for example
+      // HERD), while species and population fields disambiguate exact group
+      // IDs. They may be reused by multiple compatible species, but may never
+      // collide with an actor identity namespace.
+      if (identityNamespaces.has(module.social.group.stableIdNamespace)) return null;
+      groupNamespaces.add(module.social.group.stableIdNamespace);
     }
   }
   for (const module of modules) {

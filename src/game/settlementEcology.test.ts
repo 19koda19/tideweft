@@ -23,9 +23,13 @@ import {
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
   SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_VERSION,
+  SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_PRIOR_VERSION,
   SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
+  SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
   SETTLEMENT_ECOLOGY_INITIAL_FOOD_QUANTITY,
+  SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES,
   SETTLEMENT_ECOLOGY_PRIOR_VERSION,
+  SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION,
   SETTLEMENT_ECOLOGY_VERSION,
   applySettlementKeeperStoreResponse,
   canonicalizeSettlementEcologyState,
@@ -172,13 +176,13 @@ describe("settlement food-store ecology kernel", () => {
     const prior = priorSettlementEcologyPayload(staged.state);
     const migrated = migrateSettlementEcologyState(prior);
 
-    expect(prior.version).toBe(SETTLEMENT_ECOLOGY_PRIOR_VERSION);
+    expect(prior.version).toBe(SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION);
     expect(migrated).toMatchObject({
       version: SETTLEMENT_ECOLOGY_VERSION,
       identity: staged.state.identity,
       carrier: staged.state.carrier,
       pendingLoss: staged.state.pendingLoss,
-      domesticCustody: null,
+      domesticCustodies: [],
       lastResolvedDomesticFoodUseOrdinal: 0,
       lastResolvedDomesticFoodUseTransactionId: null,
       lastResolvedDomesticFoodUseCauseEventId: null,
@@ -191,6 +195,48 @@ describe("settlement food-store ecology kernel", () => {
 
     expect(migrateSettlementEcologyState({ ...prior, domesticCustody: null })).toBeNull();
     expect(migrateSettlementEcologyState({ ...prior, version: 0 })).toBeNull();
+  });
+
+  it("migrates an exact v2 custody and pending v1 food transaction without changing identity", () => {
+    const initial = store(fixturePatch());
+    const withCustody = establishSettlementDomesticAnimalCustody(
+      initial,
+      domesticCustodyInput(initial),
+    );
+    if (withCustody === null) throw new Error("Could not establish v2 migration fixture");
+    const request = domesticFoodUseRequest(withCustody, 3);
+    const staged = stageSettlementDomesticFoodUse(withCustody, request);
+    if (staged === null) throw new Error("Could not stage v2 migration fixture");
+    const prior = priorSettlementEcologyV2Payload(staged.state);
+    const legacyCustody = prior.domesticCustody as Record<string, unknown>;
+    const migrated = migrateSettlementEcologyState(prior);
+    const custody = migrated?.domesticCustodies[0];
+
+    expect(prior.version).toBe(SETTLEMENT_ECOLOGY_PRIOR_VERSION);
+    expect(migrated?.revision).toBe(prior.revision);
+    expect(migrated?.identity).toEqual(prior.identity);
+    expect(migrated?.carrier).toEqual(prior.carrier);
+    expect(migrated?.pendingDomesticFoodUse).toEqual(prior.pendingDomesticFoodUse);
+    expect(custody).toMatchObject({
+      relationshipId: legacyCustody.relationshipId,
+      homeId: legacyCustody.homeId,
+      memberActorIds: legacyCustody.memberActorIds,
+      memberGroupId: legacyCustody.memberGroupId,
+      homeStructure: {
+        version: SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
+        structureId: legacyCustody.coopId,
+        kind: "coop",
+        position: legacyCustody.homePosition,
+        radiusUnits: legacyCustody.homeRadiusUnits,
+      },
+    });
+    expect(custody?.relationshipId).toBe(withCustody.domesticCustodies[0]?.relationshipId);
+    expect(custody?.homeId).toBe(withCustody.domesticCustodies[0]?.homeId);
+    expect(custody?.homeStructure.structureId)
+      .toBe(withCustody.domesticCustodies[0]?.homeStructure.structureId);
+    expect(recoverPendingSettlementDomesticFoodUse(migrated)?.applied).toBe(true);
+    expect(deserializeSettlementEcologyState(JSON.stringify(prior))).toEqual(migrated);
+    expect(migrateSettlementEcologyState({ ...prior, domesticCustodies: [] })).toBeNull();
   });
 
   it("binds canonical domestic custody without copying actor simulation state", () => {
@@ -214,28 +260,41 @@ describe("settlement food-store ecology kernel", () => {
       species: "domestic-chicken",
       memberActorIds: DOMESTIC_MEMBER_IDS,
       memberGroupId: DOMESTIC_GROUP_ID,
-      homePosition: input.homePosition,
-      homeRadiusUnits: input.homeRadiusUnits,
+      homeStructure: {
+        version: SETTLEMENT_DOMESTIC_HOME_STRUCTURE_VERSION,
+        kind: "coop",
+        position: input.homeStructure.position,
+        radiusUnits: input.homeStructure.radiusUnits,
+      },
     });
     expect(record?.relationshipId).toMatch(/^DOMESTIC-REL-[0-9a-f]{16}$/u);
     expect(record?.homeId).toMatch(/^DOMESTIC-HOME-[0-9a-f]{16}$/u);
-    expect(record?.coopId).toMatch(/^DOMESTIC-COOP-[0-9a-f]{16}$/u);
-    expect(established?.domesticCustody).toEqual(record);
+    expect(record?.homeStructure.structureId).toMatch(/^DOMESTIC-COOP-[0-9a-f]{16}$/u);
+    expect({
+      relationshipId: record?.relationshipId,
+      homeId: record?.homeId,
+      structureId: record?.homeStructure.structureId,
+    }).toEqual({
+      relationshipId: "DOMESTIC-REL-9ce091a8d7588f5d",
+      homeId: "DOMESTIC-HOME-9ce091a8d7588f5d",
+      structureId: "DOMESTIC-COOP-9ce091a8d7588f5d",
+    });
+    expect(established?.domesticCustodies).toEqual([record]);
     expect(establishSettlementDomesticAnimalCustody(established, input)).toEqual(established);
     expect(deserializeSettlementEcologyState(
       serializeSettlementEcologyState(established),
     )).toEqual(established);
-    expect("needs" in established!.domesticCustody!).toBe(false);
-    expect("actorPosition" in established!.domesticCustody!).toBe(false);
-    expect("movement" in established!.domesticCustody!).toBe(false);
+    expect("needs" in established!.domesticCustodies[0]!).toBe(false);
+    expect("actorPosition" in established!.domesticCustodies[0]!).toBe(false);
+    expect("movement" in established!.domesticCustodies[0]!).toBe(false);
 
     const persisted = JSON.parse(serializeSettlementEcologyState(established)) as {
-      domesticCustody: Record<string, unknown> & { memberActorIds: string[] };
+      domesticCustodies: Array<Record<string, unknown> & { memberActorIds: string[] }>;
     };
-    persisted.domesticCustody.memberActorIds.reverse();
+    persisted.domesticCustodies[0]!.memberActorIds.reverse();
     expect(canonicalizeSettlementEcologyState(persisted)).toBeNull();
-    persisted.domesticCustody.memberActorIds.reverse();
-    persisted.domesticCustody.owner = { kind: "settlement", id: 404 };
+    persisted.domesticCustodies[0]!.memberActorIds.reverse();
+    persisted.domesticCustodies[0]!.owner = { kind: "settlement", id: 404 };
     expect(canonicalizeSettlementEcologyState(persisted)).toBeNull();
 
     expect(establishSettlementDomesticAnimalCustody(initial, {
@@ -256,14 +315,104 @@ describe("settlement food-store ecology kernel", () => {
     })).toBeNull();
   });
 
-  it("conserves one exact open-store food unit across domestic replay and rat loss", () => {
+  it("orders plural generic homes canonically and rejects cross-custody membership", () => {
+    const initial = store(fixturePatch());
+    const coop = domesticCustodyInput(initial);
+    const pen = secondDomesticCustodyInput(initial);
+    const coopThenPen = establishSettlementDomesticAnimalCustody(
+      establishSettlementDomesticAnimalCustody(initial, coop),
+      pen,
+    );
+    const penThenCoop = establishSettlementDomesticAnimalCustody(
+      establishSettlementDomesticAnimalCustody(initial, pen),
+      coop,
+    );
+
+    expect(coopThenPen).toEqual(penThenCoop);
+    expect(coopThenPen?.domesticCustodies.map(({ custodyOrdinal }) => custodyOrdinal))
+      .toEqual([0, 1]);
+    expect(coopThenPen?.domesticCustodies.map(({ homeStructure }) => homeStructure.kind))
+      .toEqual(["coop", "pen"]);
+    expect(coopThenPen?.domesticCustodies[0]?.homeStructure.structureId)
+      .toMatch(/^DOMESTIC-COOP-[0-9a-f]{16}$/u);
+    expect(coopThenPen?.domesticCustodies[1]?.homeStructure.structureId)
+      .toMatch(/^DOMESTIC-PEN-[0-9a-f]{16}$/u);
+    expect(establishSettlementDomesticAnimalCustody(coopThenPen, {
+      ...secondDomesticCustodyInput(initial, 2),
+      memberActorIds: [DOMESTIC_MEMBER_IDS[0]],
+    })).toBeNull();
+
+    const reordered = JSON.parse(serializeSettlementEcologyState(coopThenPen)) as {
+      domesticCustodies: unknown[];
+    };
+    reordered.domesticCustodies.reverse();
+    expect(canonicalizeSettlementEcologyState(reordered)).toBeNull();
+
+    const duplicateMember = JSON.parse(serializeSettlementEcologyState(coopThenPen)) as {
+      domesticCustodies: Array<{ memberActorIds: string[] }>;
+    };
+    duplicateMember.domesticCustodies[1]!.memberActorIds = [DOMESTIC_MEMBER_IDS[0]];
+    expect(canonicalizeSettlementEcologyState(duplicateMember)).toBeNull();
+
+    const duplicateGroup = JSON.parse(serializeSettlementEcologyState(coopThenPen)) as {
+      domesticCustodies: Array<{ memberGroupId: string | null }>;
+    };
+    duplicateGroup.domesticCustodies[1]!.memberGroupId =
+      duplicateGroup.domesticCustodies[0]!.memberGroupId;
+    expect(canonicalizeSettlementEcologyState(duplicateGroup)).toBeNull();
+
+    const mismatchedHome = JSON.parse(serializeSettlementEcologyState(coopThenPen)) as {
+      domesticCustodies: Array<{
+        homeStructure: { kind: "coop" | "pen"; structureId: string };
+      }>;
+    };
+    mismatchedHome.domesticCustodies[0]!.homeStructure.kind = "pen";
+    expect(canonicalizeSettlementEcologyState(mismatchedHome)).toBeNull();
+
+    const firstNine = establishSettlementDomesticAnimalCustody(initial, {
+      ...coop,
+      memberActorIds: Array.from({ length: 9 }, (_, index) => (
+        `CHICKEN-v1-shared-bound-a-${index}`
+      )),
+    });
+    expect(establishSettlementDomesticAnimalCustody(firstNine, {
+      ...pen,
+      memberActorIds: Array.from({ length: 8 }, (_, index) => (
+        `CHICKEN-v1-shared-bound-b-${index}`
+      )),
+    })).toBeNull();
+
+    let bounded: SettlementEcologyState | null = initial;
+    for (
+      let ordinal = 0;
+      ordinal < SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES;
+      ordinal += 1
+    ) {
+      bounded = establishSettlementDomesticAnimalCustody(bounded, {
+        ...secondDomesticCustodyInput(initial, ordinal),
+        memberActorIds: [`CHICKEN-v1-shared-custody-bound-${ordinal}`],
+      });
+      expect(bounded).not.toBeNull();
+    }
+    expect(establishSettlementDomesticAnimalCustody(bounded, {
+      ...secondDomesticCustodyInput(initial, SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES),
+      memberActorIds: [
+        `CHICKEN-v1-shared-custody-bound-${SETTLEMENT_ECOLOGY_MAX_DOMESTIC_CUSTODIES}`,
+      ],
+    })).toBeNull();
+  });
+
+  it("conserves the one physical lot across plural custody, replay, and rat loss", () => {
     const current = attractionFixture();
     const domestic = establishSettlementDomesticAnimalCustody(
-      current.state,
-      domesticCustodyInput(current.state),
+      establishSettlementDomesticAnimalCustody(
+        current.state,
+        domesticCustodyInput(current.state),
+      ),
+      secondDomesticCustodyInput(current.state),
     );
-    if (domestic === null || domestic.domesticCustody === null) {
-      throw new Error("Could not establish domestic custody fixture");
+    if (domestic === null || domestic.domesticCustodies.length !== 2) {
+      throw new Error("Could not establish plural domestic custody fixture");
     }
     const request = domesticFoodUseRequest(domestic, 3);
     const quantityBefore = foodQuantity(domestic);
@@ -306,15 +455,36 @@ describe("settlement food-store ecology kernel", () => {
       removed: [],
     });
 
+    const secondRequest = domesticFoodUseRequest(fed!.state, 4, 1);
+    const secondStage = stageSettlementDomesticFoodUse(fed!.state, secondRequest);
+    const secondFed = resolveSettlementDomesticFoodUse(
+      secondStage!.state,
+      secondStage!.transaction,
+    );
+    expect(secondFed?.applied).toBe(true);
+    expect(foodQuantity(secondFed!.state)).toBe(quantityBefore - 2);
+
     const ratStage = stageSettlementFoodLoss(
-      fed!.state,
+      secondFed!.state,
       current.proposal,
       current.nextPatch,
       current.event,
     );
     const ratLoss = resolveSettlementFoodLoss(ratStage!.state, ratStage!.transaction);
     expect(ratLoss?.applied).toBe(true);
-    expect(foodQuantity(ratLoss!.state)).toBe(quantityBefore - 2);
+    expect(foodQuantity(ratLoss!.state)).toBe(quantityBefore - 3);
+    const removedQuantity = [
+      ...fed!.removed,
+      ...secondFed!.removed,
+      ...ratLoss!.removed,
+    ].reduce((sum, lot) => (
+      sum + (lot.payload.kind === "provision" ? lot.payload.quantity : 0)
+    ), 0);
+    expect(foodQuantity(ratLoss!.state) + removedQuantity).toBe(quantityBefore);
+    expect(ratLoss!.state.carrier.owner).toEqual({
+      kind: "settlement",
+      id: domestic.identity.settlementId,
+    });
     expect(deserializeSettlementEcologyState(
       serializeSettlementEcologyState(ratLoss!.state),
     )).toEqual(ratLoss!.state);
@@ -692,8 +862,10 @@ function foodQuantity(state: SettlementEcologyState): number {
 
 function priorSettlementEcologyPayload(
   state: SettlementEcologyState,
-): Record<string, unknown> & { version: typeof SETTLEMENT_ECOLOGY_PRIOR_VERSION } {
-  const value = structuredClone(state) as unknown as Record<string, unknown>;
+): Record<string, unknown> & { version: typeof SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION } {
+  const value = structuredClone(
+    priorSettlementEcologyV2Payload(state),
+  ) as unknown as Record<string, unknown>;
   delete value.domesticCustody;
   delete value.lastResolvedDomesticFoodUseOrdinal;
   delete value.lastResolvedDomesticFoodUseTransactionId;
@@ -701,6 +873,33 @@ function priorSettlementEcologyPayload(
   delete value.lastResolvedDomesticFoodUseCauseEventTick;
   delete value.lastResolvedDomesticFoodUseMemberActorId;
   delete value.pendingDomesticFoodUse;
+  value.version = SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION;
+  return value as Record<string, unknown> & {
+    version: typeof SETTLEMENT_ECOLOGY_STOREHOUSE_VERSION;
+  };
+}
+
+function priorSettlementEcologyV2Payload(
+  state: SettlementEcologyState,
+): Record<string, unknown> & { version: typeof SETTLEMENT_ECOLOGY_PRIOR_VERSION } {
+  const value = structuredClone(state) as unknown as Record<string, unknown>;
+  const custodies = value.domesticCustodies as Array<Record<string, unknown>>;
+  if (custodies.length > 1) throw new Error("v2 fixture supports at most one custody");
+  const current = custodies[0];
+  delete value.domesticCustodies;
+  if (current === undefined) {
+    value.domesticCustody = null;
+  } else {
+    const homeStructure = current.homeStructure as Record<string, unknown>;
+    const { homeStructure: _homeStructure, ...legacy } = current;
+    value.domesticCustody = {
+      ...legacy,
+      version: SETTLEMENT_DOMESTIC_ANIMAL_CUSTODY_PRIOR_VERSION,
+      coopId: homeStructure.structureId,
+      homePosition: homeStructure.position,
+      homeRadiusUnits: homeStructure.radiusUnits,
+    };
+  }
   value.version = SETTLEMENT_ECOLOGY_PRIOR_VERSION;
   return value as Record<string, unknown> & {
     version: typeof SETTLEMENT_ECOLOGY_PRIOR_VERSION;
@@ -717,26 +916,57 @@ function domesticCustodyInput(
     species: "domestic-chicken",
     memberActorIds: DOMESTIC_MEMBER_IDS,
     memberGroupId: DOMESTIC_GROUP_ID,
-    homePosition: translateWorldPosition(
-      state.identity.position,
-      -3 * WORLD_POSITION_UNITS_PER_TILE,
-      2 * WORLD_POSITION_UNITS_PER_TILE,
-    ),
-    homeRadiusUnits: 6 * WORLD_POSITION_UNITS_PER_TILE,
+    homeStructure: {
+      kind: "coop",
+      position: translateWorldPosition(
+        state.identity.position,
+        -3 * WORLD_POSITION_UNITS_PER_TILE,
+        2 * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      radiusUnits: 6 * WORLD_POSITION_UNITS_PER_TILE,
+    },
+  };
+}
+
+function secondDomesticCustodyInput(
+  state: SettlementEcologyState,
+  custodyOrdinal = 1,
+): CreateSettlementDomesticAnimalCustodyInput {
+  return {
+    custodyOrdinal,
+    owner: { kind: "settlement", id: state.identity.settlementId },
+    caretakerActorId: KEEPER_ID,
+    species: "domestic-chicken",
+    memberActorIds: [
+      `CHICKEN-v1-shared-pen-${custodyOrdinal}-a`,
+      `CHICKEN-v1-shared-pen-${custodyOrdinal}-b`,
+    ],
+    memberGroupId: `CHICKEN-FLOCK-v1-shared-pen-${custodyOrdinal}`,
+    homeStructure: {
+      kind: "pen",
+      position: translateWorldPosition(
+        state.identity.position,
+        4 * WORLD_POSITION_UNITS_PER_TILE,
+        -2 * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      radiusUnits: 8 * WORLD_POSITION_UNITS_PER_TILE,
+    },
   };
 }
 
 function domesticFoodUseRequest(
   state: SettlementEcologyState,
   causeEventTick: number,
+  custodyIndex = 0,
 ): SettlementDomesticFoodUseRequest {
-  if (state.domesticCustody === null) throw new Error("Domestic custody is required");
+  const custody = state.domesticCustodies[custodyIndex];
+  if (custody === undefined) throw new Error("Domestic custody is required");
   return {
     version: SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
     storeId: state.identity.storeId,
     foodLotId: state.identity.foodLotId,
-    relationshipId: state.domesticCustody.relationshipId,
-    memberActorId: state.domesticCustody.memberActorIds[0]!,
+    relationshipId: custody.relationshipId,
+    memberActorId: custody.memberActorIds[0]!,
     requestedQuantity: 1,
     causeEventId: `domestic-food-use:${causeEventTick}`,
     causeEventTick,

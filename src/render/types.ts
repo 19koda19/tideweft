@@ -500,6 +500,12 @@ export interface WildlifeView {
   readonly position: WorldPoint;
   readonly facing: number;
   readonly sizeScale: number;
+  /**
+   * Authenticated visible morphology for consistent Chart/Relief rendering.
+   * Renderers must not turn this into player-facing knowledge; textual
+   * disclosure remains owned by the observation-gated ABOUT projection.
+   */
+  readonly appearanceKey: string;
   readonly behavior: WildlifeBehaviorView;
   readonly conditionLabels: readonly string[];
   /** Aggregate flocks expose a visible approximate count, never hidden members. */

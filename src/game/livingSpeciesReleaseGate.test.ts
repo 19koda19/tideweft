@@ -19,6 +19,9 @@ import {
   ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS,
   ALPHA24_DOMESTIC_CHICKEN_EXCLUDED_CLAIMS,
   ALPHA24_DOMESTIC_CHICKEN_SPECIES,
+  ALPHA25_SHARED_DOMESTIC_LIVESTOCK_EXCLUDED_CLAIMS,
+  ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS,
+  ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES,
   ALPHA16_MARSH_EDGE_BOUNDED_CRITERIA,
   ALPHA16_MARSH_EDGE_BOUNDED_READINESS,
   ALPHA16_MARSH_EDGE_SPECIES,
@@ -39,6 +42,7 @@ import {
   alpha21RiverOtterBoundedReadiness,
   alpha22TidalConvergenceSourceCandidateReadiness,
   alpha24DomesticChickenBoundedReadiness,
+  alpha25SharedDomesticLivestockReadiness,
   auditLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGateSet,
@@ -1160,6 +1164,140 @@ describe("Living Weft species release gate", () => {
     ]);
     expect(module?.social.ownerId).toBe("game:core-ecology-groups:v1");
     expect(module?.interactions.ownerId).not.toMatch(/chicken/iu);
+  });
+
+  it("authenticates Alpha-25 as one shared domestic flock-and-herd source unit", () => {
+    const readiness = alpha25SharedDomesticLivestockReadiness();
+
+    expect(readiness).toEqual(ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "alpha25-shared-domestic-livestock",
+      scope: "bounded-settlement-flock-and-herd",
+      speciesIds: ["domestic-chicken", "domestic-goat"],
+      evidenceAuthenticated: true,
+      historicalChickenBaselineReady: true,
+      speciesProfilesReady: true,
+      exactBoundedPopulationReady: true,
+      pluralCustodyAndHomesReady: true,
+      habitatSeparationReady: true,
+      sharedActorAbstractionsReady: true,
+      broadClassInteractionsReady: true,
+      physicalResourceBoundaryReady: true,
+      persistenceAndPresentationReady: true,
+      sharedInvariantCoverageReady: true,
+      performanceEvidenceReady: true,
+      excludedClaimIntegrityReady: true,
+      boundedCandidateReady: true,
+      blockingCapabilities: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      liveVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+      fullWaveDReady: false,
+      fullDirective041Ready: false,
+    });
+    expect(readiness.speciesIds).toEqual(ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES);
+    expect(readiness.excludedClaims)
+      .toEqual(ALPHA25_SHARED_DOMESTIC_LIVESTOCK_EXCLUDED_CLAIMS);
+    expect(readiness.excludedClaims).toEqual(expect.arrayContaining([
+      "goat-store-food-use",
+      "living-foliage-browsing",
+      "mortality",
+      "sound",
+      "environmental-evidence",
+      "worldwide-livestock",
+    ]));
+    expect(readiness.evidenceOwnerIds).toEqual([...readiness.evidenceOwnerIds].sort());
+    expect(new Set(readiness.evidenceOwnerIds).size).toBe(readiness.evidenceOwnerIds.length);
+    expect(readiness.evidenceOwnerIds).toEqual(expect.arrayContaining([
+      "game:core-ecology-habitat:v9",
+      "game:core-wildlife-resource-claim-arbitration:v1",
+      "game:runtime-save:v18",
+      "game:settlement-ecology:v3",
+      "test:alpha25-shared-domestic-livestock-invariants:v1",
+      "test:alpha25-shared-domestic-livestock-performance:v1",
+      "test:alpha25-shared-domestic-livestock-source-candidate:v1",
+    ]));
+    expect(livingSpeciesReadinessReport("domestic-goat")).toMatchObject({
+      evidenceAuthenticated: true,
+      state: "blocked",
+      publicReady: false,
+      counts: {
+        active: 22,
+        foundation: 2,
+        unimplemented: 6,
+        notApplicable: 0,
+        total: 30,
+      },
+      blockingCriteria: [
+        "sound",
+        "food-web",
+        "perception-senses",
+        "environmental-evidence",
+        "seamless-region-crossing",
+        "tutorial-truth",
+        "patch-note-truth",
+        "exact-tested-deployment",
+      ],
+    });
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.speciesIds)).toBe(true);
+    expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);
+    expect(Object.isFrozen(readiness.evidenceOwnerIds)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("extends livestock through shared properties, not a species-pair matrix", () => {
+    const modules = ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES.map((species) => {
+      const module = livingSpeciesModule(species);
+      if (module === null) throw new Error(`Missing domestic module ${species}`);
+      return module;
+    });
+
+    expect(modules).toHaveLength(2);
+    for (const module of modules) {
+      expect(module.interactions.targets.map(({ targetClass }) => targetClass))
+        .toEqual(LIVING_SPECIES_INTERACTION_TARGET_CLASSES);
+      expect(module.interactions.targets).toHaveLength(
+        LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length,
+      );
+      expect(module.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+        verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+      ))).toBe(false);
+      expect(module.activity.ownerId).toBe("game:core-wildlife-actor:v1");
+      expect(module.cognition.ownerId).toBe("game:core-wildlife-actor:v1");
+      expect(module.interactions.ownerId).toBe("game:core-wildlife-actor:v1");
+      expect(module.population.ownerId).toBe("game:core-wildlife-actor:v1");
+      expect(module.social.ownerId).toBe("game:core-ecology-groups:v1");
+      expect(module.locomotion.ownerId).toBe(
+        "game:core-wildlife-locomotion-profile:v1",
+      );
+      expect(module.interactions.ownerId).not.toMatch(/chicken|goat/iu);
+    }
+
+    const goat = modules.find(({ speciesId }) => speciesId === "domestic-goat");
+    expect(goat).toMatchObject({
+      identity: { stableIdNamespace: "GOAT" },
+      population: { maxMaterializedPerRegion: 2 },
+      habitat: {
+        ownerId: "game:core-ecology-habitat:v9",
+        habitatClasses: ["livestock-pen", "settlement-edge"],
+      },
+      social: {
+        group: {
+          organizationKinds: ["herd"],
+          stableIdNamespace: "HERD",
+          stableIdentity: true,
+        },
+      },
+      sound: { implementation: "unimplemented", repertoire: [] },
+      evidence: { status: "unimplemented", produces: [] },
+      lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+    });
+    expect(goat?.diet.resources).toEqual([{ resourceClass: "browse", role: "nutrition" }]);
   });
 
   it("keeps mortality, carcasses, living cover, and circadian schedules explicit future work", () => {

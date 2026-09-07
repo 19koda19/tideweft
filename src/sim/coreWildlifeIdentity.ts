@@ -23,6 +23,7 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "american-black-duck",
   "north-american-river-otter",
   "domestic-chicken",
+  "domestic-goat",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -98,6 +99,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "DUCK-"
     | "OTTER-"
     | "CHICKEN-"
+    | "GOAT-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -116,6 +118,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "american-black-duck": "DUCK-",
   "north-american-river-otter": "OTTER-",
   "domestic-chicken": "CHICKEN-",
+  "domestic-goat": "GOAT-",
 });
 
 /**
@@ -302,6 +305,16 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     locomotionClass: "terrestrial",
     groupOrganization: "flock",
     groupStableIdNamespace: "CHICKEN-FLOCK",
+  },
+  "domestic-goat": {
+    species: "domestic-goat",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "herbivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: "herd",
+    groupStableIdNamespace: "HERD",
   },
 });
 
@@ -914,6 +927,39 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       vigilance: [580_000, 960_000],
       boldness: [120_000, 700_000],
       sociability: [680_000, 980_000],
+    },
+  },
+  "domestic-goat": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "domestic-goat",
+    maximumPatchPopulation: 2,
+    roles: ["alarm-source", "prey", "forager"],
+    foodAffinities: {
+      browse: 1_000_000,
+      "shore-forage": 0,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 400_000,
+      fleeThreshold: 600_000,
+      retreatThreshold: 480_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["black-coated", "brown-coated", "cream-coated", "pied-coated"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["bold", "patient"],
+      ["reserved", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [520_000, 920_000],
+      boldness: [160_000, 720_000],
+      sociability: [700_000, 980_000],
     },
   },
 });

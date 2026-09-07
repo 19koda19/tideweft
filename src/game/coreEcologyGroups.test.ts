@@ -84,6 +84,7 @@ describe("core ecology social groups", () => {
       "gull",
       "fish-crow",
       "domestic-chicken",
+      "domestic-goat",
     ]);
     const deer = deerGroup({ memberOrdinals: [7, 2, 5] });
     const reordered = deerGroup({ memberOrdinals: [5, 7, 2] });

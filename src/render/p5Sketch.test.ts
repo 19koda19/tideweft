@@ -251,6 +251,7 @@ const wildlifeView = (
     "snowy-egret": "Snowy egret",
     "american-black-duck": "American black duck",
     "domestic-chicken": "Domestic chicken",
+    "domestic-goat": "Domestic goat",
     "north-american-river-otter": "North American river otter",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
@@ -265,6 +266,7 @@ const wildlifeView = (
     "snowy-egret": "EGRET-",
     "american-black-duck": "DUCK-",
     "domestic-chicken": "CHICKEN-",
+    "domestic-goat": "GOAT-",
     "north-american-river-otter": "OTTER-",
   };
   return {
@@ -274,6 +276,7 @@ const wildlifeView = (
     position: { x: 12, y: 12 },
     facing: 0,
     sizeScale: 1,
+    appearanceKey: species === "domestic-goat" ? "brown-coated" : "test-visible-morph",
     behavior: "watch",
     conditionLabels: [],
     selected: false,
@@ -1796,6 +1799,7 @@ describe("Chart Wave-B wildlife presentation", () => {
     ["marsh-rabbit", "RABBIT-", "#816b52", "triangle"],
     ["marsh-fox", "FOX-", "#9d5136", "bezier"],
     ["domestic-chicken", "CHICKEN-", "#a66a3f", "triangle"],
+    ["domestic-goat", "GOAT-", "#8f7150", "bezier"],
   ] as const)("draws and touch-selects the color-independent %s form with reduced motion", (
     species,
     prefix,
@@ -1862,6 +1866,47 @@ describe("Chart Wave-B wildlife presentation", () => {
       id: `${prefix}R-v1-chart-${species}`,
       point: { x: 12, y: 12 },
     });
+    renderer.destroy();
+  });
+
+  it("draws one goat from its authenticated coat in Chart without disclosing the key", () => {
+    vi.stubGlobal("performance", { now: () => 1_337 });
+    const base = view("chart-authenticated-goat-coat", { x: 12, y: 12 });
+    const goat = wildlifeView("domestic-goat", {
+      actorId: "GOAT-AUTHENTICATED-PIED",
+      appearanceKey: "pied-coated",
+      selected: true,
+    });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlife: [goat],
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+
+    const fill = p5Harness.instance?.fill as ReturnType<typeof vi.fn>;
+    const stroke = p5Harness.instance?.stroke as ReturnType<typeof vi.fn>;
+    for (const color of ["#e2d6bc", "#55463b", "#211c19"]) {
+      expect(fill).toHaveBeenCalledWith(color);
+    }
+    expect(stroke).toHaveBeenCalledWith("#b99d72");
+    expect(fill).not.toHaveBeenCalledWith("#8f7150");
+    expect((p5Harness.instance?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
+      .not.toContain("pied-coated");
     renderer.destroy();
   });
 

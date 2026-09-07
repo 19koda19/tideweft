@@ -102,6 +102,11 @@ export interface WildlifePresentation {
   readonly position: Readonly<{ x: number; y: number }>;
   readonly facing: number;
   readonly sizeScale: number;
+  /**
+   * Canonical visible morphology used to draw the individual consistently.
+   * This is a visual input, not permission to disclose its textual label.
+   */
+  readonly appearanceKey: string;
   readonly behavior: WildlifePresentationBehavior;
   readonly behaviorLabel: string;
   readonly conditionLabels: readonly string[];
@@ -223,6 +228,7 @@ type WildlifePresentationForm =
   | "snowy-egret"
   | "american-black-duck"
   | "domestic-chicken"
+  | "domestic-goat"
   | "north-american-river-otter"
   | "black-bear"
   | "brown-rat"
@@ -461,6 +467,20 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: true,
     baseSizeScale: 0.58,
     observableForm: "Compact ground bird with comb and upright tail",
+  },
+  "domestic-goat": {
+    form: "domestic-goat",
+    representation: "actor",
+    identificationClarity: 300_000,
+    unidentifiedQuickLabel: "Unknown livestock",
+    unidentifiedIdentityLabel: "Unidentified livestock",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.94,
+    observableForm: "Stocky, cloven-hoofed goat with swept horns",
   },
   "north-american-river-otter": {
     form: "north-american-river-otter",
@@ -708,6 +728,7 @@ export function projectWildlifePresentation(
     },
     facing: headingToRadians(detail.heading),
     sizeScale: sizeScale(species, actor.identity.lifeStage),
+    appearanceKey: actor.identity.morph,
     behavior,
     behaviorLabel,
     conditionLabels,

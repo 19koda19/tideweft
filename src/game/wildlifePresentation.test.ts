@@ -686,6 +686,7 @@ describe("knowledge-honest wildlife presentation", () => {
     ["snowy-egret", "Snowy egret"],
     ["american-black-duck", "American black duck"],
     ["domestic-chicken", "Domestic chicken"],
+    ["domestic-goat", "Domestic goat"],
     ["north-american-river-otter", "North American river otter"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
@@ -701,6 +702,7 @@ describe("knowledge-honest wildlife presentation", () => {
       species,
       quickLabel: label,
       speciesIdentified: true,
+      appearanceKey: actor.identity.morph,
       behavior: "watch",
       behaviorLabel: "Watching",
       selected: true,
@@ -720,6 +722,8 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(presentation?.formLabel).toBe("Broad-bodied dabbling duck");
     } else if (species === "domestic-chicken") {
       expect(presentation?.formLabel).toBe("Compact ground bird with comb and upright tail");
+    } else if (species === "domestic-goat") {
+      expect(presentation?.formLabel).toBe("Stocky, cloven-hoofed goat with swept horns");
     } else if (species === "north-american-river-otter") {
       expect(presentation?.formLabel).toBe("Long-bodied, low-slung swimmer");
     } else {

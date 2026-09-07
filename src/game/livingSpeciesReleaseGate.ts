@@ -32,6 +32,7 @@ export const ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_VERSION = 1 as const;
 export const ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS_VERSION = 1 as const;
+export const ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -609,6 +610,113 @@ export interface Alpha24DomesticChickenBoundedReadinessReport {
   readonly fullThirtyCriterionReady: boolean;
   /** Claims this bounded domestic flock can never authorize. */
   readonly excludedClaims: readonly Alpha24DomesticChickenExcludedClaim[];
+}
+
+export const ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES = [
+  "domestic-chicken",
+  "domestic-goat",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha25SharedDomesticLivestockSpecies =
+  (typeof ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES)[number];
+
+export type Alpha25SharedDomesticLivestockCapability =
+  | "historical-chicken-baseline"
+  | "species-profiles"
+  | "exact-bounded-population"
+  | "plural-custody-and-homes"
+  | "habitat-separation"
+  | "shared-actor-abstractions"
+  | "broad-class-interactions"
+  | "physical-resource-boundary"
+  | "persistence-and-presentation"
+  | "shared-invariant-coverage"
+  | "performance-budget"
+  | "excluded-claim-integrity";
+
+export type Alpha25SharedDomesticLivestockExcludedClaim =
+  | "sound"
+  | "environmental-evidence"
+  | "harmful-attack"
+  | "injury"
+  | "mortality"
+  | "carcasses"
+  | "live-prey-capture"
+  | "live-prey-consumption"
+  | "goat-store-food-use"
+  | "living-foliage-browsing"
+  | "eggs"
+  | "milk"
+  | "wool"
+  | "shearing"
+  | "nesting"
+  | "reproduction"
+  | "herding-behavior"
+  | "guardian-behavior"
+  | "full-circadian-schedules"
+  | "autonomous-home-return"
+  | "ecological-cross-region-migration"
+  | "worldwide-livestock"
+  | "full-wave-d"
+  | "full-directive-04-1";
+
+export const ALPHA25_SHARED_DOMESTIC_LIVESTOCK_EXCLUDED_CLAIMS = [
+  "sound",
+  "environmental-evidence",
+  "harmful-attack",
+  "injury",
+  "mortality",
+  "carcasses",
+  "live-prey-capture",
+  "live-prey-consumption",
+  "goat-store-food-use",
+  "living-foliage-browsing",
+  "eggs",
+  "milk",
+  "wool",
+  "shearing",
+  "nesting",
+  "reproduction",
+  "herding-behavior",
+  "guardian-behavior",
+  "full-circadian-schedules",
+  "autonomous-home-return",
+  "ecological-cross-region-migration",
+  "worldwide-livestock",
+  "full-wave-d",
+  "full-directive-04-1",
+] as const satisfies readonly Alpha25SharedDomesticLivestockExcludedClaim[];
+
+export interface Alpha25SharedDomesticLivestockReadinessReport {
+  readonly version: typeof ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS_VERSION;
+  readonly unitId: "alpha25-shared-domestic-livestock";
+  readonly scope: "bounded-settlement-flock-and-herd";
+  readonly speciesIds: readonly Alpha25SharedDomesticLivestockSpecies[];
+  readonly evidenceAuthenticated: boolean;
+  readonly historicalChickenBaselineReady: boolean;
+  readonly speciesProfilesReady: boolean;
+  readonly exactBoundedPopulationReady: boolean;
+  readonly pluralCustodyAndHomesReady: boolean;
+  readonly habitatSeparationReady: boolean;
+  readonly sharedActorAbstractionsReady: boolean;
+  readonly broadClassInteractionsReady: boolean;
+  readonly physicalResourceBoundaryReady: boolean;
+  readonly persistenceAndPresentationReady: boolean;
+  readonly sharedInvariantCoverageReady: boolean;
+  readonly performanceEvidenceReady: boolean;
+  readonly excludedClaimIntegrityReady: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingCapabilities: readonly Alpha25SharedDomesticLivestockCapability[];
+  readonly evidenceOwnerIds: readonly string[];
+  /** Source readiness cannot authenticate public copy or a deployed artifact. */
+  readonly publicationRecordsReady: false;
+  readonly exactTestedDeploymentVerified: false;
+  readonly liveVerified: false;
+  readonly published: false;
+  readonly fullThirtyCriterionReady: false;
+  readonly fullWaveDReady: false;
+  readonly fullDirective041Ready: false;
+  readonly excludedClaims: readonly Alpha25SharedDomesticLivestockExcludedClaim[];
 }
 
 /** The seven deliberately bounded small-world roles shipped across Wave B. */
@@ -1796,17 +1904,35 @@ function riverOtterEvidence(): readonly ClaimTuple[] {
   ];
 }
 
+interface DomesticLivestockEvidenceConfiguration {
+  readonly habitatOwnerId: string;
+  readonly settlementOwnerId: string;
+  readonly saveOwnerId: string;
+  readonly sharedInvariantOwner: string;
+  readonly performanceOwner: string;
+  readonly physicalStoreFood: boolean;
+  readonly resourceBoundaryOwnerIds?: readonly string[];
+}
+
 /**
- * Build-owned evidence for Alpha-24's bounded domestic chicken flock. The
- * chicken plugs into the shared wildlife actor, flock, perception, habitat,
- * and physical settlement-store owners; there is deliberately no
- * chicken-specific AI or pairwise interaction owner. Life history, sound,
- * evidence, harmful outcomes, schedules, home-return, and worldwide livestock
- * remain explicit absences.
+ * Shared release evidence for bounded domestic individuals. Species compose
+ * the same actor, group, perception, locomotion, persistence, and presentation
+ * owners; configuration records only the versioned habitat/custody boundary
+ * and whether this slice can lawfully claim food from the physical store.
  */
-function domesticChickenEvidence(): readonly ClaimTuple[] {
+function domesticLivestockEvidence(
+  configuration: DomesticLivestockEvidenceConfiguration,
+): readonly ClaimTuple[] {
   const owners = (...values: string[]): readonly string[] => values.sort(compareText);
-  const sharedInvariantOwner = "test:alpha24-domestic-chicken-shared-invariants:v1";
+  const {
+    habitatOwnerId,
+    settlementOwnerId,
+    saveOwnerId,
+    sharedInvariantOwner,
+    performanceOwner,
+    physicalStoreFood,
+    resourceBoundaryOwnerIds = [],
+  } = configuration;
   return [
     ["species-profile", A, owners(
       "game:core-ecology-species-runtime-policy:v1",
@@ -1814,10 +1940,10 @@ function domesticChickenEvidence(): readonly ClaimTuple[] {
       "sim:core-wildlife-identity:v1",
     )],
     ["ecological-niche", A, owners(
-      "game:core-ecology-habitat:v8",
+      habitatOwnerId,
       "game:core-ecology-species-runtime-policy:v1",
       "game:living-species-catalog:v1",
-      "game:settlement-ecology:v2",
+      settlementOwnerId,
       "sim:core-wildlife-identity:v1",
     )],
     ["appearance", A, owners(
@@ -1826,16 +1952,17 @@ function domesticChickenEvidence(): readonly ClaimTuple[] {
     )],
     ["sound", U, []],
     ["habitat-placement", A, owners(
-      "game:core-ecology-habitat:v8",
+      habitatOwnerId,
       "game:runtime-core-ecology:v1",
-      "game:settlement-ecology:v2",
+      settlementOwnerId,
       sharedInvariantOwner,
     )],
     ["food-web", F, owners(
       "game:core-ecology-species-runtime-policy:v1",
       "game:core-wildlife-actor:v1",
       "game:living-species-catalog:v1",
-      "game:settlement-ecology:v2",
+      ...(physicalStoreFood ? [settlementOwnerId] : []),
+      ...resourceBoundaryOwnerIds,
       "sim:core-wildlife-identity:v1",
       sharedInvariantOwner,
     )],
@@ -1895,11 +2022,11 @@ function domesticChickenEvidence(): readonly ClaimTuple[] {
       "sim:actor-perception:v2",
     )],
     ["population-materialization", A, owners(
-      "game:core-ecology-habitat:v8",
+      habitatOwnerId,
       "game:core-ecology-groups:v1",
       "game:core-ecology:v4",
       "game:runtime-core-ecology:v1",
-      "game:settlement-ecology:v2",
+      settlementOwnerId,
       sharedInvariantOwner,
     )],
     ["full-coarse-transition", A, owners(
@@ -1910,16 +2037,16 @@ function domesticChickenEvidence(): readonly ClaimTuple[] {
     )],
     ["save-load", A, owners(
       "game:core-ecology:v4",
-      "game:runtime-save:v17",
-      "game:settlement-ecology:v2",
+      saveOwnerId,
+      settlementOwnerId,
       sharedInvariantOwner,
     )],
     ["seamless-region-crossing", U, []],
     ["performance-budget", A, owners(
-      "game:core-ecology-habitat:v8",
+      habitatOwnerId,
       "game:core-ecology:v4",
       "game:runtime-core-ecology:v1",
-      "test:alpha24-domestic-chicken-performance:v1",
+      performanceOwner,
     )],
     ["accessibility", A, owners(
       "game:wildlife-about:v1",
@@ -1931,19 +2058,19 @@ function domesticChickenEvidence(): readonly ClaimTuple[] {
       sharedInvariantOwner,
     )],
     ["player-independent-scenario", A, owners(
-      "game:core-ecology-habitat:v8",
+      habitatOwnerId,
       "game:core-ecology-groups:v1",
       "game:core-ecology-perception:v1",
       "game:core-wildlife-actor:v1",
       "game:runtime-core-ecology:v1",
-      "game:settlement-ecology:v2",
+      settlementOwnerId,
       sharedInvariantOwner,
     )],
     ["fuzz-testing", A, owners(
-      "game:core-ecology-habitat:v8",
+      habitatOwnerId,
       "game:core-ecology-groups:v1",
       "game:core-ecology-species-runtime-policy:v1",
-      "game:settlement-ecology:v2",
+      settlementOwnerId,
       "sim:core-wildlife-identity:v1",
       sharedInvariantOwner,
     )],
@@ -1952,6 +2079,33 @@ function domesticChickenEvidence(): readonly ClaimTuple[] {
     ["patch-note-truth", U, []],
     ["exact-tested-deployment", U, []],
   ];
+}
+
+function domesticChickenEvidence(): readonly ClaimTuple[] {
+  return domesticLivestockEvidence({
+    habitatOwnerId: "game:core-ecology-habitat:v8",
+    settlementOwnerId: "game:settlement-ecology:v2",
+    saveOwnerId: "game:runtime-save:v17",
+    sharedInvariantOwner: "test:alpha24-domestic-chicken-shared-invariants:v1",
+    performanceOwner: "test:alpha24-domestic-chicken-performance:v1",
+    physicalStoreFood: true,
+  });
+}
+
+function domesticGoatEvidence(): readonly ClaimTuple[] {
+  return domesticLivestockEvidence({
+    habitatOwnerId: "game:core-ecology-habitat:v9",
+    settlementOwnerId: "game:settlement-ecology:v3",
+    saveOwnerId: "game:runtime-save:v18",
+    sharedInvariantOwner: "test:alpha25-shared-domestic-livestock-invariants:v1",
+    performanceOwner: "test:alpha25-shared-domestic-livestock-performance:v1",
+    // This slice establishes goat identity, herd, home, and behavior only.
+    // Browse remains a foliage integration seam and store provisions stay out.
+    physicalStoreFood: false,
+    resourceBoundaryOwnerIds: [
+      "game:core-wildlife-resource-claim-arbitration:v1",
+    ],
+  });
 }
 
 /**
@@ -2039,6 +2193,7 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "american-black-duck": americanBlackDuckEvidence(),
   "north-american-river-otter": riverOtterEvidence(),
   "domestic-chicken": domesticChickenEvidence(),
+  "domestic-goat": domesticGoatEvidence(),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -3900,6 +4055,461 @@ Alpha24DomesticChickenBoundedReadinessReport {
 
 export const ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS =
   alpha24DomesticChickenBoundedReadiness();
+
+/**
+ * Source-authenticated Alpha-25 witness for one existing flock and one new
+ * two-member herd. It verifies shared properties and owner boundaries, never
+ * chicken×goat or livestock×wildlife pair permutations.
+ */
+export function alpha25SharedDomesticLivestockReadiness():
+Alpha25SharedDomesticLivestockReadinessReport {
+  const chickenId = ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES[0];
+  const goatId = ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES[1];
+  const chicken = livingSpeciesModule(chickenId);
+  const goat = livingSpeciesModule(goatId);
+  const chickenPolicy = coreEcologySpeciesRuntimePolicy(chickenId);
+  const goatPolicy = coreEcologySpeciesRuntimePolicy(goatId);
+  const chickenGate = LIVING_SPECIES_RELEASE_GATES.gates.find(({ speciesId }) => (
+    speciesId === chickenId
+  ));
+  const goatGate = LIVING_SPECIES_RELEASE_GATES.gates.find(({ speciesId }) => (
+    speciesId === goatId
+  ));
+  const chickenReport = chickenGate === undefined
+    ? null
+    : auditLivingSpeciesReleaseGate(chickenGate);
+  const goatReport = goatGate === undefined
+    ? null
+    : auditLivingSpeciesReleaseGate(goatGate);
+  const goatCriterion = (name: LivingSpeciesReleaseCriterion) => (
+    goatGate?.criteria.find(({ criterion }) => criterion === name)
+  );
+  const goatActive = (name: LivingSpeciesReleaseCriterion): boolean => (
+    goatCriterion(name)?.status === "active"
+  );
+  const goatHasOwner = (name: LivingSpeciesReleaseCriterion, ownerId: string): boolean => (
+    goatCriterion(name)?.evidenceOwnerIds.includes(ownerId) === true
+  );
+  const hasCapability = (
+    policy: typeof chickenPolicy,
+    capability: CoreEcologySpeciesRuntimeCapability,
+  ): boolean => policy?.capabilities.includes(capability) === true;
+  const sharedInvariantOwner = "test:alpha25-shared-domestic-livestock-invariants:v1";
+  const performanceOwner = "test:alpha25-shared-domestic-livestock-performance:v1";
+  const resourceBoundaryOwner = "game:core-wildlife-resource-claim-arbitration:v1";
+  const evidenceAuthenticated = chickenReport?.evidenceAuthenticated === true
+    && goatReport?.evidenceAuthenticated === true;
+
+  const historicalChickenBaselineReady =
+    ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS.boundedCandidateReady;
+
+  const speciesProfilesReady = chicken !== null
+    && goat !== null
+    && chickenPolicy !== null
+    && goatPolicy !== null
+    && goatActive("species-profile")
+    && goatActive("ecological-niche")
+    && chicken.profile.implementation === "active"
+    && goat.profile.implementation === "active"
+    && chicken.profile.taxonomicClass === "bird"
+    && goat.profile.taxonomicClass === "mammal"
+    && [chicken, goat].every((module) => (
+      module.profile.ecologicalClasses.includes("alarm-source")
+      && module.profile.ecologicalClasses.includes("domestic-livestock")
+      && module.profile.ecologicalClasses.includes("forager")
+      && module.profile.ecologicalClasses.includes("prey")
+    ))
+    && chickenPolicy.representation === "individual"
+    && goatPolicy.representation === "individual"
+    && chickenPolicy.locomotionClass === "terrestrial"
+    && goatPolicy.locomotionClass === "terrestrial";
+
+  const boundedIndividualRepresentationsReady = chicken !== null
+    && goat !== null
+    && chickenPolicy !== null
+    && goatPolicy !== null
+    && chicken.identity.form === "individual"
+    && goat.identity.form === "individual"
+    && chicken.identity.stableIdNamespace === "CHICKEN"
+    && goat.identity.stableIdNamespace === "GOAT"
+    && chicken.population.materialization === "mixed"
+    && goat.population.materialization === "mixed"
+    && chicken.population.coarseSimulation
+    && goat.population.coarseSimulation
+    && chickenPolicy.actorAddressable
+    && goatPolicy.actorAddressable
+    && chickenPolicy.aggregate === null
+    && goatPolicy.aggregate === null;
+
+  const exactGoatPairReady = goat !== null
+    && goatPolicy !== null
+    && goat.population.maxMaterializedPerRegion === 2
+    && goatPolicy.maximumMaterializedActors === 2
+    && goatPolicy.presentationModel === "individual";
+
+  const pluralDomesticCustodyReady = chicken !== null
+    && goat !== null
+    && historicalChickenBaselineReady
+    && goatActive("ecological-niche")
+    && goatActive("habitat-placement")
+    && goatActive("save-load")
+    && goatHasOwner("ecological-niche", "game:settlement-ecology:v3")
+    && goatHasOwner("habitat-placement", "game:settlement-ecology:v3")
+    && goatHasOwner("save-load", "game:settlement-ecology:v3")
+    && goatHasOwner("player-independent-scenario", "game:settlement-ecology:v3")
+    && goatHasOwner("fuzz-testing", sharedInvariantOwner)
+    && [chicken, goat].every((module) => (
+      module.habitat.placementInputs.includes("domestic-animal-anchor")
+    ));
+
+  const typedHomeStructuresReady = pluralDomesticCustodyReady
+    && chicken !== null
+    && goat !== null
+    && chicken.habitat.habitatClasses.includes("storehouse-yard")
+    && goat.habitat.habitatClasses.includes("livestock-pen")
+    && chicken.habitat.habitatClasses.includes("settlement-edge")
+    && goat.habitat.habitatClasses.includes("settlement-edge");
+
+  const separatedHabitatPlacementReady = chicken !== null
+    && goat !== null
+    && goatActive("habitat-placement")
+    && chicken.habitat.ownerId === "game:core-ecology-habitat:v8"
+    && goat.habitat.ownerId === "game:core-ecology-habitat:v9"
+    && goatHasOwner("habitat-placement", "game:core-ecology-habitat:v9")
+    && goatHasOwner("habitat-placement", sharedInvariantOwner);
+
+  const groupModuleReady = (
+    module: NonNullable<typeof chicken>,
+    organization: "flock" | "herd",
+    namespace: "CHICKEN-FLOCK" | "HERD",
+  ): boolean => module.social.implementation === "active"
+    && module.social.ownerId === "game:core-ecology-groups:v1"
+    && module.social.group.status === "active"
+    && module.social.group.ownerId === "game:core-ecology-groups:v1"
+    && module.social.group.organizationKinds.length === 1
+    && module.social.group.organizationKinds[0] === organization
+    && module.social.group.stableIdentity
+    && module.social.group.stableIdNamespace === namespace
+    && module.social.group.membership
+    && module.social.group.informationPropagation
+    && module.social.group.separationReunion;
+  const sharedGroupAbstractionReady = chicken !== null
+    && goat !== null
+    && chickenPolicy !== null
+    && goatPolicy !== null
+    && goatActive("same-species-interaction")
+    && groupModuleReady(chicken, "flock", "CHICKEN-FLOCK")
+    && groupModuleReady(goat, "herd", "HERD")
+    && hasCapability(chickenPolicy, "group-coordination")
+    && hasCapability(goatPolicy, "group-coordination")
+    && hasCapability(chickenPolicy, "shared-alarm")
+    && hasCapability(goatPolicy, "shared-alarm");
+
+  const lawfulPerceptionReady = chicken !== null
+    && goat !== null
+    && chickenPolicy !== null
+    && goatPolicy !== null
+    && goatCriterion("perception-senses")?.status === "foundation"
+    && goatHasOwner("perception-senses", "game:core-ecology-perception:v1")
+    && goatHasOwner("perception-senses", "sim:actor-perception:v2")
+    && [chicken, goat].every((module) => (
+      module.senses.implementation === "foundation"
+      && module.senses.ownerId === "game:living-actor-senses:v1"
+      && module.cognition.implementation === "active"
+      && module.cognition.ownerId === "game:core-wildlife-actor:v1"
+      && module.cognition.attentionOwnerId === "sim:actor-perception:v2"
+      && module.cognition.knowledgeSources.length === 1
+      && module.cognition.knowledgeSources[0] === "direct-observation"
+      && !module.cognition.inference
+    ))
+    && hasCapability(chickenPolicy, "actor-address")
+    && hasCapability(goatPolicy, "actor-address");
+
+  const terrestrialModuleReady = (
+    module: NonNullable<typeof chicken>,
+  ): boolean => module.locomotion.implementation === "active"
+    && module.locomotion.ownerId === "game:core-wildlife-locomotion-profile:v1"
+    && module.locomotion.decisionModel === "individual"
+    && !module.locomotion.crossRegion
+    && module.locomotion.media.some(({ medium }) => medium === "land")
+    && module.locomotion.media.some(({ medium }) => medium === "shallow-water")
+    && module.locomotion.movementVerbs.includes("walk")
+    && module.locomotion.terrainAffordances.includes("land")
+    && module.locomotion.terrainAffordances.includes("standable-shallow-water");
+  const sharedTerrestrialLocomotionReady = chicken !== null
+    && goat !== null
+    && chickenPolicy !== null
+    && goatPolicy !== null
+    && goatActive("locomotion")
+    && terrestrialModuleReady(chicken)
+    && terrestrialModuleReady(goat)
+    && chickenPolicy.locomotionClass === "terrestrial"
+    && goatPolicy.locomotionClass === "terrestrial"
+    && !hasCapability(goatPolicy, "aerial-locomotion")
+    && !hasCapability(goatPolicy, "amphibious-locomotion")
+    && !hasCapability(goatPolicy, "aquatic-locomotion");
+
+  const forbiddenInteractionVerbs = new Set(["attack", "capture", "consume", "kill"]);
+  const broadInteractionModuleReady = (
+    module: NonNullable<typeof chicken>,
+  ): boolean => module.interactions.targets.length
+      === LIVING_SPECIES_INTERACTION_TARGET_CLASSES.length
+    && module.interactions.targets.every((target, index) => (
+      target.targetClass === LIVING_SPECIES_INTERACTION_TARGET_CLASSES[index]
+      && (target.policy === "available" || target.policy === "intentional-no-response")
+      && target.verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ))
+    && ["dog", "human", "predator", "same-species"].every((targetClass) => (
+      module.interactions.targets.find((target) => target.targetClass === targetClass)
+        ?.policy === "available"
+    ));
+  const broadClassInteractionsReady = chicken !== null
+    && goat !== null
+    && [
+      "human-interaction",
+      "dog-interaction",
+      "same-species-interaction",
+      "other-species-interaction",
+    ].every((name) => goatActive(name as LivingSpeciesReleaseCriterion))
+    && broadInteractionModuleReady(chicken)
+    && broadInteractionModuleReady(goat);
+
+  const physicalResourceBoundaryReady = chicken !== null
+    && goat !== null
+    && chickenPolicy !== null
+    && goatPolicy !== null
+    && hasCapability(chickenPolicy, "food-investigation")
+    && chicken.diet.resources.some(({ resourceClass }) => resourceClass === "exposed-food")
+    && !hasCapability(goatPolicy, "food-investigation")
+    && goat.diet.resources.some(({ resourceClass }) => resourceClass === "browse")
+    && !goat.diet.resources.some(({ resourceClass }) => resourceClass === "exposed-food")
+    && goatHasOwner("food-web", resourceBoundaryOwner)
+    && goatHasOwner("food-web", sharedInvariantOwner)
+    && [chicken, goat].every((module) => (
+      module.inventory.implementation === "unimplemented"
+      && module.inventory.model === "none"
+      && !module.inventory.acceptsCustody
+      && !module.inventory.conservationRequired
+    ));
+
+  const saveMigrationReady = chicken !== null
+    && goat !== null
+    && historicalChickenBaselineReady
+    && goatActive("save-load")
+    && goatHasOwner("save-load", "game:core-ecology:v4")
+    && goatHasOwner("save-load", "game:runtime-save:v18")
+    && goatHasOwner("save-load", "game:settlement-ecology:v3")
+    && goatHasOwner("save-load", sharedInvariantOwner)
+    && chicken.persistence.generationMigration === "preserve-materialized-identity"
+    && goat.persistence.generationMigration === "preserve-materialized-identity";
+
+  const knowledgeHonestPresentationReady = chicken !== null
+    && goat !== null
+    && chickenPolicy !== null
+    && goatPolicy !== null
+    && [
+      "appearance",
+      "about-disclosure",
+      "knowledge-honesty",
+      "accessibility",
+      "mobile-parity",
+    ].every((name) => goatActive(name as LivingSpeciesReleaseCriterion))
+    && [chicken, goat].every((module) => (
+      module.about.implementation === "active"
+      && module.about.ownerId === "game:wildlife-about:v1"
+      && module.about.directObservationRequired
+      && module.about.learnedFields.length === 0
+    ))
+    && chickenPolicy.presentationModel === "visible-flock"
+    && goatPolicy.presentationModel === "individual"
+    && goatHasOwner("mobile-parity", sharedInvariantOwner);
+
+  const boundedLocalContinuityReady = chicken !== null
+    && goat !== null
+    && goatActive("population-materialization")
+    && goatActive("full-coarse-transition")
+    && goatActive("save-load")
+    && goatCriterion("seamless-region-crossing")?.status === "unimplemented"
+    && [chicken, goat].every((module) => (
+      module.population.coarseSimulation
+      && module.spatial.signedRegions
+      && module.spatial.extremeRegions
+      && module.social.group.stableIdentity
+      && !module.locomotion.crossRegion
+    ));
+
+  const sharedInvariantCoverageReady = validateCoreEcologySpeciesRuntimePolicies(
+    LIVING_SPECIES_CATALOG,
+  ).length === 0
+    && goatActive("fuzz-testing")
+    && goatHasOwner("fuzz-testing", sharedInvariantOwner)
+    && goatHasOwner("population-materialization", sharedInvariantOwner)
+    && goatHasOwner("full-coarse-transition", sharedInvariantOwner)
+    && pluralDomesticCustodyReady
+    && sharedGroupAbstractionReady
+    && broadClassInteractionsReady
+    && physicalResourceBoundaryReady;
+
+  const performanceEvidenceReady = historicalChickenBaselineReady
+    && goatActive("performance-budget")
+    && goatHasOwner("performance-budget", performanceOwner);
+
+  const ownerCoherent = (status: string, ownerId: string | null): boolean => (
+    status === "unimplemented"
+      ? ownerId === null
+      : (status === "active" || status === "foundation")
+        && typeof ownerId === "string"
+        && ownerId.length > 0
+  );
+  const moduleOwnersCoherent = (module: NonNullable<typeof chicken>): boolean => [
+    [module.profile.implementation, module.profile.ownerId],
+    [module.habitat.implementation, module.habitat.ownerId],
+    [module.identity.implementation, module.identity.ownerId],
+    [module.population.implementation, module.population.ownerId],
+    [module.senses.implementation, module.senses.ownerId],
+    [module.locomotion.implementation, module.locomotion.ownerId],
+    [module.activity.implementation, module.activity.ownerId],
+    [module.social.implementation, module.social.ownerId],
+    [module.social.group.status, module.social.group.ownerId],
+    [module.sound.implementation, module.sound.ownerId],
+    [module.cognition.implementation, module.cognition.ownerId],
+    [module.evidence.status, module.evidence.ownerId],
+    [module.aftermath.implementation, module.aftermath.ownerId],
+    [module.interactions.implementation, module.interactions.ownerId],
+    [module.inventory.implementation, module.inventory.ownerId],
+    [module.about.implementation, module.about.ownerId],
+    [module.persistence.implementation, module.persistence.ownerId],
+  ].every(([status, ownerId]) => ownerCoherent(status as string, ownerId as string | null));
+  const ownerCoherenceReady = chicken !== null
+    && goat !== null
+    && moduleOwnersCoherent(chicken)
+    && moduleOwnersCoherent(goat)
+    && chicken.population.ownerId === "game:core-wildlife-actor:v1"
+    && goat.population.ownerId === "game:core-wildlife-actor:v1"
+    && chicken.social.ownerId === "game:core-ecology-groups:v1"
+    && goat.social.ownerId === "game:core-ecology-groups:v1"
+    && chicken.locomotion.ownerId === "game:core-wildlife-locomotion-profile:v1"
+    && goat.locomotion.ownerId === "game:core-wildlife-locomotion-profile:v1"
+    && goatHasOwner("ecological-niche", "game:settlement-ecology:v3")
+    && goatHasOwner("player-independent-scenario", "game:settlement-ecology:v3");
+
+  const excludedModuleReady = (module: NonNullable<typeof chicken>): boolean => (
+    module.sound.implementation === "unimplemented"
+    && module.sound.repertoire.length === 0
+    && module.evidence.status === "unimplemented"
+    && module.evidence.produces.length === 0
+    && module.health.implementation === "foundation"
+    && module.health.injuryAxis === null
+    && !module.health.incapacitation
+    && !module.health.causalDeath
+    && !module.health.recovery
+    && module.lifeHistory.mortality === "unimplemented"
+    && module.lifeHistory.reproduction === "unimplemented"
+    && !module.lifeHistory.dynamicAging
+    && module.aftermath.implementation === "unimplemented"
+    && module.aftermath.carcassModel === "none"
+    && module.activity.circadian.status === "unimplemented"
+    && module.social.territory.model === "none"
+    && !module.social.actorToActorRelationships
+    && module.habitat.migrationModel === "none"
+    && !module.locomotion.crossRegion
+    && module.environment.livingCover.status === "unimplemented"
+    && module.environment.weather.status === "unimplemented"
+    && module.environment.water.status === "unimplemented"
+    && module.interactions.targets.every(({ verbs }) => (
+      verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
+    ))
+  );
+  const excludedClaimIntegrityReady = chicken !== null
+    && goat !== null
+    && goatPolicy !== null
+    && goatCriterion("sound")?.status === "unimplemented"
+    && goatCriterion("environmental-evidence")?.status === "unimplemented"
+    && goatCriterion("seamless-region-crossing")?.status === "unimplemented"
+    && excludedModuleReady(chicken)
+    && excludedModuleReady(goat)
+    && !hasCapability(goatPolicy, "food-investigation")
+    && !hasCapability(goatPolicy, "small-prey-pursuit")
+    && !hasCapability(goatPolicy, "diurnal-activity")
+    && !goat.diet.resources.some(({ resourceClass }) => (
+      resourceClass === "exposed-food" || resourceClass === "live-prey"
+    ));
+
+  const exactBoundedPopulationReady = boundedIndividualRepresentationsReady
+    && exactGoatPairReady;
+  const pluralCustodyAndHomesReady = pluralDomesticCustodyReady
+    && typedHomeStructuresReady;
+  const habitatSeparationReady = separatedHabitatPlacementReady;
+  const sharedActorAbstractionsReady = sharedGroupAbstractionReady
+    && lawfulPerceptionReady
+    && sharedTerrestrialLocomotionReady;
+  const persistenceAndPresentationReady = saveMigrationReady
+    && knowledgeHonestPresentationReady
+    && boundedLocalContinuityReady
+    && ownerCoherenceReady;
+
+  const capabilities: readonly (
+    readonly [Alpha25SharedDomesticLivestockCapability, boolean]
+  )[] = [
+    ["historical-chicken-baseline", historicalChickenBaselineReady],
+    ["species-profiles", speciesProfilesReady],
+    ["exact-bounded-population", exactBoundedPopulationReady],
+    ["plural-custody-and-homes", pluralCustodyAndHomesReady],
+    ["habitat-separation", habitatSeparationReady],
+    ["shared-actor-abstractions", sharedActorAbstractionsReady],
+    ["broad-class-interactions", broadClassInteractionsReady],
+    ["physical-resource-boundary", physicalResourceBoundaryReady],
+    ["persistence-and-presentation", persistenceAndPresentationReady],
+    ["shared-invariant-coverage", sharedInvariantCoverageReady],
+    ["performance-budget", performanceEvidenceReady],
+    ["excluded-claim-integrity", excludedClaimIntegrityReady],
+  ];
+  const blockingCapabilities = capabilities
+    .filter(([, ready]) => !ready)
+    .map(([capability]) => capability);
+  const evidenceOwnerIds = [...new Set([
+    ...(chickenGate?.criteria.flatMap(({ evidenceOwnerIds: values }) => values) ?? []),
+    ...(goatGate?.criteria.flatMap(({ evidenceOwnerIds: values }) => values) ?? []),
+    resourceBoundaryOwner,
+    "test:alpha25-shared-domestic-livestock-source-candidate:v1",
+  ])].sort(compareText);
+  const boundedCandidateReady = evidenceAuthenticated
+    && blockingCapabilities.length === 0;
+
+  return deepFreeze({
+    version: ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS_VERSION,
+    unitId: "alpha25-shared-domestic-livestock",
+    scope: "bounded-settlement-flock-and-herd",
+    speciesIds: [...ALPHA25_SHARED_DOMESTIC_LIVESTOCK_SPECIES],
+    evidenceAuthenticated,
+    historicalChickenBaselineReady,
+    speciesProfilesReady,
+    exactBoundedPopulationReady,
+    pluralCustodyAndHomesReady,
+    habitatSeparationReady,
+    sharedActorAbstractionsReady,
+    broadClassInteractionsReady,
+    physicalResourceBoundaryReady,
+    persistenceAndPresentationReady,
+    sharedInvariantCoverageReady,
+    performanceEvidenceReady,
+    excludedClaimIntegrityReady,
+    boundedCandidateReady,
+    blockingCapabilities,
+    evidenceOwnerIds,
+    publicationRecordsReady: false,
+    exactTestedDeploymentVerified: false,
+    liveVerified: false,
+    published: false,
+    fullThirtyCriterionReady: false,
+    fullWaveDReady: false,
+    fullDirective041Ready: false,
+    excludedClaims: [...ALPHA25_SHARED_DOMESTIC_LIVESTOCK_EXCLUDED_CLAIMS],
+  });
+}
+
+export const ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS =
+  alpha25SharedDomesticLivestockReadiness();
 
 function canonicalCriterionState(
   value: unknown,

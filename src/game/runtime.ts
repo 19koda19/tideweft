@@ -312,6 +312,7 @@ import {
 } from "./coreEcology";
 import {
   deriveCoreEcologyHabitatAssemblage,
+  deriveCoreEcologyDomesticPenHabitatAssemblage,
   deriveCoreEcologyDomesticYardHabitatAssemblage,
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyMarshEdgeHabitatAssemblage,
@@ -320,6 +321,7 @@ import {
   deriveCoreEcologyTidalWebHabitatAssemblage,
   deriveCoreEcologyWaterfowlHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
+  type CoreEcologyDomesticPenHabitatAssemblage,
   type CoreEcologyDomesticYardHabitatAssemblage,
   type CoreEcologyHarborEdgeHabitatAssemblage,
   type CoreEcologyMarshEdgeHabitatAssemblage,
@@ -382,6 +384,11 @@ import {
   type CoreWildlifeNeutralActivityPreference,
   type CoreWildlifeResourceClaim,
 } from "./coreWildlifeActor";
+import {
+  CORE_WILDLIFE_RESOURCE_CLAIM_ARBITRATION_VERSION,
+  orderCoreWildlifeResourceClaimContenders,
+  type CoreWildlifeResourceClaimContender,
+} from "./coreWildlifeResourceClaimArbitration";
 import {
   coreEcologySpeciesCanOwnActorAddress,
   coreEcologySpeciesHasRuntimeCapability,
@@ -468,7 +475,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 17;
+const GAME_SAVE_VERSION = 18;
+const DOMESTIC_YARD_GAME_SAVE_VERSION = 17;
 const STOREHOUSE_GAME_SAVE_VERSION = 16;
 const TIDAL_CONVERGENCE_GAME_SAVE_VERSION = 15;
 const WATERFOWL_GAME_SAVE_VERSION = 14;
@@ -599,6 +607,8 @@ const LEGACY_CORE_ECOLOGY_POPULATION_TOPOLOGY = Object.freeze([
 const CORE_ECOLOGY_FORAGE_PROVISION = "dried-fish" as const;
 const RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT = 24;
 const runtimeCoreEcologyHabitatCache =
+  new Map<string, CoreEcologyDomesticPenHabitatAssemblage>();
+const runtimeDomesticYardCoreEcologyHabitatCache =
   new Map<string, CoreEcologyDomesticYardHabitatAssemblage>();
 const runtimeTidalWebCoreEcologyHabitatCache =
   new Map<string, CoreEcologyTidalWebHabitatAssemblage>();
@@ -775,7 +785,7 @@ function createRuntimeCoreEcology(
     patchKey: CORE_ECOLOGY_PATCH_KEY,
     originRegion: habitat.originRegion,
     tick: world.meta.completedTick,
-    derivation: { kind: "habitat-v8", habitat },
+    derivation: { kind: "habitat-v9", habitat },
     groups,
     populations: habitat.populations
       .filter(({ populationUnits, representation }) => (
@@ -1202,6 +1212,71 @@ function deriveRuntimeCoreEcologyHabitat(
   world: WorldState,
   bio0: Bio0EcologyState,
   economy: WorldView,
+): CoreEcologyDomesticPenHabitatAssemblage {
+  const porter = runtimeBio0Porter(economy, bio0.porterAddress.actorId);
+  const startingSettlement = economy.settlements.find(
+    ({ id }) => id === porter.resident.homeSettlementId,
+  ) ?? economy.settlements[0];
+  const startingTile = startingSettlement === undefined
+    ? undefined
+    : economy.terrain.tiles[startingSettlement.tileIndex];
+  const focus = startingTile === undefined
+    ? bio0.porterAddress.position
+    : createWorldPosition(
+        bio0.porterAddress.position.region,
+        Math.min(
+          REGION_WIDTH_UNITS - 1,
+          (startingTile.x + 6) * WORLD_POSITION_UNITS_PER_TILE
+            + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+        ),
+        startingTile.y * WORLD_POSITION_UNITS_PER_TILE
+          + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+      );
+  const excludedTileIndices = economy.settlements
+    .map(({ tileIndex }) => tileIndex)
+    .filter((tileIndex) => Number.isSafeInteger(tileIndex) && tileIndex >= 0)
+    .sort((left, right) => left - right);
+  const settlementId = startingSettlement?.id ?? porter.resident.homeSettlementId;
+  const domesticPosition = runtimeSettlementStorePosition(economy, settlementId);
+  const domesticAnchor = Object.freeze({
+    anchorId: `SETTLEMENT-DOMESTIC-YARD-${settlementId}`,
+    species: "domestic-chicken" as const,
+    position: domesticPosition,
+    radiusTiles: 4,
+  });
+  const cacheKey = hashCanonical([
+    "runtime-core-ecology-habitat/v9",
+    world.meta.rootSeed,
+    focus,
+    32,
+    excludedTileIndices,
+    domesticAnchor,
+  ]);
+  const cached = runtimeCoreEcologyHabitatCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const habitat = deriveCoreEcologyDomesticPenHabitatAssemblage({
+    rootSeed: world.meta.rootSeed,
+    originRegion: focus.region,
+    focus: {
+      position: focus,
+      radiusTiles: 32,
+      excludedTileIndices,
+    },
+    domesticAnchor,
+  });
+  runtimeCoreEcologyHabitatCache.set(cacheKey, habitat);
+  if (runtimeCoreEcologyHabitatCache.size > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT) {
+    const oldest = runtimeCoreEcologyHabitatCache.keys().next().value as string | undefined;
+    if (oldest !== undefined) runtimeCoreEcologyHabitatCache.delete(oldest);
+  }
+  return habitat;
+}
+
+/** Frozen Alpha-24 habitat authority used only to authenticate v17 saves. */
+function deriveRuntimeDomesticYardCoreEcologyHabitat(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView,
 ): CoreEcologyDomesticYardHabitatAssemblage {
   const porter = runtimeBio0Porter(economy, bio0.porterAddress.actorId);
   const startingSettlement = economy.settlements.find(
@@ -1242,7 +1317,7 @@ function deriveRuntimeCoreEcologyHabitat(
     excludedTileIndices,
     domesticAnchor,
   ]);
-  const cached = runtimeCoreEcologyHabitatCache.get(cacheKey);
+  const cached = runtimeDomesticYardCoreEcologyHabitatCache.get(cacheKey);
   if (cached !== undefined) return cached;
   const habitat = deriveCoreEcologyDomesticYardHabitatAssemblage({
     rootSeed: world.meta.rootSeed,
@@ -1254,10 +1329,15 @@ function deriveRuntimeCoreEcologyHabitat(
     },
     domesticAnchor,
   });
-  runtimeCoreEcologyHabitatCache.set(cacheKey, habitat);
-  if (runtimeCoreEcologyHabitatCache.size > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT) {
-    const oldest = runtimeCoreEcologyHabitatCache.keys().next().value as string | undefined;
-    if (oldest !== undefined) runtimeCoreEcologyHabitatCache.delete(oldest);
+  runtimeDomesticYardCoreEcologyHabitatCache.set(cacheKey, habitat);
+  if (
+    runtimeDomesticYardCoreEcologyHabitatCache.size
+      > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT
+  ) {
+    const oldest = runtimeDomesticYardCoreEcologyHabitatCache.keys().next().value as
+      | string
+      | undefined;
+    if (oldest !== undefined) runtimeDomesticYardCoreEcologyHabitatCache.delete(oldest);
   }
   return habitat;
 }
@@ -1665,6 +1745,7 @@ function createRuntimeCoreEcologyGroups(
     | CoreEcologyTidalTableHabitatAssemblage
     | CoreEcologyWaterfowlHabitatAssemblage
     | CoreEcologyTidalWebHabitatAssemblage
+    | CoreEcologyDomesticPenHabitatAssemblage
     | CoreEcologyDomesticYardHabitatAssemblage,
 ) {
   const groups: CoreEcologyGroupState[] = [];
@@ -1712,12 +1793,12 @@ function canonicalRuntimeCoreEcology(
     || state.derivation.kind === "bounded-input-v1"
   ) return null;
   if (
-    state.derivation.kind === "habitat-v8"
-    || state.derivation.kind === "legacy-fixed-v1-with-habitat-v8"
+    state.derivation.kind === "habitat-v9"
+    || state.derivation.kind === "legacy-fixed-v1-with-habitat-v9"
   ) {
     const expectedHabitat = deriveRuntimeCoreEcologyHabitat(world, bio0, createWorldView(world));
     if (stableStringify(state.derivation.habitat) !== stableStringify(expectedHabitat)) return null;
-    if (state.derivation.kind === "habitat-v8") {
+    if (state.derivation.kind === "habitat-v9") {
       const expectedGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat);
       if (!runtimeCoreGroupTopologyMatches(state.groups.groups, expectedGroups.groups)) return null;
     } else {
@@ -1728,6 +1809,7 @@ function canonicalRuntimeCoreEcology(
         .groups.filter(({ identity }) => (
           identity.species === "fish-crow"
           || identity.species === "domestic-chicken"
+          || identity.species === "domestic-goat"
         ));
       if (
         !legacyRuntimeCoreEcologyTopologyMatches(legacyPopulations)
@@ -1735,12 +1817,66 @@ function canonicalRuntimeCoreEcology(
       ) return null;
     }
   } else {
-    // Current envelopes always carry their authenticated v8 habitat. Earlier
+    // Current envelopes always carry their authenticated v9 habitat. Earlier
     // derivations are admitted only through the explicit one-way migrators.
     return null;
   }
+  return runtimeCoreEcologyIdentitiesMatch(state, world) ? state : null;
+}
+
+/** Exact Alpha-24 v8 authority used only before the additive goat migration. */
+function canonicalRuntimeDomesticYardCoreEcology(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+): CoreEcologyAggregatePatchState | null {
+  const state = canonicalizeCoreEcologyAggregatePatch(value);
+  if (
+    state === null
+    || state.updatedAtTick !== world.meta.completedTick
+    || state.patchKey !== CORE_ECOLOGY_PATCH_KEY
+  ) return null;
+  const origin = bio0.porterAddress.position.region;
+  if (
+    state.originRegion.x !== origin.x
+    || state.originRegion.y !== origin.y
+    || (
+      state.derivation.kind !== "habitat-v8"
+      && state.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
+    )
+  ) return null;
+  const expectedHabitat = deriveRuntimeDomesticYardCoreEcologyHabitat(
+    world,
+    bio0,
+    createWorldView(world),
+  );
+  if (stableStringify(state.derivation.habitat) !== stableStringify(expectedHabitat)) return null;
+  if (state.derivation.kind === "habitat-v8") {
+    const expectedGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat);
+    if (!runtimeCoreGroupTopologyMatches(state.groups.groups, expectedGroups.groups)) return null;
+  } else {
+    const legacyPopulations = state.populations.filter(({ species }) => (
+      species === "deer" || species === "gull" || species === "black-bear"
+    ));
+    const expectedExtensionGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat)
+      .groups.filter(({ identity }) => (
+        identity.species === "fish-crow"
+        || identity.species === "domestic-chicken"
+      ));
+    if (
+      !legacyRuntimeCoreEcologyTopologyMatches(legacyPopulations)
+      || !runtimeCoreGroupTopologyMatches(state.groups.groups, expectedExtensionGroups)
+    ) return null;
+  }
+  return runtimeCoreEcologyIdentitiesMatch(state, world) ? state : null;
+}
+
+function runtimeCoreEcologyIdentitiesMatch(
+  state: CoreEcologyAggregatePatchState,
+  world: WorldState,
+): boolean {
   for (const population of state.populations) {
-    if (!coreEcologySpeciesCanOwnActorAddress(population.species)) return null;
+    if (!coreEcologySpeciesCanOwnActorAddress(population.species)) return false;
     for (const member of population.members) {
       const expectedIdentity = generateCoreWildlifeIdentity({
         seed: world.meta.rootSeed,
@@ -1749,7 +1885,7 @@ function canonicalRuntimeCoreEcology(
         populationKey: population.populationKey,
         populationOrdinal: member.populationOrdinal,
       });
-      if (stableStringify(member.actor.identity) !== stableStringify(expectedIdentity)) return null;
+      if (stableStringify(member.actor.identity) !== stableStringify(expectedIdentity)) return false;
     }
   }
   for (const population of state.aggregatePopulations) {
@@ -1758,9 +1894,9 @@ function canonicalRuntimeCoreEcology(
       originRegion: state.originRegion,
       populationKey: population.populationKey,
       species: population.species,
-    })) return null;
+    })) return false;
   }
-  return state;
+  return true;
 }
 
 function runtimeSettlementStorePosition(economy: WorldView, settlementId: number) {
@@ -1795,32 +1931,63 @@ function createRuntimeSettlementEcology(
     position: runtimeSettlementStorePosition(economy, settlementId),
     aggregatePatch: core,
   });
-  const chickenPopulation = core.populations.find(({ species }) => (
-    species === "domestic-chicken"
-  ));
-  if (chickenPopulation === undefined || chickenPopulation.members.length === 0) return store;
-  const flock = core.groups.groups.find(({ identity }) => (
-    identity.species === "domestic-chicken"
-  ));
-  const domesticAnchor = core.derivation.kind === "habitat-v8"
-    || core.derivation.kind === "legacy-fixed-v1-with-habitat-v8"
-    ? core.derivation.habitat.domesticAnchor
-    : null;
-  if (flock === undefined || domesticAnchor === null) {
-    throw new Error("Domestic chicken population lost its authenticated flock or home anchor");
-  }
-  const established = establishSettlementDomesticAnimalCustody(store, {
-    custodyOrdinal: 0,
-    owner: { kind: "settlement", id: settlementId },
-    caretakerActorId: keeper.address.actorId,
-    species: "domestic-chicken",
-    memberActorIds: chickenPopulation.members.map(({ actor }) => actor.identity.stableId),
-    memberGroupId: flock.identity.stableId,
-    homePosition: domesticAnchor.position,
-    homeRadiusUnits: domesticAnchor.radiusTiles * WORLD_POSITION_UNITS_PER_TILE,
-  });
-  if (established === null) {
-    throw new Error("Domestic chicken custody could not bind to its authoritative actors");
+  if (
+    core.derivation.kind !== "habitat-v9"
+    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
+  ) return store;
+  const definitions = [
+    {
+      custodyOrdinal: 0,
+      species: "domestic-chicken" as const,
+      groupOrganization: "flock" as const,
+      homeStructure: {
+        kind: "coop" as const,
+        position: core.derivation.habitat.domesticAnchor.position,
+        radiusUnits:
+          core.derivation.habitat.domesticAnchor.radiusTiles
+            * WORLD_POSITION_UNITS_PER_TILE,
+      },
+    },
+    {
+      custodyOrdinal: 1,
+      species: "domestic-goat" as const,
+      groupOrganization: "herd" as const,
+      homeStructure: {
+        kind: "pen" as const,
+        position: core.derivation.habitat.domesticPenAnchor.position,
+        radiusUnits:
+          core.derivation.habitat.domesticPenAnchor.radiusTiles
+            * WORLD_POSITION_UNITS_PER_TILE,
+      },
+    },
+  ] as const;
+  let established = store;
+  for (const definition of definitions) {
+    const population = core.populations.find(({ species }) => (
+      species === definition.species
+    ));
+    const group = core.groups.groups.find(({ identity }) => (
+      identity.species === definition.species
+      && identity.organization === definition.groupOrganization
+    ));
+    if (population === undefined || population.members.length === 0 || group === undefined) {
+      throw new Error(
+        `Domestic ${definition.species} population lost its authenticated group or home anchor`,
+      );
+    }
+    const next = establishSettlementDomesticAnimalCustody(established, {
+      custodyOrdinal: definition.custodyOrdinal,
+      owner: { kind: "settlement", id: settlementId },
+      caretakerActorId: keeper.address.actorId,
+      species: definition.species,
+      memberActorIds: population.members.map(({ actor }) => actor.identity.stableId),
+      memberGroupId: group.identity.stableId,
+      homeStructure: definition.homeStructure,
+    });
+    if (next === null) {
+      throw new Error(`Domestic ${definition.species} custody could not bind to its actors`);
+    }
+    established = next;
   }
   return established;
 }
@@ -1847,7 +2014,7 @@ function canonicalRuntimeSettlementEcology(
     if (keeper.address.actorId !== bio0.porterAddress.actorId) return null;
     const expected = createRuntimeSettlementEcology(world, bio0, core, economy);
     return stableStringify(state.identity) === stableStringify(expected.identity)
-      && stableStringify(state.domesticCustody) === stableStringify(expected.domesticCustody)
+      && stableStringify(state.domesticCustodies) === stableStringify(expected.domesticCustodies)
       ? state
       : null;
   } catch {
@@ -1855,31 +2022,40 @@ function canonicalRuntimeSettlementEcology(
   }
 }
 
-function establishRuntimeDomesticCustody(
+function establishRuntimeDomesticCustodies(
   state: SettlementEcologyState,
   expected: SettlementEcologyState,
 ): SettlementEcologyState | null {
   if (stableStringify(state.identity) !== stableStringify(expected.identity)) return null;
-  if (expected.domesticCustody === null) {
-    return state.domesticCustody === null ? state : null;
+  let adopted = state;
+  for (const custody of expected.domesticCustodies) {
+    const existing = adopted.domesticCustodies.find(({ custodyOrdinal }) => (
+      custodyOrdinal === custody.custodyOrdinal
+    ));
+    if (existing !== undefined) {
+      if (stableStringify(existing) !== stableStringify(custody)) return null;
+      continue;
+    }
+    const next = establishSettlementDomesticAnimalCustody(adopted, {
+      custodyOrdinal: custody.custodyOrdinal,
+      owner: custody.owner,
+      caretakerActorId: custody.caretakerActorId,
+      species: custody.species,
+      memberActorIds: custody.memberActorIds,
+      memberGroupId: custody.memberGroupId,
+      homeStructure: {
+        kind: custody.homeStructure.kind,
+        position: custody.homeStructure.position,
+        radiusUnits: custody.homeStructure.radiusUnits,
+      },
+    });
+    if (next === null) return null;
+    adopted = next;
   }
-  if (state.domesticCustody !== null) {
-    return stableStringify(state.domesticCustody)
-      === stableStringify(expected.domesticCustody)
-      ? state
-      : null;
-  }
-  const custody = expected.domesticCustody;
-  return establishSettlementDomesticAnimalCustody(state, {
-    custodyOrdinal: custody.custodyOrdinal,
-    owner: custody.owner,
-    caretakerActorId: custody.caretakerActorId,
-    species: custody.species,
-    memberActorIds: custody.memberActorIds,
-    memberGroupId: custody.memberGroupId,
-    homePosition: custody.homePosition,
-    homeRadiusUnits: custody.homeRadiusUnits,
-  });
+  return stableStringify(adopted.domesticCustodies)
+    === stableStringify(expected.domesticCustodies)
+    ? adopted
+    : null;
 }
 
 /** Authenticate the exact tidal-web contract shipped by Alpha 21–23. */
@@ -2567,7 +2743,66 @@ function migrateRuntimeCoreEcologyFromTidalTable(
 }
 
 /**
- * Append the tidal-web mammal and first domestic-yard flock without rewriting
+ * Append the second domestic species to an exact Alpha-24 yard. Every earlier
+ * actor, group, aggregate unit, event, need, and position remains byte exact.
+ */
+function migrateRuntimeCoreEcologyFromDomesticYard(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+): CoreEcologyAggregatePatchState | null {
+  const domesticYard = canonicalRuntimeDomesticYardCoreEcology(value, world, bio0);
+  if (domesticYard === null) return null;
+  const template = createRuntimeCoreEcology(world, bio0, createWorldView(world));
+  if (template.derivation.kind !== "habitat-v9") return null;
+  const extensionPopulations = template.populations
+    .filter(({ species }) => species === "domestic-goat")
+    .map((population) => ({
+      ...population,
+      members: population.members.map((member) => ({
+        ...member,
+        materialization: "coarse" as const,
+      })),
+    }));
+  const extensionGroups = template.groups.groups.filter(
+    ({ identity }) => identity.species === "domestic-goat",
+  );
+  const migrated = canonicalizeCoreEcologyAggregatePatch({
+    ...domesticYard,
+    derivation: domesticYard.derivation.kind === "legacy-fixed-v1-with-habitat-v8"
+      ? {
+          kind: "legacy-fixed-v1-with-habitat-v9",
+          habitat: template.derivation.habitat,
+        }
+      : template.derivation,
+    groups: createCoreEcologyGroupSet([
+      ...domesticYard.groups.groups,
+      ...extensionGroups,
+    ]),
+    populations: [...domesticYard.populations, ...extensionPopulations],
+  });
+  if (migrated === null) return null;
+  if (
+    stableStringify(migrated.aggregatePopulations)
+      !== stableStringify(domesticYard.aggregatePopulations)
+  ) return null;
+  for (const oldPopulation of domesticYard.populations) {
+    const retained = migrated.populations.find(({ species, populationKey }) => (
+      species === oldPopulation.species && populationKey === oldPopulation.populationKey
+    ));
+    if (stableStringify(retained) !== stableStringify(oldPopulation)) return null;
+  }
+  for (const oldGroup of domesticYard.groups.groups) {
+    const retained = migrated.groups.groups.find(
+      ({ identity }) => identity.stableId === oldGroup.identity.stableId,
+    );
+    if (stableStringify(retained) !== stableStringify(oldGroup)) return null;
+  }
+  return canonicalRuntimeCoreEcology(migrated, world, bio0);
+}
+
+/**
+ * Append the tidal-web mammal and bounded domestic groups without rewriting
  * any Alpha-20 actor, group, aggregate population, disturbance, evidence, or
  * tide clock.
  */
@@ -2579,11 +2814,12 @@ function migrateRuntimeCoreEcologyFromWaterfowl(
   const waterfowl = canonicalRuntimeWaterfowlCoreEcology(value, world, bio0);
   if (waterfowl === null) return null;
   const template = createRuntimeCoreEcology(world, bio0, createWorldView(world));
-  if (template.derivation.kind !== "habitat-v8") return null;
+  if (template.derivation.kind !== "habitat-v9") return null;
   const extensionPopulations = template.populations
     .filter(({ species }) => (
       species === "north-american-river-otter"
       || species === "domestic-chicken"
+      || species === "domestic-goat"
     ))
     .map((population) => ({
       ...population,
@@ -2595,14 +2831,15 @@ function migrateRuntimeCoreEcologyFromWaterfowl(
         materialization: "coarse" as const,
       })),
     }));
-  const extensionGroups = template.groups.groups.filter(
-    ({ identity }) => identity.species === "domestic-chicken",
-  );
+  const extensionGroups = template.groups.groups.filter(({ identity }) => (
+    identity.species === "domestic-chicken"
+    || identity.species === "domestic-goat"
+  ));
   const migrated = canonicalizeCoreEcologyAggregatePatch({
     ...waterfowl,
     derivation: waterfowl.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
       ? {
-          kind: "legacy-fixed-v1-with-habitat-v8",
+          kind: "legacy-fixed-v1-with-habitat-v9",
           habitat: template.derivation.habitat,
         }
       : template.derivation,
@@ -2633,7 +2870,7 @@ function migrateRuntimeCoreEcologyFromWaterfowl(
 }
 
 /**
- * Append only the domestic-yard flock to an exact Alpha-21–23 tidal-web save.
+ * Append the bounded domestic actors to an exact Alpha-21–23 tidal-web save.
  * Every earlier actor, group, aggregate unit, disturbance, and evidence record
  * remains byte-for-byte unchanged.
  */
@@ -2645,9 +2882,11 @@ function migrateRuntimeCoreEcologyFromTidalWeb(
   const tidalWeb = canonicalRuntimeTidalWebCoreEcology(value, world, bio0);
   if (tidalWeb === null) return null;
   const template = createRuntimeCoreEcology(world, bio0, createWorldView(world));
-  if (template.derivation.kind !== "habitat-v8") return null;
+  if (template.derivation.kind !== "habitat-v9") return null;
   const extensionPopulations = template.populations
-    .filter(({ species }) => species === "domestic-chicken")
+    .filter(({ species }) => (
+      species === "domestic-chicken" || species === "domestic-goat"
+    ))
     .map((population) => ({
       ...population,
       members: population.members.map((member) => ({
@@ -2655,14 +2894,15 @@ function migrateRuntimeCoreEcologyFromTidalWeb(
         materialization: "coarse" as const,
       })),
     }));
-  const extensionGroups = template.groups.groups.filter(
-    ({ identity }) => identity.species === "domestic-chicken",
-  );
+  const extensionGroups = template.groups.groups.filter(({ identity }) => (
+    identity.species === "domestic-chicken"
+    || identity.species === "domestic-goat"
+  ));
   const migrated = canonicalizeCoreEcologyAggregatePatch({
     ...tidalWeb,
     derivation: tidalWeb.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
       ? {
-          kind: "legacy-fixed-v1-with-habitat-v8",
+          kind: "legacy-fixed-v1-with-habitat-v9",
           habitat: template.derivation.habitat,
         }
       : template.derivation,
@@ -2886,14 +3126,15 @@ function runtimeCoreFoodEvidence(
   const storeLot = settlementEcology.carrier.lots.find(({ id }) => (
     id === settlementEcology.identity.foodLotId
   ));
+  const domesticCustody = settlementEcology.domesticCustodies.find(({ memberActorIds }) => (
+    memberActorIds.includes(actor.identity.stableId)
+  ));
   if (
     storeSource !== null
     && storeSource.closure === "open"
     && storeSource.source.packagingLeakage > 0
     && storeLot?.payload.kind === "provision"
-    && settlementEcology.domesticCustody?.memberActorIds.includes(
-      actor.identity.stableId,
-    ) === true
+    && domesticCustody !== undefined
   ) {
     const targetPoint = worldPositionToSpatialFrame(frame, storeSource.source.position);
     if (targetPoint !== null) {
@@ -2916,7 +3157,7 @@ function runtimeCoreFoodEvidence(
             // present through walls or outside ordinary visual range.
             knownFeedingStation: true,
             contactRadiusUnits: Math.min(
-              settlementEcology.domesticCustody.homeRadiusUnits,
+              domesticCustody.homeStructure.radiusUnits,
               CORE_ECOLOGY_DOMESTIC_STORE_ACCESS_REACH_UNITS,
             ),
           }));
@@ -3713,27 +3954,83 @@ function resolveRuntimeCoreResourceClaims(
     resourceId: string;
     source: "loose-parcel" | "settlement-store";
   }>> = [];
-  const orderedClaims = [...claims].sort((left, right) => (
-    left.resourceId < right.resourceId
-      ? -1
-      : left.resourceId > right.resourceId
-        ? 1
-        : left.actorId < right.actorId
-          ? -1
-          : left.actorId > right.actorId
-            ? 1
-            : 0
-  ));
-  for (const claim of orderedClaims) {
+  const contenders: CoreWildlifeResourceClaimContender[] = [];
+  for (const claim of claims) {
     const actor = coreEcologyAggregatePatchActor(patch, claim.actorId);
     if (actor === null) continue;
     const located = locatePhysicalCargoEntity(physicalCargo, claim.resourceId);
     if (located === null) {
-      const custody = settlementEcology.domesticCustody;
+      const custody = settlementEcology.domesticCustodies.find(({ memberActorIds }) => (
+        memberActorIds.includes(actor.identity.stableId)
+      ));
       if (
-        custody === null
+        custody === undefined
         || claim.resourceId !== settlementEcology.identity.foodLotId
-        || !custody.memberActorIds.includes(actor.identity.stableId)
+      ) continue;
+      let contactDelta: Readonly<{ x: number; y: number }>;
+      try {
+        contactDelta = worldPositionDelta(
+          actor.address.position,
+          settlementEcology.identity.position,
+        );
+      } catch {
+        continue;
+      }
+      const accessReachUnits = Math.min(
+        custody.homeStructure.radiusUnits,
+        CORE_ECOLOGY_DOMESTIC_STORE_ACCESS_REACH_UNITS,
+      );
+      const contactDistance = BigInt(contactDelta.x) * BigInt(contactDelta.x)
+        + BigInt(contactDelta.y) * BigInt(contactDelta.y);
+      if (contactDistance > BigInt(accessReachUnits) * BigInt(accessReachUnits)) continue;
+      contenders.push(Object.freeze({
+        version: CORE_WILDLIFE_RESOURCE_CLAIM_ARBITRATION_VERSION,
+        claim,
+        contactDistance,
+        needPressure: actor.needs.hunger,
+      }));
+      continue;
+    }
+    if (
+      located.entity.payload.kind !== "provision"
+      || located.entity.payload.quantity !== claim.requestedUnits
+    ) continue;
+    const looseUnitsPerWorldUnit = LOOSE_CARGO_TILE_UNITS / WORLD_POSITION_UNITS_PER_TILE;
+    if (!Number.isSafeInteger(looseUnitsPerWorldUnit) || looseUnitsPerWorldUnit <= 0) return null;
+    const looseScale = BigInt(looseUnitsPerWorldUnit);
+    const actorX = (
+      (BigInt(actor.address.position.region.x) - BigInt(located.world.region.x))
+        * BigInt(REGION_WIDTH_UNITS)
+      + BigInt(actor.address.position.localX)
+    ) * looseScale;
+    const actorY = (
+      (BigInt(actor.address.position.region.y) - BigInt(located.world.region.y))
+        * BigInt(REGION_HEIGHT_UNITS)
+      + BigInt(actor.address.position.localY)
+    ) * looseScale;
+    const contactDistance = bigintAbs(actorX - BigInt(located.entity.x))
+      + bigintAbs(actorY - BigInt(located.entity.y));
+    if (contactDistance > BigInt(CORE_ECOLOGY_CONTACT_REACH_LOOSE_UNITS)) continue;
+    contenders.push(Object.freeze({
+      version: CORE_WILDLIFE_RESOURCE_CLAIM_ARBITRATION_VERSION,
+      claim,
+      contactDistance,
+      needPressure: actor.needs.hunger,
+    }));
+  }
+  const orderedContenders = orderCoreWildlifeResourceClaimContenders(contenders);
+  if (orderedContenders === null) return null;
+  for (const { claim } of orderedContenders) {
+    const actor = coreEcologyAggregatePatchActor(patch, claim.actorId);
+    if (actor === null) continue;
+    const located = locatePhysicalCargoEntity(physicalCargo, claim.resourceId);
+    if (located === null) {
+      const custody = settlementEcology.domesticCustodies.find(({ memberActorIds }) => (
+        memberActorIds.includes(actor.identity.stableId)
+      ));
+      if (
+        custody === undefined
+        || claim.resourceId !== settlementEcology.identity.foodLotId
       ) continue;
       let contactDelta: Readonly<{ x: number; y: number }>;
       try {
@@ -3745,7 +4042,7 @@ function resolveRuntimeCoreResourceClaims(
         continue;
       }
       const domesticAccessReachUnits = Math.min(
-        custody.homeRadiusUnits,
+        custody.homeStructure.radiusUnits,
         CORE_ECOLOGY_DOMESTIC_STORE_ACCESS_REACH_UNITS,
       );
       const contactDistanceSquared = BigInt(contactDelta.x) * BigInt(contactDelta.x)
@@ -9476,6 +9773,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== WATERFOWL_GAME_SAVE_VERSION
         && decoded.version !== TIDAL_CONVERGENCE_GAME_SAVE_VERSION
         && decoded.version !== STOREHOUSE_GAME_SAVE_VERSION
+        && decoded.version !== DOMESTIC_YARD_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -9497,6 +9795,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
         || decoded.version === STOREHOUSE_GAME_SAVE_VERSION
       ) {
         if (
@@ -9702,6 +10001,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           world,
           bio0Ecology,
         )
+      : decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
+        ? migrateRuntimeCoreEcologyFromDomesticYard(
+            deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
+            world,
+            bio0Ecology,
+          )
       : (
           decoded.version === STOREHOUSE_GAME_SAVE_VERSION
           || decoded.version === TIDAL_CONVERGENCE_GAME_SAVE_VERSION
@@ -9755,6 +10060,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const settlementEcology = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
       || decoded.version === STOREHOUSE_GAME_SAVE_VERSION
     )
       ? (() => {
@@ -9769,7 +10075,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             coreEcology,
             compatibilityView,
           );
-          const adopted = establishRuntimeDomesticCustody(migrated, expected);
+          const adopted = establishRuntimeDomesticCustodies(migrated, expected);
           if (adopted === null) return null;
           let accepted = canonicalRuntimeSettlementEcology(
             adopted,

@@ -151,16 +151,26 @@ describe("Alpha-24 domestic-yard shared invariants", () => {
           .map(({ actor }) => actor.identity.stableId)
           .reverse(),
         memberGroupId: chickenGroup.identity.stableId,
-        homePosition: anchor.position,
-        homeRadiusUnits: anchor.radiusTiles * WORLD_POSITION_UNITS_PER_TILE,
+        homeStructure: {
+          kind: "coop",
+          position: anchor.position,
+          radiusUnits: anchor.radiusTiles * WORLD_POSITION_UNITS_PER_TILE,
+        },
       });
-      if (withCustody?.domesticCustody === null || withCustody === null) {
+      const custody = withCustody?.domesticCustodies[0];
+      if (withCustody === null || custody === undefined) {
         throw new Error("shared domestic candidate could not establish physical custody");
       }
-      expect(withCustody.domesticCustody.memberActorIds).toEqual(
+      expect(withCustody.domesticCustodies).toEqual([custody]);
+      expect(custody.memberActorIds).toEqual(
         chickenPopulation.members.map(({ actor }) => actor.identity.stableId).sort(),
       );
-      expect(withCustody.domesticCustody.memberGroupId).toBe(chickenGroup.identity.stableId);
+      expect(custody.memberGroupId).toBe(chickenGroup.identity.stableId);
+      expect(custody.homeStructure).toMatchObject({
+        kind: "coop",
+        position: anchor.position,
+        radiusUnits: anchor.radiusTiles * WORLD_POSITION_UNITS_PER_TILE,
+      });
       expect(foodQuantity(withCustody)).toBe(foodBefore);
       expect(establishSettlementDomesticAnimalCustody(withCustody, {
         custodyOrdinal: 0,
@@ -169,17 +179,20 @@ describe("Alpha-24 domestic-yard shared invariants", () => {
         species: "domestic-chicken",
         memberActorIds: chickenPopulation.members.map(({ actor }) => actor.identity.stableId),
         memberGroupId: chickenGroup.identity.stableId,
-        homePosition: anchor.position,
-        homeRadiusUnits: anchor.radiusTiles * WORLD_POSITION_UNITS_PER_TILE,
+        homeStructure: {
+          kind: "coop",
+          position: anchor.position,
+          radiusUnits: anchor.radiusTiles * WORLD_POSITION_UNITS_PER_TILE,
+        },
       })).toEqual(withCustody);
 
-      const memberActorId = withCustody.domesticCustody.memberActorIds[0];
+      const memberActorId = custody.memberActorIds[0];
       if (memberActorId === undefined) throw new Error("domestic custody has no member");
       const request = {
         version: SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
         storeId: withCustody.identity.storeId,
         foodLotId: withCustody.identity.foodLotId,
-        relationshipId: withCustody.domesticCustody.relationshipId,
+        relationshipId: custody.relationshipId,
         memberActorId,
         requestedQuantity: 1 as const,
         causeEventId: `alpha24:shared-food:${sampleOrdinal}`,

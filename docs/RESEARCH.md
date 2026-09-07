@@ -202,7 +202,30 @@ test suite or a species-pair matrix. Exact release commit
 Pages run `34093027917`; the deployed HTML, icon, manifest, JavaScript, and CSS
 match the tested local production build byte-for-byte.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified bounded storehouse composition, and Alpha 24 is the verified Yard Flock release. None completes worldwide Wave C, full Wave D, or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The `0.3.3-alpha.25 — The Far Paddock` source candidate tests an eleventh
+scaling lesson: adding a domestic species should require a profile and a
+bounded habitat/custody suffix, while conflicts remain properties of shared
+owners. Habitat version 9 preserves the version-8 record exactly before adding
+one separated pen, two goat individuals, and one persistent herd. Settlement
+ecology version 3 generalizes custody into a bounded collection of typed homes
+and rejects duplicate actor, group, relationship, home, or structure
+authority. Outer save 18 preserves the older flock, coop, store, physical food,
+actors, aggregates, items, and Promises before that additive migration.
+
+The shared resource arbiter accepts only source-validated contenders, then
+orders them by physical contact, current need, and stable identity. This avoids
+both first-array-wins behavior and a goat-specific food exception. The goat
+profile has no store-food capability; its future browse diet remains dormant
+until living foliage supplies a real conserved resource. Evidence therefore
+comes from signed-coordinate habitat properties, shared custody/group
+invariants, migration and replay attacks, item conservation, bounded
+performance, and representative runtime composition. It does not come from
+testing goats against every existing animal, and it does not claim calls,
+tracks, injury, mortality, carcasses, reproduction, schedules, herding,
+guardian behavior, cross-region migration, worldwide livestock, full Wave D,
+or Directive 04_1 completion.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor Wave-C role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, and Alpha 25 is the current Far Paddock source candidate. None completes worldwide Wave C, full Wave D, or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

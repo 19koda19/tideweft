@@ -61,6 +61,7 @@ import {
 } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
+import { domesticGoatAppearancePalette } from "./wildlifeAppearance";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
@@ -201,6 +202,7 @@ type ReliefWildlifeForm =
   | "snowy-egret"
   | "american-black-duck"
   | "domestic-chicken"
+  | "domestic-goat"
   | "north-american-river-otter"
   | "black-bear"
   | "domestic-cat"
@@ -300,6 +302,18 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.44,
     ringRadiusScale: 0.35,
     labelLift: 0.7,
+  },
+  "domestic-goat": {
+    form: "domestic-goat",
+    colors: {
+      primary: "#8f7150",
+      secondary: "#d8c9aa",
+      dark: "#30271f",
+      accent: "#b99d72",
+    },
+    hitRadiusScale: 0.54,
+    ringRadiusScale: 0.44,
+    labelLift: 0.86,
   },
   "north-american-river-otter": {
     form: "north-american-river-otter",
@@ -4230,6 +4244,82 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawDomesticGoat = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = domesticGoatAppearancePalette(wildlife.appearanceKey);
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.105 * scale;
+      const moving = wildlife.behavior === "flee" || wildlife.behavior === "retreat";
+      const browsing = wildlife.behavior === "forage";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.009) * base * 0.22;
+      const bodyHalfLength = base * 1.72;
+      const bodyHalfHeight = base * 0.7;
+      const bodyHalfWidth = base * 0.62;
+      const legHeight = base * 1.12;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.7;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+
+      p.ambientMaterial(colors.dark);
+      for (const [legX, phase] of [
+        [-bodyHalfLength * 0.56, -1],
+        [bodyHalfLength * 0.56, 1],
+      ] as const) {
+        for (const legZ of [-bodyHalfWidth * 0.48, bodyHalfWidth * 0.48]) {
+          p.push();
+          p.translate(legX + stride * phase, legHeight * 0.68, legZ);
+          p.box(base * 0.2, legHeight, base * 0.2);
+          p.translate(base * 0.16, legHeight * 0.49, 0);
+          p.box(base * 0.48, base * 0.14, base * 0.24);
+          p.pop();
+        }
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 10, 6);
+
+      const headY = browsing ? bodyHalfHeight * 0.68 : -bodyHalfHeight * 0.5;
+      p.push();
+      p.translate(bodyHalfLength * 0.82, headY, 0);
+      p.rotateZ(browsing ? 0.58 : -0.22);
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(base * 0.72, base * 0.9, base * 0.62, 8, 5);
+      p.translate(base * 0.55, base * 0.08, 0);
+      p.ambientMaterial(colors.secondary);
+      p.ellipsoid(base * 0.58, base * 0.42, base * 0.5, 7, 5);
+
+      // Two swept horns plus a narrow beard keep the silhouette distinct from deer.
+      for (const hornZ of [-base * 0.34, base * 0.34]) {
+        p.push();
+        p.translate(-base * 0.48, -base * 0.58, hornZ);
+        p.rotateZ(-0.78);
+        p.ambientMaterial(colors.accent ?? colors.secondary);
+        p.cone(base * 0.13, base * 0.92, 7, 2);
+        p.pop();
+      }
+      p.push();
+      p.translate(base * 0.04, base * 0.54, 0);
+      p.ambientMaterial(colors.dark);
+      p.cone(base * 0.2, base * 0.78, 6, 1);
+      p.pop();
+      p.pop();
+
+      p.push();
+      p.translate(-bodyHalfLength * 0.96, -bodyHalfHeight * 0.2, 0);
+      p.rotateZ(0.82);
+      p.ambientMaterial(colors.dark);
+      p.cone(base * 0.24, base * 0.58, 6, 1);
+      p.pop();
+      p.pop();
+    };
+
     const drawNorthAmericanRiverOtter = (
       wildlife: WildlifeView,
       surface: number,
@@ -4833,6 +4923,9 @@ export function createTideweftReliefRenderer(
           return true;
         case "domestic-chicken":
           drawDomesticChicken(wildlife, surface, tileSize, now);
+          return true;
+        case "domestic-goat":
+          drawDomesticGoat(wildlife, surface, tileSize, now);
           return true;
         case "north-american-river-otter":
           drawNorthAmericanRiverOtter(wildlife, surface, tileSize, now);

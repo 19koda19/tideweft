@@ -45,6 +45,7 @@ describe("Living Weft species module catalog", () => {
       "living-species:domestic-cat:v1",
       "living-species:domestic-chicken:v1",
       "living-species:domestic-dog:v1",
+      "living-species:domestic-goat:v1",
       "living-species:fish-crow:v1",
       "living-species:gull:v1",
       "living-species:human:v1",
@@ -165,6 +166,34 @@ describe("Living Weft species module catalog", () => {
     }
     expect(livingSpeciesModule("gull")?.locomotion.media)
       .toEqual([{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }]);
+  });
+
+  it("keeps domestic livestock on shared active owners with deferred life systems", () => {
+    const goat = livingSpeciesModule("domestic-goat");
+    expect(goat).toMatchObject({
+      habitat: {
+        implementation: "active",
+        ownerId: "game:core-ecology-habitat:v9",
+        placementInputs: expect.arrayContaining(["domestic-animal-anchor"]),
+      },
+      population: { maxMaterializedPerRegion: 2 },
+      social: {
+        ownerId: "game:core-ecology-groups:v1",
+        actorToActorRelationships: false,
+        group: { stableIdNamespace: "HERD" },
+        territory: { model: "none", ownerId: null },
+      },
+      lifeHistory: {
+        dynamicAging: false,
+        reproduction: "unimplemented",
+        mortality: "unimplemented",
+      },
+      evidence: { status: "unimplemented", ownerId: null },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+    });
+    expect(goat?.diet.resources).toEqual([{ resourceClass: "browse", role: "nutrition" }]);
+    expect(goat?.activity.circadian).toMatchObject({ status: "unimplemented", ownerId: null });
+    expect(goat?.environment.weather.status).toBe("unimplemented");
   });
 
   it("models the landed Settlement Shadows rat aggregate and cat without inherited fallbacks", () => {
@@ -1681,6 +1710,7 @@ describe("Living Weft species module catalog", () => {
         module.speciesId === "deer"
           || module.speciesId === "american-black-duck"
           || module.speciesId === "domestic-chicken"
+          || module.speciesId === "domestic-goat"
           || module.speciesId === "gull"
           || module.speciesId === "fish-crow"
           || module.speciesId === "marsh-rabbit"
@@ -1695,6 +1725,7 @@ describe("Living Weft species module catalog", () => {
             || module.speciesId === "gull"
             || module.speciesId === "fish-crow"
             || module.speciesId === "domestic-chicken"
+            || module.speciesId === "domestic-goat"
             ? "active"
             : "unimplemented",
       );

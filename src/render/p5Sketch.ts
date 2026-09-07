@@ -13,6 +13,7 @@ import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
+import { domesticGoatAppearancePalette } from "./wildlifeAppearance";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
@@ -3367,6 +3368,80 @@ export function createTideweftRenderer(
       p.circle(headX + headRadius * 0.24, headY - headRadius * 0.24, base * 0.12);
     };
 
+    const drawChartDomesticGoat = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const colors = domesticGoatAppearancePalette(actor.appearanceKey);
+      const moving = actor.behavior === "flee" || actor.behavior === "retreat";
+      const browsing = actor.behavior === "forage";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.009) * base * 0.26;
+      const bodyLength = base * 3.55;
+      const bodyHeight = base * 1.48;
+      const headX = bodyLength * 0.54;
+      const headY = browsing ? bodyHeight * 0.43 : -bodyHeight * 0.34;
+      const headRadius = base * 0.64;
+
+      p.stroke(withAlpha(PALETTE.ink, 242));
+      p.strokeWeight(Math.max(0.8, base * 0.16));
+      for (const [legX, phase] of [
+        [-bodyLength * 0.3, -1],
+        [bodyLength * 0.3, 1],
+      ] as const) {
+        p.line(
+          legX,
+          bodyHeight * 0.28,
+          legX + stride * phase,
+          bodyHeight * 1.02,
+        );
+      }
+      // Swept horns and beard make the form readable without relying on coat color.
+      p.noFill();
+      p.stroke(colors.accent);
+      p.bezier(
+        headX - headRadius * 0.18,
+        headY - headRadius * 0.68,
+        headX - headRadius * 0.65,
+        headY - headRadius * 1.55,
+        headX - headRadius * 1.28,
+        headY - headRadius * 1.22,
+        headX - headRadius * 1.05,
+        headY - headRadius * 0.7,
+      );
+
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 242));
+      p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.24);
+      p.circle(headX, headY, headRadius * 2.28);
+      p.fill(colors.primary);
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.fill(colors.secondary);
+      p.ellipse(-bodyLength * 0.13, bodyHeight * 0.02, bodyLength * 0.42, bodyHeight * 0.7);
+      p.fill(colors.primary);
+      p.quad(
+        bodyLength * 0.28, -bodyHeight * 0.34,
+        headX - headRadius * 0.48, headY - headRadius * 0.22,
+        headX - headRadius * 0.38, headY + headRadius * 0.48,
+        bodyLength * 0.26, bodyHeight * 0.28,
+      );
+      p.fill(colors.primary);
+      p.ellipse(headX, headY, headRadius * 2.08, headRadius * 1.62);
+      p.fill(colors.secondary);
+      p.triangle(
+        headX - headRadius * 0.18, headY + headRadius * 0.46,
+        headX + headRadius * 0.14, headY + headRadius * 1.42,
+        headX + headRadius * 0.42, headY + headRadius * 0.38,
+      );
+      p.fill(colors.dark);
+      p.circle(headX + headRadius * 0.42, headY - headRadius * 0.2, base * 0.13);
+      p.triangle(
+        -bodyLength * 0.5, -bodyHeight * 0.18,
+        -bodyLength * 0.82, -bodyHeight * 0.46,
+        -bodyLength * 0.54, bodyHeight * 0.12,
+      );
+    };
+
     const drawChartNorthAmericanRiverOtter = (
       actor: WildlifeView,
       base: number,
@@ -3736,6 +3811,9 @@ export function createTideweftRenderer(
           return true;
         case "domestic-chicken":
           drawChartDomesticChicken(actor, base, now);
+          return true;
+        case "domestic-goat":
+          drawChartDomesticGoat(actor, base, now);
           return true;
         case "north-american-river-otter":
           drawChartNorthAmericanRiverOtter(actor, base, now);

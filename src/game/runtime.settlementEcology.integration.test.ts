@@ -6,6 +6,10 @@ import {
   serializeCoreEcologyAggregatePatch,
 } from "./coreEcology";
 import {
+  CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION,
+  CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES,
+  CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
@@ -18,7 +22,10 @@ import {
   deserializeSettlementEcologyState,
   serializeSettlementEcologyState,
 } from "./settlementEcology";
-import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
+import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  type WorldPosition,
+} from "./worldPosition";
 
 const settlementShadowsHarness = vi.hoisted(() => ({
   excludePhysicalFood: false,
@@ -225,6 +232,65 @@ function requireCoreEcology(encoded: unknown) {
   return state;
 }
 
+interface ExpectedDomesticRepresentative {
+  readonly species: "domestic-chicken" | "domestic-goat";
+  readonly organization: "flock" | "herd";
+  readonly custodyOrdinal: number;
+  readonly structureKind: "coop" | "pen";
+  readonly position: WorldPosition;
+  readonly radiusUnits: number;
+}
+
+function expectDomesticRepresentatives(
+  core: ReturnType<typeof requireCoreEcology>,
+  store: ReturnType<typeof deserializeSettlementEcologyState>,
+  expected: readonly ExpectedDomesticRepresentative[],
+): void {
+  expect(store.domesticCustodies).toHaveLength(expected.length);
+  for (const representative of expected) {
+    const populations = core.populations.filter(({ species }) => (
+      species === representative.species
+    ));
+    const groups = core.groups.groups.filter(({ identity }) => (
+      identity.species === representative.species
+    ));
+    const custodies = store.domesticCustodies.filter(({ species }) => (
+      species === representative.species
+    ));
+    expect(populations).toHaveLength(1);
+    expect(groups).toHaveLength(1);
+    expect(custodies).toHaveLength(1);
+    const population = populations[0];
+    const group = groups[0];
+    const custody = custodies[0];
+    if (population === undefined || group === undefined || custody === undefined) {
+      throw new Error(`runtime omitted ${representative.species} custody authority`);
+    }
+    expect(group.identity).toMatchObject({
+      species: representative.species,
+      organization: representative.organization,
+    });
+    expect(group.identity.stableId).toMatch(
+      representative.organization === "herd" ? /^HERD-v1-/u : /^CHICKEN-FLOCK-v1-/u,
+    );
+    expect(custody).toMatchObject({
+      custodyOrdinal: representative.custodyOrdinal,
+      owner: { kind: "settlement", id: store.identity.settlementId },
+      caretakerActorId: store.identity.keeperActorId,
+      species: representative.species,
+      memberGroupId: group.identity.stableId,
+      homeStructure: {
+        kind: representative.structureKind,
+        position: representative.position,
+        radiusUnits: representative.radiusUnits,
+      },
+    });
+    expect(custody.memberActorIds).toEqual(population.members
+      .map(({ actor }) => actor.identity.stableId)
+      .sort());
+  }
+}
+
 function storedFoodQuantity(
   state: ReturnType<typeof deserializeSettlementEcologyState>,
 ): number {
@@ -238,7 +304,7 @@ function downgradeSettlementEcologyToV1(encoded: unknown): string {
   }
   const prior = JSON.parse(encoded) as Record<string, unknown>;
   for (const field of [
-    "domesticCustody",
+    "domesticCustodies",
     "lastResolvedDomesticFoodUseCauseEventId",
     "lastResolvedDomesticFoodUseCauseEventTick",
     "lastResolvedDomesticFoodUseMemberActorId",
@@ -249,25 +315,74 @@ function downgradeSettlementEcologyToV1(encoded: unknown): string {
   if (typeof prior.revision !== "number" || prior.revision < 1) {
     throw new Error("current settlement fixture omitted its domestic revision");
   }
-  prior.revision -= 1;
+  prior.revision -= 2;
   prior.version = 1;
   return JSON.stringify(prior);
+}
+
+function downgradeSettlementEcologyToV2(encoded: unknown): string {
+  if (typeof encoded !== "string") {
+    throw new Error("current fixture omitted settlement ecology");
+  }
+  const current = JSON.parse(encoded) as Record<string, unknown>;
+  if (!Array.isArray(current.domesticCustodies)) {
+    throw new Error("current settlement fixture omitted plural custody");
+  }
+  const chicken = current.domesticCustodies.find((candidate) => (
+    typeof candidate === "object"
+    && candidate !== null
+    && !Array.isArray(candidate)
+    && (candidate as Record<string, unknown>).species === "domestic-chicken"
+  )) as Record<string, unknown> | undefined;
+  if (
+    chicken === undefined
+    || typeof chicken.homeStructure !== "object"
+    || chicken.homeStructure === null
+    || Array.isArray(chicken.homeStructure)
+    || typeof current.revision !== "number"
+    || current.revision < 1
+  ) throw new Error("current settlement fixture omitted its Alpha-24 custody");
+  const structure = chicken.homeStructure as Record<string, unknown>;
+  const {
+    homeStructure: _homeStructure,
+    ...custodyFields
+  } = chicken;
+  const {
+    domesticCustodies: _domesticCustodies,
+    ...stateFields
+  } = current;
+  return JSON.stringify({
+    ...stateFields,
+    version: 2,
+    revision: current.revision - 1,
+    domesticCustody: {
+      ...custodyFields,
+      version: 1,
+      coopId: structure.structureId,
+      homePosition: structure.position,
+      homeRadiusUnits: structure.radiusUnits,
+    },
+  });
 }
 
 function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
   const current = requireCoreEcology(encoded);
   if (
-    current.derivation.kind !== "habitat-v8"
-    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
-  ) throw new Error("current fixture did not use the domestic-yard habitat");
-  const { domesticAnchor: _domesticAnchor, ...habitatFields } = current.derivation.habitat;
+    current.derivation.kind !== "habitat-v9"
+    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
+  ) throw new Error("current fixture did not use the domestic-pen habitat");
+  const {
+    domesticAnchor: _domesticAnchor,
+    domesticPenAnchor: _domesticPenAnchor,
+    ...habitatFields
+  } = current.derivation.habitat;
   const populations = habitatFields.populations.filter(({ species }) => (
-    species !== "domestic-chicken"
+    species !== "domestic-chicken" && species !== "domestic-goat"
   ));
   return serializeCoreEcologyAggregatePatch({
     ...current,
     derivation: {
-      kind: current.derivation.kind === "habitat-v8"
+      kind: current.derivation.kind === "habitat-v9"
         ? "habitat-v7"
         : "legacy-fixed-v1-with-habitat-v7",
       habitat: {
@@ -283,17 +398,56 @@ function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
       ...current.groups,
       groups: current.groups.groups.filter(({ identity }) => (
         identity.species !== "domestic-chicken"
+        && identity.species !== "domestic-goat"
       )),
     },
     populations: current.populations.filter(({ species }) => (
-      species !== "domestic-chicken"
+      species !== "domestic-chicken" && species !== "domestic-goat"
+    )),
+  });
+}
+
+function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
+  const current = requireCoreEcology(encoded);
+  if (
+    current.derivation.kind !== "habitat-v9"
+    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
+  ) throw new Error("current fixture did not use the domestic-pen habitat");
+  const { domesticPenAnchor: _domesticPenAnchor, ...habitatFields } =
+    current.derivation.habitat;
+  const populations = habitatFields.populations.filter(({ species }) => (
+    species !== "domestic-goat"
+  ));
+  return serializeCoreEcologyAggregatePatch({
+    ...current,
+    derivation: {
+      kind: current.derivation.kind === "habitat-v9"
+        ? "habitat-v8"
+        : "legacy-fixed-v1-with-habitat-v8",
+      habitat: {
+        ...habitatFields,
+        generationVersion: CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION,
+        maximumAllocationBudget: CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS,
+        populations,
+        speciesEvaluations:
+          habitatFields.evaluatedTiles * CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES.length,
+      },
+    },
+    groups: {
+      ...current.groups,
+      groups: current.groups.groups.filter(({ identity }) => (
+        identity.species !== "domestic-goat"
+      )),
+    },
+    populations: current.populations.filter(({ species }) => (
+      species !== "domestic-goat"
     )),
   });
 }
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 17) throw new Error("fixture is not a current save");
+  if (current.version !== 18) throw new Error("fixture is not a current save");
   const { integrity: _integrity, ...currentFields } = current;
   const priorBase = {
     ...currentFields,
@@ -304,6 +458,26 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   return {
     ...currentRecord,
     payloadVersion: 16,
+    worldJson: JSON.stringify({
+      ...priorBase,
+      integrity: gameSaveEnvelopeIntegrity(priorBase),
+    }),
+  };
+}
+
+function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
+  const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
+  if (current.version !== 18) throw new Error("fixture is not a current save");
+  const { integrity: _integrity, ...currentFields } = current;
+  const priorBase = {
+    ...currentFields,
+    version: 17,
+    coreEcology: downgradeCoreEcologyToDomesticYard(current.coreEcology),
+    settlementEcology: downgradeSettlementEcologyToV2(current.settlementEcology),
+  };
+  return {
+    ...currentRecord,
+    payloadVersion: 17,
     worldJson: JSON.stringify({
       ...priorBase,
       integrity: gameSaveEnvelopeIntegrity(priorBase),
@@ -352,7 +526,9 @@ async function advanceUntilDomesticFoodUse(
     store: store === undefined ? undefined : {
       closure: store.closure,
       position: store.identity.position,
-      custody: store.domesticCustody?.memberActorIds,
+      custody: store.domesticCustodies.find(({ species }) => (
+        species === "domestic-chicken"
+      ))?.memberActorIds,
     },
     chickens: core?.populations.find(({ species }) => species === "domestic-chicken")?.members
       .map(({ actor, materialization }) => ({
@@ -399,8 +575,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(17);
-    expect(envelope.version).toBe(17);
+    expect(record.payloadVersion).toBe(18);
+    expect(envelope.version).toBe(18);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "coreEcology",
@@ -421,6 +597,14 @@ describe("runtime settlement ecology integration", () => {
       "world",
     ]);
     const state = deserializeSettlementEcologyState(envelope.settlementEcology);
+    const core = requireCoreEcology(envelope.coreEcology);
+    if (
+      core.derivation.kind !== "habitat-v9"
+      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
+    ) throw new Error("current save omitted its v9 domestic habitat");
+    expect(core.derivation.habitat.generationVersion)
+      .toBe(CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION);
+    expect(state.version).toBe(3);
     expect((envelope.player as { activeContractId: number | null }).activeContractId).not.toBeNull();
     expect(state).toMatchObject({
       closure: "secured",
@@ -493,8 +677,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(17);
-    expect(migratedEnvelope.version).toBe(17);
+    expect(migratedRecord.payloadVersion).toBe(18);
+    expect(migratedEnvelope.version).toBe(18);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -529,7 +713,7 @@ describe("runtime settlement ecology integration", () => {
     quarantined.destroy();
   });
 
-  it("migrates an exact v16 store and appends authenticated domestic custody once", async () => {
+  it("migrates an exact v16 store and appends both authenticated domestic custodies once", async () => {
     const sourceRepository = new MemoryRepository();
     const source = await createTideweftRuntime(sourceRepository);
     source.dispatchUI({
@@ -559,6 +743,11 @@ describe("runtime settlement ecology integration", () => {
     expect(priorCore.groups.groups.some(({ identity }) => (
       identity.species === "domestic-chicken"
     ))).toBe(false);
+    expect(priorCore.populations.some(({ species }) => species === "domestic-goat"))
+      .toBe(false);
+    expect(priorCore.groups.groups.some(({ identity }) => (
+      identity.species === "domestic-goat"
+    ))).toBe(false);
 
     const migratedRepository = new MemoryRepository(v16Record);
     const migrated = await createTideweftRuntime(migratedRepository);
@@ -571,57 +760,50 @@ describe("runtime settlement ecology integration", () => {
     );
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
-    expect(migratedRecord.payloadVersion).toBe(17);
-    expect(migratedEnvelope.version).toBe(17);
-    expect(migratedStore.version).toBe(2);
+    expect(migratedRecord.payloadVersion).toBe(18);
+    expect(migratedEnvelope.version).toBe(18);
+    expect(migratedStore.version).toBe(3);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
     }
-    expect(migratedStore.revision).toBe((priorStore.revision as number) + 1);
+    expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
     expect(migratedStore.carrier).toEqual(priorStore.carrier);
     expect(migratedStore.closure).toBe("secured");
     expect(migratedStore.keeperKnowledge).toHaveLength(1);
 
-    const chickenPopulations = migratedCore.populations.filter(({ species }) => (
-      species === "domestic-chicken"
-    ));
-    const chickenGroups = migratedCore.groups.groups.filter(({ identity }) => (
-      identity.species === "domestic-chicken"
-    ));
-    expect(chickenPopulations).toHaveLength(1);
-    expect(chickenGroups).toHaveLength(1);
-    const chickenPopulation = chickenPopulations[0];
-    const chickenGroup = chickenGroups[0];
-    const custody = migratedStore.domesticCustody;
     if (
-      chickenPopulation === undefined
-      || chickenGroup === undefined
-      || custody === null
-      || (
-        migratedCore.derivation.kind !== "habitat-v8"
-        && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
-      )
+      migratedCore.derivation.kind !== "habitat-v9"
+      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     ) throw new Error("v16 migration omitted its authenticated domestic append");
-    expect(custody).toMatchObject({
-      custodyOrdinal: 0,
-      owner: { kind: "settlement", id: migratedStore.identity.settlementId },
-      caretakerActorId: migratedStore.identity.keeperActorId,
-      species: "domestic-chicken",
-      memberGroupId: chickenGroup.identity.stableId,
-      homePosition: migratedCore.derivation.habitat.domesticAnchor.position,
-      homeRadiusUnits:
-        migratedCore.derivation.habitat.domesticAnchor.radiusTiles
-          * WORLD_POSITION_UNITS_PER_TILE,
-    });
-    expect(custody.memberActorIds).toEqual(chickenPopulation.members
-      .map(({ actor }) => actor.identity.stableId)
-      .sort());
+    expectDomesticRepresentatives(migratedCore, migratedStore, [
+      {
+        species: "domestic-chicken",
+        organization: "flock",
+        custodyOrdinal: 0,
+        structureKind: "coop",
+        position: migratedCore.derivation.habitat.domesticAnchor.position,
+        radiusUnits:
+          migratedCore.derivation.habitat.domesticAnchor.radiusTiles
+            * WORLD_POSITION_UNITS_PER_TILE,
+      },
+      {
+        species: "domestic-goat",
+        organization: "herd",
+        custodyOrdinal: 1,
+        structureKind: "pen",
+        position: migratedCore.derivation.habitat.domesticPenAnchor.position,
+        radiusUnits:
+          migratedCore.derivation.habitat.domesticPenAnchor.radiusTiles
+            * WORLD_POSITION_UNITS_PER_TILE,
+      },
+    ]);
     expect(migratedCore.populations.filter(({ species }) => (
-      species !== "domestic-chicken"
+      species !== "domestic-chicken" && species !== "domestic-goat"
     ))).toEqual(priorCore.populations);
     expect(migratedCore.groups.groups.filter(({ identity }) => (
       identity.species !== "domestic-chicken"
+      && identity.species !== "domestic-goat"
     ))).toEqual(priorCore.groups.groups);
     expect(migratedCore.aggregatePopulations).toEqual(priorCore.aggregatePopulations);
     if (
@@ -661,13 +843,150 @@ describe("runtime settlement ecology integration", () => {
     expect(replayEnvelope.settlementEcology).toBe(committedStore);
     const replayCore = requireCoreEcology(replayEnvelope.coreEcology);
     const replayStore = deserializeSettlementEcologyState(replayEnvelope.settlementEcology);
-    expect(replayCore.populations.filter(({ species }) => (
+    expect(replayCore).toEqual(migratedCore);
+    expect(replayStore).toEqual(migratedStore);
+    reloaded.destroy();
+  });
+
+  it("migrates v17 without rewriting chicken actors, flock, or custody identity", async () => {
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world",
+      seed: "domestic yard v17 plural custody migration",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await source.save();
+    source.destroy();
+
+    const v17Record = asDomesticYardV17Record(sourceRepository.snapshot());
+    const v17Envelope = JSON.parse(v17Record.worldJson) as Record<string, unknown>;
+    if (typeof v17Envelope.settlementEcology !== "string") {
+      throw new Error("v17 fixture omitted its settlement ecology state");
+    }
+    const priorStore = JSON.parse(v17Envelope.settlementEcology) as Record<string, unknown>;
+    const priorCustody = priorStore.domesticCustody as Record<string, unknown> | undefined;
+    const priorCore = requireCoreEcology(v17Envelope.coreEcology);
+    const priorChickenPopulation = priorCore.populations.find(({ species }) => (
       species === "domestic-chicken"
-    ))).toHaveLength(1);
-    expect(replayCore.groups.groups.filter(({ identity }) => (
+    ));
+    const priorChickenGroup = priorCore.groups.groups.find(({ identity }) => (
       identity.species === "domestic-chicken"
-    ))).toHaveLength(1);
-    expect(replayStore.domesticCustody).toEqual(custody);
+    ));
+    if (
+      priorCustody === undefined
+      || priorChickenPopulation === undefined
+      || priorChickenGroup === undefined
+      || (
+        priorCore.derivation.kind !== "habitat-v8"
+        && priorCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
+      )
+    ) throw new Error("v17 fixture omitted its frozen Alpha-24 authority");
+    expect(v17Record.payloadVersion).toBe(17);
+    expect(v17Envelope.version).toBe(17);
+    expect(priorStore.version).toBe(2);
+    expect(priorCustody.version).toBe(1);
+    expect(priorCore.populations.some(({ species }) => species === "domestic-goat"))
+      .toBe(false);
+    expect(priorCore.groups.groups.some(({ identity }) => (
+      identity.species === "domestic-goat"
+    ))).toBe(false);
+
+    const migratedRepository = new MemoryRepository(v17Record);
+    const migrated = await createTideweftRuntime(migratedRepository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const migratedRecord = migratedRepository.snapshot();
+    const migratedEnvelope = savedEnvelope(migratedRepository);
+    const migratedStore = deserializeSettlementEcologyState(
+      migratedEnvelope.settlementEcology,
+    );
+    const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
+    if (
+      migratedCore.derivation.kind !== "habitat-v9"
+      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
+    ) throw new Error("v17 migration omitted the plural domestic habitat");
+    expect(migratedRecord.payloadVersion).toBe(18);
+    expect(migratedEnvelope.version).toBe(18);
+    expect(migratedStore.version).toBe(3);
+    expect(migratedStore.revision).toBe((priorStore.revision as number) + 1);
+    expect(migratedStore.identity).toEqual(priorStore.identity);
+    expect(migratedStore.carrier).toEqual(priorStore.carrier);
+
+    expect(migratedCore.populations).toHaveLength(priorCore.populations.length + 1);
+    expect(migratedCore.groups.groups).toHaveLength(priorCore.groups.groups.length + 1);
+    expect(migratedCore.populations.filter(({ species }) => (
+      species !== "domestic-goat"
+    ))).toEqual(priorCore.populations);
+    expect(migratedCore.groups.groups.filter(({ identity }) => (
+      identity.species !== "domestic-goat"
+    ))).toEqual(priorCore.groups.groups);
+    expect(migratedCore.aggregatePopulations).toEqual(priorCore.aggregatePopulations);
+    expect(migratedCore.derivation.habitat.populations.slice(
+      0,
+      priorCore.derivation.habitat.populations.length,
+    )).toEqual(priorCore.derivation.habitat.populations);
+    expect(migratedCore.derivation.habitat.tidalAnchors)
+      .toEqual(priorCore.derivation.habitat.tidalAnchors);
+    expect(migratedCore.derivation.habitat.domesticAnchor)
+      .toEqual(priorCore.derivation.habitat.domesticAnchor);
+
+    const migratedChickenPopulation = migratedCore.populations.find(({ species }) => (
+      species === "domestic-chicken"
+    ));
+    const migratedChickenGroup = migratedCore.groups.groups.find(({ identity }) => (
+      identity.species === "domestic-chicken"
+    ));
+    const migratedChickenCustody = migratedStore.domesticCustodies.find(({ species }) => (
+      species === "domestic-chicken"
+    ));
+    if (
+      migratedChickenPopulation === undefined
+      || migratedChickenGroup === undefined
+      || migratedChickenCustody === undefined
+    ) throw new Error("v17 migration rewrote its chicken authority");
+    expect(JSON.stringify(migratedChickenPopulation))
+      .toBe(JSON.stringify(priorChickenPopulation));
+    expect(JSON.stringify(migratedChickenGroup)).toBe(JSON.stringify(priorChickenGroup));
+    expect(migratedChickenCustody.relationshipId).toBe(priorCustody.relationshipId);
+    expect(migratedChickenCustody.homeId).toBe(priorCustody.homeId);
+    expect(migratedChickenCustody.homeStructure.structureId).toBe(priorCustody.coopId);
+    expect(migratedChickenCustody.memberActorIds).toEqual(priorCustody.memberActorIds);
+    expect(migratedChickenCustody.memberGroupId).toBe(priorCustody.memberGroupId);
+
+    expectDomesticRepresentatives(migratedCore, migratedStore, [
+      {
+        species: "domestic-chicken",
+        organization: "flock",
+        custodyOrdinal: 0,
+        structureKind: "coop",
+        position: migratedCore.derivation.habitat.domesticAnchor.position,
+        radiusUnits:
+          migratedCore.derivation.habitat.domesticAnchor.radiusTiles
+            * WORLD_POSITION_UNITS_PER_TILE,
+      },
+      {
+        species: "domestic-goat",
+        organization: "herd",
+        custodyOrdinal: 1,
+        structureKind: "pen",
+        position: migratedCore.derivation.habitat.domesticPenAnchor.position,
+        radiusUnits:
+          migratedCore.derivation.habitat.domesticPenAnchor.radiusTiles
+            * WORLD_POSITION_UNITS_PER_TILE,
+      },
+    ]);
+
+    const committedCore = migratedEnvelope.coreEcology;
+    const committedStore = migratedEnvelope.settlementEcology;
+    migrated.destroy();
+    const reloaded = await createTideweftRuntime(migratedRepository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    await reloaded.save();
+    const replayEnvelope = savedEnvelope(migratedRepository);
+    expect(replayEnvelope.coreEcology).toBe(committedCore);
+    expect(replayEnvelope.settlementEcology).toBe(committedStore);
     reloaded.destroy();
   });
 
@@ -689,8 +1008,10 @@ describe("runtime settlement ecology integration", () => {
     const initialEnvelope = JSON.parse(initialRecord.worldJson) as Record<string, unknown>;
     const initialStore = deserializeSettlementEcologyState(initialEnvelope.settlementEcology);
     const initialCore = requireCoreEcology(initialEnvelope.coreEcology);
-    const initialCustody = initialStore.domesticCustody;
-    if (initialCustody === null) throw new Error("runtime omitted domestic custody");
+    const initialCustody = initialStore.domesticCustodies.find(({ species }) => (
+      species === "domestic-chicken"
+    ));
+    if (initialCustody === undefined) throw new Error("runtime omitted domestic custody");
     expect(initialStore.closure).toBe("open");
     expect(initialStore.lastResolvedDomesticFoodUseOrdinal).toBe(0);
     expect(storedFoodQuantity(initialStore)).toBe(8);
