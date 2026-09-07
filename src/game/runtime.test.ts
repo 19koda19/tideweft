@@ -297,7 +297,7 @@ function resealGameSave(envelope: TestGameSaveEnvelope): void {
   envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v19/v9 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v20/v9 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
@@ -305,8 +305,8 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   const envelope = decodeGameSave(record);
   const current = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
   if (
-    envelope.version !== 19
-    || record.payloadVersion !== 19
+    envelope.version !== 20
+    || record.payloadVersion !== 20
     || current === null
     || (
       current.derivation.kind !== "habitat-v9"
@@ -1567,8 +1567,8 @@ describe("perpetual new worlds", () => {
     const currentEcology = deserializeCoreEcologyAggregatePatch(
       currentEnvelope.coreEcology,
     );
-    expect(currentEnvelope.version).toBe(19);
-    expect(currentRecord.payloadVersion).toBe(19);
+    expect(currentEnvelope.version).toBe(20);
+    expect(currentRecord.payloadVersion).toBe(20);
     expect(currentEcology?.derivation.kind).toBe("habitat-v9");
     if (currentEcology?.derivation.kind !== "habitat-v9") {
       throw new Error("fixture did not create current domestic-pen ecology");
@@ -1635,8 +1635,8 @@ describe("perpetual new worlds", () => {
     const migratedEcology = deserializeCoreEcologyAggregatePatch(
       migratedEnvelope.coreEcology,
     );
-    expect(migratedEnvelope.version).toBe(19);
-    expect(migratedRecord.payloadVersion).toBe(19);
+    expect(migratedEnvelope.version).toBe(20);
+    expect(migratedRecord.payloadVersion).toBe(20);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v9");
     if (migratedEcology?.derivation.kind !== "habitat-v9") {
       throw new Error("v11 migration did not produce canonical current ecology");
@@ -2022,7 +2022,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(19);
+    expect(prepared.version).toBe(20);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2234,8 +2234,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(19);
-    expect(durableRecord.payloadVersion).toBe(19);
+    expect(durable.version).toBe(20);
+    expect(durableRecord.payloadVersion).toBe(20);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

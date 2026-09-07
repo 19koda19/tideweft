@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(36);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(37);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,18 +63,18 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("exactly one separate settlement working dog beside the existing two-goat herd");
-    expect(copy).toContain("own kennel and custody");
-    expect(copy).toContain("generic persisted working-animal assignment");
-    expect(copy).toContain("ordinary dog cognition, needs, weather exposure, perception, and shared terrestrial locomotion");
-    expect(copy).toContain("lawful anonymous herd or wildlife alarm");
-    expect(copy).toContain("retreat, shelter, avoidance, or rest can take priority");
-    expect(copy).toContain("fox to change course only after it actually perceives the dog");
-    expect(copy).toContain("Outer save 19 adopts one sealed version-18 world exactly once");
-    expect(copy).toContain("habitat stays version 9, settlement ecology advances to version 4");
-    expect(copy).toContain("there is no species-by-species or N² pair matrix");
-    expect(copy).toContain("one local working relationship, not worldwide dogs or livestock");
-    expect(copy).toContain("attacks, injury, mortality, carcasses, new sound, guaranteed livestock defense");
+    expect(copy).toContain("adds no animal");
+    expect(copy).toContain("one bounded persisted work-task lifecycle");
+    expect(copy).toContain("deterministic shared-locomotion search probe");
+    expect(copy).toContain("physically toward the existing pen worksite");
+    expect(copy).toContain("keeper's lawful acknowledgement");
+    expect(copy).toContain("fresh reciprocal identified sight");
+    expect(copy).toContain("Dog cognition and welfare can suspend work and later resume it");
+    expect(copy).toContain("Outer save 20 adopts one sealed version-19 Paddock Watch world exactly once");
+    expect(copy).toContain("habitat remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4");
+    expect(copy).toContain("without species-by-species or N² pair testing");
+    expect(copy).toContain("not a new species, herding, separated-livestock search or rescue");
+    expect(copy).toContain("attack, injury, mortality, carcass, guaranteed defense");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -250,12 +250,12 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 19");
-    expect(copy).toContain("sealed version 18 Far Paddock save migrates exactly once");
+    expect(copy).toContain("Outer save version 20");
+    expect(copy).toContain("sealed version 19 Paddock Watch save migrates exactly once");
     expect(copy).toContain("every established habitat-9 population and anchor, actor, group, aggregate unit, store and lot identity");
-    expect(copy).toContain("working dog, kennel, third custody relationship, and guardian assignment are appended");
-    expect(copy).toContain("cannot reroll a chicken, goat, dog, or anchor");
-    expect(copy).toContain("saved pending work transition recovers exactly once without repeating perception or movement");
+    expect(copy).toContain("empty task-lifecycle fields are appended");
+    expect(copy).toContain("cannot reroll an animal or anchor");
+    expect(copy).toContain("saved pending work or task transition recovers exactly once without repeating perception, movement, handler authority, or outcome");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -503,10 +503,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the current working-animal adoption without rewriting older ecology", () => {
+  it("teaches the current working-task adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 19 preserves habitat version 9");
+    expect(copy).toContain("Outer save version 20 preserves habitat version 9");
     expect(copy).toContain("aggregate ecology record version 4");
     expect(copy).toContain("settlement ecology version 4");
     expect(copy).toContain("all four aggregate populations");
@@ -514,12 +514,15 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("deterministic top-K core-wildlife materialization state");
     expect(copy).toContain("durable tide-operation clock");
     expect(copy).toContain("starting-harbor store's plural domestic custody and food-use history");
-    expect(copy).toContain("one separate dog roster, and one generic settlement-working-animal assignment root");
-    expect(copy).toContain("sealed version 18 Far Paddock save migrates exactly once");
-    expect(copy).toContain("working dog, kennel, third custody relationship, and guardian assignment are appended");
+    expect(copy).toContain("one separate dog roster, and working-animal state version 2");
+    expect(copy).toContain("sealed version 19 Paddock Watch save migrates exactly once");
+    expect(copy).toContain("empty task-lifecycle fields are appended");
+    expect(copy).toContain("only the latest closed outcome");
+    expect(copy).toContain("handler recall requires current mutual sight");
+    expect(copy).toContain("return remains physical travel");
     expect(copy).toContain("store lot remains distinct from abstract settlement food");
-    expect(copy).toContain("cannot reroll a chicken, goat, dog, or anchor");
-    expect(copy).toContain("saved pending work transition recovers exactly once without repeating perception or movement");
+    expect(copy).toContain("cannot reroll an animal or anchor");
+    expect(copy).toContain("saved pending work or task transition recovers exactly once without repeating perception, movement, handler authority, or outcome");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

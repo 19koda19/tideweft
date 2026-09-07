@@ -52,7 +52,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 19;
+  readonly version: 20;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -147,10 +147,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 19
-    || record.payloadVersion !== 19
+    || envelope.version !== 20
+    || record.payloadVersion !== 20
   ) {
-    throw new Error("fixture did not produce a current v19 regional session save");
+    throw new Error("fixture did not produce a current v20 regional session save");
   }
   return envelope;
 }
@@ -171,7 +171,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 19,
+    payloadVersion: 20,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -519,7 +519,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 19,
+      version: 20,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,

@@ -7,20 +7,33 @@ import {
   type ActorPerceptionState,
 } from "../sim/actorPerception";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
+import { hashCanonical, stableStringify } from "../sim/util";
 import {
   SETTLEMENT_WORKING_ANIMALS_MAX_ASSIGNMENTS,
   SETTLEMENT_WORKING_ANIMALS_MAX_SERIALIZED_BYTES,
+  SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
+  SETTLEMENT_WORKING_ANIMALS_VERSION,
+  SETTLEMENT_WORKING_ANIMAL_ASSIGNMENT_VERSION,
   SETTLEMENT_WORKING_ANIMAL_ACTIVITY_VERSION,
   SETTLEMENT_WORKING_ANIMAL_GUARDIAN_SIGNAL_THRESHOLD,
+  PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
+  PRIOR_SETTLEMENT_WORKING_ANIMALS_VERSION,
+  PRIOR_SETTLEMENT_WORKING_ANIMAL_ASSIGNMENT_VERSION,
+  adoptSettlementWorkingAnimalStateV1,
   canonicalizeSettlementWorkingAnimalAssignment,
   canonicalizeSettlementWorkingAnimalState,
   createSettlementWorkingAnimalState,
   decideSettlementWorkingAnimalActivity,
+  deriveSettlementWorkingAnimalTaskSearchProbe,
   deserializeSettlementWorkingAnimalState,
   recoverPendingSettlementWorkingAnimalActivity,
+  recoverPendingSettlementWorkingAnimalTaskLifecycle,
   resolveSettlementWorkingAnimalActivity,
+  resolveSettlementWorkingAnimalTaskLifecycle,
   serializeSettlementWorkingAnimalState,
+  settlementWorkingAnimalReturnArea,
   stageSettlementWorkingAnimalActivity,
+  stageSettlementWorkingAnimalTaskLifecycle,
   type CreateSettlementWorkingAnimalAssignmentInput,
   type SettlementWorkingAnimalActivityAccessibility,
   type SettlementWorkingAnimalState,
@@ -143,6 +156,108 @@ function quietPerception(actorId: string, tick: number): ActorPerceptionState {
   return result;
 }
 
+function identifiedVision(
+  observerId: string,
+  subjectId: string,
+  subjectPosition: WorldPosition,
+  tick: number,
+  id: string,
+): ActorPerceptionState {
+  return perceptionWithObservation(observerId, {
+    tick,
+    id,
+    channel: "vision",
+    perceivedClass: "known-actor",
+    subjectId,
+    center: subjectPosition,
+    radiusUnits: 0,
+    confidence: ACTOR_PERCEPTION_SCALE,
+    salience: ACTOR_PERCEPTION_SCALE,
+    identification: "identified",
+  });
+}
+
+function agePerception(
+  perception: ActorPerceptionState,
+  tick: number,
+): ActorPerceptionState {
+  const aged = stepActorPerception(perception, { tick, observations: [] });
+  if (aged === null) throw new Error("Test cognition did not age");
+  return aged;
+}
+
+function commitInvestigation(
+  initial: SettlementWorkingAnimalState,
+  tick = 1,
+): Readonly<{
+  readonly state: SettlementWorkingAnimalState;
+  readonly perception: ActorPerceptionState;
+}> {
+  const assignment = initial.assignments[0]!;
+  const perception = perceptionWithObservation(assignment.workerActorId, { tick });
+  const staged = stageSettlementWorkingAnimalActivity(initial, {
+    assignmentId: assignment.assignmentId,
+    tick,
+    perception,
+    welfare: ZERO_WELFARE,
+    accessibility: ALL_ACCESSIBLE,
+    actorDisposition: AVAILABLE_FOR_WORK,
+    workerInsideDutyArea: true,
+  });
+  if (staged?.transaction === null || staged === null) {
+    throw new Error("Investigation was not staged");
+  }
+  const resolved = resolveSettlementWorkingAnimalActivity(staged.state, staged.transaction);
+  if (resolved === null) throw new Error("Investigation was not committed");
+  return Object.freeze({ state: resolved.state, perception });
+}
+
+function openTask(
+  investigating: SettlementWorkingAnimalState,
+  workerPerception: ActorPerceptionState,
+  tick = 1,
+  workerPosition = position(0, 0, 18_000, 18_000),
+): SettlementWorkingAnimalState {
+  const assignment = investigating.assignments[0]!;
+  const staged = stageSettlementWorkingAnimalTaskLifecycle(investigating, {
+    assignmentId: assignment.assignmentId,
+    tick,
+    workerPosition,
+    handlerPosition: position(0, 0, 20_000, 20_000),
+    workerPerception,
+    handlerPerception: quietPerception(assignment.handlerActorId, tick),
+    welfare: ZERO_WELFARE,
+    actorDisposition: AVAILABLE_FOR_WORK,
+    handlerDisposition: { kind: "continue" },
+  });
+  if (staged?.transaction === null || staged === null) throw new Error("Task was not staged");
+  const resolved = resolveSettlementWorkingAnimalTaskLifecycle(staged.state, staged.transaction);
+  if (resolved === null) throw new Error("Task was not committed");
+  return resolved.state;
+}
+
+function priorV1State(value: SettlementWorkingAnimalState): unknown {
+  return {
+    ...value,
+    version: PRIOR_SETTLEMENT_WORKING_ANIMALS_VERSION,
+    ownerId: PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
+    assignments: value.assignments.map((assignment) => {
+      const {
+        lastTaskOrdinal: _lastTaskOrdinal,
+        lastResolvedTaskTransitionOrdinal: _lastResolvedTaskTransitionOrdinal,
+        currentTask: _currentTask,
+        lastTaskOutcome: _lastTaskOutcome,
+        pendingTaskTransition: _pendingTaskTransition,
+        ...prior
+      } = assignment;
+      return {
+        ...prior,
+        version: PRIOR_SETTLEMENT_WORKING_ANIMAL_ASSIGNMENT_VERSION,
+      };
+    }),
+  };
+}
+
 describe("settlement working-animal authority", () => {
   it("derives stable immutable assignments and canonical bytes independent of input order", () => {
     const left = createSettlementWorkingAnimalState({
@@ -173,6 +288,44 @@ describe("settlement working-animal authority", () => {
     const encoded = serializeSettlementWorkingAnimalState(left);
     expect(deserializeSettlementWorkingAnimalState(encoded)).toEqual(left);
     expect(deserializeSettlementWorkingAnimalState(`\n${encoded}`)).toBeNull();
+  });
+
+  it("adopts the sealed v1 relationship root without changing assignment or activity identity", () => {
+    const initial = stateAt();
+    const assignment = initial.assignments[0]!;
+    const staged = stageSettlementWorkingAnimalActivity(initial, {
+      assignmentId: assignment.assignmentId,
+      tick: 1,
+      perception: perceptionWithObservation(assignment.workerActorId),
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    });
+    const prior = priorV1State(staged!.state);
+    const adopted = adoptSettlementWorkingAnimalStateV1(prior);
+
+    expect(adopted).toMatchObject({
+      version: SETTLEMENT_WORKING_ANIMALS_VERSION,
+      ownerId: SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
+      revision: staged!.state.revision,
+    });
+    expect(adopted?.assignments[0]).toMatchObject({
+      version: SETTLEMENT_WORKING_ANIMAL_ASSIGNMENT_VERSION,
+      assignmentId: assignment.assignmentId,
+      currentActivity: assignment.currentActivity,
+      pendingActivity: staged!.transaction,
+      lastTaskOrdinal: 0,
+      lastResolvedTaskTransitionOrdinal: 0,
+      currentTask: null,
+      lastTaskOutcome: null,
+      pendingTaskTransition: null,
+    });
+    expect(adoptSettlementWorkingAnimalStateV1(adopted)).toEqual(adopted);
+    expect(adoptSettlementWorkingAnimalStateV1({
+      ...(prior as Readonly<Record<string, unknown>>),
+      revision: 99,
+    })).toBeNull();
   });
 
   it("turns a lawful anonymous herd alarm in the protected duty area into investigation", () => {
@@ -247,6 +400,516 @@ describe("settlement working-animal authority", () => {
     expect(encoded).not.toContain("subjectId");
     expect(encoded).not.toContain("targetActorId");
     expect(encoded).not.toContain("targetPosition");
+  });
+
+  it("uses one assignment-authenticated probe for preflight and persisted task opening", () => {
+    const initial = stateAt();
+    const assignment = initial.assignments[0]!;
+    const perception = perceptionWithObservation(assignment.workerActorId);
+    const stagedActivity = stageSettlementWorkingAnimalActivity(initial, {
+      assignmentId: assignment.assignmentId,
+      tick: 1,
+      perception,
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    });
+    const stagedAssignment = stagedActivity!.state.assignments[0]!;
+    const preflightProbe = deriveSettlementWorkingAnimalTaskSearchProbe(
+      stagedAssignment,
+      stagedActivity!.transaction,
+    );
+    expect(preflightProbe).not.toBeNull();
+    // The same valid transaction is not authoritative in the pre-stage state.
+    expect(deriveSettlementWorkingAnimalTaskSearchProbe(
+      assignment,
+      stagedActivity!.transaction,
+    )).toBeNull();
+    expect(deriveSettlementWorkingAnimalTaskSearchProbe(
+      assignment,
+      assignment.currentActivity,
+    )).toBeNull();
+    expect(deriveSettlementWorkingAnimalTaskSearchProbe(stagedAssignment, {
+      ...stagedActivity!.transaction!,
+      acceptedAtTick: 2,
+    })).toBeNull();
+
+    const committed = resolveSettlementWorkingAnimalActivity(
+      stagedActivity!.state,
+      stagedActivity!.transaction,
+    )!.state;
+    const opened = openTask(committed, perception);
+    expect(opened.assignments[0]?.currentTask?.searchProbe).toEqual(preflightProbe);
+  });
+
+  it("opens one bounded task from committed evidence and retains its opaque probe after belief decay", () => {
+    const initial = stateAt();
+    const committed = commitInvestigation(initial);
+    const assignment = committed.state.assignments[0]!;
+    const staged = stageSettlementWorkingAnimalTaskLifecycle(committed.state, {
+      assignmentId: assignment.assignmentId,
+      tick: 1,
+      workerPosition: position(0, 0, 18_000, 18_000),
+      handlerPosition: position(0, 0, 20_000, 20_000),
+      workerPerception: committed.perception,
+      handlerPerception: quietPerception(assignment.handlerActorId, 1),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    expect(staged).toMatchObject({ staged: true, reusedPendingTransaction: false });
+    expect(staged?.transaction).toMatchObject({ transition: "open", taskOrdinal: 1 });
+    const reloaded = deserializeSettlementWorkingAnimalState(
+      serializeSettlementWorkingAnimalState(staged!.state),
+    );
+    const recovered = recoverPendingSettlementWorkingAnimalTaskLifecycle(
+      reloaded,
+      assignment.assignmentId,
+    );
+    expect(recovered).toMatchObject({ applied: true });
+    const task = recovered?.state.assignments[0]?.currentTask;
+    expect(task).toMatchObject({
+      phase: "investigating",
+      outcome: null,
+      sourceObservationId: "OBS-herd-alarm",
+      perceivedArea: { center: position(), radiusUnits: 500 },
+      searchProbe: { probeOrdinal: 0, probeArea: { center: position(), radiusUnits: 0 } },
+    });
+    const encoded = serializeSettlementWorkingAnimalState(recovered!.state);
+    expect(encoded).not.toContain("targetActorId");
+    expect(encoded).not.toContain("subjectId");
+    expect(task?.searchProbe.beliefKey).toMatch(/^contact:work:[0-9a-f]{16}$/u);
+
+    const retained = decideSettlementWorkingAnimalActivity({
+      assignment: recovered!.state.assignments[0]!,
+      tick: 2,
+      perception: quietPerception(assignment.workerActorId, 2),
+      welfare: ZERO_WELFARE,
+      accessibility: { watch: true, investigate: false, return: false },
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: false,
+    });
+    expect(retained).toMatchObject({
+      activity: "investigate",
+      cause: { kind: "perception", referenceId: "OBS-herd-alarm" },
+      perceivedArea: task?.perceivedArea,
+    });
+  });
+
+  it("suspends for actor and welfare authority without laundering either into completion", () => {
+    const committed = commitInvestigation(stateAt());
+    let state = openTask(committed.state, committed.perception);
+    const assignmentId = state.assignments[0]!.assignmentId;
+    const workerId = state.assignments[0]!.workerActorId;
+    const handlerId = state.assignments[0]!.handlerActorId;
+    const probe = state.assignments[0]!.currentTask!.searchProbe.probeArea.center;
+
+    const steps = [
+      {
+        tick: 2,
+        welfare: ZERO_WELFARE,
+        actorDisposition: {
+          kind: "defer-to-actor" as const,
+          referenceId: "actor-intent:retreat",
+        },
+        transition: "suspend",
+        suspension: { kind: "actor-disposition", referenceId: "actor-intent:retreat" },
+      },
+      {
+        tick: 3,
+        welfare: { ...ZERO_WELFARE, coldPressure: 800_000 },
+        actorDisposition: AVAILABLE_FOR_WORK,
+        transition: "suspend",
+        suspension: { kind: "welfare", referenceId: "welfare:cold-pressure" },
+      },
+      {
+        tick: 4,
+        welfare: ZERO_WELFARE,
+        actorDisposition: AVAILABLE_FOR_WORK,
+        transition: "resume",
+        suspension: null,
+      },
+      {
+        tick: 5,
+        welfare: ZERO_WELFARE,
+        actorDisposition: AVAILABLE_FOR_WORK,
+        transition: "complete",
+        suspension: null,
+      },
+    ] as const;
+
+    for (const step of steps) {
+      const staged = stageSettlementWorkingAnimalTaskLifecycle(state, {
+        assignmentId,
+        tick: step.tick,
+        workerPosition: probe,
+        handlerPosition: position(0, 0, 20_000, 20_000),
+        workerPerception: quietPerception(workerId, step.tick),
+        handlerPerception: quietPerception(handlerId, step.tick),
+        welfare: step.welfare,
+        actorDisposition: step.actorDisposition,
+        handlerDisposition: { kind: "continue" },
+      });
+      expect(staged?.transaction?.transition).toBe(step.transition);
+      const resolved = resolveSettlementWorkingAnimalTaskLifecycle(
+        staged!.state,
+        staged!.transaction,
+      );
+      state = resolved!.state;
+      expect(state.assignments[0]?.currentTask?.suspension).toEqual(step.suspension);
+      if (step.transition !== "complete") {
+        expect(state.assignments[0]?.currentTask?.outcome).toBeNull();
+      }
+    }
+    expect(state.assignments[0]?.currentTask).toMatchObject({
+      phase: "returning",
+      outcome: "completed",
+    });
+  });
+
+  it("requires reciprocal current sight to cancel, then physical return and handler sight to close", () => {
+    const committed = commitInvestigation(stateAt());
+    let state = openTask(committed.state, committed.perception);
+    const assignment = state.assignments[0]!;
+    const workerAway = position(0, 0, 31_000, 31_000);
+    const handlerAway = position(0, 0, 30_000, 30_000);
+
+    const oneWay = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 2,
+      workerPosition: workerAway,
+      handlerPosition: handlerAway,
+      workerPerception: quietPerception(assignment.workerActorId, 2),
+      handlerPerception: identifiedVision(
+        assignment.handlerActorId,
+        assignment.workerActorId,
+        workerAway,
+        2,
+        "OBS-handler-sees-worker",
+      ),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "recall", referenceId: "handler-intent:recall" },
+    });
+    expect(oneWay).toMatchObject({ staged: false, transaction: null });
+
+    const staleWorkerSight = agePerception(identifiedVision(
+      assignment.workerActorId,
+      assignment.handlerActorId,
+      handlerAway,
+      2,
+      "OBS-worker-old-sight",
+    ), 3);
+    const staleHandlerSight = agePerception(identifiedVision(
+      assignment.handlerActorId,
+      assignment.workerActorId,
+      workerAway,
+      2,
+      "OBS-handler-old-sight",
+    ), 3);
+    expect(stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 3,
+      workerPosition: workerAway,
+      handlerPosition: handlerAway,
+      workerPerception: staleWorkerSight,
+      handlerPerception: staleHandlerSight,
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "recall", referenceId: "handler-intent:recall" },
+    })).toMatchObject({ staged: false, transaction: null });
+
+    const cancellation = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 3,
+      workerPosition: workerAway,
+      handlerPosition: handlerAway,
+      workerPerception: identifiedVision(
+        assignment.workerActorId,
+        assignment.handlerActorId,
+        handlerAway,
+        3,
+        "OBS-worker-sees-handler",
+      ),
+      handlerPerception: identifiedVision(
+        assignment.handlerActorId,
+        assignment.workerActorId,
+        workerAway,
+        3,
+        "OBS-handler-sees-worker-3",
+      ),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "recall", referenceId: "handler-intent:recall" },
+    });
+    expect(cancellation?.transaction).toMatchObject({
+      transition: "cancel",
+      cause: {
+        kind: "handler-recall",
+        workerObservationId: "OBS-worker-sees-handler",
+        handlerObservationId: "OBS-handler-sees-worker-3",
+      },
+    });
+    const cancelled = resolveSettlementWorkingAnimalTaskLifecycle(
+      cancellation!.state,
+      cancellation!.transaction,
+    );
+    state = cancelled!.state;
+    expect(state.assignments[0]?.currentTask).toMatchObject({
+      phase: "returning",
+      outcome: "cancelled",
+    });
+
+    const returnArea = settlementWorkingAnimalReturnArea(state.assignments[0]);
+    expect(returnArea).toEqual({ center: position(), radiusUnits: 1_000 });
+    const justOutside = position(0, 0, position().localX + 1_001, position().localY);
+    expect(stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 4,
+      workerPosition: justOutside,
+      handlerPosition: handlerAway,
+      workerPerception: quietPerception(assignment.workerActorId, 4),
+      handlerPerception: quietPerception(assignment.handlerActorId, 4),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    })).toMatchObject({ staged: false, transaction: null });
+
+    const arrival = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 5,
+      workerPosition: returnArea!.center,
+      handlerPosition: handlerAway,
+      workerPerception: quietPerception(assignment.workerActorId, 5),
+      handlerPerception: quietPerception(assignment.handlerActorId, 5),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    expect(arrival?.transaction?.transition).toBe("arrive");
+    state = resolveSettlementWorkingAnimalTaskLifecycle(
+      arrival!.state,
+      arrival!.transaction,
+    )!.state;
+    expect(state.assignments[0]?.currentTask?.phase).toBe("awaiting-handler");
+
+    const arrivedTask = state.assignments[0]!.currentTask!;
+    const { transactionId: _arrivalTransactionId, ...arrivalFields } =
+      arrivedTask.lastTransition;
+    const forgedArrivalFields = {
+      ...arrivalFields,
+      cause: { kind: "worksite" as const, referenceId: "DOMESTIC-PEN-forged" },
+    };
+    const forgedArrival = {
+      ...forgedArrivalFields,
+      transactionId: `WORK-TASK-TX-${hashCanonical(forgedArrivalFields)}`,
+    };
+    expect(canonicalizeSettlementWorkingAnimalState({
+      ...state,
+      assignments: [{
+        ...state.assignments[0]!,
+        currentTask: { ...arrivedTask, lastTransition: forgedArrival },
+      }],
+    })).toBeNull();
+
+    expect(stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 6,
+      workerPosition: returnArea!.center,
+      handlerPosition: handlerAway,
+      workerPerception: quietPerception(assignment.workerActorId, 6),
+      handlerPerception: quietPerception(assignment.handlerActorId, 6),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    })).toMatchObject({ staged: false, transaction: null });
+
+    const acknowledgement = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 7,
+      workerPosition: returnArea!.center,
+      handlerPosition: handlerAway,
+      workerPerception: quietPerception(assignment.workerActorId, 7),
+      handlerPerception: identifiedVision(
+        assignment.handlerActorId,
+        assignment.workerActorId,
+        returnArea!.center,
+        7,
+        "OBS-handler-acknowledges-worker",
+      ),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    expect(acknowledgement?.transaction?.transition).toBe("acknowledge");
+    const closed = resolveSettlementWorkingAnimalTaskLifecycle(
+      acknowledgement!.state,
+      acknowledgement!.transaction,
+    );
+    expect(closed?.state.assignments[0]).toMatchObject({
+      currentTask: null,
+      lastTaskOutcome: { phase: "closed", outcome: "cancelled", closedAtTick: 7 },
+    });
+    const closedAssignment = closed!.state.assignments[0]!;
+    expect(canonicalizeSettlementWorkingAnimalState({
+      ...closed!.state,
+      assignments: [{
+        ...closedAssignment,
+        lastTaskOutcome: {
+          ...closedAssignment.lastTaskOutcome!,
+          sourceObservationId: "OBS-forged-provenance",
+        },
+      }],
+    })).toBeNull();
+    const { transactionId: _closedArrivalId, ...closedArrivalFields } =
+      closedAssignment.lastTaskOutcome!.arrivalTransition;
+    const forgedClosedArrivalFields = {
+      ...closedArrivalFields,
+      cause: { kind: "worksite" as const, referenceId: "DOMESTIC-PEN-forged" },
+    };
+    expect(canonicalizeSettlementWorkingAnimalState({
+      ...closed!.state,
+      assignments: [{
+        ...closedAssignment,
+        lastTaskOutcome: {
+          ...closedAssignment.lastTaskOutcome!,
+          arrivalTransition: {
+            ...forgedClosedArrivalFields,
+            transactionId: `WORK-TASK-TX-${hashCanonical(forgedClosedArrivalFields)}`,
+          },
+        },
+      }],
+    })).toBeNull();
+    expect(resolveSettlementWorkingAnimalTaskLifecycle(
+      closed!.state,
+      acknowledgement!.transaction,
+    )).toMatchObject({ applied: false, state: closed?.state });
+    expect(recoverPendingSettlementWorkingAnimalTaskLifecycle(
+      closed!.state,
+      assignment.assignmentId,
+    )).toMatchObject({ applied: false, transition: null });
+  });
+
+  it("resumes physical return when welfare moves an unacknowledged worker away", () => {
+    const committed = commitInvestigation(stateAt());
+    let state = openTask(committed.state, committed.perception);
+    let assignment = state.assignments[0]!;
+    const completed = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 2,
+      workerPosition: assignment.currentTask!.searchProbe.probeArea.center,
+      handlerPosition: position(0, 0, 20_000, 20_000),
+      workerPerception: quietPerception(assignment.workerActorId, 2),
+      handlerPerception: quietPerception(assignment.handlerActorId, 2),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    state = resolveSettlementWorkingAnimalTaskLifecycle(
+      completed!.state,
+      completed!.transaction,
+    )!.state;
+    assignment = state.assignments[0]!;
+    const returnArea = settlementWorkingAnimalReturnArea(assignment)!;
+    const arrived = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 3,
+      workerPosition: returnArea.center,
+      handlerPosition: position(0, 0, 20_000, 20_000),
+      workerPerception: quietPerception(assignment.workerActorId, 3),
+      handlerPerception: quietPerception(assignment.handlerActorId, 3),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    state = resolveSettlementWorkingAnimalTaskLifecycle(
+      arrived!.state,
+      arrived!.transaction,
+    )!.state;
+    expect(state.assignments[0]?.currentTask?.phase).toBe("awaiting-handler");
+
+    assignment = state.assignments[0]!;
+    const shelter = stageSettlementWorkingAnimalActivity(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 4,
+      perception: quietPerception(assignment.workerActorId, 4),
+      welfare: { ...ZERO_WELFARE, coldPressure: 700_000 },
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    });
+    expect(shelter?.decision.activity).toBe("survival-override");
+    state = resolveSettlementWorkingAnimalActivity(
+      shelter!.state,
+      shelter!.transaction,
+    )!.state;
+
+    assignment = state.assignments[0]!;
+    const recovered = stageSettlementWorkingAnimalActivity(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 5,
+      perception: quietPerception(assignment.workerActorId, 5),
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      // Runtime evaluates this against the narrow return area while the
+      // outcome is awaiting acknowledgement.
+      workerInsideDutyArea: false,
+    });
+    expect(recovered?.decision.activity).toBe("return");
+    state = resolveSettlementWorkingAnimalActivity(
+      recovered!.state,
+      recovered!.transaction,
+    )!.state;
+
+    assignment = state.assignments[0]!;
+    const acknowledged = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 6,
+      workerPosition: returnArea.center,
+      handlerPosition: position(0, 0, 20_000, 20_000),
+      workerPerception: quietPerception(assignment.workerActorId, 6),
+      handlerPerception: identifiedVision(
+        assignment.handlerActorId,
+        assignment.workerActorId,
+        returnArea.center,
+        6,
+        "OBS-handler-after-welfare-return",
+      ),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    expect(acknowledged?.transaction?.transition).toBe("acknowledge");
+    const closed = resolveSettlementWorkingAnimalTaskLifecycle(
+      acknowledged!.state,
+      acknowledged!.transaction,
+    );
+    expect(closed?.state.assignments[0]).toMatchObject({
+      currentTask: null,
+      lastTaskOutcome: { outcome: "completed", closedAtTick: 6 },
+    });
+    const closedAssignment = closed!.state.assignments[0]!;
+    const { transactionId: _outcomeId, ...outcomeFields } =
+      closedAssignment.lastTaskOutcome!.outcomeTransition;
+    const forgedOutcomeFields = {
+      ...outcomeFields,
+      cause: { kind: "probe" as const, referenceId: "living-probe:forged" },
+    };
+    expect(canonicalizeSettlementWorkingAnimalState({
+      ...closed!.state,
+      assignments: [{
+        ...closedAssignment,
+        lastTaskOutcome: {
+          ...closedAssignment.lastTaskOutcome!,
+          outcomeTransition: {
+            ...forgedOutcomeFields,
+            transactionId: `WORK-TASK-TX-${hashCanonical(forgedOutcomeFields)}`,
+          },
+        },
+      }],
+    })).toBeNull();
   });
 
   it("lets injury, cold, exhaustion, and other survival pressure override duty", () => {
@@ -518,6 +1181,81 @@ describe("settlement working-animal authority", () => {
       { length: SETTLEMENT_WORKING_ANIMALS_MAX_ASSIGNMENTS },
       (_, ordinal) => assignmentInput(ordinal),
     );
+    let lifecycleState = createSettlementWorkingAnimalState({
+      settlementId: 1,
+      assignments,
+    });
+    for (const original of lifecycleState.assignments) {
+      const perception = perceptionWithObservation(original.workerActorId);
+      const activity = stageSettlementWorkingAnimalActivity(lifecycleState, {
+        assignmentId: original.assignmentId,
+        tick: 1,
+        perception,
+        welfare: ZERO_WELFARE,
+        accessibility: ALL_ACCESSIBLE,
+        actorDisposition: AVAILABLE_FOR_WORK,
+        workerInsideDutyArea: true,
+      });
+      lifecycleState = resolveSettlementWorkingAnimalActivity(
+        activity!.state,
+        activity!.transaction,
+      )!.state;
+      const opened = stageSettlementWorkingAnimalTaskLifecycle(lifecycleState, {
+        assignmentId: original.assignmentId,
+        tick: 1,
+        workerPosition: position(0, 0, 18_000, 18_000),
+        handlerPosition: position(0, 0, 20_000, 20_000),
+        workerPerception: perception,
+        handlerPerception: quietPerception(original.handlerActorId, 1),
+        welfare: ZERO_WELFARE,
+        actorDisposition: AVAILABLE_FOR_WORK,
+        handlerDisposition: { kind: "continue" },
+      });
+      lifecycleState = resolveSettlementWorkingAnimalTaskLifecycle(
+        opened!.state,
+        opened!.transaction,
+      )!.state;
+    }
+    for (const original of lifecycleState.assignments) {
+      const task = lifecycleState.assignments.find(({ assignmentId }) => (
+        assignmentId === original.assignmentId
+      ))!.currentTask!;
+      const completed = stageSettlementWorkingAnimalTaskLifecycle(lifecycleState, {
+        assignmentId: original.assignmentId,
+        tick: 2,
+        workerPosition: task.searchProbe.probeArea.center,
+        handlerPosition: position(0, 0, 20_000, 20_000),
+        workerPerception: quietPerception(original.workerActorId, 2),
+        handlerPerception: quietPerception(original.handlerActorId, 2),
+        welfare: ZERO_WELFARE,
+        actorDisposition: AVAILABLE_FOR_WORK,
+        handlerDisposition: { kind: "continue" },
+      });
+      lifecycleState = resolveSettlementWorkingAnimalTaskLifecycle(
+        completed!.state,
+        completed!.transaction,
+      )!.state;
+      const arrived = stageSettlementWorkingAnimalTaskLifecycle(lifecycleState, {
+        assignmentId: original.assignmentId,
+        tick: 3,
+        workerPosition: position(),
+        handlerPosition: position(0, 0, 20_000, 20_000),
+        workerPerception: quietPerception(original.workerActorId, 3),
+        handlerPerception: quietPerception(original.handlerActorId, 3),
+        welfare: ZERO_WELFARE,
+        actorDisposition: AVAILABLE_FOR_WORK,
+        handlerDisposition: { kind: "continue" },
+      });
+      lifecycleState = resolveSettlementWorkingAnimalTaskLifecycle(
+        arrived!.state,
+        arrived!.transaction,
+      )!.state;
+    }
+    const lifecycleBytes = new TextEncoder().encode(
+      serializeSettlementWorkingAnimalState(lifecycleState),
+    ).byteLength;
+    expect(lifecycleBytes).toBeLessThan(24_000);
+
     const startedAt = performance.now();
     let bytes = 0;
     for (let pass = 0; pass < 250; pass += 1) {
@@ -530,6 +1268,229 @@ describe("settlement working-animal authority", () => {
 
     expect(bytes).toBeLessThan(SETTLEMENT_WORKING_ANIMALS_MAX_SERIALIZED_BYTES);
     expect(elapsed).toBeLessThan(2_000);
+  });
+
+  it("keeps every canonical lifecycle root closed over the fixed byte budget", () => {
+    const denseAssignments = Array.from(
+      { length: SETTLEMENT_WORKING_ANIMALS_MAX_ASSIGNMENTS },
+      (_, ordinal) => {
+        let state = createSettlementWorkingAnimalState({
+          settlementId: 1,
+          assignments: [assignmentInput(ordinal)],
+        });
+        const first = commitInvestigation(state, 1);
+        state = openTask(first.state, first.perception, 1);
+        let assignment = state.assignments[0]!;
+        const probe = assignment.currentTask!.searchProbe.probeArea.center;
+        const completed = stageSettlementWorkingAnimalTaskLifecycle(state, {
+          assignmentId: assignment.assignmentId,
+          tick: 2,
+          workerPosition: probe,
+          handlerPosition: position(0, 0, 20_000, 20_000),
+          workerPerception: quietPerception(assignment.workerActorId, 2),
+          handlerPerception: quietPerception(assignment.handlerActorId, 2),
+          welfare: ZERO_WELFARE,
+          actorDisposition: AVAILABLE_FOR_WORK,
+          handlerDisposition: { kind: "continue" },
+        });
+        state = resolveSettlementWorkingAnimalTaskLifecycle(
+          completed!.state,
+          completed!.transaction,
+        )!.state;
+        assignment = state.assignments[0]!;
+        const returnArea = settlementWorkingAnimalReturnArea(assignment)!;
+        const arrived = stageSettlementWorkingAnimalTaskLifecycle(state, {
+          assignmentId: assignment.assignmentId,
+          tick: 3,
+          workerPosition: returnArea.center,
+          handlerPosition: position(0, 0, 20_000, 20_000),
+          workerPerception: quietPerception(assignment.workerActorId, 3),
+          handlerPerception: quietPerception(assignment.handlerActorId, 3),
+          welfare: ZERO_WELFARE,
+          actorDisposition: AVAILABLE_FOR_WORK,
+          handlerDisposition: { kind: "continue" },
+        });
+        state = resolveSettlementWorkingAnimalTaskLifecycle(
+          arrived!.state,
+          arrived!.transaction,
+        )!.state;
+        assignment = state.assignments[0]!;
+        const acknowledged = stageSettlementWorkingAnimalTaskLifecycle(state, {
+          assignmentId: assignment.assignmentId,
+          tick: 4,
+          workerPosition: returnArea.center,
+          handlerPosition: position(0, 0, 20_000, 20_000),
+          workerPerception: quietPerception(assignment.workerActorId, 4),
+          handlerPerception: identifiedVision(
+            assignment.handlerActorId,
+            assignment.workerActorId,
+            returnArea.center,
+            4,
+            `OBS-handler-dense-${ordinal}`,
+          ),
+          welfare: ZERO_WELFARE,
+          actorDisposition: AVAILABLE_FOR_WORK,
+          handlerDisposition: { kind: "continue" },
+        });
+        state = resolveSettlementWorkingAnimalTaskLifecycle(
+          acknowledged!.state,
+          acknowledged!.transaction,
+        )!.state;
+
+        const secondPerception = perceptionWithObservation(
+          state.assignments[0]!.workerActorId,
+          { tick: 5, id: `OBS-second-alarm-${ordinal}` },
+        );
+        const secondActivity = stageSettlementWorkingAnimalActivity(state, {
+          assignmentId: state.assignments[0]!.assignmentId,
+          tick: 5,
+          perception: secondPerception,
+          welfare: ZERO_WELFARE,
+          accessibility: ALL_ACCESSIBLE,
+          actorDisposition: AVAILABLE_FOR_WORK,
+          workerInsideDutyArea: true,
+        });
+        state = resolveSettlementWorkingAnimalActivity(
+          secondActivity!.state,
+          secondActivity!.transaction,
+        )!.state;
+        return openTask(state, secondPerception, 5).assignments[0]!;
+      },
+    );
+
+    let sawBudgetRejection = false;
+    for (let count = 1; count <= denseAssignments.length; count += 1) {
+      const assignments = denseAssignments.slice(0, count);
+      const raw = {
+        version: SETTLEMENT_WORKING_ANIMALS_VERSION,
+        ownerId: SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
+        revision: assignments.reduce((sum, assignment) => (
+          sum
+          + assignment.lastResolvedActivityOrdinal * 2
+          + (assignment.pendingActivity === null ? 0 : 1)
+          + assignment.lastResolvedTaskTransitionOrdinal * 2
+          + (assignment.pendingTaskTransition === null ? 0 : 1)
+        ), 0),
+        settlementId: 1,
+        assignments,
+      };
+      const bytes = new TextEncoder().encode(stableStringify(raw)).byteLength;
+      const canonical = canonicalizeSettlementWorkingAnimalState(raw);
+      if (bytes > SETTLEMENT_WORKING_ANIMALS_MAX_SERIALIZED_BYTES) {
+        sawBudgetRejection = true;
+        expect(canonical).toBeNull();
+      } else {
+        expect(canonical).not.toBeNull();
+        expect(() => serializeSettlementWorkingAnimalState(canonical)).not.toThrow();
+      }
+    }
+    expect(sawBudgetRejection).toBe(true);
+  });
+
+  it("carries maximum-length legal identities through one complete lifecycle", () => {
+    const maximumId = (prefix: string): string => (
+      `${prefix}${"x".repeat(192 - prefix.length)}`
+    );
+    let state = createSettlementWorkingAnimalState({
+      settlementId: 1,
+      assignments: [{
+        ...assignmentInput(0),
+        workerActorId: maximumId("D-"),
+        handlerActorId: maximumId("H-"),
+        protectedGroupId: maximumId("G-"),
+        worksiteId: maximumId("W-"),
+      }],
+    });
+    let assignment = state.assignments[0]!;
+    const sourcePerception = perceptionWithObservation(assignment.workerActorId, {
+      id: maximumId("O-"),
+    });
+    const investigating = stageSettlementWorkingAnimalActivity(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 1,
+      perception: sourcePerception,
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    });
+    state = resolveSettlementWorkingAnimalActivity(
+      investigating!.state,
+      investigating!.transaction,
+    )!.state;
+    state = openTask(state, sourcePerception, 1);
+
+    assignment = state.assignments[0]!;
+    const completed = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 2,
+      workerPosition: assignment.currentTask!.searchProbe.probeArea.center,
+      handlerPosition: position(0, 0, 20_000, 20_000),
+      workerPerception: quietPerception(assignment.workerActorId, 2),
+      handlerPerception: quietPerception(assignment.handlerActorId, 2),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    state = resolveSettlementWorkingAnimalTaskLifecycle(
+      completed!.state,
+      completed!.transaction,
+    )!.state;
+
+    assignment = state.assignments[0]!;
+    const returnArea = settlementWorkingAnimalReturnArea(assignment)!;
+    const arrived = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 3,
+      workerPosition: returnArea.center,
+      handlerPosition: position(0, 0, 20_000, 20_000),
+      workerPerception: quietPerception(assignment.workerActorId, 3),
+      handlerPerception: quietPerception(assignment.handlerActorId, 3),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    state = resolveSettlementWorkingAnimalTaskLifecycle(
+      arrived!.state,
+      arrived!.transaction,
+    )!.state;
+
+    assignment = state.assignments[0]!;
+    const acknowledged = stageSettlementWorkingAnimalTaskLifecycle(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 4,
+      workerPosition: returnArea.center,
+      handlerPosition: position(0, 0, 20_000, 20_000),
+      workerPerception: quietPerception(assignment.workerActorId, 4),
+      handlerPerception: identifiedVision(
+        assignment.handlerActorId,
+        assignment.workerActorId,
+        returnArea.center,
+        4,
+        maximumId("O-"),
+      ),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    state = resolveSettlementWorkingAnimalTaskLifecycle(
+      acknowledged!.state,
+      acknowledged!.transaction,
+    )!.state;
+
+    expect(state.assignments[0]).toMatchObject({
+      currentTask: null,
+      lastTaskOutcome: {
+        phase: "closed",
+        outcome: "completed",
+        closedAtTick: 4,
+        lastTransition: { transition: "acknowledge" },
+      },
+    });
+    const serialized = serializeSettlementWorkingAnimalState(state);
+    expect(new TextEncoder().encode(serialized).byteLength)
+      .toBeLessThanOrEqual(SETTLEMENT_WORKING_ANIMALS_MAX_SERIALIZED_BYTES);
+    expect(deserializeSettlementWorkingAnimalState(serialized)).toEqual(state);
   });
 
   it("ignores weak or unrelated cognition instead of inventing work knowledge", () => {

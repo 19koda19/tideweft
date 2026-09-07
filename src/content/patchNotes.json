@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.27",
+      "releaseDate": "2026-09-07",
+      "buildIdentity": "0.3.3-alpha.27",
+      "summary": "The Watch Returns gives the existing settlement guardian dog one bounded, persisted, handler-aware work-task lifecycle: lawful investigation, completion or cancellation, physical return, and acknowledgement compose the same perception, cognition, welfare, and locomotion owners.",
+      "gameplayContractVersion": 25,
+      "tutorialVersion": 37,
+      "categories": {
+        "gameplay": [
+          "A committed alarm investigation now opens one bounded work task for the existing settlement guardian dog. The task retains the lawful source observation, uncertain perceived area, and one deterministic shared-locomotion search probe; it never gains the alarm emitter, an exact hidden target, or remote livestock knowledge.",
+          "Reaching that search probe completes the investigation and sends the same dog physically back toward the existing pen worksite. Arrival enters a bounded wait for the existing keeper's lawful acknowledgement before the task closes and retains only its latest completed or cancelled outcome.",
+          "The existing keeper may recall an investigating dog that has left its duty area, but cancellation requires fresh reciprocal identified sight. A remote, occluded, or unloaded relationship creates no command; dog cognition and welfare can suspend work and later resume it without inventing evidence."
+        ],
+        "fixes": [
+          "The keeper's shared visual-contact bridge now evaluates both existing dogs through the same terrain-occluded perception owner. A dog outside the materialized sensory window is lawful absence of evidence rather than a malformed frame or an excuse to flatten remote state into local sight.",
+          "Work-task opening, suspension, resumption, completion, cancellation, arrival, and acknowledgement use one staged exact-once transition contract. Pending transitions recover without repeating perception, movement, outcome, or handler authority, and replay of the latest committed transition is inert.",
+          "Version-1 working-animal state adopts into the additive lifecycle schema without changing the established assignment identity. Strict bounds, canonical geometry, stable ordinals, and authenticated actor relationships reject malformed, duplicated, or mismatched task state."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Returning is physical travel through ordinary terrain, while keeper recall depends on current mutual sight; neither the assignment nor the keeper gains an aura, teleport, or omniscient recall.",
+          "Investigation completion means only that the cognition-owned search probe was reached. It does not prove the source was found, remove a threat, herd a goat, guarantee livestock safety, or turn the dog into a combat actor.",
+          "Validation remains architecture-led: shared lifecycle, perception, locomotion, welfare, conservation, save, signed-world, and bounded-performance invariants plus representative emergence exercise the reusable seam without species-by-species fixtures or an N-squared interaction matrix."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D continue to project the same directly perceived dog. Quick inspection and pane-free ABOUT may describe only visible present activity, never the hidden task record, source identity, handler intent, reciprocal sight facts, or internal outcome state.",
+          "The return lifecycle adds no remote guardian marker, handler command button, dog tracker, task pane, or hidden-world narration. Losing direct-detail sight still removes the dog's rendering, label, hit target, and actions.",
+          "Field Manual version 37 explains the bounded investigation-to-return lifecycle, mutual-sight handler boundary, welfare and cognition suspension, exact save adoption, shared-invariant validation, and all material exclusions."
+        ],
+        "saves": [
+          "The outer session advances to version 20. Working-animal state and assignment records advance to version 2, while task, transition, and latest-outcome records begin at version 1; habitat analysis remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4, and the nineteen-record species catalog and existing dog roster remain unchanged.",
+          "A sealed version-19 Paddock Watch save migrates exactly once. Its dog identities, kennel and pen, three custody relationships, goat herd, prior working assignment and activity, every habitat population and anchor, actor, group, item, Promise, evidence record, store fact, and world fact remain exact before empty lifecycle fields are appended.",
+          "Current saves authenticate task source evidence, search geometry, handler and worker identities, transition ordinals, suspension, outcome, return worksite, and pending state. Save, reload, interruption, rollback, and representative regional travel cannot reroll or duplicate a task, movement, acknowledgement, or result."
+        ],
+        "knownLimitations": [
+          "This release adds no species, actor, population, habitat, home, custody relationship, worldwide ecology, cross-region animal migration, or broader settlement-animal simulation. It advances only the existing starting-harbor working dog's bounded task lifecycle.",
+          "The dog still does not herd goats, search for separated livestock, regroup or rescue a herd, follow a full schedule, execute an autonomous kennel-life routine, bark on command, train, attack, injure, kill, die, leave a carcass, capture prey, or consume live prey. This release adds no mortality system.",
+          "Keeper recall is one narrow autonomous policy for an investigating dog beyond its duty area, not a player command or universal handler system. A return to the existing pen is not a protection guarantee, successful defense, full home routine, remote order, or new companion behavior."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.26",
       "releaseDate": "2026-09-07",
       "buildIdentity": "0.3.3-alpha.26",

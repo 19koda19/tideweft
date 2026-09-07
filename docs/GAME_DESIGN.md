@@ -120,6 +120,19 @@ and quick inspection remain direct-detail gated; ABOUT shows only directly
 visible current activity and does not disclose the assignment graph or alarm
 source.
 
+The Watch Returns adds no animal. A committed investigation now opens one
+bounded task retaining only the lawful source observation, uncertain perceived
+area, and a deterministic shared-locomotion search probe. Reaching that probe
+records completion and makes the same dog travel physically toward the existing
+pen worksite. The keeper may request recall only after the dog leaves its duty
+area, and cancellation becomes authoritative only under fresh reciprocal
+identified sight. Actor-owned intent or welfare can suspend the task and later
+resume it. Arrival at the worksite waits for the keeper's current lawful sight
+before acknowledgement closes the task and preserves only the latest outcome.
+This is not a player command, herding, separated-livestock search or rescue,
+full schedule, autonomous kennel routine, attack, mortality, or guaranteed
+defense.
+
 The bounded core-wildlife assemblage extends the same observation boundary to its present deer, gulls, black bears, free-ranging domestic cats, domestic chickens, domestic goats, marsh rabbits, marsh foxes, fish crows, northern harrier, snowy egret, American black duck, and North American river otter. Terrain and structures can block sight; sufficiently clear contact can identify an ecologically plausible relationship; and an explicit established alarm can propagate through bounded hearing without revealing the caller's stable identity, species, hidden target, or exact motive. Cats, chickens, goats, rabbits, foxes, crows, the harrier, the egret, the duck, the otter, both dogs, the porter, gulls, and the player receive only the visual observations that lawfully reach them. The egret, duck, or otter receives a current anonymous **AQUATIC ACTIVITY** area only when an occupied, active, depth-usable fish or crab anchor passes shared direct sight; none receives an aggregate ID, species, exact count, or hidden target. A directly seen second cat can become food competition for a hungry cat; strong local rain can make a materialized cat retreat and leave bounded wet pawprints. Rabbit and fox movement can leave paired tracks or canid pawprints at the saved movement site. Crows, the harrier, the egret, the duck, the otter, chickens, and goats do not manufacture ground tracks or new calls in the current release. Directly visible individual wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT surface; each visible crow, chicken, or goat representative renders and hit-tests once even when its flock or herd context reports a larger group, while the duck and otter each remain one addressable individual. Loss of direct-detail sight removes rendering, selection, labels, actions, and inspection rather than leaving a remote tracker. Individual movement signs require current direct-detail sight, fade from identified to ambiguous as their clarity ages, expire after 180 ticks, remain non-targetable, and cannot reveal an unseen animal's thoughts or current location. Rat/frog-area evidence, silverside surface activity, and fiddler-crab burrows or feeding scrapes follow the same knowledge boundary and never pretend to be individual aggregate animals.
 
 When a bear is present, it may choose an easier exposed provision instead of pursuing visible live prey. A gull, fish crow, or eligible river otter may also opportunistically inspect and claim exposed food through the same generic item opportunity. Every animal must physically reach the same exact whole parcel; stable conflict ordering permits one claim and one custody path, so the object cannot duplicate or be consumed twice. A marsh rabbit can alarm and then flee from a directly perceived fox or northern harrier. A hungry marsh fox or harrier can begin a finite pursuit of directly perceived small prey, but lawful pressure can replace that prey as its urgent attention. A fish crow can alarm only after directly identifying the harrier; only that causally retained alarm can become mobbing pressure and interrupt the harrier. Mere proximity cannot manufacture the relationship. Rabbit flight and fox/harrier pursuit use shared locomotion boundaries with distinct bounded gaits, and pursuit ends through finite disengagement rather than attack. No live prey is injured, killed, consumed, or converted into a carcass. Deer, gulls, fish crows, and the otter can likewise use only their declared broad roles, capabilities, current observations, and lawful action owners. The player can **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, or **LEAVE**, but cannot command, feed, tame, name, own, recruit, attack, or otherwise directly manipulate these animals in this release.
@@ -319,6 +332,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Released Alpha 24 uses outer save format 17, habitat version 8, and settlement ecology version 2. An authenticated sealed version-16 envelope retains every prior habitat entry as the exact prefix before deriving the yard anchor, stable chicken individuals, flock, and custody record once. It preserves the store and lot identities, door state, quantities, completed loss ordinals, keeper knowledge, all earlier actors and groups, aggregate units, items, Promises, evidence, and world facts. Pending/resolved domestic-food transactions are canonicalized on load so interruption cannot duplicate or reconsume a unit.
 - Released Alpha 25 uses outer save format 18, habitat version 9, and settlement ecology version 3. An authenticated sealed version-17 envelope retains the complete Alpha-24 habitat, chicken members, flock, coop, keeper, custody, store, food transactions, actors, groups, aggregate units, items, Promises, evidence, and world facts before appending one separate pen, exactly two goats, one herd, and one additional custody relationship. Plural canonical custody rejects duplicate actors, groups, relationships, homes, or structures; reload cannot reroll either domestic population or assign one physical item to two contenders.
 - Released Alpha 26 uses outer save format 19 and settlement ecology version 4 while habitat remains version 9 and aggregate ecology remains version 4. A sealed version-18 envelope preserves the complete Far Paddock habitat, actors, flock, herd, homes, custody, store, food history, groups, aggregate units, items, Promises, evidence, and world facts before appending one deterministic working dog, kennel, third custody, dog-roster root, and generic working-animal assignment. Pending work activity recovers exactly once; reload, rollback, and representative regional travel cannot reroll or duplicate its actor, relationship, assignment, ordinal, or position.
+- The Alpha 27 source candidate uses outer save format 20 while habitat remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4, and the nineteen-record species catalog and existing dog roster remain unchanged. A sealed version-19 Paddock Watch envelope preserves every established actor, group, home, custody, assignment, activity, item, Promise, evidence record, store fact, and world fact before the working-animal root and assignment advance to version 2 with empty task fields. Task, transition, and latest-outcome records begin at version 1. One pending task transition recovers exactly once; reload cannot reroll its source evidence, probe, suspension, result, return, or handler acknowledgement.
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
@@ -389,6 +403,16 @@ v19 adoption. It explicitly preserves the absence of attacks, injury, death,
 carcasses, herding, a new guardian sound, guaranteed livestock defense,
 worldwide dogs or livestock, ecological cross-region animal migration, full
 Wave D, Directive 04_1 completion, and exhaustive species/pair testing.
+
+Source-candidate Alpha 27 advances the manual to version 37 with the existing
+working dog's bounded investigation-to-return task, deterministic
+cognition-owned search probe, mutual-sight keeper recall, actor/welfare
+suspension and resumption, physical pen return, handler acknowledgement, latest
+outcome retention, and exact outer-v19 to v20 adoption. It adds no species,
+herding, separated-livestock search or rescue, full schedule, autonomous kennel
+life, player command, attack, injury, mortality, carcass, guaranteed defense,
+worldwide ecology, broader settlement-animal simulation, or exhaustive
+species/pair testing.
 
 The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
@@ -674,6 +698,20 @@ guaranteed defense, companion command, worldwide dog population, cross-region
 animal ecology, full Wave D, or Directive 04_1 completion. Evidence remains
 shared-invariant and representative-chain based rather than species-by-species
 or N².
+
+Release `0.3.3-alpha.27 — The Watch Returns` is a **SOURCE_CANDIDATE**. It
+advances only the existing guardian relationship: a committed investigation
+opens one bounded task, travels to one cognition-derived search probe, records
+completion or a mutually seen keeper cancellation, returns physically to the
+existing pen, and closes after lawful handler acknowledgement. Dog cognition
+and welfare may suspend and resume that work without inventing evidence. Outer
+save 20 adopts version 19 exactly once, while all species, actors, habitats,
+homes, custodies, groups, items, Promises, and world facts remain conserved.
+No herding, livestock recovery, schedule, kennel-life routine, player command,
+attack, injury, mortality, carcass, or guaranteed defense is added. Exact
+commit, CI, Pages, and live-asset attestations remain pending; confidence comes
+from shared invariants and representative emergence rather than per-species or
+N² interaction tests.
 
 Released through Alpha 26:
 

@@ -363,18 +363,28 @@ import {
   type SettlementEcologyState,
 } from "./settlementEcology";
 import {
+  adoptSettlementWorkingAnimalStateV1,
   canonicalizeSettlementWorkingAnimalState,
   createSettlementWorkingAnimalState,
+  deriveSettlementWorkingAnimalTaskSearchProbe,
   deserializeSettlementWorkingAnimalState,
+  PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
+  PRIOR_SETTLEMENT_WORKING_ANIMALS_VERSION,
   recoverPendingSettlementWorkingAnimalActivity,
+  recoverPendingSettlementWorkingAnimalTaskLifecycle,
   resolveSettlementWorkingAnimalActivity,
+  resolveSettlementWorkingAnimalTaskLifecycle,
   serializeSettlementWorkingAnimalState,
   stageSettlementWorkingAnimalActivity,
+  stageSettlementWorkingAnimalTaskLifecycle,
+  settlementWorkingAnimalReturnArea,
   type SettlementWorkingAnimalActorDisposition,
   type SettlementWorkingAnimalActivityDecision,
   type SettlementWorkingAnimalActivityTransaction,
   type SettlementWorkingAnimalAssignment,
+  type SettlementWorkingAnimalHandlerDisposition,
   type SettlementWorkingAnimalState,
+  type SettlementWorkingAnimalTaskLifecycleEvaluationInput,
 } from "./settlementWorkingAnimals";
 import {
   stepCoreEcologyTidalTable,
@@ -523,7 +533,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 19;
+const GAME_SAVE_VERSION = 20;
+const PADDOCK_WATCH_GAME_SAVE_VERSION = 19;
 const DOMESTIC_PEN_GAME_SAVE_VERSION = 18;
 const DOMESTIC_YARD_GAME_SAVE_VERSION = 17;
 const STOREHOUSE_GAME_SAVE_VERSION = 16;
@@ -688,6 +699,8 @@ const CORE_ECOLOGY_CONTACT_REACH_LOOSE_UNITS = Math.trunc(LOOSE_CARGO_TILE_UNITS
 const CORE_ECOLOGY_DOMESTIC_STORE_ACCESS_REACH_UNITS =
   3 * WORLD_POSITION_UNITS_PER_TILE;
 const CORE_ECOLOGY_MOVING_SOURCE_SALIENCE = 780_000;
+/** Focused keeper attention toward a known worksite; ordinary detail sight remains unchanged. */
+const SETTLEMENT_KEEPER_WORKSITE_DIRECT_SIGHT_RANGE_TILES = 32;
 
 function bigintAbs(value: bigint): bigint {
   return value < 0n ? -value : value;
@@ -697,7 +710,7 @@ type RuntimeCoreWildlifeTarget = LivingActorTargetUIView & {
   readonly species: CoreWildlifeSpecies;
 };
 
-interface RuntimeBio0PorterVisualFrame {
+interface RuntimePorterVisualFrame {
   readonly actorId: string;
   readonly observations: readonly ActorObservation[];
 }
@@ -2318,6 +2331,13 @@ function canonicalRuntimeSettlementWorkingAnimals(
     || assignment.createdAtTick > world.meta.completedTick
     || assignment.currentActivity.acceptedAtTick > world.meta.completedTick
     || (assignment.pendingActivity?.acceptedAtTick ?? 0) > world.meta.completedTick
+    || (assignment.currentTask?.openedAtTick ?? 0) > world.meta.completedTick
+    || (assignment.currentTask?.lastTransition.acceptedAtTick ?? 0) > world.meta.completedTick
+    || (assignment.currentTask?.outcomeAtTick ?? 0) > world.meta.completedTick
+    || (assignment.lastTaskOutcome?.outcomeAtTick ?? 0) > world.meta.completedTick
+    || (assignment.lastTaskOutcome?.closedAtTick ?? 0) > world.meta.completedTick
+    || (assignment.lastTaskOutcome?.lastTransition.acceptedAtTick ?? 0) > world.meta.completedTick
+    || (assignment.pendingTaskTransition?.acceptedAtTick ?? 0) > world.meta.completedTick
     || dogActorRosterActor(dogRoster, assignment.workerActorId) === null
   ) return null;
   try {
@@ -4455,16 +4475,20 @@ function runtimeLivingActorPerceptionCells(world: WorldView): readonly Perceptio
   }));
 }
 
-function runtimeBio0DogVisualObservations(
+function runtimePorterDogVisualObservations(
   world: WorldView,
   window: RegionalPlayerTravelState["window"],
   porterAddress: Bio0PorterAddress,
   dogAddress: LivingActorAddress,
   tick: number,
+  knownWorksiteFocus: LivingActorAddress["position"] | null = null,
 ): readonly ActorObservation[] | null {
   const observer = livingActorAddressInRegionalWindow(porterAddress, window);
   const subject = livingActorAddressInRegionalWindow(dogAddress, window);
-  if (observer === null || subject === null) return null;
+  // An actor outside the currently materialized sensory window is a lawful
+  // absence of evidence, not a malformed frame. Never flatten a remote dog
+  // into this local view merely because the keeper relationship is known.
+  if (observer === null || subject === null) return Object.freeze([]);
   const targetTile = world.terrain.tiles[subject.tileIndex];
   if (targetTile === undefined) return null;
   const targetLightVisibility = targetTile.terrain === "marsh"
@@ -4472,15 +4496,34 @@ function runtimeBio0DogVisualObservations(
     : targetTile.terrain === "ridge" || targetTile.terrain === "deep-water"
       ? 0.9
       : 0.72;
+  let observerFacingRadians = headingToRadians(porterAddress.heading);
+  if (knownWorksiteFocus !== null) {
+    try {
+      const delta = worldPositionDelta(porterAddress.position, knownWorksiteFocus);
+      observerFacingRadians = Math.atan2(delta.y, delta.x);
+    } catch {
+      return Object.freeze([]);
+    }
+  }
   const sight = evaluateVisualContact({
     columns: world.terrain.width,
     rows: world.terrain.height,
     cells: runtimeLivingActorPerceptionCells(world),
     observerTileIndex: observer.tileIndex,
     targetTileIndex: subject.tileIndex,
-    observerFacingRadians: headingToRadians(porterAddress.heading),
+    observerFacingRadians,
     weatherVisibility: clamp(1 - world.weather.intensity / FIXED_POINT * 0.52, 0, 1),
-    targetMovementSalience: 0,
+    ...(knownWorksiteFocus === null ? {} : {
+      detailRangeOverrides: {
+        closePeripheralRange: 2,
+        directSightRange: SETTLEMENT_KEEPER_WORKSITE_DIRECT_SIGHT_RANGE_TILES,
+        forwardConeRadians: (5 * Math.PI) / 9,
+      },
+    }),
+    // A keeper deliberately checking the known worksite can pick out the
+    // returning dog's gait/posture; ordinary incidental dog visibility keeps
+    // the neutral salience used elsewhere.
+    targetMovementSalience: knownWorksiteFocus === null ? 0 : 0.5,
     targetLightVisibility,
   });
   if (sight === null) return Object.freeze([]);
@@ -5101,6 +5144,7 @@ function runtimeWorkingDogInvestigationReachable(input: Readonly<{
   readonly dog: DogActorState;
   readonly regionalView: WorldView;
   readonly tick: number;
+  readonly assignment: SettlementWorkingAnimalAssignment;
   readonly activity: SettlementWorkingAnimalActivityTransaction;
 }>): boolean | null {
   const { activity } = input;
@@ -5121,12 +5165,10 @@ function runtimeWorkingDogInvestigationReachable(input: Readonly<{
     activity.perceivedArea,
   );
   if (surface === null) return false;
-  const searchProbe = deriveLivingActorSearchProbe({
-    requestId: activity.transactionId,
-    beliefKey: belief.key,
-    probeOrdinal: 0,
-    sourceArea: activity.perceivedArea,
-  });
+  const searchProbe = deriveSettlementWorkingAnimalTaskSearchProbe(
+    input.assignment,
+    activity,
+  );
   if (searchProbe === null) return null;
   const movement = resolveLivingActorLocomotion({
     requestId: activity.transactionId,
@@ -5142,10 +5184,50 @@ function runtimeWorkingDogInvestigationReachable(input: Readonly<{
   return movement.reason === "already-at-search-probe";
 }
 
+/**
+ * The keeper has one narrow autonomous policy in this slice: ask an
+ * investigating dog that has crossed its authenticated duty boundary to come
+ * back. This is only intent. The work owner still requires fresh reciprocal
+ * identified sight before it may become an authoritative cancellation.
+ */
+function runtimeWorkingAnimalHandlerDisposition(input: Readonly<{
+  readonly assignment: SettlementWorkingAnimalAssignment;
+  readonly dog: DogActorState;
+  readonly handler: RuntimeBio0Porter;
+}>): SettlementWorkingAnimalHandlerDisposition {
+  if (
+    input.handler.address.actorId === input.assignment.handlerActorId
+    && input.assignment.currentTask?.phase === "investigating"
+    && !runtimePositionInsideArea(input.dog.address.position, input.assignment.dutyArea)
+  ) {
+    return Object.freeze({
+      kind: "recall" as const,
+      referenceId: "handler-intent:recall-outside-duty-area",
+    });
+  }
+  return Object.freeze({ kind: "continue" as const });
+}
+
+/** Stage and commit at most one exact-once work-task transition. */
+function stepRuntimeWorkingAnimalTaskLifecycle(
+  state: SettlementWorkingAnimalState,
+  evaluation: SettlementWorkingAnimalTaskLifecycleEvaluationInput,
+): SettlementWorkingAnimalState | null {
+  const staged = stageSettlementWorkingAnimalTaskLifecycle(state, evaluation);
+  if (staged === null) return null;
+  if (staged.transaction === null) return staged.state;
+  const resolved = resolveSettlementWorkingAnimalTaskLifecycle(
+    staged.state,
+    staged.transaction,
+  );
+  return resolved?.state ?? null;
+}
+
 function stepRuntimeSettlementWorkingDog(input: Readonly<{
   readonly roster: DogActorRosterState;
   readonly workingAnimals: SettlementWorkingAnimalState;
   readonly settlement: SettlementEcologyState;
+  readonly handler: RuntimeBio0Porter;
   readonly world: WorldState;
   readonly regionalView: WorldView;
   readonly weather: WeatherState;
@@ -5242,26 +5324,57 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
   });
   if (autonomy === null) return null;
   dog = autonomy.dog;
+  const welfare = {
+    injuryPressure: Math.min(
+      FIXED_POINT,
+      FIXED_POINT - dog.condition.health + dog.condition.injuries.length * 100_000,
+    ),
+    coldPressure: dog.condition.coldStress,
+    heatPressure: dog.condition.heatStress,
+    exhaustionPressure: Math.max(dog.condition.exhaustion, dog.needs.rest),
+    hungerPressure: dog.needs.hunger,
+    thirstPressure: dog.needs.thirst,
+  } as const;
+  let workingAnimals = stepRuntimeWorkingAnimalTaskLifecycle(
+    input.workingAnimals,
+    {
+      assignmentId: assignment.assignmentId,
+      tick,
+      workerPosition: dog.address.position,
+      handlerPosition: input.handler.address.position,
+      workerPerception: dog.perception,
+      handlerPerception: input.handler.resident.perception,
+      welfare,
+      actorDisposition: autonomy.disposition,
+      handlerDisposition: runtimeWorkingAnimalHandlerDisposition({
+        assignment,
+        dog,
+        handler: input.handler,
+      }),
+    },
+  );
+  if (workingAnimals === null) return null;
+  let activeAssignment = workingAnimals.assignments.find(({ assignmentId }) => (
+    assignmentId === assignment.assignmentId
+  ));
+  if (activeAssignment === undefined) return null;
+  const requiredWorkArea = activeAssignment.currentTask?.phase === "awaiting-handler"
+    ? settlementWorkingAnimalReturnArea(activeAssignment)
+    : activeAssignment.dutyArea;
+  if (requiredWorkArea === null) return null;
+  // For an outcome awaiting acknowledgement, the required area is the narrow
+  // relationship worksite rather than the broader guardian duty perimeter.
   const workerInsideDutyArea = runtimePositionInsideArea(
     dog.address.position,
-    assignment.dutyArea,
+    requiredWorkArea,
   );
+  let workActorDisposition = autonomy.disposition;
   const workEvaluation = {
-    assignmentId: assignment.assignmentId,
+    assignmentId: activeAssignment.assignmentId,
     tick,
     perception: dog.perception,
-    welfare: {
-      injuryPressure: Math.min(
-        FIXED_POINT,
-        FIXED_POINT - dog.condition.health + dog.condition.injuries.length * 100_000,
-      ),
-      coldPressure: dog.condition.coldStress,
-      heatPressure: dog.condition.heatStress,
-      exhaustionPressure: Math.max(dog.condition.exhaustion, dog.needs.rest),
-      hungerPressure: dog.needs.hunger,
-      thirstPressure: dog.needs.thirst,
-    },
-    actorDisposition: autonomy.disposition,
+    welfare,
+    actorDisposition: workActorDisposition,
     accessibility: {
       watch: true,
       investigate: actorOnOpenTerrain && hasTraversableStep,
@@ -5270,7 +5383,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     workerInsideDutyArea,
   } as const;
   let staged = stageSettlementWorkingAnimalActivity(
-    input.workingAnimals,
+    workingAnimals,
     workEvaluation,
   );
   if (staged === null) return null;
@@ -5279,11 +5392,15 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
   ));
   if (stagedAssignment === undefined) return null;
   const acceptedCandidate = staged.transaction ?? stagedAssignment.currentActivity;
-  if (staged.decision.activity === "investigate") {
+  if (
+    activeAssignment.currentTask === null
+    && staged.decision.activity === "investigate"
+  ) {
     const routeReachable = runtimeWorkingDogInvestigationReachable({
       dog,
       regionalView: input.regionalView,
       tick,
+      assignment: stagedAssignment,
       activity: acceptedCandidate,
     });
     if (routeReachable === null) return null;
@@ -5291,7 +5408,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
       // No task may become authoritative when it cannot take even one lawful
       // step toward the cognition-owned search area.
       staged = stageSettlementWorkingAnimalActivity(
-        input.workingAnimals,
+        workingAnimals,
         {
           ...workEvaluation,
           accessibility: {
@@ -5313,26 +5430,27 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     );
     if (!consumesFallback) {
       dog = applyDogBehaviorDecision(dog, autonomy.assignmentCompatibleFallback);
+      workActorDisposition = {
+        kind: "defer-to-actor",
+        referenceId: `actor-intent:${dog.intent.kind}`,
+      };
       // Re-propose against the original authoritative work state. The
       // speculative stage above was immutable and never became committed.
       staged = stageSettlementWorkingAnimalActivity(
-        input.workingAnimals,
+        workingAnimals,
         {
           ...workEvaluation,
           accessibility: {
             ...workEvaluation.accessibility,
             investigate: false,
           },
-          actorDisposition: {
-            kind: "defer-to-actor",
-            referenceId: `actor-intent:${dog.intent.kind}`,
-          },
+          actorDisposition: workActorDisposition,
         },
       );
       if (staged === null) return null;
     }
   }
-  let workingAnimals = staged.state;
+  workingAnimals = staged.state;
   if (staged.transaction !== null) {
     const resolved = resolveSettlementWorkingAnimalActivity(
       staged.state,
@@ -5342,7 +5460,36 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     workingAnimals = resolved.state;
   }
 
-  const acceptedAssignment = workingAnimals.assignments[0];
+  // A newly committed investigation opens its retained task here. The same
+  // pass also records an actor-owned fallback as suspension; only one task
+  // transition can commit in a world tick.
+  activeAssignment = workingAnimals.assignments.find(({ assignmentId }) => (
+    assignmentId === assignment.assignmentId
+  ));
+  if (activeAssignment === undefined) return null;
+  workingAnimals = stepRuntimeWorkingAnimalTaskLifecycle(
+    workingAnimals,
+    {
+      assignmentId: activeAssignment.assignmentId,
+      tick,
+      workerPosition: dog.address.position,
+      handlerPosition: input.handler.address.position,
+      workerPerception: dog.perception,
+      handlerPerception: input.handler.resident.perception,
+      welfare,
+      actorDisposition: workActorDisposition,
+      handlerDisposition: runtimeWorkingAnimalHandlerDisposition({
+        assignment: activeAssignment,
+        dog,
+        handler: input.handler,
+      }),
+    },
+  );
+  if (workingAnimals === null) return null;
+
+  const acceptedAssignment = workingAnimals.assignments.find(({ assignmentId }) => (
+    assignmentId === assignment.assignmentId
+  ));
   if (acceptedAssignment === undefined) return null;
   const acceptedActivity = acceptedAssignment.currentActivity;
   const targetAreas: Array<Readonly<{
@@ -5350,12 +5497,12 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     radiusUnits: number;
   }>> = [];
   if (acceptedActivity.activity === "investigate" && acceptedActivity.perceivedArea !== null) {
-    targetAreas.push(acceptedActivity.perceivedArea);
+    if (acceptedAssignment.currentTask?.phase !== "investigating") return null;
+    targetAreas.push(acceptedAssignment.currentTask.perceivedArea);
   } else if (acceptedActivity.activity === "return") {
-    targetAreas.push({
-      center: protectedCustody.homeStructure.position,
-      radiusUnits: WORLD_POSITION_UNITS_PER_TILE,
-    });
+    const returnArea = settlementWorkingAnimalReturnArea(acceptedAssignment);
+    if (returnArea === null) return null;
+    targetAreas.push(returnArea);
   } else if (
     acceptedActivity.activity === "survival-override"
     || (acceptedActivity.activity === "defer-to-actor" && dog.intent.kind === "seek-shelter")
@@ -5382,7 +5529,16 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
 
   for (let targetOrdinal = 0; targetOrdinal < targetAreas.length; targetOrdinal += 1) {
     const targetArea = targetAreas[targetOrdinal];
-    if (targetArea === undefined || runtimePositionInsideArea(dog.address.position, targetArea)) break;
+    if (targetArea === undefined) break;
+    const searchProbe = acceptedActivity.activity === "investigate"
+      ? acceptedAssignment.currentTask?.phase === "investigating"
+        ? acceptedAssignment.currentTask.searchProbe
+        : null
+      : null;
+    if (
+      searchProbe === null
+      && runtimePositionInsideArea(dog.address.position, targetArea)
+    ) break;
     const surface = createRuntimeWorkingDogTraversability(
       dog,
       input.regionalView,
@@ -5393,7 +5549,10 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
       && (dog.intent.kind === "retreat" || dog.intent.kind === "avoid-human");
     if (surface === null) {
       if (isEscape) continue;
-      return null;
+      // A route can leave the materialized window or become temporarily
+      // blocked. The retained task remains authoritative and simply makes no
+      // physical progress this tick.
+      break;
     }
     const requestId = isEscape
       ? `work-move:${hashCanonical([
@@ -5402,23 +5561,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
           targetOrdinal,
           targetArea,
         ])}`
-      : acceptedActivity.transactionId;
-    const investigationBelief = acceptedActivity.activity === "investigate"
-      && acceptedActivity.cause.kind === "perception"
-      ? dog.perception.beliefs.find(({ sourceObservationId, area }) => (
-          sourceObservationId === acceptedActivity.cause.referenceId
-          && stableStringify(area) === stableStringify(targetArea)
-        )) ?? null
-      : null;
-    const searchProbe = acceptedActivity.activity === "investigate"
-      && investigationBelief !== null
-      ? deriveLivingActorSearchProbe({
-          requestId,
-          beliefKey: investigationBelief.key,
-          probeOrdinal: 0,
-          sourceArea: targetArea,
-        })
-      : null;
+      : searchProbe?.requestId ?? acceptedActivity.transactionId;
     if (acceptedActivity.activity === "investigate" && searchProbe === null) return null;
     const movement = resolveLivingActorLocomotion({
       requestId,
@@ -6410,7 +6553,7 @@ export async function createTideweftRuntime(
 
   function residentPerceptionFrame(
     targetTick: number,
-    bio0Visual: RuntimeBio0PorterVisualFrame | null = null,
+    porterVisual: RuntimePorterVisualFrame | null = null,
   ): ResidentPerceptionFrame {
     const batches = collectExistingHumanObservations({
       world: worldView,
@@ -6434,7 +6577,7 @@ export async function createTideweftRuntime(
       .sort((left, right) => left.id - right.id)
       .map((resident) => {
         const existing = batchByResidentId.get(resident.id)?.observations ?? [];
-        if (bio0Visual === null || resident.identity.stableId !== bio0Visual.actorId) {
+        if (porterVisual === null || resident.identity.stableId !== porterVisual.actorId) {
           return {
             residentId: resident.id,
             actorId: resident.identity.stableId,
@@ -6443,10 +6586,10 @@ export async function createTideweftRuntime(
         }
         const observations = canonicalizeActorObservations([
           ...existing,
-          ...bio0Visual.observations,
+          ...porterVisual.observations,
         ]);
-        if (observations.length !== existing.length + bio0Visual.observations.length) {
-          throw new Error("BIO0 visual contact could not enter porter cognition");
+        if (observations.length !== existing.length + porterVisual.observations.length) {
+          throw new Error("Dog visual contact could not enter porter cognition");
         }
         return {
           residentId: resident.id,
@@ -6820,17 +6963,36 @@ export async function createTideweftRuntime(
       if (bio0Simulation === null) {
         throw new Error("BIO0 active simulation policy could not be resolved");
       }
-      const dogVisualObservations = bio0Simulation.allowNewObservations
-        ? runtimeBio0DogVisualObservations(
-            worldView,
-            regionalTravel.window,
-            priorPorter.address,
-            bio0Ecology.dog.address,
-            targetTick,
-          )
-        : Object.freeze([] as ActorObservation[]);
-      if (dogVisualObservations === null) {
-        throw new Error("BIO0 dog visual contact could not be resolved");
+      const dogVisualObservations: ActorObservation[] = [];
+      for (const dog of runtimeDogActors(bio0Ecology, dogActorRoster)) {
+        const workingAssignment = settlementWorkingAnimals.assignments.find(({ workerActorId }) => (
+          workerActorId === dog.identity.stableId
+        ));
+        // The keeper routinely watches the authenticated pen worksite attached
+        // to this dog relationship. Attention must not switch because hidden
+        // task phase changed: identical physical/perception frames receive the
+        // same facing and range policy.
+        const knownWorksiteFocus = workingAssignment === undefined
+          ? null
+          : settlementWorkingAnimalReturnArea(workingAssignment)?.center ?? null;
+        const observations = runtimePorterDogVisualObservations(
+          worldView,
+          regionalTravel.window,
+          priorPorter.address,
+          dog.address,
+          targetTick,
+          knownWorksiteFocus,
+        );
+        if (observations === null) {
+          throw new Error("Dog visual contact could not be resolved");
+        }
+        dogVisualObservations.push(...observations);
+      }
+      const canonicalDogVisualObservations = canonicalizeActorObservations(
+        dogVisualObservations,
+      );
+      if (canonicalDogVisualObservations.length !== dogVisualObservations.length) {
+        throw new Error("Dog visual contacts could not be canonicalized");
       }
       const dogCoreObservations = bio0Simulation.mode === "full"
         ? mergeRuntimeCoreObservationBatches(
@@ -6854,12 +7016,12 @@ export async function createTideweftRuntime(
         throw new Error("Core ecology observations could not enter living-actor cognition");
       }
       const porterWorldObservations = canonicalizeActorObservations([
-        ...dogVisualObservations,
+        ...canonicalDogVisualObservations,
         ...porterCoreObservations,
       ]);
       if (
         porterWorldObservations.length
-        !== dogVisualObservations.length + porterCoreObservations.length
+        !== canonicalDogVisualObservations.length + porterCoreObservations.length
       ) {
         throw new Error("Porter world observations could not be canonicalized");
       }
@@ -6992,6 +7154,7 @@ export async function createTideweftRuntime(
         roster: dogActorRoster,
         workingAnimals: settlementWorkingAnimals,
         settlement: settlementEcology,
+        handler: porter,
         world,
         regionalView: completedRegionalView,
         weather: elapsedWeather,
@@ -10393,6 +10556,8 @@ export async function createTideweftRuntime(
       bio0Ecology,
       coreEcology,
       settlementEcology,
+      dogActorRoster,
+      settlementWorkingAnimals,
       porterResponse,
       livingActorPlayerChoice,
       regionalTravel,
@@ -10439,6 +10604,8 @@ export async function createTideweftRuntime(
       bio0Ecology = prior.bio0Ecology;
       coreEcology = prior.coreEcology;
       settlementEcology = prior.settlementEcology;
+      dogActorRoster = prior.dogActorRoster;
+      settlementWorkingAnimals = prior.settlementWorkingAnimals;
       porterResponse = prior.porterResponse;
       livingActorPlayerChoice = prior.livingActorPlayerChoice;
       regionalTravel = prior.regionalTravel;
@@ -10787,6 +10954,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== STOREHOUSE_GAME_SAVE_VERSION
         && decoded.version !== DOMESTIC_YARD_GAME_SAVE_VERSION
         && decoded.version !== DOMESTIC_PEN_GAME_SAVE_VERSION
+        && decoded.version !== PADDOCK_WATCH_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -10806,7 +10974,10 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         typeof decoded.integrity !== "string"
         || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
       ) throw new Error("Save envelope integrity does not match its contents");
-      if (decoded.version === GAME_SAVE_VERSION) {
+      if (
+        decoded.version === GAME_SAVE_VERSION
+        || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
+      ) {
         if (
           !hasExactObjectKeys(decoded, [
             "bio0Ecology",
@@ -11044,6 +11215,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const coreEcology = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
     )
       ? canonicalRuntimeCoreEcology(
@@ -11108,7 +11280,10 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (coreEcology === null) {
       throw new Error("Current save contains invalid core ecology state");
     }
-    const dogActorRoster = decoded.version === GAME_SAVE_VERSION
+    const dogActorRoster = (
+      decoded.version === GAME_SAVE_VERSION
+      || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
+    )
       ? canonicalRuntimeDogActorRoster(
           deserializeDogActorRoster(decoded.dogActorRoster),
           world,
@@ -11121,6 +11296,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const settlementEcology = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
       || decoded.version === STOREHOUSE_GAME_SAVE_VERSION
@@ -11128,7 +11304,10 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ? (() => {
           const migrated = deserializeSettlementEcologyState(decoded.settlementEcology);
           if (
-            decoded.version === GAME_SAVE_VERSION
+            (
+              decoded.version === GAME_SAVE_VERSION
+              || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
+            )
             && serializeSettlementEcologyState(migrated) !== decoded.settlementEcology
           ) return null;
           const expected = createRuntimeSettlementEcology(
@@ -11178,15 +11357,44 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (settlementEcology === null) {
       throw new Error("Current save contains invalid settlement ecology state");
     }
-    const settlementWorkingAnimals = decoded.version === GAME_SAVE_VERSION
+    const settlementWorkingAnimals = (
+      decoded.version === GAME_SAVE_VERSION
+      || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
+    )
       ? (() => {
-          const deserialized = deserializeSettlementWorkingAnimalState(
-            decoded.settlementWorkingAnimals,
-          );
+          const workingAnimalsText = decoded.settlementWorkingAnimals;
+          if (typeof workingAnimalsText !== "string") return null;
+          let parsedWorkingAnimals: unknown;
+          try {
+            parsedWorkingAnimals = JSON.parse(workingAnimalsText);
+          } catch {
+            return null;
+          }
+          if (stableStringify(parsedWorkingAnimals) !== workingAnimalsText) {
+            return null;
+          }
+          if (
+            decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
+            && (
+              parsedWorkingAnimals === null
+              || typeof parsedWorkingAnimals !== "object"
+              || Array.isArray(parsedWorkingAnimals)
+              || (parsedWorkingAnimals as Record<string, unknown>).version
+                !== PRIOR_SETTLEMENT_WORKING_ANIMALS_VERSION
+              || (parsedWorkingAnimals as Record<string, unknown>).ownerId
+                !== PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID
+            )
+          ) return null;
+          const deserialized = decoded.version === GAME_SAVE_VERSION
+            ? deserializeSettlementWorkingAnimalState(workingAnimalsText)
+            : adoptSettlementWorkingAnimalStateV1(parsedWorkingAnimals);
           if (
             deserialized === null
-            || serializeSettlementWorkingAnimalState(deserialized)
-              !== decoded.settlementWorkingAnimals
+            || (
+              decoded.version === GAME_SAVE_VERSION
+              && serializeSettlementWorkingAnimalState(deserialized)
+                !== workingAnimalsText
+            )
           ) return null;
           let accepted = canonicalRuntimeSettlementWorkingAnimals(
             deserialized,
@@ -11195,6 +11403,18 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             dogActorRoster,
           );
           if (accepted === null) return null;
+          // A pending task transition was staged against the saved current
+          // activity. Resolve it first; a later pending activity may otherwise
+          // invalidate that authenticated lifecycle transaction before replay.
+          for (const assignment of accepted.assignments) {
+            if (assignment.pendingTaskTransition === null) continue;
+            const recovered = recoverPendingSettlementWorkingAnimalTaskLifecycle(
+              accepted,
+              assignment.assignmentId,
+            );
+            if (recovered === null) return null;
+            accepted = recovered.state;
+          }
           for (const assignment of accepted.assignments) {
             if (assignment.pendingActivity === null) continue;
             const recovered = recoverPendingSettlementWorkingAnimalActivity(

@@ -9,6 +9,7 @@ import {
   seedFromText,
   serializeWorld,
 } from "../sim/public";
+import { hashCanonical } from "../sim/util";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer } from "./player";
 import { createSessionState } from "./sessionTypes";
@@ -195,8 +196,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(19);
-    expect(firstRepository.snapshot().payloadVersion).toBe(19);
+    expect(firstEnvelope.version).toBe(20);
+    expect(firstRepository.snapshot().payloadVersion).toBe(20);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
 
@@ -336,7 +337,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(19);
+    expect(migratedEnvelope.version).toBe(20);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -381,7 +382,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(19);
+    expect(envelope.version).toBe(20);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -428,8 +429,8 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(19);
-    expect(firstRepository.snapshot().payloadVersion).toBe(19);
+    expect(firstEnvelope.version).toBe(20);
+    expect(firstRepository.snapshot().payloadVersion).toBe(20);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
     const ecology = requiredCoreEcology(firstEnvelope);
     expect(ecology.derivation.kind).toBe("habitat-v9");
@@ -502,8 +503,8 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(19);
-    expect(firstRepository.snapshot().payloadVersion).toBe(19);
+    expect(firstEnvelope.version).toBe(20);
+    expect(firstRepository.snapshot().payloadVersion).toBe(20);
     expect(firstEnvelope.coreEcology).toBe(secondEnvelope.coreEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
@@ -595,7 +596,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(19);
+    expect(firstEnvelope.version).toBe(20);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual(v9Envelope.player);
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -827,11 +828,21 @@ describe("runtime BIO0 ecology persistence", () => {
     );
     if (!porter) throw new Error("unseen BIO0 fixture lost its chosen porter");
     expect(ecology.dog.address.position).toEqual(fixture.dogPosition);
-    expect(porter.perception.beliefs.some((belief) => (
-      belief.subjectId === fixture.dogActorId
-      || belief.perceivedClass === "domestic-dog"
-      || belief.perceivedClass === "animal-silhouette"
-    ))).toBe(false);
+    expect(porter.perception.beliefs.some((belief) => {
+      const tick = belief.lastObservedTick;
+      const evidenceId = `bio0-visual:${hashCanonical({
+        dogActorId: fixture.dogActorId,
+        observerActorId: fixture.porterActorId,
+        tick,
+      })}`;
+      const sourceObservationId = `living-vision:${hashCanonical({
+        evidenceId,
+        observerId: fixture.porterActorId,
+        tick,
+      })}`;
+      return belief.subjectId === fixture.dogActorId
+        || belief.sourceObservationId === sourceObservationId;
+    })).toBe(false);
     expect(requiredPorterResponse(envelope)).toMatchObject({
       actorId: fixture.porterActorId,
       intent: "wait-observe",
@@ -1071,7 +1082,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v19 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v20 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1084,7 +1095,7 @@ describe("runtime BIO0 ecology persistence", () => {
     rejected.destroy();
   });
 
-  it("rejects a resealed v19 ecology whose rat identity is self-consistent but belongs to another seed", async () => {
+  it("rejects a resealed v20 ecology whose rat identity is self-consistent but belongs to another seed", async () => {
     const repository = new MemoryRepository(legacyRecord("rat aggregate seed authentication"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();

@@ -33,6 +33,7 @@ Alpha 0.3 grows the earlier slices with fieldcraft, seamless travel, shared perc
 - **The Yard Flock:** released Alpha 24 adds one stable group of two or three individual domestic chickens beside that store. The flock, each bird, its bounded yard anchor, and settlement custody persist independently of the camera. Chickens use the existing animal perception, attention, group alarm, terrestrial locomotion, broad-role interaction, and physical-item claim owners rather than a private behavior tree. A hungry bird must lawfully perceive and reach the exact open-store lot before one authenticated produce unit can be consumed; securing the door removes that opportunity. A witnessed meal is visible in EVENTS, while hidden activity never becomes retrospective narration.
 - **The Far Paddock:** released Alpha 25 adds exactly two persistent domestic goats in one herd at a habitat-derived pen separated from the storehouse yard and prior animal placements. The goats plug into shared actor identity, direct perception, attention, terrestrial movement, broad-role interaction, group alarm, bounded materialization, Chart/Relief presentation, and pane-free ABOUT without a goat-only behavior tree. Settlement ecology now supports plural canonical custody and typed coop/pen homes, while physical-resource contention resolves by reach, current need, and stable identity. Goats deliberately receive neither store-provision access nor foliage browsing in this slice.
 - **The Paddock Watch:** released Alpha 26 adds exactly one separate settlement working dog beside the existing two-goat herd. Its kennel and custody remain distinct from the original independent porter-scene dog, while one generic persisted guardian assignment binds the existing keeper, both custody relationships, the goat herd, and the pen worksite. The dog keeps ordinary cognition, needs, exposure, perception, and shared pathing; its own retreat, shelter, avoidance, or rest can outrank duty. It investigates only lawful uncertain alarm evidence, and any fox deterrence happens only after the fox actually perceives the dog—never through a hidden protection aura.
+- **The Watch Returns (Alpha 27 source candidate):** no animal is added. The existing working dog's committed investigation now opens one bounded persisted task around a cognition-owned uncertain area and deterministic shared-locomotion probe. Reaching that probe completes investigation and sends the dog physically to the existing pen worksite; a keeper recall requires fresh reciprocal sight, cognition or welfare may suspend and resume work, and arrival waits for lawful handler acknowledgement. This remains one local lifecycle—not herding, separated-livestock recovery, a full schedule, mortality, attack, player command, or guaranteed defense.
 - **Living commons:** nine seed-derived material families now grow visibly in suitable biomes. Desktop and touch gathering feed one exact shared pack, while the anywhere **KIT** turns those finds into six prepared components and eleven durable tools through mobile-safe **PACK / MAKE / MEND** tabs.
 - **Footing and physical parcels:** stability is a live 0–100% physical-balance calculation, not a second stamina bar or accumulated drain. Actual speed, turning, grade, roughness, moisture, local water force, wind, load, footwear, fixtures, and BRACE determine the currently supported percentage; unchanged conditions hold one value and a safer bank recalculates it immediately. Hazardous entries can still deterministically stumble or fall, briefly alter the courier's color and silhouette, speak a tiny Atari-like callout, damage one exact cargo lot, and separate persistent parcels that drift, tumble, weather, save, reload, and remain recoverable.
 - **Responsive river recovery:** desktop Shift now braces even when the document body or HUD has focus, with immediate BRACING copy and a color-independent planted marker in Chart and Relief. If stamina or stability still collapses in deep current, the courier becomes ADRIFT instead of being ejected to a bank: hold WASD/arrows or tap toward shallows to paddle, release movement to float and recover breath, then rise only after finding standable water with enough stamina. The current remains authoritative, full packs weaken a stroke, and separated physical parcels continue their own journey.
@@ -163,6 +164,17 @@ dog-roster root, and generic guardian assignment. Current records authenticate
 the assignment's staged activity and recover a pending transition exactly once;
 reload, rollback, and representative regional travel cannot reroll or duplicate
 the dog, relationship, work identity, activity ordinal, or position.
+
+The Alpha 27 source candidate advances outer session to version 20 and the
+working-animal state and assignment records to version 2. A sealed version-19
+Paddock Watch envelope retains every established actor, habitat, group, home,
+custody, assignment, activity, item, Promise, evidence record, store fact, and
+world fact before empty task-lifecycle fields are appended. Task, transition,
+and latest-outcome records begin at version 1. A pending lifecycle transition
+recovers exactly once; reload cannot reroll its lawful source evidence, search
+probe, physical return, handler acknowledgement, or bounded result. Habitat 9,
+settlement ecology 4, aggregate ecology 4, the nineteen-record species catalog,
+and the existing dog roster do not change.
 
 Released Alpha 22 deliberately retains outer session 15, habitat 7,
 and aggregate schema 4. Its activity-profile convergence is derived from the
@@ -452,6 +464,21 @@ death, carcass, new sound, companion training, player command, autonomous
 kennel schedule, worldwide dog population, cross-region animal ecology, full
 Wave D, or Directive 04_1 completion. Validation remains shared-invariant and
 representative-chain driven rather than species-by-species or N².
+
+Release `0.3.3-alpha.27 — The Watch Returns` is a **SOURCE_CANDIDATE**. It adds
+no species, actor, population, habitat, home, or custody relationship. One
+additive task owner gives the existing working dog a bounded investigation,
+physical return, and handler-acknowledgement lifecycle over the already-shared
+perception, cognition, welfare, and locomotion seams. Handler recall requires
+fresh reciprocal identified sight; work may suspend for actor-owned or welfare
+pressure and resume without inventing evidence. Outer save 20 adopts sealed
+version 19 exactly once and retains only the latest closed task outcome. This
+candidate does not add herding, separated-livestock search or rescue, full
+schedules, autonomous kennel life, attack, injury, mortality, carcasses,
+player commands, worldwide ecology, or guaranteed defense. Validation targets
+shared invariants and representative emergence, not a bespoke species/pair
+matrix. Exact commit, CI, Pages, and live-asset attestations remain pending and
+must not be inferred from the Alpha 26 evidence above.
 
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 

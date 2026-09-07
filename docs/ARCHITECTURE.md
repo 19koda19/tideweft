@@ -137,6 +137,26 @@ retreat, shelter, human avoidance, rest, inaccessible terrain, or urgent
 welfare can supersede assignment work. Feeding and drinking actions stay
 dormant because this slice has no physical settlement remedy for them.
 
+Alpha 27's additive task lifecycle turns a committed investigation into one
+bounded record rather than a second behavior tree. It retains the source
+observation, uncertain perceived area, and a deterministic search probe derived
+by the shared locomotion owner. Physical arrival at that probe records a
+completed result and starts return toward the canonical pen worksite. A narrow
+keeper policy may instead request cancellation after the investigating dog
+leaves its duty area, but the transition is lawful only when worker and handler
+hold fresh reciprocal identified visual beliefs. Arrival at the worksite waits
+for a current handler observation before acknowledgement closes the task.
+
+Task opening, suspension, resumption, completion, cancellation, arrival, and
+acknowledgement share one exact-once staged transition contract. Actor-owned
+intent or normalized welfare may suspend an open task and later resume it;
+neither can manufacture a terminal result. The root retains at most one current
+task, one pending transition, and one latest closed outcome, bounding both save
+growth and replay surface. This is handler-aware relationship state over the
+existing actor, cognition, perception, welfare, and locomotion owners—not a
+remote command bus, herding system, full schedule, autonomous kennel-life
+routine, combat system, mortality system, or guarantee of livestock safety.
+
 `src/game/coreEcologyPerception.ts` now admits bounded external actors through
 ordered `{ address, contactScope }` participants and indexes visual candidates
 in deterministic local buckets. Core wildlife and opted-in external actors can
@@ -326,6 +346,19 @@ There are two nested versions:
 1. `tideweft-world` contains the save-format version, rules version, checksum, and canonical `WorldState`. The perception slice uses embedded simulation format 4 and `tideweft-sim/6`; checksum-first migrations from supported format-1 through format-3 worlds add deterministic resident identity, condition, knowledge, memory, and an initially unaware actor-perception state at the already-completed tick before current invariants run.
 2. `tideweft-session` contains the serialized world plus player motion/cargo/report/chart/Wayknot state, tutorial state, chosen posture, a legacy-compatible session-shape field, recap history, a sealed pending-perception carry, the first living web's dog ecology, porter response, player-choice state, the canonical core-ecology patch, settlement ecology, the separate dog roster, and settlement-working-animal state. Released Alpha 26 advances the outer session to version 19 and settlement ecology to version 4 while habitat analysis remains version 9 and aggregate ecology remains schema version 4. A sealed version-18 Far Paddock envelope is authenticated before one deterministic dog body, kennel custody, and generic guardian assignment are appended. Every habitat-9 population and anchor, prior actor, group, aggregate unit, item, Promise, evidence record, store fact, world fact, chicken and goat member, flock, herd, coop, pen, keeper, prior custody, and physical food-use transaction remains exact. Version 19 strictly persists both new roots and recovers one pending assignment activity exactly once; reload cannot reroll or duplicate the dog, relationship, assignment, activity ordinal, movement, group, structure, or provision. Versions 1 through 17 continue through their established frozen one-way migrations before this final adoption. Spatial top-K core-wildlife materialization remains a deterministic projection from local distance with stable actor identity breaking ties and does not rewrite authoritative coarse state; the separately bounded dog roster is not a hidden expansion of that habitat population. The sealed regional-travel payload remains version 2 and stores the exact global origin of the 120 × 120 presentation frame; valid version-1 98 × 74 payloads migrate into a player-centered frame without moving the courier or changing chart knowledge. It does not serialize derived Tide Harps, biome profiles, target-tick tidal depths, or the current materialized-detail selection.
 
+The Alpha 27 source candidate advances only the outer session to version 20 and
+the working-animal root and assignment records to version 2. A sealed
+version-19 Paddock Watch payload is authenticated and adopted by appending empty
+task-lifecycle fields without changing the stable assignment identity or any
+prior actor, habitat, group, home, custody, item, Promise, evidence, store, or
+world fact. Task, transition, and bounded latest-outcome records begin at
+version 1. Current records authenticate their worker, handler, source activity
+and observation, uncertain area, search probe, worksite, cause, suspension,
+outcome, and monotonic ordinals. One saved pending task transition recovers
+exactly once without rerunning sight, geometry, movement, handler authority, or
+outcome. Habitat 9, settlement ecology 4, aggregate ecology 4, the nineteen
+species records, and the dog roster remain unchanged.
+
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
 
 The browser repository is local-first: it prefers IndexedDB and mirrors into localStorage. A compact local version fence stores the newest era/generation/timestamp/tick tuple and full-record fingerprint. Cross-store reads reconcile only after both configured stores are readable: known fence rollback produces `NewerSaveUnavailableError`, equal-version differing records produce `ConflictingSaveCopiesError`, and any partial or total read failure remains an unknown-authority error rather than trusting a plausible survivor. Record writes reject older or equal-version-different snapshots with `StaleSaveWriteError`. Overlapping runtime save requests coalesce to the newest complete snapshot behind the in-flight write, and only success for the latest requested sequence in the active era/generation clears persistent failure UI.
@@ -354,7 +387,7 @@ The current CSS layer intentionally narrows the title and field palette to black
 
 ## Versioned field manual
 
-`src/ui/tutorialGuide.ts` is platform-neutral data with stable section/control IDs, audience filters, and explicit live/planned status. Guide versions 26 through 32 preserve the verified Alpha-16 through Alpha-22 lessons, while released version 33 records the Storehouse Door and outer-v15-to-v16 adoption. Released version 34 adds the one stable two-to-three-chicken yard flock, individual/group/custody identities, shared perception and terrestrial movement, broad ecological roles, exact open-store food transaction, secured-store and event-time knowledge boundaries, habitat-8 exact-prefix rule, settlement ecology 2, and outer-v16-to-v17 adoption. Released version 35 adds the separate stable two-goat herd and pen, plural custody, typed homes, shared resource arbitration, exact habitat-v8 and outer-v17 preservation, and outer-v18 adoption. Source-candidate version 36 adds the separate working dog and kennel custody, generic persisted guardian assignment, species-neutral perception participants, shared task and escape locomotion, actor-owned self-preservation, direct-detail work activity, conditional fox deterrence, and outer-v18-to-v19 adoption. It explicitly names attacks, injury, mortality, carcasses, herding, new guardian sound, guaranteed livestock defense, autonomous kennel return, worldwide dogs and livestock, cross-region animal ecology, the full bestiary, full Wave D, Directive 04_1 completion, and exhaustive species/pair testing as absent. The player-facing world lesson uses continuous E/N coordinates and states that no edge action, generation prompt, address banner, loading screen, or second click is required.
+`src/ui/tutorialGuide.ts` is platform-neutral data with stable section/control IDs, audience filters, and explicit live/planned status. Guide versions 26 through 32 preserve the verified Alpha-16 through Alpha-22 lessons, while released version 33 records the Storehouse Door and outer-v15-to-v16 adoption. Released version 34 adds the one stable two-to-three-chicken yard flock, individual/group/custody identities, shared perception and terrestrial movement, broad ecological roles, exact open-store food transaction, secured-store and event-time knowledge boundaries, habitat-8 exact-prefix rule, settlement ecology 2, and outer-v16-to-v17 adoption. Released version 35 adds the separate stable two-goat herd and pen, plural custody, typed homes, shared resource arbitration, exact habitat-v8 and outer-v17 preservation, and outer-v18 adoption. Released version 36 adds the separate working dog and kennel custody, generic persisted guardian assignment, species-neutral perception participants, shared task and escape locomotion, actor-owned self-preservation, direct-detail work activity, conditional fox deterrence, and outer-v18-to-v19 adoption. Source-candidate version 37 adds the bounded investigation-to-return task lifecycle, mutual-sight handler cancellation, actor/welfare suspension and resumption, worksite arrival and handler acknowledgement, exact latest-outcome retention, and outer-v19-to-v20 adoption. It explicitly names new species, herding, separated-livestock search or rescue, full schedules, attacks, injury, mortality, carcasses, player commands, guaranteed livestock defense, autonomous kennel life, worldwide ecology, broader settlement-animal simulation, and exhaustive species/pair testing as absent. The player-facing world lesson uses continuous E/N coordinates and states that no edge action, generation prompt, address banner, loading screen, or second click is required.
 
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 
@@ -611,3 +644,25 @@ return, worldwide dogs or livestock, ecological cross-region animal migration,
 full Wave D, and Directive 04_1 completion remain absent. Validation uses
 shared invariants and representative runtime/emergence chains rather than a
 species-by-species or N² matrix.
+
+Release `0.3.3-alpha.27 — The Watch Returns` is a **SOURCE_CANDIDATE**. It
+changes no species, population, habitat, settlement home, custody relationship,
+or actor owner. Working-animal root and assignment version 2 add one bounded
+task over the existing guardian's committed investigation. The task derives a
+deterministic shared-locomotion probe from lawful uncertain evidence; physical
+probe arrival produces a completed result, while fresh reciprocal worker and
+handler sight may authenticate the keeper's narrow outside-duty recall and a
+cancelled result. Either outcome returns the dog through ordinary locomotion to
+the exact pen worksite, where current handler sight acknowledges and closes it.
+
+Actor intent and welfare may suspend and resume the task without manufacturing
+completion. All seven transition kinds use one exact-once transaction seam;
+only one current task, one pending transition, and the latest closed outcome
+persist. Outer save 20 adopts sealed version 19 once, preserving every prior
+identity, relationship, item, Promise, and world fact. This is no remote command
+system, herding, livestock search/rescue, complete schedule, autonomous kennel
+life, attack, injury, mortality, carcass, new species, worldwide ecology, or
+broader settlement-animal simulation. Evidence remains shared-invariant,
+property, replay/migration, bounded-performance, runtime-composition, and
+representative-emergence based. Exact commit, CI, Pages, and live-asset
+attestations remain pending.

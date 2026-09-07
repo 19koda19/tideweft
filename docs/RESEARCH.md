@@ -260,7 +260,32 @@ commit `e3aae174d962ec609b9463e40320227237c9fa1f` passed CI run `34143286763`
 and Pages run `34143286720`; five cache-bypassed live artifacts match the
 tested local production build byte-for-byte.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded Wave-B starting-harbor closure, Alpha 19 is the verified first bounded Wave-C tidal unit, Alpha 20 is the verified second bounded Wave-C unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, and Alpha 26 is the verified Paddock Watch release. None completes worldwide Wave C, full Wave D, or Directive 04_1, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The **SOURCE_CANDIDATE** `0.3.3-alpha.27 — The Watch Returns` tests a thirteenth
+scaling lesson: work needs a small lawful lifecycle, not a handler-specific
+brain or an ever-growing activity log. The existing guardian's committed
+investigation opens one bounded task around its source observation, uncertain
+area, and deterministic shared-locomotion probe. Completion is physical probe
+arrival, not discovery of a hidden emitter or proof that danger disappeared.
+The same task then returns physically to the existing pen and closes only after
+current handler sight acknowledges arrival.
+
+Handler influence is information-constrained. The keeper's narrow
+outside-duty recall can cancel investigation only when dog and keeper hold
+fresh reciprocal identified visual beliefs; an occluded or unloaded dog
+creates no remote command. Actor intent and welfare can suspend and resume work
+without manufacturing an outcome. One exact-once transition contract covers
+open, suspend, resume, complete, cancel, arrive, and acknowledge, while the save
+retains only one current task, one pending transition, and one latest result.
+
+This candidate adds no species, herding, separated-livestock search or rescue,
+full schedule, autonomous kennel routine, attack, injury, mortality, carcass,
+player command, or guaranteed defense. Validation is deliberately concentrated
+on shared lifecycle, perception, locomotion, welfare, migration/replay,
+conservation, signed-world, and bounded-performance invariants plus
+representative runtime emergence—not a bespoke test for every species or pair.
+Exact commit, CI, Pages, and live-asset attestations remain pending.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, and Alpha 27 is the source-candidate bounded work-lifecycle extension. None completes worldwide aquatic or settlement ecology, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.26",
-      buildIdentity: "0.3.3-alpha.26",
-      gameplayContractVersion: 24,
-      tutorialVersion: 36,
+      version: "0.3.3-alpha.27",
+      buildIdentity: "0.3.3-alpha.27",
+      gameplayContractVersion: 25,
+      tutorialVersion: 37,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes The Paddock Watch and retains the earlier habitat releases", () => {
+  it("scopes The Watch Returns and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const paddockWatchRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.26",
+    );
+    const paddockWatchCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => paddockWatchRelease?.categories[category] ?? [])
       .join(" ");
     const farPaddockRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.25",
@@ -162,15 +169,22 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("exactly one additional seed-stable domestic dog");
-    expect(activeCopy).toContain("distinct from the original independent porter-scene dog");
-    expect(activeCopy).toContain("generic persisted settlement-working-animal owner");
-    expect(activeCopy).toContain("ordinary dog cognition, needs, weather exposure, condition, perception, and locomotion");
-    expect(activeCopy).toContain("ordered species-neutral participant boundary");
-    expect(activeCopy).toContain("rabbit's anonymous alarm can recruit the dog");
-    expect(activeCopy).toContain("fox changes course only after it actually gains lawful sight");
-    expect(activeCopy).toContain("actor with bounded senses, exposure, needs, route access, and self-preservation");
-    expect(activeCopy).toContain("representative runtime and emergence chains replace species-by-species fixtures or an N-squared interaction matrix");
+    expect(activeCopy).toContain("one bounded work task for the existing settlement guardian dog");
+    expect(activeCopy).toContain("deterministic shared-locomotion search probe");
+    expect(activeCopy).toContain("physically back toward the existing pen worksite");
+    expect(activeCopy).toContain("keeper's lawful acknowledgement");
+    expect(activeCopy).toContain("fresh reciprocal identified sight");
+    expect(activeCopy).toContain("dog cognition and welfare can suspend work and later resume it");
+    expect(activeCopy).toContain("species-by-species fixtures or an N-squared interaction matrix");
+    expect(paddockWatchCopy).toContain("exactly one additional seed-stable domestic dog");
+    expect(paddockWatchCopy).toContain("distinct from the original independent porter-scene dog");
+    expect(paddockWatchCopy).toContain("generic persisted settlement-working-animal owner");
+    expect(paddockWatchCopy).toContain("ordinary dog cognition, needs, weather exposure, condition, perception, and locomotion");
+    expect(paddockWatchCopy).toContain("ordered species-neutral participant boundary");
+    expect(paddockWatchCopy).toContain("rabbit's anonymous alarm can recruit the dog");
+    expect(paddockWatchCopy).toContain("fox changes course only after it actually gains lawful sight");
+    expect(paddockWatchCopy).toContain("actor with bounded senses, exposure, needs, route access, and self-preservation");
+    expect(paddockWatchCopy).toContain("representative runtime and emergence chains replace species-by-species fixtures or an N-squared interaction matrix");
     expect(farPaddockCopy).toContain("exactly two individually identified domestic goats");
     expect(farPaddockCopy).toContain("existing wildlife actor, direct perception, attention, terrestrial locomotion, broad ecological-role, and group-alarm owners");
     expect(farPaddockCopy).toContain("several canonical domestic custody relationships and typed coop or pen homes");
@@ -182,16 +196,24 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 19");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 20");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis remains version 9");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology advances to version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-18 Far Paddock save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("exactly one bounded starting-harbor working dog");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not a worldwide dog population");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("does not attack, injure, kill, herd, breed, rescue livestock");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Fox deterrence is incidental and perception-driven");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no invisible protection radius");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology remains version 4");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-19 Paddock Watch save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("task, transition, and latest-outcome records begin at version 1");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no species, actor, population, habitat, home, custody relationship");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("does not herd goats");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no mortality system");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not a player command or universal handler system");
+    expect(paddockWatchRelease?.categories.saves.join(" ")).toContain("outer session advances to version 19");
+    expect(paddockWatchRelease?.categories.saves.join(" ")).toContain("settlement ecology advances to version 4");
+    expect(paddockWatchRelease?.categories.saves.join(" ")).toContain("sealed version-18 Far Paddock save migrates exactly once");
+    expect(paddockWatchRelease?.categories.knownLimitations.join(" ")).toContain("exactly one bounded starting-harbor working dog");
+    expect(paddockWatchRelease?.categories.knownLimitations.join(" ")).toContain("not a worldwide dog population");
+    expect(paddockWatchRelease?.categories.knownLimitations.join(" ")).toContain("does not attack, injure, kill, herd, breed, rescue livestock");
+    expect(paddockWatchRelease?.categories.knownLimitations.join(" ")).toContain("Fox deterrence is incidental and perception-driven");
+    expect(paddockWatchRelease?.categories.knownLimitations.join(" ")).toContain("no invisible protection radius");
     expect(farPaddockRelease?.categories.saves.join(" ")).toContain("outer session advances to version 18");
     expect(farPaddockRelease?.categories.saves.join(" ")).toContain("habitat analysis advances to version 9");
     expect(farPaddockRelease?.categories.saves.join(" ")).toContain("settlement ecology advances to version 3");
