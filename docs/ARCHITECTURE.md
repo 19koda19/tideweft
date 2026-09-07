@@ -458,8 +458,8 @@ mortality, carcasses, live-prey consumption, the full bestiary, or Directive
 Pages run `34080936748`; the deployed HTML, icon, manifest, JavaScript, and CSS
 match the tested local production build byte-for-byte.
 
-Source version `0.3.3-alpha.24 — The Yard Flock` is the current publication
-candidate. Habitat version 8 preserves the exact version-7 tidal-web prefix and
+Source version `0.3.3-alpha.24 — The Yard Flock` is **LIVE_VERIFIED**. Habitat
+version 8 preserves the exact version-7 tidal-web prefix and
 appends one deterministic storehouse-yard anchor, two or three stable chicken
 actors, and one stable `CHICKEN-FLOCK`. Settlement ecology version 2 binds that
 flock to the existing settlement and keeper through one canonical custody
@@ -479,8 +479,11 @@ actor, group, aggregate unit, store/lot identity, closure, loss record, item,
 Promise, evidence record, and world fact. Shared invariants, signed-coordinate
 properties, conservation, migration/replay attacks, bounded performance, and
 one representative visible-yard event provide evidence without an N² pair
-matrix. Publication and exact-live fields remain unimplemented until external
-CI/Pages and artifact comparison succeed. Calls/tracks, attacks, injury,
+matrix. Exact release commit `4067ac4439bb6f624ed88f69eb09cc591b246741`
+passed CI run `34093027893` and Pages run `34093027917`; the deployed HTML,
+icon, manifest, JavaScript, and CSS match the tested local production build
+byte-for-byte. Immutable build-owned publication fields remain false because
+runtime code cannot attest its own later deployment. Calls/tracks, attacks, injury,
 mortality, carcasses, live-prey consumption, eggs, nesting, reproduction,
 herding, guardian behavior, schedules, autonomous home return, ecological
 cross-region migration, worldwide livestock, full Wave D, and Directive 04_1
