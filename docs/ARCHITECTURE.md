@@ -437,7 +437,7 @@ recruitment, group reunion, or caretaker confirmation. Habitat 9, settlement
 ecology 4, aggregate ecology 4, the nineteen species records, and all existing
 actors remain unchanged.
 
-Alpha 29 source advances the outer session to version 22, the core-ecology
+Released Alpha 29 advances the outer session to version 22, the core-ecology
 patch to version 3, and its aggregate record to version 5. An authenticated
 sealed version-21 Missing Goat payload preserves every existing actor,
 population, representative, group, reserve, home, relationship, task, recovery
@@ -463,7 +463,7 @@ Unsupported simulation versions fail rather than being guessed into a current wo
 
 ## Dual p5 presentation
 
-Alpha 29 projects the same authoritative physical carcass through Chart and
+Released Alpha 29 projects the same authoritative physical carcass through Chart and
 Relief only while current direct-detail perception permits it. Both views use
 the same body ID, world position, species-clarity boundary, and depleted/remains
 state. Neither renderer owns body state or may
@@ -489,7 +489,7 @@ The current CSS layer intentionally narrows the title and field palette to black
 
 Released guide version 38 documents the Alpha-28 exact goat split/reunion,
 knowledge-honest recovery, atomic group materialization, and version-20-to-21
-adoption. Alpha 29 source advances the guide to version 39 and gameplay
+adoption. Released Alpha 29 advances the guide to version 39 and gameplay
 contract to 27 for the exact-contact fox/rabbit harm boundary, one-life/one-body
 conservation, finite fox/fish-crow carcass feeding, fox guarding, current-
 perception-only aftermath presentation, outer save 22, core patch 3, aggregate
@@ -810,7 +810,7 @@ and 2,111 checks, a five-asset 3,284,606-byte served web build, a 10-entry
 smoke, and clean invariant, save, and visual audits. Its first cache-bypassed
 five-file live comparison matched the tested production build exactly.
 
-Source candidate `0.3.3-alpha.29 — What Remains` changes no species, habitat,
+Release `0.3.3-alpha.29 — What Remains` is **LIVE_VERIFIED** and changes no species, habitat,
 population allocation, home, custody, or actor construction. The runtime
 resolves only current identified marsh-fox pursuit plus exact contact with that
 exact marsh rabbit. A named damage event may injure or kill; death retires the
@@ -828,5 +828,13 @@ reproduction, recruitment, population recovery, live-time decomposition, body
 drift/drag/harvest, carcass scent, insects, worldwide ecology, or later Wave-E
 species. Evidence uses shared invariants, deterministic properties,
 conservation, replay/migration attacks, bounded performance, and representative
-emergent scenarios rather than per-species or N² tests. This section records
-source-candidate truth only and makes no CI, Pages, or deployed-byte claim.
+emergent scenarios rather than per-species or N² tests.
+
+Exact gameplay commit `a0f7b571cf6068c41397ad0b8767347b04b24ac1`
+passed feature CI `34187159628`, main CI `34187706800`, and Pages
+`34187706784`. The complete release gate passed TypeScript, public-boundary and
+player-facing-sync checks, 224 test files and 2,143 checks, a five-asset
+3,323,332-byte served web build, a 10-entry 3,514,940-byte runtime-only
+Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, and visual audits. Its first cache-bypassed five-file
+live comparison matched the tested production build exactly.

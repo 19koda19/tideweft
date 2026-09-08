@@ -155,7 +155,7 @@ tracks, or complete cross-region ecology. Its confidence comes from shared
 invariants and representative emergence rather than bespoke coverage for every
 species or pair.
 
-The Alpha 29 source candidate, What Remains, adds no species, habitat,
+Released Alpha 29, What Remains, adds no species, habitat,
 population, or actor. It connects only the existing identified marsh-fox
 pursuit to exact physical rabbit contact, then to one-life/one-body
 conservation. Contact may injure or kill that individual rabbit. Death retires
@@ -371,7 +371,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Released Alpha 26 uses outer save format 19 and settlement ecology version 4 while habitat remains version 9 and aggregate ecology remains version 4. A sealed version-18 envelope preserves the complete Far Paddock habitat, actors, flock, herd, homes, custody, store, food history, groups, aggregate units, items, Promises, evidence, and world facts before appending one deterministic working dog, kennel, third custody, dog-roster root, and generic working-animal assignment. Pending work activity recovers exactly once; reload, rollback, and representative regional travel cannot reroll or duplicate its actor, relationship, assignment, ordinal, or position.
 - Released Alpha 27 uses outer save format 20 while habitat remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4, and the nineteen-record species catalog and existing dog roster remain unchanged. A sealed version-19 Paddock Watch envelope preserves every established actor, group, home, custody, assignment, activity, item, Promise, evidence record, store fact, and world fact before the working-animal root and assignment advance to version 2 with empty task fields. Task, transition, and latest-outcome records begin at version 1. One pending task transition recovers exactly once; reload cannot reroll its source evidence, probe, suspension, result, return, or handler acknowledgement.
 - Released Alpha 28 uses outer save format 21 and appends an empty version-1 domestic-animal-recovery root to an authenticated version-20 Watch Returns envelope. It preserves every established species, actor, population, group, habitat, home, custody, assignment, task, item, Promise, evidence record, store fact, and world fact. At most one current case, one pending transaction, and one latest result bind exact actor, group, custody, home, incident, report, and monotonic ordinal identities. A pending transaction recovers exactly once; reload cannot reroll the noticed absence, last-known area, guardian recruitment, exact reunion, or caretaker confirmation.
-- Alpha 29 source uses outer save format 22, core-ecology patch version 3, and aggregate record version 5. A sealed version-21 envelope keeps every earlier fact exact before empty mortality, population-reserve, and physical-body ledgers are appended once. A valid fox-contact rabbit death retains the exact retired actor, one removed population unit, named cause, stable finite body, claim, and consumption ordinals; reload cannot reroll or duplicate any of them.
+- Released Alpha 29 uses outer save format 22, core-ecology patch version 3, and aggregate record version 5. A sealed version-21 envelope keeps every earlier fact exact before empty mortality, population-reserve, and physical-body ledgers are appended once. A valid fox-contact rabbit death retains the exact retired actor, one removed population unit, named cause, stable finite body, claim, and consumption ordinals; reload cannot reroll or duplicate any of them.
 
 There is no courier or human death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice. The only current mortality is the bounded fox-contact rabbit event described above.
 
@@ -464,7 +464,7 @@ routines, guaranteed recovery, a remote marker or player search command,
 attack, injury, mortality, carcasses, new calls or tracks, or full cross-region
 ecology.
 
-Alpha 29 source advances the manual to version 39 and gameplay contract to
+Released Alpha 29 advances the manual to version 39 and gameplay contract to
 version 27. It explains current identified fox pursuit, exact rabbit contact,
 one-life/one-body population conservation, finite carcass feeding and guarding,
 current-perception-only Chart/Relief/EVENTS presentation, outer save 22,
@@ -802,7 +802,7 @@ desktop/mobile/title smoke, and clean invariant, save, and visual audits. The
 first cache-bypassed five-file live comparison matched the tested production
 build exactly.
 
-Source candidate `0.3.3-alpha.29 — What Remains` adds no species, habitat,
+Release `0.3.3-alpha.29 — What Remains` is **LIVE_VERIFIED** and adds no species, habitat,
 population, home, or actor. A marsh fox may harm only the exact marsh rabbit it
 currently identifies and pursues, and only after exact physical contact.
 Death retires that actor once, removes exactly one population unit while other
@@ -820,10 +820,18 @@ mortality; reproduction, recruitment, population recovery; live-time
 decomposition; body drift, dragging, harvesting, scent, and insects; worldwide
 ecology; and later Wave-E species. Evidence remains shared-invariant,
 deterministic-property, conservation, bounded-performance, and representative-
-emergence based rather than per-species or N². This is source-candidate truth,
-not a deployment or byte-identity attestation.
+emergence based rather than per-species or N².
 
-Released through Alpha 28, with Alpha 29 present as a source candidate:
+Exact gameplay commit `a0f7b571cf6068c41397ad0b8767347b04b24ac1`
+passed feature CI `34187159628`, main CI `34187706800`, and Pages
+`34187706784`. The complete local gate passed TypeScript, public-boundary and
+player-facing-sync checks, 224 test files and 2,143 checks, a five-asset
+3,323,332-byte served web build, a 10-entry 3,514,940-byte runtime-only
+Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, and visual audits. The first cache-bypassed five-file
+live comparison matched the tested production build exactly.
+
+Released through Alpha 29:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
@@ -840,7 +848,7 @@ Released through Alpha 28, with Alpha 29 present as a source candidate:
 - one bounded Paddock Watch release: exactly one separate settlement working dog, one kennel and third custody, and one generic persisted guardian assignment over ordinary cognition, perception, self-preservation, and shared locomotion; a representative rabbit-alarm/fox chain remains conditional on lawful perception, and one-time version-18-to-19 adoption preserves every prior actor, item, relationship, and world fact;
 - one bounded Watch Returns release: the existing working dog's committed investigation becomes one exact-once task with a cognition-owned probe, physical return, fresh mutual-sight keeper recall, welfare suspension/resumption, and current handler acknowledgement; one-time version-19-to-20 adoption preserves every prior identity and world fact;
 - one bounded Missing Goat release: caused exact herd separation, direct-sight regroup, keeper-observed absence, explicit last-known-area guardian search without find proof, exact-body reunion and pen confirmation, atomic social-group materialization, no off-frame local sensing or movement, and exact version-20-to-21 adoption with one bounded recovery root;
-- one bounded What Remains source candidate: current identified marsh-fox pursuit plus exact rabbit contact, one exact retired actor, one-unit population loss with conserved abstract reserve, one stable finite carcass, lawful fox/fish-crow reach and feeding, optional fox guarding, current-perception-only aftermath presentation, and exact version-21-to-22 adoption without adding a species or actor;
+- one bounded What Remains release: current identified marsh-fox pursuit plus exact rabbit contact, one exact retired actor, one-unit population loss with conserved abstract reserve, one stable finite carcass, lawful fox/fish-crow reach and feeding, optional fox guarding, current-perception-only aftermath presentation, and exact version-21-to-22 adoption without adding a species or actor;
 - one versioned production species contract covering exactly nineteen current records—human, domestic dog, deer, gull, black bear, brown rat, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, domestic chicken, and domestic goat—while keeping rat, frog, silverside, and fiddler-crab populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, plural domestic custody, typed homes, deterministic resource contention, physical item claims, and the narrow fox/rabbit mortality-body seam; complete scent/evidence tracking, foliage consumption, broader health/death, full circadian behavior, worldwide habitat breadth, ecological migration/reproduction and population recovery, complete food-web turnover, and an exhaustive pair matrix remain closed;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;

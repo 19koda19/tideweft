@@ -324,7 +324,35 @@ and 2,111 checks, a five-asset 3,284,606-byte served web build, a 10-entry
 smoke, and clean invariant, save, and visual audits. The first cache-bypassed
 five-file live comparison matched the tested build exactly.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, and Alpha 28 is the verified bounded recovery-composition release. None completes worldwide aquatic or settlement ecology, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The **LIVE_VERIFIED** `0.3.3-alpha.29 — What Remains` release tests a
+fifteenth scaling lesson: harmful interaction and aftermath should compose
+current perception, pursuit, exact contact, population conservation, physical
+resources, and shared movement instead of adding a fox-only kill script or a
+death-time loot table. Only an already-pursuing marsh fox that currently
+identifies and physically contacts its exact marsh rabbit can resolve damage.
+One death retires that actor once, removes one population unit, preserves any
+other represented units as abstract reserve, and leaves one stable finite body.
+
+The same ordinary vision and reach owners let a fox or fish crow discover and
+approach that body. Exclusive claim and one-unit consumption conserve its
+finite resource, while a fox may guard it. Chart, Relief, and EVENTS project
+only bodies and events the player currently perceives; offscreen death,
+feeding, attacker identity, cause, claimant, and remaining resource never
+become retrospective narration. Group-member mortality fails closed, and the
+slice does not claim broader attacks, mortality, population recovery,
+decomposition, body movement or harvesting, scent, insects, worldwide ecology,
+or later Wave-E species.
+
+Exact gameplay commit `a0f7b571cf6068c41397ad0b8767347b04b24ac1`
+passed feature CI `34187159628`, main CI `34187706800`, and Pages
+`34187706784`. The release gate passed TypeScript, public-boundary and
+player-facing-sync checks, 224 test files and 2,143 checks, a five-asset
+3,323,332-byte served web build, a 10-entry 3,514,940-byte runtime-only
+Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, and visual audits. The first cache-bypassed five-file
+live comparison matched the tested build exactly.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, mortality/body, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the verified bounded recovery-composition release, and Alpha 29 is the verified first one-life/one-body mortality release. None completes worldwide aquatic or settlement ecology, broad attacks or mortality, population recovery, decomposition, body transport or harvesting, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)
