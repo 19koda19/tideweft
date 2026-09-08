@@ -352,25 +352,37 @@ Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. The first cache-bypassed five-file
 live comparison matched the tested build exactly.
 
-The `0.3.3-alpha.30 — Beyond the Harbor` repository state is a source
-candidate, not a **LIVE_VERIFIED** release. Its scaling lesson is that regional
+The `0.3.3-alpha.30 — Beyond the Harbor` release is **LIVE_VERIFIED**. Its scaling lesson is that regional
 biodiversity should add a bounded habitat source and parameterized species
 records, not copy an animal-specific simulation. One deterministic remote
 temperate-upland/forest-edge source adds wild boar, elk, and gray wolf as
 `SOUNDER`, `HERD`, and `PACK` members through shared perception, locomotion,
 group, materialization, and knowledge-honest Chart/Relief/ABOUT owners. Wolf
-pursuit pressure remains separate from harm: only a solitary addressable marsh
-rabbit can receive current exact-contact mortality, while grouped elk, deer,
-and all group members cannot be harmed. A boar can see, reach, claim, and
-consume an existing finite body. Habitat 10 and outer save 23 preserve the
+pursuit remains nonlethal pressure unless the wolf reaches exact contact with
+an eligible solitary addressable marsh rabbit; grouped elk, deer, and all group
+members cannot be harmed. A boar or wolf can see, reach, claim, and consume an
+existing finite body, and a wolf may guard its claim. Habitat 10 and outer save 23 preserve the
 complete habitat-9 and version-22 body-bearing state before exact append-only
 adoption. Representative/property, conservation, and bounded-performance
 checks cover the shared abstractions. Voice patterns remain inaudible
 foundation data, dog interaction is an intentional unimplemented no-response,
 and tactical pack combat, group mortality, cougar, additional bear ecotypes,
-worldwide ecology, and full Wave E remain outside the candidate.
+worldwide ecology, and full Wave E remain outside the release.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, mortality/body, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the verified bounded recovery-composition release, and Alpha 29 is the verified first one-life/one-body mortality release. Alpha 30 is only the current source candidate. None completes worldwide aquatic or settlement ecology, broad attacks or mortality, population recovery, decomposition, body transport or harvesting, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+Exact gameplay commit `56dc4812c7c41b6227bae1b0273701b51076f34a` passed
+feature CI `34215120610` and Pages `34216318509`. Verification-only descendant
+`65e2ba59929a296139e578adbd03621f91d93fc2` raises the CI and Pages job
+ceilings plus one slow integration-test allowance without changing production
+code or artifacts; it passed main CI `34221064966` and Pages `34221064916`.
+The complete local
+gate passed TypeScript, public-boundary and player-facing-sync checks, 227 test
+files and 2,177 checks, a five-asset 3,365,373-byte served
+web build, a 10-entry 3,556,981-byte runtime-only Electron ASAR inspection,
+desktop/mobile/title smoke, and clean invariant, save, release-surface, and
+visual audits. A cache-bypassed live comparison matched all five production
+files byte-for-byte.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, mortality/body, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the verified bounded recovery-composition release, Alpha 29 is the verified first one-life/one-body mortality release, and Alpha 30 is the verified first Wave-E regional breadth release. None completes worldwide aquatic or settlement ecology, broad attacks or mortality, population recovery, decomposition, body transport or harvesting, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)
