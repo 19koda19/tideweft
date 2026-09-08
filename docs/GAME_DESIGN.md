@@ -133,8 +133,8 @@ This is not a player command, herding, separated-livestock search or rescue,
 full schedule, autonomous kennel routine, attack, mortality, or guaranteed
 defense.
 
-The Missing Goat source candidate adds no animal either. An in-frame exact herd
-split requires one goat's current caused flee or retreat plus actual separation;
+Released Alpha 28, The Missing Goat, adds no animal either. An in-frame exact
+herd split requires one goat's current caused flee or retreat plus actual separation;
 distance alone cannot split the herd. A separated goat may choose shared
 regroup movement only after current identified sight of its exact peer, and
 danger or urgent physiology still wins. The keeper must personally observe an
@@ -355,7 +355,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Released Alpha 25 uses outer save format 18, habitat version 9, and settlement ecology version 3. An authenticated sealed version-17 envelope retains the complete Alpha-24 habitat, chicken members, flock, coop, keeper, custody, store, food transactions, actors, groups, aggregate units, items, Promises, evidence, and world facts before appending one separate pen, exactly two goats, one herd, and one additional custody relationship. Plural canonical custody rejects duplicate actors, groups, relationships, homes, or structures; reload cannot reroll either domestic population or assign one physical item to two contenders.
 - Released Alpha 26 uses outer save format 19 and settlement ecology version 4 while habitat remains version 9 and aggregate ecology remains version 4. A sealed version-18 envelope preserves the complete Far Paddock habitat, actors, flock, herd, homes, custody, store, food history, groups, aggregate units, items, Promises, evidence, and world facts before appending one deterministic working dog, kennel, third custody, dog-roster root, and generic working-animal assignment. Pending work activity recovers exactly once; reload, rollback, and representative regional travel cannot reroll or duplicate its actor, relationship, assignment, ordinal, or position.
 - Released Alpha 27 uses outer save format 20 while habitat remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4, and the nineteen-record species catalog and existing dog roster remain unchanged. A sealed version-19 Paddock Watch envelope preserves every established actor, group, home, custody, assignment, activity, item, Promise, evidence record, store fact, and world fact before the working-animal root and assignment advance to version 2 with empty task fields. Task, transition, and latest-outcome records begin at version 1. One pending task transition recovers exactly once; reload cannot reroll its source evidence, probe, suspension, result, return, or handler acknowledgement.
-- The Alpha 28 source candidate uses outer save format 21 and appends an empty version-1 domestic-animal-recovery root to an authenticated version-20 Watch Returns envelope. It preserves every established species, actor, population, group, habitat, home, custody, assignment, task, item, Promise, evidence record, store fact, and world fact. At most one current case, one pending transaction, and one latest result bind exact actor, group, custody, home, incident, report, and monotonic ordinal identities. A pending transaction recovers exactly once; reload cannot reroll the noticed absence, last-known area, guardian recruitment, exact reunion, or caretaker confirmation.
+- Released Alpha 28 uses outer save format 21 and appends an empty version-1 domestic-animal-recovery root to an authenticated version-20 Watch Returns envelope. It preserves every established species, actor, population, group, habitat, home, custody, assignment, task, item, Promise, evidence record, store fact, and world fact. At most one current case, one pending transaction, and one latest result bind exact actor, group, custody, home, incident, report, and monotonic ordinal identities. A pending transaction recovers exactly once; reload cannot reroll the noticed absence, last-known area, guardian recruitment, exact reunion, or caretaker confirmation.
 
 There is no character death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice.
 
@@ -437,7 +437,7 @@ life, player command, attack, injury, mortality, carcass, guaranteed defense,
 worldwide ecology, broader settlement-animal simulation, or exhaustive
 species/pair testing.
 
-The Alpha 28 source candidate advances the manual to version 38 and gameplay
+Released Alpha 28 advances the manual to version 38 and gameplay
 contract to version 26. It explains the caused exact goat split, sight-gated
 regroup, keeper-observed absence, explicit last-known-area search request,
 non-guaranteed guardian search, exact physical reunion, caretaker pen
@@ -749,8 +749,8 @@ attestation commit `6a5bc4352edb39b47ee2216ca01a1506f01419cb` passed final CI
 Confidence comes from shared invariants and representative emergence rather
 than per-species or N² interaction tests.
 
-Source candidate `0.3.3-alpha.28 — The Missing Goat` extends that shared
-architecture with one caused, exact two-goat split/rejoin and a bounded
+Release `0.3.3-alpha.28 — The Missing Goat` is **LIVE_VERIFIED** and extends
+that shared architecture with one caused, exact two-goat split/rejoin and a bounded
 knowledge-honest recovery case. Current identified sight permits regroup;
 danger and physiology outrank it. Only a keeper who lawfully notices the
 absence can issue the explicit last-known-area report that recruits the
@@ -763,10 +763,20 @@ adds only the empty version-1 recovery root; gameplay contract 26 and manual 38
 describe the same boundary. No species, herding, full home routine or schedule,
 guaranteed recovery, player search or remote marker, attack, injury, mortality,
 carcass, new call or track, or complete cross-region ecology is added. The
-candidate remains unreleased and uses representative emergence plus shared
-invariants rather than per-species or N² testing.
+release uses representative emergence plus shared invariants rather than
+per-species or N² testing.
 
-Released through Alpha 27:
+Exact gameplay/release/main commit
+`60c9bc34ac871425e5319c8369e715751b5d1c44` passed feature CI
+`34174876320`, main CI `34175693435`, and Pages `34175693447`. The complete
+local gate passed TypeScript, public-boundary and player-facing-sync checks,
+220 test files and 2,111 checks, a five-asset 3,284,606-byte served web build,
+a 10-entry 3,476,214-byte runtime-only Electron ASAR inspection,
+desktop/mobile/title smoke, and clean invariant, save, and visual audits. The
+first cache-bypassed five-file live comparison matched the tested production
+build exactly.
+
+Released through Alpha 28:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
@@ -782,6 +792,7 @@ Released through Alpha 27:
 - one bounded Far Paddock release: exactly two stable individual domestic goats, one stable herd, a separate pen, plural settlement custody and typed homes, shared perception/attention/terrestrial-movement/group-alarm behavior, deterministic physical-resource arbitration, knowledge-honest dual-view presentation, and one-time version-17-to-18 adoption;
 - one bounded Paddock Watch release: exactly one separate settlement working dog, one kennel and third custody, and one generic persisted guardian assignment over ordinary cognition, perception, self-preservation, and shared locomotion; a representative rabbit-alarm/fox chain remains conditional on lawful perception, and one-time version-18-to-19 adoption preserves every prior actor, item, relationship, and world fact;
 - one bounded Watch Returns release: the existing working dog's committed investigation becomes one exact-once task with a cognition-owned probe, physical return, fresh mutual-sight keeper recall, welfare suspension/resumption, and current handler acknowledgement; one-time version-19-to-20 adoption preserves every prior identity and world fact;
+- one bounded Missing Goat release: caused exact herd separation, direct-sight regroup, keeper-observed absence, explicit last-known-area guardian search without find proof, exact-body reunion and pen confirmation, atomic social-group materialization, no off-frame local sensing or movement, and exact version-20-to-21 adoption with one bounded recovery root;
 - one versioned production species contract covering exactly nineteen current records—human, domestic dog, deer, gull, black bear, brown rat, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, domestic chicken, and domestic goat—while keeping rat, frog, silverside, and fiddler-crab populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, plural domestic custody, typed homes, deterministic resource contention, and physical item claims; complete scent/evidence tracking, foliage consumption, health/death, full circadian behavior, worldwide habitat breadth, ecological migration/reproduction, complete food-web turnover, and an exhaustive pair matrix remain closed;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;

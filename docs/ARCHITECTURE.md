@@ -177,7 +177,7 @@ graph, alarm source, internal needs, hidden threat, or remote dog marker.
 
 ## Bounded domestic-animal recovery composition
 
-The Alpha 28 source candidate adds one versioned
+Released Alpha 28 adds one versioned
 `settlementDomesticAnimalRecovery` owner around the existing goat herd,
 keeper, pen, custody, and working dog. An in-frame exact herd split may occur
 only when a member is currently fleeing or retreating because of a lawful cause
@@ -217,7 +217,7 @@ cross-region animal ecology.
 
 `src/game/coreEcologyHabitat.ts` preserves the frozen Wave-A analysis for deer, gulls, and black bears, the version-2 harbor-edge extension for brown rats and domestic cats, the version-3 marsh-rabbit and marsh-fox extension, the version-4 fish-crow, northern-harrier, and southern-leopard-frog extension, the version-5 Tide Table extension, version-6 American-black-duck habitat, and version-7 North American river otter habitat. Habitat version 8 preserves the complete version-7 population and anchor record as an exact prefix, then appends one deterministic domestic-yard anchor and one two-to-three-member domestic-chicken population. Habitat version 9 preserves that complete record exactly before appending one separate pen anchor and exactly two domestic-goat individuals in one herd. Unlike terrain-derived wild habitat, both domestic populations are supported by the existing starting-settlement relationship; the stable world seed, signed origin, settlement focus, and generation version derive their anchors and allocations. The pen remains separated from the yard and every established individual allocation. Each animal receives one individual allocation, all members share the existing individual occupancy plane, and each population is represented by one stable group. Existing rat, frog, fish, and crab populations retain their aggregate occupancy planes and all tidal metadata remains exact. Inputs are call-order independent and valid at signed extreme region addresses; the runtime rederives the expected habitat on load and rejects a mismatch instead of accepting a reroll.
 
-`src/game/coreEcology.ts` owns the resulting aggregate-capable patch. Internal record version 4 retains hard limits of 13 individual populations, 48 exact representative members, 24 materialized actors, four aggregate populations, four anchors per aggregate, 24 retained evidence records, and 16 retained disturbances. Each individual representative states how many population units it represents, and canonicalization requires their sum to equal the population total. Brown-rat, southern-leopard-frog, Atlantic-silverside, and Atlantic-marsh-fiddler-crab aggregates separately conserve their population units across bounded anchors. Alpha 25 retains the aggregate schema and 24-actor materialization ceiling while admitting habitat version 9 and the new goat herd through the existing spatial top-K and full/coarse state owners. Every lawful candidate intersecting the active window is ranked by exact local squared distance with stable-ID ties. The Alpha 28 candidate ranks a social group as one indivisible candidate: all members receive full detail only when the remaining cap admits the whole group; otherwise all remain coarse. Overflow individuals retain identity and authoritative coarse state; candidate input order and camera traversal cannot decide who exists. Full simulation continues to use exact actors and lawful observations. A coarse individual ages needs, condition, and perception with an empty observation frame; it applies only the remainder of an already-authoritative intent until that intent expires, then returns to neutral observation. Coarse advancement cannot invent a sighting, target, food opportunity, resource claim, local movement, or new decision.
+`src/game/coreEcology.ts` owns the resulting aggregate-capable patch. Internal record version 4 retains hard limits of 13 individual populations, 48 exact representative members, 24 materialized actors, four aggregate populations, four anchors per aggregate, 24 retained evidence records, and 16 retained disturbances. Each individual representative states how many population units it represents, and canonicalization requires their sum to equal the population total. Brown-rat, southern-leopard-frog, Atlantic-silverside, and Atlantic-marsh-fiddler-crab aggregates separately conserve their population units across bounded anchors. Alpha 25 retains the aggregate schema and 24-actor materialization ceiling while admitting habitat version 9 and the new goat herd through the existing spatial top-K and full/coarse state owners. Every lawful candidate intersecting the active window is ranked by exact local squared distance with stable-ID ties. Alpha 28 ranks a social group as one indivisible candidate: all members receive full detail only when the remaining cap admits the whole group; otherwise all remain coarse. Overflow individuals retain identity and authoritative coarse state; candidate input order and camera traversal cannot decide who exists. Full simulation continues to use exact actors and lawful observations. A coarse individual ages needs, condition, and perception with an empty observation frame; it applies only the remainder of an already-authoritative intent until that intent expires, then returns to neutral observation. Coarse advancement cannot invent a sighting, target, food opportunity, resource claim, local movement, or new decision.
 
 `src/game/coreEcologyGroups.ts` adds one persistent herd or flock record when a derived deer, gull, fish-crow, domestic-chicken, or domestic-goat population has at least two representatives; black bears, northern harriers, snowy egrets, American black ducks, and North American river otters remain solitary. Crow, chicken, and goat groups use separate stable `CROW-FLOCK`, `CHICKEN-FLOCK`, and `GOAT-HERD` namespaces while preserving the shared membership, cohesion, phase, component-anchor, signal, split/rejoin, and aftermath contracts. Signals reach additional members only on exact coarse cadence rather than setting every hidden target at once. A fully coarse group may still undergo its bounded player-absent, nonlethal, cargo-neutral pressure transition; it remains unavailable as automatic player knowledge. In current detailed simulation, a split additionally requires a caused flee/retreat and exact separation, while distance alone is inert. Cohesion can later produce a saved reunion, and that transition is propagated through coarse stepping for an already-authoritative consumer. Full-to-coarse reconciliation copies lawful member positions into the group anchors; coarse-to-full return reuses the same actor IDs and places members around their saved component anchor without duplication. No authored home-return schedule exists: settlement custody is stable social/home authority, not a second movement controller.
 
@@ -393,7 +393,7 @@ exactly once without rerunning sight, geometry, movement, handler authority, or
 outcome. Habitat 9, settlement ecology 4, aggregate ecology 4, the nineteen
 species records, and the dog roster remain unchanged.
 
-The Alpha 28 source candidate advances the outer session to version 21 and
+Released Alpha 28 advances the outer session to version 21 and
 appends an empty version-1 domestic-animal-recovery root to an authenticated
 sealed version-20 Watch Returns payload. Every existing species, actor,
 population, habitat, group, home, custody, assignment, task, item, Promise,
@@ -718,8 +718,8 @@ representative-emergence based. Exact gameplay commit
 `34160098140` and Pages `34160098112`; all five cache-bypassed deployed
 artifacts match the tested production build exactly.
 
-Source candidate `0.3.3-alpha.28 — The Missing Goat` closes one bounded
-starting-harbor Wave-D composition without adding a species or rewriting an
+Release `0.3.3-alpha.28 — The Missing Goat` is **LIVE_VERIFIED** and closes one
+bounded starting-harbor Wave-D composition without adding a species or rewriting an
 actor. A caused current flee/retreat plus exact separation can split the goat
 herd; distance alone cannot. Current identified group sight can propose
 regroup, but danger and physiology outrank it. The keeper must lawfully notice
@@ -729,7 +729,7 @@ bodies can physically rejoin, and current caretaker sight of all members in
 the pen closes the case; an already-known case can retain an authenticated
 coarse reunion transition without fabricating sight.
 
-The candidate makes each social group an indivisible materialization-cap unit,
+The release makes each social group an indivisible materialization-cap unit,
 so all members enter full detail together or remain coarse with no local
 perception or locomotion. It adds a bounded version-1 recovery root and exact
 outer-v20-to-v21 adoption, gameplay contract 26, and field manual 38. It adds
@@ -737,4 +737,13 @@ no herding, complete schedule or home routine, guaranteed recovery, remote
 marker or player search command, attack, injury, mortality, carcass, call,
 track, or full cross-region ecology. Verification remains shared-invariant,
 property, replay/migration, bounded-performance, and representative-emergence
-based rather than per-species or N². This candidate is not yet released.
+based rather than per-species or N².
+
+Exact gameplay/release/main commit
+`60c9bc34ac871425e5319c8369e715751b5d1c44` passed feature CI
+`34174876320`, main CI `34175693435`, and Pages `34175693447`. The release gate
+passed TypeScript, public-boundary and player-facing-sync checks, 220 test files
+and 2,111 checks, a five-asset 3,284,606-byte served web build, a 10-entry
+3,476,214-byte runtime-only Electron ASAR inspection, desktop/mobile/title
+smoke, and clean invariant, save, and visual audits. Its first cache-bypassed
+five-file live comparison matched the tested production build exactly.
