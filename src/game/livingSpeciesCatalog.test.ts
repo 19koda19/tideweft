@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { getCoreWildlifeProfile } from "../sim/coreWildlifeIdentity";
 import { LIVING_ACTOR_SPECIES } from "./livingActor";
+import { livingActorSenseProfile } from "./livingActorSenses";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 import {
   coreEcologySpeciesCanFeedFromCarcass,
@@ -11,6 +13,7 @@ import {
 } from "./coreEcologySpeciesRuntimePolicy";
 import { CORE_ECOLOGY_ACTIVITY_OWNER_ID } from "./coreEcologyActivity";
 import { CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES } from "./coreEcologyActivityAffordance";
+import { coreWildlifeLocomotionProfile } from "./coreWildlifeLocomotionProfile";
 import {
   LIVING_SPECIES_CAPABILITY_SCALE,
   LIVING_SPECIES_CATALOG,
@@ -46,7 +49,9 @@ describe("Living Weft species module catalog", () => {
       "living-species:atlantic-marsh-fiddler-crab:v1",
       "living-species:atlantic-silverside:v1",
       "living-species:black-bear:v1",
+      "living-species:brown-bear:v1",
       "living-species:brown-rat:v1",
+      "living-species:cougar:v1",
       "living-species:deer:v1",
       "living-species:domestic-cat:v1",
       "living-species:domestic-chicken:v1",
@@ -268,6 +273,77 @@ describe("Living Weft species module catalog", () => {
         .toEqual(LIVING_SPECIES_INTERACTION_TARGET_CLASSES);
       expect(module?.interactions.targets.find(({ targetClass }) => targetClass === "dog"))
         .toMatchObject({ policy: "intentional-no-response", verbs: [] });
+    }
+  });
+
+  it("projects the Alpha 31 solitary predators through shared capability contracts", () => {
+    const cases = [
+      [
+        "cougar",
+        ["forest-edge", "rocky-cover", "temperate-upland", "wooded-ridge"],
+        ["carcass", "food", "human", "predator", "smaller-prey"],
+      ],
+      [
+        "brown-bear",
+        ["forest-edge", "temperate-upland", "wooded-ridge"],
+        ["carcass", "food", "human", "predator"],
+      ],
+    ] as const;
+
+    for (const [species, habitatClasses, activeTargets] of cases) {
+      const module = livingSpeciesModule(species);
+      expect(module).toMatchObject({
+        profile: { implementation: "active", taxonomicClass: "mammal" },
+        morphology: { implementation: "active", model: "individual" },
+        habitat: {
+          ownerId: "game:core-ecology-habitat:v11",
+          habitatClasses,
+          migrationModel: "none",
+        },
+        identity: { implementation: "active", form: "individual" },
+        population: { maxMaterializedPerRegion: 2 },
+        locomotion: {
+          implementation: "active",
+          ownerId: "game:core-wildlife-locomotion-profile:v1",
+          crossRegion: false,
+        },
+        social: {
+          ownerId: "game:core-ecology-perception:v1",
+          group: { status: "unimplemented", stableIdNamespace: null },
+        },
+        sound: { implementation: "unimplemented", ownerId: null, repertoire: [] },
+      });
+      expect(module?.interactions.targets
+        .filter(({ policy }) => policy === "available")
+        .map(({ targetClass }) => targetClass))
+        .toEqual(activeTargets);
+      expect(module?.interactions.targets.find(({ targetClass }) => targetClass === "dog"))
+        .toMatchObject({ policy: "intentional-no-response", verbs: [] });
+      expect(module?.interactions.targets.find(({ targetClass }) => targetClass === "same-species"))
+        .toMatchObject({ policy: "intentional-no-response", verbs: [] });
+    }
+  });
+
+  it("keeps each Alpha 31 species distinct from its nearest established analogue", () => {
+    for (const [species, analogue] of [
+      ["cougar", "gray-wolf"],
+      ["brown-bear", "black-bear"],
+    ] as const) {
+      const module = livingSpeciesModule(species);
+      const analogueModule = livingSpeciesModule(analogue);
+      expect(getCoreWildlifeProfile(species)).not.toEqual(getCoreWildlifeProfile(analogue));
+      expect({
+        habitatClasses: module?.habitat.habitatClasses,
+        groupModel: module?.social.groupModel,
+        groupStatus: module?.social.group.status,
+      }).not.toEqual({
+        habitatClasses: analogueModule?.habitat.habitatClasses,
+        groupModel: analogueModule?.social.groupModel,
+        groupStatus: analogueModule?.social.group.status,
+      });
+      expect(coreWildlifeLocomotionProfile(species))
+        .not.toEqual(coreWildlifeLocomotionProfile(analogue));
+      expect(livingActorSenseProfile(species)).not.toEqual(livingActorSenseProfile(analogue));
     }
   });
 
@@ -656,7 +732,13 @@ describe("Living Weft species module catalog", () => {
   });
 
   it("derives the bounded mortality and carrion contracts from shared capabilities", () => {
-    const witnesses = ["marsh-rabbit", "marsh-fox", "fish-crow"] as const;
+    const witnesses = [
+      "marsh-rabbit",
+      "marsh-fox",
+      "fish-crow",
+      "cougar",
+      "brown-bear",
+    ] as const;
 
     for (const species of witnesses) {
       const module = livingSpeciesModule(species);
@@ -725,9 +807,9 @@ describe("Living Weft species module catalog", () => {
       coreEcologySpeciesPhysicalBodyResourceUnits(species) > 0
     ))).toEqual(["marsh-rabbit"]);
     expect(witnesses.filter(coreEcologySpeciesCanFeedFromCarcass))
-      .toEqual(["marsh-fox", "fish-crow"]);
+      .toEqual(["marsh-fox", "fish-crow", "cougar", "brown-bear"]);
     expect(witnesses.filter(coreEcologySpeciesCanGuardCarcass))
-      .toEqual(["marsh-fox"]);
+      .toEqual(["marsh-fox", "cougar", "brown-bear"]);
   });
 
   it("declares the active rain-chorus trio through shared capabilities", () => {

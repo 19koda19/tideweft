@@ -199,6 +199,18 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN CANID",
     representation: "individual",
   },
+  cougar: {
+    identifiedName: "Cougar",
+    identifiedHeading: "COUGAR",
+    unidentifiedHeading: "UNKNOWN LARGE CAT",
+    representation: "individual",
+  },
+  "brown-bear": {
+    identifiedName: "Brown bear",
+    identifiedHeading: "BROWN BEAR",
+    unidentifiedHeading: "LARGE BEAR",
+    representation: "individual",
+  },
 });
 
 /**

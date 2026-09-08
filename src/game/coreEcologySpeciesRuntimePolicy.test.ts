@@ -49,6 +49,8 @@ describe("core ecology species runtime policy", () => {
       "wild-boar",
       "elk",
       "gray-wolf",
+      "cougar",
+      "brown-bear",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -154,12 +156,43 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanFeedFromCarcass("wild-boar")).toBe(true);
     expect(coreEcologySpeciesCanGuardCarcass("wild-boar")).toBe(false);
 
+    const predatorBreadth = [
+      [
+        "cougar",
+        { cause: "predator-contact", reachUnits: 600, damageUnits: 800_000 },
+        true,
+      ],
+      ["brown-bear", null, false],
+    ] as const;
+    for (const [species, contact, pursuesLivePrey] of predatorBreadth) {
+      expect(coreEcologySpeciesRuntimePolicy(species)).toMatchObject({
+        actorAddressable: true,
+        groupOrganization: null,
+        maximumMaterializedActors: 2,
+        mortality: {
+          predatorContact: contact,
+          physicalBodySizeUnits: 0,
+          physicalBodyResourceUnits: 0,
+          carcassFeeding: true,
+          carcassGuarding: true,
+        },
+      });
+      expect(coreEcologySpeciesCanFeedFromCarcass(species)).toBe(true);
+      expect(coreEcologySpeciesCanGuardCarcass(species)).toBe(true);
+      expect(coreEcologySpeciesHasRuntimeCapability(species, "live-prey-pursuit"))
+        .toBe(pursuesLivePrey);
+      expect(coreEcologySpeciesHasRuntimeCapability(species, "physical-body-resource"))
+        .toBe(false);
+    }
+
     const inactive = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(({ speciesId }) => (
       speciesId !== "marsh-fox"
       && speciesId !== "marsh-rabbit"
       && speciesId !== "fish-crow"
       && speciesId !== "wild-boar"
       && speciesId !== "gray-wolf"
+      && speciesId !== "cougar"
+      && speciesId !== "brown-bear"
     ));
     for (const policy of inactive) {
       expect(policy.mortality).toEqual({

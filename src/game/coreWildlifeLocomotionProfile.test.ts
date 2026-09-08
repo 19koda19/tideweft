@@ -250,6 +250,8 @@ describe("core wildlife locomotion profiles", () => {
     ["wild-boar", "ridge", "marsh", "flee"],
     ["elk", "meadow", "marsh", "flee"],
     ["gray-wolf", "ridge", "tidal-flat", "pursue"],
+    ["cougar", "ridge", "tidal-flat", "pursue"],
+    ["brown-bear", "ridge", "tidal-flat", "scavenge"],
   ] as const)(
     "keeps the shared upland %s profile terrain-aware with one bounded gait",
     (species, preferredTerrain, resistedTerrain, intent) => {

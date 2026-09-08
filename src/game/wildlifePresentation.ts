@@ -251,6 +251,8 @@ type WildlifePresentationForm =
   | "wild-boar"
   | "elk"
   | "gray-wolf"
+  | "cougar"
+  | "brown-bear"
   | "black-bear"
   | "brown-rat"
   | "domestic-cat"
@@ -558,6 +560,34 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: true,
     baseSizeScale: 0.98,
     observableForm: "Long-legged, deep-chested canid with a level tail",
+  },
+  cougar: {
+    form: "cougar",
+    representation: "actor",
+    identificationClarity: 430_000,
+    unidentifiedQuickLabel: "Unknown large cat",
+    unidentifiedIdentityLabel: "Unidentified large cat",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.02,
+    observableForm: "Long-bodied tawny cat with a heavy tail",
+  },
+  "brown-bear": {
+    form: "brown-bear",
+    representation: "actor",
+    identificationClarity: 440_000,
+    unidentifiedQuickLabel: "Large bear",
+    unidentifiedIdentityLabel: "Unidentified large bear",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.48,
+    observableForm: "Massive bear with a high shoulder hump",
   },
 });
 const BEHAVIOR_CLARITY = 180_000;

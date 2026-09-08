@@ -63,9 +63,10 @@ import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
   ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
-  alpha30WildlifeAppearancePalette,
+  ALPHA31_PREDATOR_APPEARANCE_PALETTES,
   domesticGoatAppearancePalette,
-  type Alpha30WildlifeAppearanceSpecies,
+  regionalUplandWildlifeAppearancePalette,
+  type RegionalUplandWildlifeAppearanceSpecies,
 } from "./wildlifeAppearance";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
@@ -213,6 +214,8 @@ type ReliefWildlifeForm =
   | "wild-boar"
   | "elk"
   | "gray-wolf"
+  | "cougar"
+  | "brown-bear"
   | "black-bear"
   | "domestic-cat"
   | "marsh-rabbit"
@@ -400,6 +403,20 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.54,
     ringRadiusScale: 0.44,
     labelLift: 0.78,
+  },
+  cougar: {
+    form: "cougar",
+    colors: ALPHA31_PREDATOR_APPEARANCE_PALETTES.cougar["warm-tawny"],
+    hitRadiusScale: 0.56,
+    ringRadiusScale: 0.46,
+    labelLift: 0.76,
+  },
+  "brown-bear": {
+    form: "brown-bear",
+    colors: ALPHA31_PREDATOR_APPEARANCE_PALETTES["brown-bear"]["dark-brown"],
+    hitRadiusScale: 0.68,
+    ringRadiusScale: 0.58,
+    labelLift: 0.88,
   },
 };
 
@@ -4422,20 +4439,32 @@ export function createTideweftReliefRenderer(
 
     const drawUplandMammal = (
       wildlife: WildlifeView,
-      species: Alpha30WildlifeAppearanceSpecies,
+      species: RegionalUplandWildlifeAppearanceSpecies,
       surface: number,
       tileSize: number,
       now: number,
     ): void => {
-      const colors = alpha30WildlifeAppearancePalette(species, wildlife.appearanceKey);
+      const colors = regionalUplandWildlifeAppearancePalette(species, wildlife.appearanceKey);
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
       const boar = species === "wild-boar";
       const elk = species === "elk";
-      const base = tileSize * (boar ? 0.12 : elk ? 0.115 : 0.1) * scale;
-      const bodyHalfLength = base * (boar ? 1.75 : 1.68);
-      const bodyHalfHeight = base * (boar ? 0.68 : elk ? 0.72 : 0.58);
-      const bodyHalfWidth = base * (boar ? 0.72 : 0.56);
-      const legHeight = base * (boar ? 0.58 : elk ? 1.55 : 0.88);
+      const cougar = species === "cougar";
+      const brownBear = species === "brown-bear";
+      const base = tileSize * (
+        brownBear ? 0.13 : boar ? 0.12 : elk ? 0.115 : cougar ? 0.105 : 0.1
+      ) * scale;
+      const bodyHalfLength = base * (
+        cougar ? 1.95 : brownBear ? 1.82 : boar ? 1.75 : 1.68
+      );
+      const bodyHalfHeight = base * (
+        brownBear ? 0.9 : boar ? 0.68 : elk ? 0.72 : cougar ? 0.5 : 0.58
+      );
+      const bodyHalfWidth = base * (
+        brownBear ? 0.82 : boar ? 0.72 : cougar ? 0.5 : 0.56
+      );
+      const legHeight = base * (
+        brownBear ? 0.62 : boar ? 0.58 : elk ? 1.55 : cougar ? 0.74 : 0.88
+      );
       const moving = wildlife.behavior === "flee"
         || wildlife.behavior === "pursue"
         || wildlife.behavior === "retreat";
@@ -4506,6 +4535,49 @@ export function createTideweftReliefRenderer(
         p.translate(-bodyHalfLength * 0.72, -bodyHalfHeight * 0.06, 0);
         p.ambientMaterial(colors.secondary);
         p.ellipsoid(base * 0.52, base * 0.5, bodyHalfWidth * 1.02, 7, 5);
+        p.pop();
+      } else if (brownBear) {
+        p.push();
+        p.translate(-bodyHalfLength * 0.24, -bodyHalfHeight * 0.5, 0);
+        p.ambientMaterial(colors.secondary);
+        p.ellipsoid(base * 0.92, base * 0.7, bodyHalfWidth * 1.06, 8, 5);
+        p.pop();
+        p.push();
+        p.translate(bodyHalfLength * 0.84, -bodyHalfHeight * 0.18, 0);
+        p.ambientMaterial(colors.primary);
+        p.sphere(base * 0.66, 8, 6);
+        for (const earZ of [-base * 0.42, base * 0.42]) {
+          p.push();
+          p.translate(-base * 0.05, -base * 0.58, earZ);
+          p.ambientMaterial(colors.dark);
+          p.sphere(base * 0.2, 6, 4);
+          p.pop();
+        }
+        p.translate(base * 0.58, base * 0.13, 0);
+        p.ambientMaterial(colors.secondary);
+        p.ellipsoid(base * 0.5, base * 0.31, base * 0.43, 7, 4);
+        p.pop();
+      } else if (cougar) {
+        p.push();
+        p.translate(bodyHalfLength * 0.9, -bodyHalfHeight * 0.28, 0);
+        p.ambientMaterial(colors.primary);
+        p.sphere(base * 0.5, 8, 5);
+        for (const earZ of [-base * 0.3, base * 0.3]) {
+          p.push();
+          p.translate(-base * 0.07, -base * 0.45, earZ);
+          p.ambientMaterial(colors.dark);
+          p.cone(base * 0.15, base * 0.38, 5, 1);
+          p.pop();
+        }
+        p.translate(base * 0.42, base * 0.1, 0);
+        p.ambientMaterial(colors.secondary);
+        p.ellipsoid(base * 0.38, base * 0.25, base * 0.34, 7, 4);
+        p.pop();
+        p.push();
+        p.translate(-bodyHalfLength * 0.96, -bodyHalfHeight * 0.08, 0);
+        p.rotateZ(1.08);
+        p.ambientMaterial(colors.dark);
+        p.cylinder(base * 0.12, base * 1.9, 7, 2);
         p.pop();
       } else {
         p.push();
@@ -5154,6 +5226,12 @@ export function createTideweftReliefRenderer(
           return true;
         case "gray-wolf":
           drawUplandMammal(wildlife, "gray-wolf", surface, tileSize, now);
+          return true;
+        case "cougar":
+          drawUplandMammal(wildlife, "cougar", surface, tileSize, now);
+          return true;
+        case "brown-bear":
+          drawUplandMammal(wildlife, "brown-bear", surface, tileSize, now);
           return true;
         case "black-bear":
           drawBlackBear(wildlife, surface, tileSize);

@@ -148,8 +148,8 @@ const NO_MORTALITY_RUNTIME: CoreEcologySpeciesMortalityRuntimePolicy = deepFreez
 });
 
 /**
- * Alpha 30 extends the deliberately narrow mortality roster without changing
- * its fail-closed rule. Every species is present so adding a biological role
+ * Each bounded roster extension preserves the deliberately narrow mortality
+ * seam and its fail-closed rule. Every species is present so a biological role
  * or food affinity cannot accidentally activate a physical attack/body
  * contract. The fish crow proves that carcass consumers need not also own
  * harmful contact or body creation.
@@ -216,6 +216,26 @@ const MORTALITY_VALUES: Readonly<Record<
       reachUnits: 650,
       damageUnits: 700_000,
     },
+    physicalBodySizeUnits: 0,
+    physicalBodyResourceUnits: 0,
+    carcassFeeding: true,
+    carcassGuarding: true,
+  },
+  cougar: {
+    version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+    predatorContact: {
+      cause: "predator-contact",
+      reachUnits: 600,
+      damageUnits: 800_000,
+    },
+    physicalBodySizeUnits: 0,
+    physicalBodyResourceUnits: 0,
+    carcassFeeding: true,
+    carcassGuarding: true,
+  },
+  "brown-bear": {
+    version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+    predatorContact: null,
     physicalBodySizeUnits: 0,
     physicalBodyResourceUnits: 0,
     carcassFeeding: true,
@@ -532,6 +552,36 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       ],
       activitySignals: [],
       evidenceKinds: ["canid-pawprints"],
+      presentationModel: "individual",
+    },
+    cougar: {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "carcass-feeding",
+        "carcass-guarding",
+        "food-investigation",
+        "live-prey-pursuit",
+        "predator-contact-damage",
+      ],
+      activitySignals: [],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "brown-bear": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "carcass-feeding",
+        "carcass-guarding",
+        "food-investigation",
+      ],
+      activitySignals: [],
+      evidenceKinds: [],
       presentationModel: "individual",
     },
   });

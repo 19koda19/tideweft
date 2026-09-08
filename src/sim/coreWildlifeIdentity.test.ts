@@ -55,6 +55,8 @@ describe("core wildlife identity", () => {
       "wild-boar",
       "elk",
       "gray-wolf",
+      "cougar",
+      "brown-bear",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -307,6 +309,22 @@ describe("core wildlife identity", () => {
         pursuitTicks: 12,
         roles: ["forager", "scavenger", "predator"],
       },
+      cougar: {
+        dietClass: "carnivore",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumPatchPopulation: 2,
+        pursuitTicks: 10,
+        roles: ["forager", "scavenger", "predator"],
+      },
+      "brown-bear": {
+        dietClass: "omnivore",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumPatchPopulation: 2,
+        pursuitTicks: 0,
+        roles: ["forager", "scavenger", "predator", "omnivore"],
+      },
     } as const satisfies Partial<Record<CoreWildlifeSpecies, unknown>>;
     for (const [species, expected] of Object.entries(waveESpecies) as [
       keyof typeof waveESpecies,
@@ -327,6 +345,15 @@ describe("core wildlife identity", () => {
         behavior: { maximumPursuitTicks: expected.pursuitTicks },
       });
     }
+
+    expect(getCoreWildlifeProfile("cougar")).toMatchObject({
+      foodAffinities: { carrion: 720_000, "live-prey": 1_000_000 },
+      morphs: ["gray-tawny", "pale-tawny", "reddish-tawny", "warm-tawny"],
+    });
+    expect(getCoreWildlifeProfile("brown-bear")).toMatchObject({
+      foodAffinities: { browse: 640_000, carrion: 920_000, "live-prey": 0 },
+      morphs: ["dark-brown", "golden-brown", "grizzled-brown", "reddish-brown"],
+    });
   });
 
   it("fixes the Alpha-20 duck identity contract as deterministic bytes", () => {

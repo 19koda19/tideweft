@@ -9,6 +9,9 @@ import type {
   WildlifeView,
 } from "./types";
 
+export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
+  "test:alpha31-predator-presentation-invariants:v1" as const;
+
 const p5Harness = vi.hoisted(() => ({
   canvas: null as MockCanvas | null,
   instance: null as Record<PropertyKey, unknown> | null,
@@ -264,6 +267,8 @@ const wildlifeView = (
     "wild-boar": "Wild boar",
     elk: "Elk",
     "gray-wolf": "Gray wolf",
+    cougar: "Cougar",
+    "brown-bear": "Brown bear",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -282,6 +287,8 @@ const wildlifeView = (
     "wild-boar": "BOAR-",
     elk: "ELK-",
     "gray-wolf": "WOLF-",
+    cougar: "COUGAR-",
+    "brown-bear": "BROWNBEAR-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -1956,7 +1963,9 @@ describe("Chart Wave-B wildlife presentation", () => {
     ["wild-boar", "BOAR-", "#614735", "triangle"],
     ["elk", "ELK-", "#9b6f43", "quad"],
     ["gray-wolf", "WOLF-", "#727875", "bezier"],
-  ] as const)("draws and touch-selects the color-independent %s form with reduced motion", (
+    ["cougar", "COUGAR-", "#aa8258", "bezier"],
+    ["brown-bear", "BROWNBEAR-", "#4c372b", "ellipse"],
+  ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} draws and touch-selects the color-independent %s form with reduced motion`, (
     species,
     prefix,
     primaryColor,

@@ -13,7 +13,7 @@ describe("shared wildlife world-label copy", () => {
     expect(visibleWildlifeGroupSuffix({ species: "american-black-duck", groupSize: 5 })).toBe("");
     expect(visibleWildlifeGroupSuffix({ species: "domestic-chicken", groupSize: 5 })).toBe("");
     expect(visibleWildlifeGroupSuffix({ species: "domestic-goat", groupSize: 5 })).toBe("");
-    for (const species of ["wild-boar", "elk", "gray-wolf"] as const) {
+    for (const species of ["wild-boar", "elk", "gray-wolf", "cougar", "brown-bear"] as const) {
       expect(visibleWildlifeGroupSuffix({ species, groupSize: 5 })).toBe("");
     }
     expect(visibleWildlifeGroupSuffix({

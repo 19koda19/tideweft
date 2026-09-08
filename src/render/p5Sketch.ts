@@ -14,9 +14,9 @@ import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
-  alpha30WildlifeAppearancePalette,
   domesticGoatAppearancePalette,
-  type Alpha30WildlifeAppearanceSpecies,
+  regionalUplandWildlifeAppearancePalette,
+  type RegionalUplandWildlifeAppearanceSpecies,
 } from "./wildlifeAppearance";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
@@ -3836,22 +3836,36 @@ export function createTideweftRenderer(
 
     const drawChartUplandMammal = (
       actor: WildlifeView,
-      species: Alpha30WildlifeAppearanceSpecies,
+      species: RegionalUplandWildlifeAppearanceSpecies,
       base: number,
       now: number,
     ): void => {
-      const colors = alpha30WildlifeAppearancePalette(species, actor.appearanceKey);
+      const colors = regionalUplandWildlifeAppearancePalette(species, actor.appearanceKey);
       const moving = actor.behavior === "flee"
         || actor.behavior === "pursue"
         || actor.behavior === "retreat";
       const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.01) * base * 0.3;
       const elk = species === "elk";
       const boar = species === "wild-boar";
-      const bodyLength = base * (boar ? 3.8 : 3.55);
-      const bodyHeight = base * (boar ? 1.35 : elk ? 1.55 : 1.3);
-      const legHeight = base * (boar ? 0.8 : elk ? 2.15 : 1.4);
+      const cougar = species === "cougar";
+      const brownBear = species === "brown-bear";
+      const bodyLength = base * (cougar ? 4.05 : brownBear ? 3.9 : boar ? 3.8 : 3.55);
+      const bodyHeight = base * (
+        brownBear ? 1.82 : boar ? 1.35 : elk ? 1.55 : cougar ? 1.05 : 1.3
+      );
+      const legHeight = base * (
+        brownBear ? 1.02 : boar ? 0.8 : elk ? 2.15 : cougar ? 1.12 : 1.4
+      );
       const headX = bodyLength * 0.55;
-      const headY = boar ? bodyHeight * 0.02 : elk ? -bodyHeight * 0.62 : -bodyHeight * 0.28;
+      const headY = boar
+        ? bodyHeight * 0.02
+        : elk
+          ? -bodyHeight * 0.62
+          : brownBear
+            ? -bodyHeight * 0.14
+            : cougar
+              ? -bodyHeight * 0.12
+              : -bodyHeight * 0.28;
 
       p.stroke(withAlpha(PALETTE.ink, 242));
       p.strokeWeight(Math.max(0.8, base * 0.16));
@@ -3913,6 +3927,47 @@ export function createTideweftRenderer(
             headY - base * 0.45,
           );
         }
+      } else if (brownBear) {
+        p.fill(colors.secondary);
+        p.ellipse(-bodyLength * 0.28, -bodyHeight * 0.36, base * 1.8, bodyHeight * 0.92);
+        p.fill(colors.primary);
+        p.circle(headX, headY, base * 1.72);
+        p.fill(colors.dark);
+        for (const ear of [-1, 1]) {
+          p.circle(
+            headX + base * 0.42 * ear,
+            headY - base * 0.67,
+            base * 0.42,
+          );
+        }
+        p.fill(colors.secondary);
+        p.ellipse(headX + base * 0.68, headY + base * 0.2, base * 1.02, base * 0.62);
+      } else if (cougar) {
+        p.fill(colors.primary);
+        p.circle(headX, headY, base * 1.32);
+        p.fill(colors.dark);
+        for (const ear of [-1, 1]) {
+          p.triangle(
+            headX + base * 0.14 * ear,
+            headY - base * 0.38,
+            headX + base * 0.43 * ear,
+            headY - base * 0.84,
+            headX + base * 0.55 * ear,
+            headY - base * 0.28,
+          );
+        }
+        p.fill(colors.secondary);
+        p.ellipse(headX + base * 0.48, headY + base * 0.16, base * 0.72, base * 0.46);
+        p.noFill();
+        p.stroke(colors.dark);
+        p.strokeWeight(Math.max(0.9, base * 0.22));
+        p.bezier(
+          -bodyLength * 0.45, -bodyHeight * 0.04,
+          -bodyLength * 0.88, -bodyHeight * 0.48,
+          -bodyLength * 1.15, bodyHeight * 0.08,
+          -bodyLength * 1.3, -bodyHeight * 0.36,
+        );
+        p.noStroke();
       } else {
         p.fill(colors.primary);
         p.ellipse(headX, headY, base * 1.4, base * 1.2);
@@ -3982,6 +4037,8 @@ export function createTideweftRenderer(
         case "wild-boar":
         case "elk":
         case "gray-wolf":
+        case "cougar":
+        case "brown-bear":
           drawChartUplandMammal(actor, actor.species, base, now);
           return true;
         case "black-bear":

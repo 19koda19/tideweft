@@ -1089,6 +1089,8 @@ function projectDabblingWaterfowlTidalActivity(
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     && patch.derivation.kind !== "habitat-v10"
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+    && patch.derivation.kind !== "habitat-v11"
+    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
   ) return null;
   const anchors = patch.derivation.habitat.tidalAnchors.filter(({ species }) => (
     species === speciesId
@@ -1173,6 +1175,8 @@ function projectShoreWaterForagerActivity(
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     && patch.derivation.kind !== "habitat-v10"
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+    && patch.derivation.kind !== "habitat-v11"
+    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
   ) return null;
   const anchors = patch.derivation.habitat.tidalAnchors.filter(({ species }) => (
     species === speciesId
@@ -1236,6 +1240,8 @@ function authenticatedHabitatAllocation(
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     && patch.derivation.kind !== "habitat-v10"
     && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+    && patch.derivation.kind !== "habitat-v11"
+    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
   ) return null;
   const analysis = patch.derivation.habitat.populations.find((candidate) => (
     candidate.species === population.species

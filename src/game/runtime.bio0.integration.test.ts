@@ -195,8 +195,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(23);
-    expect(firstRepository.snapshot().payloadVersion).toBe(23);
+    expect(firstEnvelope.version).toBe(24);
+    expect(firstRepository.snapshot().payloadVersion).toBe(24);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
 
@@ -337,7 +337,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(23);
+    expect(migratedEnvelope.version).toBe(24);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -383,7 +383,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(23);
+    expect(envelope.version).toBe(24);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -431,11 +431,11 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(23);
-    expect(firstRepository.snapshot().payloadVersion).toBe(23);
+    expect(firstEnvelope.version).toBe(24);
+    expect(firstRepository.snapshot().payloadVersion).toBe(24);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
     const ecology = requiredCoreEcology(firstEnvelope);
-    expect(ecology.derivation.kind).toBe("habitat-v10");
+    expect(ecology.derivation.kind).toBe("habitat-v11");
     expect(ecology.populations.map(({ species }) => species)).toEqual(expect.arrayContaining([
       "black-bear",
       "deer",
@@ -449,7 +449,7 @@ describe("runtime BIO0 ecology persistence", () => {
       "marsh-rabbit",
       "wild-boar",
     ]));
-    if (ecology.derivation.kind !== "habitat-v10") throw new Error("missing regional-upland habitat");
+    if (ecology.derivation.kind !== "habitat-v11") throw new Error("missing regional-predator habitat");
     expect(ecology.populations.find(({ species }) => species === "domestic-goat"))
       .toMatchObject({ populationSize: 2 });
     expect(ecology.groups.groups.filter(({ identity }) => (
@@ -508,12 +508,12 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(23);
-    expect(firstRepository.snapshot().payloadVersion).toBe(23);
+    expect(firstEnvelope.version).toBe(24);
+    expect(firstRepository.snapshot().payloadVersion).toBe(24);
     expect(firstEnvelope.coreEcology).toBe(secondEnvelope.coreEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
-    expect(migrated.derivation.kind).toBe("habitat-v10");
+    expect(migrated.derivation.kind).toBe("habitat-v11");
     expect(migrated.groups.groups.filter(({ identity }) => (
       identity.species !== "fish-crow"
       && identity.species !== "domestic-chicken"
@@ -535,8 +535,8 @@ describe("runtime BIO0 ecology persistence", () => {
       species === "deer" || species === "gull" || species === "black-bear"
     ))).toEqual(waveAPopulations);
     expect(migrated.populations.some(({ species }) => species === "domestic-cat")).toBe(true);
-    if (migrated.derivation.kind !== "habitat-v10") {
-      throw new Error("missing regional-upland habitat");
+    if (migrated.derivation.kind !== "habitat-v11") {
+      throw new Error("missing regional-predator habitat");
     }
     expect(migrated.populations.find(({ species }) => species === "domestic-goat"))
       .toMatchObject({ populationSize: 2 });
@@ -604,7 +604,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(23);
+    expect(firstEnvelope.version).toBe(24);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual(v9Envelope.player);
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -612,7 +612,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(firstEnvelope.bio0Ecology).toBe(v9Envelope.bio0Ecology);
     expect(firstEnvelope.porterResponse).toEqual(v9Envelope.porterResponse);
     expect(firstEnvelope.livingActorPlayerChoice).toEqual(v9Envelope.livingActorPlayerChoice);
-    expect(migrated.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v10");
+    expect(migrated.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     for (const historicalGroup of legacyEcology.groups.groups) {
       expect(migrated.groups.groups).toContainEqual(historicalGroup);
     }
@@ -1090,7 +1090,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v23 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v24 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1463,6 +1463,7 @@ function waveAHabitatFromCurrentEcology(
   if (
     ecology.derivation.kind !== "habitat-v9"
     && ecology.derivation.kind !== "habitat-v10"
+    && ecology.derivation.kind !== "habitat-v11"
   ) {
     throw new Error("current migration fixture omitted a habitat derivation");
   }

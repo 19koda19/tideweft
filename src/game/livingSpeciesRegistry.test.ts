@@ -47,6 +47,8 @@ describe("lean runtime living-species registry", () => {
       "wild-boar",
       "elk",
       "gray-wolf",
+      "cougar",
+      "brown-bear",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -401,6 +403,38 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 46_000,
         },
       },
+      {
+        species: "cougar",
+        actorIdPrefix: "COUGAR-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "cougar",
+        senses: {
+          visionAcuity: 960_000,
+          hearingSensitivity: 950_000,
+          scentSensitivity: 880_000,
+          scentBaseRangeUnits: 40_000,
+        },
+      },
+      {
+        species: "brown-bear",
+        actorIdPrefix: "BROWNBEAR-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "brown bear",
+        senses: {
+          visionAcuity: 740_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: ACTOR_PERCEPTION_SCALE,
+          scentBaseRangeUnits: 52_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -426,6 +460,8 @@ describe("lean runtime living-species registry", () => {
       ["wild-boar", "BOAR-v1-alpha30-fixture"],
       ["elk", "ELK-v1-alpha30-fixture"],
       ["gray-wolf", "WOLF-v1-alpha30-fixture"],
+      ["cougar", "COUGAR-v1-alpha31-fixture"],
+      ["brown-bear", "BROWNBEAR-v1-alpha31-fixture"],
     ] as const) {
       expect(isLivingSpeciesActorAddressable(species)).toBe(true);
       expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(true);

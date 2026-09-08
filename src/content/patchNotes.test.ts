@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.30",
-      buildIdentity: "0.3.3-alpha.30",
-      gameplayContractVersion: 28,
-      tutorialVersion: 40,
+      version: "0.3.3-alpha.31",
+      buildIdentity: "0.3.3-alpha.31",
+      gameplayContractVersion: 29,
+      tutorialVersion: 41,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Beyond the Harbor and retains the earlier habitat releases", () => {
+  it("scopes High Country Shadows and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const beyondHarborRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.30",
+    );
+    const beyondHarborCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => beyondHarborRelease?.categories[category] ?? [])
       .join(" ");
     const whatRemainsRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.29",
@@ -190,13 +197,20 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("wild boar, elk, and gray wolf");
-    expect(activeCopy).toContain("SOUNDER, HERD, and PACK");
-    expect(activeCopy).toContain("shared direct perception, attention, actor-owned locomotion");
-    expect(activeCopy).toContain("only a solitary addressable marsh rabbit");
-    expect(activeCopy).toContain("grouped elk, deer, and every other group member cannot be harmed");
-    expect(activeCopy).toContain("currently perceiving it, reaching it through ordinary movement, and winning its physical claim");
-    expect(activeCopy).toContain("representative emergent chains replace bespoke tests for every species or an N-squared animal-pair matrix");
+    expect(activeCopy).toContain("Cougar and brown bear");
+    expect(activeCopy).toContain("twenty-four-record catalog");
+    expect(activeCopy).toContain("same habitat, population, perception, attention, locomotion, bounded materialization, and presentation owners");
+    expect(activeCopy).toContain("currently identified solitary addressable marsh rabbit");
+    expect(activeCopy).toContain("A brown bear has no live-prey pursuit or harmful contact");
+    expect(activeCopy).toContain("see, reach, claim, guard, and consume from an already-existing finite physical body");
+    expect(activeCopy).toContain("representative predator-and-scavenger chain exercise the reusable scaffold instead of bespoke tests for every species or an N-squared animal-pair matrix");
+    expect(beyondHarborCopy).toContain("wild boar, elk, and gray wolf");
+    expect(beyondHarborCopy).toContain("SOUNDER, HERD, and PACK");
+    expect(beyondHarborCopy).toContain("shared direct perception, attention, actor-owned locomotion");
+    expect(beyondHarborCopy).toContain("only a solitary addressable marsh rabbit");
+    expect(beyondHarborCopy).toContain("grouped elk, deer, and every other group member cannot be harmed");
+    expect(beyondHarborCopy).toContain("currently perceiving it, reaching it through ordinary movement, and winning its physical claim");
+    expect(beyondHarborCopy).toContain("representative emergent chains replace bespoke tests for every species or an N-squared animal-pair matrix");
     expect(whatRemainsCopy).toContain("currently identified marsh rabbit");
     expect(whatRemainsCopy).toContain("exact body physically reaches that exact rabbit");
     expect(whatRemainsCopy).toContain("removes exactly one unit from its population");
@@ -234,17 +248,21 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 23");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis advances to version 10");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("core-ecology patch remains version 3");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate record remains version 5");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("catalog now contains twenty-two records");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-22 What Remains save is authenticated and adopted exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete habitat-version-9 record, mortality/body state");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 24");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis advances to version 11");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("core ecology remains patch version 3");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains record version 5");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("catalog now contains twenty-four records");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-23 Beyond the Harbor save is authenticated and adopted exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete habitat-version-10 source and population sequence");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no tactical pack combat or group-member mortality");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Dog interaction with the three new species is an intentional no-response and remains unimplemented");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("voice patterns are foundation-only and are not audible in play");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Brown bear has no live-prey pursuit or contact");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no player, dog, human, social-group-member, or broader-animal harm");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no social group, persistent track evidence, audible voice, species-specific dog-directed behavior");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("shared large-predator perception path");
+    expect(beyondHarborRelease?.categories.saves.join(" ")).toContain("outer session advances to version 23");
+    expect(beyondHarborRelease?.categories.saves.join(" ")).toContain("habitat analysis advances to version 10");
+    expect(beyondHarborRelease?.categories.saves.join(" ")).toContain("catalog now contains twenty-two records");
     expect(whatRemainsRelease?.categories.saves.join(" ")).toContain("outer session advances to version 22");
     expect(whatRemainsRelease?.categories.saves.join(" ")).toContain("Habitat analysis remains version 9");
     expect(whatRemainsRelease?.categories.saves.join(" ")).toContain("core-ecology patch advances to version 3");

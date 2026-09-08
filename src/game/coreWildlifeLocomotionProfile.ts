@@ -269,6 +269,46 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       retreat: 880_000,
     }),
   }),
+  cougar: Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 870_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_280_000,
+      meadow: 880_000,
+      ridge: 620_000,
+      "tidal-flat": 1_400_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 840_000,
+    intentStepFactors: Object.freeze({
+      disengage: 900_000,
+      flee: 930_000,
+      pursue: 980_000,
+      retreat: 880_000,
+    }),
+  }),
+  "brown-bear": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 900_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_050_000,
+      meadow: 820_000,
+      ridge: 740_000,
+      "tidal-flat": 1_250_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 760_000,
+    intentStepFactors: Object.freeze({
+      flee: 850_000,
+      guard: 740_000,
+      retreat: 800_000,
+      scavenge: 820_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(

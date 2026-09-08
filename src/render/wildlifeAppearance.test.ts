@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA30_WILDLIFE_APPEARANCE_SPECIES,
+  ALPHA31_PREDATOR_APPEARANCE_PALETTES,
   DOMESTIC_GOAT_APPEARANCE_PALETTES,
+  REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES,
   alpha30WildlifeAppearancePalette,
   domesticGoatAppearancePalette,
+  regionalUplandWildlifeAppearancePalette,
 } from "./wildlifeAppearance";
 
 describe("shared wildlife appearance projection", () => {
@@ -54,5 +57,25 @@ describe("shared wildlife appearance projection", () => {
     expect(alpha30WildlifeAppearancePalette("gray-wolf", "unknown-morph")).toBe(
       ALPHA30_WILDLIFE_APPEARANCE_PALETTES["gray-wolf"]["grizzled-gray"],
     );
+  });
+
+  it("appends the distinct predator duo to the frozen upland palette prefix", () => {
+    expect(REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES.slice(
+      0,
+      ALPHA30_WILDLIFE_APPEARANCE_SPECIES.length,
+    )).toEqual(ALPHA30_WILDLIFE_APPEARANCE_SPECIES);
+    expect(REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES.slice(-2)).toEqual([
+      "cougar",
+      "brown-bear",
+    ]);
+
+    expect(regionalUplandWildlifeAppearancePalette("cougar", "warm-tawny"))
+      .toBe(ALPHA31_PREDATOR_APPEARANCE_PALETTES.cougar["warm-tawny"]);
+    expect(regionalUplandWildlifeAppearancePalette("brown-bear", "grizzled-brown"))
+      .toBe(ALPHA31_PREDATOR_APPEARANCE_PALETTES["brown-bear"]["grizzled-brown"]);
+    expect(regionalUplandWildlifeAppearancePalette("cougar", "unknown-morph"))
+      .toBe(ALPHA31_PREDATOR_APPEARANCE_PALETTES.cougar["warm-tawny"]);
+    expect(regionalUplandWildlifeAppearancePalette("brown-bear", "unknown-morph"))
+      .toBe(ALPHA31_PREDATOR_APPEARANCE_PALETTES["brown-bear"]["dark-brown"]);
   });
 });

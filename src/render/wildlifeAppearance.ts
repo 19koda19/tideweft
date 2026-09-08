@@ -33,6 +33,19 @@ export const ALPHA30_WILDLIFE_APPEARANCE_SPECIES = [
 export type Alpha30WildlifeAppearanceSpecies =
   (typeof ALPHA30_WILDLIFE_APPEARANCE_SPECIES)[number];
 
+/**
+ * Shared regional-upland palette roster. The Alpha 30 export above remains a
+ * frozen release prefix; later species append here without rewriting it.
+ */
+export const REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES = [
+  ...ALPHA30_WILDLIFE_APPEARANCE_SPECIES,
+  "cougar",
+  "brown-bear",
+] as const;
+
+export type RegionalUplandWildlifeAppearanceSpecies =
+  (typeof REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES)[number];
+
 /** Fails safely to the established brown coat for legacy or malformed views. */
 export function domesticGoatAppearancePalette(
   appearanceKey: string,
@@ -85,4 +98,47 @@ export function alpha30WildlifeAppearancePalette(
     return palettes[appearanceKey] as WildlifeAppearancePalette;
   }
   return palettes[ALPHA30_WILDLIFE_APPEARANCE_FALLBACK[species]] as WildlifeAppearancePalette;
+}
+
+const ALPHA31_PREDATOR_APPEARANCE_FALLBACK = Object.freeze({
+  cougar: "warm-tawny",
+  "brown-bear": "dark-brown",
+} as const);
+
+export const ALPHA31_PREDATOR_APPEARANCE_PALETTES = Object.freeze({
+  cougar: Object.freeze({
+    "gray-tawny": palette("#8d8372", "#c5b69b", "#3f3b35", "#e4d4b7"),
+    "pale-tawny": palette("#b89d76", "#dec9a4", "#4d4338", "#efe0c3"),
+    "reddish-tawny": palette("#a66e4a", "#d6a878", "#462e25", "#ead0aa"),
+    "warm-tawny": palette("#aa8258", "#d2b184", "#44382d", "#ead7b5"),
+  }),
+  "brown-bear": Object.freeze({
+    "dark-brown": palette("#4c372b", "#7d6651", "#211914", "#b89e78"),
+    "golden-brown": palette("#806141", "#ad8d62", "#34271e", "#d0b78e"),
+    "grizzled-brown": palette("#665d50", "#9f927d", "#2c2924", "#cbb995"),
+    "reddish-brown": palette("#70452f", "#a66d4d", "#2d211b", "#c9a47d"),
+  }),
+} as const);
+
+/** One species-safe palette owner for every animal in the remote upland source. */
+export function regionalUplandWildlifeAppearancePalette(
+  species: RegionalUplandWildlifeAppearanceSpecies,
+  appearanceKey: string,
+): WildlifeAppearancePalette {
+  if ((ALPHA30_WILDLIFE_APPEARANCE_SPECIES as readonly string[]).includes(species)) {
+    return alpha30WildlifeAppearancePalette(
+      species as Alpha30WildlifeAppearanceSpecies,
+      appearanceKey,
+    );
+  }
+  const predatorSpecies = species as keyof typeof ALPHA31_PREDATOR_APPEARANCE_PALETTES;
+  const palettes = ALPHA31_PREDATOR_APPEARANCE_PALETTES[predatorSpecies] as Readonly<
+    Record<string, WildlifeAppearancePalette>
+  >;
+  if (Object.prototype.hasOwnProperty.call(palettes, appearanceKey)) {
+    return palettes[appearanceKey] as WildlifeAppearancePalette;
+  }
+  return palettes[
+    ALPHA31_PREDATOR_APPEARANCE_FALLBACK[predatorSpecies]
+  ] as WildlifeAppearancePalette;
 }

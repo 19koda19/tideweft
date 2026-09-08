@@ -37,6 +37,17 @@ describe("core ecology trophic capability resolver", () => {
       expect(coreEcologyCanPursueLivingActor("gray-wolf", subject)).toBe(true);
       expect(coreEcologyCanResolveMortalityTarget("gray-wolf", subject)).toBe(false);
     }
+    expect(coreEcologyTrophicPerceivedClass("cougar", "marsh-rabbit"))
+      .toBe("live-prey");
+    expect(coreEcologyCanPursueLivingActor("cougar", "marsh-rabbit")).toBe(true);
+    expect(coreEcologyCanResolveMortalityTarget("cougar", "marsh-rabbit")).toBe(true);
+    expect(coreEcologyCanResolveMortalityTarget("cougar", "elk")).toBe(false);
+    expect(coreEcologyCanPursueLivingActor("brown-bear", "marsh-rabbit"))
+      .toBe(false);
+    expect(coreEcologyTrophicPerceivedClass("brown-bear", "marsh-rabbit"))
+      .toBeNull();
+    expect(coreEcologyTrophicPerceivedClass("marsh-rabbit", "brown-bear"))
+      .toBe("large-predator");
     expect(coreEcologyCanResolveMortalityTarget("domestic-cat", "marsh-rabbit"))
       .toBe(false);
   });

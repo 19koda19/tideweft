@@ -259,6 +259,24 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 46_000,
     },
   },
+  cougar: {
+    aboutNoun: "cougar",
+    senses: {
+      visionAcuity: 960_000,
+      hearingSensitivity: 950_000,
+      scentSensitivity: 880_000,
+      scentBaseRangeUnits: 40_000,
+    },
+  },
+  "brown-bear": {
+    aboutNoun: "brown bear",
+    senses: {
+      visionAcuity: 740_000,
+      hearingSensitivity: 900_000,
+      scentSensitivity: ACTOR_PERCEPTION_SCALE,
+      scentBaseRangeUnits: 52_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

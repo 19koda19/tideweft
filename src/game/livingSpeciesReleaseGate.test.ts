@@ -134,6 +134,66 @@ describe("Living Weft species release gate", () => {
     }
   });
 
+  it("keeps one shared knowledge-honest gate for the Alpha 31 solitary predators", () => {
+    for (const species of ["cougar", "brown-bear"] as const) {
+      const releaseGate = gate(species);
+      const criterion = (name: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+        releaseGate.criteria.find((candidate) => candidate.criterion === name)
+      );
+      expect(livingSpeciesReadinessReport(species)).toMatchObject({
+        evidenceAuthenticated: true,
+        state: "blocked",
+        publicReady: false,
+        counts: { total: 30 },
+      });
+      for (const active of [
+        "species-profile",
+        "appearance",
+        "habitat-placement",
+        "locomotion",
+        "human-interaction",
+        "other-species-interaction",
+        "neutral-behavior",
+        "disengagement",
+        "about-disclosure",
+        "knowledge-honesty",
+        "population-materialization",
+        "full-coarse-transition",
+        "save-load",
+        "performance-budget",
+        "accessibility",
+        "mobile-parity",
+      ] as const) {
+        expect(criterion(active)?.status).toBe("active");
+      }
+      for (const [name, evidenceOwnerId] of [
+        ["habitat-placement", "test:alpha31-regional-predator-habitat:v1"],
+        ["population-materialization", "test:alpha31-regional-predator-materialization:v1"],
+        ["full-coarse-transition", "test:alpha31-regional-predator-materialization:v1"],
+        ["save-load", "test:alpha31-body-bearing-save-adoption:v1"],
+        ["performance-budget", "test:alpha31-regional-predator-performance:v1"],
+        ["mobile-parity", "test:alpha31-predator-presentation-invariants:v1"],
+      ] as const) {
+        expect(criterion(name)?.evidenceOwnerIds).toContain(evidenceOwnerId);
+      }
+      for (const unimplemented of [
+        "sound",
+        "dog-interaction",
+        "same-species-interaction",
+        "environmental-evidence",
+        "seamless-region-crossing",
+        "tutorial-truth",
+        "patch-note-truth",
+        "exact-tested-deployment",
+      ] as const) {
+        expect(criterion(unimplemented)).toMatchObject({
+          status: "unimplemented",
+          evidenceOwnerIds: [],
+        });
+      }
+    }
+  });
+
   it("keeps every current actor module blocked until all 30 release criteria close", () => {
     const human = livingSpeciesReadinessReport("human");
     const dog = livingSpeciesReadinessReport("domestic-dog");

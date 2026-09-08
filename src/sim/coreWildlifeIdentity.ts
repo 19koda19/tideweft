@@ -27,6 +27,8 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "wild-boar",
   "elk",
   "gray-wolf",
+  "cougar",
+  "brown-bear",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -111,6 +113,8 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "BOAR-"
     | "ELK-"
     | "WOLF-"
+    | "COUGAR-"
+    | "BROWNBEAR-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -133,6 +137,8 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "wild-boar": "BOAR-",
   elk: "ELK-",
   "gray-wolf": "WOLF-",
+  cougar: "COUGAR-",
+  "brown-bear": "BROWNBEAR-",
 });
 
 /**
@@ -361,6 +367,26 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     locomotionClass: "terrestrial",
     groupOrganization: "pack",
     groupStableIdNamespace: "PACK",
+  },
+  cougar: {
+    species: "cougar",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "carnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "brown-bear": {
+    species: "brown-bear",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
   },
 });
 
@@ -1105,6 +1131,72 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       vigilance: [580_000, 940_000],
       boldness: [200_000, 760_000],
       sociability: [620_000, 960_000],
+    },
+  },
+  cougar: {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "cougar",
+    maximumPatchPopulation: 2,
+    roles: ["forager", "scavenger", "predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 80_000,
+      carrion: 720_000,
+      "exposed-food": 260_000,
+      "live-prey": 1_000_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 880_000,
+      retreatThreshold: 660_000,
+      forageThreshold: 260_000,
+      guardThreshold: 520_000,
+      maximumPursuitTicks: 10,
+    },
+    morphs: ["gray-tawny", "pale-tawny", "reddish-tawny", "warm-tawny"],
+    temperamentPairs: [
+      ["cautious", "patient"],
+      ["watchful", "reserved"],
+      ["bold", "patient"],
+      ["opportunistic", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 980_000],
+      boldness: [180_000, 780_000],
+      sociability: [40_000, 260_000],
+    },
+  },
+  "brown-bear": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "brown-bear",
+    maximumPatchPopulation: 2,
+    roles: ["forager", "scavenger", "predator", "omnivore"],
+    foodAffinities: {
+      browse: 640_000,
+      "shore-forage": 420_000,
+      carrion: 920_000,
+      "exposed-food": 980_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 900_000,
+      retreatThreshold: 680_000,
+      forageThreshold: 300_000,
+      guardThreshold: 500_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-brown", "golden-brown", "grizzled-brown", "reddish-brown"],
+    temperamentPairs: [
+      ["reserved", "patient"],
+      ["cautious", "watchful"],
+      ["bold", "opportunistic"],
+      ["patient", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [460_000, 900_000],
+      boldness: [220_000, 860_000],
+      sociability: [30_000, 240_000],
     },
   },
 });

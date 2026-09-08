@@ -325,6 +325,7 @@ import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyMarshEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
+  deriveCoreEcologyRegionalPredatorHabitatAssemblage,
   deriveCoreEcologyRegionalUplandHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
   deriveCoreEcologyTidalWebHabitatAssemblage,
@@ -335,6 +336,7 @@ import {
   type CoreEcologyHarborEdgeHabitatAssemblage,
   type CoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
+  type CoreEcologyRegionalPredatorHabitatAssemblage,
   type CoreEcologyRegionalUplandHabitatAssemblage,
   type CoreEcologyTidalTableHabitatAssemblage,
   type CoreEcologyTidalWebHabitatAssemblage,
@@ -576,7 +578,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 23;
+const GAME_SAVE_VERSION = 24;
+const REGIONAL_UPLAND_GAME_SAVE_VERSION = 23;
 const MORTALITY_BODY_GAME_SAVE_VERSION = 22;
 const DOMESTIC_GOAT_GAME_SAVE_VERSION = 21;
 const WATCH_RETURNS_GAME_SAVE_VERSION = 20;
@@ -716,6 +719,8 @@ const LEGACY_CORE_ECOLOGY_POPULATION_TOPOLOGY = Object.freeze([
 const CORE_ECOLOGY_FORAGE_PROVISION = "dried-fish" as const;
 const RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT = 24;
 const runtimeCoreEcologyHabitatCache =
+  new Map<string, CoreEcologyRegionalPredatorHabitatAssemblage>();
+const runtimeRegionalUplandCoreEcologyHabitatCache =
   new Map<string, CoreEcologyRegionalUplandHabitatAssemblage>();
 const runtimeDomesticPenCoreEcologyHabitatCache =
   new Map<string, CoreEcologyDomesticPenHabitatAssemblage>();
@@ -892,6 +897,95 @@ function createRuntimeCoreEcology(
   economy: WorldView = createWorldView(world),
 ): CoreEcologyAggregatePatchState {
   const habitat = deriveRuntimeCoreEcologyHabitat(world, bio0, economy);
+  const groups = createRuntimeCoreEcologyGroups(world, habitat);
+  let patch = createCoreEcologyAggregatePatch({
+    seed: world.meta.rootSeed,
+    patchKey: CORE_ECOLOGY_PATCH_KEY,
+    originRegion: habitat.originRegion,
+    tick: world.meta.completedTick,
+    derivation: { kind: "habitat-v11", habitat },
+    groups,
+    populations: habitat.populations
+      .filter(({ populationUnits, representation }) => (
+        populationUnits > 0
+        && representation === "individual-representatives"
+      ))
+      .filter(({ species }) => coreEcologySpeciesCanOwnActorAddress(species))
+      .map((population) => ({
+        species: population.species,
+        populationKey: population.populationKey,
+        populationSize: population.populationUnits,
+        members: population.allocations.map((allocation) => ({
+          populationOrdinal: allocation.allocationOrdinal,
+          representedUnits: allocation.representedUnits,
+          position: allocation.position,
+          materialization: "coarse" as const,
+        })),
+      })),
+  });
+  const initialMaterialization = setCoreEcologyMaterializationForWindow(
+    patch,
+    {
+      origin: (() => {
+        const regionOrigin = regionLocalToGlobalTile(habitat.originRegion, 0, 0);
+        return {
+          x: regionOrigin.x - Math.trunc((REGIONAL_TRAVEL_COLUMNS - WORLD_WIDTH) / 2),
+          y: regionOrigin.y - Math.trunc((REGIONAL_TRAVEL_ROWS - WORLD_HEIGHT) / 2),
+        };
+      })(),
+      terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+    },
+    world.meta.completedTick,
+  );
+  if (initialMaterialization === null) {
+    throw new Error("Initial tidal-web materialization failed validation");
+  }
+  patch = initialMaterialization;
+  const bearMember = patch.populations
+    .find(({ species }) => species === "black-bear")
+    ?.members[0];
+  if (bearMember !== undefined) {
+    const hungryBear = replaceCoreWildlifeActorPhysiology(bearMember.actor, {
+      atTick: world.meta.completedTick,
+      needs: { ...bearMember.actor.needs, hunger: Math.max(680_000, bearMember.actor.needs.hunger) },
+      condition: bearMember.actor.condition,
+    });
+    patch = replaceCoreEcologyAggregatePatchActor(patch, hungryBear);
+  }
+  const tidal = stepCoreEcologyTidalTable(patch, {
+    atTick: world.meta.completedTick,
+  });
+  if (tidal === null) throw new Error("Initial tidal ecology projection failed validation");
+  const initialized = initializeRuntimeTidalActivityActor(
+    tidal.patch,
+    tidal.projection,
+    world.meta.completedTick,
+  );
+  if (initialized === null) throw new Error("Initial tidal actor placement failed validation");
+  const waterfowlInitialized = initializeRuntimeWaterfowlActivityActor(
+    initialized,
+    world.meta.completedTick,
+  );
+  if (waterfowlInitialized === null) {
+    throw new Error("Initial waterfowl placement failed validation");
+  }
+  const tidalWebInitialized = initializeRuntimeTidalWebActivityActor(
+    waterfowlInitialized,
+    world.meta.completedTick,
+  );
+  if (tidalWebInitialized === null) {
+    throw new Error("Initial tidal-web activity placement failed validation");
+  }
+  return tidalWebInitialized;
+}
+
+/** Frozen Alpha-30 v10 constructor used only to authenticate and extend v23 saves. */
+function createRuntimeRegionalUplandCoreEcology(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView = createWorldView(world),
+): CoreEcologyAggregatePatchState {
+  const habitat = deriveRuntimeRegionalUplandCoreEcologyHabitat(world, bio0, economy);
   const groups = createRuntimeCoreEcologyGroups(world, habitat);
   let patch = createCoreEcologyAggregatePatch({
     seed: world.meta.rootSeed,
@@ -1404,16 +1498,39 @@ function deriveRuntimeCoreEcologyHabitat(
   world: WorldState,
   bio0: Bio0EcologyState,
   economy: WorldView,
-): CoreEcologyRegionalUplandHabitatAssemblage {
+): CoreEcologyRegionalPredatorHabitatAssemblage {
   const input = runtimeCoreEcologyHabitatInput(world, bio0, economy);
-  const cacheKey = hashCanonical(["runtime-core-ecology-habitat/v10", input]);
+  const cacheKey = hashCanonical(["runtime-core-ecology-habitat/v11", input]);
   const cached = runtimeCoreEcologyHabitatCache.get(cacheKey);
   if (cached !== undefined) return cached;
-  const habitat = deriveCoreEcologyRegionalUplandHabitatAssemblage(input);
+  const habitat = deriveCoreEcologyRegionalPredatorHabitatAssemblage(input);
   runtimeCoreEcologyHabitatCache.set(cacheKey, habitat);
   if (runtimeCoreEcologyHabitatCache.size > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT) {
     const oldest = runtimeCoreEcologyHabitatCache.keys().next().value as string | undefined;
     if (oldest !== undefined) runtimeCoreEcologyHabitatCache.delete(oldest);
+  }
+  return habitat;
+}
+
+/** Frozen Alpha-30 v10 habitat authority used only by outer-save adoption. */
+function deriveRuntimeRegionalUplandCoreEcologyHabitat(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView,
+): CoreEcologyRegionalUplandHabitatAssemblage {
+  const input = runtimeCoreEcologyHabitatInput(world, bio0, economy);
+  const cacheKey = hashCanonical(["runtime-core-ecology-habitat/v10", input]);
+  const cached = runtimeRegionalUplandCoreEcologyHabitatCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const habitat = deriveCoreEcologyRegionalUplandHabitatAssemblage(input);
+  runtimeRegionalUplandCoreEcologyHabitatCache.set(cacheKey, habitat);
+  if (
+    runtimeRegionalUplandCoreEcologyHabitatCache.size
+      > RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT
+  ) {
+    const oldest = runtimeRegionalUplandCoreEcologyHabitatCache.keys().next().value as
+      string | undefined;
+    if (oldest !== undefined) runtimeRegionalUplandCoreEcologyHabitatCache.delete(oldest);
   }
   return habitat;
 }
@@ -1495,6 +1612,8 @@ function runtimeGuardianDogGeneration(
     && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     && core.derivation.kind !== "habitat-v10"
     && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+    && core.derivation.kind !== "habitat-v11"
+    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
   ) return null;
   const pen = core.derivation.habitat.domesticPenAnchor;
   const identity = hashCanonical([
@@ -1530,6 +1649,8 @@ function createRuntimeDogActorRoster(
       && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
       && core.derivation.kind !== "habitat-v10"
       && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+      && core.derivation.kind !== "habitat-v11"
+      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
     )
   ) throw new Error("Working-dog roster requires the authenticated livestock pen");
   const guardian = createDogActorState({
@@ -2063,7 +2184,8 @@ function createRuntimeCoreEcologyGroups(
     | CoreEcologyTidalWebHabitatAssemblage
     | CoreEcologyDomesticPenHabitatAssemblage
     | CoreEcologyDomesticYardHabitatAssemblage
-    | CoreEcologyRegionalUplandHabitatAssemblage,
+    | CoreEcologyRegionalUplandHabitatAssemblage
+    | CoreEcologyRegionalPredatorHabitatAssemblage,
 ) {
   const groups: CoreEcologyGroupState[] = [];
   for (const population of habitat.populations) {
@@ -2110,12 +2232,12 @@ function canonicalRuntimeCoreEcology(
     || state.derivation.kind === "bounded-input-v1"
   ) return null;
   if (
-    state.derivation.kind === "habitat-v10"
-    || state.derivation.kind === "legacy-fixed-v1-with-habitat-v10"
+    state.derivation.kind === "habitat-v11"
+    || state.derivation.kind === "legacy-fixed-v1-with-habitat-v11"
   ) {
     const expectedHabitat = deriveRuntimeCoreEcologyHabitat(world, bio0, createWorldView(world));
     if (stableStringify(state.derivation.habitat) !== stableStringify(expectedHabitat)) return null;
-    if (state.derivation.kind === "habitat-v10") {
+    if (state.derivation.kind === "habitat-v11") {
       const expectedGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat);
       if (!runtimeCoreGroupTopologyMatches(state.groups.groups, expectedGroups.groups)) return null;
     } else {
@@ -2137,9 +2259,60 @@ function canonicalRuntimeCoreEcology(
       ) return null;
     }
   } else {
-    // Current envelopes always carry their authenticated v10 habitat. Earlier
+    // Current envelopes always carry their authenticated v11 habitat. Earlier
     // derivations are admitted only through the explicit one-way migrators.
     return null;
+  }
+  return runtimeCoreEcologyIdentitiesMatch(state, world) ? state : null;
+}
+
+/** Authenticate the exact Alpha-30 v10 ecology before its one-way adoption. */
+function canonicalRuntimeRegionalUplandCoreEcology(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+): CoreEcologyAggregatePatchState | null {
+  const state = canonicalizeCoreEcologyAggregatePatch(value);
+  if (
+    state === null
+    || state.updatedAtTick !== world.meta.completedTick
+    || state.patchKey !== CORE_ECOLOGY_PATCH_KEY
+  ) return null;
+  const origin = bio0.porterAddress.position.region;
+  if (
+    state.originRegion.x !== origin.x
+    || state.originRegion.y !== origin.y
+    || (
+      state.derivation.kind !== "habitat-v10"
+      && state.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+    )
+  ) return null;
+  const expectedHabitat = deriveRuntimeRegionalUplandCoreEcologyHabitat(
+    world,
+    bio0,
+    createWorldView(world),
+  );
+  if (stableStringify(state.derivation.habitat) !== stableStringify(expectedHabitat)) return null;
+  if (state.derivation.kind === "habitat-v10") {
+    const expectedGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat);
+    if (!runtimeCoreGroupTopologyMatches(state.groups.groups, expectedGroups.groups)) return null;
+  } else {
+    const legacyPopulations = state.populations.filter(({ species }) => (
+      species === "deer" || species === "gull" || species === "black-bear"
+    ));
+    const expectedExtensionGroups = createRuntimeCoreEcologyGroups(world, expectedHabitat)
+      .groups.filter(({ identity }) => (
+        identity.species === "fish-crow"
+        || identity.species === "domestic-chicken"
+        || identity.species === "domestic-goat"
+        || identity.species === "wild-boar"
+        || identity.species === "elk"
+        || identity.species === "gray-wolf"
+      ));
+    if (
+      !legacyRuntimeCoreEcologyTopologyMatches(legacyPopulations)
+      || !runtimeCoreGroupTopologyMatches(state.groups.groups, expectedExtensionGroups)
+    ) return null;
   }
   return runtimeCoreEcologyIdentitiesMatch(state, world) ? state : null;
 }
@@ -2320,6 +2493,8 @@ function createRuntimeSettlementEcology(
     && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     && core.derivation.kind !== "habitat-v10"
     && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+    && core.derivation.kind !== "habitat-v11"
+    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
   ) return store;
   const definitions = [
     {
@@ -3690,7 +3865,11 @@ function migrateRuntimeCoreEcologyFromDomesticPen(
 ): CoreEcologyAggregatePatchState | null {
   const domesticPen = canonicalRuntimeDomesticPenCoreEcology(value, world, bio0);
   if (domesticPen === null) return null;
-  const template = createRuntimeCoreEcology(world, bio0, createWorldView(world));
+  const template = createRuntimeRegionalUplandCoreEcology(
+    world,
+    bio0,
+    createWorldView(world),
+  );
   if (template.derivation.kind !== "habitat-v10") return null;
   const regionalSpecies = new Set<CoreWildlifeSpecies>([
     "wild-boar",
@@ -3743,6 +3922,67 @@ function migrateRuntimeCoreEcologyFromDomesticPen(
       ({ identity }) => identity.stableId === oldGroup.identity.stableId,
     );
     if (stableStringify(retained) !== stableStringify(oldGroup)) return null;
+  }
+  const regionalUpland = canonicalRuntimeRegionalUplandCoreEcology(migrated, world, bio0);
+  return regionalUpland === null
+    ? null
+    : migrateRuntimeCoreEcologyFromRegionalUpland(regionalUpland, world, bio0);
+}
+
+/**
+ * Adopt Alpha-30's exact v10 population/body ledger once and append only the
+ * two solitary regional-predator populations. Existing groups, aggregate
+ * populations, mortality transactions, carcasses, actor claims, and item
+ * custody remain byte-for-byte authoritative; the extension creates no group.
+ */
+function migrateRuntimeCoreEcologyFromRegionalUpland(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+): CoreEcologyAggregatePatchState | null {
+  const regionalUpland = canonicalRuntimeRegionalUplandCoreEcology(value, world, bio0);
+  if (regionalUpland === null) return null;
+  const template = createRuntimeCoreEcology(world, bio0, createWorldView(world));
+  if (template.derivation.kind !== "habitat-v11") return null;
+  const predatorSpecies = new Set<CoreWildlifeSpecies>(["cougar", "brown-bear"]);
+  const extensionPopulations = template.populations
+    .filter(({ species }) => predatorSpecies.has(species))
+    .map((population) => Object.freeze({
+      ...population,
+      members: Object.freeze(population.members.map((member) => Object.freeze({
+        ...member,
+        materialization: "coarse" as const,
+      }))),
+    }));
+  const migrated = canonicalizeCoreEcologyAggregatePatch({
+    ...regionalUpland,
+    derivation: regionalUpland.derivation.kind === "legacy-fixed-v1-with-habitat-v10"
+      ? {
+          kind: "legacy-fixed-v1-with-habitat-v11",
+          habitat: template.derivation.habitat,
+        }
+      : template.derivation,
+    groups: regionalUpland.groups,
+    populations: [...regionalUpland.populations, ...extensionPopulations],
+  });
+  if (migrated === null) return null;
+  if (
+    stableStringify(migrated.groups) !== stableStringify(regionalUpland.groups)
+    || stableStringify(migrated.aggregatePopulations)
+      !== stableStringify(regionalUpland.aggregatePopulations)
+    || migrated.nextMortalityOrdinal !== regionalUpland.nextMortalityOrdinal
+    || stableStringify(migrated.mortalityTransactions)
+      !== stableStringify(regionalUpland.mortalityTransactions)
+    || stableStringify(migrated.carcasses) !== stableStringify(regionalUpland.carcasses)
+  ) return null;
+  for (const oldPopulation of regionalUpland.populations) {
+    const retained = migrated.populations.find(({ species, populationKey }) => (
+      species === oldPopulation.species && populationKey === oldPopulation.populationKey
+    ));
+    if (stableStringify(retained) !== stableStringify(oldPopulation)) return null;
+  }
+  if (migrated.groups.groups.some(({ identity }) => predatorSpecies.has(identity.species))) {
+    return null;
   }
   return canonicalRuntimeCoreEcology(migrated, world, bio0);
 }
@@ -12483,6 +12723,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== WATCH_RETURNS_GAME_SAVE_VERSION
         && decoded.version !== DOMESTIC_GOAT_GAME_SAVE_VERSION
         && decoded.version !== MORTALITY_BODY_GAME_SAVE_VERSION
+        && decoded.version !== REGIONAL_UPLAND_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -12504,6 +12745,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
         || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
         || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
       ) {
@@ -12787,6 +13029,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           world,
           bio0Ecology,
         )
+      : decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
+        ? migrateRuntimeCoreEcologyFromRegionalUpland(
+            deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
+            world,
+            bio0Ecology,
+          )
       : decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
         ? migrateRuntimeCoreEcologyFromDomesticPen(
             deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
@@ -12861,6 +13109,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const dogActorRoster = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
       || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
       || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
@@ -12878,6 +13127,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const settlementEcology = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
       || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
       || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
@@ -12891,6 +13141,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           if (
             (
               decoded.version === GAME_SAVE_VERSION
+              || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
               || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
               || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
               || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
@@ -12947,6 +13198,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const settlementWorkingAnimals = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
       || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
       || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
@@ -12978,6 +13230,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           ) return null;
           const deserialized = (
             decoded.version === GAME_SAVE_VERSION
+            || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
             || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
             || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
             || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
@@ -12989,6 +13242,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             || (
               (
                 decoded.version === GAME_SAVE_VERSION
+                || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
                 || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
                 || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
                 || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
@@ -13042,6 +13296,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const settlementDomesticAnimalRecovery = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
       || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
     )

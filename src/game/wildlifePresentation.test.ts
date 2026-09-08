@@ -708,11 +708,13 @@ function regroupingGoat(): CoreWildlifeActorState {
 }
 
 describe("knowledge-honest wildlife presentation", () => {
-  it("projects all three Alpha 30 bodies through the shared direct-detail vocabulary", () => {
+  it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
       ["elk", "Elk", "Tall, long-legged ungulate with a dark neck"],
       ["gray-wolf", "Gray wolf", "Long-legged, deep-chested canid with a level tail"],
+      ["cougar", "Cougar", "Long-bodied tawny cat with a heavy tail"],
+      ["brown-bear", "Brown bear", "Massive bear with a high shoulder hump"],
     ] as const;
 
     for (const [species, quickLabel, formLabel] of cases) {

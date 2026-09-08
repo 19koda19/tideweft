@@ -2188,6 +2188,80 @@ function regionalUplandEvidence(
 }
 
 /**
+ * Shared evidence for the bounded solitary-predator extension. The gate names
+ * only behavior owned by the common habitat, actor, trophic, mortality,
+ * presentation, and save seams; dog response, voice playback, physical bodies,
+ * tracks, migration, and same-species coordination remain absent.
+ */
+function regionalPredatorBreadthEvidence(
+  species: "cougar" | "brown-bear",
+): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  const wildlifeOwners = owners(
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:core-wildlife-actor:v1",
+  );
+  const presentationOwners = owners(
+    "game:wildlife-about:v1",
+    "game:wildlife-presentation:v1",
+    "sim:actor-perception:v2",
+  );
+  return [
+    ["species-profile", A, owners("game:living-species-catalog:v1", "sim:core-wildlife-identity:v1")],
+    ["ecological-niche", F, owners("game:core-ecology-habitat:v11", "game:core-ecology-trophic:v1", ...wildlifeOwners)],
+    ["appearance", A, owners("game:wildlife-presentation:v1", "sim:core-wildlife-identity:v1")],
+    ["sound", U, []],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v11",
+      "game:runtime-core-ecology:v1",
+      "test:alpha31-regional-predator-habitat:v1",
+    )],
+    ["food-web", F, owners("game:core-ecology-trophic:v1", "game:living-species-catalog:v1", ...wildlifeOwners)],
+    ["perception-senses", F, owners("game:living-actor-senses:v1", "game:runtime-core-ecology:v1", "sim:actor-perception:v2")],
+    ["locomotion", A, owners("game:core-wildlife-locomotion-profile:v1", "game:runtime-core-ecology:v1")],
+    ["human-interaction", A, wildlifeOwners],
+    ["dog-interaction", U, []],
+    ["same-species-interaction", U, []],
+    ["other-species-interaction", A, owners("game:core-ecology-trophic:v1", ...wildlifeOwners)],
+    ["neutral-behavior", A, ["game:core-wildlife-actor:v1"]],
+    ["disengagement", A, ["game:core-wildlife-actor:v1"]],
+    ["environmental-evidence", U, []],
+    ["about-disclosure", A, presentationOwners],
+    ["knowledge-honesty", A, presentationOwners],
+    ["population-materialization", A, owners(
+      "game:core-ecology-habitat:v11",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha31-regional-predator-materialization:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha31-regional-predator-materialization:v1",
+    )],
+    ["save-load", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha31-body-bearing-save-adoption:v1",
+    )],
+    ["seamless-region-crossing", U, []],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v11",
+      "game:runtime-core-ecology:v1",
+      "test:alpha31-regional-predator-performance:v1",
+    )],
+    ["accessibility", A, presentationOwners],
+    ["mobile-parity", A, owners(...presentationOwners, "test:alpha31-predator-presentation-invariants:v1")],
+    ["player-independent-scenario", F, wildlifeOwners],
+    ["fuzz-testing", F, owners("game:core-ecology-species-runtime-policy:v1", "sim:core-wildlife-identity:v1")],
+    ["clone-diversity", A, ["sim:core-wildlife-identity:v1"]],
+    ["tutorial-truth", U, []],
+    ["patch-note-truth", U, []],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -2276,6 +2350,8 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "wild-boar": regionalUplandEvidence("wild-boar"),
   elk: regionalUplandEvidence("elk"),
   "gray-wolf": regionalUplandEvidence("gray-wolf"),
+  cougar: regionalPredatorBreadthEvidence("cougar"),
+  "brown-bear": regionalPredatorBreadthEvidence("brown-bear"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {

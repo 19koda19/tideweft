@@ -33,7 +33,7 @@ import {
   CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES,
   CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION,
-  CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION,
+  CORE_ECOLOGY_REGIONAL_PREDATOR_HABITAT_VERSION,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
@@ -558,8 +558,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 23 || current.version !== 23) {
-    throw new Error("runtime fixture is not a current v23 save");
+  if (record.payloadVersion !== 24 || current.version !== 24) {
+    throw new Error("runtime fixture is not a current v24 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -866,9 +866,9 @@ function downgradeSettlementEcologyToV2(encoded: unknown): string {
 function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
   const current = requireCoreEcology(encoded);
   if (
-    current.derivation.kind !== "habitat-v10"
-    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-  ) throw new Error("current fixture did not use the regional-upland habitat");
+    current.derivation.kind !== "habitat-v11"
+    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+  ) throw new Error("current fixture did not use the regional-predator habitat");
   const {
     domesticAnchor: _domesticAnchor,
     domesticPenAnchor: _domesticPenAnchor,
@@ -881,11 +881,13 @@ function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
     && species !== "wild-boar"
     && species !== "elk"
     && species !== "gray-wolf"
+    && species !== "cougar"
+    && species !== "brown-bear"
   ));
   const downgraded = canonicalizeCoreEcologyAggregatePatch({
     ...current,
     derivation: {
-      kind: current.derivation.kind === "habitat-v10"
+      kind: current.derivation.kind === "habitat-v11"
         ? "habitat-v7"
         : "legacy-fixed-v1-with-habitat-v7",
       habitat: {
@@ -905,6 +907,8 @@ function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
         && identity.species !== "wild-boar"
         && identity.species !== "elk"
         && identity.species !== "gray-wolf"
+        && identity.species !== "cougar"
+        && identity.species !== "brown-bear"
       )),
     },
     populations: current.populations.filter(({ species }) => (
@@ -913,6 +917,8 @@ function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
       && species !== "wild-boar"
       && species !== "elk"
       && species !== "gray-wolf"
+      && species !== "cougar"
+      && species !== "brown-bear"
     )),
   });
   if (downgraded === null) throw new Error("tidal-web downgrade is not canonical");
@@ -922,9 +928,9 @@ function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
 function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
   const current = requireCoreEcology(encoded);
   if (
-    current.derivation.kind !== "habitat-v10"
-    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-  ) throw new Error("current fixture did not use the regional-upland habitat");
+    current.derivation.kind !== "habitat-v11"
+    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+  ) throw new Error("current fixture did not use the regional-predator habitat");
   const {
     domesticPenAnchor: _domesticPenAnchor,
     regionalHabitat: _regionalHabitat,
@@ -935,11 +941,13 @@ function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
     && species !== "wild-boar"
     && species !== "elk"
     && species !== "gray-wolf"
+    && species !== "cougar"
+    && species !== "brown-bear"
   ));
   const downgraded = canonicalizeCoreEcologyAggregatePatch({
     ...current,
     derivation: {
-      kind: current.derivation.kind === "habitat-v10"
+      kind: current.derivation.kind === "habitat-v11"
         ? "habitat-v8"
         : "legacy-fixed-v1-with-habitat-v8",
       habitat: {
@@ -958,6 +966,8 @@ function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
         && identity.species !== "wild-boar"
         && identity.species !== "elk"
         && identity.species !== "gray-wolf"
+        && identity.species !== "cougar"
+        && identity.species !== "brown-bear"
       )),
     },
     populations: current.populations.filter(({ species }) => (
@@ -965,6 +975,8 @@ function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
       && species !== "wild-boar"
       && species !== "elk"
       && species !== "gray-wolf"
+      && species !== "cougar"
+      && species !== "brown-bear"
     )),
   });
   if (downgraded === null) throw new Error("domestic-yard downgrade is not canonical");
@@ -974,16 +986,22 @@ function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
 function downgradeCoreEcologyToDomesticPen(encoded: unknown): string {
   const current = requireCoreEcology(encoded);
   if (
-    current.derivation.kind !== "habitat-v10"
-    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-  ) throw new Error("current fixture did not use the regional-upland habitat");
+    current.derivation.kind !== "habitat-v11"
+    && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+  ) throw new Error("current fixture did not use the regional-predator habitat");
   const { regionalHabitat: _regionalHabitat, ...habitatFields } =
     current.derivation.habitat;
-  const regionalSpecies = new Set(["wild-boar", "elk", "gray-wolf"]);
+  const regionalSpecies = new Set([
+    "wild-boar",
+    "elk",
+    "gray-wolf",
+    "cougar",
+    "brown-bear",
+  ]);
   const downgraded = canonicalizeCoreEcologyAggregatePatch({
     ...current,
     derivation: {
-      kind: current.derivation.kind === "habitat-v10"
+      kind: current.derivation.kind === "habitat-v11"
         ? "habitat-v9"
         : "legacy-fixed-v1-with-habitat-v9",
       habitat: {
@@ -1012,7 +1030,7 @@ function downgradeCoreEcologyToDomesticPen(encoded: unknown): string {
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 23) throw new Error("fixture is not a current save");
+  if (current.version !== 24) throw new Error("fixture is not a current save");
   const {
     integrity: _integrity,
     dogActorRoster: _dogActorRoster,
@@ -1038,7 +1056,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 23) throw new Error("fixture is not a current save");
+  if (current.version !== 24) throw new Error("fixture is not a current save");
   const {
     integrity: _integrity,
     dogActorRoster: _dogActorRoster,
@@ -1064,7 +1082,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 23 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 24 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const currentSettlement = JSON.parse(current.settlementEcology) as Record<string, unknown>;
@@ -1114,7 +1132,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 23
+    current.version !== 24
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const currentWork = JSON.parse(current.settlementWorkingAnimals) as Record<string, unknown>;
@@ -1266,7 +1284,11 @@ describe("runtime settlement ecology integration", () => {
       throw new Error("boundary fixture omitted one bounded social group");
     }
     const localMemberIds = core.populations.flatMap(({ species, members: owned }) => (
-      species === "wild-boar" || species === "elk" || species === "gray-wolf"
+      species === "wild-boar"
+      || species === "elk"
+      || species === "gray-wolf"
+      || species === "cougar"
+      || species === "brown-bear"
         ? []
         : owned.map(({ actor }) => actor.identity.stableId)
     ));
@@ -1469,7 +1491,9 @@ describe("runtime settlement ecology integration", () => {
       throw new Error("recovery fixture could not find a traversable separated position");
     }
 
-    const everyMember = core.populations.flatMap(({ members }) => members);
+    const everyMember = core.populations.flatMap(({ species, members }) => (
+      species === "cougar" || species === "brown-bear" ? [] : members
+    ));
     core = setCoreEcologyAggregatePatchMaterializedActors(core, {
       atTick: core.updatedAtTick,
       actorIds: everyMember.map(({ actor }) => actor.identity.stableId),
@@ -1787,8 +1811,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(23);
-    expect(envelope.version).toBe(23);
+    expect(record.payloadVersion).toBe(24);
+    expect(envelope.version).toBe(24);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "coreEcology",
@@ -1814,11 +1838,11 @@ describe("runtime settlement ecology integration", () => {
     const state = deserializeSettlementEcologyState(envelope.settlementEcology);
     const core = requireCoreEcology(envelope.coreEcology);
     if (
-      core.derivation.kind !== "habitat-v10"
-      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-    ) throw new Error("current save omitted its v10 regional habitat");
+      core.derivation.kind !== "habitat-v11"
+      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+    ) throw new Error("current save omitted its v11 regional-predator habitat");
     expect(core.derivation.habitat.generationVersion)
-      .toBe(CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION);
+      .toBe(CORE_ECOLOGY_REGIONAL_PREDATOR_HABITAT_VERSION);
     expect(state.version).toBe(4);
     expect((envelope.player as { activeContractId: number | null }).activeContractId).not.toBeNull();
     expect(state).toMatchObject({
@@ -1892,8 +1916,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(23);
-    expect(migratedEnvelope.version).toBe(23);
+    expect(migratedRecord.payloadVersion).toBe(24);
+    expect(migratedEnvelope.version).toBe(24);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -1974,8 +1998,8 @@ describe("runtime settlement ecology integration", () => {
     );
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
-    expect(migratedRecord.payloadVersion).toBe(23);
-    expect(migratedEnvelope.version).toBe(23);
+    expect(migratedRecord.payloadVersion).toBe(24);
+    expect(migratedEnvelope.version).toBe(24);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -1987,8 +2011,8 @@ describe("runtime settlement ecology integration", () => {
     expect(migratedStore.keeperKnowledge).toHaveLength(1);
 
     if (
-      migratedCore.derivation.kind !== "habitat-v10"
-      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+      migratedCore.derivation.kind !== "habitat-v11"
+      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
     ) throw new Error("v16 migration omitted its authenticated domestic append");
     expectDomesticRepresentatives(migratedCore, migratedStore, [
       {
@@ -2018,6 +2042,8 @@ describe("runtime settlement ecology integration", () => {
       && species !== "wild-boar"
       && species !== "elk"
       && species !== "gray-wolf"
+      && species !== "cougar"
+      && species !== "brown-bear"
     ))).toEqual(priorCore.populations);
     expect(migratedCore.groups.groups.filter(({ identity }) => (
       identity.species !== "domestic-chicken"
@@ -2125,23 +2151,37 @@ describe("runtime settlement ecology integration", () => {
     );
     const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
     if (
-      migratedCore.derivation.kind !== "habitat-v10"
-      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
+      migratedCore.derivation.kind !== "habitat-v11"
+      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
     ) throw new Error("v17 migration omitted the plural domestic habitat");
-    expect(migratedRecord.payloadVersion).toBe(23);
-    expect(migratedEnvelope.version).toBe(23);
+    expect(migratedRecord.payloadVersion).toBe(24);
+    expect(migratedEnvelope.version).toBe(24);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
     expect(migratedStore.carrier).toEqual(priorStore.carrier);
 
-    expect(migratedCore.populations).toHaveLength(priorCore.populations.length + 4);
+    const priorPopulationKeys = new Set(priorCore.populations.map(({ populationKey }) => (
+      populationKey
+    )));
+    const expectedAddedPopulations = migratedCore.derivation.habitat.populations.filter(
+      ({ populationKey, populationUnits, representation }) => (
+        !priorPopulationKeys.has(populationKey)
+        && populationUnits > 0
+        && representation === "individual-representatives"
+      ),
+    );
+    expect(migratedCore.populations).toHaveLength(
+      priorCore.populations.length + expectedAddedPopulations.length,
+    );
     expect(migratedCore.groups.groups).toHaveLength(priorCore.groups.groups.length + 4);
     expect(migratedCore.populations.filter(({ species }) => (
       species !== "domestic-goat"
       && species !== "wild-boar"
       && species !== "elk"
       && species !== "gray-wolf"
+      && species !== "cougar"
+      && species !== "brown-bear"
     ))).toEqual(priorCore.populations);
     expect(migratedCore.groups.groups.filter(({ identity }) => (
       identity.species !== "domestic-goat"
@@ -2261,8 +2301,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(23);
-    expect(migratedEnvelope.version).toBe(23);
+    expect(migratedRecord.payloadVersion).toBe(24);
+    expect(migratedEnvelope.version).toBe(24);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -2369,8 +2409,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(23);
-    expect(migratedEnvelope.version).toBe(23);
+    expect(migratedRecord.payloadVersion).toBe(24);
+    expect(migratedEnvelope.version).toBe(24);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,

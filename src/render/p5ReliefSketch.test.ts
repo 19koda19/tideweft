@@ -12,6 +12,9 @@ import type {
 } from "./types";
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 
+export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
+  "test:alpha31-predator-presentation-invariants:v1" as const;
+
 const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
   instances: [] as Array<Record<string, unknown>>,
@@ -383,6 +386,8 @@ function wildlifeView(
     "wild-boar": "Wild boar",
     elk: "Elk",
     "gray-wolf": "Gray wolf",
+    cougar: "Cougar",
+    "brown-bear": "Brown bear",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -401,6 +406,8 @@ function wildlifeView(
     "wild-boar": "BOAR-",
     elk: "ELK-",
     "gray-wolf": "WOLF-",
+    cougar: "COUGAR-",
+    "brown-bear": "BROWNBEAR-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -2291,7 +2298,9 @@ describe("Relief wildlife presentation", () => {
     ["wild-boar", "#614735", "cone"],
     ["elk", "#9b6f43", "ellipsoid"],
     ["gray-wolf", "#727875", "sphere"],
-  ] as const)("renders and touch-selects the shared color-independent upland %s form", (
+    ["cougar", "#aa8258", "cylinder"],
+    ["brown-bear", "#4c372b", "sphere"],
+  ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} renders and touch-selects the shared color-independent upland %s form`, (
     species,
     primaryColor,
     structuralMethod,
@@ -2355,6 +2364,8 @@ describe("Relief wildlife presentation", () => {
       "wild-boar",
       "elk",
       "gray-wolf",
+      "cougar",
+      "brown-bear",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -2373,6 +2384,8 @@ describe("Relief wildlife presentation", () => {
       "wild-boar": "BOAR-",
       elk: "ELK-",
       "gray-wolf": "WOLF-",
+      cougar: "COUGAR-",
+      "brown-bear": "BROWNBEAR-",
     };
 
     for (const kind of species) {

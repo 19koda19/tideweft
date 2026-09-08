@@ -202,7 +202,7 @@ describe("core ecology additive domestic habitat properties", () => {
     expect(canonicalizeCoreEcologyAggregatePatch(patch)).toEqual(patch);
     expect(deserializeCoreEcologyAggregatePatch(serializeCoreEcologyAggregatePatch(patch)))
       .toEqual(patch);
-    expect(CORE_ECOLOGY_MAX_POPULATIONS).toBe(16);
+    expect(CORE_ECOLOGY_MAX_POPULATIONS).toBe(18);
     expect(CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS).toBe(24);
   });
 

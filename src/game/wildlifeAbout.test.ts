@@ -364,6 +364,8 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["wild-boar", "WILD BOAR", "Wild boar"],
     ["elk", "ELK", "Elk"],
     ["gray-wolf", "GRAY WOLF", "Gray wolf"],
+    ["cougar", "COUGAR", "Cougar"],
+    ["brown-bear", "BROWN BEAR", "Brown bear"],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -400,6 +402,8 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["wild-boar", "LARGE ANIMAL", "Unidentified large animal", 80],
     ["elk", "LARGE HOOFED ANIMAL", "Unidentified large hoofed animal", 80],
     ["gray-wolf", "UNKNOWN CANID", "Unidentified canid", 80],
+    ["cougar", "UNKNOWN LARGE CAT", "Unidentified large cat", 80],
+    ["brown-bear", "LARGE BEAR", "Unidentified large bear", 80],
     [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",

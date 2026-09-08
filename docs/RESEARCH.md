@@ -382,7 +382,35 @@ desktop/mobile/title smoke, and clean invariant, save, release-surface, and
 visual audits. A cache-bypassed live comparison matched all five production
 files byte-for-byte.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, mortality/body, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the verified bounded recovery-composition release, Alpha 29 is the verified first one-life/one-body mortality release, and Alpha 30 is the verified first Wave-E regional breadth release. None completes worldwide aquatic or settlement ecology, broad attacks or mortality, population recovery, decomposition, body transport or harvesting, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The `0.3.3-alpha.31 — High Country Shadows` source release tests the next
+scaling step: add two behaviorally distinct solitary predators without adding
+two private controllers. Cougar and brown bear append to the exact existing
+remote source through habitat version 11 and the twenty-four-record catalog.
+Both reuse stable habitat-population records and, where carrying capacity
+supports them, persistent individual identity, current direct perception,
+attention, actor-owned locomotion, nearest-24 materialization, physical-body
+claims, knowledge-honest dual-view presentation, and persistence. Cougar alone
+uses a short direct-sight pursuit and may reach the current mortality kernel
+only through exact contact with a currently identified solitary addressable
+marsh rabbit. Brown bear has no live-prey pursuit or harmful contact. Either
+may see, reach, claim, guard, and consume an already-existing finite body.
+
+This unit is also a compatibility experiment. Habitat 11 must reproduce the
+entire habitat-10 remote source and population sequence exactly—including the
+existing trio's pressure and trend—before it evaluates two new population
+records and appends only supported populations. Outer
+save 24 must authenticate and adopt sealed version 23 once without changing
+actors, groups, mortality, bodies, claims, consumption, or world facts.
+Shared/property and signed-region checks, conservation, bounded performance,
+and one representative predator/scavenger chain give more useful confidence
+than multiplying per-species fixtures or building an N² interaction matrix.
+The unit deliberately adds no group, track evidence, audible voice,
+species-specific dog-directed behavior, player/human/group harm, broader
+mortality, ecological migration, or worldwide distribution. Ordinary lawful
+large-predator perception may still produce a non-harmful dog or porter
+reaction through the shared cognition architecture. Live release evidence remains pending deployment.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, mortality/body, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the verified bounded recovery-composition release, Alpha 29 is the verified first one-life/one-body mortality release, Alpha 30 is the verified first Wave-E regional breadth release, and Alpha 31 is the source-stage solitary-predator append awaiting live attestation. None completes worldwide aquatic or settlement ecology, broad attacks or mortality, population recovery, decomposition, body transport or harvesting, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

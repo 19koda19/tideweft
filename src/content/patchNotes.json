@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.31",
+      "releaseDate": "2026-09-08",
+      "buildIdentity": "0.3.3-alpha.31",
+      "summary": "High Country Shadows adds cougar and brown bear as distinct solitary species at the existing remote upland source, extending the shared living-ecology architecture without species-local controllers.",
+      "gameplayContractVersion": 29,
+      "tutorialVersion": 41,
+      "categories": {
+        "gameplay": [
+          "Cougar and brown bear now join the exact existing Beyond the Harbor source as distinct solitary species with stable habitat-population records and, where carrying capacity supports them, persistent individual representatives. The twenty-four-record catalog derives them through the same habitat, population, perception, attention, locomotion, bounded materialization, and presentation owners as established wildlife.",
+          "A cougar may form a short direct-sight pursuit and can enter the existing exact-contact mortality transaction only against a currently identified solitary addressable marsh rabbit. A brown bear has no live-prey pursuit or harmful contact in this unit, and neither animal can harm the player, dogs, humans, or social-group members.",
+          "Either new animal may lawfully see, reach, claim, guard, and consume from an already-existing finite physical body. Each meal uses the same exact conserved resource and claim owner; neither species creates a carcass merely from proximity or an unsupported target."
+        ],
+        "fixes": [
+          "The habitat-version-11 record preserves the complete version-10 source and population sequence exactly before evaluating cougar and brown-bear population records at that same selected remote source and appending only habitat-supported populations. Existing boar, elk, and wolf pressure, trend, identities, and group topology are not rederived or renumbered.",
+          "Solitary predator addition now passes through shared role and capability policy rather than introducing cougar-only or bear-only detection, pathing, feeding, or save controllers. Unsupported group, track, sound, species-specific dog-directed response, migration, and harmful-contact paths remain explicit fail-closed no-responses; ordinary lawful large-predator perception remains shared.",
+          "The finite-body boundary authenticates current direct perception, physical reach, exact body identity, stable claim ownership, and remaining resource before either new scavenger can guard or consume it. Reload, coarse detail, or source order cannot duplicate a claim, meal, body, or actor."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Cougar pressure is bounded by current sight, access, short pursuit opportunity, actor-owned priorities, and exact contact; losing lawful perception or reach ends the path rather than granting hidden tracking or a damage aura.",
+          "A habitat-supported brown bear adds a large solitary presence and lawful aftermath competition, not live-prey combat. Both species retain ordinary welfare, terrain, attention, and locomotion limits and gain no scripted victory over an animal, person, companion, or cargo.",
+          "Validation remains architecture-led: roster and habitat properties, exact-prefix adoption, conservation, signed-region determinism, bounded performance, and one representative predator-and-scavenger chain exercise the reusable scaffold instead of bespoke tests for every species or an N-squared animal-pair matrix."
+        ],
+        "interface": [
+          "When present, Chart 2D, Relief 3D, quick inspection, and ABOUT now present cougar and brown bear with distinct readable forms and knowledge-honest names, condition, and behavior. They reveal no hidden population count, prey target, body claim, offscreen event, or retrospective story.",
+          "Any present cougar or brown bear remains solitary in presentation: no invented pack or family suffix appears. The same generous desktop and mobile targeting boundary selects only a currently visible individual, and ABOUT closes when lawful direct sight is lost.",
+          "Field Manual version 41 explains the two-species append, narrow cougar-to-rabbit contact boundary, brown-bear non-pursuit, conserved carcass use, exact save adoption, shared validation, and intentionally absent systems."
+        ],
+        "saves": [
+          "The outer session advances to version 24 and habitat analysis advances to version 11 while core ecology remains patch version 3 and aggregate ecology remains record version 5. The production species catalog now contains twenty-four records.",
+          "A sealed version-23 Beyond the Harbor save is authenticated and adopted exactly once. Its complete habitat-version-10 source and population sequence, actors, groups, mortality, bodies, claims, consumption history, custody, tasks, items, Promises, evidence, and world facts remain exact before the two solitary habitat-population records are evaluated and supported populations are appended.",
+          "Cougar and brown-bear population and any actor identities persist deterministically across save, reload, interruption, signed and extreme coordinates, and full/coarse materialization. Authoritative absence is preserved when capacity is insufficient; adoption cannot reroll the existing remote source, duplicate either animal, or alter any sealed version-23 body or claim."
+        ],
+        "knownLimitations": [
+          "This remains one deterministic remote temperate-upland and forest-edge source, not worldwide ecology, ecological cross-region migration, a complete regional assemblage, full Wave E, or the full bestiary.",
+          "Cougar alone adds the narrow supported live-prey seam, and only against a solitary addressable marsh rabbit at exact current contact. Brown bear has no live-prey pursuit or contact; both species have no player, dog, human, social-group-member, or broader-animal harm.",
+          "Cougar and brown bear have no social group, persistent track evidence, audible voice, species-specific dog-directed behavior, reproduction, population recovery, broad scent tracking, tactical combat, body creation, body transport, harvesting, or ecological migration in this release. A dog or porter that lawfully sees one may still react non-harmfully through the existing shared large-predator perception path."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.30",
       "releaseDate": "2026-09-08",
       "buildIdentity": "0.3.3-alpha.30",

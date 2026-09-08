@@ -30,6 +30,10 @@ import {
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_SPECIES,
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
+  CORE_ECOLOGY_REGIONAL_PREDATOR_HABITAT_SPECIES,
+  CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS,
+  CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES,
+  CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_SPECIES,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
@@ -44,9 +48,11 @@ import {
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   canonicalizeCoreEcologyRainChorusHabitatAssemblage,
+  canonicalizeCoreEcologyRegionalUplandHabitatAssemblage,
   canonicalizeCoreEcologyTidalWebHabitatAssemblage,
   canonicalizeCoreEcologyWaterfowlHabitatAssemblage,
   type CoreEcologyDomesticPenHabitatAssemblage,
+  type CoreEcologyRegionalUplandHabitatAssemblage,
   type CoreEcologyTidalWebHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
@@ -113,6 +119,8 @@ export const PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT =
   "test:runtime-core-ecology-physical-provision-conservation:v1" as const;
 export const ALPHA30_BODY_BEARING_SAVE_ADOPTION_OWNER_INTENT =
   "test:alpha30-body-bearing-save-adoption:v1" as const;
+export const ALPHA31_BODY_BEARING_SAVE_ADOPTION_OWNER_INTENT =
+  "test:alpha31-body-bearing-save-adoption:v1" as const;
 export const ALPHA30_RUNTIME_MORTALITY_EMERGENCE_OWNER_INTENT =
   "test:alpha30-runtime-mortality-emergence:v1" as const;
 export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
@@ -120,7 +128,7 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 23;
+  readonly version: 24;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -199,9 +207,9 @@ describe("runtime core-ecology vertical slice", () => {
       await runtime.save();
       const envelope = requiredEnvelope(repository);
       const core = requiredCore(envelope);
-      expect(core.derivation.kind, seed).toBe("habitat-v10");
-      if (core.derivation.kind !== "habitat-v10") {
-        throw new Error(`${seed}: new world omitted habitat v10`);
+      expect(core.derivation.kind, seed).toBe("habitat-v11");
+      if (core.derivation.kind !== "habitat-v11") {
+        throw new Error(`${seed}: new world omitted habitat v11`);
       }
       expect(core.populations.length, seed).toBeLessThanOrEqual(CORE_ECOLOGY_MAX_POPULATIONS);
       expect(core.populations.flatMap(({ members }) => members).filter(({ materialization }) => (
@@ -211,10 +219,10 @@ describe("runtime core-ecology vertical slice", () => {
       const regionalPopulations = core.populations.filter(({ species }) => (
         species === "wild-boar" || species === "elk" || species === "gray-wolf"
       ));
-      expect(core.derivation.habitat.populations.slice(-3).map(({ species }) => species), seed)
-        .toEqual(["wild-boar", "elk", "gray-wolf"]);
+      expect(core.derivation.habitat.populations.slice(-5).map(({ species }) => species), seed)
+        .toEqual(["wild-boar", "elk", "gray-wolf", "cougar", "brown-bear"]);
       expect(regionalPopulations.map(({ species }) => species).sort(), seed)
-        .toEqual(core.derivation.habitat.populations.slice(-3)
+        .toEqual(core.derivation.habitat.populations.slice(-5, -2)
           .filter(({ populationUnits }) => populationUnits > 0)
           .map(({ species }) => species)
           .sort());
@@ -246,7 +254,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   }, 120_000);
 
-  it("migrates a sealed v20 save into v23 without inventing mortality history", async () => {
+  it("migrates a sealed v20 save into v24 without inventing mortality history", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -306,7 +314,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(23);
+    expect(adoptedRecord.payloadVersion).toBe(24);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -326,7 +334,7 @@ describe("runtime core-ecology vertical slice", () => {
     migrated.destroy();
   });
 
-  it("migrates a sealed v21 save into the empty v23 mortality ledger exactly once", async () => {
+  it("migrates a sealed v21 save into the empty v24 mortality ledger exactly once", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -363,7 +371,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(23);
+    expect(adoptedRecord.payloadVersion).toBe(24);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -377,7 +385,11 @@ describe("runtime core-ecology vertical slice", () => {
       reserveUnits: population.reserveUnits,
     }));
     expect(adoptedPopulationSummaries.filter(({ species }) => (
-      species !== "wild-boar" && species !== "elk" && species !== "gray-wolf"
+      species !== "wild-boar"
+      && species !== "elk"
+      && species !== "gray-wolf"
+      && species !== "cougar"
+      && species !== "brown-bear"
     ))).toEqual(currentCore.populations.map((population) => ({
       species: population.species,
       populationKey: population.populationKey,
@@ -385,12 +397,34 @@ describe("runtime core-ecology vertical slice", () => {
       populationSize: population.populationSize,
       reserveUnits: 0,
     })));
-    expect(adoptedPopulationSummaries
+    const adoptedRegionalSpecies = adoptedPopulationSummaries
       .filter(({ species }) => (
-        species === "wild-boar" || species === "elk" || species === "gray-wolf"
+        species === "wild-boar"
+        || species === "elk"
+        || species === "gray-wolf"
+        || species === "cougar"
+        || species === "brown-bear"
       ))
       .map(({ species }) => species)
-      .sort()).toEqual(["elk", "gray-wolf", "wild-boar"]);
+      .sort();
+    expect(adoptedCore.derivation.kind).toBe("habitat-v11");
+    expect(adoptedRegionalSpecies).toEqual(
+      adoptedCore.derivation.kind === "habitat-v11"
+        ? adoptedCore.derivation.habitat.populations
+            .filter(({ species, populationUnits }) => (
+              populationUnits > 0
+              && (
+                species === "wild-boar"
+                || species === "elk"
+                || species === "gray-wolf"
+                || species === "cougar"
+                || species === "brown-bear"
+              )
+            ))
+            .map(({ species }) => species)
+            .sort()
+        : [],
+    );
 
     const durableCore = adopted.coreEcology;
     migrated.destroy();
@@ -441,8 +475,8 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(23);
-    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v10");
+    expect(repository.snapshot().payloadVersion).toBe(24);
+    expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
         identity.species === "fish-crow"
@@ -557,8 +591,8 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(23);
-    expect(v13Ecology.derivation.kind).toBe("habitat-v10");
+    expect(v13Record.payloadVersion).toBe(24);
+    expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
     expect(v13Envelope.physicalCargo).toEqual(v10Envelope.physicalCargo);
@@ -580,7 +614,7 @@ describe("runtime core-ecology vertical slice", () => {
       ))).toEqual(oldPopulation);
     }
     if (
-      v13Ecology.derivation.kind !== "habitat-v10"
+      v13Ecology.derivation.kind !== "habitat-v11"
       || v10Ecology.derivation.kind !== "habitat-v2"
     ) throw new Error("migration did not retain canonical habitat derivations");
     expect(v13Ecology.derivation.habitat.populations.slice(
@@ -610,7 +644,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = requiredEnvelope(repository);
     const currentEcology = requiredCore(currentEnvelope);
-    if (currentEcology.derivation.kind !== "habitat-v10") {
+    if (currentEcology.derivation.kind !== "habitat-v11") {
       throw new Error("current fixture omitted its regional-upland habitat");
     }
     const v11Record = marshEdgeV11Record(currentRecord);
@@ -638,8 +672,8 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(23);
-    expect(v13Ecology.derivation.kind).toBe("habitat-v10");
+    expect(v13Record.payloadVersion).toBe(24);
+    expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
     expect(v13Envelope.physicalCargo).toEqual(v11Envelope.physicalCargo);
@@ -660,7 +694,7 @@ describe("runtime core-ecology vertical slice", () => {
         ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
       ))).toBe(stableStringify(oldAggregate));
     }
-    if (v13Ecology.derivation.kind !== "habitat-v10") {
+    if (v13Ecology.derivation.kind !== "habitat-v11") {
       throw new Error("v11 migration did not reach the current regional-upland derivation");
     }
     expect(v13Ecology.derivation.habitat.populations.slice(
@@ -711,7 +745,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = requiredEnvelope(repository);
     const currentEcology = requiredCore(currentEnvelope);
-    if (currentEcology.derivation.kind !== "habitat-v10") {
+    if (currentEcology.derivation.kind !== "habitat-v11") {
       throw new Error("current fixture omitted its regional-upland habitat");
     }
     const v12Record = rainChorusV12Record(currentRecord);
@@ -736,8 +770,8 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(23);
-    expect(v13Ecology.derivation.kind).toBe("habitat-v10");
+    expect(v13Record.payloadVersion).toBe(24);
+    expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
     expect(v13Envelope.physicalCargo).toEqual(v12Envelope.physicalCargo);
@@ -758,7 +792,7 @@ describe("runtime core-ecology vertical slice", () => {
         ({ aggregateId }) => aggregateId === oldAggregate.aggregateId,
       )).toEqual(oldAggregate);
     }
-    if (v13Ecology.derivation.kind !== "habitat-v10") {
+    if (v13Ecology.derivation.kind !== "habitat-v11") {
       throw new Error("v12 migration did not reach the current regional-upland derivation");
     }
     expect(v13Ecology.derivation.habitat.populations.slice(
@@ -801,7 +835,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentDuck = currentEcology.populations.find(({ species }) => (
       species === "american-black-duck"
     ));
-    if (currentDuck === undefined || currentEcology.derivation.kind !== "habitat-v10") {
+    if (currentDuck === undefined || currentEcology.derivation.kind !== "habitat-v11") {
       throw new Error("current migration fixture omitted its bounded duck");
     }
     const v13Record = tidalTableV13Record(currentRecord);
@@ -823,8 +857,8 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(23);
-    expect(adopted.derivation.kind).toBe("habitat-v10");
+    expect(adoptedRecord.payloadVersion).toBe(24);
+    expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
     expect(adoptedEnvelope.physicalCargo).toEqual(v13Envelope.physicalCargo);
@@ -884,8 +918,8 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(23);
-    expect(adopted.derivation.kind).toBe("habitat-v10");
+    expect(adoptedRecord.payloadVersion).toBe(24);
+    expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
     expect(adoptedEnvelope.physicalCargo).toEqual(v14Envelope.physicalCargo);
@@ -900,7 +934,7 @@ describe("runtime core-ecology vertical slice", () => {
         species === established.species && populationKey === established.populationKey
       ))).toEqual(established);
     }
-    if (adopted.derivation.kind !== "habitat-v10") {
+    if (adopted.derivation.kind !== "habitat-v11") {
       throw new Error("v14 migration did not reach regional-upland habitat v10");
     }
     const otterHabitat = adopted.derivation.habitat.populations.find(
@@ -1058,7 +1092,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v23 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v24 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -1083,7 +1117,7 @@ describe("runtime core-ecology vertical slice", () => {
     rejected.destroy();
   });
 
-  it("quarantines an Alpha-19 aggregate record masquerading inside a current v23 envelope", async () => {
+  it("quarantines an Alpha-19 aggregate record masquerading inside a current v24 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -1188,7 +1222,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(23);
+    expect(before.version).toBe(24);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -2112,8 +2146,8 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(23);
-    expect(adopted.derivation.kind).toBe("habitat-v10");
+    expect(repository.snapshot().payloadVersion).toBe(24);
+    expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
       .toBe(stableStringify(alpha29Core.mortalityTransactions));
@@ -2165,6 +2199,109 @@ describe("runtime core-ecology vertical slice", () => {
     expect(rejectedReplay.getUIView().saveWarning?.message)
       .toBe("LOCAL AUTOSAVE UNREADABLE");
     rejectedReplay.destroy();
+  });
+
+  it(`${ALPHA31_BODY_BEARING_SAVE_ADOPTION_OWNER_INTENT} adopts one sealed body-bearing v23 save exactly once`, async () => {
+    const {
+      runtime,
+      repository,
+      foxActorId,
+      rabbitActorId,
+    } = await createFoxEventBoundaryRuntime({ lethalContact: true });
+
+    advancePlayerSteps(runtime, 20);
+    await runtime.save();
+    const currentEnvelope = requiredEnvelope(repository);
+    const current = requiredCore(currentEnvelope);
+    expect(current.mortalityTransactions).toHaveLength(1);
+    expect(current.carcasses).toHaveLength(1);
+    expect(current.carcasses[0]).toMatchObject({
+      sourceActorId: rabbitActorId,
+      remainingResourceUnits: 3,
+      consumedResourceUnits: 1,
+      currentClaimantActorId: foxActorId,
+    });
+
+    const alpha30Core = regionalUplandCoreEcologyFromCurrent(current);
+    if (alpha30Core.derivation.kind !== "habitat-v10") {
+      throw new Error("Alpha-31 adoption fixture did not reconstruct frozen habitat v10");
+    }
+    const { integrity: _currentIntegrity, version: _currentVersion, ...alpha30Roots } =
+      currentEnvelope;
+    const alpha30Base = {
+      ...alpha30Roots,
+      version: 23 as const,
+      coreEcology: serializeCoreEcologyAggregatePatch(alpha30Core),
+    };
+    const alpha30Record = repository.snapshot();
+    await repository.save({
+      ...alpha30Record,
+      payloadVersion: 23,
+      updatedAt: alpha30Record.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...alpha30Base,
+        integrity: gameSaveEnvelopeIntegrity(alpha30Base),
+      }),
+    });
+    runtime.destroy();
+    scheduledFrame = undefined;
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    await resumed.save();
+    const adoptedEnvelope = requiredEnvelope(repository);
+    const adopted = requiredCore(adoptedEnvelope);
+    expect(repository.snapshot().payloadVersion).toBe(24);
+    expect(adopted.derivation.kind).toBe("habitat-v11");
+    expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
+    expect(stableStringify(adopted.mortalityTransactions))
+      .toBe(stableStringify(alpha30Core.mortalityTransactions));
+    expect(stableStringify(adopted.carcasses)).toBe(stableStringify(alpha30Core.carcasses));
+    expect(stableStringify(adopted.aggregatePopulations))
+      .toBe(stableStringify(alpha30Core.aggregatePopulations));
+    expect(stableStringify(adopted.groups)).toBe(stableStringify(alpha30Core.groups));
+    for (const established of alpha30Core.populations) {
+      expect(stableStringify(adopted.populations.find(({ species, populationKey }) => (
+        species === established.species && populationKey === established.populationKey
+      )))).toBe(stableStringify(established));
+    }
+    const establishedPopulationKeys = new Set(alpha30Core.populations.map(
+      ({ populationKey }) => populationKey,
+    ));
+    const extensionPopulations = adopted.populations.filter(
+      ({ populationKey }) => !establishedPopulationKeys.has(populationKey),
+    );
+    expect(extensionPopulations.map(({ species }) => species).sort()).toEqual(
+      adopted.derivation.kind === "habitat-v11"
+        ? adopted.derivation.habitat.populations.slice(-2)
+            .filter(({ populationUnits }) => populationUnits > 0)
+            .map(({ species }) => species)
+            .sort()
+        : [],
+    );
+    expect(extensionPopulations.every(({ species, members }) => (
+      (species === "cougar" || species === "brown-bear")
+      && members.every(({ materialization }) => materialization === "coarse")
+    ))).toBe(true);
+    expect(adopted.groups.groups.some(({ identity }) => (
+      identity.species === "cougar" || identity.species === "brown-bear"
+    ))).toBe(false);
+
+    for (const key of Object.keys(alpha30Base).filter((key) => (
+      key !== "version" && key !== "coreEcology" && key !== "session"
+    ))) {
+      expect(stableStringify(adoptedEnvelope[key]), key)
+        .toBe(stableStringify(alpha30Base[key as keyof typeof alpha30Base]));
+    }
+
+    const durable = adoptedEnvelope.coreEcology;
+    resumed.destroy();
+    scheduledFrame = undefined;
+    const secondResume = await createTideweftRuntime(repository);
+    expect(secondResume.getUIView().saveWarning).toBeUndefined();
+    await secondResume.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(durable);
+    secondResume.destroy();
   });
 
   it(`${ALPHA30_RUNTIME_MORTALITY_EMERGENCE_OWNER_INTENT} composes current sight, pack pursuit, one exact death, and finite boar scavenging`, async () => {
@@ -2734,7 +2871,7 @@ describe("runtime core-ecology vertical slice", () => {
       throw new Error("shore-water fixture lost its otter or threat");
     }
     expect(otterMember?.materialization).toBe("materialized");
-    if (patch.derivation.kind !== "habitat-v10") {
+    if (patch.derivation.kind !== "habitat-v11") {
       throw new Error("shore-water fixture omitted its authenticated habitat");
     }
     const otterPosition = findDeepWaterRoutePosition(world);
@@ -3019,6 +3156,40 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
   return { runtime, alarmActorId: alarmActor.identity.stableId };
 }
 
+function regionalUplandHabitatFromCurrentEcology(
+  ecology: CoreEcologyAggregatePatchState,
+): CoreEcologyRegionalUplandHabitatAssemblage {
+  if (
+    ecology.derivation.kind === "habitat-v10"
+    || ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v10"
+  ) return ecology.derivation.habitat;
+  if (
+    ecology.derivation.kind !== "habitat-v11"
+    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+  ) throw new Error("fresh migration source omitted regional-predator habitat v11");
+  const habitat = ecology.derivation.habitat;
+  const upland = canonicalizeCoreEcologyRegionalUplandHabitatAssemblage({
+    generationVersion: CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION,
+    originRegion: habitat.originRegion,
+    regionId: habitat.regionId,
+    terrainHash: habitat.terrainHash,
+    selection: habitat.selection,
+    evaluatedTiles: habitat.evaluatedTiles,
+    speciesEvaluations:
+      habitat.speciesEvaluations - habitat.regionalHabitat.evaluatedTiles * 2,
+    maximumAllocationBudget: CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS,
+    populations: habitat.populations.slice(0, CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES.length),
+    tidalAnchors: habitat.tidalAnchors,
+    domesticAnchor: habitat.domesticAnchor,
+    domesticPenAnchor: habitat.domesticPenAnchor,
+    regionalHabitat: habitat.regionalHabitat,
+  });
+  if (upland === null) {
+    throw new Error("regional-predator habitat did not preserve its exact frozen v10 prefix");
+  }
+  return upland;
+}
+
 function domesticPenHabitatFromCurrentEcology(
   ecology: CoreEcologyAggregatePatchState,
 ): CoreEcologyDomesticPenHabitatAssemblage {
@@ -3026,11 +3197,7 @@ function domesticPenHabitatFromCurrentEcology(
     ecology.derivation.kind === "habitat-v9"
     || ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v9"
   ) return ecology.derivation.habitat;
-  if (
-    ecology.derivation.kind !== "habitat-v10"
-    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-  ) throw new Error("fresh migration source omitted regional-upland habitat v10");
-  const habitat = ecology.derivation.habitat;
+  const habitat = regionalUplandHabitatFromCurrentEcology(ecology);
   const domesticPen = canonicalizeCoreEcologyDomesticPenHabitatAssemblage({
     generationVersion: CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION,
     originRegion: habitat.originRegion,
@@ -3062,27 +3229,24 @@ function domesticPenCoreEcologyFromCurrent(
     ecology.derivation.kind === "habitat-v9"
     || ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v9"
   ) return ecology;
-  if (
-    ecology.derivation.kind !== "habitat-v10"
-    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-  ) throw new Error("current ecology has no regional-upland derivation");
+  const regionalUpland = regionalUplandCoreEcologyFromCurrent(ecology);
   const regionalSpecies = new Set<CoreWildlifeSpecies>([
     "wild-boar",
     "elk",
     "gray-wolf",
   ]);
   const domesticPen = canonicalizeCoreEcologyAggregatePatch({
-    ...ecology,
+    ...regionalUpland,
     derivation: {
-      kind: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v10"
+      kind: regionalUpland.derivation.kind === "legacy-fixed-v1-with-habitat-v10"
         ? "legacy-fixed-v1-with-habitat-v9"
         : "habitat-v9",
-      habitat: domesticPenHabitatFromCurrentEcology(ecology),
+      habitat: domesticPenHabitatFromCurrentEcology(regionalUpland),
     },
-    populations: ecology.populations.filter(({ species }) => !regionalSpecies.has(species)),
+    populations: regionalUpland.populations.filter(({ species }) => !regionalSpecies.has(species)),
     groups: {
-      ...ecology.groups,
-      groups: ecology.groups.groups.filter(({ identity }) => (
+      ...regionalUpland.groups,
+      groups: regionalUpland.groups.groups.filter(({ identity }) => (
         !regionalSpecies.has(identity.species)
       )),
     },
@@ -3091,6 +3255,36 @@ function domesticPenCoreEcologyFromCurrent(
     throw new Error("current ecology could not reconstruct the canonical v9 prefix");
   }
   return domesticPen;
+}
+
+function regionalUplandCoreEcologyFromCurrent(
+  ecology: CoreEcologyAggregatePatchState,
+): CoreEcologyAggregatePatchState {
+  if (
+    ecology.derivation.kind === "habitat-v10"
+    || ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v10"
+  ) return ecology;
+  if (
+    ecology.derivation.kind !== "habitat-v11"
+    && ecology.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+  ) throw new Error("current ecology has no regional-predator derivation");
+  const predatorSpecies = new Set<CoreWildlifeSpecies>(
+    CORE_ECOLOGY_REGIONAL_PREDATOR_HABITAT_SPECIES.slice(-2),
+  );
+  const upland = canonicalizeCoreEcologyAggregatePatch({
+    ...ecology,
+    derivation: {
+      kind: ecology.derivation.kind === "legacy-fixed-v1-with-habitat-v11"
+        ? "legacy-fixed-v1-with-habitat-v10"
+        : "habitat-v10",
+      habitat: regionalUplandHabitatFromCurrentEcology(ecology),
+    },
+    populations: ecology.populations.filter(({ species }) => !predatorSpecies.has(species)),
+  });
+  if (upland === null) {
+    throw new Error("current ecology could not reconstruct the canonical v10 prefix");
+  }
+  return upland;
 }
 
 function tidalWebHabitatFromCurrentEcology(
@@ -3567,8 +3761,8 @@ function serializePublishedAggregateV4(
 
 function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
-  if (value.format !== "tideweft-session" || value.version !== 23) {
-    throw new Error("core-ecology runtime fixture did not save a v23 envelope");
+  if (value.format !== "tideweft-session" || value.version !== 24) {
+    throw new Error("core-ecology runtime fixture did not save a v24 envelope");
   }
   return value;
 }
