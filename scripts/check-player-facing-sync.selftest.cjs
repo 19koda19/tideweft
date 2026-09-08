@@ -17,6 +17,8 @@ const {
   run,
   validateBuildMetadata,
   validateContentDocuments,
+  validateElectronSmokeMetadata,
+  validateElectronSmokeSaveVersion,
   validateGameplayContract,
   validateLocalContent,
   validateReviewAdvancement,
@@ -26,7 +28,7 @@ const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "src/content/gameplayContract.json"), "utf8"));
 const patchNotes = JSON.parse(fs.readFileSync(path.join(root, "src/content/patchNotes.json"), "utf8"));
 const packageDocument = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-const tutorialSource = "export const TUTORIAL_CONTENT_VERSION = 38 as const;";
+const tutorialSource = "export const TUTORIAL_CONTENT_VERSION = 39 as const;";
 
 let assertions = 0;
 function test(name, body) {
@@ -119,7 +121,7 @@ test("the explicit tutorial constant is parsed without matching unrelated versio
 test("current content contracts agree", () => {
   const result = validateContentDocuments({ manifest, tutorialSource, patchNotes, packageDocument });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.tutorialVersion, 38);
+  assert.equal(result.tutorialVersion, 39);
 });
 
 test("the first explicit tutorial contract advances the legacy v5 guide", () => {
@@ -152,6 +154,47 @@ test("browser metadata exposes the same official ruleset and release identity", 
   assert.equal(validateBuildMetadata(valid.replace("A CHALLENGING HARD", "Normal"), manifest, packageDocument).length, 1);
   assert.equal(validateBuildMetadata(valid.replace(packageDocument.version, "stale"), manifest, packageDocument).length, 1);
   assert.equal(validateBuildMetadata("", manifest, packageDocument).length, 2);
+});
+
+test("packaged smoke expectations match the current release contract", () => {
+  const valid = `const SMOKE_EXPECTED_RELEASE_VERSION = '${packageDocument.version}';\n`
+    + `const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = ${manifest.gameplayContractVersion};\n`;
+  assert.deepEqual(validateElectronSmokeMetadata(valid, manifest, packageDocument), []);
+  assert.equal(
+    validateElectronSmokeMetadata(
+      valid.replace(packageDocument.version, "0.0.0-stale"),
+      manifest,
+      packageDocument,
+    ).length,
+    1,
+  );
+  assert.equal(
+    validateElectronSmokeMetadata(
+      valid.replace(
+        String(manifest.gameplayContractVersion),
+        String(manifest.gameplayContractVersion - 1),
+      ),
+      manifest,
+      packageDocument,
+    ).length,
+    1,
+  );
+  assert.equal(validateElectronSmokeMetadata("", manifest, packageDocument).length, 2);
+});
+
+test("packaged smoke expects the current authoritative save version", () => {
+  const electronSource = "const SMOKE_EXPECTED_SAVE_VERSION = 22;";
+  const runtimeSource = "const GAME_SAVE_VERSION = 22;";
+  assert.deepEqual(validateElectronSmokeSaveVersion(electronSource, runtimeSource), []);
+  assert.equal(
+    validateElectronSmokeSaveVersion(
+      electronSource.replace("22", "21"),
+      runtimeSource,
+    ).length,
+    1,
+  );
+  assert.equal(validateElectronSmokeSaveVersion("", runtimeSource).length, 1);
+  assert.equal(validateElectronSmokeSaveVersion(electronSource, "").length, 1);
 });
 
 test("unsafe or missing gameplay schema fails closed", () => {

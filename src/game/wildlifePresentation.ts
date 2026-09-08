@@ -195,8 +195,20 @@ export function isWildlifeWorldPositionDirectlyObserved(
   position: WorldPosition,
   observation: WildlifePopulationEvidenceObservation,
 ): boolean {
+  return wildlifeWorldPositionDirectDetail(position, observation) !== null;
+}
+
+/**
+ * Shared direct-detail projection seam for bodies and other physical wildlife
+ * aftermath. Terrain visibility alone is insufficient: signed detail grade,
+ * range, frame membership, and visibility strength must all remain valid.
+ */
+export function wildlifeWorldPositionDirectDetail(
+  position: WorldPosition,
+  observation: WildlifePopulationEvidenceObservation,
+): WildlifeWorldPositionDirectDetail | null {
   const context = directEvidenceObservationContext(observation);
-  return context !== null && directEvidenceDetail(position, context) !== null;
+  return context === null ? null : directEvidenceDetail(position, context);
 }
 
 interface DirectDetail {
@@ -219,6 +231,12 @@ interface DirectEvidenceDetail {
   readonly distanceUnits: number;
   readonly visualClarity: number;
 }
+
+/**
+ * Renderer-neutral detail for a persistent physical wildlife aftermath at a
+ * known world position. It exists only inside current direct-detail sight.
+ */
+export type WildlifeWorldPositionDirectDetail = DirectEvidenceDetail;
 
 type WildlifePresentationForm =
   | "deer"
@@ -784,6 +802,7 @@ export function projectWildlifePopulationEvidencePresentations(
   if (ownsTidalPopulations && tidal === null) return null;
 
   const presentations: WildlifePopulationEvidencePresentation[] = [];
+  const presentedEvidenceIds = new Set<string>();
   for (const population of patch.aggregatePopulations) {
     if (!isAggregateWildlifeSpecies(population.species)) continue;
     const speciesDescriptor = POPULATION_EVIDENCE_BY_SPECIES[population.species];
@@ -816,8 +835,10 @@ export function projectWildlifePopulationEvidencePresentations(
       const descriptor = speciesDescriptor.byKind[evidence.kind];
       if (descriptor === undefined) continue;
       if (detail === null || detail.visualClarity < descriptor.minimumClarity) continue;
+      if (presentedEvidenceIds.has(evidence.evidenceId)) continue;
       const speciesIdentified = detail.visualClarity
         >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
+      presentedEvidenceIds.add(evidence.evidenceId);
       presentations.push(deepFreeze({
         version: WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION,
         aggregateId: population.aggregateId,
@@ -849,56 +870,96 @@ export function projectWildlifePopulationEvidencePresentations(
   }
   for (const population of patch.populations) {
     if (!isIndividualEvidenceSpecies(population.species)) continue;
-    const descriptor = INDIVIDUAL_EVIDENCE_BY_SPECIES[population.species];
     for (const member of population.members) {
-      for (const memory of member.actor.memories) {
-        const evidence = memory.environmentalEvidence;
-        if (evidence === undefined || evidence.kind !== descriptor.expectedKind) continue;
-        const detail = directEvidenceDetail(evidence.position, context);
-        if (detail === null) continue;
-        const evidenceStrength = coreWildlifeEnvironmentalEvidenceStrengthAtTick(
-          evidence,
-          patch.updatedAtTick,
-        );
-        const observableClarity = Math.min(detail.visualClarity, evidenceStrength);
-        if (observableClarity < descriptor.minimumClarity) continue;
-        const speciesIdentified = observableClarity
-          >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
-        presentations.push(deepFreeze({
-          version: WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION,
-          // The legacy renderer field is a stable source identity. For an
-          // individual sign it carries the owning actor's stable ID, but is
-          // never displayed and says nothing about that actor's current place.
-          aggregateId: member.actor.identity.stableId,
-          evidenceId: evidence.evidenceId,
-          species: population.species,
-          representation: "individual-evidence",
-          form: descriptor.form,
-          quickLabel: speciesIdentified
-            ? descriptor.identifiedQuickLabel
-            : descriptor.unidentifiedQuickLabel,
-          identityLabel: speciesIdentified
-            ? descriptor.identifiedIdentityLabel
-            : descriptor.unidentifiedIdentityLabel,
-          evidenceLabel: speciesIdentified
-            ? descriptor.identifiedEvidenceLabel
-            : descriptor.unidentifiedEvidenceLabel,
-          speciesIdentified,
-          position: {
-            x: detail.point.x * input.tileSize / WORLD_POSITION_UNITS_PER_TILE,
-            y: detail.point.y * input.tileSize / WORLD_POSITION_UNITS_PER_TILE,
-          },
-          sizeScale: descriptor.sizeScale,
-          distanceUnits: detail.distanceUnits,
-          // Individual signs are deliberately non-targetable in this bounded
-          // slice; ABOUT remains attached to a currently observed living actor.
-          selected: false,
-        }));
-      }
+      appendIndividualEvidencePresentations(
+        presentations,
+        presentedEvidenceIds,
+        member.actor,
+        population.species,
+        patch.updatedAtTick,
+        input.tileSize,
+        context,
+      );
     }
+  }
+  // A killed actor leaves the living roster, but its still-valid physical
+  // movement evidence does not vanish with it. The immutable retirement
+  // transaction owns that bounded evidence tail until normal decay expires.
+  for (const transaction of patch.mortalityTransactions) {
+    const retiredActor = transaction.retiredActor;
+    if (!isIndividualEvidenceSpecies(retiredActor.identity.species)) continue;
+    appendIndividualEvidencePresentations(
+      presentations,
+      presentedEvidenceIds,
+      retiredActor,
+      retiredActor.identity.species,
+      patch.updatedAtTick,
+      input.tileSize,
+      context,
+    );
   }
   presentations.sort((left, right) => compareText(left.evidenceId, right.evidenceId));
   return Object.freeze(presentations);
+}
+
+function appendIndividualEvidencePresentations(
+  presentations: WildlifePopulationEvidencePresentation[],
+  presentedEvidenceIds: Set<string>,
+  actor: CoreWildlifeActorState,
+  species: IndividualEvidenceSpecies,
+  atTick: number,
+  tileSize: number,
+  context: DirectEvidenceObservationContext,
+): void {
+  const descriptor = INDIVIDUAL_EVIDENCE_BY_SPECIES[species];
+  for (const memory of actor.memories) {
+    const evidence = memory.environmentalEvidence;
+    if (
+      evidence === undefined
+      || evidence.kind !== descriptor.expectedKind
+      || presentedEvidenceIds.has(evidence.evidenceId)
+    ) continue;
+    const detail = directEvidenceDetail(evidence.position, context);
+    if (detail === null) continue;
+    const evidenceStrength = coreWildlifeEnvironmentalEvidenceStrengthAtTick(
+      evidence,
+      atTick,
+    );
+    const observableClarity = Math.min(detail.visualClarity, evidenceStrength);
+    if (observableClarity < descriptor.minimumClarity) continue;
+    const speciesIdentified = observableClarity
+      >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
+    presentedEvidenceIds.add(evidence.evidenceId);
+    presentations.push(deepFreeze({
+      version: WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION,
+      // The legacy renderer field is a stable physical-source identity. It
+      // does not disclose whether the source animal remains alive or nearby.
+      aggregateId: actor.identity.stableId,
+      evidenceId: evidence.evidenceId,
+      species,
+      representation: "individual-evidence",
+      form: descriptor.form,
+      quickLabel: speciesIdentified
+        ? descriptor.identifiedQuickLabel
+        : descriptor.unidentifiedQuickLabel,
+      identityLabel: speciesIdentified
+        ? descriptor.identifiedIdentityLabel
+        : descriptor.unidentifiedIdentityLabel,
+      evidenceLabel: speciesIdentified
+        ? descriptor.identifiedEvidenceLabel
+        : descriptor.unidentifiedEvidenceLabel,
+      speciesIdentified,
+      position: {
+        x: detail.point.x * tileSize / WORLD_POSITION_UNITS_PER_TILE,
+        y: detail.point.y * tileSize / WORLD_POSITION_UNITS_PER_TILE,
+      },
+      sizeScale: descriptor.sizeScale,
+      distanceUnits: detail.distanceUnits,
+      // Individual signs are deliberately non-targetable in this bounded
+      // slice; ABOUT remains attached to a currently observed living actor.
+      selected: false,
+    }));
+  }
 }
 
 function isAggregateWildlifeSpecies(

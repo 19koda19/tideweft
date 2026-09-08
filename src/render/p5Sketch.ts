@@ -119,6 +119,7 @@ import type {
   WayknotKind,
   WayknotView,
   WeatherView,
+  WildlifeCarcassView,
   WildlifeView,
   WorldEventView,
   WorldPoint,
@@ -200,6 +201,7 @@ type HoverTarget =
       readonly aggregateId: string;
       readonly evidenceId: string;
     }
+  | { readonly entity: "wildlife-carcass"; readonly id: string }
   | { readonly entity: "parcel"; readonly id: string };
 
 interface ClickCandidate {
@@ -410,6 +412,28 @@ export function createTideweftRenderer(
     canvasElement.tabIndex = active ? 0 : -1;
     canvasElement.dataset.active = active ? "true" : "false";
     canvasElement.setAttribute("aria-hidden", active ? "false" : "true");
+  };
+
+  const syncCarcassAccessibility = (view: TideweftView | null): void => {
+    if (!canvasElement) return;
+    const labels = view
+      ? [...new Set((view.wildlifeCarcasses ?? [])
+          .filter((carcass) => isDirectlyDetailPerceived(
+            view.terrain,
+            carcass.position,
+            view.perception !== undefined,
+          ))
+          .map((carcass) => carcass.quickLabel.trim())
+          .filter((label) => label.length > 0))]
+      : [];
+    if (labels.length === 0) {
+      canvasElement.removeAttribute("aria-description");
+      return;
+    }
+    canvasElement.setAttribute(
+      "aria-description",
+      `Nearby wildlife remains: ${labels.join("; ")}.`,
+    );
   };
 
   const getCanvasSize = (): { width: number; height: number } => {
@@ -666,6 +690,25 @@ export function createTideweftRenderer(
             species: actor.species,
             id: actor.actorId,
           },
+          distance,
+        };
+      }
+    }
+
+    const carcassRadius = Math.max(
+      view.terrain.tileSize * 0.5,
+      22 / Math.max(camera.zoom, 0.01),
+    );
+    for (const carcass of view.wildlifeCarcasses ?? []) {
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        carcass.position,
+        view.perception !== undefined,
+      )) continue;
+      const distance = distanceSquared(point, carcass.position);
+      if (distance <= carcassRadius ** 2 && (!nearest || distance < nearest.distance)) {
+        nearest = {
+          target: { entity: "wildlife-carcass", id: carcass.carcassId },
           distance,
         };
       }
@@ -978,7 +1021,9 @@ export function createTideweftRenderer(
       const view = latestView;
       if (view) emit(commandForWorldTap(
         view,
-        target?.entity === "parcel" ? null : target,
+        target?.entity === "parcel" || target?.entity === "wildlife-carcass"
+          ? null
+          : target,
         point,
         candidate.coarsePointer,
         candidate.shiftKey || event.shiftKey,
@@ -4106,6 +4151,94 @@ export function createTideweftRenderer(
       }
     };
 
+    const drawWildlifeCarcasses = (
+      carcasses: readonly WildlifeCarcassView[],
+      now: number,
+    ): void => {
+      for (const carcass of carcasses) {
+        if (
+          latestView?.perception
+          && !isDirectlyDetailPerceived(latestView.terrain, carcass.position, true)
+        ) continue;
+        const hovered = hoverTarget?.entity === "wildlife-carcass"
+          && hoverTarget.id === carcass.carcassId;
+        const base = (hovered ? 5.2 : 4.8)
+          * clamp(carcass.sizeScale, 0.7, 2.2)
+          / camera.zoom;
+        p.push();
+        p.translate(carcass.position.x, carcass.position.y);
+        p.rotate(carcass.orientation);
+        if (hovered) {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.tide, 205));
+          p.strokeWeight(1.25 / camera.zoom);
+          p.ellipse(0, 0, base * 5.2, base * 3.35);
+        }
+        if (carcass.form === "body") {
+          p.noStroke();
+          p.fill(withAlpha(PALETTE.ink, 176));
+          p.ellipse(0, base * 0.24, base * 3.8, base * 1.58);
+          p.fill("#694f42");
+          p.ellipse(-base * 0.18, 0, base * 3.35, base * 1.42);
+          p.fill("#836554");
+          p.circle(base * 1.45, -base * 0.13, base * 1.02);
+          p.stroke(withAlpha("#c6ad8d", 205));
+          p.strokeWeight(Math.max(0.65, base * 0.1));
+          p.line(-base * 0.9, base * 0.32, -base * 1.45, base * 0.75);
+          p.line(base * 0.48, base * 0.34, base * 0.9, base * 0.76);
+        } else {
+          p.noFill();
+          p.stroke(withAlpha(PALETTE.ink, 210));
+          p.strokeWeight(Math.max(1.5, base * 0.38));
+          p.line(-base * 1.35, 0, base * 1.25, 0);
+          p.stroke("#c7b89b");
+          p.strokeWeight(Math.max(0.8, base * 0.15));
+          p.line(-base * 1.35, 0, base * 1.25, 0);
+          for (const offset of [-0.62, -0.2, 0.22, 0.64]) {
+            p.arc(
+              base * offset,
+              0,
+              base * 0.72,
+              base * 1.16,
+              -p.HALF_PI,
+              p.HALF_PI,
+            );
+          }
+          p.noStroke();
+          p.fill("#ad9d82");
+          p.ellipse(base * 1.35, 0, base * 0.74, base * 0.58);
+        }
+        p.pop();
+
+        if (!hovered) continue;
+        const screen = worldLabelScreen(
+          `wildlife-carcass-${carcass.carcassId}`,
+          carcass.position,
+          now,
+        );
+        const width = Math.min(
+          Math.max(1, p.width - 16),
+          p.textWidth(carcass.quickLabel) + 12,
+        );
+        const labelX = clamp(
+          screen.x,
+          8 + width / 2,
+          Math.max(8 + width / 2, p.width - 8 - width / 2),
+        );
+        const labelY = clamp(screen.y + 20, 11, Math.max(11, p.height - 11));
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textSize(10.5);
+        p.noStroke();
+        p.fill(withAlpha(PALETTE.ink, 235));
+        p.text(carcass.quickLabel, labelX + 1, labelY + 0.5);
+        p.fill(PALETTE.foam);
+        p.text(carcass.quickLabel, labelX, labelY - 0.5);
+        p.pop();
+      }
+    };
+
     const drawDestination = (view: TideweftView, now: number): void => {
       const destination = view.player.destination;
       if (!destination) return;
@@ -4777,6 +4910,7 @@ export function createTideweftRenderer(
       advancePointerParallax(pointerParallax, now, reducedMotion);
       usedLabelPositions.clear();
       latestView = options.getView() ?? null;
+      syncCarcassAccessibility(latestView);
       if (!latestView) {
         labelPositions.clear();
         drawEmptyEstuary(now);
@@ -4815,6 +4949,7 @@ export function createTideweftRenderer(
       drawTideHarps(latestView, now);
       drawWayknots(latestView, now);
       drawAggregateWildlifeEvidence(latestView.aggregateWildlifeEvidence ?? [], now);
+      drawWildlifeCarcasses(latestView.wildlifeCarcasses ?? [], now);
       drawSettlements(latestView.settlements, now);
       drawPorters(latestView.porters, now);
       drawDogs(latestView.dogs ?? [], now);

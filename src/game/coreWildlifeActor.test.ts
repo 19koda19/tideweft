@@ -97,7 +97,11 @@ function food(
     resourceId,
     observationId,
     foodClass,
-    sourceKind: foodClass === "live-prey" ? "living-actor" : "physical-item",
+    sourceKind: foodClass === "live-prey"
+      ? "living-actor"
+      : foodClass === "carrion"
+        ? "physical-carcass"
+        : "physical-item",
     availableUnits: 4,
     nutrition: 800_000,
     effort: 100_000,
@@ -638,7 +642,11 @@ describe("core Wave-A wildlife actor", () => {
         seen.id,
         `ITEM-${fixture.species}`,
         fixture.foodClass,
-        { sourceKind: fixture.foodClass === "browse" ? "natural-forage" : "physical-item" },
+        { sourceKind: fixture.foodClass === "browse"
+          ? "natural-forage"
+          : fixture.foodClass === "carrion"
+            ? "physical-carcass"
+            : "physical-item" },
       );
       const before = structuredClone(opportunity);
       const result = step(state, 1, [seen], [opportunity]);
@@ -654,6 +662,48 @@ describe("core Wave-A wildlife actor", () => {
       expect(opportunity).toEqual(before);
       expect(result.actor.needs.hunger).toBeGreaterThan(state.needs.hunger);
     }
+  });
+
+  it("keeps physical carcasses distinct from living prey and ordinary items", () => {
+    const bear = hungry(actor("black-bear"));
+    const seen = observation(bear, 1, {
+      id: "obs:physical-carcass",
+      perceivedClass: "carrion",
+      subjectId: "CARCASS-contract",
+    });
+    const carcass = food(seen.id, "CARCASS-contract", "carrion");
+    const accepted = step(bear, 1, [seen], [carcass]);
+
+    expect(accepted.decision.resourceReference).toMatchObject({
+      foodClass: "carrion",
+      sourceKind: "physical-carcass",
+    });
+    expect(canonicalizeCoreWildlifeActorState(accepted.actor)).toEqual(accepted.actor);
+
+    for (const invalid of [
+      { ...carcass, sourceKind: "physical-item" as const },
+      { ...carcass, foodClass: "exposed-food" as const },
+      { ...carcass, foodClass: "live-prey" as const, sourceKind: "physical-item" as const },
+      { ...carcass, foodClass: "exposed-food" as const, sourceKind: "living-actor" as const },
+    ]) {
+      expect(stepCoreWildlifeActor(bear, {
+        tick: 1,
+        observations: [seen],
+        foodOpportunities: [invalid],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      })).toBeNull();
+    }
+
+    expect(canonicalizeCoreWildlifeActorState({
+      ...accepted.actor,
+      intent: {
+        ...accepted.actor.intent,
+        resourceReference: {
+          ...accepted.actor.intent.resourceReference!,
+          sourceKind: "physical-item",
+        },
+      },
+    })).toBeNull();
   });
 
   it("lets an omnivore choose easier physical food over live prey", () => {

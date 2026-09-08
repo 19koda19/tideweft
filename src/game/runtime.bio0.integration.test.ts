@@ -9,7 +9,7 @@ import {
   seedFromText,
   serializeWorld,
 } from "../sim/public";
-import { hashCanonical } from "../sim/util";
+import { hashCanonical, stableStringify } from "../sim/util";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer } from "./player";
 import { createSessionState } from "./sessionTypes";
@@ -79,10 +79,9 @@ import {
   canonicalizeCoreEcologyPatch,
   createCoreEcologyPatch,
   deserializeCoreEcologyAggregatePatch,
-  deserializeCoreEcologyPatch,
+  migrateLegacyCoreEcologyPatch,
   replaceCoreEcologyActor,
   serializeCoreEcologyAggregatePatch,
-  serializeCoreEcologyPatch,
   stableCoreEcologyAggregatePopulationId,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
@@ -196,8 +195,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(21);
-    expect(firstRepository.snapshot().payloadVersion).toBe(21);
+    expect(firstEnvelope.version).toBe(22);
+    expect(firstRepository.snapshot().payloadVersion).toBe(22);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
 
@@ -338,7 +337,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(21);
+    expect(migratedEnvelope.version).toBe(22);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -384,7 +383,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(21);
+    expect(envelope.version).toBe(22);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -432,8 +431,8 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(21);
-    expect(firstRepository.snapshot().payloadVersion).toBe(21);
+    expect(firstEnvelope.version).toBe(22);
+    expect(firstRepository.snapshot().payloadVersion).toBe(22);
     expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
     const ecology = requiredCoreEcology(firstEnvelope);
     expect(ecology.derivation.kind).toBe("habitat-v9");
@@ -487,7 +486,7 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const v9Record = waveAV9Record(setupRepository.snapshot());
     const v9Envelope = JSON.parse(v9Record.worldJson) as CurrentEnvelope;
-    const waveA = deserializeCoreEcologyPatch(v9Envelope.coreEcology);
+    const waveA = migrateLegacyCoreEcologyPatch(v9Envelope.coreEcology);
     if (waveA === null) throw new Error("v9 fixture omitted its canonical Wave-A ecology");
     const waveAPopulations = structuredClone(waveA.populations);
     const waveAGroups = structuredClone(waveA.groups);
@@ -506,8 +505,8 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(21);
-    expect(firstRepository.snapshot().payloadVersion).toBe(21);
+    expect(firstEnvelope.version).toBe(22);
+    expect(firstRepository.snapshot().payloadVersion).toBe(22);
     expect(firstEnvelope.coreEcology).toBe(secondEnvelope.coreEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
@@ -577,7 +576,7 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const v9Record = legacyFixedV9Record(setupRepository.snapshot());
     const v9Envelope = JSON.parse(v9Record.worldJson) as CurrentEnvelope;
-    const legacyEcology = deserializeCoreEcologyPatch(v9Envelope.coreEcology);
+    const legacyEcology = migrateLegacyCoreEcologyPatch(v9Envelope.coreEcology);
     if (legacyEcology === null) throw new Error("fixture omitted canonical legacy-fixed ecology");
     expect(legacyEcology.derivation).toEqual({ kind: "legacy-fixed-v1" });
     expect(legacyEcology.groups.groups).toEqual([]);
@@ -599,7 +598,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
     const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(21);
+    expect(firstEnvelope.version).toBe(22);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual(v9Envelope.player);
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -1085,7 +1084,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v21 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v22 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1483,6 +1482,24 @@ function waveAHabitatFromCurrentEcology(
   return canonical;
 }
 
+/** Emit the exact pre-mortality v2 shape used by outer-v9 migration fixtures. */
+function serializeLegacyCoreEcologyPatchV2(
+  patch: ReturnType<typeof createCoreEcologyPatch>,
+): string {
+  return stableStringify({
+    ...patch,
+    version: 2,
+    populations: patch.populations.map((population) => {
+      const {
+        baselinePopulationSize: _baselinePopulationSize,
+        reserveUnits: _reserveUnits,
+        ...legacyPopulation
+      } = population;
+      return legacyPopulation;
+    }),
+  });
+}
+
 function legacyFixedV9Record(current: SaveRecord): SaveRecord {
   const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
   const envelope = decoded as unknown as CurrentEnvelope;
@@ -1553,7 +1570,7 @@ function legacyFixedV9Record(current: SaveRecord): SaveRecord {
   const v9Base = {
     ...currentBase,
     version: 9,
-    coreEcology: serializeCoreEcologyPatch(waveA),
+    coreEcology: serializeLegacyCoreEcologyPatchV2(waveA),
   };
   return {
     ...current,
@@ -1573,7 +1590,7 @@ function waveAV9Record(current: SaveRecord): SaveRecord {
     throw new Error("current migration fixture omitted aggregate core ecology");
   }
   const waveA = canonicalizeCoreEcologyPatch({
-    version: 2,
+    version: 3,
     patchKey: coreEcology.patchKey,
     originRegion: coreEcology.originRegion,
     updatedAtTick: coreEcology.updatedAtTick,
@@ -1600,7 +1617,7 @@ function waveAV9Record(current: SaveRecord): SaveRecord {
   const v9Base = {
     ...currentBase,
     version: 9,
-    coreEcology: serializeCoreEcologyPatch(waveA),
+    coreEcology: serializeLegacyCoreEcologyPatchV2(waveA),
   };
   return {
     ...current,

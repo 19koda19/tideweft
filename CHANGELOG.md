@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.29 — 2026-09-08
+
+Build: `0.3.3-alpha.29` · Gameplay contract: 27 · Tutorial: 39
+
+What Remains adds the first bounded causal wildlife-mortality and physical-aftermath loop without adding a species: exact fox contact can injure or kill a rabbit, and one finite body remains for lawful scavenging.
+
+### Gameplay
+
+- A marsh fox already pursuing a currently identified marsh rabbit can now cause injury or death only after its exact body physically reaches that exact rabbit. Sight, proximity, a stale target, or an anonymous alarm cannot substitute for direct current contact.
+- A death retires the exact rabbit once and removes exactly one unit from its population. Any other units formerly represented by that individual remain conserved as abstract reserve rather than dying, duplicating, or becoming hidden actors.
+- The death creates one stable physical carcass with a finite conserved resource. A marsh fox or fish crow may notice it through ordinary current vision, physically reach it, and consume from that same body; the fox may claim and guard it while the resource remains.
+
+### Fixes
+
+- The mortality transaction authenticates the pursuer, prey, current identified observation, active pursuit, exact contact, damage event, population unit, and body identity. Hidden, stale, malformed, aggregate, or group-member candidates fail closed.
+- Retirement, population loss, carcass creation, claim, release, and consumption are exact-once conservation boundaries. Save, reload, interruption, or replay cannot resurrect the rabbit, create another body, duplicate food, or consume one unit twice.
+- Chart and Relief now derive carcass visibility from the same current lawful perception boundary as living actors. Losing direct detail removes the body from presentation instead of leaving remote aftermath knowledge behind.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. A fox must first lawfully identify and pursue the rabbit, close through ordinary movement, and make exact physical contact; escape, lost contact, stronger pressure, or disengagement can still interrupt the attempt.
+- One represented rabbit death means one population-unit loss. Remaining abstract reserve is neither immortal scenery nor collateral death, and the finite body cannot provide unlimited feeding.
+- Validation remains architecture-led: shared identity, perception, contact, mortality, population, body, conservation, save, signed-world, and bounded-performance invariants plus representative fox-and-scavenger scenarios replace an N-squared species-pair matrix.
+
+### Interface
+
+- Chart 2D and Relief 3D show an animal body or remains only while the player currently has lawful direct-detail perception. Species identification still depends on available clarity; no hidden attacker, cause, resource count, claimant, or offscreen outcome is disclosed.
+- A direct injury, death, or feeding event enters the pane-free event feed only when the player currently witnesses it. Returning later may reveal the physical body, but it does not grant a retrospective report of an unseen death or meal.
+- Field Manual version 39 explains exact-contact fox pressure, one-life/one-body conservation, lawful carcass feeding and guarding, current-perception presentation, exact save adoption, and the deliberately narrow limits of this first mortality slice.
+
+### Save changes
+
+- The outer session advances to version 22, the core-ecology patch advances to version 3, and its aggregate record advances to version 5. Habitat analysis remains version 9, and the nineteen-species roster, populations, homes, custody, and living actor roster remain unchanged.
+- A sealed version-21 Missing Goat save migrates exactly once. Every prior actor, population, group, home, relationship, task, recovery case, item, Promise, evidence record, and world fact remains exact before an empty authoritative mortality, population-reserve, and physical-body ledger is appended.
+- Current saves seal the retired actor, one-unit population consequence, damage and death cause, stable body, finite resource, claims, and consumption ordinals. Reload cannot reroll the outcome, recreate the actor, duplicate the body, restore consumed resource, or move an unseen event into player knowledge.
+
+### Known limitations
+
+- This release adds no species, habitat, population, settlement relationship, home, or actor. It advances only the current bounded starting-harbor marsh-fox-contact and marsh-rabbit-body seam, not worldwide ecology or the later Wave-E species.
+- Only direct marsh-fox contact can injure or kill an individual marsh rabbit in this slice. Player, dog, human, other-animal, and social-group-member mortality remain absent, as do broader combat, bleeding, treatment, and rescue consequences.
+- Reproduction, recruitment, population recovery, live-time decomposition, body drift, dragging, harvesting, carcass scent, insects, and worldwide aftermath ecology remain future work. The finite carcass can currently be reached and fed from only through the bounded fox and fish-crow policies described above.
+
 ## 0.3.3-alpha.28 — 2026-09-07
 
 Build: `0.3.3-alpha.28` · Gameplay contract: 26 · Tutorial: 38

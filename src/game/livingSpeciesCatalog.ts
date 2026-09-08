@@ -22,7 +22,12 @@ import {
 import {
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
   assertCoreEcologySpeciesRuntimePolicies,
+  coreEcologySpeciesCanFeedFromCarcass,
+  coreEcologySpeciesCanGuardCarcass,
   coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesPhysicalBodyResourceUnits,
+  coreEcologySpeciesPhysicalBodySizeUnits,
+  coreEcologySpeciesPredatorContact,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
 
@@ -748,6 +753,9 @@ const noHealth = (): LivingSpeciesHealthContract => ({
   causalDeath: false,
   recovery: false,
 });
+
+const CORE_WILDLIFE_MORTALITY_OWNER_ID = "game:core-ecology-mortality:v1";
+const CORE_WILDLIFE_CARCASS_OWNER_ID = "game:core-wildlife-carcass:v1";
 
 interface CoreWildlifeCatalogValues {
   readonly implementation: "active" | "foundation";
@@ -1696,7 +1704,7 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
   },
   "marsh-fox": {
     "aquatic-animal": "intentional-no-response",
-    carcass: "intentional-no-response",
+    carcass: "available",
     dog: "available",
     fire: "intentional-no-response",
     "flying-animal": "intentional-no-response",
@@ -1716,7 +1724,7 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
   },
   "fish-crow": {
     "aquatic-animal": "intentional-no-response",
-    carcass: "intentional-no-response",
+    carcass: "available",
     dog: "available",
     fire: "intentional-no-response",
     "flying-animal": "available",
@@ -1988,6 +1996,28 @@ function coreWildlifeInteractionTargets(
     });
   }
 
+  if (coreEcologySpeciesCanFeedFromCarcass(species)) {
+    const canGuardCarcass = coreEcologySpeciesCanGuardCarcass(species);
+    targets.push({
+      targetClass: "carcass",
+      policy: "available",
+      perceptionChannels: ["vision"],
+      appraisals: canGuardCarcass
+        ? ["food-competition", "food-value"]
+        : ["food-value"],
+      motivationAxes: ["hunger"],
+      verbs: canGuardCarcass
+        ? ["consume", "guard", "scavenge"]
+        : ["consume", "scavenge"],
+      escalationConstraints: [
+        "current-physical-carcass-required",
+        "direct-perception-required",
+        "physical-resource-conservation",
+      ],
+      disengagementVerbs: ["disengage"],
+    });
+  }
+
   targets.push(
     {
       targetClass: "food",
@@ -2026,14 +2056,22 @@ function coreWildlifeInteractionTargets(
   );
 
   if (profile.roles.includes("predator")) {
+    const predatorContact = coreEcologySpeciesPredatorContact(species);
     targets.push({
       targetClass: "smaller-prey",
       policy: "available",
       perceptionChannels: ["vision"],
       appraisals: ["food-value"],
       motivationAxes: ["hunger"],
-      verbs: ["pursue"],
-      escalationConstraints: ["bounded-pursuit", "direct-perception-required"],
+      verbs: predatorContact === null ? ["pursue"] : ["attack", "pursue"],
+      escalationConstraints: predatorContact === null
+        ? ["bounded-pursuit", "direct-perception-required"]
+        : [
+            "bounded-pursuit",
+            "direct-contact-required",
+            "direct-perception-required",
+            "named-predator-contact-cause",
+          ],
       disengagementVerbs: ["disengage", "retreat"],
     });
   }
@@ -2220,10 +2258,11 @@ function sensesFromRegistry(
 }
 
 /**
- * Wave-A animals and Settlement Shadows retain their exact contracts. Marsh
- * rabbit and marsh fox activate only the capabilities their bounded runtime
- * slice owns; mortality and the later world systems remain explicit seams. No
- * species can inherit a catch-all wildlife shape.
+ * Wave-A animals and Settlement Shadows retain their exact contracts. Later
+ * slices become truthful here only through the shared runtime capability
+ * policy: owning a predator contact never implies that the attacker can die,
+ * and feeding from a body never implies that the consumer owns one. No species
+ * can inherit a catch-all wildlife shape.
  */
 function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const profile = getCoreWildlifeProfile(species);
@@ -2238,6 +2277,11 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const aggregate = identityForm === "aggregate";
   const aggregateSchool = aggregate
     && coreEcologySpeciesHasRuntimeCapability(species, "school-coordination");
+  const physicalBodyResourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(species);
+  const physicalBodySizeUnits = coreEcologySpeciesPhysicalBodySizeUnits(species);
+  const ownsPhysicalBody = physicalBodySizeUnits > 0
+    && physicalBodyResourceUnits > 0
+    && coreEcologySpeciesHasRuntimeCapability(species, "physical-body-resource");
 
   const foodResources = CORE_WILDLIFE_FOOD_CLASSES.filter(
     (resourceClass) => profile.foodAffinities[resourceClass] > 0,
@@ -2418,25 +2462,39 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       ecologicalEffects: values.ecologicalEffects,
     },
     lifeHistory: {
-      implementation: "foundation",
-      ownerId: aggregate ? values.ecologyOwnerId : "sim:core-wildlife-identity:v1",
+      implementation: ownsPhysicalBody ? "active" : "foundation",
+      ownerId: ownsPhysicalBody
+        ? CORE_WILDLIFE_MORTALITY_OWNER_ID
+        : aggregate
+          ? values.ecologyOwnerId
+          : "sim:core-wildlife-identity:v1",
       model: identityForm,
       stages: aggregate ? ["mixed-life-stages"] : ["adult", "juvenile", "older"],
       dynamicAging: false,
       reproduction: "unimplemented",
-      mortality: "unimplemented",
+      mortality: ownsPhysicalBody ? "individual-causal" : "unimplemented",
     },
-    health: values.health ?? (aggregate
-      ? noHealth()
-      : {
-          implementation: "foundation",
-          ownerId: "game:core-wildlife-actor:v1",
+    health: ownsPhysicalBody
+      ? {
+          implementation: "active",
+          ownerId: CORE_WILDLIFE_MORTALITY_OWNER_ID,
           vitalityAxis: "health",
           injuryAxis: null,
           incapacitation: false,
-          causalDeath: false,
+          causalDeath: true,
           recovery: false,
-        }),
+        }
+      : values.health ?? (aggregate
+        ? noHealth()
+        : {
+            implementation: "foundation",
+            ownerId: "game:core-wildlife-actor:v1",
+            vitalityAxis: "health",
+            injuryAxis: null,
+            incapacitation: false,
+            causalDeath: false,
+            recovery: false,
+          }),
     activity: {
       implementation,
       ownerId: values.activityOwnerId,
@@ -2496,7 +2554,17 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       ...values.evidence,
       produces: runtimePolicy.evidenceKinds,
     },
-    aftermath: noAftermath(),
+    aftermath: ownsPhysicalBody
+      ? {
+          implementation: "active",
+          ownerId: CORE_WILDLIFE_CARCASS_OWNER_ID,
+          decayOwnerId: CORE_WILDLIFE_CARCASS_OWNER_ID,
+          carcassModel: "physical",
+          persistentIdentity: true,
+          resourceClasses: ["carrion"],
+          evidenceOutputs: ["physical-carcass"],
+        }
+      : noAftermath(),
     interactions: {
       implementation: "foundation",
       ownerId: values.behaviorOwnerId,
@@ -3995,7 +4063,7 @@ function crossContractCoherence(module: LivingSpeciesModule): boolean {
   if (module.social.group.sharedMemory && module.cognition.maxMemories === 0) return false;
   if (module.foodWeb.consumes.length > 0 && module.diet.mode === "none") return false;
   if (module.lifeHistory.dynamicAging && module.lifeHistory.implementation !== "active") return false;
-  if (module.health.causalDeath && !module.health.incapacitation) return false;
+  if (module.health.recovery && !module.health.incapacitation) return false;
   if (module.aftermath.implementation !== "unimplemented" && !module.health.causalDeath) return false;
   return true;
 }

@@ -565,6 +565,24 @@ export type AggregateWildlifeEvidenceView = WildlifeEvidenceViewBase & (
     }
 );
 
+/**
+ * One directly observed physical wildlife body. This deliberately carries no
+ * killer, hidden cause, resource total, claimant, or remote tracking data.
+ * Depleted remains persist as their own form instead of disappearing.
+ */
+export interface WildlifeCarcassView {
+  readonly version: 1;
+  readonly carcassId: string;
+  readonly position: WorldPoint;
+  readonly form: "body" | "depleted-remains";
+  readonly quickLabel: string;
+  readonly speciesIdentified: boolean;
+  readonly sizeScale: number;
+  /** Stable presentation rotation derived from the body identity. */
+  readonly orientation: number;
+  readonly distanceUnits: number;
+}
+
 export interface ParticleView {
   readonly id: string;
   readonly position: WorldPoint;
@@ -635,6 +653,8 @@ export interface TideweftView {
   readonly dogs?: readonly DogView[];
   /** Optional during the Wave A migration; production projections remain direct-sight only. */
   readonly wildlife?: readonly WildlifeView[];
+  /** Directly observed physical bodies, separate from living actors and tracks. */
+  readonly wildlifeCarcasses?: readonly WildlifeCarcassView[];
   /** Direct-detail aggregate signs; never merge these into the living-actor list. */
   readonly aggregateWildlifeEvidence?: readonly AggregateWildlifeEvidenceView[];
   readonly particles?: readonly ParticleView[];

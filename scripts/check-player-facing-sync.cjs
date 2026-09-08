@@ -8,6 +8,8 @@ const projectRoot = path.resolve(__dirname, "..");
 const manifestRelativePath = "src/content/gameplayContract.json";
 const packageRelativePath = "package.json";
 const htmlMetadataRelativePath = "index.html";
+const electronMainRelativePath = "electron/main.cjs";
+const runtimeRelativePath = "src/game/runtime.ts";
 const releaseCategoryKeys = [
   "gameplay",
   "fixes",
@@ -288,6 +290,64 @@ function validateBuildMetadata(htmlSource, manifest, packageDocument) {
   return errors;
 }
 
+function validateElectronSmokeMetadata(source, manifest, packageDocument) {
+  if (typeof source !== "string") {
+    return [`${electronMainRelativePath} is missing or unreadable.`];
+  }
+  const errors = [];
+  const releaseMatches = [...source.matchAll(
+    /\bconst\s+SMOKE_EXPECTED_RELEASE_VERSION\s*=\s*["']([^"']+)["']\s*;/gu,
+  )];
+  if (
+    releaseMatches.length !== 1
+    || releaseMatches[0]?.[1] !== packageDocument?.version
+  ) {
+    errors.push(
+      `${electronMainRelativePath} must declare one packaged-smoke release matching package.json.`,
+    );
+  }
+  const contractMatches = [...source.matchAll(
+    /\bconst\s+SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION\s*=\s*([0-9]+)\s*;/gu,
+  )];
+  const contractVersion = Number(contractMatches[0]?.[1]);
+  if (
+    contractMatches.length !== 1
+    || !Number.isSafeInteger(contractVersion)
+    || contractVersion !== manifest.gameplayContractVersion
+  ) {
+    errors.push(
+      `${electronMainRelativePath} must declare one packaged-smoke gameplay contract matching gameplayContract.json.`,
+    );
+  }
+  return errors;
+}
+
+function validateElectronSmokeSaveVersion(electronSource, runtimeSource) {
+  if (typeof electronSource !== "string" || typeof runtimeSource !== "string") {
+    return ["Packaged-smoke and runtime save-version sources must both be readable."];
+  }
+  const electronMatches = [...electronSource.matchAll(
+    /\bconst\s+SMOKE_EXPECTED_SAVE_VERSION\s*=\s*([0-9]+)\s*;/gu,
+  )];
+  const runtimeMatches = [...runtimeSource.matchAll(
+    /\bconst\s+GAME_SAVE_VERSION\s*=\s*([0-9]+)\s*;/gu,
+  )];
+  const electronVersion = Number(electronMatches[0]?.[1]);
+  const runtimeVersion = Number(runtimeMatches[0]?.[1]);
+  if (
+    electronMatches.length !== 1
+    || runtimeMatches.length !== 1
+    || !Number.isSafeInteger(electronVersion)
+    || !Number.isSafeInteger(runtimeVersion)
+    || electronVersion !== runtimeVersion
+  ) {
+    return [
+      `${electronMainRelativePath} packaged-smoke save version must match ${runtimeRelativePath}.`,
+    ];
+  }
+  return [];
+}
+
 function validateContentDocuments({ manifest, tutorialSource, patchNotes, packageDocument }) {
   const errors = validateGameplayContract(manifest);
   if (errors.length > 0) return { errors, tutorialVersion: null };
@@ -334,6 +394,8 @@ function validateLocalContent(root = projectRoot) {
   let patchNotes;
   let packageDocument;
   let htmlSource;
+  let electronMainSource;
+  let runtimeSource;
   const readErrors = [];
   try {
     tutorialSource = fs.readFileSync(path.join(root, manifest.tutorialSourcePath), "utf8");
@@ -355,11 +417,26 @@ function validateLocalContent(root = projectRoot) {
   } catch (error) {
     readErrors.push(`${htmlMetadataRelativePath} is missing or unreadable: ${error.message}`);
   }
+  try {
+    electronMainSource = fs.readFileSync(path.join(root, electronMainRelativePath), "utf8");
+  } catch (error) {
+    readErrors.push(`${electronMainRelativePath} is missing or unreadable: ${error.message}`);
+  }
+  try {
+    runtimeSource = fs.readFileSync(path.join(root, runtimeRelativePath), "utf8");
+  } catch (error) {
+    readErrors.push(`${runtimeRelativePath} is missing or unreadable: ${error.message}`);
+  }
   if (readErrors.length > 0) return { errors: readErrors, manifest, tutorialVersion: null };
   const result = validateContentDocuments({ manifest, tutorialSource, patchNotes, packageDocument });
   return {
     ...result,
-    errors: [...result.errors, ...validateBuildMetadata(htmlSource, manifest, packageDocument)],
+    errors: [
+      ...result.errors,
+      ...validateBuildMetadata(htmlSource, manifest, packageDocument),
+      ...validateElectronSmokeMetadata(electronMainSource, manifest, packageDocument),
+      ...validateElectronSmokeSaveVersion(electronMainSource, runtimeSource),
+    ],
     manifest,
     patchNotes,
   };
@@ -778,6 +855,8 @@ module.exports = {
   run,
   validateBuildMetadata,
   validateContentDocuments,
+  validateElectronSmokeMetadata,
+  validateElectronSmokeSaveVersion,
   validateGameplayContract,
   validateLocalContent,
   validatePatchNotes,

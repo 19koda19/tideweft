@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { LIVING_ACTOR_SPECIES } from "./livingActor";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
-import { coreEcologySpeciesHasRuntimeCapability } from "./coreEcologySpeciesRuntimePolicy";
+import {
+  coreEcologySpeciesCanFeedFromCarcass,
+  coreEcologySpeciesCanGuardCarcass,
+  coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesPhysicalBodyResourceUnits,
+  coreEcologySpeciesPredatorContact,
+} from "./coreEcologySpeciesRuntimePolicy";
 import { CORE_ECOLOGY_ACTIVITY_OWNER_ID } from "./coreEcologyActivity";
 import { CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES } from "./coreEcologyActivityAffordance";
 import {
@@ -388,7 +394,7 @@ describe("Living Weft species module catalog", () => {
     });
   });
 
-  it("declares the active marsh-edge individuals without inventing later mortality systems", () => {
+  it("declares the active marsh-edge individuals without inheriting unrelated life systems", () => {
     const rabbit = livingSpeciesModule("marsh-rabbit");
     const fox = livingSpeciesModule("marsh-fox");
 
@@ -456,28 +462,6 @@ describe("Living Weft species module catalog", () => {
           ownerId: "game:core-wildlife-actor:v1",
           attentionOwnerId: "sim:actor-perception:v2",
           model: "bounded-learning",
-        },
-        lifeHistory: {
-          implementation: "foundation",
-          dynamicAging: false,
-          reproduction: "unimplemented",
-          mortality: "unimplemented",
-        },
-        health: {
-          implementation: "foundation",
-          injuryAxis: null,
-          incapacitation: false,
-          causalDeath: false,
-          recovery: false,
-        },
-        aftermath: {
-          implementation: "unimplemented",
-          ownerId: null,
-          decayOwnerId: null,
-          carcassModel: "none",
-          persistentIdentity: false,
-          resourceClasses: [],
-          evidenceOutputs: [],
         },
         about: {
           implementation: "active",
@@ -592,9 +576,89 @@ describe("Living Weft species module catalog", () => {
     });
     expect(fox?.interactions.targets.find(({ targetClass }) => targetClass === "smaller-prey"))
       .toMatchObject({
-        verbs: ["pursue"],
-        escalationConstraints: ["bounded-pursuit", "direct-perception-required"],
+        verbs: ["attack", "pursue"],
+        escalationConstraints: [
+          "bounded-pursuit",
+          "direct-contact-required",
+          "direct-perception-required",
+          "named-predator-contact-cause",
+        ],
       });
+  });
+
+  it("derives the bounded mortality and carrion contracts from shared capabilities", () => {
+    const witnesses = ["marsh-rabbit", "marsh-fox", "fish-crow"] as const;
+
+    for (const species of witnesses) {
+      const module = livingSpeciesModule(species);
+      const bodyResourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(species);
+      const ownsPhysicalBody = bodyResourceUnits > 0
+        && coreEcologySpeciesHasRuntimeCapability(species, "physical-body-resource");
+      const predatorContact = coreEcologySpeciesPredatorContact(species);
+      const canFeedFromCarcass = coreEcologySpeciesCanFeedFromCarcass(species);
+      const canGuardCarcass = coreEcologySpeciesCanGuardCarcass(species);
+      const carcassTarget = module?.interactions.targets.find(({ targetClass }) => (
+        targetClass === "carcass"
+      ));
+      const smallerPreyTarget = module?.interactions.targets.find(({ targetClass }) => (
+        targetClass === "smaller-prey"
+      ));
+
+      expect(module).not.toBeNull();
+      expect(module?.lifeHistory).toMatchObject({
+        implementation: ownsPhysicalBody ? "active" : "foundation",
+        mortality: ownsPhysicalBody ? "individual-causal" : "unimplemented",
+        reproduction: "unimplemented",
+      });
+      expect(module?.health).toMatchObject({
+        implementation: ownsPhysicalBody ? "active" : "foundation",
+        vitalityAxis: "health",
+        injuryAxis: null,
+        incapacitation: false,
+        causalDeath: ownsPhysicalBody,
+        recovery: false,
+      });
+      expect(module?.aftermath).toEqual(ownsPhysicalBody
+        ? {
+            implementation: "active",
+            ownerId: "game:core-wildlife-carcass:v1",
+            decayOwnerId: "game:core-wildlife-carcass:v1",
+            carcassModel: "physical",
+            persistentIdentity: true,
+            resourceClasses: ["carrion"],
+            evidenceOutputs: ["physical-carcass"],
+          }
+        : {
+            implementation: "unimplemented",
+            ownerId: null,
+            decayOwnerId: null,
+            carcassModel: "none",
+            persistentIdentity: false,
+            resourceClasses: [],
+            evidenceOutputs: [],
+          });
+      expect(carcassTarget?.policy).toBe(
+        canFeedFromCarcass ? "available" : "intentional-no-response",
+      );
+      expect(carcassTarget?.verbs.includes("consume")).toBe(canFeedFromCarcass);
+      expect(carcassTarget?.verbs.includes("scavenge")).toBe(canFeedFromCarcass);
+      expect(carcassTarget?.verbs.includes("guard")).toBe(canGuardCarcass);
+      expect(smallerPreyTarget?.verbs.includes("attack")).toBe(predatorContact !== null);
+      if (predatorContact !== null) {
+        expect(predatorContact.cause).toBe("predator-contact");
+        expect(smallerPreyTarget?.escalationConstraints).toContain(
+          "named-predator-contact-cause",
+        );
+      }
+    }
+
+    expect(witnesses.filter((species) => (
+      coreEcologySpeciesPhysicalBodyResourceUnits(species) > 0
+    ))).toEqual(["marsh-rabbit"]);
+    expect(witnesses.filter(coreEcologySpeciesCanFeedFromCarcass))
+      .toEqual(["marsh-fox", "fish-crow"]);
+    expect(witnesses.filter(coreEcologySpeciesCanGuardCarcass))
+      .toEqual(["marsh-fox"]);
   });
 
   it("declares the active rain-chorus trio through shared capabilities", () => {

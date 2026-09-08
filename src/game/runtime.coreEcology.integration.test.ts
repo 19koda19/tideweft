@@ -105,7 +105,7 @@ export const PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 21;
+  readonly version: 22;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -158,7 +158,7 @@ afterEach(() => {
 });
 
 describe("runtime core-ecology vertical slice", () => {
-  it("migrates a sealed v20 save into an empty v21 domestic-animal recovery root", async () => {
+  it("migrates a sealed v20 save into v22 without inventing mortality history", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -176,7 +176,11 @@ describe("runtime core-ecology vertical slice", () => {
       version: _currentVersion,
       ...establishedV20Roots
     } = current;
-    const v20Base = { ...establishedV20Roots, version: 20 as const };
+    const v20Base = {
+      ...establishedV20Roots,
+      version: 20 as const,
+      coreEcology: serializePublishedAggregateV4(requiredCore(current)),
+    };
     await repository.save({
       ...currentRecord,
       payloadVersion: 20,
@@ -212,7 +216,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(21);
+    expect(adoptedRecord.payloadVersion).toBe(22);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -224,7 +228,78 @@ describe("runtime core-ecology vertical slice", () => {
       latestClosedOutcome: null,
       pendingTransition: null,
     });
+    expect(requiredCore(adopted)).toMatchObject({
+      nextMortalityOrdinal: 0,
+      mortalityTransactions: [],
+      carcasses: [],
+    });
     migrated.destroy();
+  });
+
+  it("migrates a sealed v21 save into the empty v22 mortality ledger exactly once", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "alpha twenty nine mortality migration",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const currentRecord = repository.snapshot();
+    const current = requiredEnvelope(repository);
+    const currentCore = requiredCore(current);
+    const { integrity: _integrity, version: _version, ...durableRoots } = current;
+    const v21Base = {
+      ...durableRoots,
+      version: 21 as const,
+      coreEcology: serializePublishedAggregateV4(currentCore),
+    };
+    await repository.save({
+      ...currentRecord,
+      payloadVersion: 21,
+      updatedAt: currentRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v21Base,
+        integrity: gameSaveEnvelopeIntegrity(v21Base),
+      }),
+    });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const adoptedRecord = repository.snapshot();
+    const adopted = requiredEnvelope(repository);
+    const adoptedCore = requiredCore(adopted);
+    expect(adoptedRecord.payloadVersion).toBe(22);
+    expect(adoptedCore).toMatchObject({
+      nextMortalityOrdinal: 0,
+      mortalityTransactions: [],
+      carcasses: [],
+    });
+    expect(adoptedCore.populations.map((population) => ({
+      species: population.species,
+      populationKey: population.populationKey,
+      baselinePopulationSize: population.baselinePopulationSize,
+      populationSize: population.populationSize,
+      reserveUnits: population.reserveUnits,
+    }))).toEqual(currentCore.populations.map((population) => ({
+      species: population.species,
+      populationKey: population.populationKey,
+      baselinePopulationSize: population.populationSize,
+      populationSize: population.populationSize,
+      reserveUnits: 0,
+    })));
+
+    const durableCore = adopted.coreEcology;
+    migrated.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(durableCore);
+    resumed.destroy();
   });
 
   it("migrates the sealed v8 ecology exactly once without rerolling actors or cargo", async () => {
@@ -267,7 +342,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(21);
+    expect(repository.snapshot().payloadVersion).toBe(22);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v9");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -377,7 +452,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(21);
+    expect(v13Record.payloadVersion).toBe(22);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
@@ -458,7 +533,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(21);
+    expect(v13Record.payloadVersion).toBe(22);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
@@ -556,7 +631,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(21);
+    expect(v13Record.payloadVersion).toBe(22);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
@@ -643,7 +718,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(21);
+    expect(adoptedRecord.payloadVersion).toBe(22);
     expect(adopted.derivation.kind).toBe("habitat-v9");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
@@ -684,7 +759,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentRecord = repository.snapshot();
     const v14Record = waterfowlV14Record(currentRecord);
     const v14Envelope = JSON.parse(v14Record.worldJson) as unknown as CurrentEnvelope;
-    const v14Ecology = deserializeCoreEcologyAggregatePatch(v14Envelope.coreEcology);
+    const v14Ecology = deserializeOrMigrateCoreEcologyAggregatePatch(v14Envelope.coreEcology);
     if (v14Ecology === null || v14Ecology.derivation.kind !== "habitat-v6") {
       throw new Error("v14 fixture omitted its authenticated waterfowl ecology");
     }
@@ -704,7 +779,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(21);
+    expect(adoptedRecord.payloadVersion).toBe(22);
     expect(adopted.derivation.kind).toBe("habitat-v9");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
@@ -878,7 +953,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v21 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v22 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -903,7 +978,7 @@ describe("runtime core-ecology vertical slice", () => {
     rejected.destroy();
   });
 
-  it("quarantines an Alpha-19 aggregate record masquerading inside a current v21 envelope", async () => {
+  it("quarantines an Alpha-19 aggregate record masquerading inside a current v22 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -1008,7 +1083,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(21);
+    expect(before.version).toBe(22);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -1822,6 +1897,104 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
       .toHaveLength(1);
     runtime.destroy();
+  });
+
+  it("persists one caused fox-to-rabbit death and one physical body across reload", async () => {
+    const {
+      runtime,
+      repository,
+      foxActorId,
+      rabbitActorId,
+    } = await createFoxEventBoundaryRuntime({ lethalContact: true });
+    const before = requiredCore(requiredEnvelope(repository));
+    const beforeRabbitPopulation = before.populations.find(
+      ({ species }) => species === "marsh-rabbit",
+    );
+    const beforeRabbit = coreActors(before).find(
+      ({ identity }) => identity.stableId === rabbitActorId,
+    );
+    if (beforeRabbitPopulation === undefined || beforeRabbit === undefined) {
+      throw new Error("mortality fixture omitted its living rabbit");
+    }
+    expect(beforeRabbit.condition.health).toBe(500_000);
+    expect(before.mortalityTransactions).toEqual([]);
+    expect(before.carcasses).toEqual([]);
+
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const afterEnvelope = requiredEnvelope(repository);
+    const after = requiredCore(afterEnvelope);
+    const afterRabbitPopulation = after.populations.find(
+      ({ species }) => species === "marsh-rabbit",
+    );
+    if (afterRabbitPopulation === undefined) {
+      throw new Error("mortality removed the rabbit population record");
+    }
+    expect(coreActors(after).some(({ identity }) => identity.stableId === rabbitActorId))
+      .toBe(false);
+    expect(afterRabbitPopulation.baselinePopulationSize)
+      .toBe(beforeRabbitPopulation.baselinePopulationSize);
+    expect(afterRabbitPopulation.populationSize)
+      .toBe(beforeRabbitPopulation.populationSize - 1);
+    expect(afterRabbitPopulation.reserveUnits)
+      .toBe(beforeRabbitPopulation.reserveUnits + beforeRabbitPopulation.members[0]!.representedUnits - 1);
+    expect(after.mortalityTransactions).toHaveLength(1);
+    expect(after.mortalityTransactions[0]).toMatchObject({
+      mortalityOrdinal: 0,
+      removedPopulationUnits: 1,
+      event: {
+        attackerId: foxActorId,
+        victimId: rabbitActorId,
+        cause: "predator-contact",
+        outcome: "death",
+        healthAfter: 0,
+      },
+      retiredActor: {
+        identity: { stableId: rabbitActorId },
+        condition: { health: 0 },
+      },
+    });
+    expect(after.carcasses).toHaveLength(1);
+    expect(after.carcasses[0]).toMatchObject({
+      sourceActorId: rabbitActorId,
+      sourceSpecies: "marsh-rabbit",
+      bodySizeUnits: 3,
+      originalResourceUnits: 4,
+      remainingResourceUnits: 4,
+    });
+
+    // The next ordinary cognition/resource tick must use that exact body as a
+    // finite physical food source. This is one representative end-to-end
+    // composition proof for the shared capability seam, not a species-pair
+    // matrix: policy decides who may feed, while the carcass owner conserves
+    // the resource and the actor owner receives only the consumed unit.
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const afterFeedingEnvelope = requiredEnvelope(repository);
+    const afterFeeding = requiredCore(afterFeedingEnvelope);
+    expect(afterFeeding.carcasses[0]).toMatchObject({
+      carcassId: after.carcasses[0]!.carcassId,
+      originalResourceUnits: 4,
+      remainingResourceUnits: 3,
+      consumedResourceUnits: 1,
+      currentClaimantActorId: foxActorId,
+    });
+    expect(coreActors(afterFeeding).find(
+      ({ identity }) => identity.stableId === foxActorId,
+    )?.needs.hunger).toBeLessThan(1_000_000);
+
+    const durableCore = afterFeedingEnvelope.coreEcology;
+    runtime.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    expect(requiredEnvelope(repository).coreEcology).toBe(durableCore);
+    const reloaded = requiredCore(requiredEnvelope(repository));
+    expect(reloaded.mortalityTransactions).toHaveLength(1);
+    expect(reloaded.carcasses).toHaveLength(1);
+    expect(coreActors(reloaded).some(({ identity }) => identity.stableId === rabbitActorId))
+      .toBe(false);
+    resumed.destroy();
   });
 
   it("routes a selected flee target away from a closed frame edge", async () => {
@@ -2708,7 +2881,7 @@ function waterfowlV14Record(current: SaveRecord): SaveRecord {
   const v14Base = {
     ...currentBase,
     version: 14,
-    coreEcology: serializeCoreEcologyAggregatePatch(v14Ecology),
+    coreEcology: serializePublishedAggregateV4(v14Ecology),
   };
   return {
     ...current,
@@ -2724,9 +2897,23 @@ function waterfowlV14Record(current: SaveRecord): SaveRecord {
 function serializePublishedAggregateV3(
   ecology: CoreEcologyAggregatePatchState,
 ): string {
+  const {
+    carcasses: _carcasses,
+    mortalityTransactions: _mortalityTransactions,
+    nextMortalityOrdinal: _nextMortalityOrdinal,
+    ...legacyRoot
+  } = ecology;
   return stableStringify({
-    ...ecology,
+    ...legacyRoot,
     version: 3,
+    populations: ecology.populations.map((population) => {
+      const {
+        baselinePopulationSize: _baselinePopulationSize,
+        reserveUnits: _reserveUnits,
+        ...legacy
+      } = population;
+      return legacy;
+    }),
     aggregatePopulations: ecology.aggregatePopulations.map((population) => {
       const { lastTidalRedistributionTick: _omitted, ...legacy } = population;
       return legacy;
@@ -2734,10 +2921,33 @@ function serializePublishedAggregateV3(
   });
 }
 
+function serializePublishedAggregateV4(
+  ecology: CoreEcologyAggregatePatchState,
+): string {
+  const {
+    carcasses: _carcasses,
+    mortalityTransactions: _mortalityTransactions,
+    nextMortalityOrdinal: _nextMortalityOrdinal,
+    ...legacyRoot
+  } = ecology;
+  return stableStringify({
+    ...legacyRoot,
+    version: 4,
+    populations: ecology.populations.map((population) => {
+      const {
+        baselinePopulationSize: _baselinePopulationSize,
+        reserveUnits: _reserveUnits,
+        ...legacy
+      } = population;
+      return legacy;
+    }),
+  });
+}
+
 function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
-  if (value.format !== "tideweft-session" || value.version !== 21) {
-    throw new Error("core-ecology runtime fixture did not save a v21 envelope");
+  if (value.format !== "tideweft-session" || value.version !== 22) {
+    throw new Error("core-ecology runtime fixture did not save a v22 envelope");
   }
   return value;
 }
@@ -2773,9 +2983,13 @@ function makeWorldTraceableAndClear(world: ReturnType<typeof deserializeWorld>):
   for (const tile of world.terrain.tiles) tile.moisture = 900_000;
 }
 
-async function createFoxEventBoundaryRuntime(): Promise<Readonly<{
+async function createFoxEventBoundaryRuntime(
+  options: Readonly<{ lethalContact?: boolean }> = {},
+): Promise<Readonly<{
   runtime: TideweftRuntime;
+  repository: MemoryRepository;
   foxActorId: string;
+  rabbitActorId: string;
 }>> {
   const repository = new MemoryRepository();
   const initial = await createTideweftRuntime(repository);
@@ -2811,10 +3025,12 @@ async function createFoxEventBoundaryRuntime(): Promise<Readonly<{
     regional.window,
     playerIndex + direction * foxOffset,
   );
-  const rabbitPosition = worldPositionAtWindowTile(
-    regional.window,
-    playerIndex + direction * rabbitOffset,
-  );
+  const rabbitPosition = options.lethalContact
+    ? translateWorldPosition(foxPosition, direction * 400, 0)
+    : worldPositionAtWindowTile(
+        regional.window,
+        playerIndex + direction * rabbitOffset,
+      );
 
   let patch = requiredCore(envelope);
   const rabbit = patch.populations
@@ -2824,11 +3040,21 @@ async function createFoxEventBoundaryRuntime(): Promise<Readonly<{
   if (rabbit === undefined || fox === undefined) {
     throw new Error("fox event-locus fixture omitted its rabbit/fox web");
   }
-  patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(rabbit, {
+  const positionedRabbit = repositionCoreWildlifeActor(rabbit, {
     atTick: patch.updatedAtTick,
     position: rabbitPosition,
     heading: direction > 0 ? 500_000 : 0,
-  }));
+  });
+  patch = replaceCoreEcologyAggregatePatchActor(
+    patch,
+    options.lethalContact
+      ? replaceCoreWildlifeActorPhysiology(positionedRabbit, {
+          atTick: patch.updatedAtTick,
+          needs: positionedRabbit.needs,
+          condition: { ...positionedRabbit.condition, health: 500_000 },
+        })
+      : positionedRabbit,
+  );
   const positionedFox = replaceCoreWildlifeActorPhysiology(
     repositionCoreWildlifeActor(fox, {
       atTick: patch.updatedAtTick,
@@ -2869,7 +3095,9 @@ async function createFoxEventBoundaryRuntime(): Promise<Readonly<{
   scheduledFrame = undefined;
   return Object.freeze({
     runtime: await createTideweftRuntime(repository),
+    repository,
     foxActorId: fox.identity.stableId,
+    rabbitActorId: rabbit.identity.stableId,
   });
 }
 

@@ -151,6 +151,7 @@ import type {
   TideweftRendererController,
   TideweftRendererOptions,
   TideweftView,
+  WildlifeCarcassView,
   WildlifeView,
   WayknotKind,
   WayknotView,
@@ -584,6 +585,11 @@ interface AttachedListeners {
   readonly contextRestored: () => void;
 }
 
+type ReliefHoverTarget = WorldTapTarget | {
+  readonly entity: "wildlife-carcass";
+  readonly id: string;
+};
+
 /**
  * Optional, actual 3D estuary presentation. It deliberately shares only the
  * projection and command contracts with the flat renderer, so hosts can swap
@@ -619,7 +625,7 @@ export function createTideweftReliefRenderer(
   let touchSequenceSuppressed = false;
   let pointerWorld: WorldPoint | null = null;
   let hoverParcelId: string | null = null;
-  let hoverTarget: WorldTapTarget | null = null;
+  let hoverTarget: ReliefHoverTarget | null = null;
   let hasObservedSpatialEpoch = false;
   let observedSpatialEpoch: TideweftView["spatialEpoch"];
   let observedSpatialFrame: TerrainSpatialFrame | null = null;
@@ -678,6 +684,28 @@ export function createTideweftReliefRenderer(
     }
     if (notice) notice.hidden = !active;
     if (labelLayer) labelLayer.hidden = !active;
+  };
+
+  const syncCarcassAccessibility = (view: TideweftView | null): void => {
+    if (!canvasElement) return;
+    const labels = view
+      ? [...new Set((view.wildlifeCarcasses ?? [])
+          .filter((carcass) => isDirectlyDetailPerceived(
+            view.terrain,
+            carcass.position,
+            view.perception !== undefined,
+          ))
+          .map((carcass) => carcass.quickLabel.trim())
+          .filter((label) => label.length > 0))]
+      : [];
+    if (labels.length === 0) {
+      canvasElement.removeAttribute("aria-description");
+      return;
+    }
+    canvasElement.setAttribute(
+      "aria-description",
+      `Nearby wildlife remains: ${labels.join("; ")}.`,
+    );
   };
 
   const showFailure = (reason: string): void => {
@@ -1004,6 +1032,10 @@ export function createTideweftReliefRenderer(
   ): boolean => hoverTarget?.entity === "aggregate-wildlife-evidence"
     && hoverTarget.aggregateId === evidence.aggregateId
     && hoverTarget.evidenceId === evidence.evidenceId;
+
+  const carcassIsHovered = (carcass: WildlifeCarcassView): boolean =>
+    hoverTarget?.entity === "wildlife-carcass"
+    && hoverTarget.id === carcass.carcassId;
 
   const syncReliefLabels = (
     view: TideweftView,
@@ -1349,6 +1381,27 @@ export function createTideweftReliefRenderer(
         highlighted,
       );
     }
+    for (const carcass of view.wildlifeCarcasses ?? []) {
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        carcass.position,
+        view.perception !== undefined,
+      ) || !carcassIsHovered(carcass)) continue;
+      const surface = discoveredReliefSurfaceHeightAt(
+        view.terrain,
+        carcass.position,
+        cache.mesh.verticalScale,
+        true,
+      );
+      place(
+        `wildlife-carcass-${carcass.carcassId}`,
+        carcass.quickLabel,
+        carcass.position,
+        surface + tileSize * 0.46,
+        "wildlife",
+        true,
+      );
+    }
     if (destination && !view.settlements.some(
       (settlement) => settlement.discovered !== false
         && distanceSquared(destination, settlement.position) <= tileSize * tileSize * 0.25,
@@ -1559,10 +1612,10 @@ export function createTideweftReliefRenderer(
 
   const findSelection = (
     point: WorldPoint,
-  ): WorldTapTarget | null => {
+  ): ReliefHoverTarget | null => {
     const view = latestView;
     if (!view) return null;
-    let nearest: { target: WorldTapTarget; distance: number } | null = null;
+    let nearest: { target: ReliefHoverTarget; distance: number } | null = null;
     const settlementRadius = Math.max(view.terrain.tileSize * 0.55, unitsPerPixel() * 18);
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
@@ -1630,6 +1683,24 @@ export function createTideweftReliefRenderer(
             species: wildlife.species,
             id: wildlife.actorId,
           },
+          distance,
+        };
+      }
+    }
+    for (const carcass of view.wildlifeCarcasses ?? []) {
+      if (!isDirectlyDetailPerceived(
+        view.terrain,
+        carcass.position,
+        view.perception !== undefined,
+      )) continue;
+      const carcassRadius = Math.max(
+        view.terrain.tileSize * 0.5 * clamp(carcass.sizeScale, 0.7, 2.2),
+        unitsPerPixel() * 22,
+      );
+      const distance = distanceSquared(point, carcass.position);
+      if (distance <= carcassRadius ** 2 && (!nearest || distance < nearest.distance)) {
+        nearest = {
+          target: { entity: "wildlife-carcass", id: carcass.carcassId },
           distance,
         };
       }
@@ -1838,7 +1909,7 @@ export function createTideweftReliefRenderer(
       const view = latestView;
       if (view) emit(commandForWorldTap(
         view,
-        target,
+        target?.entity === "wildlife-carcass" ? null : target,
         point,
         candidate.coarsePointer,
         candidate.shiftKey || event.shiftKey,
@@ -4981,6 +5052,77 @@ export function createTideweftReliefRenderer(
       }
     };
 
+    const drawWildlifeCarcasses = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+    ): void => {
+      const tileSize = view.terrain.tileSize;
+      for (const carcass of view.wildlifeCarcasses ?? []) {
+        if (!isDirectlyDetailPerceived(
+          view.terrain,
+          carcass.position,
+          view.perception !== undefined,
+        )) continue;
+        const surface = discoveredReliefSurfaceHeightAt(
+          view.terrain,
+          carcass.position,
+          cache.mesh.verticalScale,
+          true,
+        );
+        if (carcassIsHovered(carcass)) {
+          drawGroundRing(
+            view,
+            cache,
+            carcass.position,
+            tileSize * 0.48 * clamp(carcass.sizeScale, 0.7, 2.2),
+            RELIEF_PALETTE.tide,
+            205,
+          );
+        }
+        const base = tileSize * 0.075 * clamp(carcass.sizeScale, 0.7, 2.2);
+        p.push();
+        p.translate(carcass.position.x, -surface - base * 0.14, carcass.position.y);
+        p.rotateY(-carcass.orientation);
+        p.noStroke();
+        if (carcass.form === "body") {
+          p.ambientMaterial("#694f42");
+          p.ellipsoid(base * 1.8, base * 0.48, base * 0.72, 8, 4);
+          p.push();
+          p.translate(base * 1.55, -base * 0.04, 0);
+          p.ambientMaterial("#836554");
+          p.sphere(base * 0.46, 7, 4);
+          p.pop();
+          p.ambientMaterial("#8d725e");
+          for (const [x, z] of [
+            [-base * 0.82, -base * 0.34],
+            [base * 0.48, base * 0.36],
+          ] as const) {
+            p.push();
+            p.translate(x, base * 0.18, z);
+            p.rotateZ(0.32);
+            p.box(base * 0.86, base * 0.12, base * 0.12);
+            p.pop();
+          }
+        } else {
+          p.ambientMaterial("#c7b89b");
+          p.box(base * 2.5, base * 0.12, base * 0.14);
+          for (const offset of [-0.62, -0.2, 0.22, 0.64]) {
+            p.push();
+            p.translate(base * offset, 0, 0);
+            p.rotateY(offset * 0.48);
+            p.box(base * 0.1, base * 0.1, base * 1.08);
+            p.pop();
+          }
+          p.push();
+          p.translate(base * 1.42, 0, 0);
+          p.ambientMaterial("#ad9d82");
+          p.ellipsoid(base * 0.42, base * 0.27, base * 0.34, 7, 4);
+          p.pop();
+        }
+        p.pop();
+      }
+    };
+
     const drawDestination = (view: TideweftView, cache: CachedReliefMesh): void => {
       const destination = view.player.destination;
       if (!destination) return;
@@ -5478,6 +5620,7 @@ export function createTideweftReliefRenderer(
       drawTideHarps(view, cache, now);
       drawWayknots(view, cache, now);
       drawAggregateWildlifeEvidence(view, cache);
+      drawWildlifeCarcasses(view, cache);
       for (const settlement of view.settlements) drawSettlement(view, cache, settlement);
       drawPorters(view, cache);
       drawDogs(view, cache);
@@ -5526,6 +5669,7 @@ export function createTideweftReliefRenderer(
     p.draw = (): void => {
       if (!active || contextLost || !webglSupported) return;
       refreshLatestView();
+      syncCarcassAccessibility(latestView);
       const now = performance.now();
       telemetry.recordFrame(now);
       advancePointerParallax(pointerParallax, now, reducedMotion);

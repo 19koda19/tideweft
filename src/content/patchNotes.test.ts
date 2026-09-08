@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.28",
-      buildIdentity: "0.3.3-alpha.28",
-      gameplayContractVersion: 26,
-      tutorialVersion: 38,
+      version: "0.3.3-alpha.29",
+      buildIdentity: "0.3.3-alpha.29",
+      gameplayContractVersion: 27,
+      tutorialVersion: 39,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes The Missing Goat and retains the earlier habitat releases", () => {
+  it("scopes What Remains and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const missingGoatRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.28",
+    );
+    const missingGoatCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => missingGoatRelease?.categories[category] ?? [])
       .join(" ");
     const watchReturnsRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.27",
@@ -176,14 +183,18 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("current caused flee or retreat");
-    expect(activeCopy).toContain("Distance alone cannot manufacture a split");
-    expect(activeCopy).toContain("only after current identified sight");
-    expect(activeCopy).toContain("explicit report of the last known area");
-    expect(activeCopy).toContain("Searching does not prove a find");
-    expect(activeCopy).toContain("physical group reunion and current keeper sight");
-    expect(activeCopy).toContain("indivisible materialization-cap units");
-    expect(activeCopy).toContain("species-by-species fixtures or an N-squared interaction matrix");
+    expect(activeCopy).toContain("currently identified marsh rabbit");
+    expect(activeCopy).toContain("exact body physically reaches that exact rabbit");
+    expect(activeCopy).toContain("removes exactly one unit from its population");
+    expect(activeCopy).toContain("abstract reserve");
+    expect(activeCopy).toContain("one stable physical carcass with a finite conserved resource");
+    expect(activeCopy).toContain("marsh fox or fish crow");
+    expect(activeCopy).toContain("current lawful perception boundary");
+    expect(activeCopy).toContain("representative fox-and-scavenger scenarios replace an N-squared species-pair matrix");
+    expect(missingGoatCopy).toContain("current caused flee or retreat");
+    expect(missingGoatCopy).toContain("Distance alone cannot manufacture a split");
+    expect(missingGoatCopy).toContain("physical group reunion and current keeper sight");
+    expect(missingGoatCopy).toContain("indivisible materialization-cap units");
     expect(watchReturnsCopy).toContain("one bounded work task for the existing settlement guardian dog");
     expect(watchReturnsCopy).toContain("deterministic shared-locomotion search probe");
     expect(watchReturnsCopy).toContain("physically back toward the existing pen worksite");
@@ -209,17 +220,16 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 21");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 22");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Habitat analysis remains version 9");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology remains version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("working-animal state remains version 2");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-20 Watch Returns save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("one current case, one pending exact-once transition, and one latest closed outcome");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no species, actor, population, habitat, home, custody, item, or Promise");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("closes only the bounded starting-harbor Wave-D integration seam");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("cannot guarantee a find or recovery");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("still do not attack, receive injuries, die, leave carcasses, or consume live prey");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("core-ecology patch advances to version 3");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate record advances to version 5");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-21 Missing Goat save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("empty authoritative mortality, population-reserve, and physical-body ledger");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no species, habitat, population, settlement relationship, home, or actor");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Only direct marsh-fox contact can injure or kill an individual marsh rabbit");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Player, dog, human, other-animal, and social-group-member mortality remain absent");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Reproduction, recruitment, population recovery, live-time decomposition, body drift, dragging, harvesting, carcass scent, insects");
     expect(watchReturnsRelease?.categories.saves.join(" ")).toContain("outer session advances to version 20");
     expect(watchReturnsRelease?.categories.saves.join(" ")).toContain("sealed version-19 Paddock Watch save migrates exactly once");
     expect(paddockWatchRelease?.categories.saves.join(" ")).toContain("outer session advances to version 19");

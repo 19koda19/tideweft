@@ -76,7 +76,28 @@ import {
   type CoreEcologyAggregateActivePeriod,
   type CoreEcologyAggregateSpecies,
 } from "./coreEcologyAggregatePolicy";
-import { coreEcologySpeciesRuntimePolicy } from "./coreEcologySpeciesRuntimePolicy";
+import {
+  coreEcologySpeciesPredatorContact,
+  coreEcologySpeciesPhysicalBodyResourceUnits,
+  coreEcologySpeciesPhysicalBodySizeUnits,
+  coreEcologySpeciesRuntimePolicy,
+} from "./coreEcologySpeciesRuntimePolicy";
+import {
+  canonicalizeCoreEcologyMortalityTransaction,
+  createCoreEcologyMortalityTransaction,
+  type CoreEcologyMortalityTransaction,
+} from "./coreEcologyMortality";
+import {
+  canonicalizeCoreWildlifeCarcass,
+  createCoreWildlifeCarcass,
+  releaseCoreWildlifeCarcass,
+  type CoreWildlifeCarcass,
+} from "./coreWildlifeCarcass";
+import {
+  canonicalizeCoreWildlifeMortalityEvent,
+  resolveCoreWildlifePredatorContact,
+  type CoreWildlifeMortalityResult,
+} from "./coreWildlifeMortality";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -84,10 +105,12 @@ import {
   type WorldPosition,
 } from "./worldPosition";
 
-export const CORE_ECOLOGY_PATCH_VERSION = 2 as const;
-export const CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 4 as const;
-export const LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 3 as const;
-export const LEGACY_CORE_ECOLOGY_PATCH_VERSION = 1 as const;
+export const CORE_ECOLOGY_PATCH_VERSION = 3 as const;
+export const CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 5 as const;
+export const LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 4 as const;
+export const TIDAL_LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 3 as const;
+export const LEGACY_CORE_ECOLOGY_PATCH_VERSION = 2 as const;
+export const FOUNDATION_LEGACY_CORE_ECOLOGY_PATCH_VERSION = 1 as const;
 export const CORE_ECOLOGY_MAX_POPULATIONS = 13 as const;
 export const CORE_ECOLOGY_MAX_MEMBERS = 48 as const;
 export const CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS = 24 as const;
@@ -95,6 +118,7 @@ export const CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS = 4 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_ANCHORS = 4 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_EVIDENCE = 24 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_DISTURBANCES = 16 as const;
+export const CORE_ECOLOGY_MAX_MORTALITY_TRANSACTIONS = 256 as const;
 /** Published Tide Table cadence; shared with v3 adoption so processed edges cannot replay. */
 export const CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS = 4 as const;
 export const CORE_ECOLOGY_MAX_STEP_TICKS = 64 as const;
@@ -275,7 +299,12 @@ export interface CoreEcologyPopulationMemberState {
 export interface CoreEcologyPopulationState {
   readonly species: CoreWildlifeSpecies;
   readonly populationKey: string;
+  /** Immutable generated population before authenticated mortality deltas. */
+  readonly baselinePopulationSize: number;
+  /** Current living units, including exact bodies and anonymous reserve. */
   readonly populationSize: number;
+  /** Living units intentionally not materialized as replacement bodies. */
+  readonly reserveUnits: number;
   readonly members: readonly CoreEcologyPopulationMemberState[];
 }
 
@@ -388,6 +417,24 @@ export interface CoreEcologyAggregatePatchState {
   readonly groups: CoreEcologyGroupSet;
   readonly populations: readonly CoreEcologyPopulationState[];
   readonly aggregatePopulations: readonly CoreEcologyAggregatePopulationState[];
+  /** Never reused: authoritative ordering for exact life-to-body transitions. */
+  readonly nextMortalityOrdinal: number;
+  readonly mortalityTransactions: readonly CoreEcologyMortalityTransaction[];
+  /** Physical aftermath remains separate from the living actor roster. */
+  readonly carcasses: readonly CoreWildlifeCarcass[];
+}
+
+export interface ApplyCoreEcologyWildlifeMortalityInput {
+  readonly result: CoreWildlifeMortalityResult;
+  /** Local physical temperature on the common fixed-point condition scale. */
+  readonly temperature: number;
+}
+
+export interface ApplyCoreEcologyWildlifeMortalityResult {
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly event: CoreWildlifeMortalityResult["event"];
+  readonly transaction: CoreEcologyMortalityTransaction | null;
+  readonly carcass: CoreWildlifeCarcass | null;
 }
 
 export interface DisplaceCoreEcologyAggregatePopulationInput {
@@ -605,7 +652,9 @@ export function createCoreEcologyPatch(
     populations.push(Object.freeze({
       species,
       populationKey: populationValue.populationKey,
+      baselinePopulationSize: populationSize,
       populationSize,
+      reserveUnits: 0,
       members: Object.freeze(members),
     }));
   }
@@ -681,6 +730,9 @@ export function canonicalizeCoreEcologyPatch(value: unknown): CoreEcologyPatchSt
   if (
     memberCount > CORE_ECOLOGY_MAX_MEMBERS
     || materializedCount > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
+    || populations.some(({ baselinePopulationSize, populationSize, reserveUnits }) => (
+      baselinePopulationSize !== populationSize || reserveUnits !== 0
+    ))
     || !groupsBelongToPatch(groups, populations, value.originRegion, value.updatedAtTick)
     || !derivationMatchesPopulations(derivation, populations, value.originRegion)
   ) return null;
@@ -730,8 +782,34 @@ export function migrateLegacyCoreEcologyPatch(text: unknown): CoreEcologyPatchSt
     || UTF8_ENCODER.encode(text).byteLength > CORE_ECOLOGY_PATCH_MAX_SERIALIZED_BYTES
   ) return null;
   try {
-    const legacy = canonicalizeLegacyCoreEcologyPatch(JSON.parse(text) as unknown);
-    if (legacy === null || stableStringify(legacy) !== text) return null;
+    const raw = JSON.parse(text) as unknown;
+    if (!plainRecord(raw) || stableStringify(raw) !== text) return null;
+    if (raw.version === LEGACY_CORE_ECOLOGY_PATCH_VERSION) {
+      if (!exactKeys(raw, [
+        "derivation",
+        "groups",
+        "originRegion",
+        "patchKey",
+        "populations",
+        "updatedAtTick",
+        "version",
+      ]) || !Array.isArray(raw.populations)) return null;
+      return canonicalizeCoreEcologyPatch({
+        ...raw,
+        version: CORE_ECOLOGY_PATCH_VERSION,
+        populations: raw.populations.map((population) => (
+          plainRecord(population)
+            ? {
+                ...population,
+                baselinePopulationSize: population.populationSize,
+                reserveUnits: 0,
+              }
+            : population
+        )),
+      });
+    }
+    const legacy = canonicalizeFoundationLegacyCoreEcologyPatch(raw);
+    if (legacy === null) return null;
     return canonicalizeCoreEcologyPatch({
       version: CORE_ECOLOGY_PATCH_VERSION,
       patchKey: legacy.patchKey,
@@ -741,6 +819,8 @@ export function migrateLegacyCoreEcologyPatch(text: unknown): CoreEcologyPatchSt
       groups: createCoreEcologyGroupSet(),
       populations: legacy.populations.map((population) => ({
         ...population,
+        baselinePopulationSize: population.populationSize,
+        reserveUnits: 0,
         members: population.members.map((member) => ({
           ...member,
           representedUnits: 1,
@@ -869,7 +949,9 @@ export function createCoreEcologyAggregatePatch(
     populations.push(Object.freeze({
       species,
       populationKey: populationValue.populationKey,
+      baselinePopulationSize: populationSize,
       populationSize,
+      reserveUnits: 0,
       members: Object.freeze(members),
     }));
   }
@@ -905,6 +987,9 @@ export function createCoreEcologyAggregatePatch(
     groups,
     populations,
     aggregatePopulations,
+    nextMortalityOrdinal: 0,
+    mortalityTransactions: [],
+    carcasses: [],
   };
   const patch = canonicalizeCoreEcologyAggregatePatch(candidate);
   if (patch === null) throw new Error("Generated core ecology aggregate patch failed validation");
@@ -921,8 +1006,11 @@ export function canonicalizeCoreEcologyAggregatePatch(
   ) return value as CoreEcologyAggregatePatchState;
   if (!plainRecord(value) || !exactKeys(value, [
     "aggregatePopulations",
+    "carcasses",
     "derivation",
     "groups",
+    "mortalityTransactions",
+    "nextMortalityOrdinal",
     "originRegion",
     "patchKey",
     "populations",
@@ -938,6 +1026,11 @@ export function canonicalizeCoreEcologyAggregatePatch(
     || value.populations.length > CORE_ECOLOGY_MAX_POPULATIONS
     || !Array.isArray(value.aggregatePopulations)
     || value.aggregatePopulations.length > CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS
+    || !nonnegativeSafeInteger(value.nextMortalityOrdinal)
+    || !Array.isArray(value.mortalityTransactions)
+    || value.mortalityTransactions.length > CORE_ECOLOGY_MAX_MORTALITY_TRANSACTIONS
+    || !Array.isArray(value.carcasses)
+    || value.carcasses.length > CORE_ECOLOGY_MAX_MORTALITY_TRANSACTIONS
   ) return null;
   const derivation = canonicalAggregateDerivation(value.derivation);
   const groups = canonicalizeCoreEcologyGroupSet(value.groups);
@@ -993,6 +1086,17 @@ export function canonicalizeCoreEcologyAggregatePatch(
     ) return null;
   }
 
+  const mortality = canonicalMortalityLedger({
+    rawTransactions: value.mortalityTransactions,
+    rawCarcasses: value.carcasses,
+    nextMortalityOrdinal: value.nextMortalityOrdinal,
+    populations,
+    liveActorIds: actorIds,
+    originRegion: value.originRegion,
+    maximumTick: value.updatedAtTick,
+  });
+  if (mortality === null) return null;
+
   if (
     memberCount > CORE_ECOLOGY_MAX_MEMBERS
     || materializedCount > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
@@ -1002,6 +1106,7 @@ export function canonicalizeCoreEcologyAggregatePatch(
       populations,
       aggregatePopulations,
       value.originRegion,
+      mortality.transactions,
     )
   ) return null;
   const patch = deepFreeze({
@@ -1013,6 +1118,9 @@ export function canonicalizeCoreEcologyAggregatePatch(
     groups,
     populations,
     aggregatePopulations,
+    nextMortalityOrdinal: value.nextMortalityOrdinal,
+    mortalityTransactions: mortality.transactions,
+    carcasses: mortality.carcasses,
   });
   CANONICAL_AGGREGATE_PATCHES.add(patch);
   return patch;
@@ -1045,11 +1153,10 @@ export function deserializeCoreEcologyAggregatePatch(
 }
 
 /**
- * One-way v3-to-v4 adoption. The only new datum is a durable tide-operation
- * clock inferred from authenticated retained disturbance history and, for a
- * saved silverside school on a published cadence tick, the completed runtime
- * tick itself. Every actor, anchor, population unit, event, and causal ordinal
- * remains exact.
+ * One-way aggregate adoption. V4 receives empty mortality ownership and exact
+ * baseline accounting. V3 first receives its historical durable tide clock,
+ * then the same additive V5 fields. No living identity or population unit is
+ * regenerated during either migration.
  */
 export function migrateLegacyCoreEcologyAggregatePatch(
   text: unknown,
@@ -1064,7 +1171,8 @@ export function migrateLegacyCoreEcologyAggregatePatch(
     if (
       !plainRecord(value)
       || stableStringify(value) !== text
-      || value.version !== LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION
+      || (value.version !== LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION
+        && value.version !== TIDAL_LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION)
       || !exactKeys(value, [
         "aggregatePopulations",
         "derivation",
@@ -1075,9 +1183,25 @@ export function migrateLegacyCoreEcologyAggregatePatch(
         "updatedAtTick",
         "version",
       ])
+      || !Array.isArray(value.populations)
       || !Array.isArray(value.aggregatePopulations)
     ) return null;
-    const aggregatePopulations = value.aggregatePopulations.map((population) => {
+    const populations = value.populations.map((population) => {
+      if (!plainRecord(population) || !exactKeys(population, [
+        "members",
+        "populationKey",
+        "populationSize",
+        "species",
+      ])) throw new TypeError("Legacy individual population shape is malformed");
+      return {
+        ...population,
+        baselinePopulationSize: population.populationSize,
+        reserveUnits: 0,
+      };
+    });
+    const aggregatePopulations = value.version === LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION
+      ? value.aggregatePopulations
+      : value.aggregatePopulations.map((population) => {
       if (
         !plainRecord(population)
         || !exactKeys(population, [
@@ -1130,7 +1254,11 @@ export function migrateLegacyCoreEcologyAggregatePatch(
     return canonicalizeCoreEcologyAggregatePatch({
       ...value,
       version: CORE_ECOLOGY_AGGREGATE_PATCH_VERSION,
+      populations,
       aggregatePopulations,
+      nextMortalityOrdinal: 0,
+      mortalityTransactions: [],
+      carcasses: [],
     });
   } catch {
     return null;
@@ -1154,10 +1282,13 @@ export function migrateCoreEcologyPatchToAggregatePatch(
     groups: patch.groups,
     populations: patch.populations,
     aggregatePopulations: [],
+    nextMortalityOrdinal: 0,
+    mortalityTransactions: [],
+    carcasses: [],
   });
 }
 
-/** Accepts canonical v4, v3, v2, or v1 text and returns the additive v4 form. */
+/** Accepts canonical v5 through foundational v1 text and returns additive v5. */
 export function deserializeOrMigrateCoreEcologyAggregatePatch(
   text: unknown,
 ): CoreEcologyAggregatePatchState | null {
@@ -1507,6 +1638,212 @@ export function replaceCoreEcologyAggregatePatchActor(
       patch.aggregatePopulations,
       updatedAtTick,
     ),
+  });
+}
+
+/**
+ * Atomically applies one already-perceived physical harm event. Injury keeps
+ * the same living actor. Death retires that exact body, removes one population
+ * unit, preserves anonymous survivors represented by it, and creates exactly
+ * one finite carcass. Existing committed death events replay idempotently.
+ */
+export function applyCoreEcologyWildlifeMortality(
+  value: unknown,
+  inputValue: unknown,
+): ApplyCoreEcologyWildlifeMortalityResult | null {
+  const patch = canonicalizeCoreEcologyAggregatePatch(value);
+  if (
+    patch === null
+    || !plainRecord(inputValue)
+    || !exactKeys(inputValue, ["result", "temperature"])
+    || !fixedInteger(inputValue.temperature)
+    || !plainRecord(inputValue.result)
+    || !exactKeys(inputValue.result, ["event", "target"])
+  ) return null;
+  const event = canonicalizeCoreWildlifeMortalityEvent(inputValue.result.event);
+  const target = canonicalizeCoreWildlifeActorState(inputValue.result.target);
+  if (event === null || target === null || target.condition.health !== event.healthAfter) {
+    return null;
+  }
+
+  const existing = patch.mortalityTransactions.find((transaction) => (
+    transaction.event.eventId === event.eventId
+  ));
+  if (existing !== undefined) {
+    const carcass = patch.carcasses.find(({ carcassId }) => carcassId === existing.carcassId);
+    if (
+      carcass === undefined
+      || stableStringify(existing.event) !== stableStringify(event)
+      || stableStringify(existing.retiredActor) !== stableStringify(target)
+    ) return null;
+    return deepFreeze({ patch, event, transaction: existing, carcass });
+  }
+
+  if (event.atTick !== patch.updatedAtTick) return null;
+  let victimPopulation: CoreEcologyPopulationState | undefined;
+  let victimMember: CoreEcologyPopulationMemberState | undefined;
+  let attackerMember: CoreEcologyPopulationMemberState | undefined;
+  for (const population of patch.populations) {
+    for (const member of population.members) {
+      if (member.actor.identity.stableId === event.victimId) {
+        victimPopulation = population;
+        victimMember = member;
+      }
+      if (member.actor.identity.stableId === event.attackerId) attackerMember = member;
+    }
+  }
+  if (
+    victimPopulation === undefined
+    || victimMember === undefined
+    || attackerMember === undefined
+    || victimMember.materialization !== "materialized"
+    || attackerMember.materialization !== "materialized"
+    || attackerMember.actor.updatedAtTick !== event.atTick
+  ) return null;
+  const attacker = attackerMember.actor;
+  const attack = coreEcologySpeciesPredatorContact(attacker.identity.species);
+  if (attack === null) return null;
+  const verified = resolveCoreWildlifePredatorContact({
+    attacker,
+    target: victimMember.actor,
+    atTick: event.atTick,
+    contactRadiusUnits: attack.reachUnits,
+    damageUnits: attack.damageUnits,
+    cause: attack.cause,
+  });
+  if (
+    verified === null
+    || stableStringify(verified.event) !== stableStringify(event)
+    || stableStringify(verified.target) !== stableStringify(target)
+  ) return null;
+
+  if (event.outcome === "injured") {
+    const nextPatch = replaceCoreEcologyAggregatePatchActor(patch, target);
+    return deepFreeze({ patch: nextPatch, event, transaction: null, carcass: null });
+  }
+
+  const bodySizeUnits = coreEcologySpeciesPhysicalBodySizeUnits(
+    victimPopulation.species,
+  );
+  const resourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(victimPopulation.species);
+  if (
+    bodySizeUnits <= 0
+    || resourceUnits <= 0
+    || patch.mortalityTransactions.length >= CORE_ECOLOGY_MAX_MORTALITY_TRANSACTIONS
+    || patch.groups.groups.some((group) => (
+      group.identity.species === victimPopulation?.species
+      && group.identity.populationKey === victimPopulation?.populationKey
+      && group.memberOrdinals.includes(victimMember?.populationOrdinal ?? -1)
+    ))
+  ) return null;
+  const carcass = createCoreWildlifeCarcass({
+    mortalityEvent: event,
+    sourceSpecies: victimPopulation.species,
+    bodySizeUnits,
+    resourceUnits,
+    temperature: inputValue.temperature,
+  });
+  if (carcass === null) return null;
+  const transaction = createCoreEcologyMortalityTransaction({
+    mortalityOrdinal: patch.nextMortalityOrdinal,
+    event,
+    retiredActor: target,
+    representedUnitsBefore: victimMember.representedUnits,
+    carcassId: carcass.carcassId,
+  });
+  const releasedCarcasses: CoreWildlifeCarcass[] = [];
+  for (const existingCarcass of patch.carcasses) {
+    if (existingCarcass.currentClaimantActorId !== target.identity.stableId) {
+      releasedCarcasses.push(existingCarcass);
+      continue;
+    }
+    const released = releaseCoreWildlifeCarcass(existingCarcass, {
+      actorId: target.identity.stableId,
+      atTick: event.atTick,
+    });
+    if (released === null) return null;
+    releasedCarcasses.push(released);
+  }
+  const populations = patch.populations.map((population) => {
+    if (population !== victimPopulation) return population;
+    return Object.freeze({
+      ...population,
+      populationSize: population.populationSize - 1,
+      reserveUnits: population.reserveUnits + victimMember.representedUnits - 1,
+      members: Object.freeze(population.members.filter(({ actor }) => (
+        actor.identity.stableId !== target.identity.stableId
+      ))),
+    });
+  });
+  const nextPatch = canonicalizeCoreEcologyAggregatePatch({
+    ...patch,
+    populations,
+    nextMortalityOrdinal: patch.nextMortalityOrdinal + 1,
+    mortalityTransactions: [...patch.mortalityTransactions, transaction],
+    carcasses: [...releasedCarcasses, carcass],
+  });
+  if (nextPatch === null) return null;
+  const committedCarcass = nextPatch.carcasses.find(({ carcassId }) => (
+    carcassId === carcass.carcassId
+  ));
+  const committedTransaction = nextPatch.mortalityTransactions.find(({ mortalityId }) => (
+    mortalityId === transaction.mortalityId
+  ));
+  if (committedCarcass === undefined || committedTransaction === undefined) return null;
+  return deepFreeze({
+    patch: nextPatch,
+    event,
+    transaction: committedTransaction,
+    carcass: committedCarcass,
+  });
+}
+
+/** Replace one owned carcass after a lawful claim/consume/decay transition. */
+export function replaceCoreEcologyAggregatePatchCarcass(
+  value: unknown,
+  carcassValue: unknown,
+): CoreEcologyAggregatePatchState | null {
+  const patch = canonicalizeCoreEcologyAggregatePatch(value);
+  const carcass = canonicalizeCoreWildlifeCarcass(carcassValue);
+  if (patch === null || carcass === null) return null;
+  const previous = patch.carcasses.find(({ carcassId }) => carcassId === carcass.carcassId);
+  if (
+    previous === undefined
+    || carcass.updatedAtTick < previous.updatedAtTick
+    || carcass.updatedAtTick > patch.updatedAtTick
+    || carcass.remainingResourceUnits > previous.remainingResourceUnits
+    || carcass.consumedResourceUnits < previous.consumedResourceUnits
+    || carcass.decayedResourceUnits < previous.decayedResourceUnits
+    || carcass.condition.decay < previous.condition.decay
+    || stableStringify({
+      bodySizeUnits: carcass.bodySizeUnits,
+      carcassId: carcass.carcassId,
+      deathAtTick: carcass.deathAtTick,
+      deathPosition: carcass.deathPosition,
+      disclosure: carcass.disclosure,
+      originalResourceUnits: carcass.originalResourceUnits,
+      sourceActorId: carcass.sourceActorId,
+      sourceMortalityEventId: carcass.sourceMortalityEventId,
+      sourceSpecies: carcass.sourceSpecies,
+      version: carcass.version,
+    }) !== stableStringify({
+      bodySizeUnits: previous.bodySizeUnits,
+      carcassId: previous.carcassId,
+      deathAtTick: previous.deathAtTick,
+      deathPosition: previous.deathPosition,
+      disclosure: previous.disclosure,
+      originalResourceUnits: previous.originalResourceUnits,
+      sourceActorId: previous.sourceActorId,
+      sourceMortalityEventId: previous.sourceMortalityEventId,
+      sourceSpecies: previous.sourceSpecies,
+      version: previous.version,
+    })
+  ) return null;
+  return canonicalizeCoreEcologyAggregatePatch({
+    ...patch,
+    carcasses: patch.carcasses.map((candidate) => (
+      candidate.carcassId === carcass.carcassId ? carcass : candidate
+    )),
   });
 }
 
@@ -2262,6 +2599,163 @@ function canonicalAggregateDisturbance(
   });
 }
 
+interface CanonicalCoreEcologyMortalityLedger {
+  readonly transactions: readonly CoreEcologyMortalityTransaction[];
+  readonly carcasses: readonly CoreWildlifeCarcass[];
+}
+
+function canonicalMortalityLedger(input: Readonly<{
+  readonly rawTransactions: readonly unknown[];
+  readonly rawCarcasses: readonly unknown[];
+  readonly nextMortalityOrdinal: number;
+  readonly populations: readonly CoreEcologyPopulationState[];
+  readonly liveActorIds: ReadonlySet<string>;
+  readonly originRegion: RegionCoord;
+  readonly maximumTick: number;
+}>): CanonicalCoreEcologyMortalityLedger | null {
+  const transactions: CoreEcologyMortalityTransaction[] = [];
+  const mortalityIds = new Set<string>();
+  const eventIds = new Set<string>();
+  const retiredActorIds = new Set<string>();
+  for (const raw of input.rawTransactions) {
+    const transaction = canonicalizeCoreEcologyMortalityTransaction(raw);
+    if (
+      transaction === null
+      || transaction.event.atTick > input.maximumTick
+      || transaction.retiredActor.updatedAtTick > input.maximumTick
+      || transaction.retiredActor.identity.originRegion.x !== input.originRegion.x
+      || transaction.retiredActor.identity.originRegion.y !== input.originRegion.y
+      || input.liveActorIds.has(transaction.retiredActor.identity.stableId)
+      || mortalityIds.has(transaction.mortalityId)
+      || eventIds.has(transaction.event.eventId)
+      || retiredActorIds.has(transaction.retiredActor.identity.stableId)
+    ) return null;
+    mortalityIds.add(transaction.mortalityId);
+    eventIds.add(transaction.event.eventId);
+    retiredActorIds.add(transaction.retiredActor.identity.stableId);
+    transactions.push(transaction);
+  }
+  transactions.sort((left, right) => left.mortalityOrdinal - right.mortalityOrdinal);
+  if (
+    input.nextMortalityOrdinal !== transactions.length
+    || transactions.some((transaction, index) => transaction.mortalityOrdinal !== index)
+  ) return null;
+
+  const actorRetirements = new Map<string, Readonly<{
+    tick: number;
+    mortalityOrdinal: number;
+  }>>();
+  for (const transaction of transactions) {
+    actorRetirements.set(
+      transaction.retiredActor.identity.stableId,
+      Object.freeze({
+        tick: transaction.retiredActor.updatedAtTick,
+        mortalityOrdinal: transaction.mortalityOrdinal,
+      }),
+    );
+  }
+  const currentActorTicks = new Map<string, number>();
+  for (const population of input.populations) {
+    for (const member of population.members) {
+      currentActorTicks.set(member.actor.identity.stableId, member.actor.updatedAtTick);
+    }
+  }
+  // New deaths are gated against the current species policy before commit.
+  // Once committed, the canonical event and body are history: reapplying
+  // today's reach, damage, or body-yield tuning here would make an otherwise
+  // valid old save unreadable after a balance change. The attacker still must
+  // be an owned actor that was alive through the recorded contact tick.
+  for (let index = 0; index < transactions.length; index += 1) {
+    const transaction = transactions[index]!;
+    const previous = transactions[index - 1];
+    const livingAttackerTick = currentActorTicks.get(transaction.event.attackerId);
+    const attackerRetirement = actorRetirements.get(transaction.event.attackerId);
+    const attackerWasAliveForEvent = livingAttackerTick !== undefined
+      ? livingAttackerTick >= transaction.event.atTick
+      : attackerRetirement !== undefined
+        && (
+          attackerRetirement.tick > transaction.event.atTick
+          || (
+            attackerRetirement.tick === transaction.event.atTick
+            && attackerRetirement.mortalityOrdinal > transaction.mortalityOrdinal
+          )
+        );
+    if (
+      !attackerWasAliveForEvent
+      || (previous !== undefined && transaction.event.atTick < previous.event.atTick)
+    ) return null;
+  }
+
+  const carcasses: CoreWildlifeCarcass[] = [];
+  const carcassIds = new Set<string>();
+  for (const raw of input.rawCarcasses) {
+    const carcass = canonicalizeCoreWildlifeCarcass(raw);
+    if (
+      carcass === null
+      || carcass.updatedAtTick > input.maximumTick
+      // The patch owns identities, not a prison cell. Exact actors can cross
+      // signed region seams, so their committed physical bodies may lie in an
+      // adjacent region while retaining the same population owner.
+      || carcassIds.has(carcass.carcassId)
+      || (carcass.currentClaimantActorId !== null
+        && !input.liveActorIds.has(carcass.currentClaimantActorId))
+    ) return null;
+    carcassIds.add(carcass.carcassId);
+    carcasses.push(carcass);
+  }
+  carcasses.sort((left, right) => compareText(left.carcassId, right.carcassId));
+  if (carcasses.length !== transactions.length) return null;
+  const carcassById = new Map(carcasses.map((carcass) => [carcass.carcassId, carcass] as const));
+  for (const transaction of transactions) {
+    const carcass = carcassById.get(transaction.carcassId);
+    if (
+      carcass === undefined
+      || carcass.sourceMortalityEventId !== transaction.event.eventId
+      || carcass.sourceActorId !== transaction.event.victimId
+      || carcass.sourceSpecies !== transaction.retiredActor.identity.species
+      || carcass.deathAtTick !== transaction.event.atTick
+      || !sameWorldPosition(carcass.deathPosition, transaction.event.victimPosition)
+    ) return null;
+    carcassById.delete(transaction.carcassId);
+  }
+  if (carcassById.size !== 0) return null;
+
+  const transactionsByPopulation = new Map<string, CoreEcologyMortalityTransaction[]>();
+  for (const transaction of transactions) {
+    const actor = transaction.retiredActor;
+    const key = `${actor.identity.species}:${actor.identity.populationKey}`;
+    const population = input.populations.find((candidate) => (
+      candidate.species === actor.identity.species
+      && candidate.populationKey === actor.identity.populationKey
+    ));
+    if (population === undefined) return null;
+    const bucket = transactionsByPopulation.get(key) ?? [];
+    bucket.push(transaction);
+    transactionsByPopulation.set(key, bucket);
+  }
+  for (const population of input.populations) {
+    const key = `${population.species}:${population.populationKey}`;
+    const retired = transactionsByPopulation.get(key) ?? [];
+    if (
+      population.baselinePopulationSize - population.populationSize !== retired.length
+      || population.reserveUnits !== retired.reduce(
+        (total, transaction) => total + transaction.representedUnitsBefore - 1,
+        0,
+      )
+    ) return null;
+    const ordinals = new Set(population.members.map(({ populationOrdinal }) => populationOrdinal));
+    for (const transaction of retired) {
+      const ordinal = transaction.retiredActor.identity.populationOrdinal;
+      if (ordinals.has(ordinal)) return null;
+      ordinals.add(ordinal);
+    }
+  }
+  return Object.freeze({
+    transactions: Object.freeze(transactions),
+    carcasses: Object.freeze(carcasses),
+  });
+}
+
 function canonicalPopulation(
   value: unknown,
   originRegion: RegionCoord,
@@ -2270,22 +2764,27 @@ function canonicalPopulation(
   allowedSpecies: (value: unknown) => value is CoreWildlifeSpecies,
 ): CoreEcologyPopulationState | null {
   if (!plainRecord(value) || !exactKeys(value, [
+    "baselinePopulationSize",
     "members",
     "populationKey",
     "populationSize",
+    "reserveUnits",
     "species",
   ])) return null;
   if (
     !allowedSpecies(value.species)
     || !validPatchKey(value.populationKey)
-    || !positiveSafeInteger(value.populationSize)
+    || !positiveSafeInteger(value.baselinePopulationSize)
+    || !nonnegativeSafeInteger(value.populationSize)
+    || value.populationSize > value.baselinePopulationSize
+    || !nonnegativeSafeInteger(value.reserveUnits)
+    || value.reserveUnits > value.populationSize
     || !Array.isArray(value.members)
-    || value.members.length === 0
   ) return null;
   const species = value.species as CoreWildlifeSpecies;
   if (
     value.members.length > getCoreWildlifeProfile(species).maximumPatchPopulation
-    || value.populationSize > getCoreWildlifeProfile(species).maximumPatchPopulation
+    || value.baselinePopulationSize > getCoreWildlifeProfile(species).maximumPatchPopulation
   ) return null;
   const members: CoreEcologyPopulationMemberState[] = [];
   let representedPopulation = 0;
@@ -2304,6 +2803,7 @@ function canonicalPopulation(
     const actor = canonicalizeCoreWildlifeActorState(raw.actor);
     if (
       actor === null
+      || actor.condition.health === 0
       || actor.updatedAtTick > maximumTick
       || actor.identity.species !== species
       || actor.identity.populationKey !== value.populationKey
@@ -2326,11 +2826,16 @@ function canonicalPopulation(
   for (let index = 1; index < members.length; index += 1) {
     if (members[index - 1]?.populationOrdinal === members[index]?.populationOrdinal) return null;
   }
-  if (representedPopulation !== value.populationSize) return null;
+  if (
+    representedPopulation + value.reserveUnits !== value.populationSize
+    || (value.populationSize === 0 && value.members.length !== 0)
+  ) return null;
   return Object.freeze({
     species,
     populationKey: value.populationKey,
+    baselinePopulationSize: value.baselinePopulationSize,
     populationSize: value.populationSize,
+    reserveUnits: value.reserveUnits,
     members: Object.freeze(members),
   });
 }
@@ -2532,6 +3037,7 @@ function aggregateDerivationMatchesPopulations(
   populations: readonly CoreEcologyPopulationState[],
   aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
   originRegion: RegionCoord,
+  mortalityTransactions: readonly CoreEcologyMortalityTransaction[],
 ): boolean {
   const isHarborEdgeDerivation = derivation.kind === "habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2";
@@ -2559,7 +3065,8 @@ function aggregateDerivationMatchesPopulations(
     && !isDomesticYardDerivation
     && !isDomesticPenDerivation
   ) {
-    return aggregatePopulations.length === 0
+    return mortalityTransactions.length === 0
+      && aggregatePopulations.length === 0
       && derivationMatchesPopulations(derivation, populations, originRegion);
   }
   if (!("habitat" in derivation)) return false;
@@ -2599,6 +3106,14 @@ function aggregateDerivationMatchesPopulations(
     `${population.species}:${population.populationKey}`,
     population,
   ] as const));
+  const mortalityByKey = new Map<string, CoreEcologyMortalityTransaction[]>();
+  for (const transaction of mortalityTransactions) {
+    const actor = transaction.retiredActor;
+    const key = `${actor.identity.species}:${actor.identity.populationKey}`;
+    const values = mortalityByKey.get(key) ?? [];
+    values.push(transaction);
+    mortalityByKey.set(key, values);
+  }
   for (const analysis of derivation.habitat.populations) {
     const key = `${analysis.species}:${analysis.populationKey}`;
     if (
@@ -2651,28 +3166,42 @@ function aggregateDerivationMatchesPopulations(
       && isWaveAIndividualSpecies(analysis.species)
     ) continue;
     const population = individualsByKey.get(key);
+    const retired = mortalityByKey.get(key) ?? [];
     if (analysis.populationUnits === 0) {
-      if (population !== undefined) return false;
+      if (population !== undefined || retired.length !== 0) return false;
       continue;
     }
     if (
       population === undefined
-      || population.populationSize !== analysis.populationUnits
-      || population.members.length !== analysis.allocations.length
+      || population.baselinePopulationSize !== analysis.populationUnits
+      || population.members.length + retired.length !== analysis.allocations.length
     ) return false;
-    for (let index = 0; index < analysis.allocations.length; index += 1) {
-      const allocation = analysis.allocations[index];
-      const member = population.members[index];
+    const allocations = new Map(analysis.allocations.map((allocation) => [
+      allocation.allocationOrdinal,
+      allocation,
+    ] as const));
+    for (const member of population.members) {
+      const allocation = allocations.get(member.populationOrdinal);
+      if (allocation === undefined || member.representedUnits !== allocation.representedUnits) {
+        return false;
+      }
+      allocations.delete(member.populationOrdinal);
+    }
+    for (const transaction of retired) {
+      const ordinal = transaction.retiredActor.identity.populationOrdinal;
+      const allocation = allocations.get(ordinal);
       if (
         allocation === undefined
-        || member === undefined
-        || member.populationOrdinal !== allocation.allocationOrdinal
-        || member.representedUnits !== allocation.representedUnits
+        || transaction.representedUnitsBefore !== allocation.representedUnits
       ) return false;
+      allocations.delete(ordinal);
     }
+    if (allocations.size !== 0) return false;
     individualsByKey.delete(key);
+    mortalityByKey.delete(key);
   }
-  return aggregatesByKey.size === 0
+  return mortalityByKey.size === 0
+    && aggregatesByKey.size === 0
     && (preservesLegacyRoster
       ? [...individualsByKey.values()].every(({ species }) => isWaveAIndividualSpecies(species))
       : individualsByKey.size === 0);
@@ -2988,14 +3517,16 @@ interface LegacyCoreEcologyPopulationState {
 }
 
 interface LegacyCoreEcologyPatchState {
-  readonly version: typeof LEGACY_CORE_ECOLOGY_PATCH_VERSION;
+  readonly version: typeof FOUNDATION_LEGACY_CORE_ECOLOGY_PATCH_VERSION;
   readonly patchKey: string;
   readonly originRegion: RegionCoord;
   readonly updatedAtTick: number;
   readonly populations: readonly LegacyCoreEcologyPopulationState[];
 }
 
-function canonicalizeLegacyCoreEcologyPatch(value: unknown): LegacyCoreEcologyPatchState | null {
+function canonicalizeFoundationLegacyCoreEcologyPatch(
+  value: unknown,
+): LegacyCoreEcologyPatchState | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "originRegion",
     "patchKey",
@@ -3004,7 +3535,7 @@ function canonicalizeLegacyCoreEcologyPatch(value: unknown): LegacyCoreEcologyPa
     "version",
   ])) return null;
   if (
-    value.version !== LEGACY_CORE_ECOLOGY_PATCH_VERSION
+    value.version !== FOUNDATION_LEGACY_CORE_ECOLOGY_PATCH_VERSION
     || !validPatchKey(value.patchKey)
     || !isRegionCoord(value.originRegion)
     || !nonnegativeSafeInteger(value.updatedAtTick)
@@ -3085,7 +3616,7 @@ function canonicalizeLegacyCoreEcologyPatch(value: unknown): LegacyCoreEcologyPa
     || materializedCount > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
   ) return null;
   return deepFreeze({
-    version: LEGACY_CORE_ECOLOGY_PATCH_VERSION,
+    version: FOUNDATION_LEGACY_CORE_ECOLOGY_PATCH_VERSION,
     patchKey: value.patchKey,
     originRegion: createRegionCoord(value.originRegion.x, value.originRegion.y),
     updatedAtTick: value.updatedAtTick,
@@ -3297,6 +3828,13 @@ function positiveSafeInteger(value: unknown): value is number {
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function sameWorldPosition(left: WorldPosition, right: WorldPosition): boolean {
+  return left.region.x === right.region.x
+    && left.region.y === right.region.y
+    && left.localX === right.localX
+    && left.localY === right.localY;
 }
 
 function plainRecord(value: unknown): value is Record<string, unknown> {

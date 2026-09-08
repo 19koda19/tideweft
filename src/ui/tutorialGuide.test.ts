@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(38);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(39);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,19 +63,19 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("adds no animal");
-    expect(copy).toContain("current caused flee or retreat");
-    expect(copy).toContain("distance alone cannot invent an incident");
-    expect(copy).toContain("only after current identified sight");
-    expect(copy).toContain("explicit report of the last known area");
-    expect(copy).toContain("Searching never proves the goat was found");
-    expect(copy).toContain("current keeper sight of every member inside the existing pen");
-    expect(copy).toContain("indivisible cap units");
-    expect(copy).toContain("Outer save 21 adopts one sealed version-20 world exactly once");
-    expect(copy).toContain("habitat remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4, working-animal state remains version 2");
+    expect(copy).toContain("adds no animal, habitat, population, or actor");
+    expect(copy).toContain("already pursuing a currently identified marsh rabbit");
+    expect(copy).toContain("exact body physically reaches that exact rabbit");
+    expect(copy).toContain("removes exactly one population unit");
+    expect(copy).toContain("abstract reserve");
+    expect(copy).toContain("One stable physical carcass");
+    expect(copy).toContain("fox or fish crow");
+    expect(copy).toContain("current lawful perception");
+    expect(copy).toContain("Outer save 22 adopts one sealed version-21 world exactly once");
+    expect(copy).toContain("core-ecology patch to version 3 and aggregate record to version 5");
     expect(copy).toContain("without species-by-species or N² pair testing");
-    expect(copy).toContain("not a new species, broad herding, teleporting livestock, guaranteed recovery");
-    expect(copy).toContain("attack, injury, mortality, carcass, worldwide ecology");
+    expect(copy).toContain("player, dog, human, other-animal, and group-member mortality");
+    expect(copy).toContain("live-time decomposition");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -251,12 +251,12 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 21");
-    expect(copy).toContain("sealed version 20 Watch Returns save migrates exactly once");
-    expect(copy).toContain("every established population, anchor, actor, group, item, Promise, home, relationship");
-    expect(copy).toContain("one empty domestic-animal recovery root is appended");
-    expect(copy).toContain("cannot reroll an animal or anchor");
-    expect(copy).toContain("Saved pending working-animal and domestic-recovery transitions each recover exactly once");
+    expect(copy).toContain("Outer save version 22");
+    expect(copy).toContain("sealed version 21 Missing Goat save migrates exactly once");
+    expect(copy).toContain("every earlier population, actor, group, item, Promise, home, relationship");
+    expect(copy).toContain("empty ledgers are appended");
+    expect(copy).toContain("cannot reroll the injury or death");
+    expect(copy).toContain("Existing working-animal and domestic-recovery transitions still recover exactly once");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -352,7 +352,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("aggregate populations rather than individual actors");
     expect(plannedCopy).toContain("Additional dogs and wildlife species beyond this bounded roster");
     expect(plannedCopy).toContain("worldwide populations");
-    expect(plannedCopy).toContain("animal death and carcasses");
+    expect(plannedCopy).toContain("only current animal mortality is the narrow direct-contact marsh-fox and individual-marsh-rabbit seam");
+    expect(plannedCopy).toContain("player, dog, human, group-member, and other-animal mortality");
     expect(plannedCopy).toContain("a new guardian sound, general scent and evidence tracking");
     expect(plannedCopy).toContain("full bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
@@ -447,11 +448,13 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("stereo pan is softened by that same uncertainty");
     expect(copy).toContain("northern harrier has no invented cry");
     expect(copy).toContain("Offscreen movement and hidden animal decisions");
-    expect(copy).toContain("directly perceives a fox can alarm and then flee");
-    expect(copy).toContain("hungry marsh fox can pursue a rabbit it directly perceives");
+    expect(copy).toContain("directly perceives a fox can alarm and flee");
+    expect(copy).toContain("hungry marsh fox may pursue only a rabbit it currently identifies");
     expect(copy).toContain("dog or black bear can become the more urgent pressure");
-    expect(copy).toContain("pursuit must disengage after its finite opportunity");
-    expect(copy).toContain("no attack, injury, death, carcass, or live-prey consumption");
+    expect(copy).toContain("exact physical contact between that current pursuer and that exact rabbit");
+    expect(copy).toContain("One stable physical carcass remains at the death place");
+    expect(copy).toContain("fox or fish crow must lawfully see and physically reach that same body");
+    expect(copy).toContain("finding a body later does not tell you who killed it");
     expect(copy).toContain("SMALL ANIMAL or UNKNOWN CANID");
     expect(copy).toContain("approximate visible form, morph, life stage, condition, and current behavior");
     expect(copy).toContain("never reveals a hidden statistic, private target, population pressure, or habitat calculation");
@@ -494,42 +497,39 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("danger and immediate needs still take priority");
     expect(copy).toContain("nonlethal player-absent aftermath");
     expect(copy).toContain("no harm or cargo interaction");
-    expect(copy).toContain("Animals do not attack, receive injuries, die, leave carcasses, or consume live prey");
-    expect(copy).toContain("Complete sound, general scent and evidence tracking");
+    expect(copy).toContain("only harmful animal contact in this build is a current identified marsh fox physically reaching its exact pursued marsh rabbit");
+    expect(copy).toContain("Player, dog, human, other-animal, and social-group-member mortality remain absent");
+    expect(copy).toContain("Population recovery, live-time decomposition, body drift, dragging, harvesting, carcass scent and insects");
+    expect(copy).toContain("complete sound, general scent and evidence tracking");
     expect(copy).toContain("foliage consumption");
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("further species");
     expect(copy).toContain("worldwide populations and storehouses, and the full bestiary");
     expect(copy).toContain("bounded Wave-D flock, herd, working-animal, and missing-livestock recovery slices remain one integration");
-    expect(copy).toContain("role, perception, movement, group, aggregate, tide, physical-item, plural-custody, typed-home, working-assignment, recovery, and presentation contracts");
-    expect(copy).toContain("closes the bounded starting-harbor Wave-D integration seam");
-    expect(copy).toContain("does not create storage, livestock, recovery, or dog ecology in every settlement");
+    expect(copy).toContain("role, perception, movement, group, aggregate, tide, physical-item, plural-custody, typed-home, working-assignment, recovery, mortality, body, and presentation contracts");
+    expect(copy).toContain("does not create storage, livestock, recovery, or animal ecology in every settlement or distant region");
     expect(copy).toContain("guardian search can fail or defer and never proves an animal was found");
-    expect(copy).toContain("does not create ecology in every distant region");
     expect(copy).toContain("instead of requiring a species-by-species or N² pair matrix");
-    expect(copy).toContain("not live yet");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the current domestic-recovery adoption without rewriting older ecology", () => {
+  it("teaches the current mortality adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 21 preserves habitat version 9");
-    expect(copy).toContain("aggregate ecology record version 4");
+    expect(copy).toContain("Outer save version 22 preserves habitat version 9");
+    expect(copy).toContain("core-ecology patch version 3");
+    expect(copy).toContain("aggregate ecology record version 5");
     expect(copy).toContain("settlement ecology version 4");
     expect(copy).toContain("working-animal state version 2");
-    expect(copy).toContain("all aggregate populations and signs");
-    expect(copy).toContain("tidal and domestic anchors");
-    expect(copy).toContain("deterministic materialization");
-    expect(copy).toContain("durable tide-operation clock");
-    expect(copy).toContain("one separate dog roster");
-    expect(copy).toContain("sealed version 20 Watch Returns save migrates exactly once");
-    expect(copy).toContain("one empty domestic-animal recovery root is appended");
-    expect(copy).toContain("one pending exact-once transition, and one latest closed outcome");
-    expect(copy).toContain("stable actor ID to its exact population ordinal");
-    expect(copy).toContain("cannot treat a search task as proof of finding");
-    expect(copy).toContain("cannot reroll an animal or anchor");
-    expect(copy).toContain("Saved pending working-animal and domestic-recovery transitions each recover exactly once");
+    expect(copy).toContain("authoritative mortality, population-reserve, and physical-body ledgers");
+    expect(copy).toContain("sealed version 21 Missing Goat save migrates exactly once");
+    expect(copy).toContain("empty ledgers are appended");
+    expect(copy).toContain("one-unit population consequence");
+    expect(copy).toContain("stable carcass");
+    expect(copy).toContain("cannot reroll the injury or death");
+    expect(copy).toContain("resurrect the retired actor");
+    expect(copy).toContain("restore consumed resource");
+    expect(copy).toContain("Existing working-animal and domestic-recovery transitions still recover exactly once");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

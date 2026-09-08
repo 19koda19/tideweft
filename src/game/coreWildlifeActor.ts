@@ -78,6 +78,7 @@ export type CoreWildlifeMemoryKind =
 export type CoreWildlifeFoodSourceKind =
   | "natural-forage"
   | "physical-item"
+  | "physical-carcass"
   | "living-actor";
 
 export interface CoreWildlifeNeeds {
@@ -319,7 +320,12 @@ const HUMAN_CLASSES = new Set(["human", "porter", "unknown-human", "human-voice"
 const ALARM_CLASSES = new Set(["alarm-call", "animal-alarm", "herd-alarm"]);
 const COMPETITOR_CLASSES = new Set(["food-competitor", "competitor"]);
 const RAIN_CLASSES = new Set(["rain-exposure"]);
-const FOOD_SOURCES = new Set<string>(["natural-forage", "physical-item", "living-actor"]);
+const FOOD_SOURCES = new Set<string>([
+  "natural-forage",
+  "physical-item",
+  "physical-carcass",
+  "living-actor",
+]);
 const INTENTS = new Set<string>(CORE_WILDLIFE_INTENTS);
 const MEMORY_KINDS = new Set<string>([
   "alarm",
@@ -1029,9 +1035,7 @@ function canonicalFoodOpportunities(
       || typeof raw.accessible !== "boolean"
       || !acceptedObservations.has(raw.observationId)
     ) return null;
-    if (
-      (raw.foodClass === "live-prey") !== (raw.sourceKind === "living-actor")
-    ) return null;
+    if (!validFoodSourceClassPair(raw.foodClass, raw.sourceKind)) return null;
     opportunities.push(Object.freeze({
       resourceId: raw.resourceId,
       observationId: raw.observationId,
@@ -1380,7 +1384,7 @@ function canonicalResourceReference(value: unknown): CoreWildlifeResourceReferen
     || !FOOD_CLASSES.has(value.foodClass as string)
     || !FOOD_SOURCES.has(value.sourceKind as string)
     || !positiveSafeInteger(value.observedAvailableUnits)
-    || ((value.foodClass === "live-prey") !== (value.sourceKind === "living-actor"))
+    || !validFoodSourceClassPair(value.foodClass, value.sourceKind)
   ) return null;
   return Object.freeze({
     resourceId: value.resourceId,
@@ -1389,6 +1393,18 @@ function canonicalResourceReference(value: unknown): CoreWildlifeResourceReferen
     sourceKind: value.sourceKind as CoreWildlifeFoodSourceKind,
     observedAvailableUnits: value.observedAvailableUnits,
   });
+}
+
+/**
+ * Physical carcasses and living prey are distinct authoritative resources.
+ * The two equivalences prevent a dead body from masquerading as an inventory
+ * item and prevent an ordinary item from being pursued as a living actor.
+ */
+function validFoodSourceClassPair(foodClass: unknown, sourceKind: unknown): boolean {
+  return (
+    (foodClass === "live-prey") === (sourceKind === "living-actor")
+    && (foodClass === "carrion") === (sourceKind === "physical-carcass")
+  );
 }
 
 function canonicalMemories(

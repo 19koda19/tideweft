@@ -1300,28 +1300,10 @@ describe("Living Weft species release gate", () => {
     expect(goat?.diet.resources).toEqual([{ resourceClass: "browse", role: "nutrition" }]);
   });
 
-  it("keeps mortality, carcasses, living cover, and circadian schedules explicit future work", () => {
+  it("keeps Alpha-16's still-unreleased living-cover and circadian seams explicit", () => {
     for (const species of ALPHA16_MARSH_EDGE_SPECIES) {
       const module = livingSpeciesModule(species);
       expect(module).not.toBeNull();
-      expect(module?.lifeHistory).toMatchObject({
-        implementation: "foundation",
-        dynamicAging: false,
-        reproduction: "unimplemented",
-        mortality: "unimplemented",
-      });
-      expect(module?.health).toMatchObject({
-        implementation: "foundation",
-        incapacitation: false,
-        causalDeath: false,
-        recovery: false,
-      });
-      expect(module?.aftermath).toMatchObject({
-        implementation: "unimplemented",
-        ownerId: null,
-        carcassModel: "none",
-        persistentIdentity: false,
-      });
       expect(module?.environment.livingCover).toEqual({
         status: "unimplemented",
         ownerId: null,

@@ -5,6 +5,7 @@ import type {
   DogView,
   RendererCommand,
   TideweftView,
+  WildlifeCarcassView,
   WildlifeView,
 } from "./types";
 
@@ -87,6 +88,7 @@ interface TestPointerEvent {
 class MockCanvas {
   readonly classList = { add: vi.fn() };
   readonly dataset: Record<string, string> = {};
+  readonly attributes = new Map<string, string>();
   readonly releasedPointerIds: number[] = [];
   hidden = false;
   tabIndex = 0;
@@ -147,7 +149,13 @@ class MockCanvas {
     this.releasedPointerIds.push(pointerId);
   }
 
-  setAttribute(): void {}
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
 
   setPointerCapture(pointerId: number): void {
     this.captures.add(pointerId);
@@ -303,6 +311,21 @@ const aggregateWildlifeEvidenceView = (
   selected: false,
   ...overrides,
 } as AggregateWildlifeEvidenceView);
+
+const wildlifeCarcassView = (
+  overrides: Partial<WildlifeCarcassView> = {},
+): WildlifeCarcassView => ({
+  version: 1,
+  carcassId: "wildlife-carcass:0123456789abcdef",
+  position: { x: 12, y: 12 },
+  form: "body",
+  quickLabel: "Marsh rabbit body",
+  speciesIdentified: true,
+  sizeScale: 1,
+  orientation: Math.PI * 0.25,
+  distanceUnits: 4_000,
+  ...overrides,
+});
 
 let canvas: MockCanvas;
 
@@ -983,6 +1006,129 @@ describe("Chart dog presentation", () => {
     canvas.emit("pointerdown", { clientX: 100, clientY: 50, pointerId: 93 });
     canvas.emit("pointerup", { clientX: 100, clientY: 50, pointerId: 93 });
     expect(dispatch.mock.calls.some(([command]) => command.type === "select")).toBe(false);
+    renderer.destroy();
+  });
+});
+
+describe("Chart physical wildlife remains", () => {
+  it("draws color-independent forms, exposes direct labels, and keeps carcass taps as travel", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("chart-carcass", { x: 12, y: 12 });
+    let current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "chart-carcass-direct-detail",
+        valid: true,
+        visibleTileCount: 1,
+        directTileCount: 1,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 1,
+        detailDirectTileCount: 1,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+        }],
+      },
+      wildlifeCarcasses: [
+        wildlifeCarcassView(),
+        wildlifeCarcassView({
+          carcassId: "wildlife-carcass:fedcba9876543210",
+          form: "depleted-remains",
+          quickLabel: "Marsh rabbit remains",
+          position: { x: 13, y: 12 },
+        }),
+      ],
+    };
+    const dispatch = vi.fn();
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch,
+    });
+    draw();
+    const p = p5Harness.instance;
+    const fill = p5Harness.instance?.fill as ReturnType<typeof vi.fn>;
+    const stroke = p5Harness.instance?.stroke as ReturnType<typeof vi.fn>;
+    const ellipse = p?.ellipse as ReturnType<typeof vi.fn>;
+    const circle = p?.circle as ReturnType<typeof vi.fn>;
+    const line = p?.line as ReturnType<typeof vi.fn>;
+    const arc = p?.arc as ReturnType<typeof vi.fn>;
+    const text = p?.text as ReturnType<typeof vi.fn>;
+    expect(fill.mock.calls.some(([color]) => color === "#694f42")).toBe(true);
+    expect(stroke.mock.calls.some(([color]) => color === "#c7b89b")).toBe(true);
+    expect(ellipse.mock.calls.some(([, , width, height]) => (
+      Math.abs(Number(width) - 18.24) < 0.001
+      && Math.abs(Number(height) - 7.584) < 0.001
+    ))).toBe(true);
+    expect(circle.mock.calls.some(([, , diameter]) => (
+      Math.abs(Number(diameter) - 4.896) < 0.001
+    ))).toBe(true);
+    expect(line.mock.calls.some(([x1, y1, x2, y2]) => (
+      Math.abs(Number(x1) + 6.48) < 0.001
+      && Number(y1) === 0
+      && Math.abs(Number(x2) - 6) < 0.001
+      && Number(y2) === 0
+    ))).toBe(true);
+    expect(arc.mock.calls.filter(([, y, width, height]) => (
+      Number(y) === 0
+      && Math.abs(Number(width) - 3.456) < 0.001
+      && Math.abs(Number(height) - 5.568) < 0.001
+    ))).toHaveLength(4);
+    expect(canvas.attributes.get("aria-description")).toBe(
+      "Nearby wildlife remains: Marsh rabbit body; Marsh rabbit remains.",
+    );
+
+    text.mockClear();
+    dispatch.mockClear();
+    canvas.emit("pointermove", { clientX: 100, clientY: 50, pointerType: "mouse" });
+    draw();
+    const labelCalls = text.mock.calls.filter(([copy]) => copy === "Marsh rabbit body");
+    expect(labelCalls.length).toBeGreaterThan(0);
+    for (const [, x, y] of labelCalls) {
+      expect(Number(x)).toBeGreaterThanOrEqual(8);
+      expect(Number(x)).toBeLessThanOrEqual(192);
+      expect(Number(y)).toBeGreaterThanOrEqual(10.5);
+      expect(Number(y)).toBeLessThanOrEqual(89.5);
+    }
+    expect(canvas.dataset.hoverEntity).toBe("wildlife-carcass");
+    expect(dispatch).not.toHaveBeenCalled();
+
+    canvas.emit("pointerdown", { clientX: 100, clientY: 50, pointerId: 91 });
+    canvas.emit("pointerup", { clientX: 100, clientY: 50, pointerId: 91 });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: "move-target",
+      point: { x: 12, y: 12 },
+      additive: false,
+    });
+    expect(dispatch.mock.calls.some(([command]) => command.type === "select")).toBe(false);
+
+    fill.mockClear();
+    stroke.mockClear();
+    text.mockClear();
+    dispatch.mockClear();
+    current = {
+      ...current,
+      terrain: {
+        ...current.terrain,
+        tiles: current.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentDetailVisibility: 0 as const,
+        })),
+      },
+    };
+    draw();
+    expect(fill.mock.calls.some(([color]) => color === "#694f42")).toBe(false);
+    expect(stroke.mock.calls.some(([color]) => color === "#c7b89b")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "Marsh rabbit body")).toBe(false);
+    expect(canvas.attributes.has("aria-description")).toBe(false);
     renderer.destroy();
   });
 });

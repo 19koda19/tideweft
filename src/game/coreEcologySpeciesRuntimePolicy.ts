@@ -28,6 +28,8 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "amphibious-locomotion",
   "aquatic-foraging",
   "aquatic-locomotion",
+  "carcass-feeding",
+  "carcass-guarding",
   "chorus",
   "diurnal-activity",
   "food-investigation",
@@ -36,7 +38,9 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "mobbing",
   "movement-memory",
   "perch",
+  "physical-body-resource",
   "population-activity-evidence",
+  "predator-contact-damage",
   "quieting",
   "rain-activity",
   "same-species-food-guard",
@@ -58,6 +62,35 @@ export type CoreEcologySpeciesPresentationModel =
   | "visible-flock"
   | "aggregate-activity"
   | "aggregate-school";
+
+export const CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION = 1 as const;
+
+/**
+ * One bounded harmful-contact verb. Reach uses exact world-position units;
+ * damage uses the common fixed-point wildlife-health scale. This describes an
+ * attacker ability, never a hard-coded attacker/target species pairing.
+ */
+export interface CoreEcologySpeciesPredatorContactPolicy {
+  readonly cause: "predator-contact";
+  readonly reachUnits: number;
+  readonly damageUnits: number;
+}
+
+/**
+ * Declarative mortality/aftermath participation. Zero/null/false means the
+ * current runtime does not own that behavior for this species yet; ecological
+ * plausibility alone must never silently activate it.
+ */
+export interface CoreEcologySpeciesMortalityRuntimePolicy {
+  readonly version: typeof CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION;
+  readonly predatorContact: CoreEcologySpeciesPredatorContactPolicy | null;
+  /** Physical geometry/presentation scale; deliberately not edible yield. */
+  readonly physicalBodySizeUnits: number;
+  /** Finite whole resource units available to lawful carcass consumers. */
+  readonly physicalBodyResourceUnits: number;
+  readonly carcassFeeding: boolean;
+  readonly carcassGuarding: boolean;
+}
 
 export interface CoreEcologyAggregateRuntimePolicy {
   /** A hard presentation/simulation bound; zero is never interpreted as unbounded. */
@@ -84,6 +117,7 @@ export interface CoreEcologySpeciesRuntimePolicy {
     | null;
   readonly maximumMaterializedActors: number;
   readonly aggregate: CoreEcologyAggregateRuntimePolicy | null;
+  readonly mortality: CoreEcologySpeciesMortalityRuntimePolicy;
   readonly capabilities: readonly CoreEcologySpeciesRuntimeCapability[];
   /** Directly observable activity; it is not omniscient actor knowledge. */
   readonly activitySignals: readonly string[];
@@ -101,6 +135,69 @@ interface AuthoredRuntimePolicyValues {
   readonly evidenceKinds: readonly string[];
   readonly presentationModel: CoreEcologySpeciesPresentationModel;
 }
+
+const NO_MORTALITY_RUNTIME: CoreEcologySpeciesMortalityRuntimePolicy = deepFreeze({
+  version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+  predatorContact: null,
+  physicalBodySizeUnits: 0,
+  physicalBodyResourceUnits: 0,
+  carcassFeeding: false,
+  carcassGuarding: false,
+});
+
+/**
+ * Alpha-29's deliberately narrow mortality roster. Every species is present
+ * so adding a biological role or food affinity cannot accidentally activate a
+ * physical attack/body contract. The fish crow proves that carcass consumers
+ * need not also own harmful contact or body creation.
+ */
+const MORTALITY_VALUES: Readonly<Record<
+  CoreWildlifeSpecies,
+  CoreEcologySpeciesMortalityRuntimePolicy
+>> = deepFreeze({
+  deer: NO_MORTALITY_RUNTIME,
+  gull: NO_MORTALITY_RUNTIME,
+  "black-bear": NO_MORTALITY_RUNTIME,
+  "brown-rat": NO_MORTALITY_RUNTIME,
+  "domestic-cat": NO_MORTALITY_RUNTIME,
+  "marsh-rabbit": {
+    version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+    predatorContact: null,
+    physicalBodySizeUnits: 3,
+    physicalBodyResourceUnits: 4,
+    carcassFeeding: false,
+    carcassGuarding: false,
+  },
+  "marsh-fox": {
+    version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+    predatorContact: {
+      cause: "predator-contact",
+      reachUnits: 500,
+      damageUnits: 550_000,
+    },
+    physicalBodySizeUnits: 0,
+    physicalBodyResourceUnits: 0,
+    carcassFeeding: true,
+    carcassGuarding: true,
+  },
+  "fish-crow": {
+    version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+    predatorContact: null,
+    physicalBodySizeUnits: 0,
+    physicalBodyResourceUnits: 0,
+    carcassFeeding: true,
+    carcassGuarding: false,
+  },
+  "northern-harrier": NO_MORTALITY_RUNTIME,
+  "southern-leopard-frog": NO_MORTALITY_RUNTIME,
+  "atlantic-silverside": NO_MORTALITY_RUNTIME,
+  "atlantic-marsh-fiddler-crab": NO_MORTALITY_RUNTIME,
+  "snowy-egret": NO_MORTALITY_RUNTIME,
+  "american-black-duck": NO_MORTALITY_RUNTIME,
+  "north-american-river-otter": NO_MORTALITY_RUNTIME,
+  "domestic-chicken": NO_MORTALITY_RUNTIME,
+  "domestic-goat": NO_MORTALITY_RUNTIME,
+});
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
   deepFreeze({
@@ -173,6 +270,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "actor-address",
         "ground-movement-evidence",
         "movement-memory",
+        "physical-body-resource",
         "shared-alarm",
       ],
       activitySignals: ["rabbit-thump"],
@@ -185,9 +283,12 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       aggregateResponseVerbs: [],
       capabilities: [
         "actor-address",
+        "carcass-feeding",
+        "carcass-guarding",
         "food-investigation",
         "ground-movement-evidence",
         "movement-memory",
+        "predator-contact-damage",
         "small-prey-pursuit",
       ],
       activitySignals: ["fox-yip"],
@@ -201,6 +302,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       capabilities: [
         "actor-address",
         "aerial-locomotion",
+        "carcass-feeding",
         "diurnal-activity",
         "food-investigation",
         "group-coordination",
@@ -397,6 +499,7 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES: readonly CoreEcologySpeciesR
         ? getCoreWildlifeProfile(speciesId).maximumPatchPopulation
         : 0,
       aggregate,
+      mortality: MORTALITY_VALUES[speciesId],
       capabilities: [...values.capabilities],
       activitySignals: [...values.activitySignals],
       evidenceKinds: [...values.evidenceKinds],
@@ -416,6 +519,39 @@ export function coreEcologySpeciesRuntimePolicy(
   return typeof speciesId === "string"
     ? POLICY_BY_SPECIES.get(speciesId as CoreWildlifeSpecies) ?? null
     : null;
+}
+
+/** Unknown or not-yet-integrated species never inherit a harmful contact. */
+export function coreEcologySpeciesPredatorContact(
+  speciesId: unknown,
+): CoreEcologySpeciesPredatorContactPolicy | null {
+  return coreEcologySpeciesRuntimePolicy(speciesId)?.mortality.predatorContact ?? null;
+}
+
+/** Zero is the explicit fail-closed answer for species without a physical body witness. */
+export function coreEcologySpeciesPhysicalBodyResourceUnits(
+  speciesId: unknown,
+): number {
+  return coreEcologySpeciesRuntimePolicy(speciesId)?.mortality.physicalBodyResourceUnits ?? 0;
+}
+
+/** Zero is the fail-closed physical-size answer for species without a body witness. */
+export function coreEcologySpeciesPhysicalBodySizeUnits(
+  speciesId: unknown,
+): number {
+  return coreEcologySpeciesRuntimePolicy(speciesId)?.mortality.physicalBodySizeUnits ?? 0;
+}
+
+export function coreEcologySpeciesCanFeedFromCarcass(speciesId: unknown): boolean {
+  const policy = coreEcologySpeciesRuntimePolicy(speciesId);
+  return policy?.mortality.carcassFeeding === true
+    && policy.capabilities.includes("carcass-feeding");
+}
+
+export function coreEcologySpeciesCanGuardCarcass(speciesId: unknown): boolean {
+  const policy = coreEcologySpeciesRuntimePolicy(speciesId);
+  return policy?.mortality.carcassGuarding === true
+    && policy.capabilities.includes("carcass-guarding");
 }
 
 export function isCoreEcologySpeciesRuntimeCapability(
@@ -506,8 +642,64 @@ export function validateCoreEcologySpeciesRuntimePolicies(
       policy.capabilities.includes("mobbing")
       && policy.capabilities.includes("aerial-predator")
     ) errors.push(`${policy.speciesId}:mobbing-predator-capability-collision`);
+    if (!mortalityPolicyMatchesCapabilities(policy)) {
+      errors.push(`${policy.speciesId}:mortality-policy-mismatch`);
+    }
   }
   return Object.freeze(errors.sort(compareText));
+}
+
+function mortalityPolicyMatchesCapabilities(
+  policy: CoreEcologySpeciesRuntimePolicy,
+): boolean {
+  const mortality = policy.mortality;
+  const profile = getCoreWildlifeProfile(policy.speciesId);
+  const contactCapability = policy.capabilities.includes("predator-contact-damage");
+  const bodyCapability = policy.capabilities.includes("physical-body-resource");
+  const feedingCapability = policy.capabilities.includes("carcass-feeding");
+  const guardingCapability = policy.capabilities.includes("carcass-guarding");
+  const contact = mortality.predatorContact;
+  const ownsPhysicalBody = mortality.physicalBodySizeUnits > 0
+    && mortality.physicalBodyResourceUnits > 0;
+  if (
+    mortality.version !== CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION
+    || contactCapability !== (contact !== null)
+    || bodyCapability !== ownsPhysicalBody
+    || feedingCapability !== mortality.carcassFeeding
+    || guardingCapability !== mortality.carcassGuarding
+    || !nonnegativeSafeInteger(mortality.physicalBodySizeUnits)
+    || mortality.physicalBodySizeUnits > 1_000_000
+    || !nonnegativeSafeInteger(mortality.physicalBodyResourceUnits)
+    || mortality.physicalBodyResourceUnits > 1_000_000
+    || (mortality.physicalBodySizeUnits === 0)
+      !== (mortality.physicalBodyResourceUnits === 0)
+    || ((contact !== null || mortality.physicalBodyResourceUnits > 0) && !policy.actorAddressable)
+    // The current retirement owner can split anonymous units from one exact
+    // representative, but it cannot yet rewrite a stable group membership
+    // transaction. Refuse that capability combination at the catalog gate so
+    // a later goat/chicken/etc. row cannot turn a lawful contact into a failed
+    // whole ecology step.
+    || (mortality.physicalBodyResourceUnits > 0 && policy.groupOrganization !== null)
+  ) return false;
+  if (contact !== null && (
+    contact.cause !== "predator-contact"
+    || !positiveSafeInteger(contact.reachUnits)
+    || contact.reachUnits > 1_000
+    || !positiveSafeInteger(contact.damageUnits)
+    || contact.damageUnits > 1_000_000
+    || !policy.capabilities.includes("small-prey-pursuit")
+    || !profile.roles.includes("predator")
+  )) return false;
+  if (mortality.carcassFeeding && (
+    !policy.actorAddressable
+    || !policy.capabilities.includes("food-investigation")
+    || !profile.roles.includes("scavenger")
+    || profile.foodAffinities.carrion === 0
+  )) return false;
+  return !mortality.carcassGuarding || (
+    mortality.carcassFeeding
+    && profile.behavior.guardThreshold < 1_000_000
+  );
 }
 
 function locomotionContractMatchesClass(
@@ -541,6 +733,17 @@ function sameStrings(left: readonly string[], right: readonly string[]): boolean
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function positiveSafeInteger(value: unknown): value is number {
+  return nonnegativeSafeInteger(value) && value > 0;
+}
+
+function nonnegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number"
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && !Object.is(value, -0);
 }
 
 function plainRecord(value: unknown): value is Record<string, unknown> {

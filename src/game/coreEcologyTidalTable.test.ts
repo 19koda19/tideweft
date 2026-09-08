@@ -498,9 +498,23 @@ describe("live tidal-table ecology", () => {
     ))).toBe(false);
     expect(school?.lastTidalRedistributionTick).toBe(4);
 
+    const {
+      nextMortalityOrdinal: _nextMortalityOrdinal,
+      mortalityTransactions: _mortalityTransactions,
+      carcasses: _carcasses,
+      ...legacyBase
+    } = churned;
     const legacy = {
-      ...churned,
+      ...legacyBase,
       version: 3,
+      populations: churned.populations.map((population) => {
+        const {
+          baselinePopulationSize: _baselinePopulationSize,
+          reserveUnits: _reserveUnits,
+          ...legacyPopulation
+        } = population;
+        return legacyPopulation;
+      }),
       aggregatePopulations: churned.aggregatePopulations.map((population) => {
         const { lastTidalRedistributionTick: _omitted, ...retained } = population;
         return retained;
@@ -536,9 +550,23 @@ describe("live tidal-table ecology", () => {
     if (stepped === null || stepped.redistributions.length === 0) {
       throw new Error("missing legacy tide edge");
     }
+    const {
+      nextMortalityOrdinal: _nextMortalityOrdinal,
+      mortalityTransactions: _mortalityTransactions,
+      carcasses: _carcasses,
+      ...legacyBase
+    } = stepped.patch;
     const legacy = {
-      ...stepped.patch,
+      ...legacyBase,
       version: 3,
+      populations: stepped.patch.populations.map((population) => {
+        const {
+          baselinePopulationSize: _baselinePopulationSize,
+          reserveUnits: _reserveUnits,
+          ...legacyPopulation
+        } = population;
+        return legacyPopulation;
+      }),
       aggregatePopulations: stepped.patch.aggregatePopulations.map((population) => {
         const { lastTidalRedistributionTick: _omitted, ...retained } = population;
         return retained;

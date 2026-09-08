@@ -5,11 +5,17 @@ import { LIVING_SPECIES_CATALOG } from "./livingSpeciesCatalog";
 import {
   CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES,
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES,
+  CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_VERSION,
   assertCoreEcologySpeciesRuntimePolicies,
+  coreEcologySpeciesCanFeedFromCarcass,
+  coreEcologySpeciesCanGuardCarcass,
   coreEcologySpeciesCanOwnActorAddress,
   coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesPhysicalBodyResourceUnits,
+  coreEcologySpeciesPhysicalBodySizeUnits,
+  coreEcologySpeciesPredatorContact,
   coreEcologySpeciesRuntimePolicy,
   isCoreEcologySpeciesRuntimeCapability,
   isCoreEcologySpeciesRuntimePolicy,
@@ -21,6 +27,7 @@ describe("core ecology species runtime policy", () => {
     expect(CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_VERSION).toBe(1);
     expect(CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID)
       .toBe("game:core-ecology-species-runtime-policy:v1");
+    expect(CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION).toBe(1);
     expect(CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.map(({ speciesId }) => speciesId)).toEqual([
       "deer",
       "gull",
@@ -46,10 +53,96 @@ describe("core ecology species runtime policy", () => {
     for (const policy of CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES) {
       expect(Object.isFrozen(policy)).toBe(true);
       expect(Object.isFrozen(policy.capabilities)).toBe(true);
+      expect(Object.isFrozen(policy.mortality)).toBe(true);
+      if (policy.mortality.predatorContact !== null) {
+        expect(Object.isFrozen(policy.mortality.predatorContact)).toBe(true);
+      }
       expect(Object.isFrozen(policy.activitySignals)).toBe(true);
       expect(Object.isFrozen(policy.evidenceKinds)).toBe(true);
       expect(isCoreEcologySpeciesRuntimePolicy(policy)).toBe(true);
     }
+  });
+
+  it("declares one shared fox/rabbit mortality slice and one orthogonal scavenger", () => {
+    expect(coreEcologySpeciesRuntimePolicy("marsh-fox")).toMatchObject({
+      mortality: {
+        version: 1,
+        predatorContact: {
+          cause: "predator-contact",
+          reachUnits: 500,
+          damageUnits: 550_000,
+        },
+        physicalBodySizeUnits: 0,
+        physicalBodyResourceUnits: 0,
+        carcassFeeding: true,
+        carcassGuarding: true,
+      },
+      capabilities: expect.arrayContaining([
+        "carcass-feeding",
+        "carcass-guarding",
+        "predator-contact-damage",
+      ]),
+    });
+    expect(coreEcologySpeciesPredatorContact("marsh-fox")).toEqual({
+      cause: "predator-contact",
+      reachUnits: 500,
+      damageUnits: 550_000,
+    });
+    expect(coreEcologySpeciesCanFeedFromCarcass("marsh-fox")).toBe(true);
+    expect(coreEcologySpeciesCanGuardCarcass("marsh-fox")).toBe(true);
+
+    expect(coreEcologySpeciesRuntimePolicy("marsh-rabbit")).toMatchObject({
+      mortality: {
+        version: 1,
+        predatorContact: null,
+        physicalBodySizeUnits: 3,
+        physicalBodyResourceUnits: 4,
+        carcassFeeding: false,
+        carcassGuarding: false,
+      },
+      capabilities: expect.arrayContaining(["physical-body-resource"]),
+    });
+    expect(coreEcologySpeciesPhysicalBodySizeUnits("marsh-rabbit")).toBe(3);
+    expect(coreEcologySpeciesPhysicalBodyResourceUnits("marsh-rabbit")).toBe(4);
+    expect(coreEcologySpeciesPredatorContact("marsh-rabbit")).toBeNull();
+
+    expect(coreEcologySpeciesRuntimePolicy("fish-crow")).toMatchObject({
+      mortality: {
+        predatorContact: null,
+        physicalBodySizeUnits: 0,
+        physicalBodyResourceUnits: 0,
+        carcassFeeding: true,
+        carcassGuarding: false,
+      },
+      capabilities: expect.arrayContaining(["carcass-feeding"]),
+    });
+    expect(coreEcologySpeciesCanFeedFromCarcass("fish-crow")).toBe(true);
+    expect(coreEcologySpeciesCanGuardCarcass("fish-crow")).toBe(false);
+
+    const inactive = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(({ speciesId }) => (
+      speciesId !== "marsh-fox"
+      && speciesId !== "marsh-rabbit"
+      && speciesId !== "fish-crow"
+    ));
+    for (const policy of inactive) {
+      expect(policy.mortality).toEqual({
+        version: 1,
+        predatorContact: null,
+        physicalBodySizeUnits: 0,
+        physicalBodyResourceUnits: 0,
+        carcassFeeding: false,
+        carcassGuarding: false,
+      });
+      expect(policy.capabilities).not.toContain("predator-contact-damage");
+      expect(policy.capabilities).not.toContain("physical-body-resource");
+      expect(policy.capabilities).not.toContain("carcass-feeding");
+      expect(policy.capabilities).not.toContain("carcass-guarding");
+    }
+    expect(coreEcologySpeciesPredatorContact("unknown-animal")).toBeNull();
+    expect(coreEcologySpeciesPhysicalBodySizeUnits("unknown-animal")).toBe(0);
+    expect(coreEcologySpeciesPhysicalBodyResourceUnits("unknown-animal")).toBe(0);
+    expect(coreEcologySpeciesCanFeedFromCarcass("unknown-animal")).toBe(false);
+    expect(coreEcologySpeciesCanGuardCarcass("unknown-animal")).toBe(false);
   });
 
   it("separates addressable representatives from population-only aggregates", () => {
@@ -331,6 +424,19 @@ describe("core ecology species runtime policy", () => {
     if (crow === null) throw new Error("fish crow policy fixture missing");
     expect(isCoreEcologySpeciesRuntimePolicy({ ...crow, actorAddressable: false })).toBe(false);
     expect(isCoreEcologySpeciesRuntimePolicy({ ...crow, debug: true })).toBe(false);
+    expect(isCoreEcologySpeciesRuntimePolicy({
+      ...crow,
+      mortality: { ...crow.mortality, carcassGuarding: true },
+    })).toBe(false);
+  });
+
+  it("keeps physical-body mortality off grouped species until group retirement is owned", () => {
+    const bodyCapable = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(
+      ({ mortality }) => mortality.physicalBodyResourceUnits > 0,
+    );
+    expect(bodyCapable).not.toHaveLength(0);
+    expect(bodyCapable.every(({ groupOrganization }) => groupOrganization === null)).toBe(true);
+    expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
   });
 
   it("reports catalog drift instead of accepting caller-owned capability claims", () => {

@@ -80,7 +80,7 @@ import type { PorterResponseState } from "./porterResponse";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
-  serializeCoreEcologyAggregatePatch,
+  deserializeOrMigrateCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import {
@@ -298,7 +298,7 @@ function resealGameSave(envelope: TestGameSaveEnvelope): void {
   envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v21/v9 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v22/v9 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
@@ -306,8 +306,8 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   const envelope = decodeGameSave(record);
   const current = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
   if (
-    envelope.version !== 21
-    || record.payloadVersion !== 21
+    envelope.version !== 22
+    || record.payloadVersion !== 22
     || current === null
     || (
       current.derivation.kind !== "habitat-v9"
@@ -383,7 +383,7 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   }
 
   envelope.version = 16;
-  envelope.coreEcology = serializeCoreEcologyAggregatePatch(ecology);
+  envelope.coreEcology = serializePublishedAggregateV4(ecology);
   envelope.settlementEcology = stableStringify({
     ...priorSettlement,
     revision: priorSettlement.revision - domesticCustodies.length,
@@ -409,7 +409,7 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   ecology: CoreEcologyAggregatePatchState;
 }> {
   const envelope = decodeGameSave(record);
-  const current = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
+  const current = deserializeOrMigrateCoreEcologyAggregatePatch(envelope.coreEcology);
   if (
     current === null
     || (
@@ -483,11 +483,48 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
 function serializePublishedAggregateV3(
   ecology: CoreEcologyAggregatePatchState,
 ): string {
+  const {
+    carcasses: _carcasses,
+    mortalityTransactions: _mortalityTransactions,
+    nextMortalityOrdinal: _nextMortalityOrdinal,
+    ...legacyRoot
+  } = ecology;
   return stableStringify({
-    ...ecology,
+    ...legacyRoot,
     version: 3,
+    populations: ecology.populations.map((population) => {
+      const {
+        baselinePopulationSize: _baselinePopulationSize,
+        reserveUnits: _reserveUnits,
+        ...legacy
+      } = population;
+      return legacy;
+    }),
     aggregatePopulations: ecology.aggregatePopulations.map((population) => {
       const { lastTidalRedistributionTick: _omitted, ...legacy } = population;
+      return legacy;
+    }),
+  });
+}
+
+function serializePublishedAggregateV4(
+  ecology: CoreEcologyAggregatePatchState,
+): string {
+  const {
+    carcasses: _carcasses,
+    mortalityTransactions: _mortalityTransactions,
+    nextMortalityOrdinal: _nextMortalityOrdinal,
+    ...legacyRoot
+  } = ecology;
+  return stableStringify({
+    ...legacyRoot,
+    version: 4,
+    populations: ecology.populations.map((population) => {
+      const {
+        baselinePopulationSize: _baselinePopulationSize,
+        reserveUnits: _reserveUnits,
+        ...legacy
+      } = population;
       return legacy;
     }),
   });
@@ -1569,8 +1606,8 @@ describe("perpetual new worlds", () => {
     const currentEcology = deserializeCoreEcologyAggregatePatch(
       currentEnvelope.coreEcology,
     );
-    expect(currentEnvelope.version).toBe(21);
-    expect(currentRecord.payloadVersion).toBe(21);
+    expect(currentEnvelope.version).toBe(22);
+    expect(currentRecord.payloadVersion).toBe(22);
     expect(currentEcology?.derivation.kind).toBe("habitat-v9");
     if (currentEcology?.derivation.kind !== "habitat-v9") {
       throw new Error("fixture did not create current domestic-pen ecology");
@@ -1579,7 +1616,7 @@ describe("perpetual new worlds", () => {
     const alpha16 = domesticYardSaveAsTidalWebV16(currentRecord);
     const originalRecord = alpha16.record;
     const originalEnvelope = decodeGameSave(originalRecord);
-    const originalEcology = deserializeCoreEcologyAggregatePatch(
+    const originalEcology = deserializeOrMigrateCoreEcologyAggregatePatch(
       originalEnvelope.coreEcology,
     );
     expect(originalEnvelope.version).toBe(16);
@@ -1637,8 +1674,8 @@ describe("perpetual new worlds", () => {
     const migratedEcology = deserializeCoreEcologyAggregatePatch(
       migratedEnvelope.coreEcology,
     );
-    expect(migratedEnvelope.version).toBe(21);
-    expect(migratedRecord.payloadVersion).toBe(21);
+    expect(migratedEnvelope.version).toBe(22);
+    expect(migratedRecord.payloadVersion).toBe(22);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v9");
     if (migratedEcology?.derivation.kind !== "habitat-v9") {
       throw new Error("v11 migration did not produce canonical current ecology");
@@ -2024,7 +2061,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(21);
+    expect(prepared.version).toBe(22);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2237,8 +2274,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(21);
-    expect(durableRecord.payloadVersion).toBe(21);
+    expect(durable.version).toBe(22);
+    expect(durableRecord.payloadVersion).toBe(22);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

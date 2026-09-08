@@ -232,13 +232,29 @@ describe("harbor-edge aggregate ecology", () => {
 
   it("adopts exact v3 aggregate state with a derived durable tide clock only", () => {
     const current = aggregatePatch();
+    const {
+      carcasses: _carcasses,
+      mortalityTransactions: _mortalityTransactions,
+      nextMortalityOrdinal: _nextMortalityOrdinal,
+      populations: currentPopulations,
+      ...legacyPatch
+    } = current;
+    const legacyIndividuals = currentPopulations.map((population) => {
+      const {
+        baselinePopulationSize: _baselinePopulationSize,
+        reserveUnits: _reserveUnits,
+        ...legacy
+      } = population;
+      return legacy;
+    });
     const legacyPopulations = current.aggregatePopulations.map((population) => {
       const { lastTidalRedistributionTick: _omitted, ...legacy } = population;
       return legacy;
     });
     const legacy = {
-      ...current,
+      ...legacyPatch,
       version: 3,
+      populations: legacyIndividuals,
       aggregatePopulations: legacyPopulations,
     };
     const migrated = deserializeOrMigrateCoreEcologyAggregatePatch(
@@ -252,6 +268,41 @@ describe("harbor-edge aggregate ecology", () => {
       const { lastTidalRedistributionTick: _omitted, ...retained } = population;
       return retained;
     })).toEqual(legacyPopulations);
+    expect(migrated?.mortalityTransactions).toEqual([]);
+    expect(migrated?.carcasses).toEqual([]);
+  });
+
+  it("adopts exact v4 aggregate state with additive empty mortality accounting", () => {
+    const current = aggregatePatch();
+    const {
+      carcasses: _carcasses,
+      mortalityTransactions: _mortalityTransactions,
+      nextMortalityOrdinal: _nextMortalityOrdinal,
+      populations,
+      ...legacyPatch
+    } = current;
+    const legacyPopulations = populations.map((population) => {
+      const {
+        baselinePopulationSize: _baselinePopulationSize,
+        reserveUnits: _reserveUnits,
+        ...legacy
+      } = population;
+      return legacy;
+    });
+    const legacy = { ...legacyPatch, version: 4, populations: legacyPopulations };
+    const migrated = deserializeOrMigrateCoreEcologyAggregatePatch(stableStringify(legacy));
+
+    expect(migrated).not.toBeNull();
+    expect(migrated?.nextMortalityOrdinal).toBe(0);
+    expect(migrated?.mortalityTransactions).toEqual([]);
+    expect(migrated?.carcasses).toEqual([]);
+    expect(migrated?.populations.map(({ baselinePopulationSize, reserveUnits }) => ({
+      baselinePopulationSize,
+      reserveUnits,
+    }))).toEqual(legacyPopulations.map(({ populationSize }) => ({
+      baselinePopulationSize: populationSize,
+      reserveUnits: 0,
+    })));
   });
 
   it("operates individual actors in v4 while preserving aggregate facts and evidence", () => {

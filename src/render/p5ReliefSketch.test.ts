@@ -7,6 +7,7 @@ import type {
   DogView,
   TideweftView,
   WeatherView,
+  WildlifeCarcassView,
   WildlifeView,
 } from "./types";
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
@@ -165,6 +166,10 @@ class FakeElement extends FakeEventTarget {
 
   remove(): void {
     this.removed = true;
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
   }
 
   matches(): boolean {
@@ -426,6 +431,23 @@ function aggregateWildlifeEvidenceView(
     selected: false,
     ...overrides,
   } as AggregateWildlifeEvidenceView;
+}
+
+function wildlifeCarcassView(
+  overrides: Partial<WildlifeCarcassView> = {},
+): WildlifeCarcassView {
+  return {
+    version: 1,
+    carcassId: "wildlife-carcass:0123456789abcdef",
+    position: { x: 48, y: 48 },
+    form: "body",
+    quickLabel: "Marsh rabbit body",
+    speciesIdentified: true,
+    sizeScale: 1,
+    orientation: Math.PI * 0.25,
+    distanceUnits: 4_000,
+    ...overrides,
+  };
 }
 
 function pointer(
@@ -1316,6 +1338,119 @@ describe("Relief dog presentation", () => {
     expect(harness.dispatch.mock.calls.some(([command]) =>
       (command as { type?: unknown }).type === "select"
     )).toBe(false);
+    harness.renderer.destroy();
+  });
+});
+
+describe("Relief physical wildlife remains", () => {
+  it("draws color-independent forms, exposes direct labels, and keeps carcass taps as travel", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-carcass", { x: 48, y: 48 });
+    let current: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "relief-carcass-direct-detail",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 16,
+        detailDirectTileCount: 16,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+        })),
+      },
+      wildlifeCarcasses: [
+        wildlifeCarcassView({ position: { x: 12, y: 12 } }),
+        wildlifeCarcassView({
+          carcassId: "wildlife-carcass:fedcba9876543210",
+          form: "depleted-remains",
+          quickLabel: "Marsh rabbit remains",
+          position: { x: 52, y: 48 },
+        }),
+      ],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+    const ellipsoid = harness.instance.ellipsoid as ReturnType<typeof vi.fn>;
+    const sphere = harness.instance.sphere as ReturnType<typeof vi.fn>;
+    const box = harness.instance.box as ReturnType<typeof vi.fn>;
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "ambientMaterial" && args[0] === "#694f42"
+    )).toBe(true);
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "ambientMaterial" && args[0] === "#c7b89b"
+    )).toBe(true);
+    expect(ellipsoid.mock.calls.some(([x, y, z]) => (
+      Math.abs(Number(x) - 3.24) < 0.001
+      && Math.abs(Number(y) - 0.864) < 0.001
+      && Math.abs(Number(z) - 1.296) < 0.001
+    ))).toBe(true);
+    expect(sphere.mock.calls.some(([radius]) => (
+      Math.abs(Number(radius) - 0.828) < 0.001
+    ))).toBe(true);
+    expect(box.mock.calls.some(([x, y, z]) => (
+      Math.abs(Number(x) - 4.5) < 0.001
+      && Math.abs(Number(y) - 0.216) < 0.001
+      && Math.abs(Number(z) - 0.252) < 0.001
+    ))).toBe(true);
+    expect(harness.canvas.attributes.get("aria-description")).toBe(
+      "Nearby wildlife remains: Marsh rabbit body; Marsh rabbit remains.",
+    );
+
+    harness.canvas.fire("pointermove", pointer(harness.canvas));
+    harness.draw();
+    const layer = harness.mount.children.find((child) => (
+      child.className === "relief-label-layer"
+    ));
+    const label = [...(layer?.children ?? [])].reverse().find((child) => (
+      child.textContent === "Marsh rabbit body" && !child.removed
+    ));
+    expect(label?.dataset).toMatchObject({ tone: "wildlife", selected: "true" });
+    expect(Number.parseFloat(label?.style.left ?? "NaN")).toBeGreaterThanOrEqual(60);
+    expect(Number.parseFloat(label?.style.left ?? "NaN")).toBeLessThanOrEqual(260);
+    expect(Number.parseFloat(label?.style.top ?? "NaN")).toBeGreaterThanOrEqual(28);
+    expect(Number.parseFloat(label?.style.top ?? "NaN")).toBeLessThanOrEqual(206);
+    expect(harness.dispatch).not.toHaveBeenCalled();
+
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 91 }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 91 }));
+    expect(harness.dispatch).toHaveBeenLastCalledWith({
+      type: "move-target",
+      point: { x: 12, y: 12 },
+      additive: false,
+    });
+    expect(harness.dispatch.mock.calls.some(([command]) => (
+      (command as { type?: unknown }).type === "select"
+    ))).toBe(false);
+
+    p5Harness.materialTrace.length = 0;
+    harness.dispatch.mockClear();
+    current = {
+      ...current,
+      terrain: {
+        ...current.terrain,
+        tiles: current.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentDetailVisibility: 0 as const,
+        })),
+      },
+    };
+    harness.setView(current);
+    harness.draw();
+    expect(p5Harness.materialTrace.some(({ args }) => args[0] === "#694f42")).toBe(false);
+    expect(p5Harness.materialTrace.some(({ args }) => args[0] === "#c7b89b")).toBe(false);
+    expect(harness.canvas.attributes.has("aria-description")).toBe(false);
+    expect(layer?.children.some((child) => (
+      child.textContent === "Marsh rabbit body" && !child.removed
+    ))).toBe(false);
     harness.renderer.destroy();
   });
 });
