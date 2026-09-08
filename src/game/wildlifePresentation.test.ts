@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ACTOR_PERCEPTION_SCALE,
   MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
   createActorObservation,
 } from "../sim/actorPerception";
@@ -20,6 +21,7 @@ import {
   CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
+  replaceCoreWildlifeActorPhysiology,
   repositionCoreWildlifeActor,
   repositionCoreWildlifeActorWithMovementEvidence,
   stepCoreWildlifeActor,
@@ -648,6 +650,61 @@ function pressuredPursuingBear(): CoreWildlifeActorState {
   });
   if (candidate === null) throw new Error("wildlife fixture should remain canonical");
   return candidate;
+}
+
+function regroupingGoat(): CoreWildlifeActorState {
+  const region = createRegionCoord(-31, 7);
+  const seed = seedFromText("presentation keeps regroup knowledge private");
+  const actor = replaceCoreWildlifeActorPhysiology(createCoreWildlifeActorState({
+    seed,
+    species: "domestic-goat",
+    originRegion: region,
+    populationKey: "presentation-motion",
+    populationOrdinal: 0,
+    position: createWorldPosition(region, 20_000, 18_000),
+    tick: 10,
+  }), {
+    atTick: 10,
+    needs: { hunger: 0, safety: 0, rest: 0 },
+    condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 0, stress: 0 },
+  });
+  const target = createCoreWildlifeActorState({
+    seed,
+    species: "domestic-goat",
+    originRegion: region,
+    populationKey: "presentation-motion",
+    populationOrdinal: 1,
+    position: createWorldPosition(region, 28_000, 18_000),
+    tick: 10,
+  });
+  const observation = createActorObservation({
+    id: "observation:presentation-regroup-target",
+    observerId: actor.identity.stableId,
+    observedAtTick: 11,
+    channel: "vision",
+    perceivedClass: "domestic-goat",
+    subjectId: target.identity.stableId,
+    area: { center: target.address.position, radiusUnits: 0 },
+    confidence: ACTOR_PERCEPTION_SCALE,
+    salience: 700_000,
+    identification: "identified",
+  });
+  if (observation === null) throw new Error("Regroup presentation observation failed");
+  const stepped = stepCoreWildlifeActor(actor, {
+    tick: 11,
+    observations: [observation],
+    foodOpportunities: [],
+    accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+    regroupOpportunity: {
+      groupId: "CEG-v1-presentation-motion",
+      observationId: observation.id,
+      targetActorId: target.identity.stableId,
+    },
+  });
+  if (stepped === null || stepped.actor.intent.kind !== "regroup") {
+    throw new Error("Regroup presentation fixture did not choose regroup");
+  }
+  return stepped.actor;
 }
 
 describe("knowledge-honest wildlife presentation", () => {
@@ -1616,6 +1673,21 @@ describe("knowledge-honest wildlife presentation", () => {
     expect(encoded).not.toMatch(/hidden-prey|resourceReference|focusObservationId|referenceId/iu);
     expect(encoded).not.toMatch(/"needs"|"hunger"|"safety"|"health"|"stress"|"exhaustion"/u);
     expect(encoded).not.toMatch(/200000|800000|900000|990000|880000|770000/u);
+  });
+
+  it("projects internal regrouping as neutral purposeful movement", () => {
+    const goat = regroupingGoat();
+    const presentation = projectWildlifePresentation({
+      actor: goat,
+      observation: directObservation(goat),
+      tileSize: 16,
+    });
+
+    expect(presentation).toMatchObject({
+      behavior: "pursue",
+      behaviorLabel: "Moving with focus",
+    });
+    expect(JSON.stringify(presentation)).not.toMatch(/regroup|rejoin|group/iu);
   });
 
   it("requires a valid signed, matching, direct-detail perception frame", () => {

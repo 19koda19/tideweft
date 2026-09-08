@@ -42,6 +42,7 @@ export const SETTLEMENT_WORKING_ANIMAL_ACTIVITY_VERSION = 1 as const;
 export const SETTLEMENT_WORKING_ANIMAL_TASK_VERSION = 1 as const;
 export const SETTLEMENT_WORKING_ANIMAL_TASK_TRANSITION_VERSION = 1 as const;
 export const SETTLEMENT_WORKING_ANIMAL_TASK_OUTCOME_VERSION = 1 as const;
+export const SETTLEMENT_WORKING_ANIMAL_HANDLER_SEARCH_REPORT_VERSION = 1 as const;
 export const PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID =
   "game:settlement-working-animals:v1" as const;
 export const SETTLEMENT_WORKING_ANIMALS_OWNER_ID =
@@ -66,6 +67,7 @@ export const SETTLEMENT_WORKING_ANIMAL_GUARDIAN_SIGNAL_THRESHOLD = 180_000 as co
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,191}$/u;
 const CUSTODY_RELATIONSHIP_PATTERN = /^DOMESTIC-REL-[0-9a-f]{16}$/u;
+const HANDLER_SEARCH_REPORT_PATTERN = /^WORK-REPORT-[0-9a-f]{16}$/u;
 const UTF8_ENCODER = new TextEncoder();
 
 /** The role domain is versioned. Alpha 26 deliberately ships one role. */
@@ -125,6 +127,11 @@ export type SettlementWorkingAnimalActivityCause =
   | Readonly<{
       readonly kind: "perception";
       /** Opaque accepted observation ID; never a subject identity. */
+      readonly referenceId: string;
+    }>
+  | Readonly<{
+      readonly kind: "handler-report";
+      /** Opaque report ID committing the handler's source, known tick, and known area. */
       readonly referenceId: string;
     }>
   | Readonly<{
@@ -401,6 +408,38 @@ export interface SettlementWorkingAnimalActivityResolution {
   readonly applied: boolean;
 }
 
+/**
+ * Knowledge-honest handler-to-worker information. The report commits only a
+ * previously learned area; it carries no hidden target identity or live
+ * position and is not a sensory/threat relabel.
+ */
+export interface SettlementWorkingAnimalHandlerSearchReport {
+  readonly version: typeof SETTLEMENT_WORKING_ANIMAL_HANDLER_SEARCH_REPORT_VERSION;
+  readonly reportId: string;
+  readonly assignmentId: string;
+  readonly handlerActorId: string;
+  readonly knownAtTick: number;
+  readonly sourceReferenceId: string;
+  readonly knownArea: ObservedArea;
+}
+
+export interface CreateSettlementWorkingAnimalHandlerSearchReportInput {
+  readonly assignmentId: string;
+  readonly handlerActorId: string;
+  readonly knownAtTick: number;
+  readonly sourceReferenceId: string;
+  readonly knownArea: ObservedArea;
+}
+
+export interface SettlementWorkingAnimalHandlerSearchEvaluationInput {
+  readonly tick: number;
+  readonly report: SettlementWorkingAnimalHandlerSearchReport;
+  readonly welfare: SettlementWorkingAnimalWelfareState;
+  readonly accessibility: SettlementWorkingAnimalActivityAccessibility;
+  readonly actorDisposition: SettlementWorkingAnimalActorDisposition;
+  readonly workerInsideDutyArea: boolean;
+}
+
 /** Explicit handler intent. It is inert unless current reciprocal sight proves contact. */
 export type SettlementWorkingAnimalHandlerDisposition =
   | Readonly<{ readonly kind: "continue" }>
@@ -558,6 +597,41 @@ export function settlementWorkingAnimalReturnArea(
   return assignment === null ? null : returnAreaFromCanonicalAssignment(assignment);
 }
 
+export function createSettlementWorkingAnimalHandlerSearchReport(
+  inputValue: CreateSettlementWorkingAnimalHandlerSearchReportInput,
+): SettlementWorkingAnimalHandlerSearchReport | null {
+  if (
+    !plainRecord(inputValue)
+    || !exactKeys(inputValue, [
+      "assignmentId",
+      "handlerActorId",
+      "knownArea",
+      "knownAtTick",
+      "sourceReferenceId",
+    ])
+  ) return null;
+  const knownArea = canonicalArea(inputValue.knownArea, 10_000_000);
+  if (
+    !validId(inputValue.assignmentId)
+    || !livingSpeciesActorIdMatchesNamespace(inputValue.handlerActorId, "human")
+    || !nonnegativeSafeInteger(inputValue.knownAtTick)
+    || !validId(inputValue.sourceReferenceId)
+    || knownArea === null
+  ) return null;
+  const fields = {
+    assignmentId: inputValue.assignmentId,
+    handlerActorId: inputValue.handlerActorId,
+    knownAtTick: inputValue.knownAtTick,
+    sourceReferenceId: inputValue.sourceReferenceId,
+    knownArea,
+  } as const;
+  return canonicalHandlerSearchReport({
+    version: SETTLEMENT_WORKING_ANIMAL_HANDLER_SEARCH_REPORT_VERSION,
+    reportId: handlerSearchReportId(fields),
+    ...fields,
+  });
+}
+
 /**
  * Derive the single authoritative probe for a committed or staged
  * investigation. The activity must be an exact member of the assignment; a
@@ -573,7 +647,7 @@ export function deriveSettlementWorkingAnimalTaskSearchProbe(
   if (
     activity === null
     || activity.activity !== "investigate"
-    || activity.cause.kind !== "perception"
+    || (activity.cause.kind !== "perception" && activity.cause.kind !== "handler-report")
     || activity.perceivedArea === null
     || !(
       stableStringify(activity) === stableStringify(assignment.currentActivity)
@@ -948,8 +1022,11 @@ export function decideSettlementWorkingAnimalActivity(
   // fades. Actor cognition and welfare above can suspend it, but a new signal
   // cannot replace it or reveal a new target.
   if (assignment.currentTask?.phase === "investigating") {
+    const sourceKind = HANDLER_SEARCH_REPORT_PATTERN.test(
+      assignment.currentTask.sourceObservationId,
+    ) ? "handler-report" as const : "perception" as const;
     return createDecision(assignment, tick, "investigate", {
-      kind: "perception",
+      kind: sourceKind,
       referenceId: assignment.currentTask.sourceObservationId,
     }, assignment.currentTask.perceivedArea);
   }
@@ -1067,6 +1144,99 @@ export function stageSettlementWorkingAnimalActivity(
     ...assignment,
     pendingActivity: transaction,
   });
+  const nextState = rebuildState(state, nextAssignment, state.revision + 1);
+  return nextState === null ? null : deepFreeze({
+    state: nextState,
+    decision,
+    transaction,
+    staged: true,
+    reusedPendingTransaction: false,
+  });
+}
+
+/**
+ * Stages a bounded investigation from the handler's explicit report. This is
+ * separate from sensory arbitration: the report never enters cognition as a
+ * fabricated alarm or threat, and actor welfare/disposition retain priority.
+ */
+export function stageSettlementWorkingAnimalSearchFromHandlerReport(
+  stateValue: unknown,
+  evaluationValue: SettlementWorkingAnimalHandlerSearchEvaluationInput,
+): SettlementWorkingAnimalActivityStageResult | null {
+  const state = canonicalizeSettlementWorkingAnimalState(stateValue);
+  const evaluation = canonicalHandlerSearchEvaluation(evaluationValue);
+  if (state === null || evaluation === null) return null;
+  const assignment = state.assignments.find(({ assignmentId }) => (
+    assignmentId === evaluation.report.assignmentId
+  ));
+  if (
+    assignment === undefined
+    || assignment.role !== "guardian"
+    || assignment.handlerActorId !== evaluation.report.handlerActorId
+    || evaluation.tick < evaluation.report.knownAtTick
+    || assignment.currentTask !== null
+    || assignment.lastTaskOutcome?.sourceObservationId === evaluation.report.reportId
+    || evaluation.actorDisposition.kind !== "available"
+    || strongestWelfareCause(evaluation.welfare) !== null
+    || !evaluation.accessibility.investigate
+    || !evaluation.workerInsideDutyArea
+    || !areasIntersect(assignment.dutyArea, evaluation.report.knownArea)
+  ) return null;
+
+  const decision = createDecision(assignment, evaluation.tick, "investigate", {
+    kind: "handler-report",
+    referenceId: evaluation.report.reportId,
+  }, evaluation.report.knownArea);
+  if (assignment.pendingActivity !== null) {
+    if (
+      decision.decidedAtTick <= assignment.currentActivity.acceptedAtTick
+      || assignment.lastResolvedActivityOrdinal
+        >= SETTLEMENT_WORKING_ANIMAL_MAX_ACTIVITY_ORDINAL
+    ) return null;
+    const pendingCandidate = createActivityTransaction({
+      assignmentId: assignment.assignmentId,
+      workerActorId: assignment.workerActorId,
+      ordinal: assignment.lastResolvedActivityOrdinal + 1,
+      activity: decision.activity,
+      acceptedAtTick: decision.decidedAtTick,
+      cause: decision.cause,
+      perceivedArea: decision.perceivedArea,
+    });
+    return stableStringify(assignment.pendingActivity) === stableStringify(pendingCandidate)
+      ? deepFreeze({
+          state,
+          decision: decisionFromTransaction(assignment.pendingActivity),
+          transaction: assignment.pendingActivity,
+          staged: false,
+          reusedPendingTransaction: true,
+        })
+      : null;
+  }
+  if (sameAcceptedActivity(assignment.currentActivity, decision)) {
+    return deepFreeze({
+      state,
+      decision,
+      transaction: null,
+      staged: false,
+      reusedPendingTransaction: false,
+    });
+  }
+  if (
+    decision.decidedAtTick <= assignment.currentActivity.acceptedAtTick
+    || assignment.lastResolvedActivityOrdinal
+      >= SETTLEMENT_WORKING_ANIMAL_MAX_ACTIVITY_ORDINAL
+  ) return null;
+
+  const transaction = createActivityTransaction({
+    assignmentId: assignment.assignmentId,
+    workerActorId: assignment.workerActorId,
+    ordinal: assignment.lastResolvedActivityOrdinal + 1,
+    activity: decision.activity,
+    acceptedAtTick: decision.decidedAtTick,
+    cause: decision.cause,
+    perceivedArea: decision.perceivedArea,
+  });
+  const nextAssignment = deepFreeze({ ...assignment, pendingActivity: transaction });
   const nextState = rebuildState(state, nextAssignment, state.revision + 1);
   return nextState === null ? null : deepFreeze({
     state: nextState,
@@ -1262,17 +1432,21 @@ function deriveTaskLifecycleTransition(
     if (
       assignment.pendingActivity !== null
       || activity.activity !== "investigate"
-      || activity.cause.kind !== "perception"
+      || (activity.cause.kind !== "perception" && activity.cause.kind !== "handler-report")
       || activity.perceivedArea === null
       || assignment.lastTaskOrdinal >= SETTLEMENT_WORKING_ANIMAL_MAX_TASK_ORDINAL
       || assignment.lastTaskOutcome?.sourceActivityTransactionId === activity.transactionId
     ) return null;
-    const sourceBelief = freshestMatchingSourceBelief(
-      evaluation.workerPerception,
-      activity.cause.referenceId,
-      activity.perceivedArea,
-    );
-    if (sourceBelief === null) return null;
+    let sourceReferenceId = activity.cause.referenceId;
+    if (activity.cause.kind === "perception") {
+      const sourceBelief = freshestMatchingSourceBelief(
+        evaluation.workerPerception,
+        activity.cause.referenceId,
+        activity.perceivedArea,
+      );
+      if (sourceBelief === null) return null;
+      sourceReferenceId = sourceBelief.sourceObservationId;
+    }
     const taskOrdinal = assignment.lastTaskOrdinal + 1;
     const taskId = workingAnimalTaskId(
       assignment.assignmentId,
@@ -1296,7 +1470,7 @@ function deriveTaskLifecycleTransition(
         referenceId: activity.transactionId,
       },
       sourceActivityTransactionId: activity.transactionId,
-      sourceObservationId: sourceBelief.sourceObservationId,
+      sourceObservationId: sourceReferenceId,
       perceivedArea: activity.perceivedArea,
       searchProbe,
       suspension,
@@ -2229,6 +2403,92 @@ function workingAnimalTaskId(
   })}`;
 }
 
+type HandlerSearchReportFields = Omit<
+  SettlementWorkingAnimalHandlerSearchReport,
+  "reportId" | "version"
+>;
+
+function handlerSearchReportId(fields: HandlerSearchReportFields): string {
+  return `WORK-REPORT-${hashCanonical({
+    version: SETTLEMENT_WORKING_ANIMAL_HANDLER_SEARCH_REPORT_VERSION,
+    ...fields,
+  })}`;
+}
+
+function canonicalHandlerSearchReport(
+  value: unknown,
+): SettlementWorkingAnimalHandlerSearchReport | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, [
+      "assignmentId",
+      "handlerActorId",
+      "knownArea",
+      "knownAtTick",
+      "reportId",
+      "sourceReferenceId",
+      "version",
+    ])
+    || value.version !== SETTLEMENT_WORKING_ANIMAL_HANDLER_SEARCH_REPORT_VERSION
+    || typeof value.reportId !== "string"
+    || !HANDLER_SEARCH_REPORT_PATTERN.test(value.reportId)
+    || !validId(value.assignmentId)
+    || !livingSpeciesActorIdMatchesNamespace(value.handlerActorId, "human")
+    || !nonnegativeSafeInteger(value.knownAtTick)
+    || !validId(value.sourceReferenceId)
+  ) return null;
+  const knownArea = canonicalArea(value.knownArea, 10_000_000);
+  if (knownArea === null) return null;
+  const fields = {
+    assignmentId: value.assignmentId as string,
+    handlerActorId: value.handlerActorId as string,
+    knownAtTick: value.knownAtTick as number,
+    sourceReferenceId: value.sourceReferenceId as string,
+    knownArea,
+  } as const;
+  if (value.reportId !== handlerSearchReportId(fields)) return null;
+  return deepFreeze({
+    version: SETTLEMENT_WORKING_ANIMAL_HANDLER_SEARCH_REPORT_VERSION,
+    reportId: value.reportId as string,
+    ...fields,
+  });
+}
+
+function canonicalHandlerSearchEvaluation(
+  value: unknown,
+): SettlementWorkingAnimalHandlerSearchEvaluationInput | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, [
+      "accessibility",
+      "actorDisposition",
+      "report",
+      "tick",
+      "welfare",
+      "workerInsideDutyArea",
+    ])
+    || !nonnegativeSafeInteger(value.tick)
+    || typeof value.workerInsideDutyArea !== "boolean"
+  ) return null;
+  const report = canonicalHandlerSearchReport(value.report);
+  const welfare = canonicalWelfare(value.welfare);
+  const accessibility = canonicalAccessibility(value.accessibility);
+  const actorDisposition = canonicalActorDisposition(value.actorDisposition);
+  return report === null
+    || welfare === null
+    || accessibility === null
+    || actorDisposition === null
+    ? null
+    : deepFreeze({
+        tick: value.tick as number,
+        report,
+        welfare,
+        accessibility,
+        actorDisposition,
+        workerInsideDutyArea: value.workerInsideDutyArea,
+      });
+}
+
 function activityTransactionId(input: Readonly<{
   readonly assignmentId: string;
   readonly workerActorId: string;
@@ -2549,6 +2809,11 @@ function canonicalCause(value: unknown): SettlementWorkingAnimalActivityCause | 
     || !exactKeys(value, ["kind", "referenceId"])
     || !validId(value.referenceId)
   ) return null;
+  if (value.kind === "handler-report") {
+    return HANDLER_SEARCH_REPORT_PATTERN.test(value.referenceId)
+      ? deepFreeze({ kind: value.kind, referenceId: value.referenceId })
+      : null;
+  }
   if (value.kind === "assignment" || value.kind === "perception") {
     return deepFreeze({ kind: value.kind, referenceId: value.referenceId });
   }
@@ -2628,7 +2893,9 @@ function activityCauseIsCoherent(
   area: ObservedArea | null,
   assignmentId: string,
 ): boolean {
-  if (activity === "investigate") return cause.kind === "perception" && area !== null;
+  if (activity === "investigate") {
+    return (cause.kind === "perception" || cause.kind === "handler-report") && area !== null;
+  }
   if (activity === "survival-override") return cause.kind === "welfare" && area === null;
   if (activity === "defer-to-actor") {
     return cause.kind === "actor-disposition" && area === null;
@@ -2814,7 +3081,10 @@ function taskStateIsCoherent(input: Readonly<{
   if (pendingTaskTransition.transition === "open") {
     return currentTask === null
       && currentActivity.activity === "investigate"
-      && currentActivity.cause.kind === "perception"
+      && (
+        currentActivity.cause.kind === "perception"
+        || currentActivity.cause.kind === "handler-report"
+      )
       && currentActivity.perceivedArea !== null
       && pendingTaskTransition.taskOrdinal === lastTaskOrdinal + 1
       && pendingTaskTransition.sourceActivityTransactionId === currentActivity.transactionId

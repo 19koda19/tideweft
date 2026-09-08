@@ -62,17 +62,25 @@ interface VisibleMember {
 }
 
 interface MaterializationCandidate {
-  readonly actorId: string;
+  /** Every saved group is one indivisible unit; ungrouped units contain one ID. */
+  readonly actorIds: readonly string[];
+  /** Stable actor ID belonging to the physically nearest in-frame member. */
+  readonly priorityActorId: string;
   /** Exact squared distance in doubled frame-fixed-point coordinates. */
   readonly distanceFromWindowCenterSquared: number;
 }
 
 /**
  * Bounded stable-ID set whose authoritative current representation lies in
- * the frame. When more actors intersect than can run at full fidelity, the
- * physically closest candidates win with stable actor ID as the only tie
- * break. A coarse social actor belongs at its saved group-component anchor;
- * its dormant individual address is history, not a second location.
+ * the frame. Saved social groups are indivisible materialization units: if an
+ * in-frame representative admits a bounded group, every member is admitted,
+ * or the entire group remains coarse when its unit cannot fit. Ungrouped
+ * actors remain single-member units. Units are considered by physical
+ * distance, with the nearest representative's stable actor ID as the tie
+ * break, so input ordering cannot change cap admission.
+ *
+ * A coarse social actor belongs at its saved group-component anchor; its
+ * dormant individual address is history, not a second location.
  */
 export function deriveCoreEcologyMaterializedActorIds(
   patchValue: unknown,
@@ -82,20 +90,64 @@ export function deriveCoreEcologyMaterializedActorIds(
   const window = canonicalWindow(windowValue);
   if (patch === null || window === null) return null;
   const candidates: MaterializationCandidate[] = [];
+
+  const groupedActorIds = new Set<string>();
+  for (const group of patch.groups.groups) {
+    const population = patch.populations.find((candidate) => (
+      candidate.species === group.identity.species
+      && candidate.populationKey === group.identity.populationKey
+    ));
+    if (population === undefined) return null;
+    const members = population.members.filter(({ populationOrdinal }) =>
+      group.memberOrdinals.includes(populationOrdinal));
+    if (members.length !== group.memberOrdinals.length) return null;
+    const inFrameMembers: Readonly<{
+      actorId: string;
+      distanceFromWindowCenterSquared: number;
+    }>[] = members.flatMap((member) => {
+      groupedActorIds.add(member.actor.identity.stableId);
+      const point = memberPointInRuntimeWindow(patch, population, member, window);
+      return point === null
+        ? []
+        : [{
+            actorId: member.actor.identity.stableId,
+            distanceFromWindowCenterSquared: distanceFromWindowCenterSquared(point, window),
+          }];
+    });
+    if (inFrameMembers.length === 0) continue;
+    const priority = [...inFrameMembers].sort(compareMaterializationRepresentative)[0];
+    if (priority === undefined) return null;
+    candidates.push(Object.freeze({
+      actorIds: Object.freeze(members
+        .map(({ actor }) => actor.identity.stableId)
+        .sort(compareText)),
+      priorityActorId: priority.actorId,
+      distanceFromWindowCenterSquared: priority.distanceFromWindowCenterSquared,
+    }));
+  }
+
   for (const population of patch.populations) {
     for (const member of population.members) {
+      if (groupedActorIds.has(member.actor.identity.stableId)) continue;
       const point = memberPointInRuntimeWindow(patch, population, member, window);
       if (point === null) continue;
       candidates.push(Object.freeze({
-        actorId: member.actor.identity.stableId,
+        actorIds: Object.freeze([member.actor.identity.stableId]),
+        priorityActorId: member.actor.identity.stableId,
         distanceFromWindowCenterSquared: distanceFromWindowCenterSquared(point, window),
       }));
     }
   }
   candidates.sort(compareMaterializationCandidate);
-  const actorIds = candidates
-    .slice(0, CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS)
-    .map(({ actorId }) => actorId);
+  const actorIds: string[] = [];
+  for (const candidate of candidates) {
+    if (
+      candidate.actorIds.length
+      > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS - actorIds.length
+    ) continue;
+    actorIds.push(...candidate.actorIds);
+    if (actorIds.length === CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) break;
+  }
   // The materialization command is a set, so keep its serialized spelling
   // independent of spatial traversal or population array order.
   actorIds.sort(compareText);
@@ -358,6 +410,14 @@ function comparePresentation(left: WildlifePresentation, right: WildlifePresenta
 function compareMaterializationCandidate(
   left: MaterializationCandidate,
   right: MaterializationCandidate,
+): number {
+  return left.distanceFromWindowCenterSquared - right.distanceFromWindowCenterSquared
+    || compareText(left.priorityActorId, right.priorityActorId);
+}
+
+function compareMaterializationRepresentative(
+  left: Readonly<{ actorId: string; distanceFromWindowCenterSquared: number }>,
+  right: Readonly<{ actorId: string; distanceFromWindowCenterSquared: number }>,
 ): number {
   return left.distanceFromWindowCenterSquared - right.distanceFromWindowCenterSquared
     || compareText(left.actorId, right.actorId);

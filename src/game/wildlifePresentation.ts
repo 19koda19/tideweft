@@ -1212,7 +1212,8 @@ function presentationBehavior(
     case "guard": return "guard";
     case "scavenge": return "scavenge";
     case "forage": return "forage";
-    case "pursue": return "pursue";
+    case "pursue":
+    case "regroup": return "pursue";
     case "rest": return "rest";
   }
 }
@@ -1249,7 +1250,8 @@ function observableBehavior(
     case "guard": return "Holding ground";
     case "scavenge": return "Scavenging";
     case "forage": return "Foraging";
-    case "pursue": return "Moving with focus";
+    case "pursue":
+    case "regroup": return "Moving with focus";
     case "rest": return "Resting";
   }
 }

@@ -22,6 +22,7 @@ import {
   adoptSettlementWorkingAnimalStateV1,
   canonicalizeSettlementWorkingAnimalAssignment,
   canonicalizeSettlementWorkingAnimalState,
+  createSettlementWorkingAnimalHandlerSearchReport,
   createSettlementWorkingAnimalState,
   decideSettlementWorkingAnimalActivity,
   deriveSettlementWorkingAnimalTaskSearchProbe,
@@ -33,6 +34,7 @@ import {
   serializeSettlementWorkingAnimalState,
   settlementWorkingAnimalReturnArea,
   stageSettlementWorkingAnimalActivity,
+  stageSettlementWorkingAnimalSearchFromHandlerReport,
   stageSettlementWorkingAnimalTaskLifecycle,
   type CreateSettlementWorkingAnimalAssignmentInput,
   type SettlementWorkingAnimalActivityAccessibility,
@@ -259,6 +261,83 @@ function priorV1State(value: SettlementWorkingAnimalState): unknown {
 }
 
 describe("settlement working-animal authority", () => {
+  it("opens a bounded investigation from a handler report without inventing a threat", () => {
+    const initial = stateAt(position(0, 0, 1_000, 24_000));
+    const assignment = initial.assignments[0]!;
+    const knownArea = Object.freeze({
+      center: position(-1, 0, REGION_WIDTH_UNITS - 1_000, 24_000),
+      radiusUnits: 0,
+    });
+    const report = createSettlementWorkingAnimalHandlerSearchReport({
+      assignmentId: assignment.assignmentId,
+      handlerActorId: assignment.handlerActorId,
+      knownAtTick: 1,
+      sourceReferenceId: "RECOVERY-NOTICE-handler-saw-goat",
+      knownArea,
+    });
+    expect(report).not.toBeNull();
+    if (report === null) throw new Error("Handler report was not created");
+
+    const staged = stageSettlementWorkingAnimalSearchFromHandlerReport(initial, {
+      tick: 1,
+      report,
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    });
+    expect(staged?.transaction).toMatchObject({
+      activity: "investigate",
+      acceptedAtTick: 1,
+      cause: { kind: "handler-report", referenceId: report.reportId },
+      perceivedArea: knownArea,
+    });
+    expect(stageSettlementWorkingAnimalSearchFromHandlerReport(staged?.state, {
+      tick: 1,
+      report,
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    })).toMatchObject({
+      reusedPendingTransaction: true,
+      transaction: staged?.transaction,
+    });
+    if (staged?.transaction === null || staged === null) {
+      throw new Error("Handler report did not stage an activity");
+    }
+    const accepted = resolveSettlementWorkingAnimalActivity(staged.state, staged.transaction);
+    expect(accepted?.activity.cause.kind).toBe("handler-report");
+    if (accepted === null) throw new Error("Handler report activity did not resolve");
+
+    const taskStage = stageSettlementWorkingAnimalTaskLifecycle(accepted.state, {
+      assignmentId: assignment.assignmentId,
+      tick: 1,
+      workerPosition: assignment.dutyArea.center,
+      handlerPosition: assignment.dutyArea.center,
+      workerPerception: quietPerception(assignment.workerActorId, 1),
+      handlerPerception: quietPerception(assignment.handlerActorId, 1),
+      welfare: ZERO_WELFARE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      handlerDisposition: { kind: "continue" },
+    });
+    if (taskStage?.transaction === null || taskStage === null) {
+      throw new Error("Handler report did not stage a task");
+    }
+    const task = resolveSettlementWorkingAnimalTaskLifecycle(
+      taskStage.state,
+      taskStage.transaction,
+    );
+    expect(task?.state.assignments[0]?.currentTask).toMatchObject({
+      phase: "investigating",
+      sourceObservationId: report.reportId,
+      perceivedArea: knownArea,
+      searchProbe: { sourceArea: knownArea },
+    });
+    expect(task?.state.assignments[0]?.currentTask?.sourceObservationId)
+      .not.toBe("OBS-herd-alarm");
+  });
+
   it("derives stable immutable assignments and canonical bytes independent of input order", () => {
     const left = createSettlementWorkingAnimalState({
       settlementId: 7,

@@ -54,6 +54,7 @@ export const CORE_WILDLIFE_INTENTS = Object.freeze([
   "scavenge",
   "forage",
   "pursue",
+  "regroup",
   "rest",
   "observe",
 ] as const);
@@ -200,6 +201,17 @@ export interface CoreWildlifeFoodOpportunity {
   readonly accessible: boolean;
 }
 
+/**
+ * A group owner may offer a social actor one bounded opportunity to move
+ * toward a currently and directly perceived member. The actor still owns the
+ * decision; this carries no hidden coordinates and cannot manufacture sight.
+ */
+export interface CoreWildlifeRegroupOpportunity {
+  readonly groupId: string;
+  readonly observationId: string;
+  readonly targetActorId: string;
+}
+
 export type CoreWildlifeActionAccessibility = Readonly<
   Record<CoreWildlifeIntentKind, boolean>
 >;
@@ -225,6 +237,7 @@ export interface CoreWildlifeActorStepInput {
   readonly foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
   readonly accessibility: CoreWildlifeActionAccessibility;
   readonly neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
+  readonly regroupOpportunity?: CoreWildlifeRegroupOpportunity;
 }
 
 export interface CoreWildlifeDecision {
@@ -340,9 +353,11 @@ const TEMPORARY_INTENT_DURATION: Readonly<Record<CoreWildlifeIntentKind, number 
   scavenge: 3,
   forage: 3,
   pursue: null,
+  regroup: 4,
   rest: 5,
   observe: null,
 };
+const CORE_WILDLIFE_REGROUP_SOCIAL_THRESHOLD = 600_000;
 
 export function createCoreWildlifeActorState(
   input: CreateCoreWildlifeActorInput,
@@ -658,8 +673,17 @@ export function stepCoreWildlifeActor(
   if (perception === null || perception.tick !== step.tick) return null;
   const opportunities = canonicalFoodOpportunities(step.foodOpportunities, perception);
   if (opportunities === null) return null;
+  const regroupOpportunity = step.regroupOpportunity === undefined
+    ? undefined
+    : canonicalRegroupOpportunity(step.regroupOpportunity, perception, state, step.tick);
+  if (step.regroupOpportunity !== undefined && regroupOpportunity === null) return null;
 
-  const decision = decide(state, perception, opportunities, step);
+  const decisionStep: CoreWildlifeActorStepInput = regroupOpportunity === undefined
+    ? step
+    : regroupOpportunity === null
+      ? step
+      : { ...step, regroupOpportunity };
+  const decision = decide(state, perception, opportunities, decisionStep);
   const elapsed = step.tick - state.updatedAtTick;
   const needs = ageNeeds(state.needs, decision.intent, elapsed);
   const condition = ageCondition(state.condition, decision.intent, elapsed);
@@ -807,6 +831,16 @@ function decide(
       referenceId: "need:rest",
     }, null, null);
   }
+  if (
+    step.regroupOpportunity !== undefined
+    && state.identity.traits.sociability >= CORE_WILDLIFE_REGROUP_SOCIAL_THRESHOLD
+    && step.accessibility.regroup
+  ) {
+    return decisionFor(state, step.tick, "regroup", {
+      kind: "perception",
+      referenceId: step.regroupOpportunity.observationId,
+    }, step.regroupOpportunity.observationId, null);
+  }
   if (step.neutralActivityPreference === "rest" && step.accessibility.rest) {
     return decisionFor(state, step.tick, "rest", {
       kind: "condition",
@@ -868,7 +902,7 @@ function canonicalStepInput(
   if (!plainRecord(value) || !requiredAndOptionalKeys(
     value,
     ["accessibility", "foodOpportunities", "observations", "tick"],
-    ["neutralActivityPreference"],
+    ["neutralActivityPreference", "regroupOpportunity"],
   )) return null;
   if (
     !nonnegativeSafeInteger(value.tick)
@@ -892,13 +926,60 @@ function canonicalStepInput(
     && neutralActivityPreference !== "observe"
     && neutralActivityPreference !== "rest"
   ) return null;
+  const regroupOpportunity = value.regroupOpportunity === undefined
+    ? undefined
+    : canonicalRegroupOpportunityShape(value.regroupOpportunity);
+  if (value.regroupOpportunity !== undefined && regroupOpportunity === null) return null;
   return {
     tick: value.tick,
     observations,
     foodOpportunities: value.foodOpportunities as readonly CoreWildlifeFoodOpportunity[],
     accessibility,
     ...(neutralActivityPreference === undefined ? {} : { neutralActivityPreference }),
+    ...(regroupOpportunity === undefined || regroupOpportunity === null
+      ? {}
+      : { regroupOpportunity }),
   };
+}
+
+function canonicalRegroupOpportunityShape(
+  value: unknown,
+): CoreWildlifeRegroupOpportunity | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, ["groupId", "observationId", "targetActorId"])
+    || !validId(value.groupId)
+    || !validId(value.observationId)
+    || !validId(value.targetActorId)
+  ) return null;
+  return Object.freeze({
+    groupId: value.groupId,
+    observationId: value.observationId,
+    targetActorId: value.targetActorId,
+  });
+}
+
+function canonicalRegroupOpportunity(
+  value: CoreWildlifeRegroupOpportunity,
+  perception: ActorPerceptionState,
+  state: CoreWildlifeActorState,
+  tick: number,
+): CoreWildlifeRegroupOpportunity | null {
+  const canonical = canonicalRegroupOpportunityShape(value);
+  if (canonical === null || canonical.targetActorId === state.identity.stableId) return null;
+  const belief = perception.beliefs.find(({ sourceObservationId }) => (
+    sourceObservationId === canonical.observationId
+  ));
+  if (
+    belief === undefined
+    || belief.lastObservedTick !== tick
+    || belief.channel !== "vision"
+    || belief.identification !== "identified"
+    || belief.subjectId !== canonical.targetActorId
+    || belief.perceivedClass !== state.identity.species
+    || belief.area.radiusUnits !== 0
+  ) return null;
+  return canonical;
 }
 
 function canonicalAccessibility(value: unknown): CoreWildlifeActionAccessibility | null {
@@ -1143,6 +1224,7 @@ function memoryKindForIntent(intent: CoreWildlifeIntentKind): CoreWildlifeMemory
     case "pursue": return "pursuit";
     case "guard": return "guard";
     case "disengage": return "disengagement";
+    case "regroup":
     case "rest":
     case "observe": return null;
   }

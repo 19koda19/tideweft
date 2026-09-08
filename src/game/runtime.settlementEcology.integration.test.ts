@@ -7,15 +7,24 @@ import {
   stepActorPerception,
 } from "../sim/actorPerception";
 import { createWorldView, deserializeWorld } from "../sim/public";
-import { createRegionCoord } from "../sim/regions";
+import { createRegionCoord, globalTileToRegion } from "../sim/regions";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
-import { stableStringify } from "../sim/util";
+import { hashCanonical, stableStringify } from "../sim/util";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import {
+  canonicalizeCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
+  replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregatePatchMaterializedActors,
 } from "./coreEcology";
+import {
+  CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
+  CORE_ECOLOGY_GROUP_COHESION_RECOVERY,
+  CORE_ECOLOGY_GROUP_REJOIN_COMPLETE_COHESION,
+  createCoreEcologyGroupSet,
+} from "./coreEcologyGroups";
 import {
   CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION,
   CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS,
@@ -28,6 +37,9 @@ import {
 import type { CoreEcologySettlementShadowsStimulusFrame } from "./coreEcologySmallWorld";
 import { deserializeDogActorRoster } from "./dogActorRoster";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
+import { repositionCoreWildlifeActor } from "./coreWildlifeActor";
+import { deriveCoreEcologyMaterializedActorIds } from "./coreEcologyRuntime";
+import { coreWildlifeTraversabilityCell } from "./coreWildlifeLocomotionProfile";
 import { TILE_UNITS, type PlayerState } from "./player";
 import {
   capturePlayerRegionalTravel,
@@ -49,6 +61,7 @@ import {
   deserializeSettlementEcologyState,
   serializeSettlementEcologyState,
 } from "./settlementEcology";
+import { deserializeSettlementDomesticAnimalRecoveryState } from "./settlementDomesticAnimalRecovery";
 import {
   PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
   PRIOR_SETTLEMENT_WORKING_ANIMALS_VERSION,
@@ -62,6 +75,7 @@ import {
 } from "./settlementWorkingAnimals";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
+  createWorldPosition,
   worldPositionDelta,
   type WorldPosition,
 } from "./worldPosition";
@@ -84,6 +98,12 @@ const guardianPerceptionHarness = vi.hoisted(() => ({
     radiusUnits: number;
   }>,
   targetKind: null as null | "reachable" | "unreachable" | "outside-duty",
+}));
+const domesticRecoveryHarness = vi.hoisted(() => ({
+  enabled: false,
+  caretakerActorId: null as string | null,
+  separatedActorId: null as string | null,
+  memberActorIds: [] as string[],
 }));
 
 function capturedGuardianPerceptionArea(): Readonly<{
@@ -119,7 +139,75 @@ vi.mock("./coreEcologyPerception", async (importOriginal) => {
     collectCoreEcologyVisualObservationBatches: (
       ...args: Parameters<typeof actual.collectCoreEcologyVisualObservationBatches>
     ) => {
-      const collected = actual.collectCoreEcologyVisualObservationBatches(...args);
+      let collected = actual.collectCoreEcologyVisualObservationBatches(...args);
+      const frame = args[0] as import("./coreEcologyPerception").CoreEcologyPerceptionFrameInput;
+      if (
+        collected !== null
+        && domesticRecoveryHarness.enabled
+        && domesticRecoveryHarness.caretakerActorId !== null
+        && domesticRecoveryHarness.separatedActorId !== null
+      ) {
+        const actorById = new Map(frame.actors.map((actor) => (
+          [actor.identity.stableId, actor] as const
+        )));
+        const handler = frame.participants?.find(({ address }) => (
+          address.actorId === domesticRecoveryHarness.caretakerActorId
+        ))?.address;
+        const witnessedAnimals = domesticRecoveryHarness.memberActorIds.flatMap((actorId) => {
+          const actor = actorById.get(actorId);
+          if (actor === undefined) return [];
+          const observation = createActorObservation({
+            id: `TEST-RECOVERY-CENSUS-${frame.tick}-${actorId}`,
+            observerId: domesticRecoveryHarness.caretakerActorId!,
+            observedAtTick: frame.tick,
+            channel: "vision",
+            perceivedClass: actor.identity.species,
+            subjectId: actorId,
+            area: { center: actor.address.position, radiusUnits: 0 },
+            confidence: 1_000_000,
+            salience: 1_000_000,
+            identification: "identified",
+            interrupt: "none",
+          });
+          return observation === null ? [] : [observation];
+        });
+        const separated = actorById.get(domesticRecoveryHarness.separatedActorId);
+        const retreatObservation = frame.tick === 1
+          && separated !== undefined
+          && handler !== undefined
+          ? createActorObservation({
+              id: `TEST-RECOVERY-LIVE-HUMAN-${frame.tick}`,
+              observerId: separated.identity.stableId,
+              observedAtTick: frame.tick,
+              channel: "vision",
+              perceivedClass: "human",
+              subjectId: handler.actorId,
+              area: { center: handler.position, radiusUnits: 0 },
+              confidence: 1_000_000,
+              salience: 1_000_000,
+              identification: "identified",
+              interrupt: "none",
+            })
+          : null;
+        collected = Object.freeze(collected.map((batch) => {
+          if (batch.observerId === domesticRecoveryHarness.caretakerActorId) {
+            return Object.freeze({
+              ...batch,
+              observations: Object.freeze([...batch.observations, ...witnessedAnimals]),
+            });
+          }
+          if (
+            retreatObservation !== null
+            && batch.observerId === domesticRecoveryHarness.separatedActorId
+          ) {
+            return Object.freeze({
+              ...batch,
+              observations: Object.freeze([...batch.observations, retreatObservation]),
+            });
+          }
+          return batch;
+        }));
+      }
       const observerId = guardianPerceptionHarness.observerId;
       const mode = guardianPerceptionHarness.mode;
       if (collected === null || observerId === null) return collected;
@@ -133,7 +221,6 @@ vi.mock("./coreEcologyPerception", async (importOriginal) => {
             })
           : batch));
       }
-      const frame = args[0] as import("./coreEcologyPerception").CoreEcologyPerceptionFrameInput;
       const participant = frame.participants?.find(({ address }) => (
         address.actorId === observerId
       ));
@@ -388,6 +475,10 @@ afterEach(() => {
   guardianPerceptionHarness.observationId = null;
   guardianPerceptionHarness.area = null;
   guardianPerceptionHarness.targetKind = null;
+  domesticRecoveryHarness.enabled = false;
+  domesticRecoveryHarness.caretakerActorId = null;
+  domesticRecoveryHarness.separatedActorId = null;
+  domesticRecoveryHarness.memberActorIds = [];
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -463,8 +554,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 20 || current.version !== 20) {
-    throw new Error("runtime fixture is not a current v20 save");
+  if (record.payloadVersion !== 21 || current.version !== 21) {
+    throw new Error("runtime fixture is not a current v21 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -812,11 +903,12 @@ function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 20) throw new Error("fixture is not a current save");
+  if (current.version !== 21) throw new Error("fixture is not a current save");
   const {
     integrity: _integrity,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
     ...currentFields
   } = current;
   const priorBase = {
@@ -837,11 +929,12 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 20) throw new Error("fixture is not a current save");
+  if (current.version !== 21) throw new Error("fixture is not a current save");
   const {
     integrity: _integrity,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
     ...currentFields
   } = current;
   const priorBase = {
@@ -862,7 +955,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 20 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 21 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const currentSettlement = JSON.parse(current.settlementEcology) as Record<string, unknown>;
@@ -890,6 +983,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
     integrity: _integrity,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
     ...currentFields
   } = current;
   const priorBase = {
@@ -910,7 +1004,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 20
+    current.version !== 21
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const currentWork = JSON.parse(current.settlementWorkingAnimals) as Record<string, unknown>;
@@ -940,7 +1034,11 @@ function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
     ownerId: PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
     assignments: priorAssignments,
   };
-  const { integrity: _integrity, ...currentFields } = current;
+  const {
+    integrity: _integrity,
+    settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
+    ...currentFields
+  } = current;
   const priorBase = {
     ...currentFields,
     version: 19,
@@ -1014,6 +1112,536 @@ async function advanceUntilDomesticFoodUse(
 }
 
 describe("runtime settlement ecology integration", () => {
+  it("ages an atomic social group across the loaded-window boundary without simulating its off-frame body", async () => {
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world",
+      seed: "atomic social group window boundary",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await source.save();
+    source.destroy();
+
+    const sourceRecord = sourceRepository.snapshot();
+    const envelope = savedEnvelope(sourceRepository);
+    if (
+      typeof envelope.world !== "string"
+      || typeof envelope.regionalTravel !== "string"
+      || typeof envelope.player !== "object"
+      || envelope.player === null
+      || Array.isArray(envelope.player)
+    ) throw new Error("boundary fixture omitted regional authority");
+    const world = deserializeWorld(envelope.world);
+    const player = structuredClone(envelope.player) as PlayerState;
+    const travel = restorePlayerRegionalTravel(
+      world.meta.rootSeed,
+      player,
+      envelope.regionalTravel,
+    );
+    if (travel === null) throw new Error("boundary fixture regional sidecar did not restore");
+
+    let core = requireCoreEcology(envelope.coreEcology);
+    const group = core.groups.groups.find(({ memberOrdinals }) => memberOrdinals.length > 1);
+    const population = group === undefined ? undefined : core.populations.find((candidate) => (
+      candidate.species === group.identity.species
+      && candidate.populationKey === group.identity.populationKey
+    ));
+    const members = population?.members.filter(({ populationOrdinal }) => (
+      group?.memberOrdinals.includes(populationOrdinal) ?? false
+    )).sort((left, right) => left.populationOrdinal - right.populationOrdinal);
+    if (group === undefined || population === undefined || members === undefined || members.length < 2) {
+      throw new Error("boundary fixture omitted one bounded social group");
+    }
+    const everyMember = core.populations.flatMap(({ members: populationMembers }) => (
+      populationMembers
+    ));
+    core = setCoreEcologyAggregatePatchMaterializedActors(core, {
+      atTick: core.updatedAtTick,
+      actorIds: everyMember.map(({ actor }) => actor.identity.stableId),
+    });
+    const worldPositionAtGlobalTile = (x: number, y: number): WorldPosition => {
+      const address = globalTileToRegion(x, y);
+      return createWorldPosition(
+        address.region,
+        address.localX * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+        address.localY * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+      );
+    };
+    const inside = worldPositionAtGlobalTile(
+      travel.window.origin.x,
+      travel.window.origin.y + Math.floor(REGIONAL_TRAVEL_COLUMNS / 2),
+    );
+    const outside = worldPositionAtGlobalTile(
+      travel.window.origin.x - 1,
+      travel.window.origin.y + Math.floor(REGIONAL_TRAVEL_COLUMNS / 2),
+    );
+    const targetIndexById = new Map(members.map((member, index) => (
+      [member.actor.identity.stableId, index] as const
+    )));
+    for (const [ordinal, member] of core.populations.flatMap(({ members: owned }) => (
+      owned
+    )).entries()) {
+      const targetIndex = targetIndexById.get(member.actor.identity.stableId);
+      core = replaceCoreEcologyAggregatePatchActor(core, repositionCoreWildlifeActor(
+        member.actor,
+        {
+          atTick: core.updatedAtTick,
+          position: targetIndex === 0
+            ? inside
+            : targetIndex === undefined
+              ? worldPositionAtGlobalTile(
+                  travel.window.origin.x + REGIONAL_TRAVEL_COLUMNS + 100 + ordinal,
+                  travel.window.origin.y + REGIONAL_TRAVEL_COLUMNS + 100,
+                )
+              : outside,
+          heading: member.actor.address.heading,
+        },
+      ));
+    }
+    expect(deriveCoreEcologyMaterializedActorIds(core, {
+      origin: travel.window.origin,
+      terrain: {
+        width: REGIONAL_TRAVEL_COLUMNS,
+        height: travel.window.addresses.length / REGIONAL_TRAVEL_COLUMNS,
+      },
+    })).toEqual(members.map(({ actor }) => actor.identity.stableId).sort());
+    const stagedRecord = withCurrentEnvelopeFields(sourceRecord, {
+      coreEcology: serializeCoreEcologyAggregatePatch(core),
+    });
+    const repository = new MemoryRepository(stagedRecord);
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    advancePlayerSteps(runtime, 10);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    await runtime.save();
+
+    const saved = savedEnvelope(repository);
+    const advancedWorld = deserializeWorld(String(saved.world));
+    const advancedCore = requireCoreEcology(saved.coreEcology);
+    const advancedPopulation = advancedCore.populations.find((candidate) => (
+      candidate.species === group.identity.species
+      && candidate.populationKey === group.identity.populationKey
+    ));
+    const advancedMembers = advancedPopulation?.members.filter(({ populationOrdinal }) => (
+      group.memberOrdinals.includes(populationOrdinal)
+    ));
+    expect(advancedWorld.meta.completedTick).toBe(1);
+    expect(advancedMembers).toHaveLength(members.length);
+    expect(advancedMembers?.map(({ materialization, actor }) => ({
+      materialization,
+      updatedAtTick: actor.updatedAtTick,
+    }))).toEqual(members.map(() => ({
+      materialization: "materialized",
+      updatedAtTick: advancedWorld.meta.completedTick,
+    })));
+    const advancedOffFrame = advancedMembers?.find(({ actor }) => (
+      actor.identity.stableId === members[1]?.actor.identity.stableId
+    ));
+    expect(advancedOffFrame?.actor.address.position).toEqual(outside);
+    expect(advancedOffFrame?.actor.intent.kind).toBe("observe");
+    runtime.destroy();
+  });
+
+  it("links a witnessed livestock split, retains its coarse reunion off-frame, and closes after reload", async () => {
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world",
+      seed: "physical livestock recovery witness",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await source.save();
+    source.destroy();
+
+    const sourceRecord = sourceRepository.snapshot();
+    const envelope = savedEnvelope(sourceRepository);
+    if (
+      typeof envelope.world !== "string"
+      || typeof envelope.regionalTravel !== "string"
+      || typeof envelope.player !== "object"
+      || envelope.player === null
+      || Array.isArray(envelope.player)
+    ) throw new Error("recovery fixture omitted regional authority");
+    const world = deserializeWorld(envelope.world);
+    const player = structuredClone(envelope.player) as PlayerState;
+    const travel = restorePlayerRegionalTravel(
+      world.meta.rootSeed,
+      player,
+      envelope.regionalTravel,
+    );
+    if (travel === null) throw new Error("recovery fixture regional sidecar did not restore");
+    const view = createRegionalWorldView(createWorldView(world), travel.window, {
+      discovered: player.discovered,
+      depthSoundings: player.depthSoundings,
+    });
+    const settlement = deserializeSettlementEcologyState(envelope.settlementEcology);
+    const custody = settlement.domesticCustodies.find(({ species }) => (
+      species === "domestic-goat"
+    ));
+    let core = requireCoreEcology(envelope.coreEcology);
+    const group = core.groups.groups.find(({ identity }) => (
+      identity.stableId === custody?.memberGroupId
+    ));
+    const population = group === undefined ? undefined : core.populations.find((candidate) => (
+      candidate.species === group.identity.species
+      && candidate.populationKey === group.identity.populationKey
+    ));
+    const goats = population?.members.filter(({ populationOrdinal }) => (
+      group?.memberOrdinals.includes(populationOrdinal) ?? false
+    )).sort((left, right) => left.populationOrdinal - right.populationOrdinal);
+    if (
+      custody === undefined
+      || group === undefined
+      || group.phase !== "cohesive"
+      || goats === undefined
+      || goats.length !== 2
+    ) throw new Error("recovery fixture omitted its bounded goat custody");
+
+    const positionAtViewTile = (tileIndex: number): WorldPosition => {
+      const address = travel.window.addresses[tileIndex];
+      if (address === undefined) throw new Error("recovery fixture lost a terrain address");
+      return createWorldPosition(
+        address.region,
+        address.localX * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+        address.localY * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+      );
+    };
+    const positionAtGlobalTile = (x: number, y: number): WorldPosition => {
+      const address = globalTileToRegion(x, y);
+      return createWorldPosition(
+        address.region,
+        address.localX * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+        address.localY * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+      );
+    };
+    const separatedPosition = view.terrain.tiles.map((tile, tileIndex) => ({
+      tile,
+      tileIndex,
+      position: positionAtViewTile(tileIndex),
+    })).filter(({ tile, tileIndex, position }) => {
+      const delta = worldPositionDelta(custody.homeStructure.position, position);
+      const distance = Math.hypot(delta.x, delta.y);
+      const x = tileIndex % view.terrain.width;
+      const y = Math.floor(tileIndex / view.terrain.width);
+      if (
+        distance <= 6_500
+        || distance >= 7_800
+        || x < 2
+        || y < 2
+        || x >= view.terrain.width - 2
+        || y >= view.terrain.height - 2
+        || coreWildlifeTraversabilityCell("domestic-goat", tile).access !== "open"
+      ) return false;
+      return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).every(([dx, dy]) => {
+        const neighbor = view.terrain.tiles[(y + dy) * view.terrain.width + x + dx];
+        return neighbor !== undefined
+          && coreWildlifeTraversabilityCell("domestic-goat", neighbor).access === "open";
+      });
+    }).sort((left, right) => {
+      const leftDelta = worldPositionDelta(custody.homeStructure.position, left.position);
+      const rightDelta = worldPositionDelta(custody.homeStructure.position, right.position);
+      return Math.hypot(leftDelta.x, leftDelta.y) - Math.hypot(rightDelta.x, rightDelta.y)
+        || left.tileIndex - right.tileIndex;
+    })[0]?.position;
+    if (separatedPosition === undefined) {
+      throw new Error("recovery fixture could not find a traversable separated position");
+    }
+
+    const everyMember = core.populations.flatMap(({ members }) => members);
+    core = setCoreEcologyAggregatePatchMaterializedActors(core, {
+      atTick: core.updatedAtTick,
+      actorIds: everyMember.map(({ actor }) => actor.identity.stableId),
+    });
+    const goatIds = new Set(goats.map(({ actor }) => actor.identity.stableId));
+    const separatedActorId = goats[0]!.actor.identity.stableId;
+    for (const [ordinal, member] of core.populations.flatMap(({ members }) => members).entries()) {
+      const isSeparated = member.actor.identity.stableId === separatedActorId;
+      const isHomeGoat = goatIds.has(member.actor.identity.stableId) && !isSeparated;
+      const position = isSeparated
+        ? separatedPosition
+        : isHomeGoat
+          ? custody.homeStructure.position
+          : positionAtGlobalTile(
+              travel.window.origin.x + view.terrain.width + 100 + ordinal,
+              travel.window.origin.y + view.terrain.height + 100,
+            );
+      core = replaceCoreEcologyAggregatePatchActor(core, repositionCoreWildlifeActor(
+        member.actor,
+        {
+          atTick: core.updatedAtTick,
+          position,
+          heading: member.actor.address.heading,
+        },
+      ));
+    }
+    expect(deriveCoreEcologyMaterializedActorIds(core, {
+      origin: travel.window.origin,
+      terrain: { width: view.terrain.width, height: view.terrain.height },
+    })).toEqual(goats.map(({ actor }) => actor.identity.stableId).sort());
+
+    domesticRecoveryHarness.enabled = true;
+    domesticRecoveryHarness.caretakerActorId = custody.caretakerActorId;
+    domesticRecoveryHarness.separatedActorId = separatedActorId;
+    domesticRecoveryHarness.memberActorIds = [...custody.memberActorIds];
+    const preparedRecord = withCurrentEnvelopeFields(sourceRecord, {
+      coreEcology: serializeCoreEcologyAggregatePatch(core),
+    });
+    const repository = new MemoryRepository(preparedRecord);
+    const runtime = await createTideweftRuntime(repository);
+    advancePlayerSteps(runtime, 20);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    await runtime.save();
+    const searchingRecord = repository.snapshot();
+    const searchingEnvelope = savedEnvelope(repository);
+    const searchingRecovery = deserializeSettlementDomesticAnimalRecoveryState(
+      searchingEnvelope.settlementDomesticAnimalRecovery,
+    );
+    const searchingWork = deserializeSettlementWorkingAnimalState(
+      searchingEnvelope.settlementWorkingAnimals,
+    );
+    const searchingCase = searchingRecovery?.currentCase;
+    const searchingAssignment = searchingWork?.assignments.find(({ protectedGroupId }) => (
+      protectedGroupId === group.identity.stableId
+    ));
+    if (searchingAssignment === undefined) {
+      throw new Error("recovery fixture lost its guardian assignment");
+    }
+    expect(searchingCase).toMatchObject({
+      phase: "searching",
+      groupId: group.identity.stableId,
+      separatedMemberActorId: separatedActorId,
+      notice: { source: "current-dual-sight" },
+    });
+    expect(searchingAssignment?.currentActivity).toMatchObject({
+      activity: "investigate",
+      cause: { kind: "handler-report" },
+      perceivedArea: searchingCase?.lastKnownArea,
+    });
+    expect(searchingAssignment?.currentTask).toMatchObject({
+      phase: "investigating",
+      sourceObservationId: searchingAssignment.currentActivity.cause.referenceId,
+      perceivedArea: searchingCase?.lastKnownArea,
+    });
+    expect(searchingCase?.linkedSearch).toMatchObject({
+      taskId: searchingAssignment?.currentTask?.taskId,
+      sourceObservationId: searchingAssignment?.currentTask?.sourceObservationId,
+      sourceArea: searchingCase?.lastKnownArea,
+    });
+
+    const tamperedRecovery = JSON.parse(String(
+      searchingEnvelope.settlementDomesticAnimalRecovery,
+    )) as {
+      currentCase: null | {
+        memberBindings: Array<{ actorId: string; populationOrdinal: number }>;
+        separatedMemberActorId: string;
+        separatedMemberOrdinal: number;
+      };
+    };
+    const tamperedCase = tamperedRecovery.currentCase;
+    const separatedBinding = tamperedCase?.memberBindings.find(({ actorId }) => (
+      actorId === tamperedCase.separatedMemberActorId
+    ));
+    const otherBinding = tamperedCase?.memberBindings.find(({ actorId }) => (
+      actorId !== tamperedCase.separatedMemberActorId
+    ));
+    if (
+      tamperedCase === null
+      || separatedBinding === undefined
+      || otherBinding === undefined
+    ) throw new Error("recovery fixture omitted swappable member bindings");
+    const separatedOrdinal = separatedBinding.populationOrdinal;
+    separatedBinding.populationOrdinal = otherBinding.populationOrdinal;
+    otherBinding.populationOrdinal = separatedOrdinal;
+    tamperedCase.separatedMemberOrdinal = separatedBinding.populationOrdinal;
+    const tamperedRepository = new MemoryRepository(withCurrentEnvelopeFields(searchingRecord, {
+      settlementDomesticAnimalRecovery: stableStringify(tamperedRecovery),
+    }));
+    const rejected = await createTideweftRuntime(tamperedRepository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+    runtime.destroy();
+
+    let offFrameCore = requireCoreEcology(searchingEnvelope.coreEcology);
+    const currentGoatActors = offFrameCore.populations
+      .find(({ species, populationKey }) => (
+        species === group.identity.species
+        && populationKey === group.identity.populationKey
+      ))?.members.filter(({ populationOrdinal }) => group.memberOrdinals.includes(
+        populationOrdinal,
+      ));
+    if (currentGoatActors === undefined || currentGoatActors.length !== goats.length) {
+      throw new Error("recovery fixture lost its exact goat bodies before coarse reunion");
+    }
+    const farPositions = currentGoatActors.map((_, ordinal) => positionAtGlobalTile(
+      travel.window.origin.x + view.terrain.width + 100 + ordinal * 10,
+      travel.window.origin.y + view.terrain.height + 100,
+    ));
+    for (const [ordinal, member] of currentGoatActors.entries()) {
+      offFrameCore = replaceCoreEcologyAggregatePatchActor(
+        offFrameCore,
+        repositionCoreWildlifeActor(member.actor, {
+          atTick: offFrameCore.updatedAtTick,
+          position: farPositions[ordinal]!,
+          heading: member.actor.address.heading,
+        }),
+      );
+    }
+    offFrameCore = setCoreEcologyAggregatePatchMaterializedActors(offFrameCore, {
+      atTick: offFrameCore.updatedAtTick,
+      actorIds: [],
+    });
+    const offFrameGroup = offFrameCore.groups.groups.find(({ identity }) => (
+      identity.stableId === group.identity.stableId
+    ));
+    if (offFrameGroup === undefined || offFrameGroup.components.length !== 2) {
+      throw new Error("recovery fixture lost its separated group topology off-frame");
+    }
+    const pressureCycleCadences = 8;
+    const pressurePhase = Number.parseInt(hashCanonical([
+      offFrameGroup.identity.stableId,
+      "player-absent-population-pressure",
+    ]).slice(0, 8), 16) % pressureCycleCadences;
+    const nextCoarseTick = Array.from(
+      { length: CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS },
+      (_, index) => offFrameCore.updatedAtTick + index + 1,
+    ).find((tick) => (
+      Math.trunc(tick / CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS)
+        % pressureCycleCadences !== pressurePhase
+    ));
+    if (nextCoarseTick === undefined) {
+      throw new Error("recovery fixture could not find an undisturbed coarse cadence");
+    }
+    const primedCore = canonicalizeCoreEcologyAggregatePatch({
+      ...offFrameCore,
+      groups: createCoreEcologyGroupSet(offFrameCore.groups.groups.map((candidate) => (
+        candidate.identity.stableId === offFrameGroup.identity.stableId
+          ? {
+              ...candidate,
+              updatedAtTick: offFrameCore.updatedAtTick,
+              nextCoarseTick,
+              phase: "rejoining" as const,
+              cohesion: CORE_ECOLOGY_GROUP_REJOIN_COMPLETE_COHESION
+                - CORE_ECOLOGY_GROUP_COHESION_RECOVERY,
+            }
+          : candidate
+      ))),
+    });
+    if (primedCore === null) {
+      throw new Error("recovery fixture could not prime a valid off-frame reunion cadence");
+    }
+    offFrameCore = primedCore;
+    const coarseRepository = new MemoryRepository(withCurrentEnvelopeFields(searchingRecord, {
+      coreEcology: serializeCoreEcologyAggregatePatch(offFrameCore),
+    }));
+    const coarseRuntime = await createTideweftRuntime(coarseRepository);
+    let coarseEnvelope = savedEnvelope(coarseRepository);
+    let coarseRecovery = deserializeSettlementDomesticAnimalRecoveryState(
+      coarseEnvelope.settlementDomesticAnimalRecovery,
+    );
+    let coarseGroup = requireCoreEcology(coarseEnvelope.coreEcology).groups.groups.find(
+      ({ identity }) => identity.stableId === group.identity.stableId,
+    );
+    for (let elapsedTick = offFrameCore.updatedAtTick; elapsedTick <= nextCoarseTick; elapsedTick += 1) {
+      if (
+        coarseGroup?.phase === "cohesive"
+        && coarseRecovery?.currentCase?.phase === "awaiting-confirmation"
+      ) break;
+      advancePlayerSteps(coarseRuntime, 10);
+      expect(coarseRuntime.getUIView().saveWarning).toBeUndefined();
+      await coarseRuntime.save();
+      coarseEnvelope = savedEnvelope(coarseRepository);
+      coarseRecovery = deserializeSettlementDomesticAnimalRecoveryState(
+        coarseEnvelope.settlementDomesticAnimalRecovery,
+      );
+      coarseGroup = requireCoreEcology(coarseEnvelope.coreEcology).groups.groups.find(
+        ({ identity }) => identity.stableId === group.identity.stableId,
+      );
+    }
+    expect({
+      groupPhase: coarseGroup?.phase,
+      groupTick: coarseGroup?.updatedAtTick,
+      recoveryPhase: coarseRecovery?.currentCase?.phase,
+    }).toMatchObject({
+      groupPhase: "cohesive",
+      groupTick: nextCoarseTick,
+      recoveryPhase: "awaiting-confirmation",
+    });
+    expect(coarseRecovery?.currentCase).toMatchObject({
+      caseId: searchingCase?.caseId,
+      phase: "awaiting-confirmation",
+      reunionEvent: { atTick: nextCoarseTick, kind: "group-rejoined" },
+    });
+    coarseRuntime.destroy();
+
+    const replayedCoarse = await createTideweftRuntime(coarseRepository);
+    expect(replayedCoarse.getUIView().saveWarning).toBeUndefined();
+    await replayedCoarse.save();
+    const replayedEnvelope = savedEnvelope(coarseRepository);
+    expect(replayedEnvelope.settlementDomesticAnimalRecovery)
+      .toBe(coarseEnvelope.settlementDomesticAnimalRecovery);
+    replayedCoarse.destroy();
+
+    let homeCore = requireCoreEcology(replayedEnvelope.coreEcology);
+    const materializedIds = homeCore.populations.flatMap(({ members }) => members)
+      .filter(({ materialization }) => materialization === "materialized")
+      .map(({ actor }) => actor.identity.stableId);
+    homeCore = setCoreEcologyAggregatePatchMaterializedActors(homeCore, {
+      atTick: homeCore.updatedAtTick,
+      actorIds: [...materializedIds, ...custody.memberActorIds].sort(),
+    });
+    const homeGoatActors = homeCore.populations
+      .find(({ species, populationKey }) => (
+        species === group.identity.species
+        && populationKey === group.identity.populationKey
+      ))?.members.filter(({ populationOrdinal }) => group.memberOrdinals.includes(
+        populationOrdinal,
+      ));
+    if (homeGoatActors === undefined || homeGoatActors.length !== goats.length) {
+      throw new Error("recovery fixture lost its rematerialized goat bodies");
+    }
+    for (const member of homeGoatActors) {
+      homeCore = replaceCoreEcologyAggregatePatchActor(
+        homeCore,
+        repositionCoreWildlifeActor(member.actor, {
+          atTick: homeCore.updatedAtTick,
+          position: custody.homeStructure.position,
+          heading: member.actor.address.heading,
+        }),
+      );
+    }
+    const reunionRepository = new MemoryRepository(withCurrentEnvelopeFields(
+      coarseRepository.snapshot(),
+      { coreEcology: serializeCoreEcologyAggregatePatch(homeCore) },
+    ));
+    const reunited = await createTideweftRuntime(reunionRepository);
+    advancePlayerSteps(reunited, 20);
+    expect(reunited.getUIView().saveWarning).toBeUndefined();
+    await reunited.save();
+    const closedEnvelope = savedEnvelope(reunionRepository);
+    const closedRecovery = deserializeSettlementDomesticAnimalRecoveryState(
+      closedEnvelope.settlementDomesticAnimalRecovery,
+    );
+    const closedCore = requireCoreEcology(closedEnvelope.coreEcology);
+    expect(closedRecovery?.currentCase).toBeNull();
+    expect(closedRecovery?.latestClosedOutcome).toMatchObject({
+      caseId: searchingCase?.caseId,
+      outcome: "recovered",
+    });
+    expect(closedCore.groups.groups.find(({ identity }) => (
+      identity.stableId === group.identity.stableId
+    ))?.phase).toBe("cohesive");
+    reunited.destroy();
+  });
+
   it("projects and secures one directly witnessed physical store through the keeper action", async () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
@@ -1046,8 +1674,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(20);
-    expect(envelope.version).toBe(20);
+    expect(record.payloadVersion).toBe(21);
+    expect(envelope.version).toBe(21);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "coreEcology",
@@ -1063,6 +1691,7 @@ describe("runtime settlement ecology integration", () => {
       "promiseJourney",
       "regionalTravel",
       "session",
+      "settlementDomesticAnimalRecovery",
       "settlementEcology",
       "settlementWorkingAnimals",
       "traversalFeedback",
@@ -1150,8 +1779,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(20);
-    expect(migratedEnvelope.version).toBe(20);
+    expect(migratedRecord.payloadVersion).toBe(21);
+    expect(migratedEnvelope.version).toBe(21);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -1232,8 +1861,8 @@ describe("runtime settlement ecology integration", () => {
     );
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
-    expect(migratedRecord.payloadVersion).toBe(20);
-    expect(migratedEnvelope.version).toBe(20);
+    expect(migratedRecord.payloadVersion).toBe(21);
+    expect(migratedEnvelope.version).toBe(21);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -1379,8 +2008,8 @@ describe("runtime settlement ecology integration", () => {
       migratedCore.derivation.kind !== "habitat-v9"
       && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
     ) throw new Error("v17 migration omitted the plural domestic habitat");
-    expect(migratedRecord.payloadVersion).toBe(20);
-    expect(migratedEnvelope.version).toBe(20);
+    expect(migratedRecord.payloadVersion).toBe(21);
+    expect(migratedEnvelope.version).toBe(21);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -1506,8 +2135,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(20);
-    expect(migratedEnvelope.version).toBe(20);
+    expect(migratedRecord.payloadVersion).toBe(21);
+    expect(migratedEnvelope.version).toBe(21);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -1614,8 +2243,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(20);
-    expect(migratedEnvelope.version).toBe(20);
+    expect(migratedRecord.payloadVersion).toBe(21);
+    expect(migratedEnvelope.version).toBe(21);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -1649,7 +2278,11 @@ describe("runtime settlement ecology integration", () => {
 
     const currentRecord = sourceRepository.snapshot();
     const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-    const { integrity: _integrity, ...currentFields } = current;
+    const {
+      integrity: _integrity,
+      settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
+      ...currentFields
+    } = current;
     const disguised = { ...currentFields, version: 19 };
     const repository = new MemoryRepository({
       ...currentRecord,

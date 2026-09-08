@@ -84,6 +84,9 @@ import {
   worldPositionDelta,
 } from "./worldPosition";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
+import {
+  deserializeSettlementDomesticAnimalRecoveryState,
+} from "./settlementDomesticAnimalRecovery";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -102,7 +105,7 @@ export const PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 20;
+  readonly version: 21;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -111,6 +114,7 @@ interface CurrentEnvelope {
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
   readonly settlementWorkingAnimals: string;
+  readonly settlementDomesticAnimalRecovery: string;
   readonly regionalTravel: string;
   readonly integrity: string;
   readonly [key: string]: unknown;
@@ -154,6 +158,75 @@ afterEach(() => {
 });
 
 describe("runtime core-ecology vertical slice", () => {
+  it("migrates a sealed v20 save into an empty v21 domestic-animal recovery root", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "alpha twenty eight domestic recovery migration",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const currentRecord = repository.snapshot();
+    const current = requiredEnvelope(repository);
+    const {
+      integrity: _currentIntegrity,
+      settlementDomesticAnimalRecovery: expectedEmptyRecovery,
+      version: _currentVersion,
+      ...establishedV20Roots
+    } = current;
+    const v20Base = { ...establishedV20Roots, version: 20 as const };
+    await repository.save({
+      ...currentRecord,
+      payloadVersion: 20,
+      updatedAt: currentRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v20Base,
+        integrity: gameSaveEnvelopeIntegrity(v20Base),
+      }),
+    });
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const adoptedRecord = repository.snapshot();
+    const adopted = requiredEnvelope(repository);
+    const recovery = deserializeSettlementDomesticAnimalRecoveryState(
+      adopted.settlementDomesticAnimalRecovery,
+    );
+    const {
+      integrity: _adoptedIntegrity,
+      settlementDomesticAnimalRecovery: _adoptedRecovery,
+      version: _adoptedVersion,
+      ...adoptedEstablishedRoots
+    } = adopted;
+    const {
+      session: _priorSessionPresentation,
+      ...durableV20Roots
+    } = establishedV20Roots;
+    const {
+      session: _resumedSessionPresentation,
+      ...durableAdoptedRoots
+    } = adoptedEstablishedRoots;
+
+    expect(adoptedRecord.payloadVersion).toBe(21);
+    expect(durableAdoptedRoots).toEqual(durableV20Roots);
+    expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
+    expect(recovery).toMatchObject({
+      revision: 0,
+      lastCaseOrdinal: 0,
+      lastResolvedTransitionOrdinal: 0,
+      lastResolvedTransitionId: null,
+      currentCase: null,
+      latestClosedOutcome: null,
+      pendingTransition: null,
+    });
+    migrated.destroy();
+  });
+
   it("migrates the sealed v8 ecology exactly once without rerolling actors or cargo", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
@@ -173,6 +246,7 @@ describe("runtime core-ecology vertical slice", () => {
       settlementEcology: _currentSettlementEcology,
       dogActorRoster: _currentDogActorRoster,
       settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+      settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
       ...currentBase
     } = current;
     const v8Base = { ...currentBase, version: 8 as const, coreEcology: legacy.text };
@@ -193,7 +267,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(20);
+    expect(repository.snapshot().payloadVersion).toBe(21);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v9");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -303,7 +377,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(20);
+    expect(v13Record.payloadVersion).toBe(21);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
@@ -384,7 +458,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(20);
+    expect(v13Record.payloadVersion).toBe(21);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
@@ -482,7 +556,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(20);
+    expect(v13Record.payloadVersion).toBe(21);
     expect(v13Ecology.derivation.kind).toBe("habitat-v9");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
@@ -569,7 +643,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(20);
+    expect(adoptedRecord.payloadVersion).toBe(21);
     expect(adopted.derivation.kind).toBe("habitat-v9");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
@@ -630,7 +704,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(20);
+    expect(adoptedRecord.payloadVersion).toBe(21);
     expect(adopted.derivation.kind).toBe("habitat-v9");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
@@ -780,6 +854,7 @@ describe("runtime core-ecology vertical slice", () => {
         settlementEcology: _currentSettlementEcology,
         dogActorRoster: _currentDogActorRoster,
         settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+        settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
         ...currentBase
       } = current;
       const v8Base = { ...currentBase, version: 8 as const, coreEcology: legacy.text };
@@ -803,7 +878,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
   });
 
-  it("quarantines a legacy ecology nested inside a current v20 envelope", async () => {
+  it("quarantines a legacy ecology nested inside a current v21 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -828,7 +903,7 @@ describe("runtime core-ecology vertical slice", () => {
     rejected.destroy();
   });
 
-  it("quarantines an Alpha-19 aggregate record masquerading inside a current v20 envelope", async () => {
+  it("quarantines an Alpha-19 aggregate record masquerading inside a current v21 envelope", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -870,6 +945,7 @@ describe("runtime core-ecology vertical slice", () => {
       settlementEcology: _currentSettlementEcology,
       dogActorRoster: _currentDogActorRoster,
       settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+      settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
       ...currentBase
     } = current;
     const masqueradingBase = { ...currentBase, version: 13 as const };
@@ -932,7 +1008,7 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCore = requiredCore(before);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(20);
+    expect(before.version).toBe(21);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -1046,17 +1122,45 @@ describe("runtime core-ecology vertical slice", () => {
       position: crowStart,
       heading: 0,
     }));
+    const crowGroup = patch.groups.groups.find(({ identity, memberOrdinals }) => (
+      identity.species === crow.identity.species
+      && identity.populationKey === crow.identity.populationKey
+      && memberOrdinals.includes(crow.identity.populationOrdinal)
+    ));
+    const crowGroupMemberIds = new Set(patch.populations
+      .find(({ species, populationKey }) => (
+        species === crow.identity.species
+        && populationKey === crow.identity.populationKey
+      ))?.members
+      .filter(({ populationOrdinal }) => crowGroup?.memberOrdinals.includes(populationOrdinal))
+      .map(({ actor }) => actor.identity.stableId) ?? []);
+    let crowMateOrdinal = 0;
     for (const actor of coreActors(patch)) {
       if (actor.identity.stableId === crow.identity.stableId) continue;
-      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+      const isCrowMate = crowGroupMemberIds.has(actor.identity.stableId);
+      const fixtureActor = isCrowMate
+        ? replaceCoreWildlifeActorPhysiology(actor, {
+            atTick: patch.updatedAtTick,
+            needs: { ...actor.needs, hunger: 0 },
+            condition: actor.condition,
+          })
+        : actor;
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(fixtureActor, {
         atTick: patch.updatedAtTick,
-        position: translateWorldPosition(
-          provisionPosition,
-          (80 + actor.identity.populationOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
-          20 * WORLD_POSITION_UNITS_PER_TILE,
-        ),
+        position: isCrowMate
+          ? translateWorldPosition(
+              crowStart,
+              (crowMateOrdinal + 1) * Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 4),
+              Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+            )
+          : translateWorldPosition(
+              provisionPosition,
+              (80 + actor.identity.populationOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+              20 * WORLD_POSITION_UNITS_PER_TILE,
+            ),
         heading: actor.address.heading,
       }));
+      if (isCrowMate) crowMateOrdinal += 1;
     }
     const prepared = resealedEnvelope(envelope, {
       world: serializeWorld(world),
@@ -1276,19 +1380,40 @@ describe("runtime core-ecology vertical slice", () => {
       position: crowStart,
       heading: crow.address.heading,
     }));
+    const crowGroup = patch.groups.groups.find(({ identity, memberOrdinals }) => (
+      identity.species === crow.identity.species
+      && identity.populationKey === crow.identity.populationKey
+      && memberOrdinals.includes(crow.identity.populationOrdinal)
+    ));
+    const crowGroupMemberIds = new Set(patch.populations
+      .find(({ species, populationKey }) => (
+        species === crow.identity.species
+        && populationKey === crow.identity.populationKey
+      ))?.members
+      .filter(({ populationOrdinal }) => crowGroup?.memberOrdinals.includes(populationOrdinal))
+      .map(({ actor }) => actor.identity.stableId) ?? []);
+    let crowMateOrdinal = 0;
     let displacedOrdinal = 0;
     for (const actor of coreActors(patch)) {
       if (actor.identity.stableId === crow.identity.stableId) continue;
+      const isCrowMate = crowGroupMemberIds.has(actor.identity.stableId);
       patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
         atTick: patch.updatedAtTick,
-        position: translateWorldPosition(
-          perch,
-          (80 + displacedOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
-          20 * WORLD_POSITION_UNITS_PER_TILE,
-        ),
+        position: isCrowMate
+          ? translateWorldPosition(
+              crowStart,
+              (crowMateOrdinal + 1) * Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 4),
+              Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+            )
+          : translateWorldPosition(
+              perch,
+              (80 + displacedOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+              20 * WORLD_POSITION_UNITS_PER_TILE,
+            ),
         heading: actor.address.heading,
       }));
-      displacedOrdinal += 1;
+      if (isCrowMate) crowMateOrdinal += 1;
+      else displacedOrdinal += 1;
     }
     expect(projectCoreEcologyActivity(patch, {
       actorId: crow.identity.stableId,
@@ -2124,18 +2249,39 @@ async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
     position: bearPosition,
     heading: offsetTiles < 0 ? 500_000 : 0,
   }));
+  const alarmGroup = patch.groups.groups.find(({ identity, memberOrdinals }) => (
+    identity.species === alarmActor.identity.species
+    && identity.populationKey === alarmActor.identity.populationKey
+    && memberOrdinals.includes(alarmActor.identity.populationOrdinal)
+  ));
+  const alarmGroupMemberIds = new Set(patch.populations
+    .find(({ species, populationKey }) => (
+      species === alarmActor.identity.species
+      && populationKey === alarmActor.identity.populationKey
+    ))?.members
+    .filter(({ populationOrdinal }) => alarmGroup?.memberOrdinals.includes(populationOrdinal))
+    .map(({ actor }) => actor.identity.stableId) ?? []);
+  let alarmMateOrdinal = 0;
   for (const actor of coreActors(patch)) {
     if (actor.identity.stableId === alarmActor.identity.stableId
       || actor.identity.stableId === bear.identity.stableId) continue;
+    const isAlarmMate = alarmGroupMemberIds.has(actor.identity.stableId);
     patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
       atTick: patch.updatedAtTick,
-      position: translateWorldPosition(
-        playerPosition,
-        (80 + actor.identity.populationOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
-        20 * WORLD_POSITION_UNITS_PER_TILE,
-      ),
+      position: isAlarmMate
+        ? translateWorldPosition(
+            alarmPosition,
+            0,
+            (14 + alarmMateOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+          )
+        : translateWorldPosition(
+            playerPosition,
+            (80 + actor.identity.populationOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+            20 * WORLD_POSITION_UNITS_PER_TILE,
+          ),
       heading: actor.address.heading,
     }));
+    if (isAlarmMate) alarmMateOrdinal += 1;
   }
   const nextEnvelope = resealedEnvelope(envelope, {
     world: serializeWorld(world),
@@ -2250,6 +2396,7 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
     ...currentBase
   } = decoded;
   const v10Base = {
@@ -2328,6 +2475,7 @@ function marshEdgeV11Record(current: SaveRecord): SaveRecord {
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
     ...currentBase
   } = decoded;
   const v11Base = {
@@ -2404,6 +2552,7 @@ function rainChorusV12Record(current: SaveRecord): SaveRecord {
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
     ...currentBase
   } = decoded;
   const v12Base = {
@@ -2478,6 +2627,7 @@ function tidalTableV13Record(current: SaveRecord): SaveRecord {
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
     ...currentBase
   } = decoded;
   const v13Base = {
@@ -2552,6 +2702,7 @@ function waterfowlV14Record(current: SaveRecord): SaveRecord {
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+    settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
     ...currentBase
   } = decoded;
   const v14Base = {
@@ -2585,8 +2736,8 @@ function serializePublishedAggregateV3(
 
 function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
-  if (value.format !== "tideweft-session" || value.version !== 20) {
-    throw new Error("core-ecology runtime fixture did not save a v20 envelope");
+  if (value.format !== "tideweft-session" || value.version !== 21) {
+    throw new Error("core-ecology runtime fixture did not save a v21 envelope");
   }
   return value;
 }

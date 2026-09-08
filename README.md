@@ -5,9 +5,10 @@
 **Play the current Alpha:** https://19koda19.github.io/tideweft/
 
 The current public deployment is the **LIVE_VERIFIED**
-`0.3.3-alpha.26 — The Paddock Watch` release described below. Exact release
-commit `e3aae174d962ec609b9463e40320227237c9fa1f` passed CI run
-`34143286763` and Pages run `34143286720`; all five fetched live artifacts
+`0.3.3-alpha.27 — The Watch Returns` release described below. Exact gameplay
+commit `f2c55413c64a8e6b8e3cc1fab06e50252df2399f` and public attestation commit
+`6a5bc4352edb39b47ee2216ca01a1506f01419cb` passed final CI run
+`34160098140` and Pages run `34160098112`; all five fetched live artifacts
 match the tested local production build byte-for-byte.
 
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
@@ -27,13 +28,14 @@ Alpha 0.3 grows the earlier slices with fieldcraft, seamless travel, shared perc
 - **Living field presentation:** Relief now renders the same drizzle, rain, and squall visible in Chart, while sparse wind threads expose direction and relative force under any sky. Fine-pointer movement adds only a few eased pixels of presentation depth, labels settle with the camera, and inverse picking keeps commands exact. Touch, coarse pointers, and reduced-motion preferences receive a steady view. The HUD, compass, Promises, inspector, and actions now use floating typography, hairlines, and restrained symbols directly above the unobstructed world—no field panes or edge shelves. The title opens into a bounded deterministic tide field whose short synthesized crescendo waits for a lawful first tap or key.
 - **People in the field:** the original estuary's 42 humans now have stable seed-derived identities, coherent temperament and skill details, short histories, changing weather condition, bounded memories, and persistent player knowledge. They can also see and anonymously hear the courier through a shared bounded perception loop: terrain and structures occlude sight, movement and weather alter visual contact, and rain or nearby turbulent water can mask sounds that wind may carry. If sight breaks, a person scans the last place they actually saw rather than tracking the courier through the world; lawful sight can reacquire the courier, otherwise suspicion fades and the search ends deterministically. Click or tap somebody in direct sight for a pane-free **ABOUT** view; its watching, listening, and searching cues reveal behavior without hidden coordinates or scores. **GREET** still reveals only what a nearby introduction can teach, and ABOUT never pauses danger.
 - **First living web:** each seed now creates one independently generated dog beside one deterministically selected existing porter. The dog can smell the porter's physical dried-fish pack, move toward an uncertain scent belief over traversable ground, become wet or cold in current rain, and appear through the same knowledge-honest Chart/Relief **ABOUT** surface. The player may **ASK FOR HELP**, **SUGGEST SECURING BELONGINGS**, **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, or **LEAVE**. The porter remains autonomous: a request can lead to waiting, securing the pack, rerouting, leaving, or an exact one-unit provision offer. A consumed meal creates bounded memory and persistence promotion, not ownership or a companion bond.
-- **Bounded living ecology:** one local habitat patch now derives deer, gull, black-bear, brown-rat, domestic-cat, domestic-chicken, domestic-goat, marsh-rabbit, marsh-fox, fish-crow, northern-harrier, southern-leopard-frog, Atlantic-silverside, Atlantic-marsh-fiddler-crab, snowy-egret, American-black-duck, and North American river otter presence from the seed and actual terrain. Rats, frogs, silversides, and fiddler crabs remain conserved population-area aggregates; the other listed wildlife use capped persistent representatives, including at most one snowy egret, one American black duck, one river otter, one stable two-to-three-chicken starting-yard flock, and exactly two goats in one separate pen herd. Individual animals, groups, habitat anchors, and plural settlement custody persist while shared perception, terrestrial locomotion, group alarm, and physical-resource ownership produce bounded behavior. Chickens retain their exact open-store food opportunity; goats do not inherit it. Exact spatial top-K materialization keeps the active field at 24 while preserving overflow actors in coarse state. This remains one original-harbor assemblage, not worldwide ecology or livestock, harmful animal interaction, live-prey capture or consumption, fishing, mortality, reproduction, or a complete bestiary.
+- **Bounded living ecology:** one local habitat patch now derives deer, gull, black-bear, brown-rat, domestic-cat, domestic-chicken, domestic-goat, marsh-rabbit, marsh-fox, fish-crow, northern-harrier, southern-leopard-frog, Atlantic-silverside, Atlantic-marsh-fiddler-crab, snowy-egret, American-black-duck, and North American river otter presence from the seed and actual terrain. Rats, frogs, silversides, and fiddler crabs remain conserved population-area aggregates; the other listed wildlife use capped persistent representatives, including at most one snowy egret, one American black duck, one river otter, one stable two-to-three-chicken starting-yard flock, and exactly two goats in one separate pen herd. Individual animals, groups, habitat anchors, and plural settlement custody persist while shared perception, terrestrial locomotion, group alarm, and physical-resource ownership produce bounded behavior. Chickens retain their exact open-store food opportunity; goats do not inherit it. Exact spatial top-K materialization keeps the active field at 24 while preserving overflow actors in coarse state; in the Alpha 28 source candidate, a social group is admitted as one indivisible cap unit or remains wholly coarse. This remains one original-harbor assemblage, not worldwide ecology or livestock, harmful animal interaction, live-prey capture or consumption, fishing, mortality, reproduction, or a complete bestiary.
 - **Tidal Convergence:** Released Alpha 22 adds no species and changes no outer save, habitat, or aggregate schema. It composes the six existing activity-bearing wildlife roles through reusable **perch-watch**, **low-quartering**, **tidal-wader**, **dabbling-waterfowl**, **shore-water-forager**, and **aerial-surface-opportunist** profiles. A current terrain-occluded anonymous surface observation is available only to an addressable actor whose runtime capabilities include surface opportunity and tidal activity. That lets a gull circle a currently seen surface opportunity by air and return to its authenticated habitat anchor to rest without becoming an aquatic forager or gaining a hidden fish/crab target. Immediate lawful threat, alarm, pursuit, and physical-food intents still outrank neutral activity.
 - **The Storehouse Door:** released Alpha 23 adds one bounded physical fresh-produce store at the starting harbor without adding a species. The settlement owns that exact lot separately from its abstract food economy. An open door projects food through the existing wind- and rain-shaped scent owner; a matching brown-rat attraction event may authenticate at most one real produce-unit loss, while rat population units remain conserved. An existing cat's lawfully visible presence can pressure the rat aggregate through shared perception policy, but the cat gains no hidden rat knowledge or new investigation behavior. Only a player standing near the real store and keeper can ask that keeper to secure it. The persistent secured door contains later scent, and an unseen loss never becomes a retrospective god's-ear event report.
 - **The Yard Flock:** released Alpha 24 adds one stable group of two or three individual domestic chickens beside that store. The flock, each bird, its bounded yard anchor, and settlement custody persist independently of the camera. Chickens use the existing animal perception, attention, group alarm, terrestrial locomotion, broad-role interaction, and physical-item claim owners rather than a private behavior tree. A hungry bird must lawfully perceive and reach the exact open-store lot before one authenticated produce unit can be consumed; securing the door removes that opportunity. A witnessed meal is visible in EVENTS, while hidden activity never becomes retrospective narration.
 - **The Far Paddock:** released Alpha 25 adds exactly two persistent domestic goats in one herd at a habitat-derived pen separated from the storehouse yard and prior animal placements. The goats plug into shared actor identity, direct perception, attention, terrestrial movement, broad-role interaction, group alarm, bounded materialization, Chart/Relief presentation, and pane-free ABOUT without a goat-only behavior tree. Settlement ecology now supports plural canonical custody and typed coop/pen homes, while physical-resource contention resolves by reach, current need, and stable identity. Goats deliberately receive neither store-provision access nor foliage browsing in this slice.
 - **The Paddock Watch:** released Alpha 26 adds exactly one separate settlement working dog beside the existing two-goat herd. Its kennel and custody remain distinct from the original independent porter-scene dog, while one generic persisted guardian assignment binds the existing keeper, both custody relationships, the goat herd, and the pen worksite. The dog keeps ordinary cognition, needs, exposure, perception, and shared pathing; its own retreat, shelter, avoidance, or rest can outrank duty. It investigates only lawful uncertain alarm evidence, and any fox deterrence happens only after the fox actually perceives the dog—never through a hidden protection aura.
-- **The Watch Returns (Alpha 27 source candidate):** no animal is added. The existing working dog's committed investigation now opens one bounded persisted task around a cognition-owned uncertain area and deterministic shared-locomotion probe. Reaching that probe completes investigation and sends the dog physically to the existing pen worksite; a keeper recall requires fresh reciprocal sight, cognition or welfare may suspend and resume work, and arrival waits for lawful handler acknowledgement. This remains one local lifecycle—not herding, separated-livestock recovery, a full schedule, mortality, attack, player command, or guaranteed defense.
+- **The Watch Returns:** released Alpha 27 adds no animal. The existing working dog's committed investigation now opens one bounded persisted task around a cognition-owned uncertain area and deterministic shared-locomotion probe. Reaching that probe completes investigation and sends the dog physically to the existing pen worksite; a keeper recall requires fresh reciprocal sight, cognition or welfare may suspend and resume work, and arrival waits for lawful handler acknowledgement. This remains one local lifecycle—not herding, separated-livestock recovery, a full schedule, mortality, attack, player command, or guaranteed defense.
+- **The Missing Goat (Alpha 28 source candidate):** adds no species or actor. A current caused flee or retreat plus exact separation can split the two-goat herd; distance alone cannot. A separated goat may regroup only from current identified sight, with danger and welfare still taking priority. A keeper must lawfully notice the absence before an explicit last-known-area report can recruit the existing guardian's ordinary search, and search never proves a find. The same bodies may physically rejoin; current caretaker sight of every member inside the pen confirms closure. A retained known case can accept an authenticated coarse reunion transition without inventing remote sight. This closes one bounded starting-harbor Wave-D integration seam, not worldwide ecology.
 - **Living commons:** nine seed-derived material families now grow visibly in suitable biomes. Desktop and touch gathering feed one exact shared pack, while the anywhere **KIT** turns those finds into six prepared components and eleven durable tools through mobile-safe **PACK / MAKE / MEND** tabs.
 - **Footing and physical parcels:** stability is a live 0–100% physical-balance calculation, not a second stamina bar or accumulated drain. Actual speed, turning, grade, roughness, moisture, local water force, wind, load, footwear, fixtures, and BRACE determine the currently supported percentage; unchanged conditions hold one value and a safer bank recalculates it immediately. Hazardous entries can still deterministically stumble or fall, briefly alter the courier's color and silhouette, speak a tiny Atari-like callout, damage one exact cargo lot, and separate persistent parcels that drift, tumble, weather, save, reload, and remain recoverable.
 - **Responsive river recovery:** desktop Shift now braces even when the document body or HUD has focus, with immediate BRACING copy and a color-independent planted marker in Chart and Relief. If stamina or stability still collapses in deep current, the courier becomes ADRIFT instead of being ejected to a bank: hold WASD/arrows or tap toward shallows to paddle, release movement to float and recover breath, then rise only after finding standable water with enough stamina. The current remains authoritative, full packs weaken a stroke, and separated physical parcels continue their own journey.
@@ -74,6 +76,8 @@ The campaign resolves when every settlement belongs to a sufficiently redundant 
 - Released Alpha 24 advances the catalog to eighteen records, habitat to version 8, settlement ecology to version 2, and the outer save to version 17. It appends one stable two-to-three-chicken flock, one yard anchor, and one settlement-custody relationship without changing the exact habitat-7 prefix. Shared direct perception, terrestrial movement, flock alarm, broad ecological roles, and the Storehouse Door's physical lot produce one representative visible feeding event while the secured and unseen branches remain knowledge-honest. Signed-coordinate invariants, migration/replay attacks, item conservation, bounded performance, and that representative composition validate the reusable architecture rather than every species or pair.
 - Released Alpha 25 advances the catalog to nineteen records, habitat to version 9, settlement ecology to version 3, and the outer save to version 18. It preserves the complete Alpha 24 habitat, actors, flock, coop, custody, store, and food-use history before appending exactly two goats, one herd, one separated pen, and one second custody. Shared group, perception, locomotion, presentation, conservation, and deterministic claim-arbitration owners carry the new role; no per-species or N² interaction matrix is introduced.
 - Released Alpha 26 keeps the nineteen-record catalog, habitat version 9, aggregate ecology version 4, and nearest-24 core-wildlife ceiling. Settlement ecology version 4 admits a kennel as the third typed domestic home, outer save 19 persists the separate dog roster and generic working-animal root, and sealed version 18 migrates once without rewriting the existing flock, herd, homes, actors, items, Promises, or world facts. Shared invariants and one representative runtime/emergence chain cover assignment, perception, pathing, recovery, and conditional deterrence rather than introducing species-by-species or N² tests.
+- Released Alpha 27 advances outer save 20 and the working-animal records to version 2. One bounded exact-once task carries the existing guardian from lawful investigation through physical return and current handler acknowledgement; actor cognition and welfare may suspend and resume it without inventing evidence.
+- The Alpha 28 source candidate adds a version-1 domestic-recovery root and outer save 21 without changing the nineteen-record catalog, habitat 9, settlement ecology 4, aggregate ecology 4, existing actors, homes, or custodies. A keeper-observed split can become one knowledge-honest case; an explicit last-known-area report can recruit the existing guardian's ordinary search, and exact reunion plus current caretaker sight at the pen closes it. Whole social groups are atomic materialization candidates, so off-frame exact bodies retain authoritative topology but gain no local sensing or movement. The gate concentrates on shared invariants and representative emergence rather than bespoke tests for every species or pair.
 - Continuous terrain in every direction with exact global sampling, negative-coordinate support, a bounded 120 × 120 moving frame, deterministic prefetch, sparse durable world changes, persistent cartography, and exact Chart/Relief camera rebasing. The quiet HUD reports E/N world coordinates; remote Promise and report guidance retains its harbor name, global distance, and bearing.
 - Continuous foot/wading/skiff travel with stamina, active bracing, terrain-driven footing and stability, deterministic stumbles/falls, automatically derived Rest/Steady/Swift state, fragile shock, perishable freshness, depth sounding, discovery, visible magnitude-scaled surface-current direction, emergency camp, controllable ADRIFT recovery, and infrastructure-enabled rescue.
 - A civic field kit: the Sounding line is available immediately; completed Crossings, Ferries, and Beacons can entrust visiting couriers with Marsh stilts, a Tide sail, and a Storm kite.
@@ -154,7 +158,7 @@ pen, and one second custody are appended. Plural custody rejects duplicate
 actors, groups, relationships, homes, or structures, and deterministic shared
 resource arbitration cannot give one physical item to two contenders.
 
-The current public Alpha 26 release advances outer session to version 19 and
+Released Alpha 26 advances outer session to version 19 and
 settlement ecology to version 4 while habitat analysis remains version 9 and
 aggregate ecology remains version 4. A sealed version-18 Far Paddock envelope
 retains its complete habitat, goats, herd, pen, chickens, flock, coop, store,
@@ -165,7 +169,7 @@ the assignment's staged activity and recover a pending transition exactly once;
 reload, rollback, and representative regional travel cannot reroll or duplicate
 the dog, relationship, work identity, activity ordinal, or position.
 
-The Alpha 27 source candidate advances outer session to version 20 and the
+Released Alpha 27 advances outer session to version 20 and the
 working-animal state and assignment records to version 2. A sealed version-19
 Paddock Watch envelope retains every established actor, habitat, group, home,
 custody, assignment, activity, item, Promise, evidence record, store fact, and
@@ -175,6 +179,18 @@ recovers exactly once; reload cannot reroll its lawful source evidence, search
 probe, physical return, handler acknowledgement, or bounded result. Habitat 9,
 settlement ecology 4, aggregate ecology 4, the nineteen-record species catalog,
 and the existing dog roster do not change.
+
+The Alpha 28 source candidate advances outer session to version 21 and adds a
+version-1 domestic-animal-recovery root. A sealed version-20 Watch Returns
+envelope retains every existing species, actor, population, group, habitat,
+home, custody, assignment, task, item, Promise, evidence record, store fact,
+and world fact before an empty recovery root is appended. Current records bind
+at most one case, one pending transaction, and one latest result to exact actor,
+group, custody, home, incident, report, and monotonic ordinal identities. One
+pending transaction recovers exactly once; reload cannot reroll the noticed
+absence, last-known area, guardian recruitment, exact rejoin, or caretaker
+confirmation. Habitat 9, settlement ecology 4, aggregate ecology 4, the
+nineteen-record species catalog, and all established actors remain unchanged.
 
 Released Alpha 22 deliberately retains outer session 15, habitat 7,
 and aggregate schema 4. Its activity-profile convergence is derived from the
@@ -477,11 +493,35 @@ release does not add herding, separated-livestock search or rescue, full
 schedules, autonomous kennel life, attack, injury, mortality, carcasses,
 player commands, worldwide ecology, or guaranteed defense. Validation targets
 shared invariants and representative emergence, not a bespoke species/pair
-matrix. Exact release/main commit
-`f2c55413c64a8e6b8e3cc1fab06e50252df2399f` passed feature CI
-`34158217494`, main CI `34158968284`, and Pages `34158968401`; a
-cache-bypassed comparison matched all five deployed files to the tested build
-byte-for-byte.
+matrix. Exact gameplay commit
+`f2c55413c64a8e6b8e3cc1fab06e50252df2399f` and public attestation commit
+`6a5bc4352edb39b47ee2216ca01a1506f01419cb` passed final CI
+`34160098140` and Pages `34160098112`; a cache-bypassed comparison matched all
+five deployed files to the tested build byte-for-byte.
+
+Source candidate `0.3.3-alpha.28 — The Missing Goat` adds no species, actor,
+population, habitat, home, custody, item, or Promise. A herd split now requires
+a current caused flee or retreat plus exact member distance; distance alone
+cannot split it. Regroup is available only from current identified sight and
+still yields to danger and physiology. The keeper must lawfully observe an
+absence before one explicit last-known-area report can recruit the existing
+working dog's ordinary search; search does not reveal or guarantee the goat.
+The same exact bodies may physically rejoin, and current caretaker sight of all
+members inside the pen confirms closure. A previously known case can retain an
+authenticated coarse reunion transition without manufacturing keeper sight.
+
+Social groups are indivisible materialization-cap candidates: every member is
+admitted together or the group remains wholly coarse, where exact bodies retain
+authoritative topology but gain no local sensing or locomotion. Internal
+`regroup` intent projects as neutral movement rather than exposing system
+vocabulary. Outer save 21 adopts version 20 by appending an empty version-1
+domestic-recovery root, and the candidate advances gameplay contract 26 and
+field manual 38. It closes only this bounded starting-harbor Wave-D seam. It
+does not add herding, full schedules or home routines, guaranteed recovery, a
+remote marker or player search command, attacks, injury, mortality, carcasses,
+new calls or tracks, or full cross-region ecology. Validation continues to use
+shared invariants and representative emergence rather than per-species or N²
+interaction tests. This candidate is not yet a public release.
 
 Development artifacts are not code-signed or notarized. Public desktop distribution still requires signing for each target platform.
 
@@ -489,17 +529,18 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 [The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The current Alpha 26 feature is **LIVE_VERIFIED** at exact release commit
-`e3aae174d962ec609b9463e40320227237c9fa1f`. CI run `34143286763` and Pages
-run `34143286720` succeeded. Five cache-bypassed fetched live
-assets match the local production build exactly:
+The current Alpha 27 feature is **LIVE_VERIFIED** at exact gameplay commit
+`f2c55413c64a8e6b8e3cc1fab06e50252df2399f` and public attestation commit
+`6a5bc4352edb39b47ee2216ca01a1506f01419cb`. Final CI run `34160098140` and
+Pages run `34160098112` succeeded. Five cache-bypassed fetched live assets
+match the tested production build exactly:
 
 | Asset | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `index.html` | 4,168 | `7dc903dd11a60d4959549a518c8175e855a2eb9a58f6e1bc980bd0b40997ecfb` |
+| `index.html` | 4,168 | `ddd484e8350fe8c4ec6a79124b235e8969f253ace5c09a1b57503ab5b4bb702f` |
 | `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
 | `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
-| `assets/index-UYGppMea.js` | 3,065,734 | `6a47b6dd2fc04c1cc9a5b7eabe2cb70ead8a6821e4c786fb4ee3f012b8666783` |
+| `assets/index-oRSS94zZ.js` | 3,100,096 | `b5e58d34394e07a1ffedf07d9f9580a799a18eefad355751aecdb2ff0391d1e5` |
 | `assets/index-BnNSHuv9.css` | 106,761 | `05ac88340ddce1bdde27d73638642979cdbaca4bf460d621ddcf52c94c114706` |
 
 For future releases:

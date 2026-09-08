@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.27",
-      buildIdentity: "0.3.3-alpha.27",
-      gameplayContractVersion: 25,
-      tutorialVersion: 37,
+      version: "0.3.3-alpha.28",
+      buildIdentity: "0.3.3-alpha.28",
+      gameplayContractVersion: 26,
+      tutorialVersion: 38,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes The Watch Returns and retains the earlier habitat releases", () => {
+  it("scopes The Missing Goat and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const watchReturnsRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.27",
+    );
+    const watchReturnsCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => watchReturnsRelease?.categories[category] ?? [])
       .join(" ");
     const paddockWatchRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.26",
@@ -169,13 +176,19 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("one bounded work task for the existing settlement guardian dog");
-    expect(activeCopy).toContain("deterministic shared-locomotion search probe");
-    expect(activeCopy).toContain("physically back toward the existing pen worksite");
-    expect(activeCopy).toContain("keeper's lawful acknowledgement");
-    expect(activeCopy).toContain("fresh reciprocal identified sight");
-    expect(activeCopy).toContain("dog cognition and welfare can suspend work and later resume it");
+    expect(activeCopy).toContain("current caused flee or retreat");
+    expect(activeCopy).toContain("Distance alone cannot manufacture a split");
+    expect(activeCopy).toContain("only after current identified sight");
+    expect(activeCopy).toContain("explicit report of the last known area");
+    expect(activeCopy).toContain("Searching does not prove a find");
+    expect(activeCopy).toContain("physical group reunion and current keeper sight");
+    expect(activeCopy).toContain("indivisible materialization-cap units");
     expect(activeCopy).toContain("species-by-species fixtures or an N-squared interaction matrix");
+    expect(watchReturnsCopy).toContain("one bounded work task for the existing settlement guardian dog");
+    expect(watchReturnsCopy).toContain("deterministic shared-locomotion search probe");
+    expect(watchReturnsCopy).toContain("physically back toward the existing pen worksite");
+    expect(watchReturnsCopy).toContain("keeper's lawful acknowledgement");
+    expect(watchReturnsCopy).toContain("fresh reciprocal identified sight");
     expect(paddockWatchCopy).toContain("exactly one additional seed-stable domestic dog");
     expect(paddockWatchCopy).toContain("distinct from the original independent porter-scene dog");
     expect(paddockWatchCopy).toContain("generic persisted settlement-working-animal owner");
@@ -196,16 +209,19 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 20");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis remains version 9");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 21");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Habitat analysis remains version 9");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains version 4");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("settlement ecology remains version 4");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-19 Paddock Watch save migrates exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("task, transition, and latest-outcome records begin at version 1");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no species, actor, population, habitat, home, custody relationship");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("does not herd goats");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no mortality system");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not a player command or universal handler system");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("working-animal state remains version 2");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-20 Watch Returns save migrates exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("one current case, one pending exact-once transition, and one latest closed outcome");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no species, actor, population, habitat, home, custody, item, or Promise");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("closes only the bounded starting-harbor Wave-D integration seam");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("cannot guarantee a find or recovery");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("still do not attack, receive injuries, die, leave carcasses, or consume live prey");
+    expect(watchReturnsRelease?.categories.saves.join(" ")).toContain("outer session advances to version 20");
+    expect(watchReturnsRelease?.categories.saves.join(" ")).toContain("sealed version-19 Paddock Watch save migrates exactly once");
     expect(paddockWatchRelease?.categories.saves.join(" ")).toContain("outer session advances to version 19");
     expect(paddockWatchRelease?.categories.saves.join(" ")).toContain("settlement ecology advances to version 4");
     expect(paddockWatchRelease?.categories.saves.join(" ")).toContain("sealed version-18 Far Paddock save migrates exactly once");

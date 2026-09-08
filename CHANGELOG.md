@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.28 — 2026-09-07
+
+Build: `0.3.3-alpha.28` · Gameplay contract: 26 · Tutorial: 38
+
+The Missing Goat composes physical social-group separation and reunion, actor-owned regrouping, lawful keeper awareness, and the existing guardian search lifecycle into one bounded domestic-animal recovery loop.
+
+### Gameplay
+
+- A current caused flee or retreat can split an existing social group when its exact member bodies are physically beyond the shared separation threshold. Distance alone cannot manufacture a split, and every member and persistent identity remains conserved.
+- A separated goat may choose to move toward a herd mate only after current identified sight. Immediate danger, exhaustion, exposure, and other actor-owned needs retain priority; no handler, group record, or recovery task directly commands its movement.
+- The existing keeper must lawfully notice a separation before an explicit report of the last known area can recruit the existing guardian dog's bounded investigation. Searching does not prove a find; recovery closes only after physical group reunion and current keeper sight of every member inside the existing pen.
+
+### Fixes
+
+- Saved social groups are now indivisible materialization-cap units. If one member reaches the active field, the whole group is admitted exactly or remains coarse; an exact off-frame member receives no local perception or locomotion input merely because a peer is visible.
+- Coarse group transitions are retained for the bounded recovery owner, so leaving the active field during a known separation cannot strand the recovery case after a lawful reunion. Player-absent topology still creates no player event or invented keeper knowledge.
+- Domestic recovery authenticates every stable actor ID against its exact saved population ordinal. Canonical-looking cross-wired identities, duplicated members, malformed topology, stale evidence, and mismatched custody fail closed.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. A separation requires both a current actor-owned escape cause and physical distance; incidental wandering alone cannot drain group cohesion like stamina or generate a missing-animal incident.
+- The guardian receives only the keeper's lawful last-known area. Its own cognition, welfare, perception, and traversable route can defer or end an investigation, and a linked search task is never treated as proof that livestock is safe.
+- Validation remains architecture-led: group topology, identity, materialization, knowledge, exact-once recovery, conservation, save, signed-world, and bounded-performance invariants plus representative emergence replace species-by-species fixtures or an N-squared interaction matrix.
+
+### Interface
+
+- Chart 2D and Relief 3D continue to show only directly perceived actors and visible movement. Internal regroup intent is presented as neutral purposeful movement rather than revealing a hidden herd target or recovery state.
+- The recovery loop adds no remote animal marker, livestock task pane, guardian command, success popup, or hidden-world narration. Unseen group and keeper events remain simulation state rather than entering the player's EVENTS feed.
+- Field Manual version 38 explains caused physical splitting, sight-based regrouping, lawful keeper reports, bounded guardian search, witnessed home confirmation, atomic group materialization, exact save adoption, and the major systems still absent.
+
+### Save changes
+
+- The outer session advances to version 21 and domestic-animal recovery state begins at version 1. Habitat analysis remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4, working-animal state remains version 2, and the nineteen-record species catalog and existing actor roster remain unchanged.
+- A sealed version-20 Watch Returns save migrates exactly once. Every prior actor, population ordinal, group, home, custody, relationship, assignment, task, item, Promise, store fact, evidence record, and world fact remains exact before one empty bounded recovery root is appended.
+- Recovery retains at most one current case, one pending exact-once transition, and one latest closed outcome. Save, reload, interruption, rollback, coarse simulation, and representative regional travel cannot reroll or duplicate a split, notice, report, search link, reunion, home confirmation, or result.
+
+### Known limitations
+
+- This release adds no species, actor, population, habitat, home, custody, item, or Promise. It closes only the bounded starting-harbor Wave-D integration seam, not worldwide settlement ecology, ecological cross-region animal migration, or the broader bestiary.
+- The guardian cannot guarantee a find or recovery, and the player receives no livestock-search command. Goats gain no broad herding, autonomous home-return routine, remote tracker, sound, track evidence, foliage browsing, milk, wool, reproduction, or complete schedule.
+- Animals still do not attack, receive injuries, die, leave carcasses, or consume live prey. This release adds no mortality, harmful protection, companion bond, worldwide livestock, complete sound or scent system, or exhaustive species-pair testing.
+
 ## 0.3.3-alpha.27 — 2026-09-07
 
 Build: `0.3.3-alpha.27` · Gameplay contract: 25 · Tutorial: 37

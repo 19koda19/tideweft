@@ -424,11 +424,14 @@ describe("bounded core ecology patch", () => {
     });
 
     let coarse = setCoreEcologyMaterializedActors(active, { atTick: 40, actorIds: [] });
+    let propagatedReunion = false;
     for (const tick of [48, 56, 64, 72]) {
       const result = stepCoreEcologyPatch(coarse, { tick, actorSteps: [] });
       if (result === null) throw new Error(`Coarse group recovery ${tick} failed`);
+      propagatedReunion ||= result.groupEvents.some(({ kind }) => kind === "group-rejoined");
       coarse = result.patch;
     }
+    expect(propagatedReunion).toBe(true);
     expect(coarse.groups.groups[0]).toMatchObject({
       phase: "cohesive",
       updatedAtTick: 72,

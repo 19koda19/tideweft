@@ -189,7 +189,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 20,
+      version: 21,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 9,
@@ -239,6 +239,7 @@ describe("runtime existing-human perception path", () => {
       settlementEcology: _currentSettlementEcology,
       dogActorRoster: _currentDogActorRoster,
       settlementWorkingAnimals: _currentSettlementWorkingAnimals,
+      settlementDomesticAnimalRecovery: _currentSettlementDomesticAnimalRecovery,
       porterResponse: _currentPorterResponse,
       livingActorPlayerChoice: _currentLivingActorPlayerChoice,
       ...currentBase
@@ -257,7 +258,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 20,
+      version: 21,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 0,

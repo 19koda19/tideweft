@@ -8,6 +8,8 @@ import { createRegionCoord, isRegionCoord, type RegionCoord } from "../sim/regio
 import { FIXED_POINT } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import {
+  REGION_HEIGHT_UNITS,
+  REGION_WIDTH_UNITS,
   createWorldPosition,
   isWorldPosition,
   type WorldPosition,
@@ -214,6 +216,35 @@ export interface ReconcileCoreEcologyGroupAnchorsInput {
   readonly rendezvousAnchor?: WorldPosition;
 }
 
+/** One exact actor position supplied by the active-window materialization owner. */
+export interface CoreEcologyGroupMaterializedMemberPosition {
+  readonly memberOrdinal: number;
+  readonly position: WorldPosition;
+}
+
+/**
+ * A current escape event authenticated by the upstream perception/action owner.
+ * This kernel verifies group membership, but never invents an escape cause from
+ * distance alone.
+ */
+export interface CoreEcologyGroupMaterializedEscapeCause {
+  readonly eventId: string;
+  readonly causeReferenceId: string;
+  readonly memberOrdinal: number;
+}
+
+export interface ReconcileCoreEcologyGroupMaterializedInput {
+  /** Must fall in [updatedAtTick, nextCoarseTick). */
+  readonly atTick: number;
+  /** Exactly one current physical position for every member; order has no meaning. */
+  readonly memberPositions: readonly CoreEcologyGroupMaterializedMemberPosition[];
+  /** A caused member must be farther than this many fixed-point world units to split. */
+  readonly splitDistanceUnits: number;
+  /** Every member must be within this diameter to complete a physical reunion. */
+  readonly rejoinDistanceUnits: number;
+  readonly currentEscapeCause?: CoreEcologyGroupMaterializedEscapeCause;
+}
+
 export interface CoreEcologyGroupTransitionEvent {
   readonly eventId: string;
   readonly groupId: string;
@@ -226,6 +257,12 @@ export interface CoreEcologyGroupTransitionEvent {
 }
 
 export interface CoreEcologyGroupCoarseStepResult {
+  readonly group: CoreEcologyGroupState;
+  readonly events: readonly CoreEcologyGroupTransitionEvent[];
+}
+
+/** Active physical reconciliation emits at most one topology transition. */
+export interface CoreEcologyGroupMaterializedReconciliationResult {
   readonly group: CoreEcologyGroupState;
   readonly events: readonly CoreEcologyGroupTransitionEvent[];
 }
@@ -817,6 +854,183 @@ export function reconcileCoreEcologyGroupAnchors(
   });
 }
 
+/**
+ * Reconciles an active/materialized group's topology from exact actor positions.
+ *
+ * Unlike the unloaded coarse step, this path cannot author player-absent
+ * aftermath. A cohesive group splits only when a currently authenticated cause
+ * names a member whose physical separation strictly exceeds the caller's split
+ * threshold. Existing components merge only after every current member lies
+ * within the caller's reunion diameter.
+ */
+export function reconcileCoreEcologyGroupMaterialized(
+  value: unknown,
+  input: ReconcileCoreEcologyGroupMaterializedInput,
+): CoreEcologyGroupMaterializedReconciliationResult | null {
+  const group = canonicalizeCoreEcologyGroup(value);
+  if (
+    group === null
+    || !plainRecord(input)
+    || !allowedMaterializedReconciliationKeys(input)
+    || !nonnegativeSafeInteger(input.atTick)
+    || input.atTick < group.updatedAtTick
+    || input.atTick >= group.nextCoarseTick
+    || !positiveSafeInteger(input.splitDistanceUnits)
+    || !positiveSafeInteger(input.rejoinDistanceUnits)
+    || input.rejoinDistanceUnits > input.splitDistanceUnits
+    || !Array.isArray(input.memberPositions)
+    || group.revision >= Number.MAX_SAFE_INTEGER
+  ) return null;
+
+  const memberPositions = canonicalMaterializedMemberPositions(
+    input.memberPositions,
+    group.memberOrdinals,
+  );
+  if (memberPositions === null) return null;
+  const currentEscapeCause = input.currentEscapeCause === undefined
+    ? null
+    : canonicalMaterializedEscapeCause(input.currentEscapeCause, group.memberOrdinals);
+  if (input.currentEscapeCause !== undefined && currentEscapeCause === null) return null;
+
+  let phase = group.phase;
+  let cohesion = group.cohesion;
+  let components = group.components;
+  let rendezvousAnchor = group.rendezvousAnchor;
+  let lineage = group.lineage;
+  let nextComponentOrdinal = group.nextComponentOrdinal;
+  let nextLineageOrdinal = group.nextLineageOrdinal;
+  const events: CoreEcologyGroupTransitionEvent[] = [];
+
+  if (phase === "cohesive") {
+    const anchor = materializedComponentAnchor(group.memberOrdinals, memberPositions);
+    components = [deepFreeze({ ...components[0]!, anchor })];
+    rendezvousAnchor = anchor;
+
+    if (
+      currentEscapeCause !== null
+      && causedMemberExceedsSplitThreshold(
+        currentEscapeCause.memberOrdinal,
+        memberPositions,
+        input.splitDistanceUnits,
+      )
+    ) {
+      if (
+        nextComponentOrdinal > Number.MAX_SAFE_INTEGER - 2
+        || nextLineageOrdinal >= Number.MAX_SAFE_INTEGER
+      ) return null;
+      const partitions = partitionMaterializedMembers(
+        currentEscapeCause.memberOrdinal,
+        memberPositions,
+      );
+      const parentComponentIds = components.map(({ componentId: id }) => id).sort(compareText);
+      const transitionLineageId = lineageId(group.identity.stableId, nextLineageOrdinal);
+      components = partitions.map((memberOrdinals, index) => deepFreeze({
+        componentId: componentId(group.identity.stableId, nextComponentOrdinal + index),
+        componentOrdinal: nextComponentOrdinal + index,
+        createdByLineageId: transitionLineageId,
+        parentComponentIds,
+        memberOrdinals,
+        anchor: materializedComponentAnchor(memberOrdinals, memberPositions),
+        heading: group.movementHeading,
+      })).sort(compareComponent);
+      const lineageEvent: CoreEcologyGroupLineageEvent = deepFreeze({
+        lineageId: transitionLineageId,
+        lineageOrdinal: nextLineageOrdinal,
+        kind: "split",
+        atTick: input.atTick,
+        causeReferenceId: currentEscapeCause.causeReferenceId,
+        parentComponentIds,
+        childComponentIds: components.map(({ componentId: id }) => id),
+      });
+      lineage = retainLineage([...lineage, lineageEvent]);
+      nextComponentOrdinal += 2;
+      nextLineageOrdinal += 1;
+      phase = "separated";
+      cohesion = Math.min(cohesion, CORE_ECOLOGY_GROUP_REJOIN_START_COHESION - 1);
+      events.push(transitionEvent(
+        group,
+        input.atTick,
+        "group-split",
+        currentEscapeCause.causeReferenceId,
+        group.memberOrdinals,
+        components.map(({ componentId: id }) => id),
+        currentEscapeCause.eventId,
+      ));
+    }
+  } else {
+    components = components.map((component) => deepFreeze({
+      ...component,
+      anchor: materializedComponentAnchor(component.memberOrdinals, memberPositions),
+    }));
+    if (materializedMembersWithinThreshold(memberPositions, input.rejoinDistanceUnits)) {
+      if (
+        nextComponentOrdinal >= Number.MAX_SAFE_INTEGER
+        || nextLineageOrdinal >= Number.MAX_SAFE_INTEGER
+      ) return null;
+      const parentComponentIds = components.map(({ componentId: id }) => id).sort(compareText);
+      const transitionLineageId = lineageId(group.identity.stableId, nextLineageOrdinal);
+      const anchor = materializedComponentAnchor(group.memberOrdinals, memberPositions);
+      const merged: CoreEcologyGroupComponentState = deepFreeze({
+        componentId: componentId(group.identity.stableId, nextComponentOrdinal),
+        componentOrdinal: nextComponentOrdinal,
+        createdByLineageId: transitionLineageId,
+        parentComponentIds,
+        memberOrdinals: group.memberOrdinals,
+        anchor,
+        heading: group.movementHeading,
+      });
+      const lineageEvent: CoreEcologyGroupLineageEvent = deepFreeze({
+        lineageId: transitionLineageId,
+        lineageOrdinal: nextLineageOrdinal,
+        kind: "rejoin",
+        atTick: input.atTick,
+        causeReferenceId: group.identity.stableId,
+        parentComponentIds,
+        childComponentIds: [merged.componentId],
+      });
+      lineage = retainLineage([...lineage, lineageEvent]);
+      components = [merged];
+      rendezvousAnchor = anchor;
+      nextComponentOrdinal += 1;
+      nextLineageOrdinal += 1;
+      phase = "cohesive";
+      cohesion = Math.max(cohesion, CORE_ECOLOGY_GROUP_REJOIN_COMPLETE_COHESION);
+      events.push(transitionEvent(
+        group,
+        input.atTick,
+        "group-rejoined",
+        group.identity.stableId,
+        group.memberOrdinals,
+        [merged.componentId],
+        transitionLineageId,
+      ));
+    } else {
+      phase = materializedComponentsWithinThreshold(
+        components,
+        memberPositions,
+        input.splitDistanceUnits,
+      ) ? "rejoining" : "separated";
+    }
+  }
+
+  const candidate = canonicalizeCoreEcologyGroup({
+    ...group,
+    revision: group.revision + 1,
+    updatedAtTick: input.atTick,
+    phase,
+    cohesion,
+    components,
+    rendezvousAnchor,
+    signals: group.signals.filter(({ expiresAtTick }) => expiresAtTick > input.atTick),
+    lineage,
+    nextComponentOrdinal,
+    nextLineageOrdinal,
+  });
+  if (candidate === null) return null;
+  events.sort(compareTransitionEvent);
+  return deepFreeze({ group: candidate, events });
+}
+
 export function createCoreEcologyGroupSet(
   groupsValue: readonly CoreEcologyGroupState[] = [],
 ): CoreEcologyGroupSet {
@@ -1377,6 +1591,186 @@ function partitionMembers(members: readonly number[]): readonly (readonly number
   return Object.freeze([Object.freeze(left), Object.freeze(right)]);
 }
 
+function canonicalMaterializedMemberPositions(
+  value: readonly unknown[],
+  groupMembers: readonly number[],
+): readonly CoreEcologyGroupMaterializedMemberPosition[] | null {
+  if (value.length !== groupMembers.length) return null;
+  const positions: CoreEcologyGroupMaterializedMemberPosition[] = [];
+  const ordinals = new Set<number>();
+  for (const raw of value) {
+    if (
+      !plainRecord(raw)
+      || !exactKeys(raw, ["memberOrdinal", "position"])
+      || !nonnegativeSafeInteger(raw.memberOrdinal)
+      || !groupMembers.includes(raw.memberOrdinal)
+      || ordinals.has(raw.memberOrdinal)
+      || !isWorldPosition(raw.position)
+    ) return null;
+    ordinals.add(raw.memberOrdinal);
+    positions.push(deepFreeze({
+      memberOrdinal: raw.memberOrdinal,
+      position: copyPosition(raw.position),
+    }));
+  }
+  positions.sort((left, right) => left.memberOrdinal - right.memberOrdinal);
+  if (positions.some(({ memberOrdinal }, index) => memberOrdinal !== groupMembers[index])) return null;
+  return Object.freeze(positions);
+}
+
+function canonicalMaterializedEscapeCause(
+  value: unknown,
+  groupMembers: readonly number[],
+): CoreEcologyGroupMaterializedEscapeCause | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, ["causeReferenceId", "eventId", "memberOrdinal"])
+    || !validReference(value.eventId)
+    || !validReference(value.causeReferenceId)
+    || !nonnegativeSafeInteger(value.memberOrdinal)
+    || !groupMembers.includes(value.memberOrdinal)
+  ) return null;
+  return deepFreeze({
+    eventId: value.eventId,
+    causeReferenceId: value.causeReferenceId,
+    memberOrdinal: value.memberOrdinal,
+  });
+}
+
+function causedMemberExceedsSplitThreshold(
+  causedMemberOrdinal: number,
+  positions: readonly CoreEcologyGroupMaterializedMemberPosition[],
+  thresholdUnits: number,
+): boolean {
+  const caused = positions.find(({ memberOrdinal }) => memberOrdinal === causedMemberOrdinal);
+  if (caused === undefined) return false;
+  const thresholdSquared = BigInt(thresholdUnits) * BigInt(thresholdUnits);
+  return positions.some((other) => (
+    other.memberOrdinal !== causedMemberOrdinal
+    && exactWorldDistanceSquared(caused.position, other.position) > thresholdSquared
+  ));
+}
+
+/**
+ * Two-seed spatial partition: the authenticated member and its farthest peer.
+ * Each member joins its nearer seed, with the lower seed ordinal breaking an
+ * exact tie. Canonical member order makes the outcome independent of input
+ * array order while both seeds guarantee two nonempty components.
+ */
+function partitionMaterializedMembers(
+  causedMemberOrdinal: number,
+  positions: readonly CoreEcologyGroupMaterializedMemberPosition[],
+): readonly (readonly number[])[] {
+  const caused = positions.find(({ memberOrdinal }) => memberOrdinal === causedMemberOrdinal);
+  if (caused === undefined) throw new Error("Materialized split cause lost its group member");
+  const farthest = positions
+    .filter(({ memberOrdinal }) => memberOrdinal !== causedMemberOrdinal)
+    .map((candidate) => ({
+      candidate,
+      distanceSquared: exactWorldDistanceSquared(caused.position, candidate.position),
+    }))
+    .sort((left, right) => (
+      left.distanceSquared > right.distanceSquared
+        ? -1
+        : left.distanceSquared < right.distanceSquared
+          ? 1
+          : left.candidate.memberOrdinal - right.candidate.memberOrdinal
+    ))[0]?.candidate;
+  if (farthest === undefined) throw new Error("A social group cannot split without two members");
+
+  const causedMembers: number[] = [];
+  const farthestMembers: number[] = [];
+  for (const member of positions) {
+    const causedDistance = exactWorldDistanceSquared(member.position, caused.position);
+    const farthestDistance = exactWorldDistanceSquared(member.position, farthest.position);
+    const assignToCaused = causedDistance < farthestDistance
+      || (causedDistance === farthestDistance
+        && caused.memberOrdinal < farthest.memberOrdinal);
+    (assignToCaused ? causedMembers : farthestMembers).push(member.memberOrdinal);
+  }
+  if (causedMembers.length === 0 || farthestMembers.length === 0) {
+    throw new Error("A materialized social group cannot split into an empty component");
+  }
+  causedMembers.sort((left, right) => left - right);
+  farthestMembers.sort((left, right) => left - right);
+  const partitions = [Object.freeze(causedMembers), Object.freeze(farthestMembers)];
+  partitions.sort(compareMemberPartition);
+  return Object.freeze(partitions);
+}
+
+function materializedComponentAnchor(
+  members: readonly number[],
+  positions: readonly CoreEcologyGroupMaterializedMemberPosition[],
+): WorldPosition {
+  const candidates = positions.filter(({ memberOrdinal }) => members.includes(memberOrdinal));
+  const medoid = candidates.map((candidate) => ({
+    candidate,
+    distanceSum: candidates.reduce(
+      (total, other) => total + exactWorldDistanceSquared(candidate.position, other.position),
+      0n,
+    ),
+  })).sort((left, right) => (
+    left.distanceSum < right.distanceSum
+      ? -1
+      : left.distanceSum > right.distanceSum
+        ? 1
+        : left.candidate.memberOrdinal - right.candidate.memberOrdinal
+  ))[0]?.candidate;
+  if (medoid === undefined) throw new Error("A group component cannot have no physical members");
+  return copyPosition(medoid.position);
+}
+
+function materializedMembersWithinThreshold(
+  positions: readonly CoreEcologyGroupMaterializedMemberPosition[],
+  thresholdUnits: number,
+): boolean {
+  const thresholdSquared = BigInt(thresholdUnits) * BigInt(thresholdUnits);
+  for (let left = 0; left < positions.length; left += 1) {
+    for (let right = left + 1; right < positions.length; right += 1) {
+      if (exactWorldDistanceSquared(
+        positions[left]!.position,
+        positions[right]!.position,
+      ) > thresholdSquared) return false;
+    }
+  }
+  return true;
+}
+
+function materializedComponentsWithinThreshold(
+  components: readonly CoreEcologyGroupComponentState[],
+  positions: readonly CoreEcologyGroupMaterializedMemberPosition[],
+  thresholdUnits: number,
+): boolean {
+  if (components.length !== 2) return false;
+  const leftMembers = new Set(components[0]!.memberOrdinals);
+  const rightMembers = new Set(components[1]!.memberOrdinals);
+  const thresholdSquared = BigInt(thresholdUnits) * BigInt(thresholdUnits);
+  return positions.some((left) => (
+    leftMembers.has(left.memberOrdinal)
+    && positions.some((right) => (
+      rightMembers.has(right.memberOrdinal)
+      && exactWorldDistanceSquared(left.position, right.position) <= thresholdSquared
+    ))
+  ));
+}
+
+function exactWorldDistanceSquared(left: WorldPosition, right: WorldPosition): bigint {
+  const deltaX = (BigInt(right.region.x) - BigInt(left.region.x)) * BigInt(REGION_WIDTH_UNITS)
+    + BigInt(right.localX) - BigInt(left.localX);
+  const deltaY = (BigInt(right.region.y) - BigInt(left.region.y)) * BigInt(REGION_HEIGHT_UNITS)
+    + BigInt(right.localY) - BigInt(left.localY);
+  return deltaX * deltaX + deltaY * deltaY;
+}
+
+function compareMemberPartition(left: readonly number[], right: readonly number[]): number {
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const comparison = left[index]! - right[index]!;
+    if (comparison !== 0) return comparison;
+  }
+  return left.length - right.length;
+}
+
 function retainLineage(
   events: readonly CoreEcologyGroupLineageEvent[],
 ): readonly CoreEcologyGroupLineageEvent[] {
@@ -1641,6 +2035,17 @@ function allowedSignalInputKeys(value: object): boolean {
 function allowedAnchorReconciliationKeys(value: object): boolean {
   const keys = ["atTick", "componentAnchors"];
   if (Object.hasOwn(value, "rendezvousAnchor")) keys.push("rendezvousAnchor");
+  return exactKeys(value, keys);
+}
+
+function allowedMaterializedReconciliationKeys(value: object): boolean {
+  const keys = [
+    "atTick",
+    "memberPositions",
+    "rejoinDistanceUnits",
+    "splitDistanceUnits",
+  ];
+  if (Object.hasOwn(value, "currentEscapeCause")) keys.push("currentEscapeCause");
   return exactKeys(value, keys);
 }
 

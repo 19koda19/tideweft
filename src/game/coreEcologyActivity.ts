@@ -172,6 +172,7 @@ const IMMEDIATE_RESPONSE_INTENTS = new Set<CoreWildlifeIntentKind>([
   "forage",
   "guard",
   "pursue",
+  "regroup",
   "retreat",
   "scavenge",
 ]);

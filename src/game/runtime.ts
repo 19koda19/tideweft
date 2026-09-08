@@ -24,7 +24,7 @@ import {
   findTilePath,
   MAX_TIDE_LEVEL,
 } from "../sim/terrain";
-import { hashCanonical, stableStringify } from "../sim/util";
+import { compareText, hashCanonical, stableStringify } from "../sim/util";
 import {
   stableDogId,
   type DogIdentityGenerationInput,
@@ -35,6 +35,7 @@ import {
   createActorObservation,
   stepActorPerception,
   type ActorObservation,
+  type ActorPerceptionState,
 } from "../sim/actorPerception";
 import {
   generateCoreWildlifeIdentity,
@@ -309,6 +310,7 @@ import {
   migrateLegacyCoreEcologyPatch,
   replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregatePatchMaterializedActors,
   stableCoreEcologyAggregatePopulationId,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
@@ -336,9 +338,12 @@ import {
   type CoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
+  coreEcologyGroupComponentForMember,
   createCoreEcologyGroup,
   createCoreEcologyGroupSet,
+  reconcileCoreEcologyGroupMaterialized,
   type CoreEcologyGroupState,
+  type CoreEcologyGroupTransitionEvent,
 } from "./coreEcologyGroups";
 import { stepCoreEcologySettlementShadows } from "./coreEcologySmallWorld";
 import {
@@ -365,6 +370,7 @@ import {
 import {
   adoptSettlementWorkingAnimalStateV1,
   canonicalizeSettlementWorkingAnimalState,
+  createSettlementWorkingAnimalHandlerSearchReport,
   createSettlementWorkingAnimalState,
   deriveSettlementWorkingAnimalTaskSearchProbe,
   deserializeSettlementWorkingAnimalState,
@@ -376,6 +382,7 @@ import {
   resolveSettlementWorkingAnimalTaskLifecycle,
   serializeSettlementWorkingAnimalState,
   stageSettlementWorkingAnimalActivity,
+  stageSettlementWorkingAnimalSearchFromHandlerReport,
   stageSettlementWorkingAnimalTaskLifecycle,
   settlementWorkingAnimalReturnArea,
   type SettlementWorkingAnimalActorDisposition,
@@ -383,9 +390,22 @@ import {
   type SettlementWorkingAnimalActivityTransaction,
   type SettlementWorkingAnimalAssignment,
   type SettlementWorkingAnimalHandlerDisposition,
+  type SettlementWorkingAnimalHandlerSearchReport,
   type SettlementWorkingAnimalState,
   type SettlementWorkingAnimalTaskLifecycleEvaluationInput,
 } from "./settlementWorkingAnimals";
+import {
+  canonicalizeSettlementDomesticAnimalRecoveryState,
+  createSettlementDomesticAnimalRecoveryState,
+  deserializeSettlementDomesticAnimalRecoveryState,
+  recoverPendingSettlementDomesticAnimalRecovery,
+  resolveSettlementDomesticAnimalRecovery,
+  serializeSettlementDomesticAnimalRecoveryState,
+  stageSettlementDomesticAnimalRecovery,
+  type SettlementDomesticAnimalRecoveryCase,
+  type SettlementDomesticAnimalRecoveryOutcome,
+  type SettlementDomesticAnimalRecoveryState,
+} from "./settlementDomesticAnimalRecovery";
 import {
   stepCoreEcologyTidalTable,
   type CoreEcologyTidalTableProjection,
@@ -411,6 +431,7 @@ import {
   type CoreWildlifeFoodOpportunity,
   type CoreWildlifeIntentKind,
   type CoreWildlifeNeutralActivityPreference,
+  type CoreWildlifeRegroupOpportunity,
   type CoreWildlifeResourceClaim,
 } from "./coreWildlifeActor";
 import {
@@ -533,7 +554,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 20;
+const GAME_SAVE_VERSION = 21;
+const WATCH_RETURNS_GAME_SAVE_VERSION = 20;
 const PADDOCK_WATCH_GAME_SAVE_VERSION = 19;
 const DOMESTIC_PEN_GAME_SAVE_VERSION = 18;
 const DOMESTIC_YARD_GAME_SAVE_VERSION = 17;
@@ -602,6 +624,7 @@ interface GameSaveEnvelope {
   settlementEcology: string;
   dogActorRoster: string;
   settlementWorkingAnimals: string;
+  settlementDomesticAnimalRecovery: string;
   porterResponse: PorterResponseState;
   livingActorPlayerChoice: LivingActorPlayerChoiceState;
   integrity: string;
@@ -2358,6 +2381,462 @@ function canonicalRuntimeSettlementWorkingAnimals(
   }
 }
 
+type RuntimeDomesticRecoveryRecord =
+  | SettlementDomesticAnimalRecoveryCase
+  | SettlementDomesticAnimalRecoveryOutcome;
+
+function runtimeDomesticRecoveryRecordMatches(
+  record: RuntimeDomesticRecoveryRecord,
+  settlement: SettlementEcologyState,
+  core: CoreEcologyAggregatePatchState,
+  completedTick: number,
+): boolean {
+  const custody = settlement.domesticCustodies.find(({ relationshipId }) => (
+    relationshipId === record.custodyRelationshipId
+  ));
+  const group = core.groups.groups.find(({ identity }) => (
+    identity.stableId === record.groupId
+  ));
+  if (
+    custody === undefined
+    || group === undefined
+    || record.settlementId !== settlement.identity.settlementId
+    || custody.settlementId !== record.settlementId
+    || custody.homeId !== record.homeId
+    || custody.homeStructure.structureId !== record.homeStructureId
+    || custody.caretakerActorId !== record.caretakerActorId
+    || custody.species !== record.species
+    || custody.memberGroupId !== record.groupId
+    || group.identity.species !== record.species
+    || stableStringify(custody.memberActorIds) !== stableStringify(record.memberActorIds)
+    || stableStringify({
+      center: custody.homeStructure.position,
+      radiusUnits: custody.homeStructure.radiusUnits,
+    }) !== stableStringify(record.homeArea)
+    || record.openedAtTick > completedTick
+    || record.splitEvent.atTick > completedTick
+    || record.lastTransition.acceptedAtTick > completedTick
+  ) return false;
+  for (const binding of record.memberBindings) {
+    const actor = coreEcologyAggregatePatchActor(core, binding.actorId);
+    if (
+      actor === null
+      || actor.identity.species !== record.species
+      || actor.identity.populationKey !== group.identity.populationKey
+      || actor.identity.populationOrdinal !== binding.populationOrdinal
+      || !group.memberOrdinals.includes(binding.populationOrdinal)
+    ) return false;
+  }
+  return (record.notice?.learnedAtTick ?? 0) <= completedTick
+    && (record.linkedSearch?.linkedAtTick ?? 0) <= completedTick
+    && (record.reunionEvent?.atTick ?? 0) <= completedTick
+    && (!("closedAtTick" in record) || (
+      record.closedAtTick <= completedTick
+      && record.confirmation.confirmedAtTick <= completedTick
+    ));
+}
+
+function canonicalRuntimeSettlementDomesticAnimalRecovery(
+  value: unknown,
+  world: WorldState,
+  settlement: SettlementEcologyState,
+  core: CoreEcologyAggregatePatchState,
+): SettlementDomesticAnimalRecoveryState | null {
+  const state = canonicalizeSettlementDomesticAnimalRecoveryState(value);
+  if (
+    state === null
+    || stableStringify(state) !== stableStringify(value)
+    || state.settlementId !== settlement.identity.settlementId
+    || state.pendingTransition !== null
+    || state.currentCase !== null
+      && !runtimeDomesticRecoveryRecordMatches(
+        state.currentCase,
+        settlement,
+        core,
+        world.meta.completedTick,
+      )
+    || state.latestClosedOutcome !== null
+      && !runtimeDomesticRecoveryRecordMatches(
+        state.latestClosedOutcome,
+        settlement,
+        core,
+        world.meta.completedTick,
+      )
+  ) return null;
+  return state;
+}
+
+function commitRuntimeSettlementDomesticAnimalRecovery(
+  state: SettlementDomesticAnimalRecoveryState,
+  request: Parameters<typeof stageSettlementDomesticAnimalRecovery>[1],
+): SettlementDomesticAnimalRecoveryState | null {
+  const staged = stageSettlementDomesticAnimalRecovery(state, request);
+  if (staged === null) return null;
+  const resolved = resolveSettlementDomesticAnimalRecovery(
+    staged.state,
+    staged.transaction,
+  );
+  return resolved?.state ?? null;
+}
+
+function runtimeDirectAnimalObservations(
+  observations: readonly ActorObservation[],
+  observerActorId: string,
+  actorIds: readonly string[],
+  expectedSpecies: CoreWildlifeSpecies,
+  atTick: number,
+): readonly ActorObservation[] {
+  const eligible = new Set(actorIds);
+  return Object.freeze(observations.filter((observation) => (
+    observation.observerId === observerActorId
+    && observation.subjectId !== null
+    && eligible.has(observation.subjectId)
+    && observation.observedAtTick === atTick
+    && observation.channel === "vision"
+    && observation.perceivedClass === expectedSpecies
+    && observation.identification === "identified"
+    && observation.area.radiusUnits === 0
+    && observation.confidence > 0
+    && observation.salience > 0
+  )).slice().sort((left, right) => (
+    compareText(left.subjectId!, right.subjectId!) || compareText(left.id, right.id)
+  )));
+}
+
+/**
+ * Reprojects one still-retained direct sight record without upgrading what the
+ * caretaker knew. The salient record supplies the original observation locus
+ * and tick; its matching live belief supplies only its canonical class and
+ * identification. Decayed/forgotten evidence fails closed.
+ */
+function runtimeRetainedDirectAnimalObservation(
+  perception: ActorPerceptionState,
+  observerActorId: string,
+  subjectActorId: string,
+  expectedSpecies: CoreWildlifeSpecies,
+  observedAtTick: number,
+): ActorObservation | null {
+  if (perception.actorId !== observerActorId || perception.tick < observedAtTick) return null;
+  const candidates = perception.salientMemory.filter((memory) => (
+    memory.subjectId === subjectActorId
+    && memory.observedAtTick === observedAtTick
+    && memory.channel === "vision"
+    && memory.perceivedClass === expectedSpecies
+    && memory.area.radiusUnits === 0
+    && memory.salience > 0
+  )).slice().sort((left, right) => compareText(left.observationId, right.observationId));
+  for (const memory of candidates) {
+    const belief = perception.beliefs.find((candidate) => (
+      candidate.sourceObservationId === memory.observationId
+      && candidate.subjectId === subjectActorId
+      && candidate.channel === "vision"
+      && candidate.perceivedClass === expectedSpecies
+      && candidate.identification === "identified"
+      && candidate.area.radiusUnits === 0
+      && stableStringify(candidate.area) === stableStringify(memory.area)
+      && candidate.confidence > 0
+      && candidate.salience > 0
+    ));
+    if (belief === undefined) continue;
+    const observation = createActorObservation({
+      id: memory.observationId,
+      observerId: observerActorId,
+      observedAtTick: memory.observedAtTick,
+      channel: "vision",
+      perceivedClass: expectedSpecies,
+      subjectId: subjectActorId,
+      area: memory.area,
+      confidence: belief.confidence,
+      salience: memory.salience,
+      identification: "identified",
+      interrupt: belief.strongInterrupt ? "strong" : "none",
+    });
+    if (observation !== null) return observation;
+  }
+  return null;
+}
+
+function runtimeWorldPositionDistanceSquared(
+  left: LivingActorAddress["position"],
+  right: LivingActorAddress["position"],
+): bigint {
+  const dx = (BigInt(left.region.x) - BigInt(right.region.x))
+      * BigInt(REGION_WIDTH_UNITS)
+    + BigInt(left.localX) - BigInt(right.localX);
+  const dy = (BigInt(left.region.y) - BigInt(right.region.y))
+      * BigInt(REGION_HEIGHT_UNITS)
+    + BigInt(left.localY) - BigInt(right.localY);
+  return dx * dx + dy * dy;
+}
+
+/**
+ * Advances only from the keeper's current direct visual evidence. A remembered
+ * custody relationship may direct attention toward the pen, but cannot reveal
+ * an unseen split, reunion, or animal position.
+ */
+function advanceRuntimeDomesticRecoveryFromCaretakerSight(input: Readonly<{
+  state: SettlementDomesticAnimalRecoveryState;
+  settlement: SettlementEcologyState;
+  core: CoreEcologyAggregatePatchState;
+  caretakerActorId: string;
+  caretakerPerception: ActorPerceptionState;
+  observations: readonly ActorObservation[];
+  atTick: number;
+}>): SettlementDomesticAnimalRecoveryState | null {
+  const current = input.state.currentCase;
+  if (current === null) return input.state;
+  const group = input.core.groups.groups.find(({ identity }) => (
+    identity.stableId === current.groupId
+  ));
+  if (group === undefined || current.caretakerActorId !== input.caretakerActorId) return null;
+  const direct = runtimeDirectAnimalObservations(
+    input.observations,
+    input.caretakerActorId,
+    current.memberActorIds,
+    group.identity.species,
+    input.atTick,
+  );
+
+  if (current.phase === "unnoticed" && group.phase !== "cohesive") {
+    const separatedObservation = direct.find(({ subjectId, area }) => (
+      subjectId === current.separatedMemberActorId
+      && !runtimePositionInsideArea(area.center, current.homeArea)
+    ));
+    const homeMemberObservation = direct.find(({ subjectId, area }) => (
+      subjectId !== current.separatedMemberActorId
+      && runtimePositionInsideArea(area.center, current.homeArea)
+    ));
+    if (separatedObservation !== undefined && homeMemberObservation !== undefined) {
+      return commitRuntimeSettlementDomesticAnimalRecovery(input.state, {
+        kind: "notice",
+        evidenceKind: "current-dual-sight",
+        atTick: input.atTick,
+        settlement: input.settlement,
+        group,
+        separatedObservation,
+        homeMemberObservation,
+      });
+    }
+    const witnessedSplitObservation = runtimeRetainedDirectAnimalObservation(
+      input.caretakerPerception,
+      input.caretakerActorId,
+      current.separatedMemberActorId,
+      group.identity.species,
+      current.activeSplitEvent.atTick,
+    );
+    const homeMemberObservations = current.memberActorIds
+      .filter((actorId) => actorId !== current.separatedMemberActorId)
+      .map((actorId) => direct.find(({ subjectId, area }) => (
+        subjectId === actorId && runtimePositionInsideArea(area.center, current.homeArea)
+      )));
+    if (
+      witnessedSplitObservation === null
+      || runtimePositionInsideArea(witnessedSplitObservation.area.center, current.homeArea)
+      || homeMemberObservations.some((observation) => observation === undefined)
+    ) return input.state;
+    return commitRuntimeSettlementDomesticAnimalRecovery(input.state, {
+      kind: "notice",
+      evidenceKind: "witnessed-split-home-census",
+      atTick: input.atTick,
+      settlement: input.settlement,
+      group,
+      witnessedSplitObservation,
+      homeMemberObservations: homeMemberObservations as readonly ActorObservation[],
+    });
+  }
+
+  if (current.phase === "awaiting-confirmation" && group.phase === "cohesive") {
+    const memberObservations = current.memberActorIds.map((actorId) => direct.find(
+      ({ subjectId, area }) => (
+        subjectId === actorId && runtimePositionInsideArea(area.center, current.homeArea)
+      ),
+    ));
+    if (memberObservations.some((observation) => observation === undefined)) return input.state;
+    return commitRuntimeSettlementDomesticAnimalRecovery(input.state, {
+      kind: "confirm-home",
+      atTick: input.atTick,
+      settlement: input.settlement,
+      group,
+      memberObservations: memberObservations as readonly ActorObservation[],
+    });
+  }
+  return input.state;
+}
+
+/** A guardian's independently opened search may be linked, never treated as proof of finding. */
+function advanceRuntimeDomesticRecoveryFromWorkingSearch(input: Readonly<{
+  state: SettlementDomesticAnimalRecoveryState;
+  settlement: SettlementEcologyState;
+  core: CoreEcologyAggregatePatchState;
+  workingAnimals: SettlementWorkingAnimalState;
+  atTick: number;
+}>): SettlementDomesticAnimalRecoveryState | null {
+  const current = input.state.currentCase;
+  if (current === null || current.phase !== "noticed") return input.state;
+  const group = input.core.groups.groups.find(({ identity }) => (
+    identity.stableId === current.groupId
+  ));
+  const assignment = input.workingAnimals.assignments.find((candidate) => (
+    candidate.handlerActorId === current.caretakerActorId
+    && candidate.protectedCustodyRelationshipId === current.custodyRelationshipId
+    && candidate.protectedGroupId === current.groupId
+    && candidate.currentTask?.phase === "investigating"
+    && stableStringify(candidate.currentTask.perceivedArea)
+      === stableStringify(current.lastKnownArea)
+  ));
+  if (group === undefined) return null;
+  if (assignment?.currentTask === null || assignment?.currentTask === undefined) return input.state;
+  return commitRuntimeSettlementDomesticAnimalRecovery(input.state, {
+    kind: "link-search",
+    atTick: input.atTick,
+    settlement: input.settlement,
+    group,
+    workingAnimals: input.workingAnimals,
+    assignmentId: assignment.assignmentId,
+    taskId: assignment.currentTask.taskId,
+  });
+}
+
+/**
+ * Turns the caretaker's retained recovery proof into an explicit handler
+ * report. It contains only the last area the caretaker actually learned; it
+ * never samples the animal's current body or reclassifies it as a threat.
+ */
+function runtimeDomesticRecoveryHandlerSearchReport(
+  state: SettlementDomesticAnimalRecoveryState,
+  workingAnimals: SettlementWorkingAnimalState,
+): SettlementWorkingAnimalHandlerSearchReport | null {
+  const current = state.currentCase;
+  if (current === null || current.phase !== "noticed" || current.notice === null) return null;
+  const assignment = workingAnimals.assignments.find((candidate) => (
+    candidate.handlerActorId === current.caretakerActorId
+    && candidate.protectedCustodyRelationshipId === current.custodyRelationshipId
+    && candidate.protectedGroupId === current.groupId
+  ));
+  if (assignment === undefined) return null;
+  return createSettlementWorkingAnimalHandlerSearchReport({
+    assignmentId: assignment.assignmentId,
+    handlerActorId: current.caretakerActorId,
+    knownAtTick: current.notice.learnedAtTick,
+    sourceReferenceId: current.notice.proofId,
+    knownArea: current.lastKnownArea,
+  });
+}
+
+/**
+ * Turns authenticated physical topology events into one bounded recovery case.
+ * It does not notify the keeper; awareness remains a separate sight transition.
+ */
+function advanceRuntimeDomesticRecoveryFromGroupEvents(input: Readonly<{
+  state: SettlementDomesticAnimalRecoveryState;
+  settlement: SettlementEcologyState;
+  core: CoreEcologyAggregatePatchState;
+  events: readonly CoreEcologyGroupTransitionEvent[];
+  atTick: number;
+}>): SettlementDomesticAnimalRecoveryState | null {
+  const ordered = input.events.slice().sort((left, right) => (
+    left.atTick - right.atTick || compareText(left.eventId, right.eventId)
+  ));
+  const current = input.state.currentCase;
+  if (current !== null) {
+    const group = input.core.groups.groups.find(({ identity }) => (
+      identity.stableId === current.groupId
+    ));
+    if (group === undefined) return null;
+    if (current.phase === "awaiting-confirmation") {
+      const resplitEvent = ordered.find((event) => (
+        event.kind === "group-split" && event.groupId === current.groupId
+      ));
+      if (resplitEvent === undefined) return input.state;
+      return commitRuntimeSettlementDomesticAnimalRecovery(input.state, {
+        kind: "record-resplit",
+        atTick: input.atTick,
+        settlement: input.settlement,
+        group,
+        splitEvent: resplitEvent,
+      });
+    }
+    const rejoinEvent = ordered.find((event) => (
+      event.kind === "group-rejoined" && event.groupId === current.groupId
+    ));
+    if (rejoinEvent === undefined) return input.state;
+    return commitRuntimeSettlementDomesticAnimalRecovery(input.state, {
+      kind: "record-rejoin",
+      atTick: input.atTick,
+      settlement: input.settlement,
+      group,
+      rejoinEvent,
+    });
+  }
+
+  for (const splitEvent of ordered) {
+    if (splitEvent.kind !== "group-split") continue;
+    const group = input.core.groups.groups.find(({ identity }) => (
+      identity.stableId === splitEvent.groupId
+    ));
+    const custody = input.settlement.domesticCustodies.find((candidate) => (
+      candidate.memberGroupId === splitEvent.groupId
+    ));
+    if (group === undefined || custody === undefined) continue;
+    const population = input.core.populations.find((candidate) => (
+      candidate.species === group.identity.species
+      && candidate.populationKey === group.identity.populationKey
+    ));
+    if (population === undefined) return null;
+    const maybeMembers = custody.memberActorIds.map((actorId) => (
+      population.members.find(({ actor }) => actor.identity.stableId === actorId)
+    ));
+    if (maybeMembers.some((member) => member === undefined)) return null;
+    const members = maybeMembers as typeof population.members;
+    // A player-absent coarse split remains authoritative physical topology,
+    // but it is not current actor evidence and must not manufacture a keeper
+    // recovery case. Absence/census-derived opening is outside this bounded
+    // slice; case creation remains owned by a current materialized split.
+    const materializedCount = members.filter(({ materialization }) => (
+      materialization === "materialized"
+    )).length;
+    if (materializedCount === 0) continue;
+    if (materializedCount !== members.length) return null;
+    const memberActors = members.map(({ actor }) => actor);
+    if (memberActors.some(({ updatedAtTick }) => updatedAtTick !== input.atTick)) return null;
+    const outsideMembers = memberActors.filter((actor) => (
+      !runtimePositionInsideArea(actor.address.position, {
+          center: custody.homeStructure.position,
+          radiusUnits: custody.homeStructure.radiusUnits,
+      })
+    )).sort((left, right) => {
+      const leftDistance = runtimeWorldPositionDistanceSquared(
+        left.address.position,
+        custody.homeStructure.position,
+      );
+      const rightDistance = runtimeWorldPositionDistanceSquared(
+        right.address.position,
+        custody.homeStructure.position,
+      );
+      return leftDistance === rightDistance
+        ? compareText(left.identity.stableId, right.identity.stableId)
+        : leftDistance > rightDistance ? -1 : 1;
+    });
+    const separatedMember = outsideMembers[0];
+    if (separatedMember === undefined) continue;
+    return commitRuntimeSettlementDomesticAnimalRecovery(input.state, {
+      kind: "open",
+      atTick: input.atTick,
+      settlement: input.settlement,
+      custodyRelationshipId: custody.relationshipId,
+      group,
+      splitEvent,
+      separatedMember,
+      memberActors,
+      lastKnownArea: {
+        center: separatedMember.address.position,
+        radiusUnits: 0,
+      },
+    });
+  }
+  return input.state;
+}
+
 /** Authenticate the exact tidal-web contract shipped by Alpha 21–23. */
 function canonicalRuntimeTidalWebCoreEcology(
   value: unknown,
@@ -3624,6 +4103,65 @@ function mergeRuntimeCoreObservationBatches(
   return canonical.length === combined.length ? canonical : null;
 }
 
+/**
+ * Offers a separated social actor only a group mate it directly sees in a
+ * different physical component. The actor policy may still refuse or defer;
+ * no home point, hidden body, or search result is smuggled through this seam.
+ */
+function runtimeCoreRegroupOpportunity(
+  state: CoreEcologyAggregatePatchState,
+  actor: CoreWildlifeActorState,
+  observations: readonly ActorObservation[],
+  tick: number,
+): CoreWildlifeRegroupOpportunity | undefined {
+  const population = state.populations.find(({ species, populationKey, members }) => (
+    species === actor.identity.species
+    && populationKey === actor.identity.populationKey
+    && members.some(({ actor: member }) => member.identity.stableId === actor.identity.stableId)
+  ));
+  if (population === undefined) return undefined;
+  const member = population.members.find(({ actor: candidate }) => (
+    candidate.identity.stableId === actor.identity.stableId
+  ));
+  if (member === undefined) return undefined;
+  const group = state.groups.groups.find((candidate) => (
+    candidate.phase !== "cohesive"
+    && candidate.identity.species === population.species
+    && candidate.identity.populationKey === population.populationKey
+    && candidate.memberOrdinals.includes(member.populationOrdinal)
+  ));
+  if (group === undefined) return undefined;
+  const component = coreEcologyGroupComponentForMember(group, member.populationOrdinal);
+  if (component === null) return undefined;
+  const eligibleTargetIds = new Set(population.members
+    .filter((candidate) => (
+      group.memberOrdinals.includes(candidate.populationOrdinal)
+      && !component.memberOrdinals.includes(candidate.populationOrdinal)
+    ))
+    .map(({ actor: candidate }) => candidate.identity.stableId));
+  const direct = observations
+    .filter((observation) => (
+      observation.observedAtTick === tick
+      && observation.channel === "vision"
+      && observation.identification === "identified"
+      && observation.perceivedClass === actor.identity.species
+      && observation.subjectId !== null
+      && eligibleTargetIds.has(observation.subjectId)
+      && observation.area.radiusUnits === 0
+    ))
+    .sort((left, right) => (
+      (left.subjectId ?? "") < (right.subjectId ?? "") ? -1
+        : (left.subjectId ?? "") > (right.subjectId ?? "") ? 1
+          : left.id < right.id ? -1 : left.id > right.id ? 1 : 0
+    ))[0];
+  if (direct?.subjectId === null || direct === undefined) return undefined;
+  return Object.freeze({
+    groupId: group.identity.stableId,
+    observationId: direct.id,
+    targetActorId: direct.subjectId,
+  });
+}
+
 const RUNTIME_CORE_ESCAPE_INTENTS: ReadonlySet<CoreWildlifeIntentKind> = new Set([
   "disengage",
   "flee",
@@ -3635,7 +4173,27 @@ const RUNTIME_CORE_MOVING_INTENTS: ReadonlySet<CoreWildlifeIntentKind> = new Set
   "scavenge",
   "forage",
   "pursue",
+  "regroup",
 ] satisfies readonly CoreWildlifeIntentKind[]);
+const RUNTIME_CORE_OFF_FRAME_ACTION_ACCESSIBILITY: CoreWildlifeActionAccessibility =
+  Object.freeze({
+    disengage: false,
+    flee: false,
+    alarm: false,
+    retreat: false,
+    guard: false,
+    scavenge: false,
+    forage: false,
+    pursue: false,
+    regroup: false,
+    rest: false,
+    observe: true,
+  });
+// Keep the physical split threshold inside the ordinary direct-detail sight
+// envelope. A separated social actor may then lawfully perceive a group mate
+// and choose regroup without hidden coordinates or a bespoke homing rule.
+const RUNTIME_CORE_GROUP_SPLIT_DISTANCE_UNITS = 6 * WORLD_POSITION_UNITS_PER_TILE;
+const RUNTIME_CORE_GROUP_REJOIN_DISTANCE_UNITS = 2 * WORLD_POSITION_UNITS_PER_TILE;
 
 function runtimeCoreMovementTargets(
   actor: CoreWildlifeActorState,
@@ -3652,6 +4210,7 @@ function runtimeCoreMovementTargets(
     actor.intent.kind === "pursue"
     || actor.intent.kind === "scavenge"
     || actor.intent.kind === "forage"
+    || actor.intent.kind === "regroup"
   ) return focus === null ? Object.freeze([]) : Object.freeze([focus.area]);
   if (!RUNTIME_CORE_ESCAPE_INTENTS.has(actor.intent.kind)) return Object.freeze([]);
   return deriveLivingActorEscapeTargets({
@@ -3823,6 +4382,7 @@ function runtimeCoreActionAccessibility(
     scavenge: canStand,
     forage: canStand,
     pursue: canAttemptMovement,
+    regroup: canAttemptMovement,
     rest: canStand,
     observe: true,
   });
@@ -3881,6 +4441,7 @@ function resolveRuntimeCoreLocomotion(
   state: CoreEcologyAggregatePatchState,
   world: WorldView,
   tick: number,
+  localActorIds: ReadonlySet<string>,
 ): Readonly<{
   patch: CoreEcologyAggregatePatchState;
   blocked: readonly RuntimeCoreBlockedMovement[];
@@ -3888,7 +4449,10 @@ function resolveRuntimeCoreLocomotion(
   let patch = state;
   const blocked: RuntimeCoreBlockedMovement[] = [];
   for (const member of state.populations.flatMap(({ members }) => members)
-    .filter(({ materialization }) => materialization === "materialized")
+    .filter(({ materialization, actor }) => (
+      materialization === "materialized"
+      && localActorIds.has(actor.identity.stableId)
+    ))
     .sort((left, right) => left.actor.identity.stableId < right.actor.identity.stableId ? -1 : 1)) {
     const actor = coreEcologyAggregatePatchActor(patch, member.actor.identity.stableId);
     if (actor === null) return null;
@@ -4043,6 +4607,102 @@ function resolveRuntimeCoreLocomotion(
   return Object.freeze({ patch, blocked: Object.freeze(blocked) });
 }
 
+/**
+ * Reconciles only fully materialized groups from exact post-locomotion bodies.
+ * Distance alone cannot split a group: a current actor-owned escape event must
+ * authenticate the separation. Partial groups remain under the coarse/group
+ * representation owner until all required bodies are active together.
+ */
+function reconcileRuntimeCoreMaterializedGroups(
+  state: CoreEcologyAggregatePatchState,
+  events: readonly CoreWildlifeCausalEvent[],
+  tick: number,
+): Readonly<{
+  patch: CoreEcologyAggregatePatchState;
+  events: readonly CoreEcologyGroupTransitionEvent[];
+}> | null {
+  const groups: CoreEcologyGroupState[] = [];
+  const transitions: CoreEcologyGroupTransitionEvent[] = [];
+  for (const group of state.groups.groups) {
+    const population = state.populations.find(({ species, populationKey }) => (
+      species === group.identity.species
+      && populationKey === group.identity.populationKey
+    ));
+    if (population === undefined) return null;
+    const members = population.members
+      .filter(({ populationOrdinal }) => group.memberOrdinals.includes(populationOrdinal))
+      .sort((left, right) => left.populationOrdinal - right.populationOrdinal);
+    if (
+      members.length !== group.memberOrdinals.length
+      || members.some(({ materialization }) => materialization !== "materialized")
+    ) {
+      groups.push(group);
+      continue;
+    }
+    const escapeEvents = events
+      .filter((event) => (
+        event.atTick === tick
+        && (event.kind === "flee" || event.kind === "retreat")
+        && members.some(({ actor }) => actor.identity.stableId === event.actorId)
+      ))
+      .sort((left, right) => (
+        left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0
+      ));
+    const memberPositions = members.map(({ populationOrdinal, actor }) => ({
+      memberOrdinal: populationOrdinal,
+      position: actor.address.position,
+    }));
+    const baseInput = {
+      atTick: tick,
+      memberPositions,
+      splitDistanceUnits: RUNTIME_CORE_GROUP_SPLIT_DISTANCE_UNITS,
+      rejoinDistanceUnits: RUNTIME_CORE_GROUP_REJOIN_DISTANCE_UNITS,
+    } as const;
+    // More than one member may flee in the same tick. Select the first stable
+    // event that actually satisfies the exact physical split invariant, rather
+    // than letting an unrelated lower-sorted event suppress the real split.
+    let reconciled: ReturnType<typeof reconcileCoreEcologyGroupMaterialized> = null;
+    if (group.phase === "cohesive") {
+      for (const escapeEvent of escapeEvents) {
+        const escapingMember = members.find(({ actor }) => (
+          actor.identity.stableId === escapeEvent.actorId
+        ));
+        if (escapingMember === undefined) return null;
+        const candidate = reconcileCoreEcologyGroupMaterialized(group, {
+          ...baseInput,
+          currentEscapeCause: {
+            eventId: escapeEvent.eventId,
+            causeReferenceId: escapeEvent.causeReferenceId,
+            memberOrdinal: escapingMember.populationOrdinal,
+          },
+        });
+        if (candidate === null) return null;
+        if (candidate.events.some(({ kind }) => kind === "group-split")) {
+          reconciled = candidate;
+          break;
+        }
+      }
+    }
+    reconciled ??= reconcileCoreEcologyGroupMaterialized(group, baseInput);
+    if (reconciled === null) return null;
+    groups.push(reconciled.group);
+    transitions.push(...reconciled.events);
+  }
+  let groupSet;
+  try {
+    groupSet = createCoreEcologyGroupSet(groups);
+  } catch {
+    return null;
+  }
+  const patch = canonicalizeCoreEcologyAggregatePatch({ ...state, groups: groupSet });
+  if (patch === null) return null;
+  transitions.sort((left, right) => (
+    left.atTick - right.atTick
+    || (left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
+  ));
+  return Object.freeze({ patch, events: Object.freeze(transitions) });
+}
+
 function stepRuntimeCoreEcology(
   state: CoreEcologyAggregatePatchState,
   world: WorldState,
@@ -4052,20 +4712,45 @@ function stepRuntimeCoreEcology(
   physicalCargo: PhysicalCargoState,
   settlementEcology: SettlementEcologyState,
   observationBatches: readonly (readonly CoreEcologyObservationBatch[])[],
+  localActorIdsValue: readonly string[],
 ): Readonly<{
   patch: CoreEcologyAggregatePatchState;
   events: readonly CoreWildlifeCausalEvent[];
+  groupEvents: readonly CoreEcologyGroupTransitionEvent[];
   resourceClaims: readonly CoreWildlifeResourceClaim[];
 }> | null {
+  const materializedActorIds = state.populations.flatMap(({ members }) => members)
+    .filter(({ materialization }) => materialization === "materialized")
+    .map(({ actor }) => actor.identity.stableId);
+  const materializedActorIdSet = new Set(materializedActorIds);
+  const localActorIds = new Set(localActorIdsValue);
+  if (
+    localActorIds.size !== localActorIdsValue.length
+    || localActorIdsValue.some((actorId) => !materializedActorIdSet.has(actorId))
+  ) return null;
   const actorSteps: Array<{
     actorId: string;
     observations: readonly ActorObservation[];
     foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
     accessibility: typeof CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE;
     neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
+    regroupOpportunity?: CoreWildlifeRegroupOpportunity;
   }> = [];
   for (const { actor } of state.populations.flatMap(({ members }) => members)
     .filter(({ materialization }) => materialization === "materialized")) {
+    if (!localActorIds.has(actor.identity.stableId)) {
+      // Atomic group admission may retain an exact body just beyond this
+      // regional frame. Age it without inventing perception, resources, or
+      // movement until its segmented address re-enters a loaded frame.
+      actorSteps.push({
+        actorId: actor.identity.stableId,
+        observations: Object.freeze([]),
+        foodOpportunities: Object.freeze([]),
+        accessibility: RUNTIME_CORE_OFF_FRAME_ACTION_ACCESSIBILITY,
+        neutralActivityPreference: "observe",
+      });
+      continue;
+    }
     const sharedObservations = mergeRuntimeCoreObservationBatches(
       actor.identity.stableId,
       observationBatches,
@@ -4116,11 +4801,18 @@ function stepRuntimeCoreEcology(
       || accessibility === null
       || (ownsActivity && activity === null)
     ) return null;
+    const regroupOpportunity = runtimeCoreRegroupOpportunity(
+      state,
+      actor,
+      observations,
+      world.meta.completedTick,
+    );
     actorSteps.push({
       actorId: actor.identity.stableId,
       observations,
       foodOpportunities: reachableFood,
       accessibility,
+      ...(regroupOpportunity === undefined ? {} : { regroupOpportunity }),
       ...(activity?.preferredNeutralIntent === null || activity === null
         ? {}
         : { neutralActivityPreference: activity.preferredNeutralIntent }),
@@ -4137,6 +4829,7 @@ function stepRuntimeCoreEcology(
       stepped.patch,
       movementView,
       world.meta.completedTick,
+      localActorIds,
     );
     if (locomotion === null) return null;
     if (locomotion.blocked.length === 0) {
@@ -4168,14 +4861,27 @@ function stepRuntimeCoreEcology(
     if (stepped === null) return null;
   }
   if (moved === null) return null;
-  const tidalStep = stepCoreEcologyTidalTable(moved, {
+  const reconciledGroups = reconcileRuntimeCoreMaterializedGroups(
+    moved,
+    stepped.events,
+    world.meta.completedTick,
+  );
+  if (reconciledGroups === null) return null;
+  const tidalStep = stepCoreEcologyTidalTable(reconciledGroups.patch, {
     atTick: world.meta.completedTick,
   });
   if (tidalStep === null) return null;
   const canonical = canonicalRuntimeCoreEcology(tidalStep.patch, world, bio0);
+  const groupEvents = [
+    ...stepped.groupEvents,
+    ...reconciledGroups.events,
+  ].sort((left, right) => (
+    left.atTick - right.atTick || compareText(left.eventId, right.eventId)
+  ));
   return canonical === null ? null : Object.freeze({
     patch: canonical,
     events: stepped.events,
+    groupEvents: Object.freeze(groupEvents),
     resourceClaims: stepped.resourceClaims,
   });
 }
@@ -5150,14 +5856,16 @@ function runtimeWorkingDogInvestigationReachable(input: Readonly<{
   const { activity } = input;
   if (
     activity.activity !== "investigate"
-    || activity.cause.kind !== "perception"
+    || (activity.cause.kind !== "perception" && activity.cause.kind !== "handler-report")
     || activity.perceivedArea === null
   ) return false;
-  const belief = input.dog.perception.beliefs.find(({ sourceObservationId, area }) => (
-    sourceObservationId === activity.cause.referenceId
-    && stableStringify(area) === stableStringify(activity.perceivedArea)
-  ));
-  if (belief === undefined) return null;
+  if (activity.cause.kind === "perception") {
+    const belief = input.dog.perception.beliefs.find(({ sourceObservationId, area }) => (
+      sourceObservationId === activity.cause.referenceId
+      && stableStringify(area) === stableStringify(activity.perceivedArea)
+    ));
+    if (belief === undefined) return null;
+  }
   const surface = createRuntimeWorkingDogTraversability(
     input.dog,
     input.regionalView,
@@ -5232,6 +5940,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
   readonly regionalView: WorldView;
   readonly weather: WeatherState;
   readonly observationBatches: readonly (readonly CoreEcologyObservationBatch[])[];
+  readonly handlerSearchReport: SettlementWorkingAnimalHandlerSearchReport | null;
 }>): Readonly<{
   readonly roster: DogActorRosterState;
   readonly workingAnimals: SettlementWorkingAnimalState;
@@ -5335,8 +6044,60 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     hungerPressure: dog.needs.hunger,
     thirstPressure: dog.needs.thirst,
   } as const;
-  let workingAnimals = stepRuntimeWorkingAnimalTaskLifecycle(
-    input.workingAnimals,
+  let workingAnimals = input.workingAnimals;
+  if (
+    input.handlerSearchReport !== null
+    && assignment.currentTask === null
+    && autonomy.assignmentCompatibleFallback === null
+  ) {
+    const reportStage = stageSettlementWorkingAnimalSearchFromHandlerReport(
+      workingAnimals,
+      {
+        tick,
+        report: input.handlerSearchReport,
+        welfare,
+        accessibility: {
+          watch: true,
+          investigate: actorOnOpenTerrain && hasTraversableStep,
+          return: actorOnOpenTerrain && hasTraversableStep,
+        },
+        actorDisposition: autonomy.disposition,
+        workerInsideDutyArea: runtimePositionInsideArea(
+          dog.address.position,
+          assignment.dutyArea,
+        ),
+      },
+    );
+    if (reportStage !== null) {
+      const reportAssignment = reportStage.state.assignments.find(({ assignmentId }) => (
+        assignmentId === assignment.assignmentId
+      ));
+      const reportActivity = reportStage.transaction ?? reportAssignment?.currentActivity;
+      if (reportAssignment === undefined || reportActivity === undefined) return null;
+      const routeReachable = runtimeWorkingDogInvestigationReachable({
+        dog,
+        regionalView: input.regionalView,
+        tick,
+        assignment: reportAssignment,
+        activity: reportActivity,
+      });
+      if (routeReachable === null) return null;
+      if (routeReachable) {
+        workingAnimals = reportStage.state;
+        if (reportStage.transaction !== null) {
+          const resolvedReport = resolveSettlementWorkingAnimalActivity(
+            workingAnimals,
+            reportStage.transaction,
+          );
+          if (resolvedReport === null) return null;
+          workingAnimals = resolvedReport.state;
+        }
+      }
+    }
+  }
+
+  const initialTaskLifecycle = stepRuntimeWorkingAnimalTaskLifecycle(
+    workingAnimals,
     {
       assignmentId: assignment.assignmentId,
       tick,
@@ -5353,7 +6114,8 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
       }),
     },
   );
-  if (workingAnimals === null) return null;
+  if (initialTaskLifecycle === null) return null;
+  workingAnimals = initialTaskLifecycle;
   let activeAssignment = workingAnimals.assignments.find(({ assignmentId }) => (
     assignmentId === assignment.assignmentId
   ));
@@ -5467,7 +6229,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     assignmentId === assignment.assignmentId
   ));
   if (activeAssignment === undefined) return null;
-  workingAnimals = stepRuntimeWorkingAnimalTaskLifecycle(
+  const acceptedTaskLifecycle = stepRuntimeWorkingAnimalTaskLifecycle(
     workingAnimals,
     {
       assignmentId: activeAssignment.assignmentId,
@@ -5485,7 +6247,8 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
       }),
     },
   );
-  if (workingAnimals === null) return null;
+  if (acceptedTaskLifecycle === null) return null;
+  workingAnimals = acceptedTaskLifecycle;
 
   const acceptedAssignment = workingAnimals.assignments.find(({ assignmentId }) => (
     assignmentId === assignment.assignmentId
@@ -5781,6 +6544,9 @@ export async function createTideweftRuntime(
     settlementEcology,
     dogActorRoster,
   );
+  let settlementDomesticAnimalRecovery = createSettlementDomesticAnimalRecoveryState(
+    settlementEcology.identity.settlementId,
+  );
   let porterResponse = createRuntimePorterResponse(bio0Ecology);
   let livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
   let fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -6013,6 +6779,7 @@ export async function createTideweftRuntime(
     dogActorRoster = loaded.dogActorRoster;
     settlementEcology = loaded.settlementEcology;
     settlementWorkingAnimals = loaded.settlementWorkingAnimals;
+    settlementDomesticAnimalRecovery = loaded.settlementDomesticAnimalRecovery;
     porterResponse = loaded.porterResponse;
     livingActorPlayerChoice = loaded.livingActorPlayerChoice;
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -6889,6 +7656,29 @@ export async function createTideweftRuntime(
         .flatMap(({ members }) => members)
         .filter(({ materialization }) => materialization === "materialized")
         .map(({ actor }) => actor);
+      const localMaterializedCoreActors = materializedCoreActors.filter(({ address }) => (
+        livingActorAddressInRegionalWindow(address, regionalTravel.window) !== null
+      ));
+      const localMaterializedCoreActorIds = localMaterializedCoreActors
+        .map(({ identity }) => identity.stableId)
+        .sort(compareText);
+      let coreEcologyPerceptionPatch = coreEcologyForStep;
+      if (localMaterializedCoreActors.length !== materializedCoreActors.length) {
+        try {
+          // The authoritative patch keeps the whole bounded group exact under
+          // one atomic materialization unit. This transient view narrows only
+          // the perception bridge's observer ownership to bodies in-frame.
+          coreEcologyPerceptionPatch = setCoreEcologyAggregatePatchMaterializedActors(
+            coreEcologyForStep,
+            {
+              atTick: coreEcologyForStep.updatedAtTick,
+              actorIds: localMaterializedCoreActorIds,
+            },
+          );
+        } catch {
+          throw new Error("Core ecology local perception ownership could not be resolved");
+        }
+      }
       const playerWorldPosition = playerWorldPositionInRegionalWindow(
         regionalTravel.window,
         player,
@@ -6907,7 +7697,7 @@ export async function createTideweftRuntime(
         persistence: "promoted",
       });
       const corePerceptionFrame = {
-        actors: materializedCoreActors,
+        actors: localMaterializedCoreActors,
         participants: [
           ...runtimeDogActors(bio0Ecology, dogActorRoster).map(({ address }) => ({
             address,
@@ -6929,13 +7719,16 @@ export async function createTideweftRuntime(
       const coreAggregateActivityObservations =
         collectCoreEcologyAggregateActivityObservationBatches({
           ...corePerceptionFrame,
-          patch: coreEcologyForStep,
+          patch: coreEcologyPerceptionPatch,
         });
       if (coreAggregateActivityObservations === null) {
         throw new Error("Core ecology aggregate activity perception could not be resolved");
       }
       const coreAlarmObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [];
-      for (const alarm of runtimeCoreAlarmEvents(coreEcologyForStep)) {
+      const localMaterializedCoreActorIdSet = new Set(localMaterializedCoreActorIds);
+      for (const alarm of runtimeCoreAlarmEvents(coreEcologyForStep).filter(({ actorId }) => (
+        localMaterializedCoreActorIdSet.has(actorId)
+      ))) {
         const propagated = propagateCoreEcologyAlarmObservationBatches(
           alarm,
           corePerceptionFrame,
@@ -7040,6 +7833,19 @@ export async function createTideweftRuntime(
         completedEconomyView,
         bio0Ecology.porterAddress.actorId,
       );
+      const sightAdvancedRecovery = advanceRuntimeDomesticRecoveryFromCaretakerSight({
+        state: settlementDomesticAnimalRecovery,
+        settlement: settlementEcology,
+        core: coreEcologyForStep,
+        caretakerActorId: porter.address.actorId,
+        caretakerPerception: porter.resident.perception,
+        observations: porterCoreObservations,
+        atTick: world.meta.completedTick,
+      });
+      if (sightAdvancedRecovery === null) {
+        throw new Error("Domestic-animal recovery sight transition was rejected");
+      }
+      settlementDomesticAnimalRecovery = sightAdvancedRecovery;
       const bio0Traversability = bio0Simulation.allowPhysicalMovement
         ? createRuntimeBio0Traversability(
             bio0Ecology,
@@ -7159,12 +7965,27 @@ export async function createTideweftRuntime(
         regionalView: completedRegionalView,
         weather: elapsedWeather,
         observationBatches: coreObservationBatches,
+        handlerSearchReport: runtimeDomesticRecoveryHandlerSearchReport(
+          settlementDomesticAnimalRecovery,
+          settlementWorkingAnimals,
+        ),
       });
       if (workingDogStep === null) {
         throw new Error("Settlement working dog step rejected");
       }
       dogActorRoster = workingDogStep.roster;
       settlementWorkingAnimals = workingDogStep.workingAnimals;
+      const searchLinkedRecovery = advanceRuntimeDomesticRecoveryFromWorkingSearch({
+        state: settlementDomesticAnimalRecovery,
+        settlement: settlementEcology,
+        core: coreEcologyForStep,
+        workingAnimals: settlementWorkingAnimals,
+        atTick: world.meta.completedTick,
+      });
+      if (searchLinkedRecovery === null) {
+        throw new Error("Domestic-animal recovery search linkage was rejected");
+      }
+      settlementDomesticAnimalRecovery = searchLinkedRecovery;
       const coreStep = stepRuntimeCoreEcology(
         coreEcologyForStep,
         world,
@@ -7174,13 +7995,28 @@ export async function createTideweftRuntime(
         physicalCargo,
         settlementEcology,
         coreObservationBatches,
+        localMaterializedCoreActorIds,
       );
       if (coreStep === null) {
         throw new Error("Core ecology step rejected");
       }
+      const topologyAdvancedRecovery = advanceRuntimeDomesticRecoveryFromGroupEvents({
+        state: settlementDomesticAnimalRecovery,
+        settlement: settlementEcology,
+        core: coreStep.patch,
+        events: coreStep.groupEvents,
+        atTick: world.meta.completedTick,
+      });
+      if (topologyAdvancedRecovery === null) {
+        throw new Error("Domestic-animal recovery topology transition was rejected");
+      }
+      settlementDomesticAnimalRecovery = topologyAdvancedRecovery;
       const playerEventTimeAlarmObservations: ActorObservation[] = [];
       for (const event of coreStep.events) {
-        if (event.kind !== "alarm") continue;
+        if (
+          event.kind !== "alarm"
+          || !localMaterializedCoreActorIdSet.has(event.actorId)
+        ) continue;
         const propagated = propagateCoreEcologyAlarmObservationBatches(
           event,
           corePerceptionFrame,
@@ -9048,6 +9884,9 @@ export async function createTideweftRuntime(
       settlementEcology,
       dogActorRoster,
     );
+    settlementDomesticAnimalRecovery = createSettlementDomesticAnimalRecoveryState(
+      settlementEcology.identity.settlementId,
+    );
     porterResponse = createRuntimePorterResponse(bio0Ecology);
     livingActorPlayerChoice = createRuntimeLivingActorPlayerChoice();
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
@@ -10414,6 +11253,16 @@ export async function createTideweftRuntime(
     if (settlementWorkingAnimalsSnapshot === null) {
       throw new Error("Refusing to save inconsistent settlement working-animal state");
     }
+    const settlementDomesticAnimalRecoverySnapshot =
+      canonicalRuntimeSettlementDomesticAnimalRecovery(
+        settlementDomesticAnimalRecovery,
+        worldSnapshot,
+        settlementEcologySnapshot,
+        coreEcologySnapshot,
+      );
+    if (settlementDomesticAnimalRecoverySnapshot === null) {
+      throw new Error("Refusing to save inconsistent domestic-animal recovery state");
+    }
     const porterResponseSnapshot = canonicalRuntimePorterResponse(
       porterResponse,
       bio0EcologySnapshot,
@@ -10452,6 +11301,9 @@ export async function createTideweftRuntime(
       dogActorRoster: serializeDogActorRoster(dogActorRosterSnapshot),
       settlementWorkingAnimals: serializeSettlementWorkingAnimalState(
         settlementWorkingAnimalsSnapshot,
+      ),
+      settlementDomesticAnimalRecovery: serializeSettlementDomesticAnimalRecoveryState(
+        settlementDomesticAnimalRecoverySnapshot,
       ),
       porterResponse: porterResponseSnapshot,
       livingActorPlayerChoice: livingActorPlayerChoiceSnapshot,
@@ -10558,6 +11410,7 @@ export async function createTideweftRuntime(
       settlementEcology,
       dogActorRoster,
       settlementWorkingAnimals,
+      settlementDomesticAnimalRecovery,
       porterResponse,
       livingActorPlayerChoice,
       regionalTravel,
@@ -10606,6 +11459,7 @@ export async function createTideweftRuntime(
       settlementEcology = prior.settlementEcology;
       dogActorRoster = prior.dogActorRoster;
       settlementWorkingAnimals = prior.settlementWorkingAnimals;
+      settlementDomesticAnimalRecovery = prior.settlementDomesticAnimalRecovery;
       porterResponse = prior.porterResponse;
       livingActorPlayerChoice = prior.livingActorPlayerChoice;
       regionalTravel = prior.regionalTravel;
@@ -10732,6 +11586,7 @@ type LoadedAutosave = {
   readonly dogActorRoster: DogActorRosterState;
   readonly settlementEcology: SettlementEcologyState;
   readonly settlementWorkingAnimals: SettlementWorkingAnimalState;
+  readonly settlementDomesticAnimalRecovery: SettlementDomesticAnimalRecoveryState;
   readonly porterResponse: PorterResponseState;
   readonly livingActorPlayerChoice: LivingActorPlayerChoiceState;
   readonly regionalTravel: RegionalPlayerTravelState;
@@ -10955,6 +11810,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== DOMESTIC_YARD_GAME_SAVE_VERSION
         && decoded.version !== DOMESTIC_PEN_GAME_SAVE_VERSION
         && decoded.version !== PADDOCK_WATCH_GAME_SAVE_VERSION
+        && decoded.version !== WATCH_RETURNS_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -10976,6 +11832,40 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+      ) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "bio0Ecology",
+            "coreEcology",
+            "dogActorRoster",
+            "fieldResources",
+            "format",
+            "integrity",
+            "livingActorPlayerChoice",
+            "perceptionCarry",
+            "physicalCargo",
+            "player",
+            "porterResponse",
+            "promiseJourney",
+            "regionalTravel",
+            "session",
+            "settlementEcology",
+            "settlementDomesticAnimalRecovery",
+            "settlementWorkingAnimals",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+          || typeof decoded.bio0Ecology !== "string"
+          || typeof decoded.coreEcology !== "string"
+          || typeof decoded.settlementEcology !== "string"
+          || typeof decoded.dogActorRoster !== "string"
+          || typeof decoded.settlementWorkingAnimals !== "string"
+          || typeof decoded.settlementDomesticAnimalRecovery !== "string"
+        ) throw new Error(`Version ${decoded.version} save envelope is not canonical`);
+      } else if (
+        decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
         || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
       ) {
         if (
@@ -11179,6 +12069,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || Object.hasOwn(decoded, "settlementEcology")
         || Object.hasOwn(decoded, "dogActorRoster")
         || Object.hasOwn(decoded, "settlementWorkingAnimals")
+        || Object.hasOwn(decoded, "settlementDomesticAnimalRecovery")
         || Object.hasOwn(decoded, "porterResponse")
         || Object.hasOwn(decoded, "livingActorPlayerChoice")
       ) {
@@ -11195,6 +12086,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       || Object.hasOwn(decoded, "settlementEcology")
       || Object.hasOwn(decoded, "dogActorRoster")
       || Object.hasOwn(decoded, "settlementWorkingAnimals")
+      || Object.hasOwn(decoded, "settlementDomesticAnimalRecovery")
       || Object.hasOwn(decoded, "porterResponse")
       || Object.hasOwn(decoded, "livingActorPlayerChoice")
     ) {
@@ -11215,6 +12107,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const coreEcology = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
       || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
     )
@@ -11282,6 +12175,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const dogActorRoster = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
       || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
     )
       ? canonicalRuntimeDogActorRoster(
@@ -11296,6 +12190,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const settlementEcology = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
       || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
       || decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
@@ -11306,6 +12201,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           if (
             (
               decoded.version === GAME_SAVE_VERSION
+              || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
               || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
             )
             && serializeSettlementEcologyState(migrated) !== decoded.settlementEcology
@@ -11359,6 +12255,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const settlementWorkingAnimals = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
       || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
     )
       ? (() => {
@@ -11385,13 +12282,19 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
                 !== PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID
             )
           ) return null;
-          const deserialized = decoded.version === GAME_SAVE_VERSION
+          const deserialized = (
+            decoded.version === GAME_SAVE_VERSION
+            || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
+          )
             ? deserializeSettlementWorkingAnimalState(workingAnimalsText)
             : adoptSettlementWorkingAnimalStateV1(parsedWorkingAnimals);
           if (
             deserialized === null
             || (
-              decoded.version === GAME_SAVE_VERSION
+              (
+                decoded.version === GAME_SAVE_VERSION
+                || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
+              )
               && serializeSettlementWorkingAnimalState(deserialized)
                 !== workingAnimalsText
             )
@@ -11438,6 +12341,30 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         );
     if (settlementWorkingAnimals === null) {
       throw new Error("Current save contains invalid settlement working-animal state");
+    }
+    const settlementDomesticAnimalRecovery = decoded.version === GAME_SAVE_VERSION
+      ? (() => {
+          const recoveryText = decoded.settlementDomesticAnimalRecovery;
+          if (typeof recoveryText !== "string") return null;
+          const deserialized = deserializeSettlementDomesticAnimalRecoveryState(recoveryText);
+          if (
+            deserialized === null
+            || serializeSettlementDomesticAnimalRecoveryState(deserialized) !== recoveryText
+          ) return null;
+          const recovered = recoverPendingSettlementDomesticAnimalRecovery(deserialized);
+          if (recovered === null) return null;
+          return canonicalRuntimeSettlementDomesticAnimalRecovery(
+            recovered.state,
+            world,
+            settlementEcology,
+            coreEcology,
+          );
+        })()
+      : createSettlementDomesticAnimalRecoveryState(
+          settlementEcology.identity.settlementId,
+        );
+    if (settlementDomesticAnimalRecovery === null) {
+      throw new Error("Current save contains invalid domestic-animal recovery state");
     }
     const porterResponse = decoded.version >= LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION
       ? canonicalRuntimePorterResponse(decoded.porterResponse, bio0Ecology, world)
@@ -11619,6 +12546,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       dogActorRoster,
       settlementEcology,
       settlementWorkingAnimals,
+      settlementDomesticAnimalRecovery,
       porterResponse,
       livingActorPlayerChoice,
       regionalTravel,

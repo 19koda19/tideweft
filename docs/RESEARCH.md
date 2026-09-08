@@ -283,12 +283,39 @@ player command, or guaranteed defense. Validation is deliberately concentrated
 on shared lifecycle, perception, locomotion, welfare, migration/replay,
 conservation, signed-world, and bounded-performance invariants plus
 representative runtime emergence—not a bespoke test for every species or pair.
-Exact release/main commit `f2c55413c64a8e6b8e3cc1fab06e50252df2399f`
-passed feature CI `34158217494`, main CI `34158968284`, and Pages
-`34158968401`; five cache-bypassed live artifacts match the tested production
-build byte-for-byte.
+Exact gameplay commit `f2c55413c64a8e6b8e3cc1fab06e50252df2399f` and public
+attestation commit `6a5bc4352edb39b47ee2216ca01a1506f01419cb` passed final CI
+`34160098140` and Pages `34160098112`; five cache-bypassed live artifacts match
+the tested production build byte-for-byte.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, and Alpha 27 is the verified bounded work-lifecycle extension. None completes worldwide aquatic or settlement ecology, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+The unreleased `0.3.3-alpha.28 — The Missing Goat` source candidate tests a
+fourteenth scaling lesson: a recovery story should compose existing identity,
+group, perception, locomotion, custody, home, and work owners rather than add a
+goat-specific rescue brain. An exact in-frame split needs both a current caused
+flee/retreat and real separation; distance alone is not a cause. Regroup
+requires current identified peer sight, while danger and physiology remain
+authoritative. The keeper must lawfully notice an absence before an explicit
+last-known-area report can recruit the existing guardian. Search is an action,
+not proof of finding.
+
+The same exact bodies may physically rejoin. Current caretaker sight of every
+member in the pen confirms closure; an already-known case can consume an
+authenticated coarse reunion transition without inventing that sight. Treating
+each social group as an indivisible materialization-cap unit prevents partial
+groups from acquiring mismatched presentation and cognition. Fully coarse
+members preserve identity and topology but gain no local senses or movement.
+The new persistence surface is bounded to one case, one pending transaction,
+and one latest result under an empty version-1 root and exact outer-v20-to-v21
+adoption.
+
+This closes only one starting-harbor Wave-D integration seam. It does not add
+herding, complete schedules or home routines, guaranteed recovery, a remote
+marker or player search command, attack, injury, mortality, carcasses, calls,
+tracks, or full cross-region ecology. Confidence remains centered on shared
+invariants, deterministic properties, migration/replay, bounded performance,
+and representative emergence—not per-species or N² interaction tests.
+
+Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, and Alpha 28 is the unreleased bounded recovery-composition candidate. None completes worldwide aquatic or settlement ecology, and none adds attacks, injury, mortality, carcasses, live-prey consumption, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

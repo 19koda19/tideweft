@@ -290,7 +290,7 @@ describe("core ecology pure runtime seam", () => {
     )).toEqual([]);
   });
 
-  it("keeps a partially crossing herd exact and idempotent at an unchanged camera window", () => {
+  it("keeps a partially crossing herd atomic, exact, and idempotent", () => {
     const firstWindow = windowAt();
     const group = createCoreEcologyGroup({
       seed: SEED,
@@ -314,13 +314,18 @@ describe("core ecology pure runtime seam", () => {
     const state = migrateCoreEcologyPatchToAggregatePatch(waveAState);
     if (state === null) throw new Error("Could not migrate partial-crossing fixture");
     const crossingWindow = shiftedWindow(firstWindow, 50, 0);
-    const expected = [member(state, "deer:partial-crossing", 1).actor.identity.stableId];
+    const expected = state.populations[0]!.members
+      .map(({ actor }) => actor.identity.stableId)
+      .sort();
     const beforePositions = state.populations[0]!.members
       .map(({ actor }) => actor.address.position);
 
     expect(deriveCoreEcologyMaterializedActorIds(state, crossingWindow)).toEqual(expected);
     const first = setCoreEcologyMaterializationForWindow(state, crossingWindow, 1);
     if (first === null) throw new Error("Partial crossing materialization failed");
+    expect(first.populations[0]!.members.every(({ materialization }) =>
+      materialization === "materialized"
+    )).toBe(true);
     expect(deriveCoreEcologyMaterializedActorIds(first, crossingWindow)).toEqual(expected);
     const repeated = setCoreEcologyMaterializationForWindow(first, crossingWindow, 1);
     expect(repeated).toEqual(first);
@@ -451,14 +456,14 @@ describe("core ecology pure runtime seam", () => {
         .map(({ actor }) => actor.identity.stableId).sort());
   });
 
-  it("uses a dormant component anchor and stable ID ties across order, reload, and reconcile", () => {
+  it("uses a dormant group anchor atomically across order, reload, and reconcile", () => {
     const window = windowAt();
     const populationKey = "gull:anchored-top-k";
     const gulls = population("gull", populationKey, Array.from(
       { length: CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS },
       (_, index) => positionAt(window, 130 + index, 10),
     ));
-    const deer = population("deer", "deer:anchored-top-k", [positionAt(window, 60, 60)]);
+    const deer = population("deer", "deer:anchored-top-k", [positionAt(window, 10, 10)]);
     const group = createCoreEcologyGroup({
       seed: SEED,
       species: "gull",
@@ -481,11 +486,13 @@ describe("core ecology pure runtime seam", () => {
       }));
     const state = createState([gulls, deer]);
     const reordered = createState([deer, gulls]);
-    const allIds = state.populations.flatMap(({ members }) =>
-      members.map(({ actor }) => actor.identity.stableId)
-    ).sort();
-    const expected = allIds.slice(0, CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS);
-    const omittedId = allIds.at(-1)!;
+    const expected = state.populations
+      .find(({ populationKey: key }) => key === populationKey)!
+      .members.map(({ actor }) => actor.identity.stableId)
+      .sort();
+    const omittedId = state.populations
+      .find(({ populationKey: key }) => key === "deer:anchored-top-k")!
+      .members[0]!.actor.identity.stableId;
 
     expect(deriveCoreEcologyMaterializedActorIds(state, window)).toEqual(expected);
     expect(deriveCoreEcologyMaterializedActorIds(reordered, window)).toEqual(expected);
@@ -505,6 +512,57 @@ describe("core ecology pure runtime seam", () => {
     expect(omittedBefore).toBeDefined();
     expect(omittedAfter).toEqual(omittedBefore);
     expect(omittedAfter?.materialization).toBe("coarse");
+  });
+
+  it("never bisects a bounded group when its whole unit cannot fit the actor cap", () => {
+    const window = windowAt();
+    const nearUngrouped = population("gull", "gull:unit-cap", Array.from(
+      { length: CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS - 1 },
+      (_, index) => positionAt(window, 55 + index % 10, 55 + Math.trunc(index / 10)),
+    ));
+    const goatPopulation = population("domestic-goat", "goat:unit-cap", [
+      positionAt(window, 90, 60),
+      positionAt(window, 91, 60),
+    ]);
+    const fallbackSingleton = population("black-bear", "bear:unit-cap", [
+      positionAt(window, 110, 60),
+    ]);
+    const group = createCoreEcologyGroup({
+      seed: SEED,
+      species: "domestic-goat",
+      originRegion: ORIGIN,
+      populationKey: "goat:unit-cap",
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1],
+      anchor: positionAt(window, 90, 60),
+    });
+    const state = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "runtime:atomic-unit-cap",
+      originRegion: ORIGIN,
+      derivation: { kind: "bounded-input-v1" },
+      populations: [nearUngrouped, goatPopulation, fallbackSingleton],
+      groups: createCoreEcologyGroupSet([group]),
+    });
+    const goatIds = state.populations
+      .find(({ populationKey }) => populationKey === "goat:unit-cap")!
+      .members.map(({ actor }) => actor.identity.stableId);
+    const expected = state.populations
+      .filter(({ populationKey }) => populationKey !== "goat:unit-cap")
+      .flatMap(({ members }) => members.map(({ actor }) => actor.identity.stableId))
+      .sort();
+
+    const selected = deriveCoreEcologyMaterializedActorIds(state, window);
+    expect(selected).toEqual(expected);
+    expect(selected).toHaveLength(CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS);
+    expect(goatIds.every((actorId) => !selected?.includes(actorId))).toBe(true);
+
+    const reconciled = setCoreEcologyMaterializationForWindow(state, window, 1);
+    if (reconciled === null) throw new Error("Atomic unit-cap materialization failed");
+    expect(reconciled.populations
+      .find(({ populationKey }) => populationKey === "goat:unit-cap")!
+      .members.every(({ materialization }) => materialization === "coarse"))
+      .toBe(true);
   });
 
   it("projects only direct-detail actors and counts visible flock representatives by policy", () => {

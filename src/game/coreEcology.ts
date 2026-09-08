@@ -20,6 +20,7 @@ import {
   type CoreWildlifeCausalEvent,
   type CoreWildlifeFoodOpportunity,
   type CoreWildlifeNeutralActivityPreference,
+  type CoreWildlifeRegroupOpportunity,
   type CoreWildlifeResourceClaim,
 } from "./coreWildlifeActor";
 import {
@@ -34,6 +35,7 @@ import {
   type CoreEcologyPlayerAbsentDisturbance,
   type CoreEcologyGroupSet,
   type CoreEcologyGroupState,
+  type CoreEcologyGroupTransitionEvent,
 } from "./coreEcologyGroups";
 import {
   CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION,
@@ -434,6 +436,7 @@ export interface CoreEcologyActorStepInput {
   readonly foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
   readonly accessibility: CoreWildlifeActionAccessibility;
   readonly neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
+  readonly regroupOpportunity?: CoreWildlifeRegroupOpportunity;
 }
 
 export interface CoreEcologyPatchStepInput {
@@ -445,6 +448,8 @@ export interface CoreEcologyPatchStepInput {
 export interface CoreEcologyPatchStepResult {
   readonly patch: CoreEcologyPatchState;
   readonly events: readonly CoreWildlifeCausalEvent[];
+  /** Coarse and signal-cadence group transitions retained for downstream owners. */
+  readonly groupEvents: readonly CoreEcologyGroupTransitionEvent[];
   /** Conflicts intentionally remain for the authoritative custody owner to arbitrate. */
   readonly resourceClaims: readonly CoreWildlifeResourceClaim[];
 }
@@ -452,6 +457,7 @@ export interface CoreEcologyPatchStepResult {
 export interface CoreEcologyAggregatePatchStepResult {
   readonly patch: CoreEcologyAggregatePatchState;
   readonly events: readonly CoreWildlifeCausalEvent[];
+  readonly groupEvents: readonly CoreEcologyGroupTransitionEvent[];
   readonly resourceClaims: readonly CoreWildlifeResourceClaim[];
 }
 
@@ -1531,7 +1537,7 @@ export function setCoreEcologyMaterializedActors(
     throw new RangeError("Core ecology groups could not reach the materialization tick");
   }
   const groups = reconcileGroupsBeforeMaterialization(
-    advancedGroups,
+    advancedGroups.groups,
     patch.populations,
     desired,
     input.atTick,
@@ -1587,7 +1593,7 @@ export function setCoreEcologyAggregatePatchMaterializedActors(
     throw new RangeError("Core ecology groups could not reach the aggregate materialization tick");
   }
   const groups = reconcileGroupsBeforeMaterialization(
-    advancedGroups,
+    advancedGroups.groups,
     patch.populations,
     desired,
     input.atTick,
@@ -1655,6 +1661,9 @@ export function stepCoreEcologyPatch(
         ...(stepInput.neutralActivityPreference === undefined
           ? {}
           : { neutralActivityPreference: stepInput.neutralActivityPreference }),
+        ...(stepInput.regroupOpportunity === undefined
+          ? {}
+          : { regroupOpportunity: stepInput.regroupOpportunity }),
       });
       if (result === null) return null;
       members.push(Object.freeze({ ...member, actor: result.actor }));
@@ -1671,7 +1680,7 @@ export function stepCoreEcologyPatch(
     compareText(left.resourceId, right.resourceId) || compareText(left.actorId, right.actorId)
   );
   const groups = ingestMaterializedAlarmSignals(
-    advancedGroups,
+    advancedGroups.groups,
     populations,
     events,
     input.tick,
@@ -1687,6 +1696,7 @@ export function stepCoreEcologyPatch(
   return deepFreeze({
     patch: nextPatch,
     events,
+    groupEvents: advancedGroups.events,
     resourceClaims: claims,
   });
 }
@@ -1729,6 +1739,9 @@ export function stepCoreEcologyAggregatePatch(
         ...(stepInput.neutralActivityPreference === undefined
           ? {}
           : { neutralActivityPreference: stepInput.neutralActivityPreference }),
+        ...(stepInput.regroupOpportunity === undefined
+          ? {}
+          : { regroupOpportunity: stepInput.regroupOpportunity }),
       });
       if (result === null) return null;
       members.push(Object.freeze({ ...member, actor: result.actor }));
@@ -1745,7 +1758,7 @@ export function stepCoreEcologyAggregatePatch(
     compareText(left.resourceId, right.resourceId) || compareText(left.actorId, right.actorId)
   );
   const groups = ingestMaterializedAlarmSignals(
-    advancedGroups,
+    advancedGroups.groups,
     populations,
     events,
     input.tick,
@@ -1765,6 +1778,7 @@ export function stepCoreEcologyAggregatePatch(
   return deepFreeze({
     patch: nextPatch,
     events,
+    groupEvents: advancedGroups.events,
     resourceClaims: claims,
   });
 }
@@ -2344,7 +2358,7 @@ function canonicalPatchStepInput(
     if (!plainRecord(raw) || !requiredAndOptionalKeys(
       raw,
       ["accessibility", "actorId", "foodOpportunities", "observations"],
-      ["neutralActivityPreference"],
+      ["neutralActivityPreference", "regroupOpportunity"],
     )) return null;
     if (
       typeof raw.actorId !== "string"
@@ -2364,6 +2378,9 @@ function canonicalPatchStepInput(
       ...(raw.neutralActivityPreference === undefined
         ? {}
         : { neutralActivityPreference: raw.neutralActivityPreference }),
+      ...(raw.regroupOpportunity === undefined
+        ? {}
+        : { regroupOpportunity: raw.regroupOpportunity as CoreWildlifeRegroupOpportunity }),
     });
   }
   actorSteps.sort((left, right) => compareText(left.actorId, right.actorId));
@@ -2687,8 +2704,12 @@ function groupsBelongToPatch(
 function advanceGroupsThroughTick(
   patch: CoreEcologyVersionedPatchState,
   atTick: number,
-): CoreEcologyGroupSet | null {
+): Readonly<{
+  groups: CoreEcologyGroupSet;
+  events: readonly CoreEcologyGroupTransitionEvent[];
+}> | null {
   const groups: CoreEcologyGroupState[] = [];
+  const events: CoreEcologyGroupTransitionEvent[] = [];
   for (const initial of patch.groups.groups) {
     let group = initial;
     let steps = 0;
@@ -2709,14 +2730,21 @@ function advanceGroupsThroughTick(
           });
       if (result === null || steps >= 8) return null;
       group = result.group;
+      events.push(...result.events);
       steps += 1;
     }
     groups.push(group);
   }
-  return canonicalizeCoreEcologyGroupSet({
+  const canonicalGroups = canonicalizeCoreEcologyGroupSet({
     version: patch.groups.version,
     groups,
   });
+  if (canonicalGroups === null) return null;
+  events.sort((left, right) => (
+    left.atTick - right.atTick
+    || compareText(left.eventId, right.eventId)
+  ));
+  return deepFreeze({ groups: canonicalGroups, events });
 }
 
 function reconcileGroupsBeforeMaterialization(
