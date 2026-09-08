@@ -213,6 +213,62 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       retreat: 880_000,
     }),
   }),
+  "wild-boar": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 900_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_180_000,
+      meadow: 880_000,
+      ridge: 780_000,
+      "tidal-flat": 1_320_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 720_000,
+    intentStepFactors: Object.freeze({
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
+  elk: Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 920_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_260_000,
+      meadow: 720_000,
+      ridge: 840_000,
+      "tidal-flat": 1_380_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 820_000,
+    intentStepFactors: Object.freeze({
+      flee: 980_000,
+      retreat: 900_000,
+    }),
+  }),
+  "gray-wolf": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 880_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_140_000,
+      meadow: 820_000,
+      ridge: 700_000,
+      "tidal-flat": 1_240_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 820_000,
+    intentStepFactors: Object.freeze({
+      disengage: 900_000,
+      flee: 920_000,
+      pursue: 980_000,
+      retreat: 880_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(

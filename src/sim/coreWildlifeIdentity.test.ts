@@ -52,6 +52,9 @@ describe("core wildlife identity", () => {
       "north-american-river-otter",
       "domestic-chicken",
       "domestic-goat",
+      "wild-boar",
+      "elk",
+      "gray-wolf",
     ]);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
@@ -278,6 +281,52 @@ describe("core wildlife identity", () => {
       locomotionClass: "terrestrial",
       taxonomicClass: "bird",
     });
+
+    const waveESpecies = {
+      "wild-boar": {
+        dietClass: "omnivore",
+        groupOrganization: "sounder",
+        groupStableIdNamespace: "SOUNDER",
+        maximumPatchPopulation: 7,
+        pursuitTicks: 0,
+        roles: ["alarm-source", "prey", "forager", "scavenger", "omnivore"],
+      },
+      elk: {
+        dietClass: "herbivore",
+        groupOrganization: "herd",
+        groupStableIdNamespace: "HERD",
+        maximumPatchPopulation: 12,
+        pursuitTicks: 0,
+        roles: ["alarm-source", "prey", "forager"],
+      },
+      "gray-wolf": {
+        dietClass: "carnivore",
+        groupOrganization: "pack",
+        groupStableIdNamespace: "PACK",
+        maximumPatchPopulation: 6,
+        pursuitTicks: 12,
+        roles: ["forager", "scavenger", "predator"],
+      },
+    } as const satisfies Partial<Record<CoreWildlifeSpecies, unknown>>;
+    for (const [species, expected] of Object.entries(waveESpecies) as [
+      keyof typeof waveESpecies,
+      (typeof waveESpecies)[keyof typeof waveESpecies],
+    ][]) {
+      expect(getCoreWildlifeSpeciesMetadata(species)).toMatchObject({
+        actorRepresentation: "individual",
+        catalogIdentityForm: "individual",
+        dietClass: expected.dietClass,
+        groupOrganization: expected.groupOrganization,
+        groupStableIdNamespace: expected.groupStableIdNamespace,
+        locomotionClass: "terrestrial",
+        taxonomicClass: "mammal",
+      });
+      expect(getCoreWildlifeProfile(species)).toMatchObject({
+        maximumPatchPopulation: expected.maximumPatchPopulation,
+        roles: expected.roles,
+        behavior: { maximumPursuitTicks: expected.pursuitTicks },
+      });
+    }
   });
 
   it("fixes the Alpha-20 duck identity contract as deterministic bytes", () => {

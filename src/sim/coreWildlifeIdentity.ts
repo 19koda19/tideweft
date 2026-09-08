@@ -24,6 +24,9 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "north-american-river-otter",
   "domestic-chicken",
   "domestic-goat",
+  "wild-boar",
+  "elk",
+  "gray-wolf",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -44,7 +47,12 @@ export type CoreWildlifeLocomotionClass =
   | "aerial"
   | "aquatic"
   | "amphibious";
-export type CoreWildlifeGroupOrganization = "herd" | "flock" | "school";
+export type CoreWildlifeGroupOrganization =
+  | "herd"
+  | "flock"
+  | "school"
+  | "sounder"
+  | "pack";
 export type CoreWildlifeEcologicalRole =
   | "alarm-source"
   | "prey"
@@ -100,6 +108,9 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "OTTER-"
     | "CHICKEN-"
     | "GOAT-"
+    | "BOAR-"
+    | "ELK-"
+    | "WOLF-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -119,6 +130,9 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "north-american-river-otter": "OTTER-",
   "domestic-chicken": "CHICKEN-",
   "domestic-goat": "GOAT-",
+  "wild-boar": "BOAR-",
+  elk: "ELK-",
+  "gray-wolf": "WOLF-",
 });
 
 /**
@@ -140,6 +154,8 @@ export interface CoreWildlifeSpeciesMetadata {
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
     | "CHICKEN-FLOCK"
+    | "SOUNDER"
+    | "PACK"
     | null;
 }
 
@@ -315,6 +331,36 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     locomotionClass: "terrestrial",
     groupOrganization: "herd",
     groupStableIdNamespace: "HERD",
+  },
+  "wild-boar": {
+    species: "wild-boar",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: "sounder",
+    groupStableIdNamespace: "SOUNDER",
+  },
+  elk: {
+    species: "elk",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "herbivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: "herd",
+    groupStableIdNamespace: "HERD",
+  },
+  "gray-wolf": {
+    species: "gray-wolf",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "carnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: "pack",
+    groupStableIdNamespace: "PACK",
   },
 });
 
@@ -960,6 +1006,105 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       vigilance: [520_000, 920_000],
       boldness: [160_000, 720_000],
       sociability: [700_000, 980_000],
+    },
+  },
+  "wild-boar": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "wild-boar",
+    maximumPatchPopulation: 7,
+    roles: ["alarm-source", "prey", "forager", "scavenger", "omnivore"],
+    foodAffinities: {
+      browse: 900_000,
+      "shore-forage": 360_000,
+      carrion: 720_000,
+      "exposed-food": 680_000,
+      "live-prey": 120_000,
+    },
+    behavior: {
+      alarmThreshold: 460_000,
+      fleeThreshold: 720_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 280_000,
+      guardThreshold: 600_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["bristled-black", "dark-brown", "grizzled", "rufous-brown"],
+    temperamentPairs: [
+      ["watchful", "social"],
+      ["bold", "opportunistic"],
+      ["cautious", "reserved"],
+      ["patient", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [480_000, 900_000],
+      boldness: [220_000, 820_000],
+      sociability: [380_000, 880_000],
+    },
+  },
+  elk: {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "elk",
+    maximumPatchPopulation: 12,
+    roles: ["alarm-source", "prey", "forager"],
+    foodAffinities: {
+      browse: 1_000_000,
+      "shore-forage": 120_000,
+      carrion: 0,
+      "exposed-food": 40_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 400_000,
+      fleeThreshold: 620_000,
+      retreatThreshold: 500_000,
+      forageThreshold: 320_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-maned", "golden-brown", "pale-rumped", "winter-gray"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["watchful", "social"],
+      ["patient", "social"],
+      ["reserved", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [580_000, 960_000],
+      boldness: [100_000, 520_000],
+      sociability: [560_000, 940_000],
+    },
+  },
+  "gray-wolf": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "gray-wolf",
+    maximumPatchPopulation: 6,
+    roles: ["forager", "scavenger", "predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 100_000,
+      carrion: 820_000,
+      "exposed-food": 420_000,
+      "live-prey": 1_000_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 820_000,
+      retreatThreshold: 620_000,
+      forageThreshold: 260_000,
+      guardThreshold: 540_000,
+      maximumPursuitTicks: 12,
+    },
+    morphs: ["charcoal-gray", "grizzled-gray", "pale-gray", "tawny-gray"],
+    temperamentPairs: [
+      ["patient", "social"],
+      ["watchful", "social"],
+      ["cautious", "patient"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [580_000, 940_000],
+      boldness: [200_000, 760_000],
+      sociability: [620_000, 960_000],
     },
   },
 });

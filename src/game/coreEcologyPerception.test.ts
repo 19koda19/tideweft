@@ -47,7 +47,7 @@ interface Fixture {
 }
 
 describe("core ecology cross-species perception bridge", () => {
-  it("classifies a directly seen bear as a predator to deer and deer as prey only to bear", () => {
+  it("classifies reciprocal predator/prey pressure without declaring grouped mortality", () => {
     const current = fixture("bear deer direct contact");
     const deer = wildlife(current, "deer", OBSERVER_X, OBSERVER_Y, 0, 0);
     const bear = wildlife(current, "black-bear", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);

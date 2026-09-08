@@ -78,13 +78,16 @@ function disturbance(
 }
 
 describe("core ecology social groups", () => {
-  it("admits only actor-backed herds/flocks and fails aggregate schools or solitary species closed", () => {
+  it("admits only policy-backed social organizations and keeps HERD/SOUNDER/PACK generic", () => {
     expect(CORE_ECOLOGY_GROUP_SPECIES).toEqual([
       "deer",
       "gull",
       "fish-crow",
       "domestic-chicken",
       "domestic-goat",
+      "wild-boar",
+      "elk",
+      "gray-wolf",
     ]);
     const deer = deerGroup({ memberOrdinals: [7, 2, 5] });
     const reordered = deerGroup({ memberOrdinals: [5, 7, 2] });
@@ -136,6 +139,34 @@ describe("core ecology social groups", () => {
     expect(crow.identity.stableId).toMatch(/^CROW-FLOCK-v1-/u);
     expect(chickens.identity.organization).toBe("flock");
     expect(chickens.identity.stableId).toMatch(/^CHICKEN-FLOCK-v1-/u);
+    for (const contract of [
+      { species: "wild-boar", organization: "sounder", namespace: "SOUNDER" },
+      { species: "elk", organization: "herd", namespace: "HERD" },
+      { species: "gray-wolf", organization: "pack", namespace: "PACK" },
+    ] as const) {
+      const group = createCoreEcologyGroup({
+        seed: SEED,
+        species: contract.species,
+        originRegion: ORIGIN,
+        populationKey: `habitat-v10/temperate-upland/${contract.species}`,
+        groupOrdinal: 0,
+        memberOrdinals: [3, 1, 2],
+        anchor: position(52_000, 38_000),
+      });
+      const reorderedGroup = createCoreEcologyGroup({
+        seed: SEED,
+        species: contract.species,
+        originRegion: ORIGIN,
+        populationKey: `habitat-v10/temperate-upland/${contract.species}`,
+        groupOrdinal: 0,
+        memberOrdinals: [2, 3, 1],
+        anchor: position(52_000, 38_000),
+      });
+      expect(group).toEqual(reorderedGroup);
+      expect(group.identity.organization).toBe(contract.organization);
+      expect(group.identity.stableId.startsWith(`${contract.namespace}-v1-`)).toBe(true);
+      expect(canonicalizeCoreEcologyGroup(group)).toEqual(group);
+    }
     expect(stableCoreEcologyGroupId({
       seed: SEED,
       species: "fish-crow",

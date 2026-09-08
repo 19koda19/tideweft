@@ -261,6 +261,9 @@ const wildlifeView = (
     "domestic-chicken": "Domestic chicken",
     "domestic-goat": "Domestic goat",
     "north-american-river-otter": "North American river otter",
+    "wild-boar": "Wild boar",
+    elk: "Elk",
+    "gray-wolf": "Gray wolf",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -276,6 +279,9 @@ const wildlifeView = (
     "domestic-chicken": "CHICKEN-",
     "domestic-goat": "GOAT-",
     "north-american-river-otter": "OTTER-",
+    "wild-boar": "BOAR-",
+    elk: "ELK-",
+    "gray-wolf": "WOLF-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -1659,8 +1665,9 @@ describe("Chart Wave-B wildlife presentation", () => {
       // flock context and must not multiply every representative again.
       expect((p?.ellipse as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(3);
     }
-    expect((p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
-      .not.toContain(actor.actorId);
+    const visibleText = (p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String);
+    expect(visibleText).not.toContain(actor.actorId);
+    expect(visibleText).not.toContain(actor.appearanceKey);
     if (species === "fish-crow") {
       expect((p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
         .toContain("Fish crows · ~3 visible");
@@ -1946,6 +1953,9 @@ describe("Chart Wave-B wildlife presentation", () => {
     ["marsh-fox", "FOX-", "#9d5136", "bezier"],
     ["domestic-chicken", "CHICKEN-", "#a66a3f", "triangle"],
     ["domestic-goat", "GOAT-", "#8f7150", "bezier"],
+    ["wild-boar", "BOAR-", "#614735", "triangle"],
+    ["elk", "ELK-", "#9b6f43", "quad"],
+    ["gray-wolf", "WOLF-", "#727875", "bezier"],
   ] as const)("draws and touch-selects the color-independent %s form with reduced motion", (
     species,
     prefix,
@@ -1990,8 +2000,9 @@ describe("Chart Wave-B wildlife presentation", () => {
     const structure = p?.[structuralMethod] as ReturnType<typeof vi.fn>;
     expect(fill).toHaveBeenCalledWith(primaryColor);
     expect(structure).toHaveBeenCalled();
-    expect((p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String))
-      .not.toContain(actor.actorId);
+    const visibleText = (p?.text as ReturnType<typeof vi.fn>).mock.calls.flat().map(String);
+    expect(visibleText).not.toContain(actor.actorId);
+    expect(visibleText).not.toContain(actor.appearanceKey);
 
     canvas.emit("pointerdown", {
       clientX: 100,

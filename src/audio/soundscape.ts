@@ -1,5 +1,6 @@
 import type { WaterFlowVoice } from "../game/waterFlow";
 
+/** Cues accepted by the live Web Audio playback boundary. */
 export type SoundCue =
   | "step"
   | "scan"
@@ -38,11 +39,29 @@ export type SmallWildlifeCue =
   | "rabbit-thump"
   | "fox-yip";
 
-/** Event-bound animal voices; these are never ambient population disclosure. */
+/**
+ * Authored Alpha 30 voice vocabulary. These cues have deterministic pattern
+ * data only: they are deliberately absent from `SoundCue`, so no caller can
+ * claim a runtime audio event or playback bridge yet.
+ */
+export const ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES = Object.freeze([
+  "boar-grunt",
+  "boar-squeal",
+  "elk-alarm-bark",
+  "elk-bugle",
+  "wolf-growl",
+  "wolf-howl",
+] as const);
+
+export type Alpha30FoundationEcologyVoiceCue =
+  (typeof ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES)[number];
+
+/** Authored animal voices; runtime hearing/visibility still owns emission. */
 export type EcologyVoiceCue =
   | SmallWildlifeCue
   | "crow-nasal-double-call"
-  | "frog-chorus";
+  | "frog-chorus"
+  | Alpha30FoundationEcologyVoiceCue;
 
 export interface AudioSettings {
   enabled: boolean;
@@ -421,8 +440,9 @@ export function smallWildlifePattern(
 }
 
 /**
- * Short deterministic voices for witnessed ecology events. Keeping the cue
- * policy pure lets runtime hearing/visibility decide whether any voice exists.
+ * Pure deterministic ecology-voice vocabulary. Existing event bridges may use
+ * their supported subset; authored foundation cues remain inert until a shared
+ * hearing/visibility event resolver deliberately connects them.
  */
 export function ecologyVoicePattern(
   cue: EcologyVoiceCue,
@@ -463,11 +483,57 @@ export function ecologyVoicePattern(
       toneStep(220 + shift, 0.135, "triangle", 0.12),
     ];
   }
-  return [
-    toneStep(174.61 + Math.trunc(shift / 2), 0, "triangle", 0.17),
-    toneStep(196 + Math.trunc(shift / 2), 0.082, "sine", 0.2),
-    toneStep(164.81 + Math.trunc(shift / 3), 0.18, "triangle", 0.18),
-  ];
+  if (cue === "frog-chorus") {
+    return [
+      toneStep(174.61 + Math.trunc(shift / 2), 0, "triangle", 0.17),
+      toneStep(196 + Math.trunc(shift / 2), 0.082, "sine", 0.2),
+      toneStep(164.81 + Math.trunc(shift / 3), 0.18, "triangle", 0.18),
+    ];
+  }
+  if (cue === "boar-grunt") {
+    return [
+      toneStep(98 + Math.trunc(shift / 4), 0, "sawtooth", 0.14),
+      toneStep(82 + Math.trunc(shift / 5), 0.105, "square", 0.18),
+    ];
+  }
+  if (cue === "boar-squeal") {
+    return [
+      toneStep(1_046.5 + shift * 2, 0, "sawtooth", 0.08),
+      toneStep(1_396.91 + shift * 2, 0.06, "square", 0.1),
+      toneStep(1_174.66 + shift * 2, 0.145, "triangle", 0.16),
+    ];
+  }
+  if (cue === "elk-alarm-bark") {
+    return [
+      toneStep(311.13 + shift, 0, "square", 0.09),
+      toneStep(233.08 + Math.trunc(shift / 2), 0.075, "sawtooth", 0.17),
+    ];
+  }
+  if (cue === "elk-bugle") {
+    return [
+      toneStep(392 + shift, 0, "triangle", 0.19),
+      toneStep(698.46 + shift * 2, 0.14, "sine", 0.22),
+      toneStep(1_046.5 + shift * 2, 0.3, "triangle", 0.25),
+      toneStep(783.99 + shift, 0.49, "sine", 0.24),
+    ];
+  }
+  if (cue === "wolf-growl") {
+    return [
+      toneStep(73.42 + Math.trunc(shift / 4), 0, "sawtooth", 0.28),
+      toneStep(92.5 + Math.trunc(shift / 4), 0.14, "square", 0.3),
+      toneStep(77.78 + Math.trunc(shift / 5), 0.3, "triangle", 0.2),
+    ];
+  }
+  if (cue === "wolf-howl") {
+    return [
+      toneStep(220 + Math.trunc(shift / 2), 0, "sine", 0.36),
+      toneStep(293.66 + shift, 0.22, "triangle", 0.4),
+      toneStep(329.63 + shift, 0.48, "sine", 0.38),
+      toneStep(277.18 + Math.trunc(shift / 2), 0.72, "triangle", 0.34),
+    ];
+  }
+  const exhaustiveCue: never = cue;
+  throw new RangeError(`Unknown ecology voice cue: ${String(exhaustiveCue)}`);
 }
 
 /** A tiny, deterministic Atari-like voice for a persisted traversal incident. */

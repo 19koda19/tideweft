@@ -27,6 +27,7 @@ import {
   isLivingActorAddress,
   type LivingActorAddress,
 } from "./livingActor";
+import { coreEcologySpeciesRuntimePolicy } from "./coreEcologySpeciesRuntimePolicy";
 import { isWorldPosition, type WorldPosition } from "./worldPosition";
 
 export const CORE_WILDLIFE_ACTOR_VERSION = 1 as const;
@@ -563,11 +564,7 @@ export function repositionCoreWildlifeActorWithMovementEvidence(
     || input.strength === 0
   ) throw new RangeError("Core wildlife movement evidence requires a real relocation");
 
-  const evidenceKind = state.identity.species === "marsh-rabbit"
-    ? "paired-tracks"
-    : state.identity.species === "marsh-fox"
-      ? "canid-pawprints"
-      : null;
+  const evidenceKind = movementEvidenceKindForSpecies(state.identity.species);
   if (evidenceKind === null) {
     throw new RangeError("This wildlife species does not produce bounded movement evidence");
   }
@@ -1511,14 +1508,29 @@ function validEvidenceOwner(
     && memoryKind === "weather"
     && evidenceKind === "wet-tracks"
   ) || (
-    species === "marsh-rabbit"
-    && memoryKind === "movement"
-    && evidenceKind === "paired-tracks"
-  ) || (
-    species === "marsh-fox"
-    && memoryKind === "movement"
-    && evidenceKind === "canid-pawprints"
+    memoryKind === "movement"
+    && movementEvidenceKindForSpecies(species) === evidenceKind
   );
+}
+
+/**
+ * Movement signs are selected from the shared species policy. A new ground
+ * actor plugs into this owner by declaring exactly one supported evidence
+ * kind; missing, ambiguous, or capability-free declarations fail closed.
+ */
+function movementEvidenceKindForSpecies(
+  species: CoreWildlifeSpecies,
+): Extract<CoreWildlifeEnvironmentalEvidence["kind"], "paired-tracks" | "canid-pawprints"> | null {
+  const policy = coreEcologySpeciesRuntimePolicy(species);
+  if (
+    policy === null
+    || !policy.capabilities.includes("ground-movement-evidence")
+  ) return null;
+  const supported = policy.evidenceKinds.filter((kind): kind is
+    Extract<CoreWildlifeEnvironmentalEvidence["kind"], "paired-tracks" | "canid-pawprints"> => (
+    kind === "paired-tracks" || kind === "canid-pawprints"
+  ));
+  return supported.length === 1 ? supported[0] ?? null : null;
 }
 
 function retainMemories(

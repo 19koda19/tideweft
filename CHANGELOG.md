@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.30 — 2026-09-08
+
+Build: `0.3.3-alpha.30` · Gameplay contract: 28 · Tutorial: 40
+
+Beyond the Harbor opens the first bounded Wave-E source: wild boar, elk, and gray wolf now inhabit one deterministic remote temperate-upland and forest-edge assemblage through the shared living-ecology architecture.
+
+### Gameplay
+
+- One seed-stable remote regional source beyond the compatibility harbor now supports wild boar, elk, and gray wolf. The twenty-two-record catalog derives persistent individual populations and organizes eligible members through reusable SOUNDER, HERD, and PACK records rather than species-local controllers.
+- The new animals use shared direct perception, attention, actor-owned locomotion, bounded materialization, and broad trophic roles. A gray wolf can form role-driven pursuit pressure toward eligible prey, but only a solitary addressable marsh rabbit can receive the current exact-contact injury or mortality transaction; grouped elk, deer, and every other group member cannot be harmed.
+- A wild boar may scavenge an existing physical body only after currently perceiving it, reaching it through ordinary movement, and winning its physical claim. Each meal consumes one unit from that same finite conserved resource.
+
+### Fixes
+
+- The new assemblage is selected deterministically from a bounded remote regional ring instead of appending more animals to the original-harbor patch. This corrects origin clustering for these three additions without pretending that worldwide ecology exists.
+- HERD, SOUNDER, and PACK now pass through one shared group validator and materialization owner. Stable member, group, population, and allocation identities cannot be duplicated or silently renumbered by source order, reload, or detail transitions.
+- Pursuit eligibility and harmful-contact eligibility are separate boundaries. Wolves may exert lawful pressure on grouped herbivores, while the mortality owner still fails closed unless the exact target is solitary, addressable, currently identified, physically reached, and backed by the supported body transaction.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Remote upland animals add route pressure and ecological uncertainty without granting any hidden tracking, damage aura, guaranteed hunt, or automatic player-facing event.
+- Wolf pressure can end when current perception is lost, access fails, or actor-owned behavior disengages. A wolf near an elk or deer herd cannot convert proximity into injury, a group-member death, or a carcass.
+- Validation remains architecture-led: generated release invariants, signed-region habitat properties, group parameterization, conservation, bounded performance, and a small number of representative emergent chains replace bespoke tests for every species or an N-squared animal-pair matrix.
+
+### Interface
+
+- Chart 2D, Relief 3D, quick inspection, and ABOUT project the same directly perceived wild-boar, elk, and gray-wolf identities with distinct readable forms. Species, group, intent, body, and feeding information remain limited to what the player can lawfully observe or has learned.
+- The remote source, actors, and groups do not create a global marker, hidden census, offscreen incident narration, or omniscient pursuit line. Desktop and mobile use the same knowledge-honest projection and generous targeting boundary.
+- Field Manual version 40 explains the remote three-species source, SOUNDER/HERD/PACK reuse, bounded wolf pressure, solitary-rabbit mortality boundary, finite boar scavenging, exact save adoption, shared validation, and the intentionally absent systems.
+
+### Save changes
+
+- The outer session advances to version 23 and habitat analysis advances to version 10 while the core-ecology patch remains version 3 and its aggregate record remains version 5. The catalog now contains twenty-two records.
+- A sealed version-22 What Remains save is authenticated and adopted exactly once. Its complete habitat-version-9 record, mortality/body state, actors, populations, groups, homes, relationships, tasks, items, Promises, evidence, and world facts remain exact before the regional source and new population/group records are appended.
+- The regional source, species allocations, actor identities, SOUNDER/HERD/PACK membership, and existing body history remain deterministic across save, reload, interruption, signed coordinates, and full/coarse materialization. Adoption cannot reroll the source, duplicate an animal, or rewrite the exact version-22 body-bearing state.
+
+### Known limitations
+
+- This is one deterministic remote temperate-upland and forest-edge source, not worldwide ecology, ecological cross-region migration, or full Wave E. Cougar, additional bear ecotypes, and broader regional assemblages remain absent.
+- There is no tactical pack combat or group-member mortality. Grouped elk and deer may receive pursuit pressure but cannot be injured or killed; the only currently supported live-prey harm remains exact contact with a solitary addressable marsh rabbit.
+- Dog interaction with the three new species is an intentional no-response and remains unimplemented. Boar, elk, and wolf voice patterns are foundation-only and are not audible in play; full calls, tactical coordination, broader mortality, reproduction, population recovery, decomposition, body transport or harvesting, complete scent and tracking, and worldwide ecology remain future work.
+
 ## 0.3.3-alpha.29 — 2026-09-08
 
 Build: `0.3.3-alpha.29` · Gameplay contract: 27 · Tutorial: 39

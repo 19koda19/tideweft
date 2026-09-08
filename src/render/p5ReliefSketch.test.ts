@@ -380,6 +380,9 @@ function wildlifeView(
     "domestic-chicken": "Domestic chicken",
     "domestic-goat": "Domestic goat",
     "north-american-river-otter": "North American river otter",
+    "wild-boar": "Wild boar",
+    elk: "Elk",
+    "gray-wolf": "Gray wolf",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -395,6 +398,9 @@ function wildlifeView(
     "domestic-chicken": "CHICKEN-",
     "domestic-goat": "GOAT-",
     "north-american-river-otter": "OTTER-",
+    "wild-boar": "BOAR-",
+    elk: "ELK-",
+    "gray-wolf": "WOLF-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -2281,6 +2287,53 @@ describe("Relief wildlife presentation", () => {
     harness.renderer.destroy();
   });
 
+  it.each([
+    ["wild-boar", "#614735", "cone"],
+    ["elk", "#9b6f43", "ellipsoid"],
+    ["gray-wolf", "#727875", "sphere"],
+  ] as const)("renders and touch-selects the shared color-independent upland %s form", (
+    species,
+    primaryColor,
+    structuralMethod,
+  ) => {
+    vi.stubGlobal("performance", { now: () => 320 });
+    p5Harness.reducedMotion = true;
+    const base = view(`relief-${species}`, { x: 48, y: 48 });
+    const actor = wildlifeView(species, {
+      appearanceKey: "unknown-morph",
+      behavior: species === "gray-wolf" ? "pursue" : "forage",
+      position: { x: 12, y: 12 },
+      selected: true,
+    });
+    const harness = renderHarness({ ...base, wildlife: [actor] });
+    harness.draw();
+
+    expect(p5Harness.materialTrace.some(({ method, args }) => (
+      method === "ambientMaterial" && args[0] === primaryColor
+    ))).toBe(true);
+    expect(harness.instance[structuralMethod]).toHaveBeenCalled();
+    const labels = harness.mount.children.flatMap(({ children }) => (
+      children.map(({ textContent }) => textContent)
+    ));
+    expect(labels.join(" ")).not.toMatch(/unknown-morph|BOAR-|ELK-|WOLF-/u);
+    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+      pointerId: 230,
+      pointerType: "touch",
+    }));
+    harness.canvas.fire("pointerup", pointer(harness.canvas, {
+      pointerId: 230,
+      pointerType: "touch",
+    }));
+    expect(harness.dispatch).toHaveBeenLastCalledWith({
+      type: "select",
+      entity: "living-actor",
+      species,
+      id: actor.actorId,
+      point: { x: 12, y: 12 },
+    });
+    harness.renderer.destroy();
+  });
+
   it("hovers and selects every individually represented wildlife species", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-wildlife-targets", { x: 48, y: 48 });
@@ -2299,6 +2352,9 @@ describe("Relief wildlife presentation", () => {
       "domestic-chicken",
       "domestic-goat",
       "north-american-river-otter",
+      "wild-boar",
+      "elk",
+      "gray-wolf",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -2314,6 +2370,9 @@ describe("Relief wildlife presentation", () => {
       "domestic-chicken": "CHICKEN-",
       "domestic-goat": "GOAT-",
       "north-american-river-otter": "OTTER-",
+      "wild-boar": "BOAR-",
+      elk: "ELK-",
+      "gray-wolf": "WOLF-",
     };
 
     for (const kind of species) {

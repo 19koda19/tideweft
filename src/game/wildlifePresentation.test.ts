@@ -540,7 +540,7 @@ function catEvidenceFixture(currentTick = 11) {
 }
 
 function movementEvidenceFixture(
-  species: "marsh-rabbit" | "marsh-fox",
+  species: "marsh-rabbit" | "marsh-fox" | "gray-wolf",
   currentTick = 12,
 ) {
   const seed = seedFromText(`presentation-${species}-movement-evidence`);
@@ -708,6 +708,33 @@ function regroupingGoat(): CoreWildlifeActorState {
 }
 
 describe("knowledge-honest wildlife presentation", () => {
+  it("projects all three Alpha 30 bodies through the shared direct-detail vocabulary", () => {
+    const cases = [
+      ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
+      ["elk", "Elk", "Tall, long-legged ungulate with a dark neck"],
+      ["gray-wolf", "Gray wolf", "Long-legged, deep-chested canid with a level tail"],
+    ] as const;
+
+    for (const [species, quickLabel, formLabel] of cases) {
+      const actor = wildlife(species);
+      const presentation = projectWildlifePresentation({
+        actor,
+        observation: directObservation(actor),
+        tileSize: 1_000,
+      });
+      expect(presentation).toMatchObject({
+        species,
+        quickLabel,
+        speciesIdentified: true,
+        formLabel,
+        appearanceKey: actor.identity.morph,
+      });
+      expect(presentation?.sizeScale).toBeGreaterThan(0.5);
+      expect(`${presentation?.quickLabel} ${presentation?.identityLabel}`)
+        .not.toContain(actor.identity.stableId);
+    }
+  });
+
   it("does not let a later visible actor position authorize an unseen event locus", () => {
     const region = createRegionCoord(0, 0);
     const observation = Object.freeze({
@@ -1412,6 +1439,13 @@ describe("knowledge-honest wildlife presentation", () => {
       "Marsh fox signs",
       "Marsh fox tracks",
       "Fox pawprints",
+    ],
+    [
+      "gray-wolf",
+      "canid-pawprints",
+      "Gray wolf signs",
+      "Gray wolf tracks",
+      "Wolf pawprints",
     ],
   ] as const)("projects %s movement evidence at its own directly visible position", (
     species,

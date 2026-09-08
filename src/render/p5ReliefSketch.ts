@@ -61,7 +61,12 @@ import {
 } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
-import { domesticGoatAppearancePalette } from "./wildlifeAppearance";
+import {
+  ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
+  alpha30WildlifeAppearancePalette,
+  domesticGoatAppearancePalette,
+  type Alpha30WildlifeAppearanceSpecies,
+} from "./wildlifeAppearance";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
@@ -205,6 +210,9 @@ type ReliefWildlifeForm =
   | "domestic-chicken"
   | "domestic-goat"
   | "north-american-river-otter"
+  | "wild-boar"
+  | "elk"
+  | "gray-wolf"
   | "black-bear"
   | "domestic-cat"
   | "marsh-rabbit"
@@ -371,6 +379,27 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.48,
     ringRadiusScale: 0.4,
     labelLift: 0.72,
+  },
+  "wild-boar": {
+    form: "wild-boar",
+    colors: ALPHA30_WILDLIFE_APPEARANCE_PALETTES["wild-boar"]["dark-brown"],
+    hitRadiusScale: 0.58,
+    ringRadiusScale: 0.48,
+    labelLift: 0.75,
+  },
+  elk: {
+    form: "elk",
+    colors: ALPHA30_WILDLIFE_APPEARANCE_PALETTES.elk["golden-brown"],
+    hitRadiusScale: 0.64,
+    ringRadiusScale: 0.54,
+    labelLift: 1.08,
+  },
+  "gray-wolf": {
+    form: "gray-wolf",
+    colors: ALPHA30_WILDLIFE_APPEARANCE_PALETTES["gray-wolf"]["grizzled-gray"],
+    hitRadiusScale: 0.54,
+    ringRadiusScale: 0.44,
+    labelLift: 0.78,
   },
 };
 
@@ -4391,6 +4420,122 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawUplandMammal = (
+      wildlife: WildlifeView,
+      species: Alpha30WildlifeAppearanceSpecies,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = alpha30WildlifeAppearancePalette(species, wildlife.appearanceKey);
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const boar = species === "wild-boar";
+      const elk = species === "elk";
+      const base = tileSize * (boar ? 0.12 : elk ? 0.115 : 0.1) * scale;
+      const bodyHalfLength = base * (boar ? 1.75 : 1.68);
+      const bodyHalfHeight = base * (boar ? 0.68 : elk ? 0.72 : 0.58);
+      const bodyHalfWidth = base * (boar ? 0.72 : 0.56);
+      const legHeight = base * (boar ? 0.58 : elk ? 1.55 : 0.88);
+      const moving = wildlife.behavior === "flee"
+        || wildlife.behavior === "pursue"
+        || wildlife.behavior === "retreat";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.01) * base * 0.22;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.68;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      p.ambientMaterial(colors.dark);
+      for (const [legX, phase] of [
+        [-bodyHalfLength * 0.58, -1],
+        [bodyHalfLength * 0.58, 1],
+      ] as const) {
+        for (const legZ of [-bodyHalfWidth * 0.48, bodyHalfWidth * 0.48]) {
+          p.push();
+          p.translate(legX + stride * phase, legHeight * 0.62, legZ);
+          p.box(base * 0.18, legHeight, base * 0.16);
+          p.pop();
+        }
+      }
+
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 10, 6);
+      if (boar) {
+        p.ambientMaterial(colors.dark);
+        for (const offset of [-0.72, -0.3, 0.12, 0.54]) {
+          p.push();
+          p.translate(base * offset, -bodyHalfHeight * 0.95, 0);
+          p.cone(base * 0.11, base * 0.55, 5, 1);
+          p.pop();
+        }
+        p.push();
+        p.translate(bodyHalfLength * 0.86, -bodyHalfHeight * 0.08, 0);
+        p.ambientMaterial(colors.primary);
+        p.ellipsoid(base * 0.72, base * 0.58, base * 0.61, 8, 5);
+        p.translate(base * 0.66, base * 0.1, 0);
+        p.ambientMaterial(colors.secondary);
+        p.ellipsoid(base * 0.62, base * 0.32, base * 0.48, 7, 4);
+        for (const tuskZ of [-base * 0.38, base * 0.38]) {
+          p.push();
+          p.translate(-base * 0.12, base * 0.25, tuskZ);
+          p.rotateZ(-0.5);
+          p.ambientMaterial(colors.accent);
+          p.cone(base * 0.08, base * 0.42, 5, 1);
+          p.pop();
+        }
+        p.pop();
+      } else if (elk) {
+        p.push();
+        p.translate(bodyHalfLength * 0.62, -bodyHalfHeight * 0.68, 0);
+        p.rotateZ(-0.28);
+        p.ambientMaterial(colors.dark);
+        p.ellipsoid(base * 0.46, base * 1.18, base * 0.45, 8, 5);
+        p.translate(base * 0.28, -base * 1.02, 0);
+        p.ambientMaterial(colors.primary);
+        p.ellipsoid(base * 0.66, base * 0.45, base * 0.48, 8, 5);
+        for (const earZ of [-base * 0.38, base * 0.38]) {
+          p.push();
+          p.translate(-base * 0.12, -base * 0.38, earZ);
+          p.ambientMaterial(colors.secondary);
+          p.cone(base * 0.12, base * 0.52, 5, 1);
+          p.pop();
+        }
+        p.pop();
+        p.push();
+        p.translate(-bodyHalfLength * 0.72, -bodyHalfHeight * 0.06, 0);
+        p.ambientMaterial(colors.secondary);
+        p.ellipsoid(base * 0.52, base * 0.5, bodyHalfWidth * 1.02, 7, 5);
+        p.pop();
+      } else {
+        p.push();
+        p.translate(bodyHalfLength * 0.92, -bodyHalfHeight * 0.38, 0);
+        p.ambientMaterial(colors.primary);
+        p.sphere(base * 0.52, 8, 5);
+        for (const earZ of [-base * 0.34, base * 0.34]) {
+          p.push();
+          p.translate(-base * 0.08, -base * 0.5, earZ);
+          p.ambientMaterial(colors.dark);
+          p.cone(base * 0.17, base * 0.52, 4, 1);
+          p.pop();
+        }
+        p.push();
+        p.translate(base * 0.55, base * 0.08, 0);
+        p.rotateZ(-p.HALF_PI);
+        p.ambientMaterial(colors.secondary);
+        p.cone(base * 0.23, base * 0.8, 6, 1);
+        p.pop();
+        p.pop();
+        p.push();
+        p.translate(-bodyHalfLength * 1.02, -bodyHalfHeight * 0.08, 0);
+        p.rotateZ(1.18);
+        p.ambientMaterial(colors.dark);
+        p.cone(base * 0.3, base * 1.45, 7, 2);
+        p.pop();
+      }
+      p.pop();
+    };
+
     const drawNorthAmericanRiverOtter = (
       wildlife: WildlifeView,
       surface: number,
@@ -5000,6 +5145,15 @@ export function createTideweftReliefRenderer(
           return true;
         case "north-american-river-otter":
           drawNorthAmericanRiverOtter(wildlife, surface, tileSize, now);
+          return true;
+        case "wild-boar":
+          drawUplandMammal(wildlife, "wild-boar", surface, tileSize, now);
+          return true;
+        case "elk":
+          drawUplandMammal(wildlife, "elk", surface, tileSize, now);
+          return true;
+        case "gray-wolf":
+          drawUplandMammal(wildlife, "gray-wolf", surface, tileSize, now);
           return true;
         case "black-bear":
           drawBlackBear(wildlife, surface, tileSize);

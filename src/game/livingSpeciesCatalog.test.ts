@@ -52,7 +52,9 @@ describe("Living Weft species module catalog", () => {
       "living-species:domestic-chicken:v1",
       "living-species:domestic-dog:v1",
       "living-species:domestic-goat:v1",
+      "living-species:elk:v1",
       "living-species:fish-crow:v1",
+      "living-species:gray-wolf:v1",
       "living-species:gull:v1",
       "living-species:human:v1",
       "living-species:marsh-fox:v1",
@@ -61,6 +63,7 @@ describe("Living Weft species module catalog", () => {
       "living-species:northern-harrier:v1",
       "living-species:snowy-egret:v1",
       "living-species:southern-leopard-frog:v1",
+      "living-species:wild-boar:v1",
     ]);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
@@ -200,6 +203,72 @@ describe("Living Weft species module catalog", () => {
     expect(goat?.diet.resources).toEqual([{ resourceClass: "browse", role: "nutrition" }]);
     expect(goat?.activity.circadian).toMatchObject({ status: "unimplemented", ownerId: null });
     expect(goat?.environment.weather.status).toBe("unimplemented");
+  });
+
+  it("projects the Alpha 30 upland roster through one shared catalog contract", () => {
+    const cases = [
+      [
+        "wild-boar",
+        "SOUNDER",
+        ["forest-edge", "temperate-upland", "wooded-ridge"],
+        ["boar-grunt", "boar-squeal"],
+        ["boar-grunt"],
+      ],
+      [
+        "elk",
+        "HERD",
+        ["forest-edge", "temperate-upland", "upland-meadow"],
+        ["elk-alarm-bark", "elk-bugle"],
+        ["elk-alarm-bark", "elk-bugle"],
+      ],
+      [
+        "gray-wolf",
+        "PACK",
+        ["forest-edge", "ridge", "temperate-upland"],
+        ["wolf-growl", "wolf-howl"],
+        ["wolf-growl", "wolf-howl"],
+      ],
+    ] as const;
+
+    for (const [species, namespace, habitatClasses, repertoire, communicationSignals] of cases) {
+      const module = livingSpeciesModule(species);
+      expect(module).not.toBeNull();
+      expect(module).toMatchObject({
+        profile: { implementation: "active", taxonomicClass: "mammal" },
+        morphology: { implementation: "active", model: "individual" },
+        habitat: {
+          ownerId: "game:core-ecology-habitat:v10",
+          habitatClasses,
+          migrationModel: "none",
+        },
+        identity: { implementation: "active", form: "individual" },
+        spatial: { ownerId: "game:living-actor-address:v1" },
+        population: { ownerId: "game:core-wildlife-actor:v1" },
+        senses: { implementation: "foundation", ownerId: "game:living-actor-senses:v1" },
+        locomotion: {
+          implementation: "active",
+          ownerId: "game:core-wildlife-locomotion-profile:v1",
+          crossRegion: false,
+        },
+        social: {
+          implementation: "active",
+          ownerId: "game:core-ecology-groups:v1",
+          group: { stableIdNamespace: namespace },
+        },
+        sound: {
+          implementation: "foundation",
+          ownerId: "audio:soundscape:v1",
+          repertoire,
+          communicationSignals,
+          accessibilityCues: ["direct-observation-caption"],
+        },
+        about: { implementation: "active", ownerId: "game:wildlife-about:v1" },
+      });
+      expect(module?.interactions.targets.map(({ targetClass }) => targetClass))
+        .toEqual(LIVING_SPECIES_INTERACTION_TARGET_CLASSES);
+      expect(module?.interactions.targets.find(({ targetClass }) => targetClass === "dog"))
+        .toMatchObject({ policy: "intentional-no-response", verbs: [] });
+    }
   });
 
   it("models the landed Settlement Shadows rat aggregate and cat without inherited fallbacks", () => {
@@ -1748,6 +1817,7 @@ describe("Living Weft species module catalog", () => {
       expect(module.evidence.status).toBe(
         module.speciesId === "atlantic-marsh-fiddler-crab"
           || module.speciesId === "atlantic-silverside"
+          || module.speciesId === "gray-wolf"
           ? "foundation"
           : module.speciesId === "brown-rat"
           || module.speciesId === "domestic-cat"
@@ -1778,6 +1848,9 @@ describe("Living Weft species module catalog", () => {
           || module.speciesId === "gull"
           || module.speciesId === "fish-crow"
           || module.speciesId === "marsh-rabbit"
+          || module.speciesId === "wild-boar"
+          || module.speciesId === "elk"
+          || module.speciesId === "gray-wolf"
           || module.speciesId === "southern-leopard-frog"
           ? ["hearing"]
           : [],
@@ -1790,6 +1863,9 @@ describe("Living Weft species module catalog", () => {
             || module.speciesId === "fish-crow"
             || module.speciesId === "domestic-chicken"
             || module.speciesId === "domestic-goat"
+            || module.speciesId === "wild-boar"
+            || module.speciesId === "elk"
+            || module.speciesId === "gray-wolf"
             ? "active"
             : "unimplemented",
       );

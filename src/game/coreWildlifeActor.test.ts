@@ -285,10 +285,11 @@ describe("core Wave-A wildlife actor", () => {
     } as typeof validMove)).toThrow(/ordered/u);
   });
 
-  it("persists bounded species-honest rabbit and fox movement signs", () => {
+  it("persists bounded species-honest ground-wildlife movement signs", () => {
     for (const [species, kind] of [
       ["marsh-rabbit", "paired-tracks"],
       ["marsh-fox", "canid-pawprints"],
+      ["gray-wolf", "canid-pawprints"],
     ] as const) {
       const decided = step(actor(species), 1).actor;
       const position = translateWorldPosition(decided.address.position, 650, 250);
@@ -330,6 +331,7 @@ describe("core Wave-A wildlife actor", () => {
   it.each([
     ["marsh-rabbit", "paired-tracks"],
     ["marsh-fox", "canid-pawprints"],
+    ["gray-wolf", "canid-pawprints"],
   ] as const)("ages and expires %s movement evidence independently of save cadence", (
     species,
     kind,

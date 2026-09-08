@@ -248,6 +248,9 @@ type WildlifePresentationForm =
   | "domestic-chicken"
   | "domestic-goat"
   | "north-american-river-otter"
+  | "wild-boar"
+  | "elk"
+  | "gray-wolf"
   | "black-bear"
   | "brown-rat"
   | "domestic-cat"
@@ -514,6 +517,48 @@ const PRESENTATION_BY_SPECIES: Readonly<
     baseSizeScale: 0.86,
     observableForm: "Long-bodied, low-slung swimmer",
   },
+  "wild-boar": {
+    form: "wild-boar",
+    representation: "actor",
+    identificationClarity: 390_000,
+    unidentifiedQuickLabel: "Large animal",
+    unidentifiedIdentityLabel: "Unidentified large animal",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.08,
+    observableForm: "Low, heavy-bodied animal with a long snout",
+  },
+  elk: {
+    form: "elk",
+    representation: "actor",
+    identificationClarity: 350_000,
+    unidentifiedQuickLabel: "Large hoofed animal",
+    unidentifiedIdentityLabel: "Unidentified large hoofed animal",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.42,
+    observableForm: "Tall, long-legged ungulate with a dark neck",
+  },
+  "gray-wolf": {
+    form: "gray-wolf",
+    representation: "actor",
+    identificationClarity: 420_000,
+    unidentifiedQuickLabel: "Unknown canid",
+    unidentifiedIdentityLabel: "Unidentified canid",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.98,
+    observableForm: "Long-legged, deep-chested canid with a level tail",
+  },
 });
 const BEHAVIOR_CLARITY = 180_000;
 const CONDITION_CLARITY = 260_000;
@@ -625,7 +670,11 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
   },
 });
 
-type IndividualEvidenceSpecies = "domestic-cat" | "marsh-rabbit" | "marsh-fox";
+type IndividualEvidenceSpecies =
+  | "domestic-cat"
+  | "marsh-rabbit"
+  | "marsh-fox"
+  | "gray-wolf";
 
 interface IndividualEvidenceDescriptor {
   readonly expectedKind: "wet-tracks" | "paired-tracks" | "canid-pawprints";
@@ -683,6 +732,18 @@ const INDIVIDUAL_EVIDENCE_BY_SPECIES: Readonly<
     identifiedEvidenceLabel: "Fox pawprints",
     unidentifiedEvidenceLabel: "Canid pawprints",
     sizeScale: 1.12,
+  },
+  "gray-wolf": {
+    expectedKind: "canid-pawprints",
+    form: "canid-pawprints",
+    minimumClarity: 380_000,
+    identifiedQuickLabel: "Gray wolf signs",
+    unidentifiedQuickLabel: "Large canid signs",
+    identifiedIdentityLabel: "Gray wolf tracks",
+    unidentifiedIdentityLabel: "Unidentified large canid tracks",
+    identifiedEvidenceLabel: "Wolf pawprints",
+    unidentifiedEvidenceLabel: "Large canid pawprints",
+    sizeScale: 1.28,
   },
 });
 
@@ -973,7 +1034,8 @@ function isIndividualEvidenceSpecies(
 ): species is IndividualEvidenceSpecies {
   return species === "domestic-cat"
     || species === "marsh-rabbit"
-    || species === "marsh-fox";
+    || species === "marsh-fox"
+    || species === "gray-wolf";
 }
 
 /**

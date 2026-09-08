@@ -47,7 +47,7 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "school-coordination",
   "shared-alarm",
   "shore-water-activity",
-  "small-prey-pursuit",
+  "live-prey-pursuit",
   "surface-opportunity",
   "tidal-activity",
   "wading",
@@ -114,6 +114,8 @@ export interface CoreEcologySpeciesRuntimePolicy {
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
     | "CHICKEN-FLOCK"
+    | "SOUNDER"
+    | "PACK"
     | null;
   readonly maximumMaterializedActors: number;
   readonly aggregate: CoreEcologyAggregateRuntimePolicy | null;
@@ -146,10 +148,11 @@ const NO_MORTALITY_RUNTIME: CoreEcologySpeciesMortalityRuntimePolicy = deepFreez
 });
 
 /**
- * Alpha-29's deliberately narrow mortality roster. Every species is present
- * so adding a biological role or food affinity cannot accidentally activate a
- * physical attack/body contract. The fish crow proves that carcass consumers
- * need not also own harmful contact or body creation.
+ * Alpha 30 extends the deliberately narrow mortality roster without changing
+ * its fail-closed rule. Every species is present so adding a biological role
+ * or food affinity cannot accidentally activate a physical attack/body
+ * contract. The fish crow proves that carcass consumers need not also own
+ * harmful contact or body creation.
  */
 const MORTALITY_VALUES: Readonly<Record<
   CoreWildlifeSpecies,
@@ -197,6 +200,27 @@ const MORTALITY_VALUES: Readonly<Record<
   "north-american-river-otter": NO_MORTALITY_RUNTIME,
   "domestic-chicken": NO_MORTALITY_RUNTIME,
   "domestic-goat": NO_MORTALITY_RUNTIME,
+  "wild-boar": {
+    version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+    predatorContact: null,
+    physicalBodySizeUnits: 0,
+    physicalBodyResourceUnits: 0,
+    carcassFeeding: true,
+    carcassGuarding: false,
+  },
+  elk: NO_MORTALITY_RUNTIME,
+  "gray-wolf": {
+    version: CORE_ECOLOGY_SPECIES_MORTALITY_POLICY_VERSION,
+    predatorContact: {
+      cause: "predator-contact",
+      reachUnits: 650,
+      damageUnits: 700_000,
+    },
+    physicalBodySizeUnits: 0,
+    physicalBodyResourceUnits: 0,
+    carcassFeeding: true,
+    carcassGuarding: true,
+  },
 });
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
@@ -233,7 +257,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       maximumAggregateAnchors: 0,
       aggregateResponseCadenceTicks: 0,
       aggregateResponseVerbs: [],
-      capabilities: ["actor-address", "food-investigation", "small-prey-pursuit"],
+      capabilities: ["actor-address", "food-investigation", "live-prey-pursuit"],
       activitySignals: [],
       evidenceKinds: [],
       presentationModel: "individual",
@@ -256,7 +280,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "food-investigation",
         "ground-movement-evidence",
         "same-species-food-guard",
-        "small-prey-pursuit",
+        "live-prey-pursuit",
       ],
       activitySignals: ["cat-call"],
       evidenceKinds: ["wet-tracks"],
@@ -289,7 +313,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "ground-movement-evidence",
         "movement-memory",
         "predator-contact-damage",
-        "small-prey-pursuit",
+        "live-prey-pursuit",
       ],
       activitySignals: ["fox-yip"],
       evidenceKinds: ["canid-pawprints"],
@@ -323,7 +347,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "aerial-locomotion",
         "aerial-predator",
         "diurnal-activity",
-        "small-prey-pursuit",
+        "live-prey-pursuit",
       ],
       activitySignals: ["low-quartering-flight"],
       evidenceKinds: [],
@@ -431,7 +455,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "food-investigation",
         "movement-memory",
         "shore-water-activity",
-        "small-prey-pursuit",
+        "live-prey-pursuit",
         "surface-opportunity",
         "tidal-activity",
         "water-depth-response",
@@ -465,6 +489,49 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       ],
       activitySignals: ["shared-alarm"],
       evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "wild-boar": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "carcass-feeding",
+        "food-investigation",
+        "group-coordination",
+        "shared-alarm",
+      ],
+      activitySignals: ["shared-alarm"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    elk: {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: ["actor-address", "group-coordination", "shared-alarm"],
+      activitySignals: ["shared-alarm"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "gray-wolf": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "carcass-feeding",
+        "carcass-guarding",
+        "food-investigation",
+        "ground-movement-evidence",
+        "group-coordination",
+        "live-prey-pursuit",
+        "movement-memory",
+        "predator-contact-damage",
+      ],
+      activitySignals: [],
+      evidenceKinds: ["canid-pawprints"],
       presentationModel: "individual",
     },
   });
@@ -687,7 +754,7 @@ function mortalityPolicyMatchesCapabilities(
     || contact.reachUnits > 1_000
     || !positiveSafeInteger(contact.damageUnits)
     || contact.damageUnits > 1_000_000
-    || !policy.capabilities.includes("small-prey-pursuit")
+    || !policy.capabilities.includes("live-prey-pursuit")
     || !profile.roles.includes("predator")
   )) return false;
   if (mortality.carcassFeeding && (

@@ -519,7 +519,8 @@ export type AggregateWildlifeEvidenceSpecies =
 export type IndividualWildlifeEvidenceSpecies =
   | "domestic-cat"
   | "marsh-rabbit"
-  | "marsh-fox";
+  | "marsh-fox"
+  | "gray-wolf";
 export type WildlifeEvidenceViewSpecies =
   | AggregateWildlifeEvidenceSpecies
   | IndividualWildlifeEvidenceSpecies;

@@ -3,11 +3,12 @@ import { CORE_WILDLIFE_SPECIES } from "../sim/coreWildlifeIdentity";
 import { LIVING_ACTOR_SPECIES, type LivingActorSpecies } from "./livingSpeciesRegistry";
 import {
   coreEcologyCanPursueLivingActor,
+  coreEcologyCanResolveMortalityTarget,
   coreEcologyTrophicPerceivedClass,
 } from "./coreEcologyTrophic";
 
 describe("core ecology trophic capability resolver", () => {
-  it("lets small predators recognize small prey without making deer fox prey", () => {
+  it("separates role-driven pursuit from the narrower exact-body mortality contract", () => {
     expect(coreEcologyTrophicPerceivedClass("marsh-fox", "marsh-rabbit"))
       .toBe("live-prey");
     expect(coreEcologyCanPursueLivingActor("domestic-cat", "marsh-rabbit"))
@@ -25,6 +26,19 @@ describe("core ecology trophic capability resolver", () => {
       "northern-harrier",
       "southern-leopard-frog",
     )).toBeNull();
+    expect(coreEcologyTrophicPerceivedClass("gray-wolf", "marsh-rabbit"))
+      .toBe("live-prey");
+    expect(coreEcologyCanPursueLivingActor("gray-wolf", "marsh-rabbit"))
+      .toBe(true);
+    expect(coreEcologyCanResolveMortalityTarget("gray-wolf", "marsh-rabbit"))
+      .toBe(true);
+    for (const subject of ["deer", "elk"] as const) {
+      expect(coreEcologyTrophicPerceivedClass("gray-wolf", subject)).toBe("live-prey");
+      expect(coreEcologyCanPursueLivingActor("gray-wolf", subject)).toBe(true);
+      expect(coreEcologyCanResolveMortalityTarget("gray-wolf", subject)).toBe(false);
+    }
+    expect(coreEcologyCanResolveMortalityTarget("domestic-cat", "marsh-rabbit"))
+      .toBe(false);
   });
 
   it("makes pressure reciprocal without declaring a lethal outcome", () => {
@@ -44,6 +58,8 @@ describe("core ecology trophic capability resolver", () => {
       .toBe("large-predator");
     expect(coreEcologyTrophicPerceivedClass("black-bear", "deer"))
       .toBe("live-prey");
+    expect(coreEcologyCanPursueLivingActor("black-bear", "deer")).toBe(true);
+    expect(coreEcologyCanResolveMortalityTarget("black-bear", "deer")).toBe(false);
     expect(coreEcologyTrophicPerceivedClass("domestic-cat", "domestic-dog"))
       .toBe("predator");
     expect(coreEcologyTrophicPerceivedClass("domestic-cat", "domestic-cat"))

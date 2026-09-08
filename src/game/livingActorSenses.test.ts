@@ -73,7 +73,9 @@ describe("shared living actor sensory profiles", () => {
       "domestic-chicken",
       "domestic-dog",
       "domestic-goat",
+      "elk",
       "fish-crow",
+      "gray-wolf",
       "gull",
       "human",
       "marsh-fox",
@@ -82,6 +84,7 @@ describe("shared living actor sensory profiles", () => {
       "northern-harrier",
       "snowy-egret",
       "southern-leopard-frog",
+      "wild-boar",
     ]);
     for (const module of LIVING_SPECIES_CATALOG.modules) {
       const profile = livingActorSenseProfile(module.speciesId as LivingActorSpecies);

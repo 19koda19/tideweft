@@ -246,6 +246,31 @@ describe("core wildlife locomotion profiles", () => {
     expect(coreWildlifeMaximumStepUnits("snowy-egret", "observe")).toBeLessThan(1_000);
   });
 
+  it.each([
+    ["wild-boar", "ridge", "marsh", "flee"],
+    ["elk", "meadow", "marsh", "flee"],
+    ["gray-wolf", "ridge", "tidal-flat", "pursue"],
+  ] as const)(
+    "keeps the shared upland %s profile terrain-aware with one bounded gait",
+    (species, preferredTerrain, resistedTerrain, intent) => {
+      const profile = coreWildlifeLocomotionProfile(species);
+      expect(profile).toMatchObject({
+        mode: "terrestrial",
+        aerialTravelCost: null,
+        surfaceWaterTravelCost: null,
+      });
+      expect(coreWildlifeTraversabilityCell(
+        species,
+        tile({ terrain: preferredTerrain }),
+      ).travelCost).toBeLessThan(coreWildlifeTraversabilityCell(
+        species,
+        tile({ terrain: resistedTerrain }),
+      ).travelCost);
+      expect(coreWildlifeMaximumStepUnits(species, intent)).toBeGreaterThan(0);
+      expect(coreWildlifeMaximumStepUnits(species, intent)).toBeLessThan(1_000);
+    },
+  );
+
   it("rejects nonstandable water identically before gait can matter", () => {
     for (const species of ["marsh-rabbit", "marsh-fox"] as const) {
       expect(coreWildlifeTraversabilityCell(species, tile({

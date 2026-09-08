@@ -181,6 +181,24 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN AQUATIC MAMMAL",
     representation: "individual",
   },
+  "wild-boar": {
+    identifiedName: "Wild boar",
+    identifiedHeading: "WILD BOAR",
+    unidentifiedHeading: "LARGE ANIMAL",
+    representation: "individual",
+  },
+  elk: {
+    identifiedName: "Elk",
+    identifiedHeading: "ELK",
+    unidentifiedHeading: "LARGE HOOFED ANIMAL",
+    representation: "individual",
+  },
+  "gray-wolf": {
+    identifiedName: "Gray wolf",
+    identifiedHeading: "GRAY WOLF",
+    unidentifiedHeading: "UNKNOWN CANID",
+    representation: "individual",
+  },
 });
 
 /**

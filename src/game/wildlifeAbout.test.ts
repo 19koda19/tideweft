@@ -361,6 +361,9 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["american-black-duck", "AMERICAN BLACK DUCK", "American black duck"],
     ["domestic-chicken", "DOMESTIC CHICKEN", "Domestic chicken"],
     ["domestic-goat", "DOMESTIC GOAT", "Domestic goat"],
+    ["wild-boar", "WILD BOAR", "Wild boar"],
+    ["elk", "ELK", "Elk"],
+    ["gray-wolf", "GRAY WOLF", "Gray wolf"],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -394,6 +397,9 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["marsh-fox", "UNKNOWN CANID", "Unidentified canid", 60],
     ["domestic-chicken", "UNKNOWN BIRD", "Unidentified bird", 80],
     ["domestic-goat", "UNKNOWN LIVESTOCK", "Unidentified livestock", 80],
+    ["wild-boar", "LARGE ANIMAL", "Unidentified large animal", 80],
+    ["elk", "LARGE HOOFED ANIMAL", "Unidentified large hoofed animal", 80],
+    ["gray-wolf", "UNKNOWN CANID", "Unidentified canid", 80],
     [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",

@@ -2109,6 +2109,85 @@ function domesticGoatEvidence(): readonly ClaimTuple[] {
 }
 
 /**
+ * Source evidence for the three-species regional upland cluster. This keeps
+ * profile, direct presentation, production-harbor regional placement and
+ * materialization, exact save adoption, and measured performance active while
+ * broad ecology and sound playback remain explicit foundations. Habitat-v10
+ * evidence does not claim construction from an arbitrary caller-chosen harbor.
+ */
+function regionalUplandEvidence(
+  species: "wild-boar" | "elk" | "gray-wolf",
+): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => values.sort(compareText);
+  const wildlifeOwners = owners(
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:core-wildlife-actor:v1",
+  );
+  const presentationOwners = owners(
+    "game:wildlife-about:v1",
+    "game:wildlife-presentation:v1",
+    "sim:actor-perception:v2",
+  );
+  return [
+    ["species-profile", A, owners("game:living-species-catalog:v1", "sim:core-wildlife-identity:v1")],
+    ["ecological-niche", F, owners("game:core-ecology-habitat:v10", "game:core-ecology-trophic:v1", ...wildlifeOwners)],
+    ["appearance", A, owners("game:wildlife-presentation:v1", "sim:core-wildlife-identity:v1")],
+    ["sound", F, ["audio:soundscape:v1"]],
+    ["habitat-placement", A, owners(
+      "game:core-ecology-habitat:v10",
+      "game:runtime-core-ecology:v1",
+      "test:alpha30-regional-upland-habitat:v1",
+    )],
+    ["food-web", F, owners("game:core-ecology-trophic:v1", "game:living-species-catalog:v1", ...wildlifeOwners)],
+    ["perception-senses", F, owners("game:living-actor-senses:v1", "game:runtime-core-ecology:v1", "sim:actor-perception:v2")],
+    ["locomotion", A, owners("game:core-wildlife-locomotion-profile:v1", "game:runtime-core-ecology:v1")],
+    ["human-interaction", A, wildlifeOwners],
+    ["dog-interaction", U, []],
+    ["same-species-interaction", A, owners("game:core-ecology-groups:v1", ...wildlifeOwners)],
+    ["other-species-interaction", A, owners("game:core-ecology-trophic:v1", ...wildlifeOwners)],
+    ["neutral-behavior", A, ["game:core-wildlife-actor:v1"]],
+    ["disengagement", A, ["game:core-wildlife-actor:v1"]],
+    ["environmental-evidence", species === "gray-wolf" ? F : U, species === "gray-wolf"
+      ? owners("game:core-wildlife-actor:v1", "game:wildlife-presentation:v1")
+      : []],
+    ["about-disclosure", A, presentationOwners],
+    ["knowledge-honesty", A, presentationOwners],
+    ["population-materialization", A, owners(
+      "game:core-ecology-groups:v1",
+      "game:core-ecology-habitat:v10",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha30-regional-upland-materialization:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-ecology-groups:v1",
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha30-regional-upland-materialization:v1",
+    )],
+    ["save-load", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha30-body-bearing-save-adoption:v1",
+    )],
+    ["seamless-region-crossing", U, []],
+    ["performance-budget", A, owners(
+      "game:core-ecology-habitat:v10",
+      "game:runtime-core-ecology:v1",
+      "test:alpha30-regional-upland-performance:v1",
+    )],
+    ["accessibility", A, presentationOwners],
+    ["mobile-parity", A, owners(...presentationOwners, "test:alpha30-upland-presentation-invariants:v1")],
+    ["player-independent-scenario", F, wildlifeOwners],
+    ["fuzz-testing", F, owners("game:core-ecology-species-runtime-policy:v1", "sim:core-wildlife-identity:v1")],
+    ["clone-diversity", A, ["sim:core-wildlife-identity:v1"]],
+    ["tutorial-truth", U, []],
+    ["patch-note-truth", U, []],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -2194,6 +2273,9 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "north-american-river-otter": riverOtterEvidence(),
   "domestic-chicken": domesticChickenEvidence(),
   "domestic-goat": domesticGoatEvidence(),
+  "wild-boar": regionalUplandEvidence("wild-boar"),
+  elk: regionalUplandEvidence("elk"),
+  "gray-wolf": regionalUplandEvidence("gray-wolf"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -3126,7 +3208,7 @@ Alpha21RiverOtterBoundedReadinessReport {
     && ([
       "food-investigation",
       "movement-memory",
-      "small-prey-pursuit",
+      "live-prey-pursuit",
     ] as const).every(ownsRuntimeCapability);
   const topKMaterializationReady = module !== null
     && active("population-materialization")
@@ -3975,7 +4057,7 @@ Alpha24DomesticChickenBoundedReadinessReport {
     && smallerPreyTarget?.policy === "intentional-no-response"
     && livestockTarget?.policy === "intentional-no-response"
     && !module.diet.resources.some(({ resourceClass }) => resourceClass === "live-prey")
-    && !ownsRuntimeCapability("small-prey-pursuit")
+    && !ownsRuntimeCapability("live-prey-pursuit")
     && !ownsRuntimeCapability("diurnal-activity")
     && module.interactions.targets.every(({ verbs }) => (
       verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
@@ -4429,7 +4511,7 @@ Alpha25SharedDomesticLivestockReadinessReport {
     && excludedModuleReady(chicken)
     && excludedModuleReady(goat)
     && !hasCapability(goatPolicy, "food-investigation")
-    && !hasCapability(goatPolicy, "small-prey-pursuit")
+    && !hasCapability(goatPolicy, "live-prey-pursuit")
     && !hasCapability(goatPolicy, "diurnal-activity")
     && !goat.diet.resources.some(({ resourceClass }) => (
       resourceClass === "exposed-food" || resourceClass === "live-prey"

@@ -170,6 +170,27 @@ live decomposition; body drift, dragging, harvesting, scent, or insects;
 worldwide ecology; or later Wave-E species. Validation remains representative
 and shared-invariant based rather than species-by-species or N².
 
+The `0.3.3-alpha.30 — Beyond the Harbor` repository state is a source
+candidate, not a **LIVE_VERIFIED** deployment. One seed-stable remote
+temperate-upland/forest-edge source adds wild boar, elk, and gray wolf to the
+twenty-two-record catalog. Eligible individuals use the shared perception,
+attention, actor-owned locomotion, bounded materialization, and group owners
+as `SOUNDER`, `HERD`, and `PACK` members. Wolves can exert role-driven pursuit
+pressure, but the harmful-contact boundary does not expand: only a solitary
+addressable marsh rabbit can receive current exact-contact mortality, and
+grouped elk, grouped deer, and every other group member cannot be harmed. A
+boar can see, reach, claim, and consume an existing finite body through the
+ordinary physical-resource seam. Chart, Relief, quick inspection, and ABOUT
+remain knowledge-honest across desktop and mobile.
+
+This source candidate deliberately stops short of tactical pack combat, group
+mortality, cougar, additional bear ecotypes, ecological migration, worldwide
+ecology, or full Wave E. Boar, elk, and wolf voice patterns are authored
+foundation data and are not audible; dog interaction with those species is an
+intentional no-response and remains unimplemented. Confidence comes from
+shared representative, deterministic-property, conservation, and bounded-
+performance checks rather than one bespoke test for every species or pair.
+
 The bounded core-wildlife assemblage extends the same observation boundary to its present deer, gulls, black bears, free-ranging domestic cats, domestic chickens, domestic goats, marsh rabbits, marsh foxes, fish crows, northern harrier, snowy egret, American black duck, and North American river otter. Terrain and structures can block sight; sufficiently clear contact can identify an ecologically plausible relationship; and an explicit established alarm can propagate through bounded hearing without revealing the caller's stable identity, species, hidden target, or exact motive. Cats, chickens, goats, rabbits, foxes, crows, the harrier, the egret, the duck, the otter, both dogs, the porter, gulls, and the player receive only the visual observations that lawfully reach them. The egret, duck, or otter receives a current anonymous **AQUATIC ACTIVITY** area only when an occupied, active, depth-usable fish or crab anchor passes shared direct sight; none receives an aggregate ID, species, exact count, or hidden target. A directly seen second cat can become food competition for a hungry cat; strong local rain can make a materialized cat retreat and leave bounded wet pawprints. Rabbit and fox movement can leave paired tracks or canid pawprints at the saved movement site. Crows, the harrier, the egret, the duck, the otter, chickens, and goats do not manufacture ground tracks or new calls in the current release. Directly visible individual wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT surface; each visible crow, chicken, or goat representative renders and hit-tests once even when its flock or herd context reports a larger group, while the duck and otter each remain one addressable individual. Loss of direct-detail sight removes rendering, selection, labels, actions, and inspection rather than leaving a remote tracker. Individual movement signs require current direct-detail sight, fade from identified to ambiguous as their clarity ages, expire after 180 ticks, remain non-targetable, and cannot reveal an unseen animal's thoughts or current location. Rat/frog-area evidence, silverside surface activity, and fiddler-crab burrows or feeding scrapes follow the same knowledge boundary and never pretend to be individual aggregate animals.
 
 When a bear is present, it may choose an easier exposed provision instead of pursuing visible live prey. A gull, fish crow, or eligible river otter may likewise inspect and claim exposed food through generic physical-item opportunity and arbitration. Marsh-rabbit flight and marsh-fox/northern-harrier pursuit still require current direct identification and shared locomotion. Harrier pursuit remains nonlethal. The only current harmful live-prey resolution is a marsh fox whose exact body reaches the exact rabbit it is presently pursuing: contact can injure or kill that one rabbit. Death retires its stable actor exactly once, removes one population unit while any other represented units remain abstract reserve, and creates one stable finite physical carcass. A fox or fish crow must lawfully see and physically reach the body to feed; each meal removes one conserved unit, and a fox may guard its claim. The player sees the body and any direct death or feeding event only through current lawful perception, with no hidden attacker, cause, claimant, resource count, or retrospective offscreen account. The player can **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, or **LEAVE**, but cannot command, feed, tame, name, own, recruit, attack, or otherwise directly manipulate these wild animals.
@@ -372,6 +393,7 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Released Alpha 27 uses outer save format 20 while habitat remains version 9, settlement ecology remains version 4, aggregate ecology remains version 4, and the nineteen-record species catalog and existing dog roster remain unchanged. A sealed version-19 Paddock Watch envelope preserves every established actor, group, home, custody, assignment, activity, item, Promise, evidence record, store fact, and world fact before the working-animal root and assignment advance to version 2 with empty task fields. Task, transition, and latest-outcome records begin at version 1. One pending task transition recovers exactly once; reload cannot reroll its source evidence, probe, suspension, result, return, or handler acknowledgement.
 - Released Alpha 28 uses outer save format 21 and appends an empty version-1 domestic-animal-recovery root to an authenticated version-20 Watch Returns envelope. It preserves every established species, actor, population, group, habitat, home, custody, assignment, task, item, Promise, evidence record, store fact, and world fact. At most one current case, one pending transaction, and one latest result bind exact actor, group, custody, home, incident, report, and monotonic ordinal identities. A pending transaction recovers exactly once; reload cannot reroll the noticed absence, last-known area, guardian recruitment, exact reunion, or caretaker confirmation.
 - Released Alpha 29 uses outer save format 22, core-ecology patch version 3, and aggregate record version 5. A sealed version-21 envelope keeps every earlier fact exact before empty mortality, population-reserve, and physical-body ledgers are appended once. A valid fox-contact rabbit death retains the exact retired actor, one removed population unit, named cause, stable finite body, claim, and consumption ordinals; reload cannot reroll or duplicate any of them.
+- The Alpha 30 source candidate uses outer save format 23 and habitat analysis version 10 while retaining core-ecology patch 3 and aggregate record 5. A sealed version-22 envelope is adopted exactly once: its complete habitat-version-9 prefix and body-bearing state remain exact before the remote source and wild-boar, elk, gray-wolf, `SOUNDER`, `HERD`, and `PACK` records are appended. Reload cannot reroll the source or duplicate an actor, population, group, or body.
 
 There is no courier or human death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice. The only current mortality is the bounded fox-contact rabbit event described above.
 
@@ -473,6 +495,17 @@ also states the narrow boundary: no new species or actor; no player, dog,
 human, other-animal, or group-member mortality; and no population recovery,
 live decomposition, body movement/harvest/scent/insects, worldwide ecology, or
 later Wave-E species.
+
+The Alpha 30 source candidate advances the manual to version 40 and gameplay
+contract to version 28. It explains the one bounded remote regional source,
+wild boar / elk / gray wolf, `SOUNDER` / `HERD` / `PACK`, shared perception and
+locomotion, the split between wolf pursuit pressure and solitary-rabbit-only
+mortality, finite boar scavenging, knowledge-honest Chart/Relief/ABOUT parity,
+and exact outer-v22-to-v23 adoption with habitat version 10. It also names the
+current absences: audible voice patterns, dog interaction, tactical pack
+combat, group mortality, cougar, additional bear ecotypes, worldwide ecology,
+and full Wave E. This documents repository source only; deployment has not yet
+been verified.
 
 The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
@@ -831,7 +864,13 @@ Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. The first cache-bypassed five-file
 live comparison matched the tested production build exactly.
 
-Released through Alpha 29:
+`0.3.3-alpha.30 — Beyond the Harbor` is a repository source candidate, not a
+verified deployment. It advances gameplay contract 28, Field Manual 40, outer
+save 23, habitat 10, and the catalog to twenty-two records. No CI, artifact,
+Pages, or live-build claim is attached to this candidate here.
+
+Released through Alpha 29, with Alpha 30 present only as the source candidate
+above:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;

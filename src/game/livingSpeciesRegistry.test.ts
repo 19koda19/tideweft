@@ -44,6 +44,9 @@ describe("lean runtime living-species registry", () => {
       "north-american-river-otter",
       "domestic-chicken",
       "domestic-goat",
+      "wild-boar",
+      "elk",
+      "gray-wolf",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -350,6 +353,54 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 20_000,
         },
       },
+      {
+        species: "wild-boar",
+        actorIdPrefix: "BOAR-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: "sounder",
+        groupStableIdNamespace: "SOUNDER",
+        aboutNoun: "wild boar",
+        senses: {
+          visionAcuity: 720_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: 960_000,
+          scentBaseRangeUnits: 36_000,
+        },
+      },
+      {
+        species: "elk",
+        actorIdPrefix: "ELK-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: "herd",
+        groupStableIdNamespace: "HERD",
+        aboutNoun: "elk",
+        senses: {
+          visionAcuity: 900_000,
+          hearingSensitivity: 970_000,
+          scentSensitivity: 760_000,
+          scentBaseRangeUnits: 30_000,
+        },
+      },
+      {
+        species: "gray-wolf",
+        actorIdPrefix: "WOLF-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: "pack",
+        groupStableIdNamespace: "PACK",
+        aboutNoun: "gray wolf",
+        senses: {
+          visionAcuity: 900_000,
+          hearingSensitivity: 960_000,
+          scentSensitivity: ACTOR_PERCEPTION_SCALE,
+          scentBaseRangeUnits: 46_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -371,6 +422,14 @@ describe("lean runtime living-species registry", () => {
       "GOAT-v1-alpha25-fixture",
       "domestic-goat",
     )).toBe(true);
+    for (const [species, actorId] of [
+      ["wild-boar", "BOAR-v1-alpha30-fixture"],
+      ["elk", "ELK-v1-alpha30-fixture"],
+      ["gray-wolf", "WOLF-v1-alpha30-fixture"],
+    ] as const) {
+      expect(isLivingSpeciesActorAddressable(species)).toBe(true);
+      expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(true);
+    }
   });
 
   it("is deeply immutable and fails unknown species closed", () => {

@@ -6,10 +6,13 @@ import {
 } from "../sim/coreWildlifeIdentity";
 import {
   isLivingSpeciesActorAddressable,
+  livingSpeciesRegistryEntry,
   type LivingActorSpecies,
 } from "./livingSpeciesRegistry";
 import {
   coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesPhysicalBodyResourceUnits,
+  coreEcologySpeciesPredatorContact,
 } from "./coreEcologySpeciesRuntimePolicy";
 
 /**
@@ -74,6 +77,8 @@ export function coreEcologyTrophicPerceivedClass(
   const subjectIsSmallPredator = hasRole(subject, "small-predator");
   const subjectIsPredator = subjectIsSmallPredator || hasRole(subject, "predator");
   const subjectIsAddressable = isLivingSpeciesActorAddressable(subject);
+  const observerCanPursue = canPursueLivePreyRole(observer);
+  const subjectCanBePursued = canBeLivePreySubject(subject);
 
   // Aquatic foraging is a reusable observed-role relationship rather than a
   // declaration that every wader is a general predator. Small aquatic or
@@ -102,14 +107,21 @@ export function coreEcologyTrophicPerceivedClass(
     return "predator";
   }
 
-  // Small predators can pursue only prey that explicitly declares SMALL_PREY;
-  // this prevents a fox-sized profile from silently treating deer as food.
-  if (observerIsSmallPredator && subjectIsSmallPrey && subjectIsAddressable) return "live-prey";
+  // The food web distinguishes small predators from broad predators, while
+  // the capability and victim witness below prevent a role alone from
+  // activating pursuit or routing a grouped body into solitary mortality.
   if (
-    observerIsPredator
+    observerCanPursue
+    && observerIsSmallPredator
+    && subjectIsSmallPrey
+    && subjectCanBePursued
+  ) return "live-prey";
+  if (
+    observerCanPursue
+    && observerIsPredator
     && !observerIsSmallPredator
     && subjectIsPrey
-    && subjectIsAddressable
+    && subjectCanBePursued
   ) return "live-prey";
 
   if (observerIsSmallPrey && subjectIsPredator) return "predator";
@@ -126,9 +138,52 @@ export function coreEcologyCanPursueLivingActor(
   observer: LivingActorSpecies,
   subject: LivingActorSpecies,
 ): boolean {
-  return isLivingSpeciesActorAddressable(subject)
-    && coreEcologySpeciesHasRuntimeCapability(observer, "small-prey-pursuit")
+  return canPursueLivePreyRole(observer)
+    && canBeLivePreySubject(subject)
     && coreEcologyTrophicPerceivedClass(observer, subject) === "live-prey";
+}
+
+/**
+ * Mortality is deliberately narrower than trophic pursuit. Group members may
+ * be perceived and chased through their ordinary actor addresses, but the
+ * current body owner can retire only a solitary exact actor. Keeping this
+ * witness separate preserves nonlethal predator pressure without inventing a
+ * partial group-member injury, death, or carcass transaction.
+ */
+export function coreEcologyCanResolveMortalityTarget(
+  attacker: LivingActorSpecies,
+  victim: LivingActorSpecies,
+): boolean {
+  return coreEcologyCanPursueLivingActor(attacker, victim)
+    && coreEcologySpeciesPredatorContact(attacker) !== null
+    && livingSpeciesRegistryEntry(victim)?.groupOrganization === null
+    && coreEcologySpeciesPhysicalBodyResourceUnits(victim) > 0;
+}
+
+/**
+ * A pursuit is an authored predator ability backed by an actual food-web
+ * affinity. Merely adding a predator-looking role or a positive affinity can
+ * never activate it on its own.
+ */
+function canPursueLivePreyRole(species: LivingActorSpecies): boolean {
+  if (!CORE_SPECIES.has(species)) return false;
+  const profile = getCoreWildlifeProfile(species as CoreWildlifeSpecies);
+  return coreEcologySpeciesHasRuntimeCapability(species, "live-prey-pursuit")
+    && (profile.roles.includes("predator") || profile.roles.includes("small-predator"))
+    && profile.foodAffinities["live-prey"] > 0
+    && profile.behavior.maximumPursuitTicks > 0;
+}
+
+/**
+ * Pursuit is an attention and locomotion contract, not a promise that the
+ * current mortality owner can injure or retire the target. Any addressable
+ * authored prey may therefore create pressure, including a grouped member.
+ */
+function canBeLivePreySubject(species: LivingActorSpecies): boolean {
+  if (!CORE_SPECIES.has(species)) return false;
+  const profile = getCoreWildlifeProfile(species as CoreWildlifeSpecies);
+  return isLivingSpeciesActorAddressable(species)
+    && (profile.roles.includes("prey") || profile.roles.includes("small-prey"));
 }
 
 function hasRole(

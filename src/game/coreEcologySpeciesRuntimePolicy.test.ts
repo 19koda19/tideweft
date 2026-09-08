@@ -46,6 +46,9 @@ describe("core ecology species runtime policy", () => {
       "north-american-river-otter",
       "domestic-chicken",
       "domestic-goat",
+      "wild-boar",
+      "elk",
+      "gray-wolf",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -63,7 +66,7 @@ describe("core ecology species runtime policy", () => {
     }
   });
 
-  it("declares one shared fox/rabbit mortality slice and one orthogonal scavenger", () => {
+  it("declares shared contact/body capabilities and orthogonal carcass consumers", () => {
     expect(coreEcologySpeciesRuntimePolicy("marsh-fox")).toMatchObject({
       mortality: {
         version: 1,
@@ -119,10 +122,44 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanFeedFromCarcass("fish-crow")).toBe(true);
     expect(coreEcologySpeciesCanGuardCarcass("fish-crow")).toBe(false);
 
+    expect(coreEcologySpeciesRuntimePolicy("gray-wolf")).toMatchObject({
+      mortality: {
+        predatorContact: {
+          cause: "predator-contact",
+          reachUnits: 650,
+          damageUnits: 700_000,
+        },
+        physicalBodySizeUnits: 0,
+        physicalBodyResourceUnits: 0,
+        carcassFeeding: true,
+        carcassGuarding: true,
+      },
+      capabilities: expect.arrayContaining([
+        "live-prey-pursuit",
+        "predator-contact-damage",
+        "carcass-feeding",
+        "carcass-guarding",
+      ]),
+    });
+    expect(coreEcologySpeciesRuntimePolicy("wild-boar")).toMatchObject({
+      mortality: {
+        predatorContact: null,
+        physicalBodySizeUnits: 0,
+        physicalBodyResourceUnits: 0,
+        carcassFeeding: true,
+        carcassGuarding: false,
+      },
+      capabilities: expect.arrayContaining(["food-investigation", "carcass-feeding"]),
+    });
+    expect(coreEcologySpeciesCanFeedFromCarcass("wild-boar")).toBe(true);
+    expect(coreEcologySpeciesCanGuardCarcass("wild-boar")).toBe(false);
+
     const inactive = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(({ speciesId }) => (
       speciesId !== "marsh-fox"
       && speciesId !== "marsh-rabbit"
       && speciesId !== "fish-crow"
+      && speciesId !== "wild-boar"
+      && speciesId !== "gray-wolf"
     ));
     for (const policy of inactive) {
       expect(policy.mortality).toEqual({
@@ -191,7 +228,7 @@ describe("core ecology species runtime policy", () => {
     });
     expect(coreEcologySpeciesHasRuntimeCapability("domestic-chicken", "diurnal-activity"))
       .toBe(false);
-    expect(coreEcologySpeciesHasRuntimeCapability("domestic-chicken", "small-prey-pursuit"))
+    expect(coreEcologySpeciesHasRuntimeCapability("domestic-chicken", "live-prey-pursuit"))
       .toBe(false);
   });
 
@@ -212,7 +249,7 @@ describe("core ecology species runtime policy", () => {
     });
     expect(coreEcologySpeciesHasRuntimeCapability("domestic-goat", "food-investigation"))
       .toBe(false);
-    expect(coreEcologySpeciesHasRuntimeCapability("domestic-goat", "small-prey-pursuit"))
+    expect(coreEcologySpeciesHasRuntimeCapability("domestic-goat", "live-prey-pursuit"))
       .toBe(false);
   });
 
@@ -236,7 +273,7 @@ describe("core ecology species runtime policy", () => {
       "amphibious-locomotion",
       "aquatic-foraging",
       "aquatic-locomotion",
-      "small-prey-pursuit",
+      "live-prey-pursuit",
       "wading",
     ] as const) {
       expect(coreEcologySpeciesHasRuntimeCapability("gull", capability)).toBe(false);
@@ -306,7 +343,7 @@ describe("core ecology species runtime policy", () => {
       ]),
       presentationModel: "individual",
     });
-    expect(coreEcologySpeciesHasRuntimeCapability("snowy-egret", "small-prey-pursuit"))
+    expect(coreEcologySpeciesHasRuntimeCapability("snowy-egret", "live-prey-pursuit"))
       .toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("american-black-duck")).toMatchObject({
       actorAddressable: true,
@@ -357,7 +394,7 @@ describe("core ecology species runtime policy", () => {
         "food-investigation",
         "movement-memory",
         "shore-water-activity",
-        "small-prey-pursuit",
+        "live-prey-pursuit",
         "surface-opportunity",
         "tidal-activity",
         "water-depth-response",
@@ -393,7 +430,7 @@ describe("core ecology species runtime policy", () => {
     });
     expect(coreEcologySpeciesHasRuntimeCapability("northern-harrier", "aerial-predator"))
       .toBe(true);
-    expect(coreEcologySpeciesHasRuntimeCapability("northern-harrier", "small-prey-pursuit"))
+    expect(coreEcologySpeciesHasRuntimeCapability("northern-harrier", "live-prey-pursuit"))
       .toBe(true);
   });
 

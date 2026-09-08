@@ -187,7 +187,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "aerial-locomotion",
         "aerial-predator",
         "diurnal-activity",
-        "small-prey-pursuit",
+        "live-prey-pursuit",
       ],
       locomotionClass: "aerial",
       allowedTravelMedia: ["air"],

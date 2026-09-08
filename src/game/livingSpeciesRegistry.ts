@@ -23,7 +23,12 @@ export type LivingSpeciesLocomotionClass =
   | "aerial"
   | "aquatic"
   | "amphibious";
-export type LivingSpeciesGroupOrganization = "herd" | "flock" | "school";
+export type LivingSpeciesGroupOrganization =
+  | "herd"
+  | "flock"
+  | "school"
+  | "sounder"
+  | "pack";
 
 export interface LivingSpeciesSensoryValues {
   /** Relative capability only; line-of-sight still governs actual vision. */
@@ -50,6 +55,8 @@ interface LivingSpeciesRegistryInput<Species extends string = string> {
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
     | "CHICKEN-FLOCK"
+    | "SOUNDER"
+    | "PACK"
     | null;
   /** Lowercase noun; presentation decides capitalization and knowledge qualifiers. */
   readonly aboutNoun: string;
@@ -223,6 +230,33 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       hearingSensitivity: 900_000,
       scentSensitivity: 700_000,
       scentBaseRangeUnits: 20_000,
+    },
+  },
+  "wild-boar": {
+    aboutNoun: "wild boar",
+    senses: {
+      visionAcuity: 720_000,
+      hearingSensitivity: 900_000,
+      scentSensitivity: 960_000,
+      scentBaseRangeUnits: 36_000,
+    },
+  },
+  elk: {
+    aboutNoun: "elk",
+    senses: {
+      visionAcuity: 900_000,
+      hearingSensitivity: 970_000,
+      scentSensitivity: 760_000,
+      scentBaseRangeUnits: 30_000,
+    },
+  },
+  "gray-wolf": {
+    aboutNoun: "gray wolf",
+    senses: {
+      visionAcuity: 900_000,
+      hearingSensitivity: 960_000,
+      scentSensitivity: ACTOR_PERCEPTION_SCALE,
+      scentBaseRangeUnits: 46_000,
     },
   },
 });

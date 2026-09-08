@@ -43,6 +43,7 @@ import {
   CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_VERSION,
+  CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION,
   CORE_ECOLOGY_TIDAL_TABLE_HABITAT_VERSION,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
   CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION,
@@ -52,6 +53,7 @@ import {
   canonicalizeCoreEcologyHarborEdgeHabitatAssemblage,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   canonicalizeCoreEcologyRainChorusHabitatAssemblage,
+  canonicalizeCoreEcologyRegionalUplandHabitatAssemblage,
   canonicalizeCoreEcologyTidalTableHabitatAssemblage,
   canonicalizeCoreEcologyTidalWebHabitatAssemblage,
   canonicalizeCoreEcologyWaterfowlHabitatAssemblage,
@@ -63,6 +65,7 @@ import {
   type CoreEcologyHarborEdgeHabitatPopulationAnalysis,
   type CoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyRainChorusHabitatAssemblage,
+  type CoreEcologyRegionalUplandHabitatAssemblage,
   type CoreEcologyTidalTableHabitatAssemblage,
   type CoreEcologyTidalWebHabitatAssemblage,
   type CoreEcologyWaterfowlHabitatAssemblage,
@@ -82,6 +85,7 @@ import {
   coreEcologySpeciesPhysicalBodySizeUnits,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
+import { coreEcologyCanResolveMortalityTarget } from "./coreEcologyTrophic";
 import {
   canonicalizeCoreEcologyMortalityTransaction,
   createCoreEcologyMortalityTransaction,
@@ -111,7 +115,7 @@ export const LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 4 as const;
 export const TIDAL_LEGACY_CORE_ECOLOGY_AGGREGATE_PATCH_VERSION = 3 as const;
 export const LEGACY_CORE_ECOLOGY_PATCH_VERSION = 2 as const;
 export const FOUNDATION_LEGACY_CORE_ECOLOGY_PATCH_VERSION = 1 as const;
-export const CORE_ECOLOGY_MAX_POPULATIONS = 13 as const;
+export const CORE_ECOLOGY_MAX_POPULATIONS = 16 as const;
 export const CORE_ECOLOGY_MAX_MEMBERS = 48 as const;
 export const CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS = 24 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS = 4 as const;
@@ -150,6 +154,9 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "north-american-river-otter",
   "domestic-chicken",
   "domestic-goat",
+  "wild-boar",
+  "elk",
+  "gray-wolf",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -265,6 +272,15 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Frozen pre-habitat actors remain authoritative through the v9 extension. */
       readonly kind: "legacy-fixed-v1-with-habitat-v9";
       readonly habitat: CoreEcologyDomesticPenHabitatAssemblage;
+    }>
+  | Readonly<{
+      readonly kind: "habitat-v10";
+      readonly habitat: CoreEcologyRegionalUplandHabitatAssemblage;
+    }>
+  | Readonly<{
+      /** Frozen pre-habitat actors remain authoritative through the regional extension. */
+      readonly kind: "legacy-fixed-v1-with-habitat-v10";
+      readonly habitat: CoreEcologyRegionalUplandHabitatAssemblage;
     }>;
 
 export interface CreateCoreEcologyPatchInput {
@@ -976,6 +992,8 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v8"
     || derivation.kind === "habitat-v9"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v9"
+    || derivation.kind === "habitat-v10"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v10"
     ? aggregatePopulationsFromHabitat(input.seed, derivation.habitat, tick)
     : Object.freeze([]);
   const candidate = {
@@ -1702,7 +1720,13 @@ export function applyCoreEcologyWildlifeMortality(
   ) return null;
   const attacker = attackerMember.actor;
   const attack = coreEcologySpeciesPredatorContact(attacker.identity.species);
-  if (attack === null) return null;
+  if (
+    attack === null
+    || !coreEcologyCanResolveMortalityTarget(
+      attacker.identity.species,
+      victimPopulation.species,
+    )
+  ) return null;
   const verified = resolveCoreWildlifePredatorContact({
     attacker,
     target: victimMember.actor,
@@ -2206,7 +2230,8 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyWaterfowlHabitatAssemblage
     | CoreEcologyTidalWebHabitatAssemblage
     | CoreEcologyDomesticYardHabitatAssemblage
-    | CoreEcologyDomesticPenHabitatAssemblage,
+    | CoreEcologyDomesticPenHabitatAssemblage
+    | CoreEcologyRegionalUplandHabitatAssemblage,
   tick: number,
 ): readonly CoreEcologyAggregatePopulationState[] {
   const seedFingerprint = rootSeedFingerprint(seed);
@@ -2989,6 +3014,16 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: value.kind, habitat });
   }
+  if (
+    value.kind === "habitat-v10"
+    || value.kind === "legacy-fixed-v1-with-habitat-v10"
+  ) {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyRegionalUplandHabitatAssemblage(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: value.kind, habitat });
+  }
   return canonicalDerivation(value);
 }
 
@@ -3055,6 +3090,8 @@ function aggregateDerivationMatchesPopulations(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v8";
   const isDomesticPenDerivation = derivation.kind === "habitat-v9"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v9";
+  const isRegionalUplandDerivation = derivation.kind === "habitat-v10"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v10";
   if (
     !isHarborEdgeDerivation
     && !isMarshEdgeDerivation
@@ -3064,6 +3101,7 @@ function aggregateDerivationMatchesPopulations(
     && !isTidalWebDerivation
     && !isDomesticYardDerivation
     && !isDomesticPenDerivation
+    && !isRegionalUplandDerivation
   ) {
     return mortalityTransactions.length === 0
       && aggregatePopulations.length === 0
@@ -3077,7 +3115,8 @@ function aggregateDerivationMatchesPopulations(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v6"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v7"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v8"
-    || derivation.kind === "legacy-fixed-v1-with-habitat-v9";
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v9"
+    || derivation.kind === "legacy-fixed-v1-with-habitat-v10";
   const expectedHabitatVersion = isHarborEdgeDerivation
     ? CORE_ECOLOGY_HARBOR_EDGE_HABITAT_VERSION
     : isMarshEdgeDerivation
@@ -3092,7 +3131,9 @@ function aggregateDerivationMatchesPopulations(
     ? CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION
     : isDomesticYardDerivation
     ? CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION
-    : CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION;
+    : isDomesticPenDerivation
+    ? CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION
+    : CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION;
   if (
     derivation.habitat.generationVersion !== expectedHabitatVersion
     || derivation.habitat.originRegion.x !== originRegion.x

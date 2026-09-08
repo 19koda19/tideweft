@@ -13,7 +13,11 @@ import { createTideHarpGeometryMemo } from "./tideHarps";
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
-import { domesticGoatAppearancePalette } from "./wildlifeAppearance";
+import {
+  alpha30WildlifeAppearancePalette,
+  domesticGoatAppearancePalette,
+  type Alpha30WildlifeAppearanceSpecies,
+} from "./wildlifeAppearance";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
@@ -3830,6 +3834,118 @@ export function createTideweftRenderer(
       );
     };
 
+    const drawChartUplandMammal = (
+      actor: WildlifeView,
+      species: Alpha30WildlifeAppearanceSpecies,
+      base: number,
+      now: number,
+    ): void => {
+      const colors = alpha30WildlifeAppearancePalette(species, actor.appearanceKey);
+      const moving = actor.behavior === "flee"
+        || actor.behavior === "pursue"
+        || actor.behavior === "retreat";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.01) * base * 0.3;
+      const elk = species === "elk";
+      const boar = species === "wild-boar";
+      const bodyLength = base * (boar ? 3.8 : 3.55);
+      const bodyHeight = base * (boar ? 1.35 : elk ? 1.55 : 1.3);
+      const legHeight = base * (boar ? 0.8 : elk ? 2.15 : 1.4);
+      const headX = bodyLength * 0.55;
+      const headY = boar ? bodyHeight * 0.02 : elk ? -bodyHeight * 0.62 : -bodyHeight * 0.28;
+
+      p.stroke(withAlpha(PALETTE.ink, 242));
+      p.strokeWeight(Math.max(0.8, base * 0.16));
+      for (const [legX, phase] of [
+        [-bodyLength * 0.3, -1],
+        [bodyLength * 0.3, 1],
+      ] as const) {
+        p.line(legX, bodyHeight * 0.25, legX + stride * phase, legHeight);
+      }
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 242));
+      p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.22);
+      p.fill(colors.primary);
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+
+      if (boar) {
+        p.fill(colors.dark);
+        for (const offset of [-0.7, -0.25, 0.2, 0.65]) {
+          p.triangle(
+            base * offset,
+            -bodyHeight * 0.42,
+            base * (offset + 0.18),
+            -bodyHeight * 0.9,
+            base * (offset + 0.34),
+            -bodyHeight * 0.4,
+          );
+        }
+        p.fill(colors.primary);
+        p.ellipse(headX, headY, base * 1.65, base * 1.25);
+        p.fill(colors.secondary);
+        p.ellipse(headX + base * 0.72, headY + base * 0.18, base * 1.1, base * 0.62);
+        p.fill(colors.accent);
+        p.triangle(
+          headX + base * 0.35,
+          headY + base * 0.35,
+          headX + base * 0.72,
+          headY + base * 0.88,
+          headX + base * 0.82,
+          headY + base * 0.3,
+        );
+      } else if (elk) {
+        p.fill(colors.primary);
+        p.quad(
+          bodyLength * 0.28, -bodyHeight * 0.32,
+          headX - base * 0.52, headY - base * 0.15,
+          headX - base * 0.35, headY + base * 0.72,
+          bodyLength * 0.22, bodyHeight * 0.28,
+        );
+        p.ellipse(headX, headY, base * 1.42, base * 1.05);
+        p.fill(colors.secondary);
+        p.ellipse(-bodyLength * 0.4, 0, base * 1.05, bodyHeight * 0.82);
+        for (const ear of [-1, 1]) {
+          p.triangle(
+            headX - base * 0.25,
+            headY - base * 0.35,
+            headX - base * 0.65,
+            headY - base * 1.05,
+            headX + base * 0.05 * ear,
+            headY - base * 0.45,
+          );
+        }
+      } else {
+        p.fill(colors.primary);
+        p.ellipse(headX, headY, base * 1.4, base * 1.2);
+        p.fill(colors.dark);
+        for (const ear of [-1, 1]) {
+          p.triangle(
+            headX + base * 0.12 * ear,
+            headY - base * 0.35,
+            headX + base * 0.48 * ear,
+            headY - base * 1.05,
+            headX + base * 0.62 * ear,
+            headY - base * 0.28,
+          );
+        }
+        p.fill(colors.secondary);
+        p.triangle(
+          headX + base * 0.42, headY - base * 0.18,
+          headX + base * 1.25, headY + base * 0.08,
+          headX + base * 0.4, headY + base * 0.34,
+        );
+        p.noFill();
+        p.stroke(colors.dark);
+        p.strokeWeight(Math.max(0.8, base * 0.2));
+        p.bezier(
+          -bodyLength * 0.46, -bodyHeight * 0.1,
+          -bodyLength * 0.82, -bodyHeight * 0.25,
+          -bodyLength * 0.95, bodyHeight * 0.32,
+          -bodyLength * 1.2, bodyHeight * 0.45,
+        );
+        p.noStroke();
+      }
+    };
+
     const drawChartWildlifeActor = (
       actor: WildlifeView,
       base: number,
@@ -3862,6 +3978,11 @@ export function createTideweftRenderer(
           return true;
         case "north-american-river-otter":
           drawChartNorthAmericanRiverOtter(actor, base, now);
+          return true;
+        case "wild-boar":
+        case "elk":
+        case "gray-wolf":
+          drawChartUplandMammal(actor, actor.species, base, now);
           return true;
         case "black-bear":
           drawChartBlackBear(actor, base);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES,
   ambienceParameters,
   ecologyVoicePattern,
   incidentSoundPattern,
@@ -90,6 +91,38 @@ describe("small-world wildlife cues", () => {
   it("uses malformed variation conservatively", () => {
     expect(smallWildlifePattern("rat-rustle", Number.NaN))
       .toEqual(smallWildlifePattern("rat-rustle", 0));
+  });
+
+  it("authors the complete Alpha 30 repertoire without a runtime playback claim", () => {
+    expect(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES).toEqual([
+      "boar-grunt",
+      "boar-squeal",
+      "elk-alarm-bark",
+      "elk-bugle",
+      "wolf-growl",
+      "wolf-howl",
+    ]);
+    const patterns = ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES.map((cue) => (
+      ecologyVoicePattern(cue, 0x30e)
+    ));
+    expect(new Set(patterns.map((pattern) => JSON.stringify(pattern))).size)
+      .toBe(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES.length);
+    for (const [index, cue] of ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES.entries()) {
+      const pattern = patterns[index]!;
+      expect(pattern).toEqual(ecologyVoicePattern(cue, 0x30e));
+      expect(pattern.length).toBeGreaterThan(0);
+      expect(pattern.every(({ delay, duration, frequency }) => (
+        Number.isFinite(delay)
+        && delay >= 0
+        && Number.isFinite(duration)
+        && duration > 0
+        && Number.isFinite(frequency)
+        && frequency >= 40
+      ))).toBe(true);
+      expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
+        .toBeLessThanOrEqual(1.1);
+      expect(ecologyVoicePattern(cue, Number.NaN)).toEqual(ecologyVoicePattern(cue, 0));
+    }
   });
 });
 

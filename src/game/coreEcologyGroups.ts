@@ -38,7 +38,7 @@ export const CORE_ECOLOGY_GROUP_SPECIES: readonly CoreWildlifeSpecies[] = Object
 );
 /** Runtime admission remains policy-gated; this alias avoids duplicating the policy roster in types. */
 export type CoreEcologyGroupSpecies = CoreWildlifeSpecies;
-export type CoreEcologyGroupOrganization = "herd" | "flock";
+export type CoreEcologyGroupOrganization = "herd" | "flock" | "sounder" | "pack";
 export type CoreEcologyGroupPhase = "cohesive" | "separated" | "rejoining";
 export type CoreEcologyGroupSignalKind = "alarm" | "movement";
 export type CoreEcologyGroupLineageKind = "origin" | "split" | "rejoin";
@@ -1847,18 +1847,31 @@ function isCoreWildlifeSpecies(value: unknown): value is CoreWildlifeSpecies {
 
 function groupPolicy(species: CoreWildlifeSpecies): Readonly<{
   organization: CoreEcologyGroupOrganization;
-  stableIdPrefix: "HERD" | "FLOCK" | "CROW-FLOCK" | "CHICKEN-FLOCK";
+  stableIdPrefix:
+    | "HERD"
+    | "FLOCK"
+    | "CROW-FLOCK"
+    | "CHICKEN-FLOCK"
+    | "SOUNDER"
+    | "PACK";
 }> | null {
   const policy = coreEcologySpeciesRuntimePolicy(species);
   if (
     policy === null
     || !policy.actorAddressable
-    || (policy.groupOrganization !== "herd" && policy.groupOrganization !== "flock")
+    || (
+      policy.groupOrganization !== "herd"
+      && policy.groupOrganization !== "flock"
+      && policy.groupOrganization !== "sounder"
+      && policy.groupOrganization !== "pack"
+    )
     || (
       policy.groupStableIdNamespace !== "HERD"
       && policy.groupStableIdNamespace !== "FLOCK"
       && policy.groupStableIdNamespace !== "CROW-FLOCK"
       && policy.groupStableIdNamespace !== "CHICKEN-FLOCK"
+      && policy.groupStableIdNamespace !== "SOUNDER"
+      && policy.groupStableIdNamespace !== "PACK"
     )
     || !policy.capabilities.includes("group-coordination")
   ) return null;

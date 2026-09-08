@@ -8,6 +8,7 @@ import {
 } from "../sim/biomes";
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "../sim/rng";
 import {
+  REGION_COORD_LIMIT,
   createRegionCoord,
   isRegionCoord,
   regionLocalToGlobalTile,
@@ -41,6 +42,7 @@ export const CORE_ECOLOGY_WATERFOWL_HABITAT_VERSION = 6 as const;
 export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION = 7 as const;
 export const CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_VERSION = 8 as const;
 export const CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION = 9 as const;
+export const CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION = 10 as const;
 export const CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES = [
   "deer",
   "gull",
@@ -84,6 +86,12 @@ export const CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES = [
   ...CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES,
   "domestic-goat",
 ] as const;
+export const CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES = [
+  ...CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES,
+  "wild-boar",
+  "elk",
+  "gray-wolf",
+] as const;
 export type CoreEcologyWaveAHabitatSpecies =
   (typeof CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES)[number];
 export type CoreEcologyHarborEdgeHabitatSpecies =
@@ -102,6 +110,8 @@ export type CoreEcologyDomesticYardHabitatSpecies =
   (typeof CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES)[number];
 export type CoreEcologyDomesticPenHabitatSpecies =
   (typeof CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES)[number];
+export type CoreEcologyRegionalUplandHabitatSpecies =
+  (typeof CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES)[number];
 export type CoreEcologyHabitatRepresentation =
   | "aggregate-area"
   | "group-actor"
@@ -125,6 +135,9 @@ export const CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_SPECIES.length;
 export const CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES_EVALUATION_BUDGET =
   CORE_ECOLOGY_HABITAT_TILE_BUDGET * CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES.length;
+export const CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES_EVALUATION_BUDGET =
+  CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES_EVALUATION_BUDGET
+    + CORE_ECOLOGY_HABITAT_TILE_BUDGET * 3;
 export const CORE_ECOLOGY_HABITAT_MAX_ALLOCATIONS = 11 as const;
 export const CORE_ECOLOGY_HARBOR_EDGE_HABITAT_MAX_ALLOCATIONS = 16 as const;
 export const CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS = 21 as const;
@@ -134,6 +147,9 @@ export const CORE_ECOLOGY_WATERFOWL_HABITAT_MAX_ALLOCATIONS = 37 as const;
 export const CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS = 38 as const;
 export const CORE_ECOLOGY_DOMESTIC_YARD_HABITAT_MAX_ALLOCATIONS = 41 as const;
 export const CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_MAX_ALLOCATIONS = 43 as const;
+export const CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS = 54 as const;
+export const CORE_ECOLOGY_REGIONAL_UPLAND_SOURCE_CANDIDATE_BUDGET = 8 as const;
+export const CORE_ECOLOGY_REGIONAL_UPLAND_HARBOR_SEPARATION_REGIONS = 5 as const;
 /** Saved, non-population tidal destinations remain deliberately small and bounded. */
 export const CORE_ECOLOGY_TIDAL_TABLE_MAX_ANCHOR_RECORDS = 12 as const;
 export const CORE_ECOLOGY_WATERFOWL_MAX_ANCHOR_RECORDS = 15 as const;
@@ -204,6 +220,9 @@ export interface DeriveCoreEcologyDomesticYardHabitatAssemblageInput
 
 export type DeriveCoreEcologyDomesticPenHabitatAssemblageInput =
   DeriveCoreEcologyDomesticYardHabitatAssemblageInput;
+
+export type DeriveCoreEcologyRegionalUplandHabitatAssemblageInput =
+  DeriveCoreEcologyDomesticPenHabitatAssemblageInput;
 
 export interface CoreEcologyHabitatFocusInput {
   readonly position: WorldPosition;
@@ -626,8 +645,62 @@ export interface CoreEcologyDomesticPenHabitatAssemblage {
   readonly domesticPenAnchor: CoreEcologyDomesticPenHabitatAnchor;
 }
 
+/**
+ * One seed-stable regional source chosen from a bounded ring around the
+ * compatibility harbor. `forest-edge` describes the cover/roughness candidate
+ * signal; the current terrain kernel intentionally has no literal forest tile.
+ */
+export interface CoreEcologyRegionalUplandHabitatSource {
+  readonly assemblageKey: string;
+  readonly habitatClasses: readonly ["forest-edge", "temperate-upland"];
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: typeof CORE_ECOLOGY_HABITAT_TILE_BUDGET;
+  readonly sourceCandidateOrdinal: number;
+  readonly sourceCandidateCount: number;
+}
+
+/**
+ * Additive first Wave-E habitat record. Every v9 population, tidal anchor,
+ * domestic anchor, and allocation remains an exact prefix. Boar, elk, and
+ * wolf analyses are appended from the separately addressed regional source.
+ */
+export interface CoreEcologyRegionalUplandHabitatAssemblage {
+  readonly generationVersion: typeof CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION;
+  readonly originRegion: RegionCoord;
+  readonly regionId: string;
+  readonly terrainHash: string;
+  readonly selection: CoreEcologyHabitatSelection;
+  readonly evaluatedTiles: number;
+  /** v9 selected-tile work plus one full regional pass for the three additions. */
+  readonly speciesEvaluations: number;
+  readonly maximumAllocationBudget:
+    typeof CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS;
+  readonly populations: readonly CoreEcologyRegionalUplandHabitatPopulationAnalysis[];
+  readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
+  readonly domesticAnchor: CoreEcologyDomesticHabitatAnchor;
+  readonly domesticPenAnchor: CoreEcologyDomesticPenHabitatAnchor;
+  readonly regionalHabitat: CoreEcologyRegionalUplandHabitatSource;
+}
+
 export interface CoreEcologyDomesticPenHabitatPopulationAnalysis {
   readonly species: CoreEcologyDomesticPenHabitatSpecies;
+  readonly representation: CoreEcologyHabitatRepresentation;
+  readonly populationKey: string;
+  readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
+  readonly habitatCapacity: number;
+  readonly populationUnits: number;
+  readonly populationPressure: number;
+  readonly trend: CoreEcologyPopulationTrend;
+  readonly trendSignal: number;
+  readonly activitySignal: CoreEcologyHarborEdgeActivitySignal;
+  readonly allocations: readonly CoreEcologyHabitatAllocation[];
+}
+
+export interface CoreEcologyRegionalUplandHabitatPopulationAnalysis {
+  readonly species: CoreEcologyRegionalUplandHabitatSpecies;
   readonly representation: CoreEcologyHabitatRepresentation;
   readonly populationKey: string;
   readonly capacityInputs: CoreEcologyHabitatCapacityInputs;
@@ -655,7 +728,7 @@ interface HabitatSpeciesRule {
 }
 
 export interface CoreEcologyHabitatSpeciesBounds {
-  readonly species: CoreEcologyDomesticPenHabitatSpecies;
+  readonly species: CoreEcologyRegionalUplandHabitatSpecies;
   readonly representation: CoreEcologyHabitatRepresentation;
   readonly maximumPopulation: number;
   readonly maximumAllocations: number;
@@ -688,7 +761,7 @@ interface HabitatSiteEvaluation {
 }
 
 interface UnallocatedPopulationAnalysis<
-  Species extends CoreEcologyDomesticPenHabitatSpecies = CoreEcologyDomesticPenHabitatSpecies,
+  Species extends CoreEcologyRegionalUplandHabitatSpecies = CoreEcologyRegionalUplandHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -702,7 +775,7 @@ interface UnallocatedPopulationAnalysis<
 }
 
 interface AllocatedPopulationAnalysis<
-  Species extends CoreEcologyDomesticPenHabitatSpecies = CoreEcologyDomesticPenHabitatSpecies,
+  Species extends CoreEcologyRegionalUplandHabitatSpecies = CoreEcologyRegionalUplandHabitatSpecies,
 > {
   readonly species: Species;
   readonly populationKey: string;
@@ -725,10 +798,21 @@ interface PreparedCoreEcologyHabitatContext {
 const HABITAT_RANDOM_DOMAIN = 0x4841_4231;
 const SITE_RANK_PURPOSE = 0x5349_5445;
 const POPULATION_PRESSURE_PURPOSE = 0x5052_5352;
+const REGIONAL_SOURCE_TIE_PURPOSE = 0x5550_4c44;
 const MAX_DISTANCE = WORLD_WIDTH + WORLD_HEIGHT;
 const UINT32_MAX = 0xffff_ffff;
+const REGIONAL_UPLAND_SOURCE_OFFSETS = Object.freeze([
+  Object.freeze({ x: -3, y: -2 }),
+  Object.freeze({ x: -3, y: 2 }),
+  Object.freeze({ x: -2, y: -3 }),
+  Object.freeze({ x: -2, y: 3 }),
+  Object.freeze({ x: 2, y: -3 }),
+  Object.freeze({ x: 2, y: 3 }),
+  Object.freeze({ x: 3, y: -2 }),
+  Object.freeze({ x: 3, y: 2 }),
+] as const);
 
-const SPECIES_PURPOSE: Readonly<Record<CoreEcologyDomesticPenHabitatSpecies, number>> = Object.freeze({
+const SPECIES_PURPOSE: Readonly<Record<CoreEcologyRegionalUplandHabitatSpecies, number>> = Object.freeze({
   deer: 0x4445_4552,
   gull: 0x4755_4c4c,
   "black-bear": 0x4245_4152,
@@ -746,9 +830,12 @@ const SPECIES_PURPOSE: Readonly<Record<CoreEcologyDomesticPenHabitatSpecies, num
   "north-american-river-otter": 0x4f54_5452,
   "domestic-chicken": 0x4348_4943,
   "domestic-goat": 0x474f_4154,
+  "wild-boar": 0x424f_4152,
+  elk: 0x454c_4b55,
+  "gray-wolf": 0x574f_4c46,
 });
 
-const SPECIES_RULES: Readonly<Record<CoreEcologyDomesticPenHabitatSpecies, HabitatSpeciesRule>> =
+const SPECIES_RULES: Readonly<Record<CoreEcologyRegionalUplandHabitatSpecies, HabitatSpeciesRule>> =
   Object.freeze({
     deer: Object.freeze({
       populationKey: "habitat-v1/deer",
@@ -971,6 +1058,45 @@ const SPECIES_RULES: Readonly<Record<CoreEcologyDomesticPenHabitatSpecies, Habit
       maximumOccupancyTarget: 1_000_000,
       minimumPopulationWhenViable: 2,
     }),
+    "wild-boar": Object.freeze({
+      populationKey: "habitat-v10/temperate-upland/wild-boar",
+      representation: "individual-representatives",
+      minimumSiteScore: 420_000,
+      minimumPersistentCapacity: 2,
+      maximumPopulation: 7,
+      tilesPerCapacityUnit: 260,
+      maximumAllocations: 4,
+      minimumAllocationSeparation: 5,
+      minimumOccupancyTarget: 620_000,
+      maximumOccupancyTarget: 930_000,
+      minimumPopulationWhenViable: 2,
+    }),
+    elk: Object.freeze({
+      populationKey: "habitat-v10/temperate-upland/elk",
+      representation: "individual-representatives",
+      minimumSiteScore: 430_000,
+      minimumPersistentCapacity: 2,
+      maximumPopulation: 12,
+      tilesPerCapacityUnit: 220,
+      maximumAllocations: 4,
+      minimumAllocationSeparation: 6,
+      minimumOccupancyTarget: 600_000,
+      maximumOccupancyTarget: 900_000,
+      minimumPopulationWhenViable: 2,
+    }),
+    "gray-wolf": Object.freeze({
+      populationKey: "habitat-v10/temperate-upland/gray-wolf",
+      representation: "individual-representatives",
+      minimumSiteScore: 440_000,
+      minimumPersistentCapacity: 2,
+      maximumPopulation: 6,
+      tilesPerCapacityUnit: 520,
+      maximumAllocations: 3,
+      minimumAllocationSeparation: 8,
+      minimumOccupancyTarget: 580_000,
+      maximumOccupancyTarget: 860_000,
+      minimumPopulationWhenViable: 2,
+    }),
   });
 
 /** Shared read-only seam used to prove habitat, identity, and runtime budgets agree. */
@@ -979,9 +1105,9 @@ export function coreEcologyHabitatSpeciesBounds(
 ): CoreEcologyHabitatSpeciesBounds | null {
   if (
     typeof value !== "string"
-    || !(CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES as readonly string[]).includes(value)
+    || !(CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES as readonly string[]).includes(value)
   ) return null;
-  const species = value as CoreEcologyDomesticPenHabitatSpecies;
+  const species = value as CoreEcologyRegionalUplandHabitatSpecies;
   const rule = SPECIES_RULES[species];
   return Object.freeze({
     species,
@@ -992,7 +1118,7 @@ export function coreEcologyHabitatSpeciesBounds(
 }
 
 const ACTIVITY_POLICY: Readonly<Record<
-  CoreEcologyDomesticPenHabitatSpecies,
+  CoreEcologyRegionalUplandHabitatSpecies,
   Readonly<Pick<CoreEcologyHarborEdgeActivitySignal, "activePeriod" | "kind">>
 >> = Object.freeze({
   deer: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
@@ -1030,6 +1156,9 @@ const ACTIVITY_POLICY: Readonly<Record<
   }),
   "domestic-chicken": Object.freeze({ kind: "foraging", activePeriod: "variable" }),
   "domestic-goat": Object.freeze({ kind: "roaming", activePeriod: "variable" }),
+  "wild-boar": Object.freeze({ kind: "foraging", activePeriod: "variable" }),
+  elk: Object.freeze({ kind: "browsing", activePeriod: "crepuscular" }),
+  "gray-wolf": Object.freeze({ kind: "roaming", activePeriod: "variable" }),
 });
 
 const DEER_FOOD_BY_BIOME: Readonly<Record<BiomeId, number>> = Object.freeze({
@@ -2006,6 +2135,115 @@ export function deriveCoreEcologyDomesticPenHabitatAssemblage(
   });
 }
 
+/**
+ * Pure v10 regional extension. A fixed eight-address ring (fewer only at the
+ * numeric representation boundary) supplies bounded source candidates. The
+ * best temperate meadow/ridge plus rough-cover candidate wins by stable score
+ * and keyed tie-break; live player, camera, and load order are absent.
+ */
+export function deriveCoreEcologyRegionalUplandHabitatAssemblage(
+  input: DeriveCoreEcologyRegionalUplandHabitatAssemblageInput,
+): CoreEcologyRegionalUplandHabitatAssemblage {
+  const domesticPen = deriveCoreEcologyDomesticPenHabitatAssemblage(input);
+  const candidates = regionalUplandSourceCandidates(input.rootSeed, domesticPen.originRegion);
+  const selected = candidates.slice().sort((left, right) => (
+    right.score - left.score
+      || right.tie - left.tie
+      || left.ordinal - right.ordinal
+  ))[0];
+  if (selected === undefined) {
+    throw new Error("Core ecology regional-upland source ring has no representable candidate");
+  }
+
+  const regionalOrigin = selected.context.originRegion;
+  const addressedTiles = selected.context.addressedTiles;
+  const boarBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    regionalOrigin,
+    "wild-boar",
+    addressedTiles,
+    0,
+    0,
+  );
+  const elkBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    regionalOrigin,
+    "elk",
+    addressedTiles,
+    0,
+    0,
+  );
+  const preySupport = clampFixed(
+    multiplyFixed(
+      ratioFixed(boarBase.habitatCapacity, SPECIES_RULES["wild-boar"].maximumPopulation),
+      400_000,
+    )
+      + multiplyFixed(
+        ratioFixed(elkBase.habitatCapacity, SPECIES_RULES.elk.maximumPopulation),
+        700_000,
+      ),
+  );
+  const wolfBase = analyzeEnvironmentalCapacity(
+    input.rootSeed,
+    regionalOrigin,
+    "gray-wolf",
+    addressedTiles,
+    preySupport,
+    0,
+  );
+  const wolfPressure = multiplyFixed(
+    ratioFixed(wolfBase.habitatCapacity, SPECIES_RULES["gray-wolf"].maximumPopulation),
+    320_000,
+  );
+  const individualOccupiedTiles = new Set<number>();
+  const allocated = [
+    allocatePopulation(
+      applyPredatorPressure(boarBase, multiplyFixed(wolfPressure, 650_000)),
+      regionalOrigin,
+      individualOccupiedTiles,
+    ),
+    allocatePopulation(
+      applyPredatorPressure(elkBase, wolfPressure),
+      regionalOrigin,
+      individualOccupiedTiles,
+    ),
+    allocatePopulation(wolfBase, regionalOrigin, individualOccupiedTiles),
+  ] as const;
+  const extension = allocated.map((population) => Object.freeze({
+    ...population,
+    representation: SPECIES_RULES[population.species].representation,
+    activitySignal: activitySignalFor(population),
+  }));
+  const populations: CoreEcologyRegionalUplandHabitatPopulationAnalysis[] = [
+    ...domesticPen.populations,
+    ...extension,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS) {
+    throw new Error("Core ecology regional-upland habitat allocation budget diverged");
+  }
+  const regionalHabitat = regionalUplandSourceFromCandidate(selected, candidates.length);
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION,
+    originRegion: domesticPen.originRegion,
+    regionId: domesticPen.regionId,
+    terrainHash: domesticPen.terrainHash,
+    selection: domesticPen.selection,
+    evaluatedTiles: domesticPen.evaluatedTiles,
+    speciesEvaluations: domesticPen.speciesEvaluations
+      + regionalHabitat.evaluatedTiles * 3,
+    maximumAllocationBudget: CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors: domesticPen.tidalAnchors,
+    domesticAnchor: domesticPen.domesticAnchor,
+    domesticPenAnchor: domesticPen.domesticPenAnchor,
+    regionalHabitat,
+  });
+}
+
 function deriveCoreEcologyDomesticYardFromPrepared(
   rootSeed: RootSeed,
   context: PreparedCoreEcologyHabitatContext,
@@ -2063,6 +2301,122 @@ function deriveCoreEcologyDomesticYardFromPrepared(
     populations: Object.freeze(populations),
     tidalAnchors: tidalWeb.tidalAnchors,
     domesticAnchor,
+  });
+}
+
+interface RegionalUplandSourceCandidate {
+  readonly ordinal: number;
+  readonly context: PreparedCoreEcologyHabitatContext;
+  readonly regionId: string;
+  readonly score: number;
+  readonly tie: number;
+}
+
+function regionalUplandSourceCandidates(
+  rootSeed: RootSeed,
+  harborOrigin: RegionCoord,
+): readonly RegionalUplandSourceCandidate[] {
+  const candidates: RegionalUplandSourceCandidate[] = [];
+  for (let ordinal = 0; ordinal < REGIONAL_UPLAND_SOURCE_OFFSETS.length; ordinal += 1) {
+    const originRegion = regionalUplandCandidateCoord(harborOrigin, ordinal);
+    if (originRegion === null) continue;
+    const context = prepareCoreEcologyHabitatContext({
+      rootSeed,
+      originRegion,
+    }, "regional-upland-source");
+    candidates.push(Object.freeze({
+      ordinal,
+      context,
+      regionId: stableRegionId(rootSeed, originRegion),
+      score: regionalUplandCandidateScore(context),
+      tie: keyedRandomU32(
+        rootSeed,
+        HABITAT_RANDOM_DOMAIN,
+        harborOrigin.x,
+        harborOrigin.y,
+        REGIONAL_SOURCE_TIE_PURPOSE,
+        ordinal,
+      ),
+    }));
+  }
+  if (
+    candidates.length === 0
+    || candidates.length > CORE_ECOLOGY_REGIONAL_UPLAND_SOURCE_CANDIDATE_BUDGET
+  ) {
+    throw new Error("Core ecology regional-upland source candidate budget diverged");
+  }
+  return Object.freeze(candidates);
+}
+
+function regionalUplandCandidateCoord(
+  harborOrigin: RegionCoord,
+  ordinal: number,
+): RegionCoord | null {
+  const offset = REGIONAL_UPLAND_SOURCE_OFFSETS[ordinal];
+  if (offset === undefined) return null;
+  const x = harborOrigin.x + offset.x;
+  const y = harborOrigin.y + offset.y;
+  if (
+    !Number.isSafeInteger(x)
+    || !Number.isSafeInteger(y)
+    || Math.abs(x) > REGION_COORD_LIMIT
+    || Math.abs(y) > REGION_COORD_LIMIT
+  ) return null;
+  return createRegionCoord(x, y);
+}
+
+function regionalUplandRepresentableCandidateCount(harborOrigin: RegionCoord): number {
+  let count = 0;
+  for (let ordinal = 0; ordinal < REGIONAL_UPLAND_SOURCE_OFFSETS.length; ordinal += 1) {
+    if (regionalUplandCandidateCoord(harborOrigin, ordinal) !== null) count += 1;
+  }
+  return count;
+}
+
+function regionalUplandCandidateScore(context: PreparedCoreEcologyHabitatContext): number {
+  let total = 0;
+  for (const addressed of context.addressedTiles) {
+    const { tile, biome, climate, interaction } = addressed;
+    if (tile.terrain !== "meadow" && tile.terrain !== "ridge") continue;
+    const terrainSignal = tile.terrain === "ridge" ? 900_000 : 840_000;
+    const classSignal = biome === "rain-meadow"
+      ? 980_000
+      : biome === "sun-meadow"
+      ? 920_000
+      : biome === "wind-ridge"
+      ? 900_000
+      : biome === "glimmerfen"
+      ? 620_000
+      : 300_000;
+    const coverSignal = weightedScore([
+      [tile.roughness, 560_000],
+      [FIXED_POINT - climate.exposure, 240_000],
+      [FIXED_POINT - interaction.saltStress, 200_000],
+    ]);
+    total += weightedScore([
+      [terrainSignal, 320_000],
+      [classSignal, 300_000],
+      [coverSignal, 210_000],
+      [temperateUplandClimateScore(climate, interaction), 170_000],
+    ]);
+  }
+  return Math.trunc(total / CORE_ECOLOGY_HABITAT_TILE_BUDGET);
+}
+
+function regionalUplandSourceFromCandidate(
+  candidate: RegionalUplandSourceCandidate,
+  sourceCandidateCount: number,
+): CoreEcologyRegionalUplandHabitatSource {
+  return Object.freeze({
+    assemblageKey: `habitat-v10/temperate-upland/forest-edge/${candidate.regionId}`,
+    habitatClasses: Object.freeze(["forest-edge", "temperate-upland"] as const),
+    originRegion: candidate.context.originRegion,
+    regionId: candidate.regionId,
+    terrainHash: candidate.context.terrainHash,
+    selection: candidate.context.selection,
+    evaluatedTiles: CORE_ECOLOGY_HABITAT_TILE_BUDGET,
+    sourceCandidateOrdinal: candidate.ordinal,
+    sourceCandidateCount,
   });
 }
 
@@ -3320,6 +3674,178 @@ export function canonicalizeCoreEcologyDomesticPenHabitatAssemblage(
   });
 }
 
+export function canonicalizeCoreEcologyRegionalUplandHabitatAssemblage(
+  value: unknown,
+): CoreEcologyRegionalUplandHabitatAssemblage | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "domesticAnchor",
+    "domesticPenAnchor",
+    "evaluatedTiles",
+    "generationVersion",
+    "maximumAllocationBudget",
+    "originRegion",
+    "populations",
+    "regionId",
+    "regionalHabitat",
+    "selection",
+    "speciesEvaluations",
+    "tidalAnchors",
+    "terrainHash",
+  ])) return null;
+  if (
+    value.generationVersion !== CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION
+    || !isRegionCoord(value.originRegion)
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, value.originRegion)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.maximumAllocationBudget !== CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES.length
+    || !Array.isArray(value.tidalAnchors)
+    || value.tidalAnchors.length > CORE_ECOLOGY_TIDAL_WEB_MAX_ANCHOR_RECORDS
+  ) return null;
+  const originRegion = createRegionCoord(value.originRegion.x, value.originRegion.y);
+  const selection = canonicalizeSelection(value.selection, originRegion);
+  if (selection === null) return null;
+  const evaluatedTiles = selectedTileCount(selection);
+  const domesticPen = canonicalizeCoreEcologyDomesticPenHabitatAssemblage({
+    generationVersion: CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations:
+      evaluatedTiles * CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES.length,
+    maximumAllocationBudget: CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_MAX_ALLOCATIONS,
+    populations: value.populations.slice(0, CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES.length),
+    tidalAnchors: value.tidalAnchors,
+    domesticAnchor: value.domesticAnchor,
+    domesticPenAnchor: value.domesticPenAnchor,
+  });
+  if (domesticPen === null) return null;
+  const regionalHabitat = canonicalizeRegionalUplandHabitatSource(
+    value.regionalHabitat,
+    originRegion,
+  );
+  if (regionalHabitat === null) return null;
+  const speciesEvaluations = domesticPen.speciesEvaluations
+    + regionalHabitat.evaluatedTiles * 3;
+  if (
+    value.evaluatedTiles !== evaluatedTiles
+    || value.speciesEvaluations !== speciesEvaluations
+    || speciesEvaluations > CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES_EVALUATION_BUDGET
+  ) return null;
+
+  const occupiedRegionalTiles = new Set<number>();
+  const extension: CoreEcologyRegionalUplandHabitatPopulationAnalysis[] = [];
+  const regionalSpecies = ["wild-boar", "elk", "gray-wolf"] as const;
+  for (let index = 0; index < regionalSpecies.length; index += 1) {
+    const species = regionalSpecies[index];
+    if (species === undefined) return null;
+    const analysis = canonicalizeHarborEdgePopulationAnalysis(
+      value.populations[CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES.length + index],
+      species,
+      regionalHabitat.originRegion,
+      regionalHabitat.selection,
+      regionalHabitat.evaluatedTiles,
+      occupiedRegionalTiles,
+    );
+    if (analysis === null) return null;
+    extension.push(analysis);
+  }
+  const populations: CoreEcologyRegionalUplandHabitatPopulationAnalysis[] = [
+    ...domesticPen.populations,
+    ...extension,
+  ];
+  const allocationCount = populations.reduce(
+    (total, population) => total + population.allocations.length,
+    0,
+  );
+  if (allocationCount > CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS) return null;
+  return Object.freeze({
+    generationVersion: CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_VERSION,
+    originRegion,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles,
+    speciesEvaluations,
+    maximumAllocationBudget: CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS,
+    populations: Object.freeze(populations),
+    tidalAnchors: domesticPen.tidalAnchors,
+    domesticAnchor: domesticPen.domesticAnchor,
+    domesticPenAnchor: domesticPen.domesticPenAnchor,
+    regionalHabitat,
+  });
+}
+
+function canonicalizeRegionalUplandHabitatSource(
+  value: unknown,
+  harborOrigin: RegionCoord,
+): CoreEcologyRegionalUplandHabitatSource | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "assemblageKey",
+    "evaluatedTiles",
+    "habitatClasses",
+    "originRegion",
+    "regionId",
+    "selection",
+    "sourceCandidateCount",
+    "sourceCandidateOrdinal",
+    "terrainHash",
+  ])) return null;
+  if (
+    !nonnegativeSafeInteger(value.sourceCandidateOrdinal)
+    || value.sourceCandidateOrdinal >= REGIONAL_UPLAND_SOURCE_OFFSETS.length
+    || !nonnegativeSafeInteger(value.sourceCandidateCount)
+    || value.sourceCandidateCount < 1
+    || value.sourceCandidateCount !== regionalUplandRepresentableCandidateCount(harborOrigin)
+    || value.sourceCandidateCount > CORE_ECOLOGY_REGIONAL_UPLAND_SOURCE_CANDIDATE_BUDGET
+  ) return null;
+  const expectedOrigin = regionalUplandCandidateCoord(
+    harborOrigin,
+    value.sourceCandidateOrdinal,
+  );
+  if (
+    expectedOrigin === null
+    || !isRegionCoord(value.originRegion)
+    || value.originRegion.x !== expectedOrigin.x
+    || value.originRegion.y !== expectedOrigin.y
+    || typeof value.regionId !== "string"
+    || !regionIdMatches(value.regionId, expectedOrigin)
+    || typeof value.terrainHash !== "string"
+    || !/^[0-9a-f]{32}$/u.test(value.terrainHash)
+    || value.assemblageKey
+      !== `habitat-v10/temperate-upland/forest-edge/${value.regionId}`
+    || !Array.isArray(value.habitatClasses)
+    || value.habitatClasses.length !== 2
+    || value.habitatClasses[0] !== "forest-edge"
+    || value.habitatClasses[1] !== "temperate-upland"
+    || value.evaluatedTiles !== CORE_ECOLOGY_HABITAT_TILE_BUDGET
+  ) return null;
+  const selection = canonicalizeSelection(value.selection, expectedOrigin);
+  if (
+    selection === null
+    || selection.focusPosition !== null
+    || selection.radiusTiles !== null
+    || selection.excludedTileIndices.length !== 0
+    || selectedTileCount(selection) !== CORE_ECOLOGY_HABITAT_TILE_BUDGET
+  ) return null;
+  return Object.freeze({
+    assemblageKey: value.assemblageKey,
+    habitatClasses: Object.freeze(["forest-edge", "temperate-upland"] as const),
+    originRegion: expectedOrigin,
+    regionId: value.regionId,
+    terrainHash: value.terrainHash,
+    selection,
+    evaluatedTiles: CORE_ECOLOGY_HABITAT_TILE_BUDGET,
+    sourceCandidateOrdinal: value.sourceCandidateOrdinal,
+    sourceCandidateCount: value.sourceCandidateCount,
+  });
+}
+
 function canonicalizeDomesticPenHabitatAnchor(
   value: unknown,
   originRegion: RegionCoord,
@@ -3776,13 +4302,13 @@ function terrainKindForElevation(elevation: number): TerrainKind {
 }
 
 type VersionedHabitatPopulationAnalysis<
-  Species extends CoreEcologyDomesticPenHabitatSpecies,
+  Species extends CoreEcologyRegionalUplandHabitatSpecies,
 > = Omit<CoreEcologyRainChorusHabitatPopulationAnalysis, "species"> & {
   readonly species: Species;
 };
 
 function canonicalizeHarborEdgePopulationAnalysis<
-  Species extends CoreEcologyDomesticPenHabitatSpecies,
+  Species extends CoreEcologyRegionalUplandHabitatSpecies,
 >(
   value: unknown,
   expectedSpecies: Species,
@@ -4048,7 +4574,7 @@ function canonicalizeCapacityInputs(value: unknown): CoreEcologyHabitatCapacityI
 
 function canonicalizeAllocation(
   value: unknown,
-  species: CoreEcologyDomesticPenHabitatSpecies,
+  species: CoreEcologyRegionalUplandHabitatSpecies,
   originRegion: RegionCoord,
   selection: CoreEcologyHabitatSelection,
   expectedOrdinal: number,
@@ -4132,7 +4658,7 @@ function canonicalizeAllocation(
   });
 }
 
-function analyzeEnvironmentalCapacity<Species extends CoreEcologyDomesticPenHabitatSpecies>(
+function analyzeEnvironmentalCapacity<Species extends CoreEcologyRegionalUplandHabitatSpecies>(
   seed: RootSeed,
   originRegion: RegionCoord,
   species: Species,
@@ -4161,6 +4687,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyDomesticPenHabi
   ) habitatCapacity = 0;
   if (species === "marsh-fox" && preySupport < 120_000) habitatCapacity = 0;
   if (species === "northern-harrier" && preySupport < 150_000) habitatCapacity = 0;
+  if (species === "gray-wolf" && preySupport < 240_000) habitatCapacity = 0;
   if (
     species === "snowy-egret"
     && (
@@ -4271,7 +4798,7 @@ function analyzeEnvironmentalCapacity<Species extends CoreEcologyDomesticPenHabi
  * already-derived site/capacity result keeps the exact habitat contract while
  * avoiding a second full species pass for deer, rats, and rabbits.
  */
-function applyPredatorPressure<Species extends CoreEcologyDomesticPenHabitatSpecies>(
+function applyPredatorPressure<Species extends CoreEcologyRegionalUplandHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   predatorPressure: number,
 ): UnallocatedPopulationAnalysis<Species> {
@@ -4343,7 +4870,7 @@ function hasNorthAmericanRiverOtterAnchorPair(
   )));
 }
 
-function allocatePopulation<Species extends CoreEcologyDomesticPenHabitatSpecies>(
+function allocatePopulation<Species extends CoreEcologyRegionalUplandHabitatSpecies>(
   analysis: UnallocatedPopulationAnalysis<Species>,
   originRegion: RegionCoord,
   occupiedTileIndices: Set<number>,
@@ -4821,7 +5348,7 @@ function selectedTileCount(selection: CoreEcologyHabitatSelection): number {
 function evaluateSite(
   seed: RootSeed,
   originRegion: RegionCoord,
-  species: CoreEcologyDomesticPenHabitatSpecies,
+  species: CoreEcologyRegionalUplandHabitatSpecies,
   addressed: AddressedHabitatTile,
   preySupport: number,
 ): HabitatSiteEvaluation {
@@ -5406,6 +5933,121 @@ function evaluateSite(
         );
       break;
     }
+    case "wild-boar": {
+      eligible = tile.terrain === "meadow" || tile.terrain === "ridge";
+      const uplandForage = biome === "rain-meadow"
+        ? 930_000
+        : biome === "sun-meadow"
+        ? 820_000
+        : biome === "wind-ridge"
+        ? 700_000
+        : biome === "glimmerfen"
+        ? 720_000
+        : 360_000;
+      food = weightedScore([
+        [uplandForage, 680_000],
+        [tile.moisture, 180_000],
+        [FIXED_POINT - interaction.saltStress, 140_000],
+      ]);
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 20),
+        multiplyFixed(climate.rainfall, 720_000),
+      );
+      // Rough meadow/ridge cover is the current honest proxy for a wooded
+      // edge; no literal forest terrain is fabricated by this extension.
+      cover = weightedScore([
+        [tile.roughness, 520_000],
+        [tile.terrain === "ridge" ? 820_000 : 650_000, 280_000],
+        [FIXED_POINT - climate.exposure, 200_000],
+      ]);
+      nesting = weightedScore([
+        [cover, 720_000],
+        [interaction.rainRetention, 280_000],
+      ]);
+      climateScore = temperateUplandClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 320_000],
+        [water, 120_000],
+        [cover, 250_000],
+        [nesting, 150_000],
+        [climateScore, 160_000],
+      ]);
+      eligible = eligible
+        && food >= 300_000
+        && cover >= 320_000
+        && climateScore >= 330_000;
+      break;
+    }
+    case "elk": {
+      eligible = tile.terrain === "meadow" || tile.terrain === "ridge";
+      const browse = biome === "rain-meadow"
+        ? 970_000
+        : biome === "sun-meadow"
+        ? 900_000
+        : biome === "wind-ridge"
+        ? 620_000
+        : biome === "glimmerfen"
+        ? 710_000
+        : 300_000;
+      food = multiplyFixed(browse, FIXED_POINT - Math.trunc(interaction.saltStress / 2));
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 22),
+        multiplyFixed(climate.rainfall, 700_000),
+      );
+      const meadowEdge = tile.terrain === "meadow" ? 920_000 : 620_000;
+      cover = weightedScore([
+        [meadowEdge, 520_000],
+        [tile.roughness, 260_000],
+        [FIXED_POINT - climate.exposure, 220_000],
+      ]);
+      nesting = weightedScore([
+        [cover, 620_000],
+        [FIXED_POINT - interaction.heatLoad, 380_000],
+      ]);
+      climateScore = temperateUplandClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 350_000],
+        [water, 140_000],
+        [cover, 190_000],
+        [nesting, 130_000],
+        [climateScore, 190_000],
+      ]);
+      eligible = eligible
+        && food >= 360_000
+        && water >= 150_000
+        && climateScore >= 350_000;
+      break;
+    }
+    case "gray-wolf": {
+      eligible = tile.terrain === "meadow" || tile.terrain === "ridge";
+      food = preySupport;
+      water = Math.max(
+        distanceScore(addressed.wetDistance, 24),
+        multiplyFixed(climate.rainfall, 580_000),
+      );
+      cover = weightedScore([
+        [tile.roughness, 460_000],
+        [tile.terrain === "ridge" ? 900_000 : 620_000, 340_000],
+        [FIXED_POINT - Math.trunc(climate.exposure / 2), 200_000],
+      ]);
+      nesting = weightedScore([
+        [cover, 680_000],
+        [FIXED_POINT - interaction.heatLoad, 320_000],
+      ]);
+      climateScore = temperateUplandClimateScore(climate, interaction);
+      score = weightedScore([
+        [food, 390_000],
+        [water, 80_000],
+        [cover, 240_000],
+        [nesting, 140_000],
+        [climateScore, 150_000],
+      ]);
+      eligible = eligible
+        && preySupport >= 240_000
+        && cover >= 300_000
+        && climateScore >= 330_000;
+      break;
+    }
   }
 
   eligible = eligible && addressed.withinSelection;
@@ -5446,6 +6088,18 @@ function deerClimateScore(climate: BiomeClimate, interaction: BiomeInteraction):
     [centeredTolerance(climate.heat, 500_000, 700_000), 250_000],
     [FIXED_POINT - interaction.heatLoad, 170_000],
     [FIXED_POINT - climate.exposure, 240_000],
+  ]);
+}
+
+function temperateUplandClimateScore(
+  climate: BiomeClimate,
+  interaction: BiomeInteraction,
+): number {
+  return weightedScore([
+    [centeredTolerance(climate.heat, 480_000, 620_000), 360_000],
+    [centeredTolerance(climate.rainfall, 580_000, 760_000), 260_000],
+    [FIXED_POINT - interaction.saltStress, 220_000],
+    [FIXED_POINT - Math.trunc(climate.exposure / 2), 160_000],
   ]);
 }
 
@@ -5648,7 +6302,8 @@ function prepareCoreEcologyHabitatContext(
     | "waterfowl"
     | "tidal-web"
     | "domestic-yard"
-    | "domestic-pen",
+    | "domestic-pen"
+    | "regional-upland-source",
 ): PreparedCoreEcologyHabitatContext {
   const allowedInputKeys = extension === "domestic-yard" || extension === "domestic-pen"
     ? ["domesticAnchor", "focus", "originRegion", "rootSeed", "terrain"]
@@ -5915,7 +6570,7 @@ function validTrend(value: unknown, signal: number): value is CoreEcologyPopulat
 }
 
 function validAllocationTerrain(
-  species: CoreEcologyDomesticPenHabitatSpecies,
+  species: CoreEcologyRegionalUplandHabitatSpecies,
   terrain: string,
 ): boolean {
   if (species === "gull" || species === "fish-crow") {
@@ -5944,6 +6599,9 @@ function validAllocationTerrain(
   }
   if (species === "north-american-river-otter") {
     return isTerrainKind(terrain);
+  }
+  if (species === "wild-boar" || species === "elk" || species === "gray-wolf") {
+    return terrain === "meadow" || terrain === "ridge";
   }
   return terrain === "marsh" || terrain === "meadow" || terrain === "ridge";
 }
@@ -6090,6 +6748,11 @@ if (
     )
   || CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_MAX_ALLOCATIONS
     !== CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES.reduce(
+      (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
+      0,
+    )
+  || CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_MAX_ALLOCATIONS
+    !== CORE_ECOLOGY_REGIONAL_UPLAND_HABITAT_SPECIES.reduce(
       (sum, species) => sum + SPECIES_RULES[species].maximumAllocations,
       0,
     )
