@@ -211,7 +211,7 @@ cross-region animal ecology.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
-The current `0.3.3-alpha.31 — High Country Shadows` source release extends the
+Release `0.3.3-alpha.31 — High Country Shadows` is **LIVE_VERIFIED** and extends the
 catalog to 24 records by appending cougar and brown bear at the exact existing
 deterministic remote temperate-upland/forest-edge source. The release gate gives active owners only
 to behavior and presentation that exists: shared placement, groups, direct
@@ -224,22 +224,28 @@ actors exist only when carrying capacity supports them, preserving honest
 ecological absence.
 Species-directed dog interaction is an intentional no-response; ordinary
 lawful large-predator perception may still drive a non-harmful dog or porter
-reaction through the shared cognition path. The previous Alpha 30 release
-and its remote source are **LIVE_VERIFIED** at the evidence below; Alpha 31
-deployment attestation must be added only after the release gate and live-byte
-comparison complete.
+reaction through the shared cognition path.
 
-Exact gameplay commit `56dc4812c7c41b6227bae1b0273701b51076f34a` passed
-feature CI `34215120610` and Pages `34216318509`. Verification-only descendant
+Exact gameplay commit `d124f71c1c8656db68a764d048c9a1e5d14163a7` passed
+feature CI `34241221388`, main CI `34243147747`, and Pages `34243147753`.
+The complete local gate passed TypeScript, public-boundary and
+player-facing-sync checks, 230 test files and 2,197 checks, a five-asset
+3,394,874-byte served web build, a 10-entry 3,586,482-byte runtime-only
+Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, and visual audits. A cache-bypassed live comparison
+matched all five production files byte-for-byte.
+
+For historical continuity, exact Alpha 30 gameplay commit
+`56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
+`34215120610` and Pages `34216318509`. Verification-only descendant
 `65e2ba59929a296139e578adbd03621f91d93fc2` raises the CI and Pages job
 ceilings plus one slow integration-test allowance without changing production
 code or artifacts; it passed main CI `34221064966` and Pages `34221064916`.
-The complete local
-gate passed TypeScript, public-boundary and player-facing-sync checks, 227 test
-files and 2,177 checks, a five-asset 3,365,373-byte served
-web build, a 10-entry 3,556,981-byte runtime-only Electron ASAR inspection,
+That local gate passed TypeScript, public-boundary and player-facing-sync
+checks, 227 test files and 2,177 checks, a five-asset 3,365,373-byte served web
+build, a 10-entry 3,556,981-byte runtime-only Electron ASAR inspection,
 desktop/mobile/title smoke, and clean invariant, save, release-surface, and
-visual audits. A cache-bypassed live comparison matched all five production
+visual audits. Its cache-bypassed live comparison matched all five production
 files byte-for-byte.
 
 Habitat analysis version 11 first reproduces the complete canonical version-10
@@ -523,7 +529,7 @@ coordinates, and full/coarse projection cannot reroll the source, duplicate a
 member, rewrite an established group, or alter the adopted body-bearing state.
 The exact adoption path is covered by the verified release evidence above.
 
-The Alpha 31 High Country Shadows source release advances the outer session to
+The Alpha 31 High Country Shadows release advances the outer session to
 version 24 and habitat analysis to version 11 while retaining core-ecology
 patch 3, aggregate record 5, and the nearest-24 materialization ceiling. A
 sealed version-23 payload is authenticated before its complete habitat-10

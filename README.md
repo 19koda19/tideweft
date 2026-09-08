@@ -4,17 +4,12 @@
 
 **Play the current Alpha:** https://19koda19.github.io/tideweft/
 
-The current source release is `0.3.3-alpha.31 — High Country Shadows`, which
-adds the bounded cougar-and-brown-bear unit described below. The last
-**LIVE_VERIFIED** public deployment is `0.3.3-alpha.30 — Beyond the Harbor`.
-Exact Alpha 30 gameplay
-commit `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI run
-`34215120610` and Pages run `34216318509`. Verification-only descendant
-`65e2ba59929a296139e578adbd03621f91d93fc2` raises the CI and Pages job
-ceilings plus one slow integration-test allowance without changing production
-code or artifacts; it passed main CI `34221064966` and Pages `34221064916`.
-All five cache-bypassed live artifacts match the tested local
-production build byte-for-byte.
+The current public deployment is the **LIVE_VERIFIED**
+`0.3.3-alpha.31 — High Country Shadows` release described below. Exact
+gameplay commit `d124f71c1c8656db68a764d048c9a1e5d14163a7` passed feature CI
+run `34241221388`, main CI run `34243147747`, and Pages run `34243147753`.
+All five cache-bypassed live artifacts match the tested local production build
+byte-for-byte.
 
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
 
@@ -590,7 +585,7 @@ runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. The first cache-bypassed five-file
 live comparison matched the tested production build exactly.
 
-### Current source — Alpha 31 High Country Shadows
+### Released — Alpha 31 High Country Shadows
 
 `0.3.3-alpha.31 — High Country Shadows` extends the same bounded Wave-E source
 from twenty-two to twenty-four catalog records. Habitat version 11 preserves
@@ -673,21 +668,18 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 [The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The current Alpha 30 feature is **LIVE_VERIFIED** at exact gameplay commit
-`56dc4812c7c41b6227bae1b0273701b51076f34a`. Feature CI `34215120610` and
-Pages `34216318509` succeeded for that exact commit. Verification-only
-descendant `65e2ba59929a296139e578adbd03621f91d93fc2` raises only verification
-time allowances without changing production code or artifacts; main CI
-`34221064966` and Pages `34221064916` both succeeded. The latest
-cache-bypassed fetch matched all five live assets to the tested production build
-exactly:
+The current Alpha 31 feature is **LIVE_VERIFIED** at exact gameplay commit
+`d124f71c1c8656db68a764d048c9a1e5d14163a7`. Feature CI `34241221388`,
+main CI `34243147747`, and Pages `34243147753` succeeded for that exact
+commit. The latest cache-bypassed fetch matched all five live assets to the
+tested production build exactly:
 
 | Asset | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `index.html` | 4,168 | `92de9ec91f485c79585473039c3953502c4d4935423bb1a0d3712af1148058d8` |
+| `index.html` | 4,168 | `31b8e9060480488bbeed6df670b7beaee8348f52b4daaaec39e23d041bd0f129` |
 | `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
 | `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
-| `assets/index-CG0AGjvt.js` | 3,253,063 | `fa1e99e0699f38e108a0b50a51d526c349c2d068a0961e05094ef3c587aa487c` |
+| `assets/index-BOoi-0xo.js` | 3,282,564 | `e099aeec9b673a8e273fca0902b8c2bde18540fa3b818077ba43f89a0976da50` |
 | `assets/index-BnNSHuv9.css` | 106,761 | `05ac88340ddce1bdde27d73638642979cdbaca4bf460d621ddcf52c94c114706` |
 
 For future releases:

@@ -192,7 +192,7 @@ intentional no-response and remains unimplemented. Confidence comes from
 shared representative, deterministic-property, conservation, and bounded-
 performance checks rather than one bespoke test for every species or pair.
 
-The `0.3.3-alpha.31 — High Country Shadows` source release appends cougar and
+The **LIVE_VERIFIED** `0.3.3-alpha.31 — High Country Shadows` release appends cougar and
 brown bear as distinct solitary species at that exact remote source,
 bringing the catalog to twenty-four records. Both use the existing habitat,
 population, direct-perception, attention, actor-owned locomotion, bounded
@@ -216,22 +216,83 @@ conservation, signed-region determinism, bounded performance, and one
 representative predator/scavenger chain validate this reusable seam instead of
 per-species or N² coverage.
 
-Exact gameplay commit `56dc4812c7c41b6227bae1b0273701b51076f34a` passed
-feature CI `34215120610` and Pages `34216318509`. Verification-only descendant
+Exact gameplay commit `d124f71c1c8656db68a764d048c9a1e5d14163a7` passed
+feature CI `34241221388`, main CI `34243147747`, and Pages `34243147753`.
+The complete local gate passed TypeScript, public-boundary and
+player-facing-sync checks, 230 test files and 2,197 checks, a five-asset
+3,394,874-byte served web build, a 10-entry 3,586,482-byte runtime-only
+Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, and visual audits. A cache-bypassed live comparison
+matched all five production files byte-for-byte.
+
+For historical continuity, exact Alpha 30 gameplay commit
+`56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
+`34215120610` and Pages `34216318509`. Verification-only descendant
 `65e2ba59929a296139e578adbd03621f91d93fc2` raises the CI and Pages job
 ceilings plus one slow integration-test allowance without changing production
 code or artifacts; it passed main CI `34221064966` and Pages `34221064916`.
-The complete local
-gate passed TypeScript, public-boundary and player-facing-sync checks, 227 test
-files and 2,177 checks, a five-asset 3,365,373-byte served
-web build, a 10-entry 3,556,981-byte runtime-only Electron ASAR inspection,
+That local gate passed TypeScript, public-boundary and player-facing-sync
+checks, 227 test files and 2,177 checks, a five-asset 3,365,373-byte served web
+build, a 10-entry 3,556,981-byte runtime-only Electron ASAR inspection,
 desktop/mobile/title smoke, and clean invariant, save, release-surface, and
-visual audits. A cache-bypassed live comparison matched all five production
+visual audits. Its cache-bypassed live comparison matched all five production
 files byte-for-byte.
 
-The bounded core-wildlife assemblage extends the same observation boundary to its present deer, gulls, black bears, free-ranging domestic cats, domestic chickens, domestic goats, marsh rabbits, marsh foxes, fish crows, northern harrier, snowy egret, American black duck, North American river otter, wild boars, elk, and gray wolves. Terrain and structures can block sight; sufficiently clear contact can identify an ecologically plausible relationship; and an explicit established alarm can propagate through bounded hearing without revealing the caller's stable identity, species, hidden target, or exact motive. Cats, chickens, goats, rabbits, foxes, crows, the harrier, the egret, the duck, the otter, boars, elk, wolves, both dogs, the porter, gulls, and the player receive only the visual observations that lawfully reach them. The egret, duck, or otter receives a current anonymous **AQUATIC ACTIVITY** area only when an occupied, active, depth-usable fish or crab anchor passes shared direct sight; none receives an aggregate ID, species, exact count, or hidden target. A directly seen second cat can become food competition for a hungry cat; strong local rain can make a materialized cat retreat and leave bounded wet pawprints. Rabbit, fox, and gray-wolf movement can leave paired tracks or canid pawprints at the saved movement site. Crows, the harrier, the egret, the duck, the otter, chickens, goats, boars, and elk do not manufacture ground tracks; the three upland species' voice profiles remain inaudible in the current release. Directly visible individual wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT surface; each visible crow, chicken, goat, boar, elk, or wolf representative renders and hit-tests once. Only gull, fish-crow, and domestic-chicken visible-flock presentation may expose a bounded visible count, and that context never manufactures decorative copies or extra targets. The duck and otter each remain one addressable individual. Loss of direct-detail sight removes rendering, selection, labels, actions, and inspection rather than leaving a remote tracker. Individual movement signs require current direct-detail sight, fade from identified to ambiguous as their clarity ages, expire after 180 ticks, remain non-targetable, and cannot reveal an unseen animal's thoughts or current location. Rat/frog-area evidence, silverside surface activity, and fiddler-crab burrows or feeding scrapes follow the same knowledge boundary and never pretend to be individual aggregate animals.
+The bounded core-wildlife assemblage extends the same observation boundary to
+its present deer, gulls, black bears, free-ranging domestic cats, domestic
+chickens, domestic goats, marsh rabbits, marsh foxes, fish crows, northern
+harrier, snowy egret, American black duck, North American river otter, wild
+boars, elk, gray wolves, cougars, and brown bears. Terrain and structures can
+block sight; sufficiently clear contact can identify an ecologically plausible
+relationship; and an explicit established alarm can propagate through bounded
+hearing without revealing the caller's stable identity, species, hidden
+target, or exact motive. Cats, chickens, goats, rabbits, foxes, crows, the
+harrier, the egret, the duck, the otter, boars, elk, wolves, cougars, brown
+bears, both dogs, the porter, gulls, and the player receive only the visual
+observations that lawfully reach them. The egret, duck, or otter receives a
+current anonymous **AQUATIC ACTIVITY** area only when an occupied, active,
+depth-usable fish or crab anchor passes shared direct sight; none receives an
+aggregate ID, species, exact count, or hidden target. A directly seen second
+cat can become food competition for a hungry cat; strong local rain can make a
+materialized cat retreat and leave bounded wet pawprints. Rabbit, fox, and
+gray-wolf movement can leave paired tracks or canid pawprints at the saved
+movement site. Crows, the harrier, the egret, the duck, the otter, chickens,
+goats, boars, elk, cougars, and brown bears do not manufacture ground tracks.
+Wild-boar, elk, and gray-wolf voice profiles remain inaudible; cougar and
+brown-bear voice behavior is not implemented. Directly visible individual
+wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT
+surface; each visible crow, chicken, goat, boar, elk, wolf, cougar, or brown-
+bear representative renders and hit-tests once. Only gull, fish-crow, and
+domestic-chicken visible-flock presentation may expose a bounded visible count,
+and that context never manufactures decorative copies or extra targets. The
+duck and otter each remain one addressable individual. Loss of direct-detail
+sight removes rendering, selection, labels, actions, and inspection rather
+than leaving a remote tracker. Individual movement signs require current
+direct-detail sight, fade from identified to ambiguous as their clarity ages,
+expire after 180 ticks, remain non-targetable, and cannot reveal an unseen
+animal's thoughts or current location. Rat/frog-area evidence, silverside
+surface activity, and fiddler-crab burrows or feeding scrapes follow the same
+knowledge boundary and never pretend to be individual aggregate animals.
 
-When a bear is present, it may choose an easier exposed provision instead of pursuing visible live prey. A gull, fish crow, or eligible river otter may likewise inspect and claim exposed food through generic physical-item opportunity and arbitration. Marsh-rabbit flight and marsh-fox, gray-wolf, or northern-harrier pursuit still require current direct identification and shared locomotion. Harrier pursuit remains nonlethal. The only current harmful live-prey resolution is a marsh fox or gray wolf whose exact body reaches the exact solitary rabbit it is presently pursuing: contact can injure or kill that one rabbit, while grouped targets fail closed. Death retires its stable actor exactly once, removes one population unit while any other represented units remain abstract reserve, and creates one stable finite physical carcass. A fox, fish crow, wild boar, or gray wolf must lawfully see and physically reach the body to feed; each meal removes one conserved unit, and a fox or wolf may guard its claim. The player sees the body and any direct death or feeding event only through current lawful perception, with no hidden attacker, cause, claimant, resource count, or retrospective offscreen account. The player can **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, or **LEAVE**, but cannot command, feed, tame, name, own, recruit, attack, or otherwise directly manipulate these wild animals.
+When a bear is present, it may choose an easier exposed provision instead of
+pursuing visible live prey. A gull, fish crow, or eligible river otter may
+likewise inspect and claim exposed food through generic physical-item
+opportunity and arbitration. Marsh-rabbit flight and marsh-fox, gray-wolf,
+cougar, or northern-harrier pursuit still require current direct identification
+and shared locomotion. Harrier pursuit remains nonlethal. The only current
+harmful live-prey resolution is a marsh fox, gray wolf, or cougar whose exact
+body reaches the exact solitary rabbit it is presently pursuing: contact can
+injure or kill that one rabbit, while grouped targets fail closed. Death
+retires its stable actor exactly once, removes one population unit while any
+other represented units remain abstract reserve, and creates one stable finite
+physical carcass. A fox, fish crow, wild boar, gray wolf, cougar, or brown bear
+must lawfully see and physically reach the body to feed; each meal removes one
+conserved unit, and eligible predators may guard their claim. The player sees
+the body and any direct death or feeding event only through current lawful
+perception, with no hidden attacker, cause, claimant, resource count, or
+retrospective offscreen account. The player can **WAIT AND WATCH**,
+**ROUTE AROUND THIS SPOT**, or **LEAVE**, but cannot command, feed, tame, name,
+own, recruit, attack, or otherwise directly manipulate these wild animals.
 
 Habitat analysis stores carrying capacity inputs, aggregate population units, pressure, trend, and deterministic placement anchors even though only a bounded set of individual representatives materializes. Habitat version 5 preserves the exact version-4 population prefix and appends only the Atlantic-silverside, Atlantic-marsh-fiddler-crab, and snowy-egret analyses. Habitat version 6 in released Alpha 20 preserves that entire version-5 population and tidal-anchor record as its exact prefix, then appends only the American-black-duck analysis. Habitat version 7 in released Alpha 21 preserves the complete version-6 population and anchor record as its exact prefix, then may append only the North American river otter analysis plus one foraging-water anchor and one distinct dry haulout. Habitat version 8 in released Alpha 24 preserves the complete version-7 record as its exact prefix, then appends only the domestic yard anchor and stable two-to-three-chicken flock. Habitat version 9 in released Alpha 25 preserves the complete version-8 record as its exact prefix, then appends only one separate domestic pen and one stable two-goat herd. Habitat version 10 in released Alpha 30 preserves that complete version-9 record exactly before appending one remote temperate-upland/forest-edge source and the wild-boar, elk, and gray-wolf populations. Empty wild population is a valid ecological result, not a failed spawn; the bounded starting-harbor flock and herd are settlement-owned, and the one remote source is not a claim of worldwide wild distribution. The otter remains absent unless both tidal aggregates and suitable shore-water habitat exist. Group-sized deer, gull, fish-crow, chicken, goat, wild-boar, elk, and gray-wolf populations receive stable herd/flock/sounder/pack membership, cohesion, group components, anonymous alarm-signal state, and split/rejoin lineage; crows, chickens, goats, boars, and wolves use separate stable group namespaces. Black bears and northern harriers remain solitary, while the snowy egret, black duck, and river otter are each represented by at most one individual; domestic cats, marsh rabbits, and marsh foxes remain individual. Brown-rat, southern-leopard-frog, Atlantic-silverside, and Atlantic-marsh-fiddler-crab population units are conserved across saved aggregate anchors without ever materializing any aggregate as actors. Tidal anchors persist baseline elevation; current water depth and usability are derived later from the authoritative tide rather than participating in generation.
 
@@ -336,7 +397,29 @@ exact local squared distance with stable actor ID as the tie break; the nearest
 coarse state. This selection is deterministic, camera-independent, and does
 not increase the existing materialization ceiling or population totals.
 
-Player-facing rat rustles, domestic-cat calls, rabbit thumps, fox yips, and fish-crow double calls occur only for activity visible at event time. The frog chorus instead passes through shared directional hearing from its actual aggregate anchor. Its anonymous bottom-right caption and attenuated stereo pan derive from the same heard-bearing uncertainty; it names a cardinal direction only when that contact supports one. The northern harrier, snowy egret, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated calls; the five upland species' authored voice profiles remain inaudible foundation data. These are redundant cues, not long-range simulation knowledge. Cats, rabbits, foxes, fish crows, the harrier, the egret, the duck, the otter, boars, elk, wolves, cougars, and brown bears preserve individual identity, bounded state, and already-authoritative intent through full/coarse/full transitions and accept the same **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE** choices as other visible wildlife, but cannot be owned, bonded, named, tamed, or recruited. The ABOUT view for a selected gull, fish crow, or domestic chicken may use the same bounded visible-flock estimate already present in projection; it does not recount hidden members. Boar, elk, wolf, cougar, brown bear, duck, and otter ABOUT never display a group suffix or hidden census. Rat, frog, silverside, and fiddler-crab signs are close-only observations because none represents an addressable actor; cat, rabbit, fox, and gray-wolf tracks are visible context rather than inspectable actor proxies, and the two Alpha-31 species add no track evidence.
+Player-facing rat rustles, domestic-cat calls, rabbit thumps, fox yips, and
+fish-crow double calls occur only for activity visible at event time. The frog
+chorus instead passes through shared directional hearing from its actual
+aggregate anchor. Its anonymous bottom-right caption and attenuated stereo pan
+derive from the same heard-bearing uncertainty; it names a cardinal direction
+only when that contact supports one. The northern harrier, snowy egret,
+American black duck, North American river otter, wild boar, elk, gray wolf,
+cougar, and brown bear have no fabricated calls. Wild boar, elk, and gray wolf
+have inaudible foundation voice profiles; cougar and brown-bear voice behavior
+is not implemented. These are redundant cues, not long-range simulation
+knowledge. Cats, rabbits, foxes, fish crows, the harrier, the egret, the duck,
+the otter, boars, elk, wolves, cougars, and brown bears preserve individual
+identity, bounded state, and already-authoritative intent through
+full/coarse/full transitions and accept the same **WAIT AND WATCH**,
+**ROUTE AROUND THIS SPOT**, and **LEAVE** choices as other visible wildlife,
+but cannot be owned, bonded, named, tamed, or recruited. The ABOUT view for a
+selected gull, fish crow, or domestic chicken may use the same bounded visible-
+flock estimate already present in projection; it does not recount hidden
+members. Boar, elk, wolf, cougar, brown bear, duck, and otter ABOUT never
+display a group suffix or hidden census. Rat, frog, silverside, and fiddler-
+crab signs are close-only observations because none represents an addressable
+actor; cat, rabbit, fox, and gray-wolf tracks are visible context rather than
+inspectable actor proxies, and the two Alpha-31 species add no track evidence.
 
 Shared species policy composes representation, capabilities, group eligibility, locomotion, travel medium, decision verbs, activity, evidence, sound, tide, item claims, materialization, and projection instead of adding a separate detector or decision tree for each animal. Aggregate visual pressure and aquatic observation likewise accept canonical species and resolve shared roles/capabilities/trophic classes instead of maintaining a pair allowlist. Every core-wildlife catalog module declares every broad interaction target class as either supported or an intentional no-response, so adding a species cannot silently inherit an unspecified behavior. These broad rows are a fail-closed contract, not a claim that every species pair has bespoke coverage. In released Alpha 22 the intentionally narrow activity owner consumes the six reusable profiles above: a bounded daytime/rest window covers fish-crow perching, harrier low quartering, egret wading, duck dabbling, otter shore-water activity, and gull air-only surface circling or habitat-anchor rest. Authenticated habitat or a current lawful observation supplies each destination unless a higher-priority immediate intent takes precedence. Future species should remain data and capability declarations over these shared owners. Correctness comes from shared invariants, deterministic properties, conservation, representative scenarios, bounded interaction-graph fuzzing, and performance witnesses—not species-by-species fixtures or a hand-authored N² animal-pair matrix. This is not a full sleep, denning, ecological migration, capture, consumption, feeding, or circadian-life simulation.
 
@@ -917,9 +1000,9 @@ live comparison matched the tested production build exactly.
 gameplay contract 28, Field Manual 40, outer save 23, habitat 10, and the
 catalog to twenty-two records. Its exact release evidence is recorded above.
 
-`0.3.3-alpha.31 — High Country Shadows` is the current source release. It
-advances gameplay contract 29, Field Manual 41, outer save 24, habitat 11, and
-the catalog to twenty-four records. Live deployment evidence remains pending.
+`0.3.3-alpha.31 — High Country Shadows` is **LIVE_VERIFIED**. It advances
+gameplay contract 29, Field Manual 41, outer save 24, habitat 11, and the
+catalog to twenty-four records. Its exact release evidence is recorded above.
 
 Released through Alpha 31:
 

@@ -382,7 +382,7 @@ desktop/mobile/title smoke, and clean invariant, save, release-surface, and
 visual audits. A cache-bypassed live comparison matched all five production
 files byte-for-byte.
 
-The `0.3.3-alpha.31 — High Country Shadows` source release tests the next
+The **LIVE_VERIFIED** `0.3.3-alpha.31 — High Country Shadows` release tests the next
 scaling step: add two behaviorally distinct solitary predators without adding
 two private controllers. Cougar and brown bear append to the exact existing
 remote source through habitat version 11 and the twenty-four-record catalog.
@@ -408,9 +408,38 @@ The unit deliberately adds no group, track evidence, audible voice,
 species-specific dog-directed behavior, player/human/group harm, broader
 mortality, ecological migration, or worldwide distribution. Ordinary lawful
 large-predator perception may still produce a non-harmful dog or porter
-reaction through the shared cognition architecture. Live release evidence remains pending deployment.
+reaction through the shared cognition architecture. Exact gameplay commit
+`d124f71c1c8656db68a764d048c9a1e5d14163a7` passed feature CI
+`34241221388`, main CI `34243147747`, and Pages `34243147753`; the complete
+local gate passed 230 files / 2,197 tests, the five served artifacts totaled
+3,394,874 bytes, the 10-entry runtime-only Electron ASAR totaled 3,586,482
+bytes, desktop/mobile/title smoke passed, and the cache-bypassed live
+comparison matched 5/5 files byte-for-byte.
 
-Design implication: future worldwide populations and settlement ecology should expand this aggregate/representative, physical-custody, domestic-custody, working-relationship, recovery, knowledge, mortality/body, and shared-policy boundary rather than multiplying full actors or one-off detection hooks. Ecological confidence should come from shared invariants, property checks, bounded interaction-graph fuzzing, conservation, performance budgets, and a small set of representative witnesses—not a brittle species-by-species or N² matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded starting-harbor closure, Alpha 19 is the verified first bounded tidal unit, Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified final bounded starting-harbor role slice, Alpha 22 is the verified bounded integration closure across those roles, Alpha 23 is the verified storehouse composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the verified Far Paddock release, Alpha 26 is the verified Paddock Watch release, Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the verified bounded recovery-composition release, Alpha 29 is the verified first one-life/one-body mortality release, Alpha 30 is the verified first Wave-E regional breadth release, and Alpha 31 is the source-stage solitary-predator append awaiting live attestation. None completes worldwide aquatic or settlement ecology, broad attacks or mortality, population recovery, decomposition, body transport or harvesting, full circadian life, complete scent, worldwide populations, or the full bestiary. Broader species, reproduction, ecological migration, those absent physical systems, wider settlement ecology, and wider sound/evidence tracking still require their own authoritative owners and performance proof.
+Design implication: future worldwide populations and settlement ecology should
+expand this aggregate/representative, physical-custody, domestic-custody,
+working-relationship, recovery, knowledge, mortality/body, and shared-policy
+boundary rather than multiplying full actors or one-off detection hooks.
+Ecological confidence should come from shared invariants, property checks,
+bounded interaction-graph fuzzing, conservation, performance budgets, and a
+small set of representative witnesses—not a brittle species-by-species or N²
+matrix of bespoke animal-pair tests. Alpha 18 is the verified bounded
+starting-harbor closure, Alpha 19 is the verified first bounded tidal unit,
+Alpha 20 is the verified second bounded tidal unit, Alpha 21 is the verified
+final bounded starting-harbor role slice, Alpha 22 is the verified bounded
+integration closure across those roles, Alpha 23 is the verified storehouse
+composition, Alpha 24 is the verified Yard Flock release, Alpha 25 is the
+verified Far Paddock release, Alpha 26 is the verified Paddock Watch release,
+Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the
+verified bounded recovery-composition release, Alpha 29 is the verified first
+one-life/one-body mortality release, Alpha 30 is the verified first Wave-E
+regional breadth release, and Alpha 31 is the verified solitary-predator
+append. None completes worldwide aquatic or settlement ecology, broad attacks
+or mortality, population recovery, decomposition, body transport or
+harvesting, full circadian life, complete scent, worldwide populations, or the
+full bestiary. Broader species, reproduction, ecological migration, those
+absent physical systems, wider settlement ecology, and wider sound/evidence
+tracking still require their own authoritative owners and performance proof.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)
