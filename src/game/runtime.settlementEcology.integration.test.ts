@@ -7,24 +7,39 @@ import {
   stepActorPerception,
 } from "../sim/actorPerception";
 import { createWorldView, deserializeWorld } from "../sim/public";
-import { createRegionCoord, globalTileToRegion } from "../sim/regions";
+import {
+  createRegionCoord,
+  globalTileToRegion,
+  regionKey,
+  regionLocalToGlobalTile,
+} from "../sim/regions";
+import type { RootSeed } from "../sim/rng";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import {
   canonicalizeCoreEcologyAggregatePatch,
-  deserializeCoreEcologyAggregatePatch,
+  createCoreEcologyAggregatePatch,
   migrateLegacyCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
-  serializeCoreEcologyAggregatePatch,
   setCoreEcologyAggregatePatchMaterializedActors,
+  type CoreEcologyAggregatePatchState,
+  type CoreEcologyPopulationInput,
 } from "./coreEcology";
+import {
+  projectCoreEcologyActivity,
+  projectCoreEcologyDayPhase,
+} from "./coreEcologyActivity";
 import {
   CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
   CORE_ECOLOGY_GROUP_COHESION_RECOVERY,
   CORE_ECOLOGY_GROUP_REJOIN_COMPLETE_COHESION,
+  createCoreEcologyGroup,
   createCoreEcologyGroupSet,
+  reconcileCoreEcologyGroupAnchors,
+  reconcileCoreEcologyGroupMaterialized,
+  type CoreEcologyGroupState,
 } from "./coreEcologyGroups";
 import {
   CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_MAX_ALLOCATIONS,
@@ -37,12 +52,25 @@ import {
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES,
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
+  type CoreEcologyRegionalPredatorHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import type { CoreEcologySettlementShadowsStimulusFrame } from "./coreEcologySmallWorld";
 import { deserializeDogActorRoster } from "./dogActorRoster";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
-import { repositionCoreWildlifeActor } from "./coreWildlifeActor";
-import { deriveCoreEcologyMaterializedActorIds } from "./coreEcologyRuntime";
+import {
+  repositionCoreWildlifeActor,
+  replaceCoreWildlifeActorPhysiology,
+} from "./coreWildlifeActor";
+import {
+  deriveCoreEcologyMaterializedActorIds,
+  setCoreEcologyMaterializationForWindow,
+} from "./coreEcologyRuntime";
+import {
+  coreEcologySpeciesCanOwnActorAddress,
+  coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesRuntimePolicy,
+} from "./coreEcologySpeciesRuntimePolicy";
+import { stepCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { coreWildlifeTraversabilityCell } from "./coreWildlifeLocomotionProfile";
 import { TILE_UNITS, type PlayerState } from "./player";
 import {
@@ -53,10 +81,22 @@ import {
 } from "./regionalPlayerTravel";
 import {
   REGIONAL_TRAVEL_COLUMNS,
+  REGIONAL_TRAVEL_ROWS,
   regionLocalToWindowTile,
 } from "./regionalTravel";
+import { putRegionalEcologyResidentDeviation } from "./regionalEcology";
+import {
+  createRegionalEcologyState,
+  deserializeRegionalEcologyState,
+  regionalEcologyRegionalResidentsForActiveRegions,
+  replaceRegionalEcologyActiveState,
+  serializeRegionalEcologyState,
+  type RegionalEcologyActiveResidentInput,
+  type RegionalEcologyStateV1,
+} from "./regionalEcologyState";
 import {
   createRegionalWorldView,
+  regionalStorageRegionsInView,
   regionalTileIndexInView,
 } from "./regionalWorldView";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
@@ -65,7 +105,12 @@ import {
   deserializeSettlementEcologyState,
   serializeSettlementEcologyState,
 } from "./settlementEcology";
-import { deserializeSettlementDomesticAnimalRecoveryState } from "./settlementDomesticAnimalRecovery";
+import {
+  deserializeSettlementDomesticAnimalRecoveryState,
+  resolveSettlementDomesticAnimalRecovery,
+  serializeSettlementDomesticAnimalRecoveryState,
+  stageSettlementDomesticAnimalRecovery,
+} from "./settlementDomesticAnimalRecovery";
 import {
   PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
   PRIOR_SETTLEMENT_WORKING_ANIMALS_VERSION,
@@ -558,8 +603,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 24 || current.version !== 24) {
-    throw new Error("runtime fixture is not a current v24 save");
+  if (record.payloadVersion !== 25 || current.version !== 25) {
+    throw new Error("runtime fixture is not a current v25 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -600,11 +645,68 @@ function safeEastSeamRow(view: WorldView): number {
   throw new Error("guardian fixture did not produce a safe east seam");
 }
 
+function rebaseFixtureRegionalEcology(
+  serialized: unknown,
+  rootSeed: RootSeed,
+  spatial: WorldView,
+): string {
+  const prior = deserializeRegionalEcologyState(serialized);
+  if (prior === null) throw new Error("guardian fixture started with invalid regional ecology");
+  const activeRegions = regionalStorageRegionsInView(spatial);
+  const desiredRegionKeys = new Set(activeRegions.map(regionKey));
+  let root = prior.root;
+  for (const resident of prior.activeResidents) {
+    if (
+      resident.kind !== "regional-habitat"
+      || desiredRegionKeys.has(regionKey(resident.region))
+    ) continue;
+    root = putRegionalEcologyResidentDeviation(root, {
+      rootSeed,
+      patch: resident.patch,
+    });
+  }
+  const entrants = regionalEcologyRegionalResidentsForActiveRegions(
+    root,
+    rootSeed,
+    activeRegions,
+  );
+  if (entrants === null) {
+    throw new Error("guardian fixture could not derive regional ecology entrants");
+  }
+  const retainedBySource = new Map(prior.activeResidents
+    .filter(({ kind }) => kind === "regional-habitat")
+    .map((resident) => [resident.sourceKey, resident] as const));
+  const activeResidents: RegionalEcologyActiveResidentInput[] = entrants.map((entrant) => ({
+    kind: "regional-habitat" as const,
+    sourceKey: entrant.sourceKey,
+    patch: retainedBySource.get(entrant.sourceKey)?.patch ?? entrant.patch,
+  }));
+  for (const legacy of prior.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+    activeResidents.push({
+      kind: "legacy-cohort",
+      sourceKey: legacy.sourceKey,
+      patch: legacy.patch,
+    });
+  }
+  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
+    expectedIntegrity: prior.integrity,
+    rootSeed,
+    root,
+    settlementHome: {
+      sourceKey: prior.settlementHome.sourceKey,
+      patch: prior.settlementHome.patch,
+    },
+    activeRegions,
+    activeResidents,
+  }));
+}
+
 function withPlayerAtEastSeam(record: SaveRecord): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
   if (
     typeof current.world !== "string"
     || typeof current.regionalTravel !== "string"
+    || typeof current.regionalEcology !== "string"
     || typeof current.player !== "object"
     || current.player === null
     || Array.isArray(current.player)
@@ -658,7 +760,19 @@ function withPlayerAtEastSeam(record: SaveRecord): SaveRecord {
   if (restorePlayerRegionalTravel(world.meta.rootSeed, player, regionalTravel) === null) {
     throw new Error("guardian fixture produced an invalid seam sidecar");
   }
-  return withCurrentEnvelopeFields(record, { player, regionalTravel });
+  const spatial = createRegionalWorldView(createWorldView(world), transition.state.window, {
+    discovered: player.discovered,
+    depthSoundings: player.depthSoundings,
+  });
+  return withCurrentEnvelopeFields(record, {
+    player,
+    regionalTravel,
+    regionalEcology: rebaseFixtureRegionalEcology(
+      current.regionalEcology,
+      world.meta.rootSeed,
+      spatial,
+    ),
+  });
 }
 
 function withPlayerFacing(record: SaveRecord, facingMilliRadians: number): SaveRecord {
@@ -685,10 +799,49 @@ function withPlayerFacing(record: SaveRecord, facingMilliRadians: number): SaveR
   };
 }
 
-function requireCoreEcology(encoded: unknown) {
-  const state = deserializeCoreEcologyAggregatePatch(encoded);
-  if (state === null) throw new Error("runtime fixture omitted canonical core ecology");
+function requireRegionalEcology(encoded: unknown): RegionalEcologyStateV1 {
+  const state = deserializeRegionalEcologyState(encoded);
+  if (state === null) throw new Error("runtime fixture omitted canonical regional ecology");
   return state;
+}
+
+function requireCurrentCoreEcology(envelope: Readonly<Record<string, unknown>>) {
+  return requireRegionalEcology(envelope.regionalEcology).settlementHome.patch;
+}
+
+function requireAuthenticatedLegacyCore(envelope: Readonly<Record<string, unknown>>) {
+  const source = requireRegionalEcology(envelope.regionalEcology).root.legacyCohort?.sourcePatch;
+  if (source === undefined) {
+    throw new Error("migrated fixture omitted its authenticated v24 source");
+  }
+  return source;
+}
+
+function withCurrentSettlementHomeCore(
+  record: SaveRecord,
+  patch: CoreEcologyAggregatePatchState,
+): SaveRecord {
+  const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
+  const regional = requireRegionalEcology(envelope.regionalEcology);
+  if (patch.patchKey !== regional.settlementHome.sourceKey) {
+    throw new Error("settlement-home fixture changed its signed source key");
+  }
+  const replaced = createRegionalEcologyState({
+    root: regional.root,
+    settlementHome: {
+      sourceKey: regional.settlementHome.sourceKey,
+      patch,
+    },
+    activeRegions: regional.activeRegions,
+    activeResidents: regional.activeResidents.map(({ kind, sourceKey, patch: residentPatch }) => ({
+      kind: kind === "legacy-cohort" ? "legacy-cohort" as const : "regional-habitat" as const,
+      sourceKey,
+      patch: residentPatch,
+    })),
+  });
+  return withCurrentEnvelopeFields(record, {
+    regionalEcology: serializeRegionalEcologyState(replaced),
+  });
 }
 
 function requireLegacyCoreEcology(encoded: unknown) {
@@ -699,7 +852,7 @@ function requireLegacyCoreEcology(encoded: unknown) {
 
 /** Emit the exact pre-mortality v4 aggregate shape used by outer-v15–v19 fixtures. */
 function serializeLegacyCoreEcologyAggregatePatchV4(
-  patch: ReturnType<typeof requireCoreEcology>,
+  patch: CoreEcologyAggregatePatchState,
 ): string {
   if (
     patch.nextMortalityOrdinal !== 0
@@ -739,7 +892,7 @@ interface ExpectedDomesticRepresentative {
 }
 
 function expectDomesticRepresentatives(
-  core: ReturnType<typeof requireCoreEcology>,
+  core: CoreEcologyAggregatePatchState,
   store: ReturnType<typeof deserializeSettlementEcologyState>,
   expected: readonly ExpectedDomesticRepresentative[],
 ): void {
@@ -787,6 +940,42 @@ function expectDomesticRepresentatives(
       .map(({ actor }) => actor.identity.stableId)
       .sort());
   }
+}
+
+function expectSettlementHomePreservesDomesticSource(
+  source: CoreEcologyAggregatePatchState,
+  home: CoreEcologyAggregatePatchState,
+): void {
+  expect(home.derivation.kind).toBe("settlement-home-v1");
+  const domesticSpecies = new Set([
+    "domestic-cat",
+    "domestic-chicken",
+    "domestic-goat",
+  ]);
+  const sourcePopulations = source.populations.filter(({ species }) => (
+    domesticSpecies.has(species)
+  ));
+  expect(home.populations).toEqual(sourcePopulations.map((population) => ({
+    ...population,
+    members: population.members.map((member) => ({
+      ...member,
+      materialization: "coarse" as const,
+    })),
+  })));
+  expect(home.groups.groups.map(({ identity, memberOrdinals }) => ({
+    identity,
+    memberOrdinals,
+  }))).toEqual(source.groups.groups.filter(({ identity }) => (
+    domesticSpecies.has(identity.species)
+  )).map(({ identity, memberOrdinals }) => ({
+    identity,
+    memberOrdinals,
+  })));
+  expect(home.aggregatePopulations).toEqual(source.aggregatePopulations.filter(({ species }) => (
+    species === "brown-rat"
+  )));
+  expect(home.mortalityTransactions).toEqual([]);
+  expect(home.carcasses).toEqual([]);
 }
 
 function storedFoodQuantity(
@@ -863,8 +1052,168 @@ function downgradeSettlementEcologyToV2(encoded: unknown): string {
   });
 }
 
-function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
-  const current = requireCoreEcology(encoded);
+/**
+ * Historical envelope tests need the exact whole-patch v24 owner that existed
+ * before regional storage split it. Fresh v25 saves retain the frozen v11
+ * habitat on the settlement-home owner, so rebuild that source through the
+ * same public construction and initialization kernels used by v24.
+ */
+function createExactV24CoreFromFreshV25(
+  envelope: Readonly<Record<string, unknown>>,
+): CoreEcologyAggregatePatchState {
+  if (typeof envelope.world !== "string") {
+    throw new Error("current fixture omitted its world");
+  }
+  const regional = requireRegionalEcology(envelope.regionalEcology);
+  const home = regional.settlementHome.patch;
+  if (home.derivation.kind !== "settlement-home-v1") {
+    throw new Error("current fixture omitted its frozen settlement-home habitat");
+  }
+  const habitat = home.derivation.habitat;
+  const world = deserializeWorld(envelope.world);
+  const completedTick = world.meta.completedTick;
+  let patch = createCoreEcologyAggregatePatch({
+    seed: world.meta.rootSeed,
+    patchKey: "wave-a/alarm-crossing",
+    originRegion: habitat.originRegion,
+    tick: completedTick,
+    derivation: { kind: "habitat-v11", habitat },
+    groups: exactV24Groups(world.meta.rootSeed, habitat, completedTick),
+    populations: exactV24IndividualPopulations(habitat),
+  });
+  const regionOrigin = regionLocalToGlobalTile(habitat.originRegion, 0, 0);
+  const materialized = setCoreEcologyMaterializationForWindow(patch, {
+    origin: {
+      x: regionOrigin.x - Math.trunc((REGIONAL_TRAVEL_COLUMNS - WORLD_WIDTH) / 2),
+      y: regionOrigin.y - Math.trunc((REGIONAL_TRAVEL_ROWS - WORLD_HEIGHT) / 2),
+    },
+    terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+  }, completedTick);
+  if (materialized === null) throw new Error("exact v24 fixture materialization failed");
+  patch = materialized;
+  const bear = patch.populations.find(({ species }) => species === "black-bear")
+    ?.members[0]?.actor;
+  if (bear !== undefined) {
+    patch = replaceCoreEcologyAggregatePatchActor(patch, replaceCoreWildlifeActorPhysiology(
+      bear,
+      {
+        atTick: completedTick,
+        needs: { ...bear.needs, hunger: Math.max(680_000, bear.needs.hunger) },
+        condition: bear.condition,
+      },
+    ));
+  }
+  const tidal = stepCoreEcologyTidalTable(patch, { atTick: completedTick });
+  if (tidal === null) throw new Error("exact v24 fixture tidal initialization failed");
+  patch = initializeExactV24Egret(tidal.patch, tidal.projection, completedTick);
+  patch = initializeExactV24ActivityActor(patch, "american-black-duck", completedTick);
+  return initializeExactV24ActivityActor(
+    patch,
+    "north-american-river-otter",
+    completedTick,
+  );
+}
+
+function exactV24Groups(
+  seed: readonly [number, number, number, number],
+  habitat: CoreEcologyRegionalPredatorHabitatAssemblage,
+  tick: number,
+) {
+  const groups: CoreEcologyGroupState[] = [];
+  for (const population of habitat.populations) {
+    const policy = coreEcologySpeciesRuntimePolicy(population.species);
+    const anchor = population.allocations[0]?.position;
+    if (
+      policy === null
+      || !policy.actorAddressable
+      || policy.groupOrganization === null
+      || policy.groupStableIdNamespace === null
+      || !coreEcologySpeciesHasRuntimeCapability(population.species, "group-coordination")
+      || population.allocations.length < 2
+      || anchor === undefined
+    ) continue;
+    groups.push(createCoreEcologyGroup({
+      seed,
+      species: population.species,
+      originRegion: habitat.originRegion,
+      populationKey: population.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: population.allocations.map(({ allocationOrdinal }) => allocationOrdinal),
+      anchor,
+      tick,
+    }));
+  }
+  return createCoreEcologyGroupSet(groups);
+}
+
+function exactV24IndividualPopulations(
+  habitat: CoreEcologyRegionalPredatorHabitatAssemblage,
+): readonly CoreEcologyPopulationInput[] {
+  return habitat.populations.flatMap((population) => (
+    population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      || !coreEcologySpeciesCanOwnActorAddress(population.species)
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }]
+  ));
+}
+
+function initializeExactV24Egret(
+  patch: CoreEcologyAggregatePatchState,
+  projection: NonNullable<ReturnType<typeof stepCoreEcologyTidalTable>>["projection"],
+  tick: number,
+): CoreEcologyAggregatePatchState {
+  if (projection.snowyEgret === null) return patch;
+  const actor = patch.populations.find(({ species }) => species === "snowy-egret")
+    ?.members[0]?.actor;
+  const day = projectCoreEcologyDayPhase(tick);
+  if (actor === undefined || day === null) {
+    throw new Error("exact v24 fixture egret initialization failed");
+  }
+  const target = day.phase === "daylight" && projection.snowyEgret.wadingTarget !== null
+    ? projection.snowyEgret.wadingTarget
+    : projection.snowyEgret.refugeTarget;
+  return replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+    atTick: tick,
+    position: target.targetPosition,
+    heading: actor.address.heading,
+  }));
+}
+
+function initializeExactV24ActivityActor(
+  patch: CoreEcologyAggregatePatchState,
+  species: "american-black-duck" | "north-american-river-otter",
+  tick: number,
+): CoreEcologyAggregatePatchState {
+  const member = patch.populations.find((population) => population.species === species)
+    ?.members[0];
+  if (member === undefined || member.materialization !== "materialized") return patch;
+  const activity = projectCoreEcologyActivity(patch, {
+    actorId: member.actor.identity.stableId,
+    atTick: tick,
+  });
+  if (activity === null) throw new Error(`exact v24 ${species} initialization failed`);
+  if (activity.motion.kind !== "target-area") return patch;
+  return replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(member.actor, {
+    atTick: tick,
+    position: activity.motion.targetArea.center,
+    heading: member.actor.address.heading,
+  }));
+}
+
+function downgradeCoreEcologyToTidalWeb(
+  current: CoreEcologyAggregatePatchState,
+): string {
   if (
     current.derivation.kind !== "habitat-v11"
     && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
@@ -925,8 +1274,9 @@ function downgradeCoreEcologyToTidalWeb(encoded: unknown): string {
   return serializeLegacyCoreEcologyAggregatePatchV4(downgraded);
 }
 
-function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
-  const current = requireCoreEcology(encoded);
+function downgradeCoreEcologyToDomesticYard(
+  current: CoreEcologyAggregatePatchState,
+): string {
   if (
     current.derivation.kind !== "habitat-v11"
     && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
@@ -983,8 +1333,9 @@ function downgradeCoreEcologyToDomesticYard(encoded: unknown): string {
   return serializeLegacyCoreEcologyAggregatePatchV4(downgraded);
 }
 
-function downgradeCoreEcologyToDomesticPen(encoded: unknown): string {
-  const current = requireCoreEcology(encoded);
+function downgradeCoreEcologyToDomesticPen(
+  current: CoreEcologyAggregatePatchState,
+): string {
   if (
     current.derivation.kind !== "habitat-v11"
     && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
@@ -1030,9 +1381,11 @@ function downgradeCoreEcologyToDomesticPen(encoded: unknown): string {
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 24) throw new Error("fixture is not a current save");
+  if (current.version !== 25) throw new Error("fixture is not a current save");
+  const historicalCore = createExactV24CoreFromFreshV25(current);
   const {
     integrity: _integrity,
+    regionalEcology: _regionalEcology,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
     settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
@@ -1041,7 +1394,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const priorBase = {
     ...currentFields,
     version: 16,
-    coreEcology: downgradeCoreEcologyToTidalWeb(current.coreEcology),
+    coreEcology: downgradeCoreEcologyToTidalWeb(historicalCore),
     settlementEcology: downgradeSettlementEcologyToV1(current.settlementEcology),
   };
   return {
@@ -1056,9 +1409,11 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 24) throw new Error("fixture is not a current save");
+  if (current.version !== 25) throw new Error("fixture is not a current save");
+  const historicalCore = createExactV24CoreFromFreshV25(current);
   const {
     integrity: _integrity,
+    regionalEcology: _regionalEcology,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
     settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
@@ -1067,7 +1422,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const priorBase = {
     ...currentFields,
     version: 17,
-    coreEcology: downgradeCoreEcologyToDomesticYard(current.coreEcology),
+    coreEcology: downgradeCoreEcologyToDomesticYard(historicalCore),
     settlementEcology: downgradeSettlementEcologyToV2(current.settlementEcology),
   };
   return {
@@ -1082,9 +1437,10 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 24 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 25 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
+  const historicalCore = createExactV24CoreFromFreshV25(current);
   const currentSettlement = JSON.parse(current.settlementEcology) as Record<string, unknown>;
   if (
     currentSettlement.version !== 4
@@ -1108,6 +1464,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   };
   const {
     integrity: _integrity,
+    regionalEcology: _regionalEcology,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
     settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
@@ -1116,7 +1473,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const priorBase = {
     ...currentFields,
     version: 18,
-    coreEcology: downgradeCoreEcologyToDomesticPen(current.coreEcology),
+    coreEcology: downgradeCoreEcologyToDomesticPen(historicalCore),
     settlementEcology: JSON.stringify(priorSettlement),
   };
   return {
@@ -1132,9 +1489,10 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 24
+    current.version !== 25
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
+  const historicalCore = createExactV24CoreFromFreshV25(current);
   const currentWork = JSON.parse(current.settlementWorkingAnimals) as Record<string, unknown>;
   if (!Array.isArray(currentWork.assignments)) {
     throw new Error("current fixture omitted working-animal assignments");
@@ -1164,13 +1522,14 @@ function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   };
   const {
     integrity: _integrity,
+    regionalEcology: _regionalEcology,
     settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
     ...currentFields
   } = current;
   const priorBase = {
     ...currentFields,
     version: 19,
-    coreEcology: downgradeCoreEcologyToDomesticPen(current.coreEcology),
+    coreEcology: downgradeCoreEcologyToDomesticPen(historicalCore),
     settlementWorkingAnimals: stableStringify(priorWork),
   };
   return {
@@ -1219,7 +1578,9 @@ async function advanceUntilDomesticFoodUse(
   const store = lastEnvelope === undefined
     ? undefined
     : deserializeSettlementEcologyState(lastEnvelope.settlementEcology);
-  const core = lastEnvelope === undefined ? undefined : requireCoreEcology(lastEnvelope.coreEcology);
+  const core = lastEnvelope === undefined
+    ? undefined
+    : requireCurrentCoreEcology(lastEnvelope);
   throw new Error(`domestic chicken did not reach the open store: ${JSON.stringify({
     store: store === undefined ? undefined : {
       closure: store.closure,
@@ -1271,7 +1632,7 @@ describe("runtime settlement ecology integration", () => {
     );
     if (travel === null) throw new Error("boundary fixture regional sidecar did not restore");
 
-    let core = requireCoreEcology(envelope.coreEcology);
+    let core = requireCurrentCoreEcology(envelope);
     const group = core.groups.groups.find(({ memberOrdinals }) => memberOrdinals.length > 1);
     const population = group === undefined ? undefined : core.populations.find((candidate) => (
       candidate.species === group.identity.species
@@ -1344,9 +1705,25 @@ describe("runtime settlement ecology integration", () => {
         height: travel.window.addresses.length / REGIONAL_TRAVEL_COLUMNS,
       },
     })).toEqual(members.map(({ actor }) => actor.identity.stableId).sort());
-    const stagedRecord = withCurrentEnvelopeFields(sourceRecord, {
-      coreEcology: serializeCoreEcologyAggregatePatch(core),
-    });
+    const stagedRecord = withCurrentSettlementHomeCore(sourceRecord, core);
+    const stagedEnvelope = JSON.parse(stagedRecord.worldJson) as Record<string, unknown>;
+    const storedCore = requireCurrentCoreEcology(stagedEnvelope);
+    const rematerializedCore = setCoreEcologyMaterializationForWindow(storedCore, {
+      origin: travel.window.origin,
+      terrain: {
+        width: REGIONAL_TRAVEL_COLUMNS,
+        height: travel.window.addresses.length / REGIONAL_TRAVEL_COLUMNS,
+      },
+    }, storedCore.updatedAtTick);
+    const expectedOffFrame = rematerializedCore?.populations.find((candidate) => (
+      candidate.species === group.identity.species
+      && candidate.populationKey === group.identity.populationKey
+    ))?.members.find(({ actor }) => (
+      actor.identity.stableId === members[1]?.actor.identity.stableId
+    ));
+    if (expectedOffFrame?.materialization !== "materialized") {
+      throw new Error("boundary fixture did not rematerialize its whole social group");
+    }
     const repository = new MemoryRepository(stagedRecord);
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getUIView().saveWarning).toBeUndefined();
@@ -1356,7 +1733,7 @@ describe("runtime settlement ecology integration", () => {
 
     const saved = savedEnvelope(repository);
     const advancedWorld = deserializeWorld(String(saved.world));
-    const advancedCore = requireCoreEcology(saved.coreEcology);
+    const advancedCore = requireCurrentCoreEcology(saved);
     const advancedPopulation = advancedCore.populations.find((candidate) => (
       candidate.species === group.identity.species
       && candidate.populationKey === group.identity.populationKey
@@ -1370,13 +1747,15 @@ describe("runtime settlement ecology integration", () => {
       materialization,
       updatedAtTick: actor.updatedAtTick,
     }))).toEqual(members.map(() => ({
-      materialization: "materialized",
+      materialization: "coarse",
       updatedAtTick: advancedWorld.meta.completedTick,
     })));
     const advancedOffFrame = advancedMembers?.find(({ actor }) => (
       actor.identity.stableId === members[1]?.actor.identity.stableId
     ));
-    expect(advancedOffFrame?.actor.address.position).toEqual(outside);
+    expect(advancedOffFrame?.actor.address.position).toEqual(
+      expectedOffFrame.actor.address.position,
+    );
     expect(advancedOffFrame?.actor.intent.kind).toBe("observe");
     runtime.destroy();
   });
@@ -1415,10 +1794,11 @@ describe("runtime settlement ecology integration", () => {
       depthSoundings: player.depthSoundings,
     });
     const settlement = deserializeSettlementEcologyState(envelope.settlementEcology);
+    const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
     const custody = settlement.domesticCustodies.find(({ species }) => (
       species === "domestic-goat"
     ));
-    let core = requireCoreEcology(envelope.coreEcology);
+    let core = requireCurrentCoreEcology(envelope);
     const group = core.groups.groups.find(({ identity }) => (
       identity.stableId === custody?.memberGroupId
     ));
@@ -1435,6 +1815,7 @@ describe("runtime settlement ecology integration", () => {
       || group.phase !== "cohesive"
       || goats === undefined
       || goats.length !== 2
+      || bio0 === null
     ) throw new Error("recovery fixture omitted its bounded goat custody");
 
     const positionAtViewTile = (tileIndex: number): WorldPosition => {
@@ -1464,12 +1845,17 @@ describe("runtime settlement ecology integration", () => {
       position: positionAtViewTile(tileIndex),
     })).filter(({ tile, tileIndex, position }) => {
       const delta = worldPositionDelta(custody.homeStructure.position, position);
+      const caretakerDelta = worldPositionDelta(
+        custody.homeStructure.position,
+        bio0.porterAddress.position,
+      );
       const distance = Math.hypot(delta.x, delta.y);
       const x = tileIndex % view.terrain.width;
       const y = Math.floor(tileIndex / view.terrain.width);
       if (
         distance <= 6_500
         || distance >= 7_800
+        || delta.x * caretakerDelta.x + delta.y * caretakerDelta.y >= 0
         || x < 2
         || y < 2
         || x >= view.terrain.width - 2
@@ -1484,11 +1870,28 @@ describe("runtime settlement ecology integration", () => {
     }).sort((left, right) => {
       const leftDelta = worldPositionDelta(custody.homeStructure.position, left.position);
       const rightDelta = worldPositionDelta(custody.homeStructure.position, right.position);
-      return Math.hypot(leftDelta.x, leftDelta.y) - Math.hypot(rightDelta.x, rightDelta.y)
+      return Math.hypot(rightDelta.x, rightDelta.y) - Math.hypot(leftDelta.x, leftDelta.y)
         || left.tileIndex - right.tileIndex;
     })[0]?.position;
     if (separatedPosition === undefined) {
       throw new Error("recovery fixture could not find a traversable separated position");
+    }
+    const homePosition = view.terrain.tiles.map((tile, tileIndex) => ({
+      tile,
+      tileIndex,
+      position: positionAtViewTile(tileIndex),
+    })).filter(({ tile, position }) => {
+      const homeDelta = worldPositionDelta(custody.homeStructure.position, position);
+      return Math.hypot(homeDelta.x, homeDelta.y) <= custody.homeStructure.radiusUnits
+        && coreWildlifeTraversabilityCell("domestic-goat", tile).access === "open";
+    }).sort((left, right) => {
+      const leftDelta = worldPositionDelta(separatedPosition, left.position);
+      const rightDelta = worldPositionDelta(separatedPosition, right.position);
+      return Math.hypot(rightDelta.x, rightDelta.y) - Math.hypot(leftDelta.x, leftDelta.y)
+        || left.tileIndex - right.tileIndex;
+    })[0]?.position;
+    if (homePosition === undefined) {
+      throw new Error("recovery fixture could not find a traversable home position");
     }
 
     const everyMember = core.populations.flatMap(({ species, members }) => (
@@ -1499,14 +1902,14 @@ describe("runtime settlement ecology integration", () => {
       actorIds: everyMember.map(({ actor }) => actor.identity.stableId),
     });
     const goatIds = new Set(goats.map(({ actor }) => actor.identity.stableId));
-    const separatedActorId = goats[0]!.actor.identity.stableId;
+    const separatedActorId = goats[1]!.actor.identity.stableId;
     for (const [ordinal, member] of core.populations.flatMap(({ members }) => members).entries()) {
       const isSeparated = member.actor.identity.stableId === separatedActorId;
       const isHomeGoat = goatIds.has(member.actor.identity.stableId) && !isSeparated;
       const position = isSeparated
         ? separatedPosition
         : isHomeGoat
-          ? custody.homeStructure.position
+          ? homePosition
           : positionAtGlobalTile(
               travel.window.origin.x + view.terrain.width + 100 + ordinal,
               travel.window.origin.y + view.terrain.height + 100,
@@ -1525,13 +1928,86 @@ describe("runtime settlement ecology integration", () => {
       terrain: { width: view.terrain.width, height: view.terrain.height },
     })).toEqual(goats.map(({ actor }) => actor.identity.stableId).sort());
 
+    const positionedGroup = core.groups.groups.find(({ identity }) => (
+      identity.stableId === group.identity.stableId
+    ));
+    const positionedGoats = core.populations.find(({ species, populationKey }) => (
+      species === group.identity.species
+      && populationKey === group.identity.populationKey
+    ))?.members.filter(({ populationOrdinal }) => (
+      group.memberOrdinals.includes(populationOrdinal)
+    )).sort((left, right) => left.populationOrdinal - right.populationOrdinal);
+    if (positionedGroup === undefined || positionedGoats?.length !== goats.length) {
+      throw new Error("recovery fixture lost its positioned goat authorities");
+    }
+    const split = reconcileCoreEcologyGroupMaterialized(positionedGroup, {
+      atTick: core.updatedAtTick,
+      memberPositions: positionedGoats.map(({ populationOrdinal, actor }) => ({
+        memberOrdinal: populationOrdinal,
+        position: actor.address.position,
+      })),
+      splitDistanceUnits: 6_000,
+      rejoinDistanceUnits: 2_000,
+      currentEscapeCause: {
+        eventId: `test-recovery:escape:${core.updatedAtTick}`,
+        causeReferenceId: "test-recovery:open-gate",
+        memberOrdinal: goats[1]!.populationOrdinal,
+      },
+    });
+    if (split === null || split.events.length !== 1 || split.events[0]?.kind !== "group-split") {
+      throw new Error("recovery fixture could not authenticate its physical group split");
+    }
+    const splitCore = canonicalizeCoreEcologyAggregatePatch({
+      ...core,
+      groups: createCoreEcologyGroupSet(core.groups.groups.map((candidate) => (
+        candidate.identity.stableId === split.group.identity.stableId
+          ? split.group
+          : candidate
+      ))),
+    });
+    if (splitCore === null) {
+      throw new Error("recovery fixture could not retain its split topology");
+    }
+    core = splitCore;
+    const separatedMember = positionedGoats.find(({ actor }) => (
+      actor.identity.stableId === separatedActorId
+    ))?.actor;
+    const initialRecovery = deserializeSettlementDomesticAnimalRecoveryState(
+      envelope.settlementDomesticAnimalRecovery,
+    );
+    if (separatedMember === undefined || initialRecovery === null) {
+      throw new Error("recovery fixture omitted its opening authorities");
+    }
+    const opened = stageSettlementDomesticAnimalRecovery(initialRecovery, {
+      kind: "open",
+      atTick: core.updatedAtTick,
+      settlement,
+      custodyRelationshipId: custody.relationshipId,
+      group: split.group,
+      splitEvent: split.events[0],
+      separatedMember,
+      memberActors: positionedGoats.map(({ actor }) => actor),
+      lastKnownArea: { center: separatedMember.address.position, radiusUnits: 0 },
+    });
+    const resolvedOpening = opened === null
+      ? null
+      : resolveSettlementDomesticAnimalRecovery(opened.state, opened.transaction);
+    if (resolvedOpening === null || resolvedOpening.state.currentCase?.phase !== "unnoticed") {
+      throw new Error("recovery fixture could not commit its authenticated opening");
+    }
+
     domesticRecoveryHarness.enabled = true;
     domesticRecoveryHarness.caretakerActorId = custody.caretakerActorId;
     domesticRecoveryHarness.separatedActorId = separatedActorId;
     domesticRecoveryHarness.memberActorIds = [...custody.memberActorIds];
-    const preparedRecord = withCurrentEnvelopeFields(sourceRecord, {
-      coreEcology: serializeCoreEcologyAggregatePatch(core),
-    });
+    const preparedRecord = withCurrentEnvelopeFields(
+      withCurrentSettlementHomeCore(sourceRecord, core),
+      {
+        settlementDomesticAnimalRecovery: serializeSettlementDomesticAnimalRecoveryState(
+          resolvedOpening.state,
+        ),
+      },
+    );
     const repository = new MemoryRepository(preparedRecord);
     const runtime = await createTideweftRuntime(repository);
     advancePlayerSteps(runtime, 20);
@@ -1552,6 +2028,7 @@ describe("runtime settlement ecology integration", () => {
     if (searchingAssignment === undefined) {
       throw new Error("recovery fixture lost its guardian assignment");
     }
+    if (searchingCase === null) throw new Error("recovery fixture lost its open case");
     expect(searchingCase).toMatchObject({
       phase: "searching",
       groupId: group.identity.stableId,
@@ -1607,7 +2084,7 @@ describe("runtime settlement ecology integration", () => {
     rejected.destroy();
     runtime.destroy();
 
-    let offFrameCore = requireCoreEcology(searchingEnvelope.coreEcology);
+    let offFrameCore = requireCurrentCoreEcology(searchingEnvelope);
     const currentGoatActors = offFrameCore.populations
       .find(({ species, populationKey }) => (
         species === group.identity.species
@@ -1642,6 +2119,17 @@ describe("runtime settlement ecology integration", () => {
     if (offFrameGroup === undefined || offFrameGroup.components.length !== 2) {
       throw new Error("recovery fixture lost its separated group topology off-frame");
     }
+    const offFrameAnchoredGroup = reconcileCoreEcologyGroupAnchors(offFrameGroup, {
+      atTick: offFrameCore.updatedAtTick,
+      componentAnchors: offFrameGroup.components.map((component, ordinal) => ({
+        componentId: component.componentId,
+        anchor: farPositions[ordinal]!,
+      })),
+      rendezvousAnchor: farPositions[0]!,
+    });
+    if (offFrameAnchoredGroup === null) {
+      throw new Error("recovery fixture could not retain its off-frame rendezvous");
+    }
     const pressureCycleCadences = 8;
     const pressurePhase = Number.parseInt(hashCanonical([
       offFrameGroup.identity.stableId,
@@ -1662,7 +2150,7 @@ describe("runtime settlement ecology integration", () => {
       groups: createCoreEcologyGroupSet(offFrameCore.groups.groups.map((candidate) => (
         candidate.identity.stableId === offFrameGroup.identity.stableId
           ? {
-              ...candidate,
+              ...offFrameAnchoredGroup,
               updatedAtTick: offFrameCore.updatedAtTick,
               nextCoarseTick,
               phase: "rejoining" as const,
@@ -1676,15 +2164,15 @@ describe("runtime settlement ecology integration", () => {
       throw new Error("recovery fixture could not prime a valid off-frame reunion cadence");
     }
     offFrameCore = primedCore;
-    const coarseRepository = new MemoryRepository(withCurrentEnvelopeFields(searchingRecord, {
-      coreEcology: serializeCoreEcologyAggregatePatch(offFrameCore),
-    }));
+    const coarseRepository = new MemoryRepository(
+      withCurrentSettlementHomeCore(searchingRecord, offFrameCore),
+    );
     const coarseRuntime = await createTideweftRuntime(coarseRepository);
     let coarseEnvelope = savedEnvelope(coarseRepository);
     let coarseRecovery = deserializeSettlementDomesticAnimalRecoveryState(
       coarseEnvelope.settlementDomesticAnimalRecovery,
     );
-    let coarseGroup = requireCoreEcology(coarseEnvelope.coreEcology).groups.groups.find(
+    let coarseGroup = requireCurrentCoreEcology(coarseEnvelope).groups.groups.find(
       ({ identity }) => identity.stableId === group.identity.stableId,
     );
     for (let elapsedTick = offFrameCore.updatedAtTick; elapsedTick <= nextCoarseTick; elapsedTick += 1) {
@@ -1699,7 +2187,7 @@ describe("runtime settlement ecology integration", () => {
       coarseRecovery = deserializeSettlementDomesticAnimalRecoveryState(
         coarseEnvelope.settlementDomesticAnimalRecovery,
       );
-      coarseGroup = requireCoreEcology(coarseEnvelope.coreEcology).groups.groups.find(
+      coarseGroup = requireCurrentCoreEcology(coarseEnvelope).groups.groups.find(
         ({ identity }) => identity.stableId === group.identity.stableId,
       );
     }
@@ -1727,7 +2215,7 @@ describe("runtime settlement ecology integration", () => {
       .toBe(coarseEnvelope.settlementDomesticAnimalRecovery);
     replayedCoarse.destroy();
 
-    let homeCore = requireCoreEcology(replayedEnvelope.coreEcology);
+    let homeCore = requireCurrentCoreEcology(replayedEnvelope);
     const materializedIds = homeCore.populations.flatMap(({ members }) => members)
       .filter(({ materialization }) => materialization === "materialized")
       .map(({ actor }) => actor.identity.stableId);
@@ -1755,9 +2243,9 @@ describe("runtime settlement ecology integration", () => {
         }),
       );
     }
-    const reunionRepository = new MemoryRepository(withCurrentEnvelopeFields(
+    const reunionRepository = new MemoryRepository(withCurrentSettlementHomeCore(
       coarseRepository.snapshot(),
-      { coreEcology: serializeCoreEcologyAggregatePatch(homeCore) },
+      homeCore,
     ));
     const reunited = await createTideweftRuntime(reunionRepository);
     advancePlayerSteps(reunited, 20);
@@ -1767,7 +2255,7 @@ describe("runtime settlement ecology integration", () => {
     const closedRecovery = deserializeSettlementDomesticAnimalRecoveryState(
       closedEnvelope.settlementDomesticAnimalRecovery,
     );
-    const closedCore = requireCoreEcology(closedEnvelope.coreEcology);
+    const closedCore = requireCurrentCoreEcology(closedEnvelope);
     expect(closedRecovery?.currentCase).toBeNull();
     expect(closedRecovery?.latestClosedOutcome).toMatchObject({
       caseId: searchingCase?.caseId,
@@ -1811,11 +2299,10 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(24);
-    expect(envelope.version).toBe(24);
+    expect(record.payloadVersion).toBe(25);
+    expect(envelope.version).toBe(25);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
-      "coreEcology",
       "dogActorRoster",
       "fieldResources",
       "format",
@@ -1826,6 +2313,7 @@ describe("runtime settlement ecology integration", () => {
       "player",
       "porterResponse",
       "promiseJourney",
+      "regionalEcology",
       "regionalTravel",
       "session",
       "settlementDomesticAnimalRecovery",
@@ -1836,11 +2324,10 @@ describe("runtime settlement ecology integration", () => {
       "world",
     ]);
     const state = deserializeSettlementEcologyState(envelope.settlementEcology);
-    const core = requireCoreEcology(envelope.coreEcology);
-    if (
-      core.derivation.kind !== "habitat-v11"
-      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-    ) throw new Error("current save omitted its v11 regional-predator habitat");
+    const core = requireCurrentCoreEcology(envelope);
+    if (core.derivation.kind !== "settlement-home-v1") {
+      throw new Error("current save omitted its v25 settlement-home owner");
+    }
     expect(core.derivation.habitat.generationVersion)
       .toBe(CORE_ECOLOGY_REGIONAL_PREDATOR_HABITAT_VERSION);
     expect(state.version).toBe(4);
@@ -1916,8 +2403,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(24);
-    expect(migratedEnvelope.version).toBe(24);
+    expect(migratedRecord.payloadVersion).toBe(25);
+    expect(migratedEnvelope.version).toBe(25);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -1929,12 +2416,15 @@ describe("runtime settlement ecology integration", () => {
       "promiseJourney",
       "perceptionCarry",
       "bio0Ecology",
-      "coreEcology",
       "porterResponse",
       "livingActorPlayerChoice",
     ]) {
       expect(migratedEnvelope[field], field).toEqual(controlEnvelope[field]);
     }
+    expect(requireCurrentCoreEcology(migratedEnvelope))
+      .toEqual(requireCurrentCoreEcology(controlEnvelope));
+    expect(requireAuthenticatedLegacyCore(migratedEnvelope))
+      .toEqual(requireAuthenticatedLegacyCore(controlEnvelope));
     migrated.destroy();
 
     const illegalV15Base = { ...storehouse, version: 15 };
@@ -1997,9 +2487,10 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementEcology,
     );
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
-    const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
-    expect(migratedRecord.payloadVersion).toBe(24);
-    expect(migratedEnvelope.version).toBe(24);
+    const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
+    const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
+    expect(migratedRecord.payloadVersion).toBe(25);
+    expect(migratedEnvelope.version).toBe(25);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -2011,9 +2502,12 @@ describe("runtime settlement ecology integration", () => {
     expect(migratedStore.keeperKnowledge).toHaveLength(1);
 
     if (
-      migratedCore.derivation.kind !== "habitat-v11"
-      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-    ) throw new Error("v16 migration omitted its authenticated domestic append");
+      migratedCore.derivation.kind !== "settlement-home-v1"
+      || (
+        migratedLegacy.derivation.kind !== "habitat-v11"
+        && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+      )
+    ) throw new Error("v16 migration omitted its split v25 ecology authority");
     expectDomesticRepresentatives(migratedCore, migratedStore, [
       {
         species: "domestic-chicken",
@@ -2036,7 +2530,7 @@ describe("runtime settlement ecology integration", () => {
             * WORLD_POSITION_UNITS_PER_TILE,
       },
     ]);
-    expect(migratedCore.populations.filter(({ species }) => (
+    expect(migratedLegacy.populations.filter(({ species }) => (
       species !== "domestic-chicken"
       && species !== "domestic-goat"
       && species !== "wild-boar"
@@ -2045,23 +2539,23 @@ describe("runtime settlement ecology integration", () => {
       && species !== "cougar"
       && species !== "brown-bear"
     ))).toEqual(priorCore.populations);
-    expect(migratedCore.groups.groups.filter(({ identity }) => (
+    expect(migratedLegacy.groups.groups.filter(({ identity }) => (
       identity.species !== "domestic-chicken"
       && identity.species !== "domestic-goat"
       && identity.species !== "wild-boar"
       && identity.species !== "elk"
       && identity.species !== "gray-wolf"
     ))).toEqual(priorCore.groups.groups);
-    expect(migratedCore.aggregatePopulations).toEqual(priorCore.aggregatePopulations);
+    expect(migratedLegacy.aggregatePopulations).toEqual(priorCore.aggregatePopulations);
     if (
       priorCore.derivation.kind !== "habitat-v7"
       && priorCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
     ) throw new Error("v16 fixture lost its tidal-web derivation");
-    expect(migratedCore.derivation.habitat.populations.slice(
+    expect(migratedLegacy.derivation.habitat.populations.slice(
       0,
       priorCore.derivation.habitat.populations.length,
     )).toEqual(priorCore.derivation.habitat.populations);
-    expect(migratedCore.derivation.habitat.tidalAnchors)
+    expect(migratedLegacy.derivation.habitat.tidalAnchors)
       .toEqual(priorCore.derivation.habitat.tidalAnchors);
     for (const field of [
       "world",
@@ -2079,18 +2573,20 @@ describe("runtime settlement ecology integration", () => {
       expect(migratedEnvelope[field], field).toEqual(v16Envelope[field]);
     }
 
-    const committedCore = migratedEnvelope.coreEcology;
+    const committedRegional = migratedEnvelope.regionalEcology;
     const committedStore = migratedEnvelope.settlementEcology;
     migrated.destroy();
     const reloaded = await createTideweftRuntime(migratedRepository);
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
     await reloaded.save();
     const replayEnvelope = savedEnvelope(migratedRepository);
-    expect(replayEnvelope.coreEcology).toBe(committedCore);
+    expect(replayEnvelope.regionalEcology).toBe(committedRegional);
     expect(replayEnvelope.settlementEcology).toBe(committedStore);
-    const replayCore = requireCoreEcology(replayEnvelope.coreEcology);
+    const replayCore = requireCurrentCoreEcology(replayEnvelope);
+    const replayLegacy = requireAuthenticatedLegacyCore(replayEnvelope);
     const replayStore = deserializeSettlementEcologyState(replayEnvelope.settlementEcology);
     expect(replayCore).toEqual(migratedCore);
+    expect(replayLegacy).toEqual(migratedLegacy);
     expect(replayStore).toEqual(migratedStore);
     reloaded.destroy();
   });
@@ -2149,13 +2645,17 @@ describe("runtime settlement ecology integration", () => {
     const migratedStore = deserializeSettlementEcologyState(
       migratedEnvelope.settlementEcology,
     );
-    const migratedCore = requireCoreEcology(migratedEnvelope.coreEcology);
+    const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
+    const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
     if (
-      migratedCore.derivation.kind !== "habitat-v11"
-      && migratedCore.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-    ) throw new Error("v17 migration omitted the plural domestic habitat");
-    expect(migratedRecord.payloadVersion).toBe(24);
-    expect(migratedEnvelope.version).toBe(24);
+      migratedCore.derivation.kind !== "settlement-home-v1"
+      || (
+        migratedLegacy.derivation.kind !== "habitat-v11"
+        && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
+      )
+    ) throw new Error("v17 migration omitted its split v25 ecology authority");
+    expect(migratedRecord.payloadVersion).toBe(25);
+    expect(migratedEnvelope.version).toBe(25);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -2164,18 +2664,18 @@ describe("runtime settlement ecology integration", () => {
     const priorPopulationKeys = new Set(priorCore.populations.map(({ populationKey }) => (
       populationKey
     )));
-    const expectedAddedPopulations = migratedCore.derivation.habitat.populations.filter(
+    const expectedAddedPopulations = migratedLegacy.derivation.habitat.populations.filter(
       ({ populationKey, populationUnits, representation }) => (
         !priorPopulationKeys.has(populationKey)
         && populationUnits > 0
         && representation === "individual-representatives"
       ),
     );
-    expect(migratedCore.populations).toHaveLength(
+    expect(migratedLegacy.populations).toHaveLength(
       priorCore.populations.length + expectedAddedPopulations.length,
     );
-    expect(migratedCore.groups.groups).toHaveLength(priorCore.groups.groups.length + 4);
-    expect(migratedCore.populations.filter(({ species }) => (
+    expect(migratedLegacy.groups.groups).toHaveLength(priorCore.groups.groups.length + 4);
+    expect(migratedLegacy.populations.filter(({ species }) => (
       species !== "domestic-goat"
       && species !== "wild-boar"
       && species !== "elk"
@@ -2183,26 +2683,32 @@ describe("runtime settlement ecology integration", () => {
       && species !== "cougar"
       && species !== "brown-bear"
     ))).toEqual(priorCore.populations);
-    expect(migratedCore.groups.groups.filter(({ identity }) => (
+    expect(migratedLegacy.groups.groups.filter(({ identity }) => (
       identity.species !== "domestic-goat"
       && identity.species !== "wild-boar"
       && identity.species !== "elk"
       && identity.species !== "gray-wolf"
     ))).toEqual(priorCore.groups.groups);
-    expect(migratedCore.aggregatePopulations).toEqual(priorCore.aggregatePopulations);
-    expect(migratedCore.derivation.habitat.populations.slice(
+    expect(migratedLegacy.aggregatePopulations).toEqual(priorCore.aggregatePopulations);
+    expect(migratedLegacy.derivation.habitat.populations.slice(
       0,
       priorCore.derivation.habitat.populations.length,
     )).toEqual(priorCore.derivation.habitat.populations);
-    expect(migratedCore.derivation.habitat.tidalAnchors)
+    expect(migratedLegacy.derivation.habitat.tidalAnchors)
       .toEqual(priorCore.derivation.habitat.tidalAnchors);
-    expect(migratedCore.derivation.habitat.domesticAnchor)
+    expect(migratedLegacy.derivation.habitat.domesticAnchor)
       .toEqual(priorCore.derivation.habitat.domesticAnchor);
 
     const migratedChickenPopulation = migratedCore.populations.find(({ species }) => (
       species === "domestic-chicken"
     ));
+    const migratedLegacyChickenPopulation = migratedLegacy.populations.find(({ species }) => (
+      species === "domestic-chicken"
+    ));
     const migratedChickenGroup = migratedCore.groups.groups.find(({ identity }) => (
+      identity.species === "domestic-chicken"
+    ));
+    const migratedLegacyChickenGroup = migratedLegacy.groups.groups.find(({ identity }) => (
       identity.species === "domestic-chicken"
     ));
     const migratedChickenCustody = migratedStore.domesticCustodies.find(({ species }) => (
@@ -2210,12 +2716,15 @@ describe("runtime settlement ecology integration", () => {
     ));
     if (
       migratedChickenPopulation === undefined
+      || migratedLegacyChickenPopulation === undefined
       || migratedChickenGroup === undefined
+      || migratedLegacyChickenGroup === undefined
       || migratedChickenCustody === undefined
     ) throw new Error("v17 migration rewrote its chicken authority");
-    expect(JSON.stringify(migratedChickenPopulation))
+    expectSettlementHomePreservesDomesticSource(migratedLegacy, migratedCore);
+    expect(JSON.stringify(migratedLegacyChickenPopulation))
       .toBe(JSON.stringify(priorChickenPopulation));
-    expect(JSON.stringify(migratedChickenGroup)).toBe(JSON.stringify(priorChickenGroup));
+    expect(JSON.stringify(migratedLegacyChickenGroup)).toBe(JSON.stringify(priorChickenGroup));
     expect(migratedChickenCustody.relationshipId).toBe(priorCustody.relationshipId);
     expect(migratedChickenCustody.homeId).toBe(priorCustody.homeId);
     expect(migratedChickenCustody.homeStructure.structureId).toBe(priorCustody.coopId);
@@ -2245,14 +2754,14 @@ describe("runtime settlement ecology integration", () => {
       },
     ]);
 
-    const committedCore = migratedEnvelope.coreEcology;
+    const committedRegional = migratedEnvelope.regionalEcology;
     const committedStore = migratedEnvelope.settlementEcology;
     migrated.destroy();
     const reloaded = await createTideweftRuntime(migratedRepository);
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
     await reloaded.save();
     const replayEnvelope = savedEnvelope(migratedRepository);
-    expect(replayEnvelope.coreEcology).toBe(committedCore);
+    expect(replayEnvelope.regionalEcology).toBe(committedRegional);
     expect(replayEnvelope.settlementEcology).toBe(committedStore);
     reloaded.destroy();
   });
@@ -2301,8 +2810,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(24);
-    expect(migratedEnvelope.version).toBe(24);
+    expect(migratedRecord.payloadVersion).toBe(25);
+    expect(migratedEnvelope.version).toBe(25);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -2339,7 +2848,12 @@ describe("runtime settlement ecology integration", () => {
     expect(migratedEnvelope.dogActorRoster).toBe(currentEnvelope.dogActorRoster);
     expect(migratedEnvelope.settlementWorkingAnimals)
       .toBe(currentEnvelope.settlementWorkingAnimals);
-    expect(migratedEnvelope.coreEcology).toBe(currentEnvelope.coreEcology);
+    const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
+    expect(migratedLegacy.derivation.kind).toBe("habitat-v11");
+    expectSettlementHomePreservesDomesticSource(
+      migratedLegacy,
+      requireCurrentCoreEcology(migratedEnvelope),
+    );
     for (const field of [
       "world",
       "player",
@@ -2409,8 +2923,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(24);
-    expect(migratedEnvelope.version).toBe(24);
+    expect(migratedRecord.payloadVersion).toBe(25);
+    expect(migratedEnvelope.version).toBe(25);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -2948,7 +3462,7 @@ describe("runtime settlement ecology integration", () => {
     const initialRecord = withPlayerFacing(sourceRepository.snapshot(), -3_142);
     const initialEnvelope = JSON.parse(initialRecord.worldJson) as Record<string, unknown>;
     const initialStore = deserializeSettlementEcologyState(initialEnvelope.settlementEcology);
-    const initialCore = requireCoreEcology(initialEnvelope.coreEcology);
+    const initialCore = requireCurrentCoreEcology(initialEnvelope);
     const initialCustody = initialStore.domesticCustodies.find(({ species }) => (
       species === "domestic-chicken"
     ));
@@ -2984,7 +3498,7 @@ describe("runtime settlement ecology integration", () => {
     const consumingActorId = witnessedUse.state.lastResolvedDomesticFoodUseMemberActorId;
     expect(initialCustody.memberActorIds).toContain(consumingActorId);
     if (consumingActorId === null) throw new Error("domestic food use omitted its actor");
-    const witnessedCore = requireCoreEcology(witnessedUse.envelope.coreEcology);
+    const witnessedCore = requireCurrentCoreEcology(witnessedUse.envelope);
     const consumingActor = witnessedCore.populations
       .flatMap(({ members }) => members)
       .find(({ actor }) => actor.identity.stableId === consumingActorId)?.actor;
@@ -3024,7 +3538,7 @@ describe("runtime settlement ecology integration", () => {
     await secured.save();
     const securedEnvelope = savedEnvelope(securedRepository);
     const securedStore = deserializeSettlementEcologyState(securedEnvelope.settlementEcology);
-    const securedCore = requireCoreEcology(securedEnvelope.coreEcology);
+    const securedCore = requireCurrentCoreEcology(securedEnvelope);
     expect(securedStore.closure).toBe("secured");
     expect(securedStore.lastResolvedDomesticFoodUseOrdinal).toBe(0);
     expect(securedStore.lastResolvedLossOrdinal).toBe(0);

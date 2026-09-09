@@ -220,7 +220,7 @@ import {
   selectWitnessedBrownRatRedistribution,
 } from "./coreEcologyEvidenceRuntime";
 import {
-  collectCoreEcologyAggregateActivityObservationBatches,
+  collectCoreEcologyRootAggregateActivityObservationBatches,
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
   type CoreEcologyObservationBatch,
@@ -272,7 +272,13 @@ import {
   regionalFieldResourceById,
   type RegionalFieldResourceProjection,
 } from "./regionalFieldResources";
-import { createRegionCoord, regionKey, regionLocalToGlobalTile } from "../sim/regions";
+import {
+  createRegionCoord,
+  regionKey,
+  regionLocalToGlobalTile,
+  type RegionCoord,
+} from "../sim/regions";
+import type { RootSeed } from "../sim/rng";
 import {
   createTerrainRegionPrefetchJob,
   desiredRegionCoords,
@@ -300,7 +306,7 @@ import {
   type Bio0EcologyState,
 } from "./bio0Ecology";
 import {
-  applyCoreEcologyWildlifeMortality,
+  applyCoreEcologyCrossOwnerWildlifeMortality,
   canonicalizeCoreEcologyAggregatePatch,
   canonicalizeCoreEcologyPatch,
   coreEcologyAggregatePatchActor,
@@ -350,6 +356,41 @@ import {
   type CoreEcologyGroupState,
   type CoreEcologyGroupTransitionEvent,
 } from "./coreEcologyGroups";
+import {
+  adoptCoreEcologySettlementHomeFromV24,
+  canonicalCoreEcologySettlementHomePatch,
+  createCoreEcologySettlementHomePatch,
+} from "./coreEcologySettlementHome";
+import {
+  adoptRegionalEcologyFromV24,
+  advanceRegionalEcologyRoot,
+  createPristineRegionalEcologyRoot,
+  putRegionalEcologyResidentDeviation,
+  type RegionalEcologyRootV1,
+} from "./regionalEcology";
+import {
+  canonicalCoreEcologyRegionalResidentPatchForRoot,
+  createCoreEcologyRegionalResidentPatchForRoot,
+} from "./regionalEcologyResidents";
+import { CORE_ECOLOGY_DOMESTIC_SPECIES } from "./coreEcologyRegionalHabitat";
+import {
+  canonicalRegionalEcologyLegacyCohortPatchForWorld,
+  projectRegionalEcologyLegacyCohort,
+} from "./regionalEcologyLegacyCohort";
+import {
+  canonicalRegionalEcologyStateForWorld,
+  commitRegionalEcologyActiveProjection,
+  createRegionalEcologyState,
+  deserializeRegionalEcologyState,
+  projectRegionalEcologyActiveState,
+  regionalEcologyRegionalResidentsForActiveRegions,
+  replaceRegionalEcologyActiveState,
+  serializeRegionalEcologyState,
+  type RegionalEcologyActiveProjectionV1,
+  type RegionalEcologyActiveResidentInput,
+  type RegionalEcologyProjectedResidentV1,
+  type RegionalEcologyStateV1,
+} from "./regionalEcologyState";
 import { stepCoreEcologySettlementShadows } from "./coreEcologySmallWorld";
 import {
   applySettlementKeeperStoreResponse,
@@ -412,16 +453,22 @@ import {
   type SettlementDomesticAnimalRecoveryState,
 } from "./settlementDomesticAnimalRecovery";
 import {
+  coreEcologyPatchHasTidalTableAuthority,
   stepCoreEcologyTidalTable,
   type CoreEcologyTidalTableProjection,
 } from "./coreEcologyTidalTable";
 import {
+  coreEcologyPatchHasBoundedActivityAuthority,
   coreEcologyActivityTravelMedium,
   coreEcologySpeciesHasBoundedActivityProjection,
   projectCoreEcologyActivity,
   projectCoreEcologyDayPhase,
   stepCoreEcologyActivityMotion,
 } from "./coreEcologyActivity";
+import {
+  projectCoreEcologyActivityAuthority,
+  type CoreEcologyActivityAuthorityV1,
+} from "./coreEcologyActivityAuthority";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   CORE_WILDLIFE_EVENT_VERSION,
@@ -578,7 +625,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 24;
+const GAME_SAVE_VERSION = 25;
+const REGIONAL_PREDATOR_GAME_SAVE_VERSION = 24;
 const REGIONAL_UPLAND_GAME_SAVE_VERSION = 23;
 const MORTALITY_BODY_GAME_SAVE_VERSION = 22;
 const DOMESTIC_GOAT_GAME_SAVE_VERSION = 21;
@@ -647,7 +695,9 @@ interface GameSaveEnvelope {
   promiseJourney: RegionalPromiseJourneyState;
   perceptionCarry: PlayerPerceptionCarry;
   bio0Ecology: string;
-  coreEcology: string;
+  regionalEcology: string;
+  /** Present only on v8-v24 envelopes during one-way migration. */
+  coreEcology?: string;
   settlementEcology: string;
   dogActorRoster: string;
   settlementWorkingAnimals: string;
@@ -977,6 +1027,258 @@ function createRuntimeCoreEcology(
     throw new Error("Initial tidal-web activity placement failed validation");
   }
   return tidalWebInitialized;
+}
+
+/**
+ * Alpha-32 separates settlement-owned animals from the signed regional
+ * wildlife ledger. This patch remains the authoritative home for livestock,
+ * the settlement-edge rat population, and their physical custody records.
+ */
+function createRuntimeSettlementHomeCoreEcology(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView = createWorldView(world),
+): CoreEcologyAggregatePatchState {
+  return createCoreEcologySettlementHomePatch({
+    seed: world.meta.rootSeed,
+    habitat: deriveRuntimeCoreEcologyHabitat(world, bio0, economy),
+    tick: world.meta.completedTick,
+  });
+}
+
+function canonicalRuntimeSettlementHomeCoreEcology(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView = createWorldView(world),
+): CoreEcologyAggregatePatchState | null {
+  return canonicalCoreEcologySettlementHomePatch(value, {
+    seed: world.meta.rootSeed,
+    habitat: deriveRuntimeCoreEcologyHabitat(world, bio0, economy),
+    completedTick: world.meta.completedTick,
+  });
+}
+
+function createRuntimeRegionalEcologyState(
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  settlementHome: CoreEcologyAggregatePatchState,
+  regionalView: WorldView,
+  economy: WorldView = createWorldView(world),
+): RegionalEcologyStateV1 {
+  const root = createPristineRegionalEcologyRoot({
+    rootSeed: world.meta.rootSeed,
+    completedTick: world.meta.completedTick,
+  });
+  const activeRegions = regionalStorageRegionsInView(regionalView);
+  const residents = deriveRuntimeRegionalResidentInputs(
+    root,
+    world.meta.rootSeed,
+    activeRegions,
+  );
+  const state = createRegionalEcologyState({
+    root,
+    settlementHome: {
+      sourceKey: settlementHome.patchKey,
+      patch: settlementHome,
+    },
+    activeRegions,
+    activeResidents: residents,
+  });
+  const canonical = canonicalRuntimeRegionalEcologyState(
+    state,
+    world,
+    bio0,
+    economy,
+  );
+  if (canonical === null) {
+    throw new Error("Initial regional ecology state failed its world binding");
+  }
+  return canonical;
+}
+
+function deriveRuntimeRegionalResidentInputs(
+  root: RegionalEcologyRootV1,
+  rootSeed: RootSeed,
+  regions: readonly RegionCoord[],
+): readonly RegionalEcologyActiveResidentInput[] {
+  return Object.freeze(regions.flatMap((region) => {
+    const patch = createCoreEcologyRegionalResidentPatchForRoot({
+      seed: rootSeed,
+      root,
+      region,
+    });
+    return patch === null ? [] : [{
+      kind: "regional-habitat" as const,
+      sourceKey: patch.patchKey,
+      patch,
+    }];
+  }));
+}
+
+/**
+ * Reprojects the transient schedule destinations owned by one active regional
+ * source. Settlement-home actors still authenticate against their embedded
+ * frozen habitat; sparse regional and migration owners must present a current
+ * root-bound receipt for every materialized activity actor.
+ */
+function runtimeCoreEcologyActivityAuthorities(
+  rootSeed: RootSeed,
+  root: RegionalEcologyRootV1,
+  source: Pick<
+    RegionalEcologyProjectedResidentV1,
+    "kind" | "patch" | "sourceKey"
+  >,
+): ReadonlyMap<string, CoreEcologyActivityAuthorityV1> | null {
+  const activityActors = source.patch.populations
+    .flatMap(({ members }) => members)
+    .filter(({ actor, materialization }) => (
+      materialization === "materialized"
+      && coreEcologySpeciesHasBoundedActivityProjection(actor.identity.species)
+    ))
+    .map(({ actor }) => actor)
+    .sort((left, right) => compareText(
+      left.identity.stableId,
+      right.identity.stableId,
+    ));
+  if (source.kind === "settlement-home") {
+    return coreEcologyPatchHasBoundedActivityAuthority(source.patch)
+      ? new Map()
+      : null;
+  }
+  if (coreEcologyPatchHasBoundedActivityAuthority(source.patch)) return null;
+  const authorities = new Map<string, CoreEcologyActivityAuthorityV1>();
+  for (const actor of activityActors) {
+    const authority = projectCoreEcologyActivityAuthority({
+      rootSeed,
+      root,
+      sourceKind: source.kind,
+      patch: source.patch,
+      actorId: actor.identity.stableId,
+    });
+    if (
+      authority === null
+      || authority.sourceKey !== source.sourceKey
+      || authority.species !== actor.identity.species
+      || authorities.has(authority.actorId)
+    ) return null;
+    authorities.set(authority.actorId, authority);
+  }
+  return authorities;
+}
+
+function canonicalRuntimeRegionalEcologyState(
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView = createWorldView(world),
+): RegionalEcologyStateV1 | null {
+  return canonicalRegionalEcologyStateForWorld(value, {
+    rootSeed: world.meta.rootSeed,
+    completedTick: world.meta.completedTick,
+    settlementHomeHabitat: deriveRuntimeCoreEcologyHabitat(world, bio0, economy),
+  });
+}
+
+/**
+ * Exchanges only the bounded hot neighborhood. Before an owner leaves memory,
+ * any changed regional patch is written into the sparse root ledger; pristine
+ * seeded baselines therefore cost no durable bytes merely because the player
+ * crossed them.
+ */
+function rebaseRuntimeRegionalEcologyState(
+  value: RegionalEcologyStateV1,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  regionalView: WorldView,
+  economy: WorldView = createWorldView(world),
+): RegionalEcologyStateV1 {
+  const prior = canonicalRuntimeRegionalEcologyState(value, world, bio0, economy);
+  if (prior === null) {
+    throw new Error("Regional ecology could not authenticate before a window exchange");
+  }
+  const activeRegions = regionalStorageRegionsInView(regionalView);
+  const desiredRegionKeys = new Set(activeRegions.map(regionKey));
+  let root = prior.root;
+  for (const resident of prior.activeResidents) {
+    if (
+      resident.kind !== "regional-habitat"
+      || desiredRegionKeys.has(regionKey(resident.region))
+    ) continue;
+    root = putRegionalEcologyResidentDeviation(root, {
+      rootSeed: world.meta.rootSeed,
+      patch: resident.patch,
+    });
+  }
+
+  const requiredRegionalResidents = regionalEcologyRegionalResidentsForActiveRegions(
+    root,
+    world.meta.rootSeed,
+    activeRegions,
+  );
+  if (requiredRegionalResidents === null) {
+    throw new Error("Regional ecology entrants could not be derived from physical residence");
+  }
+  const retainedBySource = new Map(prior.activeResidents
+    .filter(({ kind }) => kind === "regional-habitat")
+    .map((resident) => [resident.sourceKey, resident] as const));
+  const activeResidents: RegionalEcologyActiveResidentInput[] = requiredRegionalResidents.map(
+    (entrant) => {
+      const retained = retainedBySource.get(entrant.sourceKey);
+      return {
+        kind: "regional-habitat" as const,
+        sourceKey: entrant.sourceKey,
+        // Preserve the already-authenticated live snapshot whenever this owner
+        // remains required. Root derivation decides eligibility; it never
+        // transfers identities merely because residence crossed a seam.
+        patch: retained?.patch ?? entrant.patch,
+      };
+    },
+  );
+  for (const legacy of prior.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+    activeResidents.push({
+      kind: "legacy-cohort",
+      sourceKey: legacy.sourceKey,
+      patch: legacy.patch,
+    });
+  }
+  const next = replaceRegionalEcologyActiveState(prior, {
+    expectedIntegrity: prior.integrity,
+    rootSeed: world.meta.rootSeed,
+    root,
+    settlementHome: {
+      sourceKey: prior.settlementHome.sourceKey,
+      patch: prior.settlementHome.patch,
+    },
+    activeRegions,
+    activeResidents,
+  });
+  const canonical = canonicalRuntimeRegionalEcologyState(next, world, bio0, economy);
+  if (canonical === null) {
+    throw new Error("Regional ecology window exchange failed its world binding");
+  }
+  return canonical;
+}
+
+function runtimeRegionalEcologyActor(
+  state: RegionalEcologyStateV1,
+  world: WorldView,
+  window: RegionalPlayerTravelState["window"],
+  target: RuntimeCoreWildlifeTarget,
+): CoreWildlifeActorState | null {
+  const projection = projectRegionalEcologyActiveState(state, {
+    origin: window.origin,
+    terrain: { width: world.terrain.width, height: world.terrain.height },
+  });
+  if (projection === null) return null;
+  const matches = projection.residents.flatMap(({ patch }) => {
+    const actor = selectedCoreEcologyActor(patch, target);
+    return actor === null ? [] : [actor];
+  });
+  if (matches.length > 1) {
+    throw new Error("Selected wildlife identity has multiple regional owners");
+  }
+  return matches[0] ?? null;
 }
 
 /** Frozen Alpha-30 v10 constructor used only to authenticate and extend v23 saves. */
@@ -1607,15 +1909,9 @@ function runtimeGuardianDogGeneration(
   world: WorldState,
   core: CoreEcologyAggregatePatchState,
 ): DogIdentityGenerationInput | null {
-  if (
-    core.derivation.kind !== "habitat-v9"
-    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
-    && core.derivation.kind !== "habitat-v10"
-    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-    && core.derivation.kind !== "habitat-v11"
-    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-  ) return null;
-  const pen = core.derivation.habitat.domesticPenAnchor;
+  const habitat = runtimeSettlementHomeHabitat(core);
+  if (habitat === null) return null;
+  const pen = habitat.domesticPenAnchor;
   const identity = hashCanonical([
     "settlement-working-dog/v1",
     world.meta.rootSeed,
@@ -1642,26 +1938,39 @@ function createRuntimeDogActorRoster(
   core: CoreEcologyAggregatePatchState,
 ): DogActorRosterState {
   const generation = runtimeGuardianDogGeneration(world, core);
-  if (
-    generation === null
-    || (
-      core.derivation.kind !== "habitat-v9"
-      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
-      && core.derivation.kind !== "habitat-v10"
-      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-      && core.derivation.kind !== "habitat-v11"
-      && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-    )
-  ) throw new Error("Working-dog roster requires the authenticated livestock pen");
+  const habitat = runtimeSettlementHomeHabitat(core);
+  if (generation === null || habitat === null) {
+    throw new Error("Working-dog roster requires the authenticated livestock pen");
+  }
   const guardian = createDogActorState({
     ...generation,
-    position: core.derivation.habitat.domesticPenAnchor.position,
+    position: habitat.domesticPenAnchor.position,
     tick: world.meta.completedTick,
   });
   if (guardian.identity.stableId === bio0.dog.identity.stableId) {
     throw new Error("Working dog collided with the independent BIO0 dog identity");
   }
   return createDogActorRoster([guardian]);
+}
+
+function runtimeSettlementHomeHabitat(
+  core: CoreEcologyAggregatePatchState,
+): CoreEcologyDomesticPenHabitatAssemblage
+  | CoreEcologyRegionalUplandHabitatAssemblage
+  | CoreEcologyRegionalPredatorHabitatAssemblage
+  | null {
+  switch (core.derivation.kind) {
+    case "habitat-v9":
+    case "legacy-fixed-v1-with-habitat-v9":
+    case "habitat-v10":
+    case "legacy-fixed-v1-with-habitat-v10":
+    case "habitat-v11":
+    case "legacy-fixed-v1-with-habitat-v11":
+    case "settlement-home-v1":
+      return core.derivation.habitat;
+    default:
+      return null;
+  }
 }
 
 function canonicalRuntimeDogActorRoster(
@@ -2488,14 +2797,8 @@ function createRuntimeSettlementEcology(
     position: runtimeSettlementStorePosition(economy, settlementId),
     aggregatePatch: core,
   });
-  if (
-    core.derivation.kind !== "habitat-v9"
-    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
-    && core.derivation.kind !== "habitat-v10"
-    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-    && core.derivation.kind !== "habitat-v11"
-    && core.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-  ) return store;
+  const habitat = runtimeSettlementHomeHabitat(core);
+  if (habitat === null) return store;
   const definitions = [
     {
       custodyOrdinal: 0,
@@ -2503,9 +2806,9 @@ function createRuntimeSettlementEcology(
       groupOrganization: "flock" as const,
       homeStructure: {
         kind: "coop" as const,
-        position: core.derivation.habitat.domesticAnchor.position,
+        position: habitat.domesticAnchor.position,
         radiusUnits:
-          core.derivation.habitat.domesticAnchor.radiusTiles
+          habitat.domesticAnchor.radiusTiles
             * WORLD_POSITION_UNITS_PER_TILE,
       },
     },
@@ -2515,9 +2818,9 @@ function createRuntimeSettlementEcology(
       groupOrganization: "herd" as const,
       homeStructure: {
         kind: "pen" as const,
-        position: core.derivation.habitat.domesticPenAnchor.position,
+        position: habitat.domesticPenAnchor.position,
         radiusUnits:
-          core.derivation.habitat.domesticPenAnchor.radiusTiles
+          habitat.domesticPenAnchor.radiusTiles
             * WORLD_POSITION_UNITS_PER_TILE,
       },
     },
@@ -2563,7 +2866,7 @@ function createRuntimeSettlementEcology(
     memberGroupId: null,
     homeStructure: {
       kind: "kennel",
-      position: core.derivation.habitat.domesticPenAnchor.position,
+      position: habitat.domesticPenAnchor.position,
       radiusUnits: 3 * WORLD_POSITION_UNITS_PER_TILE,
     },
   });
@@ -4265,12 +4568,26 @@ function runtimeCoreGroupTopologyMatches(
 
 function seedRuntimeCoreEcologyProvision(
   state: PhysicalCargoState,
-  ecology: CoreEcologyAggregatePatchState,
+  regionalEcology: RegionalEcologyStateV1,
 ): PhysicalCargoState {
-  const bear = ecology.populations
-    .find(({ species }) => species === "black-bear")
-    ?.members[0]?.actor;
+  const physicalOwners = runtimeRegionalCorePhysicalOwnerIndex([
+    regionalEcology.settlementHome,
+    ...regionalEcology.activeResidents,
+  ]);
+  if (physicalOwners === null) {
+    throw new Error("Regional ecology has ambiguous physical ownership during forage seeding");
+  }
+  const bear = [...physicalOwners.actors.values()]
+    .map(({ actor }) => actor)
+    .filter(({ identity, condition }) => (
+      identity.species === "black-bear" && condition.health > 0
+    ))
+    .sort((left, right) => compareText(
+      left.identity.stableId,
+      right.identity.stableId,
+    ))[0];
   if (bear === undefined) return state;
+  const priorActiveRegion = state.activeRegion;
   const target = transitionPhysicalCargoRegion(
     state,
     bear.address.position.region,
@@ -4307,21 +4624,75 @@ function seedRuntimeCoreEcologyProvision(
   if (!dropped.ok || dropped.entity === null) {
     throw new Error(`Wave-A forage provision placement failed: ${dropped.reason}`);
   }
-  return commitPhysicalCargoRegionalMutation(state, {
+  const seeded = commitPhysicalCargoRegionalMutation(target, {
     looseWorld: dropped.world,
-    carrier: state.carrier,
+    carrier: target.carrier,
     committedSourceOrdinal: source.ordinal,
   }, {
     kind: "delta",
     removed: [],
     added: [dropped.entity.payload],
   });
+  return transitionPhysicalCargoRegion(
+    seeded,
+    priorActiveRegion,
+    WORLD_WIDTH,
+    WORLD_HEIGHT,
+  );
+}
+
+interface RuntimeRegionalCoreActorOwner {
+  readonly sourceKey: string;
+  readonly actor: CoreWildlifeActorState;
+}
+
+interface RuntimeRegionalCoreCarcassOwner {
+  readonly sourceKey: string;
+  readonly carcass: CoreWildlifeCarcass;
+}
+
+interface RuntimeRegionalCorePhysicalOwnerIndex {
+  readonly actors: ReadonlyMap<string, RuntimeRegionalCoreActorOwner>;
+  readonly carcasses: ReadonlyMap<string, RuntimeRegionalCoreCarcassOwner>;
+}
+
+/**
+ * Transient cross-owner lookup over one immutable root-wide snapshot. It is
+ * never serialized and refuses ambiguous identity instead of allowing source
+ * order to decide which animal or body another actor perceived.
+ */
+function runtimeRegionalCorePhysicalOwnerIndex(
+  sources: readonly Readonly<{
+    sourceKey: string;
+    patch: CoreEcologyAggregatePatchState;
+  }>[],
+): RuntimeRegionalCorePhysicalOwnerIndex | null {
+  const actors = new Map<string, RuntimeRegionalCoreActorOwner>();
+  const carcasses = new Map<string, RuntimeRegionalCoreCarcassOwner>();
+  const sourceKeys = new Set<string>();
+  for (const source of sources) {
+    if (sourceKeys.has(source.sourceKey) || source.patch.patchKey !== source.sourceKey) return null;
+    sourceKeys.add(source.sourceKey);
+    for (const { actor } of source.patch.populations.flatMap(({ members }) => members)) {
+      const actorId = actor.identity.stableId;
+      if (actors.has(actorId)) return null;
+      actors.set(actorId, Object.freeze({ sourceKey: source.sourceKey, actor }));
+    }
+    for (const carcass of source.patch.carcasses) {
+      if (carcasses.has(carcass.carcassId)) return null;
+      carcasses.set(carcass.carcassId, Object.freeze({
+        sourceKey: source.sourceKey,
+        carcass,
+      }));
+    }
+  }
+  return Object.freeze({ actors, carcasses });
 }
 
 function runtimeCoreFoodEvidence(
   actor: CoreWildlifeActorState,
   state: PhysicalCargoState,
-  coreEcology: CoreEcologyAggregatePatchState,
+  physicalOwners: RuntimeRegionalCorePhysicalOwnerIndex,
   settlementEcology: SettlementEcologyState,
   world: WorldView,
   tick: number,
@@ -4380,6 +4751,7 @@ function runtimeCoreFoodEvidence(
     contactRadiusUnits: number;
     foodClass: "carrion" | "exposed-food";
     sourceKind: "physical-carcass" | "physical-item";
+    currentClaimantActorId: string | null;
   }>> = [];
   for (const looseWorld of looseWorlds) {
     for (const entity of looseWorld.entities) {
@@ -4413,11 +4785,12 @@ function runtimeCoreFoodEvidence(
         contactRadiusUnits: 0,
         foodClass: "exposed-food",
         sourceKind: "physical-item",
+        currentClaimantActorId: null,
       }));
     }
   }
   if (coreEcologySpeciesCanFeedFromCarcass(actor.identity.species)) {
-    for (const carcass of coreEcology.carcasses) {
+    for (const { carcass } of physicalOwners.carcasses.values()) {
       if (carcass.remainingResourceUnits === 0 || carcass.retiredAtTick !== null) continue;
       const targetPoint = worldPositionToSpatialFrame(frame, carcass.deathPosition);
       if (targetPoint === null) continue;
@@ -4443,6 +4816,7 @@ function runtimeCoreFoodEvidence(
         contactRadiusUnits: Math.min(carcass.bodySizeUnits * 100, WORLD_POSITION_UNITS_PER_TILE),
         foodClass: "carrion",
         sourceKind: "physical-carcass",
+        currentClaimantActorId: carcass.currentClaimantActorId,
       }));
     }
   }
@@ -4486,6 +4860,7 @@ function runtimeCoreFoodEvidence(
             ),
             foodClass: "exposed-food",
             sourceKind: "physical-item",
+            currentClaimantActorId: null,
           }));
         }
       } catch {
@@ -4500,10 +4875,7 @@ function runtimeCoreFoodEvidence(
   const observations: ActorObservation[] = [];
   const opportunities: CoreWildlifeFoodOpportunity[] = [];
   for (const candidate of candidates.slice(0, CORE_WILDLIFE_MAX_FOOD_OPPORTUNITIES)) {
-    const carcassClaimantId = candidate.foodClass === "carrion"
-      ? coreEcology.carcasses.find(({ carcassId }) => carcassId === candidate.entityId)
-          ?.currentClaimantActorId ?? null
-      : null;
+    const carcassClaimantId = candidate.currentClaimantActorId;
     let observerFacingRadians = headingToRadians(actor.address.heading);
     if (candidate.knownFeedingStation) {
       try {
@@ -4579,7 +4951,7 @@ function runtimeCoreFoodEvidence(
 function runtimeCoreLivingFoodOpportunities(
   actor: CoreWildlifeActorState,
   observations: readonly ActorObservation[],
-  coreEcology: CoreEcologyAggregatePatchState,
+  physicalOwners: RuntimeRegionalCorePhysicalOwnerIndex,
 ): readonly CoreWildlifeFoodOpportunity[] {
   const opportunities: CoreWildlifeFoodOpportunity[] = [];
   for (const observation of observations) {
@@ -4589,7 +4961,7 @@ function runtimeCoreLivingFoodOpportunities(
       || observation.subjectId === null
       || observation.identification !== "identified"
     ) continue;
-    const target = coreEcologyAggregatePatchActor(coreEcology, observation.subjectId);
+    const target = physicalOwners.actors.get(observation.subjectId)?.actor ?? null;
     if (
       target === null
       || target.condition.health <= 0
@@ -5015,6 +5387,7 @@ function resolveRuntimeCoreLocomotion(
   world: WorldView,
   tick: number,
   localActorIds: ReadonlySet<string>,
+  activityAuthorities: ReadonlyMap<string, CoreEcologyActivityAuthorityV1>,
 ): Readonly<{
   patch: CoreEcologyAggregatePatchState;
   blocked: readonly RuntimeCoreBlockedMovement[];
@@ -5033,10 +5406,11 @@ function resolveRuntimeCoreLocomotion(
       actor.identity.species,
     );
     if (ownsActivity) {
+      const authority = activityAuthorities.get(actor.identity.stableId);
       const projectedActivity = projectCoreEcologyActivity(patch, {
         actorId: actor.identity.stableId,
         atTick: tick,
-      });
+      }, authority);
       if (projectedActivity === null) return null;
       const travelMedium = coreEcologyActivityTravelMedium(projectedActivity.motion);
       const activitySurface = travelMedium !== null && travelMedium !== "air"
@@ -5053,7 +5427,7 @@ function resolveRuntimeCoreLocomotion(
         ...(activitySurface === undefined || activitySurface === null
           ? {}
           : { surface: activitySurface }),
-      });
+      }, authority);
       if (activityMotion === null) return null;
       patch = activityMotion.patch;
       // A bounded physical-surface route can be temporarily closed by the live
@@ -5276,34 +5650,59 @@ function reconcileRuntimeCoreMaterializedGroups(
   return Object.freeze({ patch, events: Object.freeze(transitions) });
 }
 
+interface RuntimeRegionalCoreMortalitySource {
+  readonly sourceKey: string;
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly localActorIds: readonly string[];
+  readonly currentLivePreyByAttacker: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
 /**
- * Resolve only exact current-tick physical contacts already selected by the
- * shared perception/cognition stack. Stable actor ordering prevents iteration
- * order from deciding which body survives, and every removal is immediately
- * re-looked-up before another contender may act.
+ * Resolve exact current-tick contacts once for the whole active ecology root.
+ * Stable attacker identity—not source iteration order—decides contention. A
+ * target remains in its lineage owner, and a kill creates its one body there.
  */
-function resolveRuntimeCoreMortality(
-  state: CoreEcologyAggregatePatchState,
+function resolveRuntimeRegionalCoreMortality(
+  sourcesValue: readonly RuntimeRegionalCoreMortalitySource[],
   tick: number,
-  localActorIds: ReadonlySet<string>,
-  currentLivePreyByAttacker: ReadonlyMap<string, ReadonlySet<string>>,
 ): Readonly<{
-  patch: CoreEcologyAggregatePatchState;
+  patches: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
   events: readonly CoreWildlifeMortalityEvent[];
 }> | null {
-  let patch = state;
+  const sources = [...sourcesValue].sort((left, right) => (
+    compareText(left.sourceKey, right.sourceKey)
+  ));
+  if (new Set(sources.map(({ sourceKey }) => sourceKey)).size !== sources.length) return null;
+  const sourceByKey = new Map(sources.map((source) => [source.sourceKey, source] as const));
+  const patches = new Map(sources.map(({ sourceKey, patch }) => [sourceKey, patch] as const));
+  const snapshots = (): readonly Readonly<{
+    sourceKey: string;
+    patch: CoreEcologyAggregatePatchState;
+  }>[] => sources.map(({ sourceKey }) => ({ sourceKey, patch: patches.get(sourceKey)! }));
+  let owners = runtimeRegionalCorePhysicalOwnerIndex(snapshots());
+  if (owners === null) return null;
+  const attackerIds = sources.flatMap(({ sourceKey, localActorIds }) => (
+    localActorIds.filter((actorId) => {
+      const owner = owners?.actors.get(actorId);
+      return owner?.sourceKey === sourceKey
+        && coreEcologySpeciesPredatorContact(owner.actor.identity.species) !== null;
+    })
+  )).sort(compareText);
+  if (new Set(attackerIds).size !== attackerIds.length) return null;
+
   const events: CoreWildlifeMortalityEvent[] = [];
-  const attackerIds = state.populations.flatMap(({ members }) => members)
-    .filter(({ materialization, actor }) => (
-      materialization === "materialized"
-      && localActorIds.has(actor.identity.stableId)
-      && coreEcologySpeciesPredatorContact(actor.identity.species) !== null
-    ))
-    .map(({ actor }) => actor.identity.stableId)
-    .sort(compareText);
   for (const attackerId of attackerIds) {
-    const attacker = coreEcologyAggregatePatchActor(patch, attackerId);
-    if (attacker === null || attacker.intent.kind !== "pursue") continue;
+    owners = runtimeRegionalCorePhysicalOwnerIndex(snapshots());
+    if (owners === null) return null;
+    const attackerOwner = owners.actors.get(attackerId);
+    if (attackerOwner === undefined) continue;
+    const attackerSource = sourceByKey.get(attackerOwner.sourceKey);
+    const attackerPatch = patches.get(attackerOwner.sourceKey);
+    const attacker = attackerPatch === undefined
+      ? null
+      : coreEcologyAggregatePatchActor(attackerPatch, attackerId);
+    if (attackerSource === undefined || attackerPatch === undefined || attacker === null) return null;
+    if (attacker.intent.kind !== "pursue") continue;
     const contact = coreEcologySpeciesPredatorContact(attacker.identity.species);
     const resource = attacker.intent.resourceReference;
     if (
@@ -5311,12 +5710,17 @@ function resolveRuntimeCoreMortality(
       || resource === null
       || resource.sourceKind !== "living-actor"
       || resource.foodClass !== "live-prey"
-      || !localActorIds.has(resource.resourceId)
-      || !currentLivePreyByAttacker.get(attackerId)?.has(resource.resourceId)
+      || !attackerSource.currentLivePreyByAttacker.get(attackerId)?.has(resource.resourceId)
     ) continue;
-    const target = coreEcologyAggregatePatchActor(patch, resource.resourceId);
+    const victimOwner = owners.actors.get(resource.resourceId);
+    if (victimOwner === undefined) continue;
+    const victimPatch = patches.get(victimOwner.sourceKey);
+    const target = victimPatch === undefined
+      ? null
+      : coreEcologyAggregatePatchActor(victimPatch, resource.resourceId);
     if (
-      target === null
+      victimPatch === undefined
+      || target === null
       || !coreEcologyCanResolveMortalityTarget(
         attacker.identity.species,
         target.identity.species,
@@ -5332,18 +5736,19 @@ function resolveRuntimeCoreMortality(
       cause: contact.cause,
     });
     if (resolved === null) continue;
-    const applied = applyCoreEcologyWildlifeMortality(patch, {
+    const applied = applyCoreEcologyCrossOwnerWildlifeMortality(victimPatch, {
+      attackerPatch,
       result: resolved,
-      // Weather-owned thermal decay is a later seam. The fresh body begins at
-      // a neutral normalized condition; no decay is invented by this contact.
+      // Weather-owned thermal decay is a later seam. A fresh body begins in a
+      // neutral normalized condition; the contact invents no decay.
       temperature: Math.trunc(FIXED_POINT / 2),
     });
     if (applied === null) return null;
-    patch = applied.patch;
+    patches.set(victimOwner.sourceKey, applied.patch);
     events.push(applied.event);
   }
   return Object.freeze({
-    patch,
+    patches,
     events: Object.freeze(events.sort((left, right) => (
       left.atTick - right.atTick || compareText(left.eventId, right.eventId)
     ))),
@@ -5358,6 +5763,7 @@ function resolveRuntimeCoreMortality(
  */
 function runtimeCoreCarcassGuardClaims(
   patch: CoreEcologyAggregatePatchState,
+  physicalOwners: RuntimeRegionalCorePhysicalOwnerIndex,
   events: readonly CoreWildlifeCausalEvent[],
 ): readonly CoreWildlifeResourceClaim[] {
   const claims: CoreWildlifeResourceClaim[] = [];
@@ -5372,9 +5778,7 @@ function runtimeCoreCarcassGuardClaims(
       || actor === null
       || actor.intent.kind !== "guard"
       || !coreEcologySpeciesCanGuardCarcass(actor.identity.species)
-      || !patch.carcasses.some(({ carcassId, remainingResourceUnits }) => (
-        carcassId === resource.resourceId && remainingResourceUnits > 0
-      ))
+      || (physicalOwners.carcasses.get(resource.resourceId)?.carcass.remainingResourceUnits ?? 0) <= 0
     ) continue;
     claims.push(Object.freeze({
       eventId: event.eventId,
@@ -5395,19 +5799,23 @@ function runtimeCoreCarcassGuardClaims(
 function stepRuntimeCoreEcology(
   state: CoreEcologyAggregatePatchState,
   world: WorldState,
-  bio0: Bio0EcologyState,
   perceptionView: WorldView,
   movementView: WorldView,
   physicalCargo: PhysicalCargoState,
   settlementEcology: SettlementEcologyState,
+  physicalOwners: RuntimeRegionalCorePhysicalOwnerIndex,
   observationBatches: readonly (readonly CoreEcologyObservationBatch[])[],
   localActorIdsValue: readonly string[],
+  activityAuthorities: ReadonlyMap<string, CoreEcologyActivityAuthorityV1>,
 ): Readonly<{
+  /** Cognition-complete, pre-mortality and pre-locomotion owner snapshot. */
   patch: CoreEcologyAggregatePatchState;
   events: readonly CoreWildlifeCausalEvent[];
-  mortalityEvents: readonly CoreWildlifeMortalityEvent[];
   groupEvents: readonly CoreEcologyGroupTransitionEvent[];
   resourceClaims: readonly CoreWildlifeResourceClaim[];
+  currentLivePreyByAttacker: ReadonlyMap<string, ReadonlySet<string>>;
+  localActorIds: readonly string[];
+  activityAuthorities: ReadonlyMap<string, CoreEcologyActivityAuthorityV1>;
 }> | null {
   const materializedActorIds = state.populations.flatMap(({ members }) => members)
     .filter(({ materialization }) => materialization === "materialized")
@@ -5448,7 +5856,7 @@ function stepRuntimeCoreEcology(
     const food = runtimeCoreFoodEvidence(
       actor,
       physicalCargo,
-      state,
+      physicalOwners,
       settlementEcology,
       perceptionView,
       world.meta.completedTick,
@@ -5462,7 +5870,7 @@ function stepRuntimeCoreEcology(
     const livingFood = runtimeCoreLivingFoodOpportunities(
       actor,
       sharedObservations,
-      state,
+      physicalOwners,
     );
     const foodOpportunities = [
       // A currently seen living target remains actionable even when a dense
@@ -5485,11 +5893,12 @@ function stepRuntimeCoreEcology(
     const ownsActivity = coreEcologySpeciesHasBoundedActivityProjection(
       actor.identity.species,
     );
+    const authority = activityAuthorities.get(actor.identity.stableId);
     const activity = ownsActivity
       ? projectCoreEcologyActivity(state, {
           actorId: actor.identity.stableId,
           atTick: world.meta.completedTick,
-        })
+        }, authority)
       : null;
     if (
       reachableFood === null
@@ -5529,26 +5938,18 @@ function stepRuntimeCoreEcology(
       ))),
     ]),
   );
-  let moved: CoreEcologyAggregatePatchState | null = null;
-  let mortalityEvents: readonly CoreWildlifeMortalityEvent[] = Object.freeze([]);
+  let cognitionPatch: CoreEcologyAggregatePatchState | null = null;
   for (let refinement = 0; refinement <= CORE_WILDLIFE_INTENTS.length; refinement += 1) {
-    const mortality = resolveRuntimeCoreMortality(
-      stepped.patch,
-      world.meta.completedTick,
-      localActorIds,
-      currentLivePreyByAttacker,
-    );
-    if (mortality === null) return null;
     const locomotion = resolveRuntimeCoreLocomotion(
-      mortality.patch,
+      stepped.patch,
       movementView,
       world.meta.completedTick,
       localActorIds,
+      activityAuthorities,
     );
     if (locomotion === null) return null;
     if (locomotion.blocked.length === 0) {
-      moved = locomotion.patch;
-      mortalityEvents = mortality.events;
+      cognitionPatch = stepped.patch;
       break;
     }
     let changed = false;
@@ -5566,8 +5967,7 @@ function stepRuntimeCoreEcology(
     }
     if (!changed) {
       if (locomotion.blocked.some(({ intent }) => intent !== "disengage")) return null;
-      moved = locomotion.patch;
-      mortalityEvents = mortality.events;
+      cognitionPatch = stepped.patch;
       break;
     }
     stepped = stepCoreEcologyAggregatePatch(state, {
@@ -5576,33 +5976,76 @@ function stepRuntimeCoreEcology(
     });
     if (stepped === null) return null;
   }
-  if (moved === null) return null;
+  if (cognitionPatch === null) return null;
+  return Object.freeze({
+    patch: cognitionPatch,
+    events: stepped.events,
+    groupEvents: stepped.groupEvents,
+    resourceClaims: stepped.resourceClaims,
+    currentLivePreyByAttacker,
+    localActorIds: Object.freeze([...localActorIds].sort(compareText)),
+    activityAuthorities,
+  });
+}
+
+interface RuntimeCoreEcologyFinishedStep {
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly events: readonly CoreWildlifeCausalEvent[];
+  readonly groupEvents: readonly CoreEcologyGroupTransitionEvent[];
+  readonly resourceClaims: readonly CoreWildlifeResourceClaim[];
+}
+
+/**
+ * Finish one owner only after root-wide mortality has committed. The dry-run
+ * in the cognition phase already proved its selected movement is traversable;
+ * mortality may remove a target or alter health, but cannot authorize a new
+ * path or move a body before its contact is resolved.
+ */
+function finishRuntimeCoreEcologyStep(
+  prepared: NonNullable<ReturnType<typeof stepRuntimeCoreEcology>>,
+  stateAfterMortality: CoreEcologyAggregatePatchState,
+  movementView: WorldView,
+  tick: number,
+  physicalOwners: RuntimeRegionalCorePhysicalOwnerIndex,
+  validateAcceptedPatch: (
+    patch: CoreEcologyAggregatePatchState,
+  ) => CoreEcologyAggregatePatchState | null,
+): RuntimeCoreEcologyFinishedStep | null {
+  const locomotion = resolveRuntimeCoreLocomotion(
+    stateAfterMortality,
+    movementView,
+    tick,
+    new Set(prepared.localActorIds),
+    prepared.activityAuthorities,
+  );
+  if (locomotion === null || locomotion.blocked.some(({ intent }) => intent !== "disengage")) {
+    return null;
+  }
   const reconciledGroups = reconcileRuntimeCoreMaterializedGroups(
-    moved,
-    stepped.events,
-    world.meta.completedTick,
+    locomotion.patch,
+    prepared.events,
+    tick,
   );
   if (reconciledGroups === null) return null;
-  const tidalStep = stepCoreEcologyTidalTable(reconciledGroups.patch, {
-    atTick: world.meta.completedTick,
-  });
-  if (tidalStep === null) return null;
-  const canonical = canonicalRuntimeCoreEcology(tidalStep.patch, world, bio0);
+  const tidalPatch = coreEcologyPatchHasTidalTableAuthority(reconciledGroups.patch)
+    ? stepCoreEcologyTidalTable(reconciledGroups.patch, { atTick: tick })?.patch ?? null
+    : reconciledGroups.patch;
+  if (tidalPatch === null) return null;
+  const canonical = validateAcceptedPatch(tidalPatch);
+  if (canonical === null) return null;
   const groupEvents = [
-    ...stepped.groupEvents,
+    ...prepared.groupEvents,
     ...reconciledGroups.events,
   ].sort((left, right) => (
     left.atTick - right.atTick || compareText(left.eventId, right.eventId)
   ));
-  const carcassGuardClaims = runtimeCoreCarcassGuardClaims(moved, stepped.events);
-  return canonical === null ? null : Object.freeze({
+  return Object.freeze({
     patch: canonical,
-    events: stepped.events,
-    mortalityEvents,
+    events: prepared.events,
     groupEvents: Object.freeze(groupEvents),
     resourceClaims: Object.freeze([
-      ...stepped.resourceClaims,
-      ...carcassGuardClaims,
+      ...prepared.resourceClaims,
+      ...runtimeCoreCarcassGuardClaims(canonical, physicalOwners, prepared.events),
     ]),
   });
 }
@@ -5625,59 +6068,19 @@ function runtimeCoreCarcassContactDistance(
   return squared <= reach * reach ? squared : null;
 }
 
-function resolveRuntimeCoreResourceClaims(
-  state: CoreEcologyAggregatePatchState,
-  cargoState: PhysicalCargoState,
-  settlementState: SettlementEcologyState,
+function runtimeCoreResourceClaimContenders(
+  patch: CoreEcologyAggregatePatchState,
+  physicalOwners: RuntimeRegionalCorePhysicalOwnerIndex,
+  physicalCargo: PhysicalCargoState,
+  settlementEcology: SettlementEcologyState,
   claims: readonly CoreWildlifeResourceClaim[],
-  world: WorldState,
-  bio0: Bio0EcologyState,
-): Readonly<{
-  patch: CoreEcologyAggregatePatchState;
-  physicalCargo: PhysicalCargoState;
-  settlementEcology: SettlementEcologyState;
-  consumed: readonly Readonly<{
-    actorId: string;
-    resourceId: string;
-    source: "loose-parcel" | "settlement-store" | "wildlife-carcass";
-  }>[];
-}> | null {
-  let patch = state;
-  let physicalCargo = cargoState;
-  let settlementEcology = settlementState;
-  const consumed: Array<Readonly<{
-    actorId: string;
-    resourceId: string;
-    source: "loose-parcel" | "settlement-store" | "wildlife-carcass";
-  }>> = [];
-  for (const carcass of patch.carcasses) {
-    const claimantId = carcass.currentClaimantActorId;
-    if (claimantId === null) continue;
-    const claimant = coreEcologyAggregatePatchActor(patch, claimantId);
-    const resource = claimant?.intent.resourceReference;
-    const remainsLawful = claimant !== null
-      && coreEcologySpeciesCanGuardCarcass(claimant.identity.species)
-      && (claimant.intent.kind === "scavenge" || claimant.intent.kind === "guard")
-      && resource?.resourceId === carcass.carcassId
-      && resource.foodClass === "carrion"
-      && resource.sourceKind === "physical-carcass"
-      && runtimeCoreCarcassContactDistance(claimant, carcass) !== null;
-    if (remainsLawful) continue;
-    const released = releaseCoreWildlifeCarcass(carcass, {
-      actorId: claimantId,
-      atTick: world.meta.completedTick,
-    });
-    if (released === null) return null;
-    const releasedPatch = replaceCoreEcologyAggregatePatchCarcass(patch, released);
-    if (releasedPatch === null) return null;
-    patch = releasedPatch;
-  }
+): readonly CoreWildlifeResourceClaimContender[] | null {
   const contenders: CoreWildlifeResourceClaimContender[] = [];
   for (const claim of claims) {
     const actor = coreEcologyAggregatePatchActor(patch, claim.actorId);
     if (actor === null) continue;
     if (claim.foodClass === "carrion") {
-      const carcass = patch.carcasses.find(({ carcassId }) => carcassId === claim.resourceId);
+      const carcass = physicalOwners.carcasses.get(claim.resourceId)?.carcass;
       const contactDistance = carcass === undefined
         ? null
         : runtimeCoreCarcassContactDistance(actor, carcass);
@@ -5762,76 +6165,52 @@ function resolveRuntimeCoreResourceClaims(
       needPressure: actor.needs.hunger,
     }));
   }
-  const orderedContenders = orderCoreWildlifeResourceClaimContenders(contenders);
+  return orderCoreWildlifeResourceClaimContenders(contenders);
+}
+
+function resolveRuntimeCoreNonCarcassResourceClaims(
+  state: CoreEcologyAggregatePatchState,
+  physicalOwners: RuntimeRegionalCorePhysicalOwnerIndex,
+  cargoState: PhysicalCargoState,
+  settlementState: SettlementEcologyState,
+  claims: readonly CoreWildlifeResourceClaim[],
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  validateAcceptedPatch: (
+    patch: CoreEcologyAggregatePatchState,
+  ) => CoreEcologyAggregatePatchState | null = (patch) => (
+    canonicalRuntimeCoreEcology(patch, world, bio0)
+  ),
+): Readonly<{
+  patch: CoreEcologyAggregatePatchState;
+  physicalCargo: PhysicalCargoState;
+  settlementEcology: SettlementEcologyState;
+  consumed: readonly Readonly<{
+    actorId: string;
+    resourceId: string;
+    source: "loose-parcel" | "settlement-store" | "wildlife-carcass";
+  }>[];
+}> | null {
+  let patch = state;
+  let physicalCargo = cargoState;
+  let settlementEcology = settlementState;
+  const consumed: Array<Readonly<{
+    actorId: string;
+    resourceId: string;
+    source: "loose-parcel" | "settlement-store" | "wildlife-carcass";
+  }>> = [];
+  const orderedContenders = runtimeCoreResourceClaimContenders(
+    patch,
+    physicalOwners,
+    physicalCargo,
+    settlementEcology,
+    claims,
+  );
   if (orderedContenders === null) return null;
   for (const { claim } of orderedContenders) {
+    if (claim.foodClass === "carrion") continue;
     const actor = coreEcologyAggregatePatchActor(patch, claim.actorId);
     if (actor === null) continue;
-    if (claim.foodClass === "carrion") {
-      const carcass = patch.carcasses.find(({ carcassId }) => carcassId === claim.resourceId);
-      const guarding = actor.intent.kind === "guard"
-        && coreEcologySpeciesCanGuardCarcass(actor.identity.species);
-      const feeding = actor.intent.kind === "scavenge"
-        && coreEcologySpeciesCanFeedFromCarcass(actor.identity.species);
-      if (
-        carcass === undefined
-        || runtimeCoreCarcassContactDistance(actor, carcass) === null
-        || (!guarding && !feeding)
-      ) continue;
-      const claimed = carcass.currentClaimantActorId === actor.identity.stableId
-        ? carcass
-        : claimCoreWildlifeCarcass(carcass, {
-            actorId: actor.identity.stableId,
-            provenanceId: claim.eventId,
-            atTick: world.meta.completedTick,
-          });
-      if (claimed === null) continue;
-      if (guarding) {
-        const guardedPatch = replaceCoreEcologyAggregatePatchCarcass(patch, claimed);
-        if (guardedPatch === null) return null;
-        patch = guardedPatch;
-        continue;
-      }
-      let consumedCarcass = consumeCoreWildlifeCarcass(claimed, {
-        actorId: actor.identity.stableId,
-        units: 1,
-        atTick: world.meta.completedTick,
-      });
-      if (consumedCarcass === null) return null;
-      if (
-        consumedCarcass.remainingResourceUnits > 0
-        && !coreEcologySpeciesCanGuardCarcass(actor.identity.species)
-      ) {
-        consumedCarcass = releaseCoreWildlifeCarcass(consumedCarcass, {
-          actorId: actor.identity.stableId,
-          atTick: world.meta.completedTick,
-        });
-        if (consumedCarcass === null) return null;
-      }
-      const carcassPatch = replaceCoreEcologyAggregatePatchCarcass(patch, consumedCarcass);
-      if (carcassPatch === null) return null;
-      try {
-        patch = replaceCoreEcologyAggregatePatchActor(
-          carcassPatch,
-          replaceCoreWildlifeActorPhysiology(actor, {
-            atTick: world.meta.completedTick,
-            condition: actor.condition,
-            needs: {
-              ...actor.needs,
-              hunger: Math.max(0, actor.needs.hunger - 360_000),
-            },
-          }),
-        );
-      } catch {
-        return null;
-      }
-      consumed.push(Object.freeze({
-        actorId: actor.identity.stableId,
-        resourceId: claim.resourceId,
-        source: "wildlife-carcass",
-      }));
-      continue;
-    }
     const located = locatePhysicalCargoEntity(physicalCargo, claim.resourceId);
     if (located === null) {
       const custody = settlementEcology.domesticCustodies.find(({ memberActorIds }) => (
@@ -5973,9 +6352,270 @@ function resolveRuntimeCoreResourceClaims(
       source: "loose-parcel",
     }));
   }
-  const canonical = canonicalRuntimeCoreEcology(patch, world, bio0);
+  const canonical = validateAcceptedPatch(patch);
   return canonical === null ? null : Object.freeze({
     patch: canonical,
+    physicalCargo,
+    settlementEcology,
+    consumed: Object.freeze(consumed),
+  });
+}
+
+interface RuntimeRegionalCoreResourceSource {
+  readonly sourceKey: string;
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly claims: readonly CoreWildlifeResourceClaim[];
+  readonly validateAcceptedPatch: (
+    patch: CoreEcologyAggregatePatchState,
+  ) => CoreEcologyAggregatePatchState | null;
+}
+
+/**
+ * Resource ownership is global even though animal state is region-owned. All
+ * contenders therefore enter one deterministic arbitration order before any
+ * parcel/store/body mutation is committed.
+ */
+function resolveRuntimeRegionalCoreResourceClaims(
+  sourcesValue: readonly RuntimeRegionalCoreResourceSource[],
+  cargoState: PhysicalCargoState,
+  settlementState: SettlementEcologyState,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+): Readonly<{
+  patches: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
+  physicalCargo: PhysicalCargoState;
+  settlementEcology: SettlementEcologyState;
+  consumed: readonly Readonly<{
+    actorId: string;
+    resourceId: string;
+    source: "loose-parcel" | "settlement-store" | "wildlife-carcass";
+    ownerSourceKey: string;
+  }>[];
+}> | null {
+  const sources = [...sourcesValue].sort((left, right) => (
+    compareText(left.sourceKey, right.sourceKey)
+  ));
+  if (new Set(sources.map(({ sourceKey }) => sourceKey)).size !== sources.length) return null;
+
+  const patches = new Map<string, CoreEcologyAggregatePatchState>();
+  const sourceByKey = new Map<string, RuntimeRegionalCoreResourceSource>();
+  let physicalCargo = cargoState;
+  let settlementEcology = settlementState;
+  for (const source of sources) {
+    patches.set(source.sourceKey, source.patch);
+    sourceByKey.set(source.sourceKey, source);
+  }
+  const snapshots = (): readonly Readonly<{
+    sourceKey: string;
+    patch: CoreEcologyAggregatePatchState;
+  }>[] => sources.map(({ sourceKey }) => ({
+    sourceKey,
+    patch: patches.get(sourceKey)!,
+  }));
+  let physicalOwners = runtimeRegionalCorePhysicalOwnerIndex(snapshots());
+  if (physicalOwners === null) return null;
+
+  // Body custody is root-wide. A claimant may lawfully live in a different
+  // regional owner, so stale claims are checked against one global actor
+  // index and released only in the patch that physically owns the carcass.
+  for (const source of sources) {
+    let patch = patches.get(source.sourceKey);
+    if (patch === undefined) return null;
+    for (const carcass of [...patch.carcasses].sort((left, right) => (
+      compareText(left.carcassId, right.carcassId)
+    ))) {
+      const claimantId = carcass.currentClaimantActorId;
+      if (claimantId === null) continue;
+      const claimant = physicalOwners.actors.get(claimantId)?.actor ?? null;
+      const resource = claimant?.intent.resourceReference;
+      const remainsLawful = claimant !== null
+        && coreEcologySpeciesCanGuardCarcass(claimant.identity.species)
+        && (claimant.intent.kind === "scavenge" || claimant.intent.kind === "guard")
+        && resource?.resourceId === carcass.carcassId
+        && resource.foodClass === "carrion"
+        && resource.sourceKind === "physical-carcass"
+        && runtimeCoreCarcassContactDistance(claimant, carcass) !== null;
+      if (remainsLawful) continue;
+      const released = releaseCoreWildlifeCarcass(carcass, {
+        actorId: claimantId,
+        atTick: world.meta.completedTick,
+      });
+      if (released === null) return null;
+      const candidate = replaceCoreEcologyAggregatePatchCarcass(patch, released);
+      if (candidate === null) return null;
+      const accepted = source.validateAcceptedPatch(candidate);
+      if (accepted === null) return null;
+      patch = accepted;
+    }
+    patches.set(source.sourceKey, patch);
+  }
+  physicalOwners = runtimeRegionalCorePhysicalOwnerIndex(snapshots());
+  if (physicalOwners === null) return null;
+
+  const globalContenders: CoreWildlifeResourceClaimContender[] = [];
+  for (const source of sources) {
+    const patch = patches.get(source.sourceKey);
+    if (patch === undefined) return null;
+    const contenders = runtimeCoreResourceClaimContenders(
+      patch,
+      physicalOwners,
+      physicalCargo,
+      settlementEcology,
+      source.claims,
+    );
+    if (contenders === null) return null;
+    globalContenders.push(...contenders);
+  }
+  const ordered = orderCoreWildlifeResourceClaimContenders(globalContenders);
+  if (ordered === null) return null;
+
+  const consumed: Array<{
+    actorId: string;
+    resourceId: string;
+    source: "loose-parcel" | "settlement-store" | "wildlife-carcass";
+    ownerSourceKey: string;
+  }> = [];
+  for (const { claim } of ordered) {
+    physicalOwners = runtimeRegionalCorePhysicalOwnerIndex(snapshots());
+    if (physicalOwners === null) return null;
+    const actorOwner = physicalOwners.actors.get(claim.actorId);
+    if (actorOwner === undefined) return null;
+    const actorSource = sourceByKey.get(actorOwner.sourceKey);
+    const actorPatch = patches.get(actorOwner.sourceKey);
+    if (actorSource === undefined || actorPatch === undefined) return null;
+
+    if (claim.foodClass === "carrion") {
+      const bodyOwner = physicalOwners.carcasses.get(claim.resourceId);
+      if (bodyOwner === undefined) continue;
+      const bodySource = sourceByKey.get(bodyOwner.sourceKey);
+      const bodyPatch = patches.get(bodyOwner.sourceKey);
+      const actor = coreEcologyAggregatePatchActor(actorPatch, claim.actorId);
+      const carcass = bodyPatch?.carcasses.find(({ carcassId }) => (
+        carcassId === claim.resourceId
+      ));
+      if (bodySource === undefined || bodyPatch === undefined || actor === null || carcass === undefined) {
+        return null;
+      }
+      const resource = actor.intent.resourceReference;
+      const guarding = actor.intent.kind === "guard"
+        && coreEcologySpeciesCanGuardCarcass(actor.identity.species);
+      const feeding = actor.intent.kind === "scavenge"
+        && coreEcologySpeciesCanFeedFromCarcass(actor.identity.species);
+      if (
+        runtimeCoreCarcassContactDistance(actor, carcass) === null
+        || (!guarding && !feeding)
+        || resource?.resourceId !== carcass.carcassId
+        || resource.foodClass !== "carrion"
+        || resource.sourceKind !== "physical-carcass"
+      ) continue;
+      const claimed = carcass.currentClaimantActorId === actor.identity.stableId
+        ? carcass
+        : claimCoreWildlifeCarcass(carcass, {
+            actorId: actor.identity.stableId,
+            provenanceId: claim.eventId,
+            atTick: world.meta.completedTick,
+          });
+      if (claimed === null) continue;
+      let nextCarcass = claimed;
+      if (feeding) {
+        const fed = consumeCoreWildlifeCarcass(nextCarcass, {
+          actorId: actor.identity.stableId,
+          units: 1,
+          atTick: world.meta.completedTick,
+        });
+        if (fed === null) return null;
+        nextCarcass = fed;
+        if (
+          nextCarcass.remainingResourceUnits > 0
+          && !coreEcologySpeciesCanGuardCarcass(actor.identity.species)
+        ) {
+          const released = releaseCoreWildlifeCarcass(nextCarcass, {
+            actorId: actor.identity.stableId,
+            atTick: world.meta.completedTick,
+          });
+          if (released === null) return null;
+          nextCarcass = released;
+        }
+      }
+      const bodyCandidate = replaceCoreEcologyAggregatePatchCarcass(
+        bodyPatch,
+        nextCarcass,
+      );
+      if (bodyCandidate === null) return null;
+      if (guarding) {
+        const acceptedBody = bodySource.validateAcceptedPatch(bodyCandidate);
+        if (acceptedBody === null) return null;
+        patches.set(bodyOwner.sourceKey, acceptedBody);
+        continue;
+      }
+      let fedActor: CoreWildlifeActorState;
+      try {
+        fedActor = replaceCoreWildlifeActorPhysiology(actor, {
+          atTick: world.meta.completedTick,
+          condition: actor.condition,
+          needs: {
+            ...actor.needs,
+            hunger: Math.max(0, actor.needs.hunger - 360_000),
+          },
+        });
+      } catch {
+        return null;
+      }
+      if (actorOwner.sourceKey === bodyOwner.sourceKey) {
+        let combined: CoreEcologyAggregatePatchState;
+        try {
+          combined = replaceCoreEcologyAggregatePatchActor(bodyCandidate, fedActor);
+        } catch {
+          return null;
+        }
+        const accepted = actorSource.validateAcceptedPatch(combined);
+        if (accepted === null) return null;
+        patches.set(actorOwner.sourceKey, accepted);
+      } else {
+        let actorCandidate: CoreEcologyAggregatePatchState;
+        try {
+          actorCandidate = replaceCoreEcologyAggregatePatchActor(actorPatch, fedActor);
+        } catch {
+          return null;
+        }
+        // Validate both immutable candidates before committing either owner.
+        // A rejected second owner cannot leave half a meal in authoritative state.
+        const acceptedBody = bodySource.validateAcceptedPatch(bodyCandidate);
+        const acceptedActor = actorSource.validateAcceptedPatch(actorCandidate);
+        if (acceptedBody === null || acceptedActor === null) return null;
+        patches.set(bodyOwner.sourceKey, acceptedBody);
+        patches.set(actorOwner.sourceKey, acceptedActor);
+      }
+      consumed.push(Object.freeze({
+        actorId: actor.identity.stableId,
+        resourceId: claim.resourceId,
+        source: "wildlife-carcass",
+        ownerSourceKey: bodyOwner.sourceKey,
+      }));
+      continue;
+    }
+
+    const resolved = resolveRuntimeCoreNonCarcassResourceClaims(
+      actorPatch,
+      physicalOwners,
+      physicalCargo,
+      settlementEcology,
+      [claim],
+      world,
+      bio0,
+      actorSource.validateAcceptedPatch,
+    );
+    if (resolved === null) return null;
+    patches.set(actorOwner.sourceKey, resolved.patch);
+    physicalCargo = resolved.physicalCargo;
+    settlementEcology = resolved.settlementEcology;
+    consumed.push(...resolved.consumed.map((entry) => ({
+      ...entry,
+      ownerSourceKey: actorOwner.sourceKey,
+    })));
+  }
+  return Object.freeze({
+    patches,
     physicalCargo,
     settlementEcology,
     consumed: Object.freeze(consumed),
@@ -7246,8 +7886,9 @@ function runtimeCoreAggregateExposedFoodSources(
 }
 
 function runtimeCoreAggregateVisualSources(input: Readonly<{
-  readonly beforePatch: CoreEcologyAggregatePatchState;
-  readonly afterPatch: CoreEcologyAggregatePatchState;
+  readonly beforePatches: readonly CoreEcologyAggregatePatchState[];
+  readonly afterPatches: readonly CoreEcologyAggregatePatchState[];
+  readonly selectionPatch: CoreEcologyAggregatePatchState;
   readonly beforeDogs: readonly LivingActorAddress[];
   readonly afterDogs: readonly LivingActorAddress[];
   readonly beforePorter: Bio0PorterAddress;
@@ -7256,22 +7897,39 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
   readonly playerMoved: boolean;
 }>): readonly CoreEcologyAggregateVisualSource[] {
   const sources: CoreEcologyAggregateVisualSource[] = [];
-  for (const population of input.afterPatch.populations) {
-    for (const member of population.members) {
-      if (member.materialization !== "materialized") continue;
-      const before = coreEcologyAggregatePatchActor(
-        input.beforePatch,
-        member.actor.identity.stableId,
-      );
-      sources.push(Object.freeze({
-        sourceReferenceId: member.actor.identity.stableId,
-        sourceSpecies: population.species,
-        position: member.actor.address.position,
-        movementSalience: before !== null
-          && !sameRuntimeWorldPosition(before.address.position, member.actor.address.position)
-          ? CORE_ECOLOGY_MOVING_SOURCE_SALIENCE
-          : 0,
-      }));
+  const beforeActors = new Map<string, ReturnType<typeof coreEcologyAggregatePatchActor>>();
+  for (const patch of input.beforePatches) {
+    for (const population of patch.populations) {
+      for (const member of population.members) {
+        const actorId = member.actor.identity.stableId;
+        if (beforeActors.has(actorId)) {
+          throw new Error("Aggregate perception received duplicate prior actor custody");
+        }
+        beforeActors.set(actorId, member.actor);
+      }
+    }
+  }
+  const afterActorIds = new Set<string>();
+  for (const patch of input.afterPatches) {
+    for (const population of patch.populations) {
+      for (const member of population.members) {
+        if (member.materialization !== "materialized") continue;
+        const actorId = member.actor.identity.stableId;
+        if (afterActorIds.has(actorId)) {
+          throw new Error("Aggregate perception received duplicate current actor custody");
+        }
+        afterActorIds.add(actorId);
+        const before = beforeActors.get(actorId) ?? null;
+        sources.push(Object.freeze({
+          sourceReferenceId: actorId,
+          sourceSpecies: population.species,
+          position: member.actor.address.position,
+          movementSalience: before !== null
+            && !sameRuntimeWorldPosition(before.address.position, member.actor.address.position)
+            ? CORE_ECOLOGY_MOVING_SOURCE_SALIENCE
+            : 0,
+        }));
+      }
     }
   }
   for (const afterDog of input.afterDogs) {
@@ -7315,7 +7973,7 @@ function runtimeCoreAggregateVisualSources(input: Readonly<{
           ? -1
           : left.sourceReferenceId > right.sourceReferenceId ? 1 : 0
   ));
-  const selected = selectCoreEcologyAggregateVisualSources(input.afterPatch, sources);
+  const selected = selectCoreEcologyAggregateVisualSources(input.selectionPatch, sources);
   if (selected === null) {
     throw new Error("Core ecology living-source projection could not be bounded");
   }
@@ -7382,7 +8040,7 @@ export async function createTideweftRuntime(
   let world = createWorld("quiet-delta", HARD_PRESSURE_MODE);
   let economyView = createWorldView(world);
   let bio0Ecology = createRuntimeBio0Ecology(world, economyView);
-  let coreEcology = createRuntimeCoreEcology(world, bio0Ecology);
+  let coreEcology = createRuntimeSettlementHomeCoreEcology(world, bio0Ecology, economyView);
   let dogActorRoster = createRuntimeDogActorRoster(world, bio0Ecology, coreEcology);
   let settlementEcology = createRuntimeSettlementEcology(
     world,
@@ -7411,13 +8069,20 @@ export async function createTideweftRuntime(
     WORLD_WIDTH,
     WORLD_HEIGHT,
   );
-  physicalCargo = seedRuntimeCoreEcologyProvision(physicalCargo, coreEcology);
   let regionalTravel = migratePlayerToRegionalTravel(world.meta.rootSeed, player);
   let worldView = createRegionalWorldView(
     economyView,
     regionalTravel.window,
     { discovered: player.discovered, depthSoundings: player.depthSoundings },
   );
+  let regionalEcology = createRuntimeRegionalEcologyState(
+    world,
+    bio0Ecology,
+    coreEcology,
+    worldView,
+    economyView,
+  );
+  physicalCargo = seedRuntimeCoreEcologyProvision(physicalCargo, regionalEcology);
   let fieldResourceProjection: RegionalFieldResourceProjection =
     projectCompatibilityFieldResources(fieldResourceCatalog, worldView);
   let promiseJourney = createRegionalPromiseJourney();
@@ -7628,6 +8293,7 @@ export async function createTideweftRuntime(
     economyView = createWorldView(world);
     bio0Ecology = loaded.bio0Ecology;
     coreEcology = loaded.coreEcology;
+    regionalEcology = loaded.regionalEcology;
     dogActorRoster = loaded.dogActorRoster;
     settlementEcology = loaded.settlementEcology;
     settlementWorkingAnimals = loaded.settlementWorkingAnimals;
@@ -7729,6 +8395,31 @@ export async function createTideweftRuntime(
         height: worldView.terrain.height,
       },
     };
+    const ecologyProjection = projectRegionalEcologyActiveState(
+      regionalEcology,
+      actorWindow,
+    );
+    if (ecologyProjection === null) {
+      throw new Error("Regional ecology presentation projection could not be resolved");
+    }
+    const activeCoreEcologyPatches = ecologyProjection.residents.map(({ patch }) => patch);
+    const activityAuthoritiesBySource = new Map<
+      string,
+      ReadonlyMap<string, CoreEcologyActivityAuthorityV1>
+    >();
+    for (const source of ecologyProjection.residents) {
+      const authorities = runtimeCoreEcologyActivityAuthorities(
+        world.meta.rootSeed,
+        regionalEcology.root,
+        source,
+      );
+      if (authorities === null) {
+        throw new Error(
+          `Regional ecology source ${source.sourceKey} lost presentation activity authority`,
+        );
+      }
+      activityAuthoritiesBySource.set(source.sourceKey, authorities);
+    }
     const settlementStoreKeeper = settlementStoreKeeperAtPlayer(perception);
     const activeContract = player.activeContractId === null
       ? undefined
@@ -7778,16 +8469,26 @@ export async function createTideweftRuntime(
     ) {
       selectedDogActorId = null;
     }
-    const wildlifePresentation = projectCoreEcologyWildlife({
-      patch: coreEcology,
-      window: actorWindow,
-      perception,
-      tileSize: RENDER_TILE_SIZE,
-      selectedTarget: selectedWildlifeTarget,
+    const wildlifePresentation = ecologyProjection.residents.flatMap((source) => {
+      const activityAuthorities = activityAuthoritiesBySource.get(source.sourceKey);
+      if (activityAuthorities === undefined) {
+        throw new Error("Regional ecology presentation lost its activity source map");
+      }
+      const projected = projectCoreEcologyWildlife({
+        patch: source.patch,
+        window: actorWindow,
+        perception,
+        tileSize: RENDER_TILE_SIZE,
+        selectedTarget: selectedWildlifeTarget,
+        ...(activityAuthorities.size === 0
+          ? {}
+          : { activityAuthorities: Object.freeze([...activityAuthorities.values()]) }),
+      });
+      if (projected === null) {
+        throw new Error("Core wildlife presentation could not be projected");
+      }
+      return projected;
     });
-    if (wildlifePresentation === null) {
-      throw new Error("Core wildlife presentation could not be projected");
-    }
     if (
       selectedWildlifeTarget !== null
       && !wildlifePresentation.some(({ actorId, species }) => (
@@ -7797,25 +8498,41 @@ export async function createTideweftRuntime(
     ) {
       selectedWildlifeTarget = null;
     }
-    const wildlifeCarcassPresentation = projectCoreEcologyWildlifeCarcasses({
-      patch: coreEcology,
-      window: actorWindow,
-      perception,
-      tileSize: RENDER_TILE_SIZE,
+    const wildlifeCarcassPresentation = activeCoreEcologyPatches.flatMap((patch) => {
+      const projected = projectCoreEcologyWildlifeCarcasses({
+        patch,
+        window: actorWindow,
+        perception,
+        tileSize: RENDER_TILE_SIZE,
+      });
+      if (projected === null) {
+        throw new Error("Core wildlife carcass presentation could not be projected");
+      }
+      return projected;
     });
-    if (wildlifeCarcassPresentation === null) {
-      throw new Error("Core wildlife carcass presentation could not be projected");
-    }
-    const aggregateEvidenceProjection = projectCoreEcologyAggregateEvidence({
-      patch: coreEcology,
-      window: actorWindow,
-      perception,
-      tileSize: RENDER_TILE_SIZE,
-      selectedTarget: selectedWildlifeEvidenceTarget,
+    const aggregateEvidenceProjections = activeCoreEcologyPatches.map((patch) => {
+      const projected = projectCoreEcologyAggregateEvidence({
+        patch,
+        window: actorWindow,
+        perception,
+        tileSize: RENDER_TILE_SIZE,
+        selectedTarget: selectedWildlifeEvidenceTarget,
+      });
+      if (projected === null) {
+        throw new Error("Aggregate wildlife evidence runtime projection could not be resolved");
+      }
+      return projected;
     });
-    if (aggregateEvidenceProjection === null) {
-      throw new Error("Aggregate wildlife evidence runtime projection could not be resolved");
+    const selectedEvidence = aggregateEvidenceProjections
+      .map(({ selectedAbout }) => selectedAbout)
+      .filter((selected) => selected !== null);
+    if (selectedEvidence.length > 1) {
+      throw new Error("Aggregate wildlife evidence has multiple source owners");
     }
+    const aggregateEvidenceProjection = {
+      renderEvidence: aggregateEvidenceProjections.flatMap(({ renderEvidence }) => renderEvidence),
+      selectedAbout: selectedEvidence[0] ?? null,
+    };
     if (
       selectedWildlifeEvidenceTarget !== null
       && aggregateEvidenceProjection.selectedAbout === null
@@ -7911,15 +8628,36 @@ export async function createTideweftRuntime(
     if (selectedDogActorId !== null && dogSelection === null) {
       selectedDogActorId = null;
     }
-    const selectedWildlife = selectedWildlifeTarget === null
-      ? null
-      : selectedCoreEcologyActor(coreEcology, selectedWildlifeTarget);
+    const selectedWildlifeOwners = selectedWildlifeTarget === null
+      ? []
+      : ecologyProjection.residents.flatMap((source) => {
+          const actor = selectedCoreEcologyActor(source.patch, selectedWildlifeTarget);
+          return actor === null ? [] : [{ actor, source }];
+        });
+    if (selectedWildlifeOwners.length > 1) {
+      throw new Error("Selected wildlife identity has multiple ecology owners");
+    }
+    const selectedWildlifeOwner = selectedWildlifeOwners[0] ?? null;
+    const selectedWildlife = selectedWildlifeOwner?.actor ?? null;
     const selectedWildlifeActivity = selectedWildlife !== null
       && coreEcologySpeciesHasRuntimeCapability(
         selectedWildlife.identity.species,
         "diurnal-activity",
       )
-      ? { patch: coreEcology, atTick: coreEcology.updatedAtTick }
+      && selectedWildlifeOwner !== null
+      ? {
+          patch: selectedWildlifeOwner.source.patch,
+          atTick: selectedWildlifeOwner.source.patch.updatedAtTick,
+          ...(activityAuthoritiesBySource
+            .get(selectedWildlifeOwner.source.sourceKey)
+            ?.get(selectedWildlife.identity.stableId) === undefined
+            ? {}
+            : {
+                authority: activityAuthoritiesBySource
+                  .get(selectedWildlifeOwner.source.sourceKey)!
+                  .get(selectedWildlife.identity.stableId)!,
+              }),
+        }
       : undefined;
     const selectedWildlifePresentation = selectedWildlife === null
       ? undefined
@@ -7936,9 +8674,11 @@ export async function createTideweftRuntime(
             ? {}
             : { visibleAggregateCount: selectedWildlifePresentation.groupSize }),
         }, selectedWildlifeActivity);
-    const coreActorAddresses = coreEcology.populations.flatMap(({ members }) => members
-      .filter(({ materialization }) => materialization === "materialized")
-      .map(({ actor }) => actor.address));
+    const coreActorAddresses = activeCoreEcologyPatches.flatMap((patch) => (
+      patch.populations.flatMap(({ members }) => members
+        .filter(({ materialization }) => materialization === "materialized")
+        .map(({ actor }) => actor.address))
+    ));
     const rawWildlifeInteractions = wildlifeInspection === null
       ? null
       : projectLivingActorInteractionChoices({
@@ -8460,6 +9200,13 @@ export async function createTideweftRuntime(
         autopilotPath,
       );
       rebuildRegionalWorldView();
+      regionalEcology = rebaseRuntimeRegionalEcologyState(
+        regionalEcology,
+        world,
+        bio0Ecology,
+        worldView,
+        economyView,
+      );
     } else if (regionalTransition.crossed) {
       // Crossing an invisible persistence-cell boundary does not imply that
       // the bounded visible frame moved. Retarget metadata in place so the
@@ -8500,22 +9247,28 @@ export async function createTideweftRuntime(
         bio0Ecology.porterAddress.actorId,
       );
       const priorWorkingDogs = dogActorRoster.actors.map(({ address }) => address);
-      const coreEcologyForStep = setCoreEcologyMaterializationForWindow(
-        coreEcology,
-        {
-          origin: regionalTravel.window.origin,
-          terrain: {
-            width: worldView.terrain.width,
-            height: worldView.terrain.height,
-          },
+      const ecologyWindow = {
+        origin: regionalTravel.window.origin,
+        terrain: {
+          width: worldView.terrain.width,
+          height: worldView.terrain.height,
         },
-        coreEcology.updatedAtTick,
+      };
+      const regionalEcologyProjectionForStep = projectRegionalEcologyActiveState(
+        regionalEcology,
+        ecologyWindow,
       );
-      if (coreEcologyForStep === null) {
-        throw new Error("Core ecology materialization could not be resolved");
+      if (regionalEcologyProjectionForStep === null) {
+        throw new Error("Regional ecology materialization could not be resolved");
       }
-      const materializedCoreActors = coreEcologyForStep.populations
-        .flatMap(({ members }) => members)
+      const projectedEcologySources = regionalEcologyProjectionForStep.residents;
+      const projectedHomeSource = projectedEcologySources.find(({ sourceKey }) => (
+        sourceKey === regionalEcology.settlementHome.sourceKey
+      )) ?? null;
+      const coreEcologyForStep = projectedHomeSource?.patch
+        ?? regionalEcology.settlementHome.patch;
+      const materializedCoreActors = projectedEcologySources
+        .flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
         .filter(({ materialization }) => materialization === "materialized")
         .map(({ actor }) => actor);
       const localMaterializedCoreActors = materializedCoreActors.filter(({ address }) => (
@@ -8524,23 +9277,28 @@ export async function createTideweftRuntime(
       const localMaterializedCoreActorIds = localMaterializedCoreActors
         .map(({ identity }) => identity.stableId)
         .sort(compareText);
-      let coreEcologyPerceptionPatch = coreEcologyForStep;
-      if (localMaterializedCoreActors.length !== materializedCoreActors.length) {
+      const localMaterializedCoreActorIdSet = new Set(localMaterializedCoreActorIds);
+      const coreEcologyPerceptionPatches = projectedEcologySources.map(({ patch }) => {
+        const materializedIds = patch.populations
+          .flatMap(({ members }) => members)
+          .filter(({ materialization }) => materialization === "materialized")
+          .map(({ actor }) => actor.identity.stableId);
+        const localIds = materializedIds.filter((actorId) => (
+          localMaterializedCoreActorIdSet.has(actorId)
+        ));
+        if (localIds.length === materializedIds.length) return patch;
         try {
-          // The authoritative patch keeps the whole bounded group exact under
-          // one atomic materialization unit. This transient view narrows only
-          // the perception bridge's observer ownership to bodies in-frame.
-          coreEcologyPerceptionPatch = setCoreEcologyAggregatePatchMaterializedActors(
-            coreEcologyForStep,
-            {
-              atTick: coreEcologyForStep.updatedAtTick,
-              actorIds: localMaterializedCoreActorIds,
-            },
-          );
+          // The canonical source keeps its whole group-atomic admission. This
+          // transient observer view narrows only perception ownership to
+          // bodies inside the loaded signed frame.
+          return setCoreEcologyAggregatePatchMaterializedActors(patch, {
+            atTick: patch.updatedAtTick,
+            actorIds: localIds,
+          });
         } catch {
           throw new Error("Core ecology local perception ownership could not be resolved");
         }
-      }
+      });
       const playerWorldPosition = playerWorldPositionInRegionalWindow(
         regionalTravel.window,
         player,
@@ -8578,19 +9336,19 @@ export async function createTideweftRuntime(
       if (coreVisualObservations === null) {
         throw new Error("Core ecology visual perception could not be resolved");
       }
-      const coreAggregateActivityObservations =
-        collectCoreEcologyAggregateActivityObservationBatches({
+      const coreAggregateActivityObservationBatches =
+        collectCoreEcologyRootAggregateActivityObservationBatches({
           ...corePerceptionFrame,
-          patch: coreEcologyPerceptionPatch,
+          patches: coreEcologyPerceptionPatches,
         });
-      if (coreAggregateActivityObservations === null) {
-        throw new Error("Core ecology aggregate activity perception could not be resolved");
+      if (coreAggregateActivityObservationBatches === null) {
+        throw new Error("Root-wide core ecology aggregate activity perception could not be resolved");
       }
       const coreAlarmObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [];
-      const localMaterializedCoreActorIdSet = new Set(localMaterializedCoreActorIds);
-      for (const alarm of runtimeCoreAlarmEvents(coreEcologyForStep).filter(({ actorId }) => (
-        localMaterializedCoreActorIdSet.has(actorId)
-      ))) {
+      const coreAlarms = projectedEcologySources.flatMap(({ patch }) => (
+        runtimeCoreAlarmEvents(patch)
+      )).filter(({ actorId }) => localMaterializedCoreActorIdSet.has(actorId));
+      for (const alarm of coreAlarms) {
         const propagated = propagateCoreEcologyAlarmObservationBatches(
           alarm,
           corePerceptionFrame,
@@ -8602,7 +9360,7 @@ export async function createTideweftRuntime(
       }
       const coreObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [
         coreVisualObservations,
-        coreAggregateActivityObservations,
+        coreAggregateActivityObservationBatches,
         ...coreAlarmObservationBatches,
       ];
       const bio0Simulation = resolveLivingActorSimulationPolicy({
@@ -8848,25 +9606,167 @@ export async function createTideweftRuntime(
         throw new Error("Domestic-animal recovery search linkage was rejected");
       }
       settlementDomesticAnimalRecovery = searchLinkedRecovery;
-      const coreStep = stepRuntimeCoreEcology(
-        coreEcologyForStep,
-        world,
-        bio0Ecology,
-        worldView,
-        completedRegionalView,
-        physicalCargo,
-        settlementEcology,
-        coreObservationBatches,
-        localMaterializedCoreActorIds,
+      const regionalRootForStep = advanceRegionalEcologyRoot(
+        regionalEcology.root,
+        world.meta.completedTick,
       );
-      if (coreStep === null) {
-        throw new Error("Core ecology step rejected");
+      const ecologySourcesForStep = [
+        ...projectedEcologySources,
+        ...(projectedHomeSource === null
+          ? [{
+              kind: "settlement-home" as const,
+              sourceKey: regionalEcology.settlementHome.sourceKey,
+              region: regionalEcology.settlementHome.region,
+              sourcePatchHash: regionalEcology.settlementHome.patchHash,
+              projectedPatchHash: regionalEcology.settlementHome.patchHash,
+              patch: regionalEcology.settlementHome.patch,
+            }]
+          : []),
+      ];
+      const physicalOwnersForStep = runtimeRegionalCorePhysicalOwnerIndex(
+        ecologySourcesForStep,
+      );
+      if (physicalOwnersForStep === null) {
+        throw new Error("Regional ecology physical ownership is ambiguous");
+      }
+      const preparedCoreSteps: Array<Readonly<{
+        kind: (typeof ecologySourcesForStep)[number]["kind"];
+        sourceKey: string;
+        beforePatch: CoreEcologyAggregatePatchState;
+        validateAcceptedPatch: (
+          patch: CoreEcologyAggregatePatchState,
+        ) => CoreEcologyAggregatePatchState | null;
+        prepared: NonNullable<ReturnType<typeof stepRuntimeCoreEcology>>;
+      }>> = [];
+      for (const source of ecologySourcesForStep) {
+        const activityAuthorities = runtimeCoreEcologyActivityAuthorities(
+          world.meta.rootSeed,
+          regionalEcology.root,
+          source,
+        );
+        if (activityAuthorities === null) {
+          throw new Error(
+            `Regional ecology source ${source.sourceKey} lost activity authority`,
+          );
+        }
+        const sourceLocalActorIds = source.patch.populations
+          .flatMap(({ members }) => members)
+          .filter(({ actor, materialization }) => (
+            materialization === "materialized"
+            && localMaterializedCoreActorIdSet.has(actor.identity.stableId)
+          ))
+          .map(({ actor }) => actor.identity.stableId)
+          .sort(compareText);
+        const validateAcceptedPatch = (patch: CoreEcologyAggregatePatchState) => {
+          if (source.kind === "settlement-home") {
+            return canonicalRuntimeSettlementHomeCoreEcology(
+              patch,
+              world,
+              bio0Ecology,
+              completedEconomyView,
+            );
+          }
+          if (source.kind === "legacy-cohort") {
+            return canonicalRegionalEcologyLegacyCohortPatchForWorld(patch, {
+              rootSeed: world.meta.rootSeed,
+              root: regionalRootForStep,
+              completedTick: world.meta.completedTick,
+            });
+          }
+          return canonicalCoreEcologyRegionalResidentPatchForRoot(patch, {
+            seed: world.meta.rootSeed,
+            root: regionalRootForStep,
+            region: source.region,
+            completedTick: world.meta.completedTick,
+          });
+        };
+        const coreStep = stepRuntimeCoreEcology(
+          source.patch,
+          world,
+          worldView,
+          completedRegionalView,
+          physicalCargo,
+          settlementEcology,
+          physicalOwnersForStep,
+          coreObservationBatches,
+          sourceLocalActorIds,
+          activityAuthorities,
+        );
+        if (coreStep === null) {
+          throw new Error(`Regional ecology source ${source.sourceKey} rejected its step`);
+        }
+        preparedCoreSteps.push({
+          kind: source.kind,
+          sourceKey: source.sourceKey,
+          beforePatch: source.patch,
+          validateAcceptedPatch,
+          prepared: coreStep,
+        });
+      }
+      const regionalMortality = resolveRuntimeRegionalCoreMortality(
+        preparedCoreSteps.map(({ sourceKey, prepared }) => ({
+          sourceKey,
+          patch: prepared.patch,
+          localActorIds: prepared.localActorIds,
+          currentLivePreyByAttacker: prepared.currentLivePreyByAttacker,
+        })),
+        world.meta.completedTick,
+      );
+      if (regionalMortality === null) {
+        throw new Error("Regional ecology mortality transaction was rejected");
+      }
+      const postMortalityOwners = runtimeRegionalCorePhysicalOwnerIndex(
+        preparedCoreSteps.map(({ sourceKey }) => ({
+          sourceKey,
+          patch: regionalMortality.patches.get(sourceKey)!,
+        })),
+      );
+      if (postMortalityOwners === null) {
+        throw new Error("Regional ecology mortality produced ambiguous ownership");
+      }
+      const coreSteps: Array<Readonly<{
+        kind: (typeof ecologySourcesForStep)[number]["kind"];
+        sourceKey: string;
+        beforePatch: CoreEcologyAggregatePatchState;
+        validateAcceptedPatch: (
+          patch: CoreEcologyAggregatePatchState,
+        ) => CoreEcologyAggregatePatchState | null;
+        result: RuntimeCoreEcologyFinishedStep;
+      }>> = [];
+      for (const preparedSource of preparedCoreSteps) {
+        const mortalityPatch = regionalMortality.patches.get(preparedSource.sourceKey);
+        if (mortalityPatch === undefined) {
+          throw new Error("Regional ecology mortality lost an owner");
+        }
+        const finished = finishRuntimeCoreEcologyStep(
+          preparedSource.prepared,
+          mortalityPatch,
+          completedRegionalView,
+          world.meta.completedTick,
+          postMortalityOwners,
+          preparedSource.validateAcceptedPatch,
+        );
+        if (finished === null) {
+          throw new Error(`Regional ecology source ${preparedSource.sourceKey} rejected finalization`);
+        }
+        coreSteps.push({
+          kind: preparedSource.kind,
+          sourceKey: preparedSource.sourceKey,
+          beforePatch: preparedSource.beforePatch,
+          validateAcceptedPatch: preparedSource.validateAcceptedPatch,
+          result: finished,
+        });
+      }
+      const allCoreMortalityEvents = regionalMortality.events;
+      const homeCoreStep = coreSteps.find(({ kind }) => kind === "settlement-home");
+      if (homeCoreStep === undefined) {
+        throw new Error("Regional ecology step lost the settlement-home owner");
       }
       const topologyAdvancedRecovery = advanceRuntimeDomesticRecoveryFromGroupEvents({
         state: settlementDomesticAnimalRecovery,
         settlement: settlementEcology,
-        core: coreStep.patch,
-        events: coreStep.groupEvents,
+        core: homeCoreStep.result.patch,
+        events: homeCoreStep.result.groupEvents,
         atTick: world.meta.completedTick,
       });
       if (topologyAdvancedRecovery === null) {
@@ -8874,7 +9774,7 @@ export async function createTideweftRuntime(
       }
       settlementDomesticAnimalRecovery = topologyAdvancedRecovery;
       const playerEventTimeAlarmObservations: ActorObservation[] = [];
-      for (const event of coreStep.events) {
+      for (const event of coreSteps.flatMap(({ result }) => result.events)) {
         if (
           event.kind !== "alarm"
           || !localMaterializedCoreActorIdSet.has(event.actorId)
@@ -8897,17 +9797,33 @@ export async function createTideweftRuntime(
       if (canonicalPlayerEventTimeAlarms.length !== playerEventTimeAlarmObservations.length) {
         throw new Error("Core ecology event-time player hearing could not be canonicalized");
       }
-      const resolvedCoreResources = resolveRuntimeCoreResourceClaims(
-        coreStep.patch,
+      const resolvedRegionalResources = resolveRuntimeRegionalCoreResourceClaims(
+        coreSteps.map(({ sourceKey, result: sourceStep, validateAcceptedPatch }) => ({
+          sourceKey,
+          patch: sourceStep.patch,
+          claims: sourceStep.resourceClaims,
+          validateAcceptedPatch,
+        })),
         physicalCargo,
         settlementEcology,
-        coreStep.resourceClaims,
         world,
         bio0Ecology,
       );
-      if (resolvedCoreResources === null) {
+      if (resolvedRegionalResources === null) {
         throw new Error("Core ecology physical resource claims could not be resolved");
       }
+      const resolvedHomePatch = resolvedRegionalResources.patches.get(
+        regionalEcology.settlementHome.sourceKey,
+      );
+      if (resolvedHomePatch === undefined) {
+        throw new Error("Resource arbitration lost settlement-home ecology");
+      }
+      const resolvedCoreResources = {
+        patch: resolvedHomePatch,
+        physicalCargo: resolvedRegionalResources.physicalCargo,
+        settlementEcology: resolvedRegionalResources.settlementEcology,
+        consumed: resolvedRegionalResources.consumed,
+      };
       settlementEcology = resolvedCoreResources.settlementEcology;
       const aggregateFoodSources = runtimeCoreAggregateExposedFoodSources(
         resolvedCoreResources.physicalCargo,
@@ -8924,8 +9840,9 @@ export async function createTideweftRuntime(
         window: regionalTravel.window,
         tick: world.meta.completedTick,
         visualSources: runtimeCoreAggregateVisualSources({
-          beforePatch: coreEcologyForStep,
-          afterPatch: resolvedCoreResources.patch,
+          beforePatches: projectedEcologySources.map(({ patch }) => patch),
+          afterPatches: [...resolvedRegionalResources.patches.values()],
+          selectionPatch: resolvedCoreResources.patch,
           beforeDogs: [ecologyForStep.dog.address, ...priorWorkingDogs],
           afterDogs: [
             bio0Ecology.dog.address,
@@ -8976,7 +9893,46 @@ export async function createTideweftRuntime(
           break;
         }
       }
-      coreEcology = settlementShadows.patch;
+      const finalRegionalPatches = new Map(resolvedRegionalResources.patches);
+      finalRegionalPatches.set(
+        regionalEcology.settlementHome.sourceKey,
+        settlementShadows.patch,
+      );
+      const committedRegionalEcology = commitRegionalEcologyActiveProjection(
+        regionalEcology,
+        regionalEcologyProjectionForStep,
+        {
+          root: regionalRootForStep,
+          rootSeed: world.meta.rootSeed,
+          settlementHome: projectedHomeSource === null
+            ? {
+                sourceKey: regionalEcology.settlementHome.sourceKey,
+                patch: settlementShadows.patch,
+              }
+            : null,
+          residents: regionalEcologyProjectionForStep.residents.map(({ sourceKey }) => {
+            const patch = finalRegionalPatches.get(sourceKey);
+            if (patch === undefined) {
+              throw new Error(`Regional ecology commit lost source ${sourceKey}`);
+            }
+            return { sourceKey, patch };
+          }),
+        },
+      );
+      if (committedRegionalEcology === null) {
+        throw new Error("Regional ecology sources could not commit atomically");
+      }
+      const acceptedRegionalEcology = canonicalRuntimeRegionalEcologyState(
+        committedRegionalEcology,
+        world,
+        bio0Ecology,
+        completedEconomyView,
+      );
+      if (acceptedRegionalEcology === null) {
+        throw new Error("Committed regional ecology failed its world binding");
+      }
+      regionalEcology = acceptedRegionalEcology;
+      coreEcology = regionalEcology.settlementHome.patch;
       physicalCargo = resolvedCoreResources.physicalCargo;
       porterResponse = acceptedPorterResponse;
       clearPlayerSenseSamples();
@@ -8999,62 +9955,74 @@ export async function createTideweftRuntime(
         },
         perception: eventPerception,
       } as const;
-      const witnessedCoreWildlife = projectCoreEcologyWildlife({
-        patch: coreEcology,
-        window: coreEventObservation.window,
-        perception: eventPerception,
-        tileSize: RENDER_TILE_SIZE,
+      const witnessedCoreWildlife = [...finalRegionalPatches.values()].flatMap((patch) => {
+        const projected = projectCoreEcologyWildlife({
+          patch,
+          window: coreEventObservation.window,
+          perception: eventPerception,
+          tileSize: RENDER_TILE_SIZE,
+        });
+        if (projected === null) {
+          throw new Error("Core ecology event perception could not be projected");
+        }
+        return projected;
       });
-      if (witnessedCoreWildlife === null) {
-        throw new Error("Core ecology event perception could not be projected");
-      }
-      const witnessedCoreBeforeMortality = projectCoreEcologyWildlife({
-        patch: coreEcologyForStep,
-        window: coreEventObservation.window,
-        perception: eventPerception,
-        tileSize: RENDER_TILE_SIZE,
+      const witnessedCoreBeforeMortality = coreSteps.flatMap(({ beforePatch }) => {
+        const projected = projectCoreEcologyWildlife({
+          patch: beforePatch,
+          window: coreEventObservation.window,
+          perception: eventPerception,
+          tileSize: RENDER_TILE_SIZE,
+        });
+        if (projected === null) {
+          throw new Error("Core ecology pre-mortality perception could not be projected");
+        }
+        return projected;
       });
-      if (witnessedCoreBeforeMortality === null) {
-        throw new Error("Core ecology pre-mortality perception could not be projected");
-      }
       const witnessedCoreById = new Map(witnessedCoreWildlife.map((animal) => (
         [animal.actorId, animal] as const
       )));
       const witnessedCoreBeforeById = new Map(witnessedCoreBeforeMortality.map((animal) => (
         [animal.actorId, animal] as const
       )));
-      const directlyWitnessedCoreEventIds = new Set(coreStep.events
+      const allCoreStepEvents = coreSteps.flatMap(({ result }) => result.events);
+      const directlyWitnessedCoreEventIds = new Set(allCoreStepEvents
         .filter((event) => isWildlifeWorldPositionDirectlyObserved(
           event.position,
           coreEventObservation,
         ))
         .map(({ eventId }) => eventId));
-      const witnessedAggregateEvidenceProjection = projectCoreEcologyAggregateEvidence({
-        patch: coreEcology,
-        window: coreEventObservation.window,
-        perception: eventPerception,
-        tileSize: RENDER_TILE_SIZE,
+      const witnessedAggregateEvidence = [...finalRegionalPatches.values()].flatMap((patch) => {
+        const projected = projectCoreEcologyAggregateEvidence({
+          patch,
+          window: coreEventObservation.window,
+          perception: eventPerception,
+          tileSize: RENDER_TILE_SIZE,
+        });
+        if (projected === null) {
+          throw new Error("Aggregate wildlife event perception could not be projected");
+        }
+        return projected.renderEvidence;
       });
-      if (witnessedAggregateEvidenceProjection === null) {
-        throw new Error("Aggregate wildlife event perception could not be projected");
-      }
-      const witnessedAggregateEvidence = witnessedAggregateEvidenceProjection.renderEvidence;
       const lawfullyHeardAlarm = canonicalPlayerEventTimeAlarms.some((observation) => (
         observation.channel === "hearing"
         && observation.perceivedClass === "animal-alarm"
       ));
-      const heardAggregateCues = projectCoreEcologyAggregateHeardCues({
-        patch: coreEcology,
-        player: playerAddress,
-        tick: world.meta.completedTick,
-        window: regionalTravel.window,
-        world: worldView,
+      const heardAggregateCues = [...finalRegionalPatches.values()].flatMap((patch) => {
+        const projected = projectCoreEcologyAggregateHeardCues({
+          patch,
+          player: playerAddress,
+          tick: world.meta.completedTick,
+          window: regionalTravel.window,
+          world: worldView,
+        });
+        if (projected === null) {
+          throw new Error("Aggregate wildlife hearing could not be projected");
+        }
+        return projected;
       });
-      if (heardAggregateCues === null) {
-        throw new Error("Aggregate wildlife hearing could not be projected");
-      }
       let ecologyConsequenceAnnounced = false;
-      for (const event of coreStep.mortalityEvents) {
+      for (const event of allCoreMortalityEvents) {
         if (!isWildlifeWorldPositionDirectlyObserved(
           event.victimPosition,
           coreEventObservation,
@@ -9093,7 +10061,7 @@ export async function createTideweftRuntime(
         const animal = witnessedCoreById.get(consumption.actorId);
         if (animal === undefined) continue;
         if (consumption.source === "wildlife-carcass") {
-          const body = resolvedCoreResources.patch.carcasses.find(
+          const body = finalRegionalPatches.get(consumption.ownerSourceKey)?.carcasses.find(
             ({ carcassId }) => carcassId === consumption.resourceId,
           );
           if (
@@ -9143,42 +10111,49 @@ export async function createTideweftRuntime(
         settlementShadows.events,
         witnessedAggregateEvidence,
       );
-      const witnessedCatTransition = coreStep.events
+      const coreActorBeforeStep = (actorId: string): CoreWildlifeActorState | null => {
+        for (const { beforePatch } of coreSteps) {
+          const actor = coreEcologyAggregatePatchActor(beforePatch, actorId);
+          if (actor !== null) return actor;
+        }
+        return null;
+      };
+      const witnessedCatTransition = allCoreStepEvents
         .filter((event) => event.species === "domestic-cat")
         .slice()
         .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
         .find((event) => {
-          const before = coreEcologyAggregatePatchActor(coreEcologyForStep, event.actorId);
+          const before = coreActorBeforeStep(event.actorId);
           return directlyWitnessedCoreEventIds.has(event.eventId)
             && before !== null
             && before.intent.kind !== event.kind;
         });
-      const witnessedRabbitThump = coreStep.events
+      const witnessedRabbitThump = allCoreStepEvents
         .filter((event) => event.species === "marsh-rabbit" && event.kind === "alarm")
         .slice()
         .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
         .find((event) => {
-          const before = coreEcologyAggregatePatchActor(coreEcologyForStep, event.actorId);
+          const before = coreActorBeforeStep(event.actorId);
           return directlyWitnessedCoreEventIds.has(event.eventId)
             && before !== null
             && before.intent.kind !== event.kind;
         });
-      const witnessedFoxYip = coreStep.events
+      const witnessedFoxYip = allCoreStepEvents
         .filter((event) => event.species === "marsh-fox" && event.kind === "pursue")
         .slice()
         .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
         .find((event) => {
-          const before = coreEcologyAggregatePatchActor(coreEcologyForStep, event.actorId);
+          const before = coreActorBeforeStep(event.actorId);
           return directlyWitnessedCoreEventIds.has(event.eventId)
             && before !== null
             && before.intent.kind !== event.kind;
         });
-      const witnessedCrowDoubleCall = coreStep.events
+      const witnessedCrowDoubleCall = allCoreStepEvents
         .filter((event) => event.species === "fish-crow" && event.kind === "alarm")
         .slice()
         .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
         .find((event) => {
-          const before = coreEcologyAggregatePatchActor(coreEcologyForStep, event.actorId);
+          const before = coreActorBeforeStep(event.actorId);
           return directlyWitnessedCoreEventIds.has(event.eventId)
             && before !== null
             && before.intent.kind !== event.kind;
@@ -9785,7 +10760,7 @@ export async function createTideweftRuntime(
           && renderView.wildlife?.some(({ actorId, species }) => (
             actorId === perceivedCommand.id && species === perceivedCommand.species
           ))
-          && selectedCoreEcologyActor(coreEcology, {
+          && runtimeRegionalEcologyActor(regionalEcology, worldView, regionalTravel.window, {
             species: perceivedCommand.species,
             actorId: perceivedCommand.id,
           }) !== null
@@ -9982,7 +10957,12 @@ export async function createTideweftRuntime(
       ? null
       : selectedWildlifeTarget?.species === command.target.species
           && selectedWildlifeTarget.actorId === command.target.actorId
-        ? selectedCoreEcologyActor(coreEcology, selectedWildlifeTarget)
+        ? runtimeRegionalEcologyActor(
+            regionalEcology,
+            worldView,
+            regionalTravel.window,
+            selectedWildlifeTarget,
+          )
         : null;
     if (
       (!isDog && wildlifeActor === null)
@@ -10780,7 +11760,7 @@ export async function createTideweftRuntime(
     eventObservationCursor = 0;
     economyView = createWorldView(world);
     bio0Ecology = createRuntimeBio0Ecology(world, economyView);
-    coreEcology = createRuntimeCoreEcology(world, bio0Ecology);
+    coreEcology = createRuntimeSettlementHomeCoreEcology(world, bio0Ecology, economyView);
     dogActorRoster = createRuntimeDogActorRoster(world, bio0Ecology, coreEcology);
     settlementEcology = createRuntimeSettlementEcology(
       world,
@@ -10809,10 +11789,17 @@ export async function createTideweftRuntime(
       WORLD_WIDTH,
       WORLD_HEIGHT,
     );
-    physicalCargo = seedRuntimeCoreEcologyProvision(physicalCargo, coreEcology);
     regionalTravel = migratePlayerToRegionalTravel(world.meta.rootSeed, player);
     promiseJourney = createRegionalPromiseJourney();
     rebuildRegionalWorldView();
+    regionalEcology = createRuntimeRegionalEcologyState(
+      world,
+      bio0Ecology,
+      coreEcology,
+      worldView,
+      economyView,
+    );
+    physicalCargo = seedRuntimeCoreEcologyProvision(physicalCargo, regionalEcology);
     session.titleVisible = false;
     session.paused = false;
     session.hasSave = true;
@@ -12127,14 +13114,19 @@ export async function createTideweftRuntime(
     if (bio0EcologySnapshot === null) {
       throw new Error("Refusing to save inconsistent BIO0 ecology state");
     }
-    const coreEcologySnapshot = canonicalRuntimeCoreEcology(
-      coreEcology,
+    const regionalEcologySnapshot = canonicalRuntimeRegionalEcologyState(
+      regionalEcology,
       worldSnapshot,
       bio0EcologySnapshot,
     );
-    if (coreEcologySnapshot === null) {
-      throw new Error("Refusing to save inconsistent core ecology state");
+    if (
+      regionalEcologySnapshot === null
+      || stableStringify(regionalEcologySnapshot.settlementHome.patch)
+        !== stableStringify(coreEcology)
+    ) {
+      throw new Error("Refusing to save inconsistent regional ecology state");
     }
+    const coreEcologySnapshot = regionalEcologySnapshot.settlementHome.patch;
     const dogActorRosterSnapshot = canonicalRuntimeDogActorRoster(
       dogActorRoster,
       worldSnapshot,
@@ -12206,7 +13198,7 @@ export async function createTideweftRuntime(
         nextPlayerSenseSampleOrdinal,
       }, worldSnapshot.meta.completedTick) ?? invalidPlayerPerceptionCarry(),
       bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
-      coreEcology: serializeCoreEcologyAggregatePatch(coreEcologySnapshot),
+      regionalEcology: serializeRegionalEcologyState(regionalEcologySnapshot),
       settlementEcology: serializeSettlementEcologyState(settlementEcologySnapshot),
       dogActorRoster: serializeDogActorRoster(dogActorRosterSnapshot),
       settlementWorkingAnimals: serializeSettlementWorkingAnimalState(
@@ -12317,6 +13309,7 @@ export async function createTideweftRuntime(
       physicalCargo,
       bio0Ecology,
       coreEcology,
+      regionalEcology,
       settlementEcology,
       dogActorRoster,
       settlementWorkingAnimals,
@@ -12366,6 +13359,7 @@ export async function createTideweftRuntime(
       physicalCargo = prior.physicalCargo;
       bio0Ecology = prior.bio0Ecology;
       coreEcology = prior.coreEcology;
+      regionalEcology = prior.regionalEcology;
       settlementEcology = prior.settlementEcology;
       dogActorRoster = prior.dogActorRoster;
       settlementWorkingAnimals = prior.settlementWorkingAnimals;
@@ -12493,6 +13487,7 @@ type LoadedAutosave = {
   readonly physicalCargo: PhysicalCargoState;
   readonly bio0Ecology: Bio0EcologyState;
   readonly coreEcology: CoreEcologyAggregatePatchState;
+  readonly regionalEcology: RegionalEcologyStateV1;
   readonly dogActorRoster: DogActorRosterState;
   readonly settlementEcology: SettlementEcologyState;
   readonly settlementWorkingAnimals: SettlementWorkingAnimalState;
@@ -12724,6 +13719,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== DOMESTIC_GOAT_GAME_SAVE_VERSION
         && decoded.version !== MORTALITY_BODY_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_UPLAND_GAME_SAVE_VERSION
+        && decoded.version !== REGIONAL_PREDATOR_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -12743,8 +13739,40 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         typeof decoded.integrity !== "string"
         || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
       ) throw new Error("Save envelope integrity does not match its contents");
-      if (
-        decoded.version === GAME_SAVE_VERSION
+      if (decoded.version === GAME_SAVE_VERSION) {
+        if (
+          !hasExactObjectKeys(decoded, [
+            "bio0Ecology",
+            "dogActorRoster",
+            "fieldResources",
+            "format",
+            "integrity",
+            "livingActorPlayerChoice",
+            "perceptionCarry",
+            "physicalCargo",
+            "player",
+            "porterResponse",
+            "promiseJourney",
+            "regionalEcology",
+            "regionalTravel",
+            "session",
+            "settlementEcology",
+            "settlementDomesticAnimalRecovery",
+            "settlementWorkingAnimals",
+            "traversalFeedback",
+            "version",
+            "world",
+          ])
+          || typeof decoded.regionalTravel !== "string"
+          || typeof decoded.bio0Ecology !== "string"
+          || typeof decoded.regionalEcology !== "string"
+          || typeof decoded.settlementEcology !== "string"
+          || typeof decoded.dogActorRoster !== "string"
+          || typeof decoded.settlementWorkingAnimals !== "string"
+          || typeof decoded.settlementDomesticAnimalRecovery !== "string"
+        ) throw new Error("Version 25 save envelope is not canonical");
+      } else if (
+        decoded.version === REGIONAL_PREDATOR_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
         || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
         || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
@@ -12982,6 +14010,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || Object.hasOwn(decoded, "perceptionCarry")
         || Object.hasOwn(decoded, "bio0Ecology")
         || Object.hasOwn(decoded, "coreEcology")
+        || Object.hasOwn(decoded, "regionalEcology")
         || Object.hasOwn(decoded, "settlementEcology")
         || Object.hasOwn(decoded, "dogActorRoster")
         || Object.hasOwn(decoded, "settlementWorkingAnimals")
@@ -12999,6 +14028,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       || Object.hasOwn(decoded, "perceptionCarry")
       || Object.hasOwn(decoded, "bio0Ecology")
       || Object.hasOwn(decoded, "coreEcology")
+      || Object.hasOwn(decoded, "regionalEcology")
       || Object.hasOwn(decoded, "settlementEcology")
       || Object.hasOwn(decoded, "dogActorRoster")
       || Object.hasOwn(decoded, "settlementWorkingAnimals")
@@ -13021,14 +14051,40 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (bio0Ecology === null) {
       throw new Error("Current save contains invalid BIO0 ecology state");
     }
-    const coreEcology = (
-      decoded.version === GAME_SAVE_VERSION
-    )
-      ? canonicalRuntimeCoreEcology(
-          deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
-          world,
-          bio0Ecology,
-        )
+    const persistedRegionalEcology = decoded.version === GAME_SAVE_VERSION
+      ? (() => {
+          const text = decoded.regionalEcology;
+          const structural = deserializeRegionalEcologyState(text);
+          if (
+            structural === null
+            || serializeRegionalEcologyState(structural) !== text
+          ) return null;
+          return canonicalRuntimeRegionalEcologyState(
+            structural,
+            world,
+            bio0Ecology,
+            compatibilityView,
+          );
+        })()
+      : null;
+    if (decoded.version === GAME_SAVE_VERSION && persistedRegionalEcology === null) {
+      throw new Error("Current save contains invalid regional ecology state");
+    }
+
+    /**
+     * Every older supported save is first authenticated and normalized through
+     * the frozen v24 whole-patch owner. The v25 adoption then splits that exact
+     * authority into settlement-home, regional baseline, and one finite legacy
+     * cohort without asking any later system to reinterpret old identities.
+     */
+    const v24CompatibilityCoreEcology = decoded.version === GAME_SAVE_VERSION
+      ? null
+      : decoded.version === REGIONAL_PREDATOR_GAME_SAVE_VERSION
+        ? canonicalRuntimeCoreEcology(
+            deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
+            world,
+            bio0Ecology,
+          )
       : decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
         ? migrateRuntimeCoreEcologyFromRegionalUpland(
             deserializeCoreEcologyAggregatePatch(decoded.coreEcology),
@@ -13104,17 +14160,19 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
                 bio0Ecology,
               )
             : createRuntimeCoreEcology(world, bio0Ecology);
+    const coreEcology = persistedRegionalEcology?.settlementHome.patch
+      ?? (v24CompatibilityCoreEcology === null
+        ? null
+        : adoptCoreEcologySettlementHomeFromV24({
+            seed: world.meta.rootSeed,
+            habitat: deriveRuntimeCoreEcologyHabitat(world, bio0Ecology, compatibilityView),
+            completedTick: world.meta.completedTick,
+            sourcePatch: v24CompatibilityCoreEcology,
+          }));
     if (coreEcology === null) {
       throw new Error("Current save contains invalid core ecology state");
     }
-    const dogActorRoster = (
-      decoded.version === GAME_SAVE_VERSION
-      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
-      || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
-      || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
-      || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
-      || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
-    )
+    const dogActorRoster = decoded.version >= PADDOCK_WATCH_GAME_SAVE_VERSION
       ? canonicalRuntimeDogActorRoster(
           deserializeDogActorRoster(decoded.dogActorRoster),
           world,
@@ -13125,28 +14183,11 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (dogActorRoster === null) {
       throw new Error("Current save contains invalid dog actor roster");
     }
-    const settlementEcology = (
-      decoded.version === GAME_SAVE_VERSION
-      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
-      || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
-      || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
-      || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
-      || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
-      || decoded.version === DOMESTIC_PEN_GAME_SAVE_VERSION
-      || decoded.version === DOMESTIC_YARD_GAME_SAVE_VERSION
-      || decoded.version === STOREHOUSE_GAME_SAVE_VERSION
-    )
+    const settlementEcology = decoded.version >= STOREHOUSE_GAME_SAVE_VERSION
       ? (() => {
           const migrated = deserializeSettlementEcologyState(decoded.settlementEcology);
           if (
-            (
-              decoded.version === GAME_SAVE_VERSION
-              || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
-              || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
-              || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
-              || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
-              || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
-            )
+            decoded.version >= PADDOCK_WATCH_GAME_SAVE_VERSION
             && serializeSettlementEcologyState(migrated) !== decoded.settlementEcology
           ) return null;
           const expected = createRuntimeSettlementEcology(
@@ -13196,14 +14237,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (settlementEcology === null) {
       throw new Error("Current save contains invalid settlement ecology state");
     }
-    const settlementWorkingAnimals = (
-      decoded.version === GAME_SAVE_VERSION
-      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
-      || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
-      || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
-      || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
-      || decoded.version === PADDOCK_WATCH_GAME_SAVE_VERSION
-    )
+    const settlementWorkingAnimals = decoded.version >= PADDOCK_WATCH_GAME_SAVE_VERSION
       ? (() => {
           const workingAnimalsText = decoded.settlementWorkingAnimals;
           if (typeof workingAnimalsText !== "string") return null;
@@ -13228,25 +14262,13 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
                 !== PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID
             )
           ) return null;
-          const deserialized = (
-            decoded.version === GAME_SAVE_VERSION
-            || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
-            || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
-            || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
-            || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
-          )
+          const deserialized = decoded.version >= WATCH_RETURNS_GAME_SAVE_VERSION
             ? deserializeSettlementWorkingAnimalState(workingAnimalsText)
             : adoptSettlementWorkingAnimalStateV1(parsedWorkingAnimals);
           if (
             deserialized === null
             || (
-              (
-                decoded.version === GAME_SAVE_VERSION
-                || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
-                || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
-                || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
-                || decoded.version === WATCH_RETURNS_GAME_SAVE_VERSION
-              )
+              decoded.version >= WATCH_RETURNS_GAME_SAVE_VERSION
               && serializeSettlementWorkingAnimalState(deserialized)
                 !== workingAnimalsText
             )
@@ -13294,12 +14316,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (settlementWorkingAnimals === null) {
       throw new Error("Current save contains invalid settlement working-animal state");
     }
-    const settlementDomesticAnimalRecovery = (
-      decoded.version === GAME_SAVE_VERSION
-      || decoded.version === REGIONAL_UPLAND_GAME_SAVE_VERSION
-      || decoded.version === MORTALITY_BODY_GAME_SAVE_VERSION
-      || decoded.version === DOMESTIC_GOAT_GAME_SAVE_VERSION
-    )
+    const settlementDomesticAnimalRecovery = decoded.version >= DOMESTIC_GOAT_GAME_SAVE_VERSION
       ? (() => {
           const recoveryText = decoded.settlementDomesticAnimalRecovery;
           if (typeof recoveryText !== "string") return null;
@@ -13470,6 +14487,112 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Version 3 save contains noncanonical runtime player state");
       regionalTravel = migratePlayerToRegionalTravel(world.meta.rootSeed, decoded.player);
     }
+    const restoredRegionalView = createRegionalWorldView(
+      compatibilityView,
+      regionalTravel.window,
+      { discovered: decoded.player.discovered, depthSoundings: decoded.player.depthSoundings },
+    );
+    const activeEcologyRegions = regionalStorageRegionsInView(restoredRegionalView);
+    const regionalEcology = persistedRegionalEcology === null
+      ? (() => {
+          if (v24CompatibilityCoreEcology === null) return null;
+          const sourceActorIds = new Set(v24CompatibilityCoreEcology.populations.flatMap(
+            ({ members }) => members.map(({ actor }) => actor.identity.stableId),
+          ));
+          const choiceActorIds = livingActorPlayerChoice.events.flatMap(({ effect }) => {
+            switch (effect.kind) {
+              case "request-provision-offer":
+                return [effect.custodianActorId, effect.beneficiaryActorId];
+              case "request-secure-provisions":
+                return [effect.custodianActorId];
+              case "wait-observe":
+              case "leave-interaction":
+                return effect.focusActorId === null ? [] : [effect.focusActorId];
+              case "request-reroute":
+                return [effect.focusActorId];
+            }
+          });
+          const protectedActorIds = [...new Set([
+            ...choiceActorIds,
+            ...v24CompatibilityCoreEcology.populations.flatMap(({ species, members }) => (
+              CORE_ECOLOGY_DOMESTIC_SPECIES.includes(species)
+                ? members.map(({ actor }) => actor.identity.stableId)
+                : members.flatMap(({ actor }) => (
+                    actor.address.persistence === "promoted"
+                      ? [actor.identity.stableId]
+                      : []
+                  ))
+            )),
+          ])].filter((actorId) => sourceActorIds.has(actorId)).sort(compareText);
+          const protectedAggregateIds = v24CompatibilityCoreEcology.aggregatePopulations
+            .filter(({ species }) => species === "brown-rat")
+            .map(({ aggregateId }) => aggregateId)
+            .sort(compareText);
+          const normalizedSourceIntegrity = decoded.version
+            === REGIONAL_PREDATOR_GAME_SAVE_VERSION
+            ? decoded.integrity!
+            : hashCanonical({
+                kind: "normalized-v24-regional-ecology-source:v1",
+                normalizedOuterVersion: REGIONAL_PREDATOR_GAME_SAVE_VERSION,
+                sourceOuterVersion: decoded.version,
+                sourceEnvelopeIntegrity: typeof decoded.integrity === "string"
+                  ? decoded.integrity
+                  : null,
+                sourceCoreEcologyHash: hashCanonical(v24CompatibilityCoreEcology),
+              });
+          const root = adoptRegionalEcologyFromV24({
+            rootSeed: world.meta.rootSeed,
+            completedTick: world.meta.completedTick,
+            sourceEnvelopeIntegrity: normalizedSourceIntegrity,
+            legacyPatch: v24CompatibilityCoreEcology,
+            protectedActorIds,
+            protectedAggregateIds,
+          });
+          const legacyPatch = projectRegionalEcologyLegacyCohort({
+            rootSeed: world.meta.rootSeed,
+            root,
+          });
+          if (legacyPatch === null) return null;
+          const state = createRegionalEcologyState({
+            root,
+            settlementHome: {
+              sourceKey: coreEcology.patchKey,
+              patch: coreEcology,
+            },
+            activeRegions: activeEcologyRegions,
+            activeResidents: [
+              ...deriveRuntimeRegionalResidentInputs(
+                root,
+                world.meta.rootSeed,
+                activeEcologyRegions,
+              ),
+              {
+                kind: "legacy-cohort" as const,
+                sourceKey: legacyPatch.patchKey,
+                patch: legacyPatch,
+              },
+            ],
+          });
+          return canonicalRuntimeRegionalEcologyState(
+            state,
+            world,
+            bio0Ecology,
+            compatibilityView,
+          );
+        })()
+      : persistedRegionalEcology;
+    if (
+      regionalEcology === null
+      || stableStringify(regionalEcology.activeRegions.map(regionKey).sort(compareText))
+        !== stableStringify(activeEcologyRegions.map(regionKey).sort(compareText))
+    ) {
+      throw new Error("Current save contains ecology for a different active regional window");
+    }
+    // Regional storage deliberately normalizes materialization and group
+    // rendezvous state. Once v24 adoption commits, that normalized home owner
+    // is authoritative; retaining the separately adopted materialized view
+    // would make every honest migration fail its first v25 round trip.
+    const loadedCoreEcology = regionalEcology.settlementHome.patch;
     const physicalCargoValidation = decoded.version >= REGIONAL_GAME_SAVE_VERSION
       ? validatePhysicalCargoState(decoded.physicalCargo, decoded.player, WORLD_WIDTH, WORLD_HEIGHT)
       : decoded.version === PHYSICAL_CARGO_GAME_SAVE_VERSION
@@ -13484,7 +14607,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const loadedPhysicalCargo = decoded.version >= CORE_ECOLOGY_GAME_SAVE_VERSION
       ? physicalCargoValidation.state
-      : seedRuntimeCoreEcologyProvision(physicalCargoValidation.state, coreEcology);
+      : seedRuntimeCoreEcologyProvision(physicalCargoValidation.state, regionalEcology);
     if (
       decoded.version >= REGIONAL_GAME_SAVE_VERSION
       && regionKey(loadedPhysicalCargo.activeRegion) !== regionKey(regionalTravel.stream.center)
@@ -13499,7 +14622,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       traversalFeedback,
       physicalCargo: loadedPhysicalCargo,
       bio0Ecology,
-      coreEcology,
+      coreEcology: loadedCoreEcology,
+      regionalEcology,
       dogActorRoster,
       settlementEcology,
       settlementWorkingAnimals,

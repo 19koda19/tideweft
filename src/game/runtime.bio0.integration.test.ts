@@ -76,7 +76,6 @@ import {
   serializeBio0Ecology,
 } from "./bio0Ecology";
 import {
-  canonicalizeCoreEcologyPatch,
   createCoreEcologyPatch,
   deserializeCoreEcologyAggregatePatch,
   migrateLegacyCoreEcologyPatch,
@@ -91,8 +90,9 @@ import {
   CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES,
   canonicalizeCoreEcologyHabitatAssemblage,
   type CoreEcologyHabitatAssemblage,
+  type CoreEcologyRegionalPredatorHabitatAssemblage,
 } from "./coreEcologyHabitat";
-import { createCoreEcologyGroupSet } from "./coreEcologyGroups";
+import { createCoreEcologyGroup, createCoreEcologyGroupSet } from "./coreEcologyGroups";
 import { replaceCoreWildlifeActorPhysiology } from "./coreWildlifeActor";
 import { repositionDogActor, replaceDogActorPhysiology } from "./dogActor";
 import { LOCAL_PLAYER_SUBJECT_ID } from "./humanPerception";
@@ -103,6 +103,11 @@ import {
   type PorterResponseDecision,
 } from "./porterResponse";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
+import {
+  createRegionalEcologyState,
+  deserializeRegionalEcologyState,
+  serializeRegionalEcologyState,
+} from "./regionalEcologyState";
 import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
@@ -111,7 +116,8 @@ interface CurrentEnvelope {
   readonly version: number;
   readonly world: string;
   readonly bio0Ecology: string;
-  readonly coreEcology: string;
+  readonly coreEcology?: string;
+  readonly regionalEcology?: string;
   readonly settlementEcology: string;
   readonly physicalCargo: unknown;
   readonly promiseJourney: unknown;
@@ -160,6 +166,8 @@ class MemoryRepository implements SaveRepository {
 let scheduledFrame: ((now: number) => void) | undefined;
 let nextFrameTime = 100;
 
+vi.setConfig({ testTimeout: 90_000 });
+
 beforeEach(() => {
   bio0StepControl.reject = false;
   bio0StepControl.accessibility.length = 0;
@@ -195,10 +203,10 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(24);
-    expect(firstRepository.snapshot().payloadVersion).toBe(24);
+    expect(firstEnvelope.version).toBe(25);
+    expect(firstRepository.snapshot().payloadVersion).toBe(25);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
-    expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
+    expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
 
     const world = deserializeWorld(firstEnvelope.world);
     const ecology = requiredBio0(firstEnvelope);
@@ -263,7 +271,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const resumed = await createTideweftRuntime(firstRepository);
     await resumed.save();
     expect(currentEnvelope(firstRepository).bio0Ecology).toBe(firstEnvelope.bio0Ecology);
-    expect(currentEnvelope(firstRepository).coreEcology).toBe(firstEnvelope.coreEcology);
+    expect(currentEnvelope(firstRepository).regionalEcology).toBe(firstEnvelope.regionalEcology);
     resumed.destroy();
   });
 
@@ -312,6 +320,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const {
       bio0Ecology: _bio0Ecology,
       coreEcology: _coreEcology,
+      regionalEcology: _regionalEcology,
       settlementEcology: _settlementEcology,
       dogActorRoster: _dogActorRoster,
       settlementWorkingAnimals: _settlementWorkingAnimals,
@@ -337,7 +346,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(24);
+    expect(migratedEnvelope.version).toBe(25);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -358,6 +367,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const expectedPlayerChoice = current.livingActorPlayerChoice;
     const {
       coreEcology: _coreEcology,
+      regionalEcology: _regionalEcology,
       settlementEcology: _settlementEcology,
       dogActorRoster: _dogActorRoster,
       settlementWorkingAnimals: _settlementWorkingAnimals,
@@ -383,14 +393,14 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(24);
+    expect(envelope.version).toBe(25);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
     migrated.destroy();
   });
 
-  it("migrates a sealed v7 save to one deterministic core ecology root and preserves it", async () => {
+  it("migrates a sealed v7 save to one deterministic regional ecology root and preserves it", async () => {
     const seed = "core ecology sealed v7 migration";
     const setupRepository = new MemoryRepository(legacyRecord(seed));
     const setup = await createTideweftRuntime(setupRepository);
@@ -401,6 +411,7 @@ describe("runtime BIO0 ecology persistence", () => {
     const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
     const {
       coreEcology: _coreEcology,
+      regionalEcology: _regionalEcology,
       settlementEcology: _settlementEcology,
       dogActorRoster: _dogActorRoster,
       settlementWorkingAnimals: _settlementWorkingAnimals,
@@ -431,43 +442,34 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(24);
-    expect(firstRepository.snapshot().payloadVersion).toBe(24);
-    expect(secondEnvelope.coreEcology).toBe(firstEnvelope.coreEcology);
-    const ecology = requiredCoreEcology(firstEnvelope);
-    expect(ecology.derivation.kind).toBe("habitat-v11");
-    expect(ecology.populations.map(({ species }) => species)).toEqual(expect.arrayContaining([
-      "black-bear",
-      "deer",
+    expect(firstEnvelope.version).toBe(25);
+    expect(firstRepository.snapshot().payloadVersion).toBe(25);
+    expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
+    const ecology = requiredRegionalEcology(firstEnvelope);
+    const home = ecology.settlementHome.patch;
+    expect(home.derivation.kind).toBe("settlement-home-v1");
+    expect(home.populations.map(({ species }) => species).sort()).toEqual([
       "domestic-cat",
       "domestic-chicken",
       "domestic-goat",
-      "fish-crow",
-      "gray-wolf",
-      "gull",
-      "elk",
-      "marsh-rabbit",
-      "wild-boar",
-    ]));
-    if (ecology.derivation.kind !== "habitat-v11") throw new Error("missing regional-predator habitat");
-    expect(ecology.populations.find(({ species }) => species === "domestic-goat"))
+    ]);
+    expect(home.populations.find(({ species }) => species === "domestic-goat"))
       .toMatchObject({ populationSize: 2 });
-    expect(ecology.groups.groups.filter(({ identity }) => (
+    expect(home.groups.groups.filter(({ identity }) => (
       identity.species === "domestic-goat" && identity.organization === "herd"
     ))).toHaveLength(1);
-    const duckHabitat = ecology.derivation.habitat.populations.find(({ species }) => (
-      species === "american-black-duck"
-    ));
-    expect(duckHabitat?.populationUnits).toBeGreaterThanOrEqual(0);
-    expect(ecology.populations.some(({ species }) => species === "american-black-duck"))
-      .toBe((duckHabitat?.populationUnits ?? 0) > 0);
-    expect(ecology.aggregatePopulations).toContainEqual(expect.objectContaining({
+    expect(home.aggregatePopulations).toContainEqual(expect.objectContaining({
       species: "brown-rat",
       representation: "aggregate-area",
     }));
-    const actorIds = ecology.populations.flatMap(({ members }) =>
-      members.map(({ actor }) => actor.identity.stableId)
-    );
+    expect(ecology.root.adoption).not.toBeNull();
+    expect(ecology.root.legacyCohort).not.toBeNull();
+    expect(ecology.root.adoption?.populationAccounting.map(({ species }) => species))
+      .toEqual(expect.arrayContaining(["black-bear", "deer", "gull"]));
+    expect(ecology.activeResidents.every(({ kind }) => (
+      kind === "regional-habitat" || kind === "legacy-cohort"
+    ))).toBe(true);
+    const actorIds = regionalActorIds(ecology);
     expect(actorIds.length).toBeGreaterThan(0);
     expect(new Set(actorIds).size).toBe(actorIds.length);
 
@@ -476,11 +478,11 @@ describe("runtime BIO0 ecology persistence", () => {
     scheduledFrame = undefined;
     const resumed = await createTideweftRuntime(firstRepository);
     await resumed.save();
-    expect(currentEnvelope(firstRepository).coreEcology).toBe(firstEnvelope.coreEcology);
+    expect(currentEnvelope(firstRepository).regionalEcology).toBe(firstEnvelope.regionalEcology);
     resumed.destroy();
   });
 
-  it("migrates a sealed v9 Wave-A save once while preserving actors, groups, and physical cargo", async () => {
+  it("migrates a sealed v9 Wave-A save once with explicit actor disposition and physical cargo conservation", async () => {
     const seed = "bio0 deterministic runtime migration";
     const setupRepository = new MemoryRepository(legacyRecord(seed));
     const setup = await createTideweftRuntime(setupRepository);
@@ -507,57 +509,52 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(24);
-    expect(firstRepository.snapshot().payloadVersion).toBe(24);
-    expect(firstEnvelope.coreEcology).toBe(secondEnvelope.coreEcology);
+    const migrated = requiredRegionalEcology(firstEnvelope);
+    const adoption = migrated.root.adoption;
+    const cohort = migrated.root.legacyCohort;
+    if (adoption === null || cohort === null) {
+      throw new Error("v9 migration omitted its one-way regional adoption receipt");
+    }
+    expect(firstEnvelope.version).toBe(25);
+    expect(firstRepository.snapshot().payloadVersion).toBe(25);
+    expect(firstEnvelope.regionalEcology).toBe(secondEnvelope.regionalEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
-    expect(migrated.derivation.kind).toBe("habitat-v11");
-    expect(migrated.groups.groups.filter(({ identity }) => (
-      identity.species !== "fish-crow"
-      && identity.species !== "domestic-chicken"
-      && identity.species !== "domestic-goat"
-      && identity.species !== "wild-boar"
-      && identity.species !== "elk"
-      && identity.species !== "gray-wolf"
+    expect(cohort.sourcePatch.groups.groups.filter(({ identity }) => (
+      identity.species === "deer" || identity.species === "gull"
     ))).toEqual(waveAGroups.groups);
-    expect(migrated.groups.groups.filter(({ identity }) => (
-      identity.species === "fish-crow"
-    ))).toHaveLength(1);
-    expect(migrated.groups.groups.filter(({ identity }) => (
-      identity.species === "domestic-chicken"
-    ))).toHaveLength(1);
-    expect(migrated.groups.groups.filter(({ identity }) => (
-      identity.species === "domestic-goat" && identity.organization === "herd"
-    ))).toHaveLength(1);
-    expect(migrated.populations.filter(({ species }) => (
+    expect(cohort.sourcePatch.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
     ))).toEqual(waveAPopulations);
-    expect(migrated.populations.some(({ species }) => species === "domestic-cat")).toBe(true);
-    if (migrated.derivation.kind !== "habitat-v11") {
-      throw new Error("missing regional-predator habitat");
-    }
-    expect(migrated.populations.find(({ species }) => species === "domestic-goat"))
-      .toMatchObject({ populationSize: 2 });
-    const migratedDuckHabitat = migrated.derivation.habitat.populations.find(({ species }) => (
-      species === "american-black-duck"
+    const waveAActorIds = waveAPopulations.flatMap(({ members }) => (
+      members.map(({ actor }) => actor.identity.stableId)
     ));
-    expect(migrated.populations.some(({ species }) => species === "american-black-duck"))
-      .toBe((migratedDuckHabitat?.populationUnits ?? 0) > 0);
-    expect(migrated.populations.some(({ species }) => species === "brown-rat")).toBe(false);
-    const migratedRats = migrated.aggregatePopulations.find(({ species }) => (
+    expect(adoption.actorDispositions.filter(({ actorId }) => waveAActorIds.includes(actorId)))
+      .toHaveLength(waveAActorIds.length);
+    expect(new Set(adoption.actorDispositions.map(({ actorId }) => actorId)).size)
+      .toBe(adoption.actorDispositions.length);
+    expect(cohort.retirements.every(({ mortalityEventId, carcassId }) => (
+      mortalityEventId === null && carcassId === null
+    ))).toBe(true);
+    const home = migrated.settlementHome.patch;
+    expect(home.populations.some(({ species }) => species === "domestic-cat")).toBe(true);
+    expect(home.populations.find(({ species }) => species === "domestic-goat"))
+      .toMatchObject({ populationSize: 2 });
+    expect(home.populations.some(({ species }) => species === "brown-rat")).toBe(false);
+    const migratedRats = home.aggregatePopulations.find(({ species }) => (
       species === "brown-rat"
     ));
     expect(migratedRats).toMatchObject({ representation: "aggregate-area" });
     expect(migratedRats?.populationSize).toBeGreaterThan(0);
+    const liveActorIds = regionalActorIds(migrated);
+    expect(new Set(liveActorIds).size).toBe(liveActorIds.length);
 
     first.destroy();
     second.destroy();
     scheduledFrame = undefined;
     const resumed = await createTideweftRuntime(firstRepository);
     await resumed.save();
-    expect(currentEnvelope(firstRepository).coreEcology).toBe(firstEnvelope.coreEcology);
+    expect(currentEnvelope(firstRepository).regionalEcology).toBe(firstEnvelope.regionalEcology);
     resumed.destroy();
   });
 
@@ -603,8 +600,12 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    const migrated = requiredCoreEcology(firstEnvelope);
-    expect(firstEnvelope.version).toBe(24);
+    const migrated = requiredRegionalEcology(firstEnvelope);
+    const cohort = migrated.root.legacyCohort;
+    if (cohort === null || migrated.root.adoption === null) {
+      throw new Error("legacy-fixed v9 migration omitted regional adoption authority");
+    }
+    expect(firstEnvelope.version).toBe(25);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual(v9Envelope.player);
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -612,40 +613,44 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(firstEnvelope.bio0Ecology).toBe(v9Envelope.bio0Ecology);
     expect(firstEnvelope.porterResponse).toEqual(v9Envelope.porterResponse);
     expect(firstEnvelope.livingActorPlayerChoice).toEqual(v9Envelope.livingActorPlayerChoice);
-    expect(migrated.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
+    expect(cohort.sourcePatch.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     for (const historicalGroup of legacyEcology.groups.groups) {
-      expect(migrated.groups.groups).toContainEqual(historicalGroup);
+      expect(cohort.sourcePatch.groups.groups).toContainEqual(historicalGroup);
     }
-    expect(migrated.groups.groups.filter(({ identity }) => (
+    expect(migrated.settlementHome.patch.groups.groups.filter(({ identity }) => (
       identity.species === "domestic-chicken"
     ))).toHaveLength(1);
-    expect(migrated.groups.groups.filter(({ identity }) => (
+    expect(migrated.settlementHome.patch.groups.groups.filter(({ identity }) => (
       identity.species === "domestic-goat" && identity.organization === "herd"
     ))).toHaveLength(1);
-    expect(migrated.populations.find(({ species }) => species === "domestic-goat"))
+    expect(migrated.settlementHome.patch.populations.find(({ species }) => (
+      species === "domestic-goat"
+    )))
       .toMatchObject({ populationSize: 2 });
-    expect(migrated.populations.filter(({ species }) => (
+    expect(cohort.sourcePatch.populations.filter(({ species }) => (
       species === "deer" || species === "gull" || species === "black-bear"
     ))).toEqual(legacyPopulations);
 
-    const cats = migrated.populations.filter(({ species }) => species === "domestic-cat");
-    const rats = migrated.aggregatePopulations.filter(({ species }) => species === "brown-rat");
+    const cats = migrated.settlementHome.patch.populations.filter(
+      ({ species }) => species === "domestic-cat",
+    );
+    const rats = migrated.settlementHome.patch.aggregatePopulations.filter(
+      ({ species }) => species === "brown-rat",
+    );
     expect(cats).toHaveLength(1);
     expect(rats).toHaveLength(1);
     const migratedWorld = deserializeWorld(firstEnvelope.world);
     const allActorIds = [
       ...migratedWorld.residents.map(({ identity }) => identity.stableId),
       requiredBio0(firstEnvelope).dog.identity.stableId,
-      ...migrated.populations.flatMap(({ members }) => (
-        members.map(({ actor }) => actor.identity.stableId)
-      )),
+      ...regionalActorIds(migrated),
     ];
     expect(new Set(allActorIds).size).toBe(allActorIds.length);
-    expect(firstEnvelope.coreEcology).toBe(secondEnvelope.coreEcology);
+    expect(firstEnvelope.regionalEcology).toBe(secondEnvelope.regionalEcology);
     expect(firstEnvelope.physicalCargo).toEqual(secondEnvelope.physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(secondEnvelope.promiseJourney);
 
-    const stableCoreEcology = firstEnvelope.coreEcology;
+    const stableRegionalEcology = firstEnvelope.regionalEcology;
     const stablePhysicalCargo = structuredClone(firstEnvelope.physicalCargo);
     first.destroy();
     second.destroy();
@@ -654,12 +659,12 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
     const reloaded = currentEnvelope(firstRepository);
-    expect(reloaded.coreEcology).toBe(stableCoreEcology);
+    expect(reloaded.regionalEcology).toBe(stableRegionalEcology);
     expect(reloaded.physicalCargo).toEqual(stablePhysicalCargo);
-    expect(requiredCoreEcology(reloaded).populations.filter(
+    expect(requiredRegionalEcology(reloaded).settlementHome.patch.populations.filter(
       ({ species }) => species === "domestic-cat",
     )).toHaveLength(1);
-    expect(requiredCoreEcology(reloaded).aggregatePopulations.filter(
+    expect(requiredRegionalEcology(reloaded).settlementHome.patch.aggregatePopulations.filter(
       ({ species }) => species === "brown-rat",
     )).toHaveLength(1);
     resumed.destroy();
@@ -1013,21 +1018,21 @@ describe("runtime BIO0 ecology persistence", () => {
 
   it.each([
     {
-      label: "missing core ecology root",
+      label: "missing regional ecology root",
       tamper(envelope: Record<string, unknown>) {
-        delete envelope.coreEcology;
+        delete envelope.regionalEcology;
       },
     },
     {
-      label: "extra core ecology alias",
+      label: "extra regional ecology alias",
       tamper(envelope: Record<string, unknown>) {
-        envelope.coreEcologyAlias = envelope.coreEcology;
+        envelope.regionalEcologyAlias = envelope.regionalEcology;
       },
     },
     {
-      label: "noncanonical core ecology serialization",
+      label: "noncanonical regional ecology serialization",
       tamper(envelope: Record<string, unknown>) {
-        envelope.coreEcology = `${String(envelope.coreEcology)} `;
+        envelope.regionalEcology = `${String(envelope.regionalEcology)} `;
       },
     },
     {
@@ -1090,7 +1095,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v24 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v25 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1103,7 +1108,7 @@ describe("runtime BIO0 ecology persistence", () => {
     rejected.destroy();
   });
 
-  it("rejects a resealed v20 ecology whose rat identity is self-consistent but belongs to another seed", async () => {
+  it("rejects a resealed v25 home ecology whose rat identity is self-consistent but belongs to another seed", async () => {
     const repository = new MemoryRepository(legacyRecord("rat aggregate seed authentication"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1111,7 +1116,8 @@ describe("runtime BIO0 ecology persistence", () => {
 
     resealCurrent(repository, (decoded) => {
       const envelope = decoded as unknown as CurrentEnvelope;
-      const ecology = requiredCoreEcology(envelope);
+      const regional = requiredRegionalEcology(envelope);
+      const ecology = regional.settlementHome.patch;
       const rats = ecology.aggregatePopulations.find(({ species }) => species === "brown-rat");
       if (rats === undefined) throw new Error("seed-auth fixture omitted its rat aggregate");
       const substitutedSeed = seedFromText("a different rat aggregate authority");
@@ -1146,12 +1152,27 @@ describe("runtime BIO0 ecology persistence", () => {
           })),
         };
       });
-      const substituted = serializeCoreEcologyAggregatePatch({
+      const substituted = deserializeCoreEcologyAggregatePatch(serializeCoreEcologyAggregatePatch({
         ...ecology,
         aggregatePopulations,
+      }));
+      expect(substituted).not.toBeNull();
+      if (substituted === null) throw new Error("seed-auth fixture could not reseal its rat patch");
+      const substitutedRegional = createRegionalEcologyState({
+        root: regional.root,
+        settlementHome: {
+          sourceKey: regional.settlementHome.sourceKey,
+          patch: substituted,
+        },
+        activeRegions: regional.activeRegions,
+        activeResidents: regional.activeResidents.map(({ kind, sourceKey, patch }) => {
+          if (kind === "settlement-home") {
+            throw new Error("seed-auth fixture found duplicate settlement-home authority");
+          }
+          return { kind, sourceKey, patch };
+        }),
       });
-      expect(deserializeCoreEcologyAggregatePatch(substituted)).not.toBeNull();
-      decoded.coreEcology = substituted;
+      decoded.regionalEcology = serializeRegionalEcologyState(substitutedRegional);
     });
 
     scheduledFrame = undefined;
@@ -1457,17 +1478,9 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
-function waveAHabitatFromCurrentEcology(
-  ecology: CoreEcologyAggregatePatchState,
+function waveAHabitatFromCurrentHabitat(
+  habitat: CoreEcologyRegionalPredatorHabitatAssemblage,
 ): CoreEcologyHabitatAssemblage {
-  if (
-    ecology.derivation.kind !== "habitat-v9"
-    && ecology.derivation.kind !== "habitat-v10"
-    && ecology.derivation.kind !== "habitat-v11"
-  ) {
-    throw new Error("current migration fixture omitted a habitat derivation");
-  }
-  const habitat = ecology.derivation.habitat;
   const candidate = {
     generationVersion: CORE_ECOLOGY_HABITAT_VERSION,
     originRegion: habitat.originRegion,
@@ -1575,6 +1588,7 @@ function legacyFixedV9Record(current: SaveRecord): SaveRecord {
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
     settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
+    regionalEcology: _regionalEcology,
     ...currentBase
   } = decoded;
   const v9Base = {
@@ -1595,29 +1609,55 @@ function legacyFixedV9Record(current: SaveRecord): SaveRecord {
 
 function waveAV9Record(current: SaveRecord): SaveRecord {
   const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
-  const coreEcology = deserializeCoreEcologyAggregatePatch(decoded.coreEcology);
-  if (coreEcology === null) {
-    throw new Error("current migration fixture omitted aggregate core ecology");
+  const envelope = decoded as unknown as CurrentEnvelope;
+  const regional = requiredRegionalEcology(envelope);
+  const home = regional.settlementHome.patch;
+  if (home.derivation.kind !== "settlement-home-v1") {
+    throw new Error("current migration fixture omitted settlement-home habitat");
   }
-  const waveA = canonicalizeCoreEcologyPatch({
-    version: 3,
-    patchKey: coreEcology.patchKey,
-    originRegion: coreEcology.originRegion,
-    updatedAtTick: coreEcology.updatedAtTick,
+  const habitat = waveAHabitatFromCurrentHabitat(home.derivation.habitat);
+  const world = deserializeWorld(envelope.world);
+  const groups = habitat.populations.flatMap((population) => {
+    const anchor = population.allocations[0]?.position;
+    if (population.species === "black-bear" || population.allocations.length < 2 || !anchor) {
+      return [];
+    }
+    return [createCoreEcologyGroup({
+      seed: world.meta.rootSeed,
+      species: population.species,
+      originRegion: habitat.originRegion,
+      populationKey: population.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: population.allocations.map(({ allocationOrdinal }) => allocationOrdinal),
+      anchor,
+    })];
+  });
+  const waveA = createCoreEcologyPatch({
+    seed: world.meta.rootSeed,
+    patchKey: "wave-a/alarm-crossing",
+    originRegion: habitat.originRegion,
+    tick: world.meta.completedTick,
     derivation: {
       kind: "habitat-v1",
-      habitat: waveAHabitatFromCurrentEcology(coreEcology),
+      habitat,
     },
-    groups: createCoreEcologyGroupSet(coreEcology.groups.groups.filter(({ identity }) => (
-      CORE_ECOLOGY_WAVE_A_HABITAT_SPECIES.some((species) => species === identity.species)
-    ))),
-    populations: coreEcology.populations.filter(({ species }) => (
-      species === "deer" || species === "gull" || species === "black-bear"
-    )),
+    groups: createCoreEcologyGroupSet(groups),
+    populations: habitat.populations.filter(({ populationUnits }) => populationUnits > 0)
+      .map((population) => ({
+        species: population.species,
+        populationKey: population.populationKey,
+        populationSize: population.populationUnits,
+        members: population.allocations.map((allocation) => ({
+          populationOrdinal: allocation.allocationOrdinal,
+          representedUnits: allocation.representedUnits,
+          position: allocation.position,
+          materialization: "coarse" as const,
+        })),
+      })),
   });
-  if (waveA === null) throw new Error("migration fixture produced invalid Wave-A ecology");
   const {
     integrity: _integrity,
+    regionalEcology: _regionalEcology,
     settlementEcology: _settlementEcology,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
@@ -1650,10 +1690,20 @@ function requiredBio0(envelope: CurrentEnvelope) {
   return state;
 }
 
-function requiredCoreEcology(envelope: CurrentEnvelope) {
-  const state = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
-  if (!state) throw new Error("current runtime save omitted canonical core ecology");
+function requiredRegionalEcology(envelope: CurrentEnvelope) {
+  const state = deserializeRegionalEcologyState(envelope.regionalEcology);
+  if (!state) throw new Error("current runtime save omitted canonical regional ecology");
   return state;
+}
+
+function regionalActorIds(
+  state: ReturnType<typeof requiredRegionalEcology>,
+): readonly string[] {
+  return [state.settlementHome, ...state.activeResidents].flatMap(({ patch }) => (
+    patch.populations.flatMap(({ members }) => (
+      members.map(({ actor }) => actor.identity.stableId)
+    ))
+  ));
 }
 
 function requiredPorterResponse(envelope: CurrentEnvelope) {
