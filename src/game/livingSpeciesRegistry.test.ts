@@ -49,6 +49,9 @@ describe("lean runtime living-species registry", () => {
       "gray-wolf",
       "cougar",
       "brown-bear",
+      "mountain-goat",
+      "american-pika",
+      "golden-eagle",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -435,6 +438,54 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 52_000,
         },
       },
+      {
+        species: "mountain-goat",
+        actorIdPrefix: "MOUNTAINGOAT-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: "herd",
+        groupStableIdNamespace: "HERD",
+        aboutNoun: "mountain goat",
+        senses: {
+          visionAcuity: 900_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: 620_000,
+          scentBaseRangeUnits: 20_000,
+        },
+      },
+      {
+        species: "american-pika",
+        actorIdPrefix: "PIKA-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "American pika activity",
+        senses: {
+          visionAcuity: 780_000,
+          hearingSensitivity: 940_000,
+          scentSensitivity: 650_000,
+          scentBaseRangeUnits: 12_000,
+        },
+      },
+      {
+        species: "golden-eagle",
+        actorIdPrefix: "GOLDENEAGLE-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "golden eagle",
+        senses: {
+          visionAcuity: ACTOR_PERCEPTION_SCALE,
+          hearingSensitivity: 760_000,
+          scentSensitivity: 80_000,
+          scentBaseRangeUnits: 4_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -462,10 +513,17 @@ describe("lean runtime living-species registry", () => {
       ["gray-wolf", "WOLF-v1-alpha30-fixture"],
       ["cougar", "COUGAR-v1-alpha31-fixture"],
       ["brown-bear", "BROWNBEAR-v1-alpha31-fixture"],
+      ["mountain-goat", "MOUNTAINGOAT-v1-wave-f-fixture"],
+      ["golden-eagle", "GOLDENEAGLE-v1-wave-f-fixture"],
     ] as const) {
       expect(isLivingSpeciesActorAddressable(species)).toBe(true);
       expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(true);
     }
+    expect(isLivingSpeciesActorAddressable("american-pika")).toBe(false);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "PIKA-v1-wave-f-fixture",
+      "american-pika",
+    )).toBe(false);
   });
 
   it("is deeply immutable and fails unknown species closed", () => {

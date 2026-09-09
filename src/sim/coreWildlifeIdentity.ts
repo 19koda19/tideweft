@@ -1,12 +1,17 @@
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "./rng";
 import { createRegionCoord, isRegionCoord, type RegionCoord } from "./regions";
 import { FIXED_POINT } from "./types";
-import { stableStringify } from "./util";
+import { hashCanonical, stableStringify } from "./util";
 
 export const CORE_WILDLIFE_IDENTITY_VERSION = 1 as const;
 export const CORE_WILDLIFE_POPULATION_KEY_MAX_LENGTH = 64 as const;
 
-export const CORE_WILDLIFE_SPECIES = Object.freeze([
+/**
+ * Immutable Alpha-32 identity lineage. Later species append after this exact
+ * prefix; they may not reinterpret an already-generated identity namespace or
+ * profile under the version-1 owner.
+ */
+export const CORE_WILDLIFE_ALPHA32_SPECIES = Object.freeze([
   "deer",
   "gull",
   "black-bear",
@@ -29,6 +34,18 @@ export const CORE_WILDLIFE_SPECIES = Object.freeze([
   "gray-wolf",
   "cougar",
   "brown-bear",
+] as const);
+
+export const CORE_WILDLIFE_ALPHA32_SPECIES_COUNT = 22 as const;
+export const CORE_WILDLIFE_ALPHA32_SPECIES_HASH = "b638f0500dbbc59b" as const;
+export const CORE_WILDLIFE_ALPHA32_PROFILES_HASH = "da47691abcaedf34" as const;
+
+/** Current roster; extensions must remain append-only after the sealed prefix. */
+export const CORE_WILDLIFE_SPECIES = Object.freeze([
+  ...CORE_WILDLIFE_ALPHA32_SPECIES,
+  "mountain-goat",
+  "american-pika",
+  "golden-eagle",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -115,6 +132,9 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "WOLF-"
     | "COUGAR-"
     | "BROWNBEAR-"
+    | "MOUNTAINGOAT-"
+    | "PIKA-"
+    | "GOLDENEAGLE-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -139,6 +159,9 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "gray-wolf": "WOLF-",
   cougar: "COUGAR-",
   "brown-bear": "BROWNBEAR-",
+  "mountain-goat": "MOUNTAINGOAT-",
+  "american-pika": "PIKA-",
+  "golden-eagle": "GOLDENEAGLE-",
 });
 
 /**
@@ -385,6 +408,36 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     taxonomicClass: "mammal",
     dietClass: "omnivore",
     locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "mountain-goat": {
+    species: "mountain-goat",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "herbivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: "herd",
+    groupStableIdNamespace: "HERD",
+  },
+  "american-pika": {
+    species: "american-pika",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "mammal",
+    dietClass: "herbivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "golden-eagle": {
+    species: "golden-eagle",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "aerial",
     groupOrganization: null,
     groupStableIdNamespace: null,
   },
@@ -1199,6 +1252,105 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [30_000, 240_000],
     },
   },
+  "mountain-goat": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "mountain-goat",
+    maximumPatchPopulation: 5,
+    roles: ["prey", "forager"],
+    foodAffinities: {
+      browse: 1_000_000,
+      "shore-forage": 0,
+      carrion: 0,
+      "exposed-food": 40_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 420_000,
+      fleeThreshold: 700_000,
+      retreatThreshold: 520_000,
+      forageThreshold: 340_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["bright-white", "cream-white", "gray-white", "winter-white"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["patient", "social"],
+      ["reserved", "watchful"],
+      ["cautious", "patient"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 960_000],
+      boldness: [100_000, 540_000],
+      sociability: [480_000, 900_000],
+    },
+  },
+  "american-pika": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "american-pika",
+    maximumPatchPopulation: 32,
+    roles: ["prey", "small-prey", "forager"],
+    foodAffinities: {
+      browse: 1_000_000,
+      "shore-forage": 0,
+      carrion: 0,
+      "exposed-food": 20_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 480_000,
+      retreatThreshold: 400_000,
+      forageThreshold: 300_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["buff-gray", "gray-brown", "rust-brown", "winter-gray"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["patient", "reserved"],
+      ["cautious", "reserved"],
+      ["opportunistic", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [680_000, 980_000],
+      boldness: [40_000, 320_000],
+      sociability: [80_000, 420_000],
+    },
+  },
+  "golden-eagle": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "golden-eagle",
+    maximumPatchPopulation: 1,
+    roles: ["predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 0,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 860_000,
+      retreatThreshold: 640_000,
+      forageThreshold: 1_000_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-gold", "golden-naped", "mottled-brown", "pale-gold"],
+    temperamentPairs: [
+      ["patient", "watchful"],
+      ["reserved", "watchful"],
+      ["cautious", "patient"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [700_000, 1_000_000],
+      boldness: [180_000, 700_000],
+      sociability: [20_000, 180_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -1300,6 +1452,21 @@ export function assertCoreWildlifeIdentity(value: unknown): asserts value is Cor
 }
 
 export function assertCoreWildlifeProfiles(): void {
+  const compatibilityPrefix = CORE_WILDLIFE_SPECIES.slice(
+    0,
+    CORE_WILDLIFE_ALPHA32_SPECIES_COUNT,
+  );
+  const compatibilityProfiles = CORE_WILDLIFE_ALPHA32_SPECIES.map(
+    (species) => PROFILES[species],
+  );
+  if (
+    CORE_WILDLIFE_ALPHA32_SPECIES.length !== CORE_WILDLIFE_ALPHA32_SPECIES_COUNT
+    || hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES) !== CORE_WILDLIFE_ALPHA32_SPECIES_HASH
+    || hashCanonical(compatibilityPrefix) !== CORE_WILDLIFE_ALPHA32_SPECIES_HASH
+    || hashCanonical(compatibilityProfiles) !== CORE_WILDLIFE_ALPHA32_PROFILES_HASH
+  ) {
+    throw new Error("Core wildlife Alpha-32 identity lineage was rewritten");
+  }
   for (const species of CORE_WILDLIFE_SPECIES) {
     const profile = PROFILES[species];
     const metadata = CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES[species];

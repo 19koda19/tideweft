@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.33",
+      "releaseDate": "2026-09-09",
+      "buildIdentity": "0.3.3-alpha.33",
+      "summary": "Talus and Sky opens the first sparse Alpine lineage: mountain-goat herds, American-pika talus signs, and solitary golden eagles now inhabit supported ridges through the shared living-ecology architecture.",
+      "gameplayContractVersion": 31,
+      "tutorialVersion": 43,
+      "categories": {
+        "gameplay": [
+          "The catalog advances to twenty-seven records. Supported Alpine habitat can derive a persistent mountain-goat HERD, one conserved non-addressable American-pika talus aggregate, and one solitary golden eagle; unsupported ridges remain honestly empty.",
+          "Mountain goats use shared grade-aware terrestrial locomotion, while the golden eagle uses the common aerial activity owner to select authenticated ridge soaring and perching lines. None of the three species owns a private detector, pathfinder, materialization allowance, or save controller.",
+          "A currently visible golden eagle can create role-based pressure that quiets the pika aggregate or redistributes at most one existing population unit on its fixed opportunity. Terrain occlusion prevents that observation and response; no exact pika is selected, captured, injured, killed, or turned into a body."
+        ],
+        "fixes": [
+          "The exact Open Country Ledger regional-habitat prefix, regional-wild order, twenty-four-record catalog prefix, derivation corpus, and complete regional-ecology version-1 child remain sealed. Alpine authority lives in a separate append-safe sparse layer rather than renumbering or rewriting established populations.",
+          "Base and Alpine owners now enter one insertion-order-independent, group-atomic stable-distance top-K plan capped at twenty-four actors. A mountain-goat herd is admitted whole or remains coarse, and crossing an owner boundary cannot create another visual allowance.",
+          "Alpine habitat, ridge activity, direct perception, aggregate response, and presentation are world-bound and deterministic at signed and extreme coordinates. A copied receipt, mismatched terrain, hidden eagle, or region reload cannot manufacture a destination, pressure event, actor, or population unit."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Alpine populations are sparse consequences of ridge habitat, climate, carrying capacity, territory, and trophic support; the new layer does not force wildlife into every mountain view.",
+          "Golden-eagle pressure changes pika activity only. It does not grant a hidden prey target, damage aura, capture, meal, carcass, or new mortality path, and mountain goats gain no immunity-breaking exception merely because they use steep ground well.",
+          "Validation remains architecture-led: sealed-prefix adoption, signed-coordinate properties, group atomicity, conservation, migration, performance, and one representative visible-versus-occluded eagle-and-pika chain exercise the shared scaffold instead of species-local or N-squared pair suites."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D render distinct mountain-goat and golden-eagle forms from the same current actor identities. Relief renders the eagle's current flight-or-perch state with visual height, banking, and wing motion without claiming continuous authoritative 3D flight physics.",
+          "Quick inspection and ABOUT identify only a lawfully visible mountain goat, golden eagle, haypile, or talus sign at sufficient clarity. American pikas remain a non-addressable population aggregate: their signs never reveal an exact animal, hidden count, anchor, or offscreen pressure event.",
+          "Field Manual version 43 explains the sparse Alpine layer, HERD and aggregate representation, shared ridge activity, visible-versus-occluded pressure, global group-atomic cap, save adoption, and explicit release boundaries on desktop and mobile."
+        ],
+        "saves": [
+          "The outer session advances to version 26 and regional ecology advances to root version 2. Its base is the exact authenticated version-1 Open Country Ledger child; one separate sparse Alpine child owns the new lineages and true Alpine deviations. The production catalog contains twenty-seven records.",
+          "A normalized sealed version-25 Open Country Ledger save is authenticated and adopted exactly once. The receipt binds its original outer integrity and complete base lineage before deterministic Alpine derivation; no established actor, aggregate, population, group, mortality record, body, item, cargo lot, Promise, or history is rewritten.",
+          "Both ecology children share one atomic projection and conservation commit. Fresh Alpine baselines remain rederivable, true deviations persist sparsely, and save, reload, interruption, region streaming, negative coordinates, or extreme distance cannot reroll lineages, split a herd, duplicate an actor, or replay adoption."
+        ],
+        "knownLimitations": [
+          "Talus and Sky is the first bounded Alpine Wave-F slice, not polar ecology, complete Wave F, worldwide species breadth, ecological migration behavior, or the full bestiary.",
+          "This release adds no animal mortality, live-prey capture, exact pika target, reproduction, recruitment, population recovery, tactical combat, player harm, dog harm, human harm, or new physical body resource. The earlier exact marsh-fox, gray-wolf, or cougar contact against one identified solitary marsh rabbit remains the only live-animal mortality seam.",
+          "Mountain goats, pikas, and golden eagles have no audible Living Voice, persistent track evidence, species-directed dog interaction, complete scent or evidence tracking, foliage consumption, companion relationship, broad schedule, or authored polar counterpart in this release."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.32",
       "releaseDate": "2026-09-08",
       "buildIdentity": "0.3.3-alpha.32",

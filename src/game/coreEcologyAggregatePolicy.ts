@@ -13,6 +13,7 @@ export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
   "southern-leopard-frog",
   "atlantic-silverside",
   "atlantic-marsh-fiddler-crab",
+  "american-pika",
 ] as const);
 
 export type CoreEcologyAggregateSpecies =
@@ -20,22 +21,34 @@ export type CoreEcologyAggregateSpecies =
 
 export type CoreEcologyAggregateActivityKind =
   | "burrow-foraging"
+  | "talus-foraging"
   | "rain-chorus"
   | "rustle-scratch"
   | "schooling-glint";
 
 export type CoreEcologyAggregateActivePeriod =
+  | "diurnal"
   | "nocturnal"
   | "rain-responsive"
   | "tide-responsive";
+
+export type CoreEcologyAggregateActivityBaselineProjection =
+  | "preserve"
+  | "rain-responsive";
+
+export type CoreEcologyAggregatePerceivedPressureActivityResponse =
+  | "preserve"
+  | "quiet";
 
 export type CoreEcologyAggregatePolicyEvidenceKind =
   | "burrow-opening"
   | "feeding-scrape"
   | "frog-track"
   | "gnaw-mark"
+  | "haypile"
   | "shelter-sign"
   | "surface-dimple"
+  | "talus-sign"
   | "tracks";
 
 /**
@@ -82,6 +95,7 @@ export interface CoreEcologyAggregateSpeciesPolicy {
   readonly stableIdPrefix:
     | "FIDDLER-AREA-v1-"
     | "FROG-AREA-v1-"
+    | "PIKA-TALUS-v1-"
     | "RAT-AREA-v1-"
     | "SILVERSIDE-SCHOOL-v1-";
   readonly representation: "aggregate-area" | "group-actor";
@@ -90,6 +104,11 @@ export interface CoreEcologyAggregateSpeciesPolicy {
   readonly activity: Readonly<{
     readonly kind: CoreEcologyAggregateActivityKind;
     readonly activePeriod: CoreEcologyAggregateActivePeriod;
+    /** Runtime environmental baseline applied after an authorized frame. */
+    readonly baselineProjection: CoreEcologyAggregateActivityBaselineProjection;
+    /** Current activity response to non-weather pressure perceived at anchors. */
+    readonly perceivedPressureResponse:
+      CoreEcologyAggregatePerceivedPressureActivityResponse;
   }>;
   readonly initialEvidenceKinds: readonly CoreEcologyAggregatePolicyEvidenceKind[];
   readonly exposedFoodAttraction: boolean;
@@ -110,6 +129,8 @@ const POLICIES: Readonly<
     activity: Object.freeze({
       kind: "rustle-scratch",
       activePeriod: "nocturnal",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
     }),
     initialEvidenceKinds: Object.freeze([
       "gnaw-mark",
@@ -130,6 +151,8 @@ const POLICIES: Readonly<
     activity: Object.freeze({
       kind: "rain-chorus",
       activePeriod: "rain-responsive",
+      baselineProjection: "rain-responsive",
+      perceivedPressureResponse: "quiet",
     }),
     initialEvidenceKinds: Object.freeze(["frog-track"] as const),
     exposedFoodAttraction: false,
@@ -146,6 +169,8 @@ const POLICIES: Readonly<
     activity: Object.freeze({
       kind: "schooling-glint",
       activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
     }),
     initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
     exposedFoodAttraction: false,
@@ -162,6 +187,8 @@ const POLICIES: Readonly<
     activity: Object.freeze({
       kind: "burrow-foraging",
       activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
     }),
     initialEvidenceKinds: Object.freeze([
       "burrow-opening",
@@ -171,6 +198,27 @@ const POLICIES: Readonly<
     rainSensitive: false,
     rainResponse: "pressure",
     tideResponse: "ebb-active",
+  }),
+  "american-pika": Object.freeze({
+    species: "american-pika",
+    stableIdPrefix: "PIKA-TALUS-v1-",
+    representation: "aggregate-area",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 2,
+    activity: Object.freeze({
+      kind: "talus-foraging",
+      activePeriod: "diurnal",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "quiet",
+    }),
+    initialEvidenceKinds: Object.freeze([
+      "haypile",
+      "talus-sign",
+    ] as const),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "neutral",
   }),
 });
 

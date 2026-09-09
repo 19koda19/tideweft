@@ -61,12 +61,16 @@ import {
 import { deriveCoreEcologyRegionalResidentSet } from "./regionalEcologyResidents";
 import {
   createRegionalEcologyState,
-  deserializeRegionalEcologyState,
   regionalEcologyActiveResidentPatches,
-  serializeRegionalEcologyState,
   type RegionalEcologyResidentSnapshotV1,
   type RegionalEcologyStateV1,
 } from "./regionalEcologyState";
+import {
+  createRegionalEcologyStateV2,
+  deserializeRegionalEcologyStateV2,
+  serializeRegionalEcologyStateV2,
+  type RegionalEcologyStateV2,
+} from "./regionalEcologyStateV2";
 import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import { REGIONAL_TRAVEL_COLUMNS, REGIONAL_TRAVEL_ROWS } from "./regionalTravel";
@@ -91,9 +95,9 @@ vi.mock("../audio/soundscape", () => ({
   },
 }));
 
-interface V25Envelope {
+interface V26Envelope {
   readonly format: "tideweft-session";
-  readonly version: 25;
+  readonly version: 26;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -125,7 +129,7 @@ class MemoryRepository implements SaveRepository {
   async remove() { this.record = undefined; }
 
   snapshot(): SaveRecord {
-    if (this.record === undefined) throw new Error("regional-v25 fixture has no autosave");
+    if (this.record === undefined) throw new Error("regional-v26 fixture has no autosave");
     return structuredClone(this.record);
   }
 
@@ -153,9 +157,9 @@ afterEach(() => {
 });
 
 describe("runtime Alpha-32 regional ecology save boundary", () => {
-  it("writes one sparse v25 regional owner without the retired whole-world field", async () => {
+  it("writes one sparse v26 regional owner without the retired whole-world field", async () => {
     const repository = await createFreshSave("alpha32 runtime sparse regional owner");
-    const envelope = requireV25(repository.snapshot());
+    const envelope = requireV26(repository.snapshot());
     const state = requireRegionalState(envelope);
     const world = deserializeWorld(envelope.world);
     expect(Object.hasOwn(envelope, "regionalEcology")).toBe(true);
@@ -206,7 +210,7 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
 
   it("round-trips exact regional identity and physiology without regenerating residents", async () => {
     const repository = await createFreshSave("alpha32 runtime regional reload continuity");
-    const firstEnvelope = requireV25(repository.snapshot());
+    const firstEnvelope = requireV26(repository.snapshot());
     const firstState = requireRegionalState(firstEnvelope);
     const firstContinuity = actorContinuity(firstState);
     expect(firstContinuity.length).toBeGreaterThan(0);
@@ -215,21 +219,22 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
     await reloaded.save();
     reloaded.destroy();
 
-    const secondEnvelope = requireV25(repository.snapshot());
+    const secondEnvelope = requireV26(repository.snapshot());
     const secondState = requireRegionalState(secondEnvelope);
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
-    expect(serializeRegionalEcologyState(secondState)).toBe(firstEnvelope.regionalEcology);
+    expect(serializeRegionalEcologyStateV2(requireRegionalStateV2(secondEnvelope)))
+      .toBe(firstEnvelope.regionalEcology);
     expect(actorContinuity(secondState)).toEqual(firstContinuity);
   });
 
   it("adopts one exact v24 owner once and cannot reroll its receipt on reload", async () => {
     const repository = await createFreshSave("alpha32 exact v24 one-way adoption");
-    const fresh = requireV25(repository.snapshot());
+    const fresh = requireV26(repository.snapshot());
     const sourcePatch = createV24SourcePatch(fresh);
     const freshState = requireRegionalState(fresh);
     const freshWorld = deserializeWorld(fresh.world);
     if (freshState.settlementHome.patch.derivation.kind !== "settlement-home-v1") {
-      throw new Error("v25 fixture omitted its settlement-home habitat");
+      throw new Error("v26 fixture omitted its settlement-home habitat");
     }
     expect(adoptCoreEcologySettlementHomeFromV24({
       seed: freshWorld.meta.rootSeed,
@@ -244,7 +249,7 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
     await migratedRuntime.save();
     migratedRuntime.destroy();
 
-    const firstEnvelope = requireV25(repository.snapshot());
+    const firstEnvelope = requireV26(repository.snapshot());
     const firstState = requireRegionalState(firstEnvelope);
     const receipt = firstState.root.adoption;
     expect(Object.hasOwn(firstEnvelope, "coreEcology")).toBe(false);
@@ -262,7 +267,7 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
     await reloadedRuntime.save();
     reloadedRuntime.destroy();
 
-    const secondEnvelope = requireV25(repository.snapshot());
+    const secondEnvelope = requireV26(repository.snapshot());
     const secondState = requireRegionalState(secondEnvelope);
     expect(secondEnvelope.regionalEcology).toBe(durableState);
     expect(stableStringify(secondState.root.adoption)).toBe(durableReceipt);
@@ -272,7 +277,7 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
 
   it("materializes independently of source order and round-trips one neutral world tick", async () => {
     const repository = await createFreshSave("alpha32 runtime order and neutral tick");
-    const beforeEnvelope = requireV25(repository.snapshot());
+    const beforeEnvelope = requireV26(repository.snapshot());
     const beforeState = requireRegionalState(beforeEnvelope);
     const beforeWorld = deserializeWorld(beforeEnvelope.world);
     const travel = restorePlayerRegionalTravel(
@@ -280,9 +285,9 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
       beforeEnvelope.player,
       beforeEnvelope.regionalTravel,
     );
-    if (travel === null) throw new Error("v25 order fixture lost its regional frame");
+    if (travel === null) throw new Error("v26 order fixture lost its regional frame");
     const sources = regionalEcologyActiveResidentPatches(beforeState);
-    if (sources === null) throw new Error("v25 order fixture lost its active root owners");
+    if (sources === null) throw new Error("v26 order fixture lost its active root owners");
     const window = {
       origin: travel.window.origin,
       terrain: {
@@ -308,7 +313,7 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
     await runtime.save();
     runtime.destroy();
 
-    const afterEnvelope = requireV25(repository.snapshot());
+    const afterEnvelope = requireV26(repository.snapshot());
     const afterState = requireRegionalState(afterEnvelope);
     const afterWorld = deserializeWorld(afterEnvelope.world);
     expect(afterWorld.meta.completedTick).toBe(beforeWorld.meta.completedTick + 1);
@@ -318,7 +323,7 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
     const reloaded = await createTideweftRuntime(repository);
     await reloaded.save();
     reloaded.destroy();
-    expect(requireV25(repository.snapshot()).regionalEcology).toBe(durableRegionalEcology);
+    expect(requireV26(repository.snapshot()).regionalEcology).toBe(durableRegionalEcology);
   }, 30_000);
 
   it("conserves one cross-owner predator death and rejects duplicated body authority", async () => {
@@ -332,7 +337,7 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
     await runtime.save();
     runtime.destroy();
 
-    const afterEnvelope = requireV25(repository.snapshot());
+    const afterEnvelope = requireV26(repository.snapshot());
     const afterState = requireRegionalState(afterEnvelope);
     const attacker = regionalSource(afterState, staged.attackerSourceKey);
     const victim = regionalSource(afterState, staged.victimSourceKey);
@@ -355,8 +360,11 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
 
     const duplicate = duplicateRegionalSource(victim);
     const forgedState = forgeRegionalStateWithDuplicate(afterState, duplicate);
-    const forgedEnvelope = resealV25(afterEnvelope, {
-      regionalEcology: stableStringify(forgedState),
+    const forgedEnvelope = resealV26(afterEnvelope, {
+      regionalEcology: stableStringify(forgeRegionalStateV2WithBase(
+        requireRegionalStateV2(afterEnvelope),
+        forgedState,
+      )),
     });
     repository.replace({
       ...repository.snapshot(),
@@ -395,7 +403,7 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   // authoritative fixed player step; ten steps complete one neutral world tick.
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
-    if (callback === undefined) throw new Error("regional-v25 runtime stopped scheduling frames");
+    if (callback === undefined) throw new Error("regional-v26 runtime stopped scheduling frames");
     scheduledFrame = undefined;
     callback(nextFrameTime);
     nextFrameTime += 100;
@@ -411,7 +419,8 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
   victimPopulationUnits: number;
 }> {
   const record = repository.snapshot();
-  const envelope = requireV25(record);
+  const envelope = requireV26(record);
+  const stateV2 = requireRegionalStateV2(envelope);
   const state = requireRegionalState(envelope);
   const world = deserializeWorld(envelope.world);
   const foxSource = state.activeResidents.find(({ patch }) => (
@@ -432,7 +441,7 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
     species === "marsh-rabbit"
   ))?.members[0]?.actor;
   if (foxSource === undefined || rabbitSource === undefined || fox === undefined || rabbit === undefined) {
-    throw new Error("regional-v25 seed omitted its distinct fox/rabbit owners");
+    throw new Error("regional-v26 seed omitted its distinct fox/rabbit owners");
   }
 
   const position = crossOwnerContactPosition(envelope, state);
@@ -478,7 +487,7 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
   });
   const activeResidents = state.activeResidents.map((resident) => {
     if (resident.kind === "settlement-home") {
-      throw new Error("regional-v25 active resident impersonated settlement home");
+      throw new Error("regional-v26 active resident impersonated settlement home");
     }
     if (resident.sourceKey !== foxSource.sourceKey && resident.sourceKey !== rabbitSource.sourceKey) {
       return { kind: resident.kind, sourceKey: resident.sourceKey, patch: resident.patch };
@@ -488,7 +497,7 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
       world.meta.rootSeed,
       resident.region,
     );
-    if (deviation === null) throw new Error("regional-v25 contact deviation was not durable");
+    if (deviation === null) throw new Error("regional-v26 contact deviation was not durable");
     return { kind: resident.kind, sourceKey: resident.sourceKey, patch: deviation };
   });
   const stagedState = createRegionalEcologyState({
@@ -505,7 +514,7 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
     envelope.player,
     envelope.regionalTravel,
   );
-  if (travel === null) throw new Error("regional-v25 contact fixture lost its regional frame");
+  if (travel === null) throw new Error("regional-v26 contact fixture lost its regional frame");
   const materialized = setRegionalEcologyMaterializationForWindow(
     stagedState.activeResidents.map(({ sourceKey, patch }) => ({ sourceKey, patch })),
     {
@@ -523,13 +532,21 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
     )))
   )) ?? []);
   if (!activeIds.has(fox.identity.stableId) || !activeIds.has(rabbit.identity.stableId)) {
-    throw new Error("regional-v25 contact actors missed global materialization");
+    throw new Error("regional-v26 contact actors missed global materialization");
   }
 
   repository.replace({
     ...record,
-    worldJson: JSON.stringify(resealV25(envelope, {
-      regionalEcology: serializeRegionalEcologyState(stagedState),
+    worldJson: JSON.stringify(resealV26(envelope, {
+      regionalEcology: serializeRegionalEcologyStateV2(createRegionalEcologyStateV2({
+        base: stagedState,
+        alpineRoot: stateV2.alpineRoot,
+        alpineActiveResidents: stateV2.alpineActiveResidents.map(({ sourceKey, patch }) => ({
+          sourceKey,
+          patch,
+        })),
+        adoption: stateV2.adoption,
+      })),
     })),
   });
   return Object.freeze({
@@ -542,7 +559,7 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
 }
 
 function crossOwnerContactPosition(
-  envelope: V25Envelope,
+  envelope: V26Envelope,
   state: RegionalEcologyStateV1,
 ): WorldPosition {
   const world = deserializeWorld(envelope.world);
@@ -552,7 +569,7 @@ function crossOwnerContactPosition(
     player,
     envelope.regionalTravel,
   );
-  if (travel === null) throw new Error("regional-v25 contact fixture lost regional travel");
+  if (travel === null) throw new Error("regional-v26 contact fixture lost regional travel");
   const view = createRegionalWorldView(createWorldView(world), travel.window, {
     discovered: player.discovered,
     depthSoundings: player.depthSoundings,
@@ -584,7 +601,7 @@ function crossOwnerContactPosition(
         + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
     );
   }
-  throw new Error("regional-v25 contact fixture found no shared traversable tile");
+  throw new Error("regional-v26 contact fixture found no shared traversable tile");
 }
 
 function regionalSource(
@@ -594,7 +611,7 @@ function regionalSource(
   const source = state.activeResidents.find(
     ({ sourceKey: candidate }) => candidate === sourceKey,
   );
-  if (source === undefined) throw new Error(`regional-v25 source ${sourceKey} was lost`);
+  if (source === undefined) throw new Error(`regional-v26 source ${sourceKey} was lost`);
   return source;
 }
 
@@ -621,7 +638,7 @@ function duplicateRegionalSource(
     ...source.patch,
     patchKey: sourceKey,
   });
-  if (patch === null) throw new Error("regional-v25 duplicate fixture was not structural");
+  if (patch === null) throw new Error("regional-v26 duplicate fixture was not structural");
   const base = {
     version: source.version,
     kind: source.kind,
@@ -648,10 +665,19 @@ function forgeRegionalStateWithDuplicate(
   return Object.freeze({ ...base, integrity: hashCanonical(base) });
 }
 
-function resealV25(
-  envelope: V25Envelope,
-  changes: Readonly<Partial<Pick<V25Envelope, "regionalEcology">>>,
-): V25Envelope {
+function forgeRegionalStateV2WithBase(
+  state: RegionalEcologyStateV2,
+  base: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const { integrity: _integrity, ...prior } = state;
+  const next = { ...prior, base };
+  return Object.freeze({ ...next, integrity: hashCanonical(next) });
+}
+
+function resealV26(
+  envelope: V26Envelope,
+  changes: Readonly<Partial<Pick<V26Envelope, "regionalEcology">>>,
+): V26Envelope {
   const { integrity: _integrity, ...prior } = envelope;
   const base = { ...prior, ...changes };
   return Object.freeze({
@@ -660,26 +686,30 @@ function resealV25(
   });
 }
 
-function requireV25(record: SaveRecord): V25Envelope {
-  const value = JSON.parse(record.worldJson) as V25Envelope;
+function requireV26(record: SaveRecord): V26Envelope {
+  const value = JSON.parse(record.worldJson) as V26Envelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 25
-    || record.payloadVersion !== 25
+    || value.version !== 26
+    || record.payloadVersion !== 26
     || typeof value.world !== "string"
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("fixture did not produce the v25 regional ecology envelope");
+  ) throw new Error("fixture did not produce the v26 regional ecology envelope");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed as Readonly<Record<string, unknown>>)) {
-    throw new Error("v25 outer envelope failed its integrity seal");
+    throw new Error("v26 outer envelope failed its integrity seal");
   }
   return value;
 }
 
-function requireRegionalState(envelope: V25Envelope): RegionalEcologyStateV1 {
-  const state = deserializeRegionalEcologyState(envelope.regionalEcology);
-  if (state === null) throw new Error("v25 regional ecology state did not deserialize");
+function requireRegionalStateV2(envelope: V26Envelope): RegionalEcologyStateV2 {
+  const state = deserializeRegionalEcologyStateV2(envelope.regionalEcology);
+  if (state === null) throw new Error("v26 regional ecology state did not deserialize");
   return state;
+}
+
+function requireRegionalState(envelope: V26Envelope): RegionalEcologyStateV1 {
+  return requireRegionalStateV2(envelope).base;
 }
 
 function actorContinuity(state: RegionalEcologyStateV1) {
@@ -703,11 +733,11 @@ function uniqueActorIds(state: RegionalEcologyStateV1): Set<string> {
   return new Set(actorContinuity(state).map(({ identity }) => identity.stableId));
 }
 
-function createV24SourcePatch(envelope: V25Envelope): CoreEcologyAggregatePatchState {
+function createV24SourcePatch(envelope: V26Envelope): CoreEcologyAggregatePatchState {
   const state = requireRegionalState(envelope);
   const home = state.settlementHome.patch;
   if (home.derivation.kind !== "settlement-home-v1") {
-    throw new Error("v25 fixture omitted its settlement-home derivation");
+    throw new Error("v26 fixture omitted its settlement-home derivation");
   }
   const habitat = home.derivation.habitat;
   const world = deserializeWorld(envelope.world);
@@ -850,11 +880,11 @@ function initializeV24ActivityActor(
 
 function downgradeToV24(
   record: SaveRecord,
-  envelope: V25Envelope,
+  envelope: V26Envelope,
   sourcePatch: CoreEcologyAggregatePatchState,
 ): { readonly record: SaveRecord; readonly envelope: V24Envelope } {
   const {
-    integrity: _v25Integrity,
+    integrity: _v26Integrity,
     regionalEcology: _regionalEcology,
     ...shared
   } = envelope;

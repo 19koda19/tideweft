@@ -11,11 +11,11 @@ import {
   type CoreEcologyPopulationMemberState,
   type CoreEcologyPopulationState,
 } from "./coreEcology";
+import type { CoreEcologyActivityAuthorityReceipt } from "./coreEcologyActivity";
 import { coreEcologyGroupComponentForMember } from "./coreEcologyGroups";
-import {
-  isTrustedCoreEcologyActivityAuthority,
-  type CoreEcologyActivityAuthorityV1,
-} from "./coreEcologyActivityAuthority";
+import { isTrustedCoreEcologyActivityAuthority } from "./coreEcologyActivityAuthority";
+import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
+import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
   coreEcologySpeciesHasRuntimeCapability,
   coreEcologySpeciesRuntimePolicy,
@@ -58,7 +58,7 @@ export interface ProjectCoreEcologyWildlifeInput {
   readonly tileSize: number;
   readonly selectedTarget?: CoreWildlifeSelectionTarget | null;
   /** Transient source-authenticated activity destinations, never save data. */
-  readonly activityAuthorities?: readonly CoreEcologyActivityAuthorityV1[];
+  readonly activityAuthorities?: readonly CoreEcologyActivityAuthorityReceipt[];
 }
 
 interface VisibleMember {
@@ -454,15 +454,17 @@ function allowedProjectionInputKeys(value: Record<string, unknown>): boolean {
 }
 
 function canonicalActivityAuthorities(
-  value: readonly CoreEcologyActivityAuthorityV1[] | undefined,
+  value: readonly CoreEcologyActivityAuthorityReceipt[] | undefined,
   patch: CoreEcologyAggregatePatchState,
-): ReadonlyMap<string, CoreEcologyActivityAuthorityV1> | null {
+): ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt> | null {
   if (value === undefined) return new Map();
   if (!Array.isArray(value)) return null;
-  const authorities = new Map<string, CoreEcologyActivityAuthorityV1>();
+  const authorities = new Map<string, CoreEcologyActivityAuthorityReceipt>();
   for (const authority of value) {
+    const isHabitatAuthority = isTrustedCoreEcologyActivityAuthority(authority);
+    const isRidgeAuthority = isTrustedCoreEcologyAlpineRidgeActivityAuthority(authority);
     if (
-      !isTrustedCoreEcologyActivityAuthority(authority)
+      (!isHabitatAuthority && !isRidgeAuthority)
       || authority.sourceKey !== patch.patchKey
       || authorities.has(authority.actorId)
     ) return null;
@@ -471,7 +473,16 @@ function canonicalActivityAuthorities(
     ));
     if (
       member === undefined
-      || member.actor.identity.species !== authority.species
+      || (
+        isHabitatAuthority
+          ? member.actor.identity.species !== authority.species
+          : (
+              coreEcologyActivityAffordanceProfile(member.actor.identity.species)?.archetypeId
+                !== "ridge-soar-perch"
+              || authority.homeAnchor.region.x !== patch.originRegion.x
+              || authority.homeAnchor.region.y !== patch.originRegion.y
+            )
+      )
     ) return null;
     authorities.set(authority.actorId, authority);
   }

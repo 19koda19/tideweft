@@ -14,6 +14,8 @@ import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
   "test:alpha31-predator-presentation-invariants:v1" as const;
+export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha33-alpine-presentation-invariants:v1" as const;
 
 const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
@@ -388,6 +390,8 @@ function wildlifeView(
     "gray-wolf": "Gray wolf",
     cougar: "Cougar",
     "brown-bear": "Brown bear",
+    "mountain-goat": "Mountain goat",
+    "golden-eagle": "Golden eagle",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -408,6 +412,8 @@ function wildlifeView(
     "gray-wolf": "WOLF-",
     cougar: "COUGAR-",
     "brown-bear": "BROWNBEAR-",
+    "mountain-goat": "MOUNTAINGOAT-",
+    "golden-eagle": "GOLDENEAGLE-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -416,7 +422,13 @@ function wildlifeView(
     position: { x: 48, y: 48 },
     facing: Math.PI * 0.25,
     sizeScale: 1,
-    appearanceKey: species === "domestic-goat" ? "brown-coated" : "test-visible-morph",
+    appearanceKey: species === "domestic-goat"
+      ? "brown-coated"
+      : species === "mountain-goat"
+        ? "cream-white"
+        : species === "golden-eagle"
+          ? "golden-naped"
+          : "test-visible-morph",
     behavior: "watch",
     conditionLabels: [],
     selected: false,
@@ -1468,7 +1480,7 @@ describe("Relief physical wildlife remains", () => {
   });
 });
 
-describe("Relief wildlife presentation", () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife presentation`, () => {
   it("renders and touch-selects aggregate population evidence without an actor target", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-rat-evidence", { x: 48, y: 48 });
@@ -1608,6 +1620,8 @@ describe("Relief wildlife presentation", () => {
     ["atlantic-silverside", "surface-dimples", "#55c7dc", "torus"],
     ["atlantic-marsh-fiddler-crab", "burrow-openings", "#4c392b", "torus"],
     ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "#735b43", "line"],
+    ["american-pika", "haypile", "#737848", "ellipsoid"],
+    ["american-pika", "talus-sign", "#777b73", "cone"],
   ] as const)("renders and touch-selects low-cost %s %s without an actor alias", (
     species,
     form,
@@ -1624,15 +1638,23 @@ describe("Relief wildlife presentation", () => {
       form,
       quickLabel: species === "atlantic-silverside"
         ? "Atlantic silverside signs"
-        : "Atlantic marsh fiddler crab signs",
+        : species === "american-pika"
+          ? "American pika signs"
+          : "Atlantic marsh fiddler crab signs",
       identityLabel: species === "atlantic-silverside"
         ? "Atlantic silverside school signs"
-        : "Atlantic marsh fiddler crab area signs",
+        : species === "american-pika"
+          ? "American pika population signs"
+          : "Atlantic marsh fiddler crab area signs",
       evidenceLabel: form === "surface-dimples"
         ? "Silverside surface dimples and school glints"
         : form === "burrow-openings"
           ? "Fiddler crab burrow openings"
-          : "Fiddler crab feeding scrapes",
+          : form === "feeding-scrapes"
+            ? "Fiddler crab feeding scrapes"
+            : form === "haypile"
+              ? "American pika haypile"
+              : "American pika talus sign",
       selected: true,
     });
     const current: TideweftView = {
@@ -2226,13 +2248,17 @@ describe("Relief wildlife presentation", () => {
           position: { x: 36, y: 12 },
           behavior: "pursue",
         }),
+        wildlifeView("golden-eagle", {
+          position: { x: 60, y: 12 },
+          behavior: "flight",
+        }),
       ],
     });
     const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
     harness.draw();
     // There is one body per aerial representative. Crow `groupSize` must not
     // multiply its individually owned body again.
-    expect(harness.instance.ellipsoid).toHaveBeenCalledTimes(2);
+    expect(harness.instance.ellipsoid).toHaveBeenCalledTimes(3);
     const firstFrame = translate.mock.calls.map((call) => [...call]);
     translate.mockClear();
     now = 2_120;
@@ -2291,6 +2317,29 @@ describe("Relief wildlife presentation", () => {
     harness.draw();
     const highHarrier = translate.mock.calls.find((call) => call[0] === 36 && call[2] === 12);
     expect(lowHarrier?.[1]).not.toBe(highHarrier?.[1]);
+
+    translate.mockClear();
+    harness.setView({
+      ...base,
+      wildlife: [wildlifeView("golden-eagle", {
+        position: { x: 60, y: 12 },
+        behavior: "flight",
+      })],
+    });
+    harness.draw();
+    const soaringEagle = translate.mock.calls.find((call) => call[0] === 60 && call[2] === 12);
+
+    translate.mockClear();
+    harness.setView({
+      ...base,
+      wildlife: [wildlifeView("golden-eagle", {
+        position: { x: 60, y: 12 },
+        behavior: "perch",
+      })],
+    });
+    harness.draw();
+    const perchedEagle = translate.mock.calls.find((call) => call[0] === 60 && call[2] === 12);
+    expect(perchedEagle?.[1]).not.toBe(soaringEagle?.[1]);
     harness.renderer.destroy();
   });
 
@@ -2300,6 +2349,8 @@ describe("Relief wildlife presentation", () => {
     ["gray-wolf", "#727875", "sphere"],
     ["cougar", "#aa8258", "cylinder"],
     ["brown-bear", "#4c372b", "sphere"],
+    ["mountain-goat", "#d8d1bd", "cone"],
+    ["golden-eagle", "#4c3928", "cone"],
   ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} renders and touch-selects the shared color-independent upland %s form`, (
     species,
     primaryColor,
@@ -2310,7 +2361,11 @@ describe("Relief wildlife presentation", () => {
     const base = view(`relief-${species}`, { x: 48, y: 48 });
     const actor = wildlifeView(species, {
       appearanceKey: "unknown-morph",
-      behavior: species === "gray-wolf" ? "pursue" : "forage",
+      behavior: species === "gray-wolf"
+        ? "pursue"
+        : species === "golden-eagle"
+          ? "flight"
+          : "forage",
       position: { x: 12, y: 12 },
       selected: true,
     });
@@ -2366,6 +2421,8 @@ describe("Relief wildlife presentation", () => {
       "gray-wolf",
       "cougar",
       "brown-bear",
+      "mountain-goat",
+      "golden-eagle",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -2386,6 +2443,8 @@ describe("Relief wildlife presentation", () => {
       "gray-wolf": "WOLF-",
       cougar: "COUGAR-",
       "brown-bear": "BROWNBEAR-",
+      "mountain-goat": "MOUNTAINGOAT-",
+      "golden-eagle": "GOLDENEAGLE-",
     };
 
     for (const kind of species) {

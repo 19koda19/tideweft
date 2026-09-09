@@ -469,7 +469,7 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(25);
+    expect(saved.version).toBe(26);
     expect(saved.regionalTravel).toEqual(expect.any(String));
     expect(saved.fieldResources).toEqual(ecology.state);
     expect(saved.player.craftingInventory).toEqual(player.craftingInventory);
@@ -662,7 +662,7 @@ describe("runtime field-resource integration", () => {
     )).toBe(true);
     await runtime.save();
     const migrated = decodeGameSave(repository.snapshot());
-    expect(migrated.version).toBe(25);
+    expect(migrated.version).toBe(26);
     expect(migrated.regionalTravel).toEqual(expect.any(String));
     expect(migrated.fieldResources).toEqual({
       version: 1,

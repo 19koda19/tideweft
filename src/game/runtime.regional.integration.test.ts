@@ -43,12 +43,14 @@ import {
   putRegionalEcologyResidentDeviation,
 } from "./regionalEcology";
 import {
-  deserializeRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
-  replaceRegionalEcologyActiveState,
-  serializeRegionalEcologyState,
   type RegionalEcologyActiveResidentInput,
 } from "./regionalEcologyState";
+import {
+  deserializeRegionalEcologyStateV2,
+  replaceRegionalEcologyStateV2ActiveState,
+  serializeRegionalEcologyStateV2,
+} from "./regionalEcologyStateV2";
 import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
@@ -70,7 +72,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 25;
+  readonly version: 26;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -162,12 +164,12 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 25
-    || record.payloadVersion !== 25
-  ) throw new Error("fixture did not produce a current v25 regional save");
+    || value.version !== 26
+    || record.payloadVersion !== 26
+  ) throw new Error("fixture did not produce a current v26 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v25 outer envelope does not match its integrity seal");
+    throw new Error("fixture v26 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
@@ -206,7 +208,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 25,
+    payloadVersion: 26,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -360,12 +362,12 @@ function rebaseFixtureRegionalEcology(
   rootSeed: RootSeed,
   spatial: WorldView,
 ): string {
-  const prior = deserializeRegionalEcologyState(serialized);
+  const prior = deserializeRegionalEcologyStateV2(serialized);
   if (prior === null) throw new Error("fixture started with invalid regional ecology");
   const activeRegions = regionalStorageRegionsInView(spatial);
   const desiredRegionKeys = new Set(activeRegions.map(regionKey));
-  let root = prior.root;
-  for (const resident of prior.activeResidents) {
+  let root = prior.base.root;
+  for (const resident of prior.base.activeResidents) {
     if (
       resident.kind !== "regional-habitat"
       || desiredRegionKeys.has(regionKey(resident.region))
@@ -381,7 +383,7 @@ function rebaseFixtureRegionalEcology(
     activeRegions,
   );
   if (entrants === null) throw new Error("fixture could not derive regional ecology entrants");
-  const retainedBySource = new Map(prior.activeResidents
+  const retainedBySource = new Map(prior.base.activeResidents
     .filter(({ kind }) => kind === "regional-habitat")
     .map((resident) => [resident.sourceKey, resident] as const));
   const activeResidents: RegionalEcologyActiveResidentInput[] = entrants.map((entrant) => ({
@@ -389,23 +391,26 @@ function rebaseFixtureRegionalEcology(
     sourceKey: entrant.sourceKey,
     patch: retainedBySource.get(entrant.sourceKey)?.patch ?? entrant.patch,
   }));
-  for (const legacy of prior.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+  for (const legacy of prior.base.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
     activeResidents.push({
       kind: "legacy-cohort",
       sourceKey: legacy.sourceKey,
       patch: legacy.patch,
     });
   }
-  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
+  return serializeRegionalEcologyStateV2(replaceRegionalEcologyStateV2ActiveState(prior, {
     expectedIntegrity: prior.integrity,
-    rootSeed,
-    root,
-    settlementHome: {
-      sourceKey: prior.settlementHome.sourceKey,
-      patch: prior.settlementHome.patch,
+    base: {
+      expectedIntegrity: prior.base.integrity,
+      rootSeed,
+      root,
+      settlementHome: {
+        sourceKey: prior.base.settlementHome.sourceKey,
+        patch: prior.base.settlementHome.patch,
+      },
+      activeRegions,
+      activeResidents,
     },
-    activeRegions,
-    activeResidents,
   }));
 }
 

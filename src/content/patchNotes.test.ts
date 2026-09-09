@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.32",
-      buildIdentity: "0.3.3-alpha.32",
-      gameplayContractVersion: 30,
-      tutorialVersion: 42,
+      version: "0.3.3-alpha.33",
+      buildIdentity: "0.3.3-alpha.33",
+      gameplayContractVersion: 31,
+      tutorialVersion: 43,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Open Country Ledger and retains the earlier habitat releases", () => {
+  it("scopes Talus and Sky and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const openCountryRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.32",
+    );
+    const openCountryCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => openCountryRelease?.categories[category] ?? [])
       .join(" ");
     const highCountryRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.31",
@@ -204,19 +211,27 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("deterministic signed-region habitat");
-    expect(activeCopy).toContain("carrying capacity, food or prey support, territory, and density budgets");
-    expect(activeCopy).toContain("honestly empty");
-    expect(activeCopy).toContain("one global group-atomic stable-distance top-K plan capped at twenty-four actors");
-    expect(activeCopy).toContain("Fixed pre-materialization density gates");
-    expect(activeCopy).toContain("free-ranging domestic cat is now habitat-optional");
-    expect(activeCopy).toContain("visual actors, tidal activity, and alarms across regional-owner boundaries");
-    expect(activeCopy).toContain("exactly contacted, currently identified eligible solitary marsh rabbit");
-    expect(activeCopy).toContain("only a marsh fox, gray wolf, or cougar may enter that path");
-    expect(activeCopy).toContain("victim's owner retires it once and owns its conserved physical body");
-    expect(activeCopy).toContain("Pristine regional baselines are rederived rather than stored");
-    expect(activeCopy).toContain("signed and extreme-coordinate determinism");
-    expect(activeCopy).toContain("representative shared interactions replace species-local controllers or an exhaustive animal-pair matrix");
+    expect(activeCopy).toContain("catalog advances to twenty-seven records");
+    expect(activeCopy).toContain("mountain-goat HERD");
+    expect(activeCopy).toContain("non-addressable American-pika talus aggregate");
+    expect(activeCopy).toContain("one solitary golden eagle");
+    expect(activeCopy).toContain("shared grade-aware terrestrial locomotion");
+    expect(activeCopy).toContain("authenticated ridge soaring and perching lines");
+    expect(activeCopy).toContain("currently visible golden eagle");
+    expect(activeCopy).toContain("Terrain occlusion prevents that observation and response");
+    expect(activeCopy).toContain("no exact pika is selected, captured, injured, killed, or turned into a body");
+    expect(activeCopy).toContain("one insertion-order-independent, group-atomic stable-distance top-K plan capped at twenty-four actors");
+    expect(activeCopy).toContain("exact Open Country Ledger regional-habitat prefix");
+    expect(activeCopy).toContain("separate append-safe sparse layer");
+    expect(activeCopy).toContain("Chart 2D and Relief 3D");
+    expect(activeCopy).toContain("Quick inspection and ABOUT");
+    expect(activeCopy).toContain("representative visible-versus-occluded eagle-and-pika chain");
+    expect(openCountryCopy).toContain("deterministic signed-region habitat");
+    expect(openCountryCopy).toContain("carrying capacity, food or prey support, territory, and density budgets");
+    expect(openCountryCopy).toContain("honestly empty");
+    expect(openCountryCopy).toContain("one global group-atomic stable-distance top-K plan capped at twenty-four actors");
+    expect(openCountryCopy).toContain("Fixed pre-materialization density gates");
+    expect(openCountryCopy).toContain("free-ranging domestic cat is now habitat-optional");
     expect(highCountryCopy).toContain("Cougar and brown bear");
     expect(highCountryCopy).toContain("twenty-four-record catalog");
     expect(highCountryCopy).toContain("same habitat, population, perception, attention, locomotion, bounded materialization, and presentation owners");
@@ -268,20 +283,21 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 25");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("regional ecology root version 1");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Habitat analysis remains sealed at version 11");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("core ecology remains patch version 3");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains record version 5");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("catalog remains at twenty-four records with no new species");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("normalized sealed version-24 High Country Shadows save is authenticated and adopted exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("retains, redistributes, or explicitly retires every compatibility wildlife unit");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("persisted non-death disposition");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide species breadth");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no species");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("General tactical mortality remains absent");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("only supported live-animal harm");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete scent propagation and tracking");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 26");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("regional ecology advances to root version 2");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("exact authenticated version-1 Open Country Ledger child");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("separate sparse Alpine child");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("production catalog contains twenty-seven records");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("normalized sealed version-25 Open Country Ledger save is authenticated and adopted exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("receipt binds its original outer integrity and complete base lineage");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Both ecology children share one atomic projection and conservation commit");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not polar ecology, complete Wave F, worldwide species breadth");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no animal mortality, live-prey capture, exact pika target, reproduction");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("earlier exact marsh-fox, gray-wolf, or cougar contact");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no audible Living Voice");
+    expect(openCountryRelease?.categories.saves.join(" ")).toContain("outer session advances to version 25");
+    expect(openCountryRelease?.categories.saves.join(" ")).toContain("regional ecology root version 1");
+    expect(openCountryRelease?.categories.saves.join(" ")).toContain("catalog remains at twenty-four records with no new species");
     expect(highCountryRelease?.categories.saves.join(" ")).toContain("outer session advances to version 24");
     expect(highCountryRelease?.categories.saves.join(" ")).toContain("habitat analysis advances to version 11");
     expect(highCountryRelease?.categories.saves.join(" ")).toContain("catalog now contains twenty-four records");

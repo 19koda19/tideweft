@@ -24,6 +24,7 @@ describe("core ecology activity affordance registry", () => {
       "dabbling-waterfowl",
       "shore-water-forager",
       "aerial-surface-opportunist",
+      "ridge-soar-perch",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES).toEqual([
       "fish-crow",
@@ -32,10 +33,23 @@ describe("core ecology activity affordance registry", () => {
       "american-black-duck",
       "north-american-river-otter",
       "gull",
+      "golden-eagle",
     ]);
-    expect(new Set(
-      CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.map(({ archetypeId }) => archetypeId),
-    )).toEqual(new Set(CORE_ECOLOGY_ACTIVITY_ARCHETYPE_IDS));
+    expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.map(({ archetypeId }) => archetypeId))
+      .toEqual([
+        "perch-watch",
+        "low-quartering",
+        "tidal-wader",
+        "dabbling-waterfowl",
+        "shore-water-forager",
+        "aerial-surface-opportunist",
+        "ridge-soar-perch",
+      ]);
+    expect(coreEcologyActivityAffordanceProfile("golden-eagle")).toMatchObject({
+      archetypeId: "ridge-soar-perch",
+      locomotionClass: "aerial",
+      presentationSignals: ["perched", "resting", "ridge-soaring-flight"],
+    });
 
     for (const profile of CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES) {
       const activityArchetype = coreEcologyActivityArchetype(profile.archetypeId);
@@ -54,6 +68,30 @@ describe("core ecology activity affordance registry", () => {
       expect(Object.isFrozen(profile)).toBe(true);
       expect(Object.isFrozen(profile.destinations)).toBe(true);
     }
+  });
+
+  it("publishes one reusable ridge-soar/perch contract for the opted-in eagle", () => {
+    const ridge = coreEcologyActivityArchetype("ridge-soar-perch");
+    expect(ridge).toMatchObject({
+      archetypeId: "ridge-soar-perch",
+      locomotionClass: "aerial",
+      allowedTravelMedia: ["air"],
+      destinations: [
+        {
+          semantic: "authenticated-ridge-perch",
+          authority: "ridge-habitat",
+          allowedTravelMedia: ["air"],
+        },
+        {
+          semantic: "authenticated-ridge-soar-loop",
+          authority: "ridge-habitat",
+          allowedTravelMedia: ["air"],
+        },
+      ],
+      observationAffordance: { kind: "none" },
+      presentationSignals: ["perched", "resting", "ridge-soaring-flight"],
+    });
+    expect(Object.isFrozen(ridge)).toBe(true);
   });
 
   it("proves capability, movement, destination, and knowledge honesty as registry properties", () => {

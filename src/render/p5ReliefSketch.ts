@@ -62,8 +62,10 @@ import {
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
+  ALPINE_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA31_PREDATOR_APPEARANCE_PALETTES,
+  alpineWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
@@ -219,7 +221,9 @@ type ReliefWildlifeForm =
   | "black-bear"
   | "domestic-cat"
   | "marsh-rabbit"
-  | "marsh-fox";
+  | "marsh-fox"
+  | "mountain-goat"
+  | "golden-eagle";
 
 interface ReliefWildlifeDescriptor {
   readonly form: ReliefWildlifeForm;
@@ -418,6 +422,20 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     ringRadiusScale: 0.58,
     labelLift: 0.88,
   },
+  "mountain-goat": {
+    form: "mountain-goat",
+    colors: ALPINE_WILDLIFE_APPEARANCE_PALETTES["mountain-goat"]["cream-white"],
+    hitRadiusScale: 0.56,
+    ringRadiusScale: 0.46,
+    labelLift: 0.92,
+  },
+  "golden-eagle": {
+    form: "golden-eagle",
+    colors: ALPINE_WILDLIFE_APPEARANCE_PALETTES["golden-eagle"]["golden-naped"],
+    hitRadiusScale: 0.6,
+    ringRadiusScale: 0.48,
+    labelLift: 1.32,
+  },
 };
 
 /*
@@ -515,6 +533,22 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
     hitRadiusScale: 0.5,
     ringRadiusScale: 0.4,
     liftScale: 0.18,
+  },
+  haypile: {
+    primary: "#737848",
+    secondary: "#c8b875",
+    dark: "#323626",
+    hitRadiusScale: 0.46,
+    ringRadiusScale: 0.37,
+    liftScale: 0.3,
+  },
+  "talus-sign": {
+    primary: "#777b73",
+    secondary: "#afb3a8",
+    dark: "#272b29",
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.39,
+    liftScale: 0.34,
   },
 };
 
@@ -4437,6 +4471,149 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawMountainGoat = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = alpineWildlifeAppearancePalette("mountain-goat", wildlife.appearanceKey);
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.108 * scale;
+      const moving = wildlife.behavior === "flee" || wildlife.behavior === "retreat";
+      const browsing = wildlife.behavior === "forage";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.009) * base * 0.22;
+      const bodyHalfLength = base * 1.7;
+      const bodyHalfHeight = base * 0.76;
+      const bodyHalfWidth = base * 0.64;
+      const legHeight = base * 1.08;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.68;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      p.ambientMaterial(colors.dark);
+      for (const [legX, phase] of [
+        [-bodyHalfLength * 0.56, -1],
+        [bodyHalfLength * 0.56, 1],
+      ] as const) {
+        for (const legZ of [-bodyHalfWidth * 0.48, bodyHalfWidth * 0.48]) {
+          p.push();
+          p.translate(legX + stride * phase, legHeight * 0.67, legZ);
+          p.box(base * 0.2, legHeight, base * 0.2);
+          p.translate(base * 0.14, legHeight * 0.48, 0);
+          p.box(base * 0.46, base * 0.13, base * 0.25);
+          p.pop();
+        }
+      }
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 10, 6);
+      // A broken lower fringe supplies the shaggy silhouette without a texture asset.
+      p.ambientMaterial(colors.secondary);
+      for (const x of [-1.1, -0.55, 0, 0.55, 1.1]) {
+        p.push();
+        p.translate(base * x, bodyHalfHeight * 0.78, 0);
+        p.cone(base * 0.24, base * 0.48, 5, 1);
+        p.pop();
+      }
+      const headY = browsing ? bodyHalfHeight * 0.66 : -bodyHalfHeight * 0.5;
+      p.push();
+      p.translate(bodyHalfLength * 0.82, headY, 0);
+      p.rotateZ(browsing ? 0.56 : -0.18);
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(base * 0.7, base * 0.88, base * 0.62, 8, 5);
+      p.translate(base * 0.48, base * 0.08, 0);
+      p.ambientMaterial(colors.secondary);
+      p.ellipsoid(base * 0.5, base * 0.36, base * 0.48, 7, 4);
+      for (const hornZ of [-base * 0.33, base * 0.33]) {
+        p.push();
+        p.translate(-base * 0.45, -base * 0.58, hornZ);
+        p.rotateZ(-0.92);
+        p.ambientMaterial(colors.dark);
+        p.cone(base * 0.12, base * 1.02, 7, 2);
+        p.pop();
+      }
+      p.pop();
+      p.pop();
+    };
+
+    const drawGoldenEagle = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = alpineWildlifeAppearancePalette("golden-eagle", wildlife.appearanceKey);
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.09 * scale;
+      const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
+      const bank = reducedMotion || perched ? 0 : Math.sin(now * 0.0032) * 0.12;
+      const lift = perched ? base * 0.62 : tileSize * 0.74;
+
+      p.push();
+      p.translate(wildlife.position.x, -surface - lift, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+      p.ambientMaterial(colors.primary);
+      if (perched) {
+        p.ellipsoid(base * 0.56, base * 1.22, base * 0.5, 8, 5);
+        p.push();
+        p.translate(base * 0.18, -base * 1.02, 0);
+        p.ambientMaterial(colors.secondary);
+        p.sphere(base * 0.43, 7, 5);
+        p.push();
+        p.translate(base * 0.43, base * 0.04, 0);
+        p.rotateZ(-p.HALF_PI);
+        p.ambientMaterial(colors.dark);
+        p.cone(base * 0.14, base * 0.5, 5, 1);
+        p.pop();
+        p.ambientMaterial(colors.accent ?? colors.secondary);
+        p.push();
+        p.translate(-base * 0.22, base * 0.18, 0);
+        p.ellipsoid(base * 0.34, base * 0.28, base * 0.44, 6, 4);
+        p.pop();
+        p.pop();
+      } else {
+        p.ellipsoid(base * 1.36, base * 0.3, base * 0.36, 8, 4);
+        for (const side of [-1, 1] as const) {
+          p.push();
+          p.rotateX(bank * side);
+          p.ambientMaterial(colors.primary);
+          p.beginShape();
+          p.vertex(base * 0.35, 0, side * base * 0.12);
+          p.vertex(-base * 0.12, 0, side * base * 3.65);
+          p.vertex(-base * 1.02, 0, side * base * 2.48);
+          p.vertex(-base * 0.42, 0, side * base * 0.18);
+          p.endShape(p.CLOSE);
+          p.ambientMaterial(colors.dark);
+          for (const feather of [2.62, 3.02, 3.4]) {
+            p.push();
+            p.translate(-base * 0.38, base * 0.03, side * base * feather);
+            p.rotateX(p.HALF_PI);
+            p.cone(base * 0.13, base * 0.8, 5, 1);
+            p.pop();
+          }
+          p.pop();
+        }
+        p.push();
+        p.translate(base * 1.12, -base * 0.1, 0);
+        p.ambientMaterial(colors.accent ?? colors.secondary);
+        p.sphere(base * 0.38, 7, 4);
+        p.translate(base * 0.37, base * 0.03, 0);
+        p.rotateZ(-p.HALF_PI);
+        p.ambientMaterial(colors.dark);
+        p.cone(base * 0.12, base * 0.42, 5, 1);
+        p.pop();
+        p.push();
+        p.translate(-base * 1.28, base * 0.02, 0);
+        p.ambientMaterial(colors.dark);
+        p.box(base * 0.72, base * 0.1, base * 0.92);
+        p.pop();
+      }
+      p.pop();
+    };
+
     const drawUplandMammal = (
       wildlife: WildlifeView,
       species: RegionalUplandWildlifeAppearanceSpecies,
@@ -5141,6 +5318,43 @@ export function createTideweftReliefRenderer(
           p.line(-base * 1.2, base * 0.52, -base * 0.7, base * 1.05, base * 0.52, base * 0.7);
           p.noStroke();
           break;
+        case "haypile":
+          for (const [x, z, angle] of [
+            [-0.72, 0.34, -0.48],
+            [-0.24, -0.16, 0.32],
+            [0.28, 0.24, -0.18],
+            [0.72, -0.26, 0.52],
+          ] as const) {
+            p.push();
+            p.translate(base * x, -base * 0.08, base * z);
+            p.rotateY(angle);
+            p.ambientMaterial(descriptor.primary);
+            p.ellipsoid(base * 0.66, base * 0.13, base * 0.2, 6, 3);
+            p.pop();
+          }
+          p.stroke(descriptor.secondary);
+          p.strokeWeight(Math.max(1, base * 0.1));
+          p.line(-base * 1.25, -base * 0.08, base * 0.5, base * 1.16, -base * 0.08, -base * 0.45);
+          p.noStroke();
+          break;
+        case "talus-sign":
+          for (const [x, z, scale] of [
+            [-0.82, 0.34, 0.76],
+            [0, -0.22, 1.06],
+            [0.86, 0.28, 0.68],
+          ] as const) {
+            p.push();
+            p.translate(base * x, -base * scale * 0.12, base * z);
+            p.rotateY(x * 0.28);
+            p.ambientMaterial(descriptor.primary);
+            p.cone(base * scale * 0.62, base * scale * 0.72, 5, 1);
+            p.pop();
+          }
+          p.stroke(descriptor.dark);
+          p.strokeWeight(Math.max(1, base * 0.12));
+          p.line(-base * 0.36, -base * 0.16, base * 0.18, base * 0.58, -base * 0.16, -base * 0.08);
+          p.noStroke();
+          break;
       }
       p.pop();
     };
@@ -5244,6 +5458,12 @@ export function createTideweftReliefRenderer(
           return true;
         case "marsh-fox":
           drawMarshFox(wildlife, surface, tileSize, now);
+          return true;
+        case "mountain-goat":
+          drawMountainGoat(wildlife, surface, tileSize, now);
+          return true;
+        case "golden-eagle":
+          drawGoldenEagle(wildlife, surface, tileSize, now);
           return true;
       }
     };

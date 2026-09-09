@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CORE_WILDLIFE_IDENTITY_VERSION,
   CORE_WILDLIFE_ID_PREFIX_BY_SPECIES,
+  CORE_WILDLIFE_ALPHA32_PROFILES_HASH,
+  CORE_WILDLIFE_ALPHA32_SPECIES,
+  CORE_WILDLIFE_ALPHA32_SPECIES_COUNT,
+  CORE_WILDLIFE_ALPHA32_SPECIES_HASH,
   CORE_WILDLIFE_PROFILES,
   CORE_WILDLIFE_SPECIES,
   assertCoreWildlifeIdentity,
@@ -17,6 +21,7 @@ import {
 } from "./coreWildlifeIdentity";
 import { REGION_COORD_LIMIT, createRegionCoord } from "./regions";
 import { seedFromText } from "./rng";
+import { hashCanonical } from "./util";
 
 function input(
   species: CoreWildlifeSpecies = "deer",
@@ -34,7 +39,7 @@ function input(
 describe("core wildlife identity", () => {
   it("appends each species contract without rewriting the published v1 prefix", () => {
     expect(CORE_WILDLIFE_IDENTITY_VERSION).toBe(1);
-    expect(CORE_WILDLIFE_SPECIES).toEqual([
+    expect(CORE_WILDLIFE_ALPHA32_SPECIES).toEqual([
       "deer",
       "gull",
       "black-bear",
@@ -58,6 +63,20 @@ describe("core wildlife identity", () => {
       "cougar",
       "brown-bear",
     ]);
+    expect(CORE_WILDLIFE_ALPHA32_SPECIES).toHaveLength(
+      CORE_WILDLIFE_ALPHA32_SPECIES_COUNT,
+    );
+    expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA32_SPECIES_COUNT))
+      .toEqual(CORE_WILDLIFE_ALPHA32_SPECIES);
+    expect(CORE_WILDLIFE_SPECIES.slice(CORE_WILDLIFE_ALPHA32_SPECIES_COUNT)).toEqual([
+      "mountain-goat",
+      "american-pika",
+      "golden-eagle",
+    ]);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES))
+      .toBe(CORE_WILDLIFE_ALPHA32_SPECIES_HASH);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES.map(getCoreWildlifeProfile)))
+      .toBe(CORE_WILDLIFE_ALPHA32_PROFILES_HASH);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
     expect(getCoreWildlifeProfile("deer").roles).toEqual([
@@ -95,6 +114,41 @@ describe("core wildlife identity", () => {
     ]);
     expect(getCoreWildlifeProfile("marsh-rabbit").behavior.maximumPursuitTicks).toBe(0);
     expect(getCoreWildlifeProfile("marsh-rabbit").maximumPatchPopulation).toBe(24);
+    expect(getCoreWildlifeProfile("mountain-goat")).toMatchObject({
+      maximumPatchPopulation: 5,
+      roles: ["prey", "forager"],
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("mountain-goat")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      groupOrganization: "herd",
+      groupStableIdNamespace: "HERD",
+      locomotionClass: "terrestrial",
+    });
+    expect(getCoreWildlifeProfile("american-pika")).toMatchObject({
+      maximumPatchPopulation: 32,
+      roles: ["prey", "small-prey", "forager"],
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("american-pika")).toMatchObject({
+      actorRepresentation: "aggregate",
+      catalogIdentityForm: "aggregate",
+      groupOrganization: null,
+      locomotionClass: "terrestrial",
+    });
+    expect(getCoreWildlifeProfile("golden-eagle")).toMatchObject({
+      maximumPatchPopulation: 1,
+      roles: ["predator"],
+      foodAffinities: { "live-prey": 0 },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("golden-eagle")).toMatchObject({
+      actorRepresentation: "individual",
+      catalogIdentityForm: "individual",
+      groupOrganization: null,
+      locomotionClass: "aerial",
+    });
     expect(getCoreWildlifeProfile("marsh-fox").roles).toEqual([
       "forager",
       "scavenger",

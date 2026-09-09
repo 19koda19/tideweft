@@ -19,6 +19,8 @@ const SHOW_VISIBLE_GROUP_COUNT = Object.freeze({
   "gray-wolf": false,
   cougar: false,
   "brown-bear": false,
+  "mountain-goat": false,
+  "golden-eagle": false,
 } satisfies Readonly<Record<WildlifeView["species"], boolean>>);
 
 /** Shared Chart/Relief suffix for an already knowledge-filtered visible count. */

@@ -2,6 +2,7 @@ import { createRegionCoord, isRegionCoord, regionKey, type RegionCoord } from ".
 import type { RootSeed } from "../sim/rng";
 import { compareText, hashCanonical, stableStringify } from "../sim/util";
 import {
+  CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   CORE_ECOLOGY_MAX_STEP_TICKS,
   advanceCoreEcologyDormantAggregatePatch,
   canonicalizeCoreEcologyAggregatePatch,
@@ -576,6 +577,18 @@ export function regionalEcologyActiveResidentPatches(
   })));
 }
 
+/**
+ * Exact canonical snapshots participating in the current transient projection.
+ * Regional and receipt-bound sources remain active as stored; settlement home
+ * joins only while its physical residence intersects the hot neighborhood.
+ */
+export function regionalEcologyActiveSourceSnapshots(
+  value: unknown,
+): readonly RegionalEcologyResidentSnapshotV1[] | null {
+  const state = canonicalizeRegionalEcologyState(value);
+  return state === null ? null : activeSnapshots(state);
+}
+
 /** Stable ownership manifest used by future transient combine/split work. */
 export function regionalEcologySourceOwnership(
   value: unknown,
@@ -614,7 +627,64 @@ export function projectRegionalEcologyActiveState(
     state.updatedAtTick,
   );
   if (materialized === null || materialized.length !== sources.length) return null;
-  const materializedBySource = new Map(materialized.map((entry) => [entry.sourceKey, entry]));
+  return bindRegionalEcologyActiveProjection(state, materialized);
+}
+
+/**
+ * Bind one externally planned, root-wide materialization split back to this
+ * V1 state's exact source snapshots. Only the transient materialization bit may
+ * differ: same-tick all-coarse normalization must reproduce every source byte.
+ */
+export function bindRegionalEcologyActiveProjection(
+  value: unknown,
+  materializedResidentsValue: unknown,
+): RegionalEcologyActiveProjectionV1 | null {
+  const state = canonicalizeRegionalEcologyState(value);
+  if (state === null || !Array.isArray(materializedResidentsValue)) return null;
+  const sources = activeSnapshots(state);
+  if (materializedResidentsValue.length !== sources.length) return null;
+  const sourceByKey = new Map(sources.map((source) => [source.sourceKey, source]));
+  const materializedBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  let materializedActorCount = 0;
+  for (const raw of materializedResidentsValue) {
+    if (
+      !plainRecord(raw)
+      || !exactKeys(raw, ["patch", "sourceKey"])
+      || typeof raw.sourceKey !== "string"
+      || materializedBySource.has(raw.sourceKey)
+    ) return null;
+    const source = sourceByKey.get(raw.sourceKey);
+    const projected = canonicalizeCoreEcologyAggregatePatch(raw.patch);
+    if (
+      source === undefined
+      || projected === null
+      || stableStringify(projected) !== stableStringify(raw.patch)
+      || projected.patchKey !== source.sourceKey
+      || projected.updatedAtTick !== state.updatedAtTick
+      || sourceLineageHash(projected) !== source.lineageHash
+    ) return null;
+    const materializedActorIds = projected.populations.flatMap(({ members }) => (
+      members.filter(({ materialization }) => materialization === "materialized")
+        .map(({ actor }) => actor.identity.stableId)
+    ));
+    materializedActorCount += materializedActorIds.length;
+    if (materializedActorCount > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) return null;
+    let sourceWithMaterialization: CoreEcologyAggregatePatchState;
+    try {
+      // Replaying the exact split from the canonical all-coarse snapshot is a
+      // stronger normalization check than stripping the bit afterward: it
+      // also authenticates transient group anchors and rematerialized poses.
+      sourceWithMaterialization = setCoreEcologyAggregatePatchMaterializedActors(
+        source.patch,
+        { atTick: state.updatedAtTick, actorIds: materializedActorIds },
+      );
+    } catch {
+      return null;
+    }
+    if (stableStringify(projected) !== stableStringify(sourceWithMaterialization)) return null;
+    materializedBySource.set(raw.sourceKey, projected);
+  }
+  if (materializedBySource.size !== sourceByKey.size) return null;
   const residents: RegionalEcologyProjectedResidentV1[] = [];
   for (const source of sources) {
     const projected = materializedBySource.get(source.sourceKey);
@@ -624,8 +694,8 @@ export function projectRegionalEcologyActiveState(
       sourceKey: source.sourceKey,
       region: copyRegion(source.region),
       sourcePatchHash: source.patchHash,
-      projectedPatchHash: hashCanonical(projected.patch),
-      patch: projected.patch,
+      projectedPatchHash: hashCanonical(projected),
+      patch: projected,
     }));
   }
   residents.sort((left, right) => compareText(left.sourceKey, right.sourceKey));

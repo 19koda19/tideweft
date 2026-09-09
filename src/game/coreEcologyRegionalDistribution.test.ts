@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CORE_WILDLIFE_SPECIES, type CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
+import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { createWorld, createWorldView } from "../sim/public";
 import { seedFromText, type RootSeed } from "../sim/rng";
 import {
@@ -9,7 +9,7 @@ import {
   globalTileToRegion,
   type RegionCoord,
 } from "../sim/regions";
-import { stableStringify } from "../sim/util";
+import { hashCanonical, stableStringify } from "../sim/util";
 import { TILE_UNITS, createPlayer } from "./player";
 import { deriveCoreEcologyRegionalPredatorHabitatAssemblage } from "./coreEcologyHabitat";
 import { isCoreEcologyAggregateSpecies } from "./coreEcologyAggregatePolicy";
@@ -311,8 +311,8 @@ describe("regional ecology distribution properties", () => {
         seed: CORPUS_SEED,
         region,
         speciesOrder: ordinal % 2 === 0
-          ? [...CORE_WILDLIFE_SPECIES].reverse()
-          : [...CORE_WILDLIFE_SPECIES],
+          ? [...CORE_ECOLOGY_REGIONAL_WILD_SPECIES].reverse()
+          : [...CORE_ECOLOGY_REGIONAL_WILD_SPECIES],
       });
       return [`${region.x}:${region.y}`, stableStringify(habitat)] as const;
     }));
@@ -340,6 +340,17 @@ describe("regional ecology distribution properties", () => {
       emptyAtRepresentationEdge: emptyAtRepresentationEdge.length,
       presenceBySpecies: Object.fromEntries(presenceBySpecies),
     };
+
+    expect(new TextEncoder().encode(stableStringify(forward)).byteLength).toBe(1_034_403);
+    expect(hashCanonical(forward)).toBe("a52bf550aa1a1a9c");
+    expect(hashCanonical(forward.map(({ derivationHash }) => derivationHash)))
+      .toBe("884924d49ed2570c");
+    expect(summary).toMatchObject({
+      empty: 38,
+      occupied: 26,
+      predatorFree: 64,
+      emptyAtRepresentationEdge: 16,
+    });
 
     expect(empty.length, stableStringify(summary)).toBeGreaterThanOrEqual(4);
     expect(occupied.length, stableStringify(summary)).toBeGreaterThanOrEqual(16);

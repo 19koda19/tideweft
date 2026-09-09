@@ -533,7 +533,9 @@ export type AggregateWildlifeEvidenceForm =
   | "paired-tracks"
   | "canid-pawprints"
   | "frog-tracks"
-  | "surface-dimples";
+  | "surface-dimples"
+  | "haypile"
+  | "talus-sign";
 
 /**
  * One directly observed physical wildlife sign. This separate view deliberately

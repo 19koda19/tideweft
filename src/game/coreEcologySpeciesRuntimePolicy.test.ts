@@ -51,6 +51,9 @@ describe("core ecology species runtime policy", () => {
       "gray-wolf",
       "cougar",
       "brown-bear",
+      "mountain-goat",
+      "american-pika",
+      "golden-eagle",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -224,6 +227,9 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanOwnActorAddress("snowy-egret")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("american-black-duck")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("domestic-chicken")).toBe(true);
+    expect(coreEcologySpeciesCanOwnActorAddress("mountain-goat")).toBe(true);
+    expect(coreEcologySpeciesCanOwnActorAddress("american-pika")).toBe(false);
+    expect(coreEcologySpeciesCanOwnActorAddress("golden-eagle")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("invented-frog")).toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("southern-leopard-frog")).toMatchObject({
       actorAddressable: false,
@@ -237,6 +243,47 @@ describe("core ecology species runtime policy", () => {
       },
       presentationModel: "aggregate-activity",
     });
+    expect(coreEcologySpeciesRuntimePolicy("american-pika")).toMatchObject({
+      actorAddressable: false,
+      identityForm: "aggregate",
+      representation: "aggregate",
+      maximumMaterializedActors: 0,
+      aggregate: {
+        maximumAnchors: 4,
+        responseCadenceTicks: 8,
+        responseVerbs: ["quiet", "redistribute", "suppress"],
+      },
+      capabilities: ["aggregate-response", "population-activity-evidence", "quieting"],
+      activitySignals: ["talus-foraging", "talus-quieting"],
+      evidenceKinds: ["haypile", "talus-sign"],
+      presentationModel: "aggregate-activity",
+    });
+    expect(coreEcologySpeciesRuntimePolicy("mountain-goat")).toMatchObject({
+      actorAddressable: true,
+      groupOrganization: "herd",
+      groupStableIdNamespace: "HERD",
+      maximumMaterializedActors: 5,
+      capabilities: ["actor-address", "ground-movement-evidence", "group-coordination"],
+      activitySignals: [],
+    });
+    expect(coreEcologySpeciesRuntimePolicy("golden-eagle")).toMatchObject({
+      actorAddressable: true,
+      groupOrganization: null,
+      maximumMaterializedActors: 1,
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "aerial-predator",
+        "diurnal-activity",
+        "movement-memory",
+        "perch",
+      ],
+    });
+    for (const species of ["mountain-goat", "american-pika", "golden-eagle"] as const) {
+      expect(coreEcologySpeciesPredatorContact(species)).toBeNull();
+      expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
+      expect(coreEcologySpeciesHasRuntimeCapability(species, "live-prey-pursuit")).toBe(false);
+    }
   });
 
   it("plugs the domestic flock into shared actor, food, alarm, and group capabilities", () => {

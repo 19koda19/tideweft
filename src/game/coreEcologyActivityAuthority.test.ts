@@ -17,7 +17,6 @@ import {
   type CoreEcologyActivityAuthorityV1,
 } from "./coreEcologyActivityAuthority";
 import {
-  CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES,
   type CoreEcologyActivityAffordanceSpecies,
 } from "./coreEcologyActivityAffordance";
 import { createPristineRegionalEcologyRoot } from "./regionalEcology";
@@ -25,6 +24,14 @@ import { createCoreEcologyRegionalResidentPatchForRoot } from "./regionalEcology
 
 const SEED = seedFromText("alpha32-activity-authority-table");
 const ROOT = createPristineRegionalEcologyRoot({ rootSeed: SEED, completedTick: 0 });
+const REGIONAL_ACTIVITY_SPECIES = Object.freeze([
+  "american-black-duck",
+  "fish-crow",
+  "gull",
+  "north-american-river-otter",
+  "northern-harrier",
+  "snowy-egret",
+] as const satisfies readonly CoreEcologyActivityAffordanceSpecies[]);
 
 interface ActivityWitness {
   readonly species: CoreEcologyActivityAffordanceSpecies;
@@ -100,7 +107,7 @@ describe("core ecology transient activity authority", () => {
     });
 
     expect(results.map(({ projection }) => projection.species).sort()).toEqual(
-      [...CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES].sort(),
+      [...REGIONAL_ACTIVITY_SPECIES].sort(),
     );
   });
 

@@ -1,4 +1,5 @@
 import {
+  CORE_WILDLIFE_ALPHA32_SPECIES,
   CORE_WILDLIFE_SPECIES,
   getCoreWildlifeProfile,
   getCoreWildlifeSpeciesMetadata,
@@ -35,7 +36,10 @@ import {
   CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH,
   type CoreEcologyTidalWebHabitatAnchor,
 } from "./coreEcologyHabitat";
-import { LIVING_SPECIES_CATALOG, livingSpeciesModule } from "./livingSpeciesCatalog";
+import {
+  LIVING_SPECIES_ALPHA32_CATALOG_COUNT,
+  livingSpeciesModule,
+} from "./livingSpeciesCatalog";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -48,12 +52,60 @@ export const CORE_ECOLOGY_REGIONAL_HABITAT_OWNER_ID =
   "game:core-ecology-regional-habitat:v1" as const;
 export const CORE_ECOLOGY_REGIONAL_CELL_SPAN = 2 as const;
 export const CORE_ECOLOGY_REGIONAL_HABITAT_CACHE_LIMIT = 128 as const;
+export const CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT =
+  LIVING_SPECIES_ALPHA32_CATALOG_COUNT;
 
 export const CORE_ECOLOGY_DOMESTIC_SPECIES: readonly CoreWildlifeSpecies[] = Object.freeze([
   "domestic-cat",
   "domestic-chicken",
   "domestic-goat",
 ]);
+export const CORE_ECOLOGY_ALPHA32_DOMESTIC_SPECIES_HASH = "fa34fb30eb90e007" as const;
+
+/**
+ * Regional-habitat-v1 evaluates only this immutable Alpha-32 wild lineage.
+ * Later species belong to a separate versioned regional owner and fail closed
+ * if a caller attempts to inject them through `speciesOrder`.
+ */
+export const CORE_ECOLOGY_REGIONAL_WILD_SPECIES: readonly CoreWildlifeSpecies[] =
+  Object.freeze([
+    "american-black-duck",
+    "atlantic-marsh-fiddler-crab",
+    "atlantic-silverside",
+    "black-bear",
+    "brown-bear",
+    "brown-rat",
+    "cougar",
+    "deer",
+    "elk",
+    "fish-crow",
+    "gray-wolf",
+    "gull",
+    "marsh-fox",
+    "marsh-rabbit",
+    "north-american-river-otter",
+    "northern-harrier",
+    "snowy-egret",
+    "southern-leopard-frog",
+    "wild-boar",
+  ]);
+export const CORE_ECOLOGY_ALPHA32_REGIONAL_WILD_SPECIES_HASH =
+  "6c53a0ab5ca1bc05" as const;
+
+const alpha32RegionalSpecies = new Set<CoreWildlifeSpecies>([
+  ...CORE_ECOLOGY_DOMESTIC_SPECIES,
+  ...CORE_ECOLOGY_REGIONAL_WILD_SPECIES,
+]);
+if (
+  hashCanonical(CORE_ECOLOGY_DOMESTIC_SPECIES)
+    !== CORE_ECOLOGY_ALPHA32_DOMESTIC_SPECIES_HASH
+  || hashCanonical(CORE_ECOLOGY_REGIONAL_WILD_SPECIES)
+    !== CORE_ECOLOGY_ALPHA32_REGIONAL_WILD_SPECIES_HASH
+  || alpha32RegionalSpecies.size !== CORE_WILDLIFE_ALPHA32_SPECIES.length
+  || CORE_WILDLIFE_ALPHA32_SPECIES.some((species) => !alpha32RegionalSpecies.has(species))
+) {
+  throw new Error("Regional-habitat-v1 Alpha-32 species lineage was rewritten");
+}
 
 const DOMESTIC_SPECIES = new Set<CoreWildlifeSpecies>(CORE_ECOLOGY_DOMESTIC_SPECIES);
 const LARGE_TERRESTRIAL_PREDATORS: readonly CoreWildlifeSpecies[] = Object.freeze([
@@ -65,11 +117,6 @@ const LARGE_TERRESTRIAL_PREDATORS: readonly CoreWildlifeSpecies[] = Object.freez
 const LARGE_TERRESTRIAL_PREDATOR_SET = new Set<CoreWildlifeSpecies>(
   LARGE_TERRESTRIAL_PREDATORS,
 );
-
-export const CORE_ECOLOGY_REGIONAL_WILD_SPECIES: readonly CoreWildlifeSpecies[] =
-  Object.freeze(
-    CORE_WILDLIFE_SPECIES.filter((species) => !DOMESTIC_SPECIES.has(species)).sort(compareText),
-  );
 
 export type CoreEcologyRegionalGuild =
   | "aerial-forager"
@@ -1200,7 +1247,7 @@ export function deriveCoreEcologyRegionalHabitat(
       regionalQuiet,
       guildCeilings,
     }),
-    catalogSpeciesCount: LIVING_SPECIES_CATALOG.modules.length,
+    catalogSpeciesCount: CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT,
     evaluatedWildSpeciesCount: species.length,
     populations: Object.freeze(populations),
     totalPopulationUnits,

@@ -23,6 +23,7 @@ import {
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
+import { deriveCoreEcologyAlpineHabitat } from "./coreEcologyAlpineHabitat";
 import {
   deriveCoreEcologyHarborEdgeHabitatAssemblage,
   deriveCoreEcologyRainChorusHabitatAssemblage,
@@ -49,6 +50,7 @@ import {
   regionalFrameOriginAtAddress,
   type RegionalTerrainWindow,
 } from "./regionalTravel";
+import { createCoreEcologyAlpineResidentPatch } from "./regionalAlpineResidents";
 import { createRegionalWorldView } from "./regionalWorldView";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
@@ -65,6 +67,9 @@ import {
   stageSettlementFoodLoss,
 } from "./settlementEcology";
 
+export const ALPHA33_ALPINE_EAGLE_PIKA_EMERGENCE_OWNER_INTENT =
+  "test:alpha33-alpine-eagle-pika-emergence:v1" as const;
+
 const ORIGIN = createRegionCoord(-17, 23);
 const SEED_TEXT = "settlement shadows interaction";
 
@@ -75,6 +80,75 @@ interface Fixture {
 }
 
 describe("aggregate ecology shared-perception adapter", () => {
+  it(`${ALPHA33_ALPINE_EAGLE_PIKA_EMERGENCE_OWNER_INTENT} lets a visible eagle pressure pika through shared LOS while an occluding ridge prevents it`, () => {
+    const clear = alpineFixture();
+    const pika = clear.patch.aggregatePopulations.find(({ species }) => (
+      species === "american-pika"
+    ));
+    const eagle = clear.patch.populations.find(({ species }) => species === "golden-eagle")
+      ?.members[0]?.actor;
+    const occupied = pika?.anchors.find(({ populationUnits }) => populationUnits > 0);
+    if (pika === undefined || eagle === undefined || occupied === undefined) {
+      throw new Error("Alpine perception fixture requires pika and one eagle");
+    }
+    const sourcePosition = translateWorldPosition(
+      occupied.position,
+      2 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    const source: CoreEcologyAggregateVisualSource = {
+      sourceReferenceId: eagle.identity.stableId,
+      sourceSpecies: "golden-eagle",
+      position: sourcePosition,
+      movementSalience: FIXED_POINT,
+    };
+    for (const offset of [0, 1, 2]) {
+      setTile(clear, translateWorldPosition(
+        occupied.position,
+        offset * WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ), { terrain: "meadow", elevation: 0, roughness: 0 });
+    }
+    const visible = deriveCoreEcologySettlementShadowsStimulusFrame(input(clear, [source]));
+    const pressure = visible?.stimuli.find(({ sourceKind, targetAggregateId }) => (
+      sourceKind === "golden-eagle" && targetAggregateId === pika.aggregateId
+    ));
+    expect(influenceAt(pressure, occupied.anchorOrdinal)).toBeGreaterThan(0);
+
+    const resolved = stepCoreEcologySettlementShadows(clear.patch, 0, visible);
+    const pikaAfter = resolved?.patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === pika.aggregateId
+    ));
+    expect(resolved?.events.find(({ sourceKind, targetSpecies }) => (
+      sourceKind === "golden-eagle" && targetSpecies === "american-pika"
+    ))).toMatchObject({
+      causeKind: "predator-pressure",
+      mortality: "none",
+      targetSpecies: "american-pika",
+    });
+    expect(pikaAfter?.populationSize).toBe(pika.populationSize);
+    expect(pikaAfter?.activitySignal.intensity).toBeLessThan(pika.activitySignal.intensity);
+
+    const blocked = alpineFixture();
+    for (const offset of [0, 2]) {
+      setTile(blocked, translateWorldPosition(
+        occupied.position,
+        offset * WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ), { terrain: "meadow", elevation: 0, roughness: 0 });
+    }
+    setTile(blocked, translateWorldPosition(
+      occupied.position,
+      WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    ), { terrain: "ridge", elevation: FIXED_POINT, roughness: 0 });
+    const hidden = deriveCoreEcologySettlementShadowsStimulusFrame(input(blocked, [source]));
+    const hiddenPressure = hidden?.stimuli.find(({ sourceKind, targetAggregateId }) => (
+      sourceKind === "golden-eagle" && targetAggregateId === pika.aggregateId
+    ));
+    expect(influenceAt(hiddenPressure, occupied.anchorOrdinal)).toBe(0);
+  });
+
   it("shares a deterministic visual budget as the lawful roster grows", () => {
     expect(CORE_ECOLOGY_AGGREGATE_MIN_VISUAL_STIMULI_PER_POPULATION).toBeGreaterThan(0);
     for (let count = 1; count <= CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS; count += 1) {
@@ -571,6 +645,46 @@ function fixture(
   const window = createRegionalTerrainWindow(
     state.meta.rootSeed,
     createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed, center: ORIGIN }),
+    regionalFrameOriginAtAddress({
+      region: anchor.position.region,
+      localX: Math.floor(anchor.position.localX / WORLD_POSITION_UNITS_PER_TILE),
+      localY: Math.floor(anchor.position.localY / WORLD_POSITION_UNITS_PER_TILE),
+    }),
+  );
+  const world = createRegionalWorldView(
+    createWorldView(state),
+    window,
+    projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+  );
+  return { patch, world, window };
+}
+
+function alpineFixture(): Fixture {
+  const state = createWorld("alpine resident property", "standard");
+  state.weather = {
+    ...state.weather,
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+  };
+  const region = createRegionCoord(-1, 0);
+  const habitat = deriveCoreEcologyAlpineHabitat({
+    seed: state.meta.rootSeed,
+    region,
+  });
+  const patch = createCoreEcologyAlpineResidentPatch({
+    seed: state.meta.rootSeed,
+    habitat,
+    tick: state.meta.completedTick,
+  });
+  const anchor = patch.aggregatePopulations.find(({ species }) => (
+    species === "american-pika"
+  ))?.anchors.find(({ populationUnits }) => populationUnits > 0);
+  if (anchor === undefined) throw new Error("Alpine perception fixture has no occupied pika talus");
+  const window = createRegionalTerrainWindow(
+    state.meta.rootSeed,
+    createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed, center: region }),
     regionalFrameOriginAtAddress({
       region: anchor.position.region,
       localX: Math.floor(anchor.position.localX / WORLD_POSITION_UNITS_PER_TILE),

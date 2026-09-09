@@ -32,6 +32,7 @@ export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION = 2 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION = 1 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS = 8 as const;
 export const CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI = 32 as const;
+export const CORE_ECOLOGY_SMALL_WORLD_MAX_SOURCES = 128 as const;
 
 export type CoreEcologySettlementShadowsSourceKind =
   | "same-species"
@@ -156,6 +157,17 @@ export interface CoreEcologySettlementShadowsStepResult {
   readonly events: readonly CoreEcologySettlementShadowsEvent[];
 }
 
+export interface CoreEcologySmallWorldSourceStepInput {
+  readonly sourceKey: string;
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly stimulusFrame: CoreEcologySettlementShadowsStimulusFrame;
+}
+
+export interface CoreEcologySmallWorldSourceStepResult
+  extends CoreEcologySettlementShadowsStepResult {
+  readonly sourceKey: string;
+}
+
 export type CoreEcologySmallWorldStimulus = CoreEcologySettlementShadowsStimulus;
 export type CoreEcologySmallWorldStimulusFrame = CoreEcologySettlementShadowsStimulusFrame;
 export type CoreEcologySmallWorldEvent = CoreEcologySettlementShadowsEvent;
@@ -273,12 +285,7 @@ export function stepCoreEcologySettlementShadows(
     ? emptyStimulusFrame(atTick)
     : canonicalizeCoreEcologySettlementShadowsStimulusFrame(stimulusFrame);
   if (frame === null || frame.atTick !== atTick) return null;
-  const ownsTidalPopulations = patch.aggregatePopulations.some(({ species }) => (
-    species === "atlantic-silverside"
-      || species === "atlantic-marsh-fiddler-crab"
-  ));
   const tidal = projectCoreEcologyTidalTable(patch, atTick);
-  if (ownsTidalPopulations && tidal === null) return null;
   const aggregatesById = new Map(patch.aggregatePopulations.map((population) => (
     [population.aggregateId, population] as const
   )));
@@ -291,7 +298,7 @@ export function stepCoreEcologySettlementShadows(
     return null;
   }
   if (atTick % CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS !== 0) {
-    patch = projectRainResponsiveActivity(patch, frame);
+    patch = projectPolicyDrivenActivity(patch, frame);
     return Object.freeze({ patch, events: Object.freeze([]) });
   }
 
@@ -301,6 +308,9 @@ export function stepCoreEcologySettlementShadows(
   ));
   for (const population of aggregates) {
     if (population.anchors.length < 2) continue;
+    // A non-tidal derivation may still own inherited silverside history. It
+    // participates in the same source-set step, but cannot relocate fish
+    // until a tidal projection authenticates lawful destination anchors.
     const lawfulDestinations = population.species === "atlantic-silverside"
       ? new Set(tidal?.anchorDepths.filter(({ aggregateId, activityUsable }) => (
           aggregateId === population.aggregateId && activityUsable
@@ -395,7 +405,7 @@ export function stepCoreEcologySettlementShadows(
   // effect. Resolve it after any bounded movement so a pressure response is
   // applied once, while rain can still raise a chorus on a one-anchor patch
   // where redistribution is impossible.
-  patch = projectRainResponsiveActivity(patch, frame);
+  patch = projectPolicyDrivenActivity(patch, frame);
 
   return Object.freeze({ patch, events: Object.freeze(events) });
 }
@@ -406,22 +416,81 @@ export const canonicalizeCoreEcologySmallWorldStimulusFrame =
 /** Generalized name for new consumers; both names execute the same deterministic kernel. */
 export const stepCoreEcologySmallWorld = stepCoreEcologySettlementShadows;
 
+/**
+ * Step every aggregate owner as one deterministic source-key-ordered unit.
+ * The caller derives each frame from one immutable world snapshot; this owner
+ * validates every source and returns no candidate set when any member fails.
+ */
+export function stepCoreEcologySmallWorldSourceSet(
+  value: unknown,
+  atTick: unknown,
+): readonly CoreEcologySmallWorldSourceStepResult[] | null {
+  if (
+    !Array.isArray(value)
+    || value.length > CORE_ECOLOGY_SMALL_WORLD_MAX_SOURCES
+    || !nonnegativeSafeInteger(atTick)
+  ) return null;
+  const seenSourceKeys = new Set<string>();
+  const sources: CoreEcologySmallWorldSourceStepInput[] = [];
+  for (const candidate of value) {
+    if (
+      !plainRecord(candidate)
+      || !exactKeys(candidate, ["patch", "sourceKey", "stimulusFrame"])
+      || !canonicalSourceKey(candidate.sourceKey)
+      || seenSourceKeys.has(candidate.sourceKey)
+    ) return null;
+    const patch = canonicalizeCoreEcologyAggregatePatch(candidate.patch);
+    const stimulusFrame = canonicalizeCoreEcologySettlementShadowsStimulusFrame(
+      candidate.stimulusFrame,
+    );
+    if (
+      patch === null
+      || patch.patchKey !== candidate.sourceKey
+      || patch.updatedAtTick !== atTick
+      || stimulusFrame === null
+      || stimulusFrame.atTick !== atTick
+    ) return null;
+    seenSourceKeys.add(candidate.sourceKey);
+    sources.push(Object.freeze({
+      sourceKey: candidate.sourceKey,
+      patch,
+      stimulusFrame,
+    }));
+  }
+  sources.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+
+  const results: CoreEcologySmallWorldSourceStepResult[] = [];
+  for (const source of sources) {
+    const stepped = stepCoreEcologySettlementShadows(
+      source.patch,
+      atTick,
+      source.stimulusFrame,
+    );
+    if (stepped === null) return null;
+    results.push(deepFreeze({ sourceKey: source.sourceKey, ...stepped }));
+  }
+  return Object.freeze(results);
+}
+
 function isLegacyRatEventSourceKind(
   value: CoreEcologySettlementShadowsSourceKind,
 ): value is CoreEcologySettlementShadowsLegacyRatEventSourceKind {
   return LEGACY_RAT_EVENT_SOURCE_KIND_SET.has(value);
 }
 
-function projectRainResponsiveActivity(
+function projectPolicyDrivenActivity(
   patch: CoreEcologyAggregatePatchState,
   frame: CoreEcologySettlementShadowsStimulusFrame,
 ): CoreEcologyAggregatePatchState {
   for (const population of patch.aggregatePopulations) {
     const aggregatePolicy = coreEcologyAggregateSpeciesPolicy(population.species);
-    // The v2 rat activity byte contract is frozen. Only species which opt into
-    // live rain response pass through this additive projection boundary.
-    if (aggregatePolicy.activity.activePeriod !== "rain-responsive") continue;
-    const habitatIntensity = habitatActivityIntensity(patch, population.aggregateId);
+    // Existing rat and tidal activity remain byte-for-byte under their
+    // established displacement/tide owners. Only explicitly opted-in policies
+    // receive a current-frame baseline or perceived-pressure projection.
+    if (
+      aggregatePolicy.activity.baselineProjection === "preserve"
+      && aggregatePolicy.activity.perceivedPressureResponse === "preserve"
+    ) continue;
     let rainIntensity = 0;
     let strongestPressure: Readonly<{
       causeKind: SourcePolicy["causeKind"];
@@ -448,12 +517,17 @@ function projectRainResponsiveActivity(
         });
       }
     }
-    let intensity = resolveCoreEcologyAggregateActivityIntensity(
-      population.species,
-      habitatIntensity,
-      rainIntensity,
-    );
-    if (strongestPressure !== null) {
+    let intensity = aggregatePolicy.activity.baselineProjection === "rain-responsive"
+      ? resolveCoreEcologyAggregateActivityIntensity(
+          population.species,
+          habitatActivityIntensity(patch, population.aggregateId),
+          rainIntensity,
+        )
+      : population.activitySignal.intensity;
+    if (
+      strongestPressure !== null
+      && aggregatePolicy.activity.perceivedPressureResponse === "quiet"
+    ) {
       intensity = resolveCoreEcologyAggregateDisturbanceActivity(
         population.species,
         intensity,
@@ -754,6 +828,13 @@ function nonnegativeSafeInteger(value: unknown): value is number {
 
 function stableReference(value: unknown): value is string {
   return typeof value === "string" && STABLE_REFERENCE_PATTERN.test(value);
+}
+
+function canonicalSourceKey(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && value.length <= 512
+    && value.trim() === value;
 }
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {

@@ -88,6 +88,7 @@ describe("core ecology social groups", () => {
       "wild-boar",
       "elk",
       "gray-wolf",
+      "mountain-goat",
     ]);
     const deer = deerGroup({ memberOrdinals: [7, 2, 5] });
     const reordered = deerGroup({ memberOrdinals: [5, 7, 2] });
@@ -143,6 +144,7 @@ describe("core ecology social groups", () => {
       { species: "wild-boar", organization: "sounder", namespace: "SOUNDER" },
       { species: "elk", organization: "herd", namespace: "HERD" },
       { species: "gray-wolf", organization: "pack", namespace: "PACK" },
+      { species: "mountain-goat", organization: "herd", namespace: "HERD" },
     ] as const) {
       const group = createCoreEcologyGroup({
         seed: SEED,
@@ -202,6 +204,8 @@ describe("core ecology social groups", () => {
       "atlantic-silverside",
       "atlantic-marsh-fiddler-crab",
       "snowy-egret",
+      "american-pika",
+      "golden-eagle",
     ] as const) {
       expect(() => createCoreEcologyGroup({
         seed: SEED,

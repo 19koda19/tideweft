@@ -136,6 +136,11 @@ import {
   type RegionalEcologyStateV1,
 } from "./regionalEcologyState";
 import {
+  deserializeRegionalEcologyStateV2,
+  serializeRegionalEcologyStateV2,
+  type RegionalEcologyStateV2,
+} from "./regionalEcologyStateV2";
+import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
   type RegionalTerrainWindow,
@@ -182,13 +187,13 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 25;
+  readonly version: 26;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v25 envelopes never carry this field. */
+  /** Historical fixtures only; current v26 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -405,7 +410,7 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
-  it("migrates a sealed v20 save through v24 into v25 without inventing mortality history", async () => {
+  it("migrates a sealed v20 save through v24 and the current wrapper without inventing mortality history", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -467,7 +472,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(25);
+    expect(adoptedRecord.payloadVersion).toBe(26);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -529,7 +534,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(25);
+    expect(adoptedRecord.payloadVersion).toBe(26);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -634,7 +639,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(25);
+    expect(repository.snapshot().payloadVersion).toBe(26);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -750,7 +755,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(25);
+    expect(v13Record.payloadVersion).toBe(26);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
@@ -831,7 +836,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(25);
+    expect(v13Record.payloadVersion).toBe(26);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
@@ -929,7 +934,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(25);
+    expect(v13Record.payloadVersion).toBe(26);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
@@ -1016,7 +1021,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(25);
+    expect(adoptedRecord.payloadVersion).toBe(26);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
@@ -1086,7 +1091,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(25);
+    expect(adoptedRecord.payloadVersion).toBe(26);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
@@ -1473,7 +1478,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(25);
+    expect(before.version).toBe(26);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -2423,7 +2428,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(25);
+    expect(repository.snapshot().payloadVersion).toBe(26);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -2550,7 +2555,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(25);
+    expect(repository.snapshot().payloadVersion).toBe(26);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -2997,7 +3002,7 @@ describe("runtime core-ecology vertical slice", () => {
     resumed.destroy();
   }, 75_000);
 
-  it("routes a selected flee target away from a closed frame edge", async () => {
+  it("routes a selected flee target around a closed local escape edge", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -3010,7 +3015,11 @@ describe("runtime core-ecology vertical slice", () => {
     const record = repository.snapshot();
     const envelope = requiredEnvelope(repository);
     const world = deserializeWorld(envelope.world);
-    makeWorldDryAndClear(world);
+    world.weather.kind = "clear";
+    world.weather.intensity = 0;
+    world.weather.windX = 0;
+    world.weather.windY = 0;
+    world.weather.nextChangeTick = world.meta.completedTick + 100_000;
     const player = structuredClone(envelope.player);
     const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
     if (regional === null) throw new Error("escape fixture could not restore its regional frame");
@@ -3019,9 +3028,12 @@ describe("runtime core-ecology vertical slice", () => {
       regional.window,
       { discovered: player.discovered, depthSoundings: player.depthSoundings },
     );
-    const escapeTile = findOpenLeftEdgeEscapeTile(regionalWorld);
+    const escapeTile = findNearestBlockedEscapeTile(regionalWorld);
     const deerPosition = worldPositionAtWindowTile(regional.window, escapeTile.index);
-    const alarmPosition = worldPositionAtWindowTile(regional.window, escapeTile.index + 1);
+    const alarmPosition = worldPositionAtWindowTile(
+      regional.window,
+      escapeTile.index + escapeTile.alarmDirection,
+    );
     const sourcePatch = requiredCore(envelope);
     const sourceDeer = sourcePatch.populations.find(
       ({ species }) => species === "deer",
@@ -4129,10 +4141,10 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 25
+    || value.version !== 26
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v25 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v26 envelope");
   }
   return value;
 }
@@ -4190,7 +4202,7 @@ function resealedEnvelope(
         return Object.freeze({
           ...v25Base,
           integrity: gameSaveEnvelopeIntegrity(v25Base),
-        });
+        }) as unknown as CurrentEnvelope;
       }
       const habitat = existingRegional.settlementHome.patch.derivation.kind === "settlement-home-v1"
         ? existingRegional.settlementHome.patch.derivation.habitat
@@ -4245,7 +4257,7 @@ function resealedEnvelope(
       return Object.freeze({
         ...v25Base,
         integrity: gameSaveEnvelopeIntegrity(v25Base),
-      });
+      }) as unknown as CurrentEnvelope;
     }
     return Object.freeze({
       ...legacyBase,
@@ -4587,27 +4599,55 @@ function findDeepWaterRoutePosition(
   throw new Error("shore-water fixture found no connected deep-water route");
 }
 
-function findOpenLeftEdgeEscapeTile(
+function findNearestBlockedEscapeTile(
   world: ReturnType<typeof createRegionalWorldView>,
-): { readonly index: number } {
+): { readonly index: number; readonly alarmDirection: -1 | 1 } {
   const width = world.terrain.width;
-  for (let y = 5; y < world.terrain.height - 1; y += 1) {
-    const indexes = [
-      y * width,
-      y * width + 1,
-      (y - 1) * width,
-      (y - 2) * width,
-      (y - 3) * width,
-      (y - 4) * width,
-    ];
-    if (indexes.every((index) => {
-      const tile = world.terrain.tiles[index];
-      return tile !== undefined
-        && tile.terrain !== "deep-water"
-        && tile.waterDepth <= ADRIFT_STAND_DEPTH;
-    })) return Object.freeze({ index: y * width });
+  const height = world.terrain.height;
+  const centerX = Math.floor(width / 2);
+  const centerY = Math.floor(height / 2);
+  const candidates: Array<{
+    readonly index: number;
+    readonly alarmDirection: -1 | 1;
+    readonly distanceSquared: number;
+  }> = [];
+  const standable = (index: number): boolean => {
+    const tile = world.terrain.tiles[index];
+    return tile !== undefined
+      && tile.terrain !== "deep-water"
+      && tile.waterDepth <= ADRIFT_STAND_DEPTH;
+  };
+  const blocked = (index: number): boolean => {
+    const tile = world.terrain.tiles[index];
+    return tile !== undefined
+      && (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH);
+  };
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 2; x < width - 2; x += 1) {
+      const index = y * width + x;
+      if (!standable(index) || !standable(index - width) || !standable(index + width)) continue;
+      for (const alarmDirection of [-1, 1] as const) {
+        if (!standable(index + alarmDirection)) continue;
+        if (!blocked(index - alarmDirection)) continue;
+        candidates.push({
+          index,
+          alarmDirection,
+          distanceSquared: (x - centerX) ** 2 + (y - centerY) ** 2,
+        });
+      }
+    }
   }
-  throw new Error("escape fixture could not find an open left-edge route");
+  candidates.sort((left, right) => left.distanceSquared - right.distanceSquared
+    || left.index - right.index
+    || left.alarmDirection - right.alarmDirection);
+  const selected = candidates[0];
+  if (selected === undefined) {
+    throw new Error("escape fixture could not find a nearby blocked shoreline edge");
+  }
+  return Object.freeze({
+    index: selected.index,
+    alarmDirection: selected.alarmDirection,
+  });
 }
 
 function worldPositionAtWindowTile(
@@ -4680,8 +4720,23 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 }
 
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
+  const version = (envelope as unknown as Readonly<{ version: number }>).version;
+  if (version === 26) return requiredRegionalEcologyV2(envelope).base;
+  if (version !== 25) throw new Error("fixture envelope has no regional ecology generation");
   const state = deserializeRegionalEcologyState(envelope.regionalEcology);
-  if (state === null) throw new Error("v25 save omitted canonical regional ecology");
+  if (
+    state === null
+    || serializeRegionalEcologyState(state) !== envelope.regionalEcology
+  ) throw new Error("v25 save omitted canonical regional ecology");
+  return state;
+}
+
+function requiredRegionalEcologyV2(envelope: CurrentEnvelope): RegionalEcologyStateV2 {
+  const state = deserializeRegionalEcologyStateV2(envelope.regionalEcology);
+  if (
+    state === null
+    || serializeRegionalEcologyStateV2(state) !== envelope.regionalEcology
+  ) throw new Error("v26 save omitted canonical regional ecology");
   return state;
 }
 

@@ -39,6 +39,8 @@ import {
 } from "./regionalEcology";
 import { projectRegionalEcologyLegacyCohort } from "./regionalEcologyLegacyCohort";
 import {
+  REGIONAL_ECOLOGY_ACTIVE_PROJECTION_VERSION,
+  bindRegionalEcologyActiveProjection,
   canonicalRegionalEcologyStateForWorld,
   canonicalizeRegionalEcologyState,
   commitRegionalEcologyActiveProjection,
@@ -46,6 +48,7 @@ import {
   deserializeRegionalEcologyState,
   projectRegionalEcologyActiveState,
   regionalEcologyActiveResidentPatches,
+  regionalEcologyActiveSourceSnapshots,
   regionalEcologyPatchResidenceRegions,
   regionalEcologyRegionalResidentsForActiveRegions,
   regionalEcologyResidentTransitionIsVisitationOnly,
@@ -53,6 +56,7 @@ import {
   replaceRegionalEcologyActiveState,
   serializeRegionalEcologyState,
 } from "./regionalEcologyState";
+import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   replaceCoreWildlifeActorPhysiology,
@@ -668,6 +672,80 @@ describe("regional ecology v25 owner substrate", () => {
       .map(({ sourceKey }) => sourceKey)).toEqual([movedHome.patchKey]);
   });
 
+  it("binds an external global materialization split without changing V1 projection bytes", () => {
+    const state = stateFixture();
+    const serializedState = serializeRegionalEcologyState(state);
+    const sources = regionalEcologyActiveSourceSnapshots(state);
+    if (sources === null) throw new Error("Active source snapshots were rejected");
+    expect(sources.map(({ sourceKey }) => sourceKey)).toEqual(
+      sources.map(({ sourceKey }) => sourceKey).sort(compareText),
+    );
+    expect(sources.find(({ sourceKey }) => sourceKey === state.settlementHome.sourceKey))
+      .toBe(state.settlementHome);
+
+    const materialized = setRegionalEcologyMaterializationForWindow(
+      sources.map(({ sourceKey, patch }) => ({ sourceKey, patch })),
+      windowAt(),
+      state.updatedAtTick,
+    );
+    if (materialized === null) throw new Error("Global materialization planner failed");
+    const materializedBySource = new Map(materialized.map((resident) => (
+      [resident.sourceKey, resident] as const
+    )));
+    const priorResidents = sources.map((source) => {
+      const projected = materializedBySource.get(source.sourceKey);
+      if (projected === undefined) throw new Error("Planner omitted an active source");
+      return {
+        kind: source.kind,
+        sourceKey: source.sourceKey,
+        region: { x: source.region.x, y: source.region.y },
+        sourcePatchHash: source.patchHash,
+        projectedPatchHash: hashCanonical(projected.patch),
+        patch: projected.patch,
+      };
+    }).sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+    const priorBase = {
+      version: REGIONAL_ECOLOGY_ACTIVE_PROJECTION_VERSION,
+      ownerId: "game:regional-ecology-active-projection:v1" as const,
+      stateIntegrity: state.integrity,
+      atTick: state.updatedAtTick,
+      residents: priorResidents,
+    };
+    const priorProjection = { ...priorBase, integrity: hashCanonical(priorBase) };
+    const direct = projectRegionalEcologyActiveState(state, windowAt());
+    const rebound = bindRegionalEcologyActiveProjection(state, materialized);
+    expect(stableStringify(direct)).toBe(stableStringify(priorProjection));
+    expect(stableStringify(rebound)).toBe(stableStringify(direct));
+    expect(serializeRegionalEcologyState(state)).toBe(serializedState);
+    expect(state.integrity).toBe(JSON.parse(serializedState).integrity);
+
+    expect(bindRegionalEcologyActiveProjection(state, materialized.slice(1))).toBeNull();
+    expect(bindRegionalEcologyActiveProjection(state, [...materialized, materialized[0]!]))
+      .toBeNull();
+    if (materialized.length < 2) throw new Error("Composition fixture needs two sources");
+    expect(bindRegionalEcologyActiveProjection(state, [
+      materialized[0]!,
+      materialized[0]!,
+    ])).toBeNull();
+
+    const source = materialized[0]!;
+    const actor = source.patch.populations.flatMap(({ members }) => members)[0]?.actor;
+    if (actor === undefined) throw new Error("Mutation fixture needs an actor");
+    const moved = replaceCoreEcologyAggregatePatchActor(
+      source.patch,
+      repositionCoreWildlifeActor(actor, {
+        atTick: state.updatedAtTick,
+        position: createWorldPosition(actor.address.position.region, 1_000, 1_000),
+        heading: actor.address.heading,
+      }),
+    );
+    expect(bindRegionalEcologyActiveProjection(state, materialized.map((resident) => (
+      resident.sourceKey === source.sourceKey
+        ? { sourceKey: resident.sourceKey, patch: moved }
+        : resident
+    )))).toBeNull();
+  });
+
   it("authenticates one foreign death and current body claim without duplicating biomass", () => {
     const fixture = crossOwnerClaimStateFixture();
     const body = fixture.prey.carcasses.find(({ sourceActorId }) => (
@@ -918,6 +996,8 @@ describe("regional ecology v25 owner substrate", () => {
       settlementHomeHabitat: homeHabitatAt(HOME_REGION),
     })).toBe(state);
     expect(regionalEcologyActiveResidentPatches(state)?.map(({ sourceKey }) => sourceKey))
+      .toEqual([legacy.patchKey]);
+    expect(regionalEcologyActiveSourceSnapshots(state)?.map(({ sourceKey }) => sourceKey))
       .toEqual([legacy.patchKey]);
 
     const projection = projectRegionalEcologyActiveState(state, windowAt(EMPTY_REGION));

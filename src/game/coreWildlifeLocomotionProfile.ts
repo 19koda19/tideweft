@@ -2,6 +2,10 @@ import type { TerrainTileView } from "../sim/types";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import type { CoreWildlifeIntentKind } from "./coreWildlifeActor";
 import type { LivingActorTraversabilityCell } from "./livingActorLocomotion";
+import {
+  createLivingActorGradeTraversalPolicy,
+  type LivingActorGradeTraversalPolicy,
+} from "./livingActorGradeTraversal";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import {
   coreEcologySpeciesHasRuntimeCapability,
@@ -52,6 +56,28 @@ const DEFAULT_LOCOMOTION_PROFILE: CoreWildlifeLocomotionProfile = Object.freeze(
   dampCoverPreference: null,
   baseStepFactor: 750_000,
   intentStepFactors: Object.freeze({}),
+});
+
+/**
+ * Append-only directed-grade adaptations. Absence is authoritative: sealed
+ * Alpha-32 species continue using their legacy terrain costs byte-for-byte.
+ */
+const GRADE_TRAVERSAL_POLICIES: Readonly<Partial<Record<
+  CoreWildlifeSpecies,
+  LivingActorGradeTraversalPolicy
+>>> = Object.freeze({
+  "mountain-goat": createLivingActorGradeTraversalPolicy({
+    ascent: {
+      comfortableGrade: 350_000,
+      maximumGrade: 850_000,
+      costMultiplierAtMaximum: 1_800_000,
+    },
+    descent: {
+      comfortableGrade: 420_000,
+      maximumGrade: 900_000,
+      costMultiplierAtMaximum: 1_550_000,
+    },
+  }),
 });
 
 /**
@@ -309,6 +335,37 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       scavenge: 820_000,
     }),
   }),
+  "mountain-goat": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 900_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_450_000,
+      meadow: 900_000,
+      ridge: 520_000,
+      "tidal-flat": 1_600_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 750_000,
+    intentStepFactors: Object.freeze({
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
+  "golden-eagle": Object.freeze({
+    mode: "aerial",
+    aerialTravelCost: 190_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 820_000,
+    intentStepFactors: Object.freeze({
+      flee: 900_000,
+      retreat: 850_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(
@@ -403,6 +460,16 @@ export function coreWildlifeLocomotionProfile(
     throw new Error(`Core wildlife surface-water locomotion policy mismatch for ${species}`);
   }
   return profile;
+}
+
+/** Optional species adaptation consumed by the common grade-aware path surface. */
+export function coreWildlifeGradeTraversalPolicy(
+  species: CoreWildlifeSpecies,
+): LivingActorGradeTraversalPolicy | null {
+  if (coreEcologySpeciesRuntimePolicy(species) === null) {
+    throw new Error(`Unknown core wildlife species ${String(species)}`);
+  }
+  return GRADE_TRAVERSAL_POLICIES[species] ?? null;
 }
 
 function scaledCost(base: number, multiplier: number): number {

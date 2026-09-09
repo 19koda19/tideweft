@@ -52,6 +52,9 @@ import {
 } from "./worldPosition";
 import { tideAtTick } from "../sim/terrain";
 
+export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha33-alpine-presentation-invariants:v1" as const;
+
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
   return createCoreWildlifeActorState({
@@ -707,7 +710,7 @@ function regroupingGoat(): CoreWildlifeActorState {
   return stepped.actor;
 }
 
-describe("knowledge-honest wildlife presentation", () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
   it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
@@ -774,6 +777,8 @@ describe("knowledge-honest wildlife presentation", () => {
     ["domestic-chicken", "Domestic chicken"],
     ["domestic-goat", "Domestic goat"],
     ["north-american-river-otter", "North American river otter"],
+    ["mountain-goat", "Mountain goat"],
+    ["golden-eagle", "Golden eagle"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -812,6 +817,14 @@ describe("knowledge-honest wildlife presentation", () => {
       expect(presentation?.formLabel).toBe("Stocky, cloven-hoofed goat with swept horns");
     } else if (species === "north-american-river-otter") {
       expect(presentation?.formLabel).toBe("Long-bodied, low-slung swimmer");
+    } else if (species === "mountain-goat") {
+      expect(presentation?.formLabel).toBe(
+        "Shaggy, sure-footed ungulate with dark swept horns",
+      );
+    } else if (species === "golden-eagle") {
+      expect(presentation?.formLabel).toBe(
+        "Large, broad-winged raptor with a golden nape",
+      );
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
@@ -1094,6 +1107,7 @@ describe("knowledge-honest wildlife presentation", () => {
   });
 
   it.each([
+    "american-pika",
     "atlantic-silverside",
     "atlantic-marsh-fiddler-crab",
   ] as const)("does not fabricate a %s actor presentation", (species) => {
@@ -1634,6 +1648,8 @@ describe("knowledge-honest wildlife presentation", () => {
       "Unidentified aquatic mammal",
       90,
     ],
+    ["mountain-goat", "Unknown mountain animal", "Unidentified mountain animal", 80],
+    ["golden-eagle", "Unknown large raptor", "Unidentified large raptor", 80],
   ] as const)("keeps a distant %s at an honest observable class", (
     species,
     quickLabel,

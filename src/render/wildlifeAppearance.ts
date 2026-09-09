@@ -46,6 +46,15 @@ export const REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES = [
 export type RegionalUplandWildlifeAppearanceSpecies =
   (typeof REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES)[number];
 
+/** Addressable alpine actors; pika remains population evidence, never a palette-backed body. */
+export const ALPINE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
+  "mountain-goat",
+  "golden-eagle",
+] as const);
+
+export type AlpineWildlifeAppearanceSpecies =
+  (typeof ALPINE_WILDLIFE_APPEARANCE_SPECIES)[number];
+
 /** Fails safely to the established brown coat for legacy or malformed views. */
 export function domesticGoatAppearancePalette(
   appearanceKey: string,
@@ -140,5 +149,42 @@ export function regionalUplandWildlifeAppearancePalette(
   }
   return palettes[
     ALPHA31_PREDATOR_APPEARANCE_FALLBACK[predatorSpecies]
+  ] as WildlifeAppearancePalette;
+}
+
+const ALPINE_WILDLIFE_APPEARANCE_FALLBACK = Object.freeze({
+  "mountain-goat": "cream-white",
+  "golden-eagle": "golden-naped",
+} as const satisfies Readonly<Record<AlpineWildlifeAppearanceSpecies, string>>);
+
+/** Shared Chart/Relief colors for the two individually addressable Wave-F forms. */
+export const ALPINE_WILDLIFE_APPEARANCE_PALETTES = Object.freeze({
+  "mountain-goat": Object.freeze({
+    "bright-white": palette("#e8e5d8", "#fffbed", "#393b38", "#b5ab91"),
+    "cream-white": palette("#d8d1bd", "#f1ead5", "#403d36", "#ad9f82"),
+    "gray-white": palette("#bfc2bc", "#e6e5dc", "#3b403f", "#a59e8c"),
+    "winter-white": palette("#f0f0e8", "#fffdf3", "#424643", "#bcb7a5"),
+  }),
+  "golden-eagle": Object.freeze({
+    "dark-gold": palette("#493826", "#947044", "#1d1813", "#c79a55"),
+    "golden-naped": palette("#4c3928", "#b4864b", "#1c1713", "#d4ad68"),
+    "mottled-brown": palette("#604936", "#967657", "#241c17", "#c29a63"),
+    "pale-gold": palette("#796044", "#c09b67", "#2b221a", "#dec087"),
+  }),
+} as const);
+
+/** Species-safe alpine morph lookup; malformed legacy keys never cross species. */
+export function alpineWildlifeAppearancePalette(
+  species: AlpineWildlifeAppearanceSpecies,
+  appearanceKey: string,
+): WildlifeAppearancePalette {
+  const palettes = ALPINE_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+    Record<string, WildlifeAppearancePalette>
+  >;
+  if (Object.prototype.hasOwnProperty.call(palettes, appearanceKey)) {
+    return palettes[appearanceKey] as WildlifeAppearancePalette;
+  }
+  return palettes[
+    ALPINE_WILDLIFE_APPEARANCE_FALLBACK[species]
   ] as WildlifeAppearancePalette;
 }

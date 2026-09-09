@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getCoreWildlifeProfile } from "../sim/coreWildlifeIdentity";
+import { hashCanonical, stableStringify } from "../sim/util";
 import { LIVING_ACTOR_SPECIES } from "./livingActor";
 import { livingActorSenseProfile } from "./livingActorSenses";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
@@ -16,6 +17,12 @@ import { CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES } from "./coreEcologyActivity
 import { coreWildlifeLocomotionProfile } from "./coreWildlifeLocomotionProfile";
 import {
   LIVING_SPECIES_CAPABILITY_SCALE,
+  LIVING_SPECIES_ALPHA32_CATALOG,
+  LIVING_SPECIES_ALPHA32_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_ALPHA32_CATALOG_COUNT,
+  LIVING_SPECIES_ALPHA32_CATALOG_HASH,
+  LIVING_SPECIES_ALPHA32_SPECIES_IDS,
+  LIVING_SPECIES_ALPHA32_SPECIES_IDS_HASH,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   canonicalizeLivingSpeciesCatalog,
@@ -44,7 +51,7 @@ describe("Living Weft species module catalog", () => {
   it("registers exactly the implemented identity owners, in stable order", () => {
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
       .toEqual([...LIVING_ACTOR_SPECIES].sort());
-    expect(LIVING_SPECIES_CATALOG.modules.map(({ moduleId }) => moduleId)).toEqual([
+    expect(LIVING_SPECIES_ALPHA32_CATALOG.modules.map(({ moduleId }) => moduleId)).toEqual([
       "living-species:american-black-duck:v1",
       "living-species:atlantic-marsh-fiddler-crab:v1",
       "living-species:atlantic-silverside:v1",
@@ -70,6 +77,17 @@ describe("Living Weft species module catalog", () => {
       "living-species:southern-leopard-frog:v1",
       "living-species:wild-boar:v1",
     ]);
+    expect(LIVING_SPECIES_ALPHA32_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_ALPHA32_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_ALPHA32_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_ALPHA32_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA32_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_ALPHA32_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(stableStringify(LIVING_SPECIES_ALPHA32_CATALOG)).byteLength)
+      .toBe(LIVING_SPECIES_ALPHA32_CATALOG_BYTE_LENGTH);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA32_CATALOG))
+      .toBe(LIVING_SPECIES_ALPHA32_CATALOG_HASH);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
@@ -180,6 +198,80 @@ describe("Living Weft species module catalog", () => {
     }
     expect(livingSpeciesModule("gull")?.locomotion.media)
       .toEqual([{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }]);
+  });
+
+  it("appends the alpine trio without claiming direct predation or audible voice", () => {
+    const goat = livingSpeciesModule("mountain-goat");
+    const pika = livingSpeciesModule("american-pika");
+    const eagle = livingSpeciesModule("golden-eagle");
+
+    expect(goat).toMatchObject({
+      profile: { implementation: "foundation", taxonomicClass: "mammal" },
+      identity: { form: "individual", stableIdNamespace: "MOUNTAINGOAT" },
+      population: { maxMaterializedPerRegion: 5 },
+      social: {
+        groupModel: "group",
+        group: { organizationKinds: ["herd"], stableIdNamespace: "HERD" },
+      },
+    });
+    expect(goat?.interactions.targets.find(({ targetClass }) => targetClass === "same-species"))
+      .toMatchObject({
+        policy: "available",
+        perceptionChannels: ["vision"],
+        verbs: ["coordinate"],
+      });
+    expect(pika).toMatchObject({
+      profile: { implementation: "foundation", taxonomicClass: "mammal" },
+      identity: { form: "aggregate", stableIdNamespace: "PIKA-AREA" },
+      spatial: { positionModel: "segmented-area" },
+      population: {
+        authoritativeUnit: "population-patch",
+        maxMaterializedPerRegion: 0,
+      },
+      evidence: { status: "foundation", produces: ["haypile", "talus-sign"] },
+    });
+    for (const targetClass of ["dog", "human", "predator"] as const) {
+      expect(pika?.interactions.targets.find((target) => target.targetClass === targetClass))
+        .toMatchObject({
+          policy: "available",
+          verbs: ["quiet", "redistribute", "retreat-to-crevice"],
+          escalationConstraints: [
+            "aggregate-unit-conservation",
+            "bounded-response",
+            "direct-perception-required",
+            "nonlethal-pressure-only",
+          ],
+          disengagementVerbs: ["disengage"],
+        });
+    }
+    expect(eagle).toMatchObject({
+      profile: {
+        implementation: "foundation",
+        ecologicalClasses: ["aerial-predator", "carnivore", "predator"],
+      },
+      identity: { form: "individual", stableIdNamespace: "GOLDENEAGLE" },
+      population: { maxMaterializedPerRegion: 1 },
+      locomotion: {
+        media: [{ medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }],
+        movementVerbs: ["fly", "observe", "perch", "soar"],
+      },
+      sound: { implementation: "unimplemented", repertoire: [] },
+      lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
+    });
+    expect(eagle?.diet).toEqual({
+      implementation: "unimplemented",
+      ownerId: null,
+      mode: "none",
+      requiresPhysicalResource: false,
+      resources: [],
+    });
+    expect(eagle?.interactions.targets.find(({ targetClass }) => targetClass === "food")?.policy)
+      .toBe("intentional-no-response");
+    expect(eagle?.interactions.targets.find(({ targetClass }) => targetClass === "smaller-prey")?.policy)
+      .toBe("intentional-no-response");
+    for (const module of [goat, pika, eagle]) {
+      expect(module?.sound).toMatchObject({ implementation: "unimplemented", ownerId: null });
+    }
   });
 
   it("keeps domestic livestock on shared active owners with deferred life systems", () => {
@@ -1883,6 +1975,7 @@ describe("Living Weft species module catalog", () => {
     for (const module of LIVING_SPECIES_CATALOG.modules) {
       expect(module.spatial).toMatchObject({
         positionModel: module.speciesId === "brown-rat"
+          || module.speciesId === "american-pika"
           || module.speciesId === "atlantic-marsh-fiddler-crab"
           || module.speciesId === "atlantic-silverside"
           || module.speciesId === "southern-leopard-frog"
@@ -1900,6 +1993,8 @@ describe("Living Weft species module catalog", () => {
         module.speciesId === "atlantic-marsh-fiddler-crab"
           || module.speciesId === "atlantic-silverside"
           || module.speciesId === "gray-wolf"
+          || module.speciesId === "mountain-goat"
+          || module.speciesId === "american-pika"
           ? "foundation"
           : module.speciesId === "brown-rat"
           || module.speciesId === "domestic-cat"
@@ -1923,7 +2018,9 @@ describe("Living Weft species module catalog", () => {
       expect(module.persistence.generationMigration).toBe("preserve-materialized-identity");
       expect(module.senses.implementation).toBe("foundation");
       expect(module.social.communicationChannels).toEqual(
-        module.speciesId === "deer"
+        module.speciesId === "mountain-goat"
+          ? ["vision"]
+          : module.speciesId === "deer"
           || module.speciesId === "american-black-duck"
           || module.speciesId === "domestic-chicken"
           || module.speciesId === "domestic-goat"
@@ -1948,6 +2045,7 @@ describe("Living Weft species module catalog", () => {
             || module.speciesId === "wild-boar"
             || module.speciesId === "elk"
             || module.speciesId === "gray-wolf"
+            || module.speciesId === "mountain-goat"
             ? "active"
             : "unimplemented",
       );

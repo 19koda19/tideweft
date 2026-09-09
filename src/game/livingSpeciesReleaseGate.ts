@@ -33,6 +33,7 @@ export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA22_TIDAL_CONVERGENCE_SOURCE_CANDIDATE_VERSION = 1 as const;
 export const ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS_VERSION = 1 as const;
+export const ALPHA33_WAVE_F_ALPINE_SHARED_READINESS_VERSION = 1 as const;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -718,6 +719,135 @@ export interface Alpha25SharedDomesticLivestockReadinessReport {
   readonly fullDirective041Ready: false;
   readonly excludedClaims: readonly Alpha25SharedDomesticLivestockExcludedClaim[];
 }
+
+export const ALPHA33_WAVE_F_ALPINE_SPECIES = [
+  "mountain-goat",
+  "american-pika",
+  "golden-eagle",
+] as const satisfies readonly LivingActorSpecies[];
+
+export type Alpha33WaveFAlpineSpecies =
+  (typeof ALPHA33_WAVE_F_ALPINE_SPECIES)[number];
+export type Alpha33WaveFAlpineRole =
+  | "high-ridge-herd"
+  | "talus-prey-aggregate"
+  | "solitary-aerial-predator";
+export type Alpha33WaveFAlpineRepresentation =
+  | "individual-herd"
+  | "non-addressable-aggregate"
+  | "solitary-aerial-individual";
+export type Alpha33WaveFAlpineCapability =
+  | "connected-role-contract"
+  | "sparse-signed-extreme-presence"
+  | "shared-grade-and-ridge-activity"
+  | "knowledge-honest-presentation"
+  | "eagle-pika-los-pressure"
+  | "v2-save-runtime-continuity"
+  | "global-materialization-budget"
+  | "performance-budget"
+  | "mobile-parity"
+  | "shared-invariant-coverage"
+  | "excluded-claim-integrity";
+export type Alpha33WaveFAlpineExcludedClaim =
+  | "new-mortality"
+  | "capture"
+  | "exact-pika-targeting"
+  | "reproduction"
+  | "audible-living-voice"
+  | "tactical-combat"
+  | "polar-ecology"
+  | "full-wave-f"
+  | "full-directive-04-1";
+
+export const ALPHA33_WAVE_F_ALPINE_EXCLUDED_CLAIMS = [
+  "new-mortality",
+  "capture",
+  "exact-pika-targeting",
+  "reproduction",
+  "audible-living-voice",
+  "tactical-combat",
+  "polar-ecology",
+  "full-wave-f",
+  "full-directive-04-1",
+] as const satisfies readonly Alpha33WaveFAlpineExcludedClaim[];
+
+export interface Alpha33WaveFAlpineRoleReadiness {
+  readonly role: Alpha33WaveFAlpineRole;
+  readonly speciesId: Alpha33WaveFAlpineSpecies;
+  readonly representation: Alpha33WaveFAlpineRepresentation;
+  readonly actorAddressable: boolean;
+  readonly evidenceAuthenticated: boolean;
+  readonly representationAuthenticated: boolean;
+  readonly presentationAuthenticated: boolean;
+  readonly ready: boolean;
+  readonly evidenceOwnerIds: readonly string[];
+}
+
+/**
+ * Source-owned readiness for one connected Alpine triad. It is deliberately
+ * not three mini release reports: shared owners prove the habitat, activity,
+ * perception, persistence, presentation, and budget contracts once.
+ */
+export interface Alpha33WaveFAlpineSharedReadinessReport {
+  readonly version: typeof ALPHA33_WAVE_F_ALPINE_SHARED_READINESS_VERSION;
+  readonly unitId: "alpha33-wave-f-alpine";
+  readonly scope: "bounded-sparse-alpine-triad";
+  readonly speciesIds: readonly Alpha33WaveFAlpineSpecies[];
+  readonly roles: readonly Alpha33WaveFAlpineRoleReadiness[];
+  readonly evidenceAuthenticated: boolean;
+  readonly connectedRoleContractReady: boolean;
+  readonly sparseSignedExtremePresenceReady: boolean;
+  readonly sharedGradeAndRidgeActivityReady: boolean;
+  readonly knowledgeHonestPresentationReady: boolean;
+  readonly eaglePikaLosPressureReady: boolean;
+  readonly v2SaveRuntimeContinuityReady: boolean;
+  readonly globalMaterializationBudgetReady: boolean;
+  readonly performanceEvidenceReady: boolean;
+  readonly mobileParityReady: boolean;
+  readonly sharedInvariantCoverageReady: boolean;
+  readonly excludedClaimIntegrityReady: boolean;
+  readonly boundedCandidateReady: boolean;
+  readonly blockingCapabilities: readonly Alpha33WaveFAlpineCapability[];
+  readonly evidenceOwnerIds: readonly string[];
+  /** Public copy and an exact deployed artifact remain independent gates. */
+  readonly publicationRecordsReady: false;
+  readonly exactTestedDeploymentVerified: false;
+  readonly liveVerified: false;
+  readonly published: false;
+  readonly fullThirtyCriterionReady: false;
+  readonly fullWaveFReady: false;
+  readonly fullDirective041Ready: false;
+  readonly excludedClaims: readonly Alpha33WaveFAlpineExcludedClaim[];
+}
+
+interface Alpha33WaveFAlpineRoleDefinition {
+  readonly role: Alpha33WaveFAlpineRole;
+  readonly speciesId: Alpha33WaveFAlpineSpecies;
+  readonly representation: Alpha33WaveFAlpineRepresentation;
+  readonly actorAddressable: boolean;
+}
+
+const ALPHA33_WAVE_F_ALPINE_ROLE_DEFINITIONS:
+readonly Alpha33WaveFAlpineRoleDefinition[] = [
+  {
+    role: "high-ridge-herd",
+    speciesId: "mountain-goat",
+    representation: "individual-herd",
+    actorAddressable: true,
+  },
+  {
+    role: "talus-prey-aggregate",
+    speciesId: "american-pika",
+    representation: "non-addressable-aggregate",
+    actorAddressable: false,
+  },
+  {
+    role: "solitary-aerial-predator",
+    speciesId: "golden-eagle",
+    representation: "solitary-aerial-individual",
+    actorAddressable: true,
+  },
+] as const;
 
 /** The seven deliberately bounded small-world roles shipped across Wave B. */
 export const WAVE_B_BOUNDED_STARTING_HARBOR_SPECIES = [
@@ -2262,6 +2392,173 @@ function regionalPredatorBreadthEvidence(
 }
 
 /**
+ * One bounded Wave-F evidence train for the Alpine triad. Mountain goats and
+ * golden eagles are addressed individuals while pika remains an authoritative
+ * talus aggregate; shared owners, rather than species scripts, provide the
+ * habitat, activity, perception, presentation, persistence, and budget seams.
+ * Physical predation and audible voice remain explicitly absent.
+ */
+function alpineSharedEvidence(
+  species: "mountain-goat" | "american-pika" | "golden-eagle",
+): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => (
+    [...new Set(values)].sort(compareText)
+  );
+  const contracts = owners(
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:living-species-catalog:v1",
+    "sim:core-wildlife-identity:v1",
+  );
+  const actor = species !== "american-pika";
+  const groupedOrAggregate = species !== "golden-eagle";
+  const evidence = species !== "golden-eagle";
+  const habitatOwners = owners(
+    "game:core-ecology-alpine-habitat:v1",
+    "game:regional-alpine-ecology:v1",
+    "game:regional-alpine-residents:v1",
+    "test:alpha33-alpine-shared-invariants:v1",
+  );
+  const perceptionOwners = owners(
+    "game:core-ecology-aggregate-perception:v1",
+    "game:core-ecology-perception:v1",
+    "game:living-actor-senses:v1",
+    "sim:actor-perception:v2",
+    "test:alpha33-alpine-eagle-pika-emergence:v1",
+  );
+  const presentationOwners = owners(
+    "game:wildlife-about:v1",
+    "game:wildlife-presentation:v1",
+    "sim:actor-perception:v2",
+    "test:alpha33-alpine-presentation-invariants:v1",
+  );
+  const persistenceOwners = owners(
+    "game:regional-alpine-ecology:v1",
+    "game:regional-ecology-state:v2",
+    "game:runtime-core-ecology:v1",
+    "game:runtime-save:v26",
+    "test:alpha33-alpine-runtime-v26:v1",
+    "test:alpha33-alpine-shared-invariants:v1",
+  );
+  return [
+    ["species-profile", A, owners("game:living-species-catalog:v1", "sim:core-wildlife-identity:v1")],
+    ["ecological-niche", A, owners(...contracts, ...habitatOwners)],
+    ["appearance", A, owners("game:wildlife-presentation:v1", "sim:core-wildlife-identity:v1")],
+    ["sound", U, []],
+    ["habitat-placement", A, habitatOwners],
+    ["food-web", F, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+      "test:alpha33-alpine-eagle-pika-emergence:v1",
+    )],
+    ["perception-senses", A, perceptionOwners],
+    ["locomotion", A, species === "golden-eagle"
+      ? owners(
+          "game:core-ecology-activity:v1",
+          "game:core-ecology-ridge-activity-authority:v1",
+          "game:core-wildlife-locomotion-profile:v1",
+          "game:runtime-core-ecology:v1",
+          "test:alpha33-alpine-shared-activity:v1",
+        )
+      : species === "american-pika"
+        ? owners(
+            "game:core-ecology-aggregate-perception:v1",
+            "game:regional-alpine-ecology:v1",
+            "test:alpha33-alpine-shared-activity:v1",
+          )
+        : owners(
+            "game:core-wildlife-actor:v1",
+            "game:core-wildlife-locomotion-profile:v1",
+            "game:runtime-core-ecology:v1",
+            "test:alpha33-alpine-shared-activity:v1",
+          )],
+    ["human-interaction", F, contracts],
+    ["dog-interaction", groupedOrAggregate ? F : U, groupedOrAggregate ? contracts : []],
+    ["same-species-interaction", groupedOrAggregate ? A : U, groupedOrAggregate
+      ? owners(
+          species === "american-pika"
+            ? "game:regional-alpine-ecology:v1"
+            : "game:core-ecology-groups:v1",
+          "game:core-ecology-species-runtime-policy:v1",
+          "test:alpha33-alpine-shared-invariants:v1",
+        )
+      : []],
+    ["other-species-interaction", A, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "test:alpha33-alpine-eagle-pika-emergence:v1",
+    )],
+    ["neutral-behavior", A, actor
+      ? owners("game:core-wildlife-actor:v1", "game:core-ecology-species-runtime-policy:v1")
+      : owners("game:regional-alpine-ecology:v1", "game:core-ecology-species-runtime-policy:v1")],
+    ["disengagement", A, actor
+      ? owners("game:core-wildlife-actor:v1", "game:core-ecology-species-runtime-policy:v1")
+      : owners("game:regional-alpine-ecology:v1", "game:core-ecology-species-runtime-policy:v1")],
+    ["environmental-evidence", evidence ? A : U, evidence
+      ? owners(
+          species === "american-pika"
+            ? "game:regional-alpine-ecology:v1"
+            : "game:core-wildlife-actor:v1",
+          "game:wildlife-presentation:v1",
+          "test:alpha33-alpine-presentation-invariants:v1",
+        )
+      : []],
+    ["about-disclosure", A, presentationOwners],
+    ["knowledge-honesty", A, owners(...perceptionOwners, ...presentationOwners)],
+    ["population-materialization", A, owners(...habitatOwners, ...persistenceOwners)],
+    ["full-coarse-transition", A, owners(
+      "game:regional-alpine-ecology:v1",
+      "game:regional-alpine-residents:v1",
+      "game:regional-ecology-state:v2",
+      "game:runtime-core-ecology:v1",
+      "test:alpha33-alpine-runtime-v26:v1",
+      "test:alpha33-alpine-shared-invariants:v1",
+    )],
+    ["save-load", A, persistenceOwners],
+    ["seamless-region-crossing", A, owners(
+      "game:regional-alpine-ecology:v1",
+      "game:regional-ecology-state:v2",
+      "game:runtime-core-ecology:v1",
+      "test:alpha33-alpine-runtime-v26:v1",
+      "test:alpha33-alpine-shared-invariants:v1",
+    )],
+    ["performance-budget", A, owners(
+      "game:core-ecology-alpine-habitat:v1",
+      "game:core-ecology-ridge-activity-authority:v1",
+      "game:regional-ecology-state:v2",
+      "game:runtime-core-ecology:v1",
+      "test:alpha33-alpine-performance:v1",
+    )],
+    ["accessibility", A, presentationOwners],
+    ["mobile-parity", A, presentationOwners],
+    ["player-independent-scenario", A, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:regional-alpine-ecology:v1",
+      "test:alpha33-alpine-eagle-pika-emergence:v1",
+    )],
+    ["fuzz-testing", A, owners(
+      "game:core-ecology-alpine-habitat:v1",
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:regional-alpine-residents:v1",
+      "game:regional-ecology-state:v2",
+      "sim:core-wildlife-identity:v1",
+      "test:alpha33-alpine-shared-invariants:v1",
+    )],
+    ["clone-diversity", A, owners(
+      species === "american-pika"
+        ? "game:regional-alpine-residents:v1"
+        : "sim:core-wildlife-identity:v1",
+      "test:alpha33-alpine-shared-invariants:v1",
+    )],
+    ["tutorial-truth", U, []],
+    ["patch-note-truth", U, []],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -2352,6 +2649,9 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "gray-wolf": regionalUplandEvidence("gray-wolf"),
   cougar: regionalPredatorBreadthEvidence("cougar"),
   "brown-bear": regionalPredatorBreadthEvidence("brown-bear"),
+  "mountain-goat": alpineSharedEvidence("mountain-goat"),
+  "american-pika": alpineSharedEvidence("american-pika"),
+  "golden-eagle": alpineSharedEvidence("golden-eagle"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -3625,6 +3925,7 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
     });
 
   const activityModules = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES
+    .filter(({ speciesId }) => candidateSpecies.has(speciesId))
     .map(({ speciesId }) => livingSpeciesModule(speciesId));
   const surfaceAquaticTargets = surfaceProfiles.flatMap(({ speciesId }) => {
     const target = livingSpeciesModule(speciesId)?.interactions.targets.find((candidate) => (
@@ -4668,6 +4969,286 @@ Alpha25SharedDomesticLivestockReadinessReport {
 
 export const ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS =
   alpha25SharedDomesticLivestockReadiness();
+
+/**
+ * Authenticate the Wave-F Alpine slice as one connected, bounded source unit.
+ * This deliberately checks shared abstractions and role representations, not
+ * a species-by-species interaction matrix.
+ */
+export function alpha33WaveFAlpineSharedReadiness():
+Alpha33WaveFAlpineSharedReadinessReport {
+  const roleInputs = ALPHA33_WAVE_F_ALPINE_ROLE_DEFINITIONS.map((definition) => {
+    const gate = LIVING_SPECIES_RELEASE_GATES.gates.find(({ speciesId }) => (
+      speciesId === definition.speciesId
+    ));
+    const module = livingSpeciesModule(definition.speciesId);
+    const policy = coreEcologySpeciesRuntimePolicy(definition.speciesId);
+    const report = gate === undefined ? null : auditLivingSpeciesReleaseGate(gate);
+    const criterion = (name: LivingSpeciesReleaseCriterion) => (
+      gate?.criteria.find((candidate) => candidate.criterion === name)
+    );
+    const active = (name: LivingSpeciesReleaseCriterion): boolean => (
+      criterion(name)?.status === "active"
+    );
+    const presentationAuthenticated = module !== null
+      && active("appearance")
+      && active("about-disclosure")
+      && active("knowledge-honesty")
+      && active("accessibility")
+      && active("mobile-parity")
+      && module.about.ownerId === "game:wildlife-about:v1"
+      && module.about.directObservationRequired
+      && criterion("mobile-parity")?.evidenceOwnerIds.includes(
+        "test:alpha33-alpine-presentation-invariants:v1",
+      ) === true;
+    const representationAuthenticated = module !== null
+      && policy !== null
+      && policy.actorAddressable === definition.actorAddressable
+      && (definition.representation === "individual-herd"
+        ? module.identity.form === "individual"
+          && policy.representation === "individual"
+          && policy.groupOrganization === "herd"
+          && policy.groupStableIdNamespace === "HERD"
+          && module.social.group.organizationKinds.length === 1
+          && module.social.group.organizationKinds[0] === "herd"
+          && module.social.group.stableIdentity
+        : definition.representation === "non-addressable-aggregate"
+          ? module.identity.form === "aggregate"
+            && policy.representation === "aggregate"
+            && policy.maximumMaterializedActors === 0
+            && policy.aggregate?.maximumAnchors === 4
+            && policy.presentationModel === "aggregate-activity"
+          : module.identity.form === "individual"
+            && policy.representation === "individual"
+            && policy.groupOrganization === null
+            && policy.maximumMaterializedActors === 1
+            && policy.capabilities.includes("aerial-locomotion")
+            && policy.capabilities.includes("perch"));
+    const evidenceAuthenticated = report?.evidenceAuthenticated === true;
+    const ready = evidenceAuthenticated
+      && representationAuthenticated
+      && presentationAuthenticated
+      && active("species-profile")
+      && active("ecological-niche")
+      && active("habitat-placement")
+      && active("locomotion")
+      && active("population-materialization")
+      && active("full-coarse-transition")
+      && active("save-load");
+    const evidenceOwnerIds = [...new Set(
+      gate?.criteria.flatMap(({ evidenceOwnerIds }) => evidenceOwnerIds) ?? [],
+    )].sort(compareText);
+    return deepFreeze({
+      ...definition,
+      evidenceAuthenticated,
+      representationAuthenticated,
+      presentationAuthenticated,
+      ready,
+      evidenceOwnerIds,
+    });
+  });
+
+  const gates = ALPHA33_WAVE_F_ALPINE_SPECIES.map((speciesId) => (
+    LIVING_SPECIES_RELEASE_GATES.gates.find((candidate) => candidate.speciesId === speciesId)
+  ));
+  const modules = ALPHA33_WAVE_F_ALPINE_SPECIES.map(livingSpeciesModule);
+  const policies = ALPHA33_WAVE_F_ALPINE_SPECIES.map(coreEcologySpeciesRuntimePolicy);
+  const everyCriterion = (
+    name: LivingSpeciesReleaseCriterion,
+    ownerId?: string,
+  ): boolean => gates.every((gate) => {
+    const criterion = gate?.criteria.find((candidate) => candidate.criterion === name);
+    return criterion?.status === "active"
+      && (ownerId === undefined || criterion.evidenceOwnerIds.includes(ownerId));
+  });
+  const gateFor = (speciesId: Alpha33WaveFAlpineSpecies) => (
+    gates.find((gate) => gate?.speciesId === speciesId)
+  );
+  const activeWithOwner = (
+    speciesId: Alpha33WaveFAlpineSpecies,
+    name: LivingSpeciesReleaseCriterion,
+    ownerId: string,
+  ): boolean => {
+    const criterion = gateFor(speciesId)?.criteria.find((candidate) => (
+      candidate.criterion === name
+    ));
+    return criterion?.status === "active" && criterion.evidenceOwnerIds.includes(ownerId);
+  };
+  const policyFor = (speciesId: Alpha33WaveFAlpineSpecies) => (
+    policies.find((policy) => policy?.speciesId === speciesId) ?? null
+  );
+  const moduleFor = (speciesId: Alpha33WaveFAlpineSpecies) => (
+    modules.find((module) => module?.speciesId === speciesId) ?? null
+  );
+
+  const evidenceAuthenticated = roleInputs.every(({ evidenceAuthenticated }) => (
+    evidenceAuthenticated
+  ));
+  const connectedRoleContractReady = roleInputs.length
+      === ALPHA33_WAVE_F_ALPINE_ROLE_DEFINITIONS.length
+    && roleInputs.every(({ ready }) => ready);
+  const sparseSignedExtremePresenceReady = modules.every((module) => (
+    module !== null && module.spatial.signedRegions && module.spatial.extremeRegions
+  ))
+    && everyCriterion("habitat-placement", "game:core-ecology-alpine-habitat:v1")
+    && everyCriterion("habitat-placement", "test:alpha33-alpine-shared-invariants:v1");
+
+  const goat = moduleFor("mountain-goat");
+  const pika = policyFor("american-pika");
+  const eagle = moduleFor("golden-eagle");
+  const eaglePolicy = policyFor("golden-eagle");
+  const sharedGradeAndRidgeActivityReady = everyCriterion("locomotion")
+    && goat !== null
+    && goat.locomotion.terrainAffordances.includes("high-ridge")
+    && goat.locomotion.terrainAffordances.includes("rocky-slope")
+    && pika?.aggregate?.responseVerbs.includes("quiet") === true
+    && pika.aggregate.responseVerbs.includes("redistribute")
+    && eagle !== null
+    && eagle.locomotion.media.some(({ medium }) => medium === "air")
+    && eagle.locomotion.movementVerbs.includes("soar")
+    && eagle.locomotion.movementVerbs.includes("perch")
+    && eaglePolicy?.capabilities.includes("aerial-locomotion") === true
+    && activeWithOwner(
+      "golden-eagle",
+      "locomotion",
+      "game:core-ecology-ridge-activity-authority:v1",
+    )
+    && activeWithOwner(
+      "golden-eagle",
+      "locomotion",
+      "test:alpha33-alpine-shared-activity:v1",
+    );
+
+  const knowledgeHonestPresentationReady = roleInputs.every(({ presentationAuthenticated }) => (
+    presentationAuthenticated
+  ))
+    && everyCriterion("appearance", "game:wildlife-presentation:v1")
+    && everyCriterion("about-disclosure", "game:wildlife-about:v1")
+    && everyCriterion("knowledge-honesty", "sim:actor-perception:v2");
+  const eaglePikaLosPressureReady = pika?.actorAddressable === false
+    && pika.aggregate?.responseVerbs.includes("suppress") === true
+    && eaglePolicy?.capabilities.includes("aerial-predator") === true
+    && activeWithOwner(
+      "american-pika",
+      "perception-senses",
+      "test:alpha33-alpine-eagle-pika-emergence:v1",
+    )
+    && activeWithOwner(
+      "golden-eagle",
+      "other-species-interaction",
+      "test:alpha33-alpine-eagle-pika-emergence:v1",
+    );
+  const v2SaveRuntimeContinuityReady = everyCriterion(
+    "save-load",
+    "game:regional-ecology-state:v2",
+  )
+    && everyCriterion("save-load", "game:runtime-save:v26")
+    && everyCriterion("save-load", "test:alpha33-alpine-runtime-v26:v1")
+    && everyCriterion("seamless-region-crossing", "game:regional-ecology-state:v2");
+  const globalMaterializationBudgetReady = everyCriterion(
+    "population-materialization",
+    "game:regional-ecology-state:v2",
+  )
+    && everyCriterion("population-materialization", "game:runtime-core-ecology:v1")
+    && everyCriterion("full-coarse-transition", "game:regional-ecology-state:v2")
+    && policies.every((policy) => policy !== null)
+    && pika?.maximumMaterializedActors === 0;
+  const performanceEvidenceReady = everyCriterion(
+    "performance-budget",
+    "test:alpha33-alpine-performance:v1",
+  );
+  const mobileParityReady = everyCriterion(
+    "mobile-parity",
+    "test:alpha33-alpine-presentation-invariants:v1",
+  ) && everyCriterion("accessibility", "game:wildlife-presentation:v1");
+  const sharedInvariantCoverageReady = validateCoreEcologySpeciesRuntimePolicies(
+    LIVING_SPECIES_CATALOG,
+  ).length === 0
+    && everyCriterion("fuzz-testing", "test:alpha33-alpine-shared-invariants:v1")
+    && everyCriterion("player-independent-scenario")
+    && activeWithOwner(
+      "american-pika",
+      "player-independent-scenario",
+      "test:alpha33-alpine-eagle-pika-emergence:v1",
+    );
+
+  const forbiddenVerbs = new Set(["attack", "capture", "consume", "kill"]);
+  const excludedClaimIntegrityReady = modules.every((module) => (
+    module !== null
+    && module.sound.implementation === "unimplemented"
+    && module.sound.repertoire.length === 0
+    && module.lifeHistory.mortality === "unimplemented"
+    && module.lifeHistory.reproduction === "unimplemented"
+    && module.aftermath.implementation === "unimplemented"
+    && module.interactions.targets.every(({ verbs }) => (
+      verbs.every((verb) => !forbiddenVerbs.has(verb))
+    ))
+  ))
+    && policies.every((policy) => policy !== null
+      && policy.mortality.predatorContact === null
+      && policy.mortality.physicalBodyResourceUnits === 0
+      && !policy.capabilities.includes("live-prey-pursuit"))
+    && everyCriterion("sound") === false
+    && gates.every((gate) => gate?.criteria.find(({ criterion }) => criterion === "sound")
+      ?.status === "unimplemented")
+    && pika?.actorAddressable === false;
+
+  const capabilities: readonly (
+    readonly [Alpha33WaveFAlpineCapability, boolean]
+  )[] = [
+    ["connected-role-contract", connectedRoleContractReady],
+    ["sparse-signed-extreme-presence", sparseSignedExtremePresenceReady],
+    ["shared-grade-and-ridge-activity", sharedGradeAndRidgeActivityReady],
+    ["knowledge-honest-presentation", knowledgeHonestPresentationReady],
+    ["eagle-pika-los-pressure", eaglePikaLosPressureReady],
+    ["v2-save-runtime-continuity", v2SaveRuntimeContinuityReady],
+    ["global-materialization-budget", globalMaterializationBudgetReady],
+    ["performance-budget", performanceEvidenceReady],
+    ["mobile-parity", mobileParityReady],
+    ["shared-invariant-coverage", sharedInvariantCoverageReady],
+    ["excluded-claim-integrity", excludedClaimIntegrityReady],
+  ];
+  const blockingCapabilities = capabilities
+    .filter(([, ready]) => !ready)
+    .map(([capability]) => capability);
+  const evidenceOwnerIds = [...new Set(roleInputs.flatMap(({ evidenceOwnerIds }) => (
+    evidenceOwnerIds
+  )))].sort(compareText);
+
+  return deepFreeze({
+    version: ALPHA33_WAVE_F_ALPINE_SHARED_READINESS_VERSION,
+    unitId: "alpha33-wave-f-alpine",
+    scope: "bounded-sparse-alpine-triad",
+    speciesIds: [...ALPHA33_WAVE_F_ALPINE_SPECIES],
+    roles: roleInputs,
+    evidenceAuthenticated,
+    connectedRoleContractReady,
+    sparseSignedExtremePresenceReady,
+    sharedGradeAndRidgeActivityReady,
+    knowledgeHonestPresentationReady,
+    eaglePikaLosPressureReady,
+    v2SaveRuntimeContinuityReady,
+    globalMaterializationBudgetReady,
+    performanceEvidenceReady,
+    mobileParityReady,
+    sharedInvariantCoverageReady,
+    excludedClaimIntegrityReady,
+    boundedCandidateReady: evidenceAuthenticated && blockingCapabilities.length === 0,
+    blockingCapabilities,
+    evidenceOwnerIds,
+    publicationRecordsReady: false,
+    exactTestedDeploymentVerified: false,
+    liveVerified: false,
+    published: false,
+    fullThirtyCriterionReady: false,
+    fullWaveFReady: false,
+    fullDirective041Ready: false,
+    excludedClaims: [...ALPHA33_WAVE_F_ALPINE_EXCLUDED_CLAIMS],
+  });
+}
+
+export const ALPHA33_WAVE_F_ALPINE_SHARED_READINESS =
+  alpha33WaveFAlpineSharedReadiness();
 
 function canonicalCriterionState(
   value: unknown,
