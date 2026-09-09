@@ -19,10 +19,10 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.31",
-      buildIdentity: "0.3.3-alpha.31",
-      gameplayContractVersion: 29,
-      tutorialVersion: 41,
+      version: "0.3.3-alpha.32",
+      buildIdentity: "0.3.3-alpha.32",
+      gameplayContractVersion: 30,
+      tutorialVersion: 42,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +68,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes High Country Shadows and retains the earlier habitat releases", () => {
+  it("scopes Open Country Ledger and retains the earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const highCountryRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.31",
+    );
+    const highCountryCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => highCountryRelease?.categories[category] ?? [])
       .join(" ");
     const beyondHarborRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.30",
@@ -197,13 +204,26 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("Cougar and brown bear");
-    expect(activeCopy).toContain("twenty-four-record catalog");
-    expect(activeCopy).toContain("same habitat, population, perception, attention, locomotion, bounded materialization, and presentation owners");
-    expect(activeCopy).toContain("currently identified solitary addressable marsh rabbit");
-    expect(activeCopy).toContain("A brown bear has no live-prey pursuit or harmful contact");
-    expect(activeCopy).toContain("see, reach, claim, guard, and consume from an already-existing finite physical body");
-    expect(activeCopy).toContain("representative predator-and-scavenger chain exercise the reusable scaffold instead of bespoke tests for every species or an N-squared animal-pair matrix");
+    expect(activeCopy).toContain("deterministic signed-region habitat");
+    expect(activeCopy).toContain("carrying capacity, food or prey support, territory, and density budgets");
+    expect(activeCopy).toContain("honestly empty");
+    expect(activeCopy).toContain("one global group-atomic stable-distance top-K plan capped at twenty-four actors");
+    expect(activeCopy).toContain("Fixed pre-materialization density gates");
+    expect(activeCopy).toContain("free-ranging domestic cat is now habitat-optional");
+    expect(activeCopy).toContain("visual actors, tidal activity, and alarms across regional-owner boundaries");
+    expect(activeCopy).toContain("exactly contacted, currently identified eligible solitary marsh rabbit");
+    expect(activeCopy).toContain("only a marsh fox, gray wolf, or cougar may enter that path");
+    expect(activeCopy).toContain("victim's owner retires it once and owns its conserved physical body");
+    expect(activeCopy).toContain("Pristine regional baselines are rederived rather than stored");
+    expect(activeCopy).toContain("signed and extreme-coordinate determinism");
+    expect(activeCopy).toContain("representative shared interactions replace species-local controllers or an exhaustive animal-pair matrix");
+    expect(highCountryCopy).toContain("Cougar and brown bear");
+    expect(highCountryCopy).toContain("twenty-four-record catalog");
+    expect(highCountryCopy).toContain("same habitat, population, perception, attention, locomotion, bounded materialization, and presentation owners");
+    expect(highCountryCopy).toContain("currently identified solitary addressable marsh rabbit");
+    expect(highCountryCopy).toContain("A brown bear has no live-prey pursuit or harmful contact");
+    expect(highCountryCopy).toContain("see, reach, claim, guard, and consume from an already-existing finite physical body");
+    expect(highCountryCopy).toContain("representative predator-and-scavenger chain exercise the reusable scaffold instead of bespoke tests for every species or an N-squared animal-pair matrix");
     expect(beyondHarborCopy).toContain("wild boar, elk, and gray wolf");
     expect(beyondHarborCopy).toContain("SOUNDER, HERD, and PACK");
     expect(beyondHarborCopy).toContain("shared direct perception, attention, actor-owned locomotion");
@@ -248,18 +268,29 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 24");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("habitat analysis advances to version 11");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 25");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("regional ecology root version 1");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Habitat analysis remains sealed at version 11");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("core ecology remains patch version 3");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("aggregate ecology remains record version 5");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("catalog now contains twenty-four records");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed version-23 Beyond the Harbor save is authenticated and adopted exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete habitat-version-10 source and population sequence");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Brown bear has no live-prey pursuit or contact");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no player, dog, human, social-group-member, or broader-animal harm");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no social group, persistent track evidence, audible voice, species-specific dog-directed behavior");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("shared large-predator perception path");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("catalog remains at twenty-four records with no new species");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("normalized sealed version-24 High Country Shadows save is authenticated and adopted exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("retains, redistributes, or explicitly retires every compatibility wildlife unit");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("persisted non-death disposition");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not worldwide species breadth");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no species");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("General tactical mortality remains absent");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("only supported live-animal harm");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Complete scent propagation and tracking");
+    expect(highCountryRelease?.categories.saves.join(" ")).toContain("outer session advances to version 24");
+    expect(highCountryRelease?.categories.saves.join(" ")).toContain("habitat analysis advances to version 11");
+    expect(highCountryRelease?.categories.saves.join(" ")).toContain("catalog now contains twenty-four records");
+    expect(highCountryRelease?.categories.saves.join(" ")).toContain("sealed version-23 Beyond the Harbor save is authenticated and adopted exactly once");
+    expect(highCountryRelease?.categories.saves.join(" ")).toContain("complete habitat-version-10 source and population sequence");
+    expect(highCountryRelease?.categories.knownLimitations.join(" ")).toContain("Brown bear has no live-prey pursuit or contact");
+    expect(highCountryRelease?.categories.knownLimitations.join(" ")).toContain("no player, dog, human, social-group-member, or broader-animal harm");
+    expect(highCountryRelease?.categories.knownLimitations.join(" ")).toContain("no social group, persistent track evidence, audible voice, species-specific dog-directed behavior");
+    expect(highCountryRelease?.categories.knownLimitations.join(" ")).toContain("shared large-predator perception path");
     expect(beyondHarborRelease?.categories.saves.join(" ")).toContain("outer session advances to version 23");
     expect(beyondHarborRelease?.categories.saves.join(" ")).toContain("habitat analysis advances to version 10");
     expect(beyondHarborRelease?.categories.saves.join(" ")).toContain("catalog now contains twenty-two records");
@@ -322,7 +353,7 @@ describe("canonical offline patch notes", () => {
     expect(convergenceRelease?.categories.saves.join(" ")).toContain("not serialized as a second source of truth");
     expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("closes only the bounded starting-harbor Wave-C integration seam");
     expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("not worldwide ecology");
-    expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("complete 75-to-150-profile bestiary");
+    expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("full bestiary");
     expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, migration");
     expect(convergenceRelease?.categories.knownLimitations.join(" ")).toContain("Complete sound propagation, general scent fields, broad persistent evidence and tracking");
     expect(livingChannelCopy).toContain("North American river otter");

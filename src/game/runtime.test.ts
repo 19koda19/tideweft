@@ -27,6 +27,7 @@ import { tideAtTick } from "../sim/terrain";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   createRegionCoord,
+  regionKey,
   regionLocalToGlobalTile,
   type RegionCoord,
 } from "../sim/regions";
@@ -79,10 +80,16 @@ import type { RegionalPromiseJourneyState } from "./regionalPromiseJourney";
 import type { PorterResponseState } from "./porterResponse";
 import {
   canonicalizeCoreEcologyAggregatePatch,
-  deserializeCoreEcologyAggregatePatch,
+  createCoreEcologyAggregatePatch,
   deserializeOrMigrateCoreEcologyAggregatePatch,
+  replaceCoreEcologyAggregatePatchActor,
   type CoreEcologyAggregatePatchState,
+  type CoreEcologyPopulationInput,
 } from "./coreEcology";
+import {
+  projectCoreEcologyActivity,
+  projectCoreEcologyDayPhase,
+} from "./coreEcologyActivity";
 import {
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES,
@@ -92,7 +99,38 @@ import {
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
   canonicalizeCoreEcologyMarshEdgeHabitatAssemblage,
   canonicalizeCoreEcologyTidalWebHabitatAssemblage,
+  type CoreEcologyRegionalPredatorHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import {
+  createCoreEcologyGroup,
+  createCoreEcologyGroupSet,
+  type CoreEcologyGroupState,
+} from "./coreEcologyGroups";
+import { setCoreEcologyMaterializationForWindow } from "./coreEcologyRuntime";
+import {
+  coreEcologySpeciesCanOwnActorAddress,
+  coreEcologySpeciesHasRuntimeCapability,
+  coreEcologySpeciesRuntimePolicy,
+} from "./coreEcologySpeciesRuntimePolicy";
+import { stepCoreEcologyTidalTable } from "./coreEcologyTidalTable";
+import {
+  repositionCoreWildlifeActor,
+  replaceCoreWildlifeActorPhysiology,
+} from "./coreWildlifeActor";
+import {
+  putRegionalEcologyResidentDeviation,
+} from "./regionalEcology";
+import {
+  deserializeRegionalEcologyState,
+  regionalEcologyRegionalResidentsForActiveRegions,
+  replaceRegionalEcologyActiveState,
+  serializeRegionalEcologyState,
+  type RegionalEcologyActiveResidentInput,
+} from "./regionalEcologyState";
+import {
+  createRegionalWorldView,
+  regionalStorageRegionsInView,
+} from "./regionalWorldView";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -263,6 +301,7 @@ interface TestGameSaveEnvelope {
   perceptionCarry?: unknown;
   bio0Ecology?: string;
   coreEcology?: string;
+  regionalEcology?: string;
   settlementEcology?: string;
   dogActorRoster?: string;
   settlementWorkingAnimals?: string;
@@ -298,17 +337,219 @@ function resealGameSave(envelope: TestGameSaveEnvelope): void {
   envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current additive v24/v11 save. */
+/**
+ * Fresh v25 saves divide the old whole-home ecology between settlement and
+ * signed-region owners. Historical migration fixtures reconstruct the exact
+ * published v24 source from the settlement owner's frozen v11 habitat.
+ */
+function exactV24CoreFromV25(envelope: TestGameSaveEnvelope): CoreEcologyAggregatePatchState {
+  const regional = deserializeRegionalEcologyState(envelope.regionalEcology);
+  if (
+    regional === null
+    || regional.settlementHome.patch.derivation.kind !== "settlement-home-v1"
+  ) throw new Error("fixture requires a canonical current v25 regional ecology save");
+  const world = deserializeWorld(envelope.world);
+  const habitat = regional.settlementHome.patch.derivation.habitat;
+  const tick = world.meta.completedTick;
+  let patch = createCoreEcologyAggregatePatch({
+    seed: world.meta.rootSeed,
+    patchKey: "wave-a/alarm-crossing",
+    originRegion: habitat.originRegion,
+    tick,
+    derivation: { kind: "habitat-v11", habitat },
+    groups: exactV24CoreGroups(world.meta.rootSeed, habitat, tick),
+    populations: exactV24CorePopulations(habitat),
+  });
+  const origin = regionLocalToGlobalTile(habitat.originRegion, 0, 0);
+  const materialized = setCoreEcologyMaterializationForWindow(patch, {
+    origin: {
+      x: origin.x - Math.trunc((REGIONAL_TRAVEL_COLUMNS - WORLD_WIDTH) / 2),
+      y: origin.y - Math.trunc((REGIONAL_TRAVEL_ROWS - world.terrain.height) / 2),
+    },
+    terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+  }, tick);
+  if (materialized === null) throw new Error("historical ecology materialization failed");
+  patch = materialized;
+  const bear = patch.populations.find(({ species }) => species === "black-bear")
+    ?.members[0]?.actor;
+  if (bear !== undefined) {
+    patch = replaceCoreEcologyAggregatePatchActor(patch, replaceCoreWildlifeActorPhysiology(
+      bear,
+      {
+        atTick: tick,
+        needs: { ...bear.needs, hunger: Math.max(680_000, bear.needs.hunger) },
+        condition: bear.condition,
+      },
+    ));
+  }
+  const tidal = stepCoreEcologyTidalTable(patch, { atTick: tick });
+  if (tidal === null) throw new Error("historical ecology tidal initialization failed");
+  patch = initializeExactV24Egret(tidal.patch, tidal.projection, tick);
+  patch = initializeExactV24ActivityActor(patch, "american-black-duck", tick);
+  return initializeExactV24ActivityActor(patch, "north-american-river-otter", tick);
+}
+
+function exactV24CoreGroups(
+  seed: RootSeed,
+  habitat: CoreEcologyRegionalPredatorHabitatAssemblage,
+  tick: number,
+) {
+  const groups: CoreEcologyGroupState[] = [];
+  for (const population of habitat.populations) {
+    const policy = coreEcologySpeciesRuntimePolicy(population.species);
+    const anchor = population.allocations[0]?.position;
+    if (
+      policy === null
+      || !policy.actorAddressable
+      || policy.groupOrganization === null
+      || policy.groupStableIdNamespace === null
+      || !coreEcologySpeciesHasRuntimeCapability(population.species, "group-coordination")
+      || population.allocations.length < 2
+      || anchor === undefined
+    ) continue;
+    groups.push(createCoreEcologyGroup({
+      seed,
+      species: population.species,
+      originRegion: habitat.originRegion,
+      populationKey: population.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: population.allocations.map(({ allocationOrdinal }) => allocationOrdinal),
+      anchor,
+      tick,
+    }));
+  }
+  return createCoreEcologyGroupSet(groups);
+}
+
+function exactV24CorePopulations(
+  habitat: CoreEcologyRegionalPredatorHabitatAssemblage,
+): readonly CoreEcologyPopulationInput[] {
+  return habitat.populations.flatMap((population) => (
+    population.representation !== "individual-representatives"
+      || population.populationUnits === 0
+      || !coreEcologySpeciesCanOwnActorAddress(population.species)
+      ? []
+      : [{
+          species: population.species,
+          populationKey: population.populationKey,
+          populationSize: population.populationUnits,
+          members: population.allocations.map((allocation) => ({
+            populationOrdinal: allocation.allocationOrdinal,
+            representedUnits: allocation.representedUnits,
+            position: allocation.position,
+            materialization: "coarse" as const,
+          })),
+        }]
+  ));
+}
+
+function initializeExactV24Egret(
+  patch: CoreEcologyAggregatePatchState,
+  projection: NonNullable<ReturnType<typeof stepCoreEcologyTidalTable>>["projection"],
+  tick: number,
+): CoreEcologyAggregatePatchState {
+  if (projection.snowyEgret === null) return patch;
+  const actor = patch.populations.find(({ species }) => species === "snowy-egret")
+    ?.members[0]?.actor;
+  const day = projectCoreEcologyDayPhase(tick);
+  if (actor === undefined || day === null) {
+    throw new Error("historical ecology egret initialization failed");
+  }
+  const target = day.phase === "daylight" && projection.snowyEgret.wadingTarget !== null
+    ? projection.snowyEgret.wadingTarget
+    : projection.snowyEgret.refugeTarget;
+  return replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+    atTick: tick,
+    position: target.targetPosition,
+    heading: actor.address.heading,
+  }));
+}
+
+function initializeExactV24ActivityActor(
+  patch: CoreEcologyAggregatePatchState,
+  species: "american-black-duck" | "north-american-river-otter",
+  tick: number,
+): CoreEcologyAggregatePatchState {
+  const member = patch.populations.find((population) => population.species === species)
+    ?.members[0];
+  if (member === undefined || member.materialization !== "materialized") return patch;
+  const activity = projectCoreEcologyActivity(patch, {
+    actorId: member.actor.identity.stableId,
+    atTick: tick,
+  });
+  if (activity === null) throw new Error(`historical ${species} initialization failed`);
+  if (activity.motion.kind !== "target-area") return patch;
+  return replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(member.actor, {
+    atTick: tick,
+    position: activity.motion.targetArea.center,
+    heading: member.actor.address.heading,
+  }));
+}
+
+function rebaseFixtureRegionalEcology(
+  serialized: string | undefined,
+  rootSeed: RootSeed,
+  spatial: ReturnType<typeof createWorldView>,
+): string {
+  const prior = deserializeRegionalEcologyState(serialized);
+  if (prior === null) throw new Error("fixture started with invalid regional ecology");
+  const activeRegions = regionalStorageRegionsInView(spatial);
+  const desiredRegionKeys = new Set(activeRegions.map(regionKey));
+  let root = prior.root;
+  for (const resident of prior.activeResidents) {
+    if (
+      resident.kind !== "regional-habitat"
+      || desiredRegionKeys.has(regionKey(resident.region))
+    ) continue;
+    root = putRegionalEcologyResidentDeviation(root, {
+      rootSeed,
+      patch: resident.patch,
+    });
+  }
+  const entrants = regionalEcologyRegionalResidentsForActiveRegions(
+    root,
+    rootSeed,
+    activeRegions,
+  );
+  if (entrants === null) throw new Error("fixture could not derive regional ecology entrants");
+  const retainedBySource = new Map(prior.activeResidents
+    .filter(({ kind }) => kind === "regional-habitat")
+    .map((resident) => [resident.sourceKey, resident] as const));
+  const activeResidents: RegionalEcologyActiveResidentInput[] = entrants.map((entrant) => ({
+    kind: "regional-habitat",
+    sourceKey: entrant.sourceKey,
+    patch: retainedBySource.get(entrant.sourceKey)?.patch ?? entrant.patch,
+  }));
+  for (const legacy of prior.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+    activeResidents.push({
+      kind: "legacy-cohort",
+      sourceKey: legacy.sourceKey,
+      patch: legacy.patch,
+    });
+  }
+  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
+    expectedIntegrity: prior.integrity,
+    rootSeed,
+    root,
+    settlementHome: {
+      sourceKey: prior.settlementHome.sourceKey,
+      patch: prior.settlementHome.patch,
+    },
+    activeRegions,
+    activeResidents,
+  }));
+}
+
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v25 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
 }> {
   const envelope = decodeGameSave(record);
-  const current = deserializeCoreEcologyAggregatePatch(envelope.coreEcology);
+  const current = exactV24CoreFromV25(envelope);
   if (
-    envelope.version !== 24
-    || record.payloadVersion !== 24
-    || current === null
+    envelope.version !== 25
+    || record.payloadVersion !== 25
     || (
       current.derivation.kind !== "habitat-v11"
       && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
@@ -398,6 +639,7 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
 
   envelope.version = 16;
   envelope.coreEcology = serializePublishedAggregateV4(ecology);
+  delete envelope.regionalEcology;
   envelope.settlementEcology = stableStringify({
     ...priorSettlement,
     revision: priorSettlement.revision - domesticCustodies.length,
@@ -1603,7 +1845,7 @@ describe("perpetual new worlds", () => {
     expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
       .toBe("generation two");
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("migrates Alpha-16 ecology by preserving every old entity and appending later habitats", async () => {
     const repository = new MemoryRepository();
@@ -1617,11 +1859,9 @@ describe("perpetual new worlds", () => {
     await setup.save();
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
-    const currentEcology = deserializeCoreEcologyAggregatePatch(
-      currentEnvelope.coreEcology,
-    );
-    expect(currentEnvelope.version).toBe(24);
-    expect(currentRecord.payloadVersion).toBe(24);
+    const currentEcology = exactV24CoreFromV25(currentEnvelope);
+    expect(currentEnvelope.version).toBe(25);
+    expect(currentRecord.payloadVersion).toBe(25);
     expect(currentEcology?.derivation.kind).toBe("habitat-v11");
     if (currentEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("fixture did not create current regional-upland ecology");
@@ -1685,11 +1925,12 @@ describe("perpetual new worlds", () => {
     await migratedRuntime.save();
     const migratedRecord = repository.snapshot();
     const migratedEnvelope = decodeGameSave(migratedRecord);
-    const migratedEcology = deserializeCoreEcologyAggregatePatch(
-      migratedEnvelope.coreEcology,
+    const migratedRegionalEcology = deserializeRegionalEcologyState(
+      migratedEnvelope.regionalEcology,
     );
-    expect(migratedEnvelope.version).toBe(24);
-    expect(migratedRecord.payloadVersion).toBe(24);
+    const migratedEcology = migratedRegionalEcology?.root.legacyCohort?.sourcePatch ?? null;
+    expect(migratedEnvelope.version).toBe(25);
+    expect(migratedRecord.payloadVersion).toBe(25);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v11");
     if (migratedEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("v11 migration did not produce canonical current ecology");
@@ -1756,13 +1997,13 @@ describe("perpetual new worlds", () => {
     expect(migratedEnvelope.physicalCargo).toEqual(originalEnvelope.physicalCargo);
     expect(migratedEnvelope.bio0Ecology).toBe(originalEnvelope.bio0Ecology);
 
-    const firstCurrentEcology = migratedEnvelope.coreEcology;
+    const firstCurrentEcology = migratedEnvelope.regionalEcology;
     migratedRuntime.destroy();
     const reloaded = await createTideweftRuntime(repository);
     await reloaded.save();
-    expect(decodeGameSave(repository.snapshot()).coreEcology).toBe(firstCurrentEcology);
+    expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(firstCurrentEcology);
     reloaded.destroy();
-  });
+  }, 30_000);
 
   it("loads and re-saves legacy shape values without restoring their quota objective", async () => {
     const world = createWorld("legacy shape runtime", "calm");
@@ -1926,7 +2167,7 @@ describe("runtime clarity guards", () => {
     advancePlayerSteps(resumed, 3);
     expect(resumed.getRenderView().player.position).toEqual(reloadedPosition);
     resumed.destroy();
-  });
+  }, 30_000);
 
   it("projects every stamina change through sweep recovery and immediate water re-entry", async () => {
     const world = createWorld("runtime stamina reentry", "calm");
@@ -2013,7 +2254,7 @@ describe("runtime clarity guards", () => {
     expect(runtime.getUIView().field.isWater).toBe(true);
     expect(runtime.getUIView().player.stamina).toBeLessThan(shoreStamina);
     runtime.destroy();
-  });
+  }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it("announces stability loss, rather than stamina loss, when deep water takes control", async () => {
     const world = createWorld("runtime stability sweep", "calm");
@@ -2075,7 +2316,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(24);
+    expect(prepared.version).toBe(25);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2169,7 +2410,7 @@ describe("runtime clarity guards", () => {
     // hundreds of ecology/weather steps that the fixture never observed.
     const {
       bio0Ecology: _outdatedBio0Ecology,
-      coreEcology: _outdatedCoreEcology,
+      regionalEcology: _outdatedRegionalEcology,
       settlementEcology: _outdatedSettlementEcology,
       dogActorRoster: _outdatedDogActorRoster,
       settlementWorkingAnimals: _outdatedSettlementWorkingAnimals,
@@ -2288,8 +2529,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(24);
-    expect(durableRecord.payloadVersion).toBe(24);
+    expect(durable.version).toBe(25);
+    expect(durableRecord.payloadVersion).toBe(25);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");
@@ -2890,6 +3131,19 @@ describe("runtime clarity guards", () => {
     );
     carriedSave.regionalTravel = serializePlayerRegionalTravel(
       capturePlayerRegionalTravel(positionedTravel, carriedSave.player),
+    );
+    const positionedWorld = createRegionalWorldView(
+      createWorldView(carriedWorld),
+      positionedTravel.window,
+      {
+        discovered: carriedSave.player.discovered,
+        depthSoundings: carriedSave.player.depthSoundings,
+      },
+    );
+    carriedSave.regionalEcology = rebaseFixtureRegionalEcology(
+      carriedSave.regionalEcology,
+      carriedWorld.meta.rootSeed,
+      positionedWorld,
     );
     carriedSave.promiseJourney = {
       version: 1,

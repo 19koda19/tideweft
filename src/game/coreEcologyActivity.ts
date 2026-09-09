@@ -12,12 +12,16 @@ import {
 } from "./coreEcology";
 import {
   CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
+  CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH,
+  CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH,
   type CoreEcologyHabitatAllocation,
+  type CoreEcologyTidalWebHabitatAnchor,
 } from "./coreEcologyHabitat";
+import type { CoreEcologySnowyEgretTidalTarget } from "./coreEcologyTidalTable";
 import {
-  projectCoreEcologyTidalTable,
-  type CoreEcologySnowyEgretTidalTarget,
-} from "./coreEcologyTidalTable";
+  isTrustedCoreEcologyActivityAuthority,
+  type CoreEcologyActivityAuthorityV1,
+} from "./coreEcologyActivityAuthority";
 import {
   coreEcologySpeciesRuntimePolicy,
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES,
@@ -349,9 +353,24 @@ export function validateCoreEcologyActivityProjectionAffordance(
 export function projectCoreEcologyActivity(
   patchValue: unknown,
   input: ProjectCoreEcologyActivityInput,
+  authority?: CoreEcologyActivityAuthorityV1,
 ): CoreEcologyActivityProjection | null {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
-  return patch === null ? null : projectCanonicalCoreEcologyActivity(patch, input);
+  return patch === null
+    ? null
+    : projectCanonicalCoreEcologyActivity(patch, input, authority);
+}
+
+/**
+ * Reports whether a canonical patch carries its activity destinations inline.
+ * Sparse regional and legacy-cohort owners instead provide a transient,
+ * root-authenticated authority receipt to the projection and movement calls.
+ */
+export function coreEcologyPatchHasBoundedActivityAuthority(
+  patchValue: unknown,
+): boolean {
+  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
+  return patch !== null && isActivityHabitatDerivation(patch);
 }
 
 /**
@@ -364,6 +383,7 @@ export function projectCoreEcologyActivity(
 export function stepCoreEcologyActivityMotion(
   patchValue: unknown,
   input: StepCoreEcologyActivityMotionInput,
+  authority?: CoreEcologyActivityAuthorityV1,
 ): CoreEcologyActivityMotionStep | null {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const ordinaryKeys = ["actorId", "atTick", "maximumStepUnits"] as const;
@@ -381,7 +401,7 @@ export function stepCoreEcologyActivityMotion(
   const projection = projectCanonicalCoreEcologyActivity(patch, {
     actorId: input.actorId,
     atTick: input.atTick,
-  });
+  }, authority);
   if (projection === null) return null;
   if (projection.motion.kind === "defer-to-intent") {
     return activityMotionStep(patch, projection, "deferred");
@@ -469,6 +489,7 @@ export function stepCoreEcologyActivityMotion(
 function projectCanonicalCoreEcologyActivity(
   patch: CoreEcologyAggregatePatchState,
   input: ProjectCoreEcologyActivityInput,
+  suppliedAuthority?: CoreEcologyActivityAuthorityV1,
 ): CoreEcologyActivityProjection | null {
   if (
     !plainRecord(input)
@@ -488,8 +509,13 @@ function projectCanonicalCoreEcologyActivity(
   if (activityProfile === null || !runtimePolicyOwnsActivity(policy, activityProfile)) {
     return null;
   }
-  const allocation = authenticatedHabitatAllocation(patch, owned.population, owned.member);
-  if (allocation === null) return null;
+  const authority = authenticatedActivityDestinations(
+    patch,
+    owned.population,
+    owned.member,
+    suppliedAuthority,
+  );
+  if (authority === null) return null;
 
   const responsive = IMMEDIATE_RESPONSE_INTENTS.has(owned.member.actor.intent.kind);
   if (responsive) {
@@ -499,7 +525,7 @@ function projectCanonicalCoreEcologyActivity(
       preferredNeutralIntent: null,
       presentationSignal: null,
       perch: profileUsesHabitatPerch(activityProfile)
-        ? perchProjection(allocation.position, owned.member.actor.address.position)
+        ? perchProjection(authority.homeAnchor, owned.member.actor.address.position)
         : noPerchProjection(),
       motion: Object.freeze({ kind: "defer-to-intent" }),
     });
@@ -508,7 +534,7 @@ function projectCanonicalCoreEcologyActivity(
   const actorNeedsRest = owned.member.actor.intent.kind === "rest";
   const inRestWindow = day.phase === "rest-window";
   if (activityProfile.archetypeId === "perch-watch") {
-    const perch = perchProjection(allocation.position, owned.member.actor.address.position);
+    const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
     if (inRestWindow || actorNeedsRest) {
       const atPerch = perch.availability === "available-here";
       return activityProjection(owned, input.atTick, day, {
@@ -524,7 +550,7 @@ function projectCanonicalCoreEcologyActivity(
           : Object.freeze({
               kind: "target-area",
               verb: "seek-perch",
-              targetArea: frozenArea(allocation.position, PERCH_ARRIVAL_RADIUS_UNITS),
+              targetArea: frozenArea(authority.homeAnchor, PERCH_ARRIVAL_RADIUS_UNITS),
             }),
       });
     }
@@ -540,10 +566,10 @@ function projectCanonicalCoreEcologyActivity(
 
   if (activityProfile.archetypeId === "dabbling-waterfowl") {
     const waterfowl = projectDabblingWaterfowlTidalActivity(
-      patch,
       input.atTick,
       input.actorId,
       activityProfile.speciesId,
+      authority.tidalAnchors,
     );
     if (waterfowl === null) return null;
     const atRefuge = withinWorldRadius(
@@ -658,9 +684,9 @@ function projectCanonicalCoreEcologyActivity(
 
   if (activityProfile.archetypeId === "shore-water-forager") {
     const tidalWeb = projectShoreWaterForagerActivity(
-      patch,
       input.actorId,
       activityProfile.speciesId,
+      authority.tidalAnchors,
     );
     if (tidalWeb === null) return null;
     const atHaulout = withinWorldRadius(
@@ -728,9 +754,12 @@ function projectCanonicalCoreEcologyActivity(
   }
 
   if (activityProfile.archetypeId === "tidal-wader") {
-    const tidal = projectCoreEcologyTidalTable(patch, input.atTick);
-    const egret = tidal?.snowyEgret;
-    if (egret === null || egret === undefined || egret.actorId !== input.actorId) return null;
+    const egret = projectSnowyEgretTidalActivity(
+      input.atTick,
+      input.actorId,
+      authority.tidalAnchors,
+    );
+    if (egret === null) return null;
     if (inRestWindow || actorNeedsRest) {
       const atRefuge = withinWorldRadius(
         owned.member.actor.address.position,
@@ -853,7 +882,7 @@ function projectCanonicalCoreEcologyActivity(
   if (activityProfile.archetypeId === "aerial-surface-opportunist") {
     const atHabitatAnchor = withinWorldRadius(
       owned.member.actor.address.position,
-      allocation.position,
+      authority.homeAnchor,
       HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
     );
     if (inRestWindow || actorNeedsRest) {
@@ -869,7 +898,7 @@ function projectCanonicalCoreEcologyActivity(
               kind: "target-area",
               verb: "seek-habitat-anchor",
               targetArea: frozenArea(
-                allocation.position,
+                authority.homeAnchor,
                 HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
               ),
             }),
@@ -938,7 +967,7 @@ function projectCanonicalCoreEcologyActivity(
       verb: "quarter",
       targetArea: frozenArea(
         deterministicQuarteringTarget(
-          allocation.position,
+          authority.homeAnchor,
           owned.member.actor.identity.stableId,
           input.atTick,
         ),
@@ -1072,31 +1101,63 @@ interface CoreEcologyDabblingWaterfowlTidalActivity {
   readonly refugeTarget: CoreEcologyDabblingWaterfowlTidalTarget;
 }
 
+function projectSnowyEgretTidalActivity(
+  atTick: number,
+  actorId: string,
+  anchors: readonly CoreEcologyTidalWebHabitatAnchor[],
+): Readonly<{
+  readonly actorId: string;
+  readonly wadingTargets: readonly CoreEcologySnowyEgretTidalTarget[];
+  readonly wadingTarget: CoreEcologySnowyEgretTidalTarget | null;
+  readonly refugeTarget: CoreEcologySnowyEgretTidalTarget;
+}> | null {
+  const egretAnchors = anchors.filter(({ species }) => species === "snowy-egret");
+  const wadingAnchors = egretAnchors.filter(({ purpose }) => purpose === "wading");
+  const refugeAnchors = egretAnchors.filter(({ purpose }) => purpose === "refuge");
+  if (wadingAnchors.length !== 4 || refugeAnchors.length !== 1) return null;
+  const tide = tideAtTick(atTick);
+  const refuge = refugeAnchors[0];
+  if (refuge === undefined) return null;
+  const refugeTarget: CoreEcologySnowyEgretTidalTarget = Object.freeze({
+    purpose: "refuge",
+    targetAnchorOrdinal: refuge.anchorOrdinal,
+    targetPosition: refuge.position,
+    waterDepth: Math.max(0, tide.level - refuge.elevation),
+  });
+  const wadingTargets = wadingAnchors
+    .map((anchor): CoreEcologySnowyEgretTidalTarget => Object.freeze({
+      purpose: "wading",
+      targetAnchorOrdinal: anchor.anchorOrdinal,
+      targetPosition: anchor.position,
+      waterDepth: Math.max(0, tide.level - anchor.elevation),
+    }))
+    .filter(({ waterDepth }) => (
+      waterDepth >= CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH
+      && waterDepth <= CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH
+    ))
+    .sort((left, right) => (
+      Math.abs(left.waterDepth - 34_000) - Math.abs(right.waterDepth - 34_000)
+      || left.targetAnchorOrdinal - right.targetAnchorOrdinal
+    ));
+  return Object.freeze({
+    actorId,
+    wadingTargets: Object.freeze(wadingTargets),
+    wadingTarget: wadingTargets[0] ?? null,
+    refugeTarget,
+  });
+}
+
 function projectDabblingWaterfowlTidalActivity(
-  patch: CoreEcologyAggregatePatchState,
   atTick: number,
   actorId: string,
   speciesId: CoreEcologyActivitySpecies,
+  anchors: readonly CoreEcologyTidalWebHabitatAnchor[],
 ): CoreEcologyDabblingWaterfowlTidalActivity | null {
-  if (
-    patch.derivation.kind !== "habitat-v6"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
-    && patch.derivation.kind !== "habitat-v7"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
-    && patch.derivation.kind !== "habitat-v8"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
-    && patch.derivation.kind !== "habitat-v9"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
-    && patch.derivation.kind !== "habitat-v10"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-    && patch.derivation.kind !== "habitat-v11"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-  ) return null;
-  const anchors = patch.derivation.habitat.tidalAnchors.filter(({ species }) => (
+  const speciesAnchors = anchors.filter(({ species }) => (
     species === speciesId
   ));
-  const refugeAnchors = anchors.filter(({ purpose }) => purpose === "refuge");
-  const dabblingAnchors = anchors.filter(({ purpose }) => purpose === "dabbling");
+  const refugeAnchors = speciesAnchors.filter(({ purpose }) => purpose === "refuge");
+  const dabblingAnchors = speciesAnchors.filter(({ purpose }) => purpose === "dabbling");
   if (refugeAnchors.length !== 1 || dabblingAnchors.length !== 2) return null;
   const tide = tideAtTick(atTick);
   const refuge = refugeAnchors[0];
@@ -1162,27 +1223,15 @@ interface CoreEcologyShoreWaterForagerActivity {
 }
 
 function projectShoreWaterForagerActivity(
-  patch: CoreEcologyAggregatePatchState,
   actorId: string,
   speciesId: CoreEcologyActivitySpecies,
+  anchors: readonly CoreEcologyTidalWebHabitatAnchor[],
 ): CoreEcologyShoreWaterForagerActivity | null {
-  if (
-    patch.derivation.kind !== "habitat-v7"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
-    && patch.derivation.kind !== "habitat-v8"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
-    && patch.derivation.kind !== "habitat-v9"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
-    && patch.derivation.kind !== "habitat-v10"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-    && patch.derivation.kind !== "habitat-v11"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-  ) return null;
-  const anchors = patch.derivation.habitat.tidalAnchors.filter(({ species }) => (
+  const speciesAnchors = anchors.filter(({ species }) => (
     species === speciesId
   ));
-  const foraging = anchors.filter(({ purpose }) => purpose === "foraging");
-  const haulout = anchors.filter(({ purpose }) => purpose === "haulout");
+  const foraging = speciesAnchors.filter(({ purpose }) => purpose === "foraging");
+  const haulout = speciesAnchors.filter(({ purpose }) => purpose === "haulout");
   if (foraging.length !== 1 || haulout.length !== 1) return null;
   const foragingTarget = foraging[0]?.position;
   const hauloutTarget = haulout[0]?.position;
@@ -1220,29 +1269,48 @@ function findMaterializedActor(
   return null;
 }
 
+interface AuthenticatedActivityDestinations {
+  readonly homeAnchor: WorldPosition;
+  readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
+}
+
+function authenticatedActivityDestinations(
+  patch: CoreEcologyAggregatePatchState,
+  population: CoreEcologyPopulationState,
+  member: CoreEcologyPopulationMemberState,
+  supplied: CoreEcologyActivityAuthorityV1 | undefined,
+): AuthenticatedActivityDestinations | null {
+  const embedded = authenticatedHabitatAllocation(patch, population, member);
+  if (embedded !== null && isActivityHabitatDerivation(patch)) {
+    const tidalAnchors = "tidalAnchors" in patch.derivation.habitat
+      ? patch.derivation.habitat.tidalAnchors.filter(({ species }) => (
+          species === population.species
+        ))
+      : [];
+    return Object.freeze({
+      homeAnchor: embedded.position,
+      tidalAnchors: Object.freeze(tidalAnchors),
+    });
+  }
+  if (
+    supplied === undefined
+    || !isTrustedCoreEcologyActivityAuthority(supplied)
+    || supplied.sourceKey !== patch.patchKey
+    || supplied.actorId !== member.actor.identity.stableId
+    || supplied.species !== population.species
+  ) return null;
+  return Object.freeze({
+    homeAnchor: supplied.homeAnchor,
+    tidalAnchors: supplied.tidalAnchors,
+  });
+}
+
 function authenticatedHabitatAllocation(
   patch: CoreEcologyAggregatePatchState,
   population: CoreEcologyPopulationState,
   member: CoreEcologyPopulationMemberState,
 ): CoreEcologyHabitatAllocation | null {
-  if (
-    patch.derivation.kind !== "habitat-v4"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v4"
-    && patch.derivation.kind !== "habitat-v5"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
-    && patch.derivation.kind !== "habitat-v6"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
-    && patch.derivation.kind !== "habitat-v7"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
-    && patch.derivation.kind !== "habitat-v8"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
-    && patch.derivation.kind !== "habitat-v9"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
-    && patch.derivation.kind !== "habitat-v10"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-    && patch.derivation.kind !== "habitat-v11"
-    && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-  ) return null;
+  if (!isActivityHabitatDerivation(patch)) return null;
   const analysis = patch.derivation.habitat.populations.find((candidate) => (
     candidate.species === population.species
     && candidate.populationKey === population.populationKey
@@ -1251,6 +1319,50 @@ function authenticatedHabitatAllocation(
   return analysis?.allocations.find(({ allocationOrdinal }) => (
     allocationOrdinal === member.populationOrdinal
   )) ?? null;
+}
+
+function isActivityHabitatDerivation(
+  patch: CoreEcologyAggregatePatchState,
+): patch is CoreEcologyAggregatePatchState & Readonly<{
+  derivation: Extract<
+    CoreEcologyAggregatePatchState["derivation"],
+    { readonly kind:
+      | "habitat-v4"
+      | "legacy-fixed-v1-with-habitat-v4"
+      | "habitat-v5"
+      | "legacy-fixed-v1-with-habitat-v5"
+      | "habitat-v6"
+      | "legacy-fixed-v1-with-habitat-v6"
+      | "habitat-v7"
+      | "legacy-fixed-v1-with-habitat-v7"
+      | "habitat-v8"
+      | "legacy-fixed-v1-with-habitat-v8"
+      | "habitat-v9"
+      | "legacy-fixed-v1-with-habitat-v9"
+      | "habitat-v10"
+      | "legacy-fixed-v1-with-habitat-v10"
+      | "habitat-v11"
+      | "legacy-fixed-v1-with-habitat-v11"
+      | "settlement-home-v1" }
+  >;
+}> {
+  return patch.derivation.kind === "habitat-v4"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v4"
+    || patch.derivation.kind === "habitat-v5"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v5"
+    || patch.derivation.kind === "habitat-v6"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v6"
+    || patch.derivation.kind === "habitat-v7"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
+    || patch.derivation.kind === "habitat-v8"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v8"
+    || patch.derivation.kind === "habitat-v9"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v9"
+    || patch.derivation.kind === "habitat-v10"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v10"
+    || patch.derivation.kind === "habitat-v11"
+    || patch.derivation.kind === "legacy-fixed-v1-with-habitat-v11"
+    || patch.derivation.kind === "settlement-home-v1";
 }
 
 function runtimePolicyOwnsActivity(

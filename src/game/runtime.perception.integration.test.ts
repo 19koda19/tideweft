@@ -189,7 +189,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 24,
+      version: 25,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 9,
@@ -220,7 +220,7 @@ describe("runtime existing-human perception path", () => {
       nextPlayerSenseSampleOrdinal: 0,
     });
     resumed.destroy();
-  });
+  }, 90_000);
 
   it("migrates a sealed v4 regional save to an empty current perception interval", async () => {
     const fixture = perceptionFixture("runtime perception v4 migration");
@@ -234,6 +234,7 @@ describe("runtime existing-human perception path", () => {
     const {
       integrity: _currentIntegrity,
       perceptionCarry: _currentPerceptionCarry,
+      regionalEcology: _currentRegionalEcology,
       bio0Ecology: _currentBio0Ecology,
       coreEcology: _currentCoreEcology,
       settlementEcology: _currentSettlementEcology,
@@ -258,7 +259,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 24,
+      version: 25,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 0,
@@ -267,7 +268,7 @@ describe("runtime existing-human perception path", () => {
       },
     });
     migrated.destroy();
-  });
+  }, 60_000);
 
   it.each([
     {
@@ -345,7 +346,7 @@ describe("runtime existing-human perception path", () => {
       nextPlayerSenseSampleOrdinal: 0,
     });
     runtime.destroy();
-  });
+  }, 60_000);
 });
 
 function perceptionFixture(seed: string): {

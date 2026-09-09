@@ -13,6 +13,10 @@ import {
 } from "./coreEcology";
 import { coreEcologyGroupComponentForMember } from "./coreEcologyGroups";
 import {
+  isTrustedCoreEcologyActivityAuthority,
+  type CoreEcologyActivityAuthorityV1,
+} from "./coreEcologyActivityAuthority";
+import {
   coreEcologySpeciesHasRuntimeCapability,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
@@ -53,6 +57,8 @@ export interface ProjectCoreEcologyWildlifeInput {
   readonly perception: PerceptionResult;
   readonly tileSize: number;
   readonly selectedTarget?: CoreWildlifeSelectionTarget | null;
+  /** Transient source-authenticated activity destinations, never save data. */
+  readonly activityAuthorities?: readonly CoreEcologyActivityAuthorityV1[];
 }
 
 interface VisibleMember {
@@ -61,9 +67,11 @@ interface VisibleMember {
   readonly presentation: WildlifePresentation;
 }
 
-interface MaterializationCandidate {
+export interface CoreEcologyMaterializationUnit {
   /** Every saved group is one indivisible unit; ungrouped units contain one ID. */
   readonly actorIds: readonly string[];
+  /** Stable group identity, or the sole actor identity for an ungrouped unit. */
+  readonly unitKey: string;
   /** Stable actor ID belonging to the physically nearest in-frame member. */
   readonly priorityActorId: string;
   /** Exact squared distance in doubled frame-fixed-point coordinates. */
@@ -86,10 +94,36 @@ export function deriveCoreEcologyMaterializedActorIds(
   patchValue: unknown,
   windowValue: unknown,
 ): readonly string[] | null {
+  const candidates = deriveCoreEcologyMaterializationUnits(patchValue, windowValue);
+  if (candidates === null) return null;
+  const actorIds: string[] = [];
+  for (const candidate of candidates) {
+    if (
+      candidate.actorIds.length
+      > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS - actorIds.length
+    ) continue;
+    actorIds.push(...candidate.actorIds);
+    if (actorIds.length === CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) break;
+  }
+  // The materialization command is a set, so keep its serialized spelling
+  // independent of spatial traversal or population array order.
+  actorIds.sort(compareText);
+  return Object.freeze(actorIds);
+}
+
+/**
+ * Enumerates stable group-atomic materialization units without applying the
+ * per-patch cap. A regional owner can merge units from every resident source
+ * before admitting one global bounded set.
+ */
+export function deriveCoreEcologyMaterializationUnits(
+  patchValue: unknown,
+  windowValue: unknown,
+): readonly CoreEcologyMaterializationUnit[] | null {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const window = canonicalWindow(windowValue);
   if (patch === null || window === null) return null;
-  const candidates: MaterializationCandidate[] = [];
+  const candidates: CoreEcologyMaterializationUnit[] = [];
 
   const groupedActorIds = new Set<string>();
   for (const group of patch.groups.groups) {
@@ -121,6 +155,7 @@ export function deriveCoreEcologyMaterializedActorIds(
       actorIds: Object.freeze(members
         .map(({ actor }) => actor.identity.stableId)
         .sort(compareText)),
+      unitKey: group.identity.stableId,
       priorityActorId: priority.actorId,
       distanceFromWindowCenterSquared: priority.distanceFromWindowCenterSquared,
     }));
@@ -133,25 +168,14 @@ export function deriveCoreEcologyMaterializedActorIds(
       if (point === null) continue;
       candidates.push(Object.freeze({
         actorIds: Object.freeze([member.actor.identity.stableId]),
+        unitKey: member.actor.identity.stableId,
         priorityActorId: member.actor.identity.stableId,
         distanceFromWindowCenterSquared: distanceFromWindowCenterSquared(point, window),
       }));
     }
   }
   candidates.sort(compareMaterializationCandidate);
-  const actorIds: string[] = [];
-  for (const candidate of candidates) {
-    if (
-      candidate.actorIds.length
-      > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS - actorIds.length
-    ) continue;
-    actorIds.push(...candidate.actorIds);
-    if (actorIds.length === CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) break;
-  }
-  // The materialization command is a set, so keep its serialized spelling
-  // independent of spatial traversal or population array order.
-  actorIds.sort(compareText);
-  return Object.freeze(actorIds);
+  return Object.freeze(candidates);
 }
 
 function memberPointInRuntimeWindow(
@@ -251,6 +275,12 @@ export function projectCoreEcologyWildlife(
     || input.tileSize > 4_096
   ) return null;
 
+  const activityAuthorities = canonicalActivityAuthorities(
+    input.activityAuthorities,
+    patch,
+  );
+  if (activityAuthorities === null) return null;
+
   let selectedTarget: CoreWildlifeSelectionTarget | null = null;
   if (input.selectedTarget !== undefined && input.selectedTarget !== null) {
     selectedTarget = canonicalTarget(input.selectedTarget);
@@ -268,7 +298,17 @@ export function projectCoreEcologyWildlife(
         tileSize: input.tileSize,
         selected: targetMatchesActor(selectedTarget, member.actor),
         ...(coreEcologySpeciesHasRuntimeCapability(population.species, "diurnal-activity")
-          ? { activity: { patch, atTick: patch.updatedAtTick } }
+          ? {
+              activity: {
+                patch,
+                atTick: patch.updatedAtTick,
+                ...(activityAuthorities.get(member.actor.identity.stableId) === undefined
+                  ? {}
+                  : {
+                      authority: activityAuthorities.get(member.actor.identity.stableId)!,
+                    }),
+              },
+            }
           : {}),
       });
       if (presentation === null) continue;
@@ -303,7 +343,17 @@ export function projectCoreEcologyWildlife(
       tileSize: input.tileSize,
       selected: targetMatchesActor(selectedTarget, member.actor),
       ...(coreEcologySpeciesHasRuntimeCapability(population.species, "diurnal-activity")
-        ? { activity: { patch, atTick: patch.updatedAtTick } }
+        ? {
+            activity: {
+              patch,
+              atTick: patch.updatedAtTick,
+              ...(activityAuthorities.get(member.actor.identity.stableId) === undefined
+                ? {}
+                : {
+                    authority: activityAuthorities.get(member.actor.identity.stableId)!,
+                  }),
+            },
+          }
         : {}),
     });
     if (withVisibleCount === null) return null;
@@ -397,10 +447,35 @@ function targetMatchesActor(
 }
 
 function allowedProjectionInputKeys(value: Record<string, unknown>): boolean {
-  const expected = Object.hasOwn(value, "selectedTarget")
-    ? ["patch", "perception", "selectedTarget", "tileSize", "window"]
-    : ["patch", "perception", "tileSize", "window"];
+  const expected = ["patch", "perception", "tileSize", "window"];
+  if (Object.hasOwn(value, "activityAuthorities")) expected.push("activityAuthorities");
+  if (Object.hasOwn(value, "selectedTarget")) expected.push("selectedTarget");
   return exactKeys(value, expected);
+}
+
+function canonicalActivityAuthorities(
+  value: readonly CoreEcologyActivityAuthorityV1[] | undefined,
+  patch: CoreEcologyAggregatePatchState,
+): ReadonlyMap<string, CoreEcologyActivityAuthorityV1> | null {
+  if (value === undefined) return new Map();
+  if (!Array.isArray(value)) return null;
+  const authorities = new Map<string, CoreEcologyActivityAuthorityV1>();
+  for (const authority of value) {
+    if (
+      !isTrustedCoreEcologyActivityAuthority(authority)
+      || authority.sourceKey !== patch.patchKey
+      || authorities.has(authority.actorId)
+    ) return null;
+    const member = patch.populations.flatMap(({ members }) => members).find(({ actor }) => (
+      actor.identity.stableId === authority.actorId
+    ));
+    if (
+      member === undefined
+      || member.actor.identity.species !== authority.species
+    ) return null;
+    authorities.set(authority.actorId, authority);
+  }
+  return authorities;
 }
 
 function comparePresentation(left: WildlifePresentation, right: WildlifePresentation): number {
@@ -408,11 +483,12 @@ function comparePresentation(left: WildlifePresentation, right: WildlifePresenta
 }
 
 function compareMaterializationCandidate(
-  left: MaterializationCandidate,
-  right: MaterializationCandidate,
+  left: CoreEcologyMaterializationUnit,
+  right: CoreEcologyMaterializationUnit,
 ): number {
   return left.distanceFromWindowCenterSquared - right.distanceFromWindowCenterSquared
-    || compareText(left.priorityActorId, right.priorityActorId);
+    || compareText(left.priorityActorId, right.priorityActorId)
+    || compareText(left.unitKey, right.unitKey);
 }
 
 function compareMaterializationRepresentative(

@@ -17,7 +17,9 @@ import {
 } from "./coreWildlifeActor";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
+  CORE_ECOLOGY_MAX_STEP_TICKS,
   CORE_ECOLOGY_PATCH_VERSION,
+  advanceCoreEcologyDormantAggregatePatch,
   canonicalizeCoreEcologyPatch,
   coreEcologyActor,
   createCoreEcologyAlarmObservation,
@@ -36,10 +38,13 @@ import {
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
+  CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
   createCoreEcologyGroup,
   createCoreEcologyGroupSet,
   stepCoreEcologyGroupCoarse,
 } from "./coreEcologyGroups";
+import { deriveCoreEcologyRegionalHabitat } from "./coreEcologyRegionalHabitat";
+import { createCoreEcologyRegionalResidentPatch } from "./regionalEcologyResidents";
 import {
   REGION_HEIGHT_UNITS,
   REGION_WIDTH_UNITS,
@@ -365,6 +370,167 @@ describe("bounded core ecology patch", () => {
     expect(after.perception.beliefs).toEqual([]);
     expect(result.events).toEqual([]);
     expect(result.resourceClaims).toEqual([]);
+  });
+
+  it("fast-forwards a settled dormant group byte-identically to bounded cadence replay", () => {
+    const startTick = 19;
+    const gullPopulation = population("gull", [0, 1, 2], false);
+    const flock = createCoreEcologyGroup({
+      seed: SEED,
+      species: "gull",
+      originRegion: ORIGIN,
+      populationKey: gullPopulation.populationKey,
+      groupOrdinal: 0,
+      memberOrdinals: [0, 1, 2],
+      anchor: gullPopulation.members[0]!.position,
+      tick: startTick,
+    });
+    const state = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "east-marsh:dormant-group-fast-forward",
+      originRegion: ORIGIN,
+      tick: startTick,
+      derivation: { kind: "bounded-input-v1" },
+      populations: [gullPopulation],
+      groups: createCoreEcologyGroupSet([flock]),
+    });
+    const sourceBytes = stableStringify(state);
+    const replayTarget = startTick + 6_400 + 7;
+    let replay = state;
+    while (replay.updatedAtTick < replayTarget) {
+      const result = stepCoreEcologyAggregatePatch(replay, {
+        tick: Math.min(
+          replayTarget,
+          replay.updatedAtTick + CORE_ECOLOGY_MAX_STEP_TICKS,
+        ),
+        actorSteps: [],
+      });
+      if (result === null) throw new Error("Dormant group replay failed");
+      replay = result.patch;
+    }
+    const accelerated = advanceCoreEcologyDormantAggregatePatch(state, {
+      atTick: replayTarget,
+    });
+    expect(stableStringify(accelerated)).toBe(stableStringify(replay));
+    expect(stableStringify(state)).toBe(sourceBytes);
+
+    const largeTarget = startTick + 640_000 + 7;
+    const large = advanceCoreEcologyDormantAggregatePatch(state, {
+      atTick: largeTarget,
+    });
+    const largeCadenceCount = Math.floor(
+      (largeTarget - flock.nextCoarseTick) / CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
+    ) + 1;
+    const largeGroupUpdatedAt = flock.nextCoarseTick
+      + (largeCadenceCount - 1) * CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS;
+    expect(large?.updatedAtTick).toBe(largeTarget);
+    expect(large?.groups.groups[0]).toMatchObject({
+      phase: "cohesive",
+      revision: flock.revision + largeCadenceCount,
+      updatedAtTick: largeGroupUpdatedAt,
+      nextCoarseTick: largeGroupUpdatedAt + CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS,
+      nextLineageOrdinal: flock.nextLineageOrdinal,
+      nextAftermathOrdinal: flock.nextAftermathOrdinal,
+      lineage: flock.lineage,
+      aftermath: flock.aftermath,
+    });
+  });
+
+  it("bounds recurring dormant pressure while preserving canonical group history", () => {
+    const regionalSeed = seedFromText("alpha32-regional-habitat-properties");
+    const region = createRegionCoord(-10, -20);
+    const habitat = deriveCoreEcologyRegionalHabitat({ seed: regionalSeed, region });
+    const state = createCoreEcologyRegionalResidentPatch({
+      seed: regionalSeed,
+      habitat,
+      tick: 19,
+    });
+    const pressuredGroup = state.groups.groups[0];
+    const pressuredPopulation = habitat.populations.find((population) => (
+      population.species === pressuredGroup?.identity.species
+      && population.populationKey === pressuredGroup.identity.populationKey
+    ));
+    if (pressuredGroup === undefined || pressuredPopulation === undefined) {
+      throw new Error("Recurring pressure fixture lost its shared group authority");
+    }
+    expect(Math.trunc(
+      pressuredPopulation.populationUnits * 1_000_000 / pressuredPopulation.habitatCapacity,
+    )).toBeGreaterThanOrEqual(450_000);
+
+    let probe = state;
+    let steadySplitTick: number | null = null;
+    let steadyRejoinTick: number | null = null;
+    for (let cadence = 0; cadence < 32 && steadyRejoinTick === null; cadence += 1) {
+      const before = probe.groups.groups[0];
+      if (before === undefined) throw new Error("Recurring pressure group disappeared");
+      const tick = before.nextCoarseTick;
+      const result = stepCoreEcologyAggregatePatch(probe, { tick, actorSteps: [] });
+      if (result === null) throw new Error("Recurring pressure probe failed");
+      probe = result.patch;
+      const after = probe.groups.groups[0];
+      if (after === undefined) throw new Error("Recurring pressure group disappeared");
+      if (
+        steadySplitTick === null
+        && before.phase === "cohesive"
+        && before.cohesion === 1_000_000
+        && after.phase === "separated"
+      ) steadySplitTick = tick;
+      else if (steadySplitTick !== null && after.phase === "cohesive") {
+        steadyRejoinTick = tick;
+      }
+    }
+    if (steadySplitTick === null || steadyRejoinTick === null) {
+      throw new Error("Recurring pressure fixture did not expose one stable cycle");
+    }
+
+    const canonicalThrough = (targetTick: number) => {
+      let replay = state;
+      while (replay.updatedAtTick < targetTick) {
+        const result = stepCoreEcologyAggregatePatch(replay, {
+          tick: Math.min(
+            targetTick,
+            replay.updatedAtTick + CORE_ECOLOGY_MAX_STEP_TICKS,
+          ),
+          actorSteps: [],
+        });
+        if (result === null) throw new Error("Recurring pressure replay failed");
+        replay = result.patch;
+      }
+      return replay;
+    };
+    const distantSplitTick = steadySplitTick + 6_400;
+    const distantRejoinTick = distantSplitTick + steadyRejoinTick - steadySplitTick;
+    const proofTargets = [
+      { tick: distantSplitTick, phase: "separated" },
+      { tick: distantRejoinTick, phase: "cohesive" },
+      { tick: distantRejoinTick + 3, phase: "cohesive" },
+    ] as const;
+    const sourceBytes = stableStringify(state);
+    for (const target of proofTargets) {
+      const replay = canonicalThrough(target.tick);
+      const accelerated = advanceCoreEcologyDormantAggregatePatch(state, {
+        atTick: target.tick,
+      });
+      expect(stableStringify(accelerated)).toBe(stableStringify(replay));
+      expect(accelerated?.groups.groups[0]?.phase).toBe(target.phase);
+    }
+    expect(stableStringify(state)).toBe(sourceBytes);
+
+    const largeTarget = state.updatedAtTick + 640_000 + 7;
+    const startedAt = performance.now();
+    const large = advanceCoreEcologyDormantAggregatePatch(state, {
+      atTick: largeTarget,
+    });
+    const elapsed = performance.now() - startedAt;
+    expect(large?.updatedAtTick).toBe(largeTarget);
+    expect(large?.groups.groups[0]).toMatchObject({
+      revision: 80_000,
+      nextLineageOrdinal: 20_000,
+      nextAftermathOrdinal: 19_999,
+    });
+    expect(large?.groups.groups[0]?.lineage).toHaveLength(16);
+    expect(large?.groups.groups[0]?.aftermath).toHaveLength(16);
+    expect(elapsed).toBeLessThan(2_000);
   });
 
   it("holds active group topology until every member returns to coarse authority", () => {

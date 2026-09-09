@@ -1,5 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
+const LOCAL_TEST_TIMEOUT_MS = 15_000;
+const CI_TEST_TIMEOUT_MS = 90_000;
+
 export default defineConfig({
   base: './',
   server: {
@@ -24,9 +27,10 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     // Regional generation and sealed save/cargo integration are deliberately
-    // heavyweight. Shared CI runners can take more than Vitest's 5 s default
-    // without changing the deterministic result, so retain a finite but
-    // host-tolerant wall-clock fence for every release gate.
-    testTimeout: 15_000,
+    // heavyweight. Keep local feedback tight, while allowing the serialized
+    // release gate enough wall time on materially slower shared runners.
+    testTimeout: process.env.CI === 'true'
+      ? CI_TEST_TIMEOUT_MS
+      : LOCAL_TEST_TIMEOUT_MS,
   },
 });

@@ -201,6 +201,11 @@ export interface StepCoreEcologyGroupSignalCadenceInput {
   readonly atTick: number;
 }
 
+export interface BridgeCoreEcologyGroupDormantCyclesInput {
+  /** Number of exact copies of the supplied one-cycle reference transition. */
+  readonly cycleCount: number;
+}
+
 export interface CoreEcologyGroupComponentAnchorInput {
   readonly componentId: string;
   /** Exact canonical anchor resolved by the upstream actor/habitat owner. */
@@ -761,6 +766,154 @@ export function stepCoreEcologyGroupCoarse(
   if (candidate === null) return null;
   events.sort(compareTransitionEvent);
   return deepFreeze({ group: candidate, events });
+}
+
+/**
+ * Creates a transient clock/counter bridge from one canonically observed,
+ * stable eight-cadence pressure cycle. The bridge intentionally retains only
+ * the origin and its current component's rejoin lineage; callers must replay
+ * enough canonical tail cycles to replace every bounded history record before
+ * exposing or persisting the result.
+ */
+export function bridgeCoreEcologyGroupDormantCycles(
+  cycleStartValue: unknown,
+  oneCycleValue: unknown,
+  inputValue: unknown,
+): CoreEcologyGroupState | null {
+  const cycleStart = canonicalizeCoreEcologyGroup(cycleStartValue);
+  const oneCycle = canonicalizeCoreEcologyGroup(oneCycleValue);
+  if (
+    cycleStart === null
+    || oneCycle === null
+    || !plainRecord(inputValue)
+    || !exactKeys(inputValue, ["cycleCount"])
+    || !positiveSafeInteger(inputValue.cycleCount)
+    || stableStringify(cycleStart.identity) !== stableStringify(oneCycle.identity)
+    || stableStringify(cycleStart.memberOrdinals) !== stableStringify(oneCycle.memberOrdinals)
+    || cycleStart.phase !== "cohesive"
+    || oneCycle.phase !== "cohesive"
+    || cycleStart.cohesion !== FIXED_POINT
+    || oneCycle.cohesion !== FIXED_POINT
+    || cycleStart.signals.length !== 0
+    || oneCycle.signals.length !== 0
+    || cycleStart.components.length !== 1
+    || oneCycle.components.length !== 1
+    || oneCycle.nextCoarseTick - cycleStart.nextCoarseTick
+      !== CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS * 8
+    || oneCycle.updatedAtTick - cycleStart.updatedAtTick
+      !== CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS * 8
+    || oneCycle.revision - cycleStart.revision !== 8
+    || oneCycle.nextComponentOrdinal - cycleStart.nextComponentOrdinal !== 3
+    || oneCycle.nextLineageOrdinal - cycleStart.nextLineageOrdinal !== 2
+    || oneCycle.nextAftermathOrdinal - cycleStart.nextAftermathOrdinal !== 2
+    || oneCycle.nextSignalOrdinal !== cycleStart.nextSignalOrdinal
+  ) return null;
+
+  const referenceComponent = oneCycle.components[0]!;
+  const referenceRejoin = oneCycle.lineage.find(({ lineageId: id }) => (
+    id === referenceComponent.createdByLineageId
+  ));
+  const referenceSplit = oneCycle.lineage.find(({ lineageOrdinal }) => (
+    lineageOrdinal === oneCycle.nextLineageOrdinal - 2
+  ));
+  const expectedReferenceParents = [
+    componentId(oneCycle.identity.stableId, oneCycle.nextComponentOrdinal - 3),
+    componentId(oneCycle.identity.stableId, oneCycle.nextComponentOrdinal - 2),
+  ].sort(compareText);
+  if (
+    referenceComponent.componentOrdinal !== oneCycle.nextComponentOrdinal - 1
+    || referenceComponent.parentComponentIds.length !== 2
+    || stableStringify(referenceComponent.parentComponentIds)
+      !== stableStringify(expectedReferenceParents)
+    || referenceRejoin === undefined
+    || referenceRejoin.kind !== "rejoin"
+    || referenceRejoin.lineageOrdinal !== oneCycle.nextLineageOrdinal - 1
+    || stableStringify(referenceRejoin.parentComponentIds)
+      !== stableStringify(expectedReferenceParents)
+    || stableStringify(referenceRejoin.childComponentIds)
+      !== stableStringify([referenceComponent.componentId])
+    || referenceSplit === undefined
+    || referenceSplit.kind !== "split"
+    || stableStringify(referenceSplit.childComponentIds)
+      !== stableStringify(expectedReferenceParents)
+  ) return null;
+  if (inputValue.cycleCount === 1) return oneCycle;
+
+  const additionalCycles = BigInt(inputValue.cycleCount - 1);
+  const scale = (reference: number, delta: number): number | null => {
+    const result = BigInt(reference) + BigInt(delta) * additionalCycles;
+    return result < 0n || result > BigInt(Number.MAX_SAFE_INTEGER)
+      ? null
+      : Number(result);
+  };
+  const cycleTicks = oneCycle.nextCoarseTick - cycleStart.nextCoarseTick;
+  const revision = scale(oneCycle.revision, oneCycle.revision - cycleStart.revision);
+  const updatedAtTick = scale(oneCycle.updatedAtTick, cycleTicks);
+  const nextCoarseTick = scale(oneCycle.nextCoarseTick, cycleTicks);
+  const nextComponentOrdinal = scale(
+    oneCycle.nextComponentOrdinal,
+    oneCycle.nextComponentOrdinal - cycleStart.nextComponentOrdinal,
+  );
+  const nextLineageOrdinal = scale(
+    oneCycle.nextLineageOrdinal,
+    oneCycle.nextLineageOrdinal - cycleStart.nextLineageOrdinal,
+  );
+  const nextAftermathOrdinal = scale(
+    oneCycle.nextAftermathOrdinal,
+    oneCycle.nextAftermathOrdinal - cycleStart.nextAftermathOrdinal,
+  );
+  const rejoinAtTick = scale(referenceRejoin.atTick, cycleTicks);
+  if (
+    revision === null
+    || updatedAtTick === null
+    || nextCoarseTick === null
+    || nextComponentOrdinal === null
+    || nextLineageOrdinal === null
+    || nextAftermathOrdinal === null
+    || rejoinAtTick === null
+    || nextComponentOrdinal < 3
+    || nextLineageOrdinal < 2
+  ) return null;
+
+  const currentComponentId = componentId(
+    oneCycle.identity.stableId,
+    nextComponentOrdinal - 1,
+  );
+  const parentComponentIds = [
+    componentId(oneCycle.identity.stableId, nextComponentOrdinal - 3),
+    componentId(oneCycle.identity.stableId, nextComponentOrdinal - 2),
+  ].sort(compareText);
+  const currentLineageId = lineageId(
+    oneCycle.identity.stableId,
+    nextLineageOrdinal - 1,
+  );
+  const origin = cycleStart.lineage.find(({ lineageOrdinal }) => lineageOrdinal === 0);
+  if (origin === undefined) return null;
+  return canonicalizeCoreEcologyGroup({
+    ...oneCycle,
+    revision,
+    updatedAtTick,
+    nextCoarseTick,
+    components: [{
+      ...referenceComponent,
+      componentId: currentComponentId,
+      componentOrdinal: nextComponentOrdinal - 1,
+      createdByLineageId: currentLineageId,
+      parentComponentIds,
+    }],
+    lineage: [origin, {
+      ...referenceRejoin,
+      lineageId: currentLineageId,
+      lineageOrdinal: nextLineageOrdinal - 1,
+      atTick: rejoinAtTick,
+      parentComponentIds,
+      childComponentIds: [currentComponentId],
+    }],
+    aftermath: [],
+    nextComponentOrdinal,
+    nextLineageOrdinal,
+    nextAftermathOrdinal,
+  });
 }
 
 /**

@@ -105,11 +105,11 @@ The `0.3.3-alpha.19 — The Tide Table` release tests a fifth scaling lesson: ti
 
 The **LIVE_VERIFIED** `0.3.3-alpha.20 — Between Water and Sky` release tests a sixth scaling lesson: a representative species should exercise a missing shared capability seam rather than accumulate a private pathfinder and detector. Habitat version 6 preserves the complete version-5 population and tidal-anchor record as an exact prefix, then may append zero or one stable persistent American black duck. Two saved dabbling-water destinations and one dry refuge support bounded float, scan, dabble, rest, surface-swim, and relocation-flight activity. The duck's current lawful sensory input is only anonymous aquatic activity produced by shared terrain-occluded vision. Its catalog permits only air plus shallow- and deep-water movement, while activity projects those routes as `air` or `surface-water` into the ordinary locomotion solver; it has no land/walk route. Tide and water select habitat, activity, and travel medium without directly mutating stress or condition. Chart, Relief, and ABOUT expose the same direct knowledge-honest individual, with no flock or invented wake.
 
-The release also confirms that bounded presentation history cannot double as an authoritative operation clock. Internal aggregate schema version 4 stores a durable completed tide-edge operation marker outside the capped event tail, so evicting an old visible disturbance cannot make a same-tick redistribution eligible again. Outer session version 14 adopts an authenticated sealed version-13 record once while preserving all earlier actor, group, aggregate, item, Promise, custody, evidence, tidal-anchor, and world state. The proof remains deliberately representative: shared invariants, conservation, deterministic scenarios, bounded fuzzing, and performance witnesses scale better than a test for every animal pair. It does not add flocking, nesting, breeding, migration, cross-region ecology, mortality, carcasses, injury, capture, consumption, the otter-like predator, worldwide ecology, Wave-C completion, or directive completion. Exact feature commit `c11e4de0563876839158fb13a69ddfb4dadd6dbe` passed feature CI run `34061008077`, main CI run `34061513043`, and Pages run `34061512986`; the deployed HTML, icon, manifest, JavaScript, and CSS match the tested local build byte-for-byte.
+The release also confirms that bounded presentation history cannot double as an authoritative operation clock. Internal aggregate schema version 4 stores a durable completed tide-edge operation marker outside the capped event tail, so evicting an old visible disturbance cannot make a same-tick redistribution eligible again. Outer session version 14 adopts an authenticated sealed version-13 record once while preserving all earlier actor, group, aggregate, item, Promise, custody, evidence, tidal-anchor, and world state. The proof remains deliberately representative: shared invariants, conservation, deterministic scenarios, bounded fuzzing, and performance witnesses scale better than a test for every animal pair. It does not add flocking, nesting, breeding, migration, cross-region ecology, mortality, carcasses, injury, capture, consumption, the otter-like predator, worldwide ecology, Wave-C completion, or broader biodiversity completion. Exact feature commit `c11e4de0563876839158fb13a69ddfb4dadd6dbe` passed feature CI run `34061008077`, main CI run `34061513043`, and Pages run `34061512986`; the deployed HTML, icon, manifest, JavaScript, and CSS match the tested local build byte-for-byte.
 
 The **LIVE_VERIFIED** `0.3.3-alpha.21 — The Living Channel` release tests a seventh scaling lesson: an amphibious representative should compose existing habitat, perception, role, activity, locomotion, materialization, physical-item, and presentation owners rather than receive an otter-specific parallel simulation. Habitat version 7 preserves the complete version-6 population and anchor record as an exact prefix, then may append zero or one stable North American river otter only where both tidal aggregates, usable foraging water, and a distinct dry haulout support it. Shared shore↔surface-water travel keeps the same actor and identity across media. Current anonymous aquatic activity reaches it only through ordinary occluded sight; fish and crab interactions remain nonlethal aggregate pressure; and one representative loose-food contest resolves through the generic physical claim and custody seam. Deterministic spatial top-K ranks every lawful intersecting individual by exact local distance with stable-ID ties before selecting the unchanged 24 full-detail actors, so source order cannot determine visibility and overflow identity remains authoritative in coarse state.
 
-The release advances outer save format to 15 and adopts an authenticated version-14 envelope exactly once without rewriting its habitat-version-6 prefix. Chart, Relief, ABOUT, mouse, touch, and reduced-motion presentation project the same knowledge-honest individual. Exact feature commit `5514c24619fc6d41b34cbdd6315f4ae8d936f2dc` passed CI run `34067577935` and Pages run `34067577893`; the five fetched live assets match the tested committed build byte-for-byte. It deliberately adds no live-prey capture or consumption, harmful attacks, injury, mortality, carcasses, fishing, new sound or persistent evidence, reproduction, ecological migration, worldwide ecology, full Wave C, Directive 04_1 completion, or exhaustive pair testing.
+The release advances outer save format to 15 and adopts an authenticated version-14 envelope exactly once without rewriting its habitat-version-6 prefix. Chart, Relief, ABOUT, mouse, touch, and reduced-motion presentation project the same knowledge-honest individual. Exact feature commit `5514c24619fc6d41b34cbdd6315f4ae8d936f2dc` passed CI run `34067577935` and Pages run `34067577893`; the five fetched live assets match the tested committed build byte-for-byte. It deliberately adds no live-prey capture or consumption, harmful attacks, injury, mortality, carcasses, fishing, new sound or persistent evidence, reproduction, ecological migration, worldwide ecology, full Wave C, broader biodiversity completion, or exhaustive pair testing.
 
 The **LIVE_VERIFIED** `0.3.3-alpha.22 — Tidal Convergence` release tests an eighth scaling
 hypothesis without adding a species: activities that already crossed different
@@ -138,7 +138,7 @@ matrix. It closes only the bounded starting-harbor Wave-C integration seam.
 Exact feature commit `4dacd99e95a018314d65a72183b82cba8583774f`
 passed CI run `34074045801` and Pages run `34074045818`; the five cache-bypassed
 live assets match the tested committed build byte-for-byte. It does not
-complete worldwide Wave C or Directive 04_1. Mortality, carcasses, harmful
+complete worldwide Wave C or broader biodiversity work. Mortality, carcasses, harmful
 attacks, live-prey capture or consumption, fishing, nesting, reproduction,
 ecological cross-region migration, full circadian life, and a general
 scent/sound/evidence system remain absent.
@@ -174,7 +174,7 @@ expanding into an exhaustive species or pair matrix. Exact feature commit
 Pages run `34080936748`; the five cache-bypassed live artifacts match the tested
 local build byte-for-byte. This remains a bounded composition, not worldwide
 store ecology, schedules, livestock, broad rumors, mortality, carcasses,
-live-prey consumption, the full bestiary, or Directive 04_1 completion.
+live-prey consumption, the full bestiary, or broader biodiversity completion.
 
 The **LIVE_VERIFIED** `0.3.3-alpha.24 — The Yard Flock` release tests a tenth scaling
 lesson: domestic species should reuse the Living Weft and add custody as a
@@ -223,7 +223,7 @@ performance, and representative runtime composition. It does not come from
 testing goats against every existing animal, and it does not claim calls,
 tracks, injury, mortality, carcasses, reproduction, schedules, herding,
 guardian behavior, cross-region migration, worldwide livestock, full Wave D,
-or Directive 04_1 completion.
+or broader biodiversity completion.
 
 Exact release commit `29af7793346c0c3977a5ca727b79feb3a50b83bb` passed CI
 run `34108539228` and Pages run `34108539255`; five cache-bypassed live
@@ -416,7 +416,44 @@ local gate passed 230 files / 2,197 tests, the five served artifacts totaled
 bytes, desktop/mobile/title smoke passed, and the cache-bypassed live
 comparison matched 5/5 files byte-for-byte.
 
-Design implication: future worldwide populations and settlement ecology should
+The `0.3.3-alpha.32 — Open Country Ledger` source candidate is implemented
+locally and is not yet live-verified. It tests distribution rather than adding
+species. Existing wild populations derive from the world seed, signed region
+and territory identity, terrain, capacity, food or prey support, and density
+budgets; empty results and unused capacity are legitimate. Large-ranging
+species use one floor-correct host region. The starting settlement remains a
+separate home owner with bounded rats and anchored chicken/goat populations,
+while its free-ranging cat is habitat-optional.
+
+The anti-clustering claim is measured before presentation. A fixed 32-seed
+fresh-start corpus bounds wild individual candidates at p50 6, p95 9, and hard
+maximum 10; all home and wild candidates at hard maximum 18; aggregate anchors
+at p95 10 and hard maximum 12; and large predators at no more than one
+population per initial frame, with at least half the starts predator-free. A
+separate fixed 64-root signed/extreme corpus requires honest empty and occupied
+wild roots, at least 56 predator-free roots, no universally present wild
+species, and repeat/input/cache/camera-order identity. These are authoritative
+pre-cap measures, not a claim based on drawing fewer animals.
+
+The candidate also tests ownership at seams. Lineage is separate from current
+residence; all active owners share one group-atomic stable-distance top-K of 24
+actors and one root-wide pre-step snapshot. Current visual, anonymous tidal-
+activity, and alarm perception can cross an owner boundary without source-order
+dependence. The pre-existing narrow mortality example can do so only when a
+marsh fox, gray wolf, or cougar exactly contacts a currently identified eligible
+solitary marsh rabbit; the victim owner commits the one retirement and conserved
+body. Pristine regional baselines are
+rederived while only deviations persist.
+
+Outer save 25 authenticates normalized v24 once and records one deterministic,
+group-atomic retain, redistribute, or explicit non-death-retire disposition.
+It conserves actor and population identity, group topology, history, mortality,
+bodies, items, cargo, Promises, and cross-owner references. This remains the
+bounded 24-record catalog, not worldwide species breadth, ecological migration
+behavior, reproduction, population recovery, general tactical mortality,
+complete scent tracking, or the full bestiary.
+
+Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
 working-relationship, recovery, knowledge, mortality/body, and shared-policy
 boundary rather than multiplying full actors or one-off detection hooks.
@@ -433,10 +470,11 @@ verified Far Paddock release, Alpha 26 is the verified Paddock Watch release,
 Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the
 verified bounded recovery-composition release, Alpha 29 is the verified first
 one-life/one-body mortality release, Alpha 30 is the verified first Wave-E
-regional breadth release, and Alpha 31 is the verified solitary-predator
-append. None completes worldwide aquatic or settlement ecology, broad attacks
+regional breadth release, Alpha 31 is the verified solitary-predator append,
+and Alpha 32 is the source-candidate signed-region distribution closure for the
+current catalog. None completes broader aquatic or settlement ecology, broad attacks
 or mortality, population recovery, decomposition, body transport or
-harvesting, full circadian life, complete scent, worldwide populations, or the
+harvesting, full circadian life, complete scent, worldwide species breadth, or the
 full bestiary. Broader species, reproduction, ecological migration, those
 absent physical systems, wider settlement ecology, and wider sound/evidence
 tracking still require their own authoritative owners and performance proof.

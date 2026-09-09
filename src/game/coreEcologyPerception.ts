@@ -12,12 +12,14 @@ import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   CORE_ECOLOGY_MAX_STEP_TICKS,
   coreEcologyAlarmSignalProfile,
-  coreEcologyAggregatePatchActor,
   createCoreEcologyAlarmObservation,
   canonicalizeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
-import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
+import {
+  coreEcologyPatchHasTidalTableAuthority,
+  projectCoreEcologyTidalTable,
+} from "./coreEcologyTidalTable";
 import { coreEcologySpeciesHasRuntimeCapability } from "./coreEcologySpeciesRuntimePolicy";
 import {
   canonicalizeCoreWildlifeActorState,
@@ -52,6 +54,8 @@ import {
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
 import {
+  REGION_HEIGHT_UNITS,
+  REGION_WIDTH_UNITS,
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
   createWorldPosition,
@@ -75,6 +79,17 @@ export const CORE_ECOLOGY_PERCEPTION_MAX_EXTERNAL_PARTICIPANTS = 16 as const;
 export const CORE_ECOLOGY_PERCEPTION_MAX_OBSERVERS =
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
     + CORE_ECOLOGY_PERCEPTION_MAX_EXTERNAL_PARTICIPANTS;
+/**
+ * Active regional ecology is currently a nine-region frame plus bounded
+ * compatibility owners. Keep owner fan-in explicit so a malformed save
+ * cannot turn anonymous aggregate sight into an unbounded cross product.
+ */
+export const CORE_ECOLOGY_PERCEPTION_MAX_TIDAL_SOURCE_PATCHES = 32 as const;
+/**
+ * Leaves room in the shared 128-observation actor step for ordinary visual,
+ * alarm, and food facts while selecting tidal activity once across all owners.
+ */
+export const CORE_ECOLOGY_PERCEPTION_MAX_TIDAL_OBSERVATIONS_PER_ACTOR = 32 as const;
 /** Conservative tile envelope for the detail-contact query used below. */
 export const CORE_ECOLOGY_PERCEPTION_MAX_VISUAL_CONTACT_RANGE_TILES = Math.ceil(
   Math.max(
@@ -263,114 +278,117 @@ export function collectCoreEcologyVisualObservationBatches(
 export function collectCoreEcologyAggregateActivityObservationBatches(
   value: unknown,
 ): readonly CoreEcologyObservationBatch[] | null {
-  const input = canonicalAggregateActivityPerceptionInput(value);
+  if (!plainRecord(value) || !Object.hasOwn(value, "patch")) return null;
+  const { patch, ...frame } = value;
+  return collectCoreEcologyRootAggregateActivityObservationBatches({
+    ...frame,
+    patches: [patch],
+  });
+}
+
+/**
+ * Resolves source-owned tidal activity for every capability-selected actor in
+ * one root-wide frame. Observer custody is intentionally independent from the
+ * patch that owns the anonymous fish/crab field: crossing a regional owner
+ * seam cannot make a physically visible surface cue disappear. Candidate
+ * observations are ranked and capped once per observer after all source
+ * patches contribute, so patch iteration order cannot consume the budget.
+ */
+export function collectCoreEcologyRootAggregateActivityObservationBatches(
+  value: unknown,
+): readonly CoreEcologyObservationBatch[] | null {
+  const input = canonicalRootAggregateActivityPerceptionInput(value);
   if (input === null) return null;
-  const { frame, patch } = input;
-  const tidal = projectCoreEcologyTidalTable(patch, frame.tick);
-  if (tidal === null) return null;
+  const { frame, patches } = input;
   const observers = frame.actors.filter(({ identity }) => (
     canObserveTidalSurfaceActivity(identity.species)
   ));
-  const ownedObserverIds = patch.populations
-    .filter(({ species }) => (
-      canObserveTidalSurfaceActivity(species)
-    ))
-    .flatMap(({ members }) => members
-      .filter(({ materialization }) => materialization === "materialized")
-      .map(({ actor }) => actor.identity.stableId))
-    .sort(compareText);
-  if (
-    observers.length > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
-    || observers.length !== ownedObserverIds.length
-    || observers.some(({ identity }, index) => (
-      identity.stableId !== ownedObserverIds[index]
-    ))
-  ) return null;
+  if (observers.length > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) return null;
   const batches: CoreEcologyObservationBatch[] = [];
   for (const observer of observers) {
-    const member = patch.populations
-      .find(({ species }) => species === observer.identity.species)
-      ?.members.find(({ actor }) => (
-        actor.identity.stableId === observer.identity.stableId
-      ));
-    const patchObserver = coreEcologyAggregatePatchActor(
-      patch,
-      observer.identity.stableId,
-    );
-    if (
-      member === undefined
-      || member.materialization !== "materialized"
-      || patchObserver === null
-      || stableStringify(observer) !== stableStringify(patchObserver)
-    ) return null;
     const observerPlacement = frame.placements.get(observer.identity.stableId);
     if (observerPlacement === undefined) return null;
 
     const observations: ActorObservation[] = [];
-    for (const depth of tidal.anchorDepths) {
-      const population = patch.aggregatePopulations.find(({ aggregateId }) => (
-        aggregateId === depth.aggregateId
-      ));
-      const anchor = population?.anchors[depth.anchorOrdinal];
-      const activity = tidal.aggregateActivities.find(({ aggregateId }) => (
-        aggregateId === depth.aggregateId
-      ));
-      if (
-        population === undefined
-        || anchor === undefined
-        || activity === undefined
-        || anchor.populationUnits <= 0
-        || activity.intensity <= 0
-        || !depth.activityUsable
-        || !sameWorldPosition(anchor.position, depth.position)
-      ) continue;
-      const targetTileIndex = tileIndexInSpatialFrame(
-        frame.spatialFrame,
-        frame.world,
-        depth.position,
-      );
-      if (targetTileIndex === null) continue;
-      const targetTile = frame.world.terrain.tiles[targetTileIndex];
-      if (targetTile === undefined) return null;
-      const sight = evaluateVisualContact({
-        columns: frame.world.terrain.width,
-        rows: frame.world.terrain.height,
-        cells: frame.cells,
-        observerTileIndex: observerPlacement.tileIndex,
-        targetTileIndex,
-        observerFacingRadians: headingToRadians(observer.address.heading),
-        weatherVisibility: coreEcologyWeatherVisibility(frame.world),
-        targetMovementSalience: activity.intensity / FIXED_POINT,
-        targetLightVisibility: coreEcologyTargetLightVisibility(targetTile),
-      });
-      if (sight === null || sight.grade !== VISIBILITY_DIRECT) continue;
-      const confidence = scaleContact(sight.confidence);
-      const observation = createActorObservation({
-        id: `ecology-aquatic:${hashCanonical({
-          aggregateId: population.aggregateId,
-          anchorOrdinal: depth.anchorOrdinal,
+    for (const patch of patches) {
+      if (!coreEcologyPatchHasTidalTableAuthority(patch)) continue;
+      const tidal = projectCoreEcologyTidalTable(patch, frame.tick);
+      if (tidal === null) return null;
+      for (const depth of tidal.anchorDepths) {
+        const population = patch.aggregatePopulations.find(({ aggregateId }) => (
+          aggregateId === depth.aggregateId
+        ));
+        const anchor = population?.anchors[depth.anchorOrdinal];
+        const activity = tidal.aggregateActivities.find(({ aggregateId }) => (
+          aggregateId === depth.aggregateId
+        ));
+        if (
+          population === undefined
+          || anchor === undefined
+          || activity === undefined
+          || anchor.populationUnits <= 0
+          || activity.intensity <= 0
+          || !depth.activityUsable
+          || !sameWorldPosition(anchor.position, depth.position)
+        ) continue;
+        const targetTileIndex = tileIndexInSpatialFrame(
+          frame.spatialFrame,
+          frame.world,
+          depth.position,
+        );
+        if (targetTileIndex === null) continue;
+        const targetTile = frame.world.terrain.tiles[targetTileIndex];
+        if (targetTile === undefined) return null;
+        const sight = evaluateVisualContact({
+          columns: frame.world.terrain.width,
+          rows: frame.world.terrain.height,
+          cells: frame.cells,
+          observerTileIndex: observerPlacement.tileIndex,
+          targetTileIndex,
+          observerFacingRadians: headingToRadians(observer.address.heading),
+          weatherVisibility: coreEcologyWeatherVisibility(frame.world),
+          targetMovementSalience: activity.intensity / FIXED_POINT,
+          targetLightVisibility: coreEcologyTargetLightVisibility(targetTile),
+        });
+        if (sight === null || sight.grade !== VISIBILITY_DIRECT) continue;
+        const confidence = scaleContact(sight.confidence);
+        const observation = createActorObservation({
+          id: `ecology-aquatic:${hashCanonical({
+            aggregateId: population.aggregateId,
+            anchorOrdinal: depth.anchorOrdinal,
+            observerId: observer.identity.stableId,
+            tick: frame.tick,
+          })}`,
           observerId: observer.identity.stableId,
-          tick: frame.tick,
-        })}`,
-        observerId: observer.identity.stableId,
-        observedAtTick: frame.tick,
-        channel: "vision",
-        perceivedClass: "aquatic-activity",
-        subjectId: null,
-        area: { center: depth.position, radiusUnits: 0 },
-        confidence,
-        salience: Math.min(
-          ACTOR_PERCEPTION_SCALE,
-          Math.round((confidence + activity.intensity) / 2),
-        ),
-        identification: "classified",
-        interrupt: "none",
-      });
-      if (observation === null) return null;
-      observations.push(observation);
+          observedAtTick: frame.tick,
+          channel: "vision",
+          perceivedClass: "aquatic-activity",
+          subjectId: null,
+          area: { center: depth.position, radiusUnits: 0 },
+          confidence,
+          salience: Math.min(
+            ACTOR_PERCEPTION_SCALE,
+            Math.round((confidence + activity.intensity) / 2),
+          ),
+          identification: "classified",
+          interrupt: "none",
+        });
+        if (observation === null) return null;
+        observations.push(observation);
+      }
     }
-    const canonical = canonicalizeActorObservations(observations);
-    if (canonical.length !== observations.length) return null;
+    observations.sort((left, right) => (
+      right.salience - left.salience
+      || right.confidence - left.confidence
+      || compareExactDistanceToObserver(observer.address.position, left.area.center, right.area.center)
+      || compareText(left.id, right.id)
+    ));
+    const selected = observations.slice(
+      0,
+      CORE_ECOLOGY_PERCEPTION_MAX_TIDAL_OBSERVATIONS_PER_ACTOR,
+    );
+    const canonical = canonicalizeActorObservations(selected);
+    if (canonical.length !== selected.length) return null;
     batches.push(Object.freeze({
       observerId: observer.identity.stableId,
       observations: canonical,
@@ -383,6 +401,24 @@ function canObserveTidalSurfaceActivity(species: unknown): boolean {
   return coreEcologySpeciesHasRuntimeCapability(species, "actor-address")
     && coreEcologySpeciesHasRuntimeCapability(species, "surface-opportunity")
     && coreEcologySpeciesHasRuntimeCapability(species, "tidal-activity");
+}
+
+function compareExactDistanceToObserver(
+  observer: WorldPosition,
+  left: WorldPosition,
+  right: WorldPosition,
+): number {
+  const leftDistance = exactWorldDistanceSquared(observer, left);
+  const rightDistance = exactWorldDistanceSquared(observer, right);
+  return leftDistance < rightDistance ? -1 : leftDistance > rightDistance ? 1 : 0;
+}
+
+function exactWorldDistanceSquared(left: WorldPosition, right: WorldPosition): bigint {
+  const deltaX = (BigInt(right.region.x) - BigInt(left.region.x)) * BigInt(REGION_WIDTH_UNITS)
+    + BigInt(right.localX) - BigInt(left.localX);
+  const deltaY = (BigInt(right.region.y) - BigInt(left.region.y)) * BigInt(REGION_HEIGHT_UNITS)
+    + BigInt(right.localY) - BigInt(left.localY);
+  return deltaX * deltaX + deltaY * deltaY;
 }
 
 /**
@@ -654,37 +690,63 @@ function queryPerceptionVisualCandidates(
   return Object.freeze(candidates);
 }
 
-function canonicalAggregateActivityPerceptionInput(
+function canonicalRootAggregateActivityPerceptionInput(
   value: unknown,
 ): Readonly<{
   readonly frame: CanonicalPerceptionFrame;
-  readonly patch: CoreEcologyAggregatePatchState;
+  readonly patches: readonly CoreEcologyAggregatePatchState[];
 }> | null {
-  if (!plainRecord(value) || !Object.hasOwn(value, "patch")) return null;
-  const { patch: patchValue, ...frameValue } = value;
-  const frame = canonicalPerceptionFrame(frameValue);
-  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   if (
-    frame === null
-    || patch === null
-    || (patch.derivation.kind !== "habitat-v5"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v5"
-      && patch.derivation.kind !== "habitat-v6"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
-      && patch.derivation.kind !== "habitat-v7"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
-      && patch.derivation.kind !== "habitat-v8"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v8"
-      && patch.derivation.kind !== "habitat-v9"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v9"
-      && patch.derivation.kind !== "habitat-v10"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v10"
-      && patch.derivation.kind !== "habitat-v11"
-      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v11")
-    || frame.tick < patch.updatedAtTick
-    || frame.tick - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
+    !plainRecord(value)
+    || !Object.hasOwn(value, "patches")
+    || !Array.isArray(value.patches)
+    || value.patches.length > CORE_ECOLOGY_PERCEPTION_MAX_TIDAL_SOURCE_PATCHES
   ) return null;
-  return Object.freeze({ frame, patch });
+  const { patches: patchValues, ...frameValue } = value;
+  const frame = canonicalPerceptionFrame(frameValue);
+  if (frame === null) return null;
+  const patches: CoreEcologyAggregatePatchState[] = [];
+  const patchKeys = new Set<string>();
+  const aggregateIds = new Set<string>();
+  const actorOwners = new Map<string, Readonly<{
+    readonly actor: CoreWildlifeActorState;
+    readonly materialized: boolean;
+  }>>();
+  for (const patchValue of patchValues) {
+    const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
+    if (
+      patch === null
+      || frame.tick < patch.updatedAtTick
+      || frame.tick - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
+      || patchKeys.has(patch.patchKey)
+    ) return null;
+    patchKeys.add(patch.patchKey);
+    for (const population of patch.aggregatePopulations) {
+      if (aggregateIds.has(population.aggregateId)) return null;
+      aggregateIds.add(population.aggregateId);
+    }
+    for (const population of patch.populations) {
+      for (const member of population.members) {
+        const actorId = member.actor.identity.stableId;
+        if (actorOwners.has(actorId)) return null;
+        actorOwners.set(actorId, Object.freeze({
+          actor: member.actor,
+          materialized: member.materialization === "materialized",
+        }));
+      }
+    }
+    patches.push(patch);
+  }
+  for (const actor of frame.actors) {
+    const owner = actorOwners.get(actor.identity.stableId);
+    if (
+      owner === undefined
+      || !owner.materialized
+      || stableStringify(owner.actor) !== stableStringify(actor)
+    ) return null;
+  }
+  patches.sort((left, right) => compareText(left.patchKey, right.patchKey));
+  return Object.freeze({ frame, patches: Object.freeze(patches) });
 }
 
 function canonicalAlarmEvent(

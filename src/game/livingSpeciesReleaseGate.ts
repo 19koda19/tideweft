@@ -3454,7 +3454,7 @@ export const ALPHA21_RIVER_OTTER_BOUNDED_READINESS =
  * authenticates the already-landed bounded slices, then checks that their
  * shared policy, activity-affordance, perception, and conservation seams are
  * coherent. It deliberately cannot authorize publication, a live build,
- * worldwide ecology, or completion of Wave C / Directive 04_1.
+ * worldwide ecology or broader biodiversity completion.
  */
 export function alpha22TidalConvergenceSourceCandidateReadiness():
 Alpha22TidalConvergenceSourceCandidateReadinessReport {

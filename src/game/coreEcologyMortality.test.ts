@@ -9,12 +9,15 @@ import { seedFromText } from "../sim/rng";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { hashCanonical } from "../sim/util";
 import {
+  applyCoreEcologyCrossOwnerWildlifeMortality,
   applyCoreEcologyWildlifeMortality,
   canonicalizeCoreEcologyAggregatePatch,
   coreEcologyAggregatePatchActor,
   createCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
+  replaceCoreEcologyAggregatePatchCarcass,
+  setCoreEcologyAggregatePatchMaterializedActors,
   serializeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
@@ -23,6 +26,8 @@ import {
   deriveCoreEcologyMarshEdgeHabitatAssemblage,
   type CoreEcologyMarshEdgeHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import { deriveCoreEcologyRegionalHabitat } from "./coreEcologyRegionalHabitat";
+import { createCoreEcologyRegionalResidentPatch } from "./regionalEcologyResidents";
 import {
   coreEcologySpeciesPhysicalBodyResourceUnits,
   coreEcologySpeciesPhysicalBodySizeUnits,
@@ -36,7 +41,7 @@ import {
   stepCoreWildlifeActor,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
-import { createCoreWildlifeCarcass } from "./coreWildlifeCarcass";
+import { claimCoreWildlifeCarcass, createCoreWildlifeCarcass } from "./coreWildlifeCarcass";
 import {
   canonicalizeCoreWildlifeMortalityEvent,
   resolveCoreWildlifePredatorContact,
@@ -226,7 +231,344 @@ function committedDeath() {
   return { initial, rabbitBefore, first, injury, second, death } as const;
 }
 
+function crossOwnerPatches(): Readonly<{
+  attacker: CoreEcologyAggregatePatchState;
+  victim: CoreEcologyAggregatePatchState;
+}> {
+  const attacker = createCoreEcologyAggregatePatch({
+    seed: SEED,
+    patchKey: "alpha32:cross-owner-attacker",
+    originRegion: ORIGIN,
+    derivation: {
+      kind: "legacy-cohort-v1",
+      adoptionTransactionId: `regional-ecology-adoption:${hashCanonical("cross-owner")}`,
+      rootSeedFingerprint: hashCanonical(SEED),
+      sourcePatchHash: hashCanonical("cross-owner-source"),
+    },
+    populations: [{
+      species: "marsh-fox",
+      populationKey: "alpha32/cross-owner-fox",
+      members: [{
+        populationOrdinal: 0,
+        position: createWorldPosition(ORIGIN, CONTACT_X, CONTACT_Y),
+        materialization: "materialized",
+      }],
+    }],
+  });
+
+  for (let radius = 0; radius <= 8; radius += 1) {
+    for (let y = -radius; y <= radius; y += 1) {
+      for (let x = -radius; x <= radius; x += 1) {
+        if (Math.max(Math.abs(x), Math.abs(y)) !== radius) continue;
+        const region = createRegionCoord(x, y);
+        const habitat = deriveCoreEcologyRegionalHabitat({ seed: SEED, region });
+        if (!habitat.populations.some(({ species, populationUnits }) => (
+          species === "marsh-rabbit" && populationUnits > 0
+        ))) continue;
+        const victim = createCoreEcologyRegionalResidentPatch({ seed: SEED, habitat });
+        return Object.freeze({ attacker, victim });
+      }
+    }
+  }
+  throw new Error("Cross-owner fixture lacks a regional rabbit");
+}
+
+function stageCrossOwnerContact(
+  attackerPatchValue: CoreEcologyAggregatePatchState,
+  victimPatchValue: CoreEcologyAggregatePatchState,
+  tick: number,
+): Readonly<{
+  attacker: CoreEcologyAggregatePatchState;
+  victim: CoreEcologyAggregatePatchState;
+  result: CoreWildlifeMortalityResult;
+}> {
+  const foxId = attackerPatchValue.populations.find(({ species }) => species === "marsh-fox")
+    ?.members[0]?.actor.identity.stableId;
+  const rabbitId = victimPatchValue.populations.find(({ species }) => species === "marsh-rabbit")
+    ?.members[0]?.actor.identity.stableId;
+  if (foxId === undefined || rabbitId === undefined) {
+    throw new Error("Cross-owner contact fixture lost an actor");
+  }
+  const attackerPatch = setCoreEcologyAggregatePatchMaterializedActors(attackerPatchValue, {
+    atTick: attackerPatchValue.updatedAtTick,
+    actorIds: [foxId],
+  });
+  const victimPatch = setCoreEcologyAggregatePatchMaterializedActors(victimPatchValue, {
+    atTick: victimPatchValue.updatedAtTick,
+    actorIds: [rabbitId],
+  });
+  const fox = coreEcologyAggregatePatchActor(attackerPatch, foxId);
+  const rabbit = coreEcologyAggregatePatchActor(victimPatch, rabbitId);
+  if (fox === null || rabbit === null) throw new Error("Cross-owner actor lookup failed");
+  const contact = rabbit.address.position;
+  const fedFox = replaceCoreWildlifeActorPhysiology(fox, {
+    atTick: fox.updatedAtTick,
+    needs: { ...fox.needs, hunger: ACTOR_PERCEPTION_SCALE },
+    condition: fox.condition,
+  });
+  const positionedFox = repositionCoreWildlifeActor(fedFox, {
+    atTick: fox.updatedAtTick,
+    position: contact,
+    heading: 0,
+  });
+  const positionedRabbit = repositionCoreWildlifeActor(rabbit, {
+    atTick: tick,
+    position: contact,
+    heading: 500_000,
+  });
+  const observation = createActorObservation({
+    id: `obs:alpha32-cross-owner:${tick}`,
+    observerId: positionedFox.identity.stableId,
+    observedAtTick: tick,
+    channel: "vision",
+    perceivedClass: "live-prey",
+    subjectId: positionedRabbit.identity.stableId,
+    area: { center: contact, radiusUnits: 0 },
+    confidence: ACTOR_PERCEPTION_SCALE,
+    salience: ACTOR_PERCEPTION_SCALE,
+    identification: "identified",
+  });
+  if (observation === null) throw new Error("Cross-owner observation failed");
+  const pursuit = stepCoreWildlifeActor(positionedFox, {
+    tick,
+    observations: [observation],
+    foodOpportunities: [{
+      resourceId: positionedRabbit.identity.stableId,
+      observationId: observation.id,
+      foodClass: "live-prey",
+      sourceKind: "living-actor",
+      availableUnits: 1,
+      nutrition: 900_000,
+      effort: 10_000,
+      risk: 0,
+      competition: 0,
+      directlyConfirmed: true,
+      accessible: true,
+    }],
+    accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  });
+  if (pursuit === null || pursuit.decision.intent !== "pursue") {
+    throw new Error("Cross-owner predator did not pursue");
+  }
+  const attacker = replaceCoreEcologyAggregatePatchActor(attackerPatch, pursuit.actor);
+  const victim = replaceCoreEcologyAggregatePatchActor(victimPatch, positionedRabbit);
+  const policy = coreEcologySpeciesPredatorContact("marsh-fox");
+  if (policy === null) throw new Error("Cross-owner contact policy is missing");
+  const result = resolveCoreWildlifePredatorContact({
+    attacker: pursuit.actor,
+    target: positionedRabbit,
+    atTick: tick,
+    contactRadiusUnits: policy.reachUnits,
+    damageUnits: policy.damageUnits,
+    cause: policy.cause,
+  });
+  if (result === null) throw new Error("Cross-owner contact failed");
+  return Object.freeze({ attacker, victim, result });
+}
+
 describe("core ecology mortality ownership", () => {
+  it("matches ordinary same-owner commits byte-for-byte", () => {
+    const staged = stageContact(marshPatch(), 1);
+    const ordinary = applyCoreEcologyWildlifeMortality(staged.patch, {
+      result: staged.result,
+      temperature: TEMPERATURE,
+    });
+    const unified = applyCoreEcologyCrossOwnerWildlifeMortality(staged.patch, {
+      attackerPatch: staged.patch,
+      result: staged.result,
+      temperature: TEMPERATURE,
+    });
+    expect(unified).toEqual(ordinary);
+  });
+
+  it("commits cross-owner injury and death only to the victim owner", () => {
+    const initial = crossOwnerPatches();
+    const first = stageCrossOwnerContact(initial.attacker, initial.victim, 1);
+    const attackerBefore = serializeCoreEcologyAggregatePatch(first.attacker);
+    const injury = applyCoreEcologyCrossOwnerWildlifeMortality(first.victim, {
+      attackerPatch: first.attacker,
+      result: first.result,
+      temperature: TEMPERATURE,
+    });
+    expect(injury?.transaction).toBeNull();
+    expect(injury?.carcass).toBeNull();
+    expect(serializeCoreEcologyAggregatePatch(first.attacker)).toBe(attackerBefore);
+    if (injury === null) throw new Error("Cross-owner injury failed");
+
+    const second = stageCrossOwnerContact(first.attacker, injury.patch, 2);
+    const unitsBefore = second.victim.populations.reduce(
+      (sum, population) => sum + population.populationSize,
+      0,
+    );
+    const attackerBeforeDeath = serializeCoreEcologyAggregatePatch(second.attacker);
+    const death = applyCoreEcologyCrossOwnerWildlifeMortality(second.victim, {
+      attackerPatch: second.attacker,
+      result: second.result,
+      temperature: TEMPERATURE,
+    });
+    expect(death?.transaction).not.toBeNull();
+    expect(death?.carcass).not.toBeNull();
+    expect(death?.patch.mortalityTransactions).toHaveLength(1);
+    expect(death?.patch.carcasses).toHaveLength(1);
+    expect(death?.patch.populations.reduce(
+      (sum, population) => sum + population.populationSize,
+      0,
+    )).toBe(unitsBefore - 1);
+    expect(death?.transaction?.event.attackerId).toBe(
+      second.result.event.attackerId,
+    );
+    expect(serializeCoreEcologyAggregatePatch(second.attacker)).toBe(attackerBeforeDeath);
+    const reloaded = death === null
+      ? null
+      : deserializeCoreEcologyAggregatePatch(serializeCoreEcologyAggregatePatch(death.patch));
+    expect(reloaded).toEqual(death?.patch);
+    if (death === null || death.carcass === null) {
+      throw new Error("Cross-owner body was lost");
+    }
+    const claimed = claimCoreWildlifeCarcass(death.carcass, {
+      actorId: second.result.event.attackerId,
+      provenanceId: second.result.event.observationId,
+      atTick: second.result.event.atTick,
+    });
+    expect(claimed).not.toBeNull();
+    expect(replaceCoreEcologyAggregatePatchCarcass(death.patch, claimed)).not.toBeNull();
+  });
+
+  it("keeps frozen full-habitat compatibility patches locally strict", () => {
+    const { attacker } = crossOwnerPatches();
+    const first = stageCrossOwnerContact(attacker, marshPatch(), 1);
+    const injury = applyCoreEcologyCrossOwnerWildlifeMortality(first.victim, {
+      attackerPatch: first.attacker,
+      result: first.result,
+      temperature: TEMPERATURE,
+    });
+    if (injury === null) throw new Error("Frozen compatibility injury failed");
+    const second = stageCrossOwnerContact(first.attacker, injury.patch, 2);
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(second.victim, {
+      attackerPatch: second.attacker,
+      result: second.result,
+      temperature: TEMPERATURE,
+    })).toBeNull();
+  });
+
+  it("is deterministic across reload and rejects double-kill, stale, and tampered ownership", () => {
+    const initial = crossOwnerPatches();
+    const first = stageCrossOwnerContact(initial.attacker, initial.victim, 1);
+    const injury = applyCoreEcologyCrossOwnerWildlifeMortality(first.victim, {
+      attackerPatch: first.attacker,
+      result: first.result,
+      temperature: TEMPERATURE,
+    });
+    if (injury === null) throw new Error("Cross-owner determinism fixture lost injury");
+    const second = stageCrossOwnerContact(first.attacker, injury.patch, 2);
+    const apply = (
+      attackerPatch: CoreEcologyAggregatePatchState,
+      victimPatch: CoreEcologyAggregatePatchState,
+    ) => applyCoreEcologyCrossOwnerWildlifeMortality(victimPatch, {
+      attackerPatch,
+      result: second.result,
+      temperature: TEMPERATURE,
+    });
+    const firstDeath = apply(second.attacker, second.victim);
+    const replayInputAttacker = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(second.attacker),
+    );
+    const replayInputVictim = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(second.victim),
+    );
+    expect(replayInputAttacker).not.toBeNull();
+    expect(replayInputVictim).not.toBeNull();
+    expect(apply(replayInputAttacker!, replayInputVictim!)).toEqual(firstDeath);
+    if (firstDeath === null) throw new Error("Cross-owner death fixture failed");
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(firstDeath.patch, {
+      attackerPatch: second.attacker,
+      result: second.result,
+      temperature: TEMPERATURE,
+    })?.patch).toBe(firstDeath.patch);
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(firstDeath.patch, {
+      attackerPatch: second.attacker,
+      result: first.result,
+      temperature: TEMPERATURE,
+    })).toBeNull();
+
+    const {
+      eventId: _committedEventId,
+      ...duplicateEventBody
+    } = second.result.event;
+    const duplicateCauseReferenceId = "obs:alpha32-cross-owner:duplicate";
+    const distinctDeathBody = {
+      ...duplicateEventBody,
+      causeReferenceId: duplicateCauseReferenceId,
+      observationId: duplicateCauseReferenceId,
+    };
+    const distinctDeath = {
+      target: second.result.target,
+      event: {
+        ...distinctDeathBody,
+        eventId: `wildlife-harm:${hashCanonical(distinctDeathBody)}`,
+      },
+    };
+    expect(canonicalizeCoreWildlifeMortalityEvent(distinctDeath.event)).not.toBeNull();
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(firstDeath.patch, {
+      attackerPatch: second.attacker,
+      result: distinctDeath,
+      temperature: TEMPERATURE,
+    })).toBeNull();
+
+    expect(canonicalizeCoreEcologyAggregatePatch(first.attacker)).toBe(first.attacker);
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(second.victim, {
+      attackerPatch: first.attacker,
+      result: second.result,
+      temperature: TEMPERATURE,
+    })).toBeNull();
+
+    const unknownAttackerOwner = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "alpha32:unknown-cross-owner-attacker",
+      originRegion: ORIGIN,
+      tick: second.result.event.atTick,
+      derivation: { kind: "bounded-input-v1" },
+      populations: [],
+    });
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(second.victim, {
+      attackerPatch: unknownAttackerOwner,
+      result: second.result,
+      temperature: TEMPERATURE,
+    })).toBeNull();
+
+    const attackerActor = coreEcologyAggregatePatchActor(
+      second.attacker,
+      second.result.event.attackerId,
+    );
+    if (attackerActor === null) throw new Error("Cross-owner attacker fixture disappeared");
+    const nonContactAttacker = repositionCoreWildlifeActor(attackerActor, {
+      atTick: second.result.event.atTick,
+      position: createWorldPosition(
+        attackerActor.address.position.region,
+        attackerActor.address.position.localX > REGION_WIDTH_UNITS / 2 ? 1 : REGION_WIDTH_UNITS - 1,
+        attackerActor.address.position.localY,
+      ),
+      heading: attackerActor.address.heading,
+    });
+    const nonContactPatch = replaceCoreEcologyAggregatePatchActor(
+      second.attacker,
+      nonContactAttacker,
+    );
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(second.victim, {
+      attackerPatch: nonContactPatch,
+      result: second.result,
+      temperature: TEMPERATURE,
+    })).toBeNull();
+
+    const tampered = JSON.parse(JSON.stringify(second.result)) as any;
+    tampered.event.victimId = second.result.event.attackerId;
+    expect(applyCoreEcologyCrossOwnerWildlifeMortality(second.victim, {
+      attackerPatch: second.attacker,
+      result: tampered,
+      temperature: TEMPERATURE,
+    })).toBeNull();
+  });
+
   it("injures, then retires one exact multi-unit rabbit body without erasing survivors", () => {
     const { rabbitBefore, first, injury, second, death } = committedDeath();
     const policy = coreEcologySpeciesPredatorContact("marsh-fox");
