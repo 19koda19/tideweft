@@ -2,11 +2,18 @@ import { createActorObservation, type ActorObservation } from "../sim/actorPerce
 import {
   CORE_WILDLIFE_SPECIES,
   getCoreWildlifeProfile,
+  getCoreWildlifeSpeciesMetadata,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
 import type { RootSeed } from "../sim/rng";
-import { createRegionCoord, isRegionCoord, type RegionCoord } from "../sim/regions";
-import { FIXED_POINT } from "../sim/types";
+import {
+  REGION_COORD_LIMIT,
+  createRegionCoord,
+  isRegionCoord,
+  regionLocalToGlobalTile,
+  type RegionCoord,
+} from "../sim/regions";
+import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_WILDLIFE_EVENT_VERSION,
@@ -82,6 +89,17 @@ import {
   type CoreEcologyAggregateActivePeriod,
   type CoreEcologyAggregateSpecies,
 } from "./coreEcologyAggregatePolicy";
+import {
+  CORE_ECOLOGY_DOMESTIC_SPECIES,
+  CORE_ECOLOGY_REGIONAL_HABITAT_OWNER_ID,
+  CORE_ECOLOGY_REGIONAL_HABITAT_VERSION,
+  CORE_ECOLOGY_REGIONAL_WILD_SPECIES,
+  coreEcologyRegionalGuildForSpecies,
+  type CoreEcologyRegionalGuild,
+  type CoreEcologyRegionalHabitat,
+  type CoreEcologyRegionalPopulationCandidate,
+} from "./coreEcologyRegionalHabitat";
+import { LIVING_SPECIES_CATALOG } from "./livingSpeciesCatalog";
 import {
   coreEcologySpeciesPredatorContact,
   coreEcologySpeciesPhysicalBodyResourceUnits,
@@ -193,6 +211,49 @@ export type CoreEcologyPatchDerivation =
     }>
   | Readonly<{ readonly kind: "legacy-fixed-v1" }>;
 
+export const CORE_ECOLOGY_REGIONAL_ADOPTION_SUPPRESSION_VERSION = 1 as const;
+
+export interface CoreEcologyRegionalAdoptionActorSlotV1 {
+  readonly baselineActorId: string;
+  readonly baselinePopulationId: string;
+  readonly baselineUnitOffset: number;
+  readonly legacyActorId: string;
+  readonly species: CoreWildlifeSpecies;
+  readonly suppressedBaselineUnits: number;
+}
+
+export interface CoreEcologyRegionalAdoptionAggregateSlotV1 {
+  readonly baselinePopulationId: string;
+  readonly legacyAggregateId: string;
+  readonly species: CoreWildlifeSpecies;
+  readonly suppressedBaselineUnits: number;
+}
+
+/** Immutable substitution receipt embedded in a directly stepable regional owner. */
+export interface CoreEcologyRegionalAdoptionSuppressionManifestV1 {
+  readonly version: typeof CORE_ECOLOGY_REGIONAL_ADOPTION_SUPPRESSION_VERSION;
+  readonly adoptionTransactionId: string;
+  readonly sourcePatchHash: string;
+  readonly baselineHash: string;
+  readonly actorSlots: readonly CoreEcologyRegionalAdoptionActorSlotV1[];
+  readonly aggregateSlots: readonly CoreEcologyRegionalAdoptionAggregateSlotV1[];
+}
+
+export interface CoreEcologySettlementHomeLegacyRetirementV1 {
+  readonly legacyActorId: string;
+  readonly species: CoreWildlifeSpecies;
+  readonly populationKey: string;
+  readonly populationOrdinal: number;
+  readonly representedUnitsBefore: number;
+}
+
+/** References legacy-owned deaths without copying their ledger or bodies. */
+export interface CoreEcologySettlementHomeLegacySuppressionV1 {
+  readonly version: 1;
+  readonly sourcePatchHash: string;
+  readonly retirements: readonly CoreEcologySettlementHomeLegacyRetirementV1[];
+}
+
 export type CoreEcologyAggregatePatchDerivation =
   | CoreEcologyPatchDerivation
   | Readonly<{
@@ -295,6 +356,34 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Frozen pre-habitat actors remain authoritative through the predator extension. */
       readonly kind: "legacy-fixed-v1-with-habitat-v11";
       readonly habitat: CoreEcologyRegionalPredatorHabitatAssemblage;
+    }>
+  | Readonly<{
+      /** Canonical wild residents derived from one signed storage region. */
+      readonly kind: "regional-habitat-v1";
+      readonly habitat: CoreEcologyRegionalHabitat;
+    }>
+  | Readonly<{
+      /** Regional baseline after exact v24 identities substitute reserved units. */
+      readonly kind: "regional-habitat-v1-with-adoption-suppression";
+      readonly habitat: CoreEcologyRegionalHabitat;
+      readonly suppression: CoreEcologyRegionalAdoptionSuppressionManifestV1;
+    }>
+  | Readonly<{
+      /** Settlement-owned domestic actors and storehouse rats only. */
+      readonly kind: "settlement-home-v1";
+      readonly habitat: CoreEcologyRegionalPredatorHabitatAssemblage;
+      readonly legacySuppression?: CoreEcologySettlementHomeLegacySuppressionV1;
+    }>
+  | Readonly<{
+      /**
+       * Finite v24 compatibility authority after the regional-root adoption.
+       * This opaque derivation is structurally canonical here; the regional
+       * owner performs the strict receipt/source-state authentication.
+       */
+      readonly kind: "legacy-cohort-v1";
+      readonly adoptionTransactionId: string;
+      readonly rootSeedFingerprint: string;
+      readonly sourcePatchHash: string;
     }>;
 
 export interface CreateCoreEcologyPatchInput {
@@ -460,6 +549,12 @@ export interface ApplyCoreEcologyWildlifeMortalityInput {
   readonly temperature: number;
 }
 
+export interface ApplyCoreEcologyCrossOwnerWildlifeMortalityInput
+  extends ApplyCoreEcologyWildlifeMortalityInput {
+  /** Canonical current owner of the already-resolved event's attacker. */
+  readonly attackerPatch: CoreEcologyAggregatePatchState;
+}
+
 export interface ApplyCoreEcologyWildlifeMortalityResult {
   readonly patch: CoreEcologyAggregatePatchState;
   readonly event: CoreWildlifeMortalityResult["event"];
@@ -560,6 +655,8 @@ const UTF8_ENCODER = new TextEncoder();
 const PATCH_KEY_PATTERN = /^[a-z0-9][a-z0-9._:/-]{0,63}$/u;
 const ACTOR_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
 const SEED_FINGERPRINT_PATTERN = /^[0-9a-z]{7}(?:\.[0-9a-z]{7}){3}$/u;
+const LEGACY_COHORT_TRANSACTION_PATTERN = /^regional-ecology-adoption:[0-9a-f]{16}$/u;
+const CANONICAL_HASH_PATTERN = /^[0-9a-f]{16}$/u;
 const MATERIALIZATION = new Set<string>(["coarse", "materialized"]);
 const AGGREGATE_EVIDENCE_KINDS = new Set<string>([
   "burrow-opening",
@@ -1010,7 +1107,21 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "legacy-fixed-v1-with-habitat-v10"
     || derivation.kind === "habitat-v11"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v11"
-    ? aggregatePopulationsFromHabitat(input.seed, derivation.habitat, tick)
+    || derivation.kind === "regional-habitat-v1"
+    || derivation.kind === "regional-habitat-v1-with-adoption-suppression"
+    || derivation.kind === "settlement-home-v1"
+    ? aggregatePopulationsFromHabitat(
+        input.seed,
+        derivation.habitat,
+        tick,
+        derivation.kind === "regional-habitat-v1-with-adoption-suppression"
+          ? derivation.suppression
+          : null,
+      )
+        .filter((population) => (
+          derivation.kind !== "settlement-home-v1"
+          || population.species === "brown-rat"
+        ))
     : Object.freeze([]);
   const candidate = {
     version: CORE_ECOLOGY_AGGREGATE_PATCH_VERSION,
@@ -1069,6 +1180,11 @@ export function canonicalizeCoreEcologyAggregatePatch(
   const derivation = canonicalAggregateDerivation(value.derivation);
   const groups = canonicalizeCoreEcologyGroupSet(value.groups);
   if (derivation === null || groups === null) return null;
+  const ownsExternalResidence = derivation.kind === "legacy-cohort-v1";
+  const allowsExternalHistoricalActorReferences = ownsExternalResidence
+    || derivation.kind === "regional-habitat-v1"
+    || derivation.kind === "regional-habitat-v1-with-adoption-suppression"
+    || derivation.kind === "settlement-home-v1";
 
   const populations: CoreEcologyPopulationState[] = [];
   const actorIds = new Set<string>();
@@ -1101,6 +1217,7 @@ export function canonicalizeCoreEcologyAggregatePatch(
       rawPopulation,
       value.originRegion,
       value.updatedAtTick,
+      ownsExternalResidence,
     );
     if (population === null || aggregateIds.has(population.aggregateId)) return null;
     aggregateIds.add(population.aggregateId);
@@ -1128,6 +1245,7 @@ export function canonicalizeCoreEcologyAggregatePatch(
     liveActorIds: actorIds,
     originRegion: value.originRegion,
     maximumTick: value.updatedAtTick,
+    allowExternalActorReferences: allowsExternalHistoricalActorReferences,
   });
   if (mortality === null) return null;
 
@@ -1757,23 +1875,140 @@ export function applyCoreEcologyWildlifeMortality(
     || stableStringify(verified.target) !== stableStringify(target)
   ) return null;
 
+  return commitVerifiedCoreEcologyMortality({
+    patch,
+    victimPopulation,
+    victimMember,
+    target,
+    event,
+    temperature: inputValue.temperature,
+  });
+}
+
+/**
+ * Commits an already-resolved contact when the attacker and victim have
+ * different active owners. Both owners are authenticated, but only the victim
+ * patch is ever revised. Passing the same exact owner delegates to the ordinary
+ * path so same-owner results remain byte-for-byte identical.
+ */
+export function applyCoreEcologyCrossOwnerWildlifeMortality(
+  victimPatchValue: unknown,
+  inputValue: unknown,
+): ApplyCoreEcologyWildlifeMortalityResult | null {
+  const victimPatch = canonicalizeCoreEcologyAggregatePatch(victimPatchValue);
+  if (
+    victimPatch === null
+    || !plainRecord(inputValue)
+    || !exactKeys(inputValue, ["attackerPatch", "result", "temperature"])
+    || !fixedInteger(inputValue.temperature)
+  ) return null;
+  const attackerPatch = canonicalizeCoreEcologyAggregatePatch(inputValue.attackerPatch);
+  if (attackerPatch === null) return null;
+  if (attackerPatch.patchKey === victimPatch.patchKey) {
+    return stableStringify(attackerPatch) === stableStringify(victimPatch)
+      ? applyCoreEcologyWildlifeMortality(victimPatch, {
+          result: inputValue.result,
+          temperature: inputValue.temperature,
+        })
+      : null;
+  }
+  if (
+    attackerPatch.updatedAtTick !== victimPatch.updatedAtTick
+    || !plainRecord(inputValue.result)
+    || !exactKeys(inputValue.result, ["event", "target"])
+  ) return null;
+  const event = canonicalizeCoreWildlifeMortalityEvent(inputValue.result.event);
+  const target = canonicalizeCoreWildlifeActorState(inputValue.result.target);
+  if (
+    event === null
+    || target === null
+    || target.condition.health !== event.healthAfter
+    || !patchOwnsActorIdentity(attackerPatch, event.attackerId)
+    || ownedEcologyIdsOverlap(attackerPatch, victimPatch)
+  ) {
+    return null;
+  }
+  const existing = victimPatch.mortalityTransactions.find((transaction) => (
+    transaction.event.eventId === event.eventId
+  ));
+  if (existing !== undefined) {
+    const carcass = victimPatch.carcasses.find(({ carcassId }) => (
+      carcassId === existing.carcassId
+    ));
+    if (
+      carcass === undefined
+      || stableStringify(existing.event) !== stableStringify(event)
+      || stableStringify(existing.retiredActor) !== stableStringify(target)
+    ) return null;
+    return deepFreeze({ patch: victimPatch, event, transaction: existing, carcass });
+  }
+  if (
+    event.atTick !== victimPatch.updatedAtTick
+    || event.atTick !== attackerPatch.updatedAtTick
+  ) return null;
+  const victimOwned = ecologyPopulationMember(victimPatch, event.victimId);
+  const attackerOwned = ecologyPopulationMember(attackerPatch, event.attackerId);
+  if (
+    victimOwned === null
+    || attackerOwned === null
+    || victimOwned.member.materialization !== "materialized"
+    || attackerOwned.member.materialization !== "materialized"
+    || attackerOwned.member.actor.updatedAtTick !== event.atTick
+  ) return null;
+  const attack = coreEcologySpeciesPredatorContact(attackerOwned.member.actor.identity.species);
+  if (
+    attack === null
+    || !coreEcologyCanResolveMortalityTarget(
+      attackerOwned.member.actor.identity.species,
+      victimOwned.population.species,
+    )
+  ) return null;
+  const verified = resolveCoreWildlifePredatorContact({
+    attacker: attackerOwned.member.actor,
+    target: victimOwned.member.actor,
+    atTick: event.atTick,
+    contactRadiusUnits: attack.reachUnits,
+    damageUnits: attack.damageUnits,
+    cause: attack.cause,
+  });
+  if (
+    verified === null
+    || stableStringify(verified.event) !== stableStringify(event)
+    || stableStringify(verified.target) !== stableStringify(target)
+  ) return null;
+  return commitVerifiedCoreEcologyMortality({
+    patch: victimPatch,
+    victimPopulation: victimOwned.population,
+    victimMember: victimOwned.member,
+    target,
+    event,
+    temperature: inputValue.temperature,
+  });
+}
+
+function commitVerifiedCoreEcologyMortality(input: Readonly<{
+  patch: CoreEcologyAggregatePatchState;
+  victimPopulation: CoreEcologyPopulationState;
+  victimMember: CoreEcologyPopulationMemberState;
+  target: CoreWildlifeActorState;
+  event: CoreWildlifeMortalityResult["event"];
+  temperature: number;
+}>): ApplyCoreEcologyWildlifeMortalityResult | null {
+  const { patch, victimPopulation, victimMember, target, event } = input;
   if (event.outcome === "injured") {
     const nextPatch = replaceCoreEcologyAggregatePatchActor(patch, target);
     return deepFreeze({ patch: nextPatch, event, transaction: null, carcass: null });
   }
-
-  const bodySizeUnits = coreEcologySpeciesPhysicalBodySizeUnits(
-    victimPopulation.species,
-  );
+  const bodySizeUnits = coreEcologySpeciesPhysicalBodySizeUnits(victimPopulation.species);
   const resourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(victimPopulation.species);
   if (
     bodySizeUnits <= 0
     || resourceUnits <= 0
     || patch.mortalityTransactions.length >= CORE_ECOLOGY_MAX_MORTALITY_TRANSACTIONS
     || patch.groups.groups.some((group) => (
-      group.identity.species === victimPopulation?.species
-      && group.identity.populationKey === victimPopulation?.populationKey
-      && group.memberOrdinals.includes(victimMember?.populationOrdinal ?? -1)
+      group.identity.species === victimPopulation.species
+      && group.identity.populationKey === victimPopulation.populationKey
+      && group.memberOrdinals.includes(victimMember.populationOrdinal)
     ))
   ) return null;
   const carcass = createCoreWildlifeCarcass({
@@ -1781,7 +2016,7 @@ export function applyCoreEcologyWildlifeMortality(
     sourceSpecies: victimPopulation.species,
     bodySizeUnits,
     resourceUnits,
-    temperature: inputValue.temperature,
+    temperature: input.temperature,
   });
   if (carcass === null) return null;
   const transaction = createCoreEcologyMortalityTransaction({
@@ -1804,17 +2039,18 @@ export function applyCoreEcologyWildlifeMortality(
     if (released === null) return null;
     releasedCarcasses.push(released);
   }
-  const populations = patch.populations.map((population) => {
-    if (population !== victimPopulation) return population;
-    return Object.freeze({
-      ...population,
-      populationSize: population.populationSize - 1,
-      reserveUnits: population.reserveUnits + victimMember.representedUnits - 1,
-      members: Object.freeze(population.members.filter(({ actor }) => (
-        actor.identity.stableId !== target.identity.stableId
-      ))),
-    });
-  });
+  const populations = patch.populations.map((population) => (
+    population !== victimPopulation
+      ? population
+      : Object.freeze({
+          ...population,
+          populationSize: population.populationSize - 1,
+          reserveUnits: population.reserveUnits + victimMember.representedUnits - 1,
+          members: Object.freeze(population.members.filter(({ actor }) =>
+            actor.identity.stableId !== target.identity.stableId
+          )),
+        })
+  ));
   const nextPatch = canonicalizeCoreEcologyAggregatePatch({
     ...patch,
     populations,
@@ -1836,6 +2072,51 @@ export function applyCoreEcologyWildlifeMortality(
     transaction: committedTransaction,
     carcass: committedCarcass,
   });
+}
+
+function ecologyPopulationMember(
+  patch: CoreEcologyAggregatePatchState,
+  actorId: string,
+): Readonly<{
+  population: CoreEcologyPopulationState;
+  member: CoreEcologyPopulationMemberState;
+}> | null {
+  for (const population of patch.populations) {
+    const member = population.members.find(({ actor }) => actor.identity.stableId === actorId);
+    if (member !== undefined) return Object.freeze({ population, member });
+  }
+  return null;
+}
+
+function ownedEcologyIdsOverlap(
+  left: CoreEcologyAggregatePatchState,
+  right: CoreEcologyAggregatePatchState,
+): boolean {
+  const owned = new Set([
+    ...left.populations.flatMap(({ members }) => members.map(({ actor }) => (
+      actor.identity.stableId
+    ))),
+    ...left.mortalityTransactions.map(({ retiredActor }) => retiredActor.identity.stableId),
+    ...left.aggregatePopulations.map(({ aggregateId }) => aggregateId),
+  ]);
+  return [
+    ...right.populations.flatMap(({ members }) => members.map(({ actor }) => (
+      actor.identity.stableId
+    ))),
+    ...right.mortalityTransactions.map(({ retiredActor }) => retiredActor.identity.stableId),
+    ...right.aggregatePopulations.map(({ aggregateId }) => aggregateId),
+  ].some((id) => owned.has(id));
+}
+
+function patchOwnsActorIdentity(
+  patch: CoreEcologyAggregatePatchState,
+  actorId: string,
+): boolean {
+  return patch.populations.some(({ members }) => members.some(({ actor }) => (
+    actor.identity.stableId === actorId
+  ))) || patch.mortalityTransactions.some(({ retiredActor }) => (
+    retiredActor.identity.stableId === actorId
+  ));
 }
 
 /** Replace one owned carcass after a lawful claim/consume/decay transition. */
@@ -2248,28 +2529,61 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyDomesticYardHabitatAssemblage
     | CoreEcologyDomesticPenHabitatAssemblage
     | CoreEcologyRegionalUplandHabitatAssemblage
-    | CoreEcologyRegionalPredatorHabitatAssemblage,
+    | CoreEcologyRegionalPredatorHabitatAssemblage
+    | CoreEcologyRegionalHabitat,
   tick: number,
+  regionalSuppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null = null,
 ): readonly CoreEcologyAggregatePopulationState[] {
   const seedFingerprint = rootSeedFingerprint(seed);
   const aggregatePopulations: CoreEcologyAggregatePopulationState[] = [];
   for (const analysis of habitat.populations) {
+    const regional = isRegionalHabitatPopulation(analysis);
     if (
-      (analysis.representation !== "aggregate-area"
+      !isCoreEcologyAggregateSpecies(analysis.species)
+      || (!regional
+        && analysis.representation !== "aggregate-area"
         && analysis.representation !== "group-actor")
-      || !isCoreEcologyAggregateSpecies(analysis.species)
       || analysis.populationUnits === 0
     ) continue;
     const species = analysis.species;
     const policy = coreEcologyAggregateSpeciesPolicy(species);
+    const suppressedUnits = regional && regionalSuppression !== null
+      ? regionalSuppression.aggregateSlots.find(({ baselinePopulationId }) => (
+          baselinePopulationId === analysis.stableId
+        ))?.suppressedBaselineUnits ?? 0
+      : 0;
+    const survivingPopulationUnits = analysis.populationUnits - suppressedUnits;
+    if (survivingPopulationUnits === 0) continue;
     const aggregateId = stableAggregateIdFromFields({
       seedFingerprint,
-      originRegion: habitat.originRegion,
+      originRegion: regionalHabitatOrigin(habitat),
       populationKey: analysis.populationKey,
       species,
     });
-    const anchors = analysis.allocations.map((allocation) => Object.freeze({
-      anchorOrdinal: allocation.allocationOrdinal,
+    let remainingSuppression = suppressedUnits;
+    const sourceAnchors = regional
+      ? analysis.anchors.map((anchor, anchorOrdinal) => {
+        const removed = Math.min(anchor.allocatedPopulation, remainingSuppression);
+        remainingSuppression -= removed;
+        return {
+          anchorOrdinal,
+          position: createWorldPosition(
+            regionalHabitatOrigin(habitat),
+            anchor.localX * WORLD_POSITION_UNITS_PER_TILE
+              + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+            anchor.localY * WORLD_POSITION_UNITS_PER_TILE
+              + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+          ),
+          representedUnits: anchor.allocatedPopulation - removed,
+        };
+      }).filter(({ representedUnits }) => representedUnits > 0)
+      : analysis.allocations.map((allocation) => ({
+          anchorOrdinal: allocation.allocationOrdinal,
+          position: allocation.position,
+          representedUnits: allocation.representedUnits,
+        }));
+    const anchors = sourceAnchors.map((allocation, anchorOrdinal) => Object.freeze({
+      anchorOrdinal,
       position: createWorldPosition(
         allocation.position.region,
         allocation.position.localX,
@@ -2280,7 +2594,14 @@ function aggregatePopulationsFromHabitat(
     }));
     const activitySignal = aggregateActivitySignalFromHabitat(
       species,
-      analysis.activitySignal,
+      regional
+        ? {
+            kind: "foraging",
+            intensity: analysis.habitatScore,
+            activePeriod: "variable",
+            source: "habitat-derived",
+          }
+        : analysis.activitySignal,
       tick,
     );
     const evidence = anchors.map((anchor) => {
@@ -2312,10 +2633,12 @@ function aggregatePopulationsFromHabitat(
       revision: 0,
       updatedAtTick: tick,
       habitatCapacity: analysis.habitatCapacity,
-      populationSize: analysis.populationUnits,
-      populationPressure: analysis.populationPressure,
-      trend: analysis.trend,
-      trendSignal: analysis.trendSignal,
+      populationSize: survivingPopulationUnits,
+      populationPressure: regional
+        ? ratioFixed(survivingPopulationUnits, analysis.habitatCapacity)
+        : analysis.populationPressure,
+      trend: regional ? "stable" : analysis.trend,
+      trendSignal: regional ? 0 : analysis.trendSignal,
       anchors,
       activitySignal,
       evidence,
@@ -2328,10 +2651,47 @@ function aggregatePopulationsFromHabitat(
   return Object.freeze(aggregatePopulations);
 }
 
+function isRegionalHabitatPopulation(
+  value: unknown,
+): value is CoreEcologyRegionalPopulationCandidate {
+  return plainRecord(value) && "actorRepresentation" in value;
+}
+
+function regionalHabitatOrigin(
+  habitat:
+    | CoreEcologyHarborEdgeHabitatAssemblage
+    | CoreEcologyMarshEdgeHabitatAssemblage
+    | CoreEcologyRainChorusHabitatAssemblage
+    | CoreEcologyTidalTableHabitatAssemblage
+    | CoreEcologyWaterfowlHabitatAssemblage
+    | CoreEcologyTidalWebHabitatAssemblage
+    | CoreEcologyDomesticYardHabitatAssemblage
+    | CoreEcologyDomesticPenHabitatAssemblage
+    | CoreEcologyRegionalUplandHabitatAssemblage
+    | CoreEcologyRegionalPredatorHabitatAssemblage
+    | CoreEcologyRegionalHabitat,
+): RegionCoord {
+  return "region" in habitat ? habitat.region : habitat.originRegion;
+}
+
+function regionalAnchorPosition(
+  region: RegionCoord,
+  anchor: CoreEcologyRegionalPopulationCandidate["anchors"][number],
+): WorldPosition {
+  return createWorldPosition(
+    region,
+    anchor.localX * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+    anchor.localY * WORLD_POSITION_UNITS_PER_TILE
+      + Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+  );
+}
+
 function canonicalAggregatePopulation(
   value: unknown,
   originRegion: RegionCoord,
   maximumTick: number,
+  allowExternalResidence = false,
 ): CoreEcologyAggregatePopulationState | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "activitySignal",
@@ -2409,8 +2769,10 @@ function canonicalAggregatePopulation(
       || !exactKeys(raw, ["anchorOrdinal", "populationUnits", "position", "radiusUnits"])
       || raw.anchorOrdinal !== index
       || !isWorldPosition(raw.position)
-      || raw.position.region.x !== originRegion.x
-      || raw.position.region.y !== originRegion.y
+      || (!allowExternalResidence && (
+        raw.position.region.x !== originRegion.x
+        || raw.position.region.y !== originRegion.y
+      ))
       || raw.radiusUnits !== WORLD_POSITION_UNITS_PER_TILE * policy.anchorRadiusTiles
       || !nonnegativeSafeInteger(raw.populationUnits)
     ) return null;
@@ -2418,7 +2780,11 @@ function canonicalAggregatePopulation(
     if (!Number.isSafeInteger(representedPopulation)) return null;
     anchors.push(Object.freeze({
       anchorOrdinal: index,
-      position: createWorldPosition(originRegion, raw.position.localX, raw.position.localY),
+      position: createWorldPosition(
+        allowExternalResidence ? raw.position.region : originRegion,
+        raw.position.localX,
+        raw.position.localY,
+      ),
       radiusUnits: raw.radiusUnits,
       populationUnits: raw.populationUnits,
     }));
@@ -2440,6 +2806,7 @@ function canonicalAggregatePopulation(
       originRegion,
       value.updatedAtTick,
       species,
+      allowExternalResidence,
     );
     if (
       canonical === null
@@ -2528,6 +2895,7 @@ function canonicalAggregateEvidence(
   originRegion: RegionCoord,
   maximumTick: number,
   species: CoreEcologyAggregateSpecies,
+  allowExternalResidence = false,
 ): CoreEcologyAggregateEvidence | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "causeKind",
@@ -2550,8 +2918,10 @@ function canonicalAggregateEvidence(
     || !coreEcologyAggregateSpeciesPolicy(species).initialEvidenceKinds
       .includes(value.kind as CoreEcologyAggregateEvidenceKind)
     || !isWorldPosition(value.position)
-    || value.position.region.x !== originRegion.x
-    || value.position.region.y !== originRegion.y
+    || (!allowExternalResidence && (
+      value.position.region.x !== originRegion.x
+      || value.position.region.y !== originRegion.y
+    ))
     || !nonnegativeSafeInteger(value.createdAtTick)
     || value.createdAtTick > maximumTick
     || !fixedInteger(value.strength)
@@ -2569,7 +2939,11 @@ function canonicalAggregateEvidence(
     evidenceId: value.evidenceId,
     evidenceOrdinal: value.evidenceOrdinal,
     kind: value.kind as CoreEcologyAggregateEvidenceKind,
-    position: createWorldPosition(originRegion, value.position.localX, value.position.localY),
+    position: createWorldPosition(
+      allowExternalResidence ? value.position.region : originRegion,
+      value.position.localX,
+      value.position.localY,
+    ),
     createdAtTick: value.createdAtTick,
     strength: value.strength,
     causeKind: value.causeKind as CoreEcologyAggregateEvidenceCause,
@@ -2654,6 +3028,8 @@ function canonicalMortalityLedger(input: Readonly<{
   readonly liveActorIds: ReadonlySet<string>;
   readonly originRegion: RegionCoord;
   readonly maximumTick: number;
+  /** Legacy regional owners may retain references whose actor moved to the home owner. */
+  readonly allowExternalActorReferences?: boolean;
 }>): CanonicalCoreEcologyMortalityLedger | null {
   const transactions: CoreEcologyMortalityTransaction[] = [];
   const mortalityIds = new Set<string>();
@@ -2705,8 +3081,9 @@ function canonicalMortalityLedger(input: Readonly<{
   // New deaths are gated against the current species policy before commit.
   // Once committed, the canonical event and body are history: reapplying
   // today's reach, damage, or body-yield tuning here would make an otherwise
-  // valid old save unreadable after a balance change. The attacker still must
-  // be an owned actor that was alive through the recorded contact tick.
+  // valid old save unreadable after a balance change. Ordinary patches still
+  // own the attacker; a receipt-bound legacy cohort may preserve an exact
+  // historical reference after the living attacker moved to another owner.
   for (let index = 0; index < transactions.length; index += 1) {
     const transaction = transactions[index]!;
     const previous = transactions[index - 1];
@@ -2723,7 +3100,7 @@ function canonicalMortalityLedger(input: Readonly<{
           )
         );
     if (
-      !attackerWasAliveForEvent
+      (!attackerWasAliveForEvent && !input.allowExternalActorReferences)
       || (previous !== undefined && transaction.event.atTick < previous.event.atTick)
     ) return null;
   }
@@ -2740,7 +3117,8 @@ function canonicalMortalityLedger(input: Readonly<{
       // adjacent region while retaining the same population owner.
       || carcassIds.has(carcass.carcassId)
       || (carcass.currentClaimantActorId !== null
-        && !input.liveActorIds.has(carcass.currentClaimantActorId))
+        && !input.liveActorIds.has(carcass.currentClaimantActorId)
+        && !input.allowExternalActorReferences)
     ) return null;
     carcassIds.add(carcass.carcassId);
     carcasses.push(carcass);
@@ -2947,10 +3325,644 @@ function canonicalDerivation(value: unknown): CoreEcologyPatchDerivation | null 
   return habitat === null ? null : Object.freeze({ kind: "habitat-v1", habitat });
 }
 
+const REGIONAL_HABITAT_GUILDS = Object.freeze([
+  "aerial-forager",
+  "apex-predator",
+  "aquatic-prey",
+  "large-herbivore",
+  "large-omnivore",
+  "mesopredator",
+  "small-prey",
+  "tidal-detritivore",
+  "wetland-bird",
+] as const satisfies readonly CoreEcologyRegionalGuild[]);
+const REGIONAL_HABITAT_ADMISSION_REASONS = new Set<string>([
+  "admitted",
+  "density-budget-exhausted",
+  "density-roll-failed",
+  "habitat-capacity-zero",
+  "regional-quiet",
+  "territory-owned-elsewhere",
+  "unsupported-predator",
+]);
+const REGIONAL_HABITAT_TERRAIN_KEYS = Object.freeze([
+  "deep-water",
+  "tidal-flat",
+  "marsh",
+  "meadow",
+  "ridge",
+] as const);
+const REGIONAL_HABITAT_BIOME_KEYS = Object.freeze([
+  "tide-channel",
+  "brine-flat",
+  "reed-marsh",
+  "rain-meadow",
+  "sun-meadow",
+  "wind-ridge",
+  "glimmerfen",
+] as const);
+
+function canonicalRegionalHabitat(value: unknown): CoreEcologyRegionalHabitat | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "admittedSpeciesCount",
+    "catalogSpeciesCount",
+    "cell",
+    "density",
+    "derivationHash",
+    "evaluatedWildSpeciesCount",
+    "ownerId",
+    "populations",
+    "region",
+    "regionId",
+    "summary",
+    "terrainHash",
+    "totalPopulationUnits",
+    "version",
+  ])) return null;
+  if (
+    value.version !== CORE_ECOLOGY_REGIONAL_HABITAT_VERSION
+    || value.ownerId !== CORE_ECOLOGY_REGIONAL_HABITAT_OWNER_ID
+    || !isRegionCoord(value.region)
+    || !regionalHabitatId(value.regionId)
+    || !regionalHabitatHash(value.terrainHash)
+    || !regionalHabitatHash(value.derivationHash)
+    || value.catalogSpeciesCount !== LIVING_SPECIES_CATALOG.modules.length
+    || value.evaluatedWildSpeciesCount !== CORE_ECOLOGY_REGIONAL_WILD_SPECIES.length
+    || !nonnegativeSafeInteger(value.totalPopulationUnits)
+    || !nonnegativeSafeInteger(value.admittedSpeciesCount)
+    || !Array.isArray(value.populations)
+    || value.populations.length !== CORE_ECOLOGY_REGIONAL_WILD_SPECIES.length
+    || !canonicalRegionalCell(value.cell, value.region)
+    || !canonicalRegionalSummary(value.summary)
+    || !canonicalRegionalDensity(value.density)
+  ) return null;
+  const candidateIds = new Set<string>();
+  const populationKeys = new Set<string>();
+  const anchorIds = new Set<string>();
+  const anchorTiles = new Set<number>();
+  let totalPopulationUnits = 0;
+  let admittedSpeciesCount = 0;
+  const guildTotals = new Map<CoreEcologyRegionalGuild, number>();
+  const speciesOrder: string[] = [];
+  for (const candidate of value.populations) {
+    if (!canonicalRegionalPopulation(
+      candidate,
+      value.region,
+      value.summary,
+      value.density,
+      candidateIds,
+      populationKeys,
+      anchorIds,
+      anchorTiles,
+    )) return null;
+    speciesOrder.push(candidate.species);
+    totalPopulationUnits += candidate.populationUnits;
+    if (!Number.isSafeInteger(totalPopulationUnits)) return null;
+    if (candidate.populationUnits > 0) admittedSpeciesCount += 1;
+    guildTotals.set(
+      candidate.guild,
+      (guildTotals.get(candidate.guild) ?? 0) + candidate.populationUnits,
+    );
+  }
+  if (
+    speciesOrder.some((species, index) => species !== CORE_ECOLOGY_REGIONAL_WILD_SPECIES[index])
+    || totalPopulationUnits !== value.totalPopulationUnits
+    || admittedSpeciesCount !== value.admittedSpeciesCount
+  ) return null;
+  const density = value.density as Record<string, unknown>;
+  const guildCeilings = density.guildCeilings as Record<string, unknown>;
+  for (const [guild, units] of guildTotals) {
+    if (units > (guildCeilings[guild] as number)) return null;
+  }
+  const { derivationHash: _derivationHash, ...base } = value;
+  if (hashCanonical(base) !== value.derivationHash) return null;
+  try {
+    return deepFreeze(JSON.parse(stableStringify(value)) as CoreEcologyRegionalHabitat);
+  } catch {
+    return null;
+  }
+}
+
+function canonicalRegionalCell(value: unknown, region: RegionCoord): boolean {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "address",
+    "bounds",
+    "spanRegions",
+    "stableId",
+    "version",
+  ])) return false;
+  if (
+    value.version !== CORE_ECOLOGY_REGIONAL_HABITAT_VERSION
+    || value.spanRegions !== 2
+    || !regionalHabitatId(value.stableId)
+    || !plainRecord(value.address)
+    || !exactKeys(value.address, ["x", "y"])
+    || !signedSafeInteger(value.address.x)
+    || !signedSafeInteger(value.address.y)
+    || !plainRecord(value.bounds)
+    || !exactKeys(value.bounds, ["maximum", "minimum"])
+    || !isRegionCoord(value.bounds.minimum)
+    || !isRegionCoord(value.bounds.maximum)
+  ) return false;
+  const addressX = Math.floor(region.x / 2);
+  const addressY = Math.floor(region.y / 2);
+  const minimumX = Math.max(-REGION_COORD_LIMIT, addressX * 2);
+  const minimumY = Math.max(-REGION_COORD_LIMIT, addressY * 2);
+  const maximumX = Math.min(REGION_COORD_LIMIT, addressX * 2 + 1);
+  const maximumY = Math.min(REGION_COORD_LIMIT, addressY * 2 + 1);
+  return value.address.x === addressX
+    && value.address.y === addressY
+    && value.bounds.minimum.x === minimumX
+    && value.bounds.minimum.y === minimumY
+    && value.bounds.maximum.x === maximumX
+    && value.bounds.maximum.y === maximumY;
+}
+
+function canonicalRegionalSummary(value: unknown): boolean {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "aquaticProductivity",
+    "averageElevation",
+    "averageExposure",
+    "averageHeat",
+    "averageMoisture",
+    "averageRainfall",
+    "averageRoughness",
+    "biomeTileCounts",
+    "carryingSignal",
+    "cover",
+    "shoreTileCount",
+    "terrainDiversity",
+    "terrainTileCounts",
+    "terrestrialProductivity",
+    "tileCount",
+  ])) return false;
+  if (
+    value.tileCount !== WORLD_WIDTH * WORLD_HEIGHT
+    || !nonnegativeSafeInteger(value.shoreTileCount)
+    || value.shoreTileCount > value.tileCount
+    || !REGIONAL_HABITAT_SUMMARY_FIXED_FIELDS.every((field) => fixedInteger(value[field]))
+    || !canonicalRegionalCountRecord(value.terrainTileCounts, REGIONAL_HABITAT_TERRAIN_KEYS, value.tileCount)
+    || !canonicalRegionalCountRecord(value.biomeTileCounts, REGIONAL_HABITAT_BIOME_KEYS, value.tileCount)
+  ) return false;
+  return true;
+}
+
+const REGIONAL_HABITAT_SUMMARY_FIXED_FIELDS = Object.freeze([
+  "aquaticProductivity",
+  "averageElevation",
+  "averageExposure",
+  "averageHeat",
+  "averageMoisture",
+  "averageRainfall",
+  "averageRoughness",
+  "carryingSignal",
+  "cover",
+  "terrainDiversity",
+  "terrestrialProductivity",
+] as const);
+
+function canonicalRegionalCountRecord(
+  value: unknown,
+  keys: readonly string[],
+  expectedTotal: number,
+): boolean {
+  if (!plainRecord(value) || !exactKeys(value, keys)) return false;
+  let total = 0;
+  for (const key of keys) {
+    const count = value[key];
+    if (!nonnegativeSafeInteger(count)) return false;
+    total += count;
+  }
+  return total === expectedTotal;
+}
+
+function canonicalRegionalDensity(value: unknown): boolean {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "guildCeilings",
+    "regionalQuiet",
+    "regionalQuietRoll",
+    "regionalQuietThreshold",
+  ])) return false;
+  return typeof value.regionalQuiet === "boolean"
+    && fixedInteger(value.regionalQuietRoll)
+    && fixedInteger(value.regionalQuietThreshold)
+    && canonicalRegionalIntegerRecord(value.guildCeilings, REGIONAL_HABITAT_GUILDS);
+}
+
+function canonicalRegionalIntegerRecord(value: unknown, keys: readonly string[]): boolean {
+  if (!plainRecord(value) || !exactKeys(value, keys)) return false;
+  return keys.every((key) => nonnegativeSafeInteger(value[key]));
+}
+
+function canonicalRegionalPopulation(
+  value: unknown,
+  region: RegionCoord,
+  summaryValue: unknown,
+  densityValue: unknown,
+  candidateIds: Set<string>,
+  populationKeys: Set<string>,
+  anchorIds: Set<string>,
+  anchorTiles: Set<number>,
+): value is CoreEcologyRegionalPopulationCandidate {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "actorRepresentation",
+    "admissionReason",
+    "anchors",
+    "densityRoll",
+    "densityThreshold",
+    "guild",
+    "guildCeiling",
+    "habitatCapacity",
+    "habitatScore",
+    "populationKey",
+    "populationUnits",
+    "preySupportUnits",
+    "species",
+    "stableId",
+    "suitableTileCount",
+    "territoryHostRegion",
+    "territoryId",
+    "territoryOwnedHere",
+    "trophicCeiling",
+    "version",
+  ])) return false;
+  if (
+    value.version !== CORE_ECOLOGY_REGIONAL_HABITAT_VERSION
+    || !CORE_ECOLOGY_REGIONAL_WILD_SPECIES.includes(value.species as CoreWildlifeSpecies)
+    || !REGIONAL_HABITAT_GUILDS.includes(value.guild as CoreEcologyRegionalGuild)
+    || value.guild !== coreEcologyRegionalGuildForSpecies(value.species as CoreWildlifeSpecies)
+    || value.actorRepresentation
+      !== getCoreWildlifeSpeciesMetadata(value.species as CoreWildlifeSpecies).actorRepresentation
+    || !regionalHabitatId(value.stableId)
+    || candidateIds.has(value.stableId)
+    || !validPatchKey(value.populationKey)
+    || populationKeys.has(value.populationKey)
+    || !regionalHabitatId(value.territoryId)
+    || !isRegionCoord(value.territoryHostRegion)
+    || typeof value.territoryOwnedHere !== "boolean"
+    || (value.territoryOwnedHere && (
+      value.territoryHostRegion.x !== region.x || value.territoryHostRegion.y !== region.y
+    ))
+    || !fixedInteger(value.habitatScore)
+    || !nonnegativeSafeInteger(value.suitableTileCount)
+    || !plainRecord(summaryValue)
+    || !nonnegativeSafeInteger(summaryValue.tileCount)
+    || value.suitableTileCount > summaryValue.tileCount
+    || !nonnegativeSafeInteger(value.habitatCapacity)
+    || value.habitatCapacity > getCoreWildlifeProfile(value.species as CoreWildlifeSpecies).maximumPatchPopulation
+    || !fixedInteger(value.densityRoll)
+    || !fixedInteger(value.densityThreshold)
+    || !nonnegativeSafeInteger(value.preySupportUnits)
+    || !nonnegativeSafeInteger(value.trophicCeiling)
+    || !nonnegativeSafeInteger(value.guildCeiling)
+    || !plainRecord(densityValue)
+    || !plainRecord(densityValue.guildCeilings)
+    || value.guildCeiling !== densityValue.guildCeilings[value.guild as string]
+    || !nonnegativeSafeInteger(value.populationUnits)
+    || value.populationUnits > value.habitatCapacity
+    || !REGIONAL_HABITAT_ADMISSION_REASONS.has(value.admissionReason as string)
+    || !Array.isArray(value.anchors)
+    || value.anchors.length > CORE_ECOLOGY_MAX_AGGREGATE_ANCHORS
+  ) return false;
+  const admitted = value.populationUnits > 0;
+  if (
+    admitted !== (value.admissionReason === "admitted")
+    || admitted !== (value.anchors.length > 0)
+    || (admitted && !value.territoryOwnedHere)
+    || (value.admissionReason === "territory-owned-elsewhere" && value.territoryOwnedHere)
+  ) return false;
+  let allocatedPopulation = 0;
+  for (const anchor of value.anchors) {
+    if (!plainRecord(anchor) || !exactKeys(anchor, [
+      "allocatedPopulation",
+      "globalX",
+      "globalY",
+      "habitatScore",
+      "localX",
+      "localY",
+      "stableId",
+    ])) return false;
+    if (
+      !regionalHabitatId(anchor.stableId)
+      || anchorIds.has(anchor.stableId)
+      || !nonnegativeSafeInteger(anchor.localX)
+      || anchor.localX >= WORLD_WIDTH
+      || !nonnegativeSafeInteger(anchor.localY)
+      || anchor.localY >= WORLD_HEIGHT
+      || !signedSafeInteger(anchor.globalX)
+      || !signedSafeInteger(anchor.globalY)
+      || !fixedInteger(anchor.habitatScore)
+      || !positiveSafeInteger(anchor.allocatedPopulation)
+    ) return false;
+    const global = regionLocalToGlobalTile(region, anchor.localX, anchor.localY);
+    const tileKey = anchor.localY * WORLD_WIDTH + anchor.localX;
+    if (
+      anchor.globalX !== global.x
+      || anchor.globalY !== global.y
+      || anchorTiles.has(tileKey)
+    ) return false;
+    anchorIds.add(anchor.stableId);
+    anchorTiles.add(tileKey);
+    allocatedPopulation += anchor.allocatedPopulation;
+  }
+  if (allocatedPopulation !== value.populationUnits) return false;
+  candidateIds.add(value.stableId);
+  populationKeys.add(value.populationKey);
+  return true;
+}
+
+function regionalHabitatHash(value: unknown): value is string {
+  return typeof value === "string" && /^(?:[0-9a-f]{16}|[0-9a-f]{32})$/u.test(value);
+}
+
+function regionalHabitatId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 256;
+}
+
+function signedSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && !Object.is(value, -0);
+}
+
+function canonicalRegionalSuppression(
+  value: unknown,
+): CoreEcologyRegionalAdoptionSuppressionManifestV1 | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "actorSlots",
+    "adoptionTransactionId",
+    "aggregateSlots",
+    "baselineHash",
+    "sourcePatchHash",
+    "version",
+  ])) return null;
+  if (
+    value.version !== CORE_ECOLOGY_REGIONAL_ADOPTION_SUPPRESSION_VERSION
+    || typeof value.adoptionTransactionId !== "string"
+    || !LEGACY_COHORT_TRANSACTION_PATTERN.test(value.adoptionTransactionId)
+    || typeof value.sourcePatchHash !== "string"
+    || !CANONICAL_HASH_PATTERN.test(value.sourcePatchHash)
+    || !regionalHabitatHash(value.baselineHash)
+    || !Array.isArray(value.actorSlots)
+    || value.actorSlots.length > CORE_ECOLOGY_MAX_MEMBERS
+    || !Array.isArray(value.aggregateSlots)
+    || value.aggregateSlots.length > CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS
+    || value.actorSlots.length + value.aggregateSlots.length === 0
+  ) return null;
+
+  const actorSlots: CoreEcologyRegionalAdoptionActorSlotV1[] = [];
+  const actorIds = new Set<string>();
+  const baselineSlotIds = new Set<string>();
+  for (const raw of value.actorSlots) {
+    if (!plainRecord(raw) || !exactKeys(raw, [
+      "baselineActorId",
+      "baselinePopulationId",
+      "baselineUnitOffset",
+      "legacyActorId",
+      "species",
+      "suppressedBaselineUnits",
+    ])) return null;
+    if (
+      typeof raw.baselineActorId !== "string"
+      || !ACTOR_REFERENCE_PATTERN.test(raw.baselineActorId)
+      || !regionalHabitatId(raw.baselinePopulationId)
+      || !nonnegativeSafeInteger(raw.baselineUnitOffset)
+      || typeof raw.legacyActorId !== "string"
+      || !ACTOR_REFERENCE_PATTERN.test(raw.legacyActorId)
+      || raw.baselineActorId === raw.legacyActorId
+      || !isCurrentIndividualSpecies(raw.species)
+      || !positiveSafeInteger(raw.suppressedBaselineUnits)
+      || raw.baselineUnitOffset + raw.suppressedBaselineUnits > Number.MAX_SAFE_INTEGER
+      || raw.baselineActorId !== regionalSuppressionSlotId(
+        raw.baselinePopulationId,
+        raw.baselineUnitOffset,
+        raw.suppressedBaselineUnits,
+      )
+      || baselineSlotIds.has(raw.baselineActorId)
+      || actorIds.has(raw.legacyActorId)
+    ) return null;
+    baselineSlotIds.add(raw.baselineActorId);
+    actorIds.add(raw.legacyActorId);
+    actorSlots.push(Object.freeze({
+      baselineActorId: raw.baselineActorId,
+      baselinePopulationId: raw.baselinePopulationId,
+      baselineUnitOffset: raw.baselineUnitOffset,
+      legacyActorId: raw.legacyActorId,
+      species: raw.species,
+      suppressedBaselineUnits: raw.suppressedBaselineUnits,
+    }));
+  }
+  actorSlots.sort(compareRegionalSuppressionActorSlot);
+  for (let index = 1; index < actorSlots.length; index += 1) {
+    const prior = actorSlots[index - 1]!;
+    const current = actorSlots[index]!;
+    if (
+      prior.baselinePopulationId === current.baselinePopulationId
+      && current.baselineUnitOffset
+        < prior.baselineUnitOffset + prior.suppressedBaselineUnits
+    ) return null;
+  }
+
+  const aggregateSlots: CoreEcologyRegionalAdoptionAggregateSlotV1[] = [];
+  const aggregateIds = new Set<string>();
+  const aggregatePopulations = new Set<string>();
+  for (const raw of value.aggregateSlots) {
+    if (!plainRecord(raw) || !exactKeys(raw, [
+      "baselinePopulationId",
+      "legacyAggregateId",
+      "species",
+      "suppressedBaselineUnits",
+    ])) return null;
+    if (
+      !regionalHabitatId(raw.baselinePopulationId)
+      || typeof raw.legacyAggregateId !== "string"
+      || !ACTOR_REFERENCE_PATTERN.test(raw.legacyAggregateId)
+      || raw.baselinePopulationId === raw.legacyAggregateId
+      || !isCoreEcologyAggregateSpecies(raw.species)
+      || !positiveSafeInteger(raw.suppressedBaselineUnits)
+      || aggregatePopulations.has(raw.baselinePopulationId)
+      || aggregateIds.has(raw.legacyAggregateId)
+      || actorIds.has(raw.legacyAggregateId)
+    ) return null;
+    aggregatePopulations.add(raw.baselinePopulationId);
+    aggregateIds.add(raw.legacyAggregateId);
+    aggregateSlots.push(Object.freeze({
+      baselinePopulationId: raw.baselinePopulationId,
+      legacyAggregateId: raw.legacyAggregateId,
+      species: raw.species,
+      suppressedBaselineUnits: raw.suppressedBaselineUnits,
+    }));
+  }
+  aggregateSlots.sort(compareRegionalSuppressionAggregateSlot);
+
+  return deepFreeze({
+    version: CORE_ECOLOGY_REGIONAL_ADOPTION_SUPPRESSION_VERSION,
+    adoptionTransactionId: value.adoptionTransactionId,
+    sourcePatchHash: value.sourcePatchHash,
+    baselineHash: value.baselineHash,
+    actorSlots,
+    aggregateSlots,
+  });
+}
+
+function canonicalSettlementHomeLegacySuppression(
+  value: unknown,
+): CoreEcologySettlementHomeLegacySuppressionV1 | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "retirements",
+    "sourcePatchHash",
+    "version",
+  ])) return null;
+  if (
+    value.version !== 1
+    || typeof value.sourcePatchHash !== "string"
+    || !CANONICAL_HASH_PATTERN.test(value.sourcePatchHash)
+    || !Array.isArray(value.retirements)
+    || value.retirements.length === 0
+    || value.retirements.length > CORE_ECOLOGY_MAX_MORTALITY_TRANSACTIONS
+  ) return null;
+  const domestic = new Set<CoreWildlifeSpecies>(CORE_ECOLOGY_DOMESTIC_SPECIES);
+  const actorIds = new Set<string>();
+  const allocationKeys = new Set<string>();
+  const retirements: CoreEcologySettlementHomeLegacyRetirementV1[] = [];
+  for (const raw of value.retirements) {
+    if (!plainRecord(raw) || !exactKeys(raw, [
+      "legacyActorId",
+      "populationKey",
+      "populationOrdinal",
+      "representedUnitsBefore",
+      "species",
+    ])) return null;
+    const allocationKey = `${raw.species}:${raw.populationKey}:${raw.populationOrdinal}`;
+    if (
+      typeof raw.legacyActorId !== "string"
+      || !ACTOR_REFERENCE_PATTERN.test(raw.legacyActorId)
+      || !domestic.has(raw.species as CoreWildlifeSpecies)
+      || !validPatchKey(raw.populationKey)
+      || !nonnegativeSafeInteger(raw.populationOrdinal)
+      || !positiveSafeInteger(raw.representedUnitsBefore)
+      || actorIds.has(raw.legacyActorId)
+      || allocationKeys.has(allocationKey)
+    ) return null;
+    actorIds.add(raw.legacyActorId);
+    allocationKeys.add(allocationKey);
+    retirements.push(Object.freeze({
+      legacyActorId: raw.legacyActorId,
+      species: raw.species as CoreWildlifeSpecies,
+      populationKey: raw.populationKey,
+      populationOrdinal: raw.populationOrdinal,
+      representedUnitsBefore: raw.representedUnitsBefore,
+    }));
+  }
+  retirements.sort((left, right) => compareText(left.legacyActorId, right.legacyActorId));
+  return deepFreeze({
+    version: 1,
+    sourcePatchHash: value.sourcePatchHash,
+    retirements,
+  });
+}
+
+function regionalSuppressionMatchesHabitat(
+  habitat: CoreEcologyRegionalHabitat,
+  suppression: CoreEcologyRegionalAdoptionSuppressionManifestV1,
+): boolean {
+  if (suppression.baselineHash !== habitat.derivationHash) return false;
+  for (const slot of suppression.actorSlots) {
+    const population = habitat.populations.find(({ stableId }) => (
+      stableId === slot.baselinePopulationId
+    ));
+    if (
+      population === undefined
+      || population.species !== slot.species
+      || population.actorRepresentation !== "individual"
+      || slot.baselineUnitOffset + slot.suppressedBaselineUnits
+        > population.populationUnits
+    ) return false;
+  }
+  for (const slot of suppression.aggregateSlots) {
+    const population = habitat.populations.find(({ stableId }) => (
+      stableId === slot.baselinePopulationId
+    ));
+    if (
+      population === undefined
+      || population.species !== slot.species
+      || population.actorRepresentation !== "aggregate"
+      || slot.suppressedBaselineUnits > population.populationUnits
+    ) return false;
+  }
+  return true;
+}
+
+function compareRegionalSuppressionActorSlot(
+  left: CoreEcologyRegionalAdoptionActorSlotV1,
+  right: CoreEcologyRegionalAdoptionActorSlotV1,
+): number {
+  return compareText(left.baselinePopulationId, right.baselinePopulationId)
+    || left.baselineUnitOffset - right.baselineUnitOffset
+    || compareText(left.legacyActorId, right.legacyActorId);
+}
+
+function compareRegionalSuppressionAggregateSlot(
+  left: CoreEcologyRegionalAdoptionAggregateSlotV1,
+  right: CoreEcologyRegionalAdoptionAggregateSlotV1,
+): number {
+  return compareText(left.baselinePopulationId, right.baselinePopulationId)
+    || compareText(left.legacyAggregateId, right.legacyAggregateId);
+}
+
+function regionalSuppressionSlotId(
+  populationId: string,
+  startUnit: number,
+  units: number,
+): string {
+  return `regional-baseline-slot:${hashCanonical([populationId, startUnit, units])}`;
+}
+
 function canonicalAggregateDerivation(
   value: unknown,
 ): CoreEcologyAggregatePatchDerivation | null {
   if (!plainRecord(value) || typeof value.kind !== "string") return null;
+  if (value.kind === "legacy-cohort-v1") {
+    if (!exactKeys(value, [
+      "adoptionTransactionId",
+      "kind",
+      "rootSeedFingerprint",
+      "sourcePatchHash",
+    ])) return null;
+    if (
+      typeof value.adoptionTransactionId !== "string"
+      || !LEGACY_COHORT_TRANSACTION_PATTERN.test(value.adoptionTransactionId)
+      || typeof value.rootSeedFingerprint !== "string"
+      || !CANONICAL_HASH_PATTERN.test(value.rootSeedFingerprint)
+      || typeof value.sourcePatchHash !== "string"
+      || !CANONICAL_HASH_PATTERN.test(value.sourcePatchHash)
+    ) return null;
+    return Object.freeze({
+      kind: "legacy-cohort-v1",
+      adoptionTransactionId: value.adoptionTransactionId,
+      rootSeedFingerprint: value.rootSeedFingerprint,
+      sourcePatchHash: value.sourcePatchHash,
+    });
+  }
+  if (value.kind === "regional-habitat-v1") {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalRegionalHabitat(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: "regional-habitat-v1", habitat });
+  }
+  if (value.kind === "regional-habitat-v1-with-adoption-suppression") {
+    if (!exactKeys(value, ["habitat", "kind", "suppression"])) return null;
+    const habitat = canonicalRegionalHabitat(value.habitat);
+    const suppression = canonicalRegionalSuppression(value.suppression);
+    return habitat === null
+      || suppression === null
+      || !regionalSuppressionMatchesHabitat(habitat, suppression)
+      ? null
+      : Object.freeze({
+          kind: "regional-habitat-v1-with-adoption-suppression",
+          habitat,
+          suppression,
+        });
+  }
   if (
     value.kind === "habitat-v2"
     || value.kind === "legacy-fixed-v1-with-habitat-v2"
@@ -3051,6 +4063,22 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: value.kind, habitat });
   }
+  if (value.kind === "settlement-home-v1") {
+    if (!requiredAndOptionalKeys(value, ["habitat", "kind"], ["legacySuppression"])) {
+      return null;
+    }
+    const habitat = canonicalizeCoreEcologyRegionalPredatorHabitatAssemblage(value.habitat);
+    if (habitat === null) return null;
+    if (value.legacySuppression === undefined) {
+      return Object.freeze({ kind: "settlement-home-v1", habitat });
+    }
+    const legacySuppression = canonicalSettlementHomeLegacySuppression(
+      value.legacySuppression,
+    );
+    return legacySuppression === null
+      ? null
+      : Object.freeze({ kind: "settlement-home-v1", habitat, legacySuppression });
+  }
   return canonicalDerivation(value);
 }
 
@@ -3101,6 +4129,39 @@ function aggregateDerivationMatchesPopulations(
   originRegion: RegionCoord,
   mortalityTransactions: readonly CoreEcologyMortalityTransaction[],
 ): boolean {
+  // The regional owner authenticates this finite compatibility projection
+  // against the committed v24 receipt. Generic core validation owns only its
+  // bounded structural, group, mortality, and body invariants.
+  if (derivation.kind === "legacy-cohort-v1") return true;
+  if (derivation.kind === "settlement-home-v1") {
+    return settlementHomeDerivationMatchesPopulations(
+      derivation.habitat,
+      populations,
+      aggregatePopulations,
+      originRegion,
+      mortalityTransactions,
+      derivation.legacySuppression ?? null,
+    );
+  }
+  if (derivation.kind === "regional-habitat-v1") {
+    return regionalDerivationMatchesPopulations(
+      derivation.habitat,
+      populations,
+      aggregatePopulations,
+      originRegion,
+      mortalityTransactions,
+    );
+  }
+  if (derivation.kind === "regional-habitat-v1-with-adoption-suppression") {
+    return regionalDerivationMatchesPopulations(
+      derivation.habitat,
+      populations,
+      aggregatePopulations,
+      originRegion,
+      mortalityTransactions,
+      derivation.suppression,
+    );
+  }
   const isHarborEdgeDerivation = derivation.kind === "habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2";
   const isMarshEdgeDerivation = derivation.kind === "habitat-v3"
@@ -3279,6 +4340,301 @@ function aggregateDerivationMatchesPopulations(
     && (preservesLegacyRoster
       ? [...individualsByKey.values()].every(({ species }) => isWaveAIndividualSpecies(species))
       : individualsByKey.size === 0);
+}
+
+function settlementHomeDerivationMatchesPopulations(
+  habitat: CoreEcologyRegionalPredatorHabitatAssemblage,
+  populations: readonly CoreEcologyPopulationState[],
+  aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
+  originRegion: RegionCoord,
+  mortalityTransactions: readonly CoreEcologyMortalityTransaction[],
+  legacySuppression: CoreEcologySettlementHomeLegacySuppressionV1 | null,
+): boolean {
+  if (
+    habitat.originRegion.x !== originRegion.x
+    || habitat.originRegion.y !== originRegion.y
+    || (legacySuppression !== null && mortalityTransactions.length !== 0)
+  ) return false;
+  const domesticSpecies = new Set<CoreWildlifeSpecies>(CORE_ECOLOGY_DOMESTIC_SPECIES);
+  const expectedIndividuals = habitat.populations.filter((analysis) => (
+    domesticSpecies.has(analysis.species)
+    && analysis.representation === "individual-representatives"
+    && analysis.populationUnits > 0
+  ));
+  const expectedRat = habitat.populations.find((analysis) => (
+    analysis.species === "brown-rat"
+    && (
+      analysis.representation === "aggregate-area"
+      || analysis.representation === "group-actor"
+    )
+    && analysis.populationUnits > 0
+  ));
+  if (expectedRat === undefined) return false;
+
+  const individualsByKey = new Map<string, CoreEcologyPopulationState>(populations.map((population) => [
+    `${population.species}:${population.populationKey}`,
+    population,
+  ] as const));
+  const mortalityByKey = new Map<string, CoreEcologyMortalityTransaction[]>();
+  for (const transaction of mortalityTransactions) {
+    const actor = transaction.retiredActor;
+    if (!domesticSpecies.has(actor.identity.species)) return false;
+    const key = `${actor.identity.species}:${actor.identity.populationKey}`;
+    const entries = mortalityByKey.get(key) ?? [];
+    entries.push(transaction);
+    mortalityByKey.set(key, entries);
+  }
+  const suppressedByKey = new Map<string, CoreEcologySettlementHomeLegacyRetirementV1[]>();
+  for (const retirement of legacySuppression?.retirements ?? []) {
+    const key = `${retirement.species}:${retirement.populationKey}`;
+    const entries = suppressedByKey.get(key) ?? [];
+    entries.push(retirement);
+    suppressedByKey.set(key, entries);
+  }
+  for (const analysis of expectedIndividuals) {
+    const key = `${analysis.species}:${analysis.populationKey}`;
+    const population = individualsByKey.get(key);
+    const retired = mortalityByKey.get(key) ?? [];
+    const suppressed = suppressedByKey.get(key) ?? [];
+    const expectedBaselinePopulation = analysis.populationUnits - suppressed.length;
+    const allocations = new Map(analysis.allocations.map((allocation) => [
+      allocation.allocationOrdinal,
+      allocation,
+    ] as const));
+    let expectedReserveUnits = 0;
+    for (const retirement of suppressed) {
+      const allocation = allocations.get(retirement.populationOrdinal);
+      if (
+        allocation === undefined
+        || retirement.representedUnitsBefore !== allocation.representedUnits
+      ) return false;
+      expectedReserveUnits += retirement.representedUnitsBefore - 1;
+      allocations.delete(retirement.populationOrdinal);
+    }
+    if (expectedBaselinePopulation === 0) {
+      if (population !== undefined || retired.length !== 0 || allocations.size !== 0) return false;
+      suppressedByKey.delete(key);
+      continue;
+    }
+    if (
+      population === undefined
+      || population.baselinePopulationSize !== expectedBaselinePopulation
+      || population.reserveUnits !== expectedReserveUnits
+      || population.members.length + retired.length !== allocations.size
+    ) return false;
+    for (const member of population.members) {
+      const allocation = allocations.get(member.populationOrdinal);
+      if (
+        allocation === undefined
+        || member.representedUnits !== allocation.representedUnits
+      ) return false;
+      allocations.delete(member.populationOrdinal);
+    }
+    for (const transaction of retired) {
+      const ordinal = transaction.retiredActor.identity.populationOrdinal;
+      const allocation = allocations.get(ordinal);
+      if (
+        allocation === undefined
+        || transaction.representedUnitsBefore !== allocation.representedUnits
+      ) return false;
+      allocations.delete(ordinal);
+    }
+    if (allocations.size !== 0) return false;
+    individualsByKey.delete(key);
+    mortalityByKey.delete(key);
+    suppressedByKey.delete(key);
+  }
+  if (
+    individualsByKey.size !== 0
+    || mortalityByKey.size !== 0
+    || suppressedByKey.size !== 0
+  ) return false;
+  if (aggregatePopulations.length !== 1) return false;
+  const rat = aggregatePopulations[0];
+  const policy = coreEcologyAggregateSpeciesPolicy("brown-rat");
+  if (
+    rat === undefined
+    || rat.species !== "brown-rat"
+    || rat.populationKey !== expectedRat.populationKey
+    || rat.representation !== expectedRat.representation
+    || rat.representation !== policy.representation
+    || rat.populationSize !== expectedRat.populationUnits
+    || rat.habitatCapacity !== expectedRat.habitatCapacity
+    || rat.populationPressure !== expectedRat.populationPressure
+    || rat.trend !== expectedRat.trend
+    || rat.trendSignal !== expectedRat.trendSignal
+    || rat.anchors.length !== expectedRat.allocations.length
+  ) return false;
+  for (let index = 0; index < expectedRat.allocations.length; index += 1) {
+    const allocation = expectedRat.allocations[index];
+    const anchor = rat.anchors[index];
+    if (
+      allocation === undefined
+      || anchor === undefined
+      || anchor.anchorOrdinal !== allocation.allocationOrdinal
+      || !sameWorldPosition(anchor.position, allocation.position)
+      || anchor.radiusUnits !== WORLD_POSITION_UNITS_PER_TILE * policy.anchorRadiusTiles
+      || (rat.revision === 0 && anchor.populationUnits !== allocation.representedUnits)
+    ) return false;
+  }
+  return true;
+}
+
+function regionalDerivationMatchesPopulations(
+  habitat: CoreEcologyRegionalHabitat,
+  populations: readonly CoreEcologyPopulationState[],
+  aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
+  originRegion: RegionCoord,
+  mortalityTransactions: readonly CoreEcologyMortalityTransaction[],
+  suppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null = null,
+): boolean {
+  if (
+    habitat.region.x !== originRegion.x
+    || habitat.region.y !== originRegion.y
+  ) return false;
+  const individualsByKey = new Map<string, CoreEcologyPopulationState>(populations.map((population) => [
+    `${population.species}:${population.populationKey}`,
+    population,
+  ] as const));
+  const aggregatesByKey = new Map<string, CoreEcologyAggregatePopulationState>(
+    aggregatePopulations.map((population) => [
+      `${population.species}:${population.populationKey}`,
+      population,
+    ] as const),
+  );
+  const mortalityByKey = new Map<string, CoreEcologyMortalityTransaction[]>();
+  for (const transaction of mortalityTransactions) {
+    const actor = transaction.retiredActor;
+    const key = `${actor.identity.species}:${actor.identity.populationKey}`;
+    const values = mortalityByKey.get(key) ?? [];
+    values.push(transaction);
+    mortalityByKey.set(key, values);
+  }
+  for (const candidate of habitat.populations) {
+    const key = `${candidate.species}:${candidate.populationKey}`;
+    if (isCoreEcologyAggregateSpecies(candidate.species)) {
+      const suppressedUnits = suppression?.aggregateSlots.find(({ baselinePopulationId }) => (
+        baselinePopulationId === candidate.stableId
+      ))?.suppressedBaselineUnits ?? 0;
+      const expectedPopulationUnits = candidate.populationUnits - suppressedUnits;
+      const population = aggregatesByKey.get(key);
+      if (expectedPopulationUnits === 0) {
+        if (population !== undefined) return false;
+        continue;
+      }
+      const policy = coreEcologyAggregateSpeciesPolicy(candidate.species);
+      let remainingSuppression = suppressedUnits;
+      const expectedAnchors = candidate.anchors.flatMap((anchor) => {
+        const removed = Math.min(anchor.allocatedPopulation, remainingSuppression);
+        remainingSuppression -= removed;
+        return anchor.allocatedPopulation === removed
+          ? []
+          : [Object.freeze({
+              anchor,
+              populationUnits: anchor.allocatedPopulation - removed,
+            })];
+      });
+      if (
+        population === undefined
+        || population.representation !== policy.representation
+        || population.populationSize !== expectedPopulationUnits
+        || population.habitatCapacity !== candidate.habitatCapacity
+        || population.populationPressure
+          !== ratioFixed(expectedPopulationUnits, candidate.habitatCapacity)
+        || population.trend !== "stable"
+        || population.trendSignal !== 0
+        || population.anchors.length !== expectedAnchors.length
+      ) return false;
+      for (let index = 0; index < expectedAnchors.length; index += 1) {
+        const expected = expectedAnchors[index];
+        const actual = population.anchors[index];
+        if (
+          expected === undefined
+          || actual === undefined
+          || actual.anchorOrdinal !== index
+          || !sameWorldPosition(
+            actual.position,
+            regionalAnchorPosition(habitat.region, expected.anchor),
+          )
+          || actual.radiusUnits !== WORLD_POSITION_UNITS_PER_TILE * policy.anchorRadiusTiles
+          || (population.revision === 0
+            && actual.populationUnits !== expected.populationUnits)
+        ) return false;
+      }
+      if (remainingSuppression !== 0) return false;
+      aggregatesByKey.delete(key);
+      continue;
+    }
+    const expectedAllocations = regionalIndividualAllocationsAfterSuppression(
+      candidate,
+      suppression,
+    );
+    const expectedPopulationUnits = [...expectedAllocations.values()].reduce(
+      (sum, units) => sum + units,
+      0,
+    );
+    const population = individualsByKey.get(key);
+    const retired = mortalityByKey.get(key) ?? [];
+    if (expectedPopulationUnits === 0) {
+      if (population !== undefined || retired.length !== 0) return false;
+      continue;
+    }
+    if (
+      population === undefined
+      || population.baselinePopulationSize !== expectedPopulationUnits
+      || population.members.length + retired.length !== expectedAllocations.size
+    ) return false;
+    const allocations = new Map(expectedAllocations);
+    for (const member of population.members) {
+      const representedUnits = allocations.get(member.populationOrdinal);
+      if (representedUnits === undefined || member.representedUnits !== representedUnits) {
+        return false;
+      }
+      allocations.delete(member.populationOrdinal);
+    }
+    for (const transaction of retired) {
+      const ordinal = transaction.retiredActor.identity.populationOrdinal;
+      const representedUnits = allocations.get(ordinal);
+      if (
+        representedUnits === undefined
+        || transaction.representedUnitsBefore !== representedUnits
+      ) return false;
+      allocations.delete(ordinal);
+    }
+    if (allocations.size !== 0) return false;
+    individualsByKey.delete(key);
+    mortalityByKey.delete(key);
+  }
+  return mortalityByKey.size === 0
+    && individualsByKey.size === 0
+    && aggregatesByKey.size === 0;
+}
+
+function regionalIndividualAllocationsAfterSuppression(
+  candidate: CoreEcologyRegionalPopulationCandidate,
+  suppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null,
+): ReadonlyMap<number, number> {
+  const slots = suppression?.actorSlots.filter(({ baselinePopulationId }) => (
+    baselinePopulationId === candidate.stableId
+  )) ?? [];
+  const allocations = new Map<number, number>();
+  let anchorStart = 0;
+  for (let ordinal = 0; ordinal < candidate.anchors.length; ordinal += 1) {
+    const anchor = candidate.anchors[ordinal]!;
+    const anchorEnd = anchorStart + anchor.allocatedPopulation;
+    let removed = 0;
+    for (const slot of slots) {
+      const slotEnd = slot.baselineUnitOffset + slot.suppressedBaselineUnits;
+      removed += Math.max(
+        0,
+        Math.min(anchorEnd, slotEnd) - Math.max(anchorStart, slot.baselineUnitOffset),
+      );
+    }
+    const remaining = anchor.allocatedPopulation - removed;
+    if (remaining > 0) allocations.set(ordinal, remaining);
+    anchorStart = anchorEnd;
+  }
+  return allocations;
 }
 
 function groupsBelongToPatch(
@@ -3501,10 +4857,22 @@ function playerAbsentGroupDisturbances(
     candidate.species === group.identity.species
     && candidate.populationKey === group.identity.populationKey
   ));
+  const regional = isRegionalHabitatPopulation(analysis);
+  const allocations = regional
+    ? analysis.anchors.map((anchor, allocationOrdinal) => ({
+        allocationOrdinal,
+        position: regionalAnchorPosition(patch.originRegion, anchor),
+      }))
+    : analysis?.allocations;
+  const populationPressure = regional
+    ? ratioFixed(analysis.populationUnits, analysis.habitatCapacity)
+    : analysis?.populationPressure;
   if (
     analysis === undefined
-    || analysis.allocations.length < 2
-    || analysis.populationPressure < 450_000
+    || allocations === undefined
+    || allocations.length < 2
+    || populationPressure === undefined
+    || populationPressure < 450_000
   ) return Object.freeze([]);
   const cadenceOrdinal = Math.trunc(atTick / CORE_ECOLOGY_GROUP_COARSE_CADENCE_TICKS);
   const phase = Number.parseInt(hashCanonical([
@@ -3512,19 +4880,19 @@ function playerAbsentGroupDisturbances(
     "player-absent-population-pressure",
   ]).slice(0, 8), 16) % 8;
   if (cadenceOrdinal % 8 !== phase) return Object.freeze([]);
-  const start = cadenceOrdinal % analysis.allocations.length;
-  const first = analysis.allocations[start];
-  const second = analysis.allocations[(start + 1) % analysis.allocations.length];
+  const start = cadenceOrdinal % allocations.length;
+  const first = allocations[start];
+  const second = allocations[(start + 1) % allocations.length];
   if (first === undefined || second === undefined) return Object.freeze([]);
   const pressure = Math.min(
     1_000_000,
-    450_000 + Math.trunc(analysis.populationPressure / 2),
+    450_000 + Math.trunc(populationPressure / 2),
   );
   return Object.freeze([Object.freeze({
     disturbanceId: `population-pressure:${hashCanonical([
       group.identity.stableId,
       atTick,
-      analysis.populationPressure,
+      populationPressure,
     ])}`,
     atTick,
     causeKind: "habitat-pressure" as const,

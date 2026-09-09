@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { deserializeWorld, serializeWorld } from "../sim/public";
+import { createWorldView, deserializeWorld, serializeWorld } from "../sim/public";
 import {
   createRegionCoord,
+  regionKey,
   regionLocalToGlobalTile,
 } from "../sim/regions";
 import type { RootSeed } from "../sim/rng";
@@ -35,6 +36,20 @@ import {
   shiftedRegionalFrameOrigin,
   type RegionalTerrainWindow,
 } from "./regionalTravel";
+import {
+  putRegionalEcologyResidentDeviation,
+} from "./regionalEcology";
+import {
+  deserializeRegionalEcologyState,
+  regionalEcologyRegionalResidentsForActiveRegions,
+  replaceRegionalEcologyActiveState,
+  serializeRegionalEcologyState,
+  type RegionalEcologyActiveResidentInput,
+} from "./regionalEcologyState";
+import {
+  createRegionalWorldView,
+  regionalStorageRegionsInView,
+} from "./regionalWorldView";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { PorterResponseState } from "./porterResponse";
 import type { GameSessionState } from "./sessionTypes";
@@ -52,7 +67,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 24;
+  readonly version: 25;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -63,7 +78,7 @@ interface CurrentGameSaveEnvelope {
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: unknown;
   readonly bio0Ecology: string;
-  readonly coreEcology: string;
+  readonly regionalEcology: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
   readonly settlementWorkingAnimals: string;
@@ -148,10 +163,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 24
-    || record.payloadVersion !== 24
+    || envelope.version !== 25
+    || record.payloadVersion !== 25
   ) {
-    throw new Error("fixture did not produce a current v24 regional session save");
+    throw new Error("fixture did not produce a current v25 regional session save");
   }
   return envelope;
 }
@@ -172,7 +187,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 24,
+    payloadVersion: 25,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -267,6 +282,60 @@ function moveFixtureFrameToCompatibilityTile(
   throw new Error("fixture could not align its frame with the ridge");
 }
 
+function rebaseFixtureRegionalEcology(
+  serialized: string,
+  rootSeed: RootSeed,
+  spatial: ReturnType<typeof createWorldView>,
+): string {
+  const prior = deserializeRegionalEcologyState(serialized);
+  if (prior === null) throw new Error("fixture started with invalid regional ecology");
+  const activeRegions = regionalStorageRegionsInView(spatial);
+  const desiredRegionKeys = new Set(activeRegions.map(regionKey));
+  let root = prior.root;
+  for (const resident of prior.activeResidents) {
+    if (
+      resident.kind !== "regional-habitat"
+      || desiredRegionKeys.has(regionKey(resident.region))
+    ) continue;
+    root = putRegionalEcologyResidentDeviation(root, {
+      rootSeed,
+      patch: resident.patch,
+    });
+  }
+  const entrants = regionalEcologyRegionalResidentsForActiveRegions(
+    root,
+    rootSeed,
+    activeRegions,
+  );
+  if (entrants === null) throw new Error("fixture could not derive regional ecology entrants");
+  const retainedBySource = new Map(prior.activeResidents
+    .filter(({ kind }) => kind === "regional-habitat")
+    .map((resident) => [resident.sourceKey, resident] as const));
+  const activeResidents: RegionalEcologyActiveResidentInput[] = entrants.map((entrant) => ({
+    kind: "regional-habitat" as const,
+    sourceKey: entrant.sourceKey,
+    patch: retainedBySource.get(entrant.sourceKey)?.patch ?? entrant.patch,
+  }));
+  for (const legacy of prior.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+    activeResidents.push({
+      kind: "legacy-cohort",
+      sourceKey: legacy.sourceKey,
+      patch: legacy.patch,
+    });
+  }
+  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
+    expectedIntegrity: prior.integrity,
+    rootSeed,
+    root,
+    settlementHome: {
+      sourceKey: prior.settlementHome.sourceKey,
+      patch: prior.settlementHome.patch,
+    },
+    activeRegions,
+    activeResidents,
+  }));
+}
+
 function relocateToRidgeAtZeroStability(
   envelope: CurrentGameSaveEnvelope,
 ): { readonly envelope: CurrentGameSaveEnvelope; readonly corner: RidgeCorner } {
@@ -355,6 +424,14 @@ function relocateToRidgeAtZeroStability(
   if (!restorePlayerRegionalTravel(world.meta.rootSeed, player, regionalTravelText)) {
     throw new Error("relocated fixture did not produce a coherent regional-travel sidecar");
   }
+  const spatial = createRegionalWorldView(
+    createWorldView(world),
+    alignedTravel.window,
+    {
+      discovered: player.discovered,
+      depthSoundings: player.depthSoundings,
+    },
+  );
   return {
     envelope: {
       ...envelope,
@@ -362,6 +439,11 @@ function relocateToRidgeAtZeroStability(
       player,
       regionalTravel: regionalTravelText,
       promiseJourney,
+      regionalEcology: rebaseFixtureRegionalEcology(
+        envelope.regionalEcology,
+        world.meta.rootSeed,
+        spatial,
+      ),
       traversalFeedback: {
         ...envelope.traversalFeedback,
         nextTraversalOrdinal: 0,
@@ -520,7 +602,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 24,
+      version: 25,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
