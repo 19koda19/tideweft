@@ -277,6 +277,83 @@ Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. A cache-bypassed live comparison
 matched all five production files byte-for-byte.
 
+### Alpha33 source candidate: sparse Alpine sibling
+
+`0.3.3-alpha.33 — Talus and Sky` is an unreleased **SOURCE_CANDIDATE**. The
+source catalog becomes an append-only twenty-seven-record contract: the
+complete twenty-four-record Alpha32 sequence is a frozen prefix, followed by
+mountain goat, American pika, and golden eagle. The three additions do not
+enter or regenerate habitat 11. `src/game/coreEcologyAlpineHabitat.ts` owns a
+separate version-1 sparse Alpine derivation bound to root seed, canonical
+signed region, floor-correct territory identity, canonical terrain, ridge and
+elevation quality, baseline climate, food or prey support, and density. Empty
+Alpine regions are authoritative. Negative and extreme coordinates use the
+same derivation and validation path.
+
+Representation remains a policy decision rather than a species shortcut.
+Mountain goats are persistent addressable individual actors inside an atomic
+`HERD`; American pikas are a conserved non-addressable aggregate over bounded
+talus anchors; and a golden eagle is a solitary addressable actor. Pika
+haypiles, talus signs, and activity are evidence projections, never decorative
+pika bodies or an exact target. The shared locomotion surface gains optional
+directed edge-grade authority. Only mountain goat opts in for this slice, so
+ascent/descent thresholds and costs compose with ordinary terrain and intent
+while every frozen-prefix species retains its Alpha32 surface shape and cost.
+
+Golden-eagle activity reuses the generic activity owner through the
+`ridge-soar-perch` affordance. A world-bound projector authenticates the Alpine
+resident patch, immutable habitat allocation, canonical terrain hash, home
+ridge, and bounded ridge candidates before it can mint transient perch and
+soar-loop custody. The renderer does not author flight. Chart and Relief
+consume the resulting `perched`, `resting`, or `ridge-soaring-flight` signal;
+Relief raises the form, flaps it, and banks it as presentation. There is no
+authoritative continuous 3D body trajectory or flight-physics claim.
+
+The only new ecological response is representation-aware and nonlethal. The
+existing aggregate-perception adapter accepts a golden eagle only as a current
+lawful visual source. Existing terrain line-of-sight and occlusion derive any
+pressure on an occupied American-pika anchor. The shared role/capability policy
+then permits bounded quiet, suppress, or redistribute output while preserving
+the aggregate population equation. Co-presence, hidden state, or an occluding
+ridge conveys nothing. The transaction creates no exact pika target, capture,
+injury, death, body, or private knowledge.
+
+`src/game/regionalEcologyStateV2.ts` is the composite authority. It retains the
+exact canonical `RegionalEcologyStateV1` as `base`, adds one append-only sparse
+Alpine root and bounded Alpine hot snapshots, and uses the base active-region
+window rather than creating a second camera-owned neighborhood. Projection
+submits both children to one stable-distance group-atomic top-K with the
+unchanged 24-addressable-actor ceiling. Every selected actor must appear in
+the staged output; a whole group is admitted or left coarse. Commit validates
+both children and applies their results atomically, so failure cannot advance
+one ecology layer alone. A materialized Alpine actor cannot disappear through
+a non-authoritative projection; no new Alpine mortality path exists.
+
+Outer save 26 writes this version-2 composite. Fresh v26 worlds wrap a freshly
+derived exact version-1 base without an adoption fiction. A normalized v25
+envelope is authenticated first, then one deterministic receipt binds its
+outer integrity, child integrity, frozen lineage, clock, and newly derived
+Alpine root before the wrapper commits. Reload and interruption cannot reroll
+the adoption or rewrite legacy actors, populations, groups, mortality, bodies,
+items, cargo, Promises, or other cross-root facts.
+
+Performance caches are bounded and non-authoritative. Alpine habitat caches at
+most 128 immutable results by seed and region; ridge activity caches at most 64
+authenticated authorities by habitat derivation, patch, and actor. A caller-
+supplied terrain payload is always authenticated even on a cache hit, and
+cache contents are neither serialized nor allowed to change canonical hashes.
+The source-candidate audit measured six cold regional habitats in about 889 ms,
+six cold Alpine habitats in about 273 ms, and 22 repeated habitat requests
+collapsing to six derivation misses. Repeated warm runtime projection measured
+near 151 ms after a roughly 2.47 s cold start; these are local diagnostic
+witnesses, not universal device guarantees or live release evidence.
+
+This first Alpine unit deliberately adds no new mortality, live-prey capture,
+exact pika actor or target, reproduction, audible Living Voice, tactical
+combat, polar breadth, worldwide ecology, Wave-F completion, or exhaustive
+species-pair test matrix. Alpha32 remains the current **LIVE_VERIFIED** release
+until the candidate passes the complete release and exact deployment gates.
+
 ## Bounded habitat-derived core-wildlife assemblage
 
 Release `0.3.3-alpha.31 — High Country Shadows` is **LIVE_VERIFIED** and extends the
@@ -343,7 +420,7 @@ porter reactions to a lawfully perceived `large-predator`. Tactical pack combat,
 ecological migration, worldwide ecology, and the rest of Wave E are outside
 this release.
 
-`src/sim/coreWildlifeIdentity.ts` owns generation-v1 profiles for deer, gull, black bear, brown rat, domestic cat, domestic chicken, domestic goat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear. Persistent individual identity applies to deer, gulls, bears, cats, chickens, goats, rabbits, foxes, fish crows, northern harriers, snowy egrets, American black ducks, river otters, wild boars, elk, gray wolves, cougars, and brown bears; brown-rat, southern-leopard-frog, silverside, and fiddler-crab metadata explicitly select aggregate representation, so none can pass through the individual actor constructor. Individual identity derives from the root seed, signed origin region, semantic population key, population ordinal, species, and generation version—not array order or camera entry. Profiles supply bounded ecological roles, food affinities, behavior thresholds, morphs, temperament pairs, and individual trait ranges where those concepts apply. Domestic chickens declare domestic-livestock, omnivore, forager, prey, small-prey, and alarm-source roles; domestic goats declare domestic-livestock, herbivore, forager, prey, and alarm-source roles. Neither receives attack, capture, mortality, reproduction, schedule behavior, or unsupported foliage consumption. Current outcomes remain bounded to lawful observation, nonlethal pressure/avoidance, movement, group alarm, authenticated physical-resource claims, or the separately gated exact fox/gray-wolf/cougar-to-solitary-rabbit mortality/body transaction. `src/game/livingSpeciesRegistry.ts` is the lean runtime roster for twenty-four current source records: the nineteen Alpha-29 records plus wild boar, elk, gray wolf, cougar, and brown bear. It owns representation and addressability as well as presentation, locomotion, ABOUT nouns, and relative senses. `src/game/livingSpeciesCatalog.ts` gives the same exact roster a strict versioned contract without treating any aggregate population as an actor. Every core-wildlife module declares every broad interaction target class in canonical order as either supported or an intentional no-response; an omitted row cannot acquire fallback behavior. Roster drift, an addressable aggregate, or a missing required sense or interaction contract fails closed. The catalog contains only released species and does not imply absent health, broad death, full circadian behavior, ecological migration/reproduction, foliage-consumption, or worldwide species breadth.
+`src/sim/coreWildlifeIdentity.ts` owns generation-v1 profiles for deer, gull, black bear, brown rat, domestic cat, domestic chicken, domestic goat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear. Persistent individual identity applies to deer, gulls, bears, cats, chickens, goats, rabbits, foxes, fish crows, northern harriers, snowy egrets, American black ducks, river otters, wild boars, elk, gray wolves, cougars, and brown bears; brown-rat, southern-leopard-frog, silverside, and fiddler-crab metadata explicitly select aggregate representation, so none can pass through the individual actor constructor. Individual identity derives from the root seed, signed origin region, semantic population key, population ordinal, species, and generation version—not array order or camera entry. Profiles supply bounded ecological roles, food affinities, behavior thresholds, morphs, temperament pairs, and individual trait ranges where those concepts apply. Domestic chickens declare domestic-livestock, omnivore, forager, prey, small-prey, and alarm-source roles; domestic goats declare domestic-livestock, herbivore, forager, prey, and alarm-source roles. Neither receives attack, capture, mortality, reproduction, schedule behavior, or unsupported foliage consumption. Current outcomes remain bounded to lawful observation, nonlethal pressure/avoidance, movement, group alarm, authenticated physical-resource claims, or the separately gated exact fox/gray-wolf/cougar-to-solitary-rabbit mortality/body transaction. `src/game/livingSpeciesRegistry.ts` preserves that twenty-four-record Alpha-32 roster as the frozen prefix before the three append-only Alpha-33 Alpine records. It owns representation and addressability as well as presentation, locomotion, ABOUT nouns, and relative senses. `src/game/livingSpeciesCatalog.ts` gives the same exact roster a strict versioned contract without treating any aggregate population as an actor. Every core-wildlife module declares every broad interaction target class in canonical order as either supported or an intentional no-response; an omitted row cannot acquire fallback behavior. Roster drift, an addressable aggregate, or a missing required sense or interaction contract fails closed. The catalog contains only the frozen released prefix plus the bounded implemented Alpha-33 source-candidate additions and does not imply absent health, broad death, full circadian behavior, ecological migration/reproduction, foliage consumption, or worldwide species breadth.
 
 `src/game/livingSpeciesReleaseGate.ts` authenticates build-owned evidence for that exact roster against 30 stable completeness criteria. A structurally valid caller claim cannot mark itself ready, absent behavior cannot smuggle an evidence owner, and biologically inapplicable criteria require narrow ecological proof. The rat and cat records may claim only the connected Settlement Shadows owners; the rabbit and fox records retain their bounded Alpha-16 owners; and the crow, harrier, frog, egret, duck, otter, chicken, goat, boar, elk, wolf, cougar, and brown-bear records may claim only their actual habitat, policy, activity, perception, movement, aggregate, custody, materialization, presentation, persistence, mobile, performance, and representative-scenario owners. Separate bounded reports authenticate Wave B, the Tide Table, the Alpha-20 duck, Alpha-21 otter, Alpha-22 convergence, Alpha-24 domestic-chicken unit, Alpha-25 shared-livestock unit, Alpha-30 regional-upland unit, and Alpha-31 predator/scavenger append without promoting those scopes to worldwide ecology. The Alpha-31 witness covers exact Alpha-30 preservation, one unchanged signed remote source, two appended solitary habitat-population records with capacity-gated actors, lawful perception and shared locomotion, an exact cougar-to-solitary-rabbit mortality path, finite cougar/brown-bear scavenging and guarding, save migration, knowledge-honest presentation, executable shared-invariant coverage, bounded performance, and explicit exclusions. It cannot authorize species-specific dog-directed behavior, audible upland calls, tactical combat, group-member harm, brown-bear live-prey contact, broader animal harm, reproduction, ecological migration, worldwide populations, the full food web, full Wave E, or broader biodiversity completion; ordinary lawful large-predator perception remains shared. Immutable build-owned publication fields remain false because a bundle cannot attest its own post-deployment byte identity. Signed coordinate/frame continuity remains distinct from unsupported ecological cross-region migration. Shared invariants, deterministic properties, conservation, bounded fuzzing, and representative scenarios exercise the architecture without a species-by-species or quadratic animal-pair matrix. Same-species breadth, broad food-web turnover, complete multisensory coverage, broader health/death, worldwide ecology, foliage consumption, and full circadian life stay blocked where absent. This is a fail-closed development boundary, not a player statistic or a claim that one regional assemblage implements the eventual catalog.
 
@@ -624,6 +701,21 @@ migrated identities, bodies, claims, and transaction receipts. Reload,
 interruption, source permutation, and signed/extreme coordinates cannot reroll
 either baseline or disposition.
 
+The Alpha33 Talus and Sky source candidate advances the outer session to
+version 26 and wraps that exact regional-ecology-v1 authority in
+`RegionalEcologyStateV2`. The composite adds a version-1 sparse Alpine root and
+bounded hot snapshots without changing habitat 11, core patch 3, aggregate
+record 5, or any byte of the canonical child. It appends the three Alpine
+catalog records only after the frozen twenty-four-record prefix. A sealed v25
+envelope is authenticated before one exact adoption receipt binds the source
+outer integrity, source child integrity and hash, frozen lineage hash, clock,
+and result Alpine-root integrity. Fresh v26 state has no adoption receipt.
+Projection and commit are cross-layer atomic and retain the one global
+group-atomic 24-actor ceiling. Reload, region unload, interruption, and
+signed/extreme coordinates cannot duplicate or reroll an Alpine population,
+goat herd, eagle actor/activity, pika aggregate/evidence, or the preserved v25
+world. This is source-candidate architecture, not a live-release claim.
+
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
 
 The browser repository is local-first: it prefers IndexedDB and mirrors into localStorage. A compact local version fence stores the newest era/generation/timestamp/tick tuple and full-record fingerprint. Cross-store reads reconcile only after both configured stores are readable: known fence rollback produces `NewerSaveUnavailableError`, equal-version differing records produce `ConflictingSaveCopiesError`, and any partial or total read failure remains an unknown-authority error rather than trusting a plausible survivor. Record writes reject older or equal-version-different snapshots with `StaleSaveWriteError`. Overlapping runtime save requests coalesce to the newest complete snapshot behind the in-flight write, and only success for the latest requested sequence in the active era/generation clears persistent failure UI.
@@ -642,7 +734,17 @@ the same body ID, world position, species-clarity boundary, and depleted/remains
 state. Neither renderer owns body state or may
 infer an attacker, cause, claimant, resource count, or offscreen event.
 
-Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries the 120 × 120 frame's exact global tile origin alongside each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean, the shared surface-current direction, projected roughness, derived per-tile biome/climate views, and knowledge-safe human, dog, individual-wildlife, and aggregate-evidence cues. Chart 2D keeps color-independent terrain/biome motifs and draws bounded streamlines plus foam over perceived water, adding arrowheads only while SOUND / SCAN is active. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and biome-aware material references, resets persistent emissive state before every ground batch, draws the same flow vocabulary over live water, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active. Both renderers give domestic cats, domestic chickens, marsh rabbits, marsh foxes, fish crows, northern harriers, snowy egrets, American black ducks, North American river otters, wild boars, elk, and gray wolves distinct color-independent individual forms. A directly visible chicken uses one compact body, beak, comb, legs, and current heading; visible flock size is coarse context on the selected representative, never decorative clones or a hidden census. Touch hit targets and reduced-motion presentation retain the same knowledge. Brown-rat and frog-area signs, silverside surface dimples or glints, and fiddler-crab burrows or feeding scrapes use aggregate evidence forms; cat/rabbit/fox/wolf tracks remain individual evidence, while chickens, crows, harriers, egrets, ducks, and otters produce no ground track in this release. Wildlife visuals, labels, generous hit targets, and ABOUT remain gated through the same direct-detail projection. Actor sensing remains simulation-owned and unchanged by renderer choice, camera orbit, reduced-motion presentation, pointer type, or compact layout.
+Both renderers consume the same `TideweftView` and emit the same typed `RendererCommand`; neither owns simulation state. The projection carries the 120 × 120 frame's exact global tile origin alongside each selected Harp's canonical ID/label, fixed R/A/W knot tuple, three edges, center, and player-active boolean, the shared surface-current direction, projected roughness, derived per-tile biome/climate views, and knowledge-safe human, dog, individual-wildlife, and aggregate-evidence cues. Chart 2D keeps color-independent terrain/biome motifs and draws bounded streamlines plus foam over perceived water, adding arrowheads only while SOUND / SCAN is active. Relief 3D consumes `buildTerrainMesh()` chunks with seam-safe normals and biome-aware material references, resets persistent emissive state before every ground batch, draws the same flow vocabulary over live water, and projects pointer rays back onto the height field for selection and movement. Its Harps raise three cords from their knot objects to a suspended faceted bell, with stable cord beads and a crown when active. Both renderers give domestic cats, domestic chickens, domestic goats, marsh rabbits, marsh foxes, fish crows, northern harriers, snowy egrets, American black ducks, North American river otters, wild boars, elk, gray wolves, cougars, and brown bears distinct color-independent individual forms. A directly visible chicken uses one compact body, beak, comb, legs, and current heading; visible flock size is coarse context on the selected representative, never decorative clones or a hidden census. Touch hit targets and reduced-motion presentation retain the same knowledge. Brown-rat and frog-area signs, silverside surface dimples or glints, and fiddler-crab burrows or feeding scrapes use aggregate evidence forms; cat/rabbit/fox/wolf tracks remain individual evidence, while chickens, crows, harriers, egrets, ducks, otters, cougars, and brown bears produce no ground track in the live release. Wildlife visuals, labels, generous hit targets, and ABOUT remain gated through the same direct-detail projection. Actor sensing remains simulation-owned and unchanged by renderer choice, camera orbit, reduced-motion presentation, pointer type, or compact layout.
+
+The Alpha33 source candidate extends this same projection contract with
+mountain-goat and golden-eagle individual forms plus American-pika haypile and
+talus evidence. Selection identity and ABOUT remain bound to the same lawful
+detail field; the aggregate never becomes a clickable hidden pika. An
+authenticated ridge-soaring eagle is lifted above the sampled terrain and may
+flap or bank, while a perched/resting eagle settles at its ridge anchor.
+Reduced motion can suppress that decorative movement without changing the
+activity fact. These are visual consequences of state-based activity, not an
+authoritative continuously simulated 3D flight body.
 
 The composite renderer owns one disposable terrain-perception-memory store shared by Chart and Relief. It retains only a capped `120 × 120` scalar visibility array and eases lost terrain strength to its durable map baseline over 900 milliseconds; eight quantized Relief bands keep rebatching bounded. Clear-air terrain reaches at most 52 tiles, remains fully legible through 34, and uses an 18-tile distance feather; the exact-detail field remains 10 tiles. The buffer never retains projected terrain objects, entity/detail masks, labels, actions, hit targets, or save state. Exact water presentation, actors, parcels, resources, and interaction routing continue to consume the raw current-detail field and fail closed immediately. When the bounded frame slides, its terrain impression rebases by the same exact spatial delta as both cameras and active pointer routes. World/geometry identity changes, clock/tick regression, reload/destruction, and reduced-motion presentation otherwise settle the buffer without changing authoritative perception.
 
@@ -750,8 +852,9 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 21. Alpha-29 unchanged roster/habitat; current identified fox pursuit plus exact rabbit contact; named injury/death; exact-once actor retirement and one-unit population loss with conserved reserve; one stable finite physical body; lawful fox/fish-crow sight, reach, claim, one-unit feeding, and fox guarding; direct-perception-only Chart/Relief/EVENTS projection; exact outer-v21-to-v22, core-patch-v3, and aggregate-v5 adoption; migration/replay/conservation/signed-world/bounded-performance invariants; and representative mortality/scavenging scenarios rather than per-species or N² coverage. Broader mortality, group-member death, population recovery, live decomposition/body movement/harvest/scent/insects, worldwide ecology, and later Wave-E species remain absent.
 22. Alpha-30 twenty-two-record catalog coherence; exact habitat-v9 prefix under habitat v10; one deterministic signed remote source; appended wild-boar, elk, and gray-wolf populations with reusable `SOUNDER`, `HERD`, and `PACK` topology; shared perception, attention, locomotion, materialization, evidence, item-claim, mortality/body, and presentation owners; exact wolf contact against one eligible solitary rabbit; finite boar/wolf carcass participation; exact outer-v22-to-v23 adoption; migration/replay/conservation/signed-extreme/property/performance invariants; and one representative emergence chain rather than per-species or N² coverage. Dog interaction, audible upland calls, tactical pack combat, group-member harm, cougar and additional bear ecotypes, reproduction, ecological migration, worldwide ecology, complete turnover, full Wave E, and broader biodiversity completion remain absent.
 23. Alpha-31 twenty-four-record catalog coherence; exact habitat-v10 source/population prefix under habitat v11; solitary cougar and brown-bear habitat-population records evaluated at the existing deterministic signed remote source with actors only for supported capacity; shared perception, attention, locomotion, materialization, item-claim, mortality/body, and presentation owners; exact cougar contact against one currently identified eligible solitary rabbit; brown-bear live-prey non-response; finite cougar/brown-bear carcass participation and guarding; exact outer-v23-to-v24 adoption; replay/conservation/signed-extreme/property/performance invariants; and one representative predator/scavenger chain rather than per-species or N² coverage. Group behavior, tracks, audible calls, species-specific dog-directed behavior, player/human/group harm, broader mortality, reproduction, ecological migration, worldwide ecology, full Wave E, and broader biodiversity completion remain absent; ordinary shared large-predator perception remains live.
-24. Vite production build under relative paths.
-25. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
+24. Alpha33 source-candidate twenty-seven-record frozen-prefix coherence; sparse signed/extreme-coordinate Alpine habitat with lawful absence; stable mountain-goat `HERD`, non-addressable conserved American-pika aggregate, and solitary golden-eagle identity; shared opt-in directed-grade locomotion; world-bound ridge soar/perch authority and state-based knowledge-honest Chart/Relief/ABOUT presentation; current LOS/occlusion-gated nonlethal eagle pressure with pika conservation; one global group-atomic 24-actor cap and atomic cross-layer commit; exact v25-child wrapping and outer-v26 adoption/reload; bounded provenance-safe habitat/ridge caches; and explicit exclusion of new mortality, capture, exact pika targeting, reproduction, audible Living Voice, tactical combat, polar breadth, worldwide ecology, Wave-F completion, and N² testing.
+25. Vite production build under relative paths.
+26. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
 
 The Phase 10 gate passes TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, that extended packaged smoke, `git diff --check`, and a scoped source secret scan. Exact commit `6f74fe9e016ba566116e2085b05ecf2988213754` is published: CI run `33494152504` and Pages run `33494152310` succeeded, and the live HTML serves the inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets with HTTP 200 responses. The deployment is an untagged preview; `v0.2.0-alpha.1` remains unchanged.
 

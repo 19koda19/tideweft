@@ -7,6 +7,11 @@ import {
   type LivingActorAddress,
 } from "./livingActor";
 import {
+  canonicalLivingActorGradeTraversalPolicy,
+  resolveLivingActorTraversalEdgeCost,
+  type LivingActorGradeTraversalPolicy,
+} from "./livingActorGradeTraversal";
+import {
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
   isWorldPosition,
@@ -61,6 +66,12 @@ export interface LivingActorTraversabilitySurface {
   readonly widthTiles: number;
   readonly heightTiles: number;
   readonly cells: readonly LivingActorTraversabilityCell[];
+  /**
+   * Opt-in directed grade authority. Existing surfaces omit both fields and
+   * retain their exact Alpha-32 path costs and serialized shape.
+   */
+  readonly edgeGradePolicy?: LivingActorGradeTraversalPolicy;
+  readonly elevations?: readonly number[];
 }
 
 export interface LivingActorTraversabilitySurfaceInput {
@@ -70,6 +81,8 @@ export interface LivingActorTraversabilitySurfaceInput {
   readonly widthTiles: number;
   readonly heightTiles: number;
   readonly cells: readonly LivingActorTraversabilityCell[];
+  readonly edgeGradePolicy?: LivingActorGradeTraversalPolicy;
+  readonly elevations?: readonly number[];
 }
 
 export interface LivingActorLocomotionInput {
@@ -482,7 +495,8 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
     && value !== null
     && CANONICAL_TRAVERSABILITY_SURFACES.has(value)
   ) return value as LivingActorTraversabilitySurface;
-  if (!plainRecord(value) || !exactKeys(value, [
+  if (!plainRecord(value)) return null;
+  const baseKeys = [
     "cells",
     "forActorId",
     "heightTiles",
@@ -490,7 +504,10 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
     "sampledAtTick",
     "version",
     "widthTiles",
-  ])) return null;
+  ] as const;
+  const gradeKeys = [...baseKeys, "edgeGradePolicy", "elevations"] as const;
+  const gradeAware = exactKeys(value, gradeKeys);
+  if (!exactKeys(value, baseKeys) && !gradeAware) return null;
   if (
     value.version !== LIVING_ACTOR_TRAVERSABILITY_VERSION
     || !validId(value.forActorId)
@@ -513,6 +530,21 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
     if (cell === null) return null;
     cells.push(cell);
   }
+  const edgeGradePolicy = gradeAware
+    ? canonicalLivingActorGradeTraversalPolicy(value.edgeGradePolicy)
+    : null;
+  const elevations: number[] = [];
+  if (gradeAware) {
+    if (
+      edgeGradePolicy === null
+      || !Array.isArray(value.elevations)
+      || value.elevations.length !== value.cells.length
+    ) return null;
+    for (const elevation of value.elevations as readonly unknown[]) {
+      if (!nonnegativeSafeInteger(elevation) || elevation > 1_000_000) return null;
+      elevations.push(elevation);
+    }
+  }
   try {
     createSpatialFrame(
       value.origin,
@@ -530,6 +562,12 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
     widthTiles: value.widthTiles,
     heightTiles: value.heightTiles,
     cells: Object.freeze(cells),
+    ...(edgeGradePolicy === null
+      ? {}
+      : {
+          edgeGradePolicy,
+          elevations: Object.freeze(elevations),
+        }),
   });
   CANONICAL_TRAVERSABILITY_SURFACES.add(surface);
   return surface;
@@ -797,7 +835,15 @@ function findRoute(
       const baseCost = offsetX === 0 || offsetY === 0
         ? CARDINAL_COST_UNITS
         : DIAGONAL_COST_UNITS;
-      const tentativeG = current.g + baseCost * nextCell.travelCost;
+      const edgeCost = routeEdgeCost(
+        surface,
+        current.index,
+        nextIndex,
+        baseCost,
+        nextCell.travelCost,
+      );
+      if (edgeCost === null) continue;
+      const tentativeG = current.g + edgeCost;
       if (!Number.isSafeInteger(tentativeG) || tentativeG >= gScore[nextIndex]!) continue;
       cameFrom[nextIndex] = current.index;
       gScore[nextIndex] = tentativeG;
@@ -806,6 +852,29 @@ function findRoute(
     }
   }
   return null;
+}
+
+function routeEdgeCost(
+  surface: LivingActorTraversabilitySurface,
+  fromIndex: number,
+  toIndex: number,
+  horizontalDistanceUnits: number,
+  destinationTravelCost: number,
+): number | null {
+  if (surface.edgeGradePolicy === undefined || surface.elevations === undefined) {
+    return horizontalDistanceUnits * destinationTravelCost;
+  }
+  const fromElevation = surface.elevations[fromIndex];
+  const toElevation = surface.elevations[toIndex];
+  if (fromElevation === undefined || toElevation === undefined) return null;
+  const resolution = resolveLivingActorTraversalEdgeCost({
+    fromElevation,
+    toElevation,
+    horizontalDistanceUnits,
+    destinationTravelCost,
+    policy: surface.edgeGradePolicy,
+  });
+  return resolution?.kind === "open" ? resolution.transitionCost : null;
 }
 
 const NEIGHBOR_OFFSETS = Object.freeze([

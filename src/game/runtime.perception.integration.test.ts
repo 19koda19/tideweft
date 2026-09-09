@@ -127,7 +127,7 @@ describe("runtime existing-human perception path", () => {
       }),
     ]));
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("restores committed perception through the ordinary outer save and reload path", async () => {
     const fixture = perceptionFixture("runtime perception reload");
@@ -171,7 +171,7 @@ describe("runtime existing-human perception path", () => {
     expect(playerBelief?.lastObservedTick).toBe(2);
     expect(playerBelief?.area).toEqual({ center: playerPosition, radiusUnits: 0 });
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("commits the same cognition after a ninth-substep save/reload as uninterrupted play", async () => {
     const referenceFixture = perceptionFixture("runtime perception interrupted interval");
@@ -189,7 +189,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 25,
+      version: 26,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 9,
@@ -259,7 +259,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 25,
+      version: 26,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 0,

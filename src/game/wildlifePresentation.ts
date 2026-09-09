@@ -20,12 +20,12 @@ import {
 } from "./coreEcology";
 import {
   projectCoreEcologyActivity,
+  type CoreEcologyActivityAuthorityReceipt,
   type CoreEcologyActivityProjection,
 } from "./coreEcologyActivity";
-import {
-  isTrustedCoreEcologyActivityAuthority,
-  type CoreEcologyActivityAuthorityV1,
-} from "./coreEcologyActivityAuthority";
+import { isTrustedCoreEcologyActivityAuthority } from "./coreEcologyActivityAuthority";
+import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
+import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
   isCoreEcologyAggregateSpecies,
   type CoreEcologyAggregateSpecies,
@@ -136,7 +136,7 @@ export interface WildlifePresentationInput {
   readonly activity?: Readonly<{
     readonly patch: unknown;
     readonly atTick: number;
-    readonly authority?: CoreEcologyActivityAuthorityV1;
+    readonly authority?: CoreEcologyActivityAuthorityReceipt;
   }>;
 }
 
@@ -155,7 +155,9 @@ export type WildlifePopulationEvidenceForm =
   | "paired-tracks"
   | "canid-pawprints"
   | "frog-tracks"
-  | "surface-dimples";
+  | "surface-dimples"
+  | "haypile"
+  | "talus-sign";
 
 interface WildlifePopulationEvidencePresentationBase {
   readonly version: typeof WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION;
@@ -266,6 +268,9 @@ type WildlifePresentationForm =
   | "domestic-cat"
   | "marsh-rabbit"
   | "marsh-fox"
+  | "mountain-goat"
+  | "american-pika"
+  | "golden-eagle"
   | "southern-leopard-frog"
   | "atlantic-silverside"
   | "atlantic-marsh-fiddler-crab";
@@ -597,6 +602,48 @@ const PRESENTATION_BY_SPECIES: Readonly<
     baseSizeScale: 1.48,
     observableForm: "Massive bear with a high shoulder hump",
   },
+  "mountain-goat": {
+    form: "mountain-goat",
+    representation: "actor",
+    identificationClarity: 360_000,
+    unidentifiedQuickLabel: "Unknown mountain animal",
+    unidentifiedIdentityLabel: "Unidentified mountain animal",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.02,
+    observableForm: "Shaggy, sure-footed ungulate with dark swept horns",
+  },
+  "american-pika": {
+    form: "american-pika",
+    representation: "population-area",
+    identificationClarity: 560_000,
+    unidentifiedQuickLabel: "Talus-animal signs",
+    unidentifiedIdentityLabel: "Unidentified talus-animal signs",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.24,
+    observableForm: null,
+  },
+  "golden-eagle": {
+    form: "golden-eagle",
+    representation: "actor",
+    identificationClarity: 430_000,
+    unidentifiedQuickLabel: "Unknown large raptor",
+    unidentifiedIdentityLabel: "Unidentified large raptor",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "plumage",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.06,
+    observableForm: "Large, broad-winged raptor with a golden nape",
+  },
 });
 const BEHAVIOR_CLARITY = 180_000;
 const CONDITION_CLARITY = 260_000;
@@ -703,6 +750,28 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
         identifiedLabel: "Fiddler crab feeding scrapes",
         unidentifiedLabel: "Fine mud feeding scrapes",
         sizeScale: 0.9,
+      },
+    },
+  },
+  "american-pika": {
+    identifiedQuickLabel: "American pika signs",
+    unidentifiedQuickLabel: "Talus-animal signs",
+    identifiedIdentityLabel: "American pika population signs",
+    unidentifiedIdentityLabel: "Unidentified talus-animal signs",
+    byKind: {
+      haypile: {
+        form: "haypile",
+        minimumClarity: 340_000,
+        identifiedLabel: "American pika haypile",
+        unidentifiedLabel: "Small gathered plant pile",
+        sizeScale: 0.86,
+      },
+      "talus-sign": {
+        form: "talus-sign",
+        minimumClarity: 380_000,
+        identifiedLabel: "American pika talus signs",
+        unidentifiedLabel: "Small-animal signs among the rocks",
+        sizeScale: 0.8,
       },
     },
   },
@@ -1329,6 +1398,7 @@ function resolvePresentationActivity(
     || (
       value.authority !== undefined
       && !isTrustedCoreEcologyActivityAuthority(value.authority)
+      && !isTrustedCoreEcologyAlpineRidgeActivityAuthority(value.authority)
     )
   ) return Object.freeze({ valid: false, projection: null });
   const patch = canonicalizeCoreEcologyAggregatePatch(value.patch);
@@ -1341,12 +1411,33 @@ function resolvePresentationActivity(
   if (ownedActor === null || stableStringify(ownedActor) !== stableStringify(actor)) {
     return Object.freeze({ valid: false, projection: null });
   }
+  if (
+    value.authority !== undefined
+    && (
+      value.authority.sourceKey !== patch.patchKey
+      || value.authority.actorId !== actor.identity.stableId
+      || (
+        isTrustedCoreEcologyActivityAuthority(value.authority)
+          ? value.authority.species !== actor.identity.species
+          : (
+              coreEcologyActivityAffordanceProfile(actor.identity.species)?.archetypeId
+                !== "ridge-soar-perch"
+              || value.authority.homeAnchor.region.x !== patch.originRegion.x
+              || value.authority.homeAnchor.region.y !== patch.originRegion.y
+            )
+      )
+    )
+  ) return Object.freeze({ valid: false, projection: null });
+  const projection = projectCoreEcologyActivity(patch, {
+    actorId: actor.identity.stableId,
+    atTick: value.atTick,
+  }, value.authority);
+  if (value.authority !== undefined && projection === null) {
+    return Object.freeze({ valid: false, projection: null });
+  }
   return Object.freeze({
     valid: true,
-    projection: projectCoreEcologyActivity(patch, {
-      actorId: actor.identity.stableId,
-      atTick: value.atTick,
-    }, value.authority),
+    projection,
   });
 }
 
@@ -1359,6 +1450,7 @@ function activityBehavior(
   switch (activity?.presentationSignal) {
     case "perched": return "perch";
     case "low-quartering-flight": return "quarter";
+    case "ridge-soaring-flight": return "flight";
     case "resting": return "rest";
     case "dabbling-forage": return "forage";
     case "surface-swimming": return "swim";
@@ -1413,6 +1505,9 @@ function observableBehavior(
     return "Moving between shore and water";
   }
   if (activity?.presentationSignal === "surface-diving") return "Diving";
+  if (activity?.presentationSignal === "ridge-soaring-flight") {
+    return "Soaring along the ridge";
+  }
   const projected = activityBehavior(activity);
   if (projected === "perch") return "Perched";
   if (projected === "quarter") return "Quartering low";

@@ -10,6 +10,7 @@ import {
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
 import { MAX_RESIDENT_MEMORIES, NPC_GENERATION_VERSION } from "../sim/npcIdentity";
+import { hashCanonical, stableStringify } from "../sim/util";
 import {
   LIVING_ACTOR_SPECIES,
   type LivingActorPersistenceTier,
@@ -43,6 +44,42 @@ export const MAX_LIVING_SPECIES_MODULES = 256 as const;
 export const MAX_MATERIALIZED_ACTORS_PER_REGION = 4_096 as const;
 export const MAX_SPECIES_STATE_AXES = 64 as const;
 export const MAX_SPECIES_CAPABILITY_ENTRIES = 64 as const;
+
+/**
+ * Exact Alpha-32 catalog lineage. The live catalog may grow, but these modules
+ * remain a separately authenticated compatibility child rather than being
+ * reinterpreted by later insertion or sorting.
+ */
+export const LIVING_SPECIES_ALPHA32_SPECIES_IDS = Object.freeze([
+  "american-black-duck",
+  "atlantic-marsh-fiddler-crab",
+  "atlantic-silverside",
+  "black-bear",
+  "brown-bear",
+  "brown-rat",
+  "cougar",
+  "deer",
+  "domestic-cat",
+  "domestic-chicken",
+  "domestic-dog",
+  "domestic-goat",
+  "elk",
+  "fish-crow",
+  "gray-wolf",
+  "gull",
+  "human",
+  "marsh-fox",
+  "marsh-rabbit",
+  "north-american-river-otter",
+  "northern-harrier",
+  "snowy-egret",
+  "southern-leopard-frog",
+  "wild-boar",
+] as const);
+export const LIVING_SPECIES_ALPHA32_CATALOG_COUNT = 24 as const;
+export const LIVING_SPECIES_ALPHA32_SPECIES_IDS_HASH = "db3a190a4f44e668" as const;
+export const LIVING_SPECIES_ALPHA32_CATALOG_BYTE_LENGTH = 268_178 as const;
+export const LIVING_SPECIES_ALPHA32_CATALOG_HASH = "571f9eb8472bbf6d" as const;
 
 export type LivingSpeciesImplementation = "unimplemented" | "foundation" | "active";
 export type LivingSpeciesIdentityForm = "individual" | "aggregate" | "hybrid";
@@ -1814,6 +1851,129 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
       "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
     ],
   },
+  "mountain-goat": {
+    implementation: "foundation",
+    ecologicalClasses: [
+      "forager",
+      "herbivore",
+      "high-ridge-herbivore",
+      "prey",
+      "upland-mammal",
+    ],
+    habitatOwnerId: "game:core-ecology-alpine-habitat:v1",
+    ecologyOwnerId: "game:regional-alpine-ecology:v1",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-groups:v1",
+    activityOwnerId: "game:core-wildlife-actor:v1",
+    dynamicOverlays: ["visible-condition", "visible-herd-summary"],
+    morphologyDimensions: ["body-size", "coat-state", "horn-profile"],
+    appearanceTraits: ["horn-profile", "sex", "shaggy-white-coat", "temperament"],
+    habitatClasses: ["alpine-ridge", "high-ridge", "rocky-slope", "talus-edge"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "shallow-water", relativeCapability: 180_000 },
+    ],
+    movementVerbs: ["forage", "observe", "scramble", "walk"],
+    terrainAffordances: ["high-ridge", "land", "rocky-slope", "standable-shallow-water"],
+    consumedBy: ["large-predator"],
+    competesWith: ["elk"],
+    ecologicalEffects: ["bounded-food-pressure", "herd-coordination"],
+    includeDogInteraction: true,
+    groupModel: "group",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:core-wildlife-actor:v1",
+      decayOwnerId: "game:core-wildlife-actor:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
+    ],
+  },
+  "american-pika": {
+    implementation: "foundation",
+    ecologicalClasses: [
+      "forager",
+      "herbivore",
+      "prey",
+      "small-prey",
+      "talus-aggregate",
+      "upland-mammal",
+    ],
+    habitatOwnerId: "game:core-ecology-alpine-habitat:v1",
+    ecologyOwnerId: "game:regional-alpine-ecology:v1",
+    spatialOwnerId: "game:regional-alpine-ecology:v1",
+    behaviorOwnerId: "game:regional-alpine-ecology:v1",
+    locomotionOwnerId: "game:regional-alpine-ecology:v1",
+    socialOwnerId: "game:regional-alpine-ecology:v1",
+    activityOwnerId: "game:regional-alpine-ecology:v1",
+    dynamicOverlays: ["visible-activity"],
+    morphologyDimensions: ["activity-area", "population-density"],
+    appearanceTraits: ["activity-signs", "population-pressure"],
+    habitatClasses: ["alpine-talus", "high-ridge", "rock-crevice", "talus-edge"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["forage", "quiet", "redistribute", "retreat-to-crevice"],
+    terrainAffordances: ["rock-crevice", "talus-interstice"],
+    consumedBy: ["aerial-predator", "small-predator"],
+    competesWith: [],
+    ecologicalEffects: ["bounded-food-pressure", "population-activity", "small-prey-support"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:regional-alpine-ecology:v1",
+      decayOwnerId: "game:regional-alpine-ecology:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: ["activity", "habitat", "population-signs", "species"],
+  },
+  "golden-eagle": {
+    implementation: "foundation",
+    ecologicalClasses: ["aerial-predator", "carnivore", "predator"],
+    habitatOwnerId: "game:core-ecology-alpine-habitat:v1",
+    ecologyOwnerId: "game:regional-alpine-ecology:v1",
+    spatialOwnerId: "game:living-actor-address:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["body-size", "plumage-state"],
+    appearanceTraits: ["broad-wings", "dark-plumage", "golden-nape", "temperament"],
+    habitatClasses: ["alpine-ridge", "high-ridge", "ridge-sky", "rocky-perch"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["fly", "observe", "perch", "soar"],
+    terrainAffordances: ["open-air", "ridge-perch", "ridge-soar"],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["broad-small-prey-pressure", "prey-redistribution"],
+    includeDogInteraction: false,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    aboutObservableFields: [
+      "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
+    ],
+  },
 });
 
 /**
@@ -2264,6 +2424,66 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     water: "intentional-no-response",
     weather: "intentional-no-response",
   },
+  "mountain-goat": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "american-pika": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "golden-eagle": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "intentional-no-response",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
 } as const satisfies Readonly<Record<
   CoreWildlifeSpecies,
   Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
@@ -2275,6 +2495,22 @@ function coreWildlifeInteractionTargets(
 ): readonly LivingSpeciesInteractionTargetContract[] {
   const profile = getCoreWildlifeProfile(species);
   const targets: LivingSpeciesInteractionTargetContract[] = [];
+  const alpha32CompatibilitySpecies = (
+    LIVING_SPECIES_ALPHA32_SPECIES_IDS as readonly string[]
+  ).includes(species);
+  const appendedAggregateResponse = !alpha32CompatibilitySpecies
+    && coreEcologySpeciesHasRuntimeCapability(species, "aggregate-response");
+  const pressureVerbs = appendedAggregateResponse
+    ? ["quiet", "redistribute", "retreat-to-crevice"]
+    : ["flee", "retreat"];
+  const pressureConstraints = appendedAggregateResponse
+    ? [
+        "aggregate-unit-conservation",
+        "bounded-response",
+        "direct-perception-required",
+        "nonlethal-pressure-only",
+      ]
+    : ["direct-perception-required", "no-omniscient-targeting"];
 
   if (coreEcologySpeciesHasRuntimeCapability(species, "aquatic-foraging")) {
     const movementVerbs = CORE_WILDLIFE_CATALOG_VALUES[species].movementVerbs;
@@ -2332,9 +2568,9 @@ function coreWildlifeInteractionTargets(
       perceptionChannels: ["hearing", "vision"],
       appraisals: ["threat"],
       motivationAxes: ["safety"],
-      verbs: ["flee", "retreat"],
-      escalationConstraints: ["direct-perception-required", "no-omniscient-targeting"],
-      disengagementVerbs: ["retreat"],
+      verbs: pressureVerbs,
+      escalationConstraints: pressureConstraints,
+      disengagementVerbs: appendedAggregateResponse ? ["disengage"] : ["retreat"],
     });
   }
 
@@ -2360,8 +2596,13 @@ function coreWildlifeInteractionTargets(
     });
   }
 
-  targets.push(
-    {
+  const ownsDirectFoodResponse = alpha32CompatibilitySpecies
+    || CORE_WILDLIFE_FOOD_CLASSES.some((foodClass) => (
+      foodClass !== "live-prey" && profile.foodAffinities[foodClass] > 0
+    ))
+    || coreEcologySpeciesHasRuntimeCapability(species, "live-prey-pursuit");
+  if (ownsDirectFoodResponse) {
+    targets.push({
       targetClass: "food",
       policy: "available",
       perceptionChannels: ["vision"],
@@ -2372,16 +2613,21 @@ function coreWildlifeInteractionTargets(
         : ["forage"],
       escalationConstraints: ["direct-confirmation", "physical-resource-conservation"],
       disengagementVerbs: ["disengage"],
-    },
+    });
+  }
+
+  targets.push(
     {
       targetClass: "human",
       policy: "available",
       perceptionChannels: ["vision"],
       appraisals: ["threat"],
       motivationAxes: ["safety"],
-      verbs: ["observe", "retreat"],
-      escalationConstraints: ["direct-perception-required", "no-omniscient-targeting"],
-      disengagementVerbs: ["retreat"],
+      verbs: appendedAggregateResponse
+        ? pressureVerbs
+        : ["observe", "retreat"],
+      escalationConstraints: pressureConstraints,
+      disengagementVerbs: appendedAggregateResponse ? ["disengage"] : ["retreat"],
     },
     {
       targetClass: "predator",
@@ -2389,11 +2635,13 @@ function coreWildlifeInteractionTargets(
       perceptionChannels: ["hearing", "vision"],
       appraisals: ["threat"],
       motivationAxes: ["safety"],
-      verbs: profile.roles.includes("alarm-source")
+      verbs: appendedAggregateResponse
+        ? pressureVerbs
+        : profile.roles.includes("alarm-source")
         ? ["alarm", "flee", "retreat"]
         : ["flee", "retreat"],
-      escalationConstraints: ["direct-perception-required", "no-omniscient-targeting"],
-      disengagementVerbs: ["retreat"],
+      escalationConstraints: pressureConstraints,
+      disengagementVerbs: appendedAggregateResponse ? ["disengage"] : ["retreat"],
     },
   );
 
@@ -2445,13 +2693,15 @@ function coreWildlifeInteractionTargets(
       disengagementVerbs: ["disengage"],
     });
   } else if (coreEcologySpeciesHasRuntimeCapability(species, "group-coordination")) {
+    const ownsSharedAlarm = alpha32CompatibilitySpecies
+      || coreEcologySpeciesHasRuntimeCapability(species, "shared-alarm");
     targets.push({
       targetClass: "same-species",
       policy: "available",
-      perceptionChannels: ["hearing", "vision"],
+      perceptionChannels: ownsSharedAlarm ? ["hearing", "vision"] : ["vision"],
       appraisals: ["group-signal"],
       motivationAxes: ["cohesion"],
-      verbs: ["alarm", "coordinate"],
+      verbs: ownsSharedAlarm ? ["alarm", "coordinate"] : ["coordinate"],
       escalationConstraints: ["direct-perception-required", "shared-group-required"],
       disengagementVerbs: ["disengage"],
     });
@@ -2617,6 +2867,9 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const implementation = values.implementation;
   const identityForm = runtimePolicy.identityForm;
   const aggregate = identityForm === "aggregate";
+  const alpha32CompatibilitySpecies = (
+    LIVING_SPECIES_ALPHA32_SPECIES_IDS as readonly string[]
+  ).includes(species);
   const aggregateSchool = aggregate
     && coreEcologySpeciesHasRuntimeCapability(species, "school-coordination");
   const physicalBodyResourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(species);
@@ -2661,7 +2914,10 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
         organizationKinds: [runtimePolicy.groupOrganization],
         stateAxes: [fixed("cohesion"), fixed("movement-heading"), enumAxis("phase")],
         leadershipModel: "none" as const,
-        coordinationVerbs: ["alarm", "displace", "rejoin", "split"],
+        coordinationVerbs: alpha32CompatibilitySpecies
+          || coreEcologySpeciesHasRuntimeCapability(species, "shared-alarm")
+          ? ["alarm", "displace", "rejoin", "split"]
+          : ["coordinate", "displace", "rejoin", "split"],
         stableIdentity: true,
         stableIdNamespace: runtimePolicy.groupStableIdNamespace,
         generationVersion: 1,
@@ -2787,13 +3043,21 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       movementVerbs: values.movementVerbs,
       terrainAffordances: values.terrainAffordances,
     },
-    diet: {
-      implementation: "foundation",
-      ownerId: aggregate ? values.ecologyOwnerId : "game:core-wildlife-actor:v1",
-      mode: metadata.dietClass,
-      requiresPhysicalResource: true,
-      resources: foodResources,
-    },
+    diet: !alpha32CompatibilitySpecies && foodResources.length === 0
+      ? {
+          implementation: "unimplemented",
+          ownerId: null,
+          mode: "none",
+          requiresPhysicalResource: false,
+          resources: [],
+        }
+      : {
+          implementation: "foundation",
+          ownerId: aggregate ? values.ecologyOwnerId : "game:core-wildlife-actor:v1",
+          mode: metadata.dietClass,
+          requiresPhysicalResource: true,
+          resources: foodResources,
+        },
     foodWeb: {
       implementation: "foundation",
       ownerId: "sim:core-wildlife-identity:v1",
@@ -2864,7 +3128,10 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       communicationChannels: profile.roles.includes("alarm-source")
         || values.sound.communicationSignals.length > 0
         ? ["hearing"]
-        : [],
+        : !alpha32CompatibilitySpecies
+          && coreEcologySpeciesHasRuntimeCapability(species, "group-coordination")
+          ? ["vision"]
+          : [],
       group,
       territory: noTerritory(),
     },
@@ -3539,6 +3806,32 @@ const expectedSpecies = [...LIVING_ACTOR_SPECIES].sort(compareText);
 if (!sameStringArray(currentSpecies, expectedSpecies)) {
   throw new Error("Living Weft catalog does not exactly cover the implemented actor roster");
 }
+
+const alpha32CompatibilityModules = LIVING_SPECIES_ALPHA32_SPECIES_IDS.map((speciesId) => {
+  const module = currentCatalog.modules.find((candidate) => candidate.speciesId === speciesId);
+  if (module === undefined) {
+    throw new Error(`Living Weft catalog omitted Alpha-32 compatibility species ${speciesId}`);
+  }
+  return module;
+});
+const alpha32CompatibilityCatalog = deepFreeze({
+  version: LIVING_SPECIES_CATALOG_VERSION,
+  modules: alpha32CompatibilityModules,
+});
+const alpha32CompatibilityBytes = stableStringify(alpha32CompatibilityCatalog);
+if (
+  LIVING_SPECIES_ALPHA32_SPECIES_IDS.length !== LIVING_SPECIES_ALPHA32_CATALOG_COUNT
+  || hashCanonical(LIVING_SPECIES_ALPHA32_SPECIES_IDS)
+    !== LIVING_SPECIES_ALPHA32_SPECIES_IDS_HASH
+  || new TextEncoder().encode(alpha32CompatibilityBytes).byteLength
+    !== LIVING_SPECIES_ALPHA32_CATALOG_BYTE_LENGTH
+  || hashCanonical(alpha32CompatibilityCatalog) !== LIVING_SPECIES_ALPHA32_CATALOG_HASH
+) {
+  throw new Error("Living Weft Alpha-32 catalog lineage was rewritten");
+}
+
+export const LIVING_SPECIES_ALPHA32_CATALOG: LivingSpeciesCatalog =
+  alpha32CompatibilityCatalog;
 
 /** Only implemented identity owners are present; this is deliberately not a planned roster. */
 export const LIVING_SPECIES_CATALOG: LivingSpeciesCatalog = currentCatalog;

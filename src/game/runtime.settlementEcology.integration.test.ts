@@ -54,7 +54,10 @@ import {
   CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
   type CoreEcologyRegionalPredatorHabitatAssemblage,
 } from "./coreEcologyHabitat";
-import type { CoreEcologySettlementShadowsStimulusFrame } from "./coreEcologySmallWorld";
+import type {
+  CoreEcologySettlementShadowsStimulusFrame,
+  CoreEcologySmallWorldSourceStepInput,
+} from "./coreEcologySmallWorld";
 import { deserializeDogActorRoster } from "./dogActorRoster";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import {
@@ -87,13 +90,16 @@ import {
 import { putRegionalEcologyResidentDeviation } from "./regionalEcology";
 import {
   createRegionalEcologyState,
-  deserializeRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
-  replaceRegionalEcologyActiveState,
-  serializeRegionalEcologyState,
   type RegionalEcologyActiveResidentInput,
   type RegionalEcologyStateV1,
 } from "./regionalEcologyState";
+import {
+  createRegionalEcologyStateV2,
+  deserializeRegionalEcologyStateV2,
+  replaceRegionalEcologyStateV2ActiveState,
+  serializeRegionalEcologyStateV2,
+} from "./regionalEcologyStateV2";
 import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
@@ -435,6 +441,16 @@ vi.mock("./coreEcologySpeciesRuntimePolicy", async (importOriginal) => {
 
 vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./coreEcologySmallWorld")>();
+  const filteredFrame = (
+    frame: CoreEcologySettlementShadowsStimulusFrame,
+  ): CoreEcologySettlementShadowsStimulusFrame => ({
+    ...frame,
+    stimuli: frame.stimuli.filter(({ sourceKind }) => (
+      settlementShadowsHarness.exposeOnlyPhysicalFood
+        ? sourceKind === "exposed-food"
+        : sourceKind !== "exposed-food"
+    )),
+  });
   return {
     ...actual,
     // This one integration seam isolates the existing physical-food channel
@@ -452,14 +468,23 @@ vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
         return actual.stepCoreEcologySettlementShadows(...args);
       }
       const frame = args[2] as CoreEcologySettlementShadowsStimulusFrame;
-      return actual.stepCoreEcologySettlementShadows(args[0], args[1], {
-        ...frame,
-        stimuli: frame.stimuli.filter(({ sourceKind }) => (
-          settlementShadowsHarness.exposeOnlyPhysicalFood
-            ? sourceKind === "exposed-food"
-            : sourceKind !== "exposed-food"
-        )),
-      });
+      return actual.stepCoreEcologySettlementShadows(args[0], args[1], filteredFrame(frame));
+    },
+    stepCoreEcologySmallWorldSourceSet: (
+      ...args: Parameters<typeof actual.stepCoreEcologySmallWorldSourceSet>
+    ) => {
+      if (settlementShadowsHarness.rejectAfterWorkingDog) return null;
+      if (
+        !settlementShadowsHarness.exposeOnlyPhysicalFood
+        && !settlementShadowsHarness.excludePhysicalFood
+      ) {
+        return actual.stepCoreEcologySmallWorldSourceSet(...args);
+      }
+      const sources = args[0] as readonly CoreEcologySmallWorldSourceStepInput[];
+      return actual.stepCoreEcologySmallWorldSourceSet(sources.map((source) => ({
+        ...source,
+        stimulusFrame: filteredFrame(source.stimulusFrame),
+      })), args[1]);
     },
   };
 });
@@ -603,8 +628,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 25 || current.version !== 25) {
-    throw new Error("runtime fixture is not a current v25 save");
+  if (record.payloadVersion !== 26 || current.version !== 26) {
+    throw new Error("runtime fixture is not a current v26 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -650,8 +675,9 @@ function rebaseFixtureRegionalEcology(
   rootSeed: RootSeed,
   spatial: WorldView,
 ): string {
-  const prior = deserializeRegionalEcologyState(serialized);
-  if (prior === null) throw new Error("guardian fixture started with invalid regional ecology");
+  const priorV2 = deserializeRegionalEcologyStateV2(serialized);
+  if (priorV2 === null) throw new Error("guardian fixture started with invalid regional ecology");
+  const prior = priorV2.base;
   const activeRegions = regionalStorageRegionsInView(spatial);
   const desiredRegionKeys = new Set(activeRegions.map(regionKey));
   let root = prior.root;
@@ -688,16 +714,19 @@ function rebaseFixtureRegionalEcology(
       patch: legacy.patch,
     });
   }
-  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
-    expectedIntegrity: prior.integrity,
-    rootSeed,
-    root,
-    settlementHome: {
-      sourceKey: prior.settlementHome.sourceKey,
-      patch: prior.settlementHome.patch,
+  return serializeRegionalEcologyStateV2(replaceRegionalEcologyStateV2ActiveState(priorV2, {
+    expectedIntegrity: priorV2.integrity,
+    base: {
+      expectedIntegrity: prior.integrity,
+      rootSeed,
+      root,
+      settlementHome: {
+        sourceKey: prior.settlementHome.sourceKey,
+        patch: prior.settlementHome.patch,
+      },
+      activeRegions,
+      activeResidents,
     },
-    activeRegions,
-    activeResidents,
   }));
 }
 
@@ -800,9 +829,9 @@ function withPlayerFacing(record: SaveRecord, facingMilliRadians: number): SaveR
 }
 
 function requireRegionalEcology(encoded: unknown): RegionalEcologyStateV1 {
-  const state = deserializeRegionalEcologyState(encoded);
+  const state = deserializeRegionalEcologyStateV2(encoded);
   if (state === null) throw new Error("runtime fixture omitted canonical regional ecology");
-  return state;
+  return state.base;
 }
 
 function requireCurrentCoreEcology(envelope: Readonly<Record<string, unknown>>) {
@@ -822,11 +851,13 @@ function withCurrentSettlementHomeCore(
   patch: CoreEcologyAggregatePatchState,
 ): SaveRecord {
   const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
+  const regionalV2 = deserializeRegionalEcologyStateV2(envelope.regionalEcology);
+  if (regionalV2 === null) throw new Error("settlement-home fixture omitted v26 authority");
   const regional = requireRegionalEcology(envelope.regionalEcology);
   if (patch.patchKey !== regional.settlementHome.sourceKey) {
     throw new Error("settlement-home fixture changed its signed source key");
   }
-  const replaced = createRegionalEcologyState({
+  const replacedBase = createRegionalEcologyState({
     root: regional.root,
     settlementHome: {
       sourceKey: regional.settlementHome.sourceKey,
@@ -839,8 +870,17 @@ function withCurrentSettlementHomeCore(
       patch: residentPatch,
     })),
   });
+  const replaced = createRegionalEcologyStateV2({
+    base: replacedBase,
+    alpineRoot: regionalV2.alpineRoot,
+    alpineActiveResidents: regionalV2.alpineActiveResidents.map(({ sourceKey, patch: alpinePatch }) => ({
+      sourceKey,
+      patch: alpinePatch,
+    })),
+    adoption: regionalV2.adoption,
+  });
   return withCurrentEnvelopeFields(record, {
-    regionalEcology: serializeRegionalEcologyState(replaced),
+    regionalEcology: serializeRegionalEcologyStateV2(replaced),
   });
 }
 
@@ -1054,11 +1094,11 @@ function downgradeSettlementEcologyToV2(encoded: unknown): string {
 
 /**
  * Historical envelope tests need the exact whole-patch v24 owner that existed
- * before regional storage split it. Fresh v25 saves retain the frozen v11
+ * before regional storage split it. Fresh v26 saves retain the frozen v11
  * habitat on the settlement-home owner, so rebuild that source through the
  * same public construction and initialization kernels used by v24.
  */
-function createExactV24CoreFromFreshV25(
+function createExactV24CoreFromFreshV26(
   envelope: Readonly<Record<string, unknown>>,
 ): CoreEcologyAggregatePatchState {
   if (typeof envelope.world !== "string") {
@@ -1381,8 +1421,8 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 25) throw new Error("fixture is not a current save");
-  const historicalCore = createExactV24CoreFromFreshV25(current);
+  if (current.version !== 26) throw new Error("fixture is not a current save");
+  const historicalCore = createExactV24CoreFromFreshV26(current);
   const {
     integrity: _integrity,
     regionalEcology: _regionalEcology,
@@ -1409,8 +1449,8 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 25) throw new Error("fixture is not a current save");
-  const historicalCore = createExactV24CoreFromFreshV25(current);
+  if (current.version !== 26) throw new Error("fixture is not a current save");
+  const historicalCore = createExactV24CoreFromFreshV26(current);
   const {
     integrity: _integrity,
     regionalEcology: _regionalEcology,
@@ -1437,10 +1477,10 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 25 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 26 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
-  const historicalCore = createExactV24CoreFromFreshV25(current);
+  const historicalCore = createExactV24CoreFromFreshV26(current);
   const currentSettlement = JSON.parse(current.settlementEcology) as Record<string, unknown>;
   if (
     currentSettlement.version !== 4
@@ -1489,10 +1529,10 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 25
+    current.version !== 26
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
-  const historicalCore = createExactV24CoreFromFreshV25(current);
+  const historicalCore = createExactV24CoreFromFreshV26(current);
   const currentWork = JSON.parse(current.settlementWorkingAnimals) as Record<string, unknown>;
   if (!Array.isArray(currentWork.assignments)) {
     throw new Error("current fixture omitted working-animal assignments");
@@ -1602,7 +1642,7 @@ async function advanceUntilDomesticFoodUse(
 }
 
 describe("runtime settlement ecology integration", () => {
-  it("ages an atomic social group across the loaded-window boundary without simulating its off-frame body", async () => {
+  it("keeps a boundary-straddling social group atomic while coarse-aging its off-frame member", async () => {
     const sourceRepository = new MemoryRepository();
     const source = await createTideweftRuntime(sourceRepository);
     source.dispatchUI({
@@ -2299,8 +2339,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(25);
-    expect(envelope.version).toBe(25);
+    expect(record.payloadVersion).toBe(26);
+    expect(envelope.version).toBe(26);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -2403,8 +2443,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(25);
-    expect(migratedEnvelope.version).toBe(25);
+    expect(migratedRecord.payloadVersion).toBe(26);
+    expect(migratedEnvelope.version).toBe(26);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -2489,8 +2529,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(25);
-    expect(migratedEnvelope.version).toBe(25);
+    expect(migratedRecord.payloadVersion).toBe(26);
+    expect(migratedEnvelope.version).toBe(26);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -2654,8 +2694,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(25);
-    expect(migratedEnvelope.version).toBe(25);
+    expect(migratedRecord.payloadVersion).toBe(26);
+    expect(migratedEnvelope.version).toBe(26);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -2810,8 +2850,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(25);
-    expect(migratedEnvelope.version).toBe(25);
+    expect(migratedRecord.payloadVersion).toBe(26);
+    expect(migratedEnvelope.version).toBe(26);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -2923,8 +2963,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(25);
-    expect(migratedEnvelope.version).toBe(25);
+    expect(migratedRecord.payloadVersion).toBe(26);
+    expect(migratedEnvelope.version).toBe(26);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,

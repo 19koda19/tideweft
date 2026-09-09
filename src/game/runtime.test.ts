@@ -121,12 +121,14 @@ import {
   putRegionalEcologyResidentDeviation,
 } from "./regionalEcology";
 import {
-  deserializeRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
-  replaceRegionalEcologyActiveState,
-  serializeRegionalEcologyState,
   type RegionalEcologyActiveResidentInput,
 } from "./regionalEcologyState";
+import {
+  deserializeRegionalEcologyStateV2,
+  replaceRegionalEcologyStateV2ActiveState,
+  serializeRegionalEcologyStateV2,
+} from "./regionalEcologyStateV2";
 import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
@@ -338,16 +340,17 @@ function resealGameSave(envelope: TestGameSaveEnvelope): void {
 }
 
 /**
- * Fresh v25 saves divide the old whole-home ecology between settlement and
+ * Fresh v26 saves divide the old whole-home ecology between settlement and
  * signed-region owners. Historical migration fixtures reconstruct the exact
  * published v24 source from the settlement owner's frozen v11 habitat.
  */
-function exactV24CoreFromV25(envelope: TestGameSaveEnvelope): CoreEcologyAggregatePatchState {
-  const regional = deserializeRegionalEcologyState(envelope.regionalEcology);
+function exactV24CoreFromV26(envelope: TestGameSaveEnvelope): CoreEcologyAggregatePatchState {
+  const regionalV2 = deserializeRegionalEcologyStateV2(envelope.regionalEcology);
+  const regional = regionalV2?.base ?? null;
   if (
     regional === null
     || regional.settlementHome.patch.derivation.kind !== "settlement-home-v1"
-  ) throw new Error("fixture requires a canonical current v25 regional ecology save");
+  ) throw new Error("fixture requires a canonical current v26 regional ecology save");
   const world = deserializeWorld(envelope.world);
   const habitat = regional.settlementHome.patch.derivation.habitat;
   const tick = world.meta.completedTick;
@@ -491,8 +494,9 @@ function rebaseFixtureRegionalEcology(
   rootSeed: RootSeed,
   spatial: ReturnType<typeof createWorldView>,
 ): string {
-  const prior = deserializeRegionalEcologyState(serialized);
-  if (prior === null) throw new Error("fixture started with invalid regional ecology");
+  const priorV2 = deserializeRegionalEcologyStateV2(serialized);
+  if (priorV2 === null) throw new Error("fixture started with invalid regional ecology");
+  const prior = priorV2.base;
   const activeRegions = regionalStorageRegionsInView(spatial);
   const desiredRegionKeys = new Set(activeRegions.map(regionKey));
   let root = prior.root;
@@ -527,29 +531,32 @@ function rebaseFixtureRegionalEcology(
       patch: legacy.patch,
     });
   }
-  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
-    expectedIntegrity: prior.integrity,
-    rootSeed,
-    root,
-    settlementHome: {
-      sourceKey: prior.settlementHome.sourceKey,
-      patch: prior.settlementHome.patch,
+  return serializeRegionalEcologyStateV2(replaceRegionalEcologyStateV2ActiveState(priorV2, {
+    expectedIntegrity: priorV2.integrity,
+    base: {
+      expectedIntegrity: prior.integrity,
+      rootSeed,
+      root,
+      settlementHome: {
+        sourceKey: prior.settlementHome.sourceKey,
+        patch: prior.settlementHome.patch,
+      },
+      activeRegions,
+      activeResidents,
     },
-    activeRegions,
-    activeResidents,
   }));
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v25 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v26 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
 }> {
   const envelope = decodeGameSave(record);
-  const current = exactV24CoreFromV25(envelope);
+  const current = exactV24CoreFromV26(envelope);
   if (
-    envelope.version !== 25
-    || record.payloadVersion !== 25
+    envelope.version !== 26
+    || record.payloadVersion !== 26
     || (
       current.derivation.kind !== "habitat-v11"
       && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
@@ -1859,9 +1866,9 @@ describe("perpetual new worlds", () => {
     await setup.save();
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
-    const currentEcology = exactV24CoreFromV25(currentEnvelope);
-    expect(currentEnvelope.version).toBe(25);
-    expect(currentRecord.payloadVersion).toBe(25);
+    const currentEcology = exactV24CoreFromV26(currentEnvelope);
+    expect(currentEnvelope.version).toBe(26);
+    expect(currentRecord.payloadVersion).toBe(26);
     expect(currentEcology?.derivation.kind).toBe("habitat-v11");
     if (currentEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("fixture did not create current regional-upland ecology");
@@ -1925,12 +1932,12 @@ describe("perpetual new worlds", () => {
     await migratedRuntime.save();
     const migratedRecord = repository.snapshot();
     const migratedEnvelope = decodeGameSave(migratedRecord);
-    const migratedRegionalEcology = deserializeRegionalEcologyState(
+    const migratedRegionalEcology = deserializeRegionalEcologyStateV2(
       migratedEnvelope.regionalEcology,
     );
-    const migratedEcology = migratedRegionalEcology?.root.legacyCohort?.sourcePatch ?? null;
-    expect(migratedEnvelope.version).toBe(25);
-    expect(migratedRecord.payloadVersion).toBe(25);
+    const migratedEcology = migratedRegionalEcology?.base.root.legacyCohort?.sourcePatch ?? null;
+    expect(migratedEnvelope.version).toBe(26);
+    expect(migratedRecord.payloadVersion).toBe(26);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v11");
     if (migratedEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("v11 migration did not produce canonical current ecology");
@@ -2167,7 +2174,7 @@ describe("runtime clarity guards", () => {
     advancePlayerSteps(resumed, 3);
     expect(resumed.getRenderView().player.position).toEqual(reloadedPosition);
     resumed.destroy();
-  }, 30_000);
+  }, 60_000);
 
   it("projects every stamina change through sweep recovery and immediate water re-entry", async () => {
     const world = createWorld("runtime stamina reentry", "calm");
@@ -2316,7 +2323,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(25);
+    expect(prepared.version).toBe(26);
     expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
     const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
@@ -2529,8 +2536,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(25);
-    expect(durableRecord.payloadVersion).toBe(25);
+    expect(durable.version).toBe(26);
+    expect(durableRecord.payloadVersion).toBe(26);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

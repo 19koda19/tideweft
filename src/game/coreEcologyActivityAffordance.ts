@@ -25,6 +25,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPE_IDS = Object.freeze([
   "dabbling-waterfowl",
   "shore-water-forager",
   "aerial-surface-opportunist",
+  "ridge-soar-perch",
 ] as const);
 
 export type CoreEcologyActivityArchetypeId =
@@ -40,6 +41,8 @@ export const CORE_ECOLOGY_ACTIVITY_DESTINATION_SEMANTICS = Object.freeze([
   "authenticated-foraging-water",
   "authenticated-dry-haulout",
   "observed-surface-opportunity",
+  "authenticated-ridge-perch",
+  "authenticated-ridge-soar-loop",
 ] as const);
 
 export type CoreEcologyActivityDestinationSemantic =
@@ -49,6 +52,7 @@ export type CoreEcologyActivityDestinationAuthority =
   | "current-lawful-observation"
   | "deterministic-local-area"
   | "habitat-allocation"
+  | "ridge-habitat"
   | "tidal-habitat";
 
 export const CORE_ECOLOGY_ACTIVITY_PRESENTATION_SIGNALS = Object.freeze([
@@ -57,6 +61,7 @@ export const CORE_ECOLOGY_ACTIVITY_PRESENTATION_SIGNALS = Object.freeze([
   "low-quartering-flight",
   "perched",
   "resting",
+  "ridge-soaring-flight",
   "shore-water-relocation",
   "surface-diving",
   "surface-opportunity-flight",
@@ -110,6 +115,7 @@ export const CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES = Object.freeze([
   "american-black-duck",
   "north-american-river-otter",
   "gull",
+  "golden-eagle",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
 export type CoreEcologyActivityAffordanceSpecies =
@@ -320,6 +326,25 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "tidal-relocation-flight",
       ],
     }),
+    archetype({
+      archetypeId: "ridge-soar-perch",
+      requiredCapabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "aerial-predator",
+        "diurnal-activity",
+        "movement-memory",
+        "perch",
+      ],
+      locomotionClass: "aerial",
+      allowedTravelMedia: ["air"],
+      destinations: [
+        destination("authenticated-ridge-perch", "ridge-habitat", ["air"]),
+        destination("authenticated-ridge-soar-loop", "ridge-habitat", ["air"]),
+      ],
+      observationAffordance: NONE_OBSERVATION,
+      presentationSignals: ["perched", "resting", "ridge-soaring-flight"],
+    }),
   ]);
 
 const ARCHETYPE_BY_ID = new Map<CoreEcologyActivityArchetypeId, CoreEcologyActivityArchetype>(
@@ -335,6 +360,7 @@ const ARCHETYPE_ASSIGNMENTS: Readonly<
   "american-black-duck": "dabbling-waterfowl",
   "north-american-river-otter": "shore-water-forager",
   gull: "aerial-surface-opportunist",
+  "golden-eagle": "ridge-soar-perch",
 });
 
 function composeProfile(
@@ -378,6 +404,7 @@ const DESTINATION_AUTHORITY_SET = new Set<string>([
   "current-lawful-observation",
   "deterministic-local-area",
   "habitat-allocation",
+  "ridge-habitat",
   "tidal-habitat",
 ]);
 

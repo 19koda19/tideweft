@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { CORE_WILDLIFE_SPECIES } from "../sim/coreWildlifeIdentity";
+import {
+  CORE_WILDLIFE_ALPHA32_SPECIES,
+  type CoreWildlifeSpecies,
+} from "../sim/coreWildlifeIdentity";
 import { seedFromText } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
-import { stableStringify } from "../sim/util";
+import { hashCanonical, stableStringify } from "../sim/util";
 import {
+  CORE_ECOLOGY_ALPHA32_DOMESTIC_SPECIES_HASH,
+  CORE_ECOLOGY_ALPHA32_REGIONAL_WILD_SPECIES_HASH,
   CORE_ECOLOGY_DOMESTIC_SPECIES,
+  CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT,
   CORE_ECOLOGY_REGIONAL_WILD_SPECIES,
   clearCoreEcologyRegionalHabitatCache,
   coreEcologyRegionalFloorDivide,
@@ -41,10 +47,16 @@ describe("core ecology regional habitat", () => {
     const reversed = deriveCoreEcologyRegionalHabitat({
       seed: SEED,
       region: occupiedRegion,
-      speciesOrder: [...CORE_WILDLIFE_SPECIES].reverse(),
+      speciesOrder: [...CORE_WILDLIFE_ALPHA32_SPECIES].reverse(),
     });
     expect(stableStringify(reversed)).toBe(stableStringify(canonical));
-    expect(canonical.catalogSpeciesCount).toBe(24);
+    expect(CORE_ECOLOGY_REGIONAL_WILD_SPECIES).toHaveLength(19);
+    expect(hashCanonical(CORE_ECOLOGY_REGIONAL_WILD_SPECIES))
+      .toBe(CORE_ECOLOGY_ALPHA32_REGIONAL_WILD_SPECIES_HASH);
+    expect(hashCanonical(CORE_ECOLOGY_DOMESTIC_SPECIES))
+      .toBe(CORE_ECOLOGY_ALPHA32_DOMESTIC_SPECIES_HASH);
+    expect(canonical.catalogSpeciesCount)
+      .toBe(CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT);
     expect(canonical.evaluatedWildSpeciesCount).toBe(CORE_ECOLOGY_REGIONAL_WILD_SPECIES.length);
     expect(canonical.populations.map(({ species }) => species)).not.toEqual(
       expect.arrayContaining([...CORE_ECOLOGY_DOMESTIC_SPECIES]),
@@ -54,6 +66,15 @@ describe("core ecology regional habitat", () => {
     expect(empty.density.regionalQuiet).toBe(true);
     expect(empty.totalPopulationUnits).toBe(0);
     expect(empty.admittedSpeciesCount).toBe(0);
+
+    expect(() => deriveCoreEcologyRegionalHabitat({
+      seed: SEED,
+      region: occupiedRegion,
+      speciesOrder: [
+        ...CORE_WILDLIFE_ALPHA32_SPECIES,
+        "mountain-goat" as CoreWildlifeSpecies,
+      ],
+    })).toThrow(/complete core wild-species catalog|Unsupported core wildlife species/u);
   });
 
   it("shares one radius-two large-predator owner field across seams", () => {

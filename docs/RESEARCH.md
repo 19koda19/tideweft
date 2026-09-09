@@ -464,6 +464,60 @@ tests, a five-file 3,551,649-byte served web build, a 10-entry 3,743,257-byte
 runtime-only Electron ASAR, and desktop/mobile/title smoke. A cache-bypassed
 live comparison matched all 5/5 production files exactly.
 
+The unreleased **SOURCE_CANDIDATE** `0.3.3-alpha.33 — Talus and Sky` tests the
+next scaling hypothesis: a new ecological domain should be an authenticated
+sparse sibling around frozen lineage, not a reason to rewrite the prior
+regional owner. Its twenty-seven-record catalog preserves all twenty-four
+Alpha32 records as an exact prefix, then appends mountain goat, American pika,
+and golden eagle. `RegionalEcologyStateV2` retains the exact version-1 child and
+adds a separate Alpine root and hot snapshots, while outer save 26 records one
+v25 adoption. This makes rollback, migration, and cross-owner invariants easier
+to reason about than a broad in-place schema rewrite.
+
+The trio is deliberately a representation experiment. A mountain goat is an
+addressable individual in an atomic `HERD`, a pika population is a conserved
+non-addressable talus aggregate, and a golden eagle is one solitary
+addressable actor. The same catalog can therefore describe morphology and
+ecological role without demanding identical simulation cost or pretending
+every animal is a clickable body. Pika haypiles, talus signs, and bounded
+activity are honest evidence; they do not disclose a hidden census or create
+an exact prey target.
+
+The useful emergence witness is small and causal. The existing visual
+stimulus, terrain line-of-sight, role/capability, and aggregate-response owners
+let a lawfully visible eagle nonlethally quiet or redistribute current pika
+activity. Putting a ridge between source and occupied anchor removes that
+pressure. Population units remain conserved, and there is no capture, injury,
+death, or carcass. This shows why one representative occluded/unoccluded chain
+is more valuable than multiplying eagle×pika fixtures or constructing an N²
+species matrix.
+
+Terrain adaptation also remains compositional. The common path surface accepts
+optional directed edge-grade authority; mountain goat opts in, while every
+frozen-prefix species keeps the Alpha32 cost shape. Golden eagle plugs into a
+generic `ridge-soar-perch` affordance whose ridge candidates are authenticated
+from canonical terrain. Relief's lifted, flapping, banking eagle is a
+state-based visualization of that activity, not evidence for authoritative
+continuous 3D flight physics.
+
+The performance lesson is that derived authority may be memoized only after
+its provenance is stable. The candidate bounds immutable Alpine habitat cache
+entries by seed/region and ridge activity by habitat/patch/actor, always
+authenticates caller-supplied terrain, excludes cache contents from saves, and
+keeps hashes independent of cache order. A local audit measured six cold
+regional habitats at roughly 889 ms and six cold Alpine habitats at roughly
+273 ms, while 22 repeated habitat requests collapsed to six derivation misses;
+a representative runtime moved from roughly 2.47 s cold to 151 ms warm, with
+save staging around 40–52 ms. These figures are diagnostic evidence for the
+cache seam, not cross-device promises and not live-release evidence.
+
+Talus and Sky remains the first bounded Alpine slice. It does not add new
+mortality, exact pika targeting, live-prey capture, reproduction, audible
+Living Voice, tactical combat, polar breadth, worldwide ecology, Wave-F
+completion, or a complete bestiary. Alpha32 remains the current
+**LIVE_VERIFIED** release until the source candidate passes CI, Pages, and
+exact deployed-artifact verification.
+
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
 working-relationship, recovery, knowledge, mortality/body, and shared-policy

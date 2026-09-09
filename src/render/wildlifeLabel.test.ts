@@ -16,6 +16,8 @@ describe("shared wildlife world-label copy", () => {
     for (const species of ["wild-boar", "elk", "gray-wolf", "cougar", "brown-bear"] as const) {
       expect(visibleWildlifeGroupSuffix({ species, groupSize: 5 })).toBe("");
     }
+    expect(visibleWildlifeGroupSuffix({ species: "mountain-goat", groupSize: 5 })).toBe("");
+    expect(visibleWildlifeGroupSuffix({ species: "golden-eagle", groupSize: 5 })).toBe("");
     expect(visibleWildlifeGroupSuffix({
       species: "north-american-river-otter",
       groupSize: 5,

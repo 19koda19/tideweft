@@ -19,7 +19,10 @@ import {
   type CoreEcologyRainChorusHabitatAssemblage,
   type CoreEcologyTidalWebHabitatAssemblage,
 } from "./coreEcologyHabitat";
-import { resolveCoreEcologyAggregateActivityIntensity } from "./coreEcologyAggregatePolicy";
+import {
+  coreEcologyAggregateSpeciesPolicy,
+  resolveCoreEcologyAggregateActivityIntensity,
+} from "./coreEcologyAggregatePolicy";
 import {
   CORE_ECOLOGY_SMALL_WORLD_VERSION,
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_CADENCE_TICKS,
@@ -27,6 +30,7 @@ import {
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_VERSION,
   canonicalizeCoreEcologySettlementShadowsStimulusFrame,
   stepCoreEcologySettlementShadows,
+  stepCoreEcologySmallWorldSourceSet,
   type CoreEcologySettlementShadowsChannel,
   type CoreEcologySettlementShadowsResponse,
   type CoreEcologySettlementShadowsSourceKind,
@@ -92,6 +96,7 @@ function fixture(
   tick = 0,
   origin: RegionCoord = ORIGIN,
   seed: RootSeed = SEED,
+  patchKey = "wave-b:settlement-shadows",
 ): CoreEcologyAggregatePatchState {
   const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({
     rootSeed: seed,
@@ -99,7 +104,7 @@ function fixture(
   });
   const patch = createCoreEcologyAggregatePatch({
     seed,
-    patchKey: "wave-b:settlement-shadows",
+    patchKey,
     originRegion: origin,
     tick,
     populations: individualInputs(habitat),
@@ -162,6 +167,50 @@ function frame(
 }
 
 describe("Settlement Shadows aggregate stimulus ecology", () => {
+  it("keeps current aggregate activity projection policy explicit and frozen", () => {
+    expect(coreEcologyAggregateSpeciesPolicy("brown-rat").activity).toMatchObject({
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
+    });
+    expect(coreEcologyAggregateSpeciesPolicy("southern-leopard-frog").activity).toMatchObject({
+      baselineProjection: "rain-responsive",
+      perceivedPressureResponse: "quiet",
+    });
+    for (const species of [
+      "atlantic-silverside",
+      "atlantic-marsh-fiddler-crab",
+    ] as const) {
+      expect(coreEcologyAggregateSpeciesPolicy(species).activity).toMatchObject({
+        baselineProjection: "preserve",
+        perceivedPressureResponse: "preserve",
+      });
+    }
+  });
+
+  it("steps a source set in stable key order and rejects the whole set on one invalid source", () => {
+    const sourceZ = fixture(0, ORIGIN, seedFromText("aggregate source z"), "source:z");
+    const sourceA = fixture(
+      0,
+      createRegionCoord(ORIGIN.x + 1, ORIGIN.y),
+      seedFromText("aggregate source a"),
+      "source:a",
+    );
+    const beforeA = serializeCoreEcologyAggregatePatch(sourceA);
+    const beforeZ = serializeCoreEcologyAggregatePatch(sourceZ);
+    const stepped = stepCoreEcologySmallWorldSourceSet([
+      { sourceKey: sourceZ.patchKey, patch: sourceZ, stimulusFrame: frame(0, []) },
+      { sourceKey: sourceA.patchKey, patch: sourceA, stimulusFrame: frame(0, []) },
+    ], 0);
+    expect(stepped?.map(({ sourceKey }) => sourceKey)).toEqual(["source:a", "source:z"]);
+
+    expect(stepCoreEcologySmallWorldSourceSet([
+      { sourceKey: sourceA.patchKey, patch: sourceA, stimulusFrame: frame(0, []) },
+      { sourceKey: sourceZ.patchKey, patch: sourceZ, stimulusFrame: frame(1, []) },
+    ], 0)).toBeNull();
+    expect(serializeCoreEcologyAggregatePatch(sourceA)).toBe(beforeA);
+    expect(serializeCoreEcologyAggregatePatch(sourceZ)).toBe(beforeZ);
+  });
+
   it("uses bounded density spacing as the rat aggregate's same-species interaction", () => {
     let concentrated = fixture();
     const initialRats = concentrated.aggregatePopulations.find(({ species }) => (

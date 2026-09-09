@@ -14,6 +14,7 @@ import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
+  alpineWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
@@ -3834,6 +3835,127 @@ export function createTideweftRenderer(
       );
     };
 
+    const drawChartMountainGoat = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const colors = alpineWildlifeAppearancePalette("mountain-goat", actor.appearanceKey);
+      const moving = actor.behavior === "flee" || actor.behavior === "retreat";
+      const browsing = actor.behavior === "forage";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.009) * base * 0.24;
+      const bodyLength = base * 3.5;
+      const bodyHeight = base * 1.58;
+      const headX = bodyLength * 0.53;
+      const headY = browsing ? bodyHeight * 0.4 : -bodyHeight * 0.38;
+      const headRadius = base * 0.64;
+
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(0.9, base * 0.18));
+      for (const [legX, phase] of [
+        [-bodyLength * 0.3, -1],
+        [bodyLength * 0.29, 1],
+      ] as const) {
+        p.line(legX, bodyHeight * 0.24, legX + stride * phase, bodyHeight * 1.04);
+        p.line(
+          legX + stride * phase - base * 0.16,
+          bodyHeight * 1.04,
+          legX + stride * phase + base * 0.2,
+          bodyHeight * 1.04,
+        );
+      }
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 242));
+      p.ellipse(0, 0, bodyLength * 1.1, bodyHeight * 1.26);
+      p.circle(headX, headY, headRadius * 2.3);
+      p.fill(colors.primary);
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.circle(headX, headY, headRadius * 2.05);
+      // Uneven lower fringe keeps the shaggy alpine coat readable at map scale.
+      p.fill(colors.secondary);
+      for (const x of [-1.05, -0.52, 0, 0.52, 1.05]) {
+        p.triangle(
+          base * x - base * 0.32, bodyHeight * 0.25,
+          base * x, bodyHeight * 0.68,
+          base * x + base * 0.32, bodyHeight * 0.25,
+        );
+      }
+      p.fill(colors.primary);
+      p.quad(
+        bodyLength * 0.25, -bodyHeight * 0.32,
+        headX - headRadius * 0.5, headY - headRadius * 0.2,
+        headX - headRadius * 0.4, headY + headRadius * 0.5,
+        bodyLength * 0.23, bodyHeight * 0.3,
+      );
+      p.noFill();
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(1, base * 0.2));
+      for (const offset of [-0.18, 0.18]) {
+        p.bezier(
+          headX + headRadius * offset,
+          headY - headRadius * 0.62,
+          headX - headRadius * 0.18,
+          headY - headRadius * 1.42,
+          headX - headRadius * 1.02,
+          headY - headRadius * 1.18,
+          headX - headRadius * 0.92,
+          headY - headRadius * 0.58,
+        );
+      }
+      p.noStroke();
+      p.fill(colors.dark);
+      p.circle(headX + headRadius * 0.42, headY - headRadius * 0.2, base * 0.14);
+    };
+
+    const drawChartGoldenEagle = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const colors = alpineWildlifeAppearancePalette("golden-eagle", actor.appearanceKey);
+      const perched = actor.behavior === "perch" || actor.behavior === "rest";
+      const bank = reducedMotion || perched ? 0 : Math.sin(now * 0.0032) * base * 0.24;
+      p.noStroke();
+      p.fill(withAlpha(PALETTE.ink, 242));
+      if (perched) {
+        p.ellipse(0, 0, base * 1.28, base * 2.65);
+        p.fill(colors.primary);
+        p.ellipse(0, 0, base, base * 2.35);
+        p.fill(colors.secondary);
+        p.ellipse(base * 0.18, -base * 0.92, base * 0.78, base * 0.64);
+        p.fill(colors.accent);
+        p.arc(base * 0.04, -base * 0.72, base * 0.82, base * 0.76, p.PI, p.TWO_PI);
+        p.fill(colors.dark);
+        p.triangle(base * 0.5, -base * 0.97, base * 1.02, -base * 0.76, base * 0.48, -base * 0.62);
+        p.triangle(-base * 0.42, base * 1.04, 0, base * 1.75, base * 0.42, base * 1.04);
+        return;
+      }
+      // Long rigid wings and separated primaries read as soaring rather than flapping.
+      p.fill(colors.primary);
+      p.ellipse(0, 0, base * 0.92, base * 2.25);
+      for (const side of [-1, 1] as const) {
+        p.quad(
+          side * base * 0.16, -base * 0.32,
+          side * base * 3.55, -base * 0.62 + bank * side,
+          side * base * 2.42, base * 0.38 + bank * side,
+          side * base * 0.1, base * 0.34,
+        );
+        p.fill(colors.dark);
+        for (const feather of [2.45, 2.8, 3.14]) {
+          p.triangle(
+            side * base * (feather - 0.32), -base * 0.36 + bank * side,
+            side * base * (feather + 0.5), -base * 0.2 + bank * side,
+            side * base * (feather - 0.18), base * 0.22 + bank * side,
+          );
+        }
+        p.fill(colors.primary);
+      }
+      p.fill(colors.accent);
+      p.ellipse(0, -base * 0.74, base * 0.72, base * 0.62);
+      p.fill(colors.dark);
+      p.triangle(-base * 0.42, base * 0.86, 0, base * 1.78, base * 0.42, base * 0.86);
+    };
+
     const drawChartUplandMammal = (
       actor: WildlifeView,
       species: RegionalUplandWildlifeAppearanceSpecies,
@@ -4053,6 +4175,12 @@ export function createTideweftRenderer(
         case "marsh-fox":
           drawChartMarshFox(actor, base, now);
           return true;
+        case "mountain-goat":
+          drawChartMountainGoat(actor, base, now);
+          return true;
+        case "golden-eagle":
+          drawChartGoldenEagle(actor, base, now);
+          return true;
       }
     };
 
@@ -4249,6 +4377,44 @@ export function createTideweftRenderer(
             p.strokeWeight(Math.max(0.7, base * 0.12));
             p.line(-base * 1.55, base * 0.82, -base * 0.78, base * 0.45);
             p.line(base * 1.55, base * 0.82, base * 0.78, base * 0.45);
+            break;
+          case "haypile":
+            p.noStroke();
+            p.fill("#6d7445");
+            for (const [x, y, angle] of [
+              [-0.72, 0.34, -0.48],
+              [-0.24, -0.16, 0.32],
+              [0.28, 0.24, -0.18],
+              [0.72, -0.26, 0.52],
+            ] as const) {
+              p.push();
+              p.translate(base * x, base * y);
+              p.rotate(angle);
+              p.ellipse(0, 0, base * 1.28, base * 0.34);
+              p.pop();
+            }
+            p.stroke("#c2b16d");
+            p.strokeWeight(Math.max(0.65, base * 0.1));
+            p.line(-base * 1.3, base * 0.56, base * 1.18, -base * 0.5);
+            break;
+          case "talus-sign":
+            p.noStroke();
+            for (const [x, y, scale] of [
+              [-0.82, 0.35, 0.78],
+              [0, -0.24, 1.08],
+              [0.88, 0.28, 0.7],
+            ] as const) {
+              p.fill("#777b73");
+              p.triangle(
+                base * (x - scale * 0.58), base * (y + scale * 0.42),
+                base * x, base * (y - scale * 0.58),
+                base * (x + scale * 0.62), base * (y + scale * 0.4),
+              );
+            }
+            p.stroke("#272b29");
+            p.strokeWeight(Math.max(0.7, base * 0.12));
+            p.line(-base * 0.34, base * 0.14, base * 0.18, base * 0.42);
+            p.line(base * 0.18, base * 0.42, base * 0.58, base * 0.06);
             break;
         }
         p.pop();

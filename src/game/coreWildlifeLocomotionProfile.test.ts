@@ -9,12 +9,16 @@ import {
 import {
   CORE_WILDLIFE_BASE_MOVE_STEP_UNITS,
   CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION,
+  coreWildlifeGradeTraversalPolicy,
   coreWildlifeLocomotionProfile,
   coreWildlifeMaximumStepUnits,
   coreWildlifeTraversabilityCell,
 } from "./coreWildlifeLocomotionProfile";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import { createWorldPosition } from "./worldPosition";
+
+export const ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT =
+  "test:alpha33-alpine-shared-activity:v1" as const;
 
 function tile(overrides: Partial<TerrainTileView> = {}): TerrainTileView {
   return {
@@ -33,7 +37,7 @@ function tile(overrides: Partial<TerrainTileView> = {}): TerrainTileView {
 }
 
 describe("core wildlife locomotion profiles", () => {
-  it("selects authored terrestrial gait data through the shared profile", () => {
+  it(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} selects mountain-goat grade behavior through the shared terrestrial profile`, () => {
     expect(coreWildlifeLocomotionProfile("domestic-goat")).toEqual({
       mode: "terrestrial",
       aerialTravelCost: null,
@@ -51,6 +55,41 @@ describe("core wildlife locomotion profiles", () => {
       "domestic-goat",
       tile({ terrain: "marsh" }),
     ).travelCost);
+    expect(coreWildlifeLocomotionProfile("mountain-goat")).toMatchObject({
+      mode: "terrestrial",
+      aerialTravelCost: null,
+      baseStepFactor: 750_000,
+      terrainMultipliers: {
+        marsh: 1_450_000,
+        meadow: 900_000,
+        ridge: 520_000,
+        "tidal-flat": 1_600_000,
+      },
+      intentStepFactors: { flee: 900_000, retreat: 840_000 },
+    });
+    expect(coreWildlifeTraversabilityCell(
+      "mountain-goat",
+      tile({ terrain: "ridge" }),
+    ).travelCost).toBeLessThan(coreWildlifeTraversabilityCell(
+      "mountain-goat",
+      tile({ terrain: "marsh" }),
+    ).travelCost);
+    expect(coreWildlifeGradeTraversalPolicy("mountain-goat")).toEqual({
+      version: 1,
+      ascent: {
+        comfortableGrade: 350_000,
+        maximumGrade: 850_000,
+        costMultiplierAtMaximum: 1_800_000,
+      },
+      descent: {
+        comfortableGrade: 420_000,
+        maximumGrade: 900_000,
+        costMultiplierAtMaximum: 1_550_000,
+      },
+    });
+    expect(Object.isFrozen(coreWildlifeGradeTraversalPolicy("mountain-goat"))).toBe(true);
+    expect(coreWildlifeGradeTraversalPolicy("deer")).toBeNull();
+    expect(coreWildlifeGradeTraversalPolicy("domestic-goat")).toBeNull();
   });
 
   it("generalizes bounded aerial travel without reading surface impedance", () => {
@@ -65,6 +104,7 @@ describe("core wildlife locomotion profiles", () => {
       "fish-crow",
       "northern-harrier",
       "snowy-egret",
+      "golden-eagle",
     ] as const) {
       expect(coreWildlifeLocomotionProfile(species).mode).toBe("aerial");
       expect(coreWildlifeTraversabilityCell(species, blockedSurface)).toMatchObject({

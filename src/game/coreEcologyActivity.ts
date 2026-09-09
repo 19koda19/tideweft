@@ -22,6 +22,11 @@ import {
   isTrustedCoreEcologyActivityAuthority,
   type CoreEcologyActivityAuthorityV1,
 } from "./coreEcologyActivityAuthority";
+import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
+import {
+  coreEcologyRidgeSoarAnchorAtCadence,
+  type CoreEcologyRidgeActivityAuthorityV1,
+} from "./coreEcologyRidgeActivityAuthority";
 import {
   coreEcologySpeciesRuntimePolicy,
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES,
@@ -80,11 +85,13 @@ export type CoreEcologyActivityState =
   | "hauling-out"
   | "low-quartering"
   | "perched"
+  | "ridge-soaring"
   | "responding"
   | "resting"
   | "shore-resting"
   | "seeking-habitat-anchor"
   | "seeking-perch"
+  | "seeking-ridge-perch"
   | "seeking-tidal-refuge"
   | "seeking-dabbling-water"
   | "seeking-foraging-water"
@@ -122,6 +129,8 @@ export type CoreEcologyActivityMotion =
         | "seek-dabbling-water"
         | "seek-otter-foraging-water"
         | "seek-otter-haulout"
+        | "seek-ridge-perch"
+        | "soar-ridge-loop"
         | "seek-waterfowl-refuge";
       readonly targetArea: ObservedArea;
       readonly travelMedium: CoreWildlifeTravelMedium;
@@ -155,6 +164,11 @@ export interface ProjectCoreEcologyActivityInput {
   readonly actorId: string;
   readonly atTick: number;
 }
+
+/** Transient destination custody accepted by the shared activity owner. */
+export type CoreEcologyActivityAuthorityReceipt =
+  | CoreEcologyActivityAuthorityV1
+  | CoreEcologyRidgeActivityAuthorityV1;
 
 export interface StepCoreEcologyActivityMotionInput extends ProjectCoreEcologyActivityInput {
   readonly maximumStepUnits: number;
@@ -258,6 +272,10 @@ export function coreEcologyActivityDestinationSemantic(
       return "authenticated-foraging-water";
     case "seek-otter-haulout":
       return "authenticated-dry-haulout";
+    case "seek-ridge-perch":
+      return "authenticated-ridge-perch";
+    case "soar-ridge-loop":
+      return "authenticated-ridge-soar-loop";
   }
   const exhaustiveVerb: never = verb;
   return exhaustiveVerb;
@@ -288,6 +306,7 @@ export function validateCoreEcologyActivityProjectionAffordance(
 
   const perchDestination = profile.destinations.find(({ semantic }) => (
     semantic === "authenticated-habitat-perch"
+    || semantic === "authenticated-ridge-perch"
   ));
   if (perchDestination === undefined) {
     if (
@@ -353,7 +372,7 @@ export function validateCoreEcologyActivityProjectionAffordance(
 export function projectCoreEcologyActivity(
   patchValue: unknown,
   input: ProjectCoreEcologyActivityInput,
-  authority?: CoreEcologyActivityAuthorityV1,
+  authority?: CoreEcologyActivityAuthorityReceipt,
 ): CoreEcologyActivityProjection | null {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   return patch === null
@@ -383,7 +402,7 @@ export function coreEcologyPatchHasBoundedActivityAuthority(
 export function stepCoreEcologyActivityMotion(
   patchValue: unknown,
   input: StepCoreEcologyActivityMotionInput,
-  authority?: CoreEcologyActivityAuthorityV1,
+  authority?: CoreEcologyActivityAuthorityReceipt,
 ): CoreEcologyActivityMotionStep | null {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const ordinaryKeys = ["actorId", "atTick", "maximumStepUnits"] as const;
@@ -489,7 +508,7 @@ export function stepCoreEcologyActivityMotion(
 function projectCanonicalCoreEcologyActivity(
   patch: CoreEcologyAggregatePatchState,
   input: ProjectCoreEcologyActivityInput,
-  suppliedAuthority?: CoreEcologyActivityAuthorityV1,
+  suppliedAuthority?: CoreEcologyActivityAuthorityReceipt,
 ): CoreEcologyActivityProjection | null {
   if (
     !plainRecord(input)
@@ -513,19 +532,24 @@ function projectCanonicalCoreEcologyActivity(
     patch,
     owned.population,
     owned.member,
+    activityProfile,
     suppliedAuthority,
   );
   if (authority === null) return null;
 
   const responsive = IMMEDIATE_RESPONSE_INTENTS.has(owned.member.actor.intent.kind);
   if (responsive) {
+    const responsivePerchAnchor = activityPerchAnchor(activityProfile, authority);
     return activityProjection(owned, input.atTick, day, {
       state: "responding",
       responsiveToImmediateIntent: true,
       preferredNeutralIntent: null,
       presentationSignal: null,
-      perch: profileUsesHabitatPerch(activityProfile)
-        ? perchProjection(authority.homeAnchor, owned.member.actor.address.position)
+      perch: responsivePerchAnchor !== null
+        ? perchProjection(
+            responsivePerchAnchor,
+            owned.member.actor.address.position,
+          )
         : noPerchProjection(),
       motion: Object.freeze({ kind: "defer-to-intent" }),
     });
@@ -533,6 +557,48 @@ function projectCanonicalCoreEcologyActivity(
 
   const actorNeedsRest = owned.member.actor.intent.kind === "rest";
   const inRestWindow = day.phase === "rest-window";
+  if (activityProfile.archetypeId === "ridge-soar-perch") {
+    const ridgeAuthority = authority.ridgeAuthority;
+    if (ridgeAuthority === null) return null;
+    const perchAnchor = ridgeAuthority.perchAnchor.position;
+    const perch = perchProjection(perchAnchor, owned.member.actor.address.position);
+    if (inRestWindow || actorNeedsRest) {
+      const atPerch = perch.availability === "available-here";
+      return activityProjection(owned, input.atTick, day, {
+        state: atPerch ? "perched" : "seeking-ridge-perch",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: inRestWindow && atPerch ? "rest" : "observe",
+        presentationSignal: atPerch ? "perched" : "ridge-soaring-flight",
+        perch,
+        motion: atPerch
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-ridge-perch",
+              targetArea: frozenArea(perchAnchor, PERCH_ARRIVAL_RADIUS_UNITS),
+              travelMedium: "air",
+            }),
+      });
+    }
+    const soarAnchor = coreEcologyRidgeSoarAnchorAtCadence(
+      ridgeAuthority,
+      Math.trunc(input.atTick / CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS),
+    );
+    if (soarAnchor === null) return null;
+    return activityProjection(owned, input.atTick, day, {
+      state: "ridge-soaring",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: "observe",
+      presentationSignal: "ridge-soaring-flight",
+      perch,
+      motion: Object.freeze({
+        kind: "target-area",
+        verb: "soar-ridge-loop",
+        targetArea: frozenArea(soarAnchor.position, PERCH_ARRIVAL_RADIUS_UNITS),
+        travelMedium: "air",
+      }),
+    });
+  }
   if (activityProfile.archetypeId === "perch-watch") {
     const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
     if (inRestWindow || actorNeedsRest) {
@@ -1272,13 +1338,15 @@ function findMaterializedActor(
 interface AuthenticatedActivityDestinations {
   readonly homeAnchor: WorldPosition;
   readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
+  readonly ridgeAuthority: CoreEcologyRidgeActivityAuthorityV1 | null;
 }
 
 function authenticatedActivityDestinations(
   patch: CoreEcologyAggregatePatchState,
   population: CoreEcologyPopulationState,
   member: CoreEcologyPopulationMemberState,
-  supplied: CoreEcologyActivityAuthorityV1 | undefined,
+  profile: CoreEcologyActivityAffordanceProfile,
+  supplied: CoreEcologyActivityAuthorityReceipt | undefined,
 ): AuthenticatedActivityDestinations | null {
   const embedded = authenticatedHabitatAllocation(patch, population, member);
   if (embedded !== null && isActivityHabitatDerivation(patch)) {
@@ -1290,11 +1358,26 @@ function authenticatedActivityDestinations(
     return Object.freeze({
       homeAnchor: embedded.position,
       tidalAnchors: Object.freeze(tidalAnchors),
+      ridgeAuthority: null,
+    });
+  }
+  if (supplied === undefined) return null;
+  if (profile.archetypeId === "ridge-soar-perch") {
+    if (
+      !isTrustedCoreEcologyAlpineRidgeActivityAuthority(supplied)
+      || supplied.sourceKey !== patch.patchKey
+      || supplied.actorId !== member.actor.identity.stableId
+      || supplied.homeAnchor.region.x !== patch.originRegion.x
+      || supplied.homeAnchor.region.y !== patch.originRegion.y
+    ) return null;
+    return Object.freeze({
+      homeAnchor: supplied.homeAnchor,
+      tidalAnchors: Object.freeze([]),
+      ridgeAuthority: supplied,
     });
   }
   if (
-    supplied === undefined
-    || !isTrustedCoreEcologyActivityAuthority(supplied)
+    !isTrustedCoreEcologyActivityAuthority(supplied)
     || supplied.sourceKey !== patch.patchKey
     || supplied.actorId !== member.actor.identity.stableId
     || supplied.species !== population.species
@@ -1302,6 +1385,7 @@ function authenticatedActivityDestinations(
   return Object.freeze({
     homeAnchor: supplied.homeAnchor,
     tidalAnchors: supplied.tidalAnchors,
+    ridgeAuthority: null,
   });
 }
 
@@ -1379,12 +1463,16 @@ function runtimePolicyOwnsActivity(
     ));
 }
 
-function profileUsesHabitatPerch(
+function activityPerchAnchor(
   profile: CoreEcologyActivityAffordanceProfile,
-): boolean {
+  authority: AuthenticatedActivityDestinations,
+): WorldPosition | null {
+  if (profile.destinations.some(({ semantic }) => (
+    semantic === "authenticated-ridge-perch"
+  ))) return authority.ridgeAuthority?.perchAnchor.position ?? null;
   return profile.destinations.some(({ semantic }) => (
     semantic === "authenticated-habitat-perch"
-  ));
+  )) ? authority.homeAnchor : null;
 }
 
 function perchProjection(

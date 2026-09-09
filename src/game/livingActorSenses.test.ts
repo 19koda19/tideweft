@@ -64,6 +64,7 @@ describe("shared living actor sensory profiles", () => {
   it("derives every production sensory profile from the versioned species catalog", () => {
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId)).toEqual([
       "american-black-duck",
+      "american-pika",
       "atlantic-marsh-fiddler-crab",
       "atlantic-silverside",
       "black-bear",
@@ -77,11 +78,13 @@ describe("shared living actor sensory profiles", () => {
       "domestic-goat",
       "elk",
       "fish-crow",
+      "golden-eagle",
       "gray-wolf",
       "gull",
       "human",
       "marsh-fox",
       "marsh-rabbit",
+      "mountain-goat",
       "north-american-river-otter",
       "northern-harrier",
       "snowy-egret",

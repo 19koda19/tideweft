@@ -277,6 +277,33 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 52_000,
     },
   },
+  "mountain-goat": {
+    aboutNoun: "mountain goat",
+    senses: {
+      visionAcuity: 900_000,
+      hearingSensitivity: 900_000,
+      scentSensitivity: 620_000,
+      scentBaseRangeUnits: 20_000,
+    },
+  },
+  "american-pika": {
+    aboutNoun: "American pika activity",
+    senses: {
+      visionAcuity: 780_000,
+      hearingSensitivity: 940_000,
+      scentSensitivity: 650_000,
+      scentBaseRangeUnits: 12_000,
+    },
+  },
+  "golden-eagle": {
+    aboutNoun: "golden eagle",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 760_000,
+      scentSensitivity: 80_000,
+      scentBaseRangeUnits: 4_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

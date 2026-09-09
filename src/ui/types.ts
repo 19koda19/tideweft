@@ -300,11 +300,7 @@ export interface SelectedLivingActorUIView {
 
 /** Stable identity for one physical sign belonging to an aggregate population. */
 export interface WildlifeEvidenceTargetUIView {
-  readonly species:
-    | "atlantic-marsh-fiddler-crab"
-    | "atlantic-silverside"
-    | "brown-rat"
-    | "southern-leopard-frog";
+  readonly species: CoreEcologyAggregateSpecies;
   readonly aggregateId: string;
   readonly evidenceId: string;
 }

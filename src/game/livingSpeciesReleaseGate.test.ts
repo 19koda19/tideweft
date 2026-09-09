@@ -7,6 +7,9 @@ import {
 } from "./livingSpeciesCatalog";
 import type { LivingActorSpecies } from "./livingSpeciesRegistry";
 import {
+  ALPHA33_WAVE_F_ALPINE_EXCLUDED_CLAIMS,
+  ALPHA33_WAVE_F_ALPINE_SHARED_READINESS,
+  ALPHA33_WAVE_F_ALPINE_SPECIES,
   ALPHA20_AMERICAN_BLACK_DUCK_BOUNDED_READINESS,
   ALPHA20_AMERICAN_BLACK_DUCK_EXCLUDED_CLAIMS,
   ALPHA20_AMERICAN_BLACK_DUCK_SPECIES,
@@ -43,6 +46,7 @@ import {
   alpha22TidalConvergenceSourceCandidateReadiness,
   alpha24DomesticChickenBoundedReadiness,
   alpha25SharedDomesticLivestockReadiness,
+  alpha33WaveFAlpineSharedReadiness,
   auditLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGate,
   canonicalizeLivingSpeciesReleaseGateSet,
@@ -192,6 +196,150 @@ describe("Living Weft species release gate", () => {
         });
       }
     }
+  });
+
+  it("authenticates Wave F Alpine as one bounded connected triad over shared owners", () => {
+    const readiness = alpha33WaveFAlpineSharedReadiness();
+
+    expect(readiness).toEqual(ALPHA33_WAVE_F_ALPINE_SHARED_READINESS);
+    expect(readiness).toMatchObject({
+      version: 1,
+      unitId: "alpha33-wave-f-alpine",
+      scope: "bounded-sparse-alpine-triad",
+      speciesIds: ["mountain-goat", "american-pika", "golden-eagle"],
+      evidenceAuthenticated: true,
+      connectedRoleContractReady: true,
+      sparseSignedExtremePresenceReady: true,
+      sharedGradeAndRidgeActivityReady: true,
+      knowledgeHonestPresentationReady: true,
+      eaglePikaLosPressureReady: true,
+      v2SaveRuntimeContinuityReady: true,
+      globalMaterializationBudgetReady: true,
+      performanceEvidenceReady: true,
+      mobileParityReady: true,
+      sharedInvariantCoverageReady: true,
+      excludedClaimIntegrityReady: true,
+      boundedCandidateReady: true,
+      blockingCapabilities: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      liveVerified: false,
+      published: false,
+      fullThirtyCriterionReady: false,
+      fullWaveFReady: false,
+      fullDirective041Ready: false,
+    });
+    expect(readiness.speciesIds).toEqual(ALPHA33_WAVE_F_ALPINE_SPECIES);
+    expect(readiness.roles.map(({ role, speciesId, representation, actorAddressable }) => ({
+      role,
+      speciesId,
+      representation,
+      actorAddressable,
+    }))).toEqual([
+      {
+        role: "high-ridge-herd",
+        speciesId: "mountain-goat",
+        representation: "individual-herd",
+        actorAddressable: true,
+      },
+      {
+        role: "talus-prey-aggregate",
+        speciesId: "american-pika",
+        representation: "non-addressable-aggregate",
+        actorAddressable: false,
+      },
+      {
+        role: "solitary-aerial-predator",
+        speciesId: "golden-eagle",
+        representation: "solitary-aerial-individual",
+        actorAddressable: true,
+      },
+    ]);
+    for (const role of readiness.roles) {
+      expect(role).toMatchObject({
+        evidenceAuthenticated: true,
+        representationAuthenticated: true,
+        presentationAuthenticated: true,
+        ready: true,
+      });
+    }
+    expect(readiness.evidenceOwnerIds).toEqual([...readiness.evidenceOwnerIds].sort());
+    expect(new Set(readiness.evidenceOwnerIds).size).toBe(readiness.evidenceOwnerIds.length);
+    expect(readiness.evidenceOwnerIds).toEqual(expect.arrayContaining([
+      "game:core-ecology-alpine-habitat:v1",
+      "game:core-ecology-ridge-activity-authority:v1",
+      "game:regional-alpine-ecology:v1",
+      "game:regional-ecology-state:v2",
+      "game:runtime-save:v26",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "test:alpha33-alpine-eagle-pika-emergence:v1",
+      "test:alpha33-alpine-performance:v1",
+      "test:alpha33-alpine-presentation-invariants:v1",
+      "test:alpha33-alpine-runtime-v26:v1",
+      "test:alpha33-alpine-shared-activity:v1",
+      "test:alpha33-alpine-shared-invariants:v1",
+    ]));
+    expect(readiness.excludedClaims).toEqual(ALPHA33_WAVE_F_ALPINE_EXCLUDED_CLAIMS);
+    expect(readiness.excludedClaims).toEqual(expect.arrayContaining([
+      "new-mortality",
+      "capture",
+      "exact-pika-targeting",
+      "reproduction",
+      "audible-living-voice",
+      "tactical-combat",
+      "polar-ecology",
+      "full-wave-f",
+    ]));
+
+    for (const species of ALPHA33_WAVE_F_ALPINE_SPECIES) {
+      const releaseGate = gate(species);
+      const state = (criterion: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+        releaseGate.criteria.find((candidate) => candidate.criterion === criterion)
+      );
+      for (const sharedActive of [
+        "species-profile",
+        "ecological-niche",
+        "appearance",
+        "habitat-placement",
+        "perception-senses",
+        "locomotion",
+        "other-species-interaction",
+        "about-disclosure",
+        "knowledge-honesty",
+        "population-materialization",
+        "full-coarse-transition",
+        "save-load",
+        "seamless-region-crossing",
+        "performance-budget",
+        "accessibility",
+        "mobile-parity",
+        "player-independent-scenario",
+        "fuzz-testing",
+      ] as const) {
+        expect(state(sharedActive)?.status).toBe("active");
+      }
+      for (const deliberatelyWithheld of [
+        "sound",
+        "tutorial-truth",
+        "patch-note-truth",
+        "exact-tested-deployment",
+      ] as const) {
+        expect(state(deliberatelyWithheld)).toMatchObject({
+          status: "unimplemented",
+          evidenceOwnerIds: [],
+        });
+      }
+      expect(livingSpeciesReadinessReport(species)).toMatchObject({
+        evidenceAuthenticated: true,
+        state: "blocked",
+        publicReady: false,
+        counts: { total: 30 },
+      });
+    }
+    expect(Object.isFrozen(readiness)).toBe(true);
+    expect(Object.isFrozen(readiness.roles)).toBe(true);
+    expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
   });
 
   it("keeps every current actor module blocked until all 30 release criteria close", () => {

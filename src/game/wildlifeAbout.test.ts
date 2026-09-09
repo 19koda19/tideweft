@@ -39,6 +39,9 @@ import {
   resolveActorAboutSurface,
 } from "../ui/livingActorAbout";
 
+export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha33-alpine-presentation-invariants:v1" as const;
+
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(3, -7);
   return createCoreWildlifeActorState({
@@ -347,7 +350,7 @@ function pursuingBear(): CoreWildlifeActorState {
   return result;
 }
 
-describe("knowledge-honest wildlife ABOUT", () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
   it.each([
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
@@ -366,6 +369,8 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["gray-wolf", "GRAY WOLF", "Gray wolf"],
     ["cougar", "COUGAR", "Cougar"],
     ["brown-bear", "BROWN BEAR", "Brown bear"],
+    ["mountain-goat", "MOUNTAIN GOAT", "Mountain goat"],
+    ["golden-eagle", "GOLDEN EAGLE", "Golden eagle"],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -405,6 +410,13 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["cougar", "UNKNOWN LARGE CAT", "Unidentified large cat", 80],
     ["brown-bear", "LARGE BEAR", "Unidentified large bear", 80],
     [
+      "mountain-goat",
+      "UNKNOWN MOUNTAIN ANIMAL",
+      "Unidentified mountain animal",
+      80,
+    ],
+    ["golden-eagle", "UNKNOWN LARGE RAPTOR", "Unidentified large raptor", 80],
+    [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",
       "Unidentified aquatic mammal",
@@ -434,6 +446,8 @@ describe("knowledge-honest wildlife ABOUT", () => {
     ["domestic-chicken", "Compact ground bird with comb and upright tail"],
     ["domestic-goat", "Stocky, cloven-hoofed goat with swept horns"],
     ["north-american-river-otter", "Long-bodied, low-slung swimmer"],
+    ["mountain-goat", "Shaggy, sure-footed ungulate with dark swept horns"],
+    ["golden-eagle", "Large, broad-winged raptor with a golden nape"],
   ] as const)("shows only directly observable close-range %s facts", (species, form) => {
     const actor = wildlife(species);
     const selected = projectWildlifeLivingActorInspection(actor, observation(actor));
@@ -452,7 +466,11 @@ describe("knowledge-honest wildlife ABOUT", () => {
                   ? "Domestic chicken"
                   : species === "domestic-goat"
                     ? "Domestic goat"
-                  : "North American river otter",
+                  : species === "north-american-river-otter"
+                    ? "North American river otter"
+                    : species === "mountain-goat"
+                      ? "Mountain goat"
+                      : "Golden eagle",
       },
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },
@@ -596,6 +614,22 @@ describe("knowledge-honest wildlife ABOUT", () => {
       observed: [{ label: "Behavior", value: "Still" }],
       known: [],
     });
+  });
+
+  it("never turns American pika population activity into an ABOUT actor identity", () => {
+    const deer = wildlife("deer");
+    const fabricatedPika = {
+      ...deer,
+      identity: {
+        ...deer.identity,
+        species: "american-pika",
+        stableId: "PIKA-fabricated-individual",
+      },
+    };
+    const visible = observation(deer);
+    expect(projectWildlifeQuickInspect(fabricatedPika, visible)).toBeNull();
+    expect(projectWildlifeAbout(fabricatedPika, visible)).toBeNull();
+    expect(projectWildlifeLivingActorInspection(fabricatedPika, visible)).toBeNull();
   });
 
   it("describes directly visible brown-rat evidence as population-level signs", () => {

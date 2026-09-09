@@ -211,6 +211,24 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "LARGE BEAR",
     representation: "individual",
   },
+  "mountain-goat": {
+    identifiedName: "Mountain goat",
+    identifiedHeading: "MOUNTAIN GOAT",
+    unidentifiedHeading: "UNKNOWN MOUNTAIN ANIMAL",
+    representation: "individual",
+  },
+  "american-pika": {
+    identifiedName: "American pika",
+    identifiedHeading: "AMERICAN PIKA SIGNS",
+    unidentifiedHeading: "TALUS-ANIMAL SIGNS",
+    representation: "population-area",
+  },
+  "golden-eagle": {
+    identifiedName: "Golden eagle",
+    identifiedHeading: "GOLDEN EAGLE",
+    unidentifiedHeading: "UNKNOWN LARGE RAPTOR",
+    representation: "individual",
+  },
 });
 
 /**

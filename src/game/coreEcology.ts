@@ -84,6 +84,10 @@ import {
   type CoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import {
+  canonicalizeCoreEcologyAlpineHabitat,
+  type CoreEcologyAlpineHabitat,
+} from "./coreEcologyAlpineHabitat";
+import {
   coreEcologyAggregateSpeciesPolicy,
   isCoreEcologyAggregateSpecies,
   resolveCoreEcologyAggregateActivityIntensity,
@@ -94,6 +98,7 @@ import {
 } from "./coreEcologyAggregatePolicy";
 import {
   CORE_ECOLOGY_DOMESTIC_SPECIES,
+  CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT,
   CORE_ECOLOGY_REGIONAL_HABITAT_OWNER_ID,
   CORE_ECOLOGY_REGIONAL_HABITAT_VERSION,
   CORE_ECOLOGY_REGIONAL_WILD_SPECIES,
@@ -102,7 +107,6 @@ import {
   type CoreEcologyRegionalHabitat,
   type CoreEcologyRegionalPopulationCandidate,
 } from "./coreEcologyRegionalHabitat";
-import { LIVING_SPECIES_CATALOG } from "./livingSpeciesCatalog";
 import {
   coreEcologySpeciesPredatorContact,
   coreEcologySpeciesPhysicalBodyResourceUnits,
@@ -183,6 +187,8 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "gray-wolf",
   "cougar",
   "brown-bear",
+  "mountain-goat",
+  "golden-eagle",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -378,6 +384,11 @@ export type CoreEcologyAggregatePatchDerivation =
       readonly legacySuppression?: CoreEcologySettlementHomeLegacySuppressionV1;
     }>
   | Readonly<{
+      /** Append-only high-country residents owned by the Wave-F Alpine root. */
+      readonly kind: "regional-alpine-v1";
+      readonly habitat: CoreEcologyAlpineHabitat;
+    }>
+  | Readonly<{
       /**
        * Finite v24 compatibility authority after the regional-root adoption.
        * This opaque derivation is structurally canonical here; the regional
@@ -461,8 +472,10 @@ export type CoreEcologyAggregateEvidenceKind =
   | "feeding-scrape"
   | "frog-track"
   | "gnaw-mark"
+  | "haypile"
   | "shelter-sign"
   | "surface-dimple"
+  | "talus-sign"
   | "tracks";
 export type CoreEcologyAggregateEvidenceCause =
   | "animal-disturbance"
@@ -670,8 +683,10 @@ const AGGREGATE_EVIDENCE_KINDS = new Set<string>([
   "feeding-scrape",
   "frog-track",
   "gnaw-mark",
+  "haypile",
   "shelter-sign",
   "surface-dimple",
+  "talus-sign",
   "tracks",
 ]);
 const AGGREGATE_EVIDENCE_CAUSES = new Set<string>([
@@ -1117,6 +1132,7 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "regional-habitat-v1"
     || derivation.kind === "regional-habitat-v1-with-adoption-suppression"
     || derivation.kind === "settlement-home-v1"
+    || derivation.kind === "regional-alpine-v1"
     ? aggregatePopulationsFromHabitat(
         input.seed,
         derivation.habitat,
@@ -2581,7 +2597,8 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyDomesticPenHabitatAssemblage
     | CoreEcologyRegionalUplandHabitatAssemblage
     | CoreEcologyRegionalPredatorHabitatAssemblage
-    | CoreEcologyRegionalHabitat,
+    | CoreEcologyRegionalHabitat
+    | CoreEcologyAlpineHabitat,
   tick: number,
   regionalSuppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null = null,
 ): readonly CoreEcologyAggregatePopulationState[] {
@@ -2702,9 +2719,13 @@ function aggregatePopulationsFromHabitat(
   return Object.freeze(aggregatePopulations);
 }
 
+type CoreEcologyRegionalLikePopulationCandidate =
+  | CoreEcologyRegionalPopulationCandidate
+  | CoreEcologyAlpineHabitat["populations"][number];
+
 function isRegionalHabitatPopulation(
   value: unknown,
-): value is CoreEcologyRegionalPopulationCandidate {
+): value is CoreEcologyRegionalLikePopulationCandidate {
   return plainRecord(value) && "actorRepresentation" in value;
 }
 
@@ -2720,14 +2741,15 @@ function regionalHabitatOrigin(
     | CoreEcologyDomesticPenHabitatAssemblage
     | CoreEcologyRegionalUplandHabitatAssemblage
     | CoreEcologyRegionalPredatorHabitatAssemblage
-    | CoreEcologyRegionalHabitat,
+    | CoreEcologyRegionalHabitat
+    | CoreEcologyAlpineHabitat,
 ): RegionCoord {
   return "region" in habitat ? habitat.region : habitat.originRegion;
 }
 
 function regionalAnchorPosition(
   region: RegionCoord,
-  anchor: CoreEcologyRegionalPopulationCandidate["anchors"][number],
+  anchor: CoreEcologyRegionalLikePopulationCandidate["anchors"][number],
 ): WorldPosition {
   return createWorldPosition(
     region,
@@ -3437,7 +3459,7 @@ function canonicalRegionalHabitat(value: unknown): CoreEcologyRegionalHabitat | 
     || !regionalHabitatId(value.regionId)
     || !regionalHabitatHash(value.terrainHash)
     || !regionalHabitatHash(value.derivationHash)
-    || value.catalogSpeciesCount !== LIVING_SPECIES_CATALOG.modules.length
+    || value.catalogSpeciesCount !== CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT
     || value.evaluatedWildSpeciesCount !== CORE_ECOLOGY_REGIONAL_WILD_SPECIES.length
     || !nonnegativeSafeInteger(value.totalPopulationUnits)
     || !nonnegativeSafeInteger(value.admittedSpeciesCount)
@@ -4014,6 +4036,13 @@ function canonicalAggregateDerivation(
           suppression,
         });
   }
+  if (value.kind === "regional-alpine-v1") {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyAlpineHabitat(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: "regional-alpine-v1", habitat });
+  }
   if (
     value.kind === "habitat-v2"
     || value.kind === "legacy-fixed-v1-with-habitat-v2"
@@ -4212,6 +4241,16 @@ function aggregateDerivationMatchesPopulations(
       mortalityTransactions,
       derivation.suppression,
     );
+  }
+  if (derivation.kind === "regional-alpine-v1") {
+    return mortalityTransactions.length === 0
+      && regionalDerivationMatchesPopulations(
+        derivation.habitat,
+        populations,
+        aggregatePopulations,
+        originRegion,
+        mortalityTransactions,
+      );
   }
   const isHarborEdgeDerivation = derivation.kind === "habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2";
@@ -4532,7 +4571,7 @@ function settlementHomeDerivationMatchesPopulations(
 }
 
 function regionalDerivationMatchesPopulations(
-  habitat: CoreEcologyRegionalHabitat,
+  habitat: CoreEcologyRegionalHabitat | CoreEcologyAlpineHabitat,
   populations: readonly CoreEcologyPopulationState[],
   aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
   originRegion: RegionCoord,
@@ -4662,7 +4701,7 @@ function regionalDerivationMatchesPopulations(
 }
 
 function regionalIndividualAllocationsAfterSuppression(
-  candidate: CoreEcologyRegionalPopulationCandidate,
+  candidate: CoreEcologyRegionalLikePopulationCandidate,
   suppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null,
 ): ReadonlyMap<number, number> {
   const slots = suppression?.actorSlots.filter(({ baselinePopulationId }) => (
@@ -5405,6 +5444,7 @@ function disturbanceEvidenceKind(
   cause: CoreEcologyAggregateDisturbance["causeKind"],
 ): CoreEcologyAggregateEvidenceKind {
   if (species === "southern-leopard-frog") return "frog-track";
+  if (species === "american-pika") return "talus-sign";
   if (species === "atlantic-silverside") return "surface-dimple";
   if (species === "atlantic-marsh-fiddler-crab") {
     return cause === "tide-pressure" ? "feeding-scrape" : "burrow-opening";

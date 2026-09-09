@@ -40,12 +40,14 @@ import {
   putRegionalEcologyResidentDeviation,
 } from "./regionalEcology";
 import {
-  deserializeRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
-  replaceRegionalEcologyActiveState,
-  serializeRegionalEcologyState,
   type RegionalEcologyActiveResidentInput,
 } from "./regionalEcologyState";
+import {
+  deserializeRegionalEcologyStateV2,
+  replaceRegionalEcologyStateV2ActiveState,
+  serializeRegionalEcologyStateV2,
+} from "./regionalEcologyStateV2";
 import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
@@ -67,7 +69,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 25;
+  readonly version: 26;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -163,10 +165,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 25
-    || record.payloadVersion !== 25
+    || envelope.version !== 26
+    || record.payloadVersion !== 26
   ) {
-    throw new Error("fixture did not produce a current v25 regional session save");
+    throw new Error("fixture did not produce a current v26 regional session save");
   }
   return envelope;
 }
@@ -187,7 +189,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 25,
+    payloadVersion: 26,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -287,8 +289,9 @@ function rebaseFixtureRegionalEcology(
   rootSeed: RootSeed,
   spatial: ReturnType<typeof createWorldView>,
 ): string {
-  const prior = deserializeRegionalEcologyState(serialized);
-  if (prior === null) throw new Error("fixture started with invalid regional ecology");
+  const priorV2 = deserializeRegionalEcologyStateV2(serialized);
+  if (priorV2 === null) throw new Error("fixture started with invalid regional ecology");
+  const prior = priorV2.base;
   const activeRegions = regionalStorageRegionsInView(spatial);
   const desiredRegionKeys = new Set(activeRegions.map(regionKey));
   let root = prior.root;
@@ -323,16 +326,19 @@ function rebaseFixtureRegionalEcology(
       patch: legacy.patch,
     });
   }
-  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
-    expectedIntegrity: prior.integrity,
-    rootSeed,
-    root,
-    settlementHome: {
-      sourceKey: prior.settlementHome.sourceKey,
-      patch: prior.settlementHome.patch,
+  return serializeRegionalEcologyStateV2(replaceRegionalEcologyStateV2ActiveState(priorV2, {
+    expectedIntegrity: priorV2.integrity,
+    base: {
+      expectedIntegrity: prior.integrity,
+      rootSeed,
+      root,
+      settlementHome: {
+        sourceKey: prior.settlementHome.sourceKey,
+        patch: prior.settlementHome.patch,
+      },
+      activeRegions,
+      activeResidents,
     },
-    activeRegions,
-    activeResidents,
   }));
 }
 
@@ -602,7 +608,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 25,
+      version: 26,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,

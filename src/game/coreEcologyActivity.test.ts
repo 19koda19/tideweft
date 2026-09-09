@@ -74,14 +74,18 @@ describe("core ecology bounded activity", () => {
 
   it("fails the policy gate if a declared diurnal species lacks this runtime owner", () => {
     expect(validateCoreEcologyActivityPolicies()).toEqual([]);
-    expect(CORE_ECOLOGY_ACTIVITY_SPECIES).toEqual([
+    const alpha32ActivitySpecies = [
       "fish-crow",
       "northern-harrier",
       "snowy-egret",
       "american-black-duck",
       "north-american-river-otter",
       "gull",
-    ]);
+    ] as const;
+    expect(CORE_ECOLOGY_ACTIVITY_SPECIES.slice(0, alpha32ActivitySpecies.length))
+      .toEqual(alpha32ActivitySpecies);
+    expect(CORE_ECOLOGY_ACTIVITY_SPECIES.slice(alpha32ActivitySpecies.length))
+      .toEqual(["golden-eagle"]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
     const withoutHarrier = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(

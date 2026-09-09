@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALPINE_WILDLIFE_APPEARANCE_PALETTES,
+  ALPINE_WILDLIFE_APPEARANCE_SPECIES,
   ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA30_WILDLIFE_APPEARANCE_SPECIES,
   ALPHA31_PREDATOR_APPEARANCE_PALETTES,
   DOMESTIC_GOAT_APPEARANCE_PALETTES,
   REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES,
   alpha30WildlifeAppearancePalette,
+  alpineWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
 } from "./wildlifeAppearance";
@@ -77,5 +80,36 @@ describe("shared wildlife appearance projection", () => {
       .toBe(ALPHA31_PREDATOR_APPEARANCE_PALETTES.cougar["warm-tawny"]);
     expect(regionalUplandWildlifeAppearancePalette("brown-bear", "unknown-morph"))
       .toBe(ALPHA31_PREDATOR_APPEARANCE_PALETTES["brown-bear"]["dark-brown"]);
+  });
+
+  it("covers every addressable alpine morph without creating a pika body palette", () => {
+    const expectedMorphs = {
+      "mountain-goat": ["bright-white", "cream-white", "gray-white", "winter-white"],
+      "golden-eagle": ["dark-gold", "golden-naped", "mottled-brown", "pale-gold"],
+    } as const;
+
+    expect(ALPINE_WILDLIFE_APPEARANCE_SPECIES).toEqual([
+      "mountain-goat",
+      "golden-eagle",
+    ]);
+    expect(ALPINE_WILDLIFE_APPEARANCE_SPECIES).not.toContain("american-pika");
+    for (const species of ALPINE_WILDLIFE_APPEARANCE_SPECIES) {
+      expect(Object.keys(ALPINE_WILDLIFE_APPEARANCE_PALETTES[species]).sort())
+        .toEqual([...expectedMorphs[species]].sort());
+      for (const morph of expectedMorphs[species]) {
+        const resolved = alpineWildlifeAppearancePalette(species, morph);
+        expect(resolved).toBe(
+          (ALPINE_WILDLIFE_APPEARANCE_PALETTES[species] as Record<
+            string,
+            typeof resolved
+          >)[morph],
+        );
+        expect(Object.isFrozen(resolved)).toBe(true);
+      }
+    }
+    expect(alpineWildlifeAppearancePalette("mountain-goat", "unknown-morph"))
+      .toBe(ALPINE_WILDLIFE_APPEARANCE_PALETTES["mountain-goat"]["cream-white"]);
+    expect(alpineWildlifeAppearancePalette("golden-eagle", "unknown-morph"))
+      .toBe(ALPINE_WILDLIFE_APPEARANCE_PALETTES["golden-eagle"]["golden-naped"]);
   });
 });

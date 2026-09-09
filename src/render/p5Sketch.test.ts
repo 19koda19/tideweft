@@ -11,6 +11,8 @@ import type {
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
   "test:alpha31-predator-presentation-invariants:v1" as const;
+export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha33-alpine-presentation-invariants:v1" as const;
 
 const p5Harness = vi.hoisted(() => ({
   canvas: null as MockCanvas | null,
@@ -269,6 +271,8 @@ const wildlifeView = (
     "gray-wolf": "Gray wolf",
     cougar: "Cougar",
     "brown-bear": "Brown bear",
+    "mountain-goat": "Mountain goat",
+    "golden-eagle": "Golden eagle",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -289,6 +293,8 @@ const wildlifeView = (
     "gray-wolf": "WOLF-",
     cougar: "COUGAR-",
     "brown-bear": "BROWNBEAR-",
+    "mountain-goat": "MOUNTAINGOAT-",
+    "golden-eagle": "GOLDENEAGLE-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -297,7 +303,13 @@ const wildlifeView = (
     position: { x: 12, y: 12 },
     facing: 0,
     sizeScale: 1,
-    appearanceKey: species === "domestic-goat" ? "brown-coated" : "test-visible-morph",
+    appearanceKey: species === "domestic-goat"
+      ? "brown-coated"
+      : species === "mountain-goat"
+        ? "cream-white"
+        : species === "golden-eagle"
+          ? "golden-naped"
+          : "test-visible-morph",
     behavior: "watch",
     conditionLabels: [],
     selected: false,
@@ -1146,7 +1158,7 @@ describe("Chart physical wildlife remains", () => {
   });
 });
 
-describe("Chart Wave-B wildlife presentation", () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Chart wildlife presentation`, () => {
   it("draws and touch-selects population evidence through its non-actor target", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("chart-rat-evidence", { x: 12, y: 12 });
@@ -1300,6 +1312,8 @@ describe("Chart Wave-B wildlife presentation", () => {
     ["atlantic-silverside", "surface-dimples", "Silverside surface dimples and school glints", "ellipse"],
     ["atlantic-marsh-fiddler-crab", "burrow-openings", "Fiddler crab burrow openings", "ellipse"],
     ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "Fiddler crab feeding scrapes", "line"],
+    ["american-pika", "haypile", "American pika haypile", "ellipse"],
+    ["american-pika", "talus-sign", "American pika talus sign", "triangle"],
   ] as const)("draws and touch-selects low-cost %s %s without an actor alias", (
     species,
     form,
@@ -1316,10 +1330,14 @@ describe("Chart Wave-B wildlife presentation", () => {
       form,
       quickLabel: species === "atlantic-silverside"
         ? "Atlantic silverside signs"
-        : "Atlantic marsh fiddler crab signs",
+        : species === "american-pika"
+          ? "American pika signs"
+          : "Atlantic marsh fiddler crab signs",
       identityLabel: species === "atlantic-silverside"
         ? "Atlantic silverside school signs"
-        : "Atlantic marsh fiddler crab area signs",
+        : species === "american-pika"
+          ? "American pika population signs"
+          : "Atlantic marsh fiddler crab area signs",
       evidenceLabel,
       selected: true,
     });
@@ -1339,7 +1357,7 @@ describe("Chart Wave-B wildlife presentation", () => {
       terrain: {
         ...base.terrain,
         tiles: [{
-          kind: "mudflat",
+          kind: species === "american-pika" ? "ridge" : "mudflat",
           elevation: 0.2,
           discovered: 1,
           currentVisibility: 1,
@@ -1624,6 +1642,7 @@ describe("Chart Wave-B wildlife presentation", () => {
     ["fish-crow", "CROW-", "#284b52", "triangle"],
     ["northern-harrier", "HARRIER-", "#8d765f", "quad"],
     ["snowy-egret", "EGRET-", "#f4f1df", "bezier"],
+    ["golden-eagle", "GOLDENEAGLE-", "#4c3928", "quad"],
   ] as const)("draws and touch-selects the distinct aerial or wader %s form with reduced motion", (
     species,
     prefix,
@@ -1638,7 +1657,9 @@ describe("Chart Wave-B wildlife presentation", () => {
         ? "alarm"
         : species === "snowy-egret"
           ? "forage"
-          : "pursue",
+          : species === "golden-eagle"
+            ? "flight"
+            : "pursue",
       selected: true,
       ...(species === "fish-crow" ? { groupSize: 3 } : {}),
     });
@@ -1965,6 +1986,7 @@ describe("Chart Wave-B wildlife presentation", () => {
     ["gray-wolf", "WOLF-", "#727875", "bezier"],
     ["cougar", "COUGAR-", "#aa8258", "bezier"],
     ["brown-bear", "BROWNBEAR-", "#4c372b", "ellipse"],
+    ["mountain-goat", "MOUNTAINGOAT-", "#d8d1bd", "bezier"],
   ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} draws and touch-selects the color-independent %s form with reduced motion`, (
     species,
     prefix,

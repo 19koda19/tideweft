@@ -241,6 +241,9 @@ const MORTALITY_VALUES: Readonly<Record<
     carcassFeeding: true,
     carcassGuarding: true,
   },
+  "mountain-goat": NO_MORTALITY_RUNTIME,
+  "american-pika": NO_MORTALITY_RUNTIME,
+  "golden-eagle": NO_MORTALITY_RUNTIME,
 });
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
@@ -581,6 +584,48 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "food-investigation",
       ],
       activitySignals: [],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "mountain-goat": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "ground-movement-evidence",
+        "group-coordination",
+      ],
+      activitySignals: [],
+      evidenceKinds: ["cloven-hoofprints"],
+      presentationModel: "individual",
+    },
+    "american-pika": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 8,
+      aggregateResponseVerbs: ["quiet", "redistribute", "suppress"],
+      capabilities: [
+        "aggregate-response",
+        "population-activity-evidence",
+        "quieting",
+      ],
+      activitySignals: ["talus-foraging", "talus-quieting"],
+      evidenceKinds: ["haypile", "talus-sign"],
+      presentationModel: "aggregate-activity",
+    },
+    "golden-eagle": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "aerial-predator",
+        "diurnal-activity",
+        "movement-memory",
+        "perch",
+      ],
+      activitySignals: ["ridge-perching", "ridge-soaring"],
       evidenceKinds: [],
       presentationModel: "individual",
     },
