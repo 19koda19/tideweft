@@ -23,6 +23,10 @@ import {
   type CoreEcologyActivityProjection,
 } from "./coreEcologyActivity";
 import {
+  isTrustedCoreEcologyActivityAuthority,
+  type CoreEcologyActivityAuthorityV1,
+} from "./coreEcologyActivityAuthority";
+import {
   isCoreEcologyAggregateSpecies,
   type CoreEcologyAggregateSpecies,
 } from "./coreEcologyAggregatePolicy";
@@ -31,7 +35,10 @@ import {
   coreEcologySpeciesHasRuntimeCapability,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
-import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
+import {
+  coreEcologyPatchHasTidalTableAuthority,
+  projectCoreEcologyTidalTable,
+} from "./coreEcologyTidalTable";
 import {
   VISIBILITY_DIRECT,
   hasValidPerceptionSignature,
@@ -129,6 +136,7 @@ export interface WildlifePresentationInput {
   readonly activity?: Readonly<{
     readonly patch: unknown;
     readonly atTick: number;
+    readonly authority?: CoreEcologyActivityAuthorityV1;
   }>;
 }
 
@@ -889,8 +897,11 @@ export function projectWildlifePopulationEvidencePresentations(
     species === "atlantic-silverside"
       || species === "atlantic-marsh-fiddler-crab"
   ));
-  const tidal = projectCoreEcologyTidalTable(patch, patch.updatedAtTick);
-  if (ownsTidalPopulations && tidal === null) return null;
+  const ownsTidalProjection = coreEcologyPatchHasTidalTableAuthority(patch);
+  const tidal = ownsTidalProjection
+    ? projectCoreEcologyTidalTable(patch, patch.updatedAtTick)
+    : null;
+  if (ownsTidalProjection && tidal === null) return null;
 
   const presentations: WildlifePopulationEvidencePresentation[] = [];
   const presentedEvidenceIds = new Set<string>();
@@ -910,6 +921,11 @@ export function projectWildlifePopulationEvidencePresentations(
         population.species === "atlantic-silverside"
         || population.species === "atlantic-marsh-fiddler-crab"
       ) {
+        // A signed open-country resident deliberately has no bounded harbor
+        // tide-table authority. Preserve its coarse population, but withhold
+        // tide-specific evidence until a regional hydrology owner can prove
+        // the local anchor depth instead of borrowing the starting estuary.
+        if (!ownsTidalPopulations || tidal === null) continue;
         const occupiedAnchor = population.anchors.find((anchor) => (
           sameWorldPosition(anchor.position, evidence.position)
           && anchor.populationUnits > 0
@@ -1303,8 +1319,17 @@ function resolvePresentationActivity(
   if (value === undefined) return Object.freeze({ valid: true, projection: null });
   if (
     !plainRecord(value)
-    || !exactKeys(value, ["atTick", "patch"])
+    || !exactKeys(
+      value,
+      value.authority === undefined
+        ? ["atTick", "patch"]
+        : ["atTick", "authority", "patch"],
+    )
     || !nonnegativeSafeInteger(value.atTick)
+    || (
+      value.authority !== undefined
+      && !isTrustedCoreEcologyActivityAuthority(value.authority)
+    )
   ) return Object.freeze({ valid: false, projection: null });
   const patch = canonicalizeCoreEcologyAggregatePatch(value.patch);
   if (
@@ -1321,7 +1346,7 @@ function resolvePresentationActivity(
     projection: projectCoreEcologyActivity(patch, {
       actorId: actor.identity.stableId,
       atTick: value.atTick,
-    }),
+    }, value.authority),
   });
 }
 

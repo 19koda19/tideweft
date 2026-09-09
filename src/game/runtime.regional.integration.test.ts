@@ -4,6 +4,7 @@ import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createWorldView, deserializeWorld } from "../sim/public";
 import {
   createRegionCoord,
+  regionKey,
   regionLocalToGlobalTile,
   type RegionCoord,
 } from "../sim/regions";
@@ -39,7 +40,18 @@ import {
   regionLocalToWindowTile,
 } from "./regionalTravel";
 import {
+  putRegionalEcologyResidentDeviation,
+} from "./regionalEcology";
+import {
+  deserializeRegionalEcologyState,
+  regionalEcologyRegionalResidentsForActiveRegions,
+  replaceRegionalEcologyActiveState,
+  serializeRegionalEcologyState,
+  type RegionalEcologyActiveResidentInput,
+} from "./regionalEcologyState";
+import {
   createRegionalWorldView,
+  regionalStorageRegionsInView,
   regionalTileIndexInView,
 } from "./regionalWorldView";
 import type { PorterResponseState } from "./porterResponse";
@@ -58,7 +70,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 24;
+  readonly version: 25;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -69,7 +81,7 @@ interface CurrentGameSaveEnvelope {
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: unknown;
   readonly bio0Ecology: string;
-  readonly coreEcology: string;
+  readonly regionalEcology: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
   readonly settlementWorkingAnimals: string;
@@ -150,16 +162,15 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 24
-    || record.payloadVersion !== 24
-  ) throw new Error("fixture did not produce a current v24 regional save");
+    || value.version !== 25
+    || record.payloadVersion !== 25
+  ) throw new Error("fixture did not produce a current v25 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v24 outer envelope does not match its integrity seal");
+    throw new Error("fixture v25 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
-    "coreEcology",
     "dogActorRoster",
     "fieldResources",
     "format",
@@ -170,6 +181,7 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
     "player",
     "porterResponse",
     "promiseJourney",
+    "regionalEcology",
     "regionalTravel",
     "session",
     "settlementDomesticAnimalRecovery",
@@ -194,7 +206,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 24,
+    payloadVersion: 25,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -343,6 +355,60 @@ function adjacentCompatibilityTrace(
   return trace;
 }
 
+function rebaseFixtureRegionalEcology(
+  serialized: string,
+  rootSeed: RootSeed,
+  spatial: WorldView,
+): string {
+  const prior = deserializeRegionalEcologyState(serialized);
+  if (prior === null) throw new Error("fixture started with invalid regional ecology");
+  const activeRegions = regionalStorageRegionsInView(spatial);
+  const desiredRegionKeys = new Set(activeRegions.map(regionKey));
+  let root = prior.root;
+  for (const resident of prior.activeResidents) {
+    if (
+      resident.kind !== "regional-habitat"
+      || desiredRegionKeys.has(regionKey(resident.region))
+    ) continue;
+    root = putRegionalEcologyResidentDeviation(root, {
+      rootSeed,
+      patch: resident.patch,
+    });
+  }
+  const entrants = regionalEcologyRegionalResidentsForActiveRegions(
+    root,
+    rootSeed,
+    activeRegions,
+  );
+  if (entrants === null) throw new Error("fixture could not derive regional ecology entrants");
+  const retainedBySource = new Map(prior.activeResidents
+    .filter(({ kind }) => kind === "regional-habitat")
+    .map((resident) => [resident.sourceKey, resident] as const));
+  const activeResidents: RegionalEcologyActiveResidentInput[] = entrants.map((entrant) => ({
+    kind: "regional-habitat" as const,
+    sourceKey: entrant.sourceKey,
+    patch: retainedBySource.get(entrant.sourceKey)?.patch ?? entrant.patch,
+  }));
+  for (const legacy of prior.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+    activeResidents.push({
+      kind: "legacy-cohort",
+      sourceKey: legacy.sourceKey,
+      patch: legacy.patch,
+    });
+  }
+  return serializeRegionalEcologyState(replaceRegionalEcologyActiveState(prior, {
+    expectedIntegrity: prior.integrity,
+    rootSeed,
+    root,
+    settlementHome: {
+      sourceKey: prior.settlementHome.sourceKey,
+      patch: prior.settlementHome.patch,
+    },
+    activeRegions,
+    activeResidents,
+  }));
+}
+
 function relocateToEastSeam(
   envelope: CurrentGameSaveEnvelope,
 ): CurrentGameSaveEnvelope {
@@ -424,6 +490,11 @@ function relocateToEastSeam(
     player,
     regionalTravel,
     promiseJourney,
+    regionalEcology: rebaseFixtureRegionalEcology(
+      envelope.regionalEcology,
+      world.meta.rootSeed,
+      spatial,
+    ),
   };
 }
 

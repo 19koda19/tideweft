@@ -96,6 +96,21 @@ export interface CoreEcologyTidalTableStepResult {
 }
 
 /**
+ * Reports whether a canonical patch owns the saved elevation/anchor metadata
+ * required by the tidal-table transaction. Regional habitat v1 has a compact
+ * non-tidal schema, settlement-home v1 owns only its domestic/rat subset, and
+ * a receipt-bound legacy cohort may carry no habitat. Generic stepping should
+ * preserve those patches unchanged rather than interpreting non-applicability
+ * as invalid tidal state.
+ */
+export function coreEcologyPatchHasTidalTableAuthority(
+  patchValue: unknown,
+): boolean {
+  const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
+  return patch !== null && isTidalHabitatDerivation(patch);
+}
+
+/**
  * Projects current local depths from canonical habitat-v5 elevation metadata.
  * Camera, player position, reported knowledge, and caller-authored water values
  * never participate. The same projection drives simulation and presentation.

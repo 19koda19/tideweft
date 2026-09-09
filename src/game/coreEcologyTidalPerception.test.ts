@@ -5,11 +5,13 @@ import { seedFromText } from "../sim/rng";
 import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
 import {
+  canonicalizeCoreEcologyAggregatePatch,
   createCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
   displaceCoreEcologyAggregatePopulation,
   replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregatePatchMaterializedActors,
   setCoreEcologyAggregateActivityIntensity,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
@@ -24,8 +26,10 @@ import {
   deriveCoreEcologyTidalTableHabitatAssemblage,
   deriveCoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import { deriveCoreEcologyRegionalHabitat } from "./coreEcologyRegionalHabitat";
 import {
   collectCoreEcologyAggregateActivityObservationBatches,
+  collectCoreEcologyRootAggregateActivityObservationBatches,
 } from "./coreEcologyPerception";
 import {
   projectCoreEcologyTidalTable,
@@ -43,6 +47,7 @@ import {
   regionalFrameOriginAtAddress,
 } from "./regionalTravel";
 import { createRegionalWorldView, regionalTileIndexInView } from "./regionalWorldView";
+import { createCoreEcologyRegionalResidentPatch } from "./regionalEcologyResidents";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -54,6 +59,78 @@ const SEED = seedFromText(SEED_TEXT);
 const REGION = createRegionCoord(0, 0);
 
 describe("capability-selected perception of tidal aggregates", () => {
+  it("keeps tidal cues visible across owner boundaries and source order", () => {
+    const source = visibleCueFixture(360);
+    const observerRegion = createRegionCoord(-1, 1);
+    const observerHabitat = deriveCoreEcologyRegionalHabitat({
+      seed: SEED,
+      region: observerRegion,
+    });
+    const observerCreated = createCoreEcologyRegionalResidentPatch({
+      seed: SEED,
+      habitat: observerHabitat,
+      tick: 360,
+    });
+    const ownedObserver = observerCreated.populations.find(({ species }) => (
+      species === "snowy-egret"
+    ))?.members[0]?.actor;
+    if (ownedObserver === undefined) throw new Error("regional owner lacks egret observer");
+    const observer = repositionCoreWildlifeActor(ownedObserver, {
+      atTick: 360,
+      position: source.cuePosition,
+      heading: 0,
+    });
+    const observerOwner = setCoreEcologyAggregatePatchMaterializedActors(
+      replaceCoreEcologyAggregatePatchActor(observerCreated, observer),
+      { atTick: 360, actorIds: [observer.identity.stableId] },
+    );
+    expect(observerOwner.derivation.kind).toBe("regional-habitat-v1");
+    expect(source.patch.populations.flatMap(({ members }) => members).some(({ actor }) => (
+      actor.identity.stableId === observer.identity.stableId
+    ))).toBe(false);
+
+    const frame = {
+      actors: [observer],
+      patches: [source.patch, observerOwner],
+      tick: 361,
+      window: source.window,
+      world: source.world,
+    };
+    const forward = collectCoreEcologyRootAggregateActivityObservationBatches(frame);
+    const reverse = collectCoreEcologyRootAggregateActivityObservationBatches({
+      ...frame,
+      patches: [...frame.patches].reverse(),
+    });
+    expect(forward).not.toBeNull();
+    expect(reverse).toEqual(forward);
+    const observations = forward?.find(({ observerId }) => (
+      observerId === observer.identity.stableId
+    ))?.observations ?? [];
+    expect(hasObservationAt(observations, source.cuePosition)).toBe(true);
+
+    expect(collectCoreEcologyRootAggregateActivityObservationBatches({
+      ...frame,
+      patches: [source.patch],
+    })).toBeNull();
+    const duplicateOwner = canonicalizeCoreEcologyAggregatePatch({
+      ...observerOwner,
+      patchKey: `${observerOwner.patchKey}:duplicate`,
+    });
+    if (duplicateOwner === null) throw new Error("duplicate-owner control is malformed");
+    expect(collectCoreEcologyRootAggregateActivityObservationBatches({
+      ...frame,
+      patches: [...frame.patches, duplicateOwner],
+    })).toBeNull();
+    expect(collectCoreEcologyRootAggregateActivityObservationBatches({
+      ...frame,
+      actors: [repositionCoreWildlifeActor(observer, {
+        atTick: 360,
+        position: translateWorldPosition(source.cuePosition, 1, 0),
+        heading: observer.address.heading,
+      })],
+    })).toBeNull();
+  });
+
   it("selects eligible surface observers, excludes other actors, and is permutation-stable", () => {
     const seedText = "otter habitat 0";
     const seed = seedFromText(seedText);

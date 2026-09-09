@@ -86,7 +86,7 @@ Each seed creates:
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
 - One deterministic starting-harbor herd of exactly two individually identified domestic goats. The settlement and keeper hold a distinct typed pen, herd, and custody record; each goat uses the same shared actor, perception, attention, group, locomotion, and physical-resource arbitration owners without receiving unsupported foliage browsing.
-- One bounded core-wildlife patch attached to that first living web. Its exact habitat-v9 prefix derives the starting-harbor deer, gull, black-bear, brown-rat, domestic-cat, marsh-rabbit, marsh-fox, fish-crow, northern-harrier, southern-leopard-frog, Atlantic-silverside, Atlantic-marsh-fiddler-crab, snowy-egret, American-black-duck, and North American river otter populations. Habitat v10 appends one deterministic remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf; habitat v11 preserves that complete source/population sequence exactly and appends cougar and brown bear at the same source. Presence derives from stable seed, exact terrain, and biome/climate signals, so unsuitable ecology can honestly contain no member of a species. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, and wolves use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, and river otter remain solitary. The duck has no flock model, while the otter exists only where fish, crab, usable foraging water, and a distinct dry shore haulout all support it. Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs instead use stable aggregates disclosed only through directly visible signs. Fish and crabs never become manufactured individual actors. These are bounded regional sources, not worldwide habitat generation or a complete bestiary.
+- One bounded twenty-four-record wildlife catalog distributed through deterministic signed-region ecology. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, and wolves use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, and river otter remain solitary. The duck has no flock model, while the otter exists only where fish, crab, usable foraging water, and a distinct dry shore haulout all support it. Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs instead use stable aggregates disclosed only through directly visible signs. Fish and crabs never become manufactured individual actors. This is regional distribution of a bounded current catalog, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -224,6 +224,36 @@ player-facing-sync checks, 230 test files and 2,197 checks, a five-asset
 Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. A cache-bypassed live comparison
 matched all five production files byte-for-byte.
+
+The `0.3.3-alpha.32 — Open Country Ledger` source candidate is implemented
+locally and is not yet live-verified. It adds no species. Eligible existing
+wildlife now derives from stable signed-region habitat, carrying capacity,
+food or prey support, territory, and density budgets. Empty country is a lawful
+outcome, large-ranging species receive one floor-correct territory host, and
+the starting home retains bounded rats and anchored chicken and goat homes
+while its free-ranging cat is habitat-optional. Fixed fresh-world distributions
+measure wild candidates, all home and wild candidates, aggregate anchors, and
+large-predator incidence before the presentation cap can hide crowding.
+
+Lineage and current residence remain separate. Every active ecology owner
+contributes to one global group-atomic stable-distance top-K capped at 24
+actors, and one root-wide current snapshot permits lawful visual, anonymous
+tidal-activity, and alarm perception across owner boundaries. The narrow
+existing mortality path may also cross that seam only when a marsh fox, gray
+wolf, or cougar exactly contacts a currently identified eligible solitary marsh
+rabbit; the victim owner commits the one retirement and conserved body.
+Player-facing surfaces reveal only
+current lawful knowledge.
+
+Outer save 25 adds regional ecology root 1 and authenticates normalized v24
+once. A deterministic group-atomic disposition retains, redistributes, or
+explicitly retires compatibility wildlife while conserving stable identity,
+population units, groups, history, mortality, bodies, items, cargo, Promises,
+and cross-owner references. Retirement is non-death. Pristine regional
+baselines are rederived and only real deviations persist. The catalog remains
+24 records; this is not worldwide species breadth, ecological migration
+behavior, reproduction, population recovery, general tactical mortality,
+complete scent tracking, or the full bestiary.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -542,7 +572,7 @@ absence of live-prey capture or consumption, fishing, harmful attack, injury,
 mortality, carcasses, complete sound/scent/evidence, foliage consumption,
 full circadian life, worldwide populations, waterfowl flocks, nesting,
 reproduction, ecological migration, a full bestiary, complete Wave C,
-Directive 04_1 completion, and an exhaustive pair matrix.
+broader biodiversity completion, and an exhaustive pair matrix.
 
 Released Alpha 22 advances the manual to version 32 with the six reusable
 activity-affordance profiles, capability-selected anonymous tidal-surface
@@ -555,7 +585,7 @@ visible-cat pressure, an in-person keeper request, persistent closure,
 observation-safe EVENTS, and exact outer-version-16 adoption from sealed version
 15. It adds no species and does not claim worldwide stores, livestock, schedules,
 mortality, carcasses, live-prey consumption, broad rumors, the full bestiary, or
-Directive 04_1 completion.
+broader biodiversity completion.
 
 Released Alpha 24 advances the manual to version 34 with the stable
 two-to-three-chicken yard flock, settlement custody, shared perception and
@@ -565,7 +595,7 @@ version-17 adoption. It explicitly does not claim chicken calls or tracks,
 attacks, injury, mortality, carcasses, live-prey consumption, eggs, nesting,
 reproduction, herding, guardian behavior, full schedules, autonomous home
 return, cross-region ecological migration, worldwide livestock, full Wave D,
-or Directive 04_1 completion.
+or broader biodiversity completion.
 
 Released Alpha 25 advances the manual to version 35 with the separate stable
 two-goat herd and pen, plural custody, typed homes, shared resource arbitration,
@@ -573,7 +603,7 @@ exact habitat-v8 and outer-v17 preservation, and outer-version-18 adoption. It
 explicitly preserves the absence of goat calls or tracks, foliage browsing,
 attacks, injury, mortality, carcasses, reproduction, milk, wool, herding,
 guardian behavior, full schedules, autonomous home return, cross-region
-ecological migration, worldwide livestock, full Wave D, or Directive 04_1
+ecological migration, worldwide livestock, full Wave D, or broader biodiversity
 completion.
 
 Released Alpha 26 advances the manual to version 36 with one separate
@@ -584,7 +614,7 @@ Chart/Relief/ABOUT activity, conditional fox deterrence, and exact outer-v18 to
 v19 adoption. It explicitly preserves the absence of attacks, injury, death,
 carcasses, herding, a new guardian sound, guaranteed livestock defense,
 worldwide dogs or livestock, ecological cross-region animal migration, full
-Wave D, Directive 04_1 completion, and exhaustive species/pair testing.
+Wave D, broader biodiversity completion, and exhaustive species/pair testing.
 
 Released Alpha 27 advances the manual to version 37 with the existing
 working dog's bounded investigation-to-return task, deterministic
@@ -638,6 +668,18 @@ current absences: groups, tracks, audible voice, species-specific dog-directed
 behavior, player/human/group harm, broader mortality, ecological migration,
 worldwide ecology, and full Wave E; ordinary lawful large-predator perception
 remains shared.
+
+Alpha 32 advances the source-candidate manual to version 42 and gameplay
+contract to version 30. It explains signed-region derivation and honest
+absence, pre-cap starting-density measurement, the separate home population,
+one global group-atomic materialization plan, sparse deviation persistence,
+cross-owner current perception and the narrow marsh-fox/gray-wolf/cougar-to-
+eligible-solitary-rabbit mortality/body seam, and exact outer-v24-to-v25
+compatibility disposition. It
+also states that no species was added and that worldwide species breadth,
+ecological migration behavior, reproduction, population recovery, general
+tactical mortality, complete scent tracking, and the full bestiary remain
+absent.
 
 The interface offers redundant words, symbols, line patterns, and spatial cues instead of relying on color. Native buttons/dialogs, visible focus states, a skip link, keyboard interaction, live announcements, scalable layout, and automatic reduced-motion support are part of the play contract. On portrait and short-landscape phones, the desktop HUD disappears. A translucent overlay keeps four labeled essentials—Stamina, Stability with cause, Loom, and Cargo—plus route/terrain context; the large touch dock supplies interaction, Sound/Scan, and Wayknot actions without WASD prompts. The redundant mobile Title action is hidden to reserve a future KIT slot, while a touch-sized moon control opens Quiet Hour and its saved return-to-title path. Promises and settlement details each receive a mutually exclusive safe-area sheet, while the manual itself uses an independently scrollable safe-area page and touch-sized navigation. Relief 3D is an optional real WebGL height field; Chart 2D remains a complete playable presentation and the default for reduced-motion users without a saved explicit choice.
 
@@ -742,7 +784,7 @@ presentation. Outer save 13 adopts the deterministic habitat-version-5
 extension from sealed version 12 exactly once while preserving all established
 actors, groups, aggregates, items, Promises, evidence, and world history.
 
-This release does not complete Wave C or the biodiversity directive. It does
+This release does not complete Wave C or the broader biodiversity work. It does
 not add worldwide ecology, ecological cross-region migration, fishing,
 capture, attack, injury, mortality, carcasses, live-prey consumption, full
 circadian simulation, complete scent, the full bestiary, or an exhaustive pair
@@ -775,14 +817,14 @@ tail, preventing same-tick redistribution from being rerolled after an older
 visible event is evicted. This release adds no flock, nesting, breeding,
 migration, otter-like predator, capture, consumption, attack, injury,
 mortality, carcass, wake presentation, worldwide ecology, complete Wave C, or
-Directive 04_1 completion. Exact feature commit
+broader biodiversity completion. Exact feature commit
 `c11e4de0563876839158fb13a69ddfb4dadd6dbe` passed feature CI run
 `34061008077`, main CI run `34061513043`, and Pages run `34061512986`; the
 deployed HTML, icon, manifest, JavaScript, and CSS match the tested local build
 byte-for-byte.
 
 Source version `0.3.3-alpha.21 — The Living Channel` is the **LIVE_VERIFIED** final bounded
-starting-harbor Wave-C role slice, not Wave-C or Directive 04_1 completion.
+starting-harbor Wave-C role slice, not Wave-C or broader biodiversity completion.
 Habitat version 7 preserves the complete version-6 population and anchor
 record as an exact prefix, then may append one persistent North American river
 otter only when fish, crab, usable water, and a distinct dry shore haulout all
@@ -796,7 +838,7 @@ actor in coarse state. Outer save 15 adopts sealed version 14 once. Chart,
 Relief, ABOUT, pointer, touch, and reduced motion expose the same
 knowledge-honest individual. Live-prey capture or consumption, harmful attack,
 injury, mortality, carcasses, fishing, otter sound or new track evidence,
-reproduction, migration, worldwide ecology, complete Wave C, Directive
+reproduction, migration, worldwide ecology, complete Wave C, broader biodiversity
 completion, and exhaustive pair coverage remain absent. Exact feature commit
 `5514c24619fc6d41b34cbdd6315f4ae8d936f2dc` passed CI run `34067577935` and
 Pages run `34067577893`; the deployed HTML, icon, manifest, JavaScript, and CSS
@@ -823,8 +865,8 @@ fuzzing, performance budgets, and representative scenarios stand in for
 species-by-species or N² pair coverage. Exact feature commit
 `4dacd99e95a018314d65a72183b82cba8583774f` passed CI run `34074045801` and
 Pages run `34074045818`; the deployed HTML, icon, manifest, JavaScript, and CSS
-match the tested committed build byte-for-byte. Worldwide Wave C, Directive
-04_1, mortality, carcasses, harmful
+match the tested committed build byte-for-byte. Worldwide Wave C, broader
+biodiversity work, mortality, carcasses, harmful
 attacks, live-prey capture or consumption, fishing, nesting, reproduction,
 ecological cross-region migration, full circadian life, and general
 scent/sound/evidence remain incomplete.
@@ -851,7 +893,7 @@ representative store-rat-visible-cat composition exercise this seam. Existing
 shared fuzz and performance gates remain in regression instead of expanding
 into exhaustive species and pair tests. The slice is not
 worldwide settlement ecology, livestock, schedules, mortality, carcasses,
-live-prey consumption, rumors, the full bestiary, or Directive completion.
+live-prey consumption, rumors, the full bestiary, or broader biodiversity completion.
 Exact feature commit `245997219eff02e4edcf75331dc7fd4850432efb` passed CI run
 `34080936761` and Pages run `34080936748`; the deployed HTML, icon, manifest,
 JavaScript, and CSS match the tested local production build byte-for-byte.
@@ -920,7 +962,7 @@ recovers one staged activity without repeating perception or movement. The
 representative rabbit-alarm/fox chain deters the fox only after the fox itself
 sees the dog. There is no attack, injury, death, carcass, herding, new sound,
 guaranteed defense, companion command, worldwide dog population, cross-region
-animal ecology, full Wave D, or Directive 04_1 completion. Evidence remains
+animal ecology, full Wave D, or broader biodiversity completion. Evidence remains
 shared-invariant and representative-chain based rather than species-by-species
 or N².
 
@@ -1004,7 +1046,13 @@ catalog to twenty-two records. Its exact release evidence is recorded above.
 gameplay contract 29, Field Manual 41, outer save 24, habitat 11, and the
 catalog to twenty-four records. Its exact release evidence is recorded above.
 
-Released through Alpha 31:
+`0.3.3-alpha.32 — Open Country Ledger` is an implemented local source
+candidate, not yet live-verified. It advances gameplay contract 30, Field
+Manual 42, outer save 25, and regional ecology root 1 while habitat 11, core
+patch 3, aggregate record 5, and the twenty-four-record catalog remain sealed.
+
+Live through Alpha 31, with the Alpha 32 source-candidate addition explicitly
+marked:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
@@ -1024,7 +1072,8 @@ Released through Alpha 31:
 - one bounded What Remains release: current identified marsh-fox pursuit plus exact rabbit contact, one exact retired actor, one-unit population loss with conserved abstract reserve, one stable finite carcass, lawful fox/fish-crow reach and feeding, optional fox guarding, current-perception-only aftermath presentation, and exact version-21-to-22 adoption without adding a species or actor;
 - one bounded Beyond the Harbor release: the exact habitat-version-9 prefix remains unchanged before one deterministic remote temperate-upland/forest-edge source appends wild boar, elk, and gray wolf; eligible populations use shared `SOUNDER`, `HERD`, and `PACK` groups, perception, locomotion, materialization, and presentation; a wolf may enter the existing mortality transaction only through exact current contact with an eligible solitary rabbit, while a boar or wolf may consume from an already-existing finite body through lawful sight, reach, and claim; exact version-22-to-23 adoption preserves every earlier identity and world fact;
 - one bounded High Country Shadows release: habitat version 11 preserves the complete version-10 remote source and population sequence before evaluating distinct solitary cougar and brown-bear population records at that same source, with actors only where habitat capacity supports them; both use shared perception, attention, locomotion, materialization, physical-body claim, presentation, and persistence owners; cougar alone adds the short direct-sight path into exact contact with a currently identified eligible solitary rabbit, brown bear has no live-prey path, and both may lawfully claim, guard, and consume an existing finite body; exact version-23-to-24 adoption preserves every earlier identity and world fact;
-- one versioned production species contract covering exactly twenty-four current records—human, domestic dog, deer, gull, black bear, brown rat, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, domestic chicken, domestic goat, wild boar, elk, gray wolf, cougar, and brown bear—while keeping rat, frog, silverside, and fiddler-crab populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, plural domestic custody, typed homes, deterministic resource contention, physical item claims, and the narrow fox/gray-wolf/cougar-to-rabbit mortality-body seam; complete scent/evidence tracking, foliage consumption, broader health/death, full circadian behavior, worldwide habitat breadth, ecological migration/reproduction and population recovery, complete food-web turnover, and an exhaustive pair matrix remain closed;
+- the Alpha 32 Open Country Ledger source candidate, which adds no species: deterministic signed-region habitat/capacity/food-or-prey/territory/density derivation with honest absence; a separate bounded home owner with required rat, chicken, and goat populations but habitat-optional cat; measured pre-cap starting density; one global group-atomic top-K; sparse deviations; current cross-owner visual/tidal/alarm perception; the existing narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body transaction across owners; and one conserved group-atomic version-24-to-25 retain/redistribute/non-death-retire disposition;
+- one versioned production species contract covering exactly twenty-four current records—human, domestic dog, deer, gull, black bear, brown rat, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, domestic chicken, domestic goat, wild boar, elk, gray wolf, cougar, and brown bear—while keeping rat, frog, silverside, and fiddler-crab populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, plural domestic custody, typed homes, deterministic resource contention, physical item claims, and the narrow fox/gray-wolf/cougar-to-rabbit mortality-body seam; complete scent/evidence tracking, foliage consumption, broader health/death, full circadian behavior, worldwide species breadth, ecological migration/reproduction and population recovery, complete food-web turnover, and an exhaustive pair matrix remain closed;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;
 - seamless deterministic terrain travel in every direction, with continuous E/N location, a bounded moving presentation frame, camera/route continuity, negative-coordinate support, and exact preservation of the original estuary;
@@ -1043,7 +1092,7 @@ Released through Alpha 31:
 
 Expansion runway, not current behavior:
 
-- universal procedural humans beyond the original harbor country; general distant-actor simulation; complete scent fields, broad physical evidence/tracking, foliage consumption, social information and rumors, cross-group and broad species communication, physical human search/pursuit pathfinding, human-to-human perception, additional dogs beyond the current two and wildlife beyond the current bounded core patch, habitat-derived worldwide populations, the full bestiary, reproduction, recruitment and population recovery, ecological migration, full circadian behavior, broader herd/flock life, player/dog/human/other-animal and group-member mortality beyond the current exact-contact fox-or-gray-wolf/rabbit seam, live decomposition and body drift/drag/harvest/scent/insects, live-prey consumption beyond the finite rabbit-carcass scavenging seam, wider ownership, companions, social networks, general physical NPC inventory, negotiation, guaranteed deterrence, and broader actor-to-actor ecology; shared invariants and representative emergence remain preferred over exhaustive species-pair fixtures;
+- universal procedural humans beyond the original harbor country; general distant-actor simulation; complete scent fields, broad physical evidence/tracking, foliage consumption, social information and rumors, cross-group and broad species communication, physical human search/pursuit pathfinding, human-to-human perception, additional dogs beyond the current two, wildlife species beyond the current bounded twenty-four-record catalog, richer regional ecologies, the full bestiary, reproduction, recruitment and population recovery, ecological migration, full circadian behavior, broader herd/flock life, player/dog/human/other-animal and group-member mortality beyond the current exact-contact fox-or-gray-wolf/rabbit seam, live decomposition and body drift/drag/harvest/scent/insects, live-prey consumption beyond the finite rabbit-carcass scavenging seam, wider ownership, companions, social networks, general physical NPC inventory, negotiation, guaranteed deterrence, and broader actor-to-actor ecology; shared invariants and representative emergence remain preferred over exhaustive species-pair fixtures;
 - runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
 - distant low-detail parcel simulation, living mangrove/bramble snag integration, and delivery compensation that prices recovered condition; continuous transfer of the same parcel across the old map extent is already live;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;

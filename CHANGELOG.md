@@ -4,6 +4,49 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.32 — 2026-09-08
+
+Build: `0.3.3-alpha.32` · Gameplay contract: 30 · Tutorial: 42
+
+Open Country Ledger distributes the existing wildlife catalog through deterministic signed-region ecology, replacing the fresh-world starting pile without adding a new species.
+
+### Gameplay
+
+- Eligible existing wild populations now derive from deterministic signed-region habitat, carrying capacity, food or prey support, territory, and density budgets. A region may be honestly empty; unused capacity stays unused instead of forcing an animal near the player.
+- Population lineage and present residence are separate. Every active ecology owner contributes to one global group-atomic stable-distance top-K plan capped at twenty-four actors, so crossing a region cannot create another rendering allowance or split a social group.
+- One root-wide current snapshot lets actors lawfully perceive visual actors, tidal activity, and alarms across regional-owner boundaries. The existing narrow predator-contact path can injure or kill only an exactly contacted, currently identified eligible solitary marsh rabbit across those same boundaries; only a marsh fox, gray wolf, or cougar may enter that path, and the victim's owner retires it once and owns its conserved physical body.
+
+### Fixes
+
+- Dormant regional ecology deviations now re-enter a later hot window through the same deterministic no-action clock projection used to derive them. A lawful aged resident can cross back into active simulation without an integrity halt, identity transfer, or rewrite of its older durable snapshot.
+- Fresh worlds no longer place the full compatibility wildlife assemblage around the starting harbor. Fixed pre-materialization density gates measure authoritative wild candidates, all home and wild candidates, aggregate anchors, and large-predator incidence before the global cap can hide crowding.
+- The settlement home retains its bounded brown-rat population and anchored chicken and goat homes. A free-ranging domestic cat is now habitat-optional and may be lawfully absent rather than manufactured to satisfy an invalid home invariant.
+- Negative and extreme coordinates use deterministic floor-based territory ownership and one stable host region. Derivation is independent of cache, camera, input, and source order; pristine visits write no regional record, while promoted or migrated actors, bodies, claims, receipts, and other true deviations persist sparsely.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Regional carrying capacity, food or prey support, territory, and density are authoritative before actor creation; quiet country is valid and a genuine supported hotspot still may occur.
+- Starting-harbor de-clustering is measured rather than cosmetic: the fixed fresh-world corpus enforces candidate and aggregate bounds before materialization, permits at most one large-predator population in an initial frame, and requires at least half of starts to contain none.
+- Validation remains architecture-led: signed and extreme-coordinate determinism, honest absence, permutation invariance, global group atomicity, conservation, sparse persistence, seam behavior, fixed density distributions, and representative shared interactions replace species-local controllers or an exhaustive animal-pair matrix.
+
+### Interface
+
+- Chart 2D, Relief 3D, quick inspection, and ABOUT project the same globally selected current actors regardless of their lineage owner. A group appears together or remains coarse, and no hidden regional population receives a second visual allowance.
+- Visual actors, anonymous tidal activity, lawfully heard anonymous alarms, and the narrow witnessed mortality aftermath remain knowledge-honest across region seams. The interface does not announce an unseen population, target, death, body, migration disposition, or offscreen event.
+- Field Manual version 42 explains signed-region ecology, honest absence, measured starting density, settlement-home animals, one global group-atomic materialization plan, sparse saves, cross-owner interactions, compatibility disposition, and the deliberately bounded catalog.
+
+### Save changes
+
+- The outer session advances to version 25 and adds regional ecology root version 1. Habitat analysis remains sealed at version 11 for compatibility, core ecology remains patch version 3, aggregate ecology remains record version 5, and the catalog remains at twenty-four records with no new species.
+- A normalized sealed version-24 High Country Shadows save is authenticated and adopted exactly once. A deterministic group-atomic disposition retains, redistributes, or explicitly retires every compatibility wildlife unit while preserving stable actor and population identity, membership, origin, history, mortality, bodies, items, cargo, Promises, and cross-owner references.
+- Compatibility retirement is a persisted non-death disposition, never silent deletion or a fabricated carcass. Pristine regional baselines are rederived rather than stored; only deviations, promoted or migrated identity, bodies, claims, and transaction receipts consume regional save space, and reload cannot reroll either baseline or disposition.
+
+### Known limitations
+
+- Open Country Ledger redistributes the current bounded twenty-four-record catalog; it adds no species and is not worldwide species breadth, a complete bestiary, ecological migration behavior, reproduction, recruitment, or population recovery.
+- General tactical mortality remains absent. The only supported live-animal harm is exact contact by a marsh fox, gray wolf, or cougar against a currently identified eligible solitary marsh rabbit, now valid across active owner boundaries; brown bears, players, humans, dogs, social-group members, and broader animals cannot enter this harmful ecology path.
+- Complete scent propagation and tracking, live decomposition, body drift, dragging, harvesting, tactical multi-predator combat, full schedules, and broad species-specific relationships remain outside this release. Regional distribution does not invent those systems or turn every lawful population into a visible actor.
+
 ## 0.3.3-alpha.31 — 2026-09-08
 
 Build: `0.3.3-alpha.31` · Gameplay contract: 29 · Tutorial: 41
@@ -252,7 +295,7 @@ The Paddock Watch adds one separate settlement guardian dog with its own kennel 
 
 ### Known limitations
 
-- This is exactly one bounded starting-harbor working dog and one guardian assignment beside the existing two-goat herd, not a worldwide dog population, guaranteed livestock defense, complete Wave D settlement ecology, ecological cross-region animal migration, or completion of Directive 04\_1.
+- This is exactly one bounded starting-harbor working dog and one guardian assignment beside the existing two-goat herd, not a worldwide dog population, guaranteed livestock defense, complete Wave D settlement ecology, ecological cross-region animal migration, or broader biodiversity completion.
 - The dog does not attack, injure, kill, herd, breed, rescue livestock, follow a complete schedule, or add barking or another sound system. This release adds no injury, mortality, carcass, live-prey capture or consumption, new track evidence, companion training, player commands, or autonomous kennel-return routine.
 - Fox deterrence is incidental and perception-driven: a fox can react only when it actually perceives the dog. The assignment grants no invisible protection radius, remote predator knowledge, promise of a successful defense, wider ownership network, or cross-region animal ecology.
 
@@ -294,7 +337,7 @@ The Far Paddock adds one persistent two-goat herd at a habitat-derived pen, whil
 
 ### Known limitations
 
-- This is one bounded starting-harbor goat herd beside the existing chicken flock, not worldwide livestock, complete Wave D settlement ecology, ecological cross-region migration, the full bestiary, or completion of Directive 04\_1.
+- This is one bounded starting-harbor goat herd beside the existing chicken flock, not worldwide livestock, complete Wave D settlement ecology, ecological cross-region migration, the full bestiary, or broader biodiversity completion.
 - Goats have no authored call, persistent tracks or environmental evidence, harmful attack, injury, mortality, carcass, live-prey capture or consumption, foliage browsing, milk, wool, reproduction, complete circadian schedule, or autonomous home-return behavior in this release.
 - Guardian and herding behavior, livestock search and rescue, wider ownership, full schedules, complete sound and scent fields, living-foliage use, and exhaustive species or pair coverage remain outside this release.
 
@@ -336,7 +379,7 @@ The Yard Flock adds one persistent two-to-three-chicken flock to the starting ha
 
 ### Known limitations
 
-- This is one bounded starting-harbor chicken flock and one reusable domestic-custody seam, not worldwide livestock, full Wave D settlement ecology, ecological cross-region migration, or completion of Directive 04\_1.
+- This is one bounded starting-harbor chicken flock and one reusable domestic-custody seam, not worldwide livestock, full Wave D settlement ecology, ecological cross-region migration, or broader biodiversity completion.
 - Chickens have no authored call, persistent tracks or environmental evidence, harmful attack, injury, mortality, carcass, live-prey capture or consumption, eggs, nesting, reproduction, complete circadian schedule, or autonomous home-return behavior in this release.
 - Guardian and herding behavior, livestock search/rescue, wider ownership, broad schedules, complete sound and scent fields, full settlement food loops, and exhaustive species or pair coverage remain outside this release.
 
@@ -379,7 +422,7 @@ The Storehouse Door adds one bounded starting-harbor food store whose physical p
 
 ### Known limitations
 
-- This is one bounded starting-harbor storehouse fixture and a reusable settlement-ecology boundary, not worldwide settlement storage, a full domestic-life schedule, a complete food economy, livestock, or completion of Directive 04\_1.
+- This is one bounded starting-harbor storehouse fixture and a reusable settlement-ecology boundary, not worldwide settlement storage, a full domestic-life schedule, a complete food economy, livestock, or broader biodiversity completion.
 - No new species is added. Wildlife still has no harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, ecological migration, or complete circadian-life system; store produce loss is a narrow authenticated physical transaction.
 - General scent fields, complete sound and evidence tracking, rumors, broad keeper schedules, cat ownership, livestock guardianship or herding, and exhaustive species or pair coverage remain outside this release. Unseen store events remain world truth without becoming player knowledge.
 
@@ -421,7 +464,7 @@ Tidal Convergence closes the bounded starting-harbor Wave-C integration seam wit
 
 ### Known limitations
 
-- This closes only the bounded starting-harbor Wave-C integration seam. It is not worldwide ecology, ecological cross-region migration, the complete 75-to-150-profile bestiary, or completion of Directive 04\_1.
+- This closes only the bounded starting-harbor Wave-C integration seam. It is not worldwide ecology, ecological cross-region migration, the full bestiary, or broader biodiversity completion.
 - Animals still have no harmful attack, injury, mortality, carcass, live-prey capture or consumption, fishing, reproduction, migration, or complete circadian-life system. Existing finite pursuit and pressure remain nonlethal.
 - Complete sound propagation, general scent fields, broad persistent evidence and tracking, foliage consumption, social information, and exhaustive species-by-species or animal-pair coverage remain outside this release.
 
@@ -463,7 +506,7 @@ The Living Channel adds a habitat-supported North American river otter to the bo
 
 ### Known limitations
 
-- This is the final bounded starting-harbor Wave-C role slice, not completion of Wave C, Directive 04\_1, worldwide ecology, ecological cross-region migration, or the complete 75-to-150-profile bestiary.
+- This is the final bounded starting-harbor Wave-C role slice, not completion of Wave C, broader biodiversity completion, worldwide ecology, ecological cross-region migration, or the full bestiary.
 - The otter cannot capture or consume live prey and has no harmful attack, injury, mortality, carcass, fishing, reproduction, migration, or complete circadian-life system. Its current fish and crab relationship is nonlethal aggregate pressure only.
 - No otter-specific call, complete sound propagation, new persistent track or evidence type, complete scent field, broad information flow, or exhaustive species-pair test matrix is claimed. Wider aquatic and scavenger breadth remains future work.
 
@@ -505,7 +548,7 @@ Between Water and Sky adds at most one persistent American black duck near the s
 
 ### Known limitations
 
-- This is a bounded second Wave-C unit near the stable starting harbor. It is not worldwide ecology, ecological cross-region migration, completion of Wave C, the full biodiversity directive, or the complete 75-to-150-profile bestiary; the otter-like predator and wider waterfowl breadth remain later work.
+- This is a bounded second Wave-C unit near the stable starting harbor. It is not worldwide ecology, ecological cross-region migration, completion of Wave C, broader biodiversity completion, or the full bestiary; the otter-like predator and wider waterfowl breadth remain later work.
 - The duck has no simulated flock, nesting, reproduction, capture, consumption, injury, mortality, or carcass state. No call is invented merely to fill a sound row, and aquatic-foraging observations remain nonlethal information rather than feeding or population loss.
 - Complete scent fields and tracking, foliage consumption, broad social information, full sleep and circadian schedules, wildlife promotion beyond current rules, worldwide populations, and harmful animal interactions remain future systems.
 
@@ -547,7 +590,7 @@ The Tide Table begins bounded Wave-C tidal ecology near the stable starting harb
 
 ### Known limitations
 
-- This is only the first bounded Wave-C unit near the stable starting harbor. It is not worldwide ecology, ecological cross-region migration, completion of Wave C, the full biodiversity directive, or the complete 75-to-150-profile bestiary.
+- This is only the first bounded Wave-C unit near the stable starting harbor. It is not worldwide ecology, ecological cross-region migration, completion of Wave C, broader biodiversity completion, or the full bestiary.
 - Animals still do not attack, receive injuries, die, leave carcasses, or consume live prey. Egret pressure is conserved avoidance rather than capture or feeding, and fishing, harvest, waterfowl, otters, reproduction, and population mortality remain outside this release.
 - Complete scent fields and tracking, foliage consumption, broad social information, full sleep and circadian schedules, wildlife promotion beyond current rules, additional tidal species, and full species readiness remain future work.
 
@@ -589,7 +632,7 @@ One Marsh, Many Eyes closes the seven-role Wave-B ecology inside the bounded sta
 
 ### Known limitations
 
-- Wave B is closed only as a bounded starting-harbor assemblage. Distant regions do not yet own their own habitat populations, so this is not worldwide ecology, ecological migration, or the full 75-to-150-profile biodiversity target.
+- Wave B is closed only as a bounded starting-harbor assemblage. Distant regions do not yet own their own habitat populations, so this is not worldwide ecology, ecological migration, or the broader biodiversity target.
 - Animals still do not attack, receive injuries, die, leave carcasses, or consume live prey. Fox and harrier pursuit remains finite and nonlethal, and aggregate response remains conserved movement or activity rather than hidden mortality.
 - Complete scent fields and tracking, foliage consumption, broad social information, complete sleep and circadian schedules, reproduction, promotion beyond current rules, additional species, and full species readiness remain future work.
 
