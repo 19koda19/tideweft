@@ -464,7 +464,7 @@ tests, a five-file 3,551,649-byte served web build, a 10-entry 3,743,257-byte
 runtime-only Electron ASAR, and desktop/mobile/title smoke. A cache-bypassed
 live comparison matched all 5/5 production files exactly.
 
-The unreleased **SOURCE_CANDIDATE** `0.3.3-alpha.33 — Talus and Sky` tests the
+The **LIVE_VERIFIED** `0.3.3-alpha.33 — Talus and Sky` release tests the
 next scaling hypothesis: a new ecological domain should be an authenticated
 sparse sibling around frozen lineage, not a reason to rewrite the prior
 regional owner. Its twenty-seven-record catalog preserves all twenty-four
@@ -501,7 +501,7 @@ state-based visualization of that activity, not evidence for authoritative
 continuous 3D flight physics.
 
 The performance lesson is that derived authority may be memoized only after
-its provenance is stable. The candidate bounds immutable Alpine habitat cache
+its provenance is stable. The release bounds immutable Alpine habitat cache
 entries by seed/region and ridge activity by habitat/patch/actor, always
 authenticates caller-supplied terrain, excludes cache contents from saves, and
 keeps hashes independent of cache order. A local audit measured six cold
@@ -514,9 +514,16 @@ cache seam, not cross-device promises and not live-release evidence.
 Talus and Sky remains the first bounded Alpine slice. It does not add new
 mortality, exact pika targeting, live-prey capture, reproduction, audible
 Living Voice, tactical combat, polar breadth, worldwide ecology, Wave-F
-completion, or a complete bestiary. Alpha32 remains the current
-**LIVE_VERIFIED** release until the source candidate passes CI, Pages, and
-exact deployed-artifact verification.
+completion, or a complete bestiary.
+
+Exact gameplay commit `2a9ade01329fa731931a1cfe1884f5269ff59bcd`
+passed feature CI `34394901344`, main CI `34400426580`, and Pages
+`34400426443`. The complete release gate passed TypeScript, public-boundary and
+player-facing-sync checks, 252 test files and 2,343 checks, a five-file
+3,649,061-byte served web build, inspection of a 10-entry 3,840,669-byte
+runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, performance, and visual audits. A cache-bypassed
+comparison matched all 5/5 live production files byte-for-byte.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -536,8 +543,10 @@ Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the
 verified bounded recovery-composition release, Alpha 29 is the verified first
 one-life/one-body mortality release, Alpha 30 is the verified first Wave-E
 regional breadth release, Alpha 31 is the verified solitary-predator append,
-and Alpha 32 is the verified signed-region distribution closure for the current
-24-record catalog. None completes broader aquatic or settlement ecology, broad
+Alpha 32 is the verified signed-region distribution closure for its frozen
+24-record prefix, and Alpha 33 is the verified first bounded Alpine/Wave-F
+slice, extending the catalog to 27 records through a separate sparse sibling.
+None completes broader aquatic or settlement ecology, broad
 attacks or mortality, population recovery, decomposition, body transport or
 harvesting, full circadian life, complete scent, worldwide species breadth, or the
 full bestiary. Broader species, reproduction, ecological migration, those

@@ -86,7 +86,7 @@ Each seed creates:
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
 - One deterministic starting-harbor herd of exactly two individually identified domestic goats. The settlement and keeper hold a distinct typed pen, herd, and custody record; each goat uses the same shared actor, perception, attention, group, locomotion, and physical-resource arbitration owners without receiving unsupported foliage browsing.
-- One bounded wildlife catalog whose first twenty-four records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. The unreleased Alpha33 source candidate appends mountain goat, American pika, and golden eagle as records 25–27 and derives them from a separate sparse signed-region Alpine layer without rewriting the Alpha32 child. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, wolves, and mountain goats use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, river otter, and golden eagle remain solitary. American pika joins brown rat, southern leopard frog, Atlantic silverside, and Atlantic marsh fiddler crab as a stable non-addressable aggregate disclosed only through directly visible signs or activity. Fish, crabs, and pikas never become manufactured individual actors. This is sparse regional distribution of a bounded source-candidate catalog, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
+- One bounded living-species catalog whose first twenty-four records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. Released Alpha33 appends mountain goat, American pika, and golden eagle as records 25–27 and derives them from a separate sparse signed-region Alpine layer without rewriting the Alpha32 child. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, wolves, and mountain goats use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, river otter, and golden eagle remain solitary. American pika joins brown rat, southern leopard frog, Atlantic silverside, and Atlantic marsh fiddler crab as a stable non-addressable aggregate disclosed only through directly visible signs or activity. Fish, crabs, and pikas never become manufactured individual actors. This is sparse regional distribution of a bounded twenty-seven-record catalog, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -263,7 +263,7 @@ tests, a five-file 3,551,649-byte served web build, a 10-entry 3,743,257-byte
 runtime-only Electron ASAR, and desktop/mobile/title smoke. A cache-bypassed
 live comparison matched all 5/5 production files exactly.
 
-The unreleased **SOURCE_CANDIDATE** `0.3.3-alpha.33 — Talus and Sky` starts the
+The **LIVE_VERIFIED** `0.3.3-alpha.33 — Talus and Sky` release starts the
 Alpine Wave-F line without reopening Alpha32 authority. Its twenty-seven-record
 catalog is the exact twenty-four-record frozen prefix followed by mountain
 goat, American pika, and golden eagle. A sparse Alpine habitat layer derives
@@ -306,8 +306,16 @@ is always authenticated, and cache state is neither saved nor authoritative.
 Talus and Sky does not add mortality for the new species, live-prey capture,
 an exact pika actor or target, reproduction, audible Living Voice, tactical
 combat, polar breadth, worldwide ecology, complete Wave F, or an exhaustive
-species/pair test matrix. It has no public release, CI/Pages, or live-artifact
-claim yet; Alpha32 remains the current verified build.
+species/pair test matrix.
+
+Exact gameplay commit `2a9ade01329fa731931a1cfe1884f5269ff59bcd`
+passed feature CI `34394901344`, main CI `34400426580`, and Pages
+`34400426443`. The complete release gate passed TypeScript, public-boundary and
+player-facing-sync checks, 252 test files and 2,343 checks, a five-file
+3,649,061-byte served web build, inspection of a 10-entry 3,840,669-byte
+runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, performance, and visual audits. A cache-bypassed
+comparison matched all 5/5 live production files byte-for-byte.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -1106,17 +1114,17 @@ Manual 42, outer save 25, and regional ecology root 1 while habitat 11, core
 patch 3, aggregate record 5, and the twenty-four-record catalog remain sealed.
 Its exact release evidence is recorded above.
 
-`0.3.3-alpha.33 — Talus and Sky` is an unreleased **SOURCE_CANDIDATE**. It
+`0.3.3-alpha.33 — Talus and Sky` is **LIVE_VERIFIED**. It
 appends mountain goat, non-addressable American pika, and solitary golden eagle
 after the frozen twenty-four-record prefix; composes sparse Alpine habitat,
 shared directed-grade locomotion, authenticated ridge soar/perch activity,
 knowledge-honest presentation, and one occlusion-bound nonlethal eagle/pika
-pressure witness; and advances the source save to outer 26 through
+pressure witness; and advances the outer save to 26 through
 `RegionalEcologyStateV2` while retaining its exact version-1 child. The global
 group-atomic 24-actor cap and atomic cross-layer commit remain authoritative.
-It is not part of the live list below until release verification succeeds.
+Its exact release evidence is recorded above.
 
-Live through Alpha 32:
+Live through Alpha 33:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
@@ -1137,7 +1145,7 @@ Live through Alpha 32:
 - one bounded Beyond the Harbor release: the exact habitat-version-9 prefix remains unchanged before one deterministic remote temperate-upland/forest-edge source appends wild boar, elk, and gray wolf; eligible populations use shared `SOUNDER`, `HERD`, and `PACK` groups, perception, locomotion, materialization, and presentation; a wolf may enter the existing mortality transaction only through exact current contact with an eligible solitary rabbit, while a boar or wolf may consume from an already-existing finite body through lawful sight, reach, and claim; exact version-22-to-23 adoption preserves every earlier identity and world fact;
 - one bounded High Country Shadows release: habitat version 11 preserves the complete version-10 remote source and population sequence before evaluating distinct solitary cougar and brown-bear population records at that same source, with actors only where habitat capacity supports them; both use shared perception, attention, locomotion, materialization, physical-body claim, presentation, and persistence owners; cougar alone adds the short direct-sight path into exact contact with a currently identified eligible solitary rabbit, brown bear has no live-prey path, and both may lawfully claim, guard, and consume an existing finite body; exact version-23-to-24 adoption preserves every earlier identity and world fact;
 - one bounded Open Country Ledger release, which adds no species: deterministic signed-region habitat/capacity/food-or-prey/territory/density derivation with honest absence; a separate bounded home owner with required rat, chicken, and goat populations but habitat-optional cat; measured pre-cap starting density; one global group-atomic top-K; sparse deviations; current cross-owner visual/tidal/alarm perception; the existing narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body transaction across owners; and one conserved group-atomic version-24-to-25 retain/redistribute/non-death-retire disposition;
-- one versioned production species contract covering exactly twenty-four current records—human, domestic dog, deer, gull, black bear, brown rat, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, domestic chicken, domestic goat, wild boar, elk, gray wolf, cougar, and brown bear—while keeping rat, frog, silverside, and fiddler-crab populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, plural domestic custody, typed homes, deterministic resource contention, physical item claims, and the narrow fox/gray-wolf/cougar-to-rabbit mortality-body seam; complete scent/evidence tracking, foliage consumption, broader health/death, full circadian behavior, worldwide species breadth, ecological migration/reproduction and population recovery, complete food-web turnover, and an exhaustive pair matrix remain closed;
+- one versioned production species contract covering exactly twenty-seven current records—the frozen Alpha32 records plus mountain goat, American pika, and golden eagle—while keeping rat, frog, silverside, fiddler-crab, and pika populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, directed grade, plural domestic custody, typed homes, deterministic resource contention, physical item claims, the narrow fox/gray-wolf/cougar-to-rabbit mortality-body seam, and nonlethal eagle pressure on lawfully visible pika activity; complete scent/evidence tracking, foliage consumption, broader health/death, full circadian behavior, worldwide species breadth, ecological migration/reproduction and population recovery, complete food-web turnover, and an exhaustive pair matrix remain closed;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;
 - seamless deterministic terrain travel in every direction, with continuous E/N location, a bounded moving presentation frame, camera/route continuity, negative-coordinate support, and exact preservation of the original estuary;
@@ -1154,7 +1162,7 @@ Live through Alpha 32:
 - a deterministic rock/ladder rules kernel for coherent outcrops, crossing risk/cost, and finite reusable ladder validation; it is not yet connected to movement, rendering, UI, or saves;
 - local resume, secure desktop packaging, and static Pages output.
 
-Present in the Alpha33 source candidate but not yet live:
+Released in Alpha33:
 
 - the exact frozen twenty-four-record catalog prefix plus mountain goat,
   non-addressable American pika, and solitary golden eagle;
@@ -1177,7 +1185,7 @@ Present in the Alpha33 source candidate but not yet live:
 
 Expansion runway, not current behavior:
 
-- universal procedural humans beyond the original harbor country; general distant-actor simulation; complete scent fields, broad physical evidence/tracking, foliage consumption, social information and rumors, cross-group and broad species communication, physical human search/pursuit pathfinding, human-to-human perception, additional dogs beyond the current two, wildlife species beyond the currently live twenty-four-record and source-candidate twenty-seven-record catalogs, richer regional ecologies, the full bestiary, reproduction, recruitment and population recovery, ecological migration, full circadian behavior, broader herd/flock life, player/dog/human/other-animal and group-member mortality beyond the current exact-contact marsh-fox/gray-wolf/cougar-to-rabbit seam, live decomposition and body drift/drag/harvest/scent/insects, live-prey consumption beyond the finite rabbit-carcass scavenging seam, wider ownership, companions, social networks, general physical NPC inventory, negotiation, guaranteed deterrence, and broader actor-to-actor ecology; shared invariants and representative emergence remain preferred over exhaustive species-pair fixtures;
+- universal procedural humans beyond the original harbor country; general distant-actor simulation; complete scent fields, broad physical evidence/tracking, foliage consumption, social information and rumors, cross-group and broad species communication, physical human search/pursuit pathfinding, human-to-human perception, additional dogs beyond the current two, wildlife species beyond the currently released twenty-seven-record catalog, richer regional ecologies, the full bestiary, reproduction, recruitment and population recovery, ecological migration, full circadian behavior, broader herd/flock life, player/dog/human/other-animal and group-member mortality beyond the current exact-contact marsh-fox/gray-wolf/cougar-to-rabbit seam, live decomposition and body drift/drag/harvest/scent/insects, live-prey consumption beyond the finite rabbit-carcass scavenging seam, wider ownership, companions, social networks, general physical NPC inventory, negotiation, guaranteed deterrence, and broader actor-to-actor ecology; shared invariants and representative emergence remain preferred over exhaustive species-pair fixtures;
 - runtime integration of the pure rock/ladder kernel so procedural formations block ordinary traversal, a carried/recoverable ladder changes both manual and pointer-routing rules, and instability has legible fall consequences;
 - distant low-detail parcel simulation, living mangrove/bramble snag integration, and delivery compensation that prices recovered condition; continuous transfer of the same parcel across the old map extent is already live;
 - an anywhere-accessible upgrade surface whose capacity and traversal changes live in authoritative player state with explicit save migration;
