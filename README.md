@@ -4,13 +4,11 @@
 
 **Play the current Alpha:** https://19koda19.github.io/tideweft/
 
-The current source candidate is `0.3.3-alpha.32 — Open Country Ledger`. It is
-implemented locally but is not yet live-verified. The current public deployment
-remains the **LIVE_VERIFIED** `0.3.3-alpha.31 — High Country Shadows` release.
-Exact Alpha 31 gameplay commit `d124f71c1c8656db68a764d048c9a1e5d14163a7`
-passed feature CI run `34241221388`, main CI run `34243147747`, and Pages run
-`34243147753`; all five cache-bypassed live artifacts match that tested build
-byte-for-byte.
+The current release is the **LIVE_VERIFIED** `0.3.3-alpha.32 — Open Country
+Ledger` at exact gameplay commit
+`29a745edbeda4dba7d2b8b3f4463f42e91a356fa`. Feature CI `34333446897`, main CI
+`34338398784`, and Pages `34338398816` succeeded for that exact build; all five
+cache-bypassed live artifacts match the tested production build byte-for-byte.
 
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
 
@@ -40,7 +38,7 @@ Alpha 0.3 grows the earlier slices with fieldcraft, seamless travel, shared perc
 - **What Remains:** released Alpha 29 adds no species, habitat, population, or actor. A current identified marsh-fox pursuit may injure or kill its exact marsh rabbit only after physical contact. Death retires that actor once, removes one population unit while any other represented units remain abstract reserve, and creates one stable finite physical carcass. Foxes and fish crows may detect, reach, and feed from that body through ordinary lawful perception and movement; foxes may guard it. Chart, Relief, and EVENTS reveal only current directly perceived aftermath. Broader mortality, population recovery, decomposition, body movement and harvesting, carcass scent and insects, worldwide ecology, and later Wave-E species remain outside this release.
 - **Beyond the Harbor:** released Alpha 30 extends the catalog from nineteen to twenty-two records and places wild boar, elk, and gray wolf in one seed-stable remote temperate-upland/forest-edge source. Eligible individuals form reusable **SOUNDER**, **HERD**, and **PACK** groups through shared habitat, perception, attention, locomotion, materialization, and presentation owners. Wolves may exert role-driven pursuit pressure, but only exact contact with a solitary addressable marsh rabbit can enter the current mortality transaction; grouped elk, deer, and all other group members cannot be harmed. A boar or wolf may see, reach, claim, and consume from an existing finite body; a wolf may also guard its claim. Chart, Relief, quick inspection, and ABOUT remain knowledge-honest and shared across desktop and mobile. Voice patterns are foundation-only and inaudible; dog interaction is an intentional no-response; tactical pack combat, cougar, additional bear ecotypes, group mortality, ecological migration, worldwide ecology, and full Wave E remain absent.
 - **High Country Shadows:** Alpha 31 appends cougar and brown bear at that exact remote source through the same habitat, population, perception, attention, actor-owned locomotion, top-K, presentation, and save abstractions. Both are distinct species; when habitat supports an individual, it remains solitary. A cougar alone adds a short direct-sight pursuit path into the existing exact-contact mortality gate for a currently identified solitary marsh rabbit; brown bear has no live-prey pursuit or harm. Either may lawfully reach, claim, guard, and consume an already-existing finite body. Neither adds group behavior, tracks, audible voice, species-specific dog-directed behavior, player/human harm, ecological migration, or worldwide distribution; a dog or porter that lawfully sees one may still react non-harmfully through the existing shared large-predator perception path.
-- **Open Country Ledger:** the Alpha 32 source candidate adds no species. Eligible existing wildlife derives from deterministic signed-region habitat, carrying capacity, food or prey support, territory, and density budgets, including lawful empty country. The starting harbor keeps bounded brown rats and anchored chicken and goat homes while its free-ranging cat is habitat-optional. Every active ecology owner shares one global group-atomic stable-distance top-K capped at 24 actors, and density is measured before that presentation cap. Current visual, tidal-activity, alarm, and the narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body path may cross owner boundaries through one root-wide snapshot. Outer save 25 adds regional ecology root 1 and adopts normalized v24 exactly once through a conserved retain, redistribute, or non-death-retire disposition. Pristine regional baselines are rederived; only real deviations persist.
+- **Open Country Ledger:** released Alpha 32 adds no species. Eligible existing wildlife derives from deterministic signed-region habitat, carrying capacity, food or prey support, territory, and density budgets, including lawful empty country. The starting harbor keeps bounded brown rats and anchored chicken and goat homes while its free-ranging cat is habitat-optional. Every active ecology owner shares one global group-atomic stable-distance top-K capped at 24 actors, and density is measured before that presentation cap. Current visual, tidal-activity, alarm, and the narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body path may cross owner boundaries through one root-wide snapshot. Outer save 25 adds regional ecology root 1 and adopts normalized v24 exactly once through a conserved retain, redistribute, or non-death-retire disposition. Pristine regional baselines are rederived; only real deviations persist.
 - **Living commons:** nine seed-derived material families now grow visibly in suitable biomes. Desktop and touch gathering feed one exact shared pack, while the anywhere **KIT** turns those finds into six prepared components and eleven durable tools through mobile-safe **PACK / MAKE / MEND** tabs.
 - **Footing and physical parcels:** stability is a live 0–100% physical-balance calculation, not a second stamina bar or accumulated drain. Actual speed, turning, grade, roughness, moisture, local water force, wind, load, footwear, fixtures, and BRACE determine the currently supported percentage; unchanged conditions hold one value and a safer bank recalculates it immediately. Hazardous entries can still deterministically stumble or fall, briefly alter the courier's color and silhouette, speak a tiny Atari-like callout, damage one exact cargo lot, and separate persistent parcels that drift, tumble, weather, save, reload, and remain recoverable.
 - **Responsive river recovery:** desktop Shift now braces even when the document body or HUD has focus, with immediate BRACING copy and a color-independent planted marker in Chart and Relief. If stamina or stability still collapses in deep current, the courier becomes ADRIFT instead of being ejected to a bank: hold WASD/arrows or tap toward shallows to paddle, release movement to float and recover breath, then rise only after finding standable water with enough stamina. The current remains authoritative, full packs weaken a stroke, and separated physical parcels continue their own journey.
@@ -56,7 +54,7 @@ The published **Phase 10: Tide Harps** preview lets one Reed mat, one Tide ancho
 
 ## What is playable
 
-Each seed now creates one continuous deterministic terrain world. The preserved original 96 × 72 tidal country contains its well-separated harbor network, 42 persistent generated human residents, five resource economies, changing weather, shortage-driven promises, civic projects, and two distinct generated dogs. Walking beyond that old extent requires no edge action or transition: terrain is prepared ahead, exact negative coordinates work, and the same chart, cargo, route, camera, field kit, and persistent objects continue. Alpha 0.1's existing 64 × 48 saves retain their authored world rather than being regenerated. Released Alpha 31 completed the current twenty-four-record catalog prefix. The Alpha 32 source candidate distributes eligible existing wild populations through signed-region habitat, capacity, food/prey, territory, and density rules instead of keeping the compatibility assemblage around world start; empty regions remain empty. Generated distant settlements, worldwide species breadth, player/dog/human/broader-animal or group-member mortality, reproduction and population recovery, live decomposition, body drift/drag/harvest, complete scent tracking, and full actor-to-actor ecology remain later work. The main loop is:
+Each seed now creates one continuous deterministic terrain world. The preserved original 96 × 72 tidal country contains its well-separated harbor network, 42 persistent generated human residents, five resource economies, changing weather, shortage-driven promises, civic projects, and two distinct generated dogs. Walking beyond that old extent requires no edge action or transition: terrain is prepared ahead, exact negative coordinates work, and the same chart, cargo, route, camera, field kit, and persistent objects continue. Alpha 0.1's existing 64 × 48 saves retain their authored world rather than being regenerated. Released Alpha 31 completed the current twenty-four-record catalog prefix. Released Alpha 32 distributes eligible existing wild populations through signed-region habitat, capacity, food/prey, territory, and density rules instead of keeping the compatibility assemblage around world start; empty regions remain empty. Generated distant settlements, worldwide species breadth, player/dog/human/broader-animal or group-member mortality, reproduction and population recovery, live decomposition, body drift/drag/harvest, complete scent tracking, and full actor-to-actor ecology remain later work. The main loop is:
 
 1. Choose a physical cargo promise in the scrollable **Promises** panel.
 2. Reach its explicit **PICK UP** harbor and choose **Pick up cargo here** (or press E when it is the only local pickup).
@@ -85,7 +83,7 @@ The campaign resolves when every settlement belongs to a sufficiently redundant 
 - Released Alpha 28 adds a version-1 domestic-recovery root and outer save 21 without changing the nineteen-record catalog, habitat 9, settlement ecology 4, aggregate ecology 4, existing actors, homes, or custodies. A keeper-observed split can become one knowledge-honest case; an explicit last-known-area report can recruit the existing guardian's ordinary search, and exact reunion plus current caretaker sight at the pen closes it. Whole social groups are atomic materialization candidates, so off-frame exact bodies retain authoritative topology but gain no local sensing or movement. The gate concentrates on shared invariants and representative emergence rather than bespoke tests for every species or pair.
 - Released Alpha 29 advances outer save 22, core-ecology patch 3, aggregate record 5, gameplay contract 27, and Field Manual 39 without changing the roster or habitat. Sealed version-21 saves append empty authoritative mortality, reserve, and body ledgers exactly once. A committed fox-contact rabbit death, one-unit population consequence, stable body, claim, and finite consumption remain exact across reload; neither the event nor offscreen aftermath becomes automatic player knowledge.
 - Alpha 31 advances outer save 24, habitat 11, gameplay contract 29, Field Manual 41, and the catalog to twenty-four records. Sealed version-23 saves preserve the exact habitat-10 source/population prefix and all mortality, body, claim, and consumption state before evaluating solitary cougar and brown-bear population records at that same source; only habitat-supported populations receive actors. Shared properties, conservation, signed-world determinism, bounded performance, and a representative predator/scavenger chain validate the abstraction rather than adding per-species or N² tests.
-- The Alpha 32 source candidate advances outer save 25, gameplay contract 30, and Field Manual 42 while habitat 11, core-ecology patch 3, aggregate record 5, and the twenty-four-record catalog remain sealed. Regional ecology root 1 derives lawful signed-region baselines and stores only deviations. Normalized v24 adoption records one deterministic group-atomic retain, redistribute, or non-death-retire disposition without deleting or duplicating actor, population, body, item, cargo, Promise, or history truth.
+- Released Alpha 32 advances outer save 25, gameplay contract 30, and Field Manual 42 while habitat 11, core-ecology patch 3, aggregate record 5, and the twenty-four-record catalog remain sealed. Regional ecology root 1 derives lawful signed-region baselines and stores only deviations. Normalized v24 adoption records one deterministic group-atomic retain, redistribute, or non-death-retire disposition without deleting or duplicating actor, population, body, item, cargo, Promise, or history truth.
 - Continuous terrain in every direction with exact global sampling, negative-coordinate support, a bounded 120 × 120 moving frame, deterministic prefetch, sparse durable world changes, persistent cartography, and exact Chart/Relief camera rebasing. The quiet HUD reports E/N world coordinates; remote Promise and report guidance retains its harbor name, global distance, and bearing.
 - Continuous foot/wading/skiff travel with stamina, active bracing, terrain-driven footing and stability, deterministic stumbles/falls, automatically derived Rest/Steady/Swift state, fragile shock, perishable freshness, depth sounding, discovery, visible magnitude-scaled surface-current direction, emergency camp, controllable ADRIFT recovery, and infrastructure-enabled rescue.
 - A civic field kit: the Sounding line is available immediately; completed Crossings, Ferries, and Beacons can entrust visiting couriers with Marsh stilts, a Tide sail, and a Storm kite.
@@ -588,18 +586,18 @@ runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. The first cache-bypassed five-file
 live comparison matched the tested production build exactly.
 
-### Source candidate — Alpha 32 Open Country Ledger
+### Released — Alpha 32 Open Country Ledger
 
-Alpha 32 is implemented locally and has not yet been live-verified. It adds no
-species. Eligible existing wild populations derive from a versioned regional
-root using the world seed, signed region and territory identity, terrain,
-carrying capacity, food or prey support, and density budgets. Large-ranging
-species receive one deterministic host region using floor-correct signed
-coordinates; a region may be honestly empty. The starting settlement retains
-its bounded rat population and anchored chicken and goat homes, while a
-free-ranging domestic cat is habitat-optional. Fixed fresh-world gates measure
-authoritative candidate and aggregate density before materialization, so the
-starting pile cannot be hidden behind a draw cap.
+`0.3.3-alpha.32 — Open Country Ledger` is **LIVE_VERIFIED**. It adds no species.
+Eligible existing wild populations derive from a versioned regional root using
+the world seed, signed region and territory identity, terrain, carrying
+capacity, food or prey support, and density budgets. Large-ranging species
+receive one deterministic host region using floor-correct signed coordinates;
+a region may be honestly empty. The starting settlement retains its bounded
+rat population and anchored chicken and goat homes, while a free-ranging
+domestic cat is habitat-optional. Fixed fresh-world gates measure authoritative
+candidate and aggregate density before materialization, so the starting pile
+cannot be hidden behind a draw cap.
 
 Population lineage is separate from current residence. All active owners enter
 one global group-atomic stable-distance top-K capped at 24 actors. One root-wide
@@ -617,9 +615,22 @@ stable IDs, origins, groups, history, mortality, bodies, items, cargo,
 Promises, and cross-owner references. Retirement is a persisted non-death
 tombstone. Pristine baselines are rederived and only promoted or migrated
 identity, bodies, claims, receipts, and other real deviations use regional save
-space. This remains the current bounded 24-record catalog—not worldwide species
-breadth, ecological migration behavior, reproduction, population recovery,
-general tactical mortality, complete scent tracking, or a complete bestiary.
+space. Settled all-coarse state has an exact bounded dormant-catch-up fast path;
+step-sensitive or otherwise complex state continues through deterministic
+canonical chunks rather than making a universal constant-time simulation
+claim. This remains the current bounded 24-record catalog—not worldwide
+species breadth, ecological migration behavior, reproduction, population
+recovery, general tactical mortality, complete scent tracking, or a complete
+bestiary.
+
+Exact gameplay commit `29a745edbeda4dba7d2b8b3f4463f42e91a356fa`
+passed feature CI `34333446897`, main CI `34338398784`, and Pages
+`34338398816`. The complete release gate passed TypeScript, public-boundary and
+player-facing-sync checks, 241 test files and 2,274 checks, a five-asset
+3,551,649-byte served web build, inspection of a 10-entry 3,743,257-byte
+runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, and visual audits. A cache-bypassed comparison matched
+all five live production files byte-for-byte.
 
 ### Released — Alpha 31 High Country Shadows
 
@@ -652,6 +663,19 @@ track, audible voice, species-specific dog-directed behavior, body creation,
 reproduction, ecological migration, or worldwide distribution. A dog or porter
 that lawfully sees either animal can still respond non-harmfully through the
 existing shared large-predator perception path.
+
+Alpha 31 remains **LIVE_VERIFIED** at exact gameplay commit
+`d124f71c1c8656db68a764d048c9a1e5d14163a7`. Feature CI `34241221388`, main CI
+`34243147747`, and Pages `34243147753` succeeded for that exact build; its
+cache-bypassed deployment matched all five tested production files exactly:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `index.html` | 4,168 | `31b8e9060480488bbeed6df670b7beaee8348f52b4daaaec39e23d041bd0f129` |
+| `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
+| `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
+| `assets/index-BOoi-0xo.js` | 3,282,564 | `e099aeec9b673a8e273fca0902b8c2bde18540fa3b818077ba43f89a0976da50` |
+| `assets/index-BnNSHuv9.css` | 106,761 | `05ac88340ddce1bdde27d73638642979cdbaca4bf460d621ddcf52c94c114706` |
 
 ### Released — Alpha 30 Beyond the Harbor
 
@@ -704,18 +728,18 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 [The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The current Alpha 31 feature is **LIVE_VERIFIED** at exact gameplay commit
-`d124f71c1c8656db68a764d048c9a1e5d14163a7`. Feature CI `34241221388`,
-main CI `34243147747`, and Pages `34243147753` succeeded for that exact
-commit. The latest cache-bypassed fetch matched all five live assets to the
-tested production build exactly:
+The current Alpha 32 release is **LIVE_VERIFIED** at exact gameplay commit
+`29a745edbeda4dba7d2b8b3f4463f42e91a356fa`. Feature CI `34333446897`, main CI
+`34338398784`, and Pages `34338398816` succeeded for that exact commit. The
+latest cache-bypassed fetch matched all five live assets to the tested
+production build exactly:
 
 | Asset | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `index.html` | 4,168 | `31b8e9060480488bbeed6df670b7beaee8348f52b4daaaec39e23d041bd0f129` |
+| `index.html` | 4,168 | `9db0ec68212e373963ac8ed386a8321554b9e269046a03053cd53c3f6e30e392` |
 | `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
 | `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
-| `assets/index-BOoi-0xo.js` | 3,282,564 | `e099aeec9b673a8e273fca0902b8c2bde18540fa3b818077ba43f89a0976da50` |
+| `assets/index-BqCkjfW5.js` | 3,439,339 | `cffac6afcd658780b72988c3bdeeddfe1b75d66d374e6992c87fc76098292d16` |
 | `assets/index-BnNSHuv9.css` | 106,761 | `05ac88340ddce1bdde27d73638642979cdbaca4bf460d621ddcf52c94c114706` |
 
 For future releases:

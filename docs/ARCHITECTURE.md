@@ -211,8 +211,8 @@ cross-region animal ecology.
 
 ## Signed-region ecology root
 
-The `0.3.3-alpha.32 — Open Country Ledger` source candidate is implemented
-locally and is not yet live-verified. It adds no species. Alpha 31 habitat
+Release `0.3.3-alpha.32 — Open Country Ledger` is **LIVE_VERIFIED**. It adds no
+species. Alpha 31 habitat
 versions 1 through 11 remain sealed compatibility authority;
 `src/game/coreEcologyRegionalHabitat.ts` derives new wild baselines from the
 root seed, canonical signed region and territory identity, terrain, catalog
@@ -237,6 +237,19 @@ capped at 24 actors. The cap is one presentation budget, not one allowance per
 region; a social group enters together or remains coarse. Authoritative fresh-
 world density and aggregate-anchor counts are measured before materialization,
 so the starting-harbor pile cannot be concealed by rendering fewer actors.
+An all-coarse resident may catch up to the regional-root clock through the core
+patch owner's exact bounded accelerator. Group-free patches and cohesive,
+signal-free groups without recurring authorized pressure advance directly.
+For a group under recurring player-absent pressure, the accelerator canonically
+aligns for at most 64 eight-tick cadences, proves one stable eight-cadence
+cycle, bridges older complete cycles while retaining nine complete cycles, and
+then canonically replays only the bounded final tail, whose implementation
+ceiling is `9 × 8 + 7 = 79` internal replay steps. A materialized or
+unsupported state, active cognition, a due intent transition, a live group
+signal, or topology that still needs replay fails closed to canonical chunks
+of at most 64 ticks. Entrant
+derivation and authority validation call the same path; neither acceleration
+nor fallback invents a perception, action, target, or local movement.
 `src/game/regionalEcologyRuntime.ts` and the runtime coordinator resolve one
 root-wide pre-step snapshot, allowing current visual, anonymous tidal-activity,
 and alarm perception across owner boundaries without source-order dependence.
@@ -254,6 +267,15 @@ Reload cannot reroll the baseline or disposition. This is distribution of the
 current 24-record catalog, not worldwide species breadth, ecological migration
 behavior, reproduction, population recovery, general tactical mortality,
 complete scent tracking, or the full bestiary.
+
+Exact gameplay commit `29a745edbeda4dba7d2b8b3f4463f42e91a356fa`
+passed feature CI `34333446897`, main CI `34338398784`, and Pages
+`34338398816`. The complete local gate passed TypeScript, public-boundary and
+player-facing-sync checks, 241 test files and 2,274 checks, a five-file
+3,551,649-byte served web build, a 10-entry 3,743,257-byte runtime-only
+Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
+save, release-surface, and visual audits. A cache-bypassed live comparison
+matched all five production files byte-for-byte.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -588,7 +610,7 @@ signed/extreme coordinates, and full/coarse projection cannot reroll the
 source, duplicate an animal, rewrite the version-10 trio, or alter adopted
 body-bearing state.
 
-The Alpha 32 Open Country Ledger source candidate advances the outer session
+The released Alpha 32 Open Country Ledger advances the outer session
 to version 25 and adds regional ecology root version 1 while habitat 11, core-
 ecology patch 3, aggregate record 5, and the 24-record catalog remain sealed.
 A normalized version-24 payload is authenticated before one deterministic,
@@ -669,7 +691,7 @@ species-specific dog-directed behavior, player/human/group harm, broader
 mortality, ecological migration, worldwide ecology, full Wave E, and broader
 biodiversity completion; ordinary lawful large-predator perception remains shared.
 
-Alpha 32 advances the source-candidate guide to version 42 and gameplay
+Released Alpha 32 advances the guide to version 42 and gameplay
 contract to 30. It documents signed-region derivation and lawful absence,
 measured pre-cap starting density, separate settlement-home derivation, one
 global group-atomic materialization plan, sparse regional persistence, current

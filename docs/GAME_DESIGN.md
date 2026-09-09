@@ -225,8 +225,8 @@ Electron ASAR inspection, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. A cache-bypassed live comparison
 matched all five production files byte-for-byte.
 
-The `0.3.3-alpha.32 — Open Country Ledger` source candidate is implemented
-locally and is not yet live-verified. It adds no species. Eligible existing
+The `0.3.3-alpha.32 — Open Country Ledger` release is **LIVE_VERIFIED**. It adds
+no species. Eligible existing
 wildlife now derives from stable signed-region habitat, carrying capacity,
 food or prey support, territory, and density budgets. Empty country is a lawful
 outcome, large-ranging species receive one floor-correct territory host, and
@@ -254,6 +254,14 @@ baselines are rederived and only real deviations persist. The catalog remains
 24 records; this is not worldwide species breadth, ecological migration
 behavior, reproduction, population recovery, general tactical mortality,
 complete scent tracking, or the full bestiary.
+
+Exact gameplay commit `29a745edbeda4dba7d2b8b3f4463f42e91a356fa`
+passed feature CI
+`34333446897`, main CI `34338398784`, and Pages `34338398816`. The complete
+release gate passed all checks and audits across 241 test files and 2,274
+tests, a five-file 3,551,649-byte served web build, a 10-entry 3,743,257-byte
+runtime-only Electron ASAR, and desktop/mobile/title smoke. A cache-bypassed
+live comparison matched all 5/5 production files exactly.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -669,9 +677,9 @@ behavior, player/human/group harm, broader mortality, ecological migration,
 worldwide ecology, and full Wave E; ordinary lawful large-predator perception
 remains shared.
 
-Alpha 32 advances the source-candidate manual to version 42 and gameplay
-contract to version 30. It explains signed-region derivation and honest
-absence, pre-cap starting-density measurement, the separate home population,
+The **LIVE_VERIFIED** Alpha 32 release advances the Field Manual to version 42
+and gameplay contract to version 30. It explains signed-region derivation and
+honest absence, pre-cap starting-density measurement, the separate home population,
 one global group-atomic materialization plan, sparse deviation persistence,
 cross-owner current perception and the narrow marsh-fox/gray-wolf/cougar-to-
 eligible-solitary-rabbit mortality/body seam, and exact outer-v24-to-v25
@@ -1046,13 +1054,13 @@ catalog to twenty-two records. Its exact release evidence is recorded above.
 gameplay contract 29, Field Manual 41, outer save 24, habitat 11, and the
 catalog to twenty-four records. Its exact release evidence is recorded above.
 
-`0.3.3-alpha.32 — Open Country Ledger` is an implemented local source
-candidate, not yet live-verified. It advances gameplay contract 30, Field
+`0.3.3-alpha.32 — Open Country Ledger` is **LIVE_VERIFIED**. It advances
+gameplay contract 30, Field
 Manual 42, outer save 25, and regional ecology root 1 while habitat 11, core
 patch 3, aggregate record 5, and the twenty-four-record catalog remain sealed.
+Its exact release evidence is recorded above.
 
-Live through Alpha 31, with the Alpha 32 source-candidate addition explicitly
-marked:
+Live through Alpha 32:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
@@ -1072,7 +1080,7 @@ marked:
 - one bounded What Remains release: current identified marsh-fox pursuit plus exact rabbit contact, one exact retired actor, one-unit population loss with conserved abstract reserve, one stable finite carcass, lawful fox/fish-crow reach and feeding, optional fox guarding, current-perception-only aftermath presentation, and exact version-21-to-22 adoption without adding a species or actor;
 - one bounded Beyond the Harbor release: the exact habitat-version-9 prefix remains unchanged before one deterministic remote temperate-upland/forest-edge source appends wild boar, elk, and gray wolf; eligible populations use shared `SOUNDER`, `HERD`, and `PACK` groups, perception, locomotion, materialization, and presentation; a wolf may enter the existing mortality transaction only through exact current contact with an eligible solitary rabbit, while a boar or wolf may consume from an already-existing finite body through lawful sight, reach, and claim; exact version-22-to-23 adoption preserves every earlier identity and world fact;
 - one bounded High Country Shadows release: habitat version 11 preserves the complete version-10 remote source and population sequence before evaluating distinct solitary cougar and brown-bear population records at that same source, with actors only where habitat capacity supports them; both use shared perception, attention, locomotion, materialization, physical-body claim, presentation, and persistence owners; cougar alone adds the short direct-sight path into exact contact with a currently identified eligible solitary rabbit, brown bear has no live-prey path, and both may lawfully claim, guard, and consume an existing finite body; exact version-23-to-24 adoption preserves every earlier identity and world fact;
-- the Alpha 32 Open Country Ledger source candidate, which adds no species: deterministic signed-region habitat/capacity/food-or-prey/territory/density derivation with honest absence; a separate bounded home owner with required rat, chicken, and goat populations but habitat-optional cat; measured pre-cap starting density; one global group-atomic top-K; sparse deviations; current cross-owner visual/tidal/alarm perception; the existing narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body transaction across owners; and one conserved group-atomic version-24-to-25 retain/redistribute/non-death-retire disposition;
+- one bounded Open Country Ledger release, which adds no species: deterministic signed-region habitat/capacity/food-or-prey/territory/density derivation with honest absence; a separate bounded home owner with required rat, chicken, and goat populations but habitat-optional cat; measured pre-cap starting density; one global group-atomic top-K; sparse deviations; current cross-owner visual/tidal/alarm perception; the existing narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body transaction across owners; and one conserved group-atomic version-24-to-25 retain/redistribute/non-death-retire disposition;
 - one versioned production species contract covering exactly twenty-four current records—human, domestic dog, deer, gull, black bear, brown rat, domestic cat, marsh rabbit, marsh fox, fish crow, northern harrier, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, snowy egret, American black duck, North American river otter, domestic chicken, domestic goat, wild boar, elk, gray wolf, cougar, and brown bear—while keeping rat, frog, silverside, and fiddler-crab populations non-addressable as individual actors; shared policy composes representation, capabilities, groups, movement, activity, evidence, sound, decisions, projection, tide-responsive habitat use, amphibious movement, plural domestic custody, typed homes, deterministic resource contention, physical item claims, and the narrow fox/gray-wolf/cougar-to-rabbit mortality-body seam; complete scent/evidence tracking, foliage consumption, broader health/death, full circadian behavior, worldwide species breadth, ecological migration/reproduction and population recovery, complete food-web turnover, and an exhaustive pair matrix remain closed;
 - shortage cargo and signed information journeys;
 - continuous traversal and graded recovery;

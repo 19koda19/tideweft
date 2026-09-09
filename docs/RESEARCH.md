@@ -416,26 +416,29 @@ local gate passed 230 files / 2,197 tests, the five served artifacts totaled
 bytes, desktop/mobile/title smoke passed, and the cache-bypassed live
 comparison matched 5/5 files byte-for-byte.
 
-The `0.3.3-alpha.32 — Open Country Ledger` source candidate is implemented
-locally and is not yet live-verified. It tests distribution rather than adding
-species. Existing wild populations derive from the world seed, signed region
+The **LIVE_VERIFIED** `0.3.3-alpha.32 — Open Country Ledger` release tests
+distribution rather than adding species. Existing wild populations derive
+from the world seed, signed region
 and territory identity, terrain, capacity, food or prey support, and density
 budgets; empty results and unused capacity are legitimate. Large-ranging
 species use one floor-correct host region. The starting settlement remains a
 separate home owner with bounded rats and anchored chicken/goat populations,
 while its free-ranging cat is habitat-optional.
 
-The anti-clustering claim is measured before presentation. A fixed 32-seed
-fresh-start corpus bounds wild individual candidates at p50 6, p95 9, and hard
-maximum 10; all home and wild candidates at hard maximum 18; aggregate anchors
-at p95 10 and hard maximum 12; and large predators at no more than one
-population per initial frame, with at least half the starts predator-free. A
-separate fixed 64-root signed/extreme corpus requires honest empty and occupied
-wild roots, at least 56 predator-free roots, no universally present wild
-species, and repeat/input/cache/camera-order identity. These are authoritative
-pre-cap measures, not a claim based on drawing fewer animals.
+The anti-clustering claim is measured before presentation. For the fixed
+32-seed fresh-start corpus, the acceptance ceilings for wild individual
+candidates are p50 6, p95 9, and hard maximum 10; the observed values are p50
+1, p95 8, and maximum 9. Further acceptance ceilings hold all home and wild
+candidates to a hard maximum of 18, aggregate anchors to p95 10 and hard
+maximum 12, and large predators to no more than one population per initial
+frame with at least half the starts predator-free. A separate fixed 64-root
+signed/extreme corpus requires both honest empty and occupied wild roots, at
+least 56 predator-free roots, no universally present wild species, and
+repeat/input/cache/camera-order identity; its observed occupancy is 38/64
+empty and 26/64 occupied. These are authoritative pre-cap acceptance and
+observed measures, not a claim based on drawing fewer animals.
 
-The candidate also tests ownership at seams. Lineage is separate from current
+The release also tests ownership at seams. Lineage is separate from current
 residence; all active owners share one group-atomic stable-distance top-K of 24
 actors and one root-wide pre-step snapshot. Current visual, anonymous tidal-
 activity, and alarm perception can cross an owner boundary without source-order
@@ -452,6 +455,14 @@ bodies, items, cargo, Promises, and cross-owner references. This remains the
 bounded 24-record catalog, not worldwide species breadth, ecological migration
 behavior, reproduction, population recovery, general tactical mortality,
 complete scent tracking, or the full bestiary.
+
+Exact gameplay commit `29a745edbeda4dba7d2b8b3f4463f42e91a356fa`
+passed feature CI
+`34333446897`, main CI `34338398784`, and Pages `34338398816`. The complete
+release gate passed all checks and audits across 241 test files and 2,274
+tests, a five-file 3,551,649-byte served web build, a 10-entry 3,743,257-byte
+runtime-only Electron ASAR, and desktop/mobile/title smoke. A cache-bypassed
+live comparison matched all 5/5 production files exactly.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -471,9 +482,9 @@ Alpha 27 is the verified bounded work-lifecycle extension, Alpha 28 is the
 verified bounded recovery-composition release, Alpha 29 is the verified first
 one-life/one-body mortality release, Alpha 30 is the verified first Wave-E
 regional breadth release, Alpha 31 is the verified solitary-predator append,
-and Alpha 32 is the source-candidate signed-region distribution closure for the
-current catalog. None completes broader aquatic or settlement ecology, broad attacks
-or mortality, population recovery, decomposition, body transport or
+and Alpha 32 is the verified signed-region distribution closure for the current
+24-record catalog. None completes broader aquatic or settlement ecology, broad
+attacks or mortality, population recovery, decomposition, body transport or
 harvesting, full circadian life, complete scent, worldwide species breadth, or the
 full bestiary. Broader species, reproduction, ecological migration, those
 absent physical systems, wider settlement ecology, and wider sound/evidence
