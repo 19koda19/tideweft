@@ -2559,6 +2559,169 @@ function alpineSharedEvidence(
 }
 
 /**
+ * Build-owned evidence for Alpha 34's bounded cold-water forage seam. One
+ * non-addressable school composes shared habitat, tidal autonomy, perception,
+ * presentation, persistence, and global-budget owners; physical feeding,
+ * exact fish targets, voice, and dog interaction remain deliberately absent.
+ */
+function polarForageSharedEvidence(): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => (
+    [...new Set(values)].sort(compareText)
+  );
+  const contracts = owners(
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:living-species-catalog:v1",
+    "sim:core-wildlife-identity:v1",
+  );
+  const habitatOwners = owners(
+    "game:core-ecology-polar-shore-habitat:v1",
+    "game:regional-polar-shore-ecology:v1",
+    "game:regional-polar-shore-residents:v1",
+    "test:alpha34-polar-shore-shared-invariants:v1",
+  );
+  const aggregateOwners = owners(
+    "game:core-ecology-dormant-aggregate-autonomy:v1",
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:core-ecology-tidal-aggregate-policy:v1",
+    "game:core-ecology-tidal-table:v1",
+    "game:regional-polar-shore-ecology:v1",
+    "game:regional-polar-shore-residents:v1",
+    "test:alpha34-polar-shore-resident-shared-invariants:v1",
+  );
+  const perceptionOwners = owners(
+    "game:core-ecology-aggregate-perception:v1",
+    "game:core-ecology-perception:v1",
+    "game:living-actor-senses:v1",
+    "sim:actor-perception:v2",
+    "test:alpha34-polar-cross-owner-emergence:v1",
+  );
+  const presentationOwners = owners(
+    "game:wildlife-about:v1",
+    "game:wildlife-presentation:v1",
+    "sim:actor-perception:v2",
+    "test:alpha34-polar-presentation-invariants:v1",
+  );
+  const persistenceOwners = owners(
+    "game:regional-ecology-state:v3",
+    "game:regional-polar-shore-ecology:v1",
+    "game:runtime-core-ecology:v1",
+    "game:runtime-save:v27",
+    "test:alpha34-polar-composite-shared-invariants:v1",
+    "test:alpha34-polar-runtime-v27:v1",
+    "test:alpha34-polar-shore-root-shared-invariants:v1",
+  );
+  return [
+    ["species-profile", A, contracts],
+    ["ecological-niche", A, owners(
+      ...contracts,
+      ...habitatOwners,
+      "game:core-ecology-trophic:v1",
+    )],
+    ["appearance", A, owners(
+      "game:wildlife-presentation:v1",
+      "sim:core-wildlife-identity:v1",
+      "test:alpha34-polar-presentation-invariants:v1",
+    )],
+    ["sound", U, []],
+    ["habitat-placement", A, habitatOwners],
+    ["food-web", F, owners(
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-species-catalog:v1",
+      "test:alpha34-polar-cross-owner-emergence:v1",
+    )],
+    ["perception-senses", A, perceptionOwners],
+    ["locomotion", A, aggregateOwners],
+    ["human-interaction", F, contracts],
+    ["dog-interaction", U, []],
+    ["same-species-interaction", A, aggregateOwners],
+    ["other-species-interaction", A, owners(
+      ...perceptionOwners,
+      "game:core-ecology-species-runtime-policy:v1",
+      "game:core-ecology-trophic:v1",
+    )],
+    ["neutral-behavior", A, aggregateOwners],
+    ["disengagement", A, aggregateOwners],
+    ["environmental-evidence", A, owners(
+      "game:core-ecology-aggregate-policy:v1",
+      "game:core-ecology-tidal-table:v1",
+      "game:regional-polar-shore-ecology:v1",
+      "game:wildlife-presentation:v1",
+      "test:alpha34-polar-presentation-invariants:v1",
+    )],
+    ["about-disclosure", A, presentationOwners],
+    ["knowledge-honesty", A, owners(...perceptionOwners, ...presentationOwners)],
+    ["population-materialization", A, owners(
+      "game:core-ecology-polar-shore-habitat:v1",
+      "game:regional-ecology-state:v3",
+      "game:regional-polar-shore-residents:v1",
+      "game:runtime-core-ecology:v1",
+      "game:runtime-save:v27",
+      "test:alpha34-polar-composite-shared-invariants:v1",
+      "test:alpha34-polar-runtime-v27:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:core-ecology-dormant-aggregate-autonomy:v1",
+      "game:core-ecology-tidal-table:v1",
+      "game:regional-ecology-state:v3",
+      "game:regional-polar-shore-ecology:v1",
+      "game:regional-polar-shore-residents:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha34-polar-composite-shared-invariants:v1",
+      "test:alpha34-polar-shore-resident-shared-invariants:v1",
+    )],
+    ["save-load", A, persistenceOwners],
+    ["seamless-region-crossing", A, owners(
+      "game:core-ecology-polar-shore-habitat:v1",
+      "game:regional-ecology-state:v3",
+      "game:regional-polar-shore-ecology:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha34-polar-composite-shared-invariants:v1",
+      "test:alpha34-polar-runtime-v27:v1",
+      "test:alpha34-polar-shore-root-shared-invariants:v1",
+      "test:alpha34-polar-shore-shared-invariants:v1",
+    )],
+    ["performance-budget", A, owners(
+      "game:core-ecology-polar-shore-habitat:v1",
+      "game:regional-ecology-state:v3",
+      "game:regional-polar-shore-ecology:v1",
+      "game:regional-polar-shore-residents:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha34-polar-composite-performance:v1",
+      "test:alpha34-polar-shore-resident-shared-invariants:v1",
+      "test:alpha34-polar-shore-root-shared-invariants:v1",
+    )],
+    ["accessibility", A, presentationOwners],
+    ["mobile-parity", A, presentationOwners],
+    ["player-independent-scenario", A, owners(
+      "game:core-ecology-aggregate-perception:v1",
+      "game:core-ecology-dormant-aggregate-autonomy:v1",
+      "game:regional-polar-shore-ecology:v1",
+      "test:alpha34-polar-cross-owner-emergence:v1",
+      "test:alpha34-polar-shore-resident-shared-invariants:v1",
+    )],
+    ["fuzz-testing", A, owners(
+      "game:core-ecology-polar-shore-habitat:v1",
+      "game:regional-ecology-state:v3",
+      "game:regional-polar-shore-ecology:v1",
+      "game:regional-polar-shore-residents:v1",
+      "sim:core-wildlife-identity:v1",
+      "test:alpha34-polar-composite-shared-invariants:v1",
+      "test:alpha34-polar-shore-root-shared-invariants:v1",
+      "test:alpha34-polar-shore-shared-invariants:v1",
+    )],
+    ["clone-diversity", F, owners(
+      "game:core-ecology-polar-shore-habitat:v1",
+      "sim:core-wildlife-identity:v1",
+      "test:alpha34-polar-shore-shared-invariants:v1",
+    )],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v44"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha34:v1"]],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -2652,6 +2815,7 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "mountain-goat": alpineSharedEvidence("mountain-goat"),
   "american-pika": alpineSharedEvidence("american-pika"),
   "golden-eagle": alpineSharedEvidence("golden-eagle"),
+  "atlantic-capelin": polarForageSharedEvidence(),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {

@@ -23,6 +23,12 @@ import {
   LIVING_SPECIES_ALPHA32_CATALOG_HASH,
   LIVING_SPECIES_ALPHA32_SPECIES_IDS,
   LIVING_SPECIES_ALPHA32_SPECIES_IDS_HASH,
+  LIVING_SPECIES_ALPHA33_CATALOG,
+  LIVING_SPECIES_ALPHA33_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_ALPHA33_CATALOG_COUNT,
+  LIVING_SPECIES_ALPHA33_CATALOG_HASH,
+  LIVING_SPECIES_ALPHA33_SPECIES_IDS,
+  LIVING_SPECIES_ALPHA33_SPECIES_IDS_HASH,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   canonicalizeLivingSpeciesCatalog,
@@ -88,6 +94,22 @@ describe("Living Weft species module catalog", () => {
       .toBe(LIVING_SPECIES_ALPHA32_CATALOG_BYTE_LENGTH);
     expect(hashCanonical(LIVING_SPECIES_ALPHA32_CATALOG))
       .toBe(LIVING_SPECIES_ALPHA32_CATALOG_HASH);
+    expect(LIVING_SPECIES_ALPHA33_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_ALPHA33_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_ALPHA33_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_ALPHA33_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA33_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_ALPHA33_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(stableStringify(LIVING_SPECIES_ALPHA33_CATALOG)).byteLength)
+      .toBe(LIVING_SPECIES_ALPHA33_CATALOG_BYTE_LENGTH);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA33_CATALOG))
+      .toBe(LIVING_SPECIES_ALPHA33_CATALOG_HASH);
+    expect(LIVING_SPECIES_CATALOG.modules.filter(({ speciesId }) => (
+      !LIVING_SPECIES_ALPHA33_SPECIES_IDS.includes(
+        speciesId as (typeof LIVING_SPECIES_ALPHA33_SPECIES_IDS)[number],
+      )
+    )).map(({ speciesId }) => speciesId)).toEqual(["atlantic-capelin"]);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
@@ -272,6 +294,60 @@ describe("Living Weft species module catalog", () => {
     for (const module of [goat, pika, eagle]) {
       expect(module?.sound).toMatchObject({ implementation: "unimplemented", ownerId: null });
     }
+  });
+
+  it("appends capelin as one conserved non-addressable polar forage school", () => {
+    const capelin = livingSpeciesModule("atlantic-capelin");
+
+    expect(capelin).toMatchObject({
+      profile: {
+        implementation: "foundation",
+        taxonomicClass: "fish",
+        ecologicalClasses: [
+          "cold-water-forage-fish",
+          "forage-fish",
+          "prey",
+          "schooling-fish",
+          "small-prey",
+        ],
+      },
+      identity: { form: "aggregate", stableIdNamespace: "CAPELINSCHOOL-AREA" },
+      spatial: { positionModel: "segmented-area", authoritativeHeading: true },
+      population: {
+        authoritativeUnit: "group-records",
+        dematerialization: "reconcile-group-state",
+        maxMaterializedPerRegion: 0,
+      },
+      social: {
+        groupModel: "group",
+        group: {
+          representation: "group-actor",
+          organizationKinds: ["school"],
+          stableIdNamespace: "CAPELIN-SCHOOL",
+        },
+      },
+      evidence: { status: "foundation", produces: ["surface-dimple"] },
+      sound: { implementation: "unimplemented", repertoire: [] },
+      health: { implementation: "unimplemented", causalDeath: false },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
+      inventory: { implementation: "unimplemented", acceptsCustody: false },
+    });
+    for (const targetClass of ["human", "predator"] as const) {
+      expect(capelin?.interactions.targets.find((target) => target.targetClass === targetClass))
+        .toMatchObject({
+          policy: "available",
+          verbs: ["redistribute", "tighten"],
+          escalationConstraints: [
+            "aggregate-unit-conservation",
+            "bounded-response",
+            "direct-perception-required",
+            "nonlethal-pressure-only",
+          ],
+        });
+    }
+    expect(capelin?.interactions.targets.find(({ targetClass }) => targetClass === "dog")?.policy)
+      .toBe("intentional-no-response");
   });
 
   it("keeps domestic livestock on shared active owners with deferred life systems", () => {
@@ -1976,6 +2052,7 @@ describe("Living Weft species module catalog", () => {
       expect(module.spatial).toMatchObject({
         positionModel: module.speciesId === "brown-rat"
           || module.speciesId === "american-pika"
+          || module.speciesId === "atlantic-capelin"
           || module.speciesId === "atlantic-marsh-fiddler-crab"
           || module.speciesId === "atlantic-silverside"
           || module.speciesId === "southern-leopard-frog"
@@ -1991,6 +2068,7 @@ describe("Living Weft species module catalog", () => {
       );
       expect(module.evidence.status).toBe(
         module.speciesId === "atlantic-marsh-fiddler-crab"
+          || module.speciesId === "atlantic-capelin"
           || module.speciesId === "atlantic-silverside"
           || module.speciesId === "gray-wolf"
           || module.speciesId === "mountain-goat"
@@ -2009,6 +2087,7 @@ describe("Living Weft species module catalog", () => {
       expect(module.environment.possibility.status).toBe("unimplemented");
       expect(module.environment.terrain.status).toBe("unimplemented");
       const tidalFoundation = module.speciesId === "atlantic-marsh-fiddler-crab"
+        || module.speciesId === "atlantic-capelin"
         || module.speciesId === "atlantic-silverside"
         || module.speciesId === "snowy-egret";
       expect(module.environment.tide.status).toBe(
@@ -2036,6 +2115,7 @@ describe("Living Weft species module catalog", () => {
       );
       expect(module.social.group.status).toBe(
         module.speciesId === "atlantic-silverside"
+          || module.speciesId === "atlantic-capelin"
           ? "foundation"
           : module.speciesId === "deer"
             || module.speciesId === "gull"

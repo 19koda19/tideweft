@@ -21,16 +21,19 @@ import {
   projectCoreEcologyActivity,
   stepCoreEcologyActivityMotion,
 } from "./coreEcologyActivity";
+import { deriveCoreEcologyAggregateStimulusFrame } from "./coreEcologyAggregatePerception";
 import {
   deriveCoreEcologyTidalWebHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
   deriveCoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
 import { deriveCoreEcologyRegionalHabitat } from "./coreEcologyRegionalHabitat";
 import {
   collectCoreEcologyAggregateActivityObservationBatches,
   collectCoreEcologyRootAggregateActivityObservationBatches,
 } from "./coreEcologyPerception";
+import { stepCoreEcologySmallWorld } from "./coreEcologySmallWorld";
 import {
   projectCoreEcologyTidalTable,
   stepCoreEcologyTidalTable,
@@ -48,6 +51,7 @@ import {
 } from "./regionalTravel";
 import { createRegionalWorldView, regionalTileIndexInView } from "./regionalWorldView";
 import { createCoreEcologyRegionalResidentPatch } from "./regionalEcologyResidents";
+import { createCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -58,7 +62,155 @@ const SEED_TEXT = "tidal-triad-1";
 const SEED = seedFromText(SEED_TEXT);
 const REGION = createRegionCoord(0, 0);
 
-describe("capability-selected perception of tidal aggregates", () => {
+export const ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT =
+  "test:alpha34-polar-cross-owner-emergence:v1" as const;
+
+describe(`${ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT} capability-selected perception of tidal aggregates`, () => {
+  it("composes one existing aerial observer with polar forage through shared owners", () => {
+    const fixture = polarAerialObserverFixture(360);
+    expect(fixture.gullOwner.derivation.kind).toBe("regional-habitat-v1");
+    expect(fixture.gullOwner.populations.flatMap(({ members }) => members).filter(
+      ({ materialization }) => materialization === "materialized",
+    )).toHaveLength(1);
+    expect(fixture.polarPatch.patchKey).not.toBe(fixture.gullOwner.patchKey);
+    expect(fixture.polarPatch.populations).toEqual([]);
+
+    const perceptionFrame = {
+      actors: [fixture.gull],
+      patches: [fixture.gullOwner, fixture.polarPatch],
+      tick: 361,
+      window: fixture.window,
+      world: fixture.world,
+    };
+    const observed = collectCoreEcologyRootAggregateActivityObservationBatches(
+      perceptionFrame,
+    );
+    const reordered = collectCoreEcologyRootAggregateActivityObservationBatches({
+      ...perceptionFrame,
+      patches: [...perceptionFrame.patches].reverse(),
+    });
+    expect(observed).not.toBeNull();
+    expect(reordered).toEqual(observed);
+    const observations = observed?.find(({ observerId }) => (
+      observerId === fixture.gull.identity.stableId
+    ))?.observations ?? [];
+    const surfaceObservation = observations.find((observation) => (
+      hasObservationAt([observation], fixture.cuePosition)
+    ));
+    expect(surfaceObservation).toMatchObject({
+      observerId: fixture.gull.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      identification: "classified",
+      area: { center: fixture.cuePosition, radiusUnits: 0 },
+    });
+    const observationPayload = JSON.stringify(surfaceObservation);
+    expect(observationPayload).not.toContain(fixture.school.aggregateId);
+    expect(observationPayload).not.toContain(fixture.school.populationKey);
+    expect(observationPayload).not.toContain("atlantic-capelin");
+    expect(observationPayload).not.toContain("populationUnits");
+    expect(surfaceObservation).not.toHaveProperty("aggregateId");
+    expect(surfaceObservation).not.toHaveProperty("visibleAggregateCount");
+
+    const visualSource = {
+      sourceReferenceId: fixture.gull.identity.stableId,
+      sourceSpecies: fixture.gull.identity.species,
+      position: fixture.gull.address.position,
+      movementSalience: FIXED_POINT,
+    } as const;
+    const responseInput = {
+      patch: fixture.polarPatch,
+      world: fixture.world,
+      window: fixture.window,
+      tick: 360,
+      visualSources: [visualSource],
+      exposedFoodSources: [],
+    } as const;
+    const stimulus = deriveCoreEcologyAggregateStimulusFrame(responseInput);
+    const replayStimulus = deriveCoreEcologyAggregateStimulusFrame(responseInput);
+    expect(stimulus).not.toBeNull();
+    expect(replayStimulus).toEqual(stimulus);
+    expect(stimulus?.stimuli).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceReferenceId: fixture.gull.identity.stableId,
+        sourceKind: "gull",
+        targetAggregateId: fixture.school.aggregateId,
+        response: "pressure",
+        channels: ["vision"],
+      }),
+    ]));
+
+    const response = stepCoreEcologySmallWorld(fixture.polarPatch, 360, stimulus);
+    const replayResponse = stepCoreEcologySmallWorld(
+      fixture.polarPatch,
+      360,
+      replayStimulus,
+    );
+    expect(response).not.toBeNull();
+    expect(replayResponse).toEqual(response);
+    const gullEvents = response?.events.filter(({ sourceReferenceId }) => (
+      sourceReferenceId === fixture.gull.identity.stableId
+    )) ?? [];
+    expect(gullEvents).toEqual([
+      expect.objectContaining({
+        displacedUnits: 1,
+        mortality: "none",
+        cargoInteraction: false,
+        itemConsumption: "none",
+      }),
+    ]);
+    expect(response?.events).toHaveLength(1);
+    const afterSchool = response?.patch.aggregatePopulations.find(
+      ({ aggregateId }) => aggregateId === fixture.school.aggregateId,
+    );
+    expect(afterSchool?.populationSize).toBe(fixture.school.populationSize);
+    expect(afterSchool?.anchors.reduce(
+      (sum, anchor) => sum + anchor.populationUnits,
+      0,
+    )).toBe(fixture.school.populationSize);
+    const movedUnits = afterSchool?.anchors.reduce((sum, anchor) => {
+      const before = fixture.school.anchors[anchor.anchorOrdinal];
+      if (before === undefined) throw new Error("polar response changed anchor identity");
+      return sum + Math.abs(anchor.populationUnits - before.populationUnits);
+    }, 0) ?? 0;
+    expect(movedUnits / 2).toBe(1);
+    expect(movedUnits / 2).toBeLessThanOrEqual(1);
+    expect(response?.patch.populations).toEqual([]);
+    expect(response?.patch.groups.groups).toEqual([]);
+    expect(response?.patch.nextMortalityOrdinal).toBe(
+      fixture.polarPatch.nextMortalityOrdinal,
+    );
+    expect(response?.patch.mortalityTransactions).toEqual([]);
+    expect(response?.patch.carcasses).toEqual([]);
+    expect(JSON.stringify(response)).not.toMatch(/capture|reproduction/u);
+
+    occludePosition(fixture.world, fixture.gull.address.position);
+    const hidden = collectCoreEcologyRootAggregateActivityObservationBatches(
+      perceptionFrame,
+    );
+    expect(hidden?.find(({ observerId }) => (
+      observerId === fixture.gull.identity.stableId
+    ))?.observations.some((observation) => (
+      hasObservationAt([observation], fixture.cuePosition)
+    ))).toBe(false);
+    const hiddenStimulus = deriveCoreEcologyAggregateStimulusFrame(responseInput);
+    expect(hiddenStimulus).not.toBeNull();
+    expect(hiddenStimulus?.stimuli.some(({ sourceReferenceId }) => (
+      sourceReferenceId === fixture.gull.identity.stableId
+    ))).toBe(false);
+    const hiddenResponse = stepCoreEcologySmallWorld(
+      fixture.polarPatch,
+      360,
+      hiddenStimulus,
+    );
+    expect(hiddenResponse).not.toBeNull();
+    expect(hiddenResponse?.events.some(({ sourceReferenceId }) => (
+      sourceReferenceId === fixture.gull.identity.stableId
+    ))).toBe(false);
+  });
+
   it("keeps tidal cues visible across owner boundaries and source order", () => {
     const source = visibleCueFixture(360);
     const observerRegion = createRegionCoord(-1, 1);
@@ -537,6 +689,146 @@ describe("capability-selected perception of tidal aggregates", () => {
     expect(movement?.resolution).toBe("moved");
   });
 });
+
+function polarAerialObserverFixture(tick: number) {
+  const seedText = "polar cross owner 0";
+  const seed = seedFromText(seedText);
+  const region = createRegionCoord(4, -14);
+  const habitat = deriveCoreEcologyPolarShoreHabitat({ seed, region });
+  if (habitat.totalPopulationUnits === 0) {
+    throw new Error("polar cross-owner fixture lacks its forage school");
+  }
+  const polarPatch = createCoreEcologyPolarShoreResidentPatch({
+    seed,
+    habitat,
+    tick,
+  });
+  const school = polarPatch.aggregatePopulations.find(({ species }) => (
+    species === "atlantic-capelin"
+  ));
+  const projection = projectCoreEcologyTidalTable(polarPatch, tick + 1);
+  const cue = projection?.anchorDepths.find((depth) => (
+    depth.activityUsable
+    && depth.aggregateId === school?.aggregateId
+    && (school.anchors[depth.anchorOrdinal]?.populationUnits ?? 0) > 0
+    && (projection.aggregateActivities.find(({ aggregateId }) => (
+      aggregateId === depth.aggregateId
+    ))?.intensity ?? 0) > 0
+  ));
+  if (school === undefined || cue === undefined) {
+    throw new Error("polar cross-owner fixture lacks an active lawful cue");
+  }
+
+  const gullPosition = translateWorldPosition(
+    cue.position,
+    -4 * WORLD_POSITION_UNITS_PER_TILE,
+    0,
+  );
+  const regionalHabitat = deriveCoreEcologyRegionalHabitat({ seed, region });
+  const createdGullOwner = createCoreEcologyRegionalResidentPatch({
+    seed,
+    habitat: regionalHabitat,
+    tick,
+  });
+  const existingGull = createdGullOwner.populations.find(({ species }) => (
+    species === "gull"
+  ))?.members[0]?.actor;
+  if (existingGull === undefined) {
+    throw new Error("polar cross-owner fixture lacks its existing gull");
+  }
+  const materializedGullOwner = setCoreEcologyAggregatePatchMaterializedActors(
+    createdGullOwner,
+    { atTick: tick, actorIds: [existingGull.identity.stableId] },
+  );
+  const materializedGull = materializedGullOwner.populations.find(({ species }) => (
+    species === "gull"
+  ))?.members.find(({ actor }) => (
+    actor.identity.stableId === existingGull.identity.stableId
+  ))?.actor;
+  if (materializedGull === undefined) {
+    throw new Error("polar cross-owner fixture failed to materialize its gull");
+  }
+  const gull = repositionCoreWildlifeActor(materializedGull, {
+    atTick: tick,
+    position: gullPosition,
+    heading: 0,
+  });
+  const gullOwner = replaceCoreEcologyAggregatePatchActor(
+    materializedGullOwner,
+    gull,
+  );
+
+  const state = createWorld(seedText, "standard");
+  state.meta.completedTick = tick;
+  state.weather = {
+    ...state.weather,
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+  };
+  for (const settlement of state.settlements) settlement.tileIndex = 0;
+  const economy = createWorldView(state);
+  const window = createRegionalTerrainWindow(
+    state.meta.rootSeed,
+    createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed }),
+    regionalFrameOriginAtAddress({
+      region,
+      localX: Math.trunc(WORLD_WIDTH / 2),
+      localY: Math.trunc(WORLD_HEIGHT / 2),
+    }),
+  );
+  const world = createRegionalWorldView(
+    economy,
+    window,
+    projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+  );
+  for (const tile of world.terrain.tiles) {
+    tile.terrain = "meadow";
+    tile.elevation = 0;
+    tile.roughness = 0;
+  }
+  return Object.freeze({
+    cuePosition: cue.position,
+    gull,
+    gullOwner,
+    polarPatch,
+    school,
+    window,
+    world,
+  });
+}
+
+function occludePosition(
+  world: WorldView,
+  position: ReturnType<typeof createWorldPosition>,
+) {
+  for (const [offsetX, offsetY] of [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0], [1, 0],
+    [-1, 1], [0, 1], [1, 1],
+  ] as const) {
+    const blockerPosition = translateWorldPosition(
+      position,
+      offsetX * WORLD_POSITION_UNITS_PER_TILE,
+      offsetY * WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const storageIndex = Math.floor(blockerPosition.localY / WORLD_POSITION_UNITS_PER_TILE)
+      * WORLD_WIDTH
+      + Math.floor(blockerPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
+    const blockerIndex = regionalTileIndexInView(
+      world,
+      blockerPosition.region,
+      storageIndex,
+    );
+    const blocker = blockerIndex === null ? undefined : world.terrain.tiles[blockerIndex];
+    if (blocker === undefined) {
+      throw new Error("polar cross-owner occluder left the active frame");
+    }
+    blocker.terrain = "ridge";
+    blocker.elevation = FIXED_POINT;
+  }
+}
 
 function visibleCueFixture(tick: number): Readonly<{
   patch: CoreEcologyAggregatePatchState;

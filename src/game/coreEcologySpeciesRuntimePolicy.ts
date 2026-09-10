@@ -113,6 +113,7 @@ export interface CoreEcologySpeciesRuntimePolicy {
     | "FLOCK"
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
+    | "CAPELIN-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -244,6 +245,7 @@ const MORTALITY_VALUES: Readonly<Record<
   "mountain-goat": NO_MORTALITY_RUNTIME,
   "american-pika": NO_MORTALITY_RUNTIME,
   "golden-eagle": NO_MORTALITY_RUNTIME,
+  "atlantic-capelin": NO_MORTALITY_RUNTIME,
 });
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
@@ -628,6 +630,22 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       activitySignals: ["ridge-perching", "ridge-soaring"],
       evidenceKinds: [],
       presentationModel: "individual",
+    },
+    "atlantic-capelin": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 4,
+      aggregateResponseVerbs: ["redistribute", "school", "tighten"],
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "school-coordination",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["schooling-glint", "school-tightening", "surface-dimple"],
+      evidenceKinds: ["surface-dimple"],
+      presentationModel: "aggregate-school",
     },
   });
 

@@ -14,6 +14,7 @@ export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
   "atlantic-silverside",
   "atlantic-marsh-fiddler-crab",
   "american-pika",
+  "atlantic-capelin",
 ] as const);
 
 export type CoreEcologyAggregateSpecies =
@@ -50,6 +51,14 @@ export type CoreEcologyAggregatePolicyEvidenceKind =
   | "surface-dimple"
   | "talus-sign"
   | "tracks";
+
+export type CoreEcologyAggregatePolicyDisturbanceCause =
+  | "animal-disturbance"
+  | "food-attraction"
+  | "human-disturbance"
+  | "predator-pressure"
+  | "tide-pressure"
+  | "weather-pressure";
 
 /**
  * `cat` and `dog` are frozen Alpha-16 stimulus/event spellings. New perception
@@ -97,7 +106,8 @@ export interface CoreEcologyAggregateSpeciesPolicy {
     | "FROG-AREA-v1-"
     | "PIKA-TALUS-v1-"
     | "RAT-AREA-v1-"
-    | "SILVERSIDE-SCHOOL-v1-";
+    | "SILVERSIDE-SCHOOL-v1-"
+    | "CAPELIN-SCHOOL-v1-";
   readonly representation: "aggregate-area" | "group-actor";
   readonly maximumAnchors: number;
   readonly anchorRadiusTiles: number;
@@ -111,6 +121,13 @@ export interface CoreEcologyAggregateSpeciesPolicy {
       CoreEcologyAggregatePerceivedPressureActivityResponse;
   }>;
   readonly initialEvidenceKinds: readonly CoreEcologyAggregatePolicyEvidenceKind[];
+  readonly disturbanceEvidence: Readonly<{
+    readonly defaultKind: CoreEcologyAggregatePolicyEvidenceKind;
+    readonly byCause: Readonly<Partial<Record<
+      CoreEcologyAggregatePolicyDisturbanceCause,
+      CoreEcologyAggregatePolicyEvidenceKind
+    >>>;
+  }>;
   readonly exposedFoodAttraction: boolean;
   readonly rainSensitive: boolean;
   readonly rainResponse: "attraction" | "pressure";
@@ -137,6 +154,10 @@ const POLICIES: Readonly<
       "tracks",
       "shelter-sign",
     ] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "tracks",
+      byCause: Object.freeze({ "weather-pressure": "shelter-sign" }),
+    }),
     exposedFoodAttraction: true,
     rainSensitive: true,
     rainResponse: "pressure",
@@ -155,6 +176,10 @@ const POLICIES: Readonly<
       perceivedPressureResponse: "quiet",
     }),
     initialEvidenceKinds: Object.freeze(["frog-track"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "frog-track",
+      byCause: Object.freeze({}),
+    }),
     exposedFoodAttraction: false,
     rainSensitive: true,
     rainResponse: "attraction",
@@ -173,6 +198,10 @@ const POLICIES: Readonly<
       perceivedPressureResponse: "preserve",
     }),
     initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "surface-dimple",
+      byCause: Object.freeze({}),
+    }),
     exposedFoodAttraction: false,
     rainSensitive: false,
     rainResponse: "pressure",
@@ -194,6 +223,10 @@ const POLICIES: Readonly<
       "burrow-opening",
       "feeding-scrape",
     ] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "burrow-opening",
+      byCause: Object.freeze({ "tide-pressure": "feeding-scrape" }),
+    }),
     exposedFoodAttraction: false,
     rainSensitive: false,
     rainResponse: "pressure",
@@ -215,10 +248,36 @@ const POLICIES: Readonly<
       "haypile",
       "talus-sign",
     ] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "talus-sign",
+      byCause: Object.freeze({}),
+    }),
     exposedFoodAttraction: false,
     rainSensitive: false,
     rainResponse: "pressure",
     tideResponse: "neutral",
+  }),
+  "atlantic-capelin": Object.freeze({
+    species: "atlantic-capelin",
+    stableIdPrefix: "CAPELIN-SCHOOL-v1-",
+    representation: "group-actor",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 4,
+    activity: Object.freeze({
+      kind: "schooling-glint",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
+    }),
+    initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "surface-dimple",
+      byCause: Object.freeze({}),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "flood-active",
   }),
 });
 
@@ -233,6 +292,14 @@ export function coreEcologyAggregateSpeciesPolicy(
   species: CoreEcologyAggregateSpecies,
 ): CoreEcologyAggregateSpeciesPolicy {
   return POLICIES[species];
+}
+
+export function coreEcologyAggregateDisturbanceEvidenceKind(
+  species: CoreEcologyAggregateSpecies,
+  cause: CoreEcologyAggregatePolicyDisturbanceCause,
+): CoreEcologyAggregatePolicyEvidenceKind {
+  const evidence = POLICIES[species].disturbanceEvidence;
+  return evidence.byCause[cause] ?? evidence.defaultKind;
 }
 
 /** Frozen event spelling for one canonical materialized living source. */

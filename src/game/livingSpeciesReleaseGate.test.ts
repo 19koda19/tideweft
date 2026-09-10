@@ -342,6 +342,82 @@ describe("Living Weft species release gate", () => {
     expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
   });
 
+  it("authenticates the bounded Alpha-34 capelin seam without inventing voice, feeding, or deployment", () => {
+    const releaseGate = gate("atlantic-capelin");
+    const criterion = (name: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+      releaseGate.criteria.find((candidate) => candidate.criterion === name)
+    );
+
+    expect(livingSpeciesReadinessReport("atlantic-capelin")).toMatchObject({
+      evidenceAuthenticated: true,
+      state: "blocked",
+      publicReady: false,
+      counts: { total: 30 },
+    });
+    for (const active of [
+      "species-profile",
+      "ecological-niche",
+      "appearance",
+      "habitat-placement",
+      "perception-senses",
+      "locomotion",
+      "same-species-interaction",
+      "other-species-interaction",
+      "neutral-behavior",
+      "disengagement",
+      "environmental-evidence",
+      "about-disclosure",
+      "knowledge-honesty",
+      "population-materialization",
+      "full-coarse-transition",
+      "save-load",
+      "seamless-region-crossing",
+      "performance-budget",
+      "accessibility",
+      "mobile-parity",
+      "player-independent-scenario",
+      "fuzz-testing",
+    ] as const) {
+      expect(criterion(active)?.status).toBe("active");
+    }
+    for (const foundation of [
+      "food-web",
+      "human-interaction",
+      "clone-diversity",
+    ] as const) {
+      expect(criterion(foundation)?.status).toBe("foundation");
+    }
+    for (const withheld of [
+      "sound",
+      "dog-interaction",
+      "exact-tested-deployment",
+    ] as const) {
+      expect(criterion(withheld)).toMatchObject({
+        status: "unimplemented",
+        evidenceOwnerIds: [],
+      });
+    }
+    expect(criterion("other-species-interaction")?.evidenceOwnerIds).toContain(
+      "test:alpha34-polar-cross-owner-emergence:v1",
+    );
+    expect(criterion("save-load")?.evidenceOwnerIds).toEqual(expect.arrayContaining([
+      "game:regional-ecology-state:v3",
+      "game:runtime-save:v27",
+      "test:alpha34-polar-runtime-v27:v1",
+    ]));
+    expect(criterion("environmental-evidence")?.evidenceOwnerIds).toContain(
+      "test:alpha34-polar-presentation-invariants:v1",
+    );
+    expect(criterion("tutorial-truth")).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: ["ui:tutorial-guide:v44"],
+    });
+    expect(criterion("patch-note-truth")).toMatchObject({
+      status: "active",
+      evidenceOwnerIds: ["content:patch-notes-alpha34:v1"],
+    });
+  });
+
   it("keeps every current actor module blocked until all 30 release criteria close", () => {
     const human = livingSpeciesReadinessReport("human");
     const dog = livingSpeciesReadinessReport("domestic-dog");

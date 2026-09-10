@@ -54,6 +54,7 @@ interface LivingSpeciesRegistryInput<Species extends string = string> {
     | "FLOCK"
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
+    | "CAPELIN-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -302,6 +303,15 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       hearingSensitivity: 760_000,
       scentSensitivity: 80_000,
       scentBaseRangeUnits: 4_000,
+    },
+  },
+  "atlantic-capelin": {
+    aboutNoun: "Atlantic capelin school",
+    senses: {
+      visionAcuity: 740_000,
+      hearingSensitivity: 740_000,
+      scentSensitivity: 640_000,
+      scentBaseRangeUnits: 10_000,
     },
   },
 });

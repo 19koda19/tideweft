@@ -10,6 +10,10 @@ at exact gameplay commit
 `34400426580`, and Pages `34400426443` succeeded for that exact build; all five
 cache-bypassed live artifacts match the tested production build byte-for-byte.
 
+The repository also contains the **unpublished local candidate**
+`0.3.3-alpha.34 — Coldwater Glint`. It has not been pushed, deployed, or live
+verified; the public link above still serves Alpha 33.
+
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
 
 The name came from the image that inspired the game: every crossing is a loose thread until tide, memory, and shared use weave it into something other people can trust.
@@ -40,6 +44,7 @@ Alpha 0.3 grows the earlier slices with fieldcraft, seamless travel, shared perc
 - **High Country Shadows:** Alpha 31 appends cougar and brown bear at that exact remote source through the same habitat, population, perception, attention, actor-owned locomotion, top-K, presentation, and save abstractions. Both are distinct species; when habitat supports an individual, it remains solitary. A cougar alone adds a short direct-sight pursuit path into the existing exact-contact mortality gate for a currently identified solitary marsh rabbit; brown bear has no live-prey pursuit or harm. Either may lawfully reach, claim, guard, and consume an already-existing finite body. Neither adds group behavior, tracks, audible voice, species-specific dog-directed behavior, player/human harm, ecological migration, or worldwide distribution; a dog or porter that lawfully sees one may still react non-harmfully through the existing shared large-predator perception path.
 - **Open Country Ledger:** released Alpha 32 adds no species. Eligible existing wildlife derives from deterministic signed-region habitat, carrying capacity, food or prey support, territory, and density budgets, including lawful empty country. The starting harbor keeps bounded brown rats and anchored chicken and goat homes while its free-ranging cat is habitat-optional. Every active ecology owner shares one global group-atomic stable-distance top-K capped at 24 actors, and density is measured before that presentation cap. Current visual, tidal-activity, alarm, and the narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body path may cross owner boundaries through one root-wide snapshot. Outer save 25 adds regional ecology root 1 and adopts normalized v24 exactly once through a conserved retain, redistribute, or non-death-retire disposition. Pristine regional baselines are rederived; only real deviations persist.
 - **Talus and Sky:** released Alpha 33 keeps the complete 24-record Alpha32 catalog as a frozen prefix and appends mountain goat, American pika, and golden eagle. Sparse Alpine authority is a sibling layer around the exact regional-ecology-v1 child: goats are addressable `HERD` members with shared directed-grade movement, pikas remain a conserved non-addressable talus aggregate, and a solitary eagle uses authenticated ridge soar/perch activity. A lawfully visible eagle can nonlethally quiet or redistribute pika activity through the existing visual/evidence/occlusion policy; a ridge between them blocks that pressure. All owners still share one group-atomic 24-actor materialization cap and one atomic commit. Outer save 26 wraps an authenticated v25 child exactly once without rewriting it. Chart, Relief, quick inspection, and ABOUT disclose only current lawful evidence. Relief presents eagle flight by elevating, flapping, and banking the state-based actor projection; this is not authoritative continuous 3D flight physics. This bounded first Alpine slice adds no new mortality, capture, exact pika target, reproduction, audible Living Voice, tactical combat, polar breadth, or Wave-F completion.
+- **Coldwater Glint (unpublished local candidate):** Alpha 34 freezes all 27 Alpha33 catalog records exactly and appends Atlantic capelin as record 28. Rare cold, saline polar shoreline may support one conserved non-addressable school; unsuitable regions remain honestly empty. The school reuses shared tidal depth, activity, perception, evidence, nonlethal pressure, sparse persistence, and global atomic-commit owners. Directly visible surface dimples and brief glints can produce an anonymous ABOUT view, while terrain occlusion removes both an aerial observer's sight and its pressure. Outer save 27 wraps the exact `RegionalEcologyStateV2` child in V3 beside a polar-shore sibling. This is local candidate behavior only, not a released or deployed feature.
 - **Living commons:** nine seed-derived material families now grow visibly in suitable biomes. Desktop and touch gathering feed one exact shared pack, while the anywhere **KIT** turns those finds into six prepared components and eleven durable tools through mobile-safe **PACK / MAKE / MEND** tabs.
 - **Footing and physical parcels:** stability is a live 0–100% physical-balance calculation, not a second stamina bar or accumulated drain. Actual speed, turning, grade, roughness, moisture, local water force, wind, load, footwear, fixtures, and BRACE determine the currently supported percentage; unchanged conditions hold one value and a safer bank recalculates it immediately. Hazardous entries can still deterministically stumble or fall, briefly alter the courier's color and silhouette, speak a tiny Atari-like callout, damage one exact cargo lot, and separate persistent parcels that drift, tumble, weather, save, reload, and remain recoverable.
 - **Responsive river recovery:** desktop Shift now braces even when the document body or HUD has focus, with immediate BRACING copy and a color-independent planted marker in Chart and Relief. If stamina or stability still collapses in deep current, the courier becomes ADRIFT instead of being ejected to a bank: hold WASD/arrows or tap toward shallows to paddle, release movement to float and recover breath, then rise only after finding standable water with enough stamina. The current remains authoritative, full packs weaken a stroke, and separated physical parcels continue their own journey.
@@ -587,6 +592,57 @@ player-facing-sync checks, 224 test files and 2,143 checks, a five-asset
 runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. The first cache-bypassed five-file
 live comparison matched the tested production build exactly.
+
+### Unpublished local candidate — Alpha 34 Coldwater Glint
+
+`0.3.3-alpha.34 — Coldwater Glint` is an **unpublished local candidate**. The
+current public release remains the LIVE_VERIFIED Alpha 33 build above. Alpha 34
+preserves Alpha33's complete 27-record catalog as an exact compatibility prefix
+and appends Atlantic capelin as record 28; no existing species record is
+rewritten or renumbered.
+
+A separate seed-stable polar-shore habitat owner admits capelin only where
+canonical terrain provides sufficiently cold, saline shoreline water and
+tide-safe refuge. Absence is authoritative. Its floor-correct signed territory
+derivation works at negative and coordinate-limit regions: mathematical bounds
+are formed before each axis is clamped, so every in-bounds territory retains
+exactly one claimable host. An admitted population is one school of up to 64
+units over no more than four saved anchors. It is an aggregate-area identity,
+never a collection of fish actors, and every tide, density, pressure, save,
+reload, and region re-entry preserves the exact admitted total.
+
+The school uses the generic aggregate and Tide Table policies. Saved elevation
+plus current tide determines usable water; the shared owner handles tide-safe
+movement and at most one-unit cadence redistribution without giving the polar
+layer a second tide or evidence authority. Chart and Relief show only directly
+perceived surface dimples and restrained blue glints. Quick inspection and
+ABOUT describe anonymous aquatic evidence until its identity is actually
+learned; they expose no aggregate ID, anchor, or count and create no clickable
+individual capelin.
+
+One representative cross-owner emergence witness composes an existing gull
+with an active capelin patch. Clear current line of sight yields only anonymous
+`aquatic-activity`; the shared stimulus and small-world owners may move at most
+one conserved school unit without mortality, carcass, cargo, or item effects.
+Putting ridge terrain between them removes both the observation and gull
+pressure. Replay and source-order permutations produce the same result.
+
+`RegionalEcologyStateV3` retains the exact `RegionalEcologyStateV2` base-and-
+Alpine child and adds a sparse polar-shore sibling. Outer save 27 authenticates
+and adopts a sealed version-26 child exactly once. Base, Alpine, and polar
+sources share one insertion-order-independent, group-atomic 24-addressable-
+actor plan; capelin consume no actor slot, and all children commit together or
+none do. Continuous runtime order and dormant catch-up produce the same tidal
+school history, including re-entry after long gaps. Pristine observations are
+rederived rather than saved; only genuine deviations persist. Active-key
+selection prefilters absent/non-host regions and does not reconcile unrelated
+dormant deltas, while bounded habitat and root storage keep work independent of
+the infinite world's explored area.
+
+This candidate adds no Arctic fox, polar bear, seal, new seabird, snow or ice
+behavior, new mortality, live-prey capture, reproduction, audible Living Voice,
+or Wave-F completion. Nothing in this section is a release, deployment, Pages,
+or live-verification claim.
 
 ### Released — Alpha 33 Talus and Sky
 

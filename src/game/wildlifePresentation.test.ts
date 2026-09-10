@@ -37,6 +37,7 @@ import {
 } from "./coreEcologyHabitat";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
+import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
 import {
   isWildlifeWorldPositionDirectlyObserved,
   projectWildlifePopulationEvidencePresentations,
@@ -54,6 +55,8 @@ import { tideAtTick } from "../sim/terrain";
 
 export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha33-alpine-presentation-invariants:v1" as const;
+export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha34-polar-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -292,6 +295,46 @@ function tidalEvidenceFixture(tick = 10) {
     throw new Error("Tidal presentation fixture requires both aggregates and one egret");
   }
   return { crab, egret, patch, silverside };
+}
+
+function capelinEvidenceFixture(tick = 12) {
+  const seed = seedFromText("polar habitat fuzz 29");
+  const originRegion = createRegionCoord(-1_653, 664);
+  const habitat = deriveCoreEcologyPolarShoreHabitat({ seed, region: originRegion });
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "presentation-capelin-evidence",
+    originRegion,
+    populations: [],
+    derivation: { kind: "regional-polar-shore-v1", habitat },
+    tick,
+  });
+  const population = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-capelin",
+  );
+  const tidal = projectCoreEcologyTidalTable(patch, tick);
+  const usableDepth = tidal?.anchorDepths.find(({ aggregateId, activityUsable }) => (
+    aggregateId === population?.aggregateId && activityUsable
+  ));
+  const unusableDepth = tidal?.anchorDepths.find(({ aggregateId, activityUsable }) => (
+    aggregateId === population?.aggregateId && !activityUsable
+  ));
+  const evidence = population?.evidence.find(({ evidenceOrdinal }) => (
+    evidenceOrdinal === usableDepth?.anchorOrdinal
+  ));
+  const dryEvidence = population?.evidence.find(({ evidenceOrdinal }) => (
+    evidenceOrdinal === unusableDepth?.anchorOrdinal
+  ));
+  if (
+    population === undefined
+    || usableDepth === undefined
+    || unusableDepth === undefined
+    || evidence === undefined
+    || dryEvidence === undefined
+  ) {
+    throw new Error("Capelin presentation fixture requires lawful wet and dry school cues");
+  }
+  return { dryEvidence, evidence, patch, population };
 }
 
 function tidalWebEvidenceFixture(tick = 360) {
@@ -710,7 +753,7 @@ function regroupingGoat(): CoreWildlifeActorState {
   return stepped.actor;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
   it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
@@ -1108,6 +1151,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-hones
 
   it.each([
     "american-pika",
+    "atlantic-capelin",
     "atlantic-silverside",
     "atlantic-marsh-fiddler-crab",
   ] as const)("does not fabricate a %s actor presentation", (species) => {
@@ -1238,6 +1282,59 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-hones
           ? "Small burrow openings"
           : "Fine mud feeding scrapes",
     });
+  });
+
+  it("keeps directly observed capelin-like surface evidence anonymous without learned identity", () => {
+    const { dryEvidence, evidence, patch, population } = capelinEvidenceFixture();
+    const direct = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position),
+      tileSize: 16,
+      selectedEvidenceId: evidence.evidenceId,
+    })?.find(({ evidenceId }) => evidenceId === evidence.evidenceId);
+
+    expect(direct).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "atlantic-capelin",
+      representation: "population-evidence",
+      form: "surface-dimples",
+      quickLabel: "Aquatic activity",
+      identityLabel: "Unidentified aquatic activity",
+      evidenceLabel: "Aquatic surface dimples and brief glints",
+      speciesIdentified: false,
+      selected: true,
+    });
+    expect([
+      direct?.quickLabel,
+      direct?.identityLabel,
+      direct?.evidenceLabel,
+    ].join(" ")).not.toMatch(/capelin/iu);
+    expect(JSON.stringify(direct))
+      .not.toMatch(/actorId|populationSize|representedUnits|activitySignal|intensity/iu);
+
+    const distant = projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position, 60),
+      tileSize: 1,
+    })?.find(({ evidenceId }) => evidenceId === evidence.evidenceId);
+    expect(distant).toMatchObject({
+      quickLabel: "Aquatic activity",
+      identityLabel: "Unidentified aquatic activity",
+      evidenceLabel: "Aquatic surface dimples and brief glints",
+      speciesIdentified: false,
+    });
+
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(evidence.position, 4, Math.PI),
+      tileSize: 16,
+    })).toEqual([]);
+    expect(projectWildlifePopulationEvidencePresentations({
+      patch,
+      observation: evidenceObservation(dryEvidence.position),
+      tileSize: 16,
+    })?.some(({ evidenceId }) => evidenceId === dryEvidence.evidenceId)).toBe(false);
   });
 
   it("keeps current occupied aquatic evidence visible through the latest tidal habitat authority", () => {

@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.34",
+      "releaseDate": "2026-09-09",
+      "buildIdentity": "0.3.3-alpha.34",
+      "summary": "The unpublished Coldwater Glint candidate opens one sparse polar-shore forage seam: a conserved Atlantic-capelin school now follows the shared tidal ecology architecture without becoming a collection of fabricated fish actors.",
+      "gameplayContractVersion": 32,
+      "tutorialVersion": 44,
+      "categories": {
+        "gameplay": [
+          "The catalog advances to twenty-eight records. Rare, seed-stable cold saline shoreline habitat may support one conserved non-addressable Atlantic-capelin school; unsupported coast remains honestly empty.",
+          "Capelin use the same policy-driven tidal aggregate owner as established shoreline schools. Current depth determines usable anchors and visible activity, while every population unit remains conserved through tide, density cadence, dormant time, save, reload, and region streaming.",
+          "An existing aerial surface observer can lawfully notice anonymous capelin activity through current line of sight and apply bounded nonlethal pressure through the shared aggregate-response path. Occlusion prevents the observation and response; no exact fish, capture, injury, death, body, item, or cargo effect is created."
+        ],
+        "fixes": [
+          "The exact Alpha-33 twenty-seven-record catalog, outer-version-26 envelope, RegionalEcologyStateV2 composite, exact version-1 Open Country Ledger child, and Alpine version-1 child remain sealed. Polar authority is appended as a separate sibling rather than rewriting established identities or ecology.",
+          "Base, Alpine, and polar sources enter one insertion-order-independent group-atomic materialization and conservation commit. The capelin school remains coarse and receives no addressable actor allowance, so a region seam cannot duplicate fish or consume the twenty-four-actor visual budget.",
+          "Dormant polar schools now advance in the same clock, tide, and density order as continuously loaded schools. Pristine observation consumes no save space, inactive regional records are not scanned every frame, and independently clamped territory bounds retain one claimable host at signed coordinate limits."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Cold saline shorelines and capelin are sparse consequences of deterministic regional territory, terrain, salinity, depth, carrying capacity, and density; the slice does not seed a school into every polar-looking view.",
+          "A capelin school is one population aggregate, not sixty-four targetable fish. Shared pressure may relocate at most one conserved unit on an eligible opportunity, and it never implies a catch, meal, mortality event, or free physical resource.",
+          "Validation remains architecture-led: frozen lineage adoption, signed and extreme-coordinate properties, continuous-versus-dormant equivalence, sparse persistence, global conservation, bounded performance, and one visible-versus-occluded aerial-observer chain exercise the reusable scaffold instead of per-species or N-squared pair suites."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D render low-cost surface dimples and brief glints only when current occupied activity is lawfully visible. The school remains non-addressable and neither view invents individual fish models.",
+          "Quick inspection and ABOUT describe directly observed aquatic surface signs without revealing the capelin identity, exact count, hidden anchor, offscreen motion, or internal ecology state. Pointer and touch selection share the same knowledge-honest evidence boundary, and reduced-motion presentation remains static.",
+          "Field Manual version 44 explains the sparse polar shoreline, conserved school representation, tide and dormant-time behavior, anonymous evidence, shared global commit, save adoption, and explicit limits on mortality, capture, sound, and broader Wave-F claims."
+        ],
+        "saves": [
+          "The outer session advances to version 27 and regional ecology advances to root version 3. Its base is the exact authenticated version-2 composite, beside one version-1 sparse polar-shore root and bounded hot snapshots; the production catalog contains twenty-eight records.",
+          "A sealed outer-version-26 Talus and Sky save is authenticated and adopted exactly once. The receipt binds its original outer integrity and complete version-2 lineage before deterministic polar derivation; the supported version-25 path first performs its existing version-2 adoption and then wraps that exact result.",
+          "All three ecology layers share one atomic projection and conservation commit. Fresh polar baselines remain rederivable, only true deviations persist sparsely, and save, reload, interruption, region streaming, negative coordinates, or extreme distance cannot reroll the school, duplicate a unit, or replay adoption."
+        ],
+        "knownLimitations": [
+          "Coldwater Glint is an unpublished local candidate and one bounded polar-shore forage slice, not complete Wave F, worldwide polar ecology, biodiversity breadth, or the full bestiary.",
+          "This slice adds no Arctic fox, polar bear, seal, new seabird, snow or ice behavior, animal mortality, live-prey capture, reproduction, recruitment, population recovery, tactical combat, player harm, dog harm, human harm, or new physical body resource.",
+          "Capelin have no audible Living Voice, exact individual target, fishing or harvesting interaction, species-directed dog response, marine-predator actor, broad migration, or complete scent and evidence tracking. Surface evidence stays anonymous because no learned capelin-identification owner exists in this candidate."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.33",
       "releaseDate": "2026-09-09",
       "buildIdentity": "0.3.3-alpha.33",

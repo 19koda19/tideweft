@@ -52,6 +52,7 @@ describe("lean runtime living-species registry", () => {
       "mountain-goat",
       "american-pika",
       "golden-eagle",
+      "atlantic-capelin",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -486,6 +487,22 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 4_000,
         },
       },
+      {
+        species: "atlantic-capelin",
+        actorIdPrefix: "CAPELINSCHOOL-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization: "school",
+        groupStableIdNamespace: "CAPELIN-SCHOOL",
+        aboutNoun: "Atlantic capelin school",
+        senses: {
+          visionAcuity: 740_000,
+          hearingSensitivity: 740_000,
+          scentSensitivity: 640_000,
+          scentBaseRangeUnits: 10_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -523,6 +540,11 @@ describe("lean runtime living-species registry", () => {
     expect(livingSpeciesActorIdMatchesNamespace(
       "PIKA-v1-wave-f-fixture",
       "american-pika",
+    )).toBe(false);
+    expect(isLivingSpeciesActorAddressable("atlantic-capelin")).toBe(false);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "CAPELINSCHOOL-v1-wave-f-fixture",
+      "atlantic-capelin",
     )).toBe(false);
   });
 

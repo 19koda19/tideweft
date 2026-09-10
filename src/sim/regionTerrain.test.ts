@@ -140,8 +140,34 @@ describe("deterministic infinite-region terrain", () => {
       expect(regenerated).toEqual(first);
       expect(regenerated).not.toBe(first);
       expect(regenerated.tiles).not.toBe(first.tiles);
+      expect(regenerated.tiles[0]).not.toBe(first.tiles[0]);
     }
     expect(new Set(fingerprints)).toEqual(new Set([hashCanonical(first)]));
+  });
+
+  it("keeps cached terrain values isolated from caller mutation", () => {
+    const seed = seedFromText("a caller cannot weather the shared baseline");
+    const coord = { x: -73, y: 41 } as const;
+    const first = generateRegionTerrain(seed, coord);
+    const expected = structuredClone(first);
+    const expectedText = stableStringify(expected);
+    const firstTile = first.tiles[0];
+    if (!firstTile) throw new Error("generated terrain omitted its first tile");
+
+    first.width = 1;
+    first.height = 1;
+    firstTile.elevation = 0;
+    firstTile.moisture = 0;
+    firstTile.roughness = 0;
+    firstTile.traceStrength = FIXED_POINT;
+    first.tiles.splice(1);
+
+    const regenerated = generateRegionTerrain(seed, coord);
+    expect(stableStringify(regenerated)).toBe(expectedText);
+    expect(regenerated).toEqual(expected);
+    expect(regenerated).not.toBe(first);
+    expect(regenerated.tiles).not.toBe(first.tiles);
+    expect(regenerated.tiles[0]).not.toBe(firstTile);
   });
 
   it("changes neighboring regions, distant regions, and seeds without repeating a whole map", () => {

@@ -141,6 +141,11 @@ import {
   type RegionalEcologyStateV2,
 } from "./regionalEcologyStateV2";
 import {
+  deserializeRegionalEcologyStateV3,
+  serializeRegionalEcologyStateV3,
+  type RegionalEcologyStateV3,
+} from "./regionalEcologyStateV3";
+import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
   type RegionalTerrainWindow,
@@ -187,13 +192,13 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 26;
+  readonly version: 27;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v26 envelopes never carry this field. */
+  /** Historical fixtures only; current v27 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -472,7 +477,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(26);
+    expect(adoptedRecord.payloadVersion).toBe(27);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -534,7 +539,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(26);
+    expect(adoptedRecord.payloadVersion).toBe(27);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -639,7 +644,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(26);
+    expect(repository.snapshot().payloadVersion).toBe(27);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -755,7 +760,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(26);
+    expect(v13Record.payloadVersion).toBe(27);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
@@ -836,7 +841,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(26);
+    expect(v13Record.payloadVersion).toBe(27);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
@@ -934,7 +939,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(26);
+    expect(v13Record.payloadVersion).toBe(27);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
@@ -1021,7 +1026,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(26);
+    expect(adoptedRecord.payloadVersion).toBe(27);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
@@ -1091,7 +1096,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(26);
+    expect(adoptedRecord.payloadVersion).toBe(27);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
@@ -1478,7 +1483,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(26);
+    expect(before.version).toBe(27);
     expect(beforeWorld.meta.completedTick).toBe(0);
     expect(beforeCore.updatedAtTick).toBe(0);
     expect(seededProvisions).toHaveLength(1);
@@ -2428,7 +2433,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(26);
+    expect(repository.snapshot().payloadVersion).toBe(27);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -2555,7 +2560,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(26);
+    expect(repository.snapshot().payloadVersion).toBe(27);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -4141,10 +4146,10 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 26
+    || value.version !== 27
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v26 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v27 envelope");
   }
   return value;
 }
@@ -4721,6 +4726,7 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
   const version = (envelope as unknown as Readonly<{ version: number }>).version;
+  if (version === 27) return requiredRegionalEcologyV3(envelope).base.base;
   if (version === 26) return requiredRegionalEcologyV2(envelope).base;
   if (version !== 25) throw new Error("fixture envelope has no regional ecology generation");
   const state = deserializeRegionalEcologyState(envelope.regionalEcology);
@@ -4728,6 +4734,15 @@ function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStat
     state === null
     || serializeRegionalEcologyState(state) !== envelope.regionalEcology
   ) throw new Error("v25 save omitted canonical regional ecology");
+  return state;
+}
+
+function requiredRegionalEcologyV3(envelope: CurrentEnvelope): RegionalEcologyStateV3 {
+  const state = deserializeRegionalEcologyStateV3(envelope.regionalEcology);
+  if (
+    state === null
+    || serializeRegionalEcologyStateV3(state) !== envelope.regionalEcology
+  ) throw new Error("v27 save omitted canonical regional ecology");
   return state;
 }
 

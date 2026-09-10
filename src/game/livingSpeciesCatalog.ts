@@ -81,6 +81,45 @@ export const LIVING_SPECIES_ALPHA32_SPECIES_IDS_HASH = "db3a190a4f44e668" as con
 export const LIVING_SPECIES_ALPHA32_CATALOG_BYTE_LENGTH = 268_178 as const;
 export const LIVING_SPECIES_ALPHA32_CATALOG_HASH = "571f9eb8472bbf6d" as const;
 
+/**
+ * Exact Alpha-33 catalog lineage. This independently lists the 27 canonical
+ * modules in their persisted sort order so inserting a later `atlantic-*`
+ * module cannot silently change which records the compatibility child owns.
+ */
+export const LIVING_SPECIES_ALPHA33_SPECIES_IDS = Object.freeze([
+  "american-black-duck",
+  "american-pika",
+  "atlantic-marsh-fiddler-crab",
+  "atlantic-silverside",
+  "black-bear",
+  "brown-bear",
+  "brown-rat",
+  "cougar",
+  "deer",
+  "domestic-cat",
+  "domestic-chicken",
+  "domestic-dog",
+  "domestic-goat",
+  "elk",
+  "fish-crow",
+  "golden-eagle",
+  "gray-wolf",
+  "gull",
+  "human",
+  "marsh-fox",
+  "marsh-rabbit",
+  "mountain-goat",
+  "north-american-river-otter",
+  "northern-harrier",
+  "snowy-egret",
+  "southern-leopard-frog",
+  "wild-boar",
+] as const);
+export const LIVING_SPECIES_ALPHA33_CATALOG_COUNT = 27 as const;
+export const LIVING_SPECIES_ALPHA33_SPECIES_IDS_HASH = "8f90f55f1b848340" as const;
+export const LIVING_SPECIES_ALPHA33_CATALOG_BYTE_LENGTH = 301_756 as const;
+export const LIVING_SPECIES_ALPHA33_CATALOG_HASH = "3ba25467e98aa825" as const;
+
 export type LivingSpeciesImplementation = "unimplemented" | "foundation" | "active";
 export type LivingSpeciesIdentityForm = "individual" | "aggregate" | "hybrid";
 export type LivingSpeciesPositionModel =
@@ -1974,6 +2013,70 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
       "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
     ],
   },
+  "atlantic-capelin": {
+    implementation: "foundation",
+    ecologicalClasses: [
+      "cold-water-forage-fish",
+      "forage-fish",
+      "prey",
+      "schooling-fish",
+      "small-prey",
+    ],
+    habitatOwnerId: "game:core-ecology-polar-shore-habitat:v1",
+    ecologyOwnerId: "game:regional-polar-shore-ecology:v1",
+    spatialOwnerId: "game:regional-polar-shore-ecology:v1",
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    dynamicOverlays: ["tide-availability", "visible-activity"],
+    morphologyDimensions: ["activity-area", "school-density"],
+    appearanceTraits: ["school-flash", "school-shape", "surface-density"],
+    habitatClasses: [
+      "cold-saline-shoreline",
+      "nearshore-saline-water",
+      "polar-shore",
+      "tidal-edge",
+    ],
+    movementMedia: [
+      { medium: "deep-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "shallow-water", relativeCapability: 800_000 },
+    ],
+    movementVerbs: ["school", "swim"],
+    terrainAffordances: [
+      "connected-saline-water",
+      "swimmable-deep-water",
+      "swimmable-shallow-water",
+    ],
+    consumedBy: ["aerial-predator", "marine-predator"],
+    competesWith: [],
+    ecologicalEffects: ["forage-fish-support", "polar-food-web-support"],
+    includeDogInteraction: false,
+    groupModel: "group",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:regional-polar-shore-ecology:v1",
+      decayOwnerId: "game:regional-polar-shore-ecology:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["salinity", "water-connectivity", "water-depth"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+      inputs: ["tide-direction", "tide-height"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    health: noHealth(),
+    aboutObservableFields: ["activity-pattern", "approximate-school-size", "species"],
+  },
 });
 
 /**
@@ -2484,6 +2587,26 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     water: "intentional-no-response",
     weather: "intentional-no-response",
   },
+  "atlantic-capelin": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
 } as const satisfies Readonly<Record<
   CoreWildlifeSpecies,
   Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
@@ -2500,8 +2623,12 @@ function coreWildlifeInteractionTargets(
   ).includes(species);
   const appendedAggregateResponse = !alpha32CompatibilitySpecies
     && coreEcologySpeciesHasRuntimeCapability(species, "aggregate-response");
-  const pressureVerbs = appendedAggregateResponse
-    ? ["quiet", "redistribute", "retreat-to-crevice"]
+  const appendedSchoolResponse = appendedAggregateResponse
+    && coreEcologySpeciesHasRuntimeCapability(species, "school-coordination");
+  const pressureVerbs = appendedSchoolResponse
+    ? ["redistribute", "tighten"]
+    : appendedAggregateResponse
+      ? ["quiet", "redistribute", "retreat-to-crevice"]
     : ["flee", "retreat"];
   const pressureConstraints = appendedAggregateResponse
     ? [
@@ -3832,6 +3959,32 @@ if (
 
 export const LIVING_SPECIES_ALPHA32_CATALOG: LivingSpeciesCatalog =
   alpha32CompatibilityCatalog;
+
+const alpha33CompatibilityModules = LIVING_SPECIES_ALPHA33_SPECIES_IDS.map((speciesId) => {
+  const module = currentCatalog.modules.find((candidate) => candidate.speciesId === speciesId);
+  if (module === undefined) {
+    throw new Error(`Living Weft catalog omitted Alpha-33 compatibility species ${speciesId}`);
+  }
+  return module;
+});
+const alpha33CompatibilityCatalog = deepFreeze({
+  version: LIVING_SPECIES_CATALOG_VERSION,
+  modules: alpha33CompatibilityModules,
+});
+const alpha33CompatibilityBytes = stableStringify(alpha33CompatibilityCatalog);
+if (
+  LIVING_SPECIES_ALPHA33_SPECIES_IDS.length !== LIVING_SPECIES_ALPHA33_CATALOG_COUNT
+  || hashCanonical(LIVING_SPECIES_ALPHA33_SPECIES_IDS)
+    !== LIVING_SPECIES_ALPHA33_SPECIES_IDS_HASH
+  || new TextEncoder().encode(alpha33CompatibilityBytes).byteLength
+    !== LIVING_SPECIES_ALPHA33_CATALOG_BYTE_LENGTH
+  || hashCanonical(alpha33CompatibilityCatalog) !== LIVING_SPECIES_ALPHA33_CATALOG_HASH
+) {
+  throw new Error("Living Weft Alpha-33 catalog lineage was rewritten");
+}
+
+export const LIVING_SPECIES_ALPHA33_CATALOG: LivingSpeciesCatalog =
+  alpha33CompatibilityCatalog;
 
 /** Only implemented identity owners are present; this is deliberately not a planned roster. */
 export const LIVING_SPECIES_CATALOG: LivingSpeciesCatalog = currentCatalog;

@@ -16,6 +16,8 @@ export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
   "test:alpha31-predator-presentation-invariants:v1" as const;
 export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha33-alpine-presentation-invariants:v1" as const;
+export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha34-polar-presentation-invariants:v1" as const;
 
 const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
@@ -1480,7 +1482,7 @@ describe("Relief physical wildlife remains", () => {
   });
 });
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife presentation`, () => {
   it("renders and touch-selects aggregate population evidence without an actor target", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-rat-evidence", { x: 48, y: 48 });
@@ -1618,11 +1620,12 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife
 
   it.each([
     ["atlantic-silverside", "surface-dimples", "#55c7dc", "torus"],
+    ["atlantic-capelin", "surface-dimples", "#55c7dc", "torus"],
     ["atlantic-marsh-fiddler-crab", "burrow-openings", "#4c392b", "torus"],
     ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "#735b43", "line"],
     ["american-pika", "haypile", "#737848", "ellipsoid"],
     ["american-pika", "talus-sign", "#777b73", "cone"],
-  ] as const)("renders and touch-selects low-cost %s %s without an actor alias", (
+  ] as const)("renders and pointer-selects low-cost %s %s without an actor alias", (
     species,
     form,
     primary,
@@ -1638,16 +1641,22 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife
       form,
       quickLabel: species === "atlantic-silverside"
         ? "Atlantic silverside signs"
-        : species === "american-pika"
-          ? "American pika signs"
-          : "Atlantic marsh fiddler crab signs",
+        : species === "atlantic-capelin"
+          ? "Aquatic activity"
+          : species === "american-pika"
+            ? "American pika signs"
+            : "Atlantic marsh fiddler crab signs",
       identityLabel: species === "atlantic-silverside"
         ? "Atlantic silverside school signs"
-        : species === "american-pika"
-          ? "American pika population signs"
-          : "Atlantic marsh fiddler crab area signs",
+        : species === "atlantic-capelin"
+          ? "Unidentified aquatic activity"
+          : species === "american-pika"
+            ? "American pika population signs"
+            : "Atlantic marsh fiddler crab area signs",
       evidenceLabel: form === "surface-dimples"
-        ? "Silverside surface dimples and school glints"
+        ? species === "atlantic-capelin"
+          ? "Aquatic surface dimples and brief glints"
+          : "Silverside surface dimples and school glints"
         : form === "burrow-openings"
           ? "Fiddler crab burrow openings"
           : form === "feeding-scrapes"
@@ -1655,6 +1664,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife
             : form === "haypile"
               ? "American pika haypile"
               : "American pika talus sign",
+      speciesIdentified: species !== "atlantic-capelin",
       selected: true,
     });
     const current: TideweftView = {
@@ -1674,6 +1684,11 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife
         ...base.terrain,
         tiles: base.terrain.tiles.map((tile) => ({
           ...tile,
+          kind: species === "american-pika"
+            ? "ridge"
+            : species === "atlantic-silverside" || species === "atlantic-capelin"
+              ? "deep-water"
+              : "mudflat",
           currentVisibility: 1,
           currentDetailVisibility: 1 as const,
         })),
@@ -1692,22 +1707,35 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife
     expect(visibleText).not.toContain(evidence.aggregateId);
     expect(visibleText).not.toContain(evidence.evidenceId);
     expect(visibleText).not.toMatch(/\b48\b|actorId|mortality|carcass/iu);
-    harness.canvas.fire("pointerdown", pointer(harness.canvas, {
-      pointerId: 187,
-      pointerType: "touch",
-    }));
-    harness.canvas.fire("pointerup", pointer(harness.canvas, {
-      pointerId: 187,
-      pointerType: "touch",
-    }));
-    expect(harness.dispatch).toHaveBeenCalledWith({
-      type: "select",
-      entity: "aggregate-wildlife-evidence",
-      species,
-      aggregateId: evidence.aggregateId,
-      evidenceId: evidence.evidenceId,
-      point: { x: 12, y: 12 },
-    });
+    if (species === "atlantic-capelin") {
+      const torus = harness.instance.torus as ReturnType<typeof vi.fn>;
+      const surfaceRings = torus.mock.calls.map((call: unknown[]) => [...call]);
+      torus.mockClear();
+      harness.draw();
+      expect(torus.mock.calls).toEqual(surfaceRings);
+    }
+    const pointerTypes = species === "atlantic-capelin"
+      ? (["mouse", "touch"] as const)
+      : (["touch"] as const);
+    for (const [index, pointerType] of pointerTypes.entries()) {
+      harness.dispatch.mockClear();
+      harness.canvas.fire("pointerdown", pointer(harness.canvas, {
+        pointerId: 187 + index,
+        pointerType,
+      }));
+      harness.canvas.fire("pointerup", pointer(harness.canvas, {
+        pointerId: 187 + index,
+        pointerType,
+      }));
+      expect(harness.dispatch).toHaveBeenCalledWith({
+        type: "select",
+        entity: "aggregate-wildlife-evidence",
+        species,
+        aggregateId: evidence.aggregateId,
+        evidenceId: evidence.evidenceId,
+        point: { x: 12, y: 12 },
+      });
+    }
     expect(harness.dispatch.mock.calls.some(([command]) => (
       (command as { entity?: unknown }).entity === "living-actor"
     ))).toBe(false);

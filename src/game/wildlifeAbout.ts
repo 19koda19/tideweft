@@ -151,6 +151,12 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "MUDFLAT ACTIVITY",
     representation: "population-area",
   },
+  "atlantic-capelin": {
+    identifiedName: "Atlantic capelin",
+    identifiedHeading: "ATLANTIC CAPELIN SCHOOL SIGNS",
+    unidentifiedHeading: "AQUATIC ACTIVITY",
+    representation: "population-area",
+  },
   "snowy-egret": {
     identifiedName: "Snowy egret",
     identifiedHeading: "SNOWY EGRET",

@@ -273,7 +273,8 @@ type WildlifePresentationForm =
   | "golden-eagle"
   | "southern-leopard-frog"
   | "atlantic-silverside"
-  | "atlantic-marsh-fiddler-crab";
+  | "atlantic-marsh-fiddler-crab"
+  | "atlantic-capelin";
 
 interface WildlifeSpeciesPresentationDescriptor {
   readonly form: WildlifePresentationForm;
@@ -460,6 +461,20 @@ const PRESENTATION_BY_SPECIES: Readonly<
     conditionStyle: "none",
     exposesLifeStage: false,
     baseSizeScale: 0.28,
+    observableForm: null,
+  },
+  "atlantic-capelin": {
+    form: "atlantic-capelin",
+    representation: "population-area",
+    identificationClarity: 520_000,
+    unidentifiedQuickLabel: "Aquatic activity",
+    unidentifiedIdentityLabel: "Unidentified aquatic activity",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.32,
     observableForm: null,
   },
   "snowy-egret": {
@@ -660,6 +675,12 @@ interface PopulationEvidenceDescriptor {
 }
 
 interface PopulationEvidenceSpeciesDescriptor {
+  /**
+   * Evidence shared by visually indistinguishable species must remain
+   * anonymous until a future knowledge owner supplies an explicit learned
+   * identification receipt. Clarity alone is not knowledge.
+   */
+  readonly identification: "visual-clarity" | "learned-identity";
   readonly identifiedQuickLabel: string;
   readonly unidentifiedQuickLabel: string;
   readonly identifiedIdentityLabel: string;
@@ -673,6 +694,7 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
   Record<AggregateWildlifeSpecies, PopulationEvidenceSpeciesDescriptor>
 > = deepFreeze({
   "brown-rat": {
+    identification: "visual-clarity",
     identifiedQuickLabel: "Brown rat signs",
     unidentifiedQuickLabel: "Small-animal signs",
     identifiedIdentityLabel: "Brown rat population signs",
@@ -702,6 +724,7 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
     },
   },
   "southern-leopard-frog": {
+    identification: "visual-clarity",
     identifiedQuickLabel: "Southern leopard frog signs",
     unidentifiedQuickLabel: "Wetland-animal signs",
     identifiedIdentityLabel: "Southern leopard frog population signs",
@@ -717,6 +740,7 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
     },
   },
   "atlantic-silverside": {
+    identification: "visual-clarity",
     identifiedQuickLabel: "Atlantic silverside signs",
     unidentifiedQuickLabel: "Water-surface signs",
     identifiedIdentityLabel: "Atlantic silverside school signs",
@@ -732,6 +756,7 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
     },
   },
   "atlantic-marsh-fiddler-crab": {
+    identification: "visual-clarity",
     identifiedQuickLabel: "Atlantic marsh fiddler crab signs",
     unidentifiedQuickLabel: "Mudflat signs",
     identifiedIdentityLabel: "Atlantic marsh fiddler crab area signs",
@@ -753,7 +778,24 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
       },
     },
   },
+  "atlantic-capelin": {
+    identification: "learned-identity",
+    identifiedQuickLabel: "Atlantic capelin school signs",
+    unidentifiedQuickLabel: "Aquatic activity",
+    identifiedIdentityLabel: "Atlantic capelin school signs",
+    unidentifiedIdentityLabel: "Unidentified aquatic activity",
+    byKind: {
+      "surface-dimple": {
+        form: "surface-dimples",
+        minimumClarity: 280_000,
+        identifiedLabel: "Atlantic capelin surface dimples and school glints",
+        unidentifiedLabel: "Aquatic surface dimples and brief glints",
+        sizeScale: 1.05,
+      },
+    },
+  },
   "american-pika": {
+    identification: "visual-clarity",
     identifiedQuickLabel: "American pika signs",
     unidentifiedQuickLabel: "Talus-animal signs",
     identifiedIdentityLabel: "American pika population signs",
@@ -962,10 +1004,6 @@ export function projectWildlifePopulationEvidencePresentations(
   const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
   const context = directEvidenceObservationContext(input.observation);
   if (patch === null || context === null) return null;
-  const ownsTidalPopulations = patch.aggregatePopulations.some(({ species }) => (
-    species === "atlantic-silverside"
-      || species === "atlantic-marsh-fiddler-crab"
-  ));
   const ownsTidalProjection = coreEcologyPatchHasTidalTableAuthority(patch);
   const tidal = ownsTidalProjection
     ? projectCoreEcologyTidalTable(patch, patch.updatedAtTick)
@@ -986,15 +1024,12 @@ export function projectWildlifePopulationEvidencePresentations(
     // exact pre-Wave-C projection behavior through the neutral scale below.
     if (activityScale === null) continue;
     for (const evidence of population.evidence) {
-      if (
-        population.species === "atlantic-silverside"
-        || population.species === "atlantic-marsh-fiddler-crab"
-      ) {
+      if (coreEcologySpeciesHasRuntimeCapability(population.species, "tidal-activity")) {
         // A signed open-country resident deliberately has no bounded harbor
         // tide-table authority. Preserve its coarse population, but withhold
         // tide-specific evidence until a regional hydrology owner can prove
         // the local anchor depth instead of borrowing the starting estuary.
-        if (!ownsTidalPopulations || tidal === null) continue;
+        if (tidal === null) continue;
         const occupiedAnchor = population.anchors.find((anchor) => (
           sameWorldPosition(anchor.position, evidence.position)
           && anchor.populationUnits > 0
@@ -1012,8 +1047,8 @@ export function projectWildlifePopulationEvidencePresentations(
       if (descriptor === undefined) continue;
       if (detail === null || detail.visualClarity < descriptor.minimumClarity) continue;
       if (presentedEvidenceIds.has(evidence.evidenceId)) continue;
-      const speciesIdentified = detail.visualClarity
-        >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
+      const speciesIdentified = speciesDescriptor.identification === "visual-clarity"
+        && detail.visualClarity >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
       presentedEvidenceIds.add(evidence.evidenceId);
       presentations.push(deepFreeze({
         version: WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION,
@@ -1162,10 +1197,7 @@ function populationEvidenceActivityScale(
   species: AggregateWildlifeSpecies,
   intensity: number,
 ): number | null {
-  if (
-    species !== "atlantic-silverside"
-    && species !== "atlantic-marsh-fiddler-crab"
-  ) return 1;
+  if (!coreEcologySpeciesHasRuntimeCapability(species, "tidal-activity")) return 1;
   if (intensity <= 0) return null;
   if (intensity <= 333_333) return 0.76;
   if (intensity <= 666_666) return 0.92;

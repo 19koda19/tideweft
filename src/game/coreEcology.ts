@@ -88,6 +88,11 @@ import {
   type CoreEcologyAlpineHabitat,
 } from "./coreEcologyAlpineHabitat";
 import {
+  canonicalizeCoreEcologyPolarShoreHabitat,
+  type CoreEcologyPolarShoreHabitat,
+} from "./coreEcologyPolarShoreHabitat";
+import {
+  coreEcologyAggregateDisturbanceEvidenceKind,
   coreEcologyAggregateSpeciesPolicy,
   isCoreEcologyAggregateSpecies,
   resolveCoreEcologyAggregateActivityIntensity,
@@ -96,6 +101,11 @@ import {
   type CoreEcologyAggregateActivePeriod,
   type CoreEcologyAggregateSpecies,
 } from "./coreEcologyAggregatePolicy";
+import {
+  CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS,
+  coreEcologyTidalAggregatePolicy,
+  coreEcologyTidalAggregateUsesDurableRedistributionClock,
+} from "./coreEcologyTidalAggregatePolicy";
 import {
   CORE_ECOLOGY_DOMESTIC_SPECIES,
   CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT,
@@ -152,7 +162,7 @@ export const CORE_ECOLOGY_MAX_AGGREGATE_EVIDENCE = 24 as const;
 export const CORE_ECOLOGY_MAX_AGGREGATE_DISTURBANCES = 16 as const;
 export const CORE_ECOLOGY_MAX_MORTALITY_TRANSACTIONS = 256 as const;
 /** Published Tide Table cadence; shared with v3 adoption so processed edges cannot replay. */
-export const CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS = 4 as const;
+export { CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS };
 export const CORE_ECOLOGY_MAX_STEP_TICKS = 64 as const;
 export const CORE_ECOLOGY_PATCH_MAX_SERIALIZED_BYTES = 16 * 1_024 * 1_024;
 export const CORE_ECOLOGY_AGGREGATE_EVIDENCE_VERSION = 1 as const;
@@ -387,6 +397,11 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Append-only high-country residents owned by the Wave-F Alpine root. */
       readonly kind: "regional-alpine-v1";
       readonly habitat: CoreEcologyAlpineHabitat;
+    }>
+  | Readonly<{
+      /** Append-only cold-shore forage owned by the Wave-F polar-shore root. */
+      readonly kind: "regional-polar-shore-v1";
+      readonly habitat: CoreEcologyPolarShoreHabitat;
     }>
   | Readonly<{
       /**
@@ -1133,6 +1148,7 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "regional-habitat-v1-with-adoption-suppression"
     || derivation.kind === "settlement-home-v1"
     || derivation.kind === "regional-alpine-v1"
+    || derivation.kind === "regional-polar-shore-v1"
     ? aggregatePopulationsFromHabitat(
         input.seed,
         derivation.habitat,
@@ -1417,12 +1433,15 @@ export function migrateLegacyCoreEcologyAggregatePatch(
       // Tide Table had evaluated that tick. Its bounded event tail could be
       // churned later in the same tick, so absence of an old :edge record is
       // not proof that the cadence opportunity remains pending.
+      const tidalRedistribution = coreEcologyTidalAggregatePolicy(
+        population.species,
+      )?.redistribution;
       if (
-        population.species === "atlantic-silverside"
+        tidalRedistribution !== null
+        && tidalRedistribution !== undefined
         && nonnegativeSafeInteger(value.updatedAtTick)
         && value.updatedAtTick > 0
-        && value.updatedAtTick
-          % CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS === 0
+        && value.updatedAtTick % tidalRedistribution.cadenceTicks === 0
       ) lastTidalRedistributionTick = value.updatedAtTick;
       return { ...population, lastTidalRedistributionTick };
     });
@@ -1572,7 +1591,10 @@ export function markCoreEcologyAggregateTidalRedistribution(
     aggregateId === input.aggregateId
   ));
   const population = patch.aggregatePopulations[populationIndex];
-  if (population === undefined || population.species !== "atlantic-silverside") return null;
+  if (
+    population === undefined
+    || !coreEcologyTidalAggregateUsesDurableRedistributionClock(population.species)
+  ) return null;
   if (population.lastTidalRedistributionTick === input.atTick) return patch;
   if (
     population.lastTidalRedistributionTick !== null
@@ -1661,7 +1683,10 @@ export function displaceCoreEcologyAggregatePopulation(
     version: CORE_ECOLOGY_AGGREGATE_EVIDENCE_VERSION,
     evidenceId: `${population.aggregateId}:evidence:${evidenceOrdinal.toString(36)}`,
     evidenceOrdinal,
-    kind: disturbanceEvidenceKind(population.species, input.causeKind),
+    kind: coreEcologyAggregateDisturbanceEvidenceKind(
+      population.species,
+      input.causeKind,
+    ),
     position: createWorldPosition(
       toAnchor.position.region,
       toAnchor.position.localX,
@@ -2598,7 +2623,8 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyRegionalUplandHabitatAssemblage
     | CoreEcologyRegionalPredatorHabitatAssemblage
     | CoreEcologyRegionalHabitat
-    | CoreEcologyAlpineHabitat,
+    | CoreEcologyAlpineHabitat
+    | CoreEcologyPolarShoreHabitat,
   tick: number,
   regionalSuppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null = null,
 ): readonly CoreEcologyAggregatePopulationState[] {
@@ -2721,7 +2747,8 @@ function aggregatePopulationsFromHabitat(
 
 type CoreEcologyRegionalLikePopulationCandidate =
   | CoreEcologyRegionalPopulationCandidate
-  | CoreEcologyAlpineHabitat["populations"][number];
+  | CoreEcologyAlpineHabitat["populations"][number]
+  | CoreEcologyPolarShoreHabitat["populations"][number];
 
 function isRegionalHabitatPopulation(
   value: unknown,
@@ -2742,7 +2769,8 @@ function regionalHabitatOrigin(
     | CoreEcologyRegionalUplandHabitatAssemblage
     | CoreEcologyRegionalPredatorHabitatAssemblage
     | CoreEcologyRegionalHabitat
-    | CoreEcologyAlpineHabitat,
+    | CoreEcologyAlpineHabitat
+    | CoreEcologyPolarShoreHabitat,
 ): RegionCoord {
   return "region" in habitat ? habitat.region : habitat.originRegion;
 }
@@ -2828,7 +2856,8 @@ function canonicalAggregatePopulation(
     || (value.lastTidalRedistributionTick !== null
       && (!nonnegativeSafeInteger(value.lastTidalRedistributionTick)
         || value.lastTidalRedistributionTick > value.updatedAtTick))
-    || (species !== "atlantic-silverside" && value.lastTidalRedistributionTick !== null)
+    || (!coreEcologyTidalAggregateUsesDurableRedistributionClock(species)
+      && value.lastTidalRedistributionTick !== null)
     || value.revision !== value.nextDisturbanceOrdinal
     || value.nextEvidenceOrdinal !== value.anchors.length + value.nextDisturbanceOrdinal
   ) return null;
@@ -4043,6 +4072,13 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: "regional-alpine-v1", habitat });
   }
+  if (value.kind === "regional-polar-shore-v1") {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyPolarShoreHabitat(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: "regional-polar-shore-v1", habitat });
+  }
   if (
     value.kind === "habitat-v2"
     || value.kind === "legacy-fixed-v1-with-habitat-v2"
@@ -4243,6 +4279,16 @@ function aggregateDerivationMatchesPopulations(
     );
   }
   if (derivation.kind === "regional-alpine-v1") {
+    return mortalityTransactions.length === 0
+      && regionalDerivationMatchesPopulations(
+        derivation.habitat,
+        populations,
+        aggregatePopulations,
+        originRegion,
+        mortalityTransactions,
+      );
+  }
+  if (derivation.kind === "regional-polar-shore-v1") {
     return mortalityTransactions.length === 0
       && regionalDerivationMatchesPopulations(
         derivation.habitat,
@@ -4571,7 +4617,10 @@ function settlementHomeDerivationMatchesPopulations(
 }
 
 function regionalDerivationMatchesPopulations(
-  habitat: CoreEcologyRegionalHabitat | CoreEcologyAlpineHabitat,
+  habitat:
+    | CoreEcologyRegionalHabitat
+    | CoreEcologyAlpineHabitat
+    | CoreEcologyPolarShoreHabitat,
   populations: readonly CoreEcologyPopulationState[],
   aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
   originRegion: RegionCoord,
@@ -5437,19 +5486,6 @@ function initialAggregateEvidenceKind(
     16,
   ) % kinds.length;
   return kinds[selection] ?? "tracks";
-}
-
-function disturbanceEvidenceKind(
-  species: CoreEcologyAggregateSpecies,
-  cause: CoreEcologyAggregateDisturbance["causeKind"],
-): CoreEcologyAggregateEvidenceKind {
-  if (species === "southern-leopard-frog") return "frog-track";
-  if (species === "american-pika") return "talus-sign";
-  if (species === "atlantic-silverside") return "surface-dimple";
-  if (species === "atlantic-marsh-fiddler-crab") {
-    return cause === "tide-pressure" ? "feeding-scrape" : "burrow-opening";
-  }
-  return cause === "weather-pressure" ? "shelter-sign" : "tracks";
 }
 
 function retainAggregateEvidence(

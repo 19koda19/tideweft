@@ -7,6 +7,10 @@ import {
   CORE_WILDLIFE_ALPHA32_SPECIES,
   CORE_WILDLIFE_ALPHA32_SPECIES_COUNT,
   CORE_WILDLIFE_ALPHA32_SPECIES_HASH,
+  CORE_WILDLIFE_ALPHA33_PROFILES_HASH,
+  CORE_WILDLIFE_ALPHA33_SPECIES,
+  CORE_WILDLIFE_ALPHA33_SPECIES_COUNT,
+  CORE_WILDLIFE_ALPHA33_SPECIES_HASH,
   CORE_WILDLIFE_PROFILES,
   CORE_WILDLIFE_SPECIES,
   assertCoreWildlifeIdentity,
@@ -68,15 +72,27 @@ describe("core wildlife identity", () => {
     );
     expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA32_SPECIES_COUNT))
       .toEqual(CORE_WILDLIFE_ALPHA32_SPECIES);
-    expect(CORE_WILDLIFE_SPECIES.slice(CORE_WILDLIFE_ALPHA32_SPECIES_COUNT)).toEqual([
+    expect(CORE_WILDLIFE_ALPHA33_SPECIES).toEqual([
+      ...CORE_WILDLIFE_ALPHA32_SPECIES,
       "mountain-goat",
       "american-pika",
       "golden-eagle",
     ]);
+    expect(CORE_WILDLIFE_ALPHA33_SPECIES).toHaveLength(
+      CORE_WILDLIFE_ALPHA33_SPECIES_COUNT,
+    );
+    expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA33_SPECIES_COUNT))
+      .toEqual(CORE_WILDLIFE_ALPHA33_SPECIES);
+    expect(CORE_WILDLIFE_SPECIES.slice(CORE_WILDLIFE_ALPHA33_SPECIES_COUNT))
+      .toEqual(["atlantic-capelin"]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA32_SPECIES_HASH);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES.map(getCoreWildlifeProfile)))
       .toBe(CORE_WILDLIFE_ALPHA32_PROFILES_HASH);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA33_SPECIES))
+      .toBe(CORE_WILDLIFE_ALPHA33_SPECIES_HASH);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA33_SPECIES.map(getCoreWildlifeProfile)))
+      .toBe(CORE_WILDLIFE_ALPHA33_PROFILES_HASH);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
     expect(getCoreWildlifeProfile("deer").roles).toEqual([
@@ -148,6 +164,20 @@ describe("core wildlife identity", () => {
       catalogIdentityForm: "individual",
       groupOrganization: null,
       locomotionClass: "aerial",
+    });
+    expect(getCoreWildlifeProfile("atlantic-capelin")).toMatchObject({
+      maximumPatchPopulation: 64,
+      roles: ["prey", "small-prey", "forager"],
+      foodAffinities: { "shore-forage": 1_000_000, "live-prey": 0 },
+      behavior: { maximumPursuitTicks: 0 },
+    });
+    expect(getCoreWildlifeSpeciesMetadata("atlantic-capelin")).toMatchObject({
+      actorRepresentation: "aggregate",
+      catalogIdentityForm: "aggregate",
+      groupOrganization: "school",
+      groupStableIdNamespace: "CAPELIN-SCHOOL",
+      locomotionClass: "aquatic",
+      taxonomicClass: "fish",
     });
     expect(getCoreWildlifeProfile("marsh-fox").roles).toEqual([
       "forager",

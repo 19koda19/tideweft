@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(43);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(44);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,20 +63,19 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Talus and Sky extends the catalog to twenty-seven records");
-    expect(copy).toContain("separate sparse Alpine ecology layer beside the exact Open Country Ledger base");
-    expect(copy).toContain("mountain goats persist as one group-atomic HERD");
-    expect(copy).toContain("American pikas remain a conserved non-addressable talus aggregate");
-    expect(copy).toContain("a solitary golden eagle uses shared ridge soaring and perching");
-    expect(copy).toContain("shared grade-aware terrain contract rather than a species-only pathfinder");
-    expect(copy).toContain("currently visible eagle");
-    expect(copy).toContain("terrain occlusion prevents that observation");
-    expect(copy).toContain("cannot identify, capture, injure, kill, consume, or create an individual pika");
-    expect(copy).toContain("one global group-atomic stable-distance top-K plan capped at twenty-four actors");
-    expect(copy).toContain("Outer save 26 adds regional ecology root version 2");
-    expect(copy).toContain("authenticates one sealed version-25 Open Country Ledger save for exact-once adoption");
-    expect(copy).toContain("catalog to twenty-seven records");
-    expect(copy).toContain("not polar or complete Wave F");
+    expect(copy).toContain("Coldwater Glint is this unpublished local candidate");
+    expect(copy).toContain("catalog to twenty-eight records");
+    expect(copy).toContain("separate sparse polar-shore ecology layer");
+    expect(copy).toContain("one conserved non-addressable Atlantic-capelin school");
+    expect(copy).toContain("same policy-driven tidal aggregate owner");
+    expect(copy).toContain("entire admitted population—up to sixty-four units—remains conserved");
+    expect(copy).toContain("lawfully placed aerial surface observer");
+    expect(copy).toContain("occlusion prevents both observation and response");
+    expect(copy).toContain("no exact fish, capture, injury, death, body, item, or cargo effect");
+    expect(copy).toContain("one global group-atomic materialization and conservation commit");
+    expect(copy).toContain("Outer save 27 adds regional ecology root version 3");
+    expect(copy).toContain("authenticates one sealed outer-version-26 save for exact-once adoption");
+    expect(copy).toContain("not complete Wave F");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -252,15 +251,15 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 26");
-    expect(copy).toContain("regional ecology root version 2");
-    expect(copy).toContain("normalized sealed version 25 Open Country Ledger save is authenticated and adopted exactly once");
+    expect(copy).toContain("Outer save version 27");
+    expect(copy).toContain("regional ecology root version 3");
+    expect(copy).toContain("sealed outer-version-26 Talus and Sky save is authenticated and adopted exactly once");
     expect(copy).toContain("every earlier population, actor, group, item, Promise, home, relationship");
-    expect(copy).toContain("without rewriting, renumbering, redistributing, or retiring any base wildlife");
-    expect(copy).toContain("one deterministic group-atomic materialization and conservation commit");
-    expect(copy).toContain("cannot reroll either regional baseline or Alpine lineage");
-    expect(copy).toContain("Pristine signed-region and Alpine baselines are rederived instead of saved");
-    expect(copy).toContain("working-animal transition, and domestic recovery remain exact and cannot replay");
+    expect(copy).toContain("without rewriting, renumbering, redistributing, or retiring any base or Alpine wildlife");
+    expect(copy).toContain("All three children enter one deterministic group-atomic materialization and conservation commit");
+    expect(copy).toContain("cannot reroll a regional, Alpine, or polar lineage");
+    expect(copy).toContain("Pristine signed-region, Alpine, and polar baselines are rederived instead of saved");
+    expect(copy).toContain("Alpine adoption, working-animal transition, and domestic recovery remain exact and cannot replay");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -338,20 +337,22 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedCopy).toContain("one separate settlement-custodied working dog");
     expect(plannedCopy).toContain("starting settlement separately retains its bounded brown-rat population area and anchored chicken and goat homes");
     expect(plannedCopy).toContain("free-ranging domestic cat is habitat-optional");
-    expect(plannedCopy).toContain("current twenty-seven-record catalog preserves the exact existing signed-region ecology");
-    expect(plannedCopy).toContain("separate sparse Alpine layer");
+    expect(plannedCopy).toContain("current twenty-eight-record catalog preserves the exact existing signed-region ecology");
+    expect(plannedCopy).toContain("adds a sparse Alpine layer");
     expect(plannedCopy).toContain("mountain goats form a HERD");
     expect(plannedCopy).toContain("American pikas remain one conserved non-addressable talus aggregate");
     expect(plannedCopy).toContain("golden eagle remains solitary");
+    expect(plannedCopy).toContain("separate sparse polar-shore layer");
+    expect(plannedCopy).toContain("Atlantic capelin remain one conserved non-addressable school");
     expect(plannedCopy).toContain("honest absence remains valid");
     expect(plannedCopy).toContain("Each chicken, domestic goat, mountain goat, dog, and eagle representative remains an individual");
-    expect(plannedCopy).toContain("Rats, frogs, silversides, fiddler crabs, and pikas");
+    expect(plannedCopy).toContain("Rats, frogs, silversides, fiddler crabs, pikas, and capelin");
     expect(plannedCopy).toContain("aggregate populations rather than individual actors");
     expect(plannedCopy).toContain("Additional dogs and wildlife species beyond this bounded roster");
     expect(plannedCopy).toContain("worldwide species breadth and domestic ownership");
     expect(plannedCopy).toContain("only current animal mortality is exact contact by a marsh fox, gray wolf, or cougar");
-    expect(plannedCopy).toContain("Alpine trio, brown bears, players, dogs, humans, social-group members, and broader animals cannot enter that harmful path");
-    expect(plannedCopy).toContain("polar breadth, complete Wave F");
+    expect(plannedCopy).toContain("Alpine trio, capelin, brown bears, players, dogs, humans, social-group members, and broader animals cannot enter that harmful path");
+    expect(plannedCopy).toContain("remaining polar breadth, complete Wave F");
     expect(plannedCopy).toContain("a new guardian sound, general scent and evidence tracking");
     expect(plannedCopy).toContain("full bestiary");
     expect(plannedCopy).toContain("do not affect the courier or carried cargo yet");
@@ -516,50 +517,51 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("only harmful live-animal contact in this build remains exact contact with a currently identified solitary addressable marsh rabbit");
     expect(copy).toContain("Grouped elk, grouped deer, and every other social-group member cannot be injured or killed");
     expect(copy).toContain("Brown bear has no live-prey pursuit or harmful contact");
-    expect(copy).toContain("Species-directed dog interaction with wild boar, elk, gray wolf, cougar, brown bear, mountain goat, pika, and golden eagle is an intentional no-response and remains unimplemented");
+    expect(copy).toContain("Species-directed dog interaction with wild boar, elk, gray wolf, cougar, brown bear, mountain goat, pika, golden eagle, and capelin is an intentional no-response and remains unimplemented");
     expect(copy).toContain("ordinary lawful large-predator perception may still drive a non-harmful dog or porter reaction");
     expect(copy).toContain("Boar, elk, and wolf voice patterns are foundation-only and not audible");
-    expect(copy).toContain("cougar, brown-bear, mountain-goat, pika, and golden-eagle voice behavior is not implemented");
-    expect(copy).toContain("population recovery, live-time decomposition, body drift, dragging, harvesting, carcass scent and insects");
+    expect(copy).toContain("cougar, brown-bear, mountain-goat, pika, golden-eagle, and capelin voice behavior is not implemented");
+    expect(copy).toContain("population recovery, live-time decomposition, body drift, dragging, harvesting, fishing, carcass scent and insects");
     expect(copy).toContain("complete sound, general scent and evidence tracking");
     expect(copy).toContain("foliage consumption");
     expect(copy).toContain("complete circadian behavior");
     expect(copy).toContain("the full bestiary");
     expect(copy).toContain("worldwide species breadth and storehouses");
     expect(copy).toContain("bounded Wave-D flock, herd, working-animal, and missing-livestock recovery slices");
-    expect(copy).toContain("new Alpine triad");
+    expect(copy).toContain("Alpine triad, and the polar-shore forage school");
     expect(copy).toContain("role, perception, movement, group, aggregate, ridge-activity, tide, physical-item, plural-custody, typed-home, working-assignment, recovery, mortality, body, and presentation contracts");
-    expect(copy).toContain("current twenty-seven-record catalog preserves the exact signed-region base");
-    expect(copy).toContain("Every base and Alpine owner shares one global group-atomic materialization cap");
-    expect(copy).toContain("polar breadth, or complete Wave F");
-    expect(copy).toContain("new mortality, live-prey capture or exact pika targets");
-    expect(copy).toContain("does not create distant settlements, storage, livestock homes, recovery networks, polar breadth, or complete Wave F");
+    expect(copy).toContain("current twenty-eight-record catalog preserves the exact signed-region base");
+    expect(copy).toContain("Every base, Alpine, and polar owner shares one global group-atomic materialization cap");
+    expect(copy).toContain("remaining polar breadth, or complete Wave F");
+    expect(copy).toContain("new mortality, live-prey capture or exact pika or capelin targets");
+    expect(copy).toContain("does not create distant settlements, storage, livestock homes, recovery networks, remaining polar breadth, or complete Wave F");
     expect(copy).toContain("guardian search can fail or defer and never proves an animal was found");
     expect(copy).toContain("instead of requiring a species-by-species or N² pair matrix");
     expect(copy).not.toMatch(/exact (?:trust|fear|emotion).*(?:number|percentage)/iu);
   });
 
-  it("teaches the Alpine wrapper adoption without rewriting older ecology", () => {
+  it("teaches the polar wrapper adoption without rewriting older ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 26 adds regional ecology root version 2");
+    expect(copy).toContain("Outer save version 27 adds regional ecology root version 3");
+    expect(copy).toContain("exact version-2 base-and-Alpine composite");
     expect(copy).toContain("exact version-1 Open Country Ledger ecology");
     expect(copy).toContain("core-ecology patch version 3");
     expect(copy).toContain("aggregate ecology record version 5");
     expect(copy).toContain("settlement ecology version 4");
     expect(copy).toContain("working-animal state version 2");
     expect(copy).toContain("habitat version 11 as sealed compatibility authority");
-    expect(copy).toContain("separate sparse Alpine child owns only the new ridge populations and true deviations");
-    expect(copy).toContain("normalized sealed version 25 Open Country Ledger save is authenticated and adopted exactly once");
-    expect(copy).toContain("complete version-1 child and original outer integrity remain the adoption witness");
-    expect(copy).toContain("without rewriting, renumbering, redistributing, or retiring any base wildlife");
-    expect(copy).toContain("one deterministic group-atomic materialization and conservation commit");
-    expect(copy).toContain("cannot reroll either regional baseline or Alpine lineage");
-    expect(copy).toContain("Pristine signed-region and Alpine baselines are rederived instead of saved");
+    expect(copy).toContain("separate sparse polar-shore child owns only the capelin lineage and true deviations");
+    expect(copy).toContain("sealed outer-version-26 Talus and Sky save is authenticated and adopted exactly once");
+    expect(copy).toContain("complete version-2 child and original outer integrity remain the adoption witness");
+    expect(copy).toContain("without rewriting, renumbering, redistributing, or retiring any base or Alpine wildlife");
+    expect(copy).toContain("All three children enter one deterministic group-atomic materialization and conservation commit");
+    expect(copy).toContain("cannot reroll a regional, Alpine, or polar lineage");
+    expect(copy).toContain("Pristine signed-region, Alpine, and polar baselines are rederived instead of saved");
     expect(copy).toContain("rewrite an existing injury or death");
     expect(copy).toContain("restore consumed resource");
     expect(copy).toContain("only actual deviations, promoted or migrated identities, bodies, claims, and transaction receipts consume regional storage");
-    expect(copy).toContain("existing Open Country Ledger disposition, working-animal transition, and domestic recovery remain exact and cannot replay");
+    expect(copy).toContain("existing Open Country Ledger disposition, Alpine adoption, working-animal transition, and domestic recovery remain exact and cannot replay");
   });
 
   it("supports stable lookup and deterministic topic search", () => {

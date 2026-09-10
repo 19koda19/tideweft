@@ -8,11 +8,15 @@ import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { serializeRegionalEcologyState } from "./regionalEcologyState";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import {
-  deserializeRegionalEcologyStateV2,
   projectRegionalEcologyStateV2ActiveState,
   serializeRegionalEcologyStateV2,
   type RegionalEcologyStateV2,
 } from "./regionalEcologyStateV2";
+import {
+  deserializeRegionalEcologyStateV3,
+  serializeRegionalEcologyStateV3,
+  type RegionalEcologyStateV3,
+} from "./regionalEcologyStateV3";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
 export const ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT =
@@ -31,7 +35,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 26;
+  readonly version: 27;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
   readonly regionalTravel: string;
@@ -52,7 +56,7 @@ class MemoryRepository implements SaveRepository {
   async remove() { this.record = undefined; }
 
   snapshot(): SaveRecord {
-    if (this.record === undefined) throw new Error("v26 runtime fixture has no autosave");
+    if (this.record === undefined) throw new Error("v27 runtime fixture has no autosave");
     return structuredClone(this.record);
   }
 }
@@ -85,9 +89,10 @@ afterAll(() => {
   vi.restoreAllMocks();
 });
 
-describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} runtime Wave-F regional ecology v26 boundary`, () => {
-  it(`${ALPHA33_ALPINE_PERFORMANCE_OWNER_INTENT} writes one exact composite owner and enforces one global materialization cap`, () => {
+describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} retained Wave-F v26 child beneath v27`, () => {
+  it(`${ALPHA33_ALPINE_PERFORMANCE_OWNER_INTENT} writes one exact composite child and enforces one global materialization cap`, () => {
     const envelope = requireCurrent(fixtureRecord);
+    const wrapper = requireWrapper(envelope);
     const state = requireState(envelope);
     expect(Object.hasOwn(envelope, "coreEcology")).toBe(false);
     expect(state.adoption).toBeNull();
@@ -100,12 +105,12 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} runtime Wave-F regional eco
       envelope.player,
       envelope.regionalTravel,
     );
-    if (travel === null) throw new Error("v26 fixture lost its regional window");
+    if (travel === null) throw new Error("v27 fixture lost its regional window");
     const projection = projectRegionalEcologyStateV2ActiveState(state, {
       origin: travel.window.origin,
       terrain: travel.window.terrain,
     });
-    if (projection === null) throw new Error("v26 fixture did not project");
+    if (projection === null) throw new Error("v27 fixture did not project its v26 child");
     const sources = [...projection.base.residents, ...projection.alpineResidents];
     const materialized = sources.reduce((count, source) => count + source.patch.populations
       .flatMap(({ members }) => members)
@@ -119,7 +124,10 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} runtime Wave-F regional eco
       population.species === "american-pika"
       && population.evidence.some(({ kind }) => kind === "haypile" || kind === "talus-sign")
     )))).toBe(true);
-    expect(serializeRegionalEcologyStateV2(state)).toBe(envelope.regionalEcology);
+    expect(serializeRegionalEcologyStateV3(wrapper)).toBe(envelope.regionalEcology);
+    expect(serializeRegionalEcologyStateV2(state)).toBe(stableStringify(
+      (JSON.parse(envelope.regionalEcology) as Record<string, unknown>).base,
+    ));
   });
 
   it("authenticates an exact v25 child before wrapping it with raw envelope provenance", async () => {
@@ -143,13 +151,16 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} runtime Wave-F regional eco
     await runtime.save();
     runtime.destroy();
 
-    const migrated = requireState(requireCurrent(repository.snapshot()));
+    const migratedEnvelope = requireCurrent(repository.snapshot());
+    const migratedWrapper = requireWrapper(migratedEnvelope);
+    const migrated = migratedWrapper.base;
     expect(migrated.adoption).toMatchObject({
       sourceOuterVersion: 25,
       sourceEnvelopeIntegrity: v25Integrity,
       sourceStateIntegrity: currentState.base.integrity,
     });
     expect(migrated.base).toEqual(currentState.base);
+    expect(migratedWrapper.adoption).toMatchObject({ sourceOuterVersion: 26 });
   }, 60_000);
 
   it(`${ALPHA33_ALPINE_PERFORMANCE_OWNER_INTENT} advances Alpine individual and pika aggregate owners within the runtime budget through one shared tick and reload`, async () => {
@@ -184,13 +195,17 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} runtime Wave-F regional eco
   it("quarantines an outer-resealed save whose Alpine child was altered", async () => {
     const envelope = requireCurrent(fixtureRecord);
     const parsed = JSON.parse(envelope.regionalEcology) as Record<string, unknown>;
-    const alpine = structuredClone(parsed.alpineActiveResidents) as Array<Record<string, unknown>>;
-    if (alpine[0] === undefined) throw new Error("v26 tamper fixture needs Alpine state");
+    const parsedV2 = parsed.base as Record<string, unknown>;
+    const alpine = structuredClone(parsedV2.alpineActiveResidents) as Array<Record<string, unknown>>;
+    if (alpine[0] === undefined) throw new Error("v27 tamper fixture needs Alpine state");
     alpine[0] = { ...alpine[0], sourceKey: `${String(alpine[0].sourceKey)}:forged` };
     const { integrity: _integrity, ...shared } = envelope as unknown as Readonly<Record<string, unknown>>;
     const forgedBase = {
       ...shared,
-      regionalEcology: stableStringify({ ...parsed, alpineActiveResidents: alpine }),
+      regionalEcology: stableStringify({
+        ...parsed,
+        base: { ...parsedV2, alpineActiveResidents: alpine },
+      }),
     };
     const forged: SaveRecord = {
       ...fixtureRecord,
@@ -211,7 +226,7 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.start();
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame as ((now: number) => void) | undefined;
-    if (callback === undefined) throw new Error("v26 runtime stopped scheduling frames");
+    if (callback === undefined) throw new Error("v27 runtime stopped scheduling frames");
     scheduledFrame = undefined;
     callback(nextFrameTime);
     nextFrameTime += 100;
@@ -223,21 +238,25 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 26
-    || record.payloadVersion !== 26
+    || value.version !== 27
+    || record.payloadVersion !== 27
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("runtime fixture did not produce a v26 envelope");
+  ) throw new Error("runtime fixture did not produce a v27 envelope");
   const { integrity, ...base } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(base as Readonly<Record<string, unknown>>)) {
-    throw new Error("v26 envelope integrity did not authenticate");
+    throw new Error("v27 envelope integrity did not authenticate");
   }
   return value;
 }
 
-function requireState(envelope: CurrentEnvelope): RegionalEcologyStateV2 {
-  const state = deserializeRegionalEcologyStateV2(envelope.regionalEcology);
-  if (state === null) throw new Error("v26 regional ecology did not deserialize");
+function requireWrapper(envelope: CurrentEnvelope): RegionalEcologyStateV3 {
+  const state = deserializeRegionalEcologyStateV3(envelope.regionalEcology);
+  if (state === null) throw new Error("v27 regional ecology did not deserialize");
   return state;
+}
+
+function requireState(envelope: CurrentEnvelope): RegionalEcologyStateV2 {
+  return requireWrapper(envelope).base;
 }
 
 function alpineSpecies(state: RegionalEcologyStateV2): ReadonlySet<string> {

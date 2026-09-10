@@ -525,6 +525,49 @@ runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, performance, and visual audits. A cache-bypassed
 comparison matched all 5/5 live production files byte-for-byte.
 
+The **unpublished local** `0.3.3-alpha.34 — Coldwater Glint` candidate tests
+the next narrow scaling question without changing that release truth. It keeps
+all 27 Alpha33 catalog records as an exact compatibility prefix and appends
+Atlantic capelin as record 28. Capelin occur only where a separate deterministic
+cold, saline polar-shore habitat admits them; lawful absence remains common.
+Floor-correct signed territory derivation computes mathematical bounds before
+independently clamping each axis, preserving one host and stable membership at
+negative, corner, and coordinate-limit regions.
+
+The representation choice is the main cost-control result. A supported habitat
+owns one capelin school of up to 64 units over no more than four tide-safe
+anchors, but no unit becomes an addressable actor or exact fish target. The
+adapter delegates
+depth, usable-anchor selection, cadence movement, activity, and pressure to the
+generic tidal aggregate/Tide Table owners. Exact conservation survives
+continuous stepping, runtime-order dormant reconciliation, long absence, save,
+reload, and re-entry without creating a second tide or evidence authority.
+
+The representative emergence proof reuses an existing gull rather than adding
+a capelin-specific observer. With current unobstructed vision, it receives only
+anonymous aquatic-activity evidence and the shared stimulus/small-world policy
+may move at most one conserved unit. Intervening ridge terrain removes both
+observation and pressure. Replay and input/source permutations agree, and no
+individual fish, capture, injury, death, carcass, cargo mutation, or item
+transaction appears. This is architecture-level evidence for cross-owner
+composition, not a new species-pair matrix.
+
+`RegionalEcologyStateV3` wraps the exact V2 base-and-Alpine child beside one
+sparse polar-shore sibling, while outer save 27 authenticates and adopts a
+sealed v26 child exactly once. All sources enter one insertion-order-independent,
+group-atomic 24-addressable-actor plan and commit globally or not at all; the
+school consumes no actor slot. Pristine or merely observed polar regions are
+rederived rather than serialized, bounded habitat caches remain non-authoritative,
+and active-key prefiltering rejects absent/non-host regions without scanning
+explored history or reconciling unrelated dormant deltas. The result keeps
+storage and hot-path work tied to genuine active deviations rather than the
+size of the infinite world.
+
+Coldwater Glint deliberately adds no Arctic fox, polar bear, seal, new seabird,
+snow or ice behavior, mortality, live-prey capture, reproduction, audible
+Living Voice, or Wave-F completion. It has no push, CI, Pages, deployment, or
+live-build attestation; Alpha33 remains the latest LIVE_VERIFIED public release.
+
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
 working-relationship, recovery, knowledge, mortality/body, and shared-policy
@@ -546,6 +589,9 @@ regional breadth release, Alpha 31 is the verified solitary-predator append,
 Alpha 32 is the verified signed-region distribution closure for its frozen
 24-record prefix, and Alpha 33 is the verified first bounded Alpine/Wave-F
 slice, extending the catalog to 27 records through a separate sparse sibling.
+Alpha 34 is only an unpublished local polar-shore candidate that preserves that
+lineage and tests a 28th aggregate record; it is not part of the verified
+release sequence yet.
 None completes broader aquatic or settlement ecology, broad
 attacks or mortality, population recovery, decomposition, body transport or
 harvesting, full circadian life, complete scent, worldwide species breadth, or the

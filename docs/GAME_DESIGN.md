@@ -86,7 +86,7 @@ Each seed creates:
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
 - One deterministic starting-harbor herd of exactly two individually identified domestic goats. The settlement and keeper hold a distinct typed pen, herd, and custody record; each goat uses the same shared actor, perception, attention, group, locomotion, and physical-resource arbitration owners without receiving unsupported foliage browsing.
-- One bounded living-species catalog whose first twenty-four records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. Released Alpha33 appends mountain goat, American pika, and golden eagle as records 25–27 and derives them from a separate sparse signed-region Alpine layer without rewriting the Alpha32 child. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, wolves, and mountain goats use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, river otter, and golden eagle remain solitary. American pika joins brown rat, southern leopard frog, Atlantic silverside, and Atlantic marsh fiddler crab as a stable non-addressable aggregate disclosed only through directly visible signs or activity. Fish, crabs, and pikas never become manufactured individual actors. This is sparse regional distribution of a bounded twenty-seven-record catalog, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
+- One bounded living-species catalog whose first twenty-four records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. Released Alpha33 appends mountain goat, American pika, and golden eagle as records 25–27 and derives them from a separate sparse signed-region Alpine layer without rewriting the Alpha32 child. The unpublished Alpha34 local candidate preserves those 27 records exactly and appends Atlantic capelin as record 28 through a separate sparse polar-shore sibling. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, wolves, and mountain goats use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, river otter, and golden eagle remain solitary. American pika and candidate capelin join brown rat, southern leopard frog, Atlantic silverside, and Atlantic marsh fiddler crab as stable non-addressable aggregates disclosed only through directly visible signs or activity. Fish, crabs, and pikas never become manufactured individual actors. Alpha33 remains the current twenty-seven-record LIVE_VERIFIED release; the 28-record extension is only an unpublished local candidate, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -316,6 +316,48 @@ player-facing-sync checks, 252 test files and 2,343 checks, a five-file
 runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, performance, and visual audits. A cache-bypassed
 comparison matched all 5/5 live production files byte-for-byte.
+
+The **unpublished local candidate** `0.3.3-alpha.34 — Coldwater Glint`
+preserves Alpha33's 27 catalog records as an exact frozen prefix and appends
+Atlantic capelin as record 28. It derives rare habitat only from seed-stable
+cold, saline polar shoreline with tide-safe water; unsuitable coast remains
+honestly empty. Its two-by-two-region territory math works at negative and
+coordinate-limit addresses by forming mathematical bounds before independently
+clamping each axis, retaining exactly one claimable host.
+
+Where admitted, capelin are one conserved non-addressable school of up to 64
+units over at most four anchors—not fish actors or clickable targets. The school
+reuses
+the generic tidal aggregate policy: saved elevation and current Tide Table
+depth decide lawful anchors, and ordinary activity or pressure may move at most
+one existing unit per cadence without changing the total. Runtime-order
+stepping and dormant catch-up are equivalent through tide cycles and long
+region absences. Tide, evidence, and density remain shared authority rather
+than being reimplemented for capelin.
+
+Chart and Relief may present directly visible surface dimples and brief blue
+glints. Quick inspection and ABOUT call them anonymous aquatic activity until
+the player has actually learned more; no school ID, anchor, count, individual,
+or offscreen event leaks through presentation. One representative emergence
+witness composes an existing gull with the active school. Clear line of sight
+can feed the shared stimulus/small-world path and redistribute at most one
+conserved unit without capture, injury, death, carcass, cargo, or item effects;
+an intervening ridge removes both observation and pressure. Replay and source
+order do not change the outcome.
+
+Outer save 27 introduces `RegionalEcologyStateV3` around the exact V2
+base-and-Alpine child plus one sparse polar-shore sibling. It authenticates and
+adopts a sealed v26 child exactly once. Pristine regions remain rederived and
+consume no durable record; bounded active-key selection rejects absent or
+non-host regions without reconciling unrelated dormant history. Base, Alpine,
+and polar owners enter one insertion-order-independent, group-atomic 24-actor
+plan and one all-or-nothing commit; the capelin aggregate consumes no actor
+slot.
+
+Coldwater Glint adds no Arctic fox, polar bear, seal, new seabird, snow or ice
+behavior, new mortality, live-prey capture, reproduction, audible Living
+Voice, or Wave-F completion. It has not been pushed, deployed, or live
+verified; Alpha33 remains the public build.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -1123,6 +1165,25 @@ pressure witness; and advances the outer save to 26 through
 `RegionalEcologyStateV2` while retaining its exact version-1 child. The global
 group-atomic 24-actor cap and atomic cross-layer commit remain authoritative.
 Its exact release evidence is recorded above.
+
+Present only in the unpublished local Alpha34 candidate:
+
+- an exact frozen prefix of all 27 Alpha33 species records followed by Atlantic
+  capelin as record 28;
+- rare cold-saline polar-shore habitat with lawful absence, signed and
+  coordinate-limit-safe territory ownership, and one conserved non-addressable
+  school over tide-safe anchors;
+- generic tidal redistribution, anonymous surface evidence/ABOUT, and one
+  visible-versus-occluded existing-gull pressure witness with no capture,
+  mortality, carcass, cargo, or item consequence;
+- byte-equivalent runtime and dormant histories, pristine sparse persistence,
+  bounded active-key work, and one global group-atomic commit; and
+- outer save 27 and `RegionalEcologyStateV3`, retaining the exact V2
+  base-and-Alpine child beside a sparse polar-shore sibling through exact-once
+  v26 adoption.
+
+This candidate is not released, deployed, Pages-verified, or LIVE_VERIFIED,
+and it does not complete remaining polar breadth or Wave F.
 
 Live through Alpha 33:
 

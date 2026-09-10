@@ -20,6 +20,8 @@ import {
   deriveCoreEcologyRainChorusHabitatAssemblage,
   deriveCoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
+import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
   projectWildlifePopulationEvidenceAbout,
@@ -41,6 +43,8 @@ import {
 
 export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha33-alpine-presentation-invariants:v1" as const;
+export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha34-polar-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(3, -7);
@@ -239,6 +243,34 @@ function tidalEvidenceFixture(tick = 12) {
   return { crab, egret, patch, silverside };
 }
 
+function capelinEvidenceFixture(tick = 12) {
+  const seed = seedFromText("polar habitat fuzz 29");
+  const originRegion = createRegionCoord(-1_653, 664);
+  const habitat = deriveCoreEcologyPolarShoreHabitat({ seed, region: originRegion });
+  const patch = createCoreEcologyAggregatePatch({
+    seed,
+    patchKey: "about-capelin-evidence",
+    originRegion,
+    populations: [],
+    derivation: { kind: "regional-polar-shore-v1", habitat },
+    tick,
+  });
+  const population = patch.aggregatePopulations.find(
+    ({ species }) => species === "atlantic-capelin",
+  );
+  const tidal = projectCoreEcologyTidalTable(patch, tick);
+  const usableDepth = tidal?.anchorDepths.find(({ aggregateId, activityUsable }) => (
+    aggregateId === population?.aggregateId && activityUsable
+  ));
+  const evidence = population?.evidence.find(({ evidenceOrdinal }) => (
+    evidenceOrdinal === usableDepth?.anchorOrdinal
+  ));
+  if (population === undefined || usableDepth === undefined || evidence === undefined) {
+    throw new Error("Capelin ABOUT fixture requires one lawfully wet school cue");
+  }
+  return { evidence, patch, population };
+}
+
 function activityFixture(
   species: "fish-crow" | "northern-harrier",
   tick: number,
@@ -290,6 +322,7 @@ function activityFixture(
 function evidenceObservation(
   position: WorldPosition,
   distanceTiles = 4,
+  facingRadians = 0,
 ): WildlifePopulationEvidenceObservation {
   const evidenceGlobalX = position.region.x * WORLD_WIDTH
     + Math.floor(position.localX / 1_000);
@@ -310,7 +343,7 @@ function evidenceObservation(
       rows: 1,
       cells,
       playerTileIndex: 0,
-      facingRadians: 0,
+      facingRadians,
       weatherVisibility: 1,
       rangeOverrides: {
         closePeripheralRange: 2,
@@ -350,7 +383,7 @@ function pursuingBear(): CoreWildlifeActorState {
   return result;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
   it.each([
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
@@ -616,20 +649,23 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-hones
     });
   });
 
-  it("never turns American pika population activity into an ABOUT actor identity", () => {
+  it.each([
+    "american-pika",
+    "atlantic-capelin",
+  ] as const)("never turns %s population activity into an ABOUT actor identity", (species) => {
     const deer = wildlife("deer");
-    const fabricatedPika = {
+    const fabricatedAggregate = {
       ...deer,
       identity: {
         ...deer.identity,
-        species: "american-pika",
-        stableId: "PIKA-fabricated-individual",
+        species,
+        stableId: `FABRICATED-${species}`,
       },
     };
     const visible = observation(deer);
-    expect(projectWildlifeQuickInspect(fabricatedPika, visible)).toBeNull();
-    expect(projectWildlifeAbout(fabricatedPika, visible)).toBeNull();
-    expect(projectWildlifeLivingActorInspection(fabricatedPika, visible)).toBeNull();
+    expect(projectWildlifeQuickInspect(fabricatedAggregate, visible)).toBeNull();
+    expect(projectWildlifeAbout(fabricatedAggregate, visible)).toBeNull();
+    expect(projectWildlifeLivingActorInspection(fabricatedAggregate, visible)).toBeNull();
   });
 
   it("describes directly visible brown-rat evidence as population-level signs", () => {
@@ -803,6 +839,61 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-hones
       quiet,
       evidence!.evidenceId,
       visible,
+    )).toBeNull();
+  });
+
+  it("describes capelin-like surface cues without claiming an unlearned species identity", () => {
+    const { evidence, patch, population } = capelinEvidenceFixture();
+    const direct = evidenceObservation(evidence.position);
+    const quick = projectWildlifePopulationEvidenceQuickInspect(
+      patch,
+      evidence.evidenceId,
+      direct,
+    );
+    const about = projectWildlifePopulationEvidenceAbout(
+      patch,
+      evidence.evidenceId,
+      direct,
+    );
+
+    expect(quick).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "atlantic-capelin",
+      heading: "AQUATIC ACTIVITY",
+      summary: "Aquatic surface dimples and brief glints",
+    });
+    expect(about).toMatchObject({
+      aggregateId: population.aggregateId,
+      evidenceId: evidence.evidenceId,
+      species: "atlantic-capelin",
+      heading: "AQUATIC ACTIVITY",
+      identity: "Unidentified aquatic activity",
+      knowledge: "Unfamiliar",
+      observed: [
+        { label: "Evidence", value: "Aquatic surface dimples and brief glints" },
+        { label: "Scale", value: "Population-level signs" },
+      ],
+      known: [],
+    });
+    expect(about?.observed.map(({ label }) => label)).not.toContain("Species");
+    expect([quick?.heading, quick?.summary, about?.heading, about?.identity]
+      .join(" ")).not.toMatch(/capelin/iu);
+
+    const distant = projectWildlifePopulationEvidenceAbout(
+      patch,
+      evidence.evidenceId,
+      evidenceObservation(evidence.position, 60),
+    );
+    expect(distant).toMatchObject({
+      heading: "AQUATIC ACTIVITY",
+      identity: "Unidentified aquatic activity",
+      knowledge: "Unfamiliar",
+    });
+    expect(projectWildlifePopulationEvidenceAbout(
+      patch,
+      evidence.evidenceId,
+      evidenceObservation(evidence.position, 4, Math.PI),
     )).toBeNull();
   });
 

@@ -85,6 +85,9 @@ const CHANNEL_DOMAIN = 0x5247_4304;
 const MOISTURE_DOMAIN = 0x5247_4d05;
 const ROUGHNESS_DOMAIN = 0x5247_5206;
 const COMPATIBILITY_BLEND_TILES = 24;
+/** Enough to share one hot 3x3 ecology window without retaining world history. */
+const REGION_TERRAIN_VALUE_CACHE_LIMIT = 9;
+const REGION_TERRAIN_VALUE_CACHE = new Map<string, TerrainState>();
 
 interface TerrainSignals {
   readonly elevation: number;
@@ -377,9 +380,33 @@ function blendCompatibilitySignals(
   };
 }
 
+function regionTerrainValueCacheKey(rootSeed: RootSeed, coord: RegionCoord): string {
+  return `${rootSeed[0]}:${rootSeed[1]}:${rootSeed[2]}:${rootSeed[3]}:${coord.x}:${coord.y}`;
+}
+
+function cloneRegionTerrain(terrain: TerrainState): TerrainState {
+  return {
+    width: terrain.width,
+    height: terrain.height,
+    tiles: terrain.tiles.map((tile) => ({ ...tile })),
+  };
+}
+
+function cacheRegionTerrain(key: string, terrain: TerrainState): void {
+  REGION_TERRAIN_VALUE_CACHE.delete(key);
+  REGION_TERRAIN_VALUE_CACHE.set(key, terrain);
+  while (REGION_TERRAIN_VALUE_CACHE.size > REGION_TERRAIN_VALUE_CACHE_LIMIT) {
+    const oldest = REGION_TERRAIN_VALUE_CACHE.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    REGION_TERRAIN_VALUE_CACHE.delete(oldest);
+  }
+}
+
 /**
  * Generate one bounded compatibility-sized region from stable global tile
- * coordinates. No cache or mutable random cursor survives this call.
+ * coordinates. A bounded non-authoritative value cache avoids repeating the
+ * same noise work across ecology owners; every caller still receives its own
+ * mutable terrain graph, and no random cursor survives this call.
  */
 export function generateRegionTerrain(
   rootSeed: RootSeed,
@@ -389,8 +416,16 @@ export function generateRegionTerrain(
   if (!isRegionCoord(coord)) {
     throw new RangeError("Region coordinate is outside the supported world");
   }
+  const cacheKey = regionTerrainValueCacheKey(rootSeed, coord);
+  const cached = REGION_TERRAIN_VALUE_CACHE.get(cacheKey);
+  if (cached !== undefined) {
+    cacheRegionTerrain(cacheKey, cached);
+    return cloneRegionTerrain(cached);
+  }
   const sampler = createRegionTerrainSampler(rootSeed);
-  return generateRegionTerrainWithSampler(coord, sampler);
+  const generated = generateRegionTerrainWithSampler(coord, sampler);
+  cacheRegionTerrain(cacheKey, generated);
+  return cloneRegionTerrain(generated);
 }
 
 function generateRegionTerrainWithSampler(

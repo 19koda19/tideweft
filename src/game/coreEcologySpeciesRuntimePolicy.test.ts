@@ -54,6 +54,7 @@ describe("core ecology species runtime policy", () => {
       "mountain-goat",
       "american-pika",
       "golden-eagle",
+      "atlantic-capelin",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -230,6 +231,7 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanOwnActorAddress("mountain-goat")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("american-pika")).toBe(false);
     expect(coreEcologySpeciesCanOwnActorAddress("golden-eagle")).toBe(true);
+    expect(coreEcologySpeciesCanOwnActorAddress("atlantic-capelin")).toBe(false);
     expect(coreEcologySpeciesCanOwnActorAddress("invented-frog")).toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("southern-leopard-frog")).toMatchObject({
       actorAddressable: false,
@@ -279,7 +281,37 @@ describe("core ecology species runtime policy", () => {
         "perch",
       ],
     });
-    for (const species of ["mountain-goat", "american-pika", "golden-eagle"] as const) {
+    expect(coreEcologySpeciesRuntimePolicy("atlantic-capelin")).toMatchObject({
+      actorAddressable: false,
+      identityForm: "aggregate",
+      representation: "aggregate",
+      locomotionClass: "aquatic",
+      groupOrganization: "school",
+      groupStableIdNamespace: "CAPELIN-SCHOOL",
+      maximumMaterializedActors: 0,
+      aggregate: {
+        maximumAnchors: 4,
+        responseCadenceTicks: 4,
+        responseVerbs: ["redistribute", "school", "tighten"],
+      },
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "school-coordination",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["schooling-glint", "school-tightening", "surface-dimple"],
+      evidenceKinds: ["surface-dimple"],
+      presentationModel: "aggregate-school",
+    });
+    for (const species of [
+      "mountain-goat",
+      "american-pika",
+      "golden-eagle",
+      "atlantic-capelin",
+    ] as const) {
       expect(coreEcologySpeciesPredatorContact(species)).toBeNull();
       expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
       expect(coreEcologySpeciesHasRuntimeCapability(species, "live-prey-pursuit")).toBe(false);

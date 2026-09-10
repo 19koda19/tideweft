@@ -22,6 +22,7 @@ import {
   resolveCoreEcologyAggregateDisturbanceActivity,
   type CoreEcologyAggregateLivingSourceKind,
 } from "./coreEcologyAggregatePolicy";
+import { coreEcologyTidalLawfulDestinationOrdinals } from "./coreEcologyTidalAggregatePolicy";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 
 export const CORE_ECOLOGY_SMALL_WORLD_VERSION = 3 as const;
@@ -308,14 +309,18 @@ export function stepCoreEcologySettlementShadows(
   ));
   for (const population of aggregates) {
     if (population.anchors.length < 2) continue;
-    // A non-tidal derivation may still own inherited silverside history. It
-    // participates in the same source-set step, but cannot relocate fish
-    // until a tidal projection authenticates lawful destination anchors.
-    const lawfulDestinations = population.species === "atlantic-silverside"
-      ? new Set(tidal?.anchorDepths.filter(({ aggregateId, activityUsable }) => (
-          aggregateId === population.aggregateId && activityUsable
-        )).map(({ anchorOrdinal }) => anchorOrdinal) ?? [])
-      : null;
+    // A non-tidal derivation may still own inherited tidal-school history. It
+    // participates in the same source-set step, but a depth-constrained policy
+    // cannot relocate until a tidal projection authenticates lawful anchors.
+    const lawfulDestinationOrdinals = coreEcologyTidalLawfulDestinationOrdinals(
+      population.species,
+      tidal?.anchorDepths.filter(({ aggregateId }) => (
+        aggregateId === population.aggregateId
+      )) ?? [],
+    );
+    const lawfulDestinations = lawfulDestinationOrdinals === null
+      ? null
+      : new Set(lawfulDestinationOrdinals);
     const relevantStimuli = frame.stimuli.filter(({ targetAggregateId }) => (
       targetAggregateId === population.aggregateId
     ));

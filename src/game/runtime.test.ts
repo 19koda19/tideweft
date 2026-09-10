@@ -117,28 +117,36 @@ import {
   repositionCoreWildlifeActor,
   replaceCoreWildlifeActorPhysiology,
 } from "./coreWildlifeActor";
+import { putRegionalEcologyResidentDeviation } from "./regionalEcology";
 import {
-  putRegionalEcologyResidentDeviation,
-} from "./regionalEcology";
-import {
+  deserializeRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
+  serializeRegionalEcologyState,
   type RegionalEcologyActiveResidentInput,
 } from "./regionalEcologyState";
 import {
-  deserializeRegionalEcologyStateV2,
-  replaceRegionalEcologyStateV2ActiveState,
   serializeRegionalEcologyStateV2,
 } from "./regionalEcologyStateV2";
+import {
+  deserializeRegionalEcologyStateV3,
+  replaceRegionalEcologyStateV3ActiveState,
+  serializeRegionalEcologyStateV3,
+} from "./regionalEcologyStateV3";
 import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
 } from "./regionalWorldView";
 
+export const ALPHA34_POLAR_RUNTIME_V27_OWNER_INTENT =
+  "test:alpha34-polar-runtime-v27:v1" as const;
+
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
-    play(...args: unknown[]): void { soundscapePlay(...args); }
+    play(...args: unknown[]): void {
+      soundscapePlay(...args);
+    }
     updateAmbience(): void {}
     destroy(): void {}
   },
@@ -176,12 +184,24 @@ class MemoryRepository implements SaveRepository {
 class RuntimeTestStorage implements Storage {
   private readonly values = new Map<string, string>();
 
-  get length(): number { return this.values.size; }
-  clear(): void { this.values.clear(); }
-  getItem(key: string): string | null { return this.values.get(key) ?? null; }
-  key(index: number): string | null { return [...this.values.keys()][index] ?? null; }
-  removeItem(key: string): void { this.values.delete(key); }
-  setItem(key: string, value: string): void { this.values.set(key, String(value)); }
+  get length(): number {
+    return this.values.size;
+  }
+  clear(): void {
+    this.values.clear();
+  }
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+  key(index: number): string | null {
+    return [...this.values.keys()][index] ?? null;
+  }
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
+  setItem(key: string, value: string): void {
+    this.values.set(key, String(value));
+  }
 }
 
 function saveGenerationOf(record: SaveRecord): number {
@@ -203,8 +223,11 @@ function isNewerSave(candidate: SaveRecord, reference: SaveRecord): boolean {
   if (candidateGeneration !== referenceGeneration) {
     return candidateGeneration > referenceGeneration;
   }
-  return candidate.updatedAt > reference.updatedAt
-    || (candidate.updatedAt === reference.updatedAt && candidate.playTicks > reference.playTicks);
+  return (
+    candidate.updatedAt > reference.updatedAt ||
+    (candidate.updatedAt === reference.updatedAt &&
+      candidate.playTicks > reference.playTicks)
+  );
 }
 
 /** Mirrors the browser repositories' compare-before-write behavior. */
@@ -218,7 +241,9 @@ class VersionedMemoryRepository implements SaveRepository {
   }
 
   async load(slotId: string) {
-    return slotId === "autosave" && this.record ? structuredClone(this.record) : undefined;
+    return slotId === "autosave" && this.record
+      ? structuredClone(this.record)
+      : undefined;
   }
 
   async save(record: SaveRecord) {
@@ -255,7 +280,9 @@ class DeferredSaveRepository implements SaveRepository {
   }
 
   async load(slotId: string) {
-    return slotId === "autosave" && this.record ? structuredClone(this.record) : undefined;
+    return slotId === "autosave" && this.record
+      ? structuredClone(this.record)
+      : undefined;
   }
 
   async save(record: SaveRecord): Promise<void> {
@@ -318,10 +345,13 @@ let scheduledFrame: ((now: number) => void) | undefined;
 beforeEach(() => {
   scheduledFrame = undefined;
   soundscapePlay.mockClear();
-  vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
-    scheduledFrame = callback;
-    return 1;
-  }));
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn((callback: (now: number) => void) => {
+      scheduledFrame = callback;
+      return 1;
+    }),
+  );
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
 });
 
@@ -336,21 +366,31 @@ function decodeGameSave(record: SaveRecord): TestGameSaveEnvelope {
 }
 
 function resealGameSave(envelope: TestGameSaveEnvelope): void {
-  envelope.integrity = gameSaveEnvelopeIntegrity(envelope as unknown as Readonly<Record<string, unknown>>);
+  envelope.integrity = gameSaveEnvelopeIntegrity(
+    envelope as unknown as Readonly<Record<string, unknown>>,
+  );
 }
 
 /**
- * Fresh v26 saves divide the old whole-home ecology between settlement and
+ * Fresh v27 saves preserve the exact v26 ecology child beneath the polar
+ * sibling while retaining the old whole-home division between settlement and
  * signed-region owners. Historical migration fixtures reconstruct the exact
  * published v24 source from the settlement owner's frozen v11 habitat.
  */
-function exactV24CoreFromV26(envelope: TestGameSaveEnvelope): CoreEcologyAggregatePatchState {
-  const regionalV2 = deserializeRegionalEcologyStateV2(envelope.regionalEcology);
-  const regional = regionalV2?.base ?? null;
+function exactV24CoreFromV27(
+  envelope: TestGameSaveEnvelope,
+): CoreEcologyAggregatePatchState {
+  const regionalV3 = deserializeRegionalEcologyStateV3(
+    envelope.regionalEcology,
+  );
+  const regional = regionalV3?.base.base ?? null;
   if (
-    regional === null
-    || regional.settlementHome.patch.derivation.kind !== "settlement-home-v1"
-  ) throw new Error("fixture requires a canonical current v26 regional ecology save");
+    regional === null ||
+    regional.settlementHome.patch.derivation.kind !== "settlement-home-v1"
+  )
+    throw new Error(
+      "fixture requires a canonical current v27 regional ecology save",
+    );
   const world = deserializeWorld(envelope.world);
   const habitat = regional.settlementHome.patch.derivation.habitat;
   const tick = world.meta.completedTick;
@@ -364,32 +404,44 @@ function exactV24CoreFromV26(envelope: TestGameSaveEnvelope): CoreEcologyAggrega
     populations: exactV24CorePopulations(habitat),
   });
   const origin = regionLocalToGlobalTile(habitat.originRegion, 0, 0);
-  const materialized = setCoreEcologyMaterializationForWindow(patch, {
-    origin: {
-      x: origin.x - Math.trunc((REGIONAL_TRAVEL_COLUMNS - WORLD_WIDTH) / 2),
-      y: origin.y - Math.trunc((REGIONAL_TRAVEL_ROWS - world.terrain.height) / 2),
+  const materialized = setCoreEcologyMaterializationForWindow(
+    patch,
+    {
+      origin: {
+        x: origin.x - Math.trunc((REGIONAL_TRAVEL_COLUMNS - WORLD_WIDTH) / 2),
+        y:
+          origin.y -
+          Math.trunc((REGIONAL_TRAVEL_ROWS - world.terrain.height) / 2),
+      },
+      terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
     },
-    terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
-  }, tick);
-  if (materialized === null) throw new Error("historical ecology materialization failed");
+    tick,
+  );
+  if (materialized === null)
+    throw new Error("historical ecology materialization failed");
   patch = materialized;
   const bear = patch.populations.find(({ species }) => species === "black-bear")
     ?.members[0]?.actor;
   if (bear !== undefined) {
-    patch = replaceCoreEcologyAggregatePatchActor(patch, replaceCoreWildlifeActorPhysiology(
-      bear,
-      {
+    patch = replaceCoreEcologyAggregatePatchActor(
+      patch,
+      replaceCoreWildlifeActorPhysiology(bear, {
         atTick: tick,
         needs: { ...bear.needs, hunger: Math.max(680_000, bear.needs.hunger) },
         condition: bear.condition,
-      },
-    ));
+      }),
+    );
   }
   const tidal = stepCoreEcologyTidalTable(patch, { atTick: tick });
-  if (tidal === null) throw new Error("historical ecology tidal initialization failed");
+  if (tidal === null)
+    throw new Error("historical ecology tidal initialization failed");
   patch = initializeExactV24Egret(tidal.patch, tidal.projection, tick);
   patch = initializeExactV24ActivityActor(patch, "american-black-duck", tick);
-  return initializeExactV24ActivityActor(patch, "north-american-river-otter", tick);
+  return initializeExactV24ActivityActor(
+    patch,
+    "north-american-river-otter",
+    tick,
+  );
 }
 
 function exactV24CoreGroups(
@@ -402,24 +454,32 @@ function exactV24CoreGroups(
     const policy = coreEcologySpeciesRuntimePolicy(population.species);
     const anchor = population.allocations[0]?.position;
     if (
-      policy === null
-      || !policy.actorAddressable
-      || policy.groupOrganization === null
-      || policy.groupStableIdNamespace === null
-      || !coreEcologySpeciesHasRuntimeCapability(population.species, "group-coordination")
-      || population.allocations.length < 2
-      || anchor === undefined
-    ) continue;
-    groups.push(createCoreEcologyGroup({
-      seed,
-      species: population.species,
-      originRegion: habitat.originRegion,
-      populationKey: population.populationKey,
-      groupOrdinal: 0,
-      memberOrdinals: population.allocations.map(({ allocationOrdinal }) => allocationOrdinal),
-      anchor,
-      tick,
-    }));
+      policy === null ||
+      !policy.actorAddressable ||
+      policy.groupOrganization === null ||
+      policy.groupStableIdNamespace === null ||
+      !coreEcologySpeciesHasRuntimeCapability(
+        population.species,
+        "group-coordination",
+      ) ||
+      population.allocations.length < 2 ||
+      anchor === undefined
+    )
+      continue;
+    groups.push(
+      createCoreEcologyGroup({
+        seed,
+        species: population.species,
+        originRegion: habitat.originRegion,
+        populationKey: population.populationKey,
+        groupOrdinal: 0,
+        memberOrdinals: population.allocations.map(
+          ({ allocationOrdinal }) => allocationOrdinal,
+        ),
+        anchor,
+        tick,
+      }),
+    );
   }
   return createCoreEcologyGroupSet(groups);
 }
@@ -427,45 +487,54 @@ function exactV24CoreGroups(
 function exactV24CorePopulations(
   habitat: CoreEcologyRegionalPredatorHabitatAssemblage,
 ): readonly CoreEcologyPopulationInput[] {
-  return habitat.populations.flatMap((population) => (
-    population.representation !== "individual-representatives"
-      || population.populationUnits === 0
-      || !coreEcologySpeciesCanOwnActorAddress(population.species)
+  return habitat.populations.flatMap((population) =>
+    population.representation !== "individual-representatives" ||
+    population.populationUnits === 0 ||
+    !coreEcologySpeciesCanOwnActorAddress(population.species)
       ? []
-      : [{
-          species: population.species,
-          populationKey: population.populationKey,
-          populationSize: population.populationUnits,
-          members: population.allocations.map((allocation) => ({
-            populationOrdinal: allocation.allocationOrdinal,
-            representedUnits: allocation.representedUnits,
-            position: allocation.position,
-            materialization: "coarse" as const,
-          })),
-        }]
-  ));
+      : [
+          {
+            species: population.species,
+            populationKey: population.populationKey,
+            populationSize: population.populationUnits,
+            members: population.allocations.map((allocation) => ({
+              populationOrdinal: allocation.allocationOrdinal,
+              representedUnits: allocation.representedUnits,
+              position: allocation.position,
+              materialization: "coarse" as const,
+            })),
+          },
+        ],
+  );
 }
 
 function initializeExactV24Egret(
   patch: CoreEcologyAggregatePatchState,
-  projection: NonNullable<ReturnType<typeof stepCoreEcologyTidalTable>>["projection"],
+  projection: NonNullable<
+    ReturnType<typeof stepCoreEcologyTidalTable>
+  >["projection"],
   tick: number,
 ): CoreEcologyAggregatePatchState {
   if (projection.snowyEgret === null) return patch;
-  const actor = patch.populations.find(({ species }) => species === "snowy-egret")
-    ?.members[0]?.actor;
+  const actor = patch.populations.find(
+    ({ species }) => species === "snowy-egret",
+  )?.members[0]?.actor;
   const day = projectCoreEcologyDayPhase(tick);
   if (actor === undefined || day === null) {
     throw new Error("historical ecology egret initialization failed");
   }
-  const target = day.phase === "daylight" && projection.snowyEgret.wadingTarget !== null
-    ? projection.snowyEgret.wadingTarget
-    : projection.snowyEgret.refugeTarget;
-  return replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
-    atTick: tick,
-    position: target.targetPosition,
-    heading: actor.address.heading,
-  }));
+  const target =
+    day.phase === "daylight" && projection.snowyEgret.wadingTarget !== null
+      ? projection.snowyEgret.wadingTarget
+      : projection.snowyEgret.refugeTarget;
+  return replaceCoreEcologyAggregatePatchActor(
+    patch,
+    repositionCoreWildlifeActor(actor, {
+      atTick: tick,
+      position: target.targetPosition,
+      heading: actor.address.heading,
+    }),
+  );
 }
 
 function initializeExactV24ActivityActor(
@@ -473,20 +542,26 @@ function initializeExactV24ActivityActor(
   species: "american-black-duck" | "north-american-river-otter",
   tick: number,
 ): CoreEcologyAggregatePatchState {
-  const member = patch.populations.find((population) => population.species === species)
-    ?.members[0];
-  if (member === undefined || member.materialization !== "materialized") return patch;
+  const member = patch.populations.find(
+    (population) => population.species === species,
+  )?.members[0];
+  if (member === undefined || member.materialization !== "materialized")
+    return patch;
   const activity = projectCoreEcologyActivity(patch, {
     actorId: member.actor.identity.stableId,
     atTick: tick,
   });
-  if (activity === null) throw new Error(`historical ${species} initialization failed`);
+  if (activity === null)
+    throw new Error(`historical ${species} initialization failed`);
   if (activity.motion.kind !== "target-area") return patch;
-  return replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(member.actor, {
-    atTick: tick,
-    position: activity.motion.targetArea.center,
-    heading: member.actor.address.heading,
-  }));
+  return replaceCoreEcologyAggregatePatchActor(
+    patch,
+    repositionCoreWildlifeActor(member.actor, {
+      atTick: tick,
+      position: activity.motion.targetArea.center,
+      heading: member.actor.address.heading,
+    }),
+  );
 }
 
 function rebaseFixtureRegionalEcology(
@@ -494,17 +569,20 @@ function rebaseFixtureRegionalEcology(
   rootSeed: RootSeed,
   spatial: ReturnType<typeof createWorldView>,
 ): string {
-  const priorV2 = deserializeRegionalEcologyStateV2(serialized);
-  if (priorV2 === null) throw new Error("fixture started with invalid regional ecology");
+  const priorV3 = deserializeRegionalEcologyStateV3(serialized);
+  if (priorV3 === null)
+    throw new Error("fixture started with invalid regional ecology");
+  const priorV2 = priorV3.base;
   const prior = priorV2.base;
   const activeRegions = regionalStorageRegionsInView(spatial);
   const desiredRegionKeys = new Set(activeRegions.map(regionKey));
   let root = prior.root;
   for (const resident of prior.activeResidents) {
     if (
-      resident.kind !== "regional-habitat"
-      || desiredRegionKeys.has(regionKey(resident.region))
-    ) continue;
+      resident.kind !== "regional-habitat" ||
+      desiredRegionKeys.has(regionKey(resident.region))
+    )
+      continue;
     root = putRegionalEcologyResidentDeviation(root, {
       rootSeed,
       patch: resident.patch,
@@ -515,66 +593,77 @@ function rebaseFixtureRegionalEcology(
     rootSeed,
     activeRegions,
   );
-  if (entrants === null) throw new Error("fixture could not derive regional ecology entrants");
-  const retainedBySource = new Map(prior.activeResidents
-    .filter(({ kind }) => kind === "regional-habitat")
-    .map((resident) => [resident.sourceKey, resident] as const));
-  const activeResidents: RegionalEcologyActiveResidentInput[] = entrants.map((entrant) => ({
-    kind: "regional-habitat",
-    sourceKey: entrant.sourceKey,
-    patch: retainedBySource.get(entrant.sourceKey)?.patch ?? entrant.patch,
-  }));
-  for (const legacy of prior.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+  if (entrants === null)
+    throw new Error("fixture could not derive regional ecology entrants");
+  const retainedBySource = new Map(
+    prior.activeResidents
+      .filter(({ kind }) => kind === "regional-habitat")
+      .map((resident) => [resident.sourceKey, resident] as const),
+  );
+  const activeResidents: RegionalEcologyActiveResidentInput[] = entrants.map(
+    (entrant) => ({
+      kind: "regional-habitat",
+      sourceKey: entrant.sourceKey,
+      patch: retainedBySource.get(entrant.sourceKey)?.patch ?? entrant.patch,
+    }),
+  );
+  for (const legacy of prior.activeResidents.filter(
+    ({ kind }) => kind === "legacy-cohort",
+  )) {
     activeResidents.push({
       kind: "legacy-cohort",
       sourceKey: legacy.sourceKey,
       patch: legacy.patch,
     });
   }
-  return serializeRegionalEcologyStateV2(replaceRegionalEcologyStateV2ActiveState(priorV2, {
-    expectedIntegrity: priorV2.integrity,
-    base: {
-      expectedIntegrity: prior.integrity,
-      rootSeed,
-      root,
-      settlementHome: {
-        sourceKey: prior.settlementHome.sourceKey,
-        patch: prior.settlementHome.patch,
+  return serializeRegionalEcologyStateV3(
+    replaceRegionalEcologyStateV3ActiveState(priorV3, {
+      expectedIntegrity: priorV3.integrity,
+      base: {
+        expectedIntegrity: priorV2.integrity,
+        base: {
+          expectedIntegrity: prior.integrity,
+          rootSeed,
+          root,
+          settlementHome: {
+            sourceKey: prior.settlementHome.sourceKey,
+            patch: prior.settlementHome.patch,
+          },
+          activeRegions,
+          activeResidents,
+        },
       },
-      activeRegions,
-      activeResidents,
-    },
-  }));
+    }),
+  );
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v26 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v27 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
 }> {
   const envelope = decodeGameSave(record);
-  const current = exactV24CoreFromV26(envelope);
+  const current = exactV24CoreFromV27(envelope);
   if (
-    envelope.version !== 26
-    || record.payloadVersion !== 26
-    || (
-      current.derivation.kind !== "habitat-v11"
-      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
-    )
-  ) throw new Error("fixture requires a canonical current domestic-yard save");
+    envelope.version !== 27 ||
+    record.payloadVersion !== 27 ||
+    (current.derivation.kind !== "habitat-v11" &&
+      current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11")
+  )
+    throw new Error("fixture requires a canonical current domestic-yard save");
 
   const {
     domesticAnchor: _domesticAnchor,
     domesticPenAnchor: _domesticPenAnchor,
     regionalHabitat: _regionalHabitat,
     ...domesticYardHabitat
-  } =
-    current.derivation.habitat;
+  } = current.derivation.habitat;
   const tidalWebHabitat = canonicalizeCoreEcologyTidalWebHabitatAssemblage({
     ...domesticYardHabitat,
     generationVersion: CORE_ECOLOGY_TIDAL_WEB_HABITAT_VERSION,
     speciesEvaluations:
-      domesticYardHabitat.evaluatedTiles * CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length,
+      domesticYardHabitat.evaluatedTiles *
+      CORE_ECOLOGY_TIDAL_WEB_HABITAT_SPECIES.length,
     maximumAllocationBudget: CORE_ECOLOGY_TIDAL_WEB_HABITAT_MAX_ALLOCATIONS,
     populations: domesticYardHabitat.populations.slice(
       0,
@@ -582,51 +671,56 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
     ),
   });
   if (tidalWebHabitat === null) {
-    throw new Error("Domestic Yard habitat did not retain the exact Tidal Web prefix");
+    throw new Error(
+      "Domestic Yard habitat did not retain the exact Tidal Web prefix",
+    );
   }
   const ecology = canonicalizeCoreEcologyAggregatePatch({
     ...current,
-    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v11"
-      ? {
-          kind: "legacy-fixed-v1-with-habitat-v7",
-          habitat: tidalWebHabitat,
-        }
-      : {
-          kind: "habitat-v7",
-          habitat: tidalWebHabitat,
-        },
+    derivation:
+      current.derivation.kind === "legacy-fixed-v1-with-habitat-v11"
+        ? {
+            kind: "legacy-fixed-v1-with-habitat-v7",
+            habitat: tidalWebHabitat,
+          }
+        : {
+            kind: "habitat-v7",
+            habitat: tidalWebHabitat,
+          },
     groups: {
       ...current.groups,
       groups: current.groups.groups.filter(
-        ({ identity }) => (
-          identity.species !== "domestic-chicken"
-          && identity.species !== "domestic-goat"
-          && identity.species !== "wild-boar"
-          && identity.species !== "elk"
-          && identity.species !== "gray-wolf"
-          && identity.species !== "cougar"
-          && identity.species !== "brown-bear"
-        ),
+        ({ identity }) =>
+          identity.species !== "domestic-chicken" &&
+          identity.species !== "domestic-goat" &&
+          identity.species !== "wild-boar" &&
+          identity.species !== "elk" &&
+          identity.species !== "gray-wolf" &&
+          identity.species !== "cougar" &&
+          identity.species !== "brown-bear",
       ),
     },
     populations: current.populations.filter(
-      ({ species }) => (
-        species !== "domestic-chicken"
-        && species !== "domestic-goat"
-        && species !== "wild-boar"
-        && species !== "elk"
-        && species !== "gray-wolf"
-        && species !== "cougar"
-        && species !== "brown-bear"
-      ),
+      ({ species }) =>
+        species !== "domestic-chicken" &&
+        species !== "domestic-goat" &&
+        species !== "wild-boar" &&
+        species !== "elk" &&
+        species !== "gray-wolf" &&
+        species !== "cougar" &&
+        species !== "brown-bear",
     ),
   });
-  if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-23 ecology");
+  if (ecology === null)
+    throw new Error("fixture could not reconstruct canonical Alpha-23 ecology");
 
   if (envelope.settlementEcology === undefined) {
     throw new Error("current fixture omitted its settlement ecology sidecar");
   }
-  const currentSettlement = JSON.parse(envelope.settlementEcology) as Record<string, unknown>;
+  const currentSettlement = JSON.parse(envelope.settlementEcology) as Record<
+    string,
+    unknown
+  >;
   const domesticCustodies = Array.isArray(currentSettlement.domesticCustodies)
     ? currentSettlement.domesticCustodies
     : [];
@@ -672,21 +766,24 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
   ecology: CoreEcologyAggregatePatchState;
 }> {
   const envelope = decodeGameSave(record);
-  const current = deserializeOrMigrateCoreEcologyAggregatePatch(envelope.coreEcology);
+  const current = deserializeOrMigrateCoreEcologyAggregatePatch(
+    envelope.coreEcology,
+  );
   if (
-    current === null
-    || (
-      current.derivation.kind !== "habitat-v7"
-      && current.derivation.kind !== "legacy-fixed-v1-with-habitat-v7"
-    )
-  ) throw new Error("fixture requires a canonical tidal-web ecology save");
+    current === null ||
+    (current.derivation.kind !== "habitat-v7" &&
+      current.derivation.kind !== "legacy-fixed-v1-with-habitat-v7")
+  )
+    throw new Error("fixture requires a canonical tidal-web ecology save");
 
-  const { tidalAnchors: _tidalAnchors, ...rainChorusHabitat } = current.derivation.habitat;
+  const { tidalAnchors: _tidalAnchors, ...rainChorusHabitat } =
+    current.derivation.habitat;
   const marshEdgeHabitat = canonicalizeCoreEcologyMarshEdgeHabitatAssemblage({
     ...rainChorusHabitat,
     generationVersion: CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
     speciesEvaluations:
-      rainChorusHabitat.evaluatedTiles * CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+      rainChorusHabitat.evaluatedTiles *
+      CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
     maximumAllocationBudget: CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
     populations: rainChorusHabitat.populations.slice(
       0,
@@ -694,39 +791,45 @@ function rainChorusSaveAsMarshEdgeV11(record: SaveRecord): Readonly<{
     ),
   });
   if (marshEdgeHabitat === null) {
-    throw new Error("Rain Chorus habitat did not retain the exact Marsh Edge prefix");
+    throw new Error(
+      "Rain Chorus habitat did not retain the exact Marsh Edge prefix",
+    );
   }
   const ecology = canonicalizeCoreEcologyAggregatePatch({
     ...current,
-    derivation: current.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
-      ? {
-          kind: "legacy-fixed-v1-with-habitat-v3",
-          habitat: marshEdgeHabitat,
-        }
-      : {
-          kind: "habitat-v3",
-          habitat: marshEdgeHabitat,
-        },
+    derivation:
+      current.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
+        ? {
+            kind: "legacy-fixed-v1-with-habitat-v3",
+            habitat: marshEdgeHabitat,
+          }
+        : {
+            kind: "habitat-v3",
+            habitat: marshEdgeHabitat,
+          },
     groups: {
       ...current.groups,
       groups: current.groups.groups.filter(
         ({ identity }) => identity.species !== "fish-crow",
       ),
     },
-    populations: current.populations.filter(({ species }) => (
-      species !== "fish-crow"
-      && species !== "northern-harrier"
-      && species !== "snowy-egret"
-      && species !== "american-black-duck"
-      && species !== "north-american-river-otter"
-    )),
+    populations: current.populations.filter(
+      ({ species }) =>
+        species !== "fish-crow" &&
+        species !== "northern-harrier" &&
+        species !== "snowy-egret" &&
+        species !== "american-black-duck" &&
+        species !== "north-american-river-otter",
+    ),
     aggregatePopulations: current.aggregatePopulations.filter(
-      ({ species }) => species !== "southern-leopard-frog"
-        && species !== "atlantic-silverside"
-        && species !== "atlantic-marsh-fiddler-crab",
+      ({ species }) =>
+        species !== "southern-leopard-frog" &&
+        species !== "atlantic-silverside" &&
+        species !== "atlantic-marsh-fiddler-crab",
     ),
   });
-  if (ecology === null) throw new Error("fixture could not reconstruct canonical Alpha-11 ecology");
+  if (ecology === null)
+    throw new Error("fixture could not reconstruct canonical Alpha-11 ecology");
 
   envelope.version = 11;
   envelope.coreEcology = serializePublishedAggregateV3(ecology);
@@ -818,7 +921,10 @@ function runtimeSaveRecord(
   };
 }
 
-function placePlayerOnTile(player: PlayerState, tile: { x: number; y: number; index: number }): void {
+function placePlayerOnTile(
+  player: PlayerState,
+  tile: { x: number; y: number; index: number },
+): void {
   player.x = tile.x * TILE_UNITS + TILE_UNITS / 2;
   player.y = tile.y * TILE_UNITS + TILE_UNITS / 2;
   player.previousX = player.x;
@@ -840,7 +946,12 @@ function moveRegionalFixtureToAddress(
   const target = regionLocalToGlobalTile(targetRegion, localX, localY);
   let state = initial;
   for (let attempt = 0; attempt < 16; attempt += 1) {
-    const point = regionLocalToWindowTile(state.window, targetRegion, localX, localY);
+    const point = regionLocalToWindowTile(
+      state.window,
+      targetRegion,
+      localX,
+      localY,
+    );
     if (point !== null) {
       player.x = point.x * TILE_UNITS + TILE_UNITS / 2;
       player.y = point.y * TILE_UNITS + TILE_UNITS / 2;
@@ -854,16 +965,24 @@ function moveRegionalFixtureToAddress(
 
     const currentX = Math.floor(player.x / TILE_UNITS);
     const currentY = Math.floor(player.y / TILE_UNITS);
-    const triggerX = target.x < state.window.origin.x
-      ? REGIONAL_TRAVEL_SAFE_MIN_X - 1
-      : target.x > state.window.origin.x + REGIONAL_TRAVEL_COLUMNS - 1
-        ? REGIONAL_TRAVEL_SAFE_MAX_X + 1
-        : Math.min(REGIONAL_TRAVEL_SAFE_MAX_X, Math.max(REGIONAL_TRAVEL_SAFE_MIN_X, currentX));
-    const triggerY = target.y < state.window.origin.y
-      ? REGIONAL_TRAVEL_SAFE_MIN_Y - 1
-      : target.y > state.window.origin.y + REGIONAL_TRAVEL_ROWS - 1
-        ? REGIONAL_TRAVEL_SAFE_MAX_Y + 1
-        : Math.min(REGIONAL_TRAVEL_SAFE_MAX_Y, Math.max(REGIONAL_TRAVEL_SAFE_MIN_Y, currentY));
+    const triggerX =
+      target.x < state.window.origin.x
+        ? REGIONAL_TRAVEL_SAFE_MIN_X - 1
+        : target.x > state.window.origin.x + REGIONAL_TRAVEL_COLUMNS - 1
+          ? REGIONAL_TRAVEL_SAFE_MAX_X + 1
+          : Math.min(
+              REGIONAL_TRAVEL_SAFE_MAX_X,
+              Math.max(REGIONAL_TRAVEL_SAFE_MIN_X, currentX),
+            );
+    const triggerY =
+      target.y < state.window.origin.y
+        ? REGIONAL_TRAVEL_SAFE_MIN_Y - 1
+        : target.y > state.window.origin.y + REGIONAL_TRAVEL_ROWS - 1
+          ? REGIONAL_TRAVEL_SAFE_MAX_Y + 1
+          : Math.min(
+              REGIONAL_TRAVEL_SAFE_MAX_Y,
+              Math.max(REGIONAL_TRAVEL_SAFE_MIN_Y, currentY),
+            );
     player.x = triggerX * TILE_UNITS + TILE_UNITS / 2;
     player.y = triggerY * TILE_UNITS + TILE_UNITS / 2;
     player.previousX = player.x;
@@ -873,7 +992,9 @@ function moveRegionalFixtureToAddress(
     player.surveyTrace = [triggerIndex];
     state = recenterRegionalPlayer(rootSeed, state, player).state;
   }
-  throw new Error("fixture could not move its spatial frame to the requested address");
+  throw new Error(
+    "fixture could not move its spatial frame to the requested address",
+  );
 }
 
 function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
@@ -893,17 +1014,20 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
 
 function expectConserved(world: WorldState): void {
   for (const resource of RESOURCE_KINDS) {
-    const stored = world.settlements.reduce(
-      (total, settlement) => total + settlement.inventory[resource],
-      0,
-    ) + world.contracts.reduce(
-      (total, contract) => total + (contract.resource === resource ? contract.cargoQuantity : 0),
-      0,
-    );
+    const stored =
+      world.settlements.reduce(
+        (total, settlement) => total + settlement.inventory[resource],
+        0,
+      ) +
+      world.contracts.reduce(
+        (total, contract) =>
+          total + (contract.resource === resource ? contract.cargoQuantity : 0),
+        0,
+      );
     expect(stored).toBe(
-      world.ledger.initial[resource]
-        + world.ledger.produced[resource]
-        - world.ledger.consumed[resource],
+      world.ledger.initial[resource] +
+        world.ledger.produced[resource] -
+        world.ledger.consumed[resource],
     );
   }
 }
@@ -915,13 +1039,16 @@ function legacySizedWorld(world: WorldState): WorldState {
   legacy.terrain = {
     width: LEGACY_WORLD_WIDTH,
     height: LEGACY_WORLD_HEIGHT,
-    tiles: Array.from({ length: LEGACY_WORLD_WIDTH * LEGACY_WORLD_HEIGHT }, (_, index) => ({
-      ...template,
-      index,
-      x: index % LEGACY_WORLD_WIDTH,
-      y: Math.floor(index / LEGACY_WORLD_WIDTH),
-      traceStrength: 0,
-    })),
+    tiles: Array.from(
+      { length: LEGACY_WORLD_WIDTH * LEGACY_WORLD_HEIGHT },
+      (_, index) => ({
+        ...template,
+        index,
+        x: index % LEGACY_WORLD_WIDTH,
+        y: Math.floor(index / LEGACY_WORLD_WIDTH),
+        traceStrength: 0,
+      }),
+    ),
   };
   const harborCoordinates = [
     [4, 4],
@@ -935,12 +1062,17 @@ function legacySizedWorld(world: WorldState): WorldState {
   for (let index = 0; index < legacy.settlements.length; index += 1) {
     const settlement = legacy.settlements[index];
     const coordinate = harborCoordinates[index];
-    if (!settlement || !coordinate) throw new Error("missing legacy harbor fixture");
+    if (!settlement || !coordinate)
+      throw new Error("missing legacy harbor fixture");
     settlement.tileIndex = coordinate[1] * LEGACY_WORLD_WIDTH + coordinate[0];
   }
   for (const route of legacy.routes) {
-    const from = legacy.settlements.find((settlement) => settlement.id === route.fromSettlementId);
-    const to = legacy.settlements.find((settlement) => settlement.id === route.toSettlementId);
+    const from = legacy.settlements.find(
+      (settlement) => settlement.id === route.fromSettlementId,
+    );
+    const to = legacy.settlements.find(
+      (settlement) => settlement.id === route.toSettlementId,
+    );
     const fromTile = from ? legacy.terrain.tiles[from.tileIndex] : undefined;
     const toTile = to ? legacy.terrain.tiles[to.tileIndex] : undefined;
     if (!fromTile || !toTile) throw new Error("missing legacy route endpoint");
@@ -958,7 +1090,9 @@ function legacySizedWorld(world: WorldState): WorldState {
     route.path = path;
     route.baseTravelTicks = Math.max(12, path.length - 1);
   }
-  const worldCreated = legacy.events.find((event) => event.type === "world-created");
+  const worldCreated = legacy.events.find(
+    (event) => event.type === "world-created",
+  );
   if (worldCreated) {
     worldCreated.data.width = LEGACY_WORLD_WIDTH;
     worldCreated.data.height = LEGACY_WORLD_HEIGHT;
@@ -967,7 +1101,10 @@ function legacySizedWorld(world: WorldState): WorldState {
 }
 
 function alphaWorldSaveText(world: WorldState): string {
-  const legacyWorld = structuredClone(world) as unknown as Record<string, unknown>;
+  const legacyWorld = structuredClone(world) as unknown as Record<
+    string,
+    unknown
+  >;
   delete legacyWorld.choirs;
   const meta = legacyWorld.meta as Record<string, unknown>;
   meta.saveFormatVersion = 1;
@@ -993,7 +1130,10 @@ describe("perpetual new worlds", () => {
 
     const porter = runtime.getRenderView().porters[0];
     expect(porter).toBeDefined();
-    if (!porter) throw new Error("starting harbor should expose a resident in direct sight");
+    if (!porter)
+      throw new Error(
+        "starting harbor should expose a resident in direct sight",
+      );
 
     runtime.dispatchRenderer({
       type: "select",
@@ -1010,8 +1150,14 @@ describe("perpetual new worlds", () => {
     expect(runtime.getRenderView().paused).toBe(false);
 
     advancePlayerSteps(runtime, 10);
-    expect(runtime.getUIView().selectedResident?.knowledgeLabel).toBe("Recognized");
-    runtime.dispatchUI({ type: "resident", action: "greet", residentId: porter.id });
+    expect(runtime.getUIView().selectedResident?.knowledgeLabel).toBe(
+      "Recognized",
+    );
+    runtime.dispatchUI({
+      type: "resident",
+      action: "greet",
+      residentId: porter.id,
+    });
     advancePlayerSteps(runtime, 10);
 
     expect(runtime.getUIView().selectedResident).toMatchObject({
@@ -1057,17 +1203,99 @@ describe("perpetual new worlds", () => {
     runtime.destroy();
   });
 
+  it(`${ALPHA34_POLAR_RUNTIME_V27_OWNER_INTENT} ticks, saves, and reloads one conserved polar forage school through outer v27`, async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "alpha34 runtime polar",
+      posture: "journey",
+      sessionShape: "wander",
+    });
+
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const firstRecord = repository.snapshot();
+    const firstEnvelope = decodeGameSave(firstRecord);
+    const firstRegional = deserializeRegionalEcologyStateV3(
+      firstEnvelope.regionalEcology,
+    );
+    expect(firstRecord.payloadVersion).toBe(27);
+    expect(firstEnvelope.version).toBe(27);
+    expect(deserializeWorld(firstEnvelope.world).meta.completedTick).toBe(1);
+    expect(firstRegional).not.toBeNull();
+    if (firstRegional === null)
+      throw new Error("outer v27 omitted its polar ecology state");
+
+    const firstPolarSources = firstRegional.polarShoreActiveResidents.filter(
+      ({ patch }) =>
+        patch.aggregatePopulations.some(
+          ({ species }) => species === "atlantic-capelin",
+        ),
+    );
+    expect(firstPolarSources).toHaveLength(1);
+    const firstPatch = firstPolarSources[0]?.patch;
+    const firstSchool = firstPatch?.aggregatePopulations.find(
+      ({ species }) => species === "atlantic-capelin",
+    );
+    if (firstPatch === undefined || firstSchool === undefined) {
+      throw new Error("polar runtime fixture omitted its conserved capelin school");
+    }
+    expect(firstPatch).toMatchObject({
+      populations: [],
+      mortalityTransactions: [],
+      carcasses: [],
+    });
+    expect(firstPatch.groups.groups).toEqual([]);
+    expect(firstSchool.populationSize).toBe(64);
+    expect(
+      firstSchool.anchors.reduce(
+        (sum, anchor) => sum + anchor.populationUnits,
+        0,
+      ),
+    ).toBe(64);
+    expect(firstRegional.polarShoreRoot.regions).toEqual([]);
+
+    const firstRegionalText = firstEnvelope.regionalEcology;
+    const firstAggregateId = firstSchool.aggregateId;
+    runtime.destroy();
+
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getUIView().title.visible).toBe(false);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    await reloaded.save();
+    const reloadedRecord = repository.snapshot();
+    const reloadedEnvelope = decodeGameSave(reloadedRecord);
+    const reloadedRegional = deserializeRegionalEcologyStateV3(
+      reloadedEnvelope.regionalEcology,
+    );
+    expect(reloadedRecord.payloadVersion).toBe(27);
+    expect(reloadedEnvelope.version).toBe(27);
+    expect(reloadedEnvelope.regionalEcology).toBe(firstRegionalText);
+    expect(
+      reloadedRegional?.polarShoreActiveResidents
+        .flatMap(({ patch }) => patch.aggregatePopulations)
+        .find(({ species }) => species === "atlantic-capelin"),
+    ).toMatchObject({
+      aggregateId: firstAggregateId,
+      populationSize: 64,
+    });
+    reloaded.destroy();
+  });
+
   it("auto-resumes old postures into hard mode and refuses an unphrased replacement", async () => {
     const world = createWorld("auto return ledger", "calm");
     const session = createSessionState(world.meta.seedText, "hearth");
     session.titleVisible = true;
     session.paused = true;
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      createPlayer(createWorldView(world)),
-      session,
-      "Auto return ledger",
-    ));
+    const repository = new MemoryRepository(
+      runtimeSaveRecord(
+        world,
+        createPlayer(createWorldView(world)),
+        session,
+        "Auto return ledger",
+      ),
+    );
 
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getUIView().title.visible).toBe(false);
@@ -1084,7 +1312,9 @@ describe("perpetual new worlds", () => {
     });
     expect(runtime.getUIView().worldName).toBe(originalWorldName);
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("restartrestartrestart");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "restartrestartrestart",
+    );
 
     runtime.dispatchUI({
       type: "new-world",
@@ -1098,8 +1328,10 @@ describe("perpetual new worlds", () => {
     expect(runtime.getUIView().sessionShape).toBe("wander");
     expect(runtime.getUIView().title.visible).toBe(false);
     await runtime.save();
-    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.pressureMode)
-      .toBe("wild");
+    expect(
+      deserializeWorld(decodeGameSave(repository.snapshot()).world).meta
+        .pressureMode,
+    ).toBe("wild");
     runtime.destroy();
   });
 
@@ -1122,7 +1354,10 @@ describe("perpetual new worlds", () => {
     // A generationless alpha save remains readable and is canonicalized to
     // generation zero on its next ordinary autosave.
     await runtime.save();
-    expect(repository.snapshot()).toMatchObject({ saveGeneration: 0, updatedAt: 701 });
+    expect(repository.snapshot()).toMatchObject({
+      saveGeneration: 0,
+      updatedAt: 701,
+    });
 
     runtime.dispatchUI({ type: "open-title" });
     runtime.dispatchUI({
@@ -1132,8 +1367,10 @@ describe("perpetual new worlds", () => {
       sessionShape: "wander",
       restartPhrase: " restartrestartrestart",
     });
-    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
-      .toBe("same clock legacy");
+    expect(
+      deserializeWorld(decodeGameSave(repository.snapshot()).world).meta
+        .seedText,
+    ).toBe("same clock legacy");
     expect(runtime.getUIView().title.visible).toBe(true);
 
     runtime.dispatchUI({
@@ -1143,10 +1380,14 @@ describe("perpetual new worlds", () => {
       sessionShape: "wander",
       restartPhrase: "restartrestartrestart",
     });
-    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
-      .toBe("same clock legacy");
+    expect(
+      deserializeWorld(decodeGameSave(repository.snapshot()).world).meta
+        .seedText,
+    ).toBe("same clock legacy");
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("non-empty seed phrase");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "non-empty seed phrase",
+    );
 
     runtime.dispatchUI({
       type: "new-world",
@@ -1159,8 +1400,9 @@ describe("perpetual new worlds", () => {
     const replacement = repository.snapshot();
     expect(replacement.saveGeneration).toBe(1);
     expect(replacement.updatedAt).toBeGreaterThan(701);
-    expect(deserializeWorld(decodeGameSave(replacement).world).meta.seedText)
-      .toBe("same clock replacement");
+    expect(
+      deserializeWorld(decodeGameSave(replacement).world).meta.seedText,
+    ).toBe("same clock replacement");
 
     // A callback from the pre-restart tab can have the largest possible clock
     // and tick values; its older generation must still lose.
@@ -1177,8 +1419,10 @@ describe("perpetual new worlds", () => {
     expect(resumed.getUIView().title.visible).toBe(false);
     expect(resumed.getUIView().clock.paused).toBe(false);
     expect(resumed.getUIView().posture).toBe("gale");
-    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
-      .toBe("same clock replacement");
+    expect(
+      deserializeWorld(decodeGameSave(repository.snapshot()).world).meta
+        .seedText,
+    ).toBe("same clock replacement");
     await resumed.save();
     const resumedSave = repository.snapshot();
     expect(resumedSave.saveGeneration).toBe(1);
@@ -1214,14 +1458,17 @@ describe("perpetual new worlds", () => {
     expect(replacement.saveGeneration).toBe(1);
     expect(replacement.updatedAt).toBeGreaterThanOrEqual(812);
     expect(replacement.updatedAt).toBeLessThan(Number.MAX_SAFE_INTEGER);
-    expect(deserializeWorld(decodeGameSave(replacement).world).meta.seedText)
-      .toBe("maximum clock replacement");
+    expect(
+      deserializeWorld(decodeGameSave(replacement).world).meta.seedText,
+    ).toBe("maximum clock replacement");
     runtime.destroy();
 
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().title.visible).toBe(false);
     expect(resumed.getUIView().clock.paused).toBe(false);
-    expect(resumed.getUIView().worldName).toContain("Maximum Clock Replacement");
+    expect(resumed.getUIView().worldName).toContain(
+      "Maximum Clock Replacement",
+    );
     resumed.destroy();
   });
 
@@ -1243,12 +1490,16 @@ describe("perpetual new worlds", () => {
     expect(runtime.getUIView().title.visible).toBe(true);
     expect(runtime.getUIView().title.requiresSeed).toBe(true);
     expect(runtime.getUIView().title.worldCreationBlocked).toBeUndefined();
-    expect(runtime.getUIView().announcement?.message).toContain("could not be read");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "could not be read",
+    );
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "LOCAL AUTOSAVE UNREADABLE",
       detail: expect.stringContaining("replacement is stored"),
     });
-    await expect(runtime.save()).rejects.toThrow("Choose a seed before replacing");
+    await expect(runtime.save()).rejects.toThrow(
+      "Choose a seed before replacing",
+    );
     expect(repository.snapshot()).toEqual(corrupt);
     runtime.dispatchUI({
       type: "new-world",
@@ -1256,8 +1507,12 @@ describe("perpetual new worlds", () => {
       posture: "gale",
       sessionShape: "wander",
     });
-    expect(runtime.getUIView().announcement?.message).toContain("Enter a non-empty seed phrase");
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "Enter a non-empty seed phrase",
+    );
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
     expect(repository.snapshot()).toEqual(corrupt);
     runtime.dispatchUI({
       type: "new-world",
@@ -1276,11 +1531,14 @@ describe("perpetual new worlds", () => {
     expect(recovered.playTicks).toBe(
       deserializeWorld(decodeGameSave(recovered).world).meta.completedTick,
     );
-    expect(deserializeWorld(decodeGameSave(recovered).world).meta.seedText)
-      .toBe("clean recovery estuary");
+    expect(
+      deserializeWorld(decodeGameSave(recovered).world).meta.seedText,
+    ).toBe("clean recovery estuary");
     expect(runtime.getUIView().saveWarning).toBeUndefined();
     expect(runtime.getUIView().title.requiresSeed).toBeUndefined();
-    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE REPLACED");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "LOCAL SAVE REPLACED",
+    );
 
     // A callback retaining the corrupt maximum clock still belongs to the old
     // generation and cannot resurrect it after recovery.
@@ -1298,7 +1556,10 @@ describe("perpetual new worlds", () => {
     vi.stubGlobal("indexedDB", undefined);
     vi.stubGlobal("localStorage", new RuntimeTestStorage());
     const repository = createSaveRepository();
-    const corruptWorld = createWorld("production repository corruption", "calm");
+    const corruptWorld = createWorld(
+      "production repository corruption",
+      "calm",
+    );
     const corrupt = runtimeSaveRecord(
       corruptWorld,
       createPlayer(createWorldView(corruptWorld)),
@@ -1320,14 +1581,20 @@ describe("perpetual new worlds", () => {
     await runtime.save();
     const recovered = await repository.load("autosave");
     expect(recovered).toMatchObject({ saveGeneration: 1 });
-    if (!recovered) throw new Error("production repository did not retain recovery");
-    expect(deserializeWorld(decodeGameSave(recovered).world).meta.seedText)
-      .toBe("production repository recovery");
-    await expect(repository.save(corrupt)).rejects.toBeInstanceOf(StaleSaveWriteError);
+    if (!recovered)
+      throw new Error("production repository did not retain recovery");
+    expect(
+      deserializeWorld(decodeGameSave(recovered).world).meta.seedText,
+    ).toBe("production repository recovery");
+    await expect(repository.save(corrupt)).rejects.toBeInstanceOf(
+      StaleSaveWriteError,
+    );
     runtime.destroy();
 
     const resumed = await createTideweftRuntime(createSaveRepository());
-    expect(resumed.getUIView().worldName).toContain("Production Repository Recovery");
+    expect(resumed.getUIView().worldName).toContain(
+      "Production Repository Recovery",
+    );
     resumed.destroy();
   });
 
@@ -1354,9 +1621,13 @@ describe("perpetual new worlds", () => {
     });
     await runtime.save();
     const recovered = repository.snapshot();
-    expect(recovered).toMatchObject({ saveGenerationEra: 1, saveGeneration: 0 });
-    expect(deserializeWorld(decodeGameSave(recovered).world).meta.seedText)
-      .toBe("era rollover recovery");
+    expect(recovered).toMatchObject({
+      saveGenerationEra: 1,
+      saveGeneration: 0,
+    });
+    expect(
+      deserializeWorld(decodeGameSave(recovered).world).meta.seedText,
+    ).toBe("era rollover recovery");
 
     await repository.save(corrupt);
     expect(repository.snapshot()).toEqual(recovered);
@@ -1381,7 +1652,9 @@ describe("perpetual new worlds", () => {
     const runtime = await createTideweftRuntime(repository);
 
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("could not be read");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "could not be read",
+    );
     runtime.dispatchUI({
       type: "new-world",
       seed: "metadata truthful recovery",
@@ -1412,7 +1685,9 @@ describe("perpetual new worlds", () => {
 
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("could not be read");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "could not be read",
+    );
     runtime.dispatchUI({
       type: "new-world",
       seed: "safe session recovery",
@@ -1429,33 +1704,83 @@ describe("perpetual new worlds", () => {
   });
 
   it.each([
-    ["missing outer format fence", (record: SaveRecord, _envelope: TestGameSaveEnvelope) => {
-      delete record.payloadVersion;
-    }],
-    ["contradictory outer format fence", (record: SaveRecord, _envelope: TestGameSaveEnvelope) => {
-      record.payloadVersion = 2;
-    }],
-    ["unsealed player mutation", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      envelope.player.stamina = 123_456;
-    }],
-    ["resealed noncanonical session", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      envelope.session.posture = "hearth";
-      resealGameSave(envelope);
-    }],
-    ["resealed invalid field ecology", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      if (!envelope.fieldResources) throw new Error("v8 fixture lost field ecology");
-      envelope.fieldResources = { ...envelope.fieldResources, version: 2 as 1 };
-      resealGameSave(envelope);
-    }],
-    ["resealed invalid traversal ledger", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      if (!envelope.traversalFeedback) throw new Error("v8 fixture lost traversal feedback");
-      envelope.traversalFeedback = { ...envelope.traversalFeedback, completedSteps: -1 };
-      resealGameSave(envelope);
-    }],
-    ["resealed missing physical custody", (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
-      delete envelope.physicalCargo;
-      resealGameSave(envelope);
-    }],
+    [
+      "missing outer format fence",
+      (record: SaveRecord, _envelope: TestGameSaveEnvelope) => {
+        delete record.payloadVersion;
+      },
+    ],
+    [
+      "contradictory outer format fence",
+      (record: SaveRecord, _envelope: TestGameSaveEnvelope) => {
+        record.payloadVersion = 2;
+      },
+    ],
+    [
+      "unsealed player mutation",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        envelope.player.stamina = 123_456;
+      },
+    ],
+    [
+      "resealed noncanonical session",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        envelope.session.posture = "hearth";
+        resealGameSave(envelope);
+      },
+    ],
+    [
+      "resealed invalid field ecology",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        if (!envelope.fieldResources)
+          throw new Error("v8 fixture lost field ecology");
+        envelope.fieldResources = {
+          ...envelope.fieldResources,
+          version: 2 as 1,
+        };
+        resealGameSave(envelope);
+      },
+    ],
+    [
+      "resealed invalid traversal ledger",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        if (!envelope.traversalFeedback)
+          throw new Error("v8 fixture lost traversal feedback");
+        envelope.traversalFeedback = {
+          ...envelope.traversalFeedback,
+          completedSteps: -1,
+        };
+        resealGameSave(envelope);
+      },
+    ],
+    [
+      "resealed missing physical custody",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        delete envelope.physicalCargo;
+        resealGameSave(envelope);
+      },
+    ],
+    [
+      "resealed invalid polar ecology root",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        if (!envelope.regionalEcology)
+          throw new Error("v27 fixture lost regional ecology");
+        const regional = JSON.parse(envelope.regionalEcology) as Record<
+          string,
+          unknown
+        >;
+        const polarShoreRoot = regional.polarShoreRoot;
+        if (typeof polarShoreRoot !== "object" || polarShoreRoot === null) {
+          throw new Error("v27 fixture lost its polar ecology root");
+        }
+        regional.polarShoreRoot = {
+          ...polarShoreRoot,
+          integrity: "0000000000000000",
+        };
+        envelope.regionalEcology = stableStringify(regional);
+        resealGameSave(envelope);
+      },
+    ],
   ] as const)("quarantines a current save with %s", async (_label, mutate) => {
     const repository = new MemoryRepository();
     const original = await createTideweftRuntime(repository);
@@ -1471,7 +1796,9 @@ describe("perpetual new worlds", () => {
     const rejected = await createTideweftRuntime(repository);
     expect(rejected.getUIView().title.visible).toBe(true);
     expect(rejected.getUIView().title.hasSave).toBe(false);
-    expect(rejected.getUIView().announcement?.message).toContain("could not be read");
+    expect(rejected.getUIView().announcement?.message).toContain(
+      "could not be read",
+    );
     rejected.destroy();
   });
 
@@ -1497,9 +1824,14 @@ describe("perpetual new worlds", () => {
       restartPhrase: "restartrestartrestart",
     });
     await runtime.save();
-    expect(repository.snapshot()).toMatchObject({ saveGenerationEra: 1, saveGeneration: 0 });
-    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
-      .toBe("valid era restart");
+    expect(repository.snapshot()).toMatchObject({
+      saveGenerationEra: 1,
+      saveGeneration: 0,
+    });
+    expect(
+      deserializeWorld(decodeGameSave(repository.snapshot()).world).meta
+        .seedText,
+    ).toBe("valid era restart");
     runtime.destroy();
   });
 
@@ -1523,7 +1855,9 @@ describe("perpetual new worlds", () => {
       message: "LOCAL SAVE NOT STORED",
       tone: "danger",
     });
-    expect(runtime.getUIView().saveWarning?.detail).toContain("Clear Tideweft's stored site data");
+    expect(runtime.getUIView().saveWarning?.detail).toContain(
+      "Clear Tideweft's stored site data",
+    );
     expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
     const saturatedWorldName = runtime.getUIView().worldName;
     runtime.dispatchUI({
@@ -1535,8 +1869,12 @@ describe("perpetual new worlds", () => {
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getUIView().worldName).toBe(saturatedWorldName);
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("clear Tideweft's stored site data");
-    await expect(runtime.save()).rejects.toThrow("replacement counter is exhausted");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "clear Tideweft's stored site data",
+    );
+    await expect(runtime.save()).rejects.toThrow(
+      "replacement counter is exhausted",
+    );
     expect(repository.snapshot()).toEqual(corrupt);
     runtime.destroy();
   });
@@ -1558,10 +1896,16 @@ describe("perpetual new worlds", () => {
     };
 
     const runtime = await createTideweftRuntime(repository);
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
-    expect(runtime.getUIView().saveWarning?.detail).toContain("newer local copy exists");
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL SAVE NOT STORED",
+    );
+    expect(runtime.getUIView().saveWarning?.detail).toContain(
+      "newer local copy exists",
+    );
     expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("TEMPORARILY UNAVAILABLE");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "TEMPORARILY UNAVAILABLE",
+    );
     const unavailableWorldName = runtime.getUIView().worldName;
     runtime.dispatchUI({
       type: "new-world",
@@ -1572,8 +1916,12 @@ describe("perpetual new worlds", () => {
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getUIView().worldName).toBe(unavailableWorldName);
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("nothing was opened or replaced");
-    await expect(runtime.save()).rejects.toThrow("newer local save is temporarily unavailable");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "nothing was opened or replaced",
+    );
+    await expect(runtime.save()).rejects.toThrow(
+      "newer local save is temporarily unavailable",
+    );
     expect(repository.save).not.toHaveBeenCalled();
     runtime.destroy();
   });
@@ -1605,11 +1953,20 @@ describe("perpetual new worlds", () => {
     expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "LOCAL SAVE UNAVAILABLE",
-      detail: expect.stringContaining("could not prove that local storage is empty"),
+      detail: expect.stringContaining(
+        "could not prove that local storage is empty",
+      ),
     });
-    expect(runtime.getUIView().announcement?.message).toContain("Nothing will be opened or overwritten");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "Nothing will be opened or overwritten",
+    );
 
-    for (const seed of ["", "   ", "must not replace latent data", "rapid second submission"]) {
+    for (const seed of [
+      "",
+      "   ",
+      "must not replace latent data",
+      "rapid second submission",
+    ]) {
       runtime.dispatchUI({
         type: "new-world",
         seed,
@@ -1619,8 +1976,12 @@ describe("perpetual new worlds", () => {
     }
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE UNAVAILABLE");
-    expect(runtime.getUIView().announcement?.message).toContain("will not open or overwrite");
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL SAVE UNAVAILABLE",
+    );
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "will not open or overwrite",
+    );
     await expect(runtime.save()).rejects.toThrow("could not be read");
     await expect(runtime.save()).rejects.toThrow("could not be read");
     await vi.advanceTimersByTimeAsync(120_000);
@@ -1655,20 +2016,30 @@ describe("perpetual new worlds", () => {
         }
         return stored ? structuredClone(stored) : undefined;
       }),
-      save: vi.fn(async (record) => { stored = structuredClone(record); }),
-      remove: vi.fn(async () => { stored = undefined; }),
+      save: vi.fn(async (record) => {
+        stored = structuredClone(record);
+      }),
+      remove: vi.fn(async () => {
+        stored = undefined;
+      }),
     };
 
     const runtime = await createTideweftRuntime(repository);
-    expect(runtime.getUIView().announcement?.message).toContain("conflicting local autosaves");
-    expect(runtime.getUIView().announcement?.message).toContain("Start a seed to replace both safely");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "conflicting local autosaves",
+    );
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "Start a seed to replace both safely",
+    );
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "LOCAL AUTOSAVES CONFLICT",
       detail: expect.stringContaining("Neither equal-version copy was chosen"),
     });
     expect(runtime.getUIView().title.requiresSeed).toBe(true);
     expect(runtime.getUIView().title.worldCreationBlocked).toBeUndefined();
-    await expect(runtime.save()).rejects.toThrow("Choose a seed before replacing");
+    await expect(runtime.save()).rejects.toThrow(
+      "Choose a seed before replacing",
+    );
     expect(repository.save).not.toHaveBeenCalled();
     runtime.dispatchUI({
       type: "new-world",
@@ -1679,11 +2050,14 @@ describe("perpetual new worlds", () => {
     await runtime.save();
     expect(stored).toMatchObject({ saveGenerationEra: 2, saveGeneration: 8 });
     if (!stored) throw new Error("conflict recovery was not stored");
-    expect(deserializeWorld(decodeGameSave(stored).world).meta.seedText)
-      .toBe("conflict recovery seed");
+    expect(deserializeWorld(decodeGameSave(stored).world).meta.seedText).toBe(
+      "conflict recovery seed",
+    );
     expect(runtime.getUIView().saveWarning).toBeUndefined();
     expect(runtime.getUIView().title.requiresSeed).toBeUndefined();
-    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE REPLACED");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "LOCAL SAVE REPLACED",
+    );
     runtime.destroy();
 
     const resumed = await createTideweftRuntime(repository);
@@ -1709,7 +2083,9 @@ describe("perpetual new worlds", () => {
       detail: expect.stringContaining("will not retry or overwrite it"),
     });
     expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("reload to resolve the copies");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "reload to resolve the copies",
+    );
     const supersededWorldName = runtime.getUIView().worldName;
     runtime.dispatchUI({
       type: "new-world",
@@ -1720,10 +2096,14 @@ describe("perpetual new worlds", () => {
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getUIView().worldName).toBe(supersededWorldName);
     expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().announcement?.message).toContain("reload to resolve");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "reload to resolve",
+    );
     await vi.advanceTimersByTimeAsync(120_000);
     expect(repository.save).toHaveBeenCalledOnce();
-    await expect(runtime.save()).rejects.toThrow("superseded by a newer local save");
+    await expect(runtime.save()).rejects.toThrow(
+      "superseded by a newer local save",
+    );
     expect(repository.save).toHaveBeenCalledOnce();
     runtime.destroy();
   });
@@ -1733,12 +2113,14 @@ describe("perpetual new worlds", () => {
     vi.setSystemTime(900);
     const oldWorld = createWorld("failed restart old world", "calm");
     const oldSession = createSessionState(oldWorld.meta.seedText, "hearth");
-    const repository = new DeferredSaveRepository(runtimeSaveRecord(
-      oldWorld,
-      createPlayer(createWorldView(oldWorld)),
-      oldSession,
-      "Failed restart old world",
-    ));
+    const repository = new DeferredSaveRepository(
+      runtimeSaveRecord(
+        oldWorld,
+        createPlayer(createWorldView(oldWorld)),
+        oldSession,
+        "Failed restart old world",
+      ),
+    );
     const runtime = await createTideweftRuntime(repository);
 
     runtime.dispatchUI({
@@ -1753,13 +2135,17 @@ describe("perpetual new worlds", () => {
 
     repository.rejectNext(new Error("all local save backends unavailable"));
     await vi.waitFor(() => {
-      expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE FAILED");
+      expect(runtime.getUIView().announcement?.message).toContain(
+        "LOCAL SAVE FAILED",
+      );
     });
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "LOCAL SAVE NOT STORED",
       tone: "danger",
     });
-    expect(runtime.getUIView().saveWarning?.detail).toContain("only in this open window");
+    expect(runtime.getUIView().saveWarning?.detail).toContain(
+      "only in this open window",
+    );
     expect(runtime.getUIView().worldName).toContain("Retryable Replacement");
     expect(runtime.getUIView().title.visible).toBe(false);
 
@@ -1768,17 +2154,23 @@ describe("perpetual new worlds", () => {
     await vi.advanceTimersByTimeAsync(2_000);
     expect(repository.started).toHaveLength(2);
     const retryEnvelope = decodeGameSave(repository.started[1] as SaveRecord);
-    expect(deserializeWorld(retryEnvelope.world).meta.seedText).toBe("retryable replacement");
+    expect(deserializeWorld(retryEnvelope.world).meta.seedText).toBe(
+      "retryable replacement",
+    );
     expect(retryEnvelope.player.pace).toBe("steady");
     expect(repository.started[1]?.saveGeneration).toBe(1);
 
     repository.resolveNext();
     await vi.waitFor(() => {
-      expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
+      expect(runtime.getUIView().announcement?.message).toContain(
+        "LOCAL SAVE RESTORED",
+      );
     });
     expect(runtime.getUIView().saveWarning).toBeUndefined();
-    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
-      .toBe("retryable replacement");
+    expect(
+      deserializeWorld(decodeGameSave(repository.snapshot()).world).meta
+        .seedText,
+    ).toBe("retryable replacement");
     runtime.destroy();
   });
 
@@ -1787,10 +2179,14 @@ describe("perpetual new worlds", () => {
     const repository = new DeferredSaveRepository();
     const runtime = await createTideweftRuntime(repository);
     const failedSave = runtime.save();
-    const rejected = expect(failedSave).rejects.toThrow("storage remains unavailable");
+    const rejected = expect(failedSave).rejects.toThrow(
+      "storage remains unavailable",
+    );
     repository.rejectNext(new Error("storage remains unavailable"));
     await rejected;
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL SAVE NOT STORED",
+    );
     expect(repository.started).toHaveLength(1);
 
     runtime.destroy();
@@ -1801,12 +2197,14 @@ describe("perpetual new worlds", () => {
   it("keeps the save warning until the world currently on screen is durable", async () => {
     vi.useFakeTimers();
     const oldWorld = createWorld("generation race old world", "calm");
-    const repository = new DeferredSaveRepository(runtimeSaveRecord(
-      oldWorld,
-      createPlayer(createWorldView(oldWorld)),
-      createSessionState(oldWorld.meta.seedText, "hearth"),
-      "Generation race old world",
-    ));
+    const repository = new DeferredSaveRepository(
+      runtimeSaveRecord(
+        oldWorld,
+        createPlayer(createWorldView(oldWorld)),
+        createSessionState(oldWorld.meta.seedText, "hearth"),
+        "Generation race old world",
+      ),
+    );
     const runtime = await createTideweftRuntime(repository);
 
     runtime.dispatchUI({
@@ -1818,7 +2216,9 @@ describe("perpetual new worlds", () => {
     });
     repository.rejectNext(new Error("generation one could not be stored"));
     await vi.waitFor(() => {
-      expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+      expect(runtime.getUIView().saveWarning?.message).toBe(
+        "LOCAL SAVE NOT STORED",
+      );
     });
 
     await vi.advanceTimersByTimeAsync(2_000);
@@ -1840,18 +2240,144 @@ describe("perpetual new worlds", () => {
     await vi.waitFor(() => {
       expect(repository.started.at(-1)?.saveGeneration).toBe(2);
     });
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
-    expect(runtime.getUIView().announcement?.message).not.toContain("LOCAL SAVE RESTORED");
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL SAVE NOT STORED",
+    );
+    expect(runtime.getUIView().announcement?.message).not.toContain(
+      "LOCAL SAVE RESTORED",
+    );
 
     repository.resolveNext();
     await vi.waitFor(() => {
       expect(runtime.getUIView().saveWarning).toBeUndefined();
     });
-    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "LOCAL SAVE RESTORED",
+    );
     expect(repository.snapshot().saveGeneration).toBe(2);
-    expect(deserializeWorld(decodeGameSave(repository.snapshot()).world).meta.seedText)
-      .toBe("generation two");
+    expect(
+      deserializeWorld(decodeGameSave(repository.snapshot()).world).meta
+        .seedText,
+    ).toBe("generation two");
     runtime.destroy();
+  }, 30_000);
+
+  it("adopts an exact outer-v26 ecology child once beneath the v27 polar sibling", async () => {
+    const repository = new MemoryRepository();
+    const setup = await createTideweftRuntime(repository);
+    await setup.save();
+    setup.destroy();
+
+    const currentRecord = repository.snapshot();
+    const currentEnvelope = decodeGameSave(currentRecord);
+    const currentRegional = deserializeRegionalEcologyStateV3(
+      currentEnvelope.regionalEcology,
+    );
+    if (currentRegional === null)
+      throw new Error("current fixture lost regional ecology v3");
+    const exactV26Child = serializeRegionalEcologyStateV2(currentRegional.base);
+    const predecessorEnvelope: TestGameSaveEnvelope = {
+      ...currentEnvelope,
+      version: 26,
+      regionalEcology: exactV26Child,
+    };
+    resealGameSave(predecessorEnvelope);
+    const predecessorIntegrity = predecessorEnvelope.integrity;
+    if (predecessorIntegrity === undefined)
+      throw new Error("v26 fixture did not seal");
+    repository.replace({
+      ...currentRecord,
+      payloadVersion: 26,
+      worldJson: JSON.stringify(predecessorEnvelope),
+    });
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const firstEnvelope = decodeGameSave(repository.snapshot());
+    const firstRegional = deserializeRegionalEcologyStateV3(
+      firstEnvelope.regionalEcology,
+    );
+    expect(firstEnvelope.version).toBe(27);
+    expect(firstRegional).not.toBeNull();
+    expect(serializeRegionalEcologyStateV2(firstRegional?.base)).toBe(
+      exactV26Child,
+    );
+    expect(firstRegional?.adoption).toMatchObject({
+      sourceOuterVersion: 26,
+      sourceEnvelopeIntegrity: predecessorIntegrity,
+      sourceStateHash: hashCanonical(currentRegional.base),
+    });
+    const firstSerialized = firstEnvelope.regionalEcology;
+    migrated.destroy();
+
+    const reloaded = await createTideweftRuntime(repository);
+    await reloaded.save();
+    expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(
+      firstSerialized,
+    );
+    reloaded.destroy();
+  }, 30_000);
+
+  it("chains an exact outer-v25 ecology child through both append-only wrappers", async () => {
+    const repository = new MemoryRepository();
+    const setup = await createTideweftRuntime(repository);
+    await setup.save();
+    setup.destroy();
+
+    const currentRecord = repository.snapshot();
+    const currentEnvelope = decodeGameSave(currentRecord);
+    const currentRegional = deserializeRegionalEcologyStateV3(
+      currentEnvelope.regionalEcology,
+    );
+    if (currentRegional === null)
+      throw new Error("current fixture lost regional ecology v3");
+    const exactV25Child = serializeRegionalEcologyState(
+      currentRegional.base.base,
+    );
+    expect(deserializeRegionalEcologyState(exactV25Child)).not.toBeNull();
+    const predecessorEnvelope: TestGameSaveEnvelope = {
+      ...currentEnvelope,
+      version: 25,
+      regionalEcology: exactV25Child,
+    };
+    resealGameSave(predecessorEnvelope);
+    const predecessorIntegrity = predecessorEnvelope.integrity;
+    if (predecessorIntegrity === undefined)
+      throw new Error("v25 fixture did not seal");
+    repository.replace({
+      ...currentRecord,
+      payloadVersion: 25,
+      worldJson: JSON.stringify(predecessorEnvelope),
+    });
+
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    const firstEnvelope = decodeGameSave(repository.snapshot());
+    const firstRegional = deserializeRegionalEcologyStateV3(
+      firstEnvelope.regionalEcology,
+    );
+    expect(firstEnvelope.version).toBe(27);
+    expect(firstRegional).not.toBeNull();
+    expect(serializeRegionalEcologyState(firstRegional?.base.base)).toBe(
+      exactV25Child,
+    );
+    expect(firstRegional?.base.adoption).toMatchObject({
+      sourceOuterVersion: 25,
+      sourceEnvelopeIntegrity: predecessorIntegrity,
+      sourceStateHash: hashCanonical(currentRegional.base.base),
+    });
+    expect(firstRegional?.adoption).toMatchObject({ sourceOuterVersion: 26 });
+    const firstSerialized = firstEnvelope.regionalEcology;
+    migrated.destroy();
+
+    const reloaded = await createTideweftRuntime(repository);
+    await reloaded.save();
+    expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(
+      firstSerialized,
+    );
+    reloaded.destroy();
   }, 30_000);
 
   it("migrates Alpha-16 ecology by preserving every old entity and appending later habitats", async () => {
@@ -1866,9 +2392,9 @@ describe("perpetual new worlds", () => {
     await setup.save();
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
-    const currentEcology = exactV24CoreFromV26(currentEnvelope);
-    expect(currentEnvelope.version).toBe(26);
-    expect(currentRecord.payloadVersion).toBe(26);
+    const currentEcology = exactV24CoreFromV27(currentEnvelope);
+    expect(currentEnvelope.version).toBe(27);
+    expect(currentRecord.payloadVersion).toBe(27);
     expect(currentEcology?.derivation.kind).toBe("habitat-v11");
     if (currentEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("fixture did not create current regional-upland ecology");
@@ -1909,21 +2435,30 @@ describe("perpetual new worlds", () => {
     expect(originalCrowGroups[0]?.memberOrdinals).toEqual(
       originalCrow?.members.map(({ populationOrdinal }) => populationOrdinal),
     );
-    expect(originalEcology.populations.some(
-      ({ species }) => species === "southern-leopard-frog",
-    )).toBe(false);
+    expect(
+      originalEcology.populations.some(
+        ({ species }) => species === "southern-leopard-frog",
+      ),
+    ).toBe(false);
 
     const predecessor = rainChorusSaveAsMarshEdgeV11(originalRecord);
     expect(predecessor.ecology.derivation.kind).toBe("habitat-v3");
-    expect(predecessor.ecology.populations.some(({ species }) => (
-      species === "fish-crow" || species === "northern-harrier"
-    ))).toBe(false);
-    expect(predecessor.ecology.aggregatePopulations.some(
-      ({ species }) => species === "southern-leopard-frog",
-    )).toBe(false);
-    expect(predecessor.ecology.groups.groups.some(
-      ({ identity }) => identity.species === "fish-crow",
-    )).toBe(false);
+    expect(
+      predecessor.ecology.populations.some(
+        ({ species }) =>
+          species === "fish-crow" || species === "northern-harrier",
+      ),
+    ).toBe(false);
+    expect(
+      predecessor.ecology.aggregatePopulations.some(
+        ({ species }) => species === "southern-leopard-frog",
+      ),
+    ).toBe(false);
+    expect(
+      predecessor.ecology.groups.groups.some(
+        ({ identity }) => identity.species === "fish-crow",
+      ),
+    ).toBe(false);
     setup.destroy();
     repository.replace(predecessor.record);
 
@@ -1932,21 +2467,26 @@ describe("perpetual new worlds", () => {
     await migratedRuntime.save();
     const migratedRecord = repository.snapshot();
     const migratedEnvelope = decodeGameSave(migratedRecord);
-    const migratedRegionalEcology = deserializeRegionalEcologyStateV2(
+    const migratedRegionalEcology = deserializeRegionalEcologyStateV3(
       migratedEnvelope.regionalEcology,
     );
-    const migratedEcology = migratedRegionalEcology?.base.root.legacyCohort?.sourcePatch ?? null;
-    expect(migratedEnvelope.version).toBe(26);
-    expect(migratedRecord.payloadVersion).toBe(26);
+    const migratedEcology =
+      migratedRegionalEcology?.base.base.root.legacyCohort?.sourcePatch ?? null;
+    expect(migratedEnvelope.version).toBe(27);
+    expect(migratedRecord.payloadVersion).toBe(27);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v11");
     if (migratedEcology?.derivation.kind !== "habitat-v11") {
-      throw new Error("v11 migration did not produce canonical current ecology");
+      throw new Error(
+        "v11 migration did not produce canonical current ecology",
+      );
     }
 
     for (const oldPopulation of predecessor.ecology.populations) {
-      const retained = migratedEcology.populations.find(({ species, populationKey }) => (
-        species === oldPopulation.species && populationKey === oldPopulation.populationKey
-      ));
+      const retained = migratedEcology.populations.find(
+        ({ species, populationKey }) =>
+          species === oldPopulation.species &&
+          populationKey === oldPopulation.populationKey,
+      );
       expect(stableStringify(retained)).toBe(stableStringify(oldPopulation));
     }
     for (const oldGroup of predecessor.ecology.groups.groups) {
@@ -1962,53 +2502,79 @@ describe("perpetual new worlds", () => {
       expect(stableStringify(retained)).toBe(stableStringify(oldAggregate));
     }
 
-    expect(migratedEcology.derivation.habitat.populations.slice(
-      0,
-      CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
-    )).toEqual(
+    expect(
+      migratedEcology.derivation.habitat.populations.slice(
+        0,
+        CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES.length,
+      ),
+    ).toEqual(
       predecessor.ecology.derivation.kind === "habitat-v3"
         ? predecessor.ecology.derivation.habitat.populations
         : [],
     );
     for (const species of ["fish-crow", "northern-harrier"] as const) {
-      expect(migratedEcology.populations.find(
-        (population) => population.species === species,
-      )?.members.map(({ actor }) => actor.identity)).toEqual(originalEcology.populations.find(
-        (population) => population.species === species,
-      )?.members.map(({ actor }) => actor.identity));
+      expect(
+        migratedEcology.populations
+          .find((population) => population.species === species)
+          ?.members.map(({ actor }) => actor.identity),
+      ).toEqual(
+        originalEcology.populations
+          .find((population) => population.species === species)
+          ?.members.map(({ actor }) => actor.identity),
+      );
     }
-    expect(stableStringify(migratedEcology.aggregatePopulations.find(
-      ({ species }) => species === "southern-leopard-frog",
-    ))).toBe(stableStringify(originalFrogs));
-    expect(migratedEcology.derivation.habitat).toEqual(currentEcology.derivation.habitat);
+    expect(
+      stableStringify(
+        migratedEcology.aggregatePopulations.find(
+          ({ species }) => species === "southern-leopard-frog",
+        ),
+      ),
+    ).toBe(stableStringify(originalFrogs));
+    expect(migratedEcology.derivation.habitat).toEqual(
+      currentEcology.derivation.habitat,
+    );
     for (const species of [
       "atlantic-silverside",
       "atlantic-marsh-fiddler-crab",
     ] as const) {
-      expect(migratedEcology.aggregatePopulations.find(
-        (population) => population.species === species,
-      )).toEqual(originalEcology.aggregatePopulations.find(
-        (population) => population.species === species,
-      ));
+      expect(
+        migratedEcology.aggregatePopulations.find(
+          (population) => population.species === species,
+        ),
+      ).toEqual(
+        originalEcology.aggregatePopulations.find(
+          (population) => population.species === species,
+        ),
+      );
     }
-    expect(migratedEcology.populations.find(
-      ({ species }) => species === "snowy-egret",
-    )).toEqual(originalEcology.populations.find(
-      ({ species }) => species === "snowy-egret",
-    ));
-    expect(migratedEcology.groups.groups.filter(
-      ({ identity }) => identity.species === "fish-crow",
-    )).toEqual(originalCrowGroups);
+    expect(
+      migratedEcology.populations.find(
+        ({ species }) => species === "snowy-egret",
+      ),
+    ).toEqual(
+      originalEcology.populations.find(
+        ({ species }) => species === "snowy-egret",
+      ),
+    );
+    expect(
+      migratedEcology.groups.groups.filter(
+        ({ identity }) => identity.species === "fish-crow",
+      ),
+    ).toEqual(originalCrowGroups);
     expect(migratedEnvelope.world).toBe(originalEnvelope.world);
     expect(migratedEnvelope.player).toEqual(originalEnvelope.player);
-    expect(migratedEnvelope.physicalCargo).toEqual(originalEnvelope.physicalCargo);
+    expect(migratedEnvelope.physicalCargo).toEqual(
+      originalEnvelope.physicalCargo,
+    );
     expect(migratedEnvelope.bio0Ecology).toBe(originalEnvelope.bio0Ecology);
 
     const firstCurrentEcology = migratedEnvelope.regionalEcology;
     migratedRuntime.destroy();
     const reloaded = await createTideweftRuntime(repository);
     await reloaded.save();
-    expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(firstCurrentEcology);
+    expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(
+      firstCurrentEcology,
+    );
     reloaded.destroy();
   }, 30_000);
 
@@ -2016,24 +2582,29 @@ describe("perpetual new worlds", () => {
     const world = createWorld("legacy shape runtime", "calm");
     const view = createWorldView(world);
     const player = createPlayer(view);
-    const legacySession = createSessionState(world.meta.seedText, "journey", "weave");
+    const legacySession = createSessionState(
+      world.meta.seedText,
+      "journey",
+      "weave",
+    );
     legacySession.tutorial.dismissed = true;
     legacySession.closureOffered = true;
     legacySession.sessionDeliveries = 9;
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      player,
-      legacySession,
-      "Legacy Weave",
-    ));
+    const repository = new MemoryRepository(
+      runtimeSaveRecord(world, player, legacySession, "Legacy Weave"),
+    );
 
     const runtime = await createTideweftRuntime(repository);
 
     expect(runtime.getUIView().sessionShape).toBe("weave");
     expect(runtime.getUIView().objective?.id).toBe("perpetual-estuary");
-    expect(runtime.getUIView().objective?.description).toContain("no session timer or quota");
+    expect(runtime.getUIView().objective?.description).toContain(
+      "no session timer or quota",
+    );
     await runtime.save();
-    expect(decodeGameSave(repository.snapshot()).session.sessionShape).toBe("weave");
+    expect(decodeGameSave(repository.snapshot()).session.sessionShape).toBe(
+      "weave",
+    );
     runtime.destroy();
   });
 });
@@ -2074,18 +2645,23 @@ describe("runtime clarity guards", () => {
     world.weather.windY = 0;
     world.weather.nextChangeTick = world.meta.completedTick + 100_000;
     const view = createWorldView(world);
-    const startTile = view.terrain.tiles.find((tile) => tile.x === 24 && tile.y === 24);
-    if (!startTile) throw new Error("fixture could not find its interior start tile");
+    const startTile = view.terrain.tiles.find(
+      (tile) => tile.x === 24 && tile.y === 24,
+    );
+    if (!startTile)
+      throw new Error("fixture could not find its interior start tile");
     const player = createPlayer(view);
     placePlayerOnTile(player, startTile);
     player.stamina = 1_000_000;
     player.stability = 1_000_000;
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      player,
-      createSessionState(world.meta.seedText),
-      "Coherent diagonal",
-    ));
+    const repository = new MemoryRepository(
+      runtimeSaveRecord(
+        world,
+        player,
+        createSessionState(world.meta.seedText),
+        "Coherent diagonal",
+      ),
+    );
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
     const tileSize = runtime.getRenderView().terrain.tileSize;
@@ -2094,25 +2670,33 @@ describe("runtime clarity guards", () => {
       x: start.x + tileSize * 6,
       y: start.y + tileSize * 6,
     };
-    runtime.dispatchRenderer({ type: "move-target", point: target, additive: false });
+    runtime.dispatchRenderer({
+      type: "move-target",
+      point: target,
+      additive: false,
+    });
 
     const movingVelocities: Array<{ x: number; y: number }> = [];
     for (let step = 0; step < 120; step += 1) {
       advancePlayerSteps(runtime, 1);
       const velocity = runtime.getRenderView().player.velocity;
-      if (velocity.x !== 0 || velocity.y !== 0) movingVelocities.push({ ...velocity });
+      if (velocity.x !== 0 || velocity.y !== 0)
+        movingVelocities.push({ ...velocity });
       const position = runtime.getRenderView().player.position;
       if (
-        velocity.x === 0
-        && velocity.y === 0
-        && Math.hypot(target.x - position.x, target.y - position.y) < tileSize / 2
-      ) break;
+        velocity.x === 0 &&
+        velocity.y === 0 &&
+        Math.hypot(target.x - position.x, target.y - position.y) < tileSize / 2
+      )
+        break;
     }
 
     expect(movingVelocities.length).toBeGreaterThan(30);
     expect(movingVelocities.every(({ x, y }) => x > 0 && y > 0)).toBe(true);
     const arrived = runtime.getRenderView().player.position;
-    expect(Math.hypot(target.x - arrived.x, target.y - arrived.y)).toBeLessThan(tileSize / 8);
+    expect(Math.hypot(target.x - arrived.x, target.y - arrived.y)).toBeLessThan(
+      tileSize / 8,
+    );
     advancePlayerSteps(runtime, 4);
     expect(runtime.getRenderView().player.position).toEqual(arrived);
     expect(runtime.getRenderView().player.velocity).toEqual({ x: 0, y: 0 });
@@ -2176,98 +2760,129 @@ describe("runtime clarity guards", () => {
     resumed.destroy();
   }, 60_000);
 
-  it("projects every stamina change through sweep recovery and immediate water re-entry", async () => {
-    const world = createWorld("runtime stamina reentry", "calm");
-    const occupied = new Set(world.settlements.map((settlement) => settlement.tileIndex));
-    const channel = world.terrain.tiles.find(
-      (tile) => tile.x > 2
-        && tile.y > 2
-        && tile.x + 3 < world.terrain.width
-        && tile.y + 3 < world.terrain.height
-        && !occupied.has(tile.index),
-    );
-    if (!channel) throw new Error("fixture could not reserve a channel tile");
+  it(
+    "projects every stamina change through sweep recovery and immediate water re-entry",
+    async () => {
+      const world = createWorld("runtime stamina reentry", "calm");
+      const occupied = new Set(
+        world.settlements.map((settlement) => settlement.tileIndex),
+      );
+      const channel = world.terrain.tiles.find(
+        (tile) =>
+          tile.x > 2 &&
+          tile.y > 2 &&
+          tile.x + 3 < world.terrain.width &&
+          tile.y + 3 < world.terrain.height &&
+          !occupied.has(tile.index),
+      );
+      if (!channel) throw new Error("fixture could not reserve a channel tile");
 
-    // One deep mark in an otherwise safe local estuary makes the recovery and
-    // return path short, deterministic, and independent of generated relief.
-    for (const tile of world.terrain.tiles) {
-      tile.elevation = world.tide.level;
-      tile.terrain = "meadow";
-      tile.roughness = 0;
-      tile.baseTravelCost = 100;
-    }
-    channel.elevation = 0;
-    channel.terrain = "deep-water";
-    channel.baseTravelCost = 520;
+      // One deep mark in an otherwise safe local estuary makes the recovery and
+      // return path short, deterministic, and independent of generated relief.
+      for (const tile of world.terrain.tiles) {
+        tile.elevation = world.tide.level;
+        tile.terrain = "meadow";
+        tile.roughness = 0;
+        tile.baseTravelCost = 100;
+      }
+      channel.elevation = 0;
+      channel.terrain = "deep-water";
+      channel.baseTravelCost = 520;
 
-    const view = createWorldView(world);
-    const player = createPlayer(view);
-    const channelView = view.terrain.tiles[channel.index];
-    if (!channelView) throw new Error("fixture channel disappeared from the world view");
-    placePlayerOnTile(player, channelView);
-    player.pace = "swift";
-    player.stamina = 12_001;
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      player,
-      createSessionState(world.meta.seedText),
-      "Stamina re-entry",
-    ));
-    const runtime = await createTideweftRuntime(repository);
-    runtime.dispatchUI({ type: "resume-world" });
-    const channelTarget = structuredClone(runtime.getRenderView().player.position);
-    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
-    advancePlayerSteps(runtime, 1);
-    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
-
-    expect(runtime.getRenderView().player.mode).toBe("swept");
-    expect(runtime.getRenderView().player.stamina).toBe(0);
-    expect(runtime.getUIView().player.stamina).toBe(0);
-
-    // Reaching shallow water is no longer enough by itself: the porter must
-    // also float long enough to rebuild the authoritative standing reserve.
-    for (let step = 0; step < 80 && runtime.getRenderView().player.mode === "swept"; step += 1) {
+      const view = createWorldView(world);
+      const player = createPlayer(view);
+      const channelView = view.terrain.tiles[channel.index];
+      if (!channelView)
+        throw new Error("fixture channel disappeared from the world view");
+      placePlayerOnTile(player, channelView);
+      player.pace = "swift";
+      player.stamina = 12_001;
+      const repository = new MemoryRepository(
+        runtimeSaveRecord(
+          world,
+          player,
+          createSessionState(world.meta.seedText),
+          "Stamina re-entry",
+        ),
+      );
+      const runtime = await createTideweftRuntime(repository);
+      runtime.dispatchUI({ type: "resume-world" });
+      const channelTarget = structuredClone(
+        runtime.getRenderView().player.position,
+      );
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
       advancePlayerSteps(runtime, 1);
-      expect(runtime.getUIView().player.stamina).toBe(runtime.getRenderView().player.stamina);
-    }
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
 
-    expect(runtime.getRenderView().player.mode).toBe("camp");
-    expect(runtime.getUIView().player.pace).toBe("rest");
-    const shoreStamina = runtime.getUIView().player.stamina;
-    expect(shoreStamina).toBeCloseTo(0.15, 6);
-    expect(runtime.getRenderView().player.stamina).toBe(shoreStamina);
+      expect(runtime.getRenderView().player.mode).toBe("swept");
+      expect(runtime.getRenderView().player.stamina).toBe(0);
+      expect(runtime.getUIView().player.stamina).toBe(0);
 
-    runtime.dispatchRenderer({
-      type: "move-target",
-      point: {
-        x: channelTarget.x,
-        y: channelTarget.y,
-      },
-      additive: false,
-    });
-    advancePlayerSteps(runtime, 1);
+      // Reaching shallow water is no longer enough by itself: the porter must
+      // also float long enough to rebuild the authoritative standing reserve.
+      for (
+        let step = 0;
+        step < 80 && runtime.getRenderView().player.mode === "swept";
+        step += 1
+      ) {
+        advancePlayerSteps(runtime, 1);
+        expect(runtime.getUIView().player.stamina).toBe(
+          runtime.getRenderView().player.stamina,
+        );
+      }
 
-    // The first touch-routed step after reaching shore is real travel, not a
-    // hidden rest tick, and both projections expose its drain immediately.
-    expect(runtime.getUIView().player.stamina).toBeLessThan(shoreStamina);
-    expect(runtime.getRenderView().player.stamina).toBe(runtime.getUIView().player.stamina);
+      expect(runtime.getRenderView().player.mode).toBe("camp");
+      expect(runtime.getUIView().player.pace).toBe("rest");
+      const shoreStamina = runtime.getUIView().player.stamina;
+      expect(shoreStamina).toBeCloseTo(0.15, 6);
+      expect(runtime.getRenderView().player.stamina).toBe(shoreStamina);
 
-    for (let step = 0; step < 16 && !runtime.getUIView().field.isWater; step += 1) {
-      const before = runtime.getUIView().player.stamina;
+      runtime.dispatchRenderer({
+        type: "move-target",
+        point: {
+          x: channelTarget.x,
+          y: channelTarget.y,
+        },
+        additive: false,
+      });
       advancePlayerSteps(runtime, 1);
-      expect(runtime.getUIView().player.stamina).toBeLessThan(before);
-      expect(runtime.getRenderView().player.stamina).toBe(runtime.getUIView().player.stamina);
-    }
-    expect(runtime.getUIView().field.isWater).toBe(true);
-    expect(runtime.getUIView().player.stamina).toBeLessThan(shoreStamina);
-    runtime.destroy();
-  }, process.env.CI === "true" ? 90_000 : 30_000);
+
+      // The first touch-routed step after reaching shore is real travel, not a
+      // hidden rest tick, and both projections expose its drain immediately.
+      expect(runtime.getUIView().player.stamina).toBeLessThan(shoreStamina);
+      expect(runtime.getRenderView().player.stamina).toBe(
+        runtime.getUIView().player.stamina,
+      );
+
+      for (
+        let step = 0;
+        step < 16 && !runtime.getUIView().field.isWater;
+        step += 1
+      ) {
+        const before = runtime.getUIView().player.stamina;
+        advancePlayerSteps(runtime, 1);
+        expect(runtime.getUIView().player.stamina).toBeLessThan(before);
+        expect(runtime.getRenderView().player.stamina).toBe(
+          runtime.getUIView().player.stamina,
+        );
+      }
+      expect(runtime.getUIView().field.isWater).toBe(true);
+      expect(runtime.getUIView().player.stamina).toBeLessThan(shoreStamina);
+      runtime.destroy();
+    },
+    process.env.CI === "true" ? 90_000 : 30_000,
+  );
 
   it("announces stability loss, rather than stamina loss, when deep water takes control", async () => {
     const world = createWorld("runtime stability sweep", "calm");
-    const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
-    const deepTile = world.terrain.tiles.find((tile) => !occupied.has(tile.index));
-    if (!deepTile) throw new Error("fixture did not provide an open water test tile");
+    const occupied = new Set(
+      world.settlements.map(({ tileIndex }) => tileIndex),
+    );
+    const deepTile = world.terrain.tiles.find(
+      (tile) => !occupied.has(tile.index),
+    );
+    if (!deepTile)
+      throw new Error("fixture did not provide an open water test tile");
     deepTile.terrain = "deep-water";
     deepTile.roughness = FIXED_POINT;
     deepTile.elevation = 0;
@@ -2286,12 +2901,14 @@ describe("runtime clarity guards", () => {
     placePlayerOnTile(player, liveDeepTile);
     player.stability = FIXED_POINT;
     player.stamina = 800_000;
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      player,
-      createSessionState(world.meta.seedText),
-      "Stability sweep",
-    ));
+    const repository = new MemoryRepository(
+      runtimeSaveRecord(
+        world,
+        player,
+        createSessionState(world.meta.seedText),
+        "Stability sweep",
+      ),
+    );
 
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
@@ -2302,7 +2919,9 @@ describe("runtime clarity guards", () => {
     expect(runtime.getRenderView().player.incident?.kind).toBe("sweep");
     expect(runtime.getUIView().announcement?.message).toContain("WHHSH!");
     expect(runtime.getUIView().announcement?.message).toContain("lost balance");
-    expect(runtime.getUIView().announcement?.message).not.toContain("STAMINA EMPTY");
+    expect(runtime.getUIView().announcement?.message).not.toContain(
+      "STAMINA EMPTY",
+    );
     runtime.destroy();
   });
 
@@ -2310,10 +2929,18 @@ describe("runtime clarity guards", () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     setup.dispatchUI({ type: "resume-world" });
-    const offer = setup.getUIView().contracts.find((contract) =>
-      contract.actionLabel === "Pick up cargo here");
-    if (!offer) throw new Error("fixture did not begin beside physical Promise cargo");
-    setup.dispatchUI({ type: "contract", action: "accept", contractId: offer.id });
+    const offer = setup
+      .getUIView()
+      .contracts.find(
+        (contract) => contract.actionLabel === "Pick up cargo here",
+      );
+    if (!offer)
+      throw new Error("fixture did not begin beside physical Promise cargo");
+    setup.dispatchUI({
+      type: "contract",
+      action: "accept",
+      contractId: offer.id,
+    });
     advancePlayerSteps(setup, 10);
     await setup.save();
     setup.destroy();
@@ -2323,10 +2950,13 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(26);
-    expect(prepared.physicalCargo?.expectedManifest.entries.length).toBeGreaterThan(0);
+    expect(prepared.version).toBe(27);
+    expect(
+      prepared.physicalCargo?.expectedManifest.entries.length,
+    ).toBeGreaterThan(0);
     const preparedWorld = deserializeWorld(prepared.world);
-    const ticksToHighTide = (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
+    const ticksToHighTide =
+      (360 - (preparedWorld.meta.completedTick % 720) + 720) % 720;
     runTicks(preparedWorld, ticksToHighTide);
     preparedWorld.weather = {
       kind: "storm",
@@ -2340,26 +2970,36 @@ describe("runtime clarity guards", () => {
       prepared.player,
       prepared.regionalTravel ?? "",
     );
-    if (!preparedRegional) throw new Error("fixture lost its sealed regional stream");
+    if (!preparedRegional)
+      throw new Error("fixture lost its sealed regional stream");
     const exposedChannelTile = [...preparedRegional.window.terrain.tiles]
       .filter((tile) => {
         const address = preparedRegional.window.addresses[tile.index];
-        return address?.region.x === 0
-          && address.region.y === 0
-          && preparedWorld.tide.level - tile.elevation >= 120_000;
+        return (
+          address?.region.x === 0 &&
+          address.region.y === 0 &&
+          preparedWorld.tide.level - tile.elevation >= 120_000
+        );
       })
-      .sort((left, right) => (
-        (preparedWorld.tide.level - right.elevation) * 2 + right.roughness
-      ) - (
-        (preparedWorld.tide.level - left.elevation) * 2 + left.roughness
-      ))[0];
-    if (!exposedChannelTile) throw new Error("fixture did not provide an exposed channel tile");
-    const exposedAddress = preparedRegional.window.addresses[exposedChannelTile.index];
-    if (!exposedAddress) throw new Error("fixture channel lost its stable address");
-    const compatibilityChannel = preparedWorld.terrain.tiles[
-      exposedAddress.localY * preparedWorld.terrain.width + exposedAddress.localX
-    ];
-    if (!compatibilityChannel) throw new Error("fixture channel left the compatibility terrain");
+      .sort(
+        (left, right) =>
+          (preparedWorld.tide.level - right.elevation) * 2 +
+          right.roughness -
+          ((preparedWorld.tide.level - left.elevation) * 2 + left.roughness),
+      )[0];
+    if (!exposedChannelTile)
+      throw new Error("fixture did not provide an exposed channel tile");
+    const exposedAddress =
+      preparedRegional.window.addresses[exposedChannelTile.index];
+    if (!exposedAddress)
+      throw new Error("fixture channel lost its stable address");
+    const compatibilityChannel =
+      preparedWorld.terrain.tiles[
+        exposedAddress.localY * preparedWorld.terrain.width +
+          exposedAddress.localX
+      ];
+    if (!compatibilityChannel)
+      throw new Error("fixture channel left the compatibility terrain");
     compatibilityChannel.elevation = 0;
     compatibilityChannel.terrain = "deep-water";
     compatibilityChannel.roughness = FIXED_POINT;
@@ -2378,7 +3018,8 @@ describe("runtime clarity guards", () => {
       exposedAddress.localX,
       exposedAddress.localY,
     );
-    if (positionedChannel === null) throw new Error("fixture channel left its aligned frame");
+    if (positionedChannel === null)
+      throw new Error("fixture channel left its aligned frame");
     prepared.world = serializeWorld(preparedWorld);
     const regionalX = positionedChannel.x;
     const regionalY = positionedChannel.y;
@@ -2402,14 +3043,20 @@ describe("runtime clarity guards", () => {
     prepared.regionalTravel = serializePlayerRegionalTravel(
       capturePlayerRegionalTravel(positionedRegional, prepared.player),
     );
-    prepared.promiseJourney = prepared.player.activeContractId === null
-      ? { version: 1, contractId: null, detoured: false, compatibilityTrace: [] }
-      : {
-          version: 1,
-          contractId: prepared.player.activeContractId,
-          detoured: true,
-          compatibilityTrace: [],
-        };
+    prepared.promiseJourney =
+      prepared.player.activeContractId === null
+        ? {
+            version: 1,
+            contractId: null,
+            detoured: false,
+            compatibilityTrace: [],
+          }
+        : {
+            version: 1,
+            contractId: prepared.player.activeContractId,
+            detoured: true,
+            compatibilityTrace: [],
+          };
     prepared.traversalFeedback = createTraversalFeedbackState();
     // This fixture intentionally fast-forwards the compatibility world outside
     // the production runtime. Route it once through the supported v5 migration
@@ -2421,7 +3068,8 @@ describe("runtime clarity guards", () => {
       settlementEcology: _outdatedSettlementEcology,
       dogActorRoster: _outdatedDogActorRoster,
       settlementWorkingAnimals: _outdatedSettlementWorkingAnimals,
-      settlementDomesticAnimalRecovery: _outdatedSettlementDomesticAnimalRecovery,
+      settlementDomesticAnimalRecovery:
+        _outdatedSettlementDomesticAnimalRecovery,
       porterResponse: _outdatedPorterResponse,
       livingActorPlayerChoice: _outdatedLivingActorPlayerChoice,
       integrity: _preparedIntegrity,
@@ -2470,7 +3118,9 @@ describe("runtime clarity guards", () => {
       paddling: false,
       catchingBreath: true,
     });
-    expect(runtime.getRenderView().player.stamina).toBeGreaterThan(staminaBeforeReleaseBeat);
+    expect(runtime.getRenderView().player.stamina).toBeGreaterThan(
+      staminaBeforeReleaseBeat,
+    );
 
     // Blur/view-deactivation is projected as an explicit zero movement command.
     // It must cancel a runtime-owned touch stroke even though no keyboard key
@@ -2488,7 +3138,9 @@ describe("runtime clarity guards", () => {
       paddling: false,
       catchingBreath: true,
     });
-    expect(runtime.getRenderView().player.stamina).toBeGreaterThan(staminaBeforeCancelledTap);
+    expect(runtime.getRenderView().player.stamina).toBeGreaterThan(
+      staminaBeforeCancelledTap,
+    );
 
     // A nearby mobile move target supplies exactly the same directional verb
     // for a bounded eight-beat stroke. One later beat proves it cannot become
@@ -2536,8 +3188,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(26);
-    expect(durableRecord.payloadVersion).toBe(26);
+    expect(durable.version).toBe(27);
+    expect(durableRecord.payloadVersion).toBe(27);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");
@@ -2563,7 +3215,9 @@ describe("runtime clarity guards", () => {
     });
     await resumed.save();
     const reloaded = decodeGameSave(repository.snapshot());
-    expect({ x: reloaded.player.x, y: reloaded.player.y }).toEqual(positionAtSave);
+    expect({ x: reloaded.player.x, y: reloaded.player.y }).toEqual(
+      positionAtSave,
+    );
     expect({
       x: reloaded.player.previousX,
       y: reloaded.player.previousY,
@@ -2572,7 +3226,9 @@ describe("runtime clarity guards", () => {
     expect(reloaded.player.mode).toBe("swept");
     expect(reloaded.player.sweepSupport).toBe(supportAtSave);
     expect(reloaded.traversalFeedback).toEqual(incidentAtSave);
-    expect(reloaded.physicalCargo?.expectedManifest).toEqual(cargoAtSave.expectedManifest);
+    expect(reloaded.physicalCargo?.expectedManifest).toEqual(
+      cargoAtSave.expectedManifest,
+    );
     expect(reloaded.physicalCargo).toEqual(cargoAtSave);
     resumed.destroy();
   });
@@ -2580,7 +3236,9 @@ describe("runtime clarity guards", () => {
   it("explains ADRIFT control and ignores scan and pace commands while swept", async () => {
     const world = createWorld("runtime swept guard", "calm");
     const view = createWorldView(world);
-    const deepTile = view.terrain.tiles.find((tile) => tile.waterDepth >= 120_000);
+    const deepTile = view.terrain.tiles.find(
+      (tile) => tile.waterDepth >= 120_000,
+    );
     if (!deepTile) throw new Error("fixture did not generate deep water");
     const player = createPlayer(view);
     player.x = deepTile.x * TILE_UNITS + TILE_UNITS / 2;
@@ -2616,7 +3274,9 @@ describe("runtime clarity guards", () => {
     expect(runtime.getUIView().field.swept).toBe(true);
     runtime.dispatchUI({ type: "scan" });
     expect(runtime.getUIView().announcement?.message).toContain("ADRIFT");
-    expect(runtime.getUIView().announcement?.message).toContain("sounding line stays secured");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "sounding line stays secured",
+    );
     expect(runtime.getUIView().player.pace).toBe("rest");
     runtime.destroy();
   });
@@ -2624,14 +3284,21 @@ describe("runtime clarity guards", () => {
   it("preserves a legitimately high-tide Tide anchor when its tidal flat reloads at low water", async () => {
     const world = createWorld("receded anchor save", "calm");
     const lowView = createWorldView(world);
-    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
-    const tidalFlat = lowView.terrain.tiles.find(
-      (tile) => tile.terrain === "tidal-flat" && !settlementTiles.has(tile.index),
+    const settlementTiles = new Set(
+      world.settlements.map((settlement) => settlement.tileIndex),
     );
-    if (!tidalFlat) throw new Error("fixture did not generate an open tidal flat");
+    const tidalFlat = lowView.terrain.tiles.find(
+      (tile) =>
+        tile.terrain === "tidal-flat" && !settlementTiles.has(tile.index),
+    );
+    if (!tidalFlat)
+      throw new Error("fixture did not generate an open tidal flat");
     const context = wayknotContextAt(lowView, tidalFlat.index);
     if (!context) throw new Error("fixture tidal flat has no Wayknot context");
-    const highTideDepth = Math.max(0, tideAtTick(360).level - tidalFlat.elevation);
+    const highTideDepth = Math.max(
+      0,
+      tideAtTick(360).level - tidalFlat.elevation,
+    );
     expect(context.waterDepth).toBeLessThan(120_000);
     expect(highTideDepth).toBeGreaterThanOrEqual(120_000);
 
@@ -2642,12 +3309,14 @@ describe("runtime clarity guards", () => {
     });
     expect(placed.ok).toBe(true);
     player.wayknots = placed.state;
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      player,
-      createSessionState(world.meta.seedText),
-      "Receded anchor",
-    ));
+    const repository = new MemoryRepository(
+      runtimeSaveRecord(
+        world,
+        player,
+        createSessionState(world.meta.seedText),
+        "Receded anchor",
+      ),
+    );
 
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getRenderView().wayknots).toEqual([
@@ -2655,8 +3324,9 @@ describe("runtime clarity guards", () => {
     ]);
     await runtime.save();
     expect(
-      decodeGameSave(repository.snapshot()).player.wayknots.wayknots
-        .find((wayknot) => wayknot.id === 3)?.tileIndex,
+      decodeGameSave(repository.snapshot()).player.wayknots.wayknots.find(
+        (wayknot) => wayknot.id === 3,
+      )?.tileIndex,
     ).toBe(tidalFlat.index);
     runtime.destroy();
   });
@@ -2664,14 +3334,17 @@ describe("runtime clarity guards", () => {
   it("returns malformed Tide anchors on permanently unsuitable meadow and ridge to the pack", async () => {
     const world = createWorld("dry anchor repair", "calm");
     const view = createWorldView(world);
-    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+    const settlementTiles = new Set(
+      world.settlements.map((settlement) => settlement.tileIndex),
+    );
     const meadow = view.terrain.tiles.find(
       (tile) => tile.terrain === "meadow" && !settlementTiles.has(tile.index),
     );
     const ridge = view.terrain.tiles.find(
       (tile) => tile.terrain === "ridge" && !settlementTiles.has(tile.index),
     );
-    if (!meadow || !ridge) throw new Error("fixture did not generate open meadow and ridge tiles");
+    if (!meadow || !ridge)
+      throw new Error("fixture did not generate open meadow and ridge tiles");
     expect(meadow.waterDepth).toBeLessThan(120_000);
     expect(ridge.waterDepth).toBeLessThan(120_000);
 
@@ -2684,17 +3357,20 @@ describe("runtime clarity guards", () => {
         return wayknot;
       }),
     };
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      player,
-      createSessionState(world.meta.seedText),
-      "Dry malformed anchors",
-    ));
+    const repository = new MemoryRepository(
+      runtimeSaveRecord(
+        world,
+        player,
+        createSessionState(world.meta.seedText),
+        "Dry malformed anchors",
+      ),
+    );
 
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getRenderView().wayknots).toEqual([]);
     await runtime.save();
-    const repaired = decodeGameSave(repository.snapshot()).player.wayknots.wayknots;
+    const repaired = decodeGameSave(repository.snapshot()).player.wayknots
+      .wayknots;
     expect(repaired.find((wayknot) => wayknot.id === 3)?.tileIndex).toBeNull();
     expect(repaired.find((wayknot) => wayknot.id === 4)?.tileIndex).toBeNull();
     runtime.destroy();
@@ -2703,31 +3379,36 @@ describe("runtime clarity guards", () => {
   it("requires a sounding before binding a flooded non-channel anchor but still permits reclaim", async () => {
     const world = runTicks(createWorld("sound before anchor", "calm"), 360);
     const view = createWorldView(world);
-    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
-    const flooded = view.terrain.tiles.find((tile) =>
-      tile.terrain !== "deep-water"
-      && tile.waterDepth >= 120_000
-      && !settlementTiles.has(tile.index),
+    const settlementTiles = new Set(
+      world.settlements.map((settlement) => settlement.tileIndex),
     );
-    if (!flooded) throw new Error("fixture did not generate sounded-anchor ground at high tide");
+    const flooded = view.terrain.tiles.find(
+      (tile) =>
+        tile.terrain !== "deep-water" &&
+        tile.waterDepth >= 120_000 &&
+        !settlementTiles.has(tile.index),
+    );
+    if (!flooded)
+      throw new Error(
+        "fixture did not generate sounded-anchor ground at high tide",
+      );
     const player = createPlayer(view);
     placePlayerOnTile(player, flooded);
     player.depthSoundings[flooded.index] = 0;
     const session = createSessionState(world.meta.seedText);
     session.titleVisible = false;
     session.paused = false;
-    const repository = new MemoryRepository(runtimeSaveRecord(
-      world,
-      player,
-      session,
-      "Unsounded flooded anchor",
-    ));
+    const repository = new MemoryRepository(
+      runtimeSaveRecord(world, player, session, "Unsounded flooded anchor"),
+    );
 
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
     runtime.dispatchUI({ type: "wayknot" });
     expect(runtime.getRenderView().wayknots).toEqual([]);
-    expect(runtime.getUIView().announcement?.message).toContain("Pulse Space first");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "Pulse Space first",
+    );
 
     runtime.dispatchUI({ type: "scan" });
     expect(runtime.getUIView().field.depthKnown).toBe(true);
@@ -2758,8 +3439,13 @@ describe("runtime clarity guards", () => {
   it("collects a promise immediately when its action is used at the offer harbor", async () => {
     const runtime = await createTideweftRuntime(new MemoryRepository());
     runtime.dispatchUI({ type: "resume-world" });
-    const localOffer = runtime.getUIView().contracts.find((contract) => contract.actionLabel === "Pick up cargo here");
-    if (!localOffer) throw new Error("fixture did not start at a local cargo offer");
+    const localOffer = runtime
+      .getUIView()
+      .contracts.find(
+        (contract) => contract.actionLabel === "Pick up cargo here",
+      );
+    if (!localOffer)
+      throw new Error("fixture did not start at a local cargo offer");
 
     runtime.dispatchUI({
       type: "contract",
@@ -2769,7 +3455,9 @@ describe("runtime clarity guards", () => {
 
     expect(runtime.getUIView().player.cargoLoad).toBeGreaterThan(0);
     expect(runtime.getUIView().objective?.title).toContain("DELIVER");
-    expect(runtime.getUIView().objective?.description).toContain("cargo is in your pack");
+    expect(runtime.getUIView().objective?.description).toContain(
+      "cargo is in your pack",
+    );
     runtime.destroy();
   });
 
@@ -2777,13 +3465,24 @@ describe("runtime clarity guards", () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
-    const offer = runtime.getUIView().contracts.find((contract) =>
-      contract.actionLabel === "Pick up cargo here");
-    if (!offer) throw new Error("fixture did not begin at a physical Promise pickup");
-    runtime.dispatchUI({ type: "contract", action: "accept", contractId: offer.id });
+    const offer = runtime
+      .getUIView()
+      .contracts.find(
+        (contract) => contract.actionLabel === "Pick up cargo here",
+      );
+    if (!offer)
+      throw new Error("fixture did not begin at a physical Promise pickup");
+    runtime.dispatchUI({
+      type: "contract",
+      action: "accept",
+      contractId: offer.id,
+    });
     advancePlayerSteps(runtime, 10);
-    const promiseRow = runtime.getUIView().kit?.transportRows.find((row) =>
-      row.kind === "promise-cargo" && row.lotId !== undefined);
+    const promiseRow = runtime
+      .getUIView()
+      .kit?.transportRows.find(
+        (row) => row.kind === "promise-cargo" && row.lotId !== undefined,
+      );
     if (!promiseRow?.lotId || !promiseRow.dropQuantity) {
       throw new Error("accepted Promise did not expose its exact carried lot");
     }
@@ -2810,18 +3509,28 @@ describe("runtime clarity guards", () => {
       canInteract: true,
       interactLabel: "Recover parcel",
     });
-    runtime.dispatchUI({ type: "contract", action: "renegotiate", contractId: offer.id });
-    expect(runtime.getUIView().announcement?.message).toContain("RECOVER CARGO");
+    runtime.dispatchUI({
+      type: "contract",
+      action: "renegotiate",
+      contractId: offer.id,
+    });
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "RECOVER CARGO",
+    );
     const parcelId = loose[0]?.id;
     if (!parcelId) throw new Error("dropped Promise lost its parcel identity");
     await runtime.save();
     const beforeReload = decodeGameSave(repository.snapshot()).physicalCargo;
-    expect(beforeReload?.looseWorld.entities.some(({ id }) => id === parcelId)).toBe(true);
+    expect(
+      beforeReload?.looseWorld.entities.some(({ id }) => id === parcelId),
+    ).toBe(true);
     runtime.destroy();
 
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().objective?.id).toBe(`recover-${offer.id}`);
-    expect(resumed.getRenderView().looseCargo?.map(({ id }) => id)).toEqual([parcelId]);
+    expect(resumed.getRenderView().looseCargo?.map(({ id }) => id)).toEqual([
+      parcelId,
+    ]);
     resumed.dispatchRenderer({
       type: "parcel-target",
       parcelId,
@@ -2831,15 +3540,24 @@ describe("runtime clarity guards", () => {
     expect(resumed.getUIView().objective?.id).toBe(offer.id);
     expect(resumed.getUIView().objective?.title).toContain("DELIVER");
     const recoveredLotId = `loose:${parcelId}`;
-    expect(resumed.getUIView().kit?.transportRows.find((row) =>
-      row.kind === "promise-cargo")?.lotId).toBe(recoveredLotId);
+    expect(
+      resumed
+        .getUIView()
+        .kit?.transportRows.find((row) => row.kind === "promise-cargo")?.lotId,
+    ).toBe(recoveredLotId);
     await resumed.save();
     const recoveredSave = decodeGameSave(repository.snapshot()).physicalCargo;
-    expect(recoveredSave?.looseWorld.entities.some(({ id }) => id === parcelId)).toBe(false);
-    expect(recoveredSave?.looseWorld.entities.every(({ payload }) =>
-      payload.kind === "provision"
-    )).toBe(true);
-    expect(recoveredSave?.carrier.lots.some((lot) => lot.id === recoveredLotId)).toBe(true);
+    expect(
+      recoveredSave?.looseWorld.entities.some(({ id }) => id === parcelId),
+    ).toBe(false);
+    expect(
+      recoveredSave?.looseWorld.entities.every(
+        ({ payload }) => payload.kind === "provision",
+      ),
+    ).toBe(true);
+    expect(
+      recoveredSave?.carrier.lots.some((lot) => lot.id === recoveredLotId),
+    ).toBe(true);
     expect(recoveredSave?.carrier.retiredLotIds).toContain(promiseRow.lotId);
     resumed.destroy();
   });
@@ -2847,16 +3565,21 @@ describe("runtime clarity guards", () => {
   it("repairs an older accepted-without-pickup snapshot back to an offered promise", async () => {
     const world = createWorld("interrupted accepted pickup", "calm");
     const view = createWorldView(world);
-    const contract = world.contracts.find((candidate) => candidate.status === "offered");
-    if (!contract) throw new Error("fixture did not generate an offered contract");
+    const contract = world.contracts.find(
+      (candidate) => candidate.status === "offered",
+    );
+    if (!contract)
+      throw new Error("fixture did not generate an offered contract");
     const player = createPlayer(view, contract.originSettlementId);
     expect(loadContractCargo(player, contract)).toBe(true);
-    stepWorld(world, [{
-      id: "legacy-half-accept",
-      type: "accept-contract",
-      contractId: contract.id,
-      carrier: "player",
-    }]);
+    stepWorld(world, [
+      {
+        id: "legacy-half-accept",
+        type: "accept-contract",
+        contractId: contract.id,
+        carrier: "player",
+      },
+    ]);
     expect(contract.status).toBe("accepted");
     expect(contract.cargoQuantity).toBe(0);
     const session = createSessionState(world.meta.seedText);
@@ -2883,11 +3606,18 @@ describe("runtime clarity guards", () => {
 
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getUIView().player.cargoLoad).toBe(0);
-    expect(runtime.getUIView().contracts.find((item) => Number(item.id) === contract.id)?.actionLabel)
-      .toBe("Pick up cargo here");
+    expect(
+      runtime
+        .getUIView()
+        .contracts.find((item) => Number(item.id) === contract.id)?.actionLabel,
+    ).toBe("Pick up cargo here");
     await runtime.save();
-    const repairedWorld = deserializeWorld(decodeGameSave(repository.snapshot()).world);
-    const repairedContract = repairedWorld.contracts.find((candidate) => candidate.id === contract.id);
+    const repairedWorld = deserializeWorld(
+      decodeGameSave(repository.snapshot()).world,
+    );
+    const repairedContract = repairedWorld.contracts.find(
+      (candidate) => candidate.id === contract.id,
+    );
     expect(repairedContract?.status).toBe("offered");
     expect(repairedContract?.carrierKind).toBeNull();
     expect(repairedContract?.cargoQuantity).toBe(0);
@@ -2896,11 +3626,16 @@ describe("runtime clarity guards", () => {
   });
 
   it("repairs a 64x48 Alpha pickup before deriving trace and restores its choir baseline", async () => {
-    const world = legacySizedWorld(createWorld("published alpha pickup", "calm"));
+    const world = legacySizedWorld(
+      createWorld("published alpha pickup", "calm"),
+    );
     assertWorldInvariants(world);
     const view = createWorldView(world);
-    const contract = world.contracts.find((candidate) => candidate.status === "offered");
-    if (!contract) throw new Error("legacy fixture did not generate an offered contract");
+    const contract = world.contracts.find(
+      (candidate) => candidate.status === "offered",
+    );
+    if (!contract)
+      throw new Error("legacy fixture did not generate an offered contract");
     const player = createPlayer(view, contract.originSettlementId);
     expect(loadContractCargo(player, contract)).toBe(true);
     const legacyPlayer = structuredClone(player) as Partial<PlayerState>;
@@ -2936,7 +3671,8 @@ describe("runtime clarity guards", () => {
     session.sessionBaseline = captureSessionBaseline(view);
     const legacySession = structuredClone(session) as Partial<GameSessionState>;
     delete legacySession.sessionChoirsAwakened;
-    delete (legacySession.sessionBaseline as Partial<SessionBaseline>).awakenedChoirs;
+    delete (legacySession.sessionBaseline as Partial<SessionBaseline>)
+      .awakenedChoirs;
     const envelope: TestGameSaveEnvelope = {
       format: "tideweft-session",
       version: 1,
@@ -2957,8 +3693,11 @@ describe("runtime clarity guards", () => {
 
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getUIView().player.cargoLoad).toBe(0);
-    expect(runtime.getUIView().contracts.find((item) => Number(item.id) === contract.id)?.actionLabel)
-      .toBe("Pick up cargo here");
+    expect(
+      runtime
+        .getUIView()
+        .contracts.find((item) => Number(item.id) === contract.id)?.actionLabel,
+    ).toBe("Pick up cargo here");
     await runtime.save();
     const repaired = decodeGameSave(repository.snapshot());
     const repairedWorld = deserializeWorld(repaired.world);
@@ -2969,29 +3708,39 @@ describe("runtime clarity guards", () => {
     const repairedOrigin = world.settlements.find(
       (settlement) => settlement.id === contract.originSettlementId,
     )?.tileIndex;
-    if (repairedOrigin === undefined) throw new Error("legacy Promise origin disappeared");
+    if (repairedOrigin === undefined)
+      throw new Error("legacy Promise origin disappeared");
     const repairedOriginX = repairedOrigin % LEGACY_WORLD_WIDTH;
     const repairedOriginY = Math.floor(repairedOrigin / LEGACY_WORLD_WIDTH);
-    if (!repaired.regionalTravel) throw new Error("repaired save omitted regional travel");
+    if (!repaired.regionalTravel)
+      throw new Error("repaired save omitted regional travel");
     const repairedTravel = restorePlayerRegionalTravel(
       repairedWorld.meta.rootSeed,
       repaired.player,
       repaired.regionalTravel,
     );
-    if (!repairedTravel) throw new Error("repaired regional travel did not restore");
+    if (!repairedTravel)
+      throw new Error("repaired regional travel did not restore");
     const repairedTraceIndex = regionTileIndexToWindowIndex(
       repairedTravel.window,
       createRegionCoord(0, 0),
       repairedOriginY * WORLD_WIDTH + repairedOriginX,
     );
-    if (repairedTraceIndex === null) throw new Error("repaired origin is outside its spatial frame");
+    if (repairedTraceIndex === null)
+      throw new Error("repaired origin is outside its spatial frame");
     expect(repaired.player.currentTrace).toEqual([repairedTraceIndex]);
     expect(repaired.player.currentTrace.every(Number.isSafeInteger)).toBe(true);
     expect(repaired.player.wayknots.capacity).toBe(6);
     expect(repaired.player.wayknots.wayknots).toHaveLength(6);
-    expect(repaired.player.wayknots.wayknots.every((wayknot) => wayknot.tileIndex === null)).toBe(true);
+    expect(
+      repaired.player.wayknots.wayknots.every(
+        (wayknot) => wayknot.tileIndex === null,
+      ),
+    ).toBe(true);
     expect(Object.hasOwn(repaired.player, "tideHarps")).toBe(false);
-    expect(repaired.session.sessionBaseline?.awakenedChoirs).toBe(repairedWorld.choirs.length);
+    expect(repaired.session.sessionBaseline?.awakenedChoirs).toBe(
+      repairedWorld.choirs.length,
+    );
     assertWorldInvariants(repairedWorld);
     runtime.destroy();
   });
@@ -2999,12 +3748,18 @@ describe("runtime clarity guards", () => {
   it("repairs a failed pickup when saving before its queued release tick", async () => {
     const world = createWorld("pickup stock race", "calm");
     const view = createWorldView(world);
-    const contract = world.contracts.find((candidate) => candidate.status === "offered");
-    if (!contract) throw new Error("fixture did not generate an offered contract");
-    const origin = world.settlements.find((settlement) => settlement.id === contract.originSettlementId);
+    const contract = world.contracts.find(
+      (candidate) => candidate.status === "offered",
+    );
+    if (!contract)
+      throw new Error("fixture did not generate an offered contract");
+    const origin = world.settlements.find(
+      (settlement) => settlement.id === contract.originSettlementId,
+    );
     if (!origin) throw new Error("fixture contract has no origin");
     const availableAtPickup = Math.max(0, contract.quantity - 1);
-    const removedStock = origin.inventory[contract.resource] - availableAtPickup;
+    const removedStock =
+      origin.inventory[contract.resource] - availableAtPickup;
     origin.inventory[contract.resource] = availableAtPickup;
     world.ledger.consumed[contract.resource] += removedStock;
     assertWorldInvariants(world);
@@ -3031,18 +3786,26 @@ describe("runtime clarity guards", () => {
     });
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
-    runtime.dispatchUI({ type: "contract", action: "accept", contractId: String(contract.id) });
+    runtime.dispatchUI({
+      type: "contract",
+      action: "accept",
+      contractId: String(contract.id),
+    });
     expect(runtime.getUIView().player.cargoLoad).toBeGreaterThan(0);
 
     advancePlayerSteps(runtime, 10);
     expect(runtime.getUIView().player.cargoLoad).toBe(0);
-    expect(runtime.getUIView().announcement?.message).toContain("could not secure that cargo");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "could not secure that cargo",
+    );
     // The simulation accepted first, pickup rejected, and reconciliation queued
     // a release. Saving here used to lose that queue and strand the contract.
     await runtime.save();
     const repairedSave = decodeGameSave(repository.snapshot());
     const repairedWorld = deserializeWorld(repairedSave.world);
-    const repairedContract = repairedWorld.contracts.find((candidate) => candidate.id === contract.id);
+    const repairedContract = repairedWorld.contracts.find(
+      (candidate) => candidate.id === contract.id,
+    );
     expect(repairedContract?.status).toBe("offered");
     expect(repairedContract?.carrierKind).toBeNull();
     expect(repairedContract?.cargoQuantity).toBe(0);
@@ -3052,8 +3815,11 @@ describe("runtime clarity guards", () => {
     runtime.destroy();
 
     const resumed = await createTideweftRuntime(repository);
-    expect(resumed.getUIView().contracts.find((item) => Number(item.id) === contract.id)?.actionLabel)
-      .toBe("Pick up cargo here");
+    expect(
+      resumed
+        .getUIView()
+        .contracts.find((item) => Number(item.id) === contract.id)?.actionLabel,
+    ).toBe("Pick up cargo here");
     expect(resumed.getUIView().player.cargoLoad).toBe(0);
     resumed.destroy();
   });
@@ -3064,11 +3830,20 @@ describe("runtime clarity guards", () => {
     runtime.dispatchUI({ type: "resume-world" });
     await runtime.save();
     const beforePickup = decodeGameSave(repository.snapshot());
-    const localOffer = runtime.getUIView().contracts.find((contract) => contract.actionLabel === "Pick up cargo here");
-    if (!localOffer) throw new Error("fixture did not start at a local cargo offer");
+    const localOffer = runtime
+      .getUIView()
+      .contracts.find(
+        (contract) => contract.actionLabel === "Pick up cargo here",
+      );
+    if (!localOffer)
+      throw new Error("fixture did not start at a local cargo offer");
     const contractId = Number(localOffer.id);
 
-    runtime.dispatchUI({ type: "contract", action: "accept", contractId: localOffer.id });
+    runtime.dispatchUI({
+      type: "contract",
+      action: "accept",
+      contractId: localOffer.id,
+    });
     expect(runtime.getUIView().player.cargoLoad).toBeGreaterThan(0);
 
     // This is the pagehide window: local cargo exists, but accept + pickup have
@@ -3077,10 +3852,16 @@ describe("runtime clarity guards", () => {
     const interruptedSave = decodeGameSave(repository.snapshot());
     expect(interruptedSave.world).toBe(beforePickup.world);
     expect(interruptedSave.player.activeContractId).toBeNull();
-    expect(interruptedSave.player.cargo.some((cargo) => cargo.contractId === contractId)).toBe(false);
+    expect(
+      interruptedSave.player.cargo.some(
+        (cargo) => cargo.contractId === contractId,
+      ),
+    ).toBe(false);
     expect(interruptedSave.session.trackedContractId).toBe(contractId);
     const interruptedWorld = deserializeWorld(interruptedSave.world);
-    const stillOffered = interruptedWorld.contracts.find((contract) => contract.id === contractId);
+    const stillOffered = interruptedWorld.contracts.find(
+      (contract) => contract.id === contractId,
+    );
     expect(stillOffered?.status).toBe("offered");
     expect(stillOffered?.cargoQuantity).toBe(0);
     expectConserved(interruptedWorld);
@@ -3088,10 +3869,16 @@ describe("runtime clarity guards", () => {
 
     const resumed = await createTideweftRuntime(repository);
     resumed.dispatchUI({ type: "resume-world" });
-    const retry = resumed.getUIView().contracts.find((contract) => Number(contract.id) === contractId);
+    const retry = resumed
+      .getUIView()
+      .contracts.find((contract) => Number(contract.id) === contractId);
     expect(retry?.actionLabel).toBe("Pick up cargo here");
     expect(resumed.getUIView().player.cargoLoad).toBe(0);
-    resumed.dispatchUI({ type: "contract", action: "accept", contractId: String(contractId) });
+    resumed.dispatchUI({
+      type: "contract",
+      action: "accept",
+      contractId: String(contractId),
+    });
     expect(resumed.getUIView().player.cargoLoad).toBeGreaterThan(0);
     advancePlayerSteps(resumed, 10);
     await resumed.save();
@@ -3099,12 +3886,15 @@ describe("runtime clarity guards", () => {
     const carriedSaveRecord = repository.snapshot();
     const carriedSave = decodeGameSave(carriedSaveRecord);
     const carriedWorld = deserializeWorld(carriedSave.world);
-    const carriedContract = carriedWorld.contracts.find((contract) => contract.id === contractId);
+    const carriedContract = carriedWorld.contracts.find(
+      (contract) => contract.id === contractId,
+    );
     if (!carriedContract) throw new Error("retried contract disappeared");
     const unknownRequester = carriedWorld.residents.find(
       ({ id }) => id === carriedContract.requesterResidentId,
     );
-    if (!unknownRequester) throw new Error("retried contract requester disappeared");
+    if (!unknownRequester)
+      throw new Error("retried contract requester disappeared");
     expect(unknownRequester.playerKnowledge.level).toBe("unfamiliar");
     expect(carriedContract.status).toBe("in-transit");
     expect(carriedContract.carrierKind).toBe("player");
@@ -3114,20 +3904,26 @@ describe("runtime clarity guards", () => {
     const destination = carriedWorld.settlements.find(
       (settlement) => settlement.id === carriedContract.destinationSettlementId,
     );
-    const route = carriedWorld.routes.find((candidate) => candidate.id === carriedContract.routeId);
-    if (!destination || !route) throw new Error("retried contract has no destination route");
+    const route = carriedWorld.routes.find(
+      (candidate) => candidate.id === carriedContract.routeId,
+    );
+    if (!destination || !route)
+      throw new Error("retried contract has no destination route");
     const destinationTile = carriedWorld.terrain.tiles[destination.tileIndex];
     if (!destinationTile) throw new Error("destination has no terrain tile");
-    const trace = route.fromSettlementId === carriedContract.originSettlementId
-      ? [...route.path]
-      : [...route.path].reverse();
-    if (!carriedSave.regionalTravel) throw new Error("carried save omitted regional travel");
+    const trace =
+      route.fromSettlementId === carriedContract.originSettlementId
+        ? [...route.path]
+        : [...route.path].reverse();
+    if (!carriedSave.regionalTravel)
+      throw new Error("carried save omitted regional travel");
     const carriedTravel = restorePlayerRegionalTravel(
       carriedWorld.meta.rootSeed,
       carriedSave.player,
       carriedSave.regionalTravel,
     );
-    if (!carriedTravel) throw new Error("carried save regional travel did not restore");
+    if (!carriedTravel)
+      throw new Error("carried save regional travel did not restore");
     const positionedTravel = moveRegionalFixtureToAddress(
       carriedWorld.meta.rootSeed,
       carriedTravel,
@@ -3168,15 +3964,24 @@ describe("runtime clarity guards", () => {
     const atDestination = await createTideweftRuntime(repository);
     atDestination.dispatchUI({ type: "resume-world" });
     atDestination.dispatchUI({ type: "interact" });
-    expect(atDestination.getUIView().announcement?.message).toContain("receiving the cargo");
+    expect(atDestination.getUIView().announcement?.message).toContain(
+      "receiving the cargo",
+    );
     advancePlayerSteps(atDestination, 10);
     expect(atDestination.getUIView().player.cargoLoad).toBe(0);
-    expect(atDestination.getUIView().announcement?.message).not.toContain(unknownRequester.name);
+    expect(atDestination.getUIView().announcement?.message).not.toContain(
+      unknownRequester.name,
+    );
     await atDestination.save();
     const deliveredSave = decodeGameSave(repository.snapshot());
     const deliveredWorld = deserializeWorld(deliveredSave.world);
-    expect(deliveredWorld.contracts.find((contract) => contract.id === contractId)?.status).toBe("fulfilled");
-    expect(deliveredSave.session.sessionChanges.join("\n")).not.toContain(unknownRequester.name);
+    expect(
+      deliveredWorld.contracts.find((contract) => contract.id === contractId)
+        ?.status,
+    ).toBe("fulfilled");
+    expect(deliveredSave.session.sessionChanges.join("\n")).not.toContain(
+      unknownRequester.name,
+    );
     expectConserved(deliveredWorld);
     atDestination.destroy();
   });
@@ -3193,20 +3998,26 @@ describe("runtime clarity guards", () => {
     expect(repository.started).toHaveLength(1);
 
     let visibilitySettled = false;
-    void visibilitySave.then(() => { visibilitySettled = true; });
+    void visibilitySave.then(() => {
+      visibilitySettled = true;
+    });
     repository.resolveNext();
     await firstSave;
     await vi.waitFor(() => expect(repository.started).toHaveLength(2));
     expect(visibilitySettled).toBe(false);
     // Only the latest of the two lifecycle snapshots reaches the repository.
-    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("steady");
+    expect(
+      decodeGameSave(repository.started[1] as SaveRecord).player.pace,
+    ).toBe("steady");
 
     repository.resolveNext();
     await Promise.all([visibilitySave, pagehideSave]);
     const newest = decodeGameSave(repository.snapshot());
     expect(newest.player.pace).toBe("steady");
     expect(repository.started).toHaveLength(2);
-    expect(repository.started[0]?.playTicks).toBe(repository.started[1]?.playTicks);
+    expect(repository.started[0]?.playTicks).toBe(
+      repository.started[1]?.playTicks,
+    );
     runtime.destroy();
   });
 
@@ -3214,20 +4025,26 @@ describe("runtime clarity guards", () => {
     const repository = new DeferredSaveRepository();
     const runtime = await createTideweftRuntime(repository);
     const failedSave = runtime.save();
-    const failedExpectation = expect(failedSave).rejects.toThrow("transient storage failure");
+    const failedExpectation = expect(failedSave).rejects.toThrow(
+      "transient storage failure",
+    );
 
     runtime.dispatchUI({ type: "resume-world" });
     const recoverySave = runtime.save();
     repository.rejectNext(new Error("transient storage failure"));
     await failedExpectation;
     await vi.waitFor(() => expect(repository.started).toHaveLength(2));
-    expect(decodeGameSave(repository.started[1] as SaveRecord).player.pace).toBe("steady");
+    expect(
+      decodeGameSave(repository.started[1] as SaveRecord).player.pace,
+    ).toBe("steady");
 
     repository.resolveNext();
     await recoverySave;
     expect(decodeGameSave(repository.snapshot()).player.pace).toBe("steady");
     expect(runtime.getUIView().saveWarning).toBeUndefined();
-    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "LOCAL SAVE RESTORED",
+    );
     runtime.destroy();
   });
 
@@ -3236,10 +4053,14 @@ describe("runtime clarity guards", () => {
     const repository = new DeferredSaveRepository();
     const runtime = await createTideweftRuntime(repository);
     const firstSave = runtime.save();
-    const firstFailure = expect(firstSave).rejects.toThrow("initial storage failure");
+    const firstFailure = expect(firstSave).rejects.toThrow(
+      "initial storage failure",
+    );
     repository.rejectNext(new Error("initial storage failure"));
     await firstFailure;
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL SAVE NOT STORED",
+    );
 
     await vi.advanceTimersByTimeAsync(2_000);
     expect(repository.started).toHaveLength(2);
@@ -3248,21 +4069,37 @@ describe("runtime clarity guards", () => {
 
     repository.resolveNext();
     await vi.waitFor(() => expect(repository.started).toHaveLength(3));
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
-    expect(runtime.getUIView().announcement?.message).not.toContain("LOCAL SAVE RESTORED");
-    expect(decodeGameSave(repository.started[2] as SaveRecord).player.pace).toBe("steady");
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL SAVE NOT STORED",
+    );
+    expect(runtime.getUIView().announcement?.message).not.toContain(
+      "LOCAL SAVE RESTORED",
+    );
+    expect(
+      decodeGameSave(repository.started[2] as SaveRecord).player.pace,
+    ).toBe("steady");
 
-    const newerFailure = expect(newerSave).rejects.toThrow("newest snapshot failed");
+    const newerFailure = expect(newerSave).rejects.toThrow(
+      "newest snapshot failed",
+    );
     repository.rejectNext(new Error("newest snapshot failed"));
     await newerFailure;
-    expect(runtime.getUIView().saveWarning?.message).toBe("LOCAL SAVE NOT STORED");
+    expect(runtime.getUIView().saveWarning?.message).toBe(
+      "LOCAL SAVE NOT STORED",
+    );
 
     await vi.advanceTimersByTimeAsync(4_000);
     expect(repository.started).toHaveLength(4);
-    expect(decodeGameSave(repository.started[3] as SaveRecord).player.pace).toBe("steady");
+    expect(
+      decodeGameSave(repository.started[3] as SaveRecord).player.pace,
+    ).toBe("steady");
     repository.resolveNext();
-    await vi.waitFor(() => expect(runtime.getUIView().saveWarning).toBeUndefined());
-    expect(runtime.getUIView().announcement?.message).toContain("LOCAL SAVE RESTORED");
+    await vi.waitFor(() =>
+      expect(runtime.getUIView().saveWarning).toBeUndefined(),
+    );
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "LOCAL SAVE RESTORED",
+    );
     runtime.destroy();
   });
 });
