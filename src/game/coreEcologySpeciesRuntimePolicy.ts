@@ -46,6 +46,7 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "same-species-food-guard",
   "school-coordination",
   "shared-alarm",
+  "shoreline-foraging",
   "shore-water-activity",
   "live-prey-pursuit",
   "surface-opportunity",
@@ -246,6 +247,7 @@ const MORTALITY_VALUES: Readonly<Record<
   "american-pika": NO_MORTALITY_RUNTIME,
   "golden-eagle": NO_MORTALITY_RUNTIME,
   "atlantic-capelin": NO_MORTALITY_RUNTIME,
+  "arctic-fox": NO_MORTALITY_RUNTIME,
 });
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
@@ -647,6 +649,21 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       evidenceKinds: ["surface-dimple"],
       presentationModel: "aggregate-school",
     },
+    "arctic-fox": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "food-investigation",
+        "ground-movement-evidence",
+        "movement-memory",
+        "shoreline-foraging",
+      ],
+      activitySignals: [],
+      evidenceKinds: ["canid-pawprints"],
+      presentationModel: "individual",
+    },
   });
 
 export const CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES: readonly CoreEcologySpeciesRuntimePolicy[] =
@@ -822,6 +839,16 @@ export function validateCoreEcologySpeciesRuntimePolicies(
       policy.capabilities.includes("mobbing")
       && policy.capabilities.includes("aerial-predator")
     ) errors.push(`${policy.speciesId}:mobbing-predator-capability-collision`);
+    if (
+      policy.capabilities.includes("shoreline-foraging")
+      && (
+        !policy.actorAddressable
+        || policy.locomotionClass !== "terrestrial"
+        || !getCoreWildlifeProfile(policy.speciesId).roles.includes("small-predator")
+        || !getCoreWildlifeProfile(policy.speciesId).roles.includes("scavenger")
+        || getCoreWildlifeProfile(policy.speciesId).foodAffinities["shore-forage"] === 0
+      )
+    ) errors.push(`${policy.speciesId}:shoreline-foraging-policy-mismatch`);
     if (!mortalityPolicyMatchesCapabilities(policy)) {
       errors.push(`${policy.speciesId}:mortality-policy-mismatch`);
     }

@@ -153,6 +153,19 @@ describe("core ecology trophic capability resolver", () => {
       "north-american-river-otter",
       "atlantic-silverside",
     )).toBe(false);
+
+    // A terrestrial shoreline forager uses the same nonlethal aggregate
+    // relationship without pretending it can pursue one addressable fish.
+    expect(coreEcologyTrophicPerceivedClass(
+      "atlantic-capelin",
+      "arctic-fox",
+    )).toBe("aquatic-foraging-pressure");
+    expect(coreEcologyTrophicPerceivedClass(
+      "arctic-fox",
+      "atlantic-capelin",
+    )).toBeNull();
+    expect(coreEcologyCanPursueLivingActor("arctic-fox", "atlantic-capelin"))
+      .toBe(false);
   });
 
   it("is total and deterministic across the declared roster", () => {

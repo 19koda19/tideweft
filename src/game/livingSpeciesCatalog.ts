@@ -120,6 +120,45 @@ export const LIVING_SPECIES_ALPHA33_SPECIES_IDS_HASH = "8f90f55f1b848340" as con
 export const LIVING_SPECIES_ALPHA33_CATALOG_BYTE_LENGTH = 301_756 as const;
 export const LIVING_SPECIES_ALPHA33_CATALOG_HASH = "3ba25467e98aa825" as const;
 
+/**
+ * Exact Alpha-34 catalog lineage. The Arctic-fox admission is record 29 and
+ * must retain this complete forage-bearing catalog as an authenticated child.
+ */
+export const LIVING_SPECIES_ALPHA34_SPECIES_IDS = Object.freeze([
+  "american-black-duck",
+  "american-pika",
+  "atlantic-capelin",
+  "atlantic-marsh-fiddler-crab",
+  "atlantic-silverside",
+  "black-bear",
+  "brown-bear",
+  "brown-rat",
+  "cougar",
+  "deer",
+  "domestic-cat",
+  "domestic-chicken",
+  "domestic-dog",
+  "domestic-goat",
+  "elk",
+  "fish-crow",
+  "golden-eagle",
+  "gray-wolf",
+  "gull",
+  "human",
+  "marsh-fox",
+  "marsh-rabbit",
+  "mountain-goat",
+  "north-american-river-otter",
+  "northern-harrier",
+  "snowy-egret",
+  "southern-leopard-frog",
+  "wild-boar",
+] as const);
+export const LIVING_SPECIES_ALPHA34_CATALOG_COUNT = 28 as const;
+export const LIVING_SPECIES_ALPHA34_SPECIES_IDS_HASH = "d1ee55302ba9b46d" as const;
+export const LIVING_SPECIES_ALPHA34_CATALOG_BYTE_LENGTH = 313_934 as const;
+export const LIVING_SPECIES_ALPHA34_CATALOG_HASH = "c515376584be7475" as const;
+
 export type LivingSpeciesImplementation = "unimplemented" | "foundation" | "active";
 export type LivingSpeciesIdentityForm = "individual" | "aggregate" | "hybrid";
 export type LivingSpeciesPositionModel =
@@ -838,6 +877,7 @@ interface CoreWildlifeCatalogValues {
   readonly ecologicalClasses?: readonly string[];
   readonly habitatOwnerId: string;
   readonly ecologyOwnerId: string;
+  readonly populationOwnerId?: string;
   readonly spatialOwnerId: string;
   readonly behaviorOwnerId: string;
   readonly locomotionOwnerId: string;
@@ -2077,6 +2117,51 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     health: noHealth(),
     aboutObservableFields: ["activity-pattern", "approximate-school-size", "species"],
   },
+  "arctic-fox": {
+    implementation: "foundation",
+    ecologicalClasses: [
+      "cold-shore-mammal",
+      "forager",
+      "omnivore",
+      "scavenger",
+      "small-predator",
+    ],
+    habitatOwnerId: "game:regional-cold-shore-residents:v1",
+    ecologyOwnerId: "game:regional-cold-shore-ecology:v1",
+    populationOwnerId: "game:regional-cold-shore-residents:v1",
+    spatialOwnerId: "game:regional-cold-shore-ecology:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:regional-cold-shore-residents:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["body-size", "coat-state"],
+    appearanceTraits: ["bushy-tail", "compact-ears", "dense-coat", "temperament"],
+    habitatClasses: ["cold-saline-shoreline", "polar-shore", "rocky-shore", "tidal-edge"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["forage", "trot", "walk"],
+    terrainAffordances: ["land", "rocky-shore"],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["nonlethal-predator-pressure", "scavenger-opportunity"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:regional-cold-shore-ecology:v1",
+      decayOwnerId: "game:regional-cold-shore-ecology:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    conditionAxes: [fixed("exhaustion"), fixed("health"), fixed("stress")],
+    aboutObservableFields: [
+      "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
+    ],
+  },
 });
 
 /**
@@ -2607,6 +2692,26 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     water: "available",
     weather: "intentional-no-response",
   },
+  "arctic-fox": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
 } as const satisfies Readonly<Record<
   CoreWildlifeSpecies,
   Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
@@ -2658,6 +2763,23 @@ function coreWildlifeInteractionTargets(
       escalationConstraints: [
         "aggregate-unit-conservation",
         "direct-perception-required",
+        "no-health-or-mortality-outcome",
+        "nonlethal-pressure-only",
+      ],
+      disengagementVerbs: ["disengage", "retreat"],
+    });
+  } else if (coreEcologySpeciesHasRuntimeCapability(species, "shoreline-foraging")) {
+    targets.push({
+      targetClass: "aquatic-animal",
+      policy: "available",
+      perceptionChannels: ["vision"],
+      appraisals: ["forage-opportunity"],
+      motivationAxes: ["hunger"],
+      verbs: ["approach", "forage"],
+      escalationConstraints: [
+        "aggregate-unit-conservation",
+        "direct-perception-required",
+        "no-capture-or-consumption-outcome",
         "no-health-or-mortality-outcome",
         "nonlethal-pressure-only",
       ],
@@ -3113,7 +3235,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     },
     population: {
       implementation,
-      ownerId: values.ecologyOwnerId,
+      ownerId: values.populationOwnerId ?? values.ecologyOwnerId,
       strategy: aggregate ? "aggregate-field" : "hybrid-population",
       materialization: aggregate ? "threshold" : "mixed",
       maxMaterializedPerRegion: runtimePolicy.maximumMaterializedActors,
@@ -3332,7 +3454,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     },
     persistence: {
       implementation,
-      ownerId: values.ecologyOwnerId,
+      ownerId: values.populationOwnerId ?? values.ecologyOwnerId,
       defaultTier: "regional",
       allowedTiers: ["regional"],
       promotionTriggers: [],
@@ -3985,6 +4107,32 @@ if (
 
 export const LIVING_SPECIES_ALPHA33_CATALOG: LivingSpeciesCatalog =
   alpha33CompatibilityCatalog;
+
+const alpha34CompatibilityModules = LIVING_SPECIES_ALPHA34_SPECIES_IDS.map((speciesId) => {
+  const module = currentCatalog.modules.find((candidate) => candidate.speciesId === speciesId);
+  if (module === undefined) {
+    throw new Error(`Living Weft catalog omitted Alpha-34 compatibility species ${speciesId}`);
+  }
+  return module;
+});
+const alpha34CompatibilityCatalog = deepFreeze({
+  version: LIVING_SPECIES_CATALOG_VERSION,
+  modules: alpha34CompatibilityModules,
+});
+const alpha34CompatibilityBytes = stableStringify(alpha34CompatibilityCatalog);
+if (
+  LIVING_SPECIES_ALPHA34_SPECIES_IDS.length !== LIVING_SPECIES_ALPHA34_CATALOG_COUNT
+  || hashCanonical(LIVING_SPECIES_ALPHA34_SPECIES_IDS)
+    !== LIVING_SPECIES_ALPHA34_SPECIES_IDS_HASH
+  || new TextEncoder().encode(alpha34CompatibilityBytes).byteLength
+    !== LIVING_SPECIES_ALPHA34_CATALOG_BYTE_LENGTH
+  || hashCanonical(alpha34CompatibilityCatalog) !== LIVING_SPECIES_ALPHA34_CATALOG_HASH
+) {
+  throw new Error("Living Weft Alpha-34 catalog lineage was rewritten");
+}
+
+export const LIVING_SPECIES_ALPHA34_CATALOG: LivingSpeciesCatalog =
+  alpha34CompatibilityCatalog;
 
 /** Only implemented identity owners are present; this is deliberately not a planned roster. */
 export const LIVING_SPECIES_CATALOG: LivingSpeciesCatalog = currentCatalog;

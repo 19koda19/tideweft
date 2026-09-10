@@ -268,6 +268,7 @@ type WildlifePresentationForm =
   | "domestic-cat"
   | "marsh-rabbit"
   | "marsh-fox"
+  | "arctic-fox"
   | "mountain-goat"
   | "american-pika"
   | "golden-eagle"
@@ -392,6 +393,20 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: true,
     baseSizeScale: 0.82,
     observableForm: "Lean, low-tailed canid",
+  },
+  "arctic-fox": {
+    form: "arctic-fox",
+    representation: "actor",
+    identificationClarity: 430_000,
+    unidentifiedQuickLabel: "Unknown small canid",
+    unidentifiedIdentityLabel: "Unidentified small canid",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.68,
+    observableForm: "Compact, thick-coated canid with a full tail",
   },
   "fish-crow": {
     form: "fish-crow-flock",
@@ -823,9 +838,11 @@ type IndividualEvidenceSpecies =
   | "domestic-cat"
   | "marsh-rabbit"
   | "marsh-fox"
-  | "gray-wolf";
+  | "gray-wolf"
+  | "arctic-fox";
 
 interface IndividualEvidenceDescriptor {
+  readonly identification: "visual-clarity" | "learned-identity";
   readonly expectedKind: "wet-tracks" | "paired-tracks" | "canid-pawprints";
   readonly form: WildlifePopulationEvidenceForm;
   readonly minimumClarity: number;
@@ -847,6 +864,7 @@ const INDIVIDUAL_EVIDENCE_BY_SPECIES: Readonly<
   Record<IndividualEvidenceSpecies, IndividualEvidenceDescriptor>
 > = deepFreeze({
   "domestic-cat": {
+    identification: "visual-clarity",
     expectedKind: "wet-tracks",
     form: "small-tracks",
     minimumClarity: 340_000,
@@ -859,6 +877,7 @@ const INDIVIDUAL_EVIDENCE_BY_SPECIES: Readonly<
     sizeScale: 1.02,
   },
   "marsh-rabbit": {
+    identification: "visual-clarity",
     expectedKind: "paired-tracks",
     form: "paired-tracks",
     minimumClarity: 320_000,
@@ -871,6 +890,7 @@ const INDIVIDUAL_EVIDENCE_BY_SPECIES: Readonly<
     sizeScale: 0.94,
   },
   "marsh-fox": {
+    identification: "visual-clarity",
     expectedKind: "canid-pawprints",
     form: "canid-pawprints",
     minimumClarity: 350_000,
@@ -883,6 +903,7 @@ const INDIVIDUAL_EVIDENCE_BY_SPECIES: Readonly<
     sizeScale: 1.12,
   },
   "gray-wolf": {
+    identification: "visual-clarity",
     expectedKind: "canid-pawprints",
     form: "canid-pawprints",
     minimumClarity: 380_000,
@@ -893,6 +914,21 @@ const INDIVIDUAL_EVIDENCE_BY_SPECIES: Readonly<
     identifiedEvidenceLabel: "Wolf pawprints",
     unidentifiedEvidenceLabel: "Large canid pawprints",
     sizeScale: 1.28,
+  },
+  "arctic-fox": {
+    // A canid pawprint is observable; Arctic-fox authorship is not. Keep it
+    // anonymous until a future knowledge owner supplies a learned receipt.
+    identification: "learned-identity",
+    expectedKind: "canid-pawprints",
+    form: "canid-pawprints",
+    minimumClarity: 330_000,
+    identifiedQuickLabel: "Arctic fox signs",
+    unidentifiedQuickLabel: "Small canid signs",
+    identifiedIdentityLabel: "Arctic fox tracks",
+    unidentifiedIdentityLabel: "Unidentified small canid tracks",
+    identifiedEvidenceLabel: "Arctic fox pawprints",
+    unidentifiedEvidenceLabel: "Small canid pawprints",
+    sizeScale: 0.92,
   },
 });
 
@@ -1138,8 +1174,8 @@ function appendIndividualEvidencePresentations(
     );
     const observableClarity = Math.min(detail.visualClarity, evidenceStrength);
     if (observableClarity < descriptor.minimumClarity) continue;
-    const speciesIdentified = observableClarity
-      >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
+    const speciesIdentified = descriptor.identification === "visual-clarity"
+      && observableClarity >= POPULATION_EVIDENCE_IDENTIFICATION_CLARITY;
     presentedEvidenceIds.add(evidence.evidenceId);
     presentations.push(deepFreeze({
       version: WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION,
@@ -1182,10 +1218,7 @@ function isAggregateWildlifeSpecies(
 function isIndividualEvidenceSpecies(
   species: CoreWildlifeSpecies,
 ): species is IndividualEvidenceSpecies {
-  return species === "domestic-cat"
-    || species === "marsh-rabbit"
-    || species === "marsh-fox"
-    || species === "gray-wolf";
+  return Object.prototype.hasOwnProperty.call(INDIVIDUAL_EVIDENCE_BY_SPECIES, species);
 }
 
 /**

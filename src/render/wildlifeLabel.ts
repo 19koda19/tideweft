@@ -7,6 +7,7 @@ const SHOW_VISIBLE_GROUP_COUNT = Object.freeze({
   "domestic-cat": false,
   "marsh-rabbit": false,
   "marsh-fox": false,
+  "arctic-fox": false,
   "fish-crow": true,
   "northern-harrier": false,
   "snowy-egret": false,

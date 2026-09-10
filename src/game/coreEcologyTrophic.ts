@@ -80,12 +80,12 @@ export function coreEcologyTrophicPerceivedClass(
   const observerCanPursue = canPursueLivePreyRole(observer);
   const subjectCanBePursued = canBeLivePreySubject(subject);
 
-  // Aquatic foraging is a reusable observed-role relationship rather than a
-  // declaration that every wader is a general predator. Small aquatic or
-  // amphibious prey can recognize pressure from any addressable actor that
-  // owns this capability. The reverse direction remains non-pursuit because
-  // aggregate prey has no actor address and this resolver creates no capture,
-  // consumption, mortality, or custody outcome.
+  // Aquatic and shoreline foraging are reusable observed-role relationships
+  // rather than declarations that every wader or shore scavenger is a general
+  // predator. Small aquatic or amphibious prey can recognize pressure from an
+  // addressable actor that owns either capability. The reverse direction
+  // remains non-pursuit because aggregate prey has no actor address and this
+  // resolver creates no capture, consumption, mortality, or custody outcome.
   if (
     observerIsSmallPrey
     && (
@@ -93,7 +93,10 @@ export function coreEcologyTrophicPerceivedClass(
       || coreEcologySpeciesHasRuntimeCapability(observer, "amphibious-locomotion")
     )
     && subjectIsAddressable
-    && coreEcologySpeciesHasRuntimeCapability(subject, "aquatic-foraging")
+    && (
+      coreEcologySpeciesHasRuntimeCapability(subject, "aquatic-foraging")
+      || coreEcologySpeciesHasRuntimeCapability(subject, "shoreline-foraging")
+    )
   ) return "aquatic-foraging-pressure";
 
   // A broad predator is currently the large-predator capability. It pressures

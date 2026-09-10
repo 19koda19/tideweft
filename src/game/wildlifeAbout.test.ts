@@ -45,6 +45,8 @@ export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha33-alpine-presentation-invariants:v1" as const;
 export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha34-polar-presentation-invariants:v1" as const;
+export const ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha35-cold-shore-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(3, -7);
@@ -383,7 +385,7 @@ function pursuingBear(): CoreWildlifeActorState {
   return result;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
   it.each([
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
@@ -391,6 +393,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["domestic-cat", "DOMESTIC CAT", "Domestic cat"],
     ["marsh-rabbit", "MARSH RABBIT", "Marsh rabbit"],
     ["marsh-fox", "MARSH FOX", "Marsh fox"],
+    ["arctic-fox", "ARCTIC FOX", "Arctic fox"],
     ["fish-crow", "FISH CROW FLOCK", "Fish crow"],
     ["northern-harrier", "NORTHERN HARRIER", "Northern harrier"],
     ["snowy-egret", "SNOWY EGRET", "Snowy egret"],
@@ -435,6 +438,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   it.each([
     ["marsh-rabbit", "SMALL ANIMAL", "Unidentified small animal", 60],
     ["marsh-fox", "UNKNOWN CANID", "Unidentified canid", 60],
+    ["arctic-fox", "UNKNOWN SMALL CANID", "Unidentified small canid", 60],
     ["domestic-chicken", "UNKNOWN BIRD", "Unidentified bird", 80],
     ["domestic-goat", "UNKNOWN LIVESTOCK", "Unidentified livestock", 80],
     ["wild-boar", "LARGE ANIMAL", "Unidentified large animal", 80],
@@ -472,38 +476,27 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   });
 
   it.each([
-    ["marsh-rabbit", "Compact, long-eared"],
-    ["marsh-fox", "Lean, low-tailed canid"],
-    ["snowy-egret", "Slender, long-legged wader"],
-    ["american-black-duck", "Broad-bodied dabbling duck"],
-    ["domestic-chicken", "Compact ground bird with comb and upright tail"],
-    ["domestic-goat", "Stocky, cloven-hoofed goat with swept horns"],
-    ["north-american-river-otter", "Long-bodied, low-slung swimmer"],
-    ["mountain-goat", "Shaggy, sure-footed ungulate with dark swept horns"],
-    ["golden-eagle", "Large, broad-winged raptor with a golden nape"],
-  ] as const)("shows only directly observable close-range %s facts", (species, form) => {
+    ["marsh-rabbit", "Compact, long-eared", "Marsh rabbit"],
+    ["marsh-fox", "Lean, low-tailed canid", "Marsh fox"],
+    ["arctic-fox", "Compact, thick-coated canid with a full tail", "Arctic fox"],
+    ["snowy-egret", "Slender, long-legged wader", "Snowy egret"],
+    ["american-black-duck", "Broad-bodied dabbling duck", "American black duck"],
+    ["domestic-chicken", "Compact ground bird with comb and upright tail", "Domestic chicken"],
+    ["domestic-goat", "Stocky, cloven-hoofed goat with swept horns", "Domestic goat"],
+    ["north-american-river-otter", "Long-bodied, low-slung swimmer", "North American river otter"],
+    ["mountain-goat", "Shaggy, sure-footed ungulate with dark swept horns", "Mountain goat"],
+    ["golden-eagle", "Large, broad-winged raptor with a golden nape", "Golden eagle"],
+  ] as const)("shows only directly observable close-range %s facts", (
+    species,
+    form,
+    speciesLabel,
+  ) => {
     const actor = wildlife(species);
     const selected = projectWildlifeLivingActorInspection(actor, observation(actor));
     expect(selected?.about.observed).toEqual(expect.arrayContaining([
       {
         label: "Species",
-        value: species === "marsh-rabbit"
-          ? "Marsh rabbit"
-          : species === "marsh-fox"
-            ? "Marsh fox"
-            : species === "snowy-egret"
-              ? "Snowy egret"
-              : species === "american-black-duck"
-                ? "American black duck"
-                : species === "domestic-chicken"
-                  ? "Domestic chicken"
-                  : species === "domestic-goat"
-                    ? "Domestic goat"
-                  : species === "north-american-river-otter"
-                    ? "North American river otter"
-                    : species === "mountain-goat"
-                      ? "Mountain goat"
-                      : "Golden eagle",
+        value: speciesLabel,
       },
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },

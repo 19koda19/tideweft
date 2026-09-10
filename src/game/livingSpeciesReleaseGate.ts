@@ -2722,6 +2722,128 @@ function polarForageSharedEvidence(): readonly ClaimTuple[] {
 }
 
 /**
+ * Build-owned evidence for Alpha 35's bounded addressable cold-shore seam.
+ * The fox composes shared actor, perception, locomotion, evidence,
+ * presentation, persistence, and aggregate-pressure owners. No row claims
+ * capture, consumption, mortality, reproduction, snow/ice, or audible voice.
+ */
+function coldShoreFoxSharedEvidence(): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => (
+    [...new Set(values)].sort(compareText)
+  );
+  const contracts = owners(
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:living-species-catalog:v1",
+    "sim:core-wildlife-identity:v1",
+  );
+  const habitatOwners = owners(
+    "game:core-ecology-cold-shore-habitat:v1",
+    "game:regional-cold-shore-ecology:v1",
+    "game:regional-cold-shore-residents:v1",
+    "test:alpha35-cold-shore-shared-invariants:v1",
+  );
+  const actorOwners = owners(
+    "game:core-ecology-perception:v1",
+    "game:core-wildlife-actor:v1",
+    "game:core-wildlife-locomotion-profile:v1",
+    "game:living-actor-locomotion:v1",
+    "game:living-actor-senses:v1",
+    "sim:actor-perception:v2",
+    "test:alpha35-cold-shore-resident-shared-invariants:v1",
+  );
+  const emergenceOwners = owners(
+    "game:core-ecology-aggregate-perception:v1",
+    "game:core-ecology-trophic:v1",
+    "game:regional-cold-shore-ecology:v1",
+    "game:regional-polar-shore-ecology:v1",
+    "test:alpha35-cold-shore-emergence:v1",
+  );
+  const presentationOwners = owners(
+    "game:wildlife-about:v1",
+    "game:wildlife-presentation:v1",
+    "sim:actor-perception:v2",
+    "test:alpha35-cold-shore-presentation-invariants:v1",
+  );
+  const persistenceOwners = owners(
+    "game:regional-cold-shore-ecology:v1",
+    "game:regional-ecology-state:v4",
+    "game:runtime-core-ecology:v1",
+    "game:runtime-save:v28",
+    "test:alpha35-cold-shore-composite-shared-invariants:v1",
+    "test:alpha35-cold-shore-root-shared-invariants:v1",
+    "test:alpha35-cold-shore-runtime-v28:v1",
+  );
+  return [
+    ["species-profile", A, contracts],
+    ["ecological-niche", A, owners(...contracts, ...habitatOwners)],
+    ["appearance", A, presentationOwners],
+    ["sound", U, []],
+    ["habitat-placement", A, habitatOwners],
+    ["food-web", F, emergenceOwners],
+    ["perception-senses", A, actorOwners],
+    ["locomotion", A, actorOwners],
+    ["human-interaction", F, actorOwners],
+    ["dog-interaction", A, owners(
+      "game:living-species-catalog:v1",
+      "game:core-ecology-perception:v1",
+      "game:core-ecology-trophic:v1",
+      "game:living-actor-senses:v1",
+      "test:alpha35-cold-shore-emergence:v1",
+    )],
+    ["same-species-interaction", F, actorOwners],
+    ["other-species-interaction", A, emergenceOwners],
+    ["neutral-behavior", A, actorOwners],
+    ["disengagement", A, actorOwners],
+    ["environmental-evidence", A, owners(
+      "game:core-wildlife-actor:v1",
+      "game:living-actor-senses:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+      "test:alpha35-cold-shore-presentation-invariants:v1",
+    )],
+    ["about-disclosure", A, presentationOwners],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+      "test:alpha35-cold-shore-presentation-invariants:v1",
+    )],
+    ["population-materialization", A, persistenceOwners],
+    ["full-coarse-transition", A, persistenceOwners],
+    ["save-load", A, persistenceOwners],
+    ["seamless-region-crossing", A, persistenceOwners],
+    ["performance-budget", A, owners(
+      "game:core-ecology-cold-shore-habitat:v1",
+      "game:regional-cold-shore-ecology:v1",
+      "game:regional-ecology-state:v4",
+      "test:alpha35-cold-shore-composite-performance:v1",
+      "test:alpha35-cold-shore-root-shared-invariants:v1",
+    )],
+    ["accessibility", A, presentationOwners],
+    ["mobile-parity", A, presentationOwners],
+    ["player-independent-scenario", A, emergenceOwners],
+    ["fuzz-testing", A, owners(
+      "game:living-species-catalog:v1",
+      "sim:core-wildlife-identity:v1",
+      "game:core-ecology-cold-shore-habitat:v1",
+      "game:regional-cold-shore-ecology:v1",
+      "game:regional-ecology-state:v4",
+      "test:alpha35-cold-shore-shared-invariants:v1",
+      "test:alpha35-cold-shore-root-shared-invariants:v1",
+      "test:alpha35-cold-shore-composite-shared-invariants:v1",
+    )],
+    ["clone-diversity", A, owners(
+      "sim:core-wildlife-identity:v1",
+      "test:alpha35-cold-shore-shared-invariants:v1",
+    )],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v45"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha35:v1"]],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -2816,6 +2938,7 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "american-pika": alpineSharedEvidence("american-pika"),
   "golden-eagle": alpineSharedEvidence("golden-eagle"),
   "atlantic-capelin": polarForageSharedEvidence(),
+  "arctic-fox": coldShoreFoxSharedEvidence(),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -2841,7 +2964,18 @@ function gateFromEvidence(
     })),
   };
   const canonical = canonicalizeLivingSpeciesReleaseGate(input);
-  if (canonical === null) throw new Error(`Built-in release evidence for ${speciesId} is invalid`);
+  if (canonical === null) {
+    const invalidIndex = input.criteria.findIndex((criterion, index) => (
+      canonicalCriterionState(
+        criterion,
+        LIVING_SPECIES_RELEASE_CRITERIA[index]!,
+      ) === null
+    ));
+    const detail = invalidIndex < 0
+      ? "gate envelope"
+      : input.criteria[invalidIndex]!.criterion;
+    throw new Error(`Built-in release evidence for ${speciesId} is invalid at ${detail}`);
+  }
   return canonical;
 }
 

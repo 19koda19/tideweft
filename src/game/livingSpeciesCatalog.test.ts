@@ -29,6 +29,12 @@ import {
   LIVING_SPECIES_ALPHA33_CATALOG_HASH,
   LIVING_SPECIES_ALPHA33_SPECIES_IDS,
   LIVING_SPECIES_ALPHA33_SPECIES_IDS_HASH,
+  LIVING_SPECIES_ALPHA34_CATALOG,
+  LIVING_SPECIES_ALPHA34_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_ALPHA34_CATALOG_COUNT,
+  LIVING_SPECIES_ALPHA34_CATALOG_HASH,
+  LIVING_SPECIES_ALPHA34_SPECIES_IDS,
+  LIVING_SPECIES_ALPHA34_SPECIES_IDS_HASH,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   canonicalizeLivingSpeciesCatalog,
@@ -105,11 +111,24 @@ describe("Living Weft species module catalog", () => {
       .toBe(LIVING_SPECIES_ALPHA33_CATALOG_BYTE_LENGTH);
     expect(hashCanonical(LIVING_SPECIES_ALPHA33_CATALOG))
       .toBe(LIVING_SPECIES_ALPHA33_CATALOG_HASH);
+    expect(LIVING_SPECIES_ALPHA34_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_ALPHA34_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_ALPHA34_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_ALPHA34_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA34_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_ALPHA34_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(stableStringify(LIVING_SPECIES_ALPHA34_CATALOG)).byteLength)
+      .toBe(LIVING_SPECIES_ALPHA34_CATALOG_BYTE_LENGTH);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA34_CATALOG))
+      .toBe(LIVING_SPECIES_ALPHA34_CATALOG_HASH);
+    expect(Object.isFrozen(LIVING_SPECIES_ALPHA34_SPECIES_IDS)).toBe(true);
+    expect(Object.isFrozen(LIVING_SPECIES_ALPHA34_CATALOG)).toBe(true);
     expect(LIVING_SPECIES_CATALOG.modules.filter(({ speciesId }) => (
-      !LIVING_SPECIES_ALPHA33_SPECIES_IDS.includes(
-        speciesId as (typeof LIVING_SPECIES_ALPHA33_SPECIES_IDS)[number],
+      !LIVING_SPECIES_ALPHA34_SPECIES_IDS.includes(
+        speciesId as (typeof LIVING_SPECIES_ALPHA34_SPECIES_IDS)[number],
       )
-    )).map(({ speciesId }) => speciesId)).toEqual(["atlantic-capelin"]);
+    )).map(({ speciesId }) => speciesId)).toEqual(["arctic-fox"]);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
@@ -348,6 +367,88 @@ describe("Living Weft species module catalog", () => {
     }
     expect(capelin?.interactions.targets.find(({ targetClass }) => targetClass === "dog")?.policy)
       .toBe("intentional-no-response");
+  });
+
+  it("admits one solitary cold-shore actor through shared declarative contracts", () => {
+    const fox = livingSpeciesModule("arctic-fox");
+
+    expect(fox).toMatchObject({
+      profile: {
+        implementation: "foundation",
+        taxonomicClass: "mammal",
+        ecologicalClasses: [
+          "cold-shore-mammal",
+          "forager",
+          "omnivore",
+          "scavenger",
+          "small-predator",
+        ],
+      },
+      identity: { form: "individual", stableIdNamespace: "ARCTICFOX" },
+      spatial: {
+        ownerId: "game:regional-cold-shore-ecology:v1",
+        positionModel: "segmented-point",
+      },
+      population: {
+        ownerId: "game:regional-cold-shore-residents:v1",
+        maxMaterializedPerRegion: 1,
+      },
+      locomotion: {
+        media: [{ medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE }],
+        movementVerbs: ["forage", "trot", "walk"],
+      },
+      social: {
+        groupModel: "solitary",
+        group: { status: "unimplemented", representation: "none" },
+      },
+      evidence: { status: "foundation", produces: ["canid-pawprints"] },
+      sound: { implementation: "unimplemented", repertoire: [] },
+      lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
+      health: { implementation: "foundation", causalDeath: false },
+      aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      about: {
+        directObservationRequired: true,
+        observableFields: [
+          "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
+        ],
+      },
+    });
+    const sharedSenses = livingActorSenseProfile("arctic-fox");
+    expect(fox?.senses.channels.map(({ channel, relativeCapability }) => ({
+      channel,
+      relativeCapability,
+    }))).toEqual([
+      { channel: "hearing", relativeCapability: sharedSenses.hearingSensitivity },
+      { channel: "scent", relativeCapability: sharedSenses.scentSensitivity },
+      { channel: "vision", relativeCapability: sharedSenses.visionAcuity },
+    ]);
+    expect(fox?.physiology.conditions.map(({ id }) => id))
+      .toEqual(["exhaustion", "health", "stress"]);
+    expect(fox?.interactions.targets.find(({ targetClass }) => targetClass === "aquatic-animal"))
+      .toMatchObject({
+        policy: "available",
+        perceptionChannels: ["vision"],
+        verbs: ["approach", "forage"],
+        escalationConstraints: [
+          "aggregate-unit-conservation",
+          "direct-perception-required",
+          "no-capture-or-consumption-outcome",
+          "no-health-or-mortality-outcome",
+          "nonlethal-pressure-only",
+        ],
+      });
+    expect(fox?.interactions.targets.find(({ targetClass }) => targetClass === "dog"))
+      .toMatchObject({
+        policy: "available",
+        perceptionChannels: ["hearing", "vision"],
+        appraisals: ["threat"],
+        motivationAxes: ["safety"],
+        verbs: ["flee", "retreat"],
+        escalationConstraints: ["direct-perception-required", "no-omniscient-targeting"],
+      });
+    const forbiddenVerbs = new Set(["attack", "capture", "consume", "kill", "pursue"]);
+    expect(fox?.interactions.targets.flatMap(({ verbs }) => verbs)
+      .every((verb) => !forbiddenVerbs.has(verb))).toBe(true);
   });
 
   it("keeps domestic livestock on shared active owners with deferred life systems", () => {
@@ -2070,6 +2171,7 @@ describe("Living Weft species module catalog", () => {
         module.speciesId === "atlantic-marsh-fiddler-crab"
           || module.speciesId === "atlantic-capelin"
           || module.speciesId === "atlantic-silverside"
+          || module.speciesId === "arctic-fox"
           || module.speciesId === "gray-wolf"
           || module.speciesId === "mountain-goat"
           || module.speciesId === "american-pika"

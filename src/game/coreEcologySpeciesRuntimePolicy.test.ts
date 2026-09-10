@@ -55,6 +55,7 @@ describe("core ecology species runtime policy", () => {
       "american-pika",
       "golden-eagle",
       "atlantic-capelin",
+      "arctic-fox",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -232,6 +233,7 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanOwnActorAddress("american-pika")).toBe(false);
     expect(coreEcologySpeciesCanOwnActorAddress("golden-eagle")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("atlantic-capelin")).toBe(false);
+    expect(coreEcologySpeciesCanOwnActorAddress("arctic-fox")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("invented-frog")).toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("southern-leopard-frog")).toMatchObject({
       actorAddressable: false,
@@ -306,15 +308,46 @@ describe("core ecology species runtime policy", () => {
       evidenceKinds: ["surface-dimple"],
       presentationModel: "aggregate-school",
     });
+    expect(coreEcologySpeciesRuntimePolicy("arctic-fox")).toMatchObject({
+      actorAddressable: true,
+      identityForm: "individual",
+      representation: "individual",
+      locomotionClass: "terrestrial",
+      groupOrganization: null,
+      groupStableIdNamespace: null,
+      maximumMaterializedActors: 1,
+      aggregate: null,
+      capabilities: [
+        "actor-address",
+        "food-investigation",
+        "ground-movement-evidence",
+        "movement-memory",
+        "shoreline-foraging",
+      ],
+      activitySignals: [],
+      evidenceKinds: ["canid-pawprints"],
+      presentationModel: "individual",
+    });
     for (const species of [
       "mountain-goat",
       "american-pika",
       "golden-eagle",
       "atlantic-capelin",
+      "arctic-fox",
     ] as const) {
       expect(coreEcologySpeciesPredatorContact(species)).toBeNull();
       expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
       expect(coreEcologySpeciesHasRuntimeCapability(species, "live-prey-pursuit")).toBe(false);
+    }
+    for (const capability of [
+      "carcass-feeding",
+      "carcass-guarding",
+      "group-coordination",
+      "predator-contact-damage",
+      "physical-body-resource",
+      "school-coordination",
+    ] as const) {
+      expect(coreEcologySpeciesHasRuntimeCapability("arctic-fox", capability)).toBe(false);
     }
   });
 

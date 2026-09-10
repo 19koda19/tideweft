@@ -121,6 +121,12 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN CANID",
     representation: "individual",
   },
+  "arctic-fox": {
+    identifiedName: "Arctic fox",
+    identifiedHeading: "ARCTIC FOX",
+    unidentifiedHeading: "UNKNOWN SMALL CANID",
+    representation: "individual",
+  },
   "fish-crow": {
     identifiedName: "Fish crow",
     identifiedHeading: "FISH CROW FLOCK",

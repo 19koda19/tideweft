@@ -520,7 +520,8 @@ export type IndividualWildlifeEvidenceSpecies =
   | "domestic-cat"
   | "marsh-rabbit"
   | "marsh-fox"
-  | "gray-wolf";
+  | "gray-wolf"
+  | "arctic-fox";
 export type WildlifeEvidenceViewSpecies =
   | AggregateWildlifeEvidenceSpecies
   | IndividualWildlifeEvidenceSpecies;

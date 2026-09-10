@@ -57,6 +57,8 @@ export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha33-alpine-presentation-invariants:v1" as const;
 export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha34-polar-presentation-invariants:v1" as const;
+export const ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha35-cold-shore-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -586,7 +588,7 @@ function catEvidenceFixture(currentTick = 11) {
 }
 
 function movementEvidenceFixture(
-  species: "marsh-rabbit" | "marsh-fox" | "gray-wolf",
+  species: "marsh-rabbit" | "marsh-fox" | "gray-wolf" | "arctic-fox",
   currentTick = 12,
 ) {
   const seed = seedFromText(`presentation-${species}-movement-evidence`);
@@ -753,7 +755,7 @@ function regroupingGoat(): CoreWildlifeActorState {
   return stepped.actor;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
   it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
@@ -806,6 +808,36 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(isWildlifeWorldPositionDirectlyObserved(laterVisibleActorPosition, observation)).toBe(true);
   });
 
+  it("keeps one Arctic-fox witness distinct up close and anonymous at low clarity", () => {
+    const actor = wildlife("arctic-fox");
+    const clear = projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor),
+      tileSize: 16,
+    });
+    const distant = projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor, 60),
+      tileSize: 16,
+    });
+
+    expect(clear).toMatchObject({
+      species: "arctic-fox",
+      quickLabel: "Arctic fox",
+      identityLabel: "Arctic fox",
+      speciesIdentified: true,
+      formLabel: "Compact, thick-coated canid with a full tail",
+      appearanceKey: actor.identity.morph,
+    });
+    expect(`${distant?.quickLabel} ${distant?.identityLabel}`)
+      .toBe("Unknown small canid Unidentified small canid");
+    expect(distant).toMatchObject({ speciesIdentified: false, conditionLabels: [] });
+    expect(distant).not.toHaveProperty("formLabel");
+    expect(distant).not.toHaveProperty("appearanceLabel");
+    expect(distant).not.toHaveProperty("lifeStageLabel");
+    expect(JSON.stringify(clear)).not.toMatch(/hunger|prey|target|temperament|vigilance|boldness/iu);
+  });
+
   it.each([
     ["deer", "Deer"],
     ["gull", "Gulls"],
@@ -813,6 +845,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["domestic-cat", "Domestic cat"],
     ["marsh-rabbit", "Marsh rabbit"],
     ["marsh-fox", "Marsh fox"],
+    ["arctic-fox", "Arctic fox"],
     ["fish-crow", "Fish crows"],
     ["northern-harrier", "Northern harrier"],
     ["snowy-egret", "Snowy egret"],
@@ -846,6 +879,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       expect(presentation?.formLabel).toBe("Compact, long-eared");
     } else if (species === "marsh-fox") {
       expect(presentation?.formLabel).toBe("Lean, low-tailed canid");
+    } else if (species === "arctic-fox") {
+      expect(presentation?.formLabel).toBe("Compact, thick-coated canid with a full tail");
     } else if (species === "fish-crow") {
       expect(presentation?.formLabel).toBe("Compact, broad-winged corvids");
     } else if (species === "northern-harrier") {
@@ -1545,6 +1580,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "Marsh rabbit signs",
       "Marsh rabbit tracks",
       "Paired rabbit tracks",
+      true,
     ],
     [
       "marsh-fox",
@@ -1552,6 +1588,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "Marsh fox signs",
       "Marsh fox tracks",
       "Fox pawprints",
+      true,
     ],
     [
       "gray-wolf",
@@ -1559,6 +1596,15 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "Gray wolf signs",
       "Gray wolf tracks",
       "Wolf pawprints",
+      true,
+    ],
+    [
+      "arctic-fox",
+      "canid-pawprints",
+      "Small canid signs",
+      "Unidentified small canid tracks",
+      "Small canid pawprints",
+      false,
     ],
   ] as const)("projects %s movement evidence at its own directly visible position", (
     species,
@@ -1566,6 +1612,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     quickLabel,
     identityLabel,
     evidenceLabel,
+    speciesIdentified,
   ) => {
     const { evidence, patch, remoteActor } = movementEvidenceFixture(species);
     const presentations = projectWildlifePopulationEvidencePresentations({
@@ -1586,7 +1633,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       quickLabel,
       identityLabel,
       evidenceLabel,
-      speciesIdentified: true,
+      speciesIdentified,
       selected: false,
     });
     expect(presentation).not.toHaveProperty("actorId");
@@ -1605,6 +1652,12 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   it.each([
     ["marsh-rabbit", "Paired tracks", "Unidentified paired tracks", "Paired small-animal tracks"],
     ["marsh-fox", "Canid signs", "Unidentified canid tracks", "Canid pawprints"],
+    [
+      "arctic-fox",
+      "Small canid signs",
+      "Unidentified small canid tracks",
+      "Small canid pawprints",
+    ],
   ] as const)("keeps distant %s evidence classification bounded", (
     species,
     quickLabel,
@@ -1631,6 +1684,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   it.each([
     ["marsh-rabbit", "Paired tracks", "Unidentified paired tracks"],
     ["marsh-fox", "Canid signs", "Unidentified canid tracks"],
+    ["arctic-fox", "Small canid signs", "Unidentified small canid tracks"],
   ] as const)("lets aging %s evidence lose identification and expire", (
     species,
     quickLabel,
@@ -1739,6 +1793,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   it.each([
     ["marsh-rabbit", "Small animal", "Unidentified small animal", 60],
     ["marsh-fox", "Unknown canid", "Unidentified canid", 60],
+    ["arctic-fox", "Unknown small canid", "Unidentified small canid", 60],
     [
       "north-american-river-otter",
       "Unknown aquatic mammal",

@@ -55,10 +55,22 @@ export const CORE_WILDLIFE_ALPHA33_SPECIES_COUNT = 25 as const;
 export const CORE_WILDLIFE_ALPHA33_SPECIES_HASH = "b6dcbd837493bc9e" as const;
 export const CORE_WILDLIFE_ALPHA33_PROFILES_HASH = "e23cb5d5f437131c" as const;
 
-/** Current roster; extensions must remain append-only after the sealed prefix. */
-export const CORE_WILDLIFE_SPECIES = Object.freeze([
+/**
+ * Immutable Alpha-34 identity lineage. Alpha 35 appends its solitary cold-shore
+ * actor after this exact forage-bearing child.
+ */
+export const CORE_WILDLIFE_ALPHA34_SPECIES = Object.freeze([
   ...CORE_WILDLIFE_ALPHA33_SPECIES,
   "atlantic-capelin",
+] as const);
+export const CORE_WILDLIFE_ALPHA34_SPECIES_COUNT = 26 as const;
+export const CORE_WILDLIFE_ALPHA34_SPECIES_HASH = "3339d078da08ae3e" as const;
+export const CORE_WILDLIFE_ALPHA34_PROFILES_HASH = "0e8c2e07813bee97" as const;
+
+/** Current roster; extensions must remain append-only after the sealed prefix. */
+export const CORE_WILDLIFE_SPECIES = Object.freeze([
+  ...CORE_WILDLIFE_ALPHA34_SPECIES,
+  "arctic-fox",
 ] as const);
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
@@ -149,6 +161,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "PIKA-"
     | "GOLDENEAGLE-"
     | "CAPELINSCHOOL-"
+    | "ARCTICFOX-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -177,6 +190,7 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "american-pika": "PIKA-",
   "golden-eagle": "GOLDENEAGLE-",
   "atlantic-capelin": "CAPELINSCHOOL-",
+  "arctic-fox": "ARCTICFOX-",
 });
 
 /**
@@ -466,6 +480,16 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     locomotionClass: "aquatic",
     groupOrganization: "school",
     groupStableIdNamespace: "CAPELIN-SCHOOL",
+  },
+  "arctic-fox": {
+    species: "arctic-fox",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
   },
 });
 
@@ -1410,6 +1434,39 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [860_000, 1_000_000],
     },
   },
+  "arctic-fox": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "arctic-fox",
+    maximumPatchPopulation: 1,
+    roles: ["forager", "scavenger", "small-predator", "omnivore"],
+    foodAffinities: {
+      browse: 40_000,
+      "shore-forage": 800_000,
+      carrion: 850_000,
+      "exposed-food": 260_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 760_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["blue-gray", "brown-gray", "pale-cream", "white"],
+    temperamentPairs: [
+      ["cautious", "opportunistic"],
+      ["patient", "watchful"],
+      ["reserved", "watchful"],
+      ["bold", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [600_000, 960_000],
+      boldness: [160_000, 700_000],
+      sociability: [40_000, 260_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -1540,6 +1597,21 @@ export function assertCoreWildlifeProfiles(): void {
     || hashCanonical(alpha33CompatibilityProfiles) !== CORE_WILDLIFE_ALPHA33_PROFILES_HASH
   ) {
     throw new Error("Core wildlife Alpha-33 identity lineage was rewritten");
+  }
+  const alpha34CompatibilityPrefix = CORE_WILDLIFE_SPECIES.slice(
+    0,
+    CORE_WILDLIFE_ALPHA34_SPECIES_COUNT,
+  );
+  const alpha34CompatibilityProfiles = CORE_WILDLIFE_ALPHA34_SPECIES.map(
+    (species) => PROFILES[species],
+  );
+  if (
+    CORE_WILDLIFE_ALPHA34_SPECIES.length !== CORE_WILDLIFE_ALPHA34_SPECIES_COUNT
+    || hashCanonical(CORE_WILDLIFE_ALPHA34_SPECIES) !== CORE_WILDLIFE_ALPHA34_SPECIES_HASH
+    || hashCanonical(alpha34CompatibilityPrefix) !== CORE_WILDLIFE_ALPHA34_SPECIES_HASH
+    || hashCanonical(alpha34CompatibilityProfiles) !== CORE_WILDLIFE_ALPHA34_PROFILES_HASH
+  ) {
+    throw new Error("Core wildlife Alpha-34 identity lineage was rewritten");
   }
   for (const species of CORE_WILDLIFE_SPECIES) {
     const profile = PROFILES[species];

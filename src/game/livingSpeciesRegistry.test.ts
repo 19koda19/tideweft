@@ -53,6 +53,7 @@ describe("lean runtime living-species registry", () => {
       "american-pika",
       "golden-eagle",
       "atlantic-capelin",
+      "arctic-fox",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -503,6 +504,22 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 10_000,
         },
       },
+      {
+        species: "arctic-fox",
+        actorIdPrefix: "ARCTICFOX-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "arctic fox",
+        senses: {
+          visionAcuity: 880_000,
+          hearingSensitivity: 960_000,
+          scentSensitivity: 960_000,
+          scentBaseRangeUnits: 36_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -546,6 +563,11 @@ describe("lean runtime living-species registry", () => {
       "CAPELINSCHOOL-v1-wave-f-fixture",
       "atlantic-capelin",
     )).toBe(false);
+    expect(isLivingSpeciesActorAddressable("arctic-fox")).toBe(true);
+    expect(livingSpeciesActorIdMatchesNamespace(
+      "ARCTICFOX-v1-alpha35-fixture",
+      "arctic-fox",
+    )).toBe(true);
   });
 
   it("is deeply immutable and fails unknown species closed", () => {

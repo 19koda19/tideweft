@@ -28,6 +28,7 @@ import {
   deriveCoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
+import { deriveCoreEcologyColdShoreHabitat } from "./coreEcologyColdShoreHabitat";
 import { deriveCoreEcologyRegionalHabitat } from "./coreEcologyRegionalHabitat";
 import {
   collectCoreEcologyAggregateActivityObservationBatches,
@@ -52,6 +53,7 @@ import {
 import { createRegionalWorldView, regionalTileIndexInView } from "./regionalWorldView";
 import { createCoreEcologyRegionalResidentPatch } from "./regionalEcologyResidents";
 import { createCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
+import { createCoreEcologyColdShoreResidentPatch } from "./regionalColdShoreResidents";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -64,6 +66,8 @@ const REGION = createRegionCoord(0, 0);
 
 export const ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT =
   "test:alpha34-polar-cross-owner-emergence:v1" as const;
+export const ALPHA35_COLD_SHORE_EMERGENCE_OWNER_INTENT =
+  "test:alpha35-cold-shore-emergence:v1" as const;
 
 describe(`${ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT} capability-selected perception of tidal aggregates`, () => {
   it("composes one existing aerial observer with polar forage through shared owners", () => {
@@ -209,6 +213,68 @@ describe(`${ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT} capability-selecte
     expect(hiddenResponse?.events.some(({ sourceReferenceId }) => (
       sourceReferenceId === fixture.gull.identity.stableId
     ))).toBe(false);
+  });
+
+  it(`${ALPHA35_COLD_SHORE_EMERGENCE_OWNER_INTENT} lets one visible fox pressure the conserved school without inventing a catch`, () => {
+    const fixture = coldShoreFoxFixture(360);
+    const visualSource = {
+      sourceReferenceId: fixture.fox.identity.stableId,
+      sourceSpecies: fixture.fox.identity.species,
+      position: fixture.fox.address.position,
+      movementSalience: FIXED_POINT,
+    } as const;
+    const input = {
+      patch: fixture.polarPatch,
+      world: fixture.world,
+      window: fixture.window,
+      tick: 360,
+      visualSources: [visualSource],
+      exposedFoodSources: [],
+    } as const;
+
+    const stimulus = deriveCoreEcologyAggregateStimulusFrame(input);
+    expect(stimulus).not.toBeNull();
+    expect(stimulus?.stimuli).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceReferenceId: fixture.fox.identity.stableId,
+        sourceKind: "arctic-fox",
+        targetAggregateId: fixture.school.aggregateId,
+        response: "pressure",
+        channels: ["vision"],
+      }),
+    ]));
+    const response = stepCoreEcologySmallWorld(fixture.polarPatch, 360, stimulus);
+    expect(response).not.toBeNull();
+    expect(response?.events).toEqual([
+      expect.objectContaining({
+        sourceReferenceId: fixture.fox.identity.stableId,
+        displacedUnits: 1,
+        mortality: "none",
+        cargoInteraction: false,
+        itemConsumption: "none",
+      }),
+    ]);
+    const schoolAfter = response?.patch.aggregatePopulations.find(({ aggregateId }) => (
+      aggregateId === fixture.school.aggregateId
+    ));
+    expect(schoolAfter?.populationSize).toBe(fixture.school.populationSize);
+    expect(schoolAfter?.anchors.reduce(
+      (sum, anchor) => sum + anchor.populationUnits,
+      0,
+    )).toBe(fixture.school.populationSize);
+    expect(response?.patch.mortalityTransactions).toEqual([]);
+    expect(response?.patch.carcasses).toEqual([]);
+    expect(JSON.stringify(response)).not.toMatch(/capture|consumption|reproduction/u);
+
+    occludePosition(fixture.world, fixture.fox.address.position);
+    const hidden = deriveCoreEcologyAggregateStimulusFrame(input);
+    expect(hidden).not.toBeNull();
+    expect(hidden?.stimuli.some(({ sourceReferenceId }) => (
+      sourceReferenceId === fixture.fox.identity.stableId
+    ))).toBe(false);
+    expect(stepCoreEcologySmallWorld(fixture.polarPatch, 360, hidden)?.events.some(
+      ({ sourceReferenceId }) => sourceReferenceId === fixture.fox.identity.stableId,
+    )).toBe(false);
   });
 
   it("keeps tidal cues visible across owner boundaries and source order", () => {
@@ -689,6 +755,96 @@ describe(`${ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT} capability-selecte
     expect(movement?.resolution).toBe("moved");
   });
 });
+
+function coldShoreFoxFixture(tick: number) {
+  const seedText = "polar habitat fuzz 29";
+  const seed = seedFromText(seedText);
+  const region = createRegionCoord(-1_653, 664);
+  const coldHabitat = deriveCoreEcologyColdShoreHabitat({ seed, region });
+  if (coldHabitat.totalPopulationUnits !== 1) {
+    throw new Error("cold-shore emergence fixture lacks its solitary fox");
+  }
+  const polarHabitat = deriveCoreEcologyPolarShoreHabitat({ seed, region });
+  const polarPatch = createCoreEcologyPolarShoreResidentPatch({
+    seed,
+    habitat: polarHabitat,
+    tick,
+  });
+  const school = polarPatch.aggregatePopulations.find(({ species }) => (
+    species === "atlantic-capelin"
+  ));
+  const tidal = projectCoreEcologyTidalTable(polarPatch, tick + 1);
+  const cue = tidal?.anchorDepths.find((depth) => (
+    depth.activityUsable
+    && depth.aggregateId === school?.aggregateId
+    && (school.anchors[depth.anchorOrdinal]?.populationUnits ?? 0) > 0
+    && (tidal.aggregateActivities.find(({ aggregateId }) => (
+      aggregateId === depth.aggregateId
+    ))?.intensity ?? 0) > 0
+  ));
+  if (school === undefined || cue === undefined) {
+    throw new Error("cold-shore emergence fixture lacks an active capelin cue");
+  }
+
+  const createdFoxOwner = createCoreEcologyColdShoreResidentPatch({
+    seed,
+    habitat: coldHabitat,
+    tick,
+  });
+  const existingFox = createdFoxOwner.populations[0]?.members[0]?.actor;
+  if (existingFox === undefined) {
+    throw new Error("cold-shore emergence fixture lacks its addressable fox");
+  }
+  const materializedFoxOwner = setCoreEcologyAggregatePatchMaterializedActors(
+    createdFoxOwner,
+    { atTick: tick, actorIds: [existingFox.identity.stableId] },
+  );
+  const materializedFox = materializedFoxOwner.populations[0]?.members[0]?.actor;
+  if (materializedFox === undefined) {
+    throw new Error("cold-shore emergence fixture failed to materialize its fox");
+  }
+  const fox = repositionCoreWildlifeActor(materializedFox, {
+    atTick: tick,
+    position: translateWorldPosition(
+      cue.position,
+      -4 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    ),
+    heading: 0,
+  });
+
+  const state = createWorld(seedText, "standard");
+  state.meta.completedTick = tick;
+  state.weather = {
+    ...state.weather,
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+  };
+  for (const settlement of state.settlements) settlement.tileIndex = 0;
+  const economy = createWorldView(state);
+  const window = createRegionalTerrainWindow(
+    state.meta.rootSeed,
+    createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed }),
+    regionalFrameOriginAtAddress({
+      region,
+      localX: Math.trunc(cue.position.localX / WORLD_POSITION_UNITS_PER_TILE),
+      localY: Math.trunc(cue.position.localY / WORLD_POSITION_UNITS_PER_TILE),
+    }),
+  );
+  const world = createRegionalWorldView(
+    economy,
+    window,
+    projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+  );
+  for (const tile of world.terrain.tiles) {
+    tile.terrain = "meadow";
+    tile.elevation = 0;
+    tile.roughness = 0;
+  }
+  return Object.freeze({ fox, polarPatch, school, window, world });
+}
 
 function polarAerialObserverFixture(tick: number) {
   const seedText = "polar cross owner 0";

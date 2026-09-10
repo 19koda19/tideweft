@@ -55,6 +55,14 @@ export const ALPINE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
 export type AlpineWildlifeAppearanceSpecies =
   (typeof ALPINE_WILDLIFE_APPEARANCE_SPECIES)[number];
 
+/** Addressable cold-shore bodies; capelin remains anonymous population evidence. */
+export const COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
+  "arctic-fox",
+] as const);
+
+export type ColdShoreWildlifeAppearanceSpecies =
+  (typeof COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES)[number];
+
 /** Fails safely to the established brown coat for legacy or malformed views. */
 export function domesticGoatAppearancePalette(
   appearanceKey: string,
@@ -186,5 +194,35 @@ export function alpineWildlifeAppearancePalette(
   }
   return palettes[
     ALPINE_WILDLIFE_APPEARANCE_FALLBACK[species]
+  ] as WildlifeAppearancePalette;
+}
+
+const COLD_SHORE_WILDLIFE_APPEARANCE_FALLBACK = Object.freeze({
+  "arctic-fox": "white",
+} as const satisfies Readonly<Record<ColdShoreWildlifeAppearanceSpecies, string>>);
+
+/** Shared Chart/Relief colors for addressable cold-shore wildlife. */
+export const COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES = Object.freeze({
+  "arctic-fox": Object.freeze({
+    "blue-gray": palette("#89999b", "#d9ded9", "#344043", "#eef3eb"),
+    "brown-gray": palette("#80756a", "#c9c0b2", "#352f2b", "#e7dfcf"),
+    "pale-cream": palette("#d9d2bf", "#f2eddf", "#555149", "#fffaf0"),
+    white: palette("#e7e9e4", "#fffdf3", "#4a5353", "#c5d4d1"),
+  }),
+} as const);
+
+/** Species-safe cold-shore morph lookup; malformed keys cannot cross species. */
+export function coldShoreWildlifeAppearancePalette(
+  species: ColdShoreWildlifeAppearanceSpecies,
+  appearanceKey: string,
+): WildlifeAppearancePalette {
+  const palettes = COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+    Record<string, WildlifeAppearancePalette>
+  >;
+  if (Object.prototype.hasOwnProperty.call(palettes, appearanceKey)) {
+    return palettes[appearanceKey] as WildlifeAppearancePalette;
+  }
+  return palettes[
+    COLD_SHORE_WILDLIFE_APPEARANCE_FALLBACK[species]
   ] as WildlifeAppearancePalette;
 }

@@ -19,6 +19,8 @@ import { createWorldPosition } from "./worldPosition";
 
 export const ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT =
   "test:alpha33-alpine-shared-activity:v1" as const;
+export const ALPHA35_COLD_SHORE_SHARED_ACTIVITY_OWNER_INTENT =
+  "test:alpha35-cold-shore-shared-activity:v1" as const;
 
 function tile(overrides: Partial<TerrainTileView> = {}): TerrainTileView {
   return {
@@ -273,6 +275,39 @@ describe("core wildlife locomotion profiles", () => {
       .toBeGreaterThan(coreWildlifeMaximumStepUnits("marsh-fox", "observe"));
     expect(coreWildlifeMaximumStepUnits("marsh-rabbit", "flee")).toBeLessThan(1_000);
     expect(coreWildlifeMaximumStepUnits("marsh-fox", "pursue")).toBeLessThan(1_000);
+  });
+
+  it(`${ALPHA35_COLD_SHORE_SHARED_ACTIVITY_OWNER_INTENT} gives the fox a declarative cold-shore terrestrial gait`, () => {
+    expect(coreWildlifeLocomotionProfile("arctic-fox")).toEqual({
+      mode: "terrestrial",
+      aerialTravelCost: null,
+      surfaceWaterTravelCost: null,
+      baseTerrainMultiplier: 880_000,
+      terrainMultipliers: {
+        marsh: 1_180_000,
+        meadow: 800_000,
+        ridge: 740_000,
+        "tidal-flat": 1_420_000,
+      },
+      dampCoverPreference: null,
+      baseStepFactor: 760_000,
+      intentStepFactors: { disengage: 850_000, flee: 900_000, retreat: 840_000 },
+    });
+    expect(coreWildlifeTraversabilityCell(
+      "arctic-fox",
+      tile({ terrain: "ridge", waterDepth: 0 }),
+    ).travelCost).toBeLessThan(coreWildlifeTraversabilityCell(
+      "arctic-fox",
+      tile({ terrain: "tidal-flat", waterDepth: 0 }),
+    ).travelCost);
+    expect(coreWildlifeTraversabilityCell("arctic-fox", tile({
+      terrain: "marsh",
+      waterDepth: ADRIFT_STAND_DEPTH + 1,
+    }))).toEqual({ access: "deep-water", travelCost: 0 });
+    expect(coreWildlifeMaximumStepUnits("arctic-fox", "disengage"))
+      .toBeGreaterThan(coreWildlifeMaximumStepUnits("arctic-fox", "observe"));
+    expect(coreWildlifeMaximumStepUnits("arctic-fox", "disengage")).toBeLessThan(1_000);
+    expect(coreWildlifeGradeTraversalPolicy("arctic-fox")).toBeNull();
   });
 
   it("gives crow alarm flight and harrier pursuit distinct bounded aerial cadence", () => {

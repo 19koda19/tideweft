@@ -19,10 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.34",
-      buildIdentity: "0.3.3-alpha.34",
-      gameplayContractVersion: 32,
-      tutorialVersion: 44,
+      version: "0.3.3-alpha.35",
+      releaseDate: "2026-09-09",
+      buildIdentity: "0.3.3-alpha.35",
+      gameplayContractVersion: 33,
+      tutorialVersion: 45,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -68,10 +69,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Coldwater Glint and retains the earlier habitat releases", () => {
+  it("scopes the unpublished Alpha-35 fox and retains Coldwater Glint plus earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const coldwaterRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.34",
+    );
+    const coldwaterCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => coldwaterRelease?.categories[category] ?? [])
       .join(" ");
     const talusRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.33",
@@ -218,17 +226,30 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(activeCopy).toContain("catalog advances to twenty-eight records");
-    expect(activeCopy).toContain("non-addressable Atlantic-capelin school");
-    expect(activeCopy).toContain("policy-driven tidal aggregate owner");
-    expect(activeCopy).toContain("existing aerial surface observer");
-    expect(activeCopy).toContain("Occlusion prevents the observation and response");
-    expect(activeCopy).toContain("no exact fish, capture, injury, death, body, item, or cargo effect");
-    expect(activeCopy).toContain("inactive regional records are not scanned every frame");
-    expect(activeCopy).toContain("independently clamped territory bounds");
+    expect(activeCopy).toContain("catalog advances to twenty-nine records");
+    expect(activeCopy).toContain("One solitary addressable Arctic fox");
+    expect(activeCopy).toContain("exact already-admitted Coldwater Glint capelin forage substrate");
+    expect(activeCopy).toContain("shared identity, senses, attention, actor locomotion, condition, dormant autonomy, and evidence owners");
+    expect(activeCopy).toContain("lawfully perceived domestic dog can become generic pressure");
+    expect(activeCopy).toContain("no dog-and-fox pair script or invisible deterrence radius");
+    expect(activeCopy).toContain("currently visible fox can apply generic nonlethal pressure to the conserved capelin aggregate");
+    expect(activeCopy).toContain("Terrain occlusion prevents both observation and response");
+    expect(activeCopy).toContain("no exact fish, catch, consumption, injury, death, body, item, or cargo effect");
+    expect(activeCopy).toContain("exact Alpha-34 twenty-eight-record catalog");
+    expect(activeCopy).toContain("RegionalEcologyStateV3 composite remain authenticated as one child");
+    expect(activeCopy).toContain("one insertion-order-independent group-atomic materialization and conservation commit capped at twenty-four addressable actors");
     expect(activeCopy).toContain("Chart 2D and Relief 3D");
     expect(activeCopy).toContain("Quick inspection and ABOUT");
-    expect(activeCopy).toContain("visible-versus-occluded aerial-observer chain");
+    expect(activeCopy).toContain("representative visible-versus-occluded and dog-pressure witnesses");
+    expect(coldwaterCopy).toContain("catalog advances to twenty-eight records");
+    expect(coldwaterCopy).toContain("non-addressable Atlantic-capelin school");
+    expect(coldwaterCopy).toContain("policy-driven tidal aggregate owner");
+    expect(coldwaterCopy).toContain("existing aerial surface observer");
+    expect(coldwaterCopy).toContain("Occlusion prevents the observation and response");
+    expect(coldwaterCopy).toContain("no exact fish, capture, injury, death, body, item, or cargo effect");
+    expect(coldwaterCopy).toContain("inactive regional records are not scanned every frame");
+    expect(coldwaterCopy).toContain("independently clamped territory bounds");
+    expect(coldwaterCopy).toContain("visible-versus-occluded aerial-observer chain");
     expect(talusCopy).toContain("catalog advances to twenty-seven records");
     expect(talusCopy).toContain("mountain-goat HERD");
     expect(talusCopy).toContain("non-addressable American-pika talus aggregate");
@@ -299,18 +320,32 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 27");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("regional ecology advances to root version 3");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("exact authenticated version-2 composite");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("version-1 sparse polar-shore root");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("production catalog contains twenty-eight records");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed outer-version-26 Talus and Sky save is authenticated and adopted exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("receipt binds its original outer integrity and complete version-2 lineage");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("All three ecology layers share one atomic projection and conservation commit");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 28");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("regional ecology advances to root version 4");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("exact authenticated RegionalEcologyStateV3 composite");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("version-1 sparse addressable cold-shore root");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("production catalog contains twenty-nine records");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed outer-version-27 Coldwater Glint save is authenticated and adopted exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("receipt binds the original outer integrity and complete V3 lineage");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("All four ecology layers share one atomic cross-layer projection and conservation commit");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("one global group-atomic stable-distance top-K cap of twenty-four addressable actors");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("unpublished local candidate");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not complete Wave F, worldwide polar ecology, biodiversity breadth");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no Arctic fox, polar bear, seal, new seabird");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not been pushed, deployed, published, or LIVE_VERIFIED");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not complete Wave F, Wave G, Directive 04_1");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("adds no seals, polar bears, new seabirds, or snow or ice behavior");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no new mortality or capture");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no audible Living Voice");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("outer session advances to version 27");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("regional ecology advances to root version 3");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("exact authenticated version-2 composite");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("version-1 sparse polar-shore root");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("production catalog contains twenty-eight records");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("sealed outer-version-26 Talus and Sky save is authenticated and adopted exactly once");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("receipt binds its original outer integrity and complete version-2 lineage");
+    expect(coldwaterRelease?.categories.saves.join(" ")).toContain("All three ecology layers share one atomic projection and conservation commit");
+    expect(coldwaterRelease?.categories.knownLimitations.join(" ")).toContain("unpublished local candidate");
+    expect(coldwaterRelease?.categories.knownLimitations.join(" ")).toContain("not complete Wave F, worldwide polar ecology, biodiversity breadth");
+    expect(coldwaterRelease?.categories.knownLimitations.join(" ")).toContain("adds no Arctic fox, polar bear, seal, new seabird");
     expect(talusRelease?.categories.saves.join(" ")).toContain("outer session advances to version 26");
     expect(talusRelease?.categories.saves.join(" ")).toContain("regional ecology advances to root version 2");
     expect(talusRelease?.categories.saves.join(" ")).toContain("exact authenticated version-1 Open Country Ledger child");

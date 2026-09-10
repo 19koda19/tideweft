@@ -140,6 +140,25 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       pursue: 800_000,
     }),
   }),
+  "arctic-fox": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: 880_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_180_000,
+      meadow: 800_000,
+      ridge: 740_000,
+      "tidal-flat": 1_420_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 760_000,
+    intentStepFactors: Object.freeze({
+      disengage: 850_000,
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
   "domestic-goat": Object.freeze({
     mode: "terrestrial",
     aerialTravelCost: null,

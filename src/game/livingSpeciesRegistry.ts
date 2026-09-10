@@ -314,6 +314,15 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 10_000,
     },
   },
+  "arctic-fox": {
+    aboutNoun: "arctic fox",
+    senses: {
+      visionAcuity: 880_000,
+      hearingSensitivity: 960_000,
+      scentSensitivity: 960_000,
+      scentBaseRangeUnits: 36_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

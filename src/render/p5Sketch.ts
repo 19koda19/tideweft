@@ -15,6 +15,7 @@ import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
   alpineWildlifeAppearancePalette,
+  coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
@@ -3770,23 +3771,33 @@ export function createTideweftRenderer(
       p.circle(-bodyLength * 0.58, -bodyHeight * 0.08, base * 0.72);
     };
 
-    const drawChartMarshFox = (
+    const drawChartSmallFox = (
       actor: WildlifeView,
+      species: "marsh-fox" | "arctic-fox",
       base: number,
       now: number,
     ): void => {
+      const arctic = species === "arctic-fox";
+      const colors = arctic
+        ? coldShoreWildlifeAppearancePalette("arctic-fox", actor.appearanceKey)
+        : {
+            primary: "#9d5136",
+            secondary: "#d8c7a7",
+            dark: "#35271f",
+            accent: "#b96a43",
+          };
       const stalking = actor.behavior === "pursue" || actor.behavior === "scavenge";
       const running = stalking || actor.behavior === "flee" || actor.behavior === "retreat";
       const stride = reducedMotion || !running ? 0 : Math.sin(now * 0.012) * base * 0.34;
-      const bodyLength = base * 3.72;
-      const bodyHeight = base * (stalking ? 0.88 : 1.08);
+      const bodyLength = base * (arctic ? 3.3 : 3.72);
+      const bodyHeight = base * (stalking ? 0.88 : arctic ? 1.18 : 1.08);
       const headX = bodyLength * 0.49;
       const headY = -bodyHeight * 0.3;
-      const headRadius = base * 0.63;
+      const headRadius = base * (arctic ? 0.66 : 0.63);
 
       p.noFill();
-      p.stroke(withAlpha(PALETTE.ink, 240));
-      p.strokeWeight(Math.max(1.1, base * 0.3));
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(1.1, base * (arctic ? 0.48 : 0.3)));
       p.bezier(
         -bodyLength * 0.46,
         -bodyHeight * 0.02,
@@ -3797,6 +3808,19 @@ export function createTideweftRenderer(
         -bodyLength * 0.72,
         bodyHeight * 0.7,
       );
+      p.stroke(colors.primary);
+      p.strokeWeight(Math.max(0.75, base * (arctic ? 0.3 : 0.18)));
+      p.bezier(
+        -bodyLength * 0.46,
+        -bodyHeight * 0.02,
+        -bodyLength * 0.88,
+        bodyHeight * 0.18,
+        -bodyLength * 1.06,
+        bodyHeight * 0.64,
+        -bodyLength * 0.72,
+        bodyHeight * 0.7,
+      );
+      p.stroke(colors.dark);
       p.strokeWeight(Math.max(0.8, base * 0.15));
       p.line(-bodyLength * 0.28, bodyHeight * 0.22, -bodyLength * 0.3 + stride, bodyHeight * 0.86);
       p.line(bodyLength * 0.29, bodyHeight * 0.22, bodyLength * 0.31 - stride, bodyHeight * 0.86);
@@ -3804,15 +3828,16 @@ export function createTideweftRenderer(
       p.fill(withAlpha(PALETTE.ink, 240));
       p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.24);
       p.circle(headX, headY, headRadius * 2.25);
-      p.fill("#9d5136");
+      p.fill(colors.primary);
       p.ellipse(0, 0, bodyLength, bodyHeight);
       p.circle(headX, headY, headRadius * 2);
-      p.fill("#b96a43");
+      p.fill(colors.accent);
+      const earHeight = arctic ? 1.08 : 1.34;
       p.triangle(
         headX - headRadius * 0.72,
         headY - headRadius * 0.42,
         headX - headRadius * 0.5,
-        headY - headRadius * 1.34,
+        headY - headRadius * earHeight,
         headX - headRadius * 0.02,
         headY - headRadius * 0.46,
       );
@@ -3820,11 +3845,11 @@ export function createTideweftRenderer(
         headX + headRadius * 0.02,
         headY - headRadius * 0.48,
         headX + headRadius * 0.44,
-        headY - headRadius * 1.3,
+        headY - headRadius * (arctic ? 1.04 : 1.3),
         headX + headRadius * 0.68,
         headY - headRadius * 0.38,
       );
-      p.fill("#d8c7a7");
+      p.fill(colors.secondary);
       p.triangle(
         headX + headRadius * 0.48,
         headY - headRadius * 0.12,
@@ -4173,7 +4198,10 @@ export function createTideweftRenderer(
           drawChartMarshRabbit(actor, base, now);
           return true;
         case "marsh-fox":
-          drawChartMarshFox(actor, base, now);
+          drawChartSmallFox(actor, "marsh-fox", base, now);
+          return true;
+        case "arctic-fox":
+          drawChartSmallFox(actor, "arctic-fox", base, now);
           return true;
         case "mountain-goat":
           drawChartMountainGoat(actor, base, now);

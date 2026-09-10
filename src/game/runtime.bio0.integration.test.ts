@@ -111,9 +111,12 @@ import {
 } from "./regionalEcologyStateV2";
 import {
   createRegionalEcologyStateV3,
-  deserializeRegionalEcologyStateV3,
-  serializeRegionalEcologyStateV3,
 } from "./regionalEcologyStateV3";
+import {
+  createRegionalEcologyStateV4,
+  deserializeRegionalEcologyStateV4,
+  serializeRegionalEcologyStateV4,
+} from "./regionalEcologyStateV4";
 import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
@@ -209,8 +212,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(27);
-    expect(firstRepository.snapshot().payloadVersion).toBe(27);
+    expect(firstEnvelope.version).toBe(28);
+    expect(firstRepository.snapshot().payloadVersion).toBe(28);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
 
@@ -352,7 +355,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(27);
+    expect(migratedEnvelope.version).toBe(28);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -399,7 +402,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(27);
+    expect(envelope.version).toBe(28);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -448,8 +451,8 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(27);
-    expect(firstRepository.snapshot().payloadVersion).toBe(27);
+    expect(firstEnvelope.version).toBe(28);
+    expect(firstRepository.snapshot().payloadVersion).toBe(28);
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
     const ecology = requiredRegionalEcology(firstEnvelope);
     const home = ecology.settlementHome.patch;
@@ -521,8 +524,8 @@ describe("runtime BIO0 ecology persistence", () => {
     if (adoption === null || cohort === null) {
       throw new Error("v9 migration omitted its one-way regional adoption receipt");
     }
-    expect(firstEnvelope.version).toBe(27);
-    expect(firstRepository.snapshot().payloadVersion).toBe(27);
+    expect(firstEnvelope.version).toBe(28);
+    expect(firstRepository.snapshot().payloadVersion).toBe(28);
     expect(firstEnvelope.regionalEcology).toBe(secondEnvelope.regionalEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
@@ -611,7 +614,7 @@ describe("runtime BIO0 ecology persistence", () => {
     if (cohort === null || migrated.root.adoption === null) {
       throw new Error("legacy-fixed v9 migration omitted regional adoption authority");
     }
-    expect(firstEnvelope.version).toBe(27);
+    expect(firstEnvelope.version).toBe(28);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual(v9Envelope.player);
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -1101,7 +1104,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v27 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v28 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1114,7 +1117,7 @@ describe("runtime BIO0 ecology persistence", () => {
     rejected.destroy();
   });
 
-  it("rejects a resealed v27 home ecology whose rat identity is self-consistent but belongs to another seed", async () => {
+  it("rejects a resealed v28 home ecology whose rat identity is self-consistent but belongs to another seed", async () => {
     const repository = new MemoryRepository(legacyRecord("rat aggregate seed authentication"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1122,8 +1125,9 @@ describe("runtime BIO0 ecology persistence", () => {
 
     resealCurrent(repository, (decoded) => {
       const envelope = decoded as unknown as CurrentEnvelope;
-      const regionalV3 = deserializeRegionalEcologyStateV3(envelope.regionalEcology);
-      if (regionalV3 === null) throw new Error("seed-auth fixture omitted its v27 authority");
+      const regionalV4 = deserializeRegionalEcologyStateV4(envelope.regionalEcology);
+      if (regionalV4 === null) throw new Error("seed-auth fixture omitted its v28 authority");
+      const regionalV3 = regionalV4.base;
       const regionalV2 = regionalV3.base;
       const regional = requiredRegionalEcology(envelope);
       const ecology = regional.settlementHome.patch;
@@ -1190,13 +1194,21 @@ describe("runtime BIO0 ecology persistence", () => {
         })),
         adoption: regionalV2.adoption,
       });
-      decoded.regionalEcology = serializeRegionalEcologyStateV3(createRegionalEcologyStateV3({
+      const substitutedV3 = createRegionalEcologyStateV3({
         base: substitutedV2,
         polarShoreRoot: regionalV3.polarShoreRoot,
         polarShoreActiveResidents: regionalV3.polarShoreActiveResidents.map(
           ({ sourceKey, patch }) => ({ sourceKey, patch }),
         ),
         adoption: regionalV3.adoption,
+      });
+      decoded.regionalEcology = serializeRegionalEcologyStateV4(createRegionalEcologyStateV4({
+        base: substitutedV3,
+        coldShoreRoot: regionalV4.coldShoreRoot,
+        coldShoreActiveResidents: regionalV4.coldShoreActiveResidents.map(
+          ({ sourceKey, patch }) => ({ sourceKey, patch }),
+        ),
+        adoption: regionalV4.adoption,
       }));
     });
 
@@ -1716,9 +1728,9 @@ function requiredBio0(envelope: CurrentEnvelope) {
 }
 
 function requiredRegionalEcology(envelope: CurrentEnvelope) {
-  const state = deserializeRegionalEcologyStateV3(envelope.regionalEcology);
+  const state = deserializeRegionalEcologyStateV4(envelope.regionalEcology);
   if (!state) throw new Error("current runtime save omitted canonical regional ecology");
-  return state.base.base;
+  return state.base.base.base;
 }
 
 function regionalActorIds(

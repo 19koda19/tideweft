@@ -3,6 +3,7 @@ import {
   CORE_WILDLIFE_SPECIES,
   getCoreWildlifeProfile,
   getCoreWildlifeSpeciesMetadata,
+  type CoreWildlifeLocomotionClass,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
@@ -803,29 +804,30 @@ function habitatClassAffinity(habitatClass: string, tile: AnalyzedTile): number 
   }
 }
 
-function tileClimateFit(species: CoreWildlifeSpecies, tile: AnalyzedTile): number {
-  const metadata = getCoreWildlifeSpeciesMetadata(species);
+function tileClimateFit(
+  locomotionClass: CoreWildlifeLocomotionClass,
+  tile: AnalyzedTile,
+): number {
   const climate = tile.biome.climate;
   const temperatureComfort = FIXED_POINT - Math.abs(climate.heat - 520_000);
-  if (metadata.locomotionClass === "aquatic") {
+  if (locomotionClass === "aquatic") {
     return fixedWeighted([[tile.tile.moisture, 5], [climate.rainfall, 2], [temperatureComfort, 1]]);
   }
-  if (metadata.locomotionClass === "amphibious") {
+  if (locomotionClass === "amphibious") {
     return fixedWeighted([[tile.tile.moisture, 4], [climate.rainfall, 2], [temperatureComfort, 2]]);
   }
-  if (metadata.locomotionClass === "aerial") {
+  if (locomotionClass === "aerial") {
     return fixedWeighted([[FIXED_POINT - Math.trunc(climate.exposure / 2), 3], [temperatureComfort, 2]]);
   }
   return fixedWeighted([[temperatureComfort, 3], [FIXED_POINT - Math.trunc(climate.exposure / 3), 2]]);
 }
 
 function tileProductivity(
-  species: CoreWildlifeSpecies,
+  locomotionClass: CoreWildlifeLocomotionClass,
   summary: CoreEcologyRegionalTerrainSummary,
 ): number {
-  const locomotion = getCoreWildlifeSpeciesMetadata(species).locomotionClass;
-  if (locomotion === "aquatic") return summary.aquaticProductivity;
-  if (locomotion === "amphibious") {
+  if (locomotionClass === "aquatic") return summary.aquaticProductivity;
+  if (locomotionClass === "amphibious") {
     return fixedWeighted([[summary.aquaticProductivity, 3], [summary.terrestrialProductivity, 2]]);
   }
   return summary.terrestrialProductivity;
@@ -839,6 +841,9 @@ function scoreSpeciesTiles(
   const module = livingSpeciesModule(species);
   if (module === null) throw new TypeError(`Missing Living Weft module for ${species}`);
   const guildRule = GUILD_RULES[coreEcologyRegionalGuildForSpecies(species)];
+  const locomotionClass = getCoreWildlifeSpeciesMetadata(species).locomotionClass;
+  const productivity = tileProductivity(locomotionClass, analysis.summary);
+  const anchorRankPurpose = semanticPurpose(`anchor-rank:${species}`);
   return analysis.tiles.map((tile, ordinal) => {
     let affinity = 0;
     for (const habitatClass of module.habitat.habitatClasses) {
@@ -846,8 +851,8 @@ function scoreSpeciesTiles(
     }
     const score = fixedWeighted([
       [affinity, 7],
-      [tileClimateFit(species, tile), 2],
-      [tileProductivity(species, analysis.summary), 1],
+      [tileClimateFit(locomotionClass, tile), 2],
+      [productivity, 1],
     ]);
     return {
       tile,
@@ -857,7 +862,7 @@ function scoreSpeciesTiles(
         ANCHOR_DOMAIN,
         tile.globalX,
         tile.globalY,
-        semanticPurpose(`anchor-rank:${species}`),
+        anchorRankPurpose,
         ordinal,
       ),
     };

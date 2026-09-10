@@ -74,7 +74,7 @@ The playable slice uses:
 - 42 original-estuary human residents with immutable semantic origin identity, deterministic display identity, roles, traits, needs, relationships, condition, bounded memories, player knowledge, intention, location, and optional active contract.
 - Exactly one independently generated domestic dog, paired deterministically with one existing porter for a bounded food-and-rain interaction without making either actor the other's owner or companion.
 - Exactly one separate seed-stable settlement working dog in a bounded roster, with its own kennel custody and one generic persisted guardian assignment tied to the existing keeper, two-goat herd, and pen worksite. It does not rewrite the original dog's independent relationship.
-- One canonical bounded twenty-four-record wildlife catalog distributed through deterministic signed-region ecology. Habitat v11 remains sealed compatibility lineage: its exact habitat-v9 prefix describes the original-harbor populations, habitat v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and habitat v11 appends cougar and brown bear at that same source. Alpha 32 derives eligible current wild populations across signed regions from seed-stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, with honest absence when ecology cannot support a species. Addressable species use capped persistent representatives with stable seed/region/population/ordinal identities, segmented positions, bounded dynamic state, and saved materialized/coarse state. A separate starting-settlement home owner retains bounded brown rats, one stable two-to-three-chicken flock in a coop, and one stable two-goat herd in a separate pen; its free-ranging domestic cat remains habitat-optional. Eligible crows, boars, elk, and wolves use shared flock, sounder, herd, and pack topology, while cougar and brown bear remain solitary. Northern harriers, snowy egrets, American black ducks, and river otters each expose at most one representative, and the otter requires both tidal aggregate populations plus authenticated usable water and a distinct dry haulout. Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs instead use stable aggregate populations; no fish or crab actor is synthesized. This is signed-region distribution of a bounded current catalog rather than worldwide species breadth, ecological migration behavior, or a complete bestiary.
+- One canonical bounded wildlife catalog whose first twenty-four records are distributed through deterministic signed-region ecology. Habitat v11 remains sealed compatibility lineage: its exact habitat-v9 prefix describes the original-harbor populations, habitat v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and habitat v11 appends cougar and brown bear at that same source. Alpha 32 derives eligible current wild populations across signed regions from seed-stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, with honest absence when ecology cannot support a species. Addressable species use capped persistent representatives with stable seed/region/population/ordinal identities, segmented positions, bounded dynamic state, and saved materialized/coarse state. A separate starting-settlement home owner retains bounded brown rats, one stable two-to-three-chicken flock in a coop, and one stable two-goat herd in a separate pen; its free-ranging domestic cat remains habitat-optional. Eligible crows, boars, elk, and wolves use shared flock, sounder, herd, and pack topology, while cougar and brown bear remain solitary. Northern harriers, snowy egrets, American black ducks, and river otters each expose at most one representative, and the otter requires both tidal aggregate populations plus authenticated usable water and a distinct dry haulout. Brown rats, southern leopard frogs, Atlantic silversides, and Atlantic marsh fiddler crabs instead use stable aggregate populations; no fish or crab actor is synthesized. Released Alpha33 preserves that exact twenty-four-record prefix and appends three Alpine records. The preserved unpublished Alpha34 checkpoint appends non-addressable Atlantic capelin as record 28 through a polar-shore sibling; the current unpublished Alpha35 candidate preserves all 28 records and appends solitary addressable Arctic fox as record 29 through a cold-shore sibling. This is signed-region distribution of a bounded current catalog rather than worldwide species breadth, ecological migration behavior, or a complete bestiary.
 - One released starting-harbor fresh-produce store, bound to an existing settlement, human keeper, and brown-rat aggregate anchor. Its food is one conserved physical settlement-cargo lot rather than a mirror of abstract settlement stock; its open/secured door, keeper knowledge, and completed or pending exact-loss transaction persist under stable identity.
 - Shortage-derived contracts with a named requester, real origin stock, destination need, due tick, carrier, cargo conservation, condition grade, and traveled trace cost.
 - A complete set of potential inter-settlement corridors. Only routes above the strand-strength and condition threshold participate in autonomous service.
@@ -95,7 +95,7 @@ The game projection places residents on non-deep tiles around their current orig
 
 Actor events are stamped at emission time only when their recorded route/settlement locus was directly observable. That persisted observation fact, player-caused commands, and a very small global-event allowlist feed the player chronicle. A porter walking into view later cannot reveal an unwitnessed historical event retroactively. Full causal events remain in authoritative simulation state.
 
-This is not universal perception or a universal NPC architecture. The first porter-dog web, separate settlement working dog, separate starting-settlement home ecology, and signed-region wild-population owners extend the shared boundary through a narrow set of current consumers: one dog's physical food scent, bounded species-neutral external perception participants, individual-wildlife visual contact, explicit anonymous alarm calls, bounded individual decisions, exact physical resource and carcass transactions, one generic working-animal assignment, deer/gull/fish-crow/wild-boar/elk/gray-wolf group topology, four conserved aggregate populations receiving only declared lawful pressure, role-and-size-aware rabbit/fox/harrier/wolf pursuit, exact fox-or-wolf contact against an eligible solitary rabbit, and snowy-egret, American-black-duck, or North American river otter actors receiving current anonymous aquatic-activity facts through ordinary visual occlusion. A fish crow can alarm at a directly perceived aerial predator; only that causally retained, directly visible behavior can become mobbing pressure that interrupts a northern harrier. A working dog may investigate an anonymous alarm area, but a fox is deterred only after lawfully seeing the dog. Current physical evidence is limited to directly observable rat/frog area signs, silverside surface activity, fiddler-crab burrows or feeding scrapes, rain-response cat pawprints, rabbit paired tracks, and fox or gray-wolf canid pawprints. Fish crows, harriers, snowy egrets, American black ducks, river otters, wild boars, elk, and the working dog do not create ground-track evidence. The authored boar, elk, and wolf voice profiles remain inaudible, while wolves do create canid pawprints in this release. General scent fields, broad evidence and tracking, social reports and rumors, broad cross-group communication, physical human pursuit/search pathfinding, human-to-human sensing, generated people beyond the original estuary, additional dogs beyond the current two, worldwide species breadth, the full bestiary, wider ownership and social networks, general physical NPC inventory, negotiation, guaranteed deterrence, foliage consumption, complete circadian life, and companion behavior remain later slices.
+This is not universal perception or a universal NPC architecture. The first porter-dog web, separate settlement working dog, separate starting-settlement home ecology, and signed-region wild-population owners extend the shared boundary through a narrow set of current consumers: one dog's physical food scent, bounded species-neutral external perception participants, individual-wildlife visual contact, explicit anonymous alarm calls, bounded individual decisions, exact physical resource and carcass transactions, one generic working-animal assignment, deer/gull/fish-crow/wild-boar/elk/gray-wolf group topology, the four released conserved aggregate populations plus the unpublished capelin aggregate receiving only declared lawful pressure, role-and-size-aware rabbit/fox/harrier/wolf pursuit, exact fox-or-wolf contact against an eligible solitary rabbit, and snowy-egret, American-black-duck, or North American river otter actors receiving current anonymous aquatic-activity facts through ordinary visual occlusion. A fish crow can alarm at a directly perceived aerial predator; only that causally retained, directly visible behavior can become mobbing pressure that interrupts a northern harrier. A working dog may investigate an anonymous alarm area, but a fox is deterred only after lawfully seeing the dog. Current physical evidence is limited to directly observable rat/frog area signs, silverside or capelin surface activity, fiddler-crab burrows or feeding scrapes, rain-response cat pawprints, rabbit paired tracks, and fox or gray-wolf canid pawprints. The unpublished Arctic fox reuses the anonymous canid-pawprint evidence form rather than adding a private track system. Fish crows, harriers, snowy egrets, American black ducks, river otters, wild boars, elk, and the working dog do not create ground-track evidence. The authored boar, elk, and wolf voice profiles remain inaudible, while wolves do create canid pawprints in this release. General scent fields, broad evidence and tracking, social reports and rumors, broad cross-group communication, physical human pursuit/search pathfinding, human-to-human sensing, generated people beyond the original estuary, additional dogs beyond the current two, worldwide species breadth, the full bestiary, wider ownership and social networks, general physical NPC inventory, negotiation, guaranteed deterrence, foliage consumption, complete circadian life, and companion behavior remain later slices.
 
 ## First porter-dog living web
 
@@ -362,10 +362,10 @@ runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, performance, and visual audits. A cache-bypassed
 comparison matched all 5/5 live production files byte-for-byte.
 
-### Unpublished local Alpha34 candidate: sparse polar-shore sibling
+### Preserved unpublished local Alpha34 checkpoint: sparse polar-shore sibling
 
-`0.3.3-alpha.34 — Coldwater Glint` is an **unpublished local candidate**;
-Alpha33 remains the LIVE_VERIFIED public release. The candidate's species
+`0.3.3-alpha.34 — Coldwater Glint` is a **preserved unpublished local checkpoint**;
+Alpha33 remains the LIVE_VERIFIED public release. The checkpoint's species
 registry and catalog retain the exact 27-record Alpha33 sequence as a frozen
 prefix and append Atlantic capelin as record 28. The new record explicitly
 selects aggregate-area representation and cannot enter actor identity,
@@ -423,10 +423,54 @@ group-atomic top-K capped at 24 addressable actors; capelin use no slot. Commit
 validates and advances every child atomically, so a missing, stale, or malformed
 polar output cannot partially advance V2.
 
-The candidate adds no Arctic fox, polar bear, seal, new seabird, snow or ice
+The checkpoint adds no Arctic fox, polar bear, seal, new seabird, snow or ice
 behavior, new mortality, live-prey capture, reproduction, audible Living Voice,
 or Wave-F completion. This section records local implementation architecture,
 not release, deployment, Pages, or live-verification evidence.
+
+### Unpublished local Alpha35 candidate: one addressable cold-shore actor
+
+`0.3.3-alpha.35` is an **unpublished local working-tree candidate**; Alpha33
+remains the LIVE_VERIFIED public release, and commit `950b2b5` remains the
+preserved unpublished Alpha34 checkpoint. The candidate retains Alpha34's
+exact 28-record catalog as a frozen prefix and appends Arctic fox as record 29.
+`src/game/coreEcologyColdShoreHabitat.ts` derives a separate sparse cold-shore
+source from authenticated Alpha34 polar-shore truth. A source admits exactly
+one solitary addressable fox only when all-tide-dry cold ground is reachable
+from a viable, admitted capelin school; unsupported habitat remains empty.
+
+`src/game/regionalColdShoreResidents.ts` converts that admission into the same
+persistent individual-actor shape used by established wildlife. Stable
+identity, perception, attention, condition, dormant autonomy, terrestrial
+locomotion, movement memory, materialization, anonymous canid-track evidence,
+knowledge-honest quick inspection/ABOUT, Chart/Relief projection, and rendering
+remain shared owners. Declarative actor-address, food-investigation,
+shoreline-foraging, ground-evidence, and movement-memory capabilities opt the
+fox into those paths; there is no Arctic-fox-specific controller.
+
+The emergence seam remains aggregate and nonlethal. A fox can receive only
+current anonymous aquatic activity from an occupied, active, depth-usable
+capelin anchor that passes ordinary line of sight. Generic trophic and
+aggregate policy may then tighten activity or redistribute at most one existing
+unit while conserving the school total. An occluding ridge removes the
+observation and the response. The transaction creates no exact fish identity,
+target, capture, consumption, injury, death, carcass, item, cargo mutation, or
+offscreen player knowledge.
+
+`src/game/regionalColdShoreEcology.ts` persists only real deviations and
+rederives pristine baselines. `src/game/regionalEcologyStateV4.ts` wraps the
+exact authenticated V3 base/Alpine/polar-shore child beside the cold-shore root
+and bounded snapshots. Outer save 28 authenticates and adopts one sealed v27
+child exactly once. Every retained and new ecology source enters the same one
+insertion-order-independent, group-atomic global top-K capped at 24 addressable
+actors; commit validates and advances all children atomically. There is no
+per-layer actor budget and no V3 owner relabeling or regeneration on reload.
+
+The candidate adds no live-prey capture or consumption, new mortality,
+reproduction, audible Living Voice, seal, polar bear, new seabird, snow or ice
+behavior, full migration, Wave-F completion, Wave-G breadth, Directive 04_1
+completion, or release. It has no Alpha35 commit, push, deployment, Pages
+result, or LIVE_VERIFIED evidence.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -518,12 +562,20 @@ supported or an intentional no-response; omissions fail closed. The catalog
 does not imply absent health, broad death, full circadian behavior, ecological
 migration or reproduction, foliage consumption, or worldwide species breadth.
 
-The unpublished Alpha34 candidate preserves those twenty-seven records as an
+The preserved unpublished Alpha34 checkpoint preserves those twenty-seven records as an
 exact compatibility prefix and appends Atlantic capelin as record 28. Its
 catalog profile selects non-addressable aggregate representation; any
 individual identity, actor construction, materialization, locomotion, target,
 or carcass path therefore fails closed. This candidate extension does not
 change the twenty-seven-record LIVE_VERIFIED Alpha33 release contract.
+
+The unpublished Alpha35 candidate preserves the complete twenty-eight-record
+Alpha34 sequence as an exact prefix and appends Arctic fox as record 29. The
+new profile selects solitary individual representation and shared address,
+perception, attention, terrestrial movement, evidence, ABOUT, and presentation
+capabilities. Habitat still controls whether the one-unit population and its
+actor exist; the record itself does not spawn a fox. This candidate extension
+does not change the twenty-seven-record LIVE_VERIFIED Alpha33 release contract.
 
 `src/game/livingSpeciesReleaseGate.ts` authenticates build-owned evidence for that exact roster against 30 stable completeness criteria. A structurally valid caller claim cannot mark itself ready, absent behavior cannot smuggle an evidence owner, and biologically inapplicable criteria require narrow ecological proof. The rat and cat records may claim only the connected Settlement Shadows owners; the rabbit and fox records retain their bounded Alpha-16 owners; and the crow, harrier, frog, egret, duck, otter, chicken, goat, boar, elk, wolf, cougar, and brown-bear records may claim only their actual habitat, policy, activity, perception, movement, aggregate, custody, materialization, presentation, persistence, mobile, performance, and representative-scenario owners. Separate bounded reports authenticate Wave B, the Tide Table, the Alpha-20 duck, Alpha-21 otter, Alpha-22 convergence, Alpha-24 domestic-chicken unit, Alpha-25 shared-livestock unit, Alpha-30 regional-upland unit, and Alpha-31 predator/scavenger append without promoting those scopes to worldwide ecology. The Alpha-31 witness covers exact Alpha-30 preservation, one unchanged signed remote source, two appended solitary habitat-population records with capacity-gated actors, lawful perception and shared locomotion, an exact cougar-to-solitary-rabbit mortality path, finite cougar/brown-bear scavenging and guarding, save migration, knowledge-honest presentation, executable shared-invariant coverage, bounded performance, and explicit exclusions. It cannot authorize species-specific dog-directed behavior, audible upland calls, tactical combat, group-member harm, brown-bear live-prey contact, broader animal harm, reproduction, ecological migration, worldwide populations, the full food web, full Wave E, or broader biodiversity completion; ordinary lawful large-predator perception remains shared. Immutable build-owned publication fields remain false because a bundle cannot attest its own post-deployment byte identity. Signed coordinate/frame continuity remains distinct from unsupported ecological cross-region migration. Shared invariants, deterministic properties, conservation, bounded fuzzing, and representative scenarios exercise the architecture without a species-by-species or quadratic animal-pair matrix. Same-species breadth, broad food-web turnover, complete multisensory coverage, broader health/death, worldwide ecology, foliage consumption, and full circadian life stay blocked where absent. This is a fail-closed development boundary, not a player statistic or a claim that one regional assemblage implements the eventual catalog.
 
@@ -820,7 +872,7 @@ goat herd, eagle actor/activity, pika aggregate/evidence, or the preserved v25
 world. This is released bounded architecture, not a claim of Wave-F or
 worldwide-ecology completion.
 
-The unpublished Alpha34 candidate advances only its local outer session to
+The preserved unpublished Alpha34 checkpoint advances only its local outer session to
 version 27 and wraps that exact V2 base-and-Alpine child in
 `RegionalEcologyStateV3` beside a version-1 sparse polar-shore root and bounded
 hot snapshots. An authenticated v26 child is adopted exactly once, retaining
@@ -829,6 +881,15 @@ one insertion-order-independent, group-atomic top-K across all three layers;
 commit validates and advances the exact V2 child and polar sibling as one
 transaction. The local schema is not evidence of a pushed, deployed, or
 live-verified save format.
+
+The unpublished Alpha35 candidate advances only its local outer session to
+version 28. `RegionalEcologyStateV4` retains the exact authenticated V3
+base/Alpine/polar-shore child and adds the sparse addressable cold-shore sibling
+without rewriting the capelin owner. An authenticated v27 child is adopted
+exactly once. Projection applies the one global group-atomic 24-actor cap
+across every layer, and commit remains one all-or-nothing cross-layer
+transaction. This local schema likewise carries no release or deployment
+evidence.
 
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
 
@@ -860,12 +921,19 @@ Reduced motion can suppress that decorative movement without changing the
 activity fact. These are visual consequences of state-based activity, not an
 authoritative continuously simulated 3D flight body.
 
-The unpublished Alpha34 candidate extends only aggregate evidence projection:
+The preserved unpublished Alpha34 checkpoint extends only aggregate evidence projection:
 directly visible capelin activity may appear as restrained surface dimples and
 brief blue glints in either view, and quick inspection or ABOUT may describe
 anonymous aquatic activity. The projection never exposes the species, school
 identity, anchor, count, or an individual fish, and it disappears with the same
 current-detail/occlusion boundary that gates the observing aerial actor.
+
+The unpublished Alpha35 candidate adds one color-independent Arctic-fox form
+through the shared wildlife projection and rendering paths. Selection, quick
+inspection, and ABOUT remain bound to current direct detail and the same stable
+actor ID; Chart and Relief cannot synthesize a body or reveal a hidden forage
+target. Shared movement may leave an anonymous canid pawprint at the saved
+movement site. No voice or species-private sensory presentation is added.
 
 The composite renderer owns one disposable terrain-perception-memory store shared by Chart and Relief. It retains only a capped `120 × 120` scalar visibility array and eases lost terrain strength to its durable map baseline over 900 milliseconds; eight quantized Relief bands keep rebatching bounded. Clear-air terrain reaches at most 52 tiles, remains fully legible through 34, and uses an 18-tile distance feather; the exact-detail field remains 10 tiles. The buffer never retains projected terrain objects, entity/detail masks, labels, actions, hit targets, or save state. Exact water presentation, actors, parcels, resources, and interaction routing continue to consume the raw current-detail field and fail closed immediately. When the bounded frame slides, its terrain impression rebases by the same exact spatial delta as both cameras and active pointer routes. World/geometry identity changes, clock/tick regression, reload/destruction, and reduced-motion presentation otherwise settle the buffer without changing authoritative perception.
 
@@ -934,6 +1002,12 @@ polar-shore sibling, conserved tidal school, anonymous evidence, representative
 visible/occluded aerial-pressure witness, V3/v27 adoption, and explicit
 exclusions. Those source versions do not make Alpha34 a public release.
 
+The unpublished Alpha35 candidate advances its source guide to version 45 and
+gameplay contract to 33 for the appended Arctic-fox record, one admitted
+cold-shore actor, shared nonlethal visible/occluded capelin pressure, exact
+V3-under-V4/outer-v28 persistence, the single global cap, and the explicit
+exclusions above. Those source versions do not make Alpha35 a public release.
+
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 
 ## Electron security
@@ -982,9 +1056,10 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 22. Alpha-30 twenty-two-record catalog coherence; exact habitat-v9 prefix under habitat v10; one deterministic signed remote source; appended wild-boar, elk, and gray-wolf populations with reusable `SOUNDER`, `HERD`, and `PACK` topology; shared perception, attention, locomotion, materialization, evidence, item-claim, mortality/body, and presentation owners; exact wolf contact against one eligible solitary rabbit; finite boar/wolf carcass participation; exact outer-v22-to-v23 adoption; migration/replay/conservation/signed-extreme/property/performance invariants; and one representative emergence chain rather than per-species or N² coverage. Dog interaction, audible upland calls, tactical pack combat, group-member harm, cougar and additional bear ecotypes, reproduction, ecological migration, worldwide ecology, complete turnover, full Wave E, and broader biodiversity completion remain absent.
 23. Alpha-31 twenty-four-record catalog coherence; exact habitat-v10 source/population prefix under habitat v11; solitary cougar and brown-bear habitat-population records evaluated at the existing deterministic signed remote source with actors only for supported capacity; shared perception, attention, locomotion, materialization, item-claim, mortality/body, and presentation owners; exact cougar contact against one currently identified eligible solitary rabbit; brown-bear live-prey non-response; finite cougar/brown-bear carcass participation and guarding; exact outer-v23-to-v24 adoption; replay/conservation/signed-extreme/property/performance invariants; and one representative predator/scavenger chain rather than per-species or N² coverage. Group behavior, tracks, audible calls, species-specific dog-directed behavior, player/human/group harm, broader mortality, reproduction, ecological migration, worldwide ecology, full Wave E, and broader biodiversity completion remain absent; ordinary shared large-predator perception remains live.
 24. Released Alpha33 twenty-seven-record frozen-prefix coherence; sparse signed/extreme-coordinate Alpine habitat with lawful absence; stable mountain-goat `HERD`, non-addressable conserved American-pika aggregate, and solitary golden-eagle identity; shared opt-in directed-grade locomotion; world-bound ridge soar/perch authority and state-based knowledge-honest Chart/Relief/ABOUT presentation; current LOS/occlusion-gated nonlethal eagle pressure with pika conservation; one global group-atomic 24-actor cap and atomic cross-layer commit; exact v25-child wrapping and outer-v26 adoption/reload; bounded provenance-safe habitat/ridge caches; and explicit exclusion of new mortality, capture, exact pika targeting, reproduction, audible Living Voice, tactical combat, polar breadth, worldwide ecology, Wave-F completion, and N² testing.
-25. Unpublished local Alpha34 candidate: exact twenty-seven-record compatibility prefix plus capelin record 28; sparse cold-saline polar-shore admission with lawful absence and coordinate-limit-safe signed territories; one conserved non-addressable school of up to 64 units over at most four tide-safe anchors; generic tide/activity/evidence policy; anonymous dual-view ABOUT evidence; one visible-versus-occluded cross-owner aerial-pressure witness with no mortality, body, cargo, or item effect; byte-exact runtime/dormant ordering; pristine sparse persistence; active-key work bounded independently of explored history; exact V2 child plus polar sibling under V3/outer-v27 adoption; and one global atomic materialization/conservation commit. It explicitly excludes Arctic fox, polar bear, seal, new seabird, snow/ice behavior, new mortality, capture, reproduction, audible Living Voice, and Wave-F completion, and carries no release or deployment evidence.
-26. Vite production build under relative paths.
-27. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
+25. Preserved unpublished local Alpha34 checkpoint: exact twenty-seven-record compatibility prefix plus capelin record 28; sparse cold-saline polar-shore admission with lawful absence and coordinate-limit-safe signed territories; one conserved non-addressable school of up to 64 units over at most four tide-safe anchors; generic tide/activity/evidence policy; anonymous dual-view ABOUT evidence; one visible-versus-occluded cross-owner aerial-pressure witness with no mortality, body, cargo, or item effect; byte-exact runtime/dormant ordering; pristine sparse persistence; active-key work bounded independently of explored history; exact V2 child plus polar sibling under V3/outer-v27 adoption; and one global atomic materialization/conservation commit. It explicitly excludes Arctic fox, polar bear, seal, new seabird, snow/ice behavior, new mortality, capture, reproduction, audible Living Voice, and Wave-F completion, and carries no release or deployment evidence.
+26. Unpublished local Alpha35 candidate: exact twenty-eight-record Alpha34 prefix plus Arctic-fox record 29; sparse cold-shore admission only over a viable admitted capelin substrate; exactly one solitary addressable actor per admitted source through shared identity, perception, attention, condition, locomotion, dormant autonomy, evidence, ABOUT, and dual-view presentation; current LOS/occlusion-gated generic nonlethal pressure with exact aggregate conservation; pristine sparse persistence; exact V3 child plus cold-shore sibling under V4/outer-v28 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It explicitly excludes capture/consumption, new mortality, reproduction, audible Living Voice, seal, polar bear, new seabird, snow/ice behavior, full migration, Wave-F completion, Wave-G breadth, Directive completion, and release/deployment evidence.
+27. Vite production build under relative paths.
+28. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
 
 The Phase 10 gate passes TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, that extended packaged smoke, `git diff --check`, and a scoped source secret scan. Exact commit `6f74fe9e016ba566116e2085b05ecf2988213754` is published: CI run `33494152504` and Pages run `33494152310` succeeded, and the live HTML serves the inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets with HTTP 200 responses. The deployment is an untagged preview; `v0.2.0-alpha.1` remains unchanged.
 

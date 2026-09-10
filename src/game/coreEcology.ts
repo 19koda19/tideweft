@@ -92,6 +92,10 @@ import {
   type CoreEcologyPolarShoreHabitat,
 } from "./coreEcologyPolarShoreHabitat";
 import {
+  canonicalizeCoreEcologyColdShoreHabitat,
+  type CoreEcologyColdShoreHabitat,
+} from "./coreEcologyColdShoreHabitat";
+import {
   coreEcologyAggregateDisturbanceEvidenceKind,
   coreEcologyAggregateSpeciesPolicy,
   isCoreEcologyAggregateSpecies,
@@ -199,6 +203,7 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "brown-bear",
   "mountain-goat",
   "golden-eagle",
+  "arctic-fox",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -402,6 +407,11 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Append-only cold-shore forage owned by the Wave-F polar-shore root. */
       readonly kind: "regional-polar-shore-v1";
       readonly habitat: CoreEcologyPolarShoreHabitat;
+    }>
+  | Readonly<{
+      /** Append-only addressable cold-shore actors owned by the Wave-F sibling root. */
+      readonly kind: "regional-cold-shore-v1";
+      readonly habitat: CoreEcologyColdShoreHabitat;
     }>
   | Readonly<{
       /**
@@ -1149,6 +1159,7 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "settlement-home-v1"
     || derivation.kind === "regional-alpine-v1"
     || derivation.kind === "regional-polar-shore-v1"
+    || derivation.kind === "regional-cold-shore-v1"
     ? aggregatePopulationsFromHabitat(
         input.seed,
         derivation.habitat,
@@ -2624,7 +2635,8 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyRegionalPredatorHabitatAssemblage
     | CoreEcologyRegionalHabitat
     | CoreEcologyAlpineHabitat
-    | CoreEcologyPolarShoreHabitat,
+    | CoreEcologyPolarShoreHabitat
+    | CoreEcologyColdShoreHabitat,
   tick: number,
   regionalSuppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null = null,
 ): readonly CoreEcologyAggregatePopulationState[] {
@@ -2748,7 +2760,8 @@ function aggregatePopulationsFromHabitat(
 type CoreEcologyRegionalLikePopulationCandidate =
   | CoreEcologyRegionalPopulationCandidate
   | CoreEcologyAlpineHabitat["populations"][number]
-  | CoreEcologyPolarShoreHabitat["populations"][number];
+  | CoreEcologyPolarShoreHabitat["populations"][number]
+  | CoreEcologyColdShoreHabitat["populations"][number];
 
 function isRegionalHabitatPopulation(
   value: unknown,
@@ -2770,7 +2783,8 @@ function regionalHabitatOrigin(
     | CoreEcologyRegionalPredatorHabitatAssemblage
     | CoreEcologyRegionalHabitat
     | CoreEcologyAlpineHabitat
-    | CoreEcologyPolarShoreHabitat,
+    | CoreEcologyPolarShoreHabitat
+    | CoreEcologyColdShoreHabitat,
 ): RegionCoord {
   return "region" in habitat ? habitat.region : habitat.originRegion;
 }
@@ -4079,6 +4093,13 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: "regional-polar-shore-v1", habitat });
   }
+  if (value.kind === "regional-cold-shore-v1") {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyColdShoreHabitat(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: "regional-cold-shore-v1", habitat });
+  }
   if (
     value.kind === "habitat-v2"
     || value.kind === "legacy-fixed-v1-with-habitat-v2"
@@ -4289,6 +4310,16 @@ function aggregateDerivationMatchesPopulations(
       );
   }
   if (derivation.kind === "regional-polar-shore-v1") {
+    return mortalityTransactions.length === 0
+      && regionalDerivationMatchesPopulations(
+        derivation.habitat,
+        populations,
+        aggregatePopulations,
+        originRegion,
+        mortalityTransactions,
+      );
+  }
+  if (derivation.kind === "regional-cold-shore-v1") {
     return mortalityTransactions.length === 0
       && regionalDerivationMatchesPopulations(
         derivation.habitat,
@@ -4620,7 +4651,8 @@ function regionalDerivationMatchesPopulations(
   habitat:
     | CoreEcologyRegionalHabitat
     | CoreEcologyAlpineHabitat
-    | CoreEcologyPolarShoreHabitat,
+    | CoreEcologyPolarShoreHabitat
+    | CoreEcologyColdShoreHabitat,
   populations: readonly CoreEcologyPopulationState[],
   aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
   originRegion: RegionCoord,

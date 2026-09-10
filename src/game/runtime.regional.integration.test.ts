@@ -47,10 +47,10 @@ import {
   type RegionalEcologyActiveResidentInput,
 } from "./regionalEcologyState";
 import {
-  deserializeRegionalEcologyStateV3,
-  replaceRegionalEcologyStateV3ActiveState,
-  serializeRegionalEcologyStateV3,
-} from "./regionalEcologyStateV3";
+  deserializeRegionalEcologyStateV4,
+  replaceRegionalEcologyStateV4ActiveState,
+  serializeRegionalEcologyStateV4,
+} from "./regionalEcologyStateV4";
 import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
@@ -72,7 +72,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 27;
+  readonly version: 28;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -164,12 +164,12 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 27
-    || record.payloadVersion !== 27
-  ) throw new Error("fixture did not produce a current v27 regional save");
+    || value.version !== 28
+    || record.payloadVersion !== 28
+  ) throw new Error("fixture did not produce a current v28 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v27 outer envelope does not match its integrity seal");
+    throw new Error("fixture v28 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
@@ -208,7 +208,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 27,
+    payloadVersion: 28,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -362,8 +362,9 @@ function rebaseFixtureRegionalEcology(
   rootSeed: RootSeed,
   spatial: WorldView,
 ): string {
-  const priorV3 = deserializeRegionalEcologyStateV3(serialized);
-  if (priorV3 === null) throw new Error("fixture started with invalid regional ecology");
+  const priorV4 = deserializeRegionalEcologyStateV4(serialized);
+  if (priorV4 === null) throw new Error("fixture started with invalid regional ecology");
+  const priorV3 = priorV4.base;
   const priorV2 = priorV3.base;
   const prior = priorV2.base;
   const activeRegions = regionalStorageRegionsInView(spatial);
@@ -400,20 +401,23 @@ function rebaseFixtureRegionalEcology(
       patch: legacy.patch,
     });
   }
-  return serializeRegionalEcologyStateV3(replaceRegionalEcologyStateV3ActiveState(priorV3, {
-    expectedIntegrity: priorV3.integrity,
+  return serializeRegionalEcologyStateV4(replaceRegionalEcologyStateV4ActiveState(priorV4, {
+    expectedIntegrity: priorV4.integrity,
     base: {
-      expectedIntegrity: priorV2.integrity,
+      expectedIntegrity: priorV3.integrity,
       base: {
-        expectedIntegrity: prior.integrity,
-        rootSeed,
-        root,
-        settlementHome: {
-          sourceKey: prior.settlementHome.sourceKey,
-          patch: prior.settlementHome.patch,
+        expectedIntegrity: priorV2.integrity,
+        base: {
+          expectedIntegrity: prior.integrity,
+          rootSeed,
+          root,
+          settlementHome: {
+            sourceKey: prior.settlementHome.sourceKey,
+            patch: prior.settlementHome.patch,
+          },
+          activeRegions,
+          activeResidents,
         },
-        activeRegions,
-        activeResidents,
       },
     },
   }));

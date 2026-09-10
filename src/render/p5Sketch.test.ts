@@ -261,6 +261,7 @@ const wildlifeView = (
     "domestic-cat": "Domestic cat",
     "marsh-rabbit": "Marsh rabbit",
     "marsh-fox": "Marsh fox",
+    "arctic-fox": "Arctic fox",
     "fish-crow": "Fish crows",
     "northern-harrier": "Northern harrier",
     "snowy-egret": "Snowy egret",
@@ -283,6 +284,7 @@ const wildlifeView = (
     "domestic-cat": "CAT-",
     "marsh-rabbit": "RABBIT-",
     "marsh-fox": "FOX-",
+    "arctic-fox": "ARCTICFOX-",
     "fish-crow": "CROW-",
     "northern-harrier": "HARRIER-",
     "snowy-egret": "EGRET-",
@@ -2007,6 +2009,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   it.each([
     ["marsh-rabbit", "RABBIT-", "#816b52", "triangle"],
     ["marsh-fox", "FOX-", "#9d5136", "bezier"],
+    ["arctic-fox", "ARCTICFOX-", "#e7e9e4", "bezier"],
     ["domestic-chicken", "CHICKEN-", "#a66a3f", "triangle"],
     ["domestic-goat", "GOAT-", "#8f7150", "bezier"],
     ["wild-boar", "BOAR-", "#614735", "triangle"],

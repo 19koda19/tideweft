@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 
+import { getCoreWildlifeProfile } from "../sim/coreWildlifeIdentity";
 import {
   ALPINE_WILDLIFE_APPEARANCE_PALETTES,
   ALPINE_WILDLIFE_APPEARANCE_SPECIES,
   ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA30_WILDLIFE_APPEARANCE_SPECIES,
   ALPHA31_PREDATOR_APPEARANCE_PALETTES,
+  COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES,
+  COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES,
   DOMESTIC_GOAT_APPEARANCE_PALETTES,
   REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES,
   alpha30WildlifeAppearancePalette,
   alpineWildlifeAppearancePalette,
+  coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
 } from "./wildlifeAppearance";
@@ -111,5 +115,24 @@ describe("shared wildlife appearance projection", () => {
       .toBe(ALPINE_WILDLIFE_APPEARANCE_PALETTES["mountain-goat"]["cream-white"]);
     expect(alpineWildlifeAppearancePalette("golden-eagle", "unknown-morph"))
       .toBe(ALPINE_WILDLIFE_APPEARANCE_PALETTES["golden-eagle"]["golden-naped"]);
+  });
+
+  it("maps every Arctic-fox coat through the shared immutable cold-shore palette", () => {
+    const profile = getCoreWildlifeProfile("arctic-fox");
+    const palettes = COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES["arctic-fox"] as Readonly<
+      Record<string, unknown>
+    >;
+
+    expect(COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES).toEqual(["arctic-fox"]);
+    expect(COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES).not.toContain("atlantic-capelin");
+    expect(Object.keys(COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES["arctic-fox"]).sort())
+      .toEqual([...profile.morphs].sort());
+    for (const morph of profile.morphs) {
+      const resolved = coldShoreWildlifeAppearancePalette("arctic-fox", morph);
+      expect(resolved).toBe(palettes[morph]);
+      expect(Object.isFrozen(resolved)).toBe(true);
+    }
+    expect(coldShoreWildlifeAppearancePalette("arctic-fox", "unknown-morph"))
+      .toBe(COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES["arctic-fox"].white);
   });
 });

@@ -65,7 +65,9 @@ import {
   ALPINE_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA31_PREDATOR_APPEARANCE_PALETTES,
+  COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES,
   alpineWildlifeAppearancePalette,
+  coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
@@ -222,6 +224,7 @@ type ReliefWildlifeForm =
   | "domestic-cat"
   | "marsh-rabbit"
   | "marsh-fox"
+  | "arctic-fox"
   | "mountain-goat"
   | "golden-eagle";
 
@@ -383,6 +386,13 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
       secondary: "#d1b691",
       dark: "#35271f",
     },
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.4,
+    labelLift: 0.72,
+  },
+  "arctic-fox": {
+    form: "arctic-fox",
+    colors: COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES["arctic-fox"].white,
     hitRadiusScale: 0.48,
     ringRadiusScale: 0.4,
     labelLift: 0.72,
@@ -5060,22 +5070,26 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
-    const drawMarshFox = (
+    const drawSmallFox = (
       wildlife: WildlifeView,
+      species: "marsh-fox" | "arctic-fox",
       surface: number,
       tileSize: number,
       now: number,
     ): void => {
-      const colors = reliefWildlifeColors("marsh-fox");
+      const arctic = species === "arctic-fox";
+      const colors = arctic
+        ? coldShoreWildlifeAppearancePalette("arctic-fox", wildlife.appearanceKey)
+        : reliefWildlifeColors("marsh-fox");
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
-      const base = tileSize * 0.09 * scale;
+      const base = tileSize * (arctic ? 0.086 : 0.09) * scale;
       const resting = wildlife.behavior === "rest";
       const stalking = wildlife.behavior === "pursue" || wildlife.behavior === "scavenge";
       const running = stalking || wildlife.behavior === "flee" || wildlife.behavior === "retreat";
       const stride = reducedMotion || !running ? 0 : Math.sin(now * 0.012) * base * 0.24;
-      const bodyHalfLength = base * 1.72;
-      const bodyHalfHeight = base * (stalking ? 0.48 : 0.61);
-      const bodyHalfWidth = base * 0.48;
+      const bodyHalfLength = base * (arctic ? 1.58 : 1.72);
+      const bodyHalfHeight = base * (stalking ? 0.48 : arctic ? 0.68 : 0.61);
+      const bodyHalfWidth = base * (arctic ? 0.56 : 0.48);
       const legHeight = resting ? base * 0.12 : base * (stalking ? 0.55 : 0.78);
       const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.68;
 
@@ -5106,7 +5120,7 @@ export function createTideweftReliefRenderer(
         p.push();
         p.translate(-base * 0.09, -base * 0.52, earZ);
         p.ambientMaterial(colors.primary);
-        p.cone(base * 0.18, base * 0.5, 4, 1);
+        p.cone(base * (arctic ? 0.2 : 0.18), base * (arctic ? 0.4 : 0.5), 4, 1);
         p.pop();
       }
       p.push();
@@ -5120,7 +5134,13 @@ export function createTideweftReliefRenderer(
       p.translate(-bodyHalfLength * 1.12, bodyHalfHeight * 0.38, 0);
       p.rotateZ(0.2);
       p.ambientMaterial(colors.primary);
-      p.ellipsoid(base * 1.3, base * 0.29, base * 0.34, 8, 4);
+      p.ellipsoid(
+        base * (arctic ? 1.42 : 1.3),
+        base * (arctic ? 0.39 : 0.29),
+        base * (arctic ? 0.43 : 0.34),
+        8,
+        4,
+      );
       p.pop();
       p.pop();
     };
@@ -5457,7 +5477,10 @@ export function createTideweftReliefRenderer(
           drawMarshRabbit(wildlife, surface, tileSize, now);
           return true;
         case "marsh-fox":
-          drawMarshFox(wildlife, surface, tileSize, now);
+          drawSmallFox(wildlife, "marsh-fox", surface, tileSize, now);
+          return true;
+        case "arctic-fox":
+          drawSmallFox(wildlife, "arctic-fox", surface, tileSize, now);
           return true;
         case "mountain-goat":
           drawMountainGoat(wildlife, surface, tileSize, now);
