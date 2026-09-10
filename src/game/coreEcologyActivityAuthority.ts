@@ -6,7 +6,10 @@ import {
   type CoreEcologyPopulationMemberState,
   type CoreEcologyPopulationState,
 } from "./coreEcology";
-import type { CoreEcologyActivityAffordanceSpecies } from "./coreEcologyActivityAffordance";
+import {
+  coreEcologyActivityAffordanceProfile,
+  type CoreEcologyActivityAffordanceSpecies,
+} from "./coreEcologyActivityAffordance";
 import {
   type CoreEcologyHabitatAllocation,
   type CoreEcologyTidalWebHabitatAnchor,
@@ -25,6 +28,7 @@ import { canonicalCoreEcologyRegionalResidentPatchForRoot } from "./regionalEcol
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
+  isWorldPosition,
   type WorldPosition,
 } from "./worldPosition";
 
@@ -59,6 +63,20 @@ export interface ProjectCoreEcologyActivityAuthorityInput {
   readonly patch: CoreEcologyAggregatePatchState;
   readonly actorId: string;
 }
+
+export interface DeriveCoreEcologyShoreWaterActivityAuthorityInput {
+  readonly sourceKey: string;
+  readonly actorId: string;
+  readonly species: CoreEcologyShoreWaterActivitySpecies;
+  readonly homeAnchor: WorldPosition;
+  /** Exact habitat-owned foraging and haulout destinations. */
+  readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
+}
+
+export type CoreEcologyShoreWaterActivitySpecies = Extract<
+  CoreEcologyActivityAffordanceSpecies,
+  "north-american-river-otter" | "harbor-seal"
+>;
 
 const ACTIVITY_SPECIES = new Set<CoreEcologyActivityAffordanceSpecies>([
   "fish-crow",
@@ -105,6 +123,60 @@ export function isTrustedCoreEcologyActivityAuthority(
   return typeof value === "object"
     && value !== null
     && AUTHENTIC_AUTHORITIES.has(value);
+}
+
+/**
+ * Shared shore-water receipt constructor. A regional source adapter must first
+ * authenticate the actor and these exact habitat-owned anchors; the activity
+ * kernel then accepts only this in-process branded result.
+ */
+export function deriveCoreEcologyShoreWaterActivityAuthority(
+  input: unknown,
+): CoreEcologyActivityAuthorityV1 | null {
+  const species = plainRecord(input) ? input.species : undefined;
+  const homeAnchor = plainRecord(input) ? input.homeAnchor : undefined;
+  if (
+    !plainRecord(input)
+    || !exactKeys(input, [
+      "actorId",
+      "homeAnchor",
+      "sourceKey",
+      "species",
+      "tidalAnchors",
+    ])
+    || typeof input.sourceKey !== "string"
+    || input.sourceKey.length === 0
+    || input.sourceKey.length > 256
+    || typeof input.actorId !== "string"
+    || input.actorId.length === 0
+    || input.actorId.length > 256
+    || !isShoreWaterActivitySpecies(species)
+    || coreEcologyActivityAffordanceProfile(species)?.archetypeId
+      !== "shore-water-forager"
+    || !isWorldPosition(homeAnchor)
+    || !Array.isArray(input.tidalAnchors)
+    || input.tidalAnchors.length !== 2
+  ) return null;
+  const anchors = input.tidalAnchors.map((anchor) => (
+    canonicalShoreWaterAnchor(anchor, species, homeAnchor)
+  ));
+  if (anchors.some((anchor) => anchor === null)) return null;
+  const typedAnchors = anchors as CoreEcologyTidalWebHabitatAnchor[];
+  const foraging = typedAnchors.filter(({ purpose }) => purpose === "foraging");
+  const haulout = typedAnchors.filter(({ purpose }) => purpose === "haulout");
+  if (
+    foraging.length !== 1
+    || haulout.length !== 1
+    || foraging[0]?.tileIndex === haulout[0]?.tileIndex
+  ) return null;
+  return makeAuthority({
+    sourceKey: input.sourceKey,
+    actorId: input.actorId,
+    species,
+    provenance: "regional-habitat",
+    homeAnchor,
+    tidalAnchors: typedAnchors,
+  });
 }
 
 function projectRegionalAuthority(
@@ -259,6 +331,62 @@ function copyTidalAnchor(
     globalTile: Object.freeze({ ...anchor.globalTile }),
     position: copyPosition(anchor.position),
   });
+}
+
+function canonicalShoreWaterAnchor(
+  value: unknown,
+  species: CoreEcologyShoreWaterActivitySpecies,
+  homeAnchor: WorldPosition,
+): CoreEcologyTidalWebHabitatAnchor | null {
+  if (
+    !plainRecord(value)
+    || !exactKeys(value, [
+      "anchorOrdinal",
+      "biome",
+      "elevation",
+      "globalTile",
+      "position",
+      "purpose",
+      "species",
+      "terrain",
+      "tileIndex",
+    ])
+    || value.species !== species
+    || (value.purpose !== "foraging" && value.purpose !== "haulout")
+    || value.anchorOrdinal !== 0
+    || !Number.isSafeInteger(value.tileIndex)
+    || (value.tileIndex as number) < 0
+    || !Number.isSafeInteger(value.elevation)
+    || typeof value.terrain !== "string"
+    || typeof value.biome !== "string"
+    || !plainRecord(value.globalTile)
+    || !exactKeys(value.globalTile, ["x", "y"])
+    || !Number.isSafeInteger(value.globalTile.x)
+    || !Number.isSafeInteger(value.globalTile.y)
+    || !isWorldPosition(value.position)
+    || value.position.region.x !== homeAnchor.region.x
+    || value.position.region.y !== homeAnchor.region.y
+  ) return null;
+  return Object.freeze({
+    species,
+    purpose: value.purpose,
+    anchorOrdinal: 0,
+    tileIndex: value.tileIndex as number,
+    globalTile: Object.freeze({
+      x: value.globalTile.x as number,
+      y: value.globalTile.y as number,
+    }),
+    position: copyPosition(value.position),
+    elevation: value.elevation as number,
+    terrain: value.terrain as CoreEcologyTidalWebHabitatAnchor["terrain"],
+    biome: value.biome as CoreEcologyTidalWebHabitatAnchor["biome"],
+  });
+}
+
+function isShoreWaterActivitySpecies(
+  value: unknown,
+): value is CoreEcologyShoreWaterActivitySpecies {
+  return value === "north-american-river-otter" || value === "harbor-seal";
 }
 
 function copyPosition(position: WorldPosition): WorldPosition {

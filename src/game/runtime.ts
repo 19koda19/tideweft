@@ -407,20 +407,30 @@ import {
 } from "./regionalEcologyStateV3";
 import {
   canonicalRegionalEcologyStateV4ForWorld,
-  commitRegionalEcologyStateV4ActiveProjection,
   createFreshRegionalEcologyStateV4,
   deserializeRegionalEcologyStateV4,
   migrateRegionalEcologyStateV3ToV4,
-  projectRegionalEcologyStateV4ActiveState,
-  regionalEcologyStateV4ActiveSourcePatches,
-  replaceRegionalEcologyStateV4ActiveState,
   serializeRegionalEcologyStateV4,
-  type RegionalEcologyStateV4,
   type RegionalEcologyStateV4ProjectedColdShoreResidentV1,
 } from "./regionalEcologyStateV4";
+import {
+  canonicalRegionalEcologyStateV5ForWorld,
+  commitRegionalEcologyStateV5ActiveProjection,
+  createFreshRegionalEcologyStateV5,
+  deserializeRegionalEcologyStateV5,
+  migrateRegionalEcologyStateV4ToV5,
+  projectRegionalEcologyStateV5ActiveState,
+  regionalEcologyStateV5ActiveSourcePatches,
+  replaceRegionalEcologyStateV5ActiveState,
+  serializeRegionalEcologyStateV5,
+  type RegionalEcologyStateV5,
+  type RegionalEcologyStateV5ProjectedPolarConsumerResidentV1,
+} from "./regionalEcologyStateV5";
 import { canonicalCoreEcologyAlpineResidentPatch } from "./regionalAlpineResidents";
 import { canonicalCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
 import { canonicalCoreEcologyColdShoreResidentPatch } from "./regionalColdShoreResidents";
+import { canonicalCoreEcologyPolarConsumerResidentPatch } from "./regionalPolarConsumerResidents";
+import { projectCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
 import {
   stepCoreEcologySettlementShadows,
   stepCoreEcologySmallWorldSourceSet,
@@ -660,7 +670,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 28;
+const GAME_SAVE_VERSION = 29;
+const REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION = 28;
 const REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION = 27;
 const REGIONAL_ECOLOGY_V2_GAME_SAVE_VERSION = 26;
 const REGIONAL_ECOLOGY_V1_GAME_SAVE_VERSION = 25;
@@ -820,7 +831,7 @@ interface RuntimeRegionalEcologyWorldBindingCacheEntry {
  * differently bound values through the complete validator.
  */
 const runtimeRegionalEcologyWorldBindingCache = new WeakMap<
-  RegionalEcologyStateV4,
+  RegionalEcologyStateV5,
   RuntimeRegionalEcologyWorldBindingCacheEntry
 >();
 const runtimeRegionalUplandCoreEcologyHabitatCache =
@@ -1119,7 +1130,7 @@ function createRuntimeRegionalEcologyState(
   settlementHome: CoreEcologyAggregatePatchState,
   regionalView: WorldView,
   economy: WorldView = createWorldView(world),
-): RegionalEcologyStateV4 {
+): RegionalEcologyStateV5 {
   const root = createPristineRegionalEcologyRoot({
     rootSeed: world.meta.rootSeed,
     completedTick: world.meta.completedTick,
@@ -1156,8 +1167,12 @@ function createRuntimeRegionalEcologyState(
     alpineWrapped,
     world.meta.rootSeed,
   );
-  const wrapped = createFreshRegionalEcologyStateV4(
+  const coldWrapped = createFreshRegionalEcologyStateV4(
     polarWrapped,
+    world.meta.rootSeed,
+  );
+  const wrapped = createFreshRegionalEcologyStateV5(
+    coldWrapped,
     world.meta.rootSeed,
   );
   const canonical = canonicalRuntimeRegionalEcologyState(
@@ -1167,7 +1182,7 @@ function createRuntimeRegionalEcologyState(
     economy,
   );
   if (canonical === null) {
-    throw new Error("Initial regional ecology v4 state failed its world binding");
+    throw new Error("Initial regional ecology v5 state failed its world binding");
   }
   return canonical;
 }
@@ -1229,7 +1244,13 @@ function runtimeCoreEcologyActivityAuthorities(
   if (coreEcologyPatchHasBoundedActivityAuthority(source.patch)) return null;
   const authorities = new Map<string, CoreEcologyActivityAuthorityReceipt>();
   for (const actor of activityActors) {
-    const authority = source.kind === "regional-alpine"
+    const authority = source.kind === "regional-polar-consumer-v1"
+      ? projectCoreEcologyPolarConsumerActivityAuthority({
+          rootSeed,
+          patch: source.patch,
+          actorId: actor.identity.stableId,
+        })
+      : source.kind === "regional-alpine"
       ? cachedRuntimeAlpineRidgeActivityAuthority(
           rootSeed,
           source,
@@ -1267,6 +1288,10 @@ type RuntimeRegionalEcologyProjectedSource =
     >
   | Pick<
       RegionalEcologyStateV4ProjectedColdShoreResidentV1,
+      "kind" | "patch" | "sourceKey"
+    >
+  | Pick<
+      RegionalEcologyStateV5ProjectedPolarConsumerResidentV1,
       "kind" | "patch" | "sourceKey"
     >;
 
@@ -1340,7 +1365,7 @@ function canonicalRuntimeRegionalEcologyState(
   world: WorldState,
   bio0: Bio0EcologyState,
   economy: WorldView = createWorldView(world),
-): RegionalEcologyStateV4 | null {
+): RegionalEcologyStateV5 | null {
   const settlementHomeHabitat = deriveRuntimeCoreEcologyHabitat(
     world,
     bio0,
@@ -1348,7 +1373,7 @@ function canonicalRuntimeRegionalEcologyState(
   );
   if (value !== null && typeof value === "object") {
     const cached = runtimeRegionalEcologyWorldBindingCache.get(
-      value as RegionalEcologyStateV4,
+      value as RegionalEcologyStateV5,
     );
     if (
       cached !== undefined
@@ -1359,10 +1384,10 @@ function canonicalRuntimeRegionalEcologyState(
       && cached.rootSeed[2] === world.meta.rootSeed[2]
       && cached.rootSeed[3] === world.meta.rootSeed[3]
     ) {
-      return value as RegionalEcologyStateV4;
+      return value as RegionalEcologyStateV5;
     }
   }
-  const canonical = canonicalRegionalEcologyStateV4ForWorld(value, {
+  const canonical = canonicalRegionalEcologyStateV5ForWorld(value, {
     rootSeed: world.meta.rootSeed,
     completedTick: world.meta.completedTick,
     settlementHomeHabitat,
@@ -1384,20 +1409,20 @@ function canonicalRuntimeRegionalEcologyState(
  * crossed them.
  */
 function rebaseRuntimeRegionalEcologyState(
-  value: RegionalEcologyStateV4,
+  value: RegionalEcologyStateV5,
   world: WorldState,
   bio0: Bio0EcologyState,
   regionalView: WorldView,
   economy: WorldView = createWorldView(world),
-): RegionalEcologyStateV4 {
+): RegionalEcologyStateV5 {
   const prior = canonicalRuntimeRegionalEcologyState(value, world, bio0, economy);
   if (prior === null) {
     throw new Error("Regional ecology could not authenticate before a window exchange");
   }
   const activeRegions = regionalStorageRegionsInView(regionalView);
   const desiredRegionKeys = new Set(activeRegions.map(regionKey));
-  let root = prior.base.base.base.root;
-  for (const resident of prior.base.base.base.activeResidents) {
+  let root = prior.base.base.base.base.root;
+  for (const resident of prior.base.base.base.base.activeResidents) {
     if (
       resident.kind !== "regional-habitat"
       || desiredRegionKeys.has(regionKey(resident.region))
@@ -1416,7 +1441,7 @@ function rebaseRuntimeRegionalEcologyState(
   if (requiredRegionalResidents === null) {
     throw new Error("Regional ecology entrants could not be derived from physical residence");
   }
-  const retainedBySource = new Map(prior.base.base.base.activeResidents
+  const retainedBySource = new Map(prior.base.base.base.base.activeResidents
     .filter(({ kind }) => kind === "regional-habitat")
     .map((resident) => [resident.sourceKey, resident] as const));
   const activeResidents: RegionalEcologyActiveResidentInput[] = requiredRegionalResidents.map(
@@ -1432,14 +1457,14 @@ function rebaseRuntimeRegionalEcologyState(
       };
     },
   );
-  for (const legacy of prior.base.base.base.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
+  for (const legacy of prior.base.base.base.base.activeResidents.filter(({ kind }) => kind === "legacy-cohort")) {
     activeResidents.push({
       kind: "legacy-cohort",
       sourceKey: legacy.sourceKey,
       patch: legacy.patch,
     });
   }
-  const next = replaceRegionalEcologyStateV4ActiveState(prior, {
+  const next = replaceRegionalEcologyStateV5ActiveState(prior, {
     expectedIntegrity: prior.integrity,
     base: {
       expectedIntegrity: prior.base.integrity,
@@ -1447,14 +1472,17 @@ function rebaseRuntimeRegionalEcologyState(
         expectedIntegrity: prior.base.base.integrity,
         base: {
           expectedIntegrity: prior.base.base.base.integrity,
-          rootSeed: world.meta.rootSeed,
-          root,
-          settlementHome: {
-            sourceKey: prior.base.base.base.settlementHome.sourceKey,
-            patch: prior.base.base.base.settlementHome.patch,
+          base: {
+            expectedIntegrity: prior.base.base.base.base.integrity,
+            rootSeed: world.meta.rootSeed,
+            root,
+            settlementHome: {
+              sourceKey: prior.base.base.base.base.settlementHome.sourceKey,
+              patch: prior.base.base.base.base.settlementHome.patch,
+            },
+            activeRegions,
+            activeResidents,
           },
-          activeRegions,
-          activeResidents,
         },
       },
     },
@@ -1467,21 +1495,22 @@ function rebaseRuntimeRegionalEcologyState(
 }
 
 function runtimeRegionalEcologyActor(
-  state: RegionalEcologyStateV4,
+  state: RegionalEcologyStateV5,
   world: WorldView,
   window: RegionalPlayerTravelState["window"],
   target: RuntimeCoreWildlifeTarget,
 ): CoreWildlifeActorState | null {
-  const projection = projectRegionalEcologyStateV4ActiveState(state, {
+  const projection = projectRegionalEcologyStateV5ActiveState(state, {
     origin: window.origin,
     terrain: { width: world.terrain.width, height: world.terrain.height },
   });
   if (projection === null) return null;
   const matches = [
-    ...projection.base.base.base.residents,
-    ...projection.base.base.alpineResidents,
-    ...projection.base.polarShoreResidents,
-    ...projection.coldShoreResidents,
+    ...projection.base.base.base.base.residents,
+    ...projection.base.base.base.alpineResidents,
+    ...projection.base.base.polarShoreResidents,
+    ...projection.base.coldShoreResidents,
+    ...projection.polarConsumerResidents,
   ]
     .flatMap(({ patch }) => {
     const actor = selectedCoreEcologyActor(patch, target);
@@ -4780,9 +4809,9 @@ function runtimeCoreGroupTopologyMatches(
 
 function seedRuntimeCoreEcologyProvision(
   state: PhysicalCargoState,
-  regionalEcology: RegionalEcologyStateV4,
+  regionalEcology: RegionalEcologyStateV5,
 ): PhysicalCargoState {
-  const activeSources = regionalEcologyStateV4ActiveSourcePatches(regionalEcology);
+  const activeSources = regionalEcologyStateV5ActiveSourcePatches(regionalEcology);
   if (activeSources === null) {
     throw new Error("Regional ecology sources failed validation during forage seeding");
   }
@@ -8632,7 +8661,7 @@ export async function createTideweftRuntime(
         height: worldView.terrain.height,
       },
     };
-    const ecologyProjection = projectRegionalEcologyStateV4ActiveState(
+    const ecologyProjection = projectRegionalEcologyStateV5ActiveState(
       regionalEcology,
       actorWindow,
     );
@@ -8640,10 +8669,11 @@ export async function createTideweftRuntime(
       throw new Error("Regional ecology presentation projection could not be resolved");
     }
     const projectedEcologySources = [
-      ...ecologyProjection.base.base.base.residents,
-      ...ecologyProjection.base.base.alpineResidents,
-      ...ecologyProjection.base.polarShoreResidents,
-      ...ecologyProjection.coldShoreResidents,
+      ...ecologyProjection.base.base.base.base.residents,
+      ...ecologyProjection.base.base.base.alpineResidents,
+      ...ecologyProjection.base.base.polarShoreResidents,
+      ...ecologyProjection.base.coldShoreResidents,
+      ...ecologyProjection.polarConsumerResidents,
     ];
     const activeCoreEcologyPatches = projectedEcologySources.map(({ patch }) => patch);
     const activityAuthoritiesBySource = new Map<
@@ -8653,10 +8683,10 @@ export async function createTideweftRuntime(
     for (const source of projectedEcologySources) {
       const authorities = runtimeCoreEcologyActivityAuthorities(
         world.meta.rootSeed,
-        regionalEcology.base.base.base.root,
+        regionalEcology.base.base.base.base.root,
         source,
         alpineActivityAuthorityCache,
-        regionalEcology.base.base.alpineRoot.seedFingerprint,
+        regionalEcology.base.base.base.alpineRoot.seedFingerprint,
       );
       if (authorities === null) {
         throw new Error(
@@ -9499,7 +9529,7 @@ export async function createTideweftRuntime(
           height: worldView.terrain.height,
         },
       };
-      const regionalEcologyProjectionForStep = projectRegionalEcologyStateV4ActiveState(
+      const regionalEcologyProjectionForStep = projectRegionalEcologyStateV5ActiveState(
         regionalEcology,
         ecologyWindow,
       );
@@ -9507,16 +9537,17 @@ export async function createTideweftRuntime(
         throw new Error("Regional ecology materialization could not be resolved");
       }
       const projectedEcologySources = [
-        ...regionalEcologyProjectionForStep.base.base.base.residents,
-        ...regionalEcologyProjectionForStep.base.base.alpineResidents,
-        ...regionalEcologyProjectionForStep.base.polarShoreResidents,
-        ...regionalEcologyProjectionForStep.coldShoreResidents,
+        ...regionalEcologyProjectionForStep.base.base.base.base.residents,
+        ...regionalEcologyProjectionForStep.base.base.base.alpineResidents,
+        ...regionalEcologyProjectionForStep.base.base.polarShoreResidents,
+        ...regionalEcologyProjectionForStep.base.coldShoreResidents,
+        ...regionalEcologyProjectionForStep.polarConsumerResidents,
       ];
       const projectedHomeSource = projectedEcologySources.find(({ sourceKey }) => (
-        sourceKey === regionalEcology.base.base.base.settlementHome.sourceKey
+        sourceKey === regionalEcology.base.base.base.base.settlementHome.sourceKey
       )) ?? null;
       const coreEcologyForStep = projectedHomeSource?.patch
-        ?? regionalEcology.base.base.base.settlementHome.patch;
+        ?? regionalEcology.base.base.base.base.settlementHome.patch;
       const materializedCoreActors = projectedEcologySources
         .flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
         .filter(({ materialization }) => materialization === "materialized")
@@ -9857,7 +9888,7 @@ export async function createTideweftRuntime(
       }
       settlementDomesticAnimalRecovery = searchLinkedRecovery;
       const regionalRootForStep = advanceRegionalEcologyRoot(
-        regionalEcology.base.base.base.root,
+        regionalEcology.base.base.base.base.root,
         world.meta.completedTick,
       );
       const ecologySourcesForStep = [
@@ -9865,11 +9896,11 @@ export async function createTideweftRuntime(
         ...(projectedHomeSource === null
           ? [{
               kind: "settlement-home" as const,
-              sourceKey: regionalEcology.base.base.base.settlementHome.sourceKey,
-              region: regionalEcology.base.base.base.settlementHome.region,
-              sourcePatchHash: regionalEcology.base.base.base.settlementHome.patchHash,
-              projectedPatchHash: regionalEcology.base.base.base.settlementHome.patchHash,
-              patch: regionalEcology.base.base.base.settlementHome.patch,
+              sourceKey: regionalEcology.base.base.base.base.settlementHome.sourceKey,
+              region: regionalEcology.base.base.base.base.settlementHome.region,
+              sourcePatchHash: regionalEcology.base.base.base.base.settlementHome.patchHash,
+              projectedPatchHash: regionalEcology.base.base.base.base.settlementHome.patchHash,
+              patch: regionalEcology.base.base.base.base.settlementHome.patch,
             }]
           : []),
       ];
@@ -9891,10 +9922,10 @@ export async function createTideweftRuntime(
       for (const source of ecologySourcesForStep) {
         const activityAuthorities = runtimeCoreEcologyActivityAuthorities(
           world.meta.rootSeed,
-          regionalEcology.base.base.base.root,
+          regionalEcology.base.base.base.base.root,
           source,
           alpineActivityAuthorityCache,
-          regionalEcology.base.base.alpineRoot.seedFingerprint,
+          regionalEcology.base.base.base.alpineRoot.seedFingerprint,
         );
         if (activityAuthorities === null) {
           throw new Error(
@@ -9941,6 +9972,13 @@ export async function createTideweftRuntime(
           }
           if (source.kind === "regional-cold-shore") {
             return canonicalCoreEcologyColdShoreResidentPatch(patch, {
+              seed: world.meta.rootSeed,
+              region: source.region,
+              completedTick: world.meta.completedTick,
+            });
+          }
+          if (source.kind === "regional-polar-consumer-v1") {
+            return canonicalCoreEcologyPolarConsumerResidentPatch(patch, {
               seed: world.meta.rootSeed,
               region: source.region,
               completedTick: world.meta.completedTick,
@@ -10185,7 +10223,7 @@ export async function createTideweftRuntime(
       if (finalRegionalPatches.size !== orderedAggregateSources.length) {
         throw new Error("Aggregate response did not validate every ecology source");
       }
-      const settlementHomeSourceKey = regionalEcology.base.base.base.settlementHome.sourceKey;
+      const settlementHomeSourceKey = regionalEcology.base.base.base.base.settlementHome.sourceKey;
       const settlementHomeAggregateResult = aggregateResultsBySource.get(
         settlementHomeSourceKey,
       );
@@ -10231,70 +10269,86 @@ export async function createTideweftRuntime(
           break;
         }
       }
-      const committedRegionalEcology = commitRegionalEcologyStateV4ActiveProjection(
+      const committedRegionalEcology = commitRegionalEcologyStateV5ActiveProjection(
         regionalEcology,
         regionalEcologyProjectionForStep,
         {
           base: {
             base: {
               base: {
-                root: regionalRootForStep,
-                rootSeed: world.meta.rootSeed,
-                settlementHome: projectedHomeSource === null
-                  ? {
-                      sourceKey: settlementHomeSourceKey,
-                      patch: settlementHomeAggregateResult.patch,
+                base: {
+                  root: regionalRootForStep,
+                  rootSeed: world.meta.rootSeed,
+                  settlementHome: projectedHomeSource === null
+                    ? {
+                        sourceKey: settlementHomeSourceKey,
+                        patch: settlementHomeAggregateResult.patch,
+                      }
+                    : null,
+                  residents: regionalEcologyProjectionForStep.base.base.base.base.residents.map(({ sourceKey }) => {
+                    const patch = finalRegionalPatches.get(sourceKey);
+                    if (patch === undefined) {
+                      throw new Error(`Regional ecology commit lost source ${sourceKey}`);
                     }
-                  : null,
-                residents: regionalEcologyProjectionForStep.base.base.base.residents.map(({ sourceKey }) => {
+                    return { sourceKey, patch };
+                  }),
+                },
+                alpineResidents: regionalEcologyProjectionForStep.base.base.base.alpineResidents.map((source) => {
+                  const { sourceKey } = source;
                   const patch = finalRegionalPatches.get(sourceKey);
                   if (patch === undefined) {
-                    throw new Error(`Regional ecology commit lost source ${sourceKey}`);
+                    throw new Error(`Regional Alpine ecology commit lost source ${sourceKey}`);
+                  }
+                  if (
+                    stableStringify(runtimeMaterializedCoreActorIds(patch))
+                      !== stableStringify(runtimeMaterializedCoreActorIds(source.patch))
+                  ) {
+                    throw new Error(`Regional Alpine ecology source ${sourceKey} changed materialization ownership`);
                   }
                   return { sourceKey, patch };
                 }),
               },
-              alpineResidents: regionalEcologyProjectionForStep.base.base.alpineResidents.map((source) => {
+              polarShoreResidents: regionalEcologyProjectionForStep.base.base.polarShoreResidents.map((source) => {
                 const { sourceKey } = source;
                 const patch = finalRegionalPatches.get(sourceKey);
                 if (patch === undefined) {
-                  throw new Error(`Regional Alpine ecology commit lost source ${sourceKey}`);
+                  throw new Error(`Regional polar-shore ecology commit lost source ${sourceKey}`);
                 }
                 if (
                   stableStringify(runtimeMaterializedCoreActorIds(patch))
                     !== stableStringify(runtimeMaterializedCoreActorIds(source.patch))
                 ) {
-                  throw new Error(`Regional Alpine ecology source ${sourceKey} changed materialization ownership`);
+                  throw new Error(`Regional polar-shore source ${sourceKey} changed materialization ownership`);
                 }
                 return { sourceKey, patch };
               }),
             },
-            polarShoreResidents: regionalEcologyProjectionForStep.base.polarShoreResidents.map((source) => {
+            coldShoreResidents: regionalEcologyProjectionForStep.base.coldShoreResidents.map((source) => {
               const { sourceKey } = source;
               const patch = finalRegionalPatches.get(sourceKey);
               if (patch === undefined) {
-                throw new Error(`Regional polar-shore ecology commit lost source ${sourceKey}`);
+                throw new Error(`Regional cold-shore ecology commit lost source ${sourceKey}`);
               }
               if (
                 stableStringify(runtimeMaterializedCoreActorIds(patch))
                   !== stableStringify(runtimeMaterializedCoreActorIds(source.patch))
               ) {
-                throw new Error(`Regional polar-shore source ${sourceKey} changed materialization ownership`);
+                throw new Error(`Regional cold-shore source ${sourceKey} changed materialization ownership`);
               }
               return { sourceKey, patch };
             }),
           },
-          coldShoreResidents: regionalEcologyProjectionForStep.coldShoreResidents.map((source) => {
+          polarConsumerResidents: regionalEcologyProjectionForStep.polarConsumerResidents.map((source) => {
             const { sourceKey } = source;
             const patch = finalRegionalPatches.get(sourceKey);
             if (patch === undefined) {
-              throw new Error(`Regional cold-shore ecology commit lost source ${sourceKey}`);
+              throw new Error(`Regional polar-consumer ecology commit lost source ${sourceKey}`);
             }
             if (
               stableStringify(runtimeMaterializedCoreActorIds(patch))
                 !== stableStringify(runtimeMaterializedCoreActorIds(source.patch))
             ) {
-              throw new Error(`Regional cold-shore source ${sourceKey} changed materialization ownership`);
+              throw new Error(`Regional polar-consumer source ${sourceKey} changed materialization ownership`);
             }
             return { sourceKey, patch };
           }),
@@ -10313,7 +10367,7 @@ export async function createTideweftRuntime(
         throw new Error("Committed regional ecology failed its world binding");
       }
       regionalEcology = acceptedRegionalEcology;
-      coreEcology = regionalEcology.base.base.base.settlementHome.patch;
+      coreEcology = regionalEcology.base.base.base.base.settlementHome.patch;
       physicalCargo = resolvedRegionalResources.physicalCargo;
       settlementEcology = settlementEcologyAfterAggregate;
       porterResponse = acceptedPorterResponse;
@@ -13503,12 +13557,12 @@ export async function createTideweftRuntime(
     );
     if (
       regionalEcologySnapshot === null
-      || stableStringify(regionalEcologySnapshot.base.base.base.settlementHome.patch)
+      || stableStringify(regionalEcologySnapshot.base.base.base.base.settlementHome.patch)
         !== stableStringify(coreEcology)
     ) {
       throw new Error("Refusing to save inconsistent regional ecology state");
     }
-    const coreEcologySnapshot = regionalEcologySnapshot.base.base.base.settlementHome.patch;
+    const coreEcologySnapshot = regionalEcologySnapshot.base.base.base.base.settlementHome.patch;
     const dogActorRosterSnapshot = canonicalRuntimeDogActorRoster(
       dogActorRoster,
       worldSnapshot,
@@ -13580,7 +13634,7 @@ export async function createTideweftRuntime(
         nextPlayerSenseSampleOrdinal,
       }, worldSnapshot.meta.completedTick) ?? invalidPlayerPerceptionCarry(),
       bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
-      regionalEcology: serializeRegionalEcologyStateV4(regionalEcologySnapshot),
+      regionalEcology: serializeRegionalEcologyStateV5(regionalEcologySnapshot),
       settlementEcology: serializeSettlementEcologyState(settlementEcologySnapshot),
       dogActorRoster: serializeDogActorRoster(dogActorRosterSnapshot),
       settlementWorkingAnimals: serializeSettlementWorkingAnimalState(
@@ -13869,7 +13923,7 @@ type LoadedAutosave = {
   readonly physicalCargo: PhysicalCargoState;
   readonly bio0Ecology: Bio0EcologyState;
   readonly coreEcology: CoreEcologyAggregatePatchState;
-  readonly regionalEcology: RegionalEcologyStateV4;
+  readonly regionalEcology: RegionalEcologyStateV5;
   readonly dogActorRoster: DogActorRosterState;
   readonly settlementEcology: SettlementEcologyState;
   readonly settlementWorkingAnimals: SettlementWorkingAnimalState;
@@ -14105,6 +14159,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== REGIONAL_ECOLOGY_V1_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_ECOLOGY_V2_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION
+        && decoded.version !== REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -14126,6 +14181,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V2_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V1_GAME_SAVE_VERSION
@@ -14441,13 +14497,13 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (bio0Ecology === null) {
       throw new Error("Current save contains invalid BIO0 ecology state");
     }
-    const persistedRegionalEcologyV4 = decoded.version === GAME_SAVE_VERSION
+    const persistedRegionalEcologyV5 = decoded.version === GAME_SAVE_VERSION
       ? (() => {
           const text = decoded.regionalEcology;
-          const structural = deserializeRegionalEcologyStateV4(text);
+          const structural = deserializeRegionalEcologyStateV5(text);
           if (
             structural === null
-            || serializeRegionalEcologyStateV4(structural) !== text
+            || serializeRegionalEcologyStateV5(structural) !== text
           ) return null;
           return canonicalRuntimeRegionalEcologyState(
             structural,
@@ -14457,8 +14513,33 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           );
         })()
       : null;
-    if (decoded.version === GAME_SAVE_VERSION && persistedRegionalEcologyV4 === null) {
+    if (decoded.version === GAME_SAVE_VERSION && persistedRegionalEcologyV5 === null) {
       throw new Error("Current save contains invalid regional ecology state");
+    }
+    const persistedRegionalEcologyV4 = decoded.version === REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
+      ? (() => {
+          const text = decoded.regionalEcology;
+          const structural = deserializeRegionalEcologyStateV4(text);
+          if (
+            structural === null
+            || serializeRegionalEcologyStateV4(structural) !== text
+          ) return null;
+          return canonicalRegionalEcologyStateV4ForWorld(structural, {
+            rootSeed: world.meta.rootSeed,
+            completedTick: world.meta.completedTick,
+            settlementHomeHabitat: deriveRuntimeCoreEcologyHabitat(
+              world,
+              bio0Ecology,
+              compatibilityView,
+            ),
+          });
+        })()
+      : null;
+    if (
+      decoded.version === REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
+      && persistedRegionalEcologyV4 === null
+    ) {
+      throw new Error("Version 28 save contains invalid regional ecology state");
     }
     const persistedRegionalEcologyV3 = decoded.version === REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION
       ? (() => {
@@ -14567,10 +14648,10 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
               ),
             },
           ));
-    const persistedRegionalEcology = persistedRegionalEcologyV4
+    const normalizedRegionalEcologyV4 = persistedRegionalEcologyV4
       ?? (normalizedRegionalEcologyV3 === null
         ? null
-        : canonicalRuntimeRegionalEcologyState(
+        : canonicalRegionalEcologyStateV4ForWorld(
             migrateRegionalEcologyStateV3ToV4(normalizedRegionalEcologyV3, {
               rootSeed: world.meta.rootSeed,
               sourceEnvelopeIntegrity: decoded.version === REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION
@@ -14581,6 +14662,33 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
                     sourceOuterVersion: decoded.version,
                     sourceEnvelopeIntegrity: decoded.integrity!,
                     sourceStateHash: hashCanonical(normalizedRegionalEcologyV3),
+                  }),
+            }),
+            {
+              rootSeed: world.meta.rootSeed,
+              completedTick: world.meta.completedTick,
+              settlementHomeHabitat: deriveRuntimeCoreEcologyHabitat(
+                world,
+                bio0Ecology,
+                compatibilityView,
+              ),
+            },
+          ));
+    const persistedRegionalEcology = persistedRegionalEcologyV5
+      ?? (normalizedRegionalEcologyV4 === null
+        ? null
+        : canonicalRuntimeRegionalEcologyState(
+            migrateRegionalEcologyStateV4ToV5(normalizedRegionalEcologyV4, {
+              rootSeed: world.meta.rootSeed,
+              sourceEnvelopeIntegrity: decoded.version
+                === REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
+                ? decoded.integrity!
+                : hashCanonical({
+                    kind: "normalized-v28-regional-ecology-source:v1",
+                    normalizedOuterVersion: REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION,
+                    sourceOuterVersion: decoded.version,
+                    sourceEnvelopeIntegrity: decoded.integrity!,
+                    sourceStateHash: hashCanonical(normalizedRegionalEcologyV4),
                   }),
             }),
             world,
@@ -14683,7 +14791,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
                 bio0Ecology,
               )
             : createRuntimeCoreEcology(world, bio0Ecology);
-    const coreEcology = persistedRegionalEcology?.base.base.base.settlementHome.patch
+    const coreEcology = persistedRegionalEcology?.base.base.base.base.settlementHome.patch
       ?? (v24CompatibilityCoreEcology === null
         ? null
         : adoptCoreEcologySettlementHomeFromV24({
@@ -15107,8 +15215,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           const alpine = createFreshRegionalEcologyStateV2(canonicalBase, world.meta.rootSeed);
           const polar = createFreshRegionalEcologyStateV3(alpine, world.meta.rootSeed);
           const cold = createFreshRegionalEcologyStateV4(polar, world.meta.rootSeed);
-          const accepted = canonicalRuntimeRegionalEcologyState(
+          const polarConsumer = createFreshRegionalEcologyStateV5(
             cold,
+            world.meta.rootSeed,
+          );
+          const accepted = canonicalRuntimeRegionalEcologyState(
+            polarConsumer,
             world,
             bio0Ecology,
             compatibilityView,
@@ -15118,7 +15230,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       : persistedRegionalEcology;
     if (
       regionalEcology === null
-      || stableStringify(regionalEcology.base.base.base.activeRegions.map(regionKey).sort(compareText))
+      || stableStringify(regionalEcology.base.base.base.base.activeRegions.map(regionKey).sort(compareText))
         !== stableStringify(activeEcologyRegions.map(regionKey).sort(compareText))
     ) {
       throw new Error("Current save contains ecology for a different active regional window");
@@ -15127,7 +15239,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     // rendezvous state. Once v24 adoption commits, that normalized home owner
     // is authoritative; retaining the separately adopted materialized view
     // would make every honest migration fail its first v25 round trip.
-    const loadedCoreEcology = regionalEcology.base.base.base.settlementHome.patch;
+    const loadedCoreEcology = regionalEcology.base.base.base.base.settlementHome.patch;
     const physicalCargoValidation = decoded.version >= REGIONAL_GAME_SAVE_VERSION
       ? validatePhysicalCargoState(decoded.physicalCargo, decoded.player, WORLD_WIDTH, WORLD_HEIGHT)
       : decoded.version === PHYSICAL_CARGO_GAME_SAVE_VERSION

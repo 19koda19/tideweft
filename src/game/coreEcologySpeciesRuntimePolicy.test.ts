@@ -56,6 +56,8 @@ describe("core ecology species runtime policy", () => {
       "golden-eagle",
       "atlantic-capelin",
       "arctic-fox",
+      "harbor-seal",
+      "polar-bear",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -234,6 +236,8 @@ describe("core ecology species runtime policy", () => {
     expect(coreEcologySpeciesCanOwnActorAddress("golden-eagle")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("atlantic-capelin")).toBe(false);
     expect(coreEcologySpeciesCanOwnActorAddress("arctic-fox")).toBe(true);
+    expect(coreEcologySpeciesCanOwnActorAddress("harbor-seal")).toBe(true);
+    expect(coreEcologySpeciesCanOwnActorAddress("polar-bear")).toBe(true);
     expect(coreEcologySpeciesCanOwnActorAddress("invented-frog")).toBe(false);
     expect(coreEcologySpeciesRuntimePolicy("southern-leopard-frog")).toMatchObject({
       actorAddressable: false,
@@ -349,6 +353,84 @@ describe("core ecology species runtime policy", () => {
     ] as const) {
       expect(coreEcologySpeciesHasRuntimeCapability("arctic-fox", capability)).toBe(false);
     }
+  });
+
+  it("admits the Alpha-36 cold-shore consumers through shared nonlethal policy seams", () => {
+    const expected = {
+      "harbor-seal": {
+        maximumMaterializedActors: 3,
+        capabilities: [
+          "actor-address",
+          "amphibious-locomotion",
+          "aquatic-foraging",
+          "aquatic-locomotion",
+          "diurnal-activity",
+          "movement-memory",
+          "shore-water-activity",
+          "surface-opportunity",
+          "tidal-activity",
+          "water-depth-response",
+        ],
+        activitySignals: [
+          "aquatic-foraging",
+          "shore-water-relocation",
+          "surface-diving",
+          "surface-swimming",
+        ],
+      },
+      "polar-bear": {
+        maximumMaterializedActors: 1,
+        capabilities: [
+          "actor-address",
+          "amphibious-locomotion",
+          "aquatic-locomotion",
+          "food-investigation",
+          "live-prey-pursuit",
+          "movement-memory",
+          "shore-water-activity",
+          "water-depth-response",
+        ],
+        activitySignals: [],
+      },
+    } as const;
+    for (const [species, values] of Object.entries(expected) as [
+      keyof typeof expected,
+      (typeof expected)[keyof typeof expected],
+    ][]) {
+      expect(coreEcologySpeciesRuntimePolicy(species)).toMatchObject({
+        actorAddressable: true,
+        identityForm: "individual",
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumMaterializedActors: values.maximumMaterializedActors,
+        aggregate: null,
+        mortality: {
+          predatorContact: null,
+          physicalBodySizeUnits: 0,
+          physicalBodyResourceUnits: 0,
+          carcassFeeding: false,
+          carcassGuarding: false,
+        },
+        capabilities: values.capabilities,
+        activitySignals: values.activitySignals,
+        evidenceKinds: [],
+        presentationModel: "individual",
+      });
+      for (const capability of [
+        "carcass-feeding",
+        "carcass-guarding",
+        "physical-body-resource",
+        "predator-contact-damage",
+      ] as const) {
+        expect(coreEcologySpeciesHasRuntimeCapability(species, capability)).toBe(false);
+      }
+    }
+    expect(coreEcologySpeciesHasRuntimeCapability("harbor-seal", "live-prey-pursuit"))
+      .toBe(false);
+    expect(coreEcologySpeciesHasRuntimeCapability("polar-bear", "aquatic-foraging"))
+      .toBe(false);
   });
 
   it("plugs the domestic flock into shared actor, food, alarm, and group capabilities", () => {

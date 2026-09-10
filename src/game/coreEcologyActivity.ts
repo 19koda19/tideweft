@@ -23,6 +23,7 @@ import {
   type CoreEcologyActivityAuthorityV1,
 } from "./coreEcologyActivityAuthority";
 import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
+import { isTrustedCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
 import {
   coreEcologyRidgeSoarAnchorAtCadence,
   type CoreEcologyRidgeActivityAuthorityV1,
@@ -36,6 +37,7 @@ import {
   CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES,
   CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES,
   coreEcologyActivityAffordanceProfile,
+  coreEcologyShoreWaterMotionVocabulary,
   validateCoreEcologyActivityAffordances,
   type CoreEcologyActivityAffordanceProfile,
   type CoreEcologyActivityAffordanceSpecies,
@@ -129,6 +131,8 @@ export type CoreEcologyActivityMotion =
         | "seek-dabbling-water"
         | "seek-otter-foraging-water"
         | "seek-otter-haulout"
+        | "seek-shore-foraging-water"
+        | "seek-dry-haulout"
         | "seek-ridge-perch"
         | "soar-ridge-loop"
         | "seek-waterfowl-refuge";
@@ -269,8 +273,10 @@ export function coreEcologyActivityDestinationSemantic(
     case "seek-dabbling-water":
       return "authenticated-depth-safe-dabbling-water";
     case "seek-otter-foraging-water":
+    case "seek-shore-foraging-water":
       return "authenticated-foraging-water";
     case "seek-otter-haulout":
+    case "seek-dry-haulout":
       return "authenticated-dry-haulout";
     case "seek-ridge-perch":
       return "authenticated-ridge-perch";
@@ -749,6 +755,10 @@ function projectCanonicalCoreEcologyActivity(
   }
 
   if (activityProfile.archetypeId === "shore-water-forager") {
+    const motionVocabulary = coreEcologyShoreWaterMotionVocabulary(
+      activityProfile.speciesId,
+    );
+    if (motionVocabulary === null) return null;
     const tidalWeb = projectShoreWaterForagerActivity(
       input.actorId,
       activityProfile.speciesId,
@@ -771,7 +781,7 @@ function projectCanonicalCoreEcologyActivity(
           ? Object.freeze({ kind: "hold-position" })
           : Object.freeze({
               kind: "target-area",
-              verb: "seek-otter-haulout",
+              verb: motionVocabulary.seekHaulout,
               targetArea: frozenArea(tidalWeb.hauloutTarget, OTTER_ARRIVAL_RADIUS_UNITS),
               travelMedium: "amphibious",
             }),
@@ -797,7 +807,7 @@ function projectCanonicalCoreEcologyActivity(
         perch: noPerchProjection(),
         motion: Object.freeze({
           kind: "target-area",
-          verb: "seek-otter-foraging-water",
+          verb: motionVocabulary.seekForagingWater,
           targetArea: frozenArea(tidalWeb.foragingTarget, OTTER_ARRIVAL_RADIUS_UNITS),
           travelMedium: "amphibious",
         }),
@@ -1378,6 +1388,8 @@ function authenticatedActivityDestinations(
   }
   if (
     !isTrustedCoreEcologyActivityAuthority(supplied)
+    || (population.species === "harbor-seal"
+      && !isTrustedCoreEcologyPolarConsumerActivityAuthority(supplied))
     || supplied.sourceKey !== patch.patchKey
     || supplied.actorId !== member.actor.identity.stableId
     || supplied.species !== population.species

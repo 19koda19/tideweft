@@ -15,6 +15,7 @@ import type { CoreEcologyActivityAuthorityReceipt } from "./coreEcologyActivity"
 import { coreEcologyGroupComponentForMember } from "./coreEcologyGroups";
 import { isTrustedCoreEcologyActivityAuthority } from "./coreEcologyActivityAuthority";
 import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
+import { isTrustedCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
   coreEcologySpeciesHasRuntimeCapability,
@@ -473,6 +474,9 @@ function canonicalActivityAuthorities(
     ));
     if (
       member === undefined
+      || (member.actor.identity.species === "harbor-seal"
+        && isHabitatAuthority
+        && !isTrustedCoreEcologyPolarConsumerActivityAuthority(authority))
       || (
         isHabitatAuthority
           ? member.actor.identity.species !== authority.species

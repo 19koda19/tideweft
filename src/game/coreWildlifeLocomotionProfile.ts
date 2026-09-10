@@ -385,6 +385,45 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       retreat: 850_000,
     }),
   }),
+  "harbor-seal": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: 180_000,
+    baseTerrainMultiplier: 1_350_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 1_300_000,
+      meadow: 1_650_000,
+      ridge: 2_200_000,
+      "tidal-flat": 850_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 620_000,
+    intentStepFactors: Object.freeze({
+      disengage: 820_000,
+      flee: 900_000,
+      retreat: 820_000,
+    }),
+  }),
+  "polar-bear": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: 380_000,
+    baseTerrainMultiplier: 900_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 980_000,
+      meadow: 880_000,
+      ridge: 780_000,
+      "tidal-flat": 920_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 780_000,
+    intentStepFactors: Object.freeze({
+      disengage: 840_000,
+      flee: 860_000,
+      pursue: 900_000,
+      retreat: 820_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(

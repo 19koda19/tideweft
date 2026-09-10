@@ -86,7 +86,7 @@ Each seed creates:
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
 - One deterministic starting-harbor herd of exactly two individually identified domestic goats. The settlement and keeper hold a distinct typed pen, herd, and custody record; each goat uses the same shared actor, perception, attention, group, locomotion, and physical-resource arbitration owners without receiving unsupported foliage browsing.
-- One bounded living-species catalog whose first twenty-four records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. Released Alpha33 appends mountain goat, American pika, and golden eagle as records 25–27 and derives them from a separate sparse signed-region Alpine layer without rewriting the Alpha32 child. The preserved unpublished Alpha34 checkpoint appends Atlantic capelin as record 28 through a sparse polar-shore sibling. The current unpublished Alpha35 candidate preserves all 28 records and appends Arctic fox as record 29 through a cold-shore sibling that is viable only over admitted capelin substrate. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, wolves, and mountain goats use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, river otter, golden eagle, and candidate Arctic fox remain solitary. American pika and candidate capelin join brown rat, southern leopard frog, Atlantic silverside, and Atlantic marsh fiddler crab as stable non-addressable aggregates disclosed only through directly visible signs or activity. Fish, crabs, and pikas never become manufactured individual actors. Alpha33 remains the current twenty-seven-record LIVE_VERIFIED release; the 28- and 29-record extensions are unpublished local work, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
+- One bounded living-species catalog whose first twenty-four records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. Released Alpha33 appends mountain goat, American pika, and golden eagle as records 25–27 and derives them from a separate sparse signed-region Alpine layer without rewriting the Alpha32 child. Preserved unpublished Alpha34 appends Atlantic capelin as record 28 through a sparse polar-shore sibling, and Alpha35 appends Arctic fox as record 29 through a cold-shore sibling that is viable only over admitted capelin substrate. The current unpublished Alpha36 candidate preserves that exact prefix and appends harbor seal and polar bear as records 30–31 through one rarer capelin-backed polar-consumer sibling. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, wolves, and mountain goats use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, river otter, golden eagle, Arctic fox, harbor seal, and polar bear remain solitary. American pika and capelin join brown rat, southern leopard frog, Atlantic silverside, and Atlantic marsh fiddler crab as stable non-addressable aggregates disclosed only through directly visible signs or activity. Fish, crabs, and pikas never become manufactured individual actors. Alpha33 remains the current twenty-seven-record LIVE_VERIFIED release; records 28–31 are unpublished local work, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -392,6 +392,43 @@ completion, Wave-G breadth, Directive completion, or release. It has no
 Alpha35 commit, push, deployment, Pages result, or LIVE_VERIFIED evidence;
 Alpha33 remains the public build.
 
+The **current unpublished local working-tree candidate**
+`0.3.3-alpha.36 — Breath Between Tides` preserves Alpha35's complete
+29-record catalog as an exact prefix and appends harbor seal and polar bear as
+records 30 and 31. The polar-consumer source exists only where the authenticated
+capelin substrate, connected cold saline water, and a separate dry haulout all
+agree. It admits one solitary seal; a rarer bear is eligible only after that
+exact seal candidate exists. This makes predator presence a consequence of the
+food web rather than decorative placement.
+
+The seal and bear use the shared actor identity, perception, attention,
+condition, amphibious locomotion, full/coarse persistence, sparse regional
+root, knowledge-honest ABOUT, mobile/desktop selection, and Chart/Relief
+presentation systems. The seal reuses the shore-water activity archetype with
+generic water/haulout verbs; the bear reuses role-based live-prey pursuit. In a
+representative open corridor, the visible seal can pressure the conserved
+capelin school and the visible bear can pursue the seal while the seal flees.
+An intervening ridge removes both responses. There is no pair-specific
+detector, controller, capture, consumption, injury, death, body, player harm,
+dog harm, cargo effect, or hidden omniscient event.
+
+Outer save 29 introduces `RegionalEcologyStateV5` around the exact
+authenticated V4 child plus one polar-consumer sibling. A sealed v28 child is
+adopted exactly once. All five ecology owners still share one insertion-order-
+independent, group-atomic global allowance of 24 addressable actors and one
+atomic commit, so the two profiles do not create a second population or render
+budget.
+
+This candidate completes the current **bounded Wave-F role checklist**, not the
+biodiversity directive. Wave G is the next breadth phase: expand toward 75–150
+meaningful profiles by declaring compatible identity, niche, habitat,
+locomotion, perception, interaction, and presentation data against these
+shared owners, with representative property/conservation/emergence evidence
+instead of a bespoke suite for every species or every pair. Sea ice, snow,
+reproduction, recruitment, population recovery, full scent, broad migration,
+general mortality, audible Living Voice, Directive completion, push, CI,
+Pages, deployment, and LIVE_VERIFIED status remain absent.
+
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
 `34215120610` and Pages `34216318509`. Verification-only descendant
@@ -409,31 +446,34 @@ The bounded core-wildlife assemblage extends the same observation boundary to
 its present deer, gulls, black bears, free-ranging domestic cats, domestic
 chickens, domestic goats, marsh rabbits, marsh foxes, fish crows, northern
 harrier, snowy egret, American black duck, North American river otter, wild
-boars, elk, gray wolves, cougars, brown bears, and—in the unpublished Alpha35
-candidate only—one habitat-supported Arctic fox. Terrain and structures can
+boars, elk, gray wolves, cougars, brown bears, and—in the unpublished local
+candidates only—one habitat-supported Arctic fox, harbor seal, and polar bear.
+Terrain and structures can
 block sight; sufficiently clear contact can identify an ecologically plausible
 relationship; and an explicit established alarm can propagate through bounded
 hearing without revealing the caller's stable identity, species, hidden
 target, or exact motive. Cats, chickens, goats, rabbits, foxes, crows, the
-harrier, the egret, the duck, the otter, boars, elk, wolves, cougars, brown
-bears, both dogs, the porter, gulls, and the player receive only the visual
-observations that lawfully reach them. The egret, duck, or otter receives a
+harrier, the egret, the duck, the otter, the harbor seal, the polar bear,
+boars, elk, wolves, cougars, brown bears, both dogs, the porter, gulls, and the
+player receive only the visual
+observations that lawfully reach them. The egret, duck, otter, or seal receives a
 current anonymous **AQUATIC ACTIVITY** area only when an occupied, active,
 depth-usable fish or crab anchor passes shared direct sight; none receives an
 aggregate ID, species, exact count, or hidden target. A directly seen second
 cat can become food competition for a hungry cat; strong local rain can make a
 materialized cat retreat and leave bounded wet pawprints. Rabbit, fox, and
 gray-wolf movement can leave paired tracks or canid pawprints at the saved
-movement site. Crows, the harrier, the egret, the duck, the otter, chickens,
-goats, boars, elk, cougars, and brown bears do not manufacture ground tracks.
+movement site. Crows, the harrier, the egret, the duck, the otter, harbor
+seals, polar bears, chickens, goats, boars, elk, cougars, and brown bears do
+not manufacture ground tracks.
 Wild-boar, elk, and gray-wolf voice profiles remain inaudible; cougar and
 brown-bear voice behavior is not implemented. Directly visible individual
 wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT
-surface; each visible crow, chicken, goat, boar, elk, wolf, cougar, or brown-
-bear representative renders and hit-tests once. Only gull, fish-crow, and
+surface; each visible crow, chicken, goat, boar, elk, wolf, cougar, brown-bear,
+harbor-seal, or polar-bear representative renders and hit-tests once. Only gull, fish-crow, and
 domestic-chicken visible-flock presentation may expose a bounded visible count,
 and that context never manufactures decorative copies or extra targets. The
-duck and otter each remain one addressable individual. Loss of direct-detail
+duck, otter, harbor seal, and polar bear each remain one addressable individual. Loss of direct-detail
 sight removes rendering, selection, labels, actions, and inspection rather
 than leaving a remote tracker. Individual movement signs require current
 direct-detail sight, fade from identified to ambiguous as their clarity ages,
@@ -683,8 +723,12 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Released Alpha 28 uses outer save format 21 and appends an empty version-1 domestic-animal-recovery root to an authenticated version-20 Watch Returns envelope. It preserves every established species, actor, population, group, habitat, home, custody, assignment, task, item, Promise, evidence record, store fact, and world fact. At most one current case, one pending transaction, and one latest result bind exact actor, group, custody, home, incident, report, and monotonic ordinal identities. A pending transaction recovers exactly once; reload cannot reroll the noticed absence, last-known area, guardian recruitment, exact reunion, or caretaker confirmation.
 - Released Alpha 29 uses outer save format 22, core-ecology patch version 3, and aggregate record version 5. A sealed version-21 envelope keeps every earlier fact exact before empty mortality, population-reserve, and physical-body ledgers are appended once. A valid fox-contact rabbit death retains the exact retired actor, one removed population unit, named cause, stable finite body, claim, and consumption ordinals; reload cannot reroll or duplicate any of them.
 - Released Alpha 30 uses outer save format 23 and habitat analysis version 10 while retaining core-ecology patch 3 and aggregate record 5. A sealed version-22 envelope is adopted exactly once: its complete habitat-version-9 prefix and body-bearing state remain exact before the remote source and wild-boar, elk, gray-wolf, `SOUNDER`, `HERD`, and `PACK` records are appended. Reload cannot reroll the source or duplicate an actor, population, group, or body.
+- Released Alpha 31 uses outer save format 24 and habitat analysis version 11. It preserves the complete Alpha-30 source and population prefix before appending habitat-supported solitary cougar and brown-bear records. Exact adoption retains all earlier identities, populations, groups, mortality, bodies, items, Promises, and world facts.
+- Released Alpha 32 uses outer save format 25 and `RegionalEcologyStateV1`. It separates the starting-settlement home from signed-region ecology, preserves the habitat-version-11 child, and applies one insertion-order-independent, group-atomic global cap and atomic commit across every current source.
+- Released Alpha 33 uses outer save format 26 and `RegionalEcologyStateV2`. It wraps the exact V1 child beside one sparse Alpine sibling and adopts a sealed v25 child exactly once without rerolling mountain-goat, American-pika, or golden-eagle state.
+- The unpublished Alpha34, Alpha35, and Alpha36 candidates extend that append-only chain through `RegionalEcologyStateV3`/outer v27, V4/outer v28, and V5/outer v29. Each wrapper retains its exact authenticated child, adds only its sparse polar-shore, cold-shore, or polar-consumer sibling, and keeps every layer under the same global group-atomic 24-actor allowance and atomic commit. These formats are local compatibility candidates, not public release claims.
 
-There is no courier or human death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice. The only current mortality is bounded exact fox-or-gray-wolf contact against an eligible solitary rabbit, as described above.
+There is no courier or human death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice. The only current mortality is bounded exact marsh-fox, gray-wolf, or cougar contact against an eligible solitary rabbit, as described above.
 
 ## Perpetual play and pressure
 
@@ -1232,9 +1276,27 @@ Present only in the unpublished local Alpha35 working-tree candidate:
   beside a sparse cold-shore sibling under the same single global group-atomic
   24-actor cap and one atomic commit.
 
-Neither local checkpoint is released, deployed, Pages-verified, or
-LIVE_VERIFIED. Alpha35 does not complete remaining polar breadth, Wave F,
-Wave G, or Directive 04_1.
+Present only in the unpublished local Alpha36 working-tree candidate:
+
+- the exact 29-record Alpha35 prefix followed by solitary addressable harbor
+  seal and polar bear records 30–31;
+- one seal only where admitted capelin, connected cold saline water, and a
+  distinct dry haulout agree, plus a rarer bear only where that exact seal
+  candidate already exists;
+- shared shore-water activity, amphibious traversability, role-based cognition,
+  full/coarse persistence, sparse regional ownership, knowledge-honest ABOUT,
+  and dual-view rendering without species-local controllers;
+- one current-sight representative chain in which the seal can pressure the
+  conserved capelin aggregate, the bear can pursue the seal, and the seal can
+  flee, while occlusion removes both interactions and no contact, capture,
+  consumption, injury, mortality, body, item, or cargo outcome is created; and
+- outer save 29 and `RegionalEcologyStateV5`, retaining exact V4 beside the
+  polar-consumer sibling under the same single global group-atomic 24-actor cap
+  and one atomic commit.
+
+None of the Alpha34–36 local checkpoints is released, deployed, Pages-verified,
+or LIVE_VERIFIED. Alpha36 closes bounded Wave-F role coverage, but does not
+complete Wave G, Directive 04_1, worldwide ecology, or the full bestiary.
 
 Live through Alpha 33:
 

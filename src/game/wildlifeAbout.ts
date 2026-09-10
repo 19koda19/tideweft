@@ -127,6 +127,18 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN SMALL CANID",
     representation: "individual",
   },
+  "harbor-seal": {
+    identifiedName: "Harbor seal",
+    identifiedHeading: "HARBOR SEAL",
+    unidentifiedHeading: "UNKNOWN MARINE MAMMAL",
+    representation: "individual",
+  },
+  "polar-bear": {
+    identifiedName: "Polar bear",
+    identifiedHeading: "POLAR BEAR",
+    unidentifiedHeading: "LARGE BEAR",
+    representation: "individual",
+  },
   "fish-crow": {
     identifiedName: "Fish crow",
     identifiedHeading: "FISH CROW FLOCK",
@@ -258,6 +270,9 @@ export function projectWildlifeQuickInspect(
   if (presentation.groupSize !== undefined) {
     details.push(`About ${presentation.groupSize} visible`);
   }
+  if (presentation.appearanceLabel !== undefined) {
+    details.push(approximateSize(presentation.sizeScale));
+  }
   details.push(presentation.behaviorLabel);
   const primaryCondition = presentation.conditionLabels[0];
   if (primaryCondition !== undefined) details.push(displayToken(primaryCondition));
@@ -296,6 +311,9 @@ export function projectWildlifeAbout(
       "Condition",
       presentation.conditionLabels.map(displayToken).join(" · "),
     ));
+  }
+  if (presentation.appearanceLabel !== undefined) {
+    observed.push(fact("Size", approximateSize(presentation.sizeScale)));
   }
   observed.push(fact("Behavior", presentation.behaviorLabel));
   if (presentation.formLabel !== undefined) {
@@ -423,6 +441,18 @@ function heading(presentation: WildlifePresentation): string {
 
 function identifiedSpecies(species: IndividualWildlifeSpecies): string {
   return ABOUT_BY_SPECIES[species].identifiedName;
+}
+
+/**
+ * Qualitative apparent size from the renderer-neutral scale shared by Chart
+ * and Relief. The raw value remains private, and callers emit this label only
+ * at the close-range appearance-detail gate.
+ */
+function approximateSize(sizeScale: number): string {
+  if (sizeScale < 0.65) return "Small";
+  if (sizeScale < 1.25) return "Medium";
+  if (sizeScale < 1.55) return "Large";
+  return "Very large";
 }
 
 function displayToken(value: string): string {

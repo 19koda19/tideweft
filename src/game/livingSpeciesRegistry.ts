@@ -323,6 +323,24 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 36_000,
     },
   },
+  "harbor-seal": {
+    aboutNoun: "harbor seal",
+    senses: {
+      visionAcuity: 760_000,
+      hearingSensitivity: 900_000,
+      scentSensitivity: 720_000,
+      scentBaseRangeUnits: 20_000,
+    },
+  },
+  "polar-bear": {
+    aboutNoun: "polar bear",
+    senses: {
+      visionAcuity: 780_000,
+      hearingSensitivity: 900_000,
+      scentSensitivity: ACTOR_PERCEPTION_SCALE,
+      scentBaseRangeUnits: 56_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

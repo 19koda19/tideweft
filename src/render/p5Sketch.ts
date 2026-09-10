@@ -17,6 +17,7 @@ import {
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
+  polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
 } from "./wildlifeAppearance";
@@ -3860,6 +3861,160 @@ export function createTideweftRenderer(
       );
     };
 
+    const drawChartHarborSeal = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const colors = polarMarineWildlifeAppearancePalette(
+        "harbor-seal",
+        actor.appearanceKey,
+      );
+      const waterborne = actor.behavior === "swim"
+        || actor.behavior === "crossing"
+        || actor.behavior === "dive";
+      const diving = actor.behavior === "dive";
+      const glide = reducedMotion || !waterborne
+        ? 0
+        : Math.sin(now * 0.0065) * base * 0.16;
+      const bodyLength = base * 3.72;
+      const bodyHeight = base * (waterborne ? 0.82 : 1.12);
+      const headX = bodyLength * 0.48;
+      const headY = -bodyHeight * (diving ? -0.06 : 0.22) + glide;
+      const headRadius = base * 0.64;
+
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(1, base * 0.17));
+      p.fill(colors.primary);
+      p.ellipse(-bodyLength * 0.08, glide, bodyLength, bodyHeight);
+      p.circle(headX, headY, headRadius * 2);
+      p.noStroke();
+      p.fill(colors.secondary);
+      p.ellipse(bodyLength * 0.08, bodyHeight * 0.12 + glide, bodyLength * 0.72, bodyHeight * 0.36);
+      p.fill(colors.dark);
+      for (const side of [-1, 1] as const) {
+        p.triangle(
+          -bodyLength * 0.48,
+          glide,
+          -bodyLength * 0.78,
+          side * bodyHeight * 0.55 + glide,
+          -bodyLength * 0.36,
+          side * bodyHeight * 0.22 + glide,
+        );
+      }
+      p.triangle(
+        -bodyLength * 0.08,
+        bodyHeight * 0.28 + glide,
+        bodyLength * 0.18,
+        bodyHeight * 0.74 + glide,
+        bodyLength * 0.3,
+        bodyHeight * 0.24 + glide,
+      );
+      p.circle(headX + headRadius * 0.55, headY - headRadius * 0.28, Math.max(1.1, base * 0.15));
+      p.ellipse(
+        headX + headRadius * 0.98,
+        headY + headRadius * 0.08,
+        base * 0.25,
+        base * 0.19,
+      );
+      p.stroke(colors.accent);
+      p.strokeWeight(Math.max(0.55, base * 0.075));
+      for (const offset of [-0.22, 0.06, 0.32]) {
+        p.line(
+          headX + headRadius * 0.72,
+          headY + headRadius * offset,
+          headX + headRadius * 1.55,
+          headY + headRadius * (offset - 0.16),
+        );
+      }
+      if (waterborne) {
+        p.noFill();
+        p.stroke(colors.accent);
+        p.strokeWeight(Math.max(0.7, base * 0.1));
+        p.arc(-bodyLength * 0.18, bodyHeight * 0.55, bodyLength * 1.3, bodyHeight, 0, p.PI);
+      }
+      p.noStroke();
+    };
+
+    const drawChartPolarBear = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      const colors = polarMarineWildlifeAppearancePalette(
+        "polar-bear",
+        actor.appearanceKey,
+      );
+      const moving = actor.behavior === "flee"
+        || actor.behavior === "pursue"
+        || actor.behavior === "retreat";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.009) * base * 0.3;
+      const bodyLength = base * 4.35;
+      const bodyHeight = base * 1.86;
+      const headX = bodyLength * 0.58;
+      const headY = -bodyHeight * 0.18;
+      const headRadius = base * 0.77;
+
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(1.25, base * 0.2));
+      for (const [legX, phase] of [
+        [-bodyLength * 0.3, -1],
+        [bodyLength * 0.31, 1],
+      ] as const) {
+        p.line(legX, bodyHeight * 0.25, legX + stride * phase, bodyHeight * 1.03);
+        p.line(
+          legX + stride * phase,
+          bodyHeight * 1.03,
+          legX + stride * phase + base * 0.32,
+          bodyHeight * 1.03,
+        );
+      }
+      p.fill(colors.primary);
+      p.ellipse(0, 0, bodyLength, bodyHeight);
+      p.fill(colors.secondary);
+      p.ellipse(-bodyLength * 0.25, -bodyHeight * 0.3, base * 1.82, bodyHeight * 0.82);
+      p.fill(colors.primary);
+      p.quad(
+        bodyLength * 0.25,
+        -bodyHeight * 0.3,
+        headX - headRadius * 0.45,
+        headY - headRadius * 0.24,
+        headX - headRadius * 0.35,
+        headY + headRadius * 0.55,
+        bodyLength * 0.24,
+        bodyHeight * 0.3,
+      );
+      p.circle(headX, headY, headRadius * 2);
+      p.noStroke();
+      p.fill(colors.dark);
+      for (const ear of [-1, 1] as const) {
+        p.circle(
+          headX + headRadius * 0.34 * ear,
+          headY - headRadius * 0.78,
+          headRadius * 0.46,
+        );
+      }
+      p.fill(colors.secondary);
+      p.ellipse(
+        headX + headRadius * 0.72,
+        headY + headRadius * 0.16,
+        headRadius * 1.08,
+        headRadius * 0.66,
+      );
+      p.fill(colors.dark);
+      p.ellipse(
+        headX + headRadius * 1.2,
+        headY + headRadius * 0.12,
+        base * 0.26,
+        base * 0.21,
+      );
+      p.circle(
+        headX + headRadius * 0.28,
+        headY - headRadius * 0.22,
+        Math.max(1.15, base * 0.16),
+      );
+    };
+
     const drawChartMountainGoat = (
       actor: WildlifeView,
       base: number,
@@ -4202,6 +4357,12 @@ export function createTideweftRenderer(
           return true;
         case "arctic-fox":
           drawChartSmallFox(actor, "arctic-fox", base, now);
+          return true;
+        case "harbor-seal":
+          drawChartHarborSeal(actor, base, now);
+          return true;
+        case "polar-bear":
+          drawChartPolarBear(actor, base, now);
           return true;
         case "mountain-goat":
           drawChartMountainGoat(actor, base, now);

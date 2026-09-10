@@ -248,6 +248,8 @@ const MORTALITY_VALUES: Readonly<Record<
   "golden-eagle": NO_MORTALITY_RUNTIME,
   "atlantic-capelin": NO_MORTALITY_RUNTIME,
   "arctic-fox": NO_MORTALITY_RUNTIME,
+  "harbor-seal": NO_MORTALITY_RUNTIME,
+  "polar-bear": NO_MORTALITY_RUNTIME,
 });
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
@@ -662,6 +664,49 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       ],
       activitySignals: [],
       evidenceKinds: ["canid-pawprints"],
+      presentationModel: "individual",
+    },
+    "harbor-seal": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "aquatic-locomotion",
+        "diurnal-activity",
+        "movement-memory",
+        "shore-water-activity",
+        "surface-opportunity",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: [
+        "aquatic-foraging",
+        "shore-water-relocation",
+        "surface-diving",
+        "surface-swimming",
+      ],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "polar-bear": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "amphibious-locomotion",
+        "aquatic-locomotion",
+        "food-investigation",
+        "live-prey-pursuit",
+        "movement-memory",
+        "shore-water-activity",
+        "water-depth-response",
+      ],
+      activitySignals: [],
+      evidenceKinds: [],
       presentationModel: "individual",
     },
   });

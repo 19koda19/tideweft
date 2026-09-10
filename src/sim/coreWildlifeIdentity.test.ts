@@ -15,6 +15,14 @@ import {
   CORE_WILDLIFE_ALPHA34_SPECIES,
   CORE_WILDLIFE_ALPHA34_SPECIES_COUNT,
   CORE_WILDLIFE_ALPHA34_SPECIES_HASH,
+  CORE_WILDLIFE_ALPHA35_PROFILES_HASH,
+  CORE_WILDLIFE_ALPHA35_SPECIES,
+  CORE_WILDLIFE_ALPHA35_SPECIES_COUNT,
+  CORE_WILDLIFE_ALPHA35_SPECIES_HASH,
+  CORE_WILDLIFE_ALPHA36_PROFILES_HASH,
+  CORE_WILDLIFE_ALPHA36_SPECIES,
+  CORE_WILDLIFE_ALPHA36_SPECIES_COUNT,
+  CORE_WILDLIFE_ALPHA36_SPECIES_HASH,
   CORE_WILDLIFE_PROFILES,
   CORE_WILDLIFE_SPECIES,
   assertCoreWildlifeIdentity,
@@ -88,7 +96,7 @@ describe("core wildlife identity", () => {
     expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA33_SPECIES_COUNT))
       .toEqual(CORE_WILDLIFE_ALPHA33_SPECIES);
     expect(CORE_WILDLIFE_SPECIES.slice(CORE_WILDLIFE_ALPHA33_SPECIES_COUNT))
-      .toEqual(["atlantic-capelin", "arctic-fox"]);
+      .toEqual(["atlantic-capelin", "arctic-fox", "harbor-seal", "polar-bear"]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA32_SPECIES_HASH);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES.map(getCoreWildlifeProfile)))
@@ -107,11 +115,37 @@ describe("core wildlife identity", () => {
     expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA34_SPECIES_COUNT))
       .toEqual(CORE_WILDLIFE_ALPHA34_SPECIES);
     expect(CORE_WILDLIFE_SPECIES.slice(CORE_WILDLIFE_ALPHA34_SPECIES_COUNT))
-      .toEqual(["arctic-fox"]);
+      .toEqual(["arctic-fox", "harbor-seal", "polar-bear"]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA34_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA34_SPECIES_HASH);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA34_SPECIES.map(getCoreWildlifeProfile)))
       .toBe(CORE_WILDLIFE_ALPHA34_PROFILES_HASH);
+    expect(CORE_WILDLIFE_ALPHA35_SPECIES).toEqual([
+      ...CORE_WILDLIFE_ALPHA34_SPECIES,
+      "arctic-fox",
+    ]);
+    expect(CORE_WILDLIFE_ALPHA35_SPECIES).toHaveLength(
+      CORE_WILDLIFE_ALPHA35_SPECIES_COUNT,
+    );
+    expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA35_SPECIES_COUNT))
+      .toEqual(CORE_WILDLIFE_ALPHA35_SPECIES);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA35_SPECIES))
+      .toBe(CORE_WILDLIFE_ALPHA35_SPECIES_HASH);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA35_SPECIES.map(getCoreWildlifeProfile)))
+      .toBe(CORE_WILDLIFE_ALPHA35_PROFILES_HASH);
+    expect(CORE_WILDLIFE_ALPHA36_SPECIES).toEqual([
+      ...CORE_WILDLIFE_ALPHA35_SPECIES,
+      "harbor-seal",
+      "polar-bear",
+    ]);
+    expect(CORE_WILDLIFE_ALPHA36_SPECIES).toHaveLength(
+      CORE_WILDLIFE_ALPHA36_SPECIES_COUNT,
+    );
+    expect(CORE_WILDLIFE_SPECIES).toEqual(CORE_WILDLIFE_ALPHA36_SPECIES);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA36_SPECIES))
+      .toBe(CORE_WILDLIFE_ALPHA36_SPECIES_HASH);
+    expect(hashCanonical(CORE_WILDLIFE_ALPHA36_SPECIES.map(getCoreWildlifeProfile)))
+      .toBe(CORE_WILDLIFE_ALPHA36_PROFILES_HASH);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
     expect(getCoreWildlifeProfile("deer").roles).toEqual([
@@ -219,6 +253,47 @@ describe("core wildlife identity", () => {
       groupStableIdNamespace: null,
       locomotionClass: "terrestrial",
       taxonomicClass: "mammal",
+    });
+    const alpha36Consumers = {
+      "harbor-seal": {
+        maximumPatchPopulation: 3,
+        roles: ["prey", "forager"],
+        pursuitTicks: 0,
+        morphs: ["dark-slate", "mottled-gray", "pale-silver", "warm-brown"],
+      },
+      "polar-bear": {
+        maximumPatchPopulation: 1,
+        roles: ["forager", "predator"],
+        pursuitTicks: 12,
+        morphs: ["cream-ivory", "pale-ivory", "weathered-white", "yellowed-ivory"],
+      },
+    } as const;
+    for (const [species, expected] of Object.entries(alpha36Consumers) as [
+      keyof typeof alpha36Consumers,
+      (typeof alpha36Consumers)[keyof typeof alpha36Consumers],
+    ][]) {
+      expect(getCoreWildlifeSpeciesMetadata(species)).toMatchObject({
+        actorRepresentation: "individual",
+        catalogIdentityForm: "individual",
+        dietClass: "carnivore",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        locomotionClass: "amphibious",
+        taxonomicClass: "mammal",
+      });
+      expect(getCoreWildlifeProfile(species)).toMatchObject({
+        maximumPatchPopulation: expected.maximumPatchPopulation,
+        roles: expected.roles,
+        behavior: { maximumPursuitTicks: expected.pursuitTicks },
+        morphs: expected.morphs,
+      });
+    }
+    expect(getCoreWildlifeProfile("harbor-seal").foodAffinities).toMatchObject({
+      "shore-forage": 1_000_000,
+      "live-prey": 0,
+    });
+    expect(getCoreWildlifeProfile("polar-bear").foodAffinities).toMatchObject({
+      "live-prey": 1_000_000,
     });
     expect(getCoreWildlifeProfile("marsh-fox").roles).toEqual([
       "forager",

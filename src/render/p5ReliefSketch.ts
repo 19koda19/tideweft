@@ -66,9 +66,11 @@ import {
   ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
   ALPHA31_PREDATOR_APPEARANCE_PALETTES,
   COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES,
+  POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
+  polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
 } from "./wildlifeAppearance";
@@ -225,6 +227,8 @@ type ReliefWildlifeForm =
   | "marsh-rabbit"
   | "marsh-fox"
   | "arctic-fox"
+  | "harbor-seal"
+  | "polar-bear"
   | "mountain-goat"
   | "golden-eagle";
 
@@ -396,6 +400,20 @@ const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDe
     hitRadiusScale: 0.48,
     ringRadiusScale: 0.4,
     labelLift: 0.72,
+  },
+  "harbor-seal": {
+    form: "harbor-seal",
+    colors: POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["harbor-seal"]["mottled-gray"],
+    hitRadiusScale: 0.57,
+    ringRadiusScale: 0.47,
+    labelLift: 0.68,
+  },
+  "polar-bear": {
+    form: "polar-bear",
+    colors: POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["polar-bear"]["cream-ivory"],
+    hitRadiusScale: 0.74,
+    ringRadiusScale: 0.63,
+    labelLift: 0.96,
   },
   "wild-boar": {
     form: "wild-boar",
@@ -5070,6 +5088,166 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawHarborSeal = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = polarMarineWildlifeAppearancePalette(
+        "harbor-seal",
+        wildlife.appearanceKey,
+      );
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.105 * scale;
+      const waterborne = wildlife.behavior === "swim"
+        || wildlife.behavior === "crossing"
+        || wildlife.behavior === "dive";
+      const diving = wildlife.behavior === "dive";
+      const bodyHalfLength = base * 1.9;
+      const bodyHalfHeight = base * (waterborne ? 0.43 : 0.58);
+      const bodyHalfWidth = base * 0.66;
+      const glide = reducedMotion || !waterborne
+        ? 0
+        : Math.sin(now * 0.0065) * base * 0.1;
+      const waterLift = waterborne ? RELIEF_WATER_SURFACE_LIFT : 0;
+      const bodyCenterY = surface + waterLift + bodyHalfHeight * (diving ? 0.18 : 0.7);
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY - glide, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(1, base * 0.08));
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 10, 6);
+
+      p.push();
+      p.translate(
+        bodyHalfLength * 0.88,
+        diving ? bodyHalfHeight * 0.3 : -bodyHalfHeight * 0.2,
+        0,
+      );
+      p.ellipsoid(base * 0.62, base * 0.52, base * 0.57, 8, 5);
+      p.noStroke();
+      p.ambientMaterial(colors.dark);
+      for (const eyeZ of [-base * 0.38, base * 0.38]) {
+        p.push();
+        p.translate(base * 0.22, -base * 0.22, eyeZ);
+        p.sphere(base * 0.075, 5, 3);
+        p.pop();
+      }
+      p.translate(base * 0.5, base * 0.06, 0);
+      p.ellipsoid(base * 0.18, base * 0.12, base * 0.2, 6, 3);
+      p.pop();
+
+      p.noStroke();
+      p.ambientMaterial(colors.secondary);
+      p.push();
+      p.translate(base * 0.12, bodyHalfHeight * 0.48, bodyHalfWidth * 0.78);
+      p.rotateZ(-0.38);
+      p.ellipsoid(base * 0.72, base * 0.13, base * 0.25, 7, 3);
+      p.pop();
+      for (const tailZ of [-base * 0.25, base * 0.25]) {
+        p.push();
+        p.translate(-bodyHalfLength * 1.02, bodyHalfHeight * 0.12, tailZ);
+        p.rotateZ(0.18);
+        p.ellipsoid(base * 0.7, base * 0.14, base * 0.24, 7, 3);
+        p.pop();
+      }
+
+      if (waterborne) {
+        p.noFill();
+        p.stroke(colors.accent);
+        p.strokeWeight(Math.max(1, base * 0.08));
+        for (const wakeZ of [-base * 0.7, base * 0.7]) {
+          p.line(-bodyHalfLength * 1.65, bodyHalfHeight * 0.55, wakeZ, 0, bodyHalfHeight * 0.65, wakeZ);
+        }
+      }
+      p.noStroke();
+      p.pop();
+    };
+
+    const drawPolarBear = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+      now: number,
+    ): void => {
+      const colors = polarMarineWildlifeAppearancePalette(
+        "polar-bear",
+        wildlife.appearanceKey,
+      );
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.14 * scale;
+      const moving = wildlife.behavior === "flee"
+        || wildlife.behavior === "pursue"
+        || wildlife.behavior === "retreat";
+      const stride = reducedMotion || !moving ? 0 : Math.sin(now * 0.009) * base * 0.2;
+      const bodyHalfLength = base * 1.95;
+      const bodyHalfHeight = base * 0.88;
+      const bodyHalfWidth = base * 0.82;
+      const legHeight = base * 0.76;
+      const bodyCenterY = surface + bodyHalfHeight + legHeight * 0.68;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.stroke(colors.dark);
+      p.strokeWeight(Math.max(1.15, base * 0.085));
+      for (const [legX, phase] of [
+        [-bodyHalfLength * 0.58, -1],
+        [bodyHalfLength * 0.58, 1],
+      ] as const) {
+        for (const legZ of [-bodyHalfWidth * 0.48, bodyHalfWidth * 0.48]) {
+          p.push();
+          p.translate(legX + stride * phase, legHeight * 0.72, legZ);
+          p.ambientMaterial(colors.primary);
+          p.box(base * 0.3, legHeight, base * 0.28);
+          p.translate(base * 0.1, legHeight * 0.48, 0);
+          p.ambientMaterial(colors.dark);
+          p.box(base * 0.45, base * 0.16, base * 0.34);
+          p.pop();
+        }
+      }
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 11, 7);
+      p.push();
+      p.translate(bodyHalfLength * 0.3, -bodyHalfHeight * 0.5, 0);
+      p.ambientMaterial(colors.secondary);
+      p.ellipsoid(base * 0.95, base * 0.72, bodyHalfWidth * 1.02, 9, 6);
+      p.pop();
+      p.push();
+      p.translate(bodyHalfLength * 0.83, -bodyHalfHeight * 0.35, 0);
+      p.rotateZ(-0.14);
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(base * 0.92, base * 0.58, base * 0.62, 9, 6);
+      p.translate(base * 0.72, -base * 0.08, 0);
+      p.sphere(base * 0.59, 9, 6);
+      for (const earZ of [-base * 0.38, base * 0.38]) {
+        p.push();
+        p.translate(-base * 0.18, -base * 0.5, earZ);
+        p.ambientMaterial(colors.dark);
+        p.sphere(base * 0.2, 6, 4);
+        p.translate(base * 0.03, base * 0.02, 0);
+        p.ambientMaterial(colors.primary);
+        p.sphere(base * 0.12, 5, 3);
+        p.pop();
+      }
+      p.noStroke();
+      p.ambientMaterial(colors.dark);
+      for (const eyeZ of [-base * 0.43, base * 0.43]) {
+        p.push();
+        p.translate(base * 0.18, -base * 0.16, eyeZ);
+        p.sphere(base * 0.07, 5, 3);
+        p.pop();
+      }
+      p.translate(base * 0.51, base * 0.1, 0);
+      p.ellipsoid(base * 0.19, base * 0.14, base * 0.2, 6, 3);
+      p.pop();
+      p.noStroke();
+      p.pop();
+    };
+
     const drawSmallFox = (
       wildlife: WildlifeView,
       species: "marsh-fox" | "arctic-fox",
@@ -5481,6 +5659,12 @@ export function createTideweftReliefRenderer(
           return true;
         case "arctic-fox":
           drawSmallFox(wildlife, "arctic-fox", surface, tileSize, now);
+          return true;
+        case "harbor-seal":
+          drawHarborSeal(wildlife, surface, tileSize, now);
+          return true;
+        case "polar-bear":
+          drawPolarBear(wildlife, surface, tileSize, now);
           return true;
         case "mountain-goat":
           drawMountainGoat(wildlife, surface, tileSize, now);

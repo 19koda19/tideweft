@@ -482,6 +482,130 @@ describe("Living Weft species release gate", () => {
     ]));
   });
 
+  it("authenticates the shared Alpha-36 polar-consumer seam without claiming life systems", () => {
+    for (const species of ["harbor-seal", "polar-bear"] as const) {
+      const releaseGate = gate(species);
+      const criterion = (name: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number]) => (
+        releaseGate.criteria.find((candidate) => candidate.criterion === name)
+      );
+      const module = livingSpeciesModule(species);
+
+      expect(livingSpeciesReadinessReport(species)).toMatchObject({
+        evidenceAuthenticated: true,
+        state: "blocked",
+        publicReady: false,
+        counts: { total: 30 },
+      });
+      for (const active of [
+        "species-profile",
+        "ecological-niche",
+        "appearance",
+        "habitat-placement",
+        "perception-senses",
+        "locomotion",
+        "other-species-interaction",
+        "neutral-behavior",
+        "disengagement",
+        "about-disclosure",
+        "knowledge-honesty",
+        "population-materialization",
+        "full-coarse-transition",
+        "save-load",
+        "seamless-region-crossing",
+        "performance-budget",
+        "accessibility",
+        "mobile-parity",
+        "player-independent-scenario",
+        "fuzz-testing",
+        "clone-diversity",
+        "tutorial-truth",
+        "patch-note-truth",
+      ] as const) {
+        expect(criterion(active)?.status).toBe("active");
+      }
+      for (const foundation of [
+        "food-web",
+        "human-interaction",
+        "dog-interaction",
+        "same-species-interaction",
+      ] as const) {
+        expect(criterion(foundation)?.status).toBe("foundation");
+      }
+      for (const withheld of [
+        "sound",
+        "environmental-evidence",
+        "exact-tested-deployment",
+      ] as const) {
+        expect(criterion(withheld)).toMatchObject({
+          status: "unimplemented",
+          evidenceOwnerIds: [],
+        });
+      }
+
+      expect(criterion("habitat-placement")?.evidenceOwnerIds).toEqual(
+        expect.arrayContaining([
+          "game:core-ecology-polar-consumer-habitat:v1",
+          "game:regional-polar-consumer-ecology:v1",
+          "game:regional-polar-consumer-residents:v1",
+          "test:alpha36-polar-consumer-habitat-shared-invariants:v1",
+        ]),
+      );
+      expect(criterion("locomotion")?.evidenceOwnerIds).toContain(
+        "test:alpha36-polar-consumer-shared-locomotion:v1",
+      );
+      expect(criterion("other-species-interaction")?.evidenceOwnerIds).toContain(
+        "test:alpha36-polar-consumer-emergence:v1",
+      );
+      expect(criterion("knowledge-honesty")?.evidenceOwnerIds).toContain(
+        "test:alpha36-polar-consumer-presentation-invariants:v1",
+      );
+      expect(criterion("save-load")?.evidenceOwnerIds).toEqual(
+        expect.arrayContaining([
+          "game:regional-ecology-state:v5",
+          "game:runtime-save:v29",
+          "test:alpha36-polar-consumer-composite-shared-invariants:v1",
+          "test:alpha36-polar-consumer-root-shared-invariants:v1",
+          "test:alpha36-polar-consumer-runtime-v29:v1",
+        ]),
+      );
+      expect(criterion("performance-budget")?.evidenceOwnerIds).toContain(
+        "test:alpha36-polar-consumer-composite-performance:v1",
+      );
+      expect(criterion("tutorial-truth")?.evidenceOwnerIds).toEqual([
+        "ui:tutorial-guide:v46",
+      ]);
+      expect(criterion("patch-note-truth")?.evidenceOwnerIds).toEqual([
+        "content:patch-notes-alpha36:v1",
+      ]);
+
+      expect(module).toMatchObject({
+        senses: { implementation: "foundation" },
+        habitat: { migrationModel: "none" },
+        lifeHistory: {
+          dynamicAging: false,
+          mortality: "unimplemented",
+          reproduction: "unimplemented",
+        },
+        health: { causalDeath: false },
+        sound: { implementation: "unimplemented", repertoire: [] },
+        evidence: { status: "unimplemented", produces: [] },
+        aftermath: { implementation: "unimplemented", carcassModel: "none" },
+        social: {
+          territory: { model: "none", anchorKinds: [] },
+        },
+        environment: {
+          terrain: { status: "unimplemented" },
+          weather: { status: "unimplemented" },
+        },
+      });
+      expect(module?.habitat.habitatClasses.some((value) => /ice|snow/u.test(value)))
+        .toBe(false);
+      expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+        verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+      ))).toBe(false);
+    }
+  });
+
   it("keeps every current actor module blocked until all 30 release criteria close", () => {
     const human = livingSpeciesReadinessReport("human");
     const dog = livingSpeciesReadinessReport("domestic-dog");

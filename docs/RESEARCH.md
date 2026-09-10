@@ -568,6 +568,54 @@ snow or ice behavior, mortality, live-prey capture, reproduction, audible
 Living Voice, or Wave-F completion. It has no push, CI, Pages, deployment, or
 live-build attestation; Alpha33 remains the latest LIVE_VERIFIED public release.
 
+The preserved unpublished Alpha35 candidate adds one Arctic fox only where
+that authenticated capelin substrate overlaps suitable all-tide-dry cold shore.
+It deliberately treats the fox as an ordinary solitary actor using shared
+identity, perception, attention, locomotion, evidence, ABOUT, rendering, sparse
+regional persistence, and aggregate-pressure owners. Its representative witness
+is intentionally narrow: current direct sight may pressure the conserved school,
+while an occluding ridge removes both knowledge and response. No exact fish,
+capture, consumption, mortality, or physical body is inferred.
+
+The **unpublished local** `0.3.3-alpha.36 — Breath Between Tides` candidate
+tests the final bounded Wave-F role combination: one addressable harbor seal and
+one rarer polar bear over the exact existing capelin/cold-shore chain. NOAA
+describes harbor seals using rocks, reefs, beaches, and glacial ice as haulouts
+and feeding on fish, shellfish, and crustaceans; that supports an open-coast
+water-plus-dry-haulout abstraction without requiring a sea-ice simulation.
+[NOAA Fisheries — Harbor Seal](https://www.fisheries.noaa.gov/species/harbor-seal)
+
+The polar-bear dependency is deliberately prey-backed rather than decorative.
+Canada's status assessment records harbour seals among polar-bear prey in parts
+of their range, and Ontario's recovery strategy reports harbour seal as a
+meaningful secondary prey item in Southern Hudson Bay. TIDEWEFT therefore
+admits the rarer bear only after the same source already admits the exact seal
+candidate. This is an ecological-design inference from those sources, not a
+claim that harbor seals replace ringed seals across polar-bear ecology.
+[Government of Canada — Polar Bear status report (2018)](https://www.canada.ca/en/environment-climate-change/services/species-risk-public-registry/cosewic-assessments-status-reports/polar-bear-2018.html)
+[Government of Canada — Polar Bear recovery strategy for Ontario](https://www.canada.ca/en/environment-climate-change/services/species-risk-public-registry/recovery-strategies/polar-bear-ontario-2011.html)
+
+The seal receives one authenticated foraging-water/dry-haulout pair through the
+same shore-water activity and amphibious pathing abstractions used by the river
+otter. The bear uses shared individual cognition, amphibious traversability, and
+role-based live-prey pursuit. In the representative emergence chain, a visible
+seal can create conserved nonlethal pressure on capelin; the visible bear can
+pursue the seal; and the seal can flee. Terrain occlusion removes both chains.
+Neither species gains contact, capture, consumption, injury, mortality, body,
+player-harm, dog-harm, or cargo authority in this slice.
+
+`RegionalEcologyStateV5` retains the exact V4/v28 ecology state as a child and
+adds one sparse polar-consumer sibling. Outer save v29 adopts an authenticated
+v28 child exactly once. All five ecology layers still enter one insertion-order-
+independent, group-atomic plan capped at 24 addressable actors and one atomic
+commit. The two new actors therefore prove another reusable role composition;
+they do not receive a private visibility budget or a species-local controller.
+Passing this slice closes the directive's bounded Wave-F role checklist and
+opens Wave G breadth, but it does not itself add sea ice, snow, reproduction,
+population recovery, full scent, audible Living Voice, worldwide polar ecology,
+or the target 75–150 profiles. It remains local and unpublished until a later
+release checkpoint supplies push, CI, Pages, and exact-live evidence.
+
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
 working-relationship, recovery, knowledge, mortality/body, and shared-policy

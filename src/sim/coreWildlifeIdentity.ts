@@ -67,11 +67,31 @@ export const CORE_WILDLIFE_ALPHA34_SPECIES_COUNT = 26 as const;
 export const CORE_WILDLIFE_ALPHA34_SPECIES_HASH = "3339d078da08ae3e" as const;
 export const CORE_WILDLIFE_ALPHA34_PROFILES_HASH = "0e8c2e07813bee97" as const;
 
-/** Current roster; extensions must remain append-only after the sealed prefix. */
-export const CORE_WILDLIFE_SPECIES = Object.freeze([
+/** Immutable Alpha-35 identity lineage; later cold-shore consumers append after it. */
+export const CORE_WILDLIFE_ALPHA35_SPECIES = Object.freeze([
   ...CORE_WILDLIFE_ALPHA34_SPECIES,
   "arctic-fox",
 ] as const);
+export const CORE_WILDLIFE_ALPHA35_SPECIES_COUNT = 27 as const;
+export const CORE_WILDLIFE_ALPHA35_SPECIES_HASH = "cd187176871e53a5" as const;
+export const CORE_WILDLIFE_ALPHA35_PROFILES_HASH = "5f7ab710fac106ef" as const;
+
+/**
+ * Immutable Alpha-36 identity lineage. Harbor seals and polar bears remain
+ * distinct addressable individuals even though regional ecology owns their
+ * population pressure and placement.
+ */
+export const CORE_WILDLIFE_ALPHA36_SPECIES = Object.freeze([
+  ...CORE_WILDLIFE_ALPHA35_SPECIES,
+  "harbor-seal",
+  "polar-bear",
+] as const);
+export const CORE_WILDLIFE_ALPHA36_SPECIES_COUNT = 29 as const;
+export const CORE_WILDLIFE_ALPHA36_SPECIES_HASH = "da0c901d7a464932" as const;
+export const CORE_WILDLIFE_ALPHA36_PROFILES_HASH = "4a225e4af9bd63ea" as const;
+
+/** Current roster; extensions must remain append-only after the sealed prefix. */
+export const CORE_WILDLIFE_SPECIES = CORE_WILDLIFE_ALPHA36_SPECIES;
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
 export type CoreWildlifeRepresentation = "individual" | "aggregate";
@@ -162,6 +182,8 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "GOLDENEAGLE-"
     | "CAPELINSCHOOL-"
     | "ARCTICFOX-"
+    | "HARBORSEAL-"
+    | "POLARBEAR-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -191,6 +213,8 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "golden-eagle": "GOLDENEAGLE-",
   "atlantic-capelin": "CAPELINSCHOOL-",
   "arctic-fox": "ARCTICFOX-",
+  "harbor-seal": "HARBORSEAL-",
+  "polar-bear": "POLARBEAR-",
 });
 
 /**
@@ -488,6 +512,26 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     taxonomicClass: "mammal",
     dietClass: "omnivore",
     locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "harbor-seal": {
+    species: "harbor-seal",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "carnivore",
+    locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "polar-bear": {
+    species: "polar-bear",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "mammal",
+    dietClass: "carnivore",
+    locomotionClass: "amphibious",
     groupOrganization: null,
     groupStableIdNamespace: null,
   },
@@ -1467,6 +1511,72 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [40_000, 260_000],
     },
   },
+  "harbor-seal": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "harbor-seal",
+    maximumPatchPopulation: 3,
+    roles: ["prey", "forager"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 600_000,
+      retreatThreshold: 480_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-slate", "mottled-gray", "pale-silver", "warm-brown"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["patient", "reserved"],
+      ["social", "watchful"],
+      ["bold", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [540_000, 920_000],
+      boldness: [120_000, 620_000],
+      sociability: [260_000, 760_000],
+    },
+  },
+  "polar-bear": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "polar-bear",
+    maximumPatchPopulation: 1,
+    roles: ["forager", "predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 0,
+      carrion: 0,
+      "exposed-food": 350_000,
+      "live-prey": 1_000_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 900_000,
+      retreatThreshold: 720_000,
+      forageThreshold: 300_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 12,
+    },
+    morphs: ["cream-ivory", "pale-ivory", "weathered-white", "yellowed-ivory"],
+    temperamentPairs: [
+      ["patient", "watchful"],
+      ["reserved", "opportunistic"],
+      ["cautious", "patient"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [460_000, 860_000],
+      boldness: [300_000, 900_000],
+      sociability: [20_000, 140_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -1612,6 +1722,36 @@ export function assertCoreWildlifeProfiles(): void {
     || hashCanonical(alpha34CompatibilityProfiles) !== CORE_WILDLIFE_ALPHA34_PROFILES_HASH
   ) {
     throw new Error("Core wildlife Alpha-34 identity lineage was rewritten");
+  }
+  const alpha35CompatibilityPrefix = CORE_WILDLIFE_SPECIES.slice(
+    0,
+    CORE_WILDLIFE_ALPHA35_SPECIES_COUNT,
+  );
+  const alpha35CompatibilityProfiles = CORE_WILDLIFE_ALPHA35_SPECIES.map(
+    (species) => PROFILES[species],
+  );
+  if (
+    CORE_WILDLIFE_ALPHA35_SPECIES.length !== CORE_WILDLIFE_ALPHA35_SPECIES_COUNT
+    || hashCanonical(CORE_WILDLIFE_ALPHA35_SPECIES) !== CORE_WILDLIFE_ALPHA35_SPECIES_HASH
+    || hashCanonical(alpha35CompatibilityPrefix) !== CORE_WILDLIFE_ALPHA35_SPECIES_HASH
+    || hashCanonical(alpha35CompatibilityProfiles) !== CORE_WILDLIFE_ALPHA35_PROFILES_HASH
+  ) {
+    throw new Error("Core wildlife Alpha-35 identity lineage was rewritten");
+  }
+  const alpha36CompatibilityPrefix = CORE_WILDLIFE_SPECIES.slice(
+    0,
+    CORE_WILDLIFE_ALPHA36_SPECIES_COUNT,
+  );
+  const alpha36CompatibilityProfiles = CORE_WILDLIFE_ALPHA36_SPECIES.map(
+    (species) => PROFILES[species],
+  );
+  if (
+    CORE_WILDLIFE_ALPHA36_SPECIES.length !== CORE_WILDLIFE_ALPHA36_SPECIES_COUNT
+    || hashCanonical(CORE_WILDLIFE_ALPHA36_SPECIES) !== CORE_WILDLIFE_ALPHA36_SPECIES_HASH
+    || hashCanonical(alpha36CompatibilityPrefix) !== CORE_WILDLIFE_ALPHA36_SPECIES_HASH
+    || hashCanonical(alpha36CompatibilityProfiles) !== CORE_WILDLIFE_ALPHA36_PROFILES_HASH
+  ) {
+    throw new Error("Core wildlife Alpha-36 identity lineage was rewritten");
   }
   for (const species of CORE_WILDLIFE_SPECIES) {
     const profile = PROFILES[species];

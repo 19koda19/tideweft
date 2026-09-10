@@ -12,6 +12,7 @@ import {
   type CoreEcologyActivityProjection,
 } from "./coreEcologyActivity";
 import {
+  deriveCoreEcologyShoreWaterActivityAuthority,
   isTrustedCoreEcologyActivityAuthority,
   projectCoreEcologyActivityAuthority,
   type CoreEcologyActivityAuthorityV1,
@@ -132,5 +133,40 @@ describe("core ecology transient activity authority", () => {
       { actorId: witness.actorId, atTick: 0 },
       forged,
     )).toBeNull();
+  });
+
+  it("brands a species-neutral shore-water receipt without changing otter custody", () => {
+    const witness = activityWitnesses().find(({ species }) => (
+      species === "north-american-river-otter"
+    ));
+    if (witness === undefined) throw new Error("Otter authority fixture is absent");
+    const materialized = setCoreEcologyAggregatePatchMaterializedActors(witness.patch, {
+      atTick: 0,
+      actorIds: [witness.actorId],
+    });
+    const established = projectCoreEcologyActivityAuthority({
+      rootSeed: SEED,
+      root: ROOT,
+      sourceKind: "regional-habitat",
+      patch: materialized,
+      actorId: witness.actorId,
+    });
+    if (established === null) throw new Error("Otter authority projection failed");
+    const derived = deriveCoreEcologyShoreWaterActivityAuthority({
+      sourceKey: established.sourceKey,
+      actorId: established.actorId,
+      species: established.species,
+      homeAnchor: established.homeAnchor,
+      tidalAnchors: established.tidalAnchors,
+    });
+    expect(derived).toEqual(established);
+    expect(isTrustedCoreEcologyActivityAuthority(derived)).toBe(true);
+    expect(deriveCoreEcologyShoreWaterActivityAuthority({
+      sourceKey: established.sourceKey,
+      actorId: established.actorId,
+      species: established.species,
+      homeAnchor: established.homeAnchor,
+      tidalAnchors: [established.tidalAnchors[0], established.tidalAnchors[0]],
+    })).toBeNull();
   });
 });

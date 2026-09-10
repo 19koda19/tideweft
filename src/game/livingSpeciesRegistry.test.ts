@@ -54,6 +54,8 @@ describe("lean runtime living-species registry", () => {
       "golden-eagle",
       "atlantic-capelin",
       "arctic-fox",
+      "harbor-seal",
+      "polar-bear",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -520,6 +522,38 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 36_000,
         },
       },
+      {
+        species: "harbor-seal",
+        actorIdPrefix: "HARBORSEAL-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "harbor seal",
+        senses: {
+          visionAcuity: 760_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: 720_000,
+          scentBaseRangeUnits: 20_000,
+        },
+      },
+      {
+        species: "polar-bear",
+        actorIdPrefix: "POLARBEAR-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "polar bear",
+        senses: {
+          visionAcuity: 780_000,
+          hearingSensitivity: 900_000,
+          scentSensitivity: ACTOR_PERCEPTION_SCALE,
+          scentBaseRangeUnits: 56_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -568,6 +602,13 @@ describe("lean runtime living-species registry", () => {
       "ARCTICFOX-v1-alpha35-fixture",
       "arctic-fox",
     )).toBe(true);
+    for (const [species, actorId] of [
+      ["harbor-seal", "HARBORSEAL-v1-alpha36-fixture"],
+      ["polar-bear", "POLARBEAR-v1-alpha36-fixture"],
+    ] as const) {
+      expect(isLivingSpeciesActorAddressable(species)).toBe(true);
+      expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(true);
+    }
   });
 
   it("is deeply immutable and fails unknown species closed", () => {

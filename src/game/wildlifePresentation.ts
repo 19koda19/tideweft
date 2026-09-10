@@ -25,6 +25,7 @@ import {
 } from "./coreEcologyActivity";
 import { isTrustedCoreEcologyActivityAuthority } from "./coreEcologyActivityAuthority";
 import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
+import { isTrustedCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
   isCoreEcologyAggregateSpecies,
@@ -269,6 +270,8 @@ type WildlifePresentationForm =
   | "marsh-rabbit"
   | "marsh-fox"
   | "arctic-fox"
+  | "harbor-seal"
+  | "polar-bear"
   | "mountain-goat"
   | "american-pika"
   | "golden-eagle"
@@ -407,6 +410,34 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: true,
     baseSizeScale: 0.68,
     observableForm: "Compact, thick-coated canid with a full tail",
+  },
+  "harbor-seal": {
+    form: "harbor-seal",
+    representation: "actor",
+    identificationClarity: 420_000,
+    unidentifiedQuickLabel: "Unknown marine mammal",
+    unidentifiedIdentityLabel: "Unidentified marine mammal",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.12,
+    observableForm: "Low, streamlined marine mammal with short foreflippers",
+  },
+  "polar-bear": {
+    form: "polar-bear",
+    representation: "actor",
+    identificationClarity: 460_000,
+    unidentifiedQuickLabel: "Large bear",
+    unidentifiedIdentityLabel: "Unidentified large bear",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.68,
+    observableForm: "Massive pale bear with a long neck and high shoulders",
   },
   "fish-crow": {
     form: "fish-crow-flock",
@@ -1479,6 +1510,10 @@ function resolvePresentationActivity(
   if (
     value.authority !== undefined
     && (
+      (actor.identity.species === "harbor-seal"
+        && isTrustedCoreEcologyActivityAuthority(value.authority)
+        && !isTrustedCoreEcologyPolarConsumerActivityAuthority(value.authority))
+      ||
       value.authority.sourceKey !== patch.patchKey
       || value.authority.actorId !== actor.identity.stableId
       || (

@@ -47,6 +47,8 @@ export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha34-polar-presentation-invariants:v1" as const;
 export const ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha35-cold-shore-presentation-invariants:v1" as const;
+export const ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha36-polar-consumer-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(3, -7);
@@ -385,7 +387,7 @@ function pursuingBear(): CoreWildlifeActorState {
   return result;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
   it.each([
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
@@ -394,6 +396,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["marsh-rabbit", "MARSH RABBIT", "Marsh rabbit"],
     ["marsh-fox", "MARSH FOX", "Marsh fox"],
     ["arctic-fox", "ARCTIC FOX", "Arctic fox"],
+    ["harbor-seal", "HARBOR SEAL", "Harbor seal"],
+    ["polar-bear", "POLAR BEAR", "Polar bear"],
     ["fish-crow", "FISH CROW FLOCK", "Fish crow"],
     ["northern-harrier", "NORTHERN HARRIER", "Northern harrier"],
     ["snowy-egret", "SNOWY EGRET", "Snowy egret"],
@@ -439,6 +443,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["marsh-rabbit", "SMALL ANIMAL", "Unidentified small animal", 60],
     ["marsh-fox", "UNKNOWN CANID", "Unidentified canid", 60],
     ["arctic-fox", "UNKNOWN SMALL CANID", "Unidentified small canid", 60],
+    ["harbor-seal", "UNKNOWN MARINE MAMMAL", "Unidentified marine mammal", 80],
+    ["polar-bear", "LARGE BEAR", "Unidentified large bear", 80],
     ["domestic-chicken", "UNKNOWN BIRD", "Unidentified bird", 80],
     ["domestic-goat", "UNKNOWN LIVESTOCK", "Unidentified livestock", 80],
     ["wild-boar", "LARGE ANIMAL", "Unidentified large animal", 80],
@@ -479,6 +485,16 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["marsh-rabbit", "Compact, long-eared", "Marsh rabbit"],
     ["marsh-fox", "Lean, low-tailed canid", "Marsh fox"],
     ["arctic-fox", "Compact, thick-coated canid with a full tail", "Arctic fox"],
+    [
+      "harbor-seal",
+      "Low, streamlined marine mammal with short foreflippers",
+      "Harbor seal",
+    ],
+    [
+      "polar-bear",
+      "Massive pale bear with a long neck and high shoulders",
+      "Polar bear",
+    ],
     ["snowy-egret", "Slender, long-legged wader", "Snowy egret"],
     ["american-black-duck", "Broad-bodied dabbling duck", "American black duck"],
     ["domestic-chicken", "Compact ground bird with comb and upright tail", "Domestic chicken"],
@@ -517,7 +533,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(quick).toMatchObject({
       species: "domestic-chicken",
       heading: "DOMESTIC CHICKEN",
-      summary: "Watching",
+      summary: "Small · Watching",
     });
     expect(about).toMatchObject({
       species: "domestic-chicken",
@@ -528,6 +544,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     });
     expect(about?.observed).toEqual(expect.arrayContaining([
       { label: "Species", value: "Domestic chicken" },
+      { label: "Size", value: "Small" },
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: "Compact ground bird with comb and upright tail" },
       { label: "Appearance", value: expect.any(String) },
@@ -597,7 +614,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     const quick = projectWildlifeQuickInspect(egret, visible, activity);
     const about = projectWildlifeAbout(egret, visible, activity);
 
-    expect(quick).toMatchObject({ species: "snowy-egret", summary: "Flying" });
+    expect(quick).toMatchObject({ species: "snowy-egret", summary: "Medium · Flying" });
     expect(about?.observed).toContainEqual({ label: "Behavior", value: "Flying" });
     expect(about?.known).toEqual([]);
   });
@@ -612,7 +629,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       actorId: duck.identity.stableId,
       species: "american-black-duck",
       heading: "AMERICAN BLACK DUCK",
-      summary: "Watching",
+      summary: "Small · Watching",
     });
     expect(about).toMatchObject({
       actorId: duck.identity.stableId,
@@ -641,6 +658,25 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       known: [],
     });
   });
+
+  it.each([
+    ["harbor-seal", "Medium"],
+    ["polar-bear", "Very large"],
+  ] as const)(
+    "projects only a qualitative close-range size for the Alpha-36 %s",
+    (species, size) => {
+      const actor = wildlife(species);
+      const visible = observation(actor);
+      const quick = projectWildlifeQuickInspect(actor, visible);
+      const about = projectWildlifeAbout(actor, visible);
+      const distant = projectWildlifeAbout(actor, observation(actor, 80));
+
+      expect(quick?.summary).toContain(size);
+      expect(about?.observed).toContainEqual({ label: "Size", value: size });
+      expect(distant?.observed.map(({ label }) => label)).not.toContain("Size");
+      expect(JSON.stringify({ quick, about })).not.toMatch(/sizeScale|1\.12|1\.68/u);
+    },
+  );
 
   it.each([
     "american-pika",

@@ -450,7 +450,8 @@ export type CoreEcologyTidalTableAnchorPurpose =
 
 export type CoreEcologyTidalWebAnchorSpecies =
   | CoreEcologyTidalTableAnchorSpecies
-  | "north-american-river-otter";
+  | "north-american-river-otter"
+  | "harbor-seal";
 
 export type CoreEcologyTidalWebAnchorPurpose =
   | CoreEcologyTidalTableAnchorPurpose
@@ -7034,7 +7035,10 @@ function validTidalWebAnchorTerrain(
   purpose: CoreEcologyTidalWebAnchorPurpose,
   terrain: string,
 ): boolean {
-  if (species !== "north-american-river-otter") {
+  if (
+    species !== "north-american-river-otter"
+    && species !== "harbor-seal"
+  ) {
     return validTidalAnchorTerrain(species, purpose as CoreEcologyTidalTableAnchorPurpose, terrain);
   }
   if (purpose === "foraging") {

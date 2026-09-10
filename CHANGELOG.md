@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.36 — 2026-09-10
+
+Build: `0.3.3-alpha.36` · Gameplay contract: 34 · Tutorial: 46
+
+Breath Between Tides is the unpublished Alpha 36 source candidate: harbor seals and rarer polar bears extend the capelin-backed cold saline shore through shared habitat, activity, perception, movement, persistence, and presentation owners.
+
+### Gameplay
+
+- The exact twenty-nine-record Alpha-35 catalog remains the prefix. Harbor seal is appended as record 30 and polar bear as record 31; viable cold saline shore may admit one solitary seal, then a rarer solitary bear only where that exact seal candidate already exists.
+- A harbor seal receives one authenticated foraging-water and dry-haulout pair and uses shared amphibious activity to move between them. Both new animals remain persistent individuals built from the common identity, condition, attention, perception, locomotion, and dormant-autonomy architecture rather than species controllers.
+- Direct current sight can produce conserved nonlethal harbor-seal pressure on the existing capelin aggregate, or polar-bear pursuit with harbor-seal flight. Occluding terrain removes those observations and responses; neither relationship creates capture, consumption, injury, mortality, a body, an item, or cargo.
+
+### Fixes
+
+- The exact Alpha-35 RegionalEcologyStateV4 and outer-version-28 world remain authenticated as one child. A separate sparse polar-consumer sibling owns only harbor-seal and polar-bear lineages and their true deviations without rewriting Arctic fox or capelin authority.
+- Polar-consumer habitat now fails closed unless the exact existing capelin substrate, usable foraging water, dry haulout, terrain, density, and territory evidence agree. The polar-bear gate is evaluated after seal admission, so unsupported country remains honestly empty and a bear cannot exist without its local seal dependency.
+- Shared full-to-coarse transitions, dormant stepping, active-window exchange, save, reload, signed coordinates, and extreme-distance re-entry preserve the same solitary identities. Pristine visits remain rederivable, while only genuine movement or state deviations consume sparse storage.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Harbor seals are sparse one-individual representatives of supported shore habitat, and polar bears are rarer still; camera position, refresh, or a materialization slot cannot manufacture either population.
+- Seal pressure can only redistribute or tighten already-existing capelin units after lawful current perception. Bear pursuit and seal flight are intents, not a hidden damage aura: this slice adds no capture, kill, meal, new mortality transaction, physical body, player harm, dog harm, or resource yield.
+- Validation remains architecture-led through shared invariants, conservation, deterministic properties, signed and extreme coordinates, persistence, performance, and one representative visible-versus-occluded food-web chain rather than bespoke tests for every species pair.
+
+### Interface
+
+- Chart 2D and Relief 3D render the same current harbor-seal and polar-bear identities. The seal reads as a low streamlined shore-and-water animal; the bear uses a large ivory silhouette with dark, color-independent feature contrast against pale terrain.
+- Quick inspection and ABOUT disclose only lawfully observed approximate size, visible condition, form, and current behavior. Distance or occlusion keeps the actor generic, and neither desktop nor touch reveals private intent, exact need values, hidden anchors, capelin counts, or habitat calculations.
+- Field Manual version 46 explains the capelin-backed seal and bear dependency, amphibious seal activity, perception-gated nonlethal relationships, shared twenty-four-actor cap, exact save adoption, mobile parity, and the candidate's explicit limits.
+
+### Save changes
+
+- The outer session advances to version 29 and regional ecology advances to root version 5. Its base is the exact authenticated RegionalEcologyStateV4 Alpha-35 composite, beside one version-1 sparse polar-consumer root and bounded hot snapshots; the production catalog contains thirty-one records.
+- A sealed outer-version-28 Alpha-35 save is authenticated and adopted exactly once. The receipt binds its original outer integrity and complete V4 lineage before deterministic harbor-seal and polar-bear derivation; supported older paths complete every existing adoption before this wrapper is applied.
+- All five ecology layers enter one atomic cross-layer projection and conservation commit under the same insertion-order-independent, group-atomic stable-distance top-K cap of twenty-four addressable actors. Save, reload, interruption, streaming, or extreme distance cannot duplicate an actor, reroll habitat, or replay adoption.
+
+### Known limitations
+
+- Alpha 36 Breath Between Tides is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED. It completes the directive's bounded Wave-F role coverage, not Wave G, Directive 04\_1, worldwide polar ecology, biodiversity breadth, or the full bestiary.
+- This candidate adds no capture, kill, consumption, new mortality or body path, player harm, dog harm, human harm, reproduction, recruitment, population recovery, fishing, harvesting, sea-ice behavior, snow behavior, or new physical animal resource.
+- Harbor seals and polar bears have no audible Living Voice, complete schedule, ecological migration behavior, complete scent or evidence tracking, broad social behavior, or authored sea-ice system. Polar-bear pursuit and harbor-seal flight stop at shared intent and locomotion in this slice.
+
 ## 0.3.3-alpha.35 — 2026-09-09
 
 Build: `0.3.3-alpha.35` · Gameplay contract: 33 · Tutorial: 45

@@ -7,7 +7,6 @@ import {
 import {
   CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID,
   CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES,
-  CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES,
   CORE_ECOLOGY_ACTIVITY_ARCHETYPES,
   validateCoreEcologyActivityAffordances,
 } from "./coreEcologyActivityAffordance";
@@ -2844,6 +2843,173 @@ function coldShoreFoxSharedEvidence(): readonly ClaimTuple[] {
 }
 
 /**
+ * Alpha 36 composes two sparse addressable amphibious consumers over one
+ * capelin-backed open-shore habitat and the shared actor/perception kernels.
+ * The role bridge owns only conserved seal pressure plus bounded bear pursuit
+ * and seal flight. It does not claim sound, capture, consumption, mortality,
+ * bodies, reproduction/young, denning, ice/snow, full scent, migration, or a
+ * tested deployment.
+ */
+function polarConsumerSharedEvidence(
+  species: "harbor-seal" | "polar-bear",
+): readonly ClaimTuple[] {
+  const owners = (...values: string[]): readonly string[] => (
+    [...new Set(values)].sort(compareText)
+  );
+  const contracts = owners(
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:living-species-catalog:v1",
+    "sim:core-wildlife-identity:v1",
+  );
+  const habitatOwners = owners(
+    "game:core-ecology-polar-consumer-habitat:v1",
+    "game:regional-polar-consumer-ecology:v1",
+    "game:regional-polar-consumer-residents:v1",
+    "test:alpha36-polar-consumer-habitat-shared-invariants:v1",
+  );
+  const perceptionOwners = owners(
+    "game:core-ecology-aggregate-perception:v1",
+    "game:core-ecology-perception:v1",
+    "game:living-actor-senses:v1",
+    "sim:actor-perception:v2",
+    "test:alpha36-polar-consumer-emergence:v1",
+    "test:alpha36-polar-consumer-resident-shared-invariants:v1",
+  );
+  const locomotionOwners = owners(
+    "game:core-wildlife-actor:v1",
+    "game:core-wildlife-locomotion-profile:v1",
+    "game:living-actor-locomotion:v1",
+    "game:regional-polar-consumer-ecology:v1",
+    "test:alpha36-polar-consumer-emergence:v1",
+    "test:alpha36-polar-consumer-resident-shared-invariants:v1",
+    "test:alpha36-polar-consumer-shared-locomotion:v1",
+  );
+  const behaviorOwners = species === "harbor-seal"
+    ? owners(
+        "game:core-ecology-activity-authority:v1",
+        "game:core-ecology-activity:v1",
+        "game:core-wildlife-actor:v1",
+        "game:regional-polar-consumer-ecology:v1",
+        "game:regional-polar-consumer-residents:v1",
+        "test:alpha36-polar-consumer-activity-authority:v1",
+        "test:alpha36-polar-consumer-emergence:v1",
+      )
+    : owners(
+        "game:core-wildlife-actor:v1",
+        "game:regional-polar-consumer-ecology:v1",
+        "game:regional-polar-consumer-residents:v1",
+        "test:alpha36-polar-consumer-emergence:v1",
+      );
+  const emergenceOwners = owners(
+    "game:core-ecology-aggregate-perception:v1",
+    "game:core-ecology-perception:v1",
+    "game:core-ecology-trophic:v1",
+    "game:regional-polar-consumer-ecology:v1",
+    "game:regional-polar-shore-ecology:v1",
+    "test:alpha36-polar-consumer-emergence:v1",
+  );
+  const presentationOwners = owners(
+    "game:wildlife-about:v1",
+    "game:wildlife-presentation:v1",
+    "sim:actor-perception:v2",
+    "test:alpha36-polar-consumer-presentation-invariants:v1",
+  );
+  const persistenceOwners = owners(
+    "game:regional-ecology-state:v5",
+    "game:regional-polar-consumer-ecology:v1",
+    "game:runtime-core-ecology:v1",
+    "game:runtime-save:v29",
+    "test:alpha36-polar-consumer-composite-shared-invariants:v1",
+    "test:alpha36-polar-consumer-root-shared-invariants:v1",
+    "test:alpha36-polar-consumer-runtime-v29:v1",
+  );
+  return [
+    ["species-profile", A, contracts],
+    ["ecological-niche", A, owners(...contracts, ...habitatOwners, "game:core-ecology-trophic:v1")],
+    ["appearance", A, owners(...presentationOwners, "sim:core-wildlife-identity:v1")],
+    ["sound", U, []],
+    ["habitat-placement", A, habitatOwners],
+    ["food-web", F, emergenceOwners],
+    ["perception-senses", A, perceptionOwners],
+    ["locomotion", A, locomotionOwners],
+    ["human-interaction", F, contracts],
+    ["dog-interaction", F, contracts],
+    ["same-species-interaction", F, contracts],
+    ["other-species-interaction", A, emergenceOwners],
+    ["neutral-behavior", A, behaviorOwners],
+    ["disengagement", A, behaviorOwners],
+    ["environmental-evidence", U, []],
+    ["about-disclosure", A, presentationOwners],
+    ["knowledge-honesty", A, owners(
+      "game:core-ecology-perception:v1",
+      "game:living-actor-senses:v1",
+      "game:wildlife-about:v1",
+      "game:wildlife-presentation:v1",
+      "sim:actor-perception:v2",
+      "test:alpha36-polar-consumer-emergence:v1",
+      "test:alpha36-polar-consumer-presentation-invariants:v1",
+    )],
+    ["population-materialization", A, owners(
+      "game:core-ecology-polar-consumer-habitat:v1",
+      "game:regional-ecology-state:v5",
+      "game:regional-polar-consumer-ecology:v1",
+      "game:regional-polar-consumer-residents:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha36-polar-consumer-composite-shared-invariants:v1",
+      "test:alpha36-polar-consumer-resident-shared-invariants:v1",
+    )],
+    ["full-coarse-transition", A, owners(
+      "game:regional-ecology-state:v5",
+      "game:regional-polar-consumer-ecology:v1",
+      "game:regional-polar-consumer-residents:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha36-polar-consumer-composite-shared-invariants:v1",
+      "test:alpha36-polar-consumer-resident-shared-invariants:v1",
+      "test:alpha36-polar-consumer-root-shared-invariants:v1",
+    )],
+    ["save-load", A, persistenceOwners],
+    ["seamless-region-crossing", A, owners(
+      "game:core-ecology-polar-consumer-habitat:v1",
+      "game:regional-ecology-state:v5",
+      "game:regional-polar-consumer-ecology:v1",
+      "game:runtime-core-ecology:v1",
+      "test:alpha36-polar-consumer-composite-shared-invariants:v1",
+      "test:alpha36-polar-consumer-habitat-shared-invariants:v1",
+      "test:alpha36-polar-consumer-root-shared-invariants:v1",
+    )],
+    ["performance-budget", A, owners(
+      "game:core-ecology-polar-consumer-habitat:v1",
+      "game:regional-ecology-state:v5",
+      "game:regional-polar-consumer-ecology:v1",
+      "game:regional-polar-consumer-residents:v1",
+      "test:alpha36-polar-consumer-composite-performance:v1",
+      "test:alpha36-polar-consumer-root-shared-invariants:v1",
+    )],
+    ["accessibility", A, presentationOwners],
+    ["mobile-parity", A, presentationOwners],
+    ["player-independent-scenario", A, emergenceOwners],
+    ["fuzz-testing", A, owners(
+      "game:core-ecology-polar-consumer-habitat:v1",
+      "game:living-species-catalog:v1",
+      "game:regional-ecology-state:v5",
+      "game:regional-polar-consumer-ecology:v1",
+      "sim:core-wildlife-identity:v1",
+      "test:alpha36-polar-consumer-composite-shared-invariants:v1",
+      "test:alpha36-polar-consumer-habitat-shared-invariants:v1",
+      "test:alpha36-polar-consumer-root-shared-invariants:v1",
+    )],
+    ["clone-diversity", A, owners(
+      "sim:core-wildlife-identity:v1",
+      "test:alpha36-polar-consumer-habitat-shared-invariants:v1",
+      "test:alpha36-polar-consumer-resident-shared-invariants:v1",
+    )],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v46"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha36:v1"]],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -2939,6 +3105,8 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "golden-eagle": alpineSharedEvidence("golden-eagle"),
   "atlantic-capelin": polarForageSharedEvidence(),
   "arctic-fox": coldShoreFoxSharedEvidence(),
+  "harbor-seal": polarConsumerSharedEvidence("harbor-seal"),
+  "polar-bear": polarConsumerSharedEvidence("polar-bear"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -4060,6 +4228,24 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
   const blackDuck = alpha20AmericanBlackDuckBoundedReadiness();
   const riverOtter = alpha21RiverOtterBoundedReadiness();
   const candidateSpecies = new Set<string>(ALPHA22_TIDAL_CONVERGENCE_SPECIES);
+  const historicalActivitySpecies = [
+    "fish-crow",
+    "northern-harrier",
+    "snowy-egret",
+    "american-black-duck",
+    "north-american-river-otter",
+    "gull",
+  ] as const;
+  const historicalActivitySpeciesSet = new Set<string>(historicalActivitySpecies);
+  const historicalActivityProfiles = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.filter(
+    ({ speciesId }) => historicalActivitySpeciesSet.has(speciesId),
+  );
+  const historicalActivityArchetypeIds = new Set(
+    historicalActivityProfiles.map(({ archetypeId }) => archetypeId),
+  );
+  const historicalActivityArchetypes = CORE_ECOLOGY_ACTIVITY_ARCHETYPES.filter(
+    ({ archetypeId }) => historicalActivityArchetypeIds.has(archetypeId),
+  );
   const candidateGates = ALPHA22_TIDAL_CONVERGENCE_SPECIES.map((speciesId) => (
     LIVING_SPECIES_RELEASE_GATES.gates.find((gate) => gate.speciesId === speciesId) ?? null
   ));
@@ -4076,10 +4262,18 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
 
   const runtimePolicyErrors = validateCoreEcologySpeciesRuntimePolicies(
     LIVING_SPECIES_CATALOG,
+  ).filter((error) => historicalActivitySpecies.some((speciesId) => (
+    error.startsWith(`${speciesId}:`)
+  )));
+  const activityAffordanceErrors = validateCoreEcologyActivityAffordances().filter(
+    (error) => historicalActivitySpecies.some((speciesId) => (
+      error.startsWith(`${speciesId}:`)
+    )) || [...historicalActivityArchetypeIds].some((archetypeId) => (
+      error.startsWith(`${archetypeId}:`)
+    )),
   );
-  const activityAffordanceErrors = validateCoreEcologyActivityAffordances();
   const activityCatalogCoherenceReady =
-    CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every((profile) => {
+    historicalActivityProfiles.every((profile) => {
       const module = livingSpeciesModule(profile.speciesId);
       if (
         module === null
@@ -4102,38 +4296,44 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
     && new Set(ALPHA22_TIDAL_CONVERGENCE_SPECIES).size
       === ALPHA22_TIDAL_CONVERGENCE_SPECIES.length
     && candidateModules.every((module) => module !== null)
-    && CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every(({ ownerId }) => (
+    && historicalActivityProfiles.every(({ ownerId }) => (
       ownerId === CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID
     ));
 
-  const activityProfileSpecies = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES
+  const activityProfileSpecies = historicalActivityProfiles
     .map(({ speciesId }) => speciesId);
   const activityProfileSpeciesSet = new Set<string>(activityProfileSpecies);
   const diurnalPolicySpecies = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES
-    .filter(({ capabilities }) => capabilities.includes("diurnal-activity"))
+    .filter(({ speciesId, capabilities }) => (
+      historicalActivitySpeciesSet.has(speciesId)
+      && capabilities.includes("diurnal-activity")
+    ))
     .map(({ speciesId }) => speciesId);
   const reusableActivityArchetypesReady = activityAffordanceErrors.length === 0
-    && CORE_ECOLOGY_ACTIVITY_ARCHETYPES.length > 1
-    && CORE_ECOLOGY_ACTIVITY_ARCHETYPES.every(({ archetypeId }) => (
-      CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.some((profile) => (
+    && historicalActivityArchetypes.length > 1
+    && historicalActivityArchetypes.every(({ archetypeId }) => (
+      historicalActivityProfiles.some((profile) => (
         profile.archetypeId === archetypeId
       ))
     ))
-    && activityProfileSpecies.length === CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES.length
+    && activityProfileSpecies.length === historicalActivitySpecies.length
     && activityProfileSpecies.every((speciesId, index) => (
-      speciesId === CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES[index]
+      speciesId === historicalActivitySpecies[index]
     ))
     && diurnalPolicySpecies.length === activityProfileSpecies.length
     && diurnalPolicySpecies.every((speciesId) => activityProfileSpeciesSet.has(speciesId))
-    && CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every(({ scheduleScope }) => (
+    && historicalActivityProfiles.every(({ scheduleScope }) => (
       scheduleScope === "bounded-diurnal-window"
     ));
 
-  const surfaceProfiles = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.filter(
+  const surfaceProfiles = historicalActivityProfiles.filter(
     ({ observationAffordance }) => observationAffordance.kind === "current-anonymous-area",
   );
   const surfacePolicies = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(
-    ({ capabilities }) => capabilities.includes("surface-opportunity"),
+    ({ speciesId, capabilities }) => (
+      historicalActivitySpeciesSet.has(speciesId)
+      && capabilities.includes("surface-opportunity")
+    ),
   );
   const surfaceProfileSpecies = surfaceProfiles
     .map(({ speciesId }) => speciesId)
@@ -4222,7 +4422,7 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
       return state?.status === "active" || state?.status === "foundation";
     });
 
-  const activityModules = CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES
+  const activityModules = historicalActivityProfiles
     .filter(({ speciesId }) => candidateSpecies.has(speciesId))
     .map(({ speciesId }) => livingSpeciesModule(speciesId));
   const surfaceAquaticTargets = surfaceProfiles.flatMap(({ speciesId }) => {
@@ -4271,7 +4471,7 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
       verbs.every((verb) => !forbiddenInteractionVerbs.has(verb))
     ))
   ))
-    && CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.every(({ scheduleScope }) => (
+    && historicalActivityProfiles.every(({ scheduleScope }) => (
       scheduleScope === "bounded-diurnal-window"
     ))
     && surfaceProfiles.every(({ observationAffordance }) => (

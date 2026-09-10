@@ -85,7 +85,7 @@ describe("core ecology bounded activity", () => {
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES.slice(0, alpha32ActivitySpecies.length))
       .toEqual(alpha32ActivitySpecies);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES.slice(alpha32ActivitySpecies.length))
-      .toEqual(["golden-eagle"]);
+      .toEqual(["golden-eagle", "harbor-seal"]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
     const withoutHarrier = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(
@@ -340,6 +340,8 @@ describe("core ecology bounded activity", () => {
       ["seek-dabbling-water", "authenticated-depth-safe-dabbling-water", "surface-water"],
       ["seek-otter-foraging-water", "authenticated-foraging-water", "amphibious"],
       ["seek-otter-haulout", "authenticated-dry-haulout", "amphibious"],
+      ["seek-shore-foraging-water", "authenticated-foraging-water", "amphibious"],
+      ["seek-dry-haulout", "authenticated-dry-haulout", "amphibious"],
       ["seek-waterfowl-refuge", "authenticated-tidal-refuge", "air"],
     ] as const;
     for (const [verb, semantic, travelMedium] of explicit) {

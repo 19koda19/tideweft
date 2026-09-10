@@ -35,6 +35,18 @@ import {
   LIVING_SPECIES_ALPHA34_CATALOG_HASH,
   LIVING_SPECIES_ALPHA34_SPECIES_IDS,
   LIVING_SPECIES_ALPHA34_SPECIES_IDS_HASH,
+  LIVING_SPECIES_ALPHA35_CATALOG,
+  LIVING_SPECIES_ALPHA35_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_ALPHA35_CATALOG_COUNT,
+  LIVING_SPECIES_ALPHA35_CATALOG_HASH,
+  LIVING_SPECIES_ALPHA35_SPECIES_IDS,
+  LIVING_SPECIES_ALPHA35_SPECIES_IDS_HASH,
+  LIVING_SPECIES_ALPHA36_CATALOG,
+  LIVING_SPECIES_ALPHA36_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_ALPHA36_CATALOG_COUNT,
+  LIVING_SPECIES_ALPHA36_CATALOG_HASH,
+  LIVING_SPECIES_ALPHA36_SPECIES_IDS,
+  LIVING_SPECIES_ALPHA36_SPECIES_IDS_HASH,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   canonicalizeLivingSpeciesCatalog,
@@ -122,13 +134,48 @@ describe("Living Weft species module catalog", () => {
       .toBe(LIVING_SPECIES_ALPHA34_CATALOG_BYTE_LENGTH);
     expect(hashCanonical(LIVING_SPECIES_ALPHA34_CATALOG))
       .toBe(LIVING_SPECIES_ALPHA34_CATALOG_HASH);
-    expect(Object.isFrozen(LIVING_SPECIES_ALPHA34_SPECIES_IDS)).toBe(true);
-    expect(Object.isFrozen(LIVING_SPECIES_ALPHA34_CATALOG)).toBe(true);
+    expect(LIVING_SPECIES_ALPHA35_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_ALPHA35_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_ALPHA35_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_ALPHA35_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA35_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_ALPHA35_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(stableStringify(LIVING_SPECIES_ALPHA35_CATALOG)).byteLength)
+      .toBe(LIVING_SPECIES_ALPHA35_CATALOG_BYTE_LENGTH);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA35_CATALOG))
+      .toBe(LIVING_SPECIES_ALPHA35_CATALOG_HASH);
+    expect(LIVING_SPECIES_ALPHA36_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_ALPHA36_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_ALPHA36_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_ALPHA36_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA36_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_ALPHA36_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(stableStringify(LIVING_SPECIES_ALPHA36_CATALOG)).byteLength)
+      .toBe(LIVING_SPECIES_ALPHA36_CATALOG_BYTE_LENGTH);
+    expect(hashCanonical(LIVING_SPECIES_ALPHA36_CATALOG))
+      .toBe(LIVING_SPECIES_ALPHA36_CATALOG_HASH);
+    expect(Object.isFrozen(LIVING_SPECIES_ALPHA35_SPECIES_IDS)).toBe(true);
+    expect(Object.isFrozen(LIVING_SPECIES_ALPHA35_CATALOG)).toBe(true);
+    expect(Object.isFrozen(LIVING_SPECIES_ALPHA36_SPECIES_IDS)).toBe(true);
+    expect(Object.isFrozen(LIVING_SPECIES_ALPHA36_CATALOG)).toBe(true);
     expect(LIVING_SPECIES_CATALOG.modules.filter(({ speciesId }) => (
       !LIVING_SPECIES_ALPHA34_SPECIES_IDS.includes(
         speciesId as (typeof LIVING_SPECIES_ALPHA34_SPECIES_IDS)[number],
       )
-    )).map(({ speciesId }) => speciesId)).toEqual(["arctic-fox"]);
+    )).map(({ speciesId }) => speciesId)).toEqual([
+      "arctic-fox",
+      "harbor-seal",
+      "polar-bear",
+    ]);
+    expect(LIVING_SPECIES_CATALOG.modules.filter(({ speciesId }) => (
+      !LIVING_SPECIES_ALPHA35_SPECIES_IDS.includes(
+        speciesId as (typeof LIVING_SPECIES_ALPHA35_SPECIES_IDS)[number],
+      )
+    )).map(({ speciesId }) => speciesId)).toEqual(["harbor-seal", "polar-bear"]);
+    expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_ALPHA36_SPECIES_IDS);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
@@ -449,6 +496,112 @@ describe("Living Weft species module catalog", () => {
     const forbiddenVerbs = new Set(["attack", "capture", "consume", "kill", "pursue"]);
     expect(fox?.interactions.targets.flatMap(({ verbs }) => verbs)
       .every((verb) => !forbiddenVerbs.has(verb))).toBe(true);
+  });
+
+  it("admits the Alpha-36 polar consumers through one individual amphibious contract", () => {
+    const expected = {
+      "harbor-seal": {
+        population: 3,
+        ecologicalClasses: [
+          "cold-shore-mammal",
+          "marine-forager",
+          "prey",
+          "shore-water-forager",
+        ],
+        media: [
+          { medium: "deep-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "land", relativeCapability: 260_000 },
+          { medium: "shallow-water", relativeCapability: 900_000 },
+        ],
+        availableTargets: ["aquatic-animal", "dog", "food", "human", "predator", "water"],
+      },
+      "polar-bear": {
+        population: 1,
+        ecologicalClasses: [
+          "apex-predator",
+          "cold-shore-mammal",
+          "large-predator",
+          "marine-predator",
+          "predator",
+        ],
+        media: [
+          { medium: "deep-water", relativeCapability: 720_000 },
+          { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+          { medium: "shallow-water", relativeCapability: 800_000 },
+        ],
+        availableTargets: ["dog", "food", "human", "predator", "smaller-prey", "water"],
+      },
+    } as const;
+
+    for (const [species, values] of Object.entries(expected) as [
+      keyof typeof expected,
+      (typeof expected)[keyof typeof expected],
+    ][]) {
+      const module = livingSpeciesModule(species);
+      expect(module).toMatchObject({
+        profile: {
+          implementation: "foundation",
+          taxonomicClass: "mammal",
+          ecologicalClasses: values.ecologicalClasses,
+        },
+        habitat: { ownerId: "game:core-ecology-polar-consumer-habitat:v1" },
+        identity: { form: "individual" },
+        spatial: {
+          ownerId: "game:regional-polar-consumer-ecology:v1",
+          positionModel: "segmented-point",
+        },
+        population: {
+          ownerId: "game:regional-polar-consumer-residents:v1",
+          maxMaterializedPerRegion: values.population,
+        },
+        locomotion: {
+          ownerId: "game:core-wildlife-locomotion-profile:v1",
+          media: values.media,
+        },
+        social: {
+          groupModel: "solitary",
+          group: { status: "unimplemented", representation: "none" },
+        },
+        evidence: { status: "unimplemented", produces: [] },
+        sound: { implementation: "unimplemented", repertoire: [] },
+        lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
+        health: { implementation: "foundation", causalDeath: false },
+        aftermath: { implementation: "unimplemented", carcassModel: "none" },
+        environment: { water: { status: "foundation" } },
+      });
+      expect(module?.interactions.targets.filter(({ policy }) => policy === "available")
+        .map(({ targetClass }) => targetClass)).toEqual(values.availableTargets);
+      expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+        verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+      ))).toBe(false);
+      expect(coreEcologySpeciesPredatorContact(species)).toBeNull();
+      expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
+      expect(coreEcologySpeciesCanFeedFromCarcass(species)).toBe(false);
+      expect(coreEcologySpeciesCanGuardCarcass(species)).toBe(false);
+    }
+    expect(livingSpeciesModule("harbor-seal")?.identity.stableIdNamespace).toBe("HARBORSEAL");
+    expect(livingSpeciesModule("polar-bear")?.identity.stableIdNamespace).toBe("POLARBEAR");
+    expect(livingSpeciesModule("harbor-seal")?.activity.ownerId)
+      .toBe(CORE_ECOLOGY_ACTIVITY_OWNER_ID);
+    expect(livingSpeciesModule("harbor-seal")?.environment.tide.status).toBe("foundation");
+    expect(livingSpeciesModule("polar-bear")?.environment.tide.status).toBe("unimplemented");
+    expect(livingSpeciesModule("harbor-seal")?.interactions.targets.find(
+      ({ targetClass }) => targetClass === "aquatic-animal",
+    )).toMatchObject({
+      verbs: ["approach", "dive"],
+      escalationConstraints: [
+        "aggregate-unit-conservation",
+        "direct-perception-required",
+        "no-health-or-mortality-outcome",
+        "nonlethal-pressure-only",
+      ],
+    });
+    expect(livingSpeciesModule("polar-bear")?.interactions.targets.find(
+      ({ targetClass }) => targetClass === "smaller-prey",
+    )).toMatchObject({
+      verbs: ["pursue"],
+      escalationConstraints: ["bounded-pursuit", "direct-perception-required"],
+    });
   });
 
   it("keeps domestic livestock on shared active owners with deferred life systems", () => {
@@ -2191,6 +2344,7 @@ describe("Living Weft species module catalog", () => {
       const tidalFoundation = module.speciesId === "atlantic-marsh-fiddler-crab"
         || module.speciesId === "atlantic-capelin"
         || module.speciesId === "atlantic-silverside"
+        || module.speciesId === "harbor-seal"
         || module.speciesId === "snowy-egret";
       expect(module.environment.tide.status).toBe(
         tidalFoundation ? "foundation" : "unimplemented",

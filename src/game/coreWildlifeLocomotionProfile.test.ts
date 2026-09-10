@@ -21,6 +21,8 @@ export const ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT =
   "test:alpha33-alpine-shared-activity:v1" as const;
 export const ALPHA35_COLD_SHORE_SHARED_ACTIVITY_OWNER_INTENT =
   "test:alpha35-cold-shore-shared-activity:v1" as const;
+export const ALPHA36_POLAR_CONSUMER_SHARED_LOCOMOTION_INTENT =
+  "test:alpha36-polar-consumer-shared-locomotion:v1" as const;
 
 function tile(overrides: Partial<TerrainTileView> = {}): TerrainTileView {
   return {
@@ -308,6 +310,27 @@ describe("core wildlife locomotion profiles", () => {
       .toBeGreaterThan(coreWildlifeMaximumStepUnits("arctic-fox", "observe"));
     expect(coreWildlifeMaximumStepUnits("arctic-fox", "disengage")).toBeLessThan(1_000);
     expect(coreWildlifeGradeTraversalPolicy("arctic-fox")).toBeNull();
+  });
+
+  it(`${ALPHA36_POLAR_CONSUMER_SHARED_LOCOMOTION_INTENT} reuses one amphibious surface for both cold-shore consumers`, () => {
+    const shore = tile({ terrain: "tidal-flat", waterDepth: 0 });
+    const channel = tile({ terrain: "deep-water", waterDepth: ADRIFT_STAND_DEPTH + 900_000 });
+    for (const species of ["harbor-seal", "polar-bear"] as const) {
+      expect(coreWildlifeLocomotionProfile(species)).toMatchObject({
+        mode: "terrestrial",
+        aerialTravelCost: null,
+      });
+      expect(coreWildlifeTraversabilityCell(species, shore, "amphibious").access).toBe("open");
+      expect(coreWildlifeTraversabilityCell(species, channel, "amphibious").access).toBe("open");
+      expect(coreWildlifeLocomotionProfile(species).surfaceWaterTravelCost).toBeGreaterThan(0);
+      expect(coreWildlifeMaximumStepUnits(species, "retreat")).toBeGreaterThan(0);
+      expect(coreWildlifeMaximumStepUnits(species, "retreat")).toBeLessThan(1_000);
+      expect(coreWildlifeGradeTraversalPolicy(species)).toBeNull();
+    }
+    expect(coreWildlifeTraversabilityCell("harbor-seal", channel, "amphibious").travelCost)
+      .toBeLessThan(coreWildlifeTraversabilityCell("polar-bear", channel, "amphibious").travelCost);
+    expect(coreWildlifeMaximumStepUnits("polar-bear", "pursue"))
+      .toBeGreaterThan(coreWildlifeMaximumStepUnits("polar-bear", "observe"));
   });
 
   it("gives crow alarm flight and harrier pursuit distinct bounded aerial cadence", () => {

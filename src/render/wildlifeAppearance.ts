@@ -63,6 +63,15 @@ export const COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
 export type ColdShoreWildlifeAppearanceSpecies =
   (typeof COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES)[number];
 
+/** Addressable polar-shore bodies; capelin remains anonymous population evidence. */
+export const POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
+  "harbor-seal",
+  "polar-bear",
+] as const);
+
+export type PolarMarineWildlifeAppearanceSpecies =
+  (typeof POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES)[number];
+
 /** Fails safely to the established brown coat for legacy or malformed views. */
 export function domesticGoatAppearancePalette(
   appearanceKey: string,
@@ -224,5 +233,46 @@ export function coldShoreWildlifeAppearancePalette(
   }
   return palettes[
     COLD_SHORE_WILDLIFE_APPEARANCE_FALLBACK[species]
+  ] as WildlifeAppearancePalette;
+}
+
+const POLAR_MARINE_WILDLIFE_APPEARANCE_FALLBACK = Object.freeze({
+  "harbor-seal": "mottled-gray",
+  "polar-bear": "cream-ivory",
+} as const satisfies Readonly<Record<PolarMarineWildlifeAppearanceSpecies, string>>);
+
+/**
+ * Shared Chart/Relief colors for polar-shore actors. Polar-bear features use a
+ * deliberately dark structural color so its ivory body remains readable over
+ * any pale terrain without depending on hue perception.
+ */
+export const POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES = Object.freeze({
+  "harbor-seal": Object.freeze({
+    "dark-slate": palette("#3f5058", "#81939a", "#141d22", "#c8d8d8"),
+    "mottled-gray": palette("#687579", "#a9b2b0", "#222b2d", "#dce5df"),
+    "pale-silver": palette("#9aa7a7", "#d4dcda", "#303a3c", "#eef3ed"),
+    "warm-brown": palette("#716357", "#a99985", "#28231f", "#dfd1b8"),
+  }),
+  "polar-bear": Object.freeze({
+    "cream-ivory": palette("#e5dfc9", "#fff9e7", "#202a2d", "#6f8587"),
+    "pale-ivory": palette("#efecdf", "#fffdf3", "#1c2528", "#71878b"),
+    "weathered-white": palette("#d4d2c8", "#f2f0e8", "#222b2d", "#7a8d8e"),
+    "yellowed-ivory": palette("#d8cca9", "#f1e7cc", "#272d2d", "#778788"),
+  }),
+} as const);
+
+/** Species-safe polar-shore morph lookup; malformed keys cannot cross species. */
+export function polarMarineWildlifeAppearancePalette(
+  species: PolarMarineWildlifeAppearanceSpecies,
+  appearanceKey: string,
+): WildlifeAppearancePalette {
+  const palettes = POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+    Record<string, WildlifeAppearancePalette>
+  >;
+  if (Object.prototype.hasOwnProperty.call(palettes, appearanceKey)) {
+    return palettes[appearanceKey] as WildlifeAppearancePalette;
+  }
+  return palettes[
+    POLAR_MARINE_WILDLIFE_APPEARANCE_FALLBACK[species]
   ] as WildlifeAppearancePalette;
 }

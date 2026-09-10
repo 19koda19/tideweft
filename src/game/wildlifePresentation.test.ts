@@ -59,6 +59,8 @@ export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha34-polar-presentation-invariants:v1" as const;
 export const ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha35-cold-shore-presentation-invariants:v1" as const;
+export const ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha36-polar-consumer-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -755,7 +757,7 @@ function regroupingGoat(): CoreWildlifeActorState {
   return stepped.actor;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
   it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
@@ -846,6 +848,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["marsh-rabbit", "Marsh rabbit"],
     ["marsh-fox", "Marsh fox"],
     ["arctic-fox", "Arctic fox"],
+    ["harbor-seal", "Harbor seal"],
+    ["polar-bear", "Polar bear"],
     ["fish-crow", "Fish crows"],
     ["northern-harrier", "Northern harrier"],
     ["snowy-egret", "Snowy egret"],
@@ -881,6 +885,14 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       expect(presentation?.formLabel).toBe("Lean, low-tailed canid");
     } else if (species === "arctic-fox") {
       expect(presentation?.formLabel).toBe("Compact, thick-coated canid with a full tail");
+    } else if (species === "harbor-seal") {
+      expect(presentation?.formLabel).toBe(
+        "Low, streamlined marine mammal with short foreflippers",
+      );
+    } else if (species === "polar-bear") {
+      expect(presentation?.formLabel).toBe(
+        "Massive pale bear with a long neck and high shoulders",
+      );
     } else if (species === "fish-crow") {
       expect(presentation?.formLabel).toBe("Compact, broad-winged corvids");
     } else if (species === "northern-harrier") {
@@ -1794,6 +1806,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["marsh-rabbit", "Small animal", "Unidentified small animal", 60],
     ["marsh-fox", "Unknown canid", "Unidentified canid", 60],
     ["arctic-fox", "Unknown small canid", "Unidentified small canid", 60],
+    ["harbor-seal", "Unknown marine mammal", "Unidentified marine mammal", 80],
+    ["polar-bear", "Large bear", "Unidentified large bear", 80],
     [
       "north-american-river-otter",
       "Unknown aquatic mammal",
@@ -1916,4 +1930,25 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       tileSize: 1,
     })).toBeNull();
   });
+
+  it.each(["harbor-seal", "polar-bear"] as const)(
+    "does not project an occluded %s or leak its internal condition",
+    (species) => {
+      const actor = wildlife(species);
+      expect(projectWildlifePresentation({
+        actor,
+        observation: directObservation(actor, 4, { facingRadians: Math.PI }),
+        tileSize: 1,
+      })).toBeNull();
+
+      const visible = projectWildlifePresentation({
+        actor,
+        observation: directObservation(actor),
+        tileSize: 1,
+      });
+      expect(JSON.stringify(visible)).not.toMatch(
+        /hunger|safety|rest|stress|intent|target|populationKey|generatedSeed/iu,
+      );
+    },
+  );
 });

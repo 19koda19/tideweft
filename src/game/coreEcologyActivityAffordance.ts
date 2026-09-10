@@ -116,6 +116,7 @@ export const CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES = Object.freeze([
   "north-american-river-otter",
   "gull",
   "golden-eagle",
+  "harbor-seal",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
 export type CoreEcologyActivityAffordanceSpecies =
@@ -125,6 +126,16 @@ export interface CoreEcologyActivityAffordanceProfile
   extends CoreEcologyActivityArchetype {
   readonly profileId: string;
   readonly speciesId: CoreEcologyActivityAffordanceSpecies;
+}
+
+/**
+ * Motion vocabulary is presentation/debug data, not behavior selection. The
+ * established otter strings remain byte-stable while later shore-water
+ * species use names that do not pretend they are otters.
+ */
+export interface CoreEcologyShoreWaterMotionVocabulary {
+  readonly seekForagingWater: "seek-otter-foraging-water" | "seek-shore-foraging-water";
+  readonly seekHaulout: "seek-otter-haulout" | "seek-dry-haulout";
 }
 
 const NONE_OBSERVATION = Object.freeze({ kind: "none" as const });
@@ -361,6 +372,21 @@ const ARCHETYPE_ASSIGNMENTS: Readonly<
   "north-american-river-otter": "shore-water-forager",
   gull: "aerial-surface-opportunist",
   "golden-eagle": "ridge-soar-perch",
+  "harbor-seal": "shore-water-forager",
+});
+
+const SHORE_WATER_MOTION_VOCABULARY: Readonly<Partial<Record<
+  CoreEcologyActivityAffordanceSpecies,
+  CoreEcologyShoreWaterMotionVocabulary
+>>> = deepFreeze({
+  "north-american-river-otter": {
+    seekForagingWater: "seek-otter-foraging-water",
+    seekHaulout: "seek-otter-haulout",
+  },
+  "harbor-seal": {
+    seekForagingWater: "seek-shore-foraging-water",
+    seekHaulout: "seek-dry-haulout",
+  },
 });
 
 function composeProfile(
@@ -422,6 +448,17 @@ export function coreEcologyActivityAffordanceProfile(
 ): CoreEcologyActivityAffordanceProfile | null {
   return typeof speciesId === "string"
     ? PROFILE_BY_SPECIES.get(speciesId as CoreEcologyActivityAffordanceSpecies) ?? null
+    : null;
+}
+
+/** Declarative vocabulary for the shared shore-water activity archetype. */
+export function coreEcologyShoreWaterMotionVocabulary(
+  speciesId: unknown,
+): CoreEcologyShoreWaterMotionVocabulary | null {
+  return typeof speciesId === "string"
+    ? SHORE_WATER_MOTION_VOCABULARY[
+        speciesId as CoreEcologyActivityAffordanceSpecies
+      ] ?? null
     : null;
 }
 
@@ -502,6 +539,10 @@ export function validateCoreEcologyActivityAffordances(
     if (expectedArchetype === undefined || !profileComposesArchetype(value, expectedArchetype)) {
       errors.push(`${speciesId}:archetype-data-mismatch`);
     }
+    if (
+      value.archetypeId === "shore-water-forager"
+      && coreEcologyShoreWaterMotionVocabulary(speciesId) === null
+    ) errors.push(`${speciesId}:missing-shore-water-motion-vocabulary`);
   }
 
   for (const speciesId of CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES) {

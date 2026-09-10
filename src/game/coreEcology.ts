@@ -96,6 +96,10 @@ import {
   type CoreEcologyColdShoreHabitat,
 } from "./coreEcologyColdShoreHabitat";
 import {
+  canonicalizeCoreEcologyPolarConsumerHabitat,
+  type CoreEcologyPolarConsumerHabitat,
+} from "./coreEcologyPolarConsumerHabitat";
+import {
   coreEcologyAggregateDisturbanceEvidenceKind,
   coreEcologyAggregateSpeciesPolicy,
   isCoreEcologyAggregateSpecies,
@@ -204,6 +208,8 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "mountain-goat",
   "golden-eagle",
   "arctic-fox",
+  "harbor-seal",
+  "polar-bear",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -412,6 +418,11 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Append-only addressable cold-shore actors owned by the Wave-F sibling root. */
       readonly kind: "regional-cold-shore-v1";
       readonly habitat: CoreEcologyColdShoreHabitat;
+    }>
+  | Readonly<{
+      /** Capelin-backed seal and polar-bear residents owned by the polar consumer root. */
+      readonly kind: "regional-polar-consumer-v1";
+      readonly habitat: CoreEcologyPolarConsumerHabitat;
     }>
   | Readonly<{
       /**
@@ -4100,6 +4111,13 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: "regional-cold-shore-v1", habitat });
   }
+  if (value.kind === "regional-polar-consumer-v1") {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyPolarConsumerHabitat(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: "regional-polar-consumer-v1", habitat });
+  }
   if (
     value.kind === "habitat-v2"
     || value.kind === "legacy-fixed-v1-with-habitat-v2"
@@ -4328,6 +4346,15 @@ function aggregateDerivationMatchesPopulations(
         originRegion,
         mortalityTransactions,
       );
+  }
+  if (derivation.kind === "regional-polar-consumer-v1") {
+    return polarConsumerDerivationMatchesPopulations(
+      derivation.habitat,
+      populations,
+      aggregatePopulations,
+      originRegion,
+      mortalityTransactions,
+    );
   }
   const isHarborEdgeDerivation = derivation.kind === "habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2";
@@ -4645,6 +4672,48 @@ function settlementHomeDerivationMatchesPopulations(
     ) return false;
   }
   return true;
+}
+
+/** The polar-consumer habitat uses one direct anchor list per solitary actor. */
+function polarConsumerDerivationMatchesPopulations(
+  habitat: CoreEcologyPolarConsumerHabitat,
+  populations: readonly CoreEcologyPopulationState[],
+  aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
+  originRegion: RegionCoord,
+  mortalityTransactions: readonly CoreEcologyMortalityTransaction[],
+): boolean {
+  if (
+    habitat.region.x !== originRegion.x
+    || habitat.region.y !== originRegion.y
+    || aggregatePopulations.length !== 0
+    || mortalityTransactions.length !== 0
+  ) return false;
+  const expected = habitat.populations.filter(({ populationUnits }) => (
+    populationUnits === 1
+  ));
+  if (populations.length !== expected.length) return false;
+  const byKey = new Map(populations.map((population) => [
+    `${population.species}:${population.populationKey}`,
+    population,
+  ] as const));
+  for (const candidate of expected) {
+    const population = byKey.get(
+      `${candidate.species}:${candidate.populationKey}`,
+    );
+    const member = population?.members[0];
+    if (
+      population === undefined
+      || population.baselinePopulationSize !== 1
+      || population.populationSize !== 1
+      || population.reserveUnits !== 0
+      || population.members.length !== 1
+      || member === undefined
+      || member.populationOrdinal !== 0
+      || member.representedUnits !== 1
+    ) return false;
+    byKey.delete(`${candidate.species}:${candidate.populationKey}`);
+  }
+  return byKey.size === 0;
 }
 
 function regionalDerivationMatchesPopulations(
@@ -5162,7 +5231,10 @@ function playerAbsentGroupDisturbanceContext(
   patch: CoreEcologyVersionedPatchState,
   group: CoreEcologyGroupState,
 ): PlayerAbsentGroupDisturbanceContext | null {
-  if (!("habitat" in patch.derivation)) return null;
+  if (
+    !("habitat" in patch.derivation)
+    || patch.derivation.kind === "regional-polar-consumer-v1"
+  ) return null;
   const population = patch.populations.find((candidate) => (
     candidate.species === group.identity.species
     && candidate.populationKey === group.identity.populationKey

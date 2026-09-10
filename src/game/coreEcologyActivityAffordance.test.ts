@@ -9,6 +9,7 @@ import {
   CORE_ECOLOGY_ACTIVITY_ARCHETYPE_IDS,
   coreEcologyActivityAffordanceProfile,
   coreEcologyActivityArchetype,
+  coreEcologyShoreWaterMotionVocabulary,
   isCoreEcologyActivityAffordanceProfile,
   validateCoreEcologyActivityAffordances,
 } from "./coreEcologyActivityAffordance";
@@ -34,6 +35,7 @@ describe("core ecology activity affordance registry", () => {
       "north-american-river-otter",
       "gull",
       "golden-eagle",
+      "harbor-seal",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.map(({ archetypeId }) => archetypeId))
       .toEqual([
@@ -44,12 +46,27 @@ describe("core ecology activity affordance registry", () => {
         "shore-water-forager",
         "aerial-surface-opportunist",
         "ridge-soar-perch",
+        "shore-water-forager",
       ]);
     expect(coreEcologyActivityAffordanceProfile("golden-eagle")).toMatchObject({
       archetypeId: "ridge-soar-perch",
       locomotionClass: "aerial",
       presentationSignals: ["perched", "resting", "ridge-soaring-flight"],
     });
+    expect(coreEcologyActivityAffordanceProfile("harbor-seal")).toMatchObject({
+      archetypeId: "shore-water-forager",
+      locomotionClass: "amphibious",
+    });
+    expect(coreEcologyShoreWaterMotionVocabulary("north-american-river-otter"))
+      .toEqual({
+        seekForagingWater: "seek-otter-foraging-water",
+        seekHaulout: "seek-otter-haulout",
+      });
+    expect(coreEcologyShoreWaterMotionVocabulary("harbor-seal")).toEqual({
+      seekForagingWater: "seek-shore-foraging-water",
+      seekHaulout: "seek-dry-haulout",
+    });
+    expect(coreEcologyShoreWaterMotionVocabulary("gull")).toBeNull();
 
     for (const profile of CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES) {
       const activityArchetype = coreEcologyActivityArchetype(profile.archetypeId);

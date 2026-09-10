@@ -10,11 +10,14 @@ import {
   COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES,
   COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES,
   DOMESTIC_GOAT_APPEARANCE_PALETTES,
+  POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
+  POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES,
   REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES,
   alpha30WildlifeAppearancePalette,
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
+  polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
 } from "./wildlifeAppearance";
 
@@ -134,5 +137,37 @@ describe("shared wildlife appearance projection", () => {
     }
     expect(coldShoreWildlifeAppearancePalette("arctic-fox", "unknown-morph"))
       .toBe(COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES["arctic-fox"].white);
+  });
+
+  it("covers addressable polar-shore morphs with species-safe, high-contrast palettes", () => {
+    const expectedMorphs = {
+      "harbor-seal": ["dark-slate", "mottled-gray", "pale-silver", "warm-brown"],
+      "polar-bear": ["cream-ivory", "pale-ivory", "weathered-white", "yellowed-ivory"],
+    } as const;
+
+    expect(POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES).toEqual([
+      "harbor-seal",
+      "polar-bear",
+    ]);
+    for (const species of POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES) {
+      expect(Object.keys(POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES[species]).sort())
+        .toEqual([...expectedMorphs[species]].sort());
+      for (const morph of expectedMorphs[species]) {
+        const resolved = polarMarineWildlifeAppearancePalette(species, morph);
+        expect(resolved).toBe(
+          (POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES[species] as Record<
+            string,
+            typeof resolved
+          >)[morph],
+        );
+        expect(Object.isFrozen(resolved)).toBe(true);
+      }
+    }
+    expect(polarMarineWildlifeAppearancePalette("harbor-seal", "unknown-morph"))
+      .toBe(POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["harbor-seal"]["mottled-gray"]);
+    expect(polarMarineWildlifeAppearancePalette("polar-bear", "unknown-morph"))
+      .toBe(POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["polar-bear"]["cream-ivory"]);
+    expect(POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["polar-bear"]["cream-ivory"])
+      .toMatchObject({ primary: "#e5dfc9", dark: "#202a2d" });
   });
 });
