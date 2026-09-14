@@ -90,8 +90,25 @@ export const CORE_WILDLIFE_ALPHA36_SPECIES_COUNT = 29 as const;
 export const CORE_WILDLIFE_ALPHA36_SPECIES_HASH = "da0c901d7a464932" as const;
 export const CORE_WILDLIFE_ALPHA36_PROFILES_HASH = "4a225e4af9bd63ea" as const;
 
+/**
+ * First Wave-G ecological release cluster. The five contracts are appended as
+ * one estuary food-web breadth unit after the exact Alpha-36 child; regional
+ * population ownership remains a separate integration boundary.
+ */
+export const CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES = Object.freeze([
+  ...CORE_WILDLIFE_ALPHA36_SPECIES,
+  "bay-anchovy",
+  "atlantic-ghost-crab",
+  "great-blue-heron",
+  "common-tern",
+  "osprey",
+] as const);
+export const CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT = 34 as const;
+export const CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH = "bd1d1bbdb4858853" as const;
+export const CORE_WILDLIFE_WAVE_G_ESTUARY_PROFILES_HASH = "7e10d9329122ab39" as const;
+
 /** Current roster; extensions must remain append-only after the sealed prefix. */
-export const CORE_WILDLIFE_SPECIES = CORE_WILDLIFE_ALPHA36_SPECIES;
+export const CORE_WILDLIFE_SPECIES = CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES;
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
 export type CoreWildlifeRepresentation = "individual" | "aggregate";
@@ -184,6 +201,11 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "ARCTICFOX-"
     | "HARBORSEAL-"
     | "POLARBEAR-"
+    | "BAYANCHOVY-"
+    | "GHOSTCRAB-"
+    | "BLUEHERON-"
+    | "COMMONTERN-"
+    | "OSPREY-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -215,6 +237,11 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "arctic-fox": "ARCTICFOX-",
   "harbor-seal": "HARBORSEAL-",
   "polar-bear": "POLARBEAR-",
+  "bay-anchovy": "BAYANCHOVY-",
+  "atlantic-ghost-crab": "GHOSTCRAB-",
+  "great-blue-heron": "BLUEHERON-",
+  "common-tern": "COMMONTERN-",
+  osprey: "OSPREY-",
 });
 
 /**
@@ -236,6 +263,7 @@ export interface CoreWildlifeSpeciesMetadata {
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
     | "CAPELIN-SCHOOL"
+    | "BAYANCHOVY-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -532,6 +560,56 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     taxonomicClass: "mammal",
     dietClass: "carnivore",
     locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "bay-anchovy": {
+    species: "bay-anchovy",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "fish",
+    dietClass: "carnivore",
+    locomotionClass: "aquatic",
+    groupOrganization: "school",
+    groupStableIdNamespace: "BAYANCHOVY-SCHOOL",
+  },
+  "atlantic-ghost-crab": {
+    species: "atlantic-ghost-crab",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "invertebrate",
+    dietClass: "omnivore",
+    locomotionClass: "terrestrial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "great-blue-heron": {
+    species: "great-blue-heron",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "common-tern": {
+    species: "common-tern",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "aerial",
+    groupOrganization: "flock",
+    groupStableIdNamespace: "FLOCK",
+  },
+  osprey: {
+    species: "osprey",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "aerial",
     groupOrganization: null,
     groupStableIdNamespace: null,
   },
@@ -1577,6 +1655,171 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [20_000, 140_000],
     },
   },
+  "bay-anchovy": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "bay-anchovy",
+    maximumPatchPopulation: 64,
+    roles: ["prey", "small-prey", "forager"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 420_000,
+      retreatThreshold: 340_000,
+      forageThreshold: 230_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["blue-green-backed", "olive-backed", "silver-sided", "translucent-silver"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["social", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [650_000, 980_000],
+      boldness: [50_000, 360_000],
+      sociability: [880_000, 1_000_000],
+    },
+  },
+  "atlantic-ghost-crab": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "atlantic-ghost-crab",
+    maximumPatchPopulation: 24,
+    roles: ["prey", "small-prey", "forager", "scavenger", "omnivore"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 850_000,
+      carrion: 400_000,
+      "exposed-food": 250_000,
+      "live-prey": 100_000,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 500_000,
+      retreatThreshold: 360_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["gray-sand", "pale-sand", "straw", "warm-cream"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["patient", "reserved"],
+      ["cautious", "opportunistic"],
+      ["watchful", "reserved"],
+    ],
+    traitRanges: {
+      vigilance: [650_000, 980_000],
+      boldness: [60_000, 360_000],
+      sociability: [80_000, 360_000],
+    },
+  },
+  "great-blue-heron": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "great-blue-heron",
+    maximumPatchPopulation: 2,
+    roles: ["forager", "predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 720_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 250_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["blue-gray", "gray-blue", "pale-gray", "slate-blue"],
+    temperamentPairs: [
+      ["patient", "watchful"],
+      ["cautious", "reserved"],
+      ["patient", "reserved"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 980_000],
+      boldness: [160_000, 620_000],
+      sociability: [20_000, 180_000],
+    },
+  },
+  "common-tern": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "common-tern",
+    maximumPatchPopulation: 8,
+    roles: ["forager", "predator", "small-predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 40_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 460_000,
+      fleeThreshold: 720_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["black-capped-gray", "pale-gray", "silver-gray", "warm-gray"],
+    temperamentPairs: [
+      ["bold", "social"],
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [580_000, 960_000],
+      boldness: [240_000, 780_000],
+      sociability: [600_000, 940_000],
+    },
+  },
+  osprey: {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "osprey",
+    maximumPatchPopulation: 1,
+    roles: ["forager", "predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 840_000,
+      retreatThreshold: 640_000,
+      forageThreshold: 250_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-backed", "pale-headed", "rust-bibbed", "white-breasted"],
+    temperamentPairs: [
+      ["patient", "watchful"],
+      ["reserved", "watchful"],
+      ["cautious", "patient"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [680_000, 1_000_000],
+      boldness: [180_000, 700_000],
+      sociability: [20_000, 180_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -1752,6 +1995,19 @@ export function assertCoreWildlifeProfiles(): void {
     || hashCanonical(alpha36CompatibilityProfiles) !== CORE_WILDLIFE_ALPHA36_PROFILES_HASH
   ) {
     throw new Error("Core wildlife Alpha-36 identity lineage was rewritten");
+  }
+  const waveGEstuaryCompatibilityProfiles = CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES.map(
+    (species) => PROFILES[species],
+  );
+  if (
+    CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES.length
+      !== CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT
+    || hashCanonical(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES)
+      !== CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH
+    || hashCanonical(waveGEstuaryCompatibilityProfiles)
+      !== CORE_WILDLIFE_WAVE_G_ESTUARY_PROFILES_HASH
+  ) {
+    throw new Error("Core wildlife Wave-G estuary identity lineage was rewritten");
   }
   for (const species of CORE_WILDLIFE_SPECIES) {
     const profile = PROFILES[species];

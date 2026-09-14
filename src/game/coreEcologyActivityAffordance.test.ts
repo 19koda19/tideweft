@@ -26,6 +26,7 @@ describe("core ecology activity affordance registry", () => {
       "shore-water-forager",
       "aerial-surface-opportunist",
       "ridge-soar-perch",
+      "anchored-wader",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES).toEqual([
       "fish-crow",
@@ -36,6 +37,9 @@ describe("core ecology activity affordance registry", () => {
       "gull",
       "golden-eagle",
       "harbor-seal",
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.map(({ archetypeId }) => archetypeId))
       .toEqual([
@@ -47,6 +51,9 @@ describe("core ecology activity affordance registry", () => {
         "aerial-surface-opportunist",
         "ridge-soar-perch",
         "shore-water-forager",
+        "anchored-wader",
+        "aerial-surface-opportunist",
+        "aerial-surface-opportunist",
       ]);
     expect(coreEcologyActivityAffordanceProfile("golden-eagle")).toMatchObject({
       archetypeId: "ridge-soar-perch",
@@ -56,6 +63,15 @@ describe("core ecology activity affordance registry", () => {
     expect(coreEcologyActivityAffordanceProfile("harbor-seal")).toMatchObject({
       archetypeId: "shore-water-forager",
       locomotionClass: "amphibious",
+    });
+    expect(coreEcologyActivityAffordanceProfile("great-blue-heron")).toMatchObject({
+      archetypeId: "anchored-wader",
+      presentationSignals: [
+        "resting",
+        "tidal-relocation-flight",
+        "wading-scan",
+        "wading-search",
+      ],
     });
     expect(coreEcologyShoreWaterMotionVocabulary("north-american-river-otter"))
       .toEqual({

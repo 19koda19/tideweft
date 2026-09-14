@@ -23,6 +23,10 @@ import {
   CORE_WILDLIFE_ALPHA36_SPECIES,
   CORE_WILDLIFE_ALPHA36_SPECIES_COUNT,
   CORE_WILDLIFE_ALPHA36_SPECIES_HASH,
+  CORE_WILDLIFE_WAVE_G_ESTUARY_PROFILES_HASH,
+  CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES,
+  CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT,
+  CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH,
   CORE_WILDLIFE_PROFILES,
   CORE_WILDLIFE_SPECIES,
   assertCoreWildlifeIdentity,
@@ -96,7 +100,17 @@ describe("core wildlife identity", () => {
     expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA33_SPECIES_COUNT))
       .toEqual(CORE_WILDLIFE_ALPHA33_SPECIES);
     expect(CORE_WILDLIFE_SPECIES.slice(CORE_WILDLIFE_ALPHA33_SPECIES_COUNT))
-      .toEqual(["atlantic-capelin", "arctic-fox", "harbor-seal", "polar-bear"]);
+      .toEqual([
+        "atlantic-capelin",
+        "arctic-fox",
+        "harbor-seal",
+        "polar-bear",
+        "bay-anchovy",
+        "atlantic-ghost-crab",
+        "great-blue-heron",
+        "common-tern",
+        "osprey",
+      ]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA32_SPECIES_HASH);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES.map(getCoreWildlifeProfile)))
@@ -115,7 +129,16 @@ describe("core wildlife identity", () => {
     expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA34_SPECIES_COUNT))
       .toEqual(CORE_WILDLIFE_ALPHA34_SPECIES);
     expect(CORE_WILDLIFE_SPECIES.slice(CORE_WILDLIFE_ALPHA34_SPECIES_COUNT))
-      .toEqual(["arctic-fox", "harbor-seal", "polar-bear"]);
+      .toEqual([
+        "arctic-fox",
+        "harbor-seal",
+        "polar-bear",
+        "bay-anchovy",
+        "atlantic-ghost-crab",
+        "great-blue-heron",
+        "common-tern",
+        "osprey",
+      ]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA34_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA34_SPECIES_HASH);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA34_SPECIES.map(getCoreWildlifeProfile)))
@@ -141,11 +164,28 @@ describe("core wildlife identity", () => {
     expect(CORE_WILDLIFE_ALPHA36_SPECIES).toHaveLength(
       CORE_WILDLIFE_ALPHA36_SPECIES_COUNT,
     );
-    expect(CORE_WILDLIFE_SPECIES).toEqual(CORE_WILDLIFE_ALPHA36_SPECIES);
+    expect(CORE_WILDLIFE_SPECIES.slice(0, CORE_WILDLIFE_ALPHA36_SPECIES_COUNT))
+      .toEqual(CORE_WILDLIFE_ALPHA36_SPECIES);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA36_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA36_SPECIES_HASH);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA36_SPECIES.map(getCoreWildlifeProfile)))
       .toBe(CORE_WILDLIFE_ALPHA36_PROFILES_HASH);
+    expect(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES).toEqual([
+      ...CORE_WILDLIFE_ALPHA36_SPECIES,
+      "bay-anchovy",
+      "atlantic-ghost-crab",
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
+    ]);
+    expect(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES).toHaveLength(
+      CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT,
+    );
+    expect(CORE_WILDLIFE_SPECIES).toEqual(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES);
+    expect(hashCanonical(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES))
+      .toBe(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH);
+    expect(hashCanonical(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES.map(getCoreWildlifeProfile)))
+      .toBe(CORE_WILDLIFE_WAVE_G_ESTUARY_PROFILES_HASH);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
     expect(getCoreWildlifeProfile("deer").roles).toEqual([
@@ -554,6 +594,83 @@ describe("core wildlife identity", () => {
       foodAffinities: { browse: 640_000, carrion: 920_000, "live-prey": 0 },
       morphs: ["dark-brown", "golden-brown", "grizzled-brown", "reddish-brown"],
     });
+
+    const estuaryBreadth = {
+      "bay-anchovy": {
+        representation: "aggregate",
+        taxonomicClass: "fish",
+        dietClass: "carnivore",
+        locomotionClass: "aquatic",
+        groupOrganization: "school",
+        groupStableIdNamespace: "BAYANCHOVY-SCHOOL",
+        maximumPatchPopulation: 64,
+        pursuitTicks: 0,
+        morphs: ["blue-green-backed", "olive-backed", "silver-sided", "translucent-silver"],
+      },
+      "atlantic-ghost-crab": {
+        representation: "aggregate",
+        taxonomicClass: "invertebrate",
+        dietClass: "omnivore",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumPatchPopulation: 24,
+        pursuitTicks: 0,
+        morphs: ["gray-sand", "pale-sand", "straw", "warm-cream"],
+      },
+      "great-blue-heron": {
+        representation: "individual",
+        taxonomicClass: "bird",
+        dietClass: "carnivore",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumPatchPopulation: 2,
+        pursuitTicks: 0,
+        morphs: ["blue-gray", "gray-blue", "pale-gray", "slate-blue"],
+      },
+      "common-tern": {
+        representation: "individual",
+        taxonomicClass: "bird",
+        dietClass: "carnivore",
+        locomotionClass: "aerial",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "FLOCK",
+        maximumPatchPopulation: 8,
+        pursuitTicks: 0,
+        morphs: ["black-capped-gray", "pale-gray", "silver-gray", "warm-gray"],
+      },
+      osprey: {
+        representation: "individual",
+        taxonomicClass: "bird",
+        dietClass: "carnivore",
+        locomotionClass: "aerial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumPatchPopulation: 1,
+        pursuitTicks: 0,
+        morphs: ["dark-backed", "pale-headed", "rust-bibbed", "white-breasted"],
+      },
+    } as const;
+    for (const [species, contract] of Object.entries(estuaryBreadth) as [
+      keyof typeof estuaryBreadth,
+      (typeof estuaryBreadth)[keyof typeof estuaryBreadth],
+    ][]) {
+      expect(getCoreWildlifeSpeciesMetadata(species)).toMatchObject({
+        actorRepresentation: contract.representation,
+        catalogIdentityForm: contract.representation,
+        taxonomicClass: contract.taxonomicClass,
+        dietClass: contract.dietClass,
+        locomotionClass: contract.locomotionClass,
+        groupOrganization: contract.groupOrganization,
+        groupStableIdNamespace: contract.groupStableIdNamespace,
+      });
+      expect(getCoreWildlifeProfile(species)).toMatchObject({
+        maximumPatchPopulation: contract.maximumPatchPopulation,
+        behavior: { maximumPursuitTicks: contract.pursuitTicks },
+        morphs: contract.morphs,
+      });
+    }
   });
 
   it("fixes the Alpha-20 duck identity contract as deterministic bytes", () => {

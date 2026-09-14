@@ -56,6 +56,11 @@ describe("lean runtime living-species registry", () => {
       "arctic-fox",
       "harbor-seal",
       "polar-bear",
+      "bay-anchovy",
+      "atlantic-ghost-crab",
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -554,6 +559,86 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 56_000,
         },
       },
+      {
+        species: "bay-anchovy",
+        actorIdPrefix: "BAYANCHOVY-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization: "school",
+        groupStableIdNamespace: "BAYANCHOVY-SCHOOL",
+        aboutNoun: "bay anchovy school",
+        senses: {
+          visionAcuity: 760_000,
+          hearingSensitivity: 720_000,
+          scentSensitivity: 650_000,
+          scentBaseRangeUnits: 10_000,
+        },
+      },
+      {
+        species: "atlantic-ghost-crab",
+        actorIdPrefix: "GHOSTCRAB-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "Atlantic ghost crab activity",
+        senses: {
+          visionAcuity: 720_000,
+          hearingSensitivity: 760_000,
+          scentSensitivity: 720_000,
+          scentBaseRangeUnits: 8_000,
+        },
+      },
+      {
+        species: "great-blue-heron",
+        actorIdPrefix: "BLUEHERON-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "great blue heron",
+        senses: {
+          visionAcuity: ACTOR_PERCEPTION_SCALE,
+          hearingSensitivity: 720_000,
+          scentSensitivity: 100_000,
+          scentBaseRangeUnits: 6_000,
+        },
+      },
+      {
+        species: "common-tern",
+        actorIdPrefix: "COMMONTERN-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "FLOCK",
+        aboutNoun: "common tern",
+        senses: {
+          visionAcuity: ACTOR_PERCEPTION_SCALE,
+          hearingSensitivity: 780_000,
+          scentSensitivity: 80_000,
+          scentBaseRangeUnits: 4_000,
+        },
+      },
+      {
+        species: "osprey",
+        actorIdPrefix: "OSPREY-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "osprey",
+        senses: {
+          visionAcuity: ACTOR_PERCEPTION_SCALE,
+          hearingSensitivity: 760_000,
+          scentSensitivity: 80_000,
+          scentBaseRangeUnits: 4_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -605,9 +690,19 @@ describe("lean runtime living-species registry", () => {
     for (const [species, actorId] of [
       ["harbor-seal", "HARBORSEAL-v1-alpha36-fixture"],
       ["polar-bear", "POLARBEAR-v1-alpha36-fixture"],
+      ["great-blue-heron", "BLUEHERON-v1-wave-g-fixture"],
+      ["common-tern", "COMMONTERN-v1-wave-g-fixture"],
+      ["osprey", "OSPREY-v1-wave-g-fixture"],
     ] as const) {
       expect(isLivingSpeciesActorAddressable(species)).toBe(true);
       expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(true);
+    }
+    for (const [species, actorId] of [
+      ["bay-anchovy", "BAYANCHOVY-v1-wave-g-fixture"],
+      ["atlantic-ghost-crab", "GHOSTCRAB-v1-wave-g-fixture"],
+    ] as const) {
+      expect(isLivingSpeciesActorAddressable(species)).toBe(false);
+      expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(false);
     }
   });
 

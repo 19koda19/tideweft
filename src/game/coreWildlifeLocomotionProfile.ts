@@ -8,6 +8,7 @@ import {
 } from "./livingActorGradeTraversal";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import {
+  coreEcologySpeciesCanUseAmphibiousRoute,
   coreEcologySpeciesHasRuntimeCapability,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
@@ -217,6 +218,49 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
     intentStepFactors: Object.freeze({
       flee: 900_000,
       retreat: 840_000,
+    }),
+  }),
+  "great-blue-heron": Object.freeze({
+    // Wading is an anchor-local activity. Travel between authenticated
+    // estuary anchors uses the same aerial route surface as other waders.
+    mode: "aerial",
+    aerialTravelCost: 245_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 750_000,
+    intentStepFactors: Object.freeze({
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
+  "common-tern": Object.freeze({
+    mode: "aerial",
+    aerialTravelCost: 205_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 840_000,
+    intentStepFactors: Object.freeze({
+      disengage: 880_000,
+      flee: 940_000,
+      retreat: 900_000,
+    }),
+  }),
+  osprey: Object.freeze({
+    mode: "aerial",
+    aerialTravelCost: 195_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 820_000,
+    intentStepFactors: Object.freeze({
+      disengage: 860_000,
+      pursue: 960_000,
+      retreat: 900_000,
     }),
   }),
   "american-black-duck": Object.freeze({
@@ -466,9 +510,7 @@ export function coreWildlifeTraversabilityCell(
   if (medium === "amphibious") {
     if (
       profile.surfaceWaterTravelCost === null
-      || !coreEcologySpeciesHasRuntimeCapability(species, "amphibious-locomotion")
-      || !coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
-      || !coreEcologySpeciesHasRuntimeCapability(species, "shore-water-activity")
+      || !coreEcologySpeciesCanUseAmphibiousRoute(species)
     ) {
       throw new Error(`Species ${species} lacks an amphibious locomotion profile`);
     }

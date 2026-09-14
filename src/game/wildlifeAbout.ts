@@ -139,6 +139,36 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "LARGE BEAR",
     representation: "individual",
   },
+  "bay-anchovy": {
+    identifiedName: "Bay anchovy",
+    identifiedHeading: "BAY ANCHOVY SCHOOL SIGNS",
+    unidentifiedHeading: "AQUATIC ACTIVITY",
+    representation: "population-area",
+  },
+  "atlantic-ghost-crab": {
+    identifiedName: "Atlantic ghost crab",
+    identifiedHeading: "ATLANTIC GHOST CRAB SIGNS",
+    unidentifiedHeading: "SHORELINE ACTIVITY",
+    representation: "population-area",
+  },
+  "great-blue-heron": {
+    identifiedName: "Great blue heron",
+    identifiedHeading: "GREAT BLUE HERON",
+    unidentifiedHeading: "UNKNOWN LARGE WADER",
+    representation: "individual",
+  },
+  "common-tern": {
+    identifiedName: "Common tern",
+    identifiedHeading: "COMMON TERN FLOCK",
+    unidentifiedHeading: "UNKNOWN SEABIRDS",
+    representation: "visible-flock",
+  },
+  osprey: {
+    identifiedName: "Osprey",
+    identifiedHeading: "OSPREY",
+    unidentifiedHeading: "UNKNOWN LARGE RAPTOR",
+    representation: "individual",
+  },
   "fish-crow": {
     identifiedName: "Fish crow",
     identifiedHeading: "FISH CROW FLOCK",

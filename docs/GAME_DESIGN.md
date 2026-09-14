@@ -86,7 +86,37 @@ Each seed creates:
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
 - One deterministic starting-harbor herd of exactly two individually identified domestic goats. The settlement and keeper hold a distinct typed pen, herd, and custody record; each goat uses the same shared actor, perception, attention, group, locomotion, and physical-resource arbitration owners without receiving unsupported foliage browsing.
-- One bounded living-species catalog whose first twenty-four records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed compatibility lineage: its exact v9 prefix describes the original-harbor assemblage, v10 appends one remote temperate-upland/forest-edge source for wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that source. Alpha 32 derives eligible current wild populations across signed regions from stable terrain, biome/climate, carrying capacity, food or prey support, territory, and density signals, so unsuitable ecology can honestly contain no member of a species. Released Alpha33 appends mountain goat, American pika, and golden eagle as records 25–27 and derives them from a separate sparse signed-region Alpine layer without rewriting the Alpha32 child. Preserved unpublished Alpha34 appends Atlantic capelin as record 28 through a sparse polar-shore sibling, and Alpha35 appends Arctic fox as record 29 through a cold-shore sibling that is viable only over admitted capelin substrate. The current unpublished Alpha36 candidate preserves that exact prefix and appends harbor seal and polar bear as records 30–31 through one rarer capelin-backed polar-consumer sibling. A separate starting-settlement home owner retains bounded brown rats and anchored chickens and goats while its free-ranging domestic cat remains habitat-optional. Addressable wildlife uses bounded persistent individual representatives; viable crows, boars, elk, wolves, and mountain goats use shared flock, sounder, herd, or pack topology, while cougar, brown bear, northern harrier, snowy egret, American black duck, river otter, golden eagle, Arctic fox, harbor seal, and polar bear remain solitary. American pika and capelin join brown rat, southern leopard frog, Atlantic silverside, and Atlantic marsh fiddler crab as stable non-addressable aggregates disclosed only through directly visible signs or activity. Fish, crabs, and pikas never become manufactured individual actors. Alpha33 remains the current twenty-seven-record LIVE_VERIFIED release; records 28–31 are unpublished local work, not worldwide species breadth, ecological migration behavior, or a complete bestiary.
+- One bounded thirty-six-record living-species catalog whose first twenty-four
+  records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed
+  compatibility lineage: its exact v9 prefix describes the original-harbor
+  assemblage, v10 appends one remote temperate-upland/forest-edge source for
+  wild boar, elk, and gray wolf, and v11 appends cougar and brown bear at that
+  source. Alpha 32 derives eligible current wild populations across signed
+  regions from stable terrain, biome/climate, carrying capacity, food or prey
+  support, territory, and density signals, so unsuitable ecology can honestly
+  contain no member of a species. Released Alpha33 appends mountain goat,
+  American pika, and golden eagle as records 25–27 through a separate Alpine
+  sibling. Preserved unpublished Alpha34–36 work appends Atlantic capelin,
+  Arctic fox, harbor seal, and polar bear as records 28–31 through exact
+  polar-shore, cold-shore, and polar-consumer siblings. The current unpublished
+  Alpha37 source candidate preserves that complete `RegionalEcologyStateV5` /
+  outer-v29 child and appends bay anchovy, Atlantic ghost crab, great blue
+  heron, common tern, and osprey as records 32–36 through one sparse
+  append-only Estuary Surface Break breadth root. A separate
+  starting-settlement home owner retains bounded brown rats and anchored
+  chickens and goats while its free-ranging domestic cat remains
+  habitat-optional. Addressable wildlife uses bounded persistent
+  representatives; eligible deer, gulls, fish crows, boars, elk, wolves,
+  mountain goats, and common terns use shared herd, flock, sounder, or pack
+  topology, while other addressable profiles remain solitary. Brown rat,
+  southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab,
+  American pika, Atlantic capelin, bay anchovy, and Atlantic ghost crab remain
+  conserved non-addressable aggregates disclosed only through lawful visible
+  signs or activity; no fish, crab, or pika actor is manufactured. Alpha33
+  remains the current twenty-seven-record LIVE_VERIFIED release; records 28–36
+  are local unpublished work toward the approximately seventy-five-profile
+  target, not worldwide species breadth, ecological migration behavior, or a
+  complete bestiary.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -359,7 +389,7 @@ behavior, new mortality, live-prey capture, reproduction, audible Living
 Voice, or Wave-F completion. It has not been pushed, deployed, or live
 verified; Alpha33 remains the public build.
 
-The **current unpublished local working-tree candidate** `0.3.3-alpha.35`
+The **preserved unpublished local source candidate** `0.3.3-alpha.35`
 preserves Alpha34's complete 28-record catalog as an exact prefix and appends
 Arctic fox as record 29. A cold-shore source is viable only where authenticated
 Alpha34 polar-shore truth already admits the conserved capelin school and
@@ -392,7 +422,7 @@ completion, Wave-G breadth, Directive completion, or release. It has no
 Alpha35 commit, push, deployment, Pages result, or LIVE_VERIFIED evidence;
 Alpha33 remains the public build.
 
-The **current unpublished local working-tree candidate**
+The **preserved unpublished local source candidate**
 `0.3.3-alpha.36 — Breath Between Tides` preserves Alpha35's complete
 29-record catalog as an exact prefix and appends harbor seal and polar bear as
 records 30 and 31. The polar-consumer source exists only where the authenticated
@@ -419,15 +449,49 @@ independent, group-atomic global allowance of 24 addressable actors and one
 atomic commit, so the two profiles do not create a second population or render
 budget.
 
-This candidate completes the current **bounded Wave-F role checklist**, not the
-biodiversity directive. Wave G is the next breadth phase: expand toward 75–150
-meaningful profiles by declaring compatible identity, niche, habitat,
-locomotion, perception, interaction, and presentation data against these
-shared owners, with representative property/conservation/emergence evidence
-instead of a bespoke suite for every species or every pair. Sea ice, snow,
-reproduction, recruitment, population recovery, full scent, broad migration,
-general mortality, audible Living Voice, Directive completion, push, CI,
-Pages, deployment, and LIVE_VERIFIED status remain absent.
+The **current unpublished local source candidate**
+`0.3.3-alpha.37 — Estuary Surface Break` preserves that exact 31-record
+Alpha36 catalog and `RegionalEcologyStateV5`/outer-v29 child, then appends bay
+anchovy, Atlantic ghost crab, great blue heron, common tern, and osprey as
+records 32–36 through one sparse append-only breadth root. Anchovies and ghost
+crabs remain conserved aggregates; heron and osprey are solitary persistent
+actors, while two to four common terns form one group-atomic flock. Terrain,
+salinity, tide, carrying capacity, territory, density, regional quiet, and the
+exact local anchovy substrate decide admission, so an eligible-looking region
+may still contain none of them.
+
+The three addressable estuary birds use authenticated shared neutral activity.
+Great blue herons can relocate by air to their saved tide-depth-safe wading
+ground and then wait, scan, or search there. Common terns and ospreys reuse the
+air-only surface-opportunity/rest loop; neither receives water locomotion or an
+exact fish target. Immediate danger and other lawful urgent intent still win.
+One representative common-tern-to-anchovy witness proves that current clear
+line of sight can create bounded nonlethal aggregate pressure, that an
+intervening ridge removes it, and that anchovy units remain conserved. This is
+bounded daylight/rest behavior, not capture, consumption, full circadian life,
+or continuously simulated 3D flight.
+
+Outer save 30 introduces `RegionalEcologyStateV6` around the exact V5 child
+plus that breadth root. A sealed outer-v29 Alpha36 save is authenticated and
+adopted exactly once. All six ecology owners share the same insertion-order-
+independent, group-atomic 24-addressable-actor allowance and one atomic commit.
+
+Alpha36 completed the **bounded Wave-F role checklist**. Alpha37 opens Wave G
+with its first coherent cohort but does not complete the biodiversity
+directive. Later cohorts continue toward approximately 75 meaningful profiles
+by declaring compatible identity, niche, habitat, locomotion, perception,
+interaction, and presentation data against these shared owners, with shared
+invariants and a small number of representative conservation/emergence
+witnesses instead of a bespoke suite for every species or every pair. Dedicated
+Wave-G performance proof and seamless actor-crossing proof remain open. Sea
+ice, snow, reproduction, recruitment, population recovery, full scent, broad
+migration, general mortality, audible Living Voice, Directive completion,
+push, CI, Pages, deployment, and LIVE_VERIFIED status remain absent.
+
+Approximately 75 is the Directive 04_1 planning target, not a quota to pad or a
+cap on the architecture. Small variance is allowed when coherent ecological
+coverage closes cleanly; additional profiles beyond that target belong to
+later needs unless they fill a concrete missing niche in the active food web.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -726,7 +790,14 @@ The activity must remain pleasant before progression numbers: readable motion, s
 - Released Alpha 31 uses outer save format 24 and habitat analysis version 11. It preserves the complete Alpha-30 source and population prefix before appending habitat-supported solitary cougar and brown-bear records. Exact adoption retains all earlier identities, populations, groups, mortality, bodies, items, Promises, and world facts.
 - Released Alpha 32 uses outer save format 25 and `RegionalEcologyStateV1`. It separates the starting-settlement home from signed-region ecology, preserves the habitat-version-11 child, and applies one insertion-order-independent, group-atomic global cap and atomic commit across every current source.
 - Released Alpha 33 uses outer save format 26 and `RegionalEcologyStateV2`. It wraps the exact V1 child beside one sparse Alpine sibling and adopts a sealed v25 child exactly once without rerolling mountain-goat, American-pika, or golden-eagle state.
-- The unpublished Alpha34, Alpha35, and Alpha36 candidates extend that append-only chain through `RegionalEcologyStateV3`/outer v27, V4/outer v28, and V5/outer v29. Each wrapper retains its exact authenticated child, adds only its sparse polar-shore, cold-shore, or polar-consumer sibling, and keeps every layer under the same global group-atomic 24-actor allowance and atomic commit. These formats are local compatibility candidates, not public release claims.
+- The unpublished Alpha34, Alpha35, Alpha36, and Alpha37 candidates extend that
+  append-only chain through `RegionalEcologyStateV3`/outer v27, V4/outer v28,
+  V5/outer v29, and V6/outer v30. Each wrapper retains its exact authenticated
+  child. V3–V5 add only their polar-shore, cold-shore, or polar-consumer sibling;
+  V6 adds one sparse append-only breadth root whose first cohort owns records
+  32–36. All six current layers share the same global group-atomic 24-actor
+  allowance and atomic commit. These formats are local compatibility
+  candidates, not public release claims.
 
 There is no courier or human death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice. The only current mortality is bounded exact marsh-fox, gray-wolf, or cougar contact against an eligible solitary rabbit, as described above.
 
@@ -1276,7 +1347,8 @@ Present only in the unpublished local Alpha35 working-tree candidate:
   beside a sparse cold-shore sibling under the same single global group-atomic
   24-actor cap and one atomic commit.
 
-Present only in the unpublished local Alpha36 working-tree candidate:
+Present only in the unpublished local Alpha36 source candidate preserved at
+local commit `29b7385`:
 
 - the exact 29-record Alpha35 prefix followed by solitary addressable harbor
   seal and polar bear records 30–31;
@@ -1294,9 +1366,36 @@ Present only in the unpublished local Alpha36 working-tree candidate:
   polar-consumer sibling under the same single global group-atomic 24-actor cap
   and one atomic commit.
 
-None of the Alpha34–36 local checkpoints is released, deployed, Pages-verified,
-or LIVE_VERIFIED. Alpha36 closes bounded Wave-F role coverage, but does not
-complete Wave G, Directive 04_1, worldwide ecology, or the full bestiary.
+The first Wave-G boundary hardening changes no player-facing movement values:
+river otter, harbor seal, and polar bear retain their amphibious routes, while
+only otter and seal own authenticated shore-water schedules and destinations.
+This prevents later amphibious breadth from inheriting an unrelated foraging
+authority merely to cross between land and water.
+
+Present only in the current unpublished local Alpha37 source candidate:
+
+- the exact 31-record Alpha36 prefix followed by bay anchovy, Atlantic ghost
+  crab, great blue heron, common tern, and osprey records 32–36;
+- one habitat-gated Estuary Surface Break cohort under a sparse append-only
+  breadth root, with conserved anchovy and ghost-crab aggregates, solitary
+  heron and osprey actors, and one group-atomic two-to-four-member tern flock;
+- shared Tide Table activity, identity, grouping, perception, neutral activity,
+  locomotion, persistence, knowledge-honest ABOUT, and dual-view presentation;
+- authenticated shared neutral behavior in which the heron uses one
+  tide-depth-safe wading anchor and tern/osprey reuse the air-only
+  surface-opportunity/rest profile, always subordinate to immediate danger;
+- one representative visible-versus-ridge-occluded common-tern-to-anchovy
+  pressure scenario with exact aggregate conservation and no capture,
+  consumption, injury, death, body, item, cargo, player, or dog outcome; and
+- outer save 30 and `RegionalEcologyStateV6`, retaining the exact V5 child
+  beside the breadth root under the same single global group-atomic 24-actor
+  cap and one atomic commit.
+
+None of the Alpha34–37 local checkpoints is released, deployed, Pages-verified,
+or LIVE_VERIFIED. Alpha37 opens Wave G toward approximately 75 profiles but
+does not complete Wave G, Directive 04_1, worldwide ecology, or the full
+bestiary. It has no dedicated Wave-G performance proof or seamless
+actor-crossing proof.
 
 Live through Alpha 33:
 

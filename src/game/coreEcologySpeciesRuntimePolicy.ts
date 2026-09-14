@@ -26,6 +26,7 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "aerial-locomotion",
   "aerial-predator",
   "amphibious-locomotion",
+  "amphibious-route",
   "aquatic-foraging",
   "aquatic-locomotion",
   "carcass-feeding",
@@ -115,6 +116,7 @@ export interface CoreEcologySpeciesRuntimePolicy {
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
     | "CAPELIN-SCHOOL"
+    | "BAYANCHOVY-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -250,6 +252,11 @@ const MORTALITY_VALUES: Readonly<Record<
   "arctic-fox": NO_MORTALITY_RUNTIME,
   "harbor-seal": NO_MORTALITY_RUNTIME,
   "polar-bear": NO_MORTALITY_RUNTIME,
+  "bay-anchovy": NO_MORTALITY_RUNTIME,
+  "atlantic-ghost-crab": NO_MORTALITY_RUNTIME,
+  "great-blue-heron": NO_MORTALITY_RUNTIME,
+  "common-tern": NO_MORTALITY_RUNTIME,
+  osprey: NO_MORTALITY_RUNTIME,
 });
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
@@ -478,6 +485,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       capabilities: [
         "actor-address",
         "amphibious-locomotion",
+        "amphibious-route",
         "aquatic-foraging",
         "aquatic-locomotion",
         "diurnal-activity",
@@ -673,6 +681,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       capabilities: [
         "actor-address",
         "amphibious-locomotion",
+        "amphibious-route",
         "aquatic-foraging",
         "aquatic-locomotion",
         "diurnal-activity",
@@ -698,14 +707,106 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       capabilities: [
         "actor-address",
         "amphibious-locomotion",
+        "amphibious-route",
         "aquatic-locomotion",
         "food-investigation",
         "live-prey-pursuit",
         "movement-memory",
-        "shore-water-activity",
         "water-depth-response",
       ],
       activitySignals: [],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "bay-anchovy": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 4,
+      aggregateResponseVerbs: ["redistribute", "school", "tighten"],
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "school-coordination",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["schooling-glint", "school-tightening", "surface-dimple"],
+      evidenceKinds: ["surface-dimple"],
+      presentationModel: "aggregate-school",
+    },
+    "atlantic-ghost-crab": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 8,
+      aggregateResponseVerbs: ["emerge", "quiet", "retreat-to-burrow"],
+      capabilities: [
+        "aggregate-response",
+        "population-activity-evidence",
+        "quieting",
+        "tidal-activity",
+      ],
+      activitySignals: ["burrow-foraging", "burrow-retreat", "surface-quieting"],
+      evidenceKinds: ["burrow-opening", "feeding-scrape"],
+      presentationModel: "aggregate-activity",
+    },
+    "great-blue-heron": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "diurnal-activity",
+        "movement-memory",
+        "surface-opportunity",
+        "tidal-activity",
+        "wading",
+        "water-depth-response",
+      ],
+      activitySignals: ["shallow-water-probing", "wading-forage"],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "common-tern": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "aquatic-foraging",
+        "diurnal-activity",
+        "group-coordination",
+        "movement-memory",
+        "perch",
+        "surface-opportunity",
+        "tidal-activity",
+      ],
+      activitySignals: [
+        "estuary-plunge-diving",
+        "surface-opportunity-flight",
+        "tidal-relocation-flight",
+      ],
+      evidenceKinds: [],
+      presentationModel: "visible-flock",
+    },
+    osprey: {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "aerial-predator",
+        "aquatic-foraging",
+        "diurnal-activity",
+        "movement-memory",
+        "perch",
+        "surface-opportunity",
+        "tidal-activity",
+      ],
+      activitySignals: ["estuary-soaring", "surface-plunge-diving", "waterside-perching"],
       evidenceKinds: [],
       presentationModel: "individual",
     },
@@ -812,6 +913,22 @@ export function coreEcologySpeciesHasRuntimeCapability(
     && policy.capabilities.includes(capability);
 }
 
+/**
+ * Species-neutral land/water route eligibility. Activity schedules and their
+ * authenticated destinations remain separate opt-in capabilities.
+ */
+export function coreEcologySpeciesCanUseAmphibiousRoute(
+  speciesId: unknown,
+): boolean {
+  const policy = coreEcologySpeciesRuntimePolicy(speciesId);
+  return policy !== null
+    && policy.actorAddressable
+    && policy.locomotionClass === "amphibious"
+    && policy.capabilities.includes("amphibious-route")
+    && policy.capabilities.includes("amphibious-locomotion")
+    && policy.capabilities.includes("aquatic-locomotion");
+}
+
 export function coreEcologySpeciesCanOwnActorAddress(speciesId: unknown): boolean {
   return coreEcologySpeciesRuntimePolicy(speciesId)?.actorAddressable === true;
 }
@@ -894,6 +1011,14 @@ export function validateCoreEcologySpeciesRuntimePolicies(
         || getCoreWildlifeProfile(policy.speciesId).foodAffinities["shore-forage"] === 0
       )
     ) errors.push(`${policy.speciesId}:shoreline-foraging-policy-mismatch`);
+    if (
+      policy.capabilities.includes("amphibious-route")
+      && !coreEcologySpeciesCanUseAmphibiousRoute(policy.speciesId)
+    ) errors.push(`${policy.speciesId}:amphibious-route-policy-mismatch`);
+    if (
+      policy.capabilities.includes("shore-water-activity")
+      && !policy.capabilities.includes("amphibious-route")
+    ) errors.push(`${policy.speciesId}:shore-water-activity-route-mismatch`);
     if (!mortalityPolicyMatchesCapabilities(policy)) {
       errors.push(`${policy.speciesId}:mortality-policy-mismatch`);
     }

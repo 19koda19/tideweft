@@ -235,6 +235,54 @@ export const LIVING_SPECIES_ALPHA36_SPECIES_IDS_HASH = "4853e8839a030766" as con
 export const LIVING_SPECIES_ALPHA36_CATALOG_BYTE_LENGTH = 348_728 as const;
 export const LIVING_SPECIES_ALPHA36_CATALOG_HASH = "4c0a0afcf9a6a63e" as const;
 
+/**
+ * First Wave-G ecological cluster. This is a sorted catalog view over the
+ * append-only wildlife identity roster, not a claim that regional ecology or
+ * presentation has already materialized every contract.
+ */
+export const LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS = Object.freeze([
+  "american-black-duck",
+  "american-pika",
+  "arctic-fox",
+  "atlantic-capelin",
+  "atlantic-ghost-crab",
+  "atlantic-marsh-fiddler-crab",
+  "atlantic-silverside",
+  "bay-anchovy",
+  "black-bear",
+  "brown-bear",
+  "brown-rat",
+  "common-tern",
+  "cougar",
+  "deer",
+  "domestic-cat",
+  "domestic-chicken",
+  "domestic-dog",
+  "domestic-goat",
+  "elk",
+  "fish-crow",
+  "golden-eagle",
+  "gray-wolf",
+  "great-blue-heron",
+  "gull",
+  "harbor-seal",
+  "human",
+  "marsh-fox",
+  "marsh-rabbit",
+  "mountain-goat",
+  "north-american-river-otter",
+  "northern-harrier",
+  "osprey",
+  "polar-bear",
+  "snowy-egret",
+  "southern-leopard-frog",
+  "wild-boar",
+] as const);
+export const LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_COUNT = 36 as const;
+export const LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS_HASH = "fd56cd771d30f26e" as const;
+export const LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_BYTE_LENGTH = 406_541 as const;
+export const LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_HASH = "7b1350a97a2a20ed" as const;
+
 export type LivingSpeciesImplementation = "unimplemented" | "foundation" | "active";
 export type LivingSpeciesIdentityForm = "individual" | "aggregate" | "hybrid";
 export type LivingSpeciesPositionModel =
@@ -2370,6 +2418,243 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
       "appearance", "approximate-size", "behavior", "condition", "life-stage", "species",
     ],
   },
+  "bay-anchovy": {
+    implementation: "foundation",
+    ecologicalClasses: ["forage-fish", "forager", "prey", "small-prey"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: "game:regional-breadth-cohort:v1",
+    dynamicOverlays: ["tide-availability", "visible-activity"],
+    morphologyDimensions: ["activity-area", "school-density"],
+    appearanceTraits: ["school-flash", "school-shape", "surface-density"],
+    habitatClasses: [
+      "estuarine-channel",
+      "nearshore-saline-water",
+      "shallow-water",
+      "tidal-creek",
+    ],
+    movementMedia: [
+      { medium: "deep-water", relativeCapability: 850_000 },
+      { medium: "shallow-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["school", "swim"],
+    terrainAffordances: [
+      "connected-water",
+      "swimmable-deep-water",
+      "swimmable-shallow-water",
+    ],
+    consumedBy: ["aerial-predator", "marine-predator"],
+    competesWith: [],
+    ecologicalEffects: ["estuary-food-web-support", "forage-fish-support"],
+    includeDogInteraction: false,
+    groupModel: "group",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      decayOwnerId: "game:regional-breadth-cohort:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["salinity", "water-connectivity", "water-depth"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["tide-direction", "tide-height"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    health: noHealth(),
+    aboutObservableFields: ["activity-pattern", "approximate-school-size", "species"],
+  },
+  "atlantic-ghost-crab": {
+    implementation: "foundation",
+    ecologicalClasses: [
+      "beach-forager",
+      "burrower",
+      "omnivore",
+      "prey",
+      "scavenger",
+      "small-prey",
+    ],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: "game:regional-breadth-cohort:v1",
+    dynamicOverlays: ["tide-availability", "visible-activity"],
+    morphologyDimensions: ["activity-area", "population-density"],
+    appearanceTraits: ["activity-signs", "burrow-density", "surface-density"],
+    habitatClasses: ["dune-edge", "sandy-shore", "supratidal-beach", "tidal-edge"],
+    movementMedia: [
+      { medium: "land", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["emerge", "redistribute", "retreat-to-burrow"],
+    terrainAffordances: ["burrowable-sand", "land", "sandy-shore"],
+    consumedBy: ["aerial-predator", "small-predator"],
+    competesWith: [],
+    ecologicalEffects: ["bounded-shore-forage-pressure", "small-prey-support"],
+    includeDogInteraction: true,
+    groupModel: "variable",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      decayOwnerId: "game:regional-breadth-cohort:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    tide: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["tide-direction", "tide-height"],
+      outputs: ["activity-pressure", "displacement-pressure"],
+    },
+    health: noHealth(),
+    aboutObservableFields: ["activity", "evidence-kind", "evidence-scale", "species"],
+  },
+  "great-blue-heron": {
+    implementation: "foundation",
+    ecologicalClasses: ["aquatic-forager", "forager", "predator", "wader"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition", "wading-depth"],
+    morphologyDimensions: ["body-size", "plumage-state"],
+    appearanceTraits: ["blue-gray-plumage", "long-legs", "long-neck", "temperament"],
+    habitatClasses: ["estuarine-channel", "marsh", "shallow-water", "tidal-flat"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "land", relativeCapability: 720_000 },
+      { medium: "shallow-water", relativeCapability: 880_000 },
+    ],
+    movementVerbs: ["fly", "relocate", "wade"],
+    terrainAffordances: ["open-air", "standable-shallow-water", "tidal-foraging-edge"],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["nonlethal-foraging-pressure", "prey-redistribution"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["forage-edge-depth", "water-depth"],
+      outputs: ["stress"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["forage-edge-availability", "tide-direction", "tide-height"],
+      outputs: ["stress"],
+    },
+    health: noHealth(),
+    conditionAxes: [fixed("exhaustion"), fixed("stress")],
+    aboutObservableFields: ["appearance", "approximate-size", "behavior", "species"],
+  },
+  "common-tern": {
+    implementation: "foundation",
+    ecologicalClasses: ["aerial-forager", "forager", "small-predator"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-groups:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition", "visible-flock-summary"],
+    morphologyDimensions: ["body-size", "plumage-state"],
+    appearanceTraits: ["forked-tail", "plumage", "temperament", "wing-pattern"],
+    habitatClasses: ["estuarine-channel", "sandy-shore", "tidal-creek", "tidal-flat"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["fly", "perch", "plunge-dive", "relocate"],
+    terrainAffordances: ["open-air", "perch", "surface-foraging-opportunity"],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["nonlethal-aquatic-pressure"],
+    includeDogInteraction: true,
+    groupModel: "group",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    health: noHealth(),
+    conditionAxes: [fixed("exhaustion"), fixed("stress")],
+    aboutObservableFields: ["appearance", "approximate-size", "behavior", "species"],
+  },
+  osprey: {
+    implementation: "foundation",
+    ecologicalClasses: ["aerial-predator", "aquatic-forager", "forager", "predator"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition"],
+    morphologyDimensions: ["body-size", "plumage-state"],
+    appearanceTraits: ["dark-eye-stripe", "long-wings", "pale-head", "temperament"],
+    habitatClasses: ["estuarine-channel", "river-mouth", "tidal-creek", "waterside-perch"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["fly", "perch", "plunge-dive", "soar"],
+    terrainAffordances: ["open-air", "perch", "surface-foraging-opportunity"],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["nonlethal-aquatic-pressure", "prey-redistribution"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    health: noHealth(),
+    conditionAxes: [fixed("exhaustion"), fixed("stress")],
+    aboutObservableFields: ["appearance", "approximate-size", "behavior", "species"],
+  },
 });
 
 /**
@@ -2960,6 +3245,106 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     water: "available",
     weather: "intentional-no-response",
   },
+  "bay-anchovy": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
+  "atlantic-ghost-crab": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "great-blue-heron": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
+  "common-tern": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  osprey: {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
 } as const satisfies Readonly<Record<
   CoreWildlifeSpecies,
   Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
@@ -2994,13 +3379,15 @@ function coreWildlifeInteractionTargets(
 
   if (coreEcologySpeciesHasRuntimeCapability(species, "aquatic-foraging")) {
     const movementVerbs = CORE_WILDLIFE_CATALOG_VALUES[species].movementVerbs;
-    const forageVerbs = coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
-      ? movementVerbs.includes("dabble")
+    const forageVerbs = movementVerbs.includes("plunge-dive")
+      ? ["approach", "plunge-dive"]
+      : coreEcologySpeciesHasRuntimeCapability(species, "aquatic-locomotion")
+        ? movementVerbs.includes("dabble")
         ? ["approach", "dabble"]
         : movementVerbs.includes("dive")
           ? ["approach", "dive"]
           : ["approach", "forage"]
-      : ["approach", "probe"];
+        : ["approach", "probe"];
     targets.push({
       targetClass: "aquatic-animal",
       policy: "available",
@@ -4433,6 +4820,36 @@ if (
 
 export const LIVING_SPECIES_ALPHA36_CATALOG: LivingSpeciesCatalog =
   alpha36CompatibilityCatalog;
+
+const waveGEstuaryCompatibilityModules = LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS.map(
+  (speciesId) => {
+    const module = currentCatalog.modules.find((candidate) => candidate.speciesId === speciesId);
+    if (module === undefined) {
+      throw new Error(`Living Weft catalog omitted Wave-G estuary species ${speciesId}`);
+    }
+    return module;
+  },
+);
+const waveGEstuaryCompatibilityCatalog = deepFreeze({
+  version: LIVING_SPECIES_CATALOG_VERSION,
+  modules: waveGEstuaryCompatibilityModules,
+});
+const waveGEstuaryCompatibilityBytes = stableStringify(waveGEstuaryCompatibilityCatalog);
+if (
+  LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS.length
+    !== LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_COUNT
+  || hashCanonical(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS)
+    !== LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS_HASH
+  || new TextEncoder().encode(waveGEstuaryCompatibilityBytes).byteLength
+    !== LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_BYTE_LENGTH
+  || hashCanonical(waveGEstuaryCompatibilityCatalog)
+    !== LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_HASH
+) {
+  throw new Error("Living Weft Wave-G estuary catalog lineage was rewritten");
+}
+
+export const LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG: LivingSpeciesCatalog =
+  waveGEstuaryCompatibilityCatalog;
 
 /** Only implemented identity owners are present; this is deliberately not a planned roster. */
 export const LIVING_SPECIES_CATALOG: LivingSpeciesCatalog = currentCatalog;

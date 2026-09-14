@@ -31,18 +31,27 @@ import {
   deriveCoreEcologyTidalTableHabitatAssemblage,
   type CoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
+import {
+  CORE_ECOLOGY_BREADTH_DERIVATION_KIND,
+  CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
+  deriveCoreEcologyBreadthHabitat,
+} from "./coreEcologyBreadthHabitat";
 import { coreEcologySpeciesRuntimePolicy } from "./coreEcologySpeciesRuntimePolicy";
 import { stepCoreEcologySmallWorld } from "./coreEcologySmallWorld";
 import {
+  CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS,
+  coreEcologyPatchHasTidalTableAuthority,
   projectCoreEcologyTidalTable,
   stepCoreEcologyTidalTable,
 } from "./coreEcologyTidalTable";
+import { createCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
 } from "./worldPosition";
 
 const SEED = seedFromText("tidal-triad-1");
+const BREADTH_SEED = seedFromText("alpha37 estuary breadth shared properties");
 
 function focusAt(region: RegionCoord) {
   return createWorldPosition(
@@ -89,6 +98,21 @@ function tidalFixture(tick: number) {
     tick,
     populations: individualInputs(habitat),
     derivation: { kind: "habitat-v5", habitat },
+  });
+  return { habitat, originRegion, patch };
+}
+
+function breadthTidalFixture(tick: number) {
+  const originRegion = createRegionCoord(-5_179, -89_646);
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed: BREADTH_SEED,
+    region: originRegion,
+    cohortId: CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
+  });
+  const patch = createCoreEcologyBreadthResidentPatch({
+    seed: BREADTH_SEED,
+    habitat,
+    tick,
   });
   return { habitat, originRegion, patch };
 }
@@ -324,6 +348,130 @@ describe("tidal-table habitat v5", () => {
       MAX_TIDE_LEVEL - CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH + 1;
     (changed as { terrain: string }).terrain = "meadow";
     expect(canonicalizeCoreEcologyTidalTableHabitatAssemblage(corrupted)).toBeNull();
+  });
+});
+
+describe("regional breadth tidal-table adapter", () => {
+  it("owns canonical Wave-G depth and activity without making dry schools visible", () => {
+    const low = breadthTidalFixture(0);
+    const high = breadthTidalFixture(360);
+    expect(low.patch.derivation.kind).toBe(CORE_ECOLOGY_BREADTH_DERIVATION_KIND);
+    expect(coreEcologyPatchHasTidalTableAuthority(low.patch)).toBe(true);
+    expect(CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS).toBe(8);
+
+    const lowProjection = projectCoreEcologyTidalTable(low.patch, 0);
+    const highProjection = projectCoreEcologyTidalTable(high.patch, 360);
+    if (lowProjection === null || highProjection === null) {
+      throw new Error("Canonical breadth tide projection was rejected");
+    }
+    expect(lowProjection.anchorDepths).toHaveLength(8);
+    expect(highProjection.anchorDepths).toHaveLength(8);
+    expect(lowProjection.snowyEgret).toBeNull();
+    expect(highProjection.snowyEgret).toBeNull();
+
+    const depths = (
+      projection: typeof lowProjection,
+      species: "bay-anchovy" | "atlantic-ghost-crab",
+    ) => projection.anchorDepths.filter((entry) => entry.species === species);
+    const activity = (
+      projection: typeof lowProjection,
+      species: "bay-anchovy" | "atlantic-ghost-crab",
+    ) => projection.aggregateActivities.find((entry) => entry.species === species)
+      ?.intensity ?? -1;
+
+    expect(depths(lowProjection, "bay-anchovy")).toHaveLength(4);
+    expect(depths(lowProjection, "bay-anchovy").some(({ activityUsable }) => (
+      activityUsable
+    ))).toBe(true);
+    expect(depths(lowProjection, "bay-anchovy").some(({ activityUsable }) => (
+      !activityUsable
+    ))).toBe(true);
+    expect(activity(lowProjection, "bay-anchovy")).toBeGreaterThan(0);
+    expect(activity(highProjection, "bay-anchovy")).toBeGreaterThan(0);
+
+    expect(depths(lowProjection, "atlantic-ghost-crab")).toHaveLength(4);
+    expect(depths(lowProjection, "atlantic-ghost-crab").every(({ activityUsable }) => (
+      activityUsable
+    ))).toBe(true);
+    expect(activity(lowProjection, "atlantic-ghost-crab")).toBeGreaterThan(
+      activity(highProjection, "atlantic-ghost-crab"),
+    );
+    expect(activity(highProjection, "atlantic-ghost-crab")).toBe(0);
+  });
+
+  it("normalizes dry anchors at construction and keeps same-tick tide steps idempotent", () => {
+    for (const tick of [0, 360] as const) {
+      const { patch } = breadthTidalFixture(tick);
+      const before = new Map(patch.aggregatePopulations.map((population) => [
+        population.species,
+        {
+          aggregateId: population.aggregateId,
+          populationSize: population.populationSize,
+        },
+      ]));
+      const result = stepCoreEcologyTidalTable(patch, { atTick: tick });
+      if (result === null) throw new Error(`Breadth tide step ${tick} was rejected`);
+      expect(result).toMatchObject({
+        mortality: "none",
+        cargoInteraction: false,
+        itemConsumption: "none",
+      });
+      if (tick === 0) {
+        const projection = projectCoreEcologyTidalTable(patch, tick);
+        const anchovy = result.patch.aggregatePopulations.find(({ species }) => (
+          species === "bay-anchovy"
+        ));
+        if (projection === null || anchovy === undefined) {
+          throw new Error("Breadth low-tide refuge fixture was lost");
+        }
+        const usable = new Set(projection.anchorDepths.filter((entry) => (
+          entry.species === "bay-anchovy" && entry.activityUsable
+        )).map(({ anchorOrdinal }) => anchorOrdinal));
+        expect(result.redistributions).toEqual([]);
+        expect(patch.aggregatePopulations.find(({ species }) => (
+          species === "bay-anchovy"
+        ))?.anchors.filter(({ anchorOrdinal }) => (
+          !usable.has(anchorOrdinal)
+        )).every(({ populationUnits }) => populationUnits === 0)).toBe(true);
+        expect(anchovy.anchors.filter(({ anchorOrdinal }) => (
+          !usable.has(anchorOrdinal)
+        )).every(({ populationUnits }) => populationUnits === 0)).toBe(true);
+      }
+      expect(result.redistributions.every(({ nonlethal }) => nonlethal)).toBe(true);
+      for (const population of result.patch.aggregatePopulations) {
+        const baseline = before.get(population.species);
+        expect(baseline).toBeDefined();
+        expect(population.aggregateId).toBe(baseline?.aggregateId);
+        expect(population.populationSize).toBe(baseline?.populationSize);
+        expect(population.anchors.reduce(
+          (sum, anchor) => sum + anchor.populationUnits,
+          0,
+        )).toBe(baseline?.populationSize);
+      }
+      expect(result.patch.populations.some(({ species }) => (
+        species === "bay-anchovy" || species === "atlantic-ghost-crab"
+      ))).toBe(false);
+    }
+  });
+
+  it("fails malformed breadth authority closed while retaining the v5 adapter", () => {
+    const breadth = breadthTidalFixture(0);
+    const malformed = structuredClone(breadth.patch);
+    if (malformed.derivation.kind !== CORE_ECOLOGY_BREADTH_DERIVATION_KIND) {
+      throw new Error("Missing breadth derivation fixture");
+    }
+    const changed = malformed.derivation.habitat.tidalAnchors[0];
+    if (changed === undefined) throw new Error("Missing breadth tidal anchor");
+    (changed as { elevation: number }).elevation += 1;
+
+    expect(canonicalizeCoreEcologyAggregatePatch(malformed)).toBeNull();
+    expect(coreEcologyPatchHasTidalTableAuthority(malformed)).toBe(false);
+    expect(projectCoreEcologyTidalTable(malformed, 0)).toBeNull();
+    expect(stepCoreEcologyTidalTable(malformed, { atTick: 0 })).toBeNull();
+
+    const legacy = tidalFixture(0).patch;
+    expect(coreEcologyPatchHasTidalTableAuthority(legacy)).toBe(true);
+    expect(projectCoreEcologyTidalTable(legacy, 0)).not.toBeNull();
   });
 });
 

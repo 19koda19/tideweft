@@ -55,6 +55,7 @@ interface LivingSpeciesRegistryInput<Species extends string = string> {
     | "CROW-FLOCK"
     | "SILVERSIDE-SCHOOL"
     | "CAPELIN-SCHOOL"
+    | "BAYANCHOVY-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -339,6 +340,51 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       hearingSensitivity: 900_000,
       scentSensitivity: ACTOR_PERCEPTION_SCALE,
       scentBaseRangeUnits: 56_000,
+    },
+  },
+  "bay-anchovy": {
+    aboutNoun: "bay anchovy school",
+    senses: {
+      visionAcuity: 760_000,
+      hearingSensitivity: 720_000,
+      scentSensitivity: 650_000,
+      scentBaseRangeUnits: 10_000,
+    },
+  },
+  "atlantic-ghost-crab": {
+    aboutNoun: "Atlantic ghost crab activity",
+    senses: {
+      visionAcuity: 720_000,
+      hearingSensitivity: 760_000,
+      scentSensitivity: 720_000,
+      scentBaseRangeUnits: 8_000,
+    },
+  },
+  "great-blue-heron": {
+    aboutNoun: "great blue heron",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 720_000,
+      scentSensitivity: 100_000,
+      scentBaseRangeUnits: 6_000,
+    },
+  },
+  "common-tern": {
+    aboutNoun: "common tern",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 780_000,
+      scentSensitivity: 80_000,
+      scentBaseRangeUnits: 4_000,
+    },
+  },
+  osprey: {
+    aboutNoun: "osprey",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 760_000,
+      scentSensitivity: 80_000,
+      scentBaseRangeUnits: 4_000,
     },
   },
 });

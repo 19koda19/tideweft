@@ -251,10 +251,10 @@ export type WildlifeWorldPositionDirectDetail = DirectEvidenceDetail;
 
 type WildlifePresentationForm =
   | "deer"
-  | "gull-flock"
+  | "shorebird-flock"
   | "fish-crow-flock"
   | "northern-harrier"
-  | "snowy-egret"
+  | "long-necked-wader"
   | "american-black-duck"
   | "domestic-chicken"
   | "domestic-goat"
@@ -274,11 +274,13 @@ type WildlifePresentationForm =
   | "polar-bear"
   | "mountain-goat"
   | "american-pika"
-  | "golden-eagle"
+  | "broad-winged-raptor"
   | "southern-leopard-frog"
   | "atlantic-silverside"
   | "atlantic-marsh-fiddler-crab"
-  | "atlantic-capelin";
+  | "atlantic-capelin"
+  | "bay-anchovy"
+  | "atlantic-ghost-crab";
 
 interface WildlifeSpeciesPresentationDescriptor {
   readonly form: WildlifePresentationForm;
@@ -314,7 +316,7 @@ const PRESENTATION_BY_SPECIES: Readonly<
     observableForm: null,
   },
   gull: {
-    form: "gull-flock",
+    form: "shorebird-flock",
     representation: "actor",
     identificationClarity: 220_000,
     unidentifiedQuickLabel: "Unknown birds",
@@ -439,6 +441,76 @@ const PRESENTATION_BY_SPECIES: Readonly<
     baseSizeScale: 1.68,
     observableForm: "Massive pale bear with a long neck and high shoulders",
   },
+  "bay-anchovy": {
+    form: "bay-anchovy",
+    representation: "population-area",
+    identificationClarity: 520_000,
+    unidentifiedQuickLabel: "Aquatic activity",
+    unidentifiedIdentityLabel: "Unidentified aquatic activity",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.3,
+    observableForm: null,
+  },
+  "atlantic-ghost-crab": {
+    form: "atlantic-ghost-crab",
+    representation: "population-area",
+    identificationClarity: 520_000,
+    unidentifiedQuickLabel: "Shoreline activity",
+    unidentifiedIdentityLabel: "Unidentified shoreline activity",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.29,
+    observableForm: null,
+  },
+  "great-blue-heron": {
+    form: "long-necked-wader",
+    representation: "actor",
+    identificationClarity: 350_000,
+    unidentifiedQuickLabel: "Unknown large wader",
+    unidentifiedIdentityLabel: "Unidentified large wading bird",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "plumage",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1.08,
+    observableForm: "Tall, long-necked wader with a heavy dagger-like bill",
+  },
+  "common-tern": {
+    form: "shorebird-flock",
+    representation: "actor",
+    identificationClarity: 340_000,
+    unidentifiedQuickLabel: "Unknown seabirds",
+    unidentifiedIdentityLabel: "Unidentified seabirds",
+    identifiedNounNumber: "plural",
+    groupNoun: "flock",
+    appearanceStyle: "plumage",
+    conditionStyle: "flock",
+    exposesLifeStage: false,
+    baseSizeScale: 0.56,
+    observableForm: "Slender, pointed-winged seabirds with forked tails",
+  },
+  osprey: {
+    form: "broad-winged-raptor",
+    representation: "actor",
+    identificationClarity: 420_000,
+    unidentifiedQuickLabel: "Unknown large raptor",
+    unidentifiedIdentityLabel: "Unidentified large raptor",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "plumage",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 1,
+    observableForm: "Large, long-winged raptor with a pale head and bent wings",
+  },
   "fish-crow": {
     form: "fish-crow-flock",
     representation: "actor",
@@ -524,7 +596,7 @@ const PRESENTATION_BY_SPECIES: Readonly<
     observableForm: null,
   },
   "snowy-egret": {
-    form: "snowy-egret",
+    form: "long-necked-wader",
     representation: "actor",
     identificationClarity: 330_000,
     unidentifiedQuickLabel: "Unknown wader",
@@ -692,7 +764,7 @@ const PRESENTATION_BY_SPECIES: Readonly<
     observableForm: null,
   },
   "golden-eagle": {
-    form: "golden-eagle",
+    form: "broad-winged-raptor",
     representation: "actor",
     identificationClarity: 430_000,
     unidentifiedQuickLabel: "Unknown large raptor",
@@ -766,6 +838,50 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
         identifiedLabel: "Brown rat tracks",
         unidentifiedLabel: "Small tracks",
         sizeScale: 0.72,
+      },
+    },
+  },
+  "bay-anchovy": {
+    // Surface dimples cannot distinguish one small estuary school from
+    // another. A future learned-identity receipt may name it; eyesight alone
+    // remains anonymous at every clarity.
+    identification: "learned-identity",
+    identifiedQuickLabel: "Bay anchovy school signs",
+    unidentifiedQuickLabel: "Aquatic activity",
+    identifiedIdentityLabel: "Bay anchovy school signs",
+    unidentifiedIdentityLabel: "Unidentified aquatic activity",
+    byKind: {
+      "surface-dimple": {
+        form: "surface-dimples",
+        minimumClarity: 280_000,
+        identifiedLabel: "Bay anchovy surface dimples and school glints",
+        unidentifiedLabel: "Aquatic surface dimples and brief glints",
+        sizeScale: 1,
+      },
+    },
+  },
+  "atlantic-ghost-crab": {
+    // Burrows and feeding scrapes are observable, but species authorship is
+    // not granted by shape alone beside other shore crabs.
+    identification: "learned-identity",
+    identifiedQuickLabel: "Atlantic ghost crab signs",
+    unidentifiedQuickLabel: "Shoreline signs",
+    identifiedIdentityLabel: "Atlantic ghost crab area signs",
+    unidentifiedIdentityLabel: "Unidentified shoreline activity",
+    byKind: {
+      "burrow-opening": {
+        form: "burrow-openings",
+        minimumClarity: 300_000,
+        identifiedLabel: "Atlantic ghost crab burrow openings",
+        unidentifiedLabel: "Small shoreline burrow openings",
+        sizeScale: 0.9,
+      },
+      "feeding-scrape": {
+        form: "feeding-scrapes",
+        minimumClarity: 340_000,
+        identifiedLabel: "Atlantic ghost crab feeding scrapes",
+        unidentifiedLabel: "Fine shoreline feeding scrapes",
+        sizeScale: 0.86,
       },
     },
   },

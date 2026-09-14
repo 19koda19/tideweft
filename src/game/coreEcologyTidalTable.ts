@@ -16,6 +16,10 @@ import {
   CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH,
 } from "./coreEcologyHabitat";
 import {
+  CORE_ECOLOGY_BREADTH_DERIVATION_KIND,
+  canonicalizeCoreEcologyBreadthHabitat,
+} from "./coreEcologyBreadthHabitat";
+import {
   CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES,
   coreEcologyTidalAnchorActivityUsable,
   coreEcologyTidalEvacuationDestinationOrdinal,
@@ -31,7 +35,8 @@ export type { CoreEcologyTidalAggregateSpecies } from "./coreEcologyTidalAggrega
 export const CORE_ECOLOGY_TIDAL_TABLE_VERSION = 1 as const;
 export const CORE_ECOLOGY_TIDAL_TABLE_OWNER_ID =
   "game:core-ecology-tidal-table:v1" as const;
-export const CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS = 7 as const;
+/** Four anchovy-school plus four ghost-crab anchors in one breadth patch. */
+export const CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS = 8 as const;
 /**
  * Maximum number of tide cycles needed to prove that an aggregate-only patch
  * has entered a repeatable physical cycle before dormant reconciliation fails
@@ -112,6 +117,28 @@ export interface CoreEcologyTidalTableStepResult {
   readonly itemConsumption: "none";
 }
 
+interface CoreEcologyTidalHabitatPopulationLike {
+  readonly species: string;
+  readonly populationKey: string;
+  readonly populationUnits: number;
+  readonly activitySignal: Readonly<{ readonly intensity: number }>;
+}
+
+interface CoreEcologyTidalHabitatAnchorLike {
+  readonly species: string;
+  readonly purpose: string;
+  readonly anchorOrdinal: number;
+  readonly position: WorldPosition;
+  readonly elevation: number;
+}
+
+interface CoreEcologyTidalHabitatAdapter {
+  readonly populations: readonly CoreEcologyTidalHabitatPopulationLike[];
+  readonly tidalAnchors: readonly CoreEcologyTidalHabitatAnchorLike[];
+  /** Legacy habitat families own the snowy-egret wading/refuge contract. */
+  readonly snowyEgretAuthority: boolean;
+}
+
 /**
  * Reports whether a canonical patch owns the saved elevation/anchor metadata
  * required by the tidal-table transaction. Regional habitat v1 has a compact
@@ -124,7 +151,7 @@ export function coreEcologyPatchHasTidalTableAuthority(
   patchValue: unknown,
 ): boolean {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
-  return patch !== null && isTidalHabitatDerivation(patch);
+  return patch !== null && coreEcologyTidalHabitatAdapter(patch) !== null;
 }
 
 /**
@@ -139,14 +166,14 @@ export function projectCoreEcologyTidalTable(
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   if (
     patch === null ||
-    !isTidalHabitatDerivation(patch) ||
     !nonnegativeSafeInteger(atTickValue) ||
     atTickValue < patch.updatedAtTick ||
     atTickValue - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
   )
     return null;
+  const habitat = coreEcologyTidalHabitatAdapter(patch);
+  if (habitat === null) return null;
   const tide = tideAtTick(atTickValue);
-  const habitat = patch.derivation.habitat;
   const anchorDepths: CoreEcologyTidalAnchorDepth[] = [];
   for (const { species } of CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES) {
     const population = patch.aggregatePopulations.find(
@@ -190,11 +217,12 @@ export function projectCoreEcologyTidalTable(
   anchorDepths.sort(compareDepthAddress);
   const aggregateActivities = projectAggregateActivities(
     patch,
+    habitat,
     anchorDepths,
     tide.direction,
   );
   if (aggregateActivities === null) return null;
-  const snowyEgret = projectSnowyEgretTidalActivity(patch, tide.level);
+  const snowyEgret = projectSnowyEgretTidalActivity(patch, habitat, tide.level);
   if (snowyEgret === undefined) return null;
   return deepFreeze({
     version: CORE_ECOLOGY_TIDAL_TABLE_VERSION,
@@ -228,6 +256,8 @@ export function stepCoreEcologyTidalTable(
     return null;
   const projection = projectCoreEcologyTidalTable(patch, inputValue.atTick);
   if (projection === null) return null;
+  const habitat = coreEcologyTidalHabitatAdapter(patch);
+  if (habitat === null) return null;
   const tideReference = `tidal-table:v1:${projection.tide.phase.toString(36)}:${
     projection.tide.direction > 0 ? "rising" : "falling"
   }`;
@@ -247,7 +277,6 @@ export function stepCoreEcologyTidalTable(
       policy.species,
       populationDepths,
     );
-    if (refugeOrdinal === null) return null;
     const drySources = populationDepths
       .filter(
         ({ waterDepth, anchorOrdinal }) =>
@@ -255,7 +284,9 @@ export function stepCoreEcologyTidalTable(
           (initialPopulation.anchors[anchorOrdinal]?.populationUnits ?? 0) > 0,
       )
       .sort((left, right) => left.anchorOrdinal - right.anchorOrdinal);
+    if (refugeOrdinal === null && drySources.length > 0) return null;
     for (const source of drySources) {
+      if (refugeOrdinal === null) return null;
       const current = nextPatch.aggregatePopulations.find(
         ({ aggregateId }) => aggregateId === initialPopulation.aggregateId,
       );
@@ -323,13 +354,14 @@ export function stepCoreEcologyTidalTable(
       (candidate) => candidate.species === species,
     );
     if (population === undefined) continue;
-    if (!isTidalHabitatDerivation(patch)) return null;
-    const habitat = patch.derivation.habitat.populations.find(
+    const habitatPopulation = habitat.populations.find(
       (analysis) =>
         analysis.species === species &&
         analysis.populationKey === population.populationKey,
     );
-    if (habitat === undefined || habitat.populationUnits === 0) return null;
+    if (habitatPopulation === undefined || habitatPopulation.populationUnits === 0) {
+      return null;
+    }
     const depths = projection.anchorDepths.filter(
       ({ aggregateId }) => aggregateId === population.aggregateId,
     );
@@ -337,7 +369,7 @@ export function stepCoreEcologyTidalTable(
     if (averageDepth === null) return null;
     const intensity = resolveCoreEcologyTidalAggregateActivity(
       species,
-      habitat.activitySignal.intensity,
+      habitatPopulation.activitySignal.intensity,
       averageDepth,
       projection.tide.direction,
       depths.some(
@@ -393,7 +425,7 @@ export function advanceCoreEcologyDormantTidalTable(
   const canonical = canonicalizeCoreEcologyAggregatePatch(patchValue);
   if (
     canonical === null ||
-    !isTidalHabitatDerivation(canonical) ||
+    coreEcologyTidalHabitatAdapter(canonical) === null ||
     !plainRecord(inputValue) ||
     !exactKeys(inputValue, ["atTick"]) ||
     !nonnegativeSafeInteger(inputValue.atTick) ||
@@ -547,7 +579,10 @@ export function nextCoreEcologyDormantTidalOperationTick(
   patch: CoreEcologyAggregatePatchState,
   targetTick: number,
 ): number | null {
-  if (!isTidalHabitatDerivation(patch) || targetTick <= patch.updatedAtTick) {
+  if (
+    coreEcologyTidalHabitatAdapter(patch) === null
+    || targetTick <= patch.updatedAtTick
+  ) {
     return null;
   }
   let nextTick = targetTick;
@@ -581,28 +616,35 @@ function patchHasOccupiedUnusableTidalAnchorAtTick(
   patch: CoreEcologyAggregatePatchState,
   atTick: number,
 ): boolean {
-  if (!isTidalHabitatDerivation(patch)) return true;
+  const habitat = coreEcologyTidalHabitatAdapter(patch);
+  if (habitat === null) return true;
   const tide = tideAtTick(atTick);
   for (const population of patch.aggregatePopulations) {
     const policy = CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES.find(
       ({ species }) => species === population.species,
     );
     if (policy?.redistribution?.evacuateUnusableAnchors !== true) continue;
-    for (const anchor of population.anchors) {
-      if (anchor.populationUnits === 0) continue;
-      const saved = patch.derivation.habitat.tidalAnchors.find(
+    const resolved = population.anchors.map((anchor) => {
+      const saved = habitat.tidalAnchors.find(
         (candidate) =>
           candidate.species === population.species &&
           candidate.purpose === "population" &&
           candidate.anchorOrdinal === anchor.anchorOrdinal,
       );
+      const usable = saved !== undefined
+        && samePosition(saved.position, anchor.position)
+        && coreEcologyTidalAnchorActivityUsable(
+          population.species,
+          Math.max(0, tide.level - saved.elevation),
+        );
+      return { anchor, saved, usable };
+    });
+    for (const { anchor, saved, usable } of resolved) {
+      if (anchor.populationUnits === 0) continue;
       if (
         saved === undefined ||
         !samePosition(saved.position, anchor.position) ||
-        !coreEcologyTidalAnchorActivityUsable(
-          population.species,
-          Math.max(0, tide.level - saved.elevation),
-        )
+        !usable
       ) {
         return true;
       }
@@ -814,16 +856,17 @@ export function compactCoreEcologyDormantAggregateCycles(
 
 function projectSnowyEgretTidalActivity(
   patch: CoreEcologyAggregatePatchState,
+  habitat: CoreEcologyTidalHabitatAdapter,
   tideLevel: number,
 ): CoreEcologySnowyEgretTidalActivity | null | undefined {
-  if (!isTidalHabitatDerivation(patch)) return undefined;
+  if (!habitat.snowyEgretAuthority) return null;
   const population = patch.populations.find(
     ({ species }) => species === "snowy-egret",
   );
-  const habitatPopulation = patch.derivation.habitat.populations.find(
+  const habitatPopulation = habitat.populations.find(
     ({ species }) => species === "snowy-egret",
   );
-  const anchors = patch.derivation.habitat.tidalAnchors.filter(
+  const anchors = habitat.tidalAnchors.filter(
     ({ species }) => species === "snowy-egret",
   );
   if (population === undefined) {
@@ -886,22 +929,24 @@ function projectSnowyEgretTidalActivity(
 
 function projectAggregateActivities(
   patch: CoreEcologyAggregatePatchState,
+  habitat: CoreEcologyTidalHabitatAdapter,
   depths: readonly CoreEcologyTidalAnchorDepth[],
   tideDirection: -1 | 1,
 ): readonly CoreEcologyTidalAggregateActivity[] | null {
-  if (!isTidalHabitatDerivation(patch)) return null;
   const activities: CoreEcologyTidalAggregateActivity[] = [];
   for (const { species } of CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES) {
     const population = patch.aggregatePopulations.find(
       (candidate) => candidate.species === species,
     );
     if (population === undefined) continue;
-    const habitat = patch.derivation.habitat.populations.find(
+    const habitatPopulation = habitat.populations.find(
       (analysis) =>
         analysis.species === species &&
         analysis.populationKey === population.populationKey,
     );
-    if (habitat === undefined || habitat.populationUnits === 0) return null;
+    if (habitatPopulation === undefined || habitatPopulation.populationUnits === 0) {
+      return null;
+    }
     const populationDepths = depths.filter(
       ({ aggregateId }) => aggregateId === population.aggregateId,
     );
@@ -909,7 +954,7 @@ function projectAggregateActivities(
     if (averageDepth === null) return null;
     const intensity = resolveCoreEcologyTidalAggregateActivity(
       species,
-      habitat.activitySignal.intensity,
+      habitatPopulation.activitySignal.intensity,
       averageDepth,
       tideDirection,
       populationDepths.some(
@@ -962,7 +1007,35 @@ function compareDepthAddress(
       : left.anchorOrdinal - right.anchorOrdinal;
 }
 
-function isTidalHabitatDerivation(
+/**
+ * Normalizes the two canonical habitat families that own tidal metadata.
+ * Breadth habitats are independently re-canonicalized at this boundary so an
+ * untrusted derivation cannot acquire tide authority through its kind string.
+ */
+function coreEcologyTidalHabitatAdapter(
+  patch: CoreEcologyAggregatePatchState,
+): CoreEcologyTidalHabitatAdapter | null {
+  if (patch.derivation.kind === CORE_ECOLOGY_BREADTH_DERIVATION_KIND) {
+    const habitat = canonicalizeCoreEcologyBreadthHabitat(
+      patch.derivation.habitat,
+    );
+    return habitat === null
+      ? null
+      : Object.freeze({
+          populations: habitat.populations,
+          tidalAnchors: habitat.tidalAnchors,
+          snowyEgretAuthority: false,
+        });
+  }
+  if (!isLegacyTidalHabitatDerivation(patch)) return null;
+  return Object.freeze({
+    populations: patch.derivation.habitat.populations,
+    tidalAnchors: patch.derivation.habitat.tidalAnchors,
+    snowyEgretAuthority: true,
+  });
+}
+
+function isLegacyTidalHabitatDerivation(
   patch: CoreEcologyAggregatePatchState,
 ): patch is CoreEcologyAggregatePatchState &
   Readonly<{

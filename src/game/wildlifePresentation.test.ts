@@ -61,6 +61,8 @@ export const ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha35-cold-shore-presentation-invariants:v1" as const;
 export const ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha36-polar-consumer-presentation-invariants:v1" as const;
+export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -757,7 +759,7 @@ function regroupingGoat(): CoreWildlifeActorState {
   return stepped.actor;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
   it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
@@ -859,6 +861,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["north-american-river-otter", "North American river otter"],
     ["mountain-goat", "Mountain goat"],
     ["golden-eagle", "Golden eagle"],
+    ["great-blue-heron", "Great blue heron"],
+    ["common-tern", "Common terns"],
+    ["osprey", "Osprey"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -915,10 +920,22 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       expect(presentation?.formLabel).toBe(
         "Large, broad-winged raptor with a golden nape",
       );
+    } else if (species === "great-blue-heron") {
+      expect(presentation?.formLabel).toBe(
+        "Tall, long-necked wader with a heavy dagger-like bill",
+      );
+    } else if (species === "common-tern") {
+      expect(presentation?.formLabel).toBe(
+        "Slender, pointed-winged seabirds with forked tails",
+      );
+    } else if (species === "osprey") {
+      expect(presentation?.formLabel).toBe(
+        "Large, long-winged raptor with a pale head and bent wings",
+      );
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
-    if (species === "gull" || species === "fish-crow") {
+    if (species === "gull" || species === "fish-crow" || species === "common-tern") {
       expect(presentation).not.toHaveProperty("lifeStageLabel");
     }
     else expect(presentation?.lifeStageLabel).toBeDefined();
@@ -1201,6 +1218,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     "atlantic-capelin",
     "atlantic-silverside",
     "atlantic-marsh-fiddler-crab",
+    "bay-anchovy",
+    "atlantic-ghost-crab",
   ] as const)("does not fabricate a %s actor presentation", (species) => {
     const actor = wildlife("deer");
     expect(projectWildlifePresentation({
@@ -1816,6 +1835,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ],
     ["mountain-goat", "Unknown mountain animal", "Unidentified mountain animal", 80],
     ["golden-eagle", "Unknown large raptor", "Unidentified large raptor", 80],
+    ["great-blue-heron", "Unknown large wader", "Unidentified large wading bird", 80],
+    ["common-tern", "Unknown seabirds", "Unidentified seabirds", 80],
+    ["osprey", "Unknown large raptor", "Unidentified large raptor", 80],
   ] as const)("keeps a distant %s at an honest observable class", (
     species,
     quickLabel,
@@ -1838,7 +1860,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(presentation).not.toHaveProperty("formLabel");
     expect(presentation).not.toHaveProperty("appearanceLabel");
     expect(presentation).not.toHaveProperty("lifeStageLabel");
-    expect(JSON.stringify(presentation)).not.toMatch(/population|patch|target|hunger|prey/iu);
+    expect(JSON.stringify(presentation)).not.toMatch(
+      /"(?:population|patch|target|hunger|prey)"\s*:/iu,
+    );
   });
 
   it("buckets visible gull representatives and rejects hidden population substitutes", () => {

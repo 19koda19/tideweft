@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { isLivingSpeciesActorAddressable } from "./livingSpeciesRegistry";
 import {
+  CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES,
   CORE_ECOLOGY_AGGREGATE_SPECIES,
   coreEcologyAggregateDisturbanceEvidenceKind,
   coreEcologyAggregateSpeciesPolicy,
@@ -10,6 +11,7 @@ import {
   resolveCoreEcologyAggregateDisturbanceActivity,
   type CoreEcologyAggregatePolicyDisturbanceCause,
 } from "./coreEcologyAggregatePolicy";
+import { coreEcologySpeciesRuntimePolicy } from "./coreEcologySpeciesRuntimePolicy";
 
 export const ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT =
   "test:alpha33-alpine-shared-activity:v1" as const;
@@ -26,6 +28,30 @@ const ALPHA33_AGGREGATE_PREFIX = [
   "american-pika",
 ] as const;
 
+const ALPHA36_AGGREGATE_PREFIX = [
+  ...ALPHA33_AGGREGATE_PREFIX,
+  "atlantic-capelin",
+] as const;
+
+const WAVE_G_ESTUARY_AGGREGATES = Object.freeze([
+  Object.freeze({
+    species: "bay-anchovy" as const,
+    stableIdPrefix: "BAYANCHOVY-SCHOOL-v1-" as const,
+    representation: "group-actor" as const,
+    activityKind: "schooling-glint" as const,
+    evidenceKinds: Object.freeze(["surface-dimple"] as const),
+    tideResponse: "flood-active" as const,
+  }),
+  Object.freeze({
+    species: "atlantic-ghost-crab" as const,
+    stableIdPrefix: "GHOSTCRAB-AREA-v1-" as const,
+    representation: "aggregate-area" as const,
+    activityKind: "burrow-foraging" as const,
+    evidenceKinds: Object.freeze(["burrow-opening", "feeding-scrape"] as const),
+    tideResponse: "ebb-active" as const,
+  }),
+] as const);
+
 const DISTURBANCE_CAUSES: readonly CoreEcologyAggregatePolicyDisturbanceCause[] = [
   "animal-disturbance",
   "food-attraction",
@@ -35,16 +61,51 @@ const DISTURBANCE_CAUSES: readonly CoreEcologyAggregatePolicyDisturbanceCause[] 
   "weather-pressure",
 ];
 
-describe("Wave F aggregate policy composition", () => {
-  it("appends pika without rewriting the Alpha 32 aggregate order", () => {
+describe("core ecology aggregate policy composition", () => {
+  it("preserves every frozen aggregate prefix before appending Wave G", () => {
     expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(0, ALPHA32_AGGREGATE_PREFIX.length))
       .toEqual(ALPHA32_AGGREGATE_PREFIX);
     expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(0, ALPHA33_AGGREGATE_PREFIX.length))
       .toEqual(ALPHA33_AGGREGATE_PREFIX);
-    expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(ALPHA33_AGGREGATE_PREFIX.length))
-      .toEqual(["atlantic-capelin"]);
+    expect(CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES).toEqual(ALPHA36_AGGREGATE_PREFIX);
+    expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(0, ALPHA36_AGGREGATE_PREFIX.length))
+      .toEqual(ALPHA36_AGGREGATE_PREFIX);
+    expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(ALPHA36_AGGREGATE_PREFIX.length))
+      .toEqual(WAVE_G_ESTUARY_AGGREGATES.map(({ species }) => species));
     expect(isCoreEcologyAggregateSpecies("american-pika")).toBe(true);
     expect(isLivingSpeciesActorAddressable("american-pika")).toBe(false);
+  });
+
+  it("composes both estuary aggregates through the same bounded policy invariants", () => {
+    for (const expected of WAVE_G_ESTUARY_AGGREGATES) {
+      expect(isCoreEcologyAggregateSpecies(expected.species)).toBe(true);
+      expect(isLivingSpeciesActorAddressable(expected.species)).toBe(false);
+
+      const aggregatePolicy = coreEcologyAggregateSpeciesPolicy(expected.species);
+      const runtimePolicy = coreEcologySpeciesRuntimePolicy(expected.species);
+      if (runtimePolicy === null) {
+        throw new Error(`Missing runtime policy for ${expected.species}`);
+      }
+      expect(aggregatePolicy).toMatchObject({
+        stableIdPrefix: expected.stableIdPrefix,
+        representation: expected.representation,
+        maximumAnchors: 4,
+        activity: {
+          kind: expected.activityKind,
+          activePeriod: "tide-responsive",
+          baselineProjection: "preserve",
+          perceivedPressureResponse: "preserve",
+        },
+        initialEvidenceKinds: expected.evidenceKinds,
+        exposedFoodAttraction: false,
+        rainSensitive: false,
+        tideResponse: expected.tideResponse,
+      });
+      expect(runtimePolicy.actorAddressable).toBe(false);
+      expect(runtimePolicy.capabilities).toContain("aggregate-response");
+      expect(runtimePolicy.aggregate?.maximumAnchors).toBe(aggregatePolicy.maximumAnchors);
+      expect(runtimePolicy.evidenceKinds).toEqual(aggregatePolicy.initialEvidenceKinds);
+    }
   });
 
   it("appends capelin as a conserved school aggregate with a distinct namespace", () => {

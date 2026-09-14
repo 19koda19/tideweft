@@ -11,6 +11,7 @@ import type {
   WildlifeView,
 } from "./types";
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
+import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
   "test:alpha31-predator-presentation-invariants:v1" as const;
@@ -18,6 +19,8 @@ export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha33-alpine-presentation-invariants:v1" as const;
 export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha34-polar-presentation-invariants:v1" as const;
+export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
 
 const p5Harness = vi.hoisted(() => ({
   canvasFactory: null as null | (() => unknown),
@@ -367,7 +370,7 @@ function dogView(overrides: Partial<DogView> = {}): DogView {
   };
 }
 
-type IndividualWildlifeViewSpecies = WildlifeView["species"];
+type IndividualWildlifeViewSpecies = WildlifeVisualSpecies;
 
 function wildlifeView(
   species: IndividualWildlifeViewSpecies,
@@ -397,6 +400,9 @@ function wildlifeView(
     "brown-bear": "Brown bear",
     "mountain-goat": "Mountain goat",
     "golden-eagle": "Golden eagle",
+    "great-blue-heron": "Great blue heron",
+    "common-tern": "Common terns",
+    osprey: "Osprey",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -422,6 +428,9 @@ function wildlifeView(
     "brown-bear": "BROWNBEAR-",
     "mountain-goat": "MOUNTAINGOAT-",
     "golden-eagle": "GOLDENEAGLE-",
+    "great-blue-heron": "BLUEHERON-",
+    "common-tern": "COMMONTERN-",
+    osprey: "OSPREY-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -436,7 +445,13 @@ function wildlifeView(
         ? "cream-white"
         : species === "golden-eagle"
           ? "golden-naped"
-          : "test-visible-morph",
+          : species === "great-blue-heron"
+            ? "blue-gray"
+            : species === "common-tern"
+              ? "black-capped-gray"
+              : species === "osprey"
+                ? "pale-headed"
+                : "test-visible-morph",
     behavior: "watch",
     conditionLabels: [],
     selected: false,
@@ -1488,7 +1503,7 @@ describe("Relief physical wildlife remains", () => {
   });
 });
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} Relief wildlife presentation`, () => {
   it("renders and touch-selects aggregate population evidence without an actor target", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-rat-evidence", { x: 48, y: 48 });
@@ -1625,17 +1640,25 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   });
 
   it.each([
-    ["atlantic-silverside", "surface-dimples", "#55c7dc", "torus"],
-    ["atlantic-capelin", "surface-dimples", "#55c7dc", "torus"],
-    ["atlantic-marsh-fiddler-crab", "burrow-openings", "#4c392b", "torus"],
-    ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "#735b43", "line"],
-    ["american-pika", "haypile", "#737848", "ellipsoid"],
-    ["american-pika", "talus-sign", "#777b73", "cone"],
+    ["atlantic-silverside", "surface-dimples", "#55c7dc", "torus", "Atlantic silverside signs", "Atlantic silverside school signs", "Silverside surface dimples and school glints", true, "deep-water"],
+    ["atlantic-capelin", "surface-dimples", "#55c7dc", "torus", "Aquatic activity", "Unidentified aquatic activity", "Aquatic surface dimples and brief glints", false, "deep-water"],
+    ["bay-anchovy", "surface-dimples", "#55c7dc", "torus", "Aquatic activity", "Unidentified aquatic activity", "Aquatic surface dimples and brief glints", false, "deep-water"],
+    ["atlantic-marsh-fiddler-crab", "burrow-openings", "#4c392b", "torus", "Atlantic marsh fiddler crab signs", "Atlantic marsh fiddler crab area signs", "Fiddler crab burrow openings", true, "mudflat"],
+    ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "#735b43", "line", "Atlantic marsh fiddler crab signs", "Atlantic marsh fiddler crab area signs", "Fiddler crab feeding scrapes", true, "mudflat"],
+    ["atlantic-ghost-crab", "burrow-openings", "#4c392b", "torus", "Shoreline signs", "Unidentified shoreline activity", "Small shoreline burrow openings", false, "mudflat"],
+    ["atlantic-ghost-crab", "feeding-scrapes", "#735b43", "line", "Shoreline signs", "Unidentified shoreline activity", "Fine shoreline feeding scrapes", false, "mudflat"],
+    ["american-pika", "haypile", "#737848", "ellipsoid", "American pika signs", "American pika population signs", "American pika haypile", true, "ridge"],
+    ["american-pika", "talus-sign", "#777b73", "cone", "American pika signs", "American pika population signs", "American pika talus sign", true, "ridge"],
   ] as const)("renders and pointer-selects low-cost %s %s without an actor alias", (
     species,
     form,
     primary,
     structuralMethod,
+    quickLabel,
+    identityLabel,
+    evidenceLabel,
+    speciesIdentified,
+    terrainKind,
   ) => {
     vi.stubGlobal("performance", { now: () => 2_117 });
     p5Harness.reducedMotion = true;
@@ -1645,32 +1668,10 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       evidenceId: `TIDAL-EVIDENCE-${form}`,
       species,
       form,
-      quickLabel: species === "atlantic-silverside"
-        ? "Atlantic silverside signs"
-        : species === "atlantic-capelin"
-          ? "Aquatic activity"
-          : species === "american-pika"
-            ? "American pika signs"
-            : "Atlantic marsh fiddler crab signs",
-      identityLabel: species === "atlantic-silverside"
-        ? "Atlantic silverside school signs"
-        : species === "atlantic-capelin"
-          ? "Unidentified aquatic activity"
-          : species === "american-pika"
-            ? "American pika population signs"
-            : "Atlantic marsh fiddler crab area signs",
-      evidenceLabel: form === "surface-dimples"
-        ? species === "atlantic-capelin"
-          ? "Aquatic surface dimples and brief glints"
-          : "Silverside surface dimples and school glints"
-        : form === "burrow-openings"
-          ? "Fiddler crab burrow openings"
-          : form === "feeding-scrapes"
-            ? "Fiddler crab feeding scrapes"
-            : form === "haypile"
-              ? "American pika haypile"
-              : "American pika talus sign",
-      speciesIdentified: species !== "atlantic-capelin",
+      quickLabel,
+      identityLabel,
+      evidenceLabel,
+      speciesIdentified,
       selected: true,
     });
     const current: TideweftView = {
@@ -1690,11 +1691,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
         ...base.terrain,
         tiles: base.terrain.tiles.map((tile) => ({
           ...tile,
-          kind: species === "american-pika"
-            ? "ridge"
-            : species === "atlantic-silverside" || species === "atlantic-capelin"
-              ? "deep-water"
-              : "mudflat",
+          kind: terrainKind,
           currentVisibility: 1,
           currentDetailVisibility: 1 as const,
         })),
@@ -1713,6 +1710,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(visibleText).not.toContain(evidence.aggregateId);
     expect(visibleText).not.toContain(evidence.evidenceId);
     expect(visibleText).not.toMatch(/\b48\b|actorId|mortality|carcass/iu);
+    if (!speciesIdentified) expect(visibleText).not.toMatch(/anchovy|capelin|ghost crab/iu);
     if (species === "atlantic-capelin") {
       const torus = harness.instance.torus as ReturnType<typeof vi.fn>;
       const surfaceRings = torus.mock.calls.map((call: unknown[]) => [...call]);
@@ -2388,6 +2386,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["arctic-fox", "#e7e9e4", "ellipsoid"],
     ["harbor-seal", "#687579", "ellipsoid"],
     ["polar-bear", "#e5dfc9", "box"],
+    ["great-blue-heron", "#667a82", "ellipsoid"],
+    ["common-tern", "#dce1de", "cone"],
+    ["osprey", "#5a493a", "cone"],
   ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} renders and touch-selects the shared color-independent upland %s form`, (
     species,
     primaryColor,
@@ -2463,6 +2464,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "brown-bear",
       "mountain-goat",
       "golden-eagle",
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -2488,6 +2492,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "brown-bear": "BROWNBEAR-",
       "mountain-goat": "MOUNTAINGOAT-",
       "golden-eagle": "GOLDENEAGLE-",
+      "great-blue-heron": "BLUEHERON-",
+      "common-tern": "COMMONTERN-",
+      osprey: "OSPREY-",
     };
 
     for (const kind of species) {

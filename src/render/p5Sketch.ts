@@ -21,6 +21,11 @@ import {
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
 } from "./wildlifeAppearance";
+import {
+  isWildlifeVisualSpecies,
+  wildlifeVisualPalette,
+  wildlifeVisualProfile,
+} from "./wildlifeVisualProfile";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
@@ -683,12 +688,16 @@ export function createTideweftRenderer(
       }
     }
 
-    const wildlifeRadius = Math.max(
-      view.terrain.tileSize * 0.5,
-      22 / Math.max(camera.zoom, 0.01),
-    );
     for (const actor of view.wildlife ?? []) {
+      if (!isWildlifeVisualSpecies(actor.species)) continue;
       if (!isDirectlyDetailPerceived(view.terrain, actor.position, view.perception !== undefined)) continue;
+      const visual = wildlifeVisualProfile(actor.species);
+      const wildlifeRadius = Math.max(
+        view.terrain.tileSize
+          * visual.hitRadiusScale
+          * clamp(actor.sizeScale, 0.55, 1.8),
+        22 / Math.max(camera.zoom, 0.01),
+      );
       const distance = distanceSquared(point, actor.position);
       if (distance <= wildlifeRadius * wildlifeRadius && (!nearest || distance < nearest.distance)) {
         nearest = {
@@ -3090,25 +3099,37 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawChartGulls = (actor: WildlifeView, base: number, now: number): void => {
+    const drawChartShorebirdFlock = (
+      actor: WildlifeView,
+      base: number,
+      now: number,
+    ): void => {
+      if (!isWildlifeVisualSpecies(actor.species)) return;
+      const profile = wildlifeVisualProfile(actor.species);
+      const colors = wildlifeVisualPalette(actor.species, actor.appearanceKey);
+      const tern = profile.geometryVariant === "tern";
       const perched = actor.behavior === "perch" || actor.behavior === "rest";
       const flap = perched ? 0 : reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
-      const wingReach = perched ? 0.62 : 1.05;
+      const wingReach = perched ? (tern ? 0.72 : 0.62) : (tern ? 1.35 : 1.05);
       const wingY = perched ? base * 0.08 : flap * base;
       p.noFill();
       p.stroke(withAlpha(PALETTE.ink, 235));
       p.strokeWeight(Math.max(1, base * 0.42));
       p.line(-base * wingReach, wingY, 0, -base * 0.18);
       p.line(0, -base * 0.18, base * wingReach, wingY);
-      p.stroke(PALETTE.foam);
+      p.stroke(colors.primary);
       p.strokeWeight(Math.max(0.55, base * 0.23));
-      p.line(-base * (perched ? 0.59 : 1.02), wingY, 0, -base * 0.18);
-      p.line(0, -base * 0.18, base * (perched ? 0.59 : 1.02), wingY);
-      if (perched) {
-        p.noStroke();
-        p.fill(PALETTE.foam);
-        p.ellipse(0, base * 0.08, base * 0.72, base * 0.42);
+      p.line(-base * wingReach * 0.96, wingY, 0, -base * 0.18);
+      p.line(0, -base * 0.18, base * wingReach * 0.96, wingY);
+      p.noStroke();
+      p.fill(colors.primary);
+      p.ellipse(0, base * 0.02, base * (tern ? 0.82 : 0.72), base * (tern ? 0.28 : 0.34));
+      p.fill(colors.dark);
+      if (tern) {
+        p.triangle(-base * 0.12, base * 0.14, -base * 0.68, base * 0.55, 0, base * 0.28);
+        p.triangle(base * 0.12, base * 0.14, base * 0.68, base * 0.55, 0, base * 0.28);
       }
+      if (perched) p.ellipse(0, base * 0.08, base * 0.54, base * 0.22);
     };
 
     const drawChartFishCrows = (actor: WildlifeView, base: number, now: number): void => {
@@ -3183,11 +3204,15 @@ export function createTideweftRenderer(
       );
     };
 
-    const drawChartSnowyEgret = (
+    const drawChartLongNeckedWader = (
       actor: WildlifeView,
       base: number,
       now: number,
     ): void => {
+      if (!isWildlifeVisualSpecies(actor.species)) return;
+      const profile = wildlifeVisualProfile(actor.species);
+      const colors = wildlifeVisualPalette(actor.species, actor.appearanceKey);
+      const heron = profile.geometryVariant === "heron";
       const probing = actor.behavior === "forage" || actor.behavior === "pursue";
       const flying = actor.behavior === "flight";
       const headDip = !probing
@@ -3195,8 +3220,8 @@ export function createTideweftRenderer(
         : reducedMotion
           ? base * 0.22
           : Math.abs(Math.sin(now * 0.006)) * base * 0.34;
-      const bodyLength = base * 2.48;
-      const bodyHeight = base * 0.82;
+      const bodyLength = base * (heron ? 2.82 : 2.48);
+      const bodyHeight = base * (heron ? 0.94 : 0.82);
       const headX = bodyLength * 0.82;
       const headY = -bodyHeight * 0.9 + headDip;
 
@@ -3205,26 +3230,31 @@ export function createTideweftRenderer(
         p.strokeWeight(Math.max(0.8, base * 0.16));
         for (const legY of [-0.3, 0.3]) {
           p.line(-base * 0.54, base * legY, -base * 1.48, base * legY);
-          p.stroke("#d3ad4f");
-          p.line(-base * 1.48, base * legY, -base * 1.78, base * (legY + 0.18));
+          p.stroke(colors.accent);
+          p.line(
+            -base * (heron ? 1.68 : 1.48),
+            base * legY,
+            -base * (heron ? 2.04 : 1.78),
+            base * (legY + 0.18),
+          );
           p.stroke(withAlpha(PALETTE.ink, 240));
         }
       }
       p.noStroke();
       p.fill(withAlpha(PALETTE.ink, 240));
       p.ellipse(0, 0, bodyLength * 1.08, bodyHeight * 1.24);
-      p.fill("#f4f1df");
+      p.fill(colors.primary);
       p.ellipse(0, 0, bodyLength, bodyHeight);
       if (flying) {
         const wingLift = reducedMotion ? 0 : Math.sin(now * 0.006) * base * 0.3;
         p.triangle(
           -base * 0.2, 0,
-          -base * 0.35, -base * 2.2 + wingLift,
+          -base * 0.35, -base * (heron ? 2.55 : 2.2) + wingLift,
           base * 0.62, -base * 0.16,
         );
         p.triangle(
           -base * 0.2, 0,
-          -base * 0.35, base * 2.2 - wingLift,
+          -base * 0.35, base * (heron ? 2.55 : 2.2) - wingLift,
           base * 0.62, base * 0.16,
         );
       }
@@ -3242,7 +3272,7 @@ export function createTideweftRenderer(
         headX,
         headY,
       );
-      p.stroke("#f4f1df");
+      p.stroke(colors.primary);
       p.strokeWeight(Math.max(0.7, base * 0.25));
       p.bezier(
         bodyLength * 0.34,
@@ -3257,13 +3287,13 @@ export function createTideweftRenderer(
       p.noStroke();
       p.fill(withAlpha(PALETTE.ink, 240));
       p.circle(headX, headY, base * 0.72);
-      p.fill("#f4f1df");
+      p.fill(colors.secondary);
       p.circle(headX, headY, base * 0.57);
-      p.fill("#1d2525");
+      p.fill(colors.dark);
       p.triangle(
         headX + base * 0.22,
         headY - base * 0.12,
-        headX + base * 1.22,
+        headX + base * (heron ? 1.5 : 1.22),
         headY,
         headX + base * 0.22,
         headY + base * 0.12,
@@ -4087,12 +4117,15 @@ export function createTideweftRenderer(
       p.circle(headX + headRadius * 0.42, headY - headRadius * 0.2, base * 0.14);
     };
 
-    const drawChartGoldenEagle = (
+    const drawChartBroadWingedRaptor = (
       actor: WildlifeView,
       base: number,
       now: number,
     ): void => {
-      const colors = alpineWildlifeAppearancePalette("golden-eagle", actor.appearanceKey);
+      if (!isWildlifeVisualSpecies(actor.species)) return;
+      const profile = wildlifeVisualProfile(actor.species);
+      const colors = wildlifeVisualPalette(actor.species, actor.appearanceKey);
+      const osprey = profile.geometryVariant === "osprey";
       const perched = actor.behavior === "perch" || actor.behavior === "rest";
       const bank = reducedMotion || perched ? 0 : Math.sin(now * 0.0032) * base * 0.24;
       p.noStroke();
@@ -4116,8 +4149,8 @@ export function createTideweftRenderer(
       for (const side of [-1, 1] as const) {
         p.quad(
           side * base * 0.16, -base * 0.32,
-          side * base * 3.55, -base * 0.62 + bank * side,
-          side * base * 2.42, base * 0.38 + bank * side,
+          side * base * (osprey ? 3.38 : 3.55), -base * (osprey ? 0.88 : 0.62) + bank * side,
+          side * base * (osprey ? 2.18 : 2.42), base * (osprey ? 0.56 : 0.38) + bank * side,
           side * base * 0.1, base * 0.34,
         );
         p.fill(colors.dark);
@@ -4133,7 +4166,14 @@ export function createTideweftRenderer(
       p.fill(colors.accent);
       p.ellipse(0, -base * 0.74, base * 0.72, base * 0.62);
       p.fill(colors.dark);
-      p.triangle(-base * 0.42, base * 0.86, 0, base * 1.78, base * 0.42, base * 0.86);
+      p.triangle(
+        -base * (osprey ? 0.52 : 0.42),
+        base * 0.86,
+        0,
+        base * (osprey ? 1.5 : 1.78),
+        base * (osprey ? 0.52 : 0.42),
+        base * 0.86,
+      );
     };
 
     const drawChartUplandMammal = (
@@ -4308,40 +4348,42 @@ export function createTideweftRenderer(
       base: number,
       now: number,
     ): boolean => {
-      switch (actor.species) {
+      if (!isWildlifeVisualSpecies(actor.species)) return false;
+      switch (wildlifeVisualProfile(actor.species).form) {
         case "deer":
           drawChartDeer(actor, base);
           return true;
-        case "gull":
-          drawChartGulls(actor, base, now);
+        case "shorebird-flock":
+          drawChartShorebirdFlock(actor, base, now);
           return true;
-        case "fish-crow":
+        case "corvid-flock":
           drawChartFishCrows(actor, base, now);
           return true;
-        case "northern-harrier":
+        case "low-quartering-raptor":
           drawChartNorthernHarrier(actor, base, now);
           return true;
-        case "snowy-egret":
-          drawChartSnowyEgret(actor, base, now);
+        case "long-necked-wader":
+          drawChartLongNeckedWader(actor, base, now);
           return true;
-        case "american-black-duck":
+        case "dabbling-duck":
           drawChartAmericanBlackDuck(actor, base, now);
           return true;
-        case "domestic-chicken":
+        case "ground-fowl":
           drawChartDomesticChicken(actor, base, now);
           return true;
         case "domestic-goat":
           drawChartDomesticGoat(actor, base, now);
           return true;
-        case "north-american-river-otter":
+        case "river-otter":
           drawChartNorthAmericanRiverOtter(actor, base, now);
           return true;
-        case "wild-boar":
-        case "elk":
-        case "gray-wolf":
-        case "cougar":
-        case "brown-bear":
-          drawChartUplandMammal(actor, actor.species, base, now);
+        case "upland-mammal":
+          drawChartUplandMammal(
+            actor,
+            actor.species as RegionalUplandWildlifeAppearanceSpecies,
+            base,
+            now,
+          );
           return true;
         case "black-bear":
           drawChartBlackBear(actor, base);
@@ -4352,11 +4394,13 @@ export function createTideweftRenderer(
         case "marsh-rabbit":
           drawChartMarshRabbit(actor, base, now);
           return true;
-        case "marsh-fox":
-          drawChartSmallFox(actor, "marsh-fox", base, now);
-          return true;
-        case "arctic-fox":
-          drawChartSmallFox(actor, "arctic-fox", base, now);
+        case "small-fox":
+          drawChartSmallFox(
+            actor,
+            actor.species as "marsh-fox" | "arctic-fox",
+            base,
+            now,
+          );
           return true;
         case "harbor-seal":
           drawChartHarborSeal(actor, base, now);
@@ -4367,8 +4411,8 @@ export function createTideweftRenderer(
         case "mountain-goat":
           drawChartMountainGoat(actor, base, now);
           return true;
-        case "golden-eagle":
-          drawChartGoldenEagle(actor, base, now);
+        case "broad-winged-raptor":
+          drawChartBroadWingedRaptor(actor, base, now);
           return true;
       }
     };

@@ -39,6 +39,7 @@ import {
   WAVE_C_TIDAL_TABLE_BOUNDED_READINESS,
   WAVE_C_TIDAL_TABLE_EXCLUDED_CLAIMS,
   WAVE_C_TIDAL_TABLE_SPECIES,
+  WAVE_G_ESTUARY_BREADTH_SPECIES,
   alpha16MarshEdgeBoundedReadiness,
   alpha17RainChorusBoundedReadiness,
   alpha20AmericanBlackDuckBoundedReadiness,
@@ -603,6 +604,119 @@ describe("Living Weft species release gate", () => {
       expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
         verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
       ))).toBe(false);
+    }
+  });
+
+  it("uses one bounded Wave-G evidence contract for the estuary breadth cohort", () => {
+    expect(WAVE_G_ESTUARY_BREADTH_SPECIES).toEqual([
+      "bay-anchovy",
+      "atlantic-ghost-crab",
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
+    ]);
+    for (const species of WAVE_G_ESTUARY_BREADTH_SPECIES) {
+      const releaseGate = gate(species);
+      const criterion = (
+        name: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number],
+      ) => releaseGate.criteria.find((candidate) => candidate.criterion === name);
+      const aggregate = species === "bay-anchovy"
+        || species === "atlantic-ghost-crab";
+
+      expect(livingSpeciesReadinessReport(species)).toMatchObject({
+        evidenceAuthenticated: true,
+        state: "blocked",
+        publicReady: false,
+        counts: { total: 30 },
+      });
+      expect(criterion("habitat-placement")?.evidenceOwnerIds).toContain(
+        "game:core-ecology-breadth-habitat:v1",
+      );
+      expect(criterion("population-materialization")?.evidenceOwnerIds).toContain(
+        "game:regional-ecology-state:v6",
+      );
+      expect(criterion("save-load")?.evidenceOwnerIds).toContain(
+        "game:runtime-save:v30",
+      );
+      expect(criterion("save-load")?.evidenceOwnerIds).toContain(
+        "test:alpha37-estuary-breadth-runtime-v30:v1",
+      );
+      const emergenceParticipant = species === "bay-anchovy"
+        || species === "common-tern";
+      for (const name of [
+        "other-species-interaction",
+        "player-independent-scenario",
+      ] as const) {
+        expect(criterion(name)?.status).toBe(
+          emergenceParticipant ? "active" : "foundation",
+        );
+        expect(criterion(name)?.evidenceOwnerIds).toEqual(
+          emergenceParticipant
+            ? expect.arrayContaining(["test:alpha37-estuary-breadth-emergence:v1"])
+            : expect.not.arrayContaining(["test:alpha37-estuary-breadth-emergence:v1"]),
+        );
+      }
+      expect(criterion("food-web")?.evidenceOwnerIds).toEqual(
+        emergenceParticipant
+          ? expect.arrayContaining(["test:alpha37-estuary-breadth-emergence:v1"])
+          : expect.not.arrayContaining(["test:alpha37-estuary-breadth-emergence:v1"]),
+      );
+      expect(criterion("seamless-region-crossing")).toMatchObject({
+        status: "foundation",
+      });
+      expect(criterion("seamless-region-crossing")?.evidenceOwnerIds).toEqual(
+        expect.arrayContaining([
+          "game:core-ecology-breadth-habitat:v1",
+          "game:regional-ecology-state:v6",
+          "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+        ]),
+      );
+      expect(criterion("performance-budget")).toMatchObject({
+        status: "foundation",
+      });
+      expect(criterion("performance-budget")?.evidenceOwnerIds).not.toContain(
+        "test:alpha37-estuary-breadth-composite-performance:v1",
+      );
+      expect(criterion("knowledge-honesty")?.evidenceOwnerIds).toContain(
+        "test:alpha37-estuary-breadth-presentation-invariants:v1",
+      );
+      expect(criterion("environmental-evidence")).toMatchObject(aggregate
+        ? { status: "active" }
+        : { status: "unimplemented", evidenceOwnerIds: [] });
+      expect(criterion("same-species-interaction")?.status).toBe(
+        aggregate || species === "common-tern" ? "active" : "foundation",
+      );
+      if (species === "common-tern") {
+        expect(criterion("same-species-interaction")?.evidenceOwnerIds).toEqual(
+          expect.arrayContaining([
+            "game:core-ecology-groups:v1",
+            "game:regional-breadth-cohort:v1",
+            "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+          ]),
+        );
+      }
+      if (!aggregate) {
+        expect(criterion("neutral-behavior")?.evidenceOwnerIds).toEqual(
+          expect.arrayContaining([
+            "game:core-ecology-activity-affordance:v1",
+            "game:core-ecology-activity-authority:v1",
+            "game:core-ecology-activity:v1",
+            "test:alpha37-estuary-breadth-activity-authority:v1",
+          ]),
+        );
+      }
+      for (const withheld of ["sound", "exact-tested-deployment"] as const) {
+        expect(criterion(withheld)).toMatchObject({
+          status: "unimplemented",
+          evidenceOwnerIds: [],
+        });
+      }
+      expect(criterion("tutorial-truth")?.evidenceOwnerIds).toEqual([
+        "ui:tutorial-guide:v47",
+      ]);
+      expect(criterion("patch-note-truth")?.evidenceOwnerIds).toEqual([
+        "content:patch-notes-alpha37:v1",
+      ]);
     }
   });
 

@@ -10,6 +10,8 @@ import {
   COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES,
   COLD_SHORE_WILDLIFE_APPEARANCE_SPECIES,
   DOMESTIC_GOAT_APPEARANCE_PALETTES,
+  ESTUARY_SURFACE_WILDLIFE_APPEARANCE_PALETTES,
+  ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES,
   POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
   POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES,
   REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES,
@@ -17,6 +19,7 @@ import {
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
+  estuarySurfaceWildlifeAppearancePalette,
   polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
 } from "./wildlifeAppearance";
@@ -169,5 +172,30 @@ describe("shared wildlife appearance projection", () => {
       .toBe(POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["polar-bear"]["cream-ivory"]);
     expect(POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["polar-bear"]["cream-ivory"])
       .toMatchObject({ primary: "#e5dfc9", dark: "#202a2d" });
+  });
+
+  it("covers the addressable estuary-surface cluster without inventing aggregate bodies", () => {
+    expect(ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES).toEqual([
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
+    ]);
+    expect(ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES).not.toContain("bay-anchovy");
+    expect(ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES).not.toContain("atlantic-ghost-crab");
+
+    for (const species of ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES) {
+      const profile = getCoreWildlifeProfile(species);
+      const palettes = ESTUARY_SURFACE_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+        Record<string, unknown>
+      >;
+      expect(Object.keys(palettes).sort()).toEqual([...profile.morphs].sort());
+      for (const morph of profile.morphs) {
+        const resolved = estuarySurfaceWildlifeAppearancePalette(species, morph);
+        expect(resolved).toBe(palettes[morph]);
+        expect(Object.isFrozen(resolved)).toBe(true);
+      }
+      expect(estuarySurfaceWildlifeAppearancePalette(species, "unknown-morph"))
+        .toBeDefined();
+    }
   });
 });

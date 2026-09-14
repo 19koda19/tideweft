@@ -34,6 +34,18 @@ export const ALPHA24_DOMESTIC_CHICKEN_BOUNDED_READINESS_VERSION = 1 as const;
 export const ALPHA25_SHARED_DOMESTIC_LIVESTOCK_READINESS_VERSION = 1 as const;
 export const ALPHA33_WAVE_F_ALPINE_SHARED_READINESS_VERSION = 1 as const;
 
+/** First shared Wave-G breadth cohort; one release contract covers the cluster. */
+export const WAVE_G_ESTUARY_BREADTH_SPECIES = Object.freeze([
+  "bay-anchovy",
+  "atlantic-ghost-crab",
+  "great-blue-heron",
+  "common-tern",
+  "osprey",
+] as const satisfies readonly LivingActorSpecies[]);
+
+export type WaveGEstuaryBreadthSpecies =
+  (typeof WAVE_G_ESTUARY_BREADTH_SPECIES)[number];
+
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
   "species-profile",
@@ -3010,6 +3022,208 @@ function polarConsumerSharedEvidence(
 }
 
 /**
+ * One evidence contract for the first Wave-G ecological batch. Aggregates and
+ * addressable birds share habitat, regional persistence, projection, and
+ * presentation owners; the few representation-specific rows select the
+ * existing aggregate or actor kernels without inventing per-species systems.
+ * Sound, capture, consumption, mortality, reproduction, and deployment remain
+ * deliberately outside this slice.
+ */
+function estuaryBreadthSharedEvidence(
+  species: WaveGEstuaryBreadthSpecies,
+): readonly ClaimTuple[] {
+  const aggregate = species === "bay-anchovy" || species === "atlantic-ghost-crab";
+  const flock = species === "common-tern";
+  const emergenceParticipant = species === "bay-anchovy" || species === "common-tern";
+  const owners = (...values: string[]): readonly string[] => (
+    [...new Set(values)].sort(compareText)
+  );
+  const contracts = owners(
+    "game:core-ecology-species-runtime-policy:v1",
+    "game:living-species-catalog:v1",
+    "sim:core-wildlife-identity:v1",
+  );
+  const habitatOwners = owners(
+    "game:core-ecology-breadth-habitat:v1",
+    "game:regional-breadth-cohort:v1",
+    "game:regional-breadth-ecology:v1",
+    "test:alpha37-estuary-breadth-habitat-shared-invariants:v1",
+    "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+  );
+  const perceptionOwners = aggregate
+    ? owners(
+        "game:core-ecology-aggregate-perception:v1",
+        "game:core-ecology-perception:v1",
+        "game:core-ecology-tidal-table:v1",
+        "game:runtime-core-ecology:v1",
+      )
+    : owners(
+        "game:core-ecology-perception:v1",
+        "game:living-actor-senses:v1",
+        "game:runtime-core-ecology:v1",
+        "sim:actor-perception:v2",
+      );
+  const locomotionOwners = aggregate
+    ? owners(
+        "game:core-ecology-small-world:v3",
+        "game:core-ecology-tidal-table:v1",
+        "game:regional-breadth-cohort:v1",
+        "game:runtime-core-ecology:v1",
+      )
+    : owners(
+        "game:core-wildlife-actor:v1",
+        "game:core-wildlife-locomotion-profile:v1",
+        "game:living-actor-locomotion:v1",
+        "game:runtime-core-ecology:v1",
+      );
+  const behaviorOwners = owners(
+    ...perceptionOwners,
+    "game:core-ecology-species-runtime-policy:v1",
+    ...(aggregate
+      ? ["game:core-ecology-small-world:v3"]
+      : ["game:core-wildlife-actor:v1"]),
+  );
+  const neutralBehaviorOwners = aggregate
+    ? behaviorOwners
+    : owners(
+        "game:core-ecology-activity-affordance:v1",
+        "game:core-ecology-activity-authority:v1",
+        "game:core-ecology-activity:v1",
+        "game:core-ecology-breadth-habitat:v1",
+        "game:core-ecology-species-runtime-policy:v1",
+        "game:regional-breadth-cohort:v1",
+        "game:runtime-core-ecology:v1",
+        "test:alpha37-estuary-breadth-activity-authority:v1",
+      );
+  const sameSpeciesOwners = aggregate
+    ? owners(
+        "game:core-ecology-small-world:v3",
+        "game:core-ecology-species-runtime-policy:v1",
+        "game:core-ecology-tidal-table:v1",
+        "game:regional-breadth-cohort:v1",
+        "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+      )
+    : flock
+      ? owners(
+          "game:core-ecology-groups:v1",
+          "game:regional-breadth-cohort:v1",
+          "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+        )
+      : behaviorOwners;
+  const presentationOwners = owners(
+    "game:wildlife-about:v1",
+    "game:wildlife-presentation:v1",
+    "render:wildlife-visual-profile:v1",
+    "sim:actor-perception:v2",
+    "test:alpha37-estuary-breadth-presentation-invariants:v1",
+  );
+  const persistenceOwners = owners(
+    "game:regional-breadth-ecology:v1",
+    "game:regional-ecology-state:v6",
+    "game:runtime-core-ecology:v1",
+    "game:runtime-save:v30",
+    "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
+    "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+    "test:alpha37-estuary-breadth-runtime-v30:v1",
+  );
+  const emergenceOwners = owners(
+    ...(aggregate
+      ? [
+          "game:core-ecology-aggregate-perception:v1",
+          "game:core-ecology-perception:v1",
+          "game:core-ecology-small-world:v3",
+        ]
+      : [
+          "game:core-ecology-perception:v1",
+          "game:core-wildlife-actor:v1",
+          "game:runtime-core-ecology:v1",
+        ]),
+    "game:core-ecology-trophic:v1",
+    "game:regional-breadth-cohort:v1",
+    "test:alpha37-estuary-breadth-emergence:v1",
+    "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+  );
+  const emergenceFoundationOwners = owners(
+    ...contracts,
+    "game:core-ecology-trophic:v1",
+    "game:regional-breadth-cohort:v1",
+  );
+  return [
+    ["species-profile", A, contracts],
+    ["ecological-niche", A, owners(...contracts, ...habitatOwners)],
+    ["appearance", A, presentationOwners],
+    ["sound", U, []],
+    ["habitat-placement", A, habitatOwners],
+    [
+      "food-web",
+      F,
+      emergenceParticipant ? emergenceOwners : emergenceFoundationOwners,
+    ],
+    ["perception-senses", F, perceptionOwners],
+    ["locomotion", A, locomotionOwners],
+    ["human-interaction", F, behaviorOwners],
+    ["dog-interaction", F, behaviorOwners],
+    ["same-species-interaction", aggregate || flock ? A : F, sameSpeciesOwners],
+    [
+      "other-species-interaction",
+      emergenceParticipant ? A : F,
+      emergenceParticipant ? emergenceOwners : emergenceFoundationOwners,
+    ],
+    ["neutral-behavior", A, neutralBehaviorOwners],
+    ["disengagement", A, behaviorOwners],
+    ["environmental-evidence", aggregate ? A : U, aggregate
+      ? owners(
+          "game:core-ecology-evidence-runtime:v1",
+          "game:regional-breadth-cohort:v1",
+          "game:wildlife-presentation:v1",
+          "test:alpha37-estuary-breadth-presentation-invariants:v1",
+        )
+      : []],
+    ["about-disclosure", A, presentationOwners],
+    ["knowledge-honesty", A, presentationOwners],
+    ["population-materialization", A, persistenceOwners],
+    ["full-coarse-transition", A, persistenceOwners],
+    ["save-load", A, persistenceOwners],
+    ["seamless-region-crossing", F, owners(
+      "game:core-ecology-breadth-habitat:v1",
+      "game:regional-breadth-ecology:v1",
+      "game:regional-ecology-state:v6",
+      "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
+      "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+    )],
+    ["performance-budget", F, owners(
+      "game:core-ecology-breadth-habitat:v1",
+      "game:regional-breadth-ecology:v1",
+      "game:regional-ecology-state:v6",
+      "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
+      "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+    )],
+    ["accessibility", A, presentationOwners],
+    ["mobile-parity", A, presentationOwners],
+    [
+      "player-independent-scenario",
+      emergenceParticipant ? A : F,
+      emergenceParticipant ? emergenceOwners : emergenceFoundationOwners,
+    ],
+    ["fuzz-testing", F, owners(
+      "game:core-ecology-breadth-habitat:v1",
+      "game:regional-breadth-ecology:v1",
+      "game:regional-ecology-state:v6",
+      "sim:core-wildlife-identity:v1",
+      "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
+      "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+    )],
+    ["clone-diversity", A, owners(
+      "sim:core-wildlife-identity:v1",
+      "test:alpha37-estuary-breadth-habitat-shared-invariants:v1",
+    )],
+    ["tutorial-truth", A, ["ui:tutorial-guide:v47"]],
+    ["patch-note-truth", A, ["content:patch-notes-alpha37:v1"]],
+    ["exact-tested-deployment", U, []],
+  ];
+}
+
+/**
  * Current build-owned evidence. This intentionally contains no future roster
  * and never upgrades a criterion merely because the design intends it.
  */
@@ -3107,6 +3321,11 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "arctic-fox": coldShoreFoxSharedEvidence(),
   "harbor-seal": polarConsumerSharedEvidence("harbor-seal"),
   "polar-bear": polarConsumerSharedEvidence("polar-bear"),
+  "bay-anchovy": estuaryBreadthSharedEvidence("bay-anchovy"),
+  "atlantic-ghost-crab": estuaryBreadthSharedEvidence("atlantic-ghost-crab"),
+  "great-blue-heron": estuaryBreadthSharedEvidence("great-blue-heron"),
+  "common-tern": estuaryBreadthSharedEvidence("common-tern"),
+  osprey: estuaryBreadthSharedEvidence("osprey"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {
@@ -4037,6 +4256,7 @@ Alpha21RiverOtterBoundedReadinessReport {
     ))
     && ([
       "amphibious-locomotion",
+      "amphibious-route",
       "aquatic-locomotion",
       "water-depth-response",
     ] as const).every(ownsRuntimeCapability)

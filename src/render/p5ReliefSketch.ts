@@ -62,11 +62,6 @@ import {
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
-  ALPINE_WILDLIFE_APPEARANCE_PALETTES,
-  ALPHA30_WILDLIFE_APPEARANCE_PALETTES,
-  ALPHA31_PREDATOR_APPEARANCE_PALETTES,
-  COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES,
-  POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
@@ -74,6 +69,12 @@ import {
   regionalUplandWildlifeAppearancePalette,
   type RegionalUplandWildlifeAppearanceSpecies,
 } from "./wildlifeAppearance";
+import {
+  isWildlifeVisualSpecies,
+  wildlifeVisualPalette,
+  wildlifeVisualProfile,
+  type WildlifeVisualSpecies,
+} from "./wildlifeVisualProfile";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
@@ -207,275 +208,14 @@ const RELIEF_DOG_COAT_COLORS: Readonly<Record<DogView["coat"]["primary"], string
   "blue-gray": "#657b82",
 };
 
-type ReliefWildlifeForm =
-  | "deer"
-  | "gull-flock"
-  | "fish-crow-flock"
-  | "northern-harrier"
-  | "snowy-egret"
-  | "american-black-duck"
-  | "domestic-chicken"
-  | "domestic-goat"
-  | "north-american-river-otter"
-  | "wild-boar"
-  | "elk"
-  | "gray-wolf"
-  | "cougar"
-  | "brown-bear"
-  | "black-bear"
-  | "domestic-cat"
-  | "marsh-rabbit"
-  | "marsh-fox"
-  | "arctic-fox"
-  | "harbor-seal"
-  | "polar-bear"
-  | "mountain-goat"
-  | "golden-eagle";
+const reliefWildlifeDescriptor = (
+  species: WildlifeView["species"],
+) => isWildlifeVisualSpecies(species) ? wildlifeVisualProfile(species) : null;
 
-interface ReliefWildlifeDescriptor {
-  readonly form: ReliefWildlifeForm;
-  readonly colors: Readonly<{
-    readonly primary: string;
-    readonly secondary: string;
-    readonly dark: string;
-    readonly accent?: string;
-  }>;
-  readonly hitRadiusScale: number;
-  readonly ringRadiusScale: number;
-  readonly labelLift: number;
-}
-
-/** Exhaustive visual and targeting policy; species never inherit another silhouette. */
-const RELIEF_WILDLIFE: Readonly<Record<WildlifeView["species"], ReliefWildlifeDescriptor>> = {
-  deer: {
-    form: "deer",
-    colors: {
-      primary: "#9d744f",
-      secondary: "#d3ae78",
-      dark: "#3c2d25",
-    },
-    hitRadiusScale: 0.48,
-    ringRadiusScale: 0.4,
-    labelLift: 0.78,
-  },
-  gull: {
-    form: "gull-flock",
-    colors: {
-      primary: "#e2e8df",
-      secondary: "#879496",
-      dark: "#253438",
-    },
-    hitRadiusScale: 0.44,
-    ringRadiusScale: 0.34,
-    labelLift: 1.16,
-  },
-  "fish-crow": {
-    form: "fish-crow-flock",
-    colors: {
-      primary: "#17262a",
-      secondary: "#31545b",
-      dark: "#050a0b",
-    },
-    hitRadiusScale: 0.46,
-    ringRadiusScale: 0.36,
-    labelLift: 1.08,
-  },
-  "northern-harrier": {
-    form: "northern-harrier",
-    colors: {
-      primary: "#88715d",
-      secondary: "#ddd5c3",
-      dark: "#302a26",
-    },
-    hitRadiusScale: 0.52,
-    ringRadiusScale: 0.42,
-    labelLift: 1.18,
-  },
-  "snowy-egret": {
-    form: "snowy-egret",
-    colors: {
-      primary: "#f4f1df",
-      secondary: "#d3ad4f",
-      dark: "#1d2525",
-    },
-    hitRadiusScale: 0.48,
-    ringRadiusScale: 0.38,
-    labelLift: 0.98,
-  },
-  "american-black-duck": {
-    form: "american-black-duck",
-    colors: {
-      primary: "#4b382e",
-      secondary: "#76604a",
-      dark: "#211a16",
-      accent: "#4a5f8f",
-    },
-    hitRadiusScale: 0.48,
-    ringRadiusScale: 0.39,
-    labelLift: 0.74,
-  },
-  "domestic-chicken": {
-    form: "domestic-chicken",
-    colors: {
-      primary: "#a66a3f",
-      secondary: "#d6b37e",
-      dark: "#34241d",
-      accent: "#b34735",
-    },
-    hitRadiusScale: 0.44,
-    ringRadiusScale: 0.35,
-    labelLift: 0.7,
-  },
-  "domestic-goat": {
-    form: "domestic-goat",
-    colors: {
-      primary: "#8f7150",
-      secondary: "#d8c9aa",
-      dark: "#30271f",
-      accent: "#b99d72",
-    },
-    hitRadiusScale: 0.54,
-    ringRadiusScale: 0.44,
-    labelLift: 0.86,
-  },
-  "north-american-river-otter": {
-    form: "north-american-river-otter",
-    colors: {
-      primary: "#5b402e",
-      secondary: "#9b7957",
-      dark: "#241b17",
-      accent: "#d6c3a0",
-    },
-    hitRadiusScale: 0.52,
-    ringRadiusScale: 0.43,
-    labelLift: 0.72,
-  },
-  "black-bear": {
-    form: "black-bear",
-    colors: {
-      primary: "#202827",
-      secondary: "#5b5145",
-      dark: "#0a1112",
-    },
-    hitRadiusScale: 0.62,
-    ringRadiusScale: 0.52,
-    labelLift: 0.78,
-  },
-  "domestic-cat": {
-    form: "domestic-cat",
-    colors: {
-      primary: "#746153",
-      secondary: "#b28f69",
-      dark: "#292522",
-    },
-    hitRadiusScale: 0.44,
-    ringRadiusScale: 0.36,
-    labelLift: 0.68,
-  },
-  "marsh-rabbit": {
-    form: "marsh-rabbit",
-    colors: {
-      primary: "#806c52",
-      secondary: "#b49770",
-      dark: "#2d2923",
-    },
-    hitRadiusScale: 0.44,
-    ringRadiusScale: 0.34,
-    labelLift: 0.7,
-  },
-  "marsh-fox": {
-    form: "marsh-fox",
-    colors: {
-      primary: "#995138",
-      secondary: "#d1b691",
-      dark: "#35271f",
-    },
-    hitRadiusScale: 0.48,
-    ringRadiusScale: 0.4,
-    labelLift: 0.72,
-  },
-  "arctic-fox": {
-    form: "arctic-fox",
-    colors: COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES["arctic-fox"].white,
-    hitRadiusScale: 0.48,
-    ringRadiusScale: 0.4,
-    labelLift: 0.72,
-  },
-  "harbor-seal": {
-    form: "harbor-seal",
-    colors: POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["harbor-seal"]["mottled-gray"],
-    hitRadiusScale: 0.57,
-    ringRadiusScale: 0.47,
-    labelLift: 0.68,
-  },
-  "polar-bear": {
-    form: "polar-bear",
-    colors: POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES["polar-bear"]["cream-ivory"],
-    hitRadiusScale: 0.74,
-    ringRadiusScale: 0.63,
-    labelLift: 0.96,
-  },
-  "wild-boar": {
-    form: "wild-boar",
-    colors: ALPHA30_WILDLIFE_APPEARANCE_PALETTES["wild-boar"]["dark-brown"],
-    hitRadiusScale: 0.58,
-    ringRadiusScale: 0.48,
-    labelLift: 0.75,
-  },
-  elk: {
-    form: "elk",
-    colors: ALPHA30_WILDLIFE_APPEARANCE_PALETTES.elk["golden-brown"],
-    hitRadiusScale: 0.64,
-    ringRadiusScale: 0.54,
-    labelLift: 1.08,
-  },
-  "gray-wolf": {
-    form: "gray-wolf",
-    colors: ALPHA30_WILDLIFE_APPEARANCE_PALETTES["gray-wolf"]["grizzled-gray"],
-    hitRadiusScale: 0.54,
-    ringRadiusScale: 0.44,
-    labelLift: 0.78,
-  },
-  cougar: {
-    form: "cougar",
-    colors: ALPHA31_PREDATOR_APPEARANCE_PALETTES.cougar["warm-tawny"],
-    hitRadiusScale: 0.56,
-    ringRadiusScale: 0.46,
-    labelLift: 0.76,
-  },
-  "brown-bear": {
-    form: "brown-bear",
-    colors: ALPHA31_PREDATOR_APPEARANCE_PALETTES["brown-bear"]["dark-brown"],
-    hitRadiusScale: 0.68,
-    ringRadiusScale: 0.58,
-    labelLift: 0.88,
-  },
-  "mountain-goat": {
-    form: "mountain-goat",
-    colors: ALPINE_WILDLIFE_APPEARANCE_PALETTES["mountain-goat"]["cream-white"],
-    hitRadiusScale: 0.56,
-    ringRadiusScale: 0.46,
-    labelLift: 0.92,
-  },
-  "golden-eagle": {
-    form: "golden-eagle",
-    colors: ALPINE_WILDLIFE_APPEARANCE_PALETTES["golden-eagle"]["golden-naped"],
-    hitRadiusScale: 0.6,
-    ringRadiusScale: 0.48,
-    labelLift: 1.32,
-  },
-};
-
-/*
- * Kept as a narrow accessor so all draw helpers consume the exhaustive record
- * above rather than growing species-specific color fallbacks.
- */
-const reliefWildlifeColors = (species: WildlifeView["species"]): Readonly<{
-  readonly primary: string;
-  readonly secondary: string;
-  readonly dark: string;
-  readonly accent?: string;
-}> => RELIEF_WILDLIFE[species].colors;
+const reliefWildlifeColors = (
+  species: WildlifeVisualSpecies,
+  appearanceKey = "",
+) => wildlifeVisualPalette(species, appearanceKey);
 
 interface ReliefAggregateEvidenceDescriptor {
   readonly primary: string;
@@ -1433,7 +1173,8 @@ export function createTideweftReliefRenderer(
       );
     }
     for (const wildlife of view.wildlife ?? []) {
-      const descriptor = RELIEF_WILDLIFE[wildlife.species];
+      const descriptor = reliefWildlifeDescriptor(wildlife.species);
+      if (descriptor === null) continue;
       if (!isDirectlyDetailPerceived(
         view.terrain,
         wildlife.position,
@@ -1771,7 +1512,8 @@ export function createTideweftReliefRenderer(
       }
     }
     for (const wildlife of view.wildlife ?? []) {
-      const descriptor = RELIEF_WILDLIFE[wildlife.species];
+      const descriptor = reliefWildlifeDescriptor(wildlife.species);
+      if (descriptor === null) continue;
       if (!isDirectlyDetailPerceived(
         view.terrain,
         wildlife.position,
@@ -4062,15 +3804,18 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
-    const drawGulls = (
+    const drawShorebirdFlock = (
       wildlife: WildlifeView,
       surface: number,
       tileSize: number,
       now: number,
     ): void => {
-      const colors = reliefWildlifeColors("gull");
+      if (!isWildlifeVisualSpecies(wildlife.species)) return;
+      const profile = wildlifeVisualProfile(wildlife.species);
+      const colors = wildlifeVisualPalette(wildlife.species, wildlife.appearanceKey);
+      const tern = profile.geometryVariant === "tern";
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
-      const base = tileSize * 0.07 * scale;
+      const base = tileSize * (tern ? 0.064 : 0.07) * scale;
       const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
       const flightLift = perched ? base * 0.42 : tileSize * 0.72;
       const flap = perched || reducedMotion
@@ -4081,14 +3826,14 @@ export function createTideweftReliefRenderer(
       p.rotateY(-wildlife.facing);
       p.noStroke();
       p.ambientMaterial(colors.primary);
-      p.ellipsoid(base * 0.92, base * 0.34, base * 0.3, 7, 4);
+      p.ellipsoid(base * (tern ? 1.08 : 0.92), base * (tern ? 0.27 : 0.34), base * 0.3, 7, 4);
       p.push();
-      p.translate(base * 0.78, -base * 0.12, 0);
-      p.sphere(base * 0.31, 6, 4);
-      p.ambientMaterial(RELIEF_PALETTE.amber);
-      p.translate(base * 0.34, base * 0.02, 0);
+      p.translate(base * (tern ? 0.96 : 0.78), -base * 0.12, 0);
+      p.sphere(base * (tern ? 0.27 : 0.31), 6, 4);
+      p.ambientMaterial(colors.accent);
+      p.translate(base * (tern ? 0.42 : 0.34), base * 0.02, 0);
       p.rotateZ(-p.HALF_PI);
-      p.cone(base * 0.12, base * 0.34, 4, 1);
+      p.cone(base * (tern ? 0.09 : 0.12), base * (tern ? 0.5 : 0.34), 4, 1);
       p.pop();
 
       p.stroke(colors.secondary);
@@ -4099,7 +3844,7 @@ export function createTideweftReliefRenderer(
         -base * 0.12,
         -base * 0.38,
         -flap,
-        -base * 1.62,
+        -base * (tern ? 2.05 : 1.62),
       );
       p.line(
         -base * 0.12,
@@ -4107,8 +3852,20 @@ export function createTideweftReliefRenderer(
         base * 0.12,
         -base * 0.38,
         -flap,
-        base * 1.62,
+        base * (tern ? 2.05 : 1.62),
       );
+      if (tern) {
+        // A split tail remains legible in monochrome and separates the tern
+        // from the heavier gull while both reuse the same flock geometry.
+        p.ambientMaterial(colors.dark);
+        for (const side of [-1, 1] as const) {
+          p.push();
+          p.translate(-base * 0.92, base * 0.02, side * base * 0.19);
+          p.rotateZ(p.HALF_PI);
+          p.cone(base * 0.11, base * 0.72, 4, 1);
+          p.pop();
+        }
+      }
       p.noStroke();
       p.pop();
     };
@@ -4211,20 +3968,23 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
-    const drawSnowyEgret = (
+    const drawLongNeckedWader = (
       wildlife: WildlifeView,
       surface: number,
       tileSize: number,
     ): void => {
-      const colors = reliefWildlifeColors("snowy-egret");
+      if (!isWildlifeVisualSpecies(wildlife.species)) return;
+      const profile = wildlifeVisualProfile(wildlife.species);
+      const colors = wildlifeVisualPalette(wildlife.species, wildlife.appearanceKey);
+      const heron = profile.geometryVariant === "heron";
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
-      const base = tileSize * 0.078 * scale;
+      const base = tileSize * (heron ? 0.083 : 0.078) * scale;
       const probing = wildlife.behavior === "forage" || wildlife.behavior === "pursue";
       const flying = wildlife.behavior === "flight";
-      const bodyHalfLength = base * 1.34;
-      const bodyHalfHeight = base * 0.46;
-      const bodyHalfWidth = base * 0.52;
-      const legHeight = base * 1.5;
+      const bodyHalfLength = base * (heron ? 1.52 : 1.34);
+      const bodyHalfHeight = base * (heron ? 0.52 : 0.46);
+      const bodyHalfWidth = base * (heron ? 0.58 : 0.52);
+      const legHeight = base * (heron ? 1.7 : 1.5);
       const bodyCenterY = flying
         ? surface + tileSize * 0.58
         : surface + bodyHalfHeight + legHeight * 0.88;
@@ -4253,21 +4013,21 @@ export function createTideweftReliefRenderer(
         for (const side of [-1, 1] as const) {
           p.push();
           p.rotateX(side * 0.16);
-          p.ellipsoid(base * 0.72, base * 0.12, base * 2.35, 7, 3);
+          p.ellipsoid(base * 0.72, base * 0.12, base * (heron ? 2.65 : 2.35), 7, 3);
           p.pop();
         }
       }
       p.push();
       p.translate(bodyHalfLength * 0.62, -bodyHalfHeight * 0.56, 0);
       p.rotateZ(probing ? 0.58 : -0.28);
-      p.ellipsoid(base * 0.25, base * 1.02, base * 0.23, 7, 5);
-      p.translate(0, -base * 0.94, 0);
-      p.sphere(base * 0.34, 7, 5);
+      p.ellipsoid(base * (heron ? 0.29 : 0.25), base * (heron ? 1.22 : 1.02), base * 0.23, 7, 5);
+      p.translate(0, -base * (heron ? 1.12 : 0.94), 0);
+      p.sphere(base * (heron ? 0.38 : 0.34), 7, 5);
       p.push();
       p.translate(base * 0.45, base * 0.04, 0);
       p.rotateZ(-p.HALF_PI);
-      p.ambientMaterial(colors.dark);
-      p.cone(base * 0.11, base * 0.9, 5, 1);
+      p.ambientMaterial(colors.accent);
+      p.cone(base * (heron ? 0.13 : 0.11), base * (heron ? 1.12 : 0.9), 5, 1);
       p.pop();
       p.pop();
       p.pop();
@@ -4566,13 +4326,16 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
-    const drawGoldenEagle = (
+    const drawBroadWingedRaptor = (
       wildlife: WildlifeView,
       surface: number,
       tileSize: number,
       now: number,
     ): void => {
-      const colors = alpineWildlifeAppearancePalette("golden-eagle", wildlife.appearanceKey);
+      if (!isWildlifeVisualSpecies(wildlife.species)) return;
+      const profile = wildlifeVisualProfile(wildlife.species);
+      const colors = wildlifeVisualPalette(wildlife.species, wildlife.appearanceKey);
+      const osprey = profile.geometryVariant === "osprey";
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
       const base = tileSize * 0.09 * scale;
       const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
@@ -4610,8 +4373,8 @@ export function createTideweftReliefRenderer(
           p.ambientMaterial(colors.primary);
           p.beginShape();
           p.vertex(base * 0.35, 0, side * base * 0.12);
-          p.vertex(-base * 0.12, 0, side * base * 3.65);
-          p.vertex(-base * 1.02, 0, side * base * 2.48);
+          p.vertex(-base * (osprey ? 0.42 : 0.12), 0, side * base * (osprey ? 3.45 : 3.65));
+          p.vertex(-base * (osprey ? 1.22 : 1.02), 0, side * base * (osprey ? 2.15 : 2.48));
           p.vertex(-base * 0.42, 0, side * base * 0.18);
           p.endShape(p.CLOSE);
           p.ambientMaterial(colors.dark);
@@ -4636,7 +4399,7 @@ export function createTideweftReliefRenderer(
         p.push();
         p.translate(-base * 1.28, base * 0.02, 0);
         p.ambientMaterial(colors.dark);
-        p.box(base * 0.72, base * 0.1, base * 0.92);
+        p.box(base * (osprey ? 0.84 : 0.72), base * 0.1, base * (osprey ? 0.72 : 0.92));
         p.pop();
       }
       p.pop();
@@ -5587,8 +5350,8 @@ export function createTideweftReliefRenderer(
           cache.mesh.verticalScale,
           true,
         );
-        // Silverside dimples belong on the same water sheet as the live tide,
-        // while mudflat signs remain fixed to their physical ground surface.
+        // Schooling-fish dimples belong on the same water sheet as the live
+        // tide, while shoreline signs remain fixed to physical ground.
         const surface = terrainSurface + (
           evidence.form === "surface-dimples" ? RELIEF_WATER_SURFACE_LIFT : 0
         );
@@ -5602,48 +5365,44 @@ export function createTideweftReliefRenderer(
       tileSize: number,
       now: number,
     ): boolean => {
-      switch (RELIEF_WILDLIFE[wildlife.species].form) {
+      const descriptor = reliefWildlifeDescriptor(wildlife.species);
+      if (descriptor === null) return false;
+      switch (descriptor.form) {
         case "deer":
           drawDeer(wildlife, surface, tileSize);
           return true;
-        case "gull-flock":
-          drawGulls(wildlife, surface, tileSize, now);
+        case "shorebird-flock":
+          drawShorebirdFlock(wildlife, surface, tileSize, now);
           return true;
-        case "fish-crow-flock":
+        case "corvid-flock":
           drawFishCrows(wildlife, surface, tileSize, now);
           return true;
-        case "northern-harrier":
+        case "low-quartering-raptor":
           drawNorthernHarrier(wildlife, surface, tileSize, now);
           return true;
-        case "snowy-egret":
-          drawSnowyEgret(wildlife, surface, tileSize);
+        case "long-necked-wader":
+          drawLongNeckedWader(wildlife, surface, tileSize);
           return true;
-        case "american-black-duck":
+        case "dabbling-duck":
           drawAmericanBlackDuck(wildlife, surface, tileSize, now);
           return true;
-        case "domestic-chicken":
+        case "ground-fowl":
           drawDomesticChicken(wildlife, surface, tileSize, now);
           return true;
         case "domestic-goat":
           drawDomesticGoat(wildlife, surface, tileSize, now);
           return true;
-        case "north-american-river-otter":
+        case "river-otter":
           drawNorthAmericanRiverOtter(wildlife, surface, tileSize, now);
           return true;
-        case "wild-boar":
-          drawUplandMammal(wildlife, "wild-boar", surface, tileSize, now);
-          return true;
-        case "elk":
-          drawUplandMammal(wildlife, "elk", surface, tileSize, now);
-          return true;
-        case "gray-wolf":
-          drawUplandMammal(wildlife, "gray-wolf", surface, tileSize, now);
-          return true;
-        case "cougar":
-          drawUplandMammal(wildlife, "cougar", surface, tileSize, now);
-          return true;
-        case "brown-bear":
-          drawUplandMammal(wildlife, "brown-bear", surface, tileSize, now);
+        case "upland-mammal":
+          drawUplandMammal(
+            wildlife,
+            wildlife.species as RegionalUplandWildlifeAppearanceSpecies,
+            surface,
+            tileSize,
+            now,
+          );
           return true;
         case "black-bear":
           drawBlackBear(wildlife, surface, tileSize);
@@ -5654,11 +5413,14 @@ export function createTideweftReliefRenderer(
         case "marsh-rabbit":
           drawMarshRabbit(wildlife, surface, tileSize, now);
           return true;
-        case "marsh-fox":
-          drawSmallFox(wildlife, "marsh-fox", surface, tileSize, now);
-          return true;
-        case "arctic-fox":
-          drawSmallFox(wildlife, "arctic-fox", surface, tileSize, now);
+        case "small-fox":
+          drawSmallFox(
+            wildlife,
+            wildlife.species as "marsh-fox" | "arctic-fox",
+            surface,
+            tileSize,
+            now,
+          );
           return true;
         case "harbor-seal":
           drawHarborSeal(wildlife, surface, tileSize, now);
@@ -5669,8 +5431,8 @@ export function createTideweftReliefRenderer(
         case "mountain-goat":
           drawMountainGoat(wildlife, surface, tileSize, now);
           return true;
-        case "golden-eagle":
-          drawGoldenEagle(wildlife, surface, tileSize, now);
+        case "broad-winged-raptor":
+          drawBroadWingedRaptor(wildlife, surface, tileSize, now);
           return true;
       }
     };
@@ -5682,7 +5444,8 @@ export function createTideweftReliefRenderer(
     ): void => {
       const tileSize = view.terrain.tileSize;
       for (const wildlife of view.wildlife ?? []) {
-        const descriptor = RELIEF_WILDLIFE[wildlife.species];
+        const descriptor = reliefWildlifeDescriptor(wildlife.species);
+        if (descriptor === null) continue;
         if (!isDirectlyDetailPerceived(
           view.terrain,
           wildlife.position,

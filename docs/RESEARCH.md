@@ -613,8 +613,39 @@ they do not receive a private visibility budget or a species-local controller.
 Passing this slice closes the directive's bounded Wave-F role checklist and
 opens Wave G breadth, but it does not itself add sea ice, snow, reproduction,
 population recovery, full scent, audible Living Voice, worldwide polar ecology,
-or the target 75–150 profiles. It remains local and unpublished until a later
-release checkpoint supplies push, CI, Pages, and exact-live evidence.
+or the approximately 75-profile lower-bound target. Alpha36 remains local and
+unpublished.
+
+The **current unpublished local**
+`0.3.3-alpha.37 — Estuary Surface Break` candidate opens Wave G with one
+coherent five-profile estuary cohort. It preserves the exact 31-record
+Alpha36/`RegionalEcologyStateV5`/outer-v29 child and appends bay anchovy,
+Atlantic ghost crab, great blue heron, common tern, and osprey as records 32–36
+through one sparse append-only breadth root. Terrain, salinity, shore distance,
+carrying capacity, territory, density, regional quiet, and exact anchovy prey
+support decide admission; an eligible-looking region can remain empty.
+
+The representation boundary stays ecological rather than cosmetic. Anchovies
+and ghost crabs remain conserved non-addressable aggregates. Heron and osprey
+are solitary persistent individuals, and two to four common terns form one
+group-atomic flock. Tide changes the usable anchovy schooling water and
+ghost-crab flat activity without changing identity or total units. Great blue
+heron uses a new shared `anchored-wader` activity profile tied to one
+authenticated tide-depth-safe wading ground; common tern and osprey reuse the
+existing air-only surface-opportunity/rest profile. Immediate danger still
+preempts these bounded daylight/rest routines. They are not capture, feeding,
+full circadian behavior, or continuously simulated 3D flight.
+
+The first Alpha37 emergence witness is intentionally representative rather
+than species-pair exhaustive. A common tern with clear current line of sight can
+apply bounded nonlethal pressure to an occupied anchovy anchor; an intervening
+ridge removes the observation and response. Both branches conserve every
+anchovy unit and create no exact fish, capture, consumption, injury, mortality,
+body, item, cargo, player, or dog outcome. `RegionalEcologyStateV6` retains the
+exact V5 child beside the breadth root, and outer save v30 adopts one sealed
+outer-v29 Alpha36 save exactly once. This is local source evidence only. It has
+no push, remote CI, Pages, deployment, or exact-live attestation, and dedicated
+Wave-G performance and seamless actor-crossing proof remain open.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -637,15 +668,18 @@ regional breadth release, Alpha 31 is the verified solitary-predator append,
 Alpha 32 is the verified signed-region distribution closure for its frozen
 24-record prefix, and Alpha 33 is the verified first bounded Alpine/Wave-F
 slice, extending the catalog to 27 records through a separate sparse sibling.
-Alpha 34 is only an unpublished local polar-shore candidate that preserves that
-lineage and tests a 28th aggregate record; it is not part of the verified
-release sequence yet.
+Alpha 34–36 are preserved unpublished local polar-shore, cold-shore, and
+polar-consumer candidates extending that lineage to 31 records. Alpha37 is the
+current unpublished local first Wave-G breadth candidate, extending it to 36
+records toward approximately 75 through one append-only cohort root. None is
+part of the verified release sequence yet.
 None completes broader aquatic or settlement ecology, broad
 attacks or mortality, population recovery, decomposition, body transport or
 harvesting, full circadian life, complete scent, worldwide species breadth, or the
 full bestiary. Broader species, reproduction, ecological migration, those
 absent physical systems, wider settlement ecology, and wider sound/evidence
-tracking still require their own authoritative owners and performance proof.
+tracking still require their own authoritative owners. Alpha37 also still
+requires dedicated Wave-G performance and seamless actor-crossing evidence.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

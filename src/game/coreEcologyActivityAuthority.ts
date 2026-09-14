@@ -7,6 +7,7 @@ import {
   type CoreEcologyPopulationState,
 } from "./coreEcology";
 import {
+  CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES,
   coreEcologyActivityAffordanceProfile,
   type CoreEcologyActivityAffordanceSpecies,
 } from "./coreEcologyActivityAffordance";
@@ -25,6 +26,8 @@ import {
 } from "./regionalEcology";
 import { canonicalRegionalEcologyLegacyCohortPatchForWorld } from "./regionalEcologyLegacyCohort";
 import { canonicalCoreEcologyRegionalResidentPatchForRoot } from "./regionalEcologyResidents";
+import { canonicalCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
+import { CORE_ECOLOGY_BREADTH_DERIVATION_KIND } from "./coreEcologyBreadthHabitat";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -38,7 +41,8 @@ export const CORE_ECOLOGY_ACTIVITY_AUTHORITY_OWNER_ID =
 
 export type CoreEcologyActivityAuthorityProvenance =
   | "legacy-habitat"
-  | "regional-habitat";
+  | "regional-habitat"
+  | "breadth-habitat";
 
 /**
  * Transient, authenticated destination custody for one bounded activity actor.
@@ -53,6 +57,8 @@ export interface CoreEcologyActivityAuthorityV1 {
   readonly species: CoreEcologyActivityAffordanceSpecies;
   readonly provenance: CoreEcologyActivityAuthorityProvenance;
   readonly homeAnchor: WorldPosition;
+  /** Present only when the source habitat authenticates tide-relative depth. */
+  readonly homeAnchorElevation: number | null;
   readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
 }
 
@@ -60,6 +66,12 @@ export interface ProjectCoreEcologyActivityAuthorityInput {
   readonly rootSeed: RootSeed;
   readonly root: RegionalEcologyRootV1;
   readonly sourceKind: "regional-habitat" | "legacy-cohort";
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly actorId: string;
+}
+
+export interface ProjectCoreEcologyBreadthActivityAuthorityInput {
+  readonly rootSeed: RootSeed;
   readonly patch: CoreEcologyAggregatePatchState;
   readonly actorId: string;
 }
@@ -78,14 +90,9 @@ export type CoreEcologyShoreWaterActivitySpecies = Extract<
   "north-american-river-otter" | "harbor-seal"
 >;
 
-const ACTIVITY_SPECIES = new Set<CoreEcologyActivityAffordanceSpecies>([
-  "fish-crow",
-  "northern-harrier",
-  "snowy-egret",
-  "american-black-duck",
-  "north-american-river-otter",
-  "gull",
-]);
+const ACTIVITY_SPECIES = new Set<CoreEcologyActivityAffordanceSpecies>(
+  CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES,
+);
 const AUTHENTIC_AUTHORITIES = new WeakSet<object>();
 
 /**
@@ -114,6 +121,54 @@ export function projectCoreEcologyActivityAuthority(
   return input.sourceKind === "regional-habitat"
     ? projectRegionalAuthority(input.rootSeed, root, patch, input.actorId)
     : projectLegacyAuthority(input.rootSeed, root, patch, input.actorId);
+}
+
+/**
+ * Reprojects activity custody for any addressable member of a declarative
+ * breadth cohort. The adapter authenticates the complete world-bound patch,
+ * then exposes only that member's exact habitat-owned anchor. Future cohorts
+ * reuse this path instead of adding another species switch or root schema.
+ */
+export function projectCoreEcologyBreadthActivityAuthority(
+  input: ProjectCoreEcologyBreadthActivityAuthorityInput,
+): CoreEcologyActivityAuthorityV1 | null {
+  if (
+    !plainRecord(input)
+    || !exactKeys(input, ["actorId", "patch", "rootSeed"])
+    || typeof input.actorId !== "string"
+    || input.actorId.length === 0
+    || input.actorId.length > 256
+  ) return null;
+  const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
+  if (patch === null || stableStringify(patch) !== stableStringify(input.patch)) return null;
+  const canonical = canonicalCoreEcologyBreadthResidentPatch(patch, {
+    seed: input.rootSeed,
+    region: patch.originRegion,
+    completedTick: patch.updatedAtTick,
+  });
+  if (canonical === null) return null;
+  const owned = findActivityActor(canonical, input.actorId);
+  if (owned === null || coreEcologyActivityAffordanceProfile(owned.species) === null) {
+    return null;
+  }
+  const habitatPopulation = canonical.derivation.kind === CORE_ECOLOGY_BREADTH_DERIVATION_KIND
+    ? canonical.derivation.habitat.populations.find((candidate) => (
+        candidate.species === owned.species
+        && candidate.populationKey === owned.population.populationKey
+        && candidate.actorRepresentation === "individual"
+      ))
+    : undefined;
+  const anchor = habitatPopulation?.anchors[owned.member.populationOrdinal];
+  if (anchor === undefined || anchor.allocatedPopulation !== 1) return null;
+  return makeAuthority({
+    sourceKey: canonical.patchKey,
+    actorId: input.actorId,
+    species: owned.species,
+    provenance: "breadth-habitat",
+    homeAnchor: anchor.position,
+    homeAnchorElevation: anchor.elevation,
+    tidalAnchors: Object.freeze([]),
+  });
 }
 
 /** Only in-process projector products are accepted by the activity kernel. */
@@ -175,6 +230,7 @@ export function deriveCoreEcologyShoreWaterActivityAuthority(
     species,
     provenance: "regional-habitat",
     homeAnchor,
+    homeAnchorElevation: null,
     tidalAnchors: typedAnchors,
   });
 }
@@ -275,6 +331,7 @@ function projectLegacyAuthority(
     species: owned.species,
     provenance: "legacy-habitat",
     homeAnchor: allocation.position,
+    homeAnchorElevation: null,
     tidalAnchors: anchors,
   });
 }
@@ -304,6 +361,7 @@ function regionalAuthority(
         species,
         provenance: "regional-habitat",
         homeAnchor: anchors.homeAnchor,
+        homeAnchorElevation: null,
         tidalAnchors: anchors.tidalAnchors,
       });
 }

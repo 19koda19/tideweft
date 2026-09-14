@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES,
   CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS,
   CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES,
   coreEcologyTidalAggregatePolicy,
@@ -15,33 +16,43 @@ import {
 } from "./coreEcologyTidalAggregatePolicy";
 
 describe("core ecology tidal aggregate policy", () => {
-  it("publishes the frozen Alpha-33 pair through one append-safe registry", () => {
+  it("preserves the exact Alpha-36 child before the Wave-G append", () => {
     const species = CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES.map((policy) => policy.species);
-    expect(species.slice(0, 2)).toEqual([
+    expect(CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES).toEqual([
       "atlantic-silverside",
       "atlantic-marsh-fiddler-crab",
+      "atlantic-capelin",
     ]);
+    expect(species.slice(0, CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES.length))
+      .toEqual(CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES);
+    expect(species.slice(CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES.length))
+      .toEqual(["bay-anchovy", "atlantic-ghost-crab"]);
     expect(new Set(species).size).toBe(species.length);
     expect(Object.isFrozen(CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES)).toBe(true);
     expect(CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES.every(Object.isFrozen)).toBe(true);
-    expect(isCoreEcologyTidalAggregateSpecies("atlantic-silverside")).toBe(true);
-    expect(isCoreEcologyTidalAggregateSpecies("atlantic-marsh-fiddler-crab")).toBe(true);
+    for (const tidalSpecies of species) {
+      expect(isCoreEcologyTidalAggregateSpecies(tidalSpecies)).toBe(true);
+      expect(coreEcologyTidalAggregatePolicy(tidalSpecies)?.species).toBe(tidalSpecies);
+    }
     expect(isCoreEcologyTidalAggregateSpecies("brown-rat")).toBe(false);
     expect(coreEcologyTidalAggregatePolicy("brown-rat")).toBeNull();
   });
 
-  it("retains exact fish submersion and crab exposure boundaries", () => {
-    expect(coreEcologyTidalAnchorActivityUsable("atlantic-silverside", 19_999)).toBe(false);
-    expect(coreEcologyTidalAnchorActivityUsable("atlantic-silverside", 20_000)).toBe(true);
-    expect(coreEcologyTidalAnchorActivityUsable(
+  it("shares exact school-submersion and crab-exposure boundaries", () => {
+    for (const species of ["atlantic-silverside", "bay-anchovy"] as const) {
+      expect(coreEcologyTidalAnchorActivityUsable(species, 19_999)).toBe(false);
+      expect(coreEcologyTidalAnchorActivityUsable(species, 20_000)).toBe(true);
+    }
+    for (const species of [
       "atlantic-marsh-fiddler-crab",
-      119_999,
-    )).toBe(true);
-    expect(coreEcologyTidalAnchorActivityUsable(
-      "atlantic-marsh-fiddler-crab",
-      120_000,
-    )).toBe(false);
+      "atlantic-ghost-crab",
+    ] as const) {
+      expect(coreEcologyTidalAnchorActivityUsable(species, 119_999)).toBe(true);
+      expect(coreEcologyTidalAnchorActivityUsable(species, 120_000)).toBe(false);
+    }
     expect(coreEcologyTidalAnchorActivityUsable("brown-rat", 40_000)).toBe(false);
+    expect(coreEcologyTidalAnchorActivityUsable("bay-anchovy", -1)).toBe(false);
+    expect(coreEcologyTidalAnchorActivityUsable("atlantic-ghost-crab", 1.5)).toBe(false);
   });
 
   it("retains the published silverside cadence and durable operation clock", () => {
@@ -52,6 +63,10 @@ describe("core ecology tidal aggregate policy", () => {
     expect(coreEcologyTidalAggregateUsesDurableRedistributionClock(
       "atlantic-marsh-fiddler-crab",
     )).toBe(false);
+    expect(coreEcologyTidalAggregateUsesDurableRedistributionClock("bay-anchovy"))
+      .toBe(true);
+    expect(coreEcologyTidalAggregateUsesDurableRedistributionClock("atlantic-ghost-crab"))
+      .toBe(false);
     expect(coreEcologyTidalRedistributionIsDue("atlantic-silverside", 0, null)).toBe(false);
     expect(coreEcologyTidalRedistributionIsDue("atlantic-silverside", 3, null)).toBe(false);
     expect(coreEcologyTidalRedistributionIsDue("atlantic-silverside", 4, null)).toBe(true);
@@ -74,6 +89,8 @@ describe("core ecology tidal aggregate policy", () => {
       "atlantic-silverside",
       depths,
     )).toEqual([0, 1, 2]);
+    expect(coreEcologyTidalLawfulDestinationOrdinals("bay-anchovy", depths))
+      .toEqual([0, 1, 2]);
     expect(coreEcologyTidalLawfulDestinationOrdinals(
       "atlantic-silverside",
       [{ ...depths[0]!, waterDepth: 19_999, activityUsable: false }],
@@ -82,6 +99,8 @@ describe("core ecology tidal aggregate policy", () => {
       "atlantic-marsh-fiddler-crab",
       depths,
     )).toBeNull();
+    expect(coreEcologyTidalLawfulDestinationOrdinals("atlantic-ghost-crab", depths))
+      .toBeNull();
     expect(coreEcologyTidalLawfulDestinationOrdinals("brown-rat", depths)).toBeNull();
   });
 
@@ -120,6 +139,12 @@ describe("core ecology tidal aggregate policy", () => {
     });
     expect(resolveCoreEcologyTidalRedistribution(
       "atlantic-marsh-fiddler-crab",
+      population,
+      depths,
+      1,
+    )).toBeNull();
+    expect(resolveCoreEcologyTidalRedistribution(
+      "atlantic-ghost-crab",
       population,
       depths,
       1,
@@ -164,6 +189,34 @@ describe("core ecology tidal aggregate policy", () => {
     )).toBe(660_000);
     expect(resolveCoreEcologyTidalAggregateActivity(
       "atlantic-marsh-fiddler-crab",
+      800_000,
+      120_000,
+      -1,
+      false,
+    )).toBe(0);
+    expect(resolveCoreEcologyTidalAggregateActivity(
+      "bay-anchovy",
+      800_000,
+      70_000,
+      1,
+      false,
+    )).toBe(0);
+    expect(resolveCoreEcologyTidalAggregateActivity(
+      "bay-anchovy",
+      800_000,
+      70_000,
+      1,
+      true,
+    )).toBe(559_360);
+    expect(resolveCoreEcologyTidalAggregateActivity(
+      "atlantic-ghost-crab",
+      800_000,
+      30_000,
+      -1,
+      true,
+    )).toBe(660_000);
+    expect(resolveCoreEcologyTidalAggregateActivity(
+      "atlantic-ghost-crab",
       800_000,
       120_000,
       -1,

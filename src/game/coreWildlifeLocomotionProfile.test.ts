@@ -109,6 +109,9 @@ describe("core wildlife locomotion profiles", () => {
       "northern-harrier",
       "snowy-egret",
       "golden-eagle",
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
     ] as const) {
       expect(coreWildlifeLocomotionProfile(species).mode).toBe("aerial");
       expect(coreWildlifeTraversabilityCell(species, blockedSurface)).toMatchObject({

@@ -2,6 +2,48 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.37",
+      "releaseDate": "2026-09-14",
+      "buildIdentity": "0.3.3-alpha.37",
+      "summary": "Estuary Surface Break is the local unpublished Alpha 37 source candidate: the first Wave-G breadth cohort adds five habitat-gated estuary profiles through one reusable append-only ecology owner.",
+      "gameplayContractVersion": 35,
+      "tutorialVersion": 47,
+      "categories": {
+        "gameplay": [
+          "The exact thirty-one-record Alpha-36 catalog remains the prefix. Bay anchovy, Atlantic ghost crab, great blue heron, common tern, and osprey append as records 32 through 36 in one coherent Estuary Surface Break cohort.",
+          "Bay anchovies remain one conserved non-addressable school of up to forty-eight units, and Atlantic ghost crabs remain one conserved non-addressable shore aggregate of up to twenty-four units. Great blue heron and osprey are solitary persistent individuals; common terns form one group-atomic flock of two to four persistent members.",
+          "Terrain, salinity, shore distance, carrying capacity, territory, density, regional quiet, and prey support decide whether each profile exists. The three bird profiles require the exact local bay-anchovy substrate, so unsupported estuary country remains honestly empty instead of receiving a camera-centered spawn quota."
+        ],
+        "fixes": [
+          "Bay anchovy and Atlantic ghost crab now use the existing shared Tide Table authority. Anchovy activity follows submerged schooling water, while ghost-crab burrow and feeding signs become more active on exposed tidal flat; every unit remains conserved across tide, dormant time, save, reload, and streaming.",
+          "The Wave-G breadth root is append-only by cohort epoch: stable activation receipts and sparse regional deviations let later coherent cohorts join the same owner without adding one save wrapper per species batch or rerolling an earlier cohort.",
+          "Amphibious route eligibility is now independent from shore-water activity. River otter, harbor seal, and polar bear retain their supported land-and-water routes, while only otter and seal receive the separate authenticated activity schedule and destination authority.",
+          "The three addressable estuary birds now use authenticated shared neutral activity. Great blue heron relocates by air to one tide-depth-safe wading ground to wait, scan, or search; common tern and osprey reuse the air-only surface-opportunity and rest loop. Immediate danger still wins. These are bounded daylight/rest routines, not full circadian life or continuously simulated 3D flight."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Stable territory ownership and a deterministic regional-quiet gate leave many eligible regions empty, so this cohort is neither camera- nor start-centered.",
+          "All six current ecology layers share the existing insertion-order-independent, group-atomic stable-distance top-K cap of twenty-four addressable actors. Aggregate anchovies and ghost crabs consume no individual-actor slots, and the complete common-tern flock is admitted or kept coarse as one unit.",
+          "The new ecological links are nonlethal. No new profile can capture, consume, injure, kill, create a body, harm the player or dog, or manufacture a physical animal resource. Shared conservation checks and one representative visible-versus-ridge-occluded common-tern and anchovy scenario exercise the reusable interaction seam without a bespoke species-pair matrix."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D project the same current identities through shared visual families: a long-necked wader for great blue heron, a shorebird flock for common terns, and a broad-winged raptor for osprey. These readable forms and postures do not claim continuous 3D flight physics.",
+          "Visible anchovy surface dimples or brief glints and ghost-crab burrow openings or feeding scrapes remain aggregate evidence, not selectable invented animals. Quick inspection and ABOUT reveal only current lawful observations; distance, occlusion, low identification, touch, and reduced-motion settings preserve the same knowledge boundary.",
+          "Field Manual version 47 explains the five-profile cohort, honest regional absence, conserved aggregate versus persistent individual representation, append-only breadth persistence, shared twenty-four-actor cap, exact save adoption, and explicit local-candidate limits."
+        ],
+        "saves": [
+          "The outer session advances to version 30 and regional ecology advances to RegionalEcologyStateV6. Its first child is the exact authenticated RegionalEcologyStateV5 Alpha-36 composite; one version-1 sparse breadth root owns only cohort activations and genuine Estuary Surface Break resident deviations. The production living catalog contains thirty-six records.",
+          "A sealed outer-version-29 Alpha-36 save is authenticated and adopted exactly once. The receipt binds its original outer integrity and complete V5 lineage before deterministic breadth derivation; supported older paths complete each existing adoption before this wrapper is applied.",
+          "Base, Alpine, polar-shore, cold-shore, polar-consumer, and breadth residents enter one atomic cross-layer projection and conservation commit. Pristine breadth baselines are rederived, true deviations persist sparsely, and save, reload, interruption, signed-region streaming, or extreme distance cannot reroll a cohort, duplicate a unit, split a flock across the cap, or replay adoption."
+        ],
+        "knownLimitations": [
+          "Alpha 37 Estuary Surface Break is a local unpublished SOURCE_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED. It opens Wave G with one five-profile cohort; it does not complete Wave G, Directive 04_1, worldwide ecology, the approximately seventy-five-profile target, or the full bestiary.",
+          "This candidate adds no new animal call or audible Living Voice, capture, kill, live-prey consumption, injury, mortality or body path, player harm, dog harm, human harm, reproduction, recruitment, population recovery, fishing, harvesting, or new physical animal resource.",
+          "The three new birds have no continuous 3D flight physics, authored migration, nesting, complete circadian schedule, harmful predation outcome, or persistent track evidence. The two aggregates have no exact targetable animal, and the cohort adds no complete scent ecology, full weather response, or offscreen narrative feed.",
+          "Shared invariants, signed and extreme-coordinate properties, conservation, and one representative common-tern and anchovy scenario exercise this cohort. Dedicated Wave-G performance and seamless actor-crossing proof remain open."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.36",
       "releaseDate": "2026-09-10",
       "buildIdentity": "0.3.3-alpha.36",

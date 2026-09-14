@@ -2,6 +2,7 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import type { CoreWildlifeTravelMedium } from "./coreWildlifeLocomotionProfile";
 import {
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES,
+  coreEcologySpeciesCanUseAmphibiousRoute,
   isCoreEcologySpeciesRuntimeCapability,
   isCoreEcologySpeciesRuntimePolicy,
   type CoreEcologySpeciesRuntimeCapability,
@@ -26,6 +27,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPE_IDS = Object.freeze([
   "shore-water-forager",
   "aerial-surface-opportunist",
   "ridge-soar-perch",
+  "anchored-wader",
 ] as const);
 
 export type CoreEcologyActivityArchetypeId =
@@ -117,6 +119,9 @@ export const CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES = Object.freeze([
   "gull",
   "golden-eagle",
   "harbor-seal",
+  "great-blue-heron",
+  "common-tern",
+  "osprey",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
 export type CoreEcologyActivityAffordanceSpecies =
@@ -356,6 +361,37 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
       observationAffordance: NONE_OBSERVATION,
       presentationSignals: ["perched", "resting", "ridge-soaring-flight"],
     }),
+    archetype({
+      archetypeId: "anchored-wader",
+      requiredCapabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "diurnal-activity",
+        "movement-memory",
+        "surface-opportunity",
+        "tidal-activity",
+        "wading",
+        "water-depth-response",
+      ],
+      locomotionClass: "amphibious",
+      allowedTravelMedia: ["air"],
+      destinations: [
+        destination(
+          "authenticated-depth-safe-wading-ground",
+          "habitat-allocation",
+          ["air"],
+        ),
+      ],
+      observationAffordance: CURRENT_AQUATIC_ACTIVITY_OBSERVATION,
+      presentationSignals: [
+        "resting",
+        "tidal-relocation-flight",
+        "wading-scan",
+        "wading-search",
+      ],
+    }),
   ]);
 
 const ARCHETYPE_BY_ID = new Map<CoreEcologyActivityArchetypeId, CoreEcologyActivityArchetype>(
@@ -373,6 +409,9 @@ const ARCHETYPE_ASSIGNMENTS: Readonly<
   gull: "aerial-surface-opportunist",
   "golden-eagle": "ridge-soar-perch",
   "harbor-seal": "shore-water-forager",
+  "great-blue-heron": "anchored-wader",
+  "common-tern": "aerial-surface-opportunist",
+  osprey: "aerial-surface-opportunist",
 });
 
 const SHORE_WATER_MOTION_VOCABULARY: Readonly<Partial<Record<
@@ -666,9 +705,7 @@ function policySupportsTravelMedium(
       && (policy.locomotionClass === "aquatic" || policy.locomotionClass === "amphibious");
   }
   return policy.locomotionClass === "amphibious"
-    && policy.capabilities.includes("amphibious-locomotion")
-    && policy.capabilities.includes("aquatic-locomotion")
-    && policy.capabilities.includes("shore-water-activity");
+    && coreEcologySpeciesCanUseAmphibiousRoute(policy.speciesId);
 }
 
 function classCanUseTravelMedium(

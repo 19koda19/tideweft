@@ -72,6 +72,20 @@ export const POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
 export type PolarMarineWildlifeAppearanceSpecies =
   (typeof POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES)[number];
 
+/**
+ * Individually addressable estuary-surface actors. The two anonymous
+ * population-area species in the same release cluster deliberately have no
+ * body palette: renderers receive only their directly observed evidence.
+ */
+export const ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
+  "great-blue-heron",
+  "common-tern",
+  "osprey",
+] as const);
+
+export type EstuarySurfaceWildlifeAppearanceSpecies =
+  (typeof ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES)[number];
+
 /** Fails safely to the established brown coat for legacy or malformed views. */
 export function domesticGoatAppearancePalette(
   appearanceKey: string,
@@ -274,5 +288,53 @@ export function polarMarineWildlifeAppearancePalette(
   }
   return palettes[
     POLAR_MARINE_WILDLIFE_APPEARANCE_FALLBACK[species]
+  ] as WildlifeAppearancePalette;
+}
+
+const ESTUARY_SURFACE_WILDLIFE_APPEARANCE_FALLBACK = Object.freeze({
+  "great-blue-heron": "blue-gray",
+  "common-tern": "black-capped-gray",
+  osprey: "pale-headed",
+} as const satisfies Readonly<Record<EstuarySurfaceWildlifeAppearanceSpecies, string>>);
+
+/**
+ * Shared Chart/Relief palettes for the addressable estuary-surface forms.
+ * Dark structural colors remain deliberately separated from the body colors:
+ * silhouette, cap, eye-line, and wing structure stay legible without hue.
+ */
+export const ESTUARY_SURFACE_WILDLIFE_APPEARANCE_PALETTES = Object.freeze({
+  "great-blue-heron": Object.freeze({
+    "blue-gray": palette("#667a82", "#a9b3ae", "#202a2e", "#c8aa62"),
+    "gray-blue": palette("#77858a", "#b8beb8", "#242d30", "#cfb26b"),
+    "pale-gray": palette("#a0aaa9", "#d5d7cd", "#2b3335", "#d5b970"),
+    "slate-blue": palette("#536b76", "#98a6a7", "#1c272c", "#c4a45d"),
+  }),
+  "common-tern": Object.freeze({
+    "black-capped-gray": palette("#dce1de", "#859294", "#141c1f", "#c85e43"),
+    "pale-gray": palette("#e5e7e0", "#a0aaaa", "#182023", "#ca6549"),
+    "silver-gray": palette("#c7d0cf", "#78898d", "#121a1d", "#c45b42"),
+    "warm-gray": palette("#d5d0c4", "#948f84", "#181d1e", "#c86a4b"),
+  }),
+  osprey: Object.freeze({
+    "dark-backed": palette("#4a3b30", "#e0d9c8", "#171515", "#b2a27e"),
+    "pale-headed": palette("#5a493a", "#eee7d5", "#1a1817", "#c2b18c"),
+    "rust-bibbed": palette("#62493a", "#d9c6ab", "#201a17", "#b77955"),
+    "white-breasted": palette("#514238", "#f0e9d9", "#181716", "#b9a985"),
+  }),
+} as const);
+
+/** Species-safe estuary morph lookup; malformed keys never cross species. */
+export function estuarySurfaceWildlifeAppearancePalette(
+  species: EstuarySurfaceWildlifeAppearanceSpecies,
+  appearanceKey: string,
+): WildlifeAppearancePalette {
+  const palettes = ESTUARY_SURFACE_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+    Record<string, WildlifeAppearancePalette>
+  >;
+  if (Object.prototype.hasOwnProperty.call(palettes, appearanceKey)) {
+    return palettes[appearanceKey] as WildlifeAppearancePalette;
+  }
+  return palettes[
+    ESTUARY_SURFACE_WILDLIFE_APPEARANCE_FALLBACK[species]
   ] as WildlifeAppearancePalette;
 }

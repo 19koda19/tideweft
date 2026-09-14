@@ -85,7 +85,13 @@ describe("core ecology bounded activity", () => {
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES.slice(0, alpha32ActivitySpecies.length))
       .toEqual(alpha32ActivitySpecies);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES.slice(alpha32ActivitySpecies.length))
-      .toEqual(["golden-eagle", "harbor-seal"]);
+      .toEqual([
+        "golden-eagle",
+        "harbor-seal",
+        "great-blue-heron",
+        "common-tern",
+        "osprey",
+      ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
     const withoutHarrier = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(

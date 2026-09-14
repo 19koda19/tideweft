@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.36",
-      releaseDate: "2026-09-10",
-      buildIdentity: "0.3.3-alpha.36",
-      gameplayContractVersion: 34,
-      tutorialVersion: 46,
+      version: "0.3.3-alpha.37",
+      releaseDate: "2026-09-14",
+      buildIdentity: "0.3.3-alpha.37",
+      gameplayContractVersion: 35,
+      tutorialVersion: 47,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,10 +69,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the unpublished Alpha-36 polar consumers and retains earlier habitat releases", () => {
+  it("scopes the unpublished Alpha-37 estuary breadth cohort and retains earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const breathRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.36",
+    );
+    const breathCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => breathRelease?.categories[category] ?? [])
       .join(" ");
     const foxRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.35",
@@ -233,20 +240,31 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(LATEST_PATCH_NOTE.summary).toContain("Breath Between Tides");
-    expect(activeCopy).toContain("Harbor seal is appended as record 30 and polar bear as record 31");
-    expect(activeCopy).toContain("one authenticated foraging-water and dry-haulout pair");
-    expect(activeCopy).toContain("shared amphibious activity");
-    expect(activeCopy).toContain("rarer solitary bear only where that exact seal candidate already exists");
-    expect(activeCopy).toContain("conserved nonlethal harbor-seal pressure on the existing capelin aggregate");
-    expect(activeCopy).toContain("polar-bear pursuit with harbor-seal flight");
-    expect(activeCopy).toContain("Occluding terrain removes those observations and responses");
-    expect(activeCopy).toContain("neither relationship creates capture, consumption, injury, mortality, a body, an item, or cargo");
-    expect(activeCopy).toContain("exact Alpha-35 RegionalEcologyStateV4 and outer-version-28 world remain authenticated as one child");
-    expect(activeCopy).toContain("same insertion-order-independent, group-atomic stable-distance top-K cap of twenty-four addressable actors");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Estuary Surface Break");
+    expect(activeCopy).toContain("Bay anchovy, Atlantic ghost crab, great blue heron, common tern, and osprey append as records 32 through 36");
+    expect(activeCopy).toContain("one conserved non-addressable school of up to forty-eight units");
+    expect(activeCopy).toContain("one conserved non-addressable shore aggregate of up to twenty-four units");
+    expect(activeCopy).toContain("Great blue heron and osprey are solitary persistent individuals");
+    expect(activeCopy).toContain("common terns form one group-atomic flock of two to four persistent members");
+    expect(activeCopy).toContain("regional quiet, and prey support decide whether each profile exists");
+    expect(activeCopy).toContain("require the exact local bay-anchovy substrate");
+    expect(activeCopy).toContain("shared Tide Table authority");
+    expect(activeCopy).toContain("Amphibious route eligibility is now independent from shore-water activity");
+    expect(activeCopy).toContain("append-only by cohort epoch");
+    expect(activeCopy).toContain("three addressable estuary birds now use authenticated shared neutral activity");
+    expect(activeCopy).toContain("Great blue heron relocates by air to one tide-depth-safe wading ground");
+    expect(activeCopy).toContain("common tern and osprey reuse the air-only surface-opportunity and rest loop");
+    expect(activeCopy).toContain("Immediate danger still wins");
+    expect(activeCopy).toContain("not full circadian life or continuously simulated 3D flight");
+    expect(activeCopy).toContain("this cohort is neither camera- nor start-centered");
+    expect(activeCopy).toContain("existing insertion-order-independent, group-atomic stable-distance top-K cap of twenty-four addressable actors");
     expect(activeCopy).toContain("Chart 2D and Relief 3D");
     expect(activeCopy).toContain("Quick inspection and ABOUT");
-    expect(activeCopy).toContain("representative visible-versus-occluded food-web chain");
+    expect(activeCopy).toContain("Shared conservation checks and one representative visible-versus-ridge-occluded common-tern and anchovy scenario");
+    expect(activeCopy).toContain("reusable interaction seam without a bespoke species-pair matrix");
+    expect(breathCopy).toContain("Harbor seal is appended as record 30 and polar bear as record 31");
+    expect(breathCopy).toContain("one authenticated foraging-water and dry-haulout pair");
+    expect(breathCopy).toContain("polar-bear pursuit with harbor-seal flight");
     expect(foxCopy).toContain("catalog advances to twenty-nine records");
     expect(foxCopy).toContain("One solitary addressable Arctic fox");
     expect(foxCopy).toContain("exact already-admitted Coldwater Glint capelin forage substrate");
@@ -331,20 +349,26 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 29");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("regional ecology advances to root version 5");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("exact authenticated RegionalEcologyStateV4 Alpha-35 composite");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("version-1 sparse polar-consumer root");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("production catalog contains thirty-one records");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed outer-version-28 Alpha-35 save is authenticated and adopted exactly once");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete V4 lineage");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("All five ecology layers enter one atomic cross-layer projection and conservation commit");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("group-atomic stable-distance top-K cap of twenty-four addressable actors");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("outer session advances to version 30");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("regional ecology advances to RegionalEcologyStateV6");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("exact authenticated RegionalEcologyStateV5 Alpha-36 composite");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("version-1 sparse breadth root");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("production living catalog contains thirty-six records");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("sealed outer-version-29 Alpha-36 save is authenticated and adopted exactly once");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete V5 lineage");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Base, Alpine, polar-shore, cold-shore, polar-consumer, and breadth residents enter one atomic cross-layer projection and conservation commit");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("split a flock across the cap");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("local unpublished SOURCE_CANDIDATE");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("bounded Wave-F role coverage, not Wave G, Directive 04_1");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no capture, kill, consumption, new mortality or body path");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no audible Living Voice");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("opens Wave G with one five-profile cohort");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("does not complete Wave G, Directive 04_1");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no new animal call or audible Living Voice");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("capture, kill, live-prey consumption, injury, mortality or body path");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no continuous 3D flight physics");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Dedicated Wave-G performance and seamless actor-crossing proof remain open");
+    expect(breathRelease?.categories.saves.join(" ")).toContain("outer session advances to version 29");
+    expect(breathRelease?.categories.saves.join(" ")).toContain("regional ecology advances to root version 5");
+    expect(breathRelease?.categories.knownLimitations.join(" ")).toContain("bounded Wave-F role coverage, not Wave G, Directive 04_1");
     expect(foxRelease?.categories.saves.join(" ")).toContain("outer session advances to version 28");
     expect(foxRelease?.categories.saves.join(" ")).toContain("regional ecology advances to root version 4");
     expect(foxRelease?.categories.saves.join(" ")).toContain("production catalog contains twenty-nine records");

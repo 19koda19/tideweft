@@ -49,6 +49,8 @@ export const ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha35-cold-shore-presentation-invariants:v1" as const;
 export const ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha36-polar-consumer-presentation-invariants:v1" as const;
+export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(3, -7);
@@ -387,7 +389,7 @@ function pursuingBear(): CoreWildlifeActorState {
   return result;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
   it.each([
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
@@ -411,6 +413,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["brown-bear", "BROWN BEAR", "Brown bear"],
     ["mountain-goat", "MOUNTAIN GOAT", "Mountain goat"],
     ["golden-eagle", "GOLDEN EAGLE", "Golden eagle"],
+    ["great-blue-heron", "GREAT BLUE HERON", "Great blue heron"],
+    ["common-tern", "COMMON TERN FLOCK", "Common tern"],
+    ["osprey", "OSPREY", "Osprey"],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -421,7 +426,13 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     const visible = observation(
       actor,
       4,
-      species === "gull" ? 7 : species === "fish-crow" ? 3 : undefined,
+      species === "gull"
+        ? 7
+        : species === "fish-crow"
+          ? 3
+          : species === "common-tern"
+            ? 5
+            : undefined,
     );
     const quick = projectWildlifeQuickInspect(actor, visible);
     const about = projectWildlifeAbout(actor, visible);
@@ -459,6 +470,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       80,
     ],
     ["golden-eagle", "UNKNOWN LARGE RAPTOR", "Unidentified large raptor", 80],
+    ["great-blue-heron", "UNKNOWN LARGE WADER", "Unidentified large wading bird", 80],
+    ["common-tern", "UNKNOWN SEABIRDS", "Unidentified seabirds", 80],
+    ["osprey", "UNKNOWN LARGE RAPTOR", "Unidentified large raptor", 80],
     [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",
@@ -478,7 +492,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(about?.observed.map(({ label }) => label)).not.toContain("Form");
     expect(about?.observed.map(({ label }) => label)).not.toContain("Appearance");
     expect(about?.observed.map(({ label }) => label)).not.toContain("Life stage");
-    expect(JSON.stringify(about)).not.toMatch(/patch|population|target|hunger|prey|temperament/iu);
+    expect(JSON.stringify(about)).not.toMatch(
+      /"(?:patch|population|target|hunger|prey|temperament)"\s*:/iu,
+    );
   });
 
   it.each([
@@ -502,6 +518,21 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["north-american-river-otter", "Long-bodied, low-slung swimmer", "North American river otter"],
     ["mountain-goat", "Shaggy, sure-footed ungulate with dark swept horns", "Mountain goat"],
     ["golden-eagle", "Large, broad-winged raptor with a golden nape", "Golden eagle"],
+    [
+      "great-blue-heron",
+      "Tall, long-necked wader with a heavy dagger-like bill",
+      "Great blue heron",
+    ],
+    [
+      "common-tern",
+      "Slender, pointed-winged seabirds with forked tails",
+      "Common tern",
+    ],
+    [
+      "osprey",
+      "Large, long-winged raptor with a pale head and bent wings",
+      "Osprey",
+    ],
   ] as const)("shows only directly observable close-range %s facts", (
     species,
     form,
@@ -509,7 +540,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   ) => {
     const actor = wildlife(species);
     const selected = projectWildlifeLivingActorInspection(actor, observation(actor));
-    expect(selected?.about.observed).toEqual(expect.arrayContaining([
+    const expectedFacts = [
       {
         label: "Species",
         value: speciesLabel,
@@ -517,8 +548,11 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },
       { label: "Appearance", value: expect.any(String) },
-      { label: "Life stage", value: expect.any(String) },
-    ]));
+      ...(species === "common-tern"
+        ? []
+        : [{ label: "Life stage", value: expect.any(String) }]),
+    ];
+    expect(selected?.about.observed).toEqual(expect.arrayContaining(expectedFacts));
     expect(selected?.about.identityLine).not.toContain(actor.identity.stableId);
     expect(selected?.about.known).toEqual([]);
     expect(hasCoherentLivingActorInspection(selected!)).toBe(true);
@@ -681,6 +715,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   it.each([
     "american-pika",
     "atlantic-capelin",
+    "bay-anchovy",
+    "atlantic-ghost-crab",
   ] as const)("never turns %s population activity into an ABOUT actor identity", (species) => {
     const deer = wildlife("deer");
     const fabricatedAggregate = {

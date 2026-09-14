@@ -166,6 +166,20 @@ describe("core ecology trophic capability resolver", () => {
     )).toBeNull();
     expect(coreEcologyCanPursueLivingActor("arctic-fox", "atlantic-capelin"))
       .toBe(false);
+
+    // Estuary breadth birds use that same aggregate-pressure seam. Their
+    // aquatic foraging activity must not silently become addressable pursuit
+    // of rabbits, deer, or other ordinary living actors.
+    for (const forager of ["great-blue-heron", "common-tern", "osprey"] as const) {
+      expect(coreEcologyTrophicPerceivedClass("bay-anchovy", forager))
+        .toBe("aquatic-foraging-pressure");
+      expect(coreEcologyTrophicPerceivedClass(forager, "bay-anchovy"))
+        .toBeNull();
+      expect(coreEcologyCanPursueLivingActor(forager, "marsh-rabbit"))
+        .toBe(false);
+      expect(coreEcologyCanPursueLivingActor(forager, "deer"))
+        .toBe(false);
+    }
   });
 
   it("is total and deterministic across the declared roster", () => {

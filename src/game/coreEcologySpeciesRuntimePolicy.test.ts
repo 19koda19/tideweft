@@ -9,6 +9,7 @@ import {
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
   CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_VERSION,
   assertCoreEcologySpeciesRuntimePolicies,
+  coreEcologySpeciesCanUseAmphibiousRoute,
   coreEcologySpeciesCanFeedFromCarcass,
   coreEcologySpeciesCanGuardCarcass,
   coreEcologySpeciesCanOwnActorAddress,
@@ -58,6 +59,11 @@ describe("core ecology species runtime policy", () => {
       "arctic-fox",
       "harbor-seal",
       "polar-bear",
+      "bay-anchovy",
+      "atlantic-ghost-crab",
+      "great-blue-heron",
+      "common-tern",
+      "osprey",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -362,6 +368,7 @@ describe("core ecology species runtime policy", () => {
         capabilities: [
           "actor-address",
           "amphibious-locomotion",
+          "amphibious-route",
           "aquatic-foraging",
           "aquatic-locomotion",
           "diurnal-activity",
@@ -383,11 +390,11 @@ describe("core ecology species runtime policy", () => {
         capabilities: [
           "actor-address",
           "amphibious-locomotion",
+          "amphibious-route",
           "aquatic-locomotion",
           "food-investigation",
           "live-prey-pursuit",
           "movement-memory",
-          "shore-water-activity",
           "water-depth-response",
         ],
         activitySignals: [],
@@ -431,6 +438,125 @@ describe("core ecology species runtime policy", () => {
       .toBe(false);
     expect(coreEcologySpeciesHasRuntimeCapability("polar-bear", "aquatic-foraging"))
       .toBe(false);
+  });
+
+  it("admits the Wave-G estuary cluster through composable fail-closed roles", () => {
+    const expected = {
+      "bay-anchovy": {
+        actorAddressable: false,
+        identityForm: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization: "school",
+        groupStableIdNamespace: "BAYANCHOVY-SCHOOL",
+        maximumMaterializedActors: 0,
+        capabilities: [
+          "aggregate-response",
+          "aquatic-locomotion",
+          "population-activity-evidence",
+          "school-coordination",
+          "tidal-activity",
+          "water-depth-response",
+        ],
+        evidenceKinds: ["surface-dimple"],
+      },
+      "atlantic-ghost-crab": {
+        actorAddressable: false,
+        identityForm: "aggregate",
+        locomotionClass: "terrestrial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumMaterializedActors: 0,
+        capabilities: [
+          "aggregate-response",
+          "population-activity-evidence",
+          "quieting",
+          "tidal-activity",
+        ],
+        evidenceKinds: ["burrow-opening", "feeding-scrape"],
+      },
+      "great-blue-heron": {
+        actorAddressable: true,
+        identityForm: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumMaterializedActors: 2,
+        capabilities: [
+          "actor-address",
+          "aerial-locomotion",
+          "amphibious-locomotion",
+          "aquatic-foraging",
+          "diurnal-activity",
+          "movement-memory",
+          "surface-opportunity",
+          "tidal-activity",
+          "wading",
+          "water-depth-response",
+        ],
+        evidenceKinds: [],
+      },
+      "common-tern": {
+        actorAddressable: true,
+        identityForm: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "FLOCK",
+        maximumMaterializedActors: 8,
+        capabilities: [
+          "actor-address",
+          "aerial-locomotion",
+          "aquatic-foraging",
+          "diurnal-activity",
+          "group-coordination",
+          "movement-memory",
+          "perch",
+          "surface-opportunity",
+          "tidal-activity",
+        ],
+        evidenceKinds: [],
+      },
+      osprey: {
+        actorAddressable: true,
+        identityForm: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        maximumMaterializedActors: 1,
+        capabilities: [
+          "actor-address",
+          "aerial-locomotion",
+          "aerial-predator",
+          "aquatic-foraging",
+          "diurnal-activity",
+          "movement-memory",
+          "perch",
+          "surface-opportunity",
+          "tidal-activity",
+        ],
+        evidenceKinds: [],
+      },
+    } as const;
+
+    for (const [species, contract] of Object.entries(expected) as [
+      keyof typeof expected,
+      (typeof expected)[keyof typeof expected],
+    ][]) {
+      expect(coreEcologySpeciesRuntimePolicy(species)).toMatchObject({
+        ...contract,
+        mortality: {
+          predatorContact: null,
+          physicalBodySizeUnits: 0,
+          physicalBodyResourceUnits: 0,
+          carcassFeeding: false,
+          carcassGuarding: false,
+        },
+      });
+      expect(coreEcologySpeciesPredatorContact(species)).toBeNull();
+      expect(coreEcologySpeciesPhysicalBodySizeUnits(species)).toBe(0);
+      expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
+      expect(coreEcologySpeciesCanFeedFromCarcass(species)).toBe(false);
+      expect(coreEcologySpeciesCanGuardCarcass(species)).toBe(false);
+    }
   });
 
   it("plugs the domestic flock into shared actor, food, alarm, and group capabilities", () => {
@@ -615,6 +741,7 @@ describe("core ecology species runtime policy", () => {
       capabilities: [
         "actor-address",
         "amphibious-locomotion",
+        "amphibious-route",
         "aquatic-foraging",
         "aquatic-locomotion",
         "diurnal-activity",
@@ -634,6 +761,40 @@ describe("core ecology species runtime policy", () => {
       "north-american-river-otter",
       "ground-movement-evidence",
     )).toBe(false);
+  });
+
+  it("separates generic amphibious routing from shore-water activity authority", () => {
+    const routeOwners = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES
+      .filter(({ capabilities }) => capabilities.includes("amphibious-route"))
+      .map(({ speciesId }) => speciesId);
+    const shoreWaterActivityOwners = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES
+      .filter(({ capabilities }) => capabilities.includes("shore-water-activity"))
+      .map(({ speciesId }) => speciesId);
+
+    expect(routeOwners).toEqual([
+      "north-american-river-otter",
+      "harbor-seal",
+      "polar-bear",
+    ]);
+    expect(shoreWaterActivityOwners).toEqual([
+      "north-american-river-otter",
+      "harbor-seal",
+    ]);
+    for (const policy of CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES) {
+      if (policy.capabilities.includes("shore-water-activity")) {
+        expect(policy.capabilities).toContain("amphibious-route");
+      }
+      if (policy.capabilities.includes("amphibious-route")) {
+        expect(policy.actorAddressable).toBe(true);
+        expect(policy.locomotionClass).toBe("amphibious");
+        expect(policy.capabilities).toContain("amphibious-locomotion");
+        expect(policy.capabilities).toContain("aquatic-locomotion");
+        expect(coreEcologySpeciesCanUseAmphibiousRoute(policy.speciesId)).toBe(true);
+      }
+    }
+    expect(coreEcologySpeciesCanUseAmphibiousRoute("american-black-duck")).toBe(false);
+    expect(coreEcologySpeciesCanUseAmphibiousRoute("snowy-egret")).toBe(false);
+    expect(coreEcologySpeciesCanUseAmphibiousRoute("unknown-species")).toBe(false);
   });
 
   it("keeps mobbing and aerial predation orthogonal to prey identity", () => {

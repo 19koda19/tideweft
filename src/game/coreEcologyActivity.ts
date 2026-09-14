@@ -12,6 +12,8 @@ import {
 } from "./coreEcology";
 import {
   CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
+  CORE_ECOLOGY_ANCHORED_WADER_MAXIMUM_DEPTH,
+  CORE_ECOLOGY_ANCHORED_WADER_MINIMUM_DEPTH,
   CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH,
   CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH,
   type CoreEcologyHabitatAllocation,
@@ -955,6 +957,82 @@ function projectCanonicalCoreEcologyActivity(
     });
   }
 
+  if (activityProfile.archetypeId === "anchored-wader") {
+    if (authority.homeAnchorElevation === null) return null;
+    const atWadingGround = withinWorldRadius(
+      owned.member.actor.address.position,
+      authority.homeAnchor,
+      WADING_ARRIVAL_RADIUS_UNITS,
+    );
+    const seekAuthenticatedWadingGround = () => activityProjection(
+      owned,
+      input.atTick,
+      day,
+      {
+        state: "seeking-wading-ground",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: "observe",
+        presentationSignal: "tidal-relocation-flight",
+        perch: noPerchProjection(),
+        motion: Object.freeze({
+          kind: "target-area" as const,
+          verb: "seek-wading-ground" as const,
+          targetArea: frozenArea(
+            authority.homeAnchor,
+            WADING_ARRIVAL_RADIUS_UNITS,
+          ),
+        }),
+      },
+    );
+    const waterDepth = Math.max(
+      0,
+      tideAtTick(input.atTick).level - authority.homeAnchorElevation,
+    );
+    // Authenticated habitat admission guarantees this invariant. Fail closed
+    // rather than presenting a bird standing or resting in unsupported depth.
+    if (waterDepth > CORE_ECOLOGY_ANCHORED_WADER_MAXIMUM_DEPTH) return null;
+    if (inRestWindow || actorNeedsRest) {
+      if (!atWadingGround) return seekAuthenticatedWadingGround();
+      return activityProjection(owned, input.atTick, day, {
+        state: "resting",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: inRestWindow ? "rest" : "observe",
+        presentationSignal: "resting",
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "hold-position" }),
+      });
+    }
+    if (waterDepth < CORE_ECOLOGY_ANCHORED_WADER_MINIMUM_DEPTH) {
+      if (!atWadingGround) return seekAuthenticatedWadingGround();
+      return activityProjection(owned, input.atTick, day, {
+        state: "waiting-on-tide",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: "observe",
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    const aquaticObservation = currentAquaticActivityObservation(
+      owned.member.actor,
+      input.atTick,
+    );
+    if (!atWadingGround) {
+      return seekAuthenticatedWadingGround();
+    }
+    const searching = aquaticObservation !== null
+      || Math.trunc(input.atTick / CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS) % 2 === 1;
+    return activityProjection(owned, input.atTick, day, {
+      state: searching ? "wading-search" : "wading-scan",
+      responsiveToImmediateIntent: false,
+      sourceObservationId: aquaticObservation?.sourceObservationId ?? null,
+      preferredNeutralIntent: "observe",
+      presentationSignal: searching ? "wading-search" : "wading-scan",
+      perch: noPerchProjection(),
+      motion: Object.freeze({ kind: "hold-position" }),
+    });
+  }
+
   if (activityProfile.archetypeId === "aerial-surface-opportunist") {
     const atHabitatAnchor = withinWorldRadius(
       owned.member.actor.address.position,
@@ -1347,6 +1425,7 @@ function findMaterializedActor(
 
 interface AuthenticatedActivityDestinations {
   readonly homeAnchor: WorldPosition;
+  readonly homeAnchorElevation: number | null;
   readonly tidalAnchors: readonly CoreEcologyTidalWebHabitatAnchor[];
   readonly ridgeAuthority: CoreEcologyRidgeActivityAuthorityV1 | null;
 }
@@ -1367,6 +1446,7 @@ function authenticatedActivityDestinations(
       : [];
     return Object.freeze({
       homeAnchor: embedded.position,
+      homeAnchorElevation: null,
       tidalAnchors: Object.freeze(tidalAnchors),
       ridgeAuthority: null,
     });
@@ -1382,6 +1462,7 @@ function authenticatedActivityDestinations(
     ) return null;
     return Object.freeze({
       homeAnchor: supplied.homeAnchor,
+      homeAnchorElevation: null,
       tidalAnchors: Object.freeze([]),
       ridgeAuthority: supplied,
     });
@@ -1396,6 +1477,7 @@ function authenticatedActivityDestinations(
   ) return null;
   return Object.freeze({
     homeAnchor: supplied.homeAnchor,
+    homeAnchorElevation: supplied.homeAnchorElevation,
     tidalAnchors: supplied.tidalAnchors,
     ridgeAuthority: null,
   });

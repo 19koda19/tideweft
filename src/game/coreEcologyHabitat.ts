@@ -171,6 +171,12 @@ export const CORE_ECOLOGY_SNOWY_EGRET_WADING_ANCHORS = 4 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_REFUGE_ANCHORS = 1 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_MINIMUM_WADING_DEPTH = 8_000 as const;
 export const CORE_ECOLOGY_SNOWY_EGRET_MAXIMUM_WADING_DEPTH = 78_000 as const;
+/**
+ * Shared physical envelope for habitat-owned wading anchors without a
+ * separate dry refuge. Admission and activity must consume the same values.
+ */
+export const CORE_ECOLOGY_ANCHORED_WADER_MINIMUM_DEPTH = 4_000 as const;
+export const CORE_ECOLOGY_ANCHORED_WADER_MAXIMUM_DEPTH = 380_000 as const;
 export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_DABBLING_ANCHORS = 2 as const;
 export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_REFUGE_ANCHORS = 1 as const;
 export const CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH = 18_000 as const;

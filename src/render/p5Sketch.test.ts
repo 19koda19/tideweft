@@ -8,6 +8,7 @@ import type {
   WildlifeCarcassView,
   WildlifeView,
 } from "./types";
+import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
   "test:alpha31-predator-presentation-invariants:v1" as const;
@@ -15,6 +16,8 @@ export const ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha33-alpine-presentation-invariants:v1" as const;
 export const ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha34-polar-presentation-invariants:v1" as const;
+export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
 
 const p5Harness = vi.hoisted(() => ({
   canvas: null as MockCanvas | null,
@@ -248,7 +251,7 @@ const dogView = (overrides: Partial<DogView> = {}): DogView => ({
   ...overrides,
 });
 
-type IndividualWildlifeViewSpecies = WildlifeView["species"];
+type IndividualWildlifeViewSpecies = WildlifeVisualSpecies;
 
 const wildlifeView = (
   species: IndividualWildlifeViewSpecies,
@@ -278,6 +281,9 @@ const wildlifeView = (
     "brown-bear": "Brown bear",
     "mountain-goat": "Mountain goat",
     "golden-eagle": "Golden eagle",
+    "great-blue-heron": "Great blue heron",
+    "common-tern": "Common terns",
+    osprey: "Osprey",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -303,6 +309,9 @@ const wildlifeView = (
     "brown-bear": "BROWNBEAR-",
     "mountain-goat": "MOUNTAINGOAT-",
     "golden-eagle": "GOLDENEAGLE-",
+    "great-blue-heron": "BLUEHERON-",
+    "common-tern": "COMMONTERN-",
+    osprey: "OSPREY-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -317,7 +326,13 @@ const wildlifeView = (
         ? "cream-white"
         : species === "golden-eagle"
           ? "golden-naped"
-          : "test-visible-morph",
+          : species === "great-blue-heron"
+            ? "blue-gray"
+            : species === "common-tern"
+              ? "black-capped-gray"
+              : species === "osprey"
+                ? "pale-headed"
+                : "test-visible-morph",
     behavior: "watch",
     conditionLabels: [],
     selected: false,
@@ -1166,7 +1181,7 @@ describe("Chart physical wildlife remains", () => {
   });
 });
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} Chart wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} Chart wildlife presentation`, () => {
   it("draws and touch-selects population evidence through its non-actor target", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("chart-rat-evidence", { x: 12, y: 12 });
@@ -1317,17 +1332,24 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   });
 
   it.each([
-    ["atlantic-silverside", "surface-dimples", "Silverside surface dimples and school glints", "ellipse"],
-    ["atlantic-capelin", "surface-dimples", "Aquatic surface dimples and brief glints", "ellipse"],
-    ["atlantic-marsh-fiddler-crab", "burrow-openings", "Fiddler crab burrow openings", "ellipse"],
-    ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "Fiddler crab feeding scrapes", "line"],
-    ["american-pika", "haypile", "American pika haypile", "ellipse"],
-    ["american-pika", "talus-sign", "American pika talus sign", "triangle"],
+    ["atlantic-silverside", "surface-dimples", "Silverside surface dimples and school glints", "ellipse", "Atlantic silverside signs", "Atlantic silverside school signs", true, "deep-water"],
+    ["atlantic-capelin", "surface-dimples", "Aquatic surface dimples and brief glints", "ellipse", "Aquatic activity", "Unidentified aquatic activity", false, "deep-water"],
+    ["bay-anchovy", "surface-dimples", "Aquatic surface dimples and brief glints", "ellipse", "Aquatic activity", "Unidentified aquatic activity", false, "deep-water"],
+    ["atlantic-marsh-fiddler-crab", "burrow-openings", "Fiddler crab burrow openings", "ellipse", "Atlantic marsh fiddler crab signs", "Atlantic marsh fiddler crab area signs", true, "mudflat"],
+    ["atlantic-marsh-fiddler-crab", "feeding-scrapes", "Fiddler crab feeding scrapes", "line", "Atlantic marsh fiddler crab signs", "Atlantic marsh fiddler crab area signs", true, "mudflat"],
+    ["atlantic-ghost-crab", "burrow-openings", "Small shoreline burrow openings", "ellipse", "Shoreline signs", "Unidentified shoreline activity", false, "mudflat"],
+    ["atlantic-ghost-crab", "feeding-scrapes", "Fine shoreline feeding scrapes", "line", "Shoreline signs", "Unidentified shoreline activity", false, "mudflat"],
+    ["american-pika", "haypile", "American pika haypile", "ellipse", "American pika signs", "American pika population signs", true, "ridge"],
+    ["american-pika", "talus-sign", "American pika talus sign", "triangle", "American pika signs", "American pika population signs", true, "ridge"],
   ] as const)("draws and pointer-selects low-cost %s %s without an actor alias", (
     species,
     form,
     evidenceLabel,
     structuralMethod,
+    quickLabel,
+    identityLabel,
+    speciesIdentified,
+    terrainKind,
   ) => {
     let now = 2_117;
     vi.stubGlobal("performance", { now: () => now });
@@ -1338,22 +1360,10 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       evidenceId: `TIDAL-EVIDENCE-${form}`,
       species,
       form,
-      quickLabel: species === "atlantic-silverside"
-        ? "Atlantic silverside signs"
-        : species === "atlantic-capelin"
-          ? "Aquatic activity"
-          : species === "american-pika"
-            ? "American pika signs"
-            : "Atlantic marsh fiddler crab signs",
-      identityLabel: species === "atlantic-silverside"
-        ? "Atlantic silverside school signs"
-        : species === "atlantic-capelin"
-          ? "Unidentified aquatic activity"
-          : species === "american-pika"
-            ? "American pika population signs"
-            : "Atlantic marsh fiddler crab area signs",
+      quickLabel,
+      identityLabel,
       evidenceLabel,
-      speciesIdentified: species !== "atlantic-capelin",
+      speciesIdentified,
       selected: true,
     });
     const current: TideweftView = {
@@ -1372,11 +1382,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       terrain: {
         ...base.terrain,
         tiles: [{
-          kind: species === "american-pika"
-            ? "ridge"
-            : species === "atlantic-silverside" || species === "atlantic-capelin"
-              ? "deep-water"
-              : "mudflat",
+          kind: terrainKind,
           elevation: 0.2,
           discovered: 1,
           currentVisibility: 1,
@@ -1399,6 +1405,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(visibleText).not.toContain(evidence.aggregateId);
     expect(visibleText).not.toContain(evidence.evidenceId);
     expect(visibleText).not.toMatch(/\b48\b|actorId|mortality|carcass/iu);
+    if (!speciesIdentified) expect(visibleText).not.toMatch(/anchovy|capelin|ghost crab/iu);
     if (species === "atlantic-capelin") {
       const glintLines = (p5Harness.instance?.line as ReturnType<typeof vi.fn>)
         .mock.calls.map((call) => [...call]);
@@ -2024,6 +2031,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["cougar", "COUGAR-", "#aa8258", "bezier"],
     ["brown-bear", "BROWNBEAR-", "#4c372b", "ellipse"],
     ["mountain-goat", "MOUNTAINGOAT-", "#d8d1bd", "bezier"],
+    ["great-blue-heron", "BLUEHERON-", "#667a82", "bezier"],
+    ["common-tern", "COMMONTERN-", "#dce1de", "triangle"],
+    ["osprey", "OSPREY-", "#5a493a", "quad"],
   ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} draws and touch-selects the color-independent %s form with reduced motion`, (
     species,
     prefix,

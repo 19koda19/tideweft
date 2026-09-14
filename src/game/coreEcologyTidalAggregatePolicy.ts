@@ -9,10 +9,18 @@ const SCHOOL_DEPTH_REFERENCE = 140_000;
 const CAPELIN_SCHOOL_DEPTH_REFERENCE = 180_000;
 const CRAB_INUNDATION_REFERENCE = 120_000;
 
-export const CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES = Object.freeze([
+/** Exact tidal-aggregate roster through the Alpha-36 polar-forage slice. */
+export const CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES = Object.freeze([
   "atlantic-silverside",
   "atlantic-marsh-fiddler-crab",
   "atlantic-capelin",
+] as const);
+
+/** Append-only current roster; new species consume shared policy records. */
+export const CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES = Object.freeze([
+  ...CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES,
+  "bay-anchovy",
+  "atlantic-ghost-crab",
 ] as const);
 
 export type CoreEcologyTidalAggregateSpecies =
@@ -164,6 +172,25 @@ const ATLANTIC_CAPELIN_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
 });
 
 /**
+ * Estuary breadth consumes the same submerged-schooling law as silversides.
+ * The separate species record preserves identity without creating a controller.
+ */
+const BAY_ANCHOVY_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
+  species: "bay-anchovy",
+  activityDepthWindow: SILVERSIDE_POLICY.activityDepthWindow,
+  activityProjection: SILVERSIDE_POLICY.activityProjection,
+  redistribution: SILVERSIDE_POLICY.redistribution,
+});
+
+/** Ghost-crab surface activity follows the same exposed-flat tide law. */
+const ATLANTIC_GHOST_CRAB_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
+  species: "atlantic-ghost-crab",
+  activityDepthWindow: FIDDLER_CRAB_POLICY.activityDepthWindow,
+  activityProjection: FIDDLER_CRAB_POLICY.activityProjection,
+  redistribution: FIDDLER_CRAB_POLICY.redistribution,
+});
+
+/**
  * Ordered adapter registry for aggregates governed by live tide. Appending a
  * species policy extends the shared table without adding a new species branch
  * to its projection, cadence, evacuation, or small-world routing owners.
@@ -173,6 +200,8 @@ readonly CoreEcologyTidalAggregatePolicy[] = Object.freeze([
   SILVERSIDE_POLICY,
   FIDDLER_CRAB_POLICY,
   ATLANTIC_CAPELIN_POLICY,
+  BAY_ANCHOVY_POLICY,
+  ATLANTIC_GHOST_CRAB_POLICY,
 ]);
 
 if (

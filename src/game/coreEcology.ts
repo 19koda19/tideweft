@@ -100,6 +100,11 @@ import {
   type CoreEcologyPolarConsumerHabitat,
 } from "./coreEcologyPolarConsumerHabitat";
 import {
+  CORE_ECOLOGY_BREADTH_DERIVATION_KIND,
+  canonicalizeCoreEcologyBreadthHabitat,
+  type CoreEcologyBreadthHabitat,
+} from "./coreEcologyBreadthHabitat";
+import {
   coreEcologyAggregateDisturbanceEvidenceKind,
   coreEcologyAggregateSpeciesPolicy,
   isCoreEcologyAggregateSpecies,
@@ -210,6 +215,9 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "arctic-fox",
   "harbor-seal",
   "polar-bear",
+  "great-blue-heron",
+  "common-tern",
+  "osprey",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -423,6 +431,11 @@ export type CoreEcologyAggregatePatchDerivation =
       /** Capelin-backed seal and polar-bear residents owned by the polar consumer root. */
       readonly kind: "regional-polar-consumer-v1";
       readonly habitat: CoreEcologyPolarConsumerHabitat;
+    }>
+  | Readonly<{
+      /** Append-only Wave-G cohort residents owned by the shared breadth root. */
+      readonly kind: typeof CORE_ECOLOGY_BREADTH_DERIVATION_KIND;
+      readonly habitat: CoreEcologyBreadthHabitat;
     }>
   | Readonly<{
       /**
@@ -1171,6 +1184,7 @@ export function createCoreEcologyAggregatePatch(
     || derivation.kind === "regional-alpine-v1"
     || derivation.kind === "regional-polar-shore-v1"
     || derivation.kind === "regional-cold-shore-v1"
+    || derivation.kind === CORE_ECOLOGY_BREADTH_DERIVATION_KIND
     ? aggregatePopulationsFromHabitat(
         input.seed,
         derivation.habitat,
@@ -2647,7 +2661,8 @@ function aggregatePopulationsFromHabitat(
     | CoreEcologyRegionalHabitat
     | CoreEcologyAlpineHabitat
     | CoreEcologyPolarShoreHabitat
-    | CoreEcologyColdShoreHabitat,
+    | CoreEcologyColdShoreHabitat
+    | CoreEcologyBreadthHabitat,
   tick: number,
   regionalSuppression: CoreEcologyRegionalAdoptionSuppressionManifestV1 | null = null,
 ): readonly CoreEcologyAggregatePopulationState[] {
@@ -2772,7 +2787,8 @@ type CoreEcologyRegionalLikePopulationCandidate =
   | CoreEcologyRegionalPopulationCandidate
   | CoreEcologyAlpineHabitat["populations"][number]
   | CoreEcologyPolarShoreHabitat["populations"][number]
-  | CoreEcologyColdShoreHabitat["populations"][number];
+  | CoreEcologyColdShoreHabitat["populations"][number]
+  | CoreEcologyBreadthHabitat["populations"][number];
 
 function isRegionalHabitatPopulation(
   value: unknown,
@@ -2795,7 +2811,8 @@ function regionalHabitatOrigin(
     | CoreEcologyRegionalHabitat
     | CoreEcologyAlpineHabitat
     | CoreEcologyPolarShoreHabitat
-    | CoreEcologyColdShoreHabitat,
+    | CoreEcologyColdShoreHabitat
+    | CoreEcologyBreadthHabitat,
 ): RegionCoord {
   return "region" in habitat ? habitat.region : habitat.originRegion;
 }
@@ -4118,6 +4135,13 @@ function canonicalAggregateDerivation(
       ? null
       : Object.freeze({ kind: "regional-polar-consumer-v1", habitat });
   }
+  if (value.kind === CORE_ECOLOGY_BREADTH_DERIVATION_KIND) {
+    if (!exactKeys(value, ["habitat", "kind"])) return null;
+    const habitat = canonicalizeCoreEcologyBreadthHabitat(value.habitat);
+    return habitat === null
+      ? null
+      : Object.freeze({ kind: CORE_ECOLOGY_BREADTH_DERIVATION_KIND, habitat });
+  }
   if (
     value.kind === "habitat-v2"
     || value.kind === "legacy-fixed-v1-with-habitat-v2"
@@ -4355,6 +4379,16 @@ function aggregateDerivationMatchesPopulations(
       originRegion,
       mortalityTransactions,
     );
+  }
+  if (derivation.kind === CORE_ECOLOGY_BREADTH_DERIVATION_KIND) {
+    return mortalityTransactions.length === 0
+      && regionalDerivationMatchesPopulations(
+        derivation.habitat,
+        populations,
+        aggregatePopulations,
+        originRegion,
+        mortalityTransactions,
+      );
   }
   const isHarborEdgeDerivation = derivation.kind === "habitat-v2"
     || derivation.kind === "legacy-fixed-v1-with-habitat-v2";
@@ -4721,7 +4755,8 @@ function regionalDerivationMatchesPopulations(
     | CoreEcologyRegionalHabitat
     | CoreEcologyAlpineHabitat
     | CoreEcologyPolarShoreHabitat
-    | CoreEcologyColdShoreHabitat,
+    | CoreEcologyColdShoreHabitat
+    | CoreEcologyBreadthHabitat,
   populations: readonly CoreEcologyPopulationState[],
   aggregatePopulations: readonly CoreEcologyAggregatePopulationState[],
   originRegion: RegionCoord,

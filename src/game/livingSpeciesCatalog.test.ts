@@ -47,6 +47,12 @@ import {
   LIVING_SPECIES_ALPHA36_CATALOG_HASH,
   LIVING_SPECIES_ALPHA36_SPECIES_IDS,
   LIVING_SPECIES_ALPHA36_SPECIES_IDS_HASH,
+  LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG,
+  LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_COUNT,
+  LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_HASH,
+  LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS,
+  LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS_HASH,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   canonicalizeLivingSpeciesCatalog,
@@ -166,16 +172,41 @@ describe("Living Weft species module catalog", () => {
       )
     )).map(({ speciesId }) => speciesId)).toEqual([
       "arctic-fox",
+      "atlantic-ghost-crab",
+      "bay-anchovy",
+      "common-tern",
+      "great-blue-heron",
       "harbor-seal",
+      "osprey",
       "polar-bear",
     ]);
     expect(LIVING_SPECIES_CATALOG.modules.filter(({ speciesId }) => (
       !LIVING_SPECIES_ALPHA35_SPECIES_IDS.includes(
         speciesId as (typeof LIVING_SPECIES_ALPHA35_SPECIES_IDS)[number],
       )
-    )).map(({ speciesId }) => speciesId)).toEqual(["harbor-seal", "polar-bear"]);
+    )).map(({ speciesId }) => speciesId)).toEqual([
+      "atlantic-ghost-crab",
+      "bay-anchovy",
+      "common-tern",
+      "great-blue-heron",
+      "harbor-seal",
+      "osprey",
+      "polar-bear",
+    ]);
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
-      .toEqual(LIVING_SPECIES_ALPHA36_SPECIES_IDS);
+      .toEqual(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS);
+    expect(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(
+      stableStringify(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG),
+    ).byteLength).toBe(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_BYTE_LENGTH);
+    expect(hashCanonical(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG))
+      .toBe(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_HASH);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
@@ -602,6 +633,114 @@ describe("Living Weft species module catalog", () => {
       verbs: ["pursue"],
       escalationConstraints: ["bounded-pursuit", "direct-perception-required"],
     });
+  });
+
+  it("projects the Wave-G estuary cluster through shared aggregate and bird contracts", () => {
+    const expected = {
+      "bay-anchovy": {
+        form: "aggregate",
+        namespace: "BAYANCHOVY-AREA",
+        groupNamespace: "BAYANCHOVY-SCHOOL",
+        taxonomicClass: "fish",
+        population: 0,
+        availableTargets: [
+          "aquatic-animal", "food", "human", "predator", "same-species", "water",
+        ],
+      },
+      "atlantic-ghost-crab": {
+        form: "aggregate",
+        namespace: "GHOSTCRAB-AREA",
+        groupNamespace: null,
+        taxonomicClass: "invertebrate",
+        population: 0,
+        availableTargets: ["dog", "food", "human", "predator", "same-species"],
+      },
+      "great-blue-heron": {
+        form: "individual",
+        namespace: "BLUEHERON",
+        groupNamespace: null,
+        taxonomicClass: "bird",
+        population: 2,
+        availableTargets: [
+          "aquatic-animal", "dog", "food", "human", "predator", "water",
+        ],
+      },
+      "common-tern": {
+        form: "individual",
+        namespace: "COMMONTERN",
+        groupNamespace: "FLOCK",
+        taxonomicClass: "bird",
+        population: 8,
+        availableTargets: [
+          "aquatic-animal",
+          "dog",
+          "food",
+          "human",
+          "predator",
+          "same-species",
+        ],
+      },
+      osprey: {
+        form: "individual",
+        namespace: "OSPREY",
+        groupNamespace: null,
+        taxonomicClass: "bird",
+        population: 1,
+        availableTargets: [
+          "aquatic-animal", "dog", "food", "human", "predator",
+        ],
+      },
+    } as const;
+
+    for (const [species, contract] of Object.entries(expected) as [
+      keyof typeof expected,
+      (typeof expected)[keyof typeof expected],
+    ][]) {
+      const module = livingSpeciesModule(species);
+      expect(module).toMatchObject({
+        profile: { implementation: "foundation", taxonomicClass: contract.taxonomicClass },
+        habitat: { ownerId: "game:core-ecology-breadth-habitat:v1" },
+        identity: { form: contract.form, stableIdNamespace: contract.namespace },
+        social: { group: { stableIdNamespace: contract.groupNamespace } },
+        spatial: { ownerId: "game:regional-breadth-ecology:v1" },
+        population: {
+          ownerId: "game:regional-breadth-cohort:v1",
+          maxMaterializedPerRegion: contract.population,
+        },
+        activity: {
+          ownerId: contract.form === "individual"
+            ? CORE_ECOLOGY_ACTIVITY_OWNER_ID
+            : "game:regional-breadth-cohort:v1",
+        },
+        sound: { implementation: "unimplemented", ownerId: null, repertoire: [] },
+        lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
+        health: { implementation: "unimplemented", causalDeath: false },
+        aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      });
+      expect(module?.interactions.targets.filter(({ policy }) => policy === "available")
+        .map(({ targetClass }) => targetClass)).toEqual(contract.availableTargets);
+      expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+        verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+      ))).toBe(false);
+      expect(coreEcologySpeciesPredatorContact(species)).toBeNull();
+      expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
+    }
+    expect(livingSpeciesModule("great-blue-heron")?.interactions.targets.find(
+      ({ targetClass }) => targetClass === "aquatic-animal",
+    )).toMatchObject({ verbs: ["approach", "probe"] });
+    for (const species of ["common-tern", "osprey"] as const) {
+      expect(livingSpeciesModule(species)?.interactions.targets.find(
+        ({ targetClass }) => targetClass === "aquatic-animal",
+      )).toMatchObject({
+        verbs: ["approach", "plunge-dive"],
+        escalationConstraints: [
+          "aggregate-unit-conservation",
+          "direct-perception-required",
+          "no-health-or-mortality-outcome",
+          "nonlethal-pressure-only",
+        ],
+      });
+    }
   });
 
   it("keeps domestic livestock on shared active owners with deferred life systems", () => {
@@ -2307,8 +2446,10 @@ describe("Living Weft species module catalog", () => {
         positionModel: module.speciesId === "brown-rat"
           || module.speciesId === "american-pika"
           || module.speciesId === "atlantic-capelin"
+          || module.speciesId === "atlantic-ghost-crab"
           || module.speciesId === "atlantic-marsh-fiddler-crab"
           || module.speciesId === "atlantic-silverside"
+          || module.speciesId === "bay-anchovy"
           || module.speciesId === "southern-leopard-frog"
           ? "segmented-area"
           : "segmented-point",
@@ -2323,8 +2464,10 @@ describe("Living Weft species module catalog", () => {
       expect(module.evidence.status).toBe(
         module.speciesId === "atlantic-marsh-fiddler-crab"
           || module.speciesId === "atlantic-capelin"
+          || module.speciesId === "atlantic-ghost-crab"
           || module.speciesId === "atlantic-silverside"
           || module.speciesId === "arctic-fox"
+          || module.speciesId === "bay-anchovy"
           || module.speciesId === "gray-wolf"
           || module.speciesId === "mountain-goat"
           || module.speciesId === "american-pika"
@@ -2343,17 +2486,32 @@ describe("Living Weft species module catalog", () => {
       expect(module.environment.terrain.status).toBe("unimplemented");
       const tidalFoundation = module.speciesId === "atlantic-marsh-fiddler-crab"
         || module.speciesId === "atlantic-capelin"
+        || module.speciesId === "atlantic-ghost-crab"
         || module.speciesId === "atlantic-silverside"
+        || module.speciesId === "bay-anchovy"
+        || module.speciesId === "great-blue-heron"
         || module.speciesId === "harbor-seal"
         || module.speciesId === "snowy-egret";
       expect(module.environment.tide.status).toBe(
         tidalFoundation ? "foundation" : "unimplemented",
       );
-      if (tidalFoundation) expect(module.environment.water.status).toBe("foundation");
+      const waterFoundation = module.speciesId === "atlantic-marsh-fiddler-crab"
+        || module.speciesId === "atlantic-capelin"
+        || module.speciesId === "atlantic-silverside"
+        || module.speciesId === "bay-anchovy"
+        || module.speciesId === "domestic-dog"
+        || module.speciesId === "great-blue-heron"
+        || module.speciesId === "harbor-seal"
+        || module.speciesId === "polar-bear"
+        || module.speciesId === "snowy-egret";
+      expect(module.environment.water.status, module.speciesId).toBe(
+        waterFoundation ? "foundation" : "unimplemented",
+      );
       expect(module.persistence.generationMigration).toBe("preserve-materialized-identity");
       expect(module.senses.implementation).toBe("foundation");
       expect(module.social.communicationChannels).toEqual(
         module.speciesId === "mountain-goat"
+          || module.speciesId === "common-tern"
           ? ["vision"]
           : module.speciesId === "deer"
           || module.speciesId === "american-black-duck"
@@ -2372,10 +2530,12 @@ describe("Living Weft species module catalog", () => {
       expect(module.social.group.status).toBe(
         module.speciesId === "atlantic-silverside"
           || module.speciesId === "atlantic-capelin"
+          || module.speciesId === "bay-anchovy"
           ? "foundation"
           : module.speciesId === "deer"
             || module.speciesId === "gull"
             || module.speciesId === "fish-crow"
+            || module.speciesId === "common-tern"
             || module.speciesId === "domestic-chicken"
             || module.speciesId === "domestic-goat"
             || module.speciesId === "wild-boar"

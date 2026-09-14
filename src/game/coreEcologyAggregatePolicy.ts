@@ -8,13 +8,21 @@ import {
   type LivingActorSpecies,
 } from "./livingSpeciesRegistry";
 
-export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
+/** Frozen aggregate-species prefix through the Alpha 36 polar-forage slice. */
+export const CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES = Object.freeze([
   "brown-rat",
   "southern-leopard-frog",
   "atlantic-silverside",
   "atlantic-marsh-fiddler-crab",
   "american-pika",
   "atlantic-capelin",
+] as const);
+
+/** Append-only aggregate registry for the Wave-G estuary breadth cluster. */
+export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
+  ...CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES,
+  "bay-anchovy",
+  "atlantic-ghost-crab",
 ] as const);
 
 export type CoreEcologyAggregateSpecies =
@@ -107,7 +115,9 @@ export interface CoreEcologyAggregateSpeciesPolicy {
     | "PIKA-TALUS-v1-"
     | "RAT-AREA-v1-"
     | "SILVERSIDE-SCHOOL-v1-"
-    | "CAPELIN-SCHOOL-v1-";
+    | "CAPELIN-SCHOOL-v1-"
+    | "BAYANCHOVY-SCHOOL-v1-"
+    | "GHOSTCRAB-AREA-v1-";
   readonly representation: "aggregate-area" | "group-actor";
   readonly maximumAnchors: number;
   readonly anchorRadiusTiles: number;
@@ -278,6 +288,53 @@ const POLICIES: Readonly<
     rainSensitive: false,
     rainResponse: "pressure",
     tideResponse: "flood-active",
+  }),
+  "bay-anchovy": Object.freeze({
+    species: "bay-anchovy",
+    stableIdPrefix: "BAYANCHOVY-SCHOOL-v1-",
+    representation: "group-actor",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 3,
+    activity: Object.freeze({
+      kind: "schooling-glint",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
+    }),
+    initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "surface-dimple",
+      byCause: Object.freeze({}),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "flood-active",
+  }),
+  "atlantic-ghost-crab": Object.freeze({
+    species: "atlantic-ghost-crab",
+    stableIdPrefix: "GHOSTCRAB-AREA-v1-",
+    representation: "aggregate-area",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 2,
+    activity: Object.freeze({
+      kind: "burrow-foraging",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
+    }),
+    initialEvidenceKinds: Object.freeze([
+      "burrow-opening",
+      "feeding-scrape",
+    ] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "burrow-opening",
+      byCause: Object.freeze({ "tide-pressure": "feeding-scrape" }),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "ebb-active",
   }),
 });
 
