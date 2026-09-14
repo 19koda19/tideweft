@@ -28,6 +28,8 @@ describe("core ecology activity affordance registry", () => {
       "ridge-soar-perch",
       "anchored-wader",
       "diving-waterbird",
+      "perch-forage",
+      "amphibious-margin-forager",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES).toEqual([
       "fish-crow",
@@ -44,6 +46,8 @@ describe("core ecology activity affordance registry", () => {
       "greater-yellowlegs",
       "belted-kingfisher",
       "double-crested-cormorant",
+      "seaside-sparrow",
+      "diamondback-terrapin",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.map(({ archetypeId }) => archetypeId))
       .toEqual([
@@ -61,6 +65,8 @@ describe("core ecology activity affordance registry", () => {
         "anchored-wader",
         "aerial-surface-opportunist",
         "diving-waterbird",
+        "perch-forage",
+        "amphibious-margin-forager",
       ]);
     expect(coreEcologyActivityAffordanceProfile("golden-eagle")).toMatchObject({
       archetypeId: "ridge-soar-perch",

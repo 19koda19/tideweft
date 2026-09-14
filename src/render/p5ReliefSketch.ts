@@ -230,6 +230,14 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
   AggregateWildlifeEvidenceView["form"],
   ReliefAggregateEvidenceDescriptor
 >> = {
+  "airborne-swarm": {
+    primary: "#5b5544",
+    secondary: "#d8c98f",
+    dark: "#171714",
+    hitRadiusScale: 0.5,
+    ringRadiusScale: 0.4,
+    liftScale: 0.72,
+  },
   "burrow-openings": {
     primary: "#4c392b",
     secondary: "#b28e68",
@@ -242,6 +250,14 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
     primary: "#735b43",
     secondary: "#b89a71",
     dark: "#292018",
+    hitRadiusScale: 0.46,
+    ringRadiusScale: 0.37,
+    liftScale: 0.2,
+  },
+  "grazing-traces": {
+    primary: "#62694c",
+    secondary: "#b9ad85",
+    dark: "#25281f",
     hitRadiusScale: 0.46,
     ringRadiusScale: 0.37,
     liftScale: 0.2,
@@ -261,6 +277,14 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
     hitRadiusScale: 0.5,
     ringRadiusScale: 0.4,
     liftScale: 0.38,
+  },
+  "shell-clusters": {
+    primary: "#7d765d",
+    secondary: "#d4c799",
+    dark: "#27251e",
+    hitRadiusScale: 0.48,
+    ringRadiusScale: 0.39,
+    liftScale: 0.26,
   },
   "small-tracks": {
     primary: "#9b8067",
@@ -3814,9 +3838,12 @@ export function createTideweftReliefRenderer(
       const profile = wildlifeVisualProfile(wildlife.species);
       const colors = wildlifeVisualPalette(wildlife.species, wildlife.appearanceKey);
       const tern = profile.geometryVariant === "tern";
+      const sparrow = profile.geometryVariant === "sparrow";
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
-      const base = tileSize * (tern ? 0.064 : 0.07) * scale;
-      const perched = wildlife.behavior === "perch" || wildlife.behavior === "rest";
+      const base = tileSize * (sparrow ? 0.06 : tern ? 0.064 : 0.07) * scale;
+      const perched = wildlife.behavior === "perch"
+        || wildlife.behavior === "rest"
+        || (sparrow && wildlife.behavior !== "flight");
       const flightLift = perched ? base * 0.42 : tileSize * 0.72;
       const flap = perched || reducedMotion
         ? 0
@@ -3826,14 +3853,25 @@ export function createTideweftReliefRenderer(
       p.rotateY(-wildlife.facing);
       p.noStroke();
       p.ambientMaterial(colors.primary);
-      p.ellipsoid(base * (tern ? 1.08 : 0.92), base * (tern ? 0.27 : 0.34), base * 0.3, 7, 4);
+      p.ellipsoid(
+        base * (sparrow ? 1.02 : tern ? 1.08 : 0.92),
+        base * (sparrow ? 0.43 : tern ? 0.27 : 0.34),
+        base * (sparrow ? 0.4 : 0.3),
+        7,
+        4,
+      );
       p.push();
-      p.translate(base * (tern ? 0.96 : 0.78), -base * 0.12, 0);
-      p.sphere(base * (tern ? 0.27 : 0.31), 6, 4);
+      p.translate(base * (sparrow ? 0.86 : tern ? 0.96 : 0.78), -base * 0.12, 0);
+      p.sphere(base * (sparrow ? 0.35 : tern ? 0.27 : 0.31), 6, 4);
       p.ambientMaterial(colors.accent);
-      p.translate(base * (tern ? 0.42 : 0.34), base * 0.02, 0);
+      p.translate(base * (sparrow ? 0.42 : tern ? 0.42 : 0.34), base * 0.02, 0);
       p.rotateZ(-p.HALF_PI);
-      p.cone(base * (tern ? 0.09 : 0.12), base * (tern ? 0.5 : 0.34), 4, 1);
+      p.cone(
+        base * (sparrow ? 0.13 : tern ? 0.09 : 0.12),
+        base * (sparrow ? 0.3 : tern ? 0.5 : 0.34),
+        4,
+        1,
+      );
       p.pop();
 
       p.stroke(colors.secondary);
@@ -3844,7 +3882,7 @@ export function createTideweftReliefRenderer(
         -base * 0.12,
         -base * 0.38,
         -flap,
-        -base * (tern ? 2.05 : 1.62),
+        -base * (sparrow ? 1.18 : tern ? 2.05 : 1.62),
       );
       p.line(
         -base * 0.12,
@@ -3852,7 +3890,7 @@ export function createTideweftReliefRenderer(
         base * 0.12,
         -base * 0.38,
         -flap,
-        base * (tern ? 2.05 : 1.62),
+        base * (sparrow ? 1.18 : tern ? 2.05 : 1.62),
       );
       if (tern) {
         // A split tail remains legible in monochrome and separates the tern
@@ -3863,6 +3901,23 @@ export function createTideweftReliefRenderer(
           p.translate(-base * 0.92, base * 0.02, side * base * 0.19);
           p.rotateZ(p.HALF_PI);
           p.cone(base * 0.11, base * 0.72, 4, 1);
+          p.pop();
+        }
+      }
+      if (sparrow) {
+        // Compact wedge tail and raised dorsal streaks distinguish the
+        // perching-bird family without requiring a species-specific branch.
+        p.push();
+        p.translate(-base * 0.94, base * 0.02, 0);
+        p.rotateZ(p.HALF_PI);
+        p.ambientMaterial(colors.dark);
+        p.cone(base * 0.22, base * 0.62, 4, 1);
+        p.pop();
+        p.ambientMaterial(colors.secondary);
+        for (const offset of [-0.26, 0, 0.26]) {
+          p.push();
+          p.translate(-base * 0.02, -base * 0.42, base * offset);
+          p.box(base * 0.62, base * 0.08, base * 0.07);
           p.pop();
         }
       }
@@ -5092,6 +5147,88 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
+    const drawLowShelledReptile = (
+      wildlife: WildlifeView,
+      surface: number,
+      tileSize: number,
+    ): void => {
+      if (!isWildlifeVisualSpecies(wildlife.species)) return;
+      const colors = wildlifeVisualPalette(wildlife.species, wildlife.appearanceKey);
+      const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
+      const base = tileSize * 0.08 * scale;
+      const swimming = wildlife.behavior === "swim" || wildlife.behavior === "dive";
+      const bodyHalfLength = base * 1.58;
+      const bodyHalfHeight = base * 0.43;
+      const bodyHalfWidth = base * 1.04;
+      const bodyCenterY = surface
+        + (swimming ? RELIEF_WATER_SURFACE_LIFT : base * 0.12)
+        + bodyHalfHeight * 0.56;
+
+      p.push();
+      p.translate(wildlife.position.x, -bodyCenterY, wildlife.position.y);
+      p.rotateY(-wildlife.facing);
+      p.noStroke();
+
+      for (const [x, z, yaw] of [
+        [-0.68, -0.92, -0.34],
+        [-0.68, 0.92, 0.34],
+        [0.62, -0.9, 0.3],
+        [0.62, 0.9, -0.3],
+      ] as const) {
+        p.push();
+        p.translate(base * x, bodyHalfHeight * 0.34, base * z);
+        p.rotateY(yaw);
+        p.ambientMaterial(colors.secondary);
+        p.ellipsoid(
+          base * (swimming ? 0.54 : 0.42),
+          base * 0.12,
+          base * 0.22,
+          6,
+          3,
+        );
+        p.pop();
+      }
+
+      p.push();
+      p.translate(bodyHalfLength * 1.08, bodyHalfHeight * 0.06, 0);
+      p.ambientMaterial(colors.secondary);
+      p.sphere(base * 0.34, 7, 4);
+      p.translate(base * 0.3, 0, 0);
+      p.ambientMaterial(colors.dark);
+      p.sphere(base * 0.055, 5, 3);
+      p.pop();
+
+      p.push();
+      p.translate(-bodyHalfLength * 1.04, bodyHalfHeight * 0.12, 0);
+      p.rotateZ(p.HALF_PI);
+      p.ambientMaterial(colors.dark);
+      p.cone(base * 0.17, base * 0.54, 5, 1);
+      p.pop();
+
+      p.ambientMaterial(colors.dark);
+      p.ellipsoid(
+        bodyHalfLength * 1.06,
+        bodyHalfHeight * 1.08,
+        bodyHalfWidth * 1.05,
+        10,
+        5,
+      );
+      p.translate(0, -bodyHalfHeight * 0.16, 0);
+      p.ambientMaterial(colors.primary);
+      p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 10, 5);
+
+      // Raised crossing bands make the diamond-patterned shell readable from
+      // an oblique camera even when hue differences are unavailable.
+      p.ambientMaterial(colors.accent);
+      for (const offset of [-0.48, 0, 0.48]) {
+        p.push();
+        p.translate(base * offset, -bodyHalfHeight * 0.86, 0);
+        p.box(base * 0.08, base * 0.07, bodyHalfWidth * 1.48);
+        p.pop();
+      }
+      p.pop();
+    };
+
     const drawAggregateWildlifeEvidenceForm = (
       evidence: AggregateWildlifeEvidenceView,
       surface: number,
@@ -5103,6 +5240,27 @@ export function createTideweftReliefRenderer(
       p.translate(evidence.position.x, -surface - base * 0.12, evidence.position.y);
       p.noStroke();
       switch (evidence.form) {
+        case "airborne-swarm":
+          p.translate(0, -tileSize * 0.065, 0);
+          for (const [x, y, z, scale] of [
+            [-1.04, -0.18, 0.22, 0.13],
+            [-0.62, 0.48, -0.42, 0.1],
+            [-0.18, -0.36, 0.52, 0.12],
+            [0.28, 0.22, -0.52, 0.09],
+            [0.7, -0.46, 0.36, 0.11],
+            [1.04, 0.12, -0.12, 0.13],
+          ] as const) {
+            p.push();
+            p.translate(base * x, base * y, base * z);
+            p.ambientMaterial(descriptor.secondary);
+            p.sphere(base * scale, 5, 3);
+            p.stroke(descriptor.dark);
+            p.strokeWeight(Math.max(1, base * 0.07));
+            p.line(-base * scale * 1.7, 0, 0, base * scale * 1.7, 0, 0);
+            p.noStroke();
+            p.pop();
+          }
+          break;
         case "gnaw-marks":
           p.rotateY(-0.42);
           p.ambientMaterial(descriptor.primary);
@@ -5272,6 +5430,28 @@ export function createTideweftReliefRenderer(
             p.pop();
           }
           break;
+        case "grazing-traces":
+          p.stroke(descriptor.secondary);
+          p.strokeWeight(Math.max(1, base * 0.09));
+          for (const offset of [-0.52, -0.17, 0.18, 0.53]) {
+            p.line(
+              -base * 1.24,
+              -base * 0.03,
+              base * offset,
+              base * 1.22,
+              -base * 0.03,
+              base * (offset + 0.24),
+            );
+          }
+          p.noStroke();
+          p.ambientMaterial(descriptor.primary);
+          for (const [x, z] of [[-0.72, 0.6], [0.8, -0.56]] as const) {
+            p.push();
+            p.translate(base * x, -base * 0.04, base * z);
+            p.sphere(base * 0.09, 5, 3);
+            p.pop();
+          }
+          break;
         case "shelter-sign":
           p.ambientMaterial(descriptor.primary);
           p.cone(base * 1.45, base * 1.15, 6, 1);
@@ -5284,6 +5464,24 @@ export function createTideweftReliefRenderer(
           p.strokeWeight(Math.max(1, base * 0.12));
           p.line(-base * 1.2, base * 0.52, -base * 0.7, base * 1.05, base * 0.52, base * 0.7);
           p.noStroke();
+          break;
+        case "shell-clusters":
+          for (const [x, z, scale] of [
+            [-0.82, 0.38, 0.72],
+            [-0.14, -0.44, 0.88],
+            [0.56, 0.34, 0.64],
+            [0.94, -0.3, 0.52],
+          ] as const) {
+            p.push();
+            p.translate(base * x, -base * scale * 0.16, base * z);
+            p.ambientMaterial(descriptor.primary);
+            p.ellipsoid(base * scale * 0.42, base * scale * 0.66, base * scale * 0.4, 7, 4);
+            p.translate(0, -base * scale * 0.34, 0);
+            p.rotateX(p.HALF_PI);
+            p.ambientMaterial(descriptor.secondary);
+            p.torus(base * scale * 0.2, base * scale * 0.045, 7, 4);
+            p.pop();
+          }
           break;
         case "haypile":
           for (const [x, z, angle] of [
@@ -5439,6 +5637,9 @@ export function createTideweftReliefRenderer(
           return true;
         case "broad-winged-raptor":
           drawBroadWingedRaptor(wildlife, surface, tileSize, now);
+          return true;
+        case "low-shelled-reptile":
+          drawLowShelledReptile(wildlife, surface, tileSize);
           return true;
       }
     };

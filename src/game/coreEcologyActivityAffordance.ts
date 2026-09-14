@@ -29,6 +29,8 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPE_IDS = Object.freeze([
   "ridge-soar-perch",
   "anchored-wader",
   "diving-waterbird",
+  "perch-forage",
+  "amphibious-margin-forager",
 ] as const);
 
 export type CoreEcologyActivityArchetypeId =
@@ -38,6 +40,7 @@ export const CORE_ECOLOGY_ACTIVITY_DESTINATION_SEMANTICS = Object.freeze([
   "authenticated-habitat-anchor",
   "authenticated-habitat-perch",
   "deterministic-local-quartering-area",
+  "deterministic-local-foraging-area",
   "authenticated-tidal-refuge",
   "authenticated-depth-safe-wading-ground",
   "authenticated-depth-safe-dabbling-water",
@@ -62,6 +65,7 @@ export const CORE_ECOLOGY_ACTIVITY_PRESENTATION_SIGNALS = Object.freeze([
   "aquatic-foraging",
   "dabbling-forage",
   "low-quartering-flight",
+  "low-foraging-flight",
   "perched",
   "resting",
   "ridge-soaring-flight",
@@ -126,6 +130,8 @@ export const CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES = Object.freeze([
   "greater-yellowlegs",
   "belted-kingfisher",
   "double-crested-cormorant",
+  "seaside-sparrow",
+  "diamondback-terrapin",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
 export type CoreEcologyActivityAffordanceSpecies =
@@ -435,6 +441,55 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "tidal-relocation-flight",
       ],
     }),
+    archetype({
+      archetypeId: "perch-forage",
+      requiredCapabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "diurnal-activity",
+        "food-investigation",
+        "movement-memory",
+        "perch",
+      ],
+      locomotionClass: "aerial",
+      allowedTravelMedia: ["air"],
+      destinations: [
+        destination("authenticated-habitat-perch", "habitat-allocation", ["air"]),
+        destination(
+          "deterministic-local-foraging-area",
+          "deterministic-local-area",
+          ["air"],
+        ),
+      ],
+      observationAffordance: NONE_OBSERVATION,
+      presentationSignals: ["low-foraging-flight", "perched", "resting"],
+    }),
+    archetype({
+      archetypeId: "amphibious-margin-forager",
+      requiredCapabilities: [
+        "actor-address",
+        "amphibious-locomotion",
+        "amphibious-route",
+        "aquatic-foraging",
+        "aquatic-locomotion",
+        "diurnal-activity",
+        "movement-memory",
+        "shore-water-activity",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      locomotionClass: "amphibious",
+      allowedTravelMedia: ["amphibious"],
+      destinations: [
+        destination(
+          "authenticated-habitat-anchor",
+          "habitat-allocation",
+          ["amphibious"],
+        ),
+      ],
+      observationAffordance: NONE_OBSERVATION,
+      presentationSignals: ["aquatic-foraging", "resting", "shore-water-relocation"],
+    }),
   ]);
 
 const ARCHETYPE_BY_ID = new Map<CoreEcologyActivityArchetypeId, CoreEcologyActivityArchetype>(
@@ -458,6 +513,8 @@ const ARCHETYPE_ASSIGNMENTS: Readonly<
   "greater-yellowlegs": "anchored-wader",
   "belted-kingfisher": "aerial-surface-opportunist",
   "double-crested-cormorant": "diving-waterbird",
+  "seaside-sparrow": "perch-forage",
+  "diamondback-terrapin": "amphibious-margin-forager",
 });
 
 const SHORE_WATER_MOTION_VOCABULARY: Readonly<Partial<Record<

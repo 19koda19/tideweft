@@ -221,6 +221,8 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "greater-yellowlegs",
   "belted-kingfisher",
   "double-crested-cormorant",
+  "seaside-sparrow",
+  "diamondback-terrapin",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];
@@ -523,10 +525,13 @@ export type CoreEcologyAggregateEvidenceKind =
   | "burrow-opening"
   | "feeding-scrape"
   | "frog-track"
+  | "grazing-trace"
   | "gnaw-mark"
   | "haypile"
+  | "shell-cluster"
   | "shelter-sign"
   | "surface-dimple"
+  | "swarm-haze"
   | "talus-sign"
   | "tracks";
 export type CoreEcologyAggregateEvidenceCause =
@@ -734,10 +739,13 @@ const AGGREGATE_EVIDENCE_KINDS = new Set<string>([
   "burrow-opening",
   "feeding-scrape",
   "frog-track",
+  "grazing-trace",
   "gnaw-mark",
   "haypile",
+  "shell-cluster",
   "shelter-sign",
   "surface-dimple",
+  "swarm-haze",
   "talus-sign",
   "tracks",
 ]);

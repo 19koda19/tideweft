@@ -526,10 +526,13 @@ export type WildlifeEvidenceViewSpecies =
   | AggregateWildlifeEvidenceSpecies
   | IndividualWildlifeEvidenceSpecies;
 export type AggregateWildlifeEvidenceForm =
+  | "airborne-swarm"
   | "burrow-openings"
   | "feeding-scrapes"
+  | "grazing-traces"
   | "gnaw-marks"
   | "shelter-sign"
+  | "shell-clusters"
   | "small-tracks"
   | "paired-tracks"
   | "canid-pawprints"

@@ -147,6 +147,7 @@ import {
   serializeRegionalEcologyStateV6,
 } from "./regionalEcologyStateV6";
 import {
+  activateRegionalBreadthEcologyThroughEpoch,
   createPristineRegionalBreadthEcologyRoot,
   regionalBreadthEcologyResidentsForActiveRegions,
 } from "./regionalBreadthEcology";
@@ -163,6 +164,8 @@ export const ALPHA37_ESTUARY_BREADTH_RUNTIME_V30_OWNER_INTENT =
   "test:alpha37-estuary-breadth-runtime-v30:v1" as const;
 export const ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT =
   "test:alpha38-marsh-channel-web-runtime-v30:v1" as const;
+export const ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT =
+  "test:alpha39-saltmarsh-small-worlds-runtime-v30:v1" as const;
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -1490,6 +1493,95 @@ describe("perpetual new worlds", () => {
     );
     expect(stableStringify(adopted?.breadthRoot.activations[0])).toBe(oldActivation);
     expect(serializeRegionalEcologyStateV5(adopted?.base)).toBe(oldBase);
+    expect(adopted?.adoption).toBeNull();
+    const adoptedText = adoptedEnvelope.regionalEcology;
+    adoptedRuntime.destroy();
+
+    const replayRuntime = await createTideweftRuntime(repository);
+    expect(replayRuntime.getUIView().saveWarning).toBeUndefined();
+    await replayRuntime.save();
+    expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(adoptedText);
+    replayRuntime.destroy();
+  }, 30_000);
+
+  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT} appends epoch three to an exact epoch-two outer-v30 breadth root once`, async () => {
+    expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBe(3);
+    const repository = new MemoryRepository();
+    const setup = await createTideweftRuntime(repository);
+    setup.dispatchUI({
+      type: "new-world",
+      seed: "saltmarsh small worlds epoch adoption",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await setup.save();
+    setup.destroy();
+
+    const currentRecord = repository.snapshot();
+    const currentEnvelope = decodeGameSave(currentRecord);
+    const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
+    if (current === null) throw new Error("current v30 breadth fixture is invalid");
+    const world = deserializeWorld(currentEnvelope.world);
+    const binding = {
+      rootSeed: world.meta.rootSeed,
+      completedTick: world.meta.completedTick,
+    } as const;
+    const epochOneRoot = createPristineRegionalBreadthEcologyRoot(binding, 1);
+    const epochTwoRoot = activateRegionalBreadthEcologyThroughEpoch(
+      epochOneRoot,
+      binding,
+      2,
+    );
+    const activeRegions = current.base.base.base.base.base.activeRegions;
+    const epochTwoResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      epochTwoRoot,
+      world.meta.rootSeed,
+      activeRegions,
+    );
+    if (epochTwoResidents === null) {
+      throw new Error("epoch-two residents could not derive");
+    }
+    const epochTwoState = createRegionalEcologyStateV6({
+      base: current.base,
+      breadthRoot: epochTwoRoot,
+      breadthActiveResidents: epochTwoResidents.map(({ sourceKey, patch }) => ({
+        sourceKey,
+        patch,
+      })),
+      adoption: null,
+    });
+    const exactBase = serializeRegionalEcologyStateV5(epochTwoState.base);
+    const exactActivationPrefix = stableStringify(epochTwoState.breadthRoot.activations);
+    const exactRegionDeviationPrefix = stableStringify(epochTwoState.breadthRoot.regions);
+    currentEnvelope.regionalEcology = serializeRegionalEcologyStateV6(epochTwoState);
+    resealGameSave(currentEnvelope);
+    repository.replace({
+      ...currentRecord,
+      worldJson: JSON.stringify(currentEnvelope),
+    });
+
+    const adoptedRuntime = await createTideweftRuntime(repository);
+    expect(adoptedRuntime.getUIView().saveWarning).toBeUndefined();
+    await adoptedRuntime.save();
+    const adoptedRecord = repository.snapshot();
+    const adoptedEnvelope = decodeGameSave(adoptedRecord);
+    const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
+    expect(adoptedRecord.payloadVersion).toBe(30);
+    expect(adoptedEnvelope.version).toBe(30);
+    expect(adopted?.breadthRoot.activeThroughEpoch).toBe(3);
+    expect(stableStringify(adopted?.breadthRoot.activations.slice(0, 2))).toBe(
+      exactActivationPrefix,
+    );
+    expect(stableStringify(adopted?.breadthRoot.regions)).toBe(
+      exactRegionDeviationPrefix,
+    );
+    expect(adopted?.breadthRoot.activations[2]).toMatchObject({
+      activationOrdinal: 2,
+      cohortId: "saltmarsh-small-worlds",
+      cohortEpoch: 3,
+      activatedAtTick: world.meta.completedTick,
+    });
+    expect(serializeRegionalEcologyStateV5(adopted?.base)).toBe(exactBase);
     expect(adopted?.adoption).toBeNull();
     const adoptedText = adoptedEnvelope.regionalEcology;
     adoptedRuntime.destroy();

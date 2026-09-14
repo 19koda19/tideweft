@@ -35,8 +35,12 @@ describe("core ecology tidal aggregate policy", () => {
       0,
       CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES.length,
     )).toEqual(CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES);
-    expect(species.slice(CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES.length))
-      .toEqual(["atlantic-menhaden", "mummichog", "grass-shrimp", "blue-crab"]);
+    const marshChannelEnd = CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES.length + 4;
+    expect(species.slice(
+      CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES.length,
+      marshChannelEnd,
+    )).toEqual(["atlantic-menhaden", "mummichog", "grass-shrimp", "blue-crab"]);
+    expect(species.slice(marshChannelEnd)).toEqual(["marsh-periwinkle"]);
     expect(species).toEqual(CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES);
     expect(new Set(species).size).toBe(species.length);
     expect(Object.isFrozen(CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES)).toBe(true);
@@ -57,6 +61,7 @@ describe("core ecology tidal aggregate policy", () => {
     for (const species of [
       "atlantic-marsh-fiddler-crab",
       "atlantic-ghost-crab",
+      "marsh-periwinkle",
     ] as const) {
       expect(coreEcologyTidalAnchorActivityUsable(species, 119_999)).toBe(true);
       expect(coreEcologyTidalAnchorActivityUsable(species, 120_000)).toBe(false);
@@ -116,6 +121,51 @@ describe("core ecology tidal aggregate policy", () => {
       expect(contract.direction === "flood" ? rising! > falling! : falling! > rising!)
         .toBe(true);
     }
+  });
+
+  it("reuses exposed-flat tide activity for conserved intertidal aggregates", () => {
+    expect(coreEcologyTidalAggregatePolicy("marsh-periwinkle")).toMatchObject({
+      species: "marsh-periwinkle",
+      activityDepthWindow: { minimumInclusive: 0, maximumExclusive: 120_000 },
+      redistribution: null,
+    });
+    expect(coreEcologyTidalAnchorActivityUsable("marsh-periwinkle", 119_999)).toBe(true);
+    expect(coreEcologyTidalAnchorActivityUsable("marsh-periwinkle", 120_000)).toBe(false);
+    expect(coreEcologyTidalAggregateUsesDurableRedistributionClock("marsh-periwinkle"))
+      .toBe(false);
+    expect(coreEcologyTidalRedistributionIsDue("marsh-periwinkle", 8, null)).toBe(false);
+    expect(resolveCoreEcologyTidalRedistribution(
+      "marsh-periwinkle",
+      {
+        aggregateId: "PERIWINKLE-AREA-v1-test",
+        lastTidalRedistributionTick: null,
+        anchors: [{ anchorOrdinal: 0, populationUnits: 8 }],
+      },
+      [{
+        aggregateId: "PERIWINKLE-AREA-v1-test",
+        anchorOrdinal: 0,
+        waterDepth: 20_000,
+        activityUsable: true,
+      }],
+      -1,
+    )).toBeNull();
+    const flood = resolveCoreEcologyTidalAggregateActivity(
+      "marsh-periwinkle",
+      800_000,
+      30_000,
+      1,
+      true,
+    );
+    const ebb = resolveCoreEcologyTidalAggregateActivity(
+      "marsh-periwinkle",
+      800_000,
+      30_000,
+      -1,
+      true,
+    );
+    expect(flood).not.toBeNull();
+    expect(ebb).not.toBeNull();
+    expect(ebb!).toBeGreaterThan(flood!);
   });
 
   it("retains the published silverside cadence and durable operation clock", () => {

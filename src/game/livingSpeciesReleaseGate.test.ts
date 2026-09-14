@@ -41,6 +41,7 @@ import {
   WAVE_C_TIDAL_TABLE_SPECIES,
   WAVE_G_ESTUARY_BREADTH_SPECIES,
   WAVE_G_MARSH_CHANNEL_WEB_SPECIES,
+  WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES,
   alpha16MarshEdgeBoundedReadiness,
   alpha17RainChorusBoundedReadiness,
   alpha20AmericanBlackDuckBoundedReadiness,
@@ -663,20 +664,21 @@ describe("Living Weft species release gate", () => {
           : expect.not.arrayContaining(["test:alpha37-estuary-breadth-emergence:v1"]),
       );
       expect(criterion("seamless-region-crossing")).toMatchObject({
-        status: "foundation",
+        status: "active",
       });
       expect(criterion("seamless-region-crossing")?.evidenceOwnerIds).toEqual(
         expect.arrayContaining([
           "game:core-ecology-breadth-habitat:v1",
           "game:regional-ecology-state:v6",
           "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+          "test:wave-g-biodiversity-seamless-crossing:v1",
         ]),
       );
       expect(criterion("performance-budget")).toMatchObject({
-        status: "foundation",
+        status: "active",
       });
-      expect(criterion("performance-budget")?.evidenceOwnerIds).not.toContain(
-        "test:alpha37-estuary-breadth-composite-performance:v1",
+      expect(criterion("performance-budget")?.evidenceOwnerIds).toContain(
+        "test:wave-g-biodiversity-performance:v1",
       );
       expect(criterion("knowledge-honesty")?.evidenceOwnerIds).toContain(
         "test:alpha37-estuary-breadth-presentation-invariants:v1",
@@ -780,8 +782,18 @@ describe("Living Weft species release gate", () => {
             : expect.not.arrayContaining(["test:alpha38-marsh-channel-web-emergence:v1"]),
         );
       }
-      expect(criterion("seamless-region-crossing")?.status).toBe("foundation");
-      expect(criterion("performance-budget")?.status).toBe("foundation");
+      expect(criterion("seamless-region-crossing")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: expect.arrayContaining([
+          "test:wave-g-biodiversity-seamless-crossing:v1",
+        ]),
+      });
+      expect(criterion("performance-budget")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: expect.arrayContaining([
+          "test:wave-g-biodiversity-performance:v1",
+        ]),
+      });
       for (const withheld of ["sound", "exact-tested-deployment"] as const) {
         expect(criterion(withheld)).toMatchObject({
           status: "unimplemented",
@@ -793,6 +805,96 @@ describe("Living Weft species release gate", () => {
       ]);
       expect(criterion("patch-note-truth")?.evidenceOwnerIds).toEqual([
         "content:patch-notes-alpha38:v1",
+      ]);
+    }
+  });
+
+  it("uses one representation-driven contract for the final 45-wildlife cohort", () => {
+    expect(WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES).toEqual([
+      "eastern-saltmarsh-mosquito",
+      "marsh-periwinkle",
+      "seaside-sparrow",
+      "diamondback-terrapin",
+    ]);
+    for (const species of WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES) {
+      const releaseGate = gate(species);
+      const criterion = (
+        name: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number],
+      ) => releaseGate.criteria.find((candidate) => candidate.criterion === name);
+      const module = livingSpeciesModule(species);
+      const aggregate = module?.identity.form === "aggregate";
+      const flock = module?.social.group.organizationKinds.includes("flock") === true;
+      const emergenceParticipant = species === "marsh-periwinkle"
+        || species === "diamondback-terrapin";
+
+      expect(livingSpeciesReadinessReport(species)).toMatchObject({
+        evidenceAuthenticated: true,
+        state: "blocked",
+        publicReady: false,
+        counts: { total: 30 },
+      });
+      expect(criterion("habitat-placement")?.evidenceOwnerIds).toContain(
+        "test:alpha39-saltmarsh-small-worlds-habitat-shared-invariants:v1",
+      );
+      expect(criterion("population-materialization")?.evidenceOwnerIds).toContain(
+        "test:wave-g-biodiversity-performance:v1",
+      );
+      expect(criterion("save-load")?.evidenceOwnerIds).toContain(
+        "test:alpha39-saltmarsh-small-worlds-runtime-v30:v1",
+      );
+      expect(criterion("knowledge-honesty")?.evidenceOwnerIds).toContain(
+        "test:alpha39-saltmarsh-small-worlds-presentation-invariants:v1",
+      );
+      expect(criterion("same-species-interaction")?.status).toBe(
+        aggregate || flock ? "active" : "foundation",
+      );
+      expect(criterion("environmental-evidence")).toMatchObject(aggregate
+        ? { status: "active" }
+        : { status: "unimplemented", evidenceOwnerIds: [] });
+      for (const name of [
+        "food-web",
+        "other-species-interaction",
+        "player-independent-scenario",
+      ] as const) {
+        expect(criterion(name)?.status).toBe(
+          emergenceParticipant && name !== "food-web" ? "active" : "foundation",
+        );
+        expect(criterion(name)?.evidenceOwnerIds).toEqual(
+          emergenceParticipant
+            ? expect.arrayContaining([
+                "test:alpha39-saltmarsh-small-worlds-emergence:v1",
+              ])
+            : expect.not.arrayContaining([
+                "test:alpha39-saltmarsh-small-worlds-emergence:v1",
+              ]),
+        );
+      }
+      expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+        verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+      ))).toBe(false);
+      expect(criterion("seamless-region-crossing")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: expect.arrayContaining([
+          "test:wave-g-biodiversity-seamless-crossing:v1",
+        ]),
+      });
+      expect(criterion("performance-budget")).toMatchObject({
+        status: "active",
+        evidenceOwnerIds: expect.arrayContaining([
+          "test:wave-g-biodiversity-performance:v1",
+        ]),
+      });
+      for (const withheld of ["sound", "exact-tested-deployment"] as const) {
+        expect(criterion(withheld)).toMatchObject({
+          status: "unimplemented",
+          evidenceOwnerIds: [],
+        });
+      }
+      expect(criterion("tutorial-truth")?.evidenceOwnerIds).toEqual([
+        "ui:tutorial-guide:v49",
+      ]);
+      expect(criterion("patch-note-truth")?.evidenceOwnerIds).toEqual([
+        "content:patch-notes-alpha39:v1",
       ]);
     }
   });

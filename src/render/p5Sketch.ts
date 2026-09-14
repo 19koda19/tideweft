@@ -3108,9 +3108,14 @@ export function createTideweftRenderer(
       const profile = wildlifeVisualProfile(actor.species);
       const colors = wildlifeVisualPalette(actor.species, actor.appearanceKey);
       const tern = profile.geometryVariant === "tern";
-      const perched = actor.behavior === "perch" || actor.behavior === "rest";
+      const sparrow = profile.geometryVariant === "sparrow";
+      const perched = actor.behavior === "perch"
+        || actor.behavior === "rest"
+        || (sparrow && actor.behavior !== "flight");
       const flap = perched ? 0 : reducedMotion ? 0.2 : Math.sin(now * 0.006) * 0.32;
-      const wingReach = perched ? (tern ? 0.72 : 0.62) : (tern ? 1.35 : 1.05);
+      const wingReach = perched
+        ? sparrow ? 0.48 : tern ? 0.72 : 0.62
+        : sparrow ? 0.92 : tern ? 1.35 : 1.05;
       const wingY = perched ? base * 0.08 : flap * base;
       p.noFill();
       p.stroke(withAlpha(PALETTE.ink, 235));
@@ -3123,13 +3128,87 @@ export function createTideweftRenderer(
       p.line(0, -base * 0.18, base * wingReach * 0.96, wingY);
       p.noStroke();
       p.fill(colors.primary);
-      p.ellipse(0, base * 0.02, base * (tern ? 0.82 : 0.72), base * (tern ? 0.28 : 0.34));
+      p.ellipse(
+        0,
+        base * 0.02,
+        base * (sparrow ? 0.94 : tern ? 0.82 : 0.72),
+        base * (sparrow ? 0.48 : tern ? 0.28 : 0.34),
+      );
       p.fill(colors.dark);
       if (tern) {
         p.triangle(-base * 0.12, base * 0.14, -base * 0.68, base * 0.55, 0, base * 0.28);
         p.triangle(base * 0.12, base * 0.14, base * 0.68, base * 0.55, 0, base * 0.28);
       }
+      if (sparrow) {
+        p.fill(colors.secondary);
+        p.circle(base * 0.47, 0, base * 0.48);
+        p.fill(colors.accent);
+        p.triangle(
+          base * 0.68, -base * 0.09,
+          base * 1.02, 0,
+          base * 0.68, base * 0.09,
+        );
+        p.fill(colors.dark);
+        p.triangle(
+          -base * 0.4, -base * 0.16,
+          -base * 0.94, 0,
+          -base * 0.4, base * 0.16,
+        );
+        p.stroke(colors.dark);
+        p.strokeWeight(Math.max(0.55, base * 0.09));
+        for (const offset of [-0.18, 0.02, 0.22]) {
+          p.line(-base * 0.18, base * offset, base * 0.24, base * (offset + 0.05));
+        }
+        p.noStroke();
+      }
       if (perched) p.ellipse(0, base * 0.08, base * 0.54, base * 0.22);
+    };
+
+    const drawChartLowShelledReptile = (
+      actor: WildlifeView,
+      base: number,
+    ): void => {
+      if (!isWildlifeVisualSpecies(actor.species)) return;
+      const colors = wildlifeVisualPalette(actor.species, actor.appearanceKey);
+      const swimming = actor.behavior === "swim" || actor.behavior === "dive";
+      const bodyLength = base * 2.7;
+      const bodyWidth = base * 1.72;
+
+      p.noStroke();
+      p.fill(colors.secondary);
+      for (const [x, y, angle] of [
+        [-0.48, -0.74, -0.34],
+        [-0.48, 0.74, 0.34],
+        [0.52, -0.72, 0.3],
+        [0.52, 0.72, -0.3],
+      ] as const) {
+        p.push();
+        p.translate(base * x, base * y);
+        p.rotate(angle);
+        p.ellipse(0, 0, base * (swimming ? 0.88 : 0.65), base * 0.3);
+        p.pop();
+      }
+      p.fill(colors.dark);
+      p.triangle(
+        -bodyLength * 0.47, -base * 0.18,
+        -bodyLength * 0.78, 0,
+        -bodyLength * 0.47, base * 0.18,
+      );
+      p.fill(colors.secondary);
+      p.circle(bodyLength * 0.58, 0, base * 0.72);
+      p.fill(withAlpha(PALETTE.ink, 240));
+      p.ellipse(0, 0, bodyLength * 1.06, bodyWidth * 1.08);
+      p.fill(colors.primary);
+      p.ellipse(0, 0, bodyLength, bodyWidth);
+      p.noFill();
+      p.stroke(colors.accent);
+      p.strokeWeight(Math.max(0.65, base * 0.11));
+      p.ellipse(0, 0, bodyLength * 0.78, bodyWidth * 0.72);
+      p.line(-bodyLength * 0.3, -bodyWidth * 0.28, bodyLength * 0.3, bodyWidth * 0.28);
+      p.line(-bodyLength * 0.3, bodyWidth * 0.28, bodyLength * 0.3, -bodyWidth * 0.28);
+      p.noStroke();
+      p.fill(colors.dark);
+      p.circle(bodyLength * 0.68, -base * 0.11, base * 0.11);
     };
 
     const drawChartFishCrows = (actor: WildlifeView, base: number, now: number): void => {
@@ -4421,6 +4500,9 @@ export function createTideweftRenderer(
         case "broad-winged-raptor":
           drawChartBroadWingedRaptor(actor, base, now);
           return true;
+        case "low-shelled-reptile":
+          drawChartLowShelledReptile(actor, base);
+          return true;
       }
     };
 
@@ -4452,6 +4534,28 @@ export function createTideweftRenderer(
           p.circle(0, 0, base * 5.2);
         }
         switch (evidence.form) {
+          case "airborne-swarm": {
+            const drift = reducedMotion ? 0 : Math.sin(now * 0.004) * base * 0.18;
+            p.noStroke();
+            for (const [x, y, scale] of [
+              [-1.05, 0.18, 0.22],
+              [-0.62, -0.68, 0.16],
+              [-0.18, 0.48, 0.2],
+              [0.24, -0.34, 0.14],
+              [0.68, 0.62, 0.18],
+              [1.02, -0.1, 0.21],
+            ] as const) {
+              p.fill(withAlpha(PALETTE.ink, 225));
+              p.circle(base * x + drift * y, base * y, base * scale * 1.8);
+              p.fill("#d8c98f");
+              p.circle(base * x + drift * y, base * y, base * scale);
+            }
+            p.noFill();
+            p.stroke(withAlpha(PALETTE.foam, 120));
+            p.strokeWeight(Math.max(0.55, base * 0.08));
+            p.ellipse(0, 0, base * 3.1, base * 2.05);
+            break;
+          }
           case "gnaw-marks":
             p.noStroke();
             p.fill(withAlpha(PALETTE.ink, 230));
@@ -4600,6 +4704,27 @@ export function createTideweftRenderer(
               p.circle(base * x, base * y, base * 0.18);
             }
             break;
+          case "grazing-traces":
+            p.noFill();
+            p.stroke("#b9ad85");
+            p.strokeWeight(Math.max(0.65, base * 0.1));
+            for (const offset of [-0.54, -0.18, 0.18, 0.54]) {
+              p.bezier(
+                -base * 1.3,
+                base * offset,
+                -base * 0.45,
+                base * (offset - 0.42),
+                base * 0.44,
+                base * (offset + 0.38),
+                base * 1.28,
+                base * offset,
+              );
+            }
+            p.noStroke();
+            p.fill("#62694c");
+            p.circle(-base * 0.72, base * 0.68, base * 0.18);
+            p.circle(base * 0.82, -base * 0.62, base * 0.18);
+            break;
           case "shelter-sign":
             p.noStroke();
             p.fill("#70563f");
@@ -4617,6 +4742,25 @@ export function createTideweftRenderer(
             p.strokeWeight(Math.max(0.7, base * 0.12));
             p.line(-base * 1.55, base * 0.82, -base * 0.78, base * 0.45);
             p.line(base * 1.55, base * 0.82, base * 0.78, base * 0.45);
+            break;
+          case "shell-clusters":
+            p.noStroke();
+            for (const [x, y, scale] of [
+              [-0.82, 0.38, 0.78],
+              [-0.16, -0.46, 0.92],
+              [0.56, 0.34, 0.7],
+              [0.94, -0.32, 0.56],
+            ] as const) {
+              p.fill(withAlpha(PALETTE.ink, 235));
+              p.ellipse(base * x, base * y, base * scale * 0.84, base * scale * 1.18);
+              p.fill("#a59b78");
+              p.ellipse(base * x, base * y, base * scale * 0.6, base * scale);
+              p.noFill();
+              p.stroke("#d4c799");
+              p.strokeWeight(Math.max(0.55, base * 0.08));
+              p.ellipse(base * x, base * y, base * scale * 0.3, base * scale * 0.52);
+              p.noStroke();
+            }
             break;
           case "haypile":
             p.noStroke();

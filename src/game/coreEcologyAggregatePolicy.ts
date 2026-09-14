@@ -32,6 +32,8 @@ export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
   "mummichog",
   "grass-shrimp",
   "blue-crab",
+  "eastern-saltmarsh-mosquito",
+  "marsh-periwinkle",
 ] as const);
 
 export type CoreEcologyAggregateSpecies =
@@ -42,7 +44,9 @@ export type CoreEcologyAggregateActivityKind =
   | "talus-foraging"
   | "rain-chorus"
   | "rustle-scratch"
-  | "schooling-glint";
+  | "schooling-glint"
+  | "surface-crawling"
+  | "swarming";
 
 export type CoreEcologyAggregateActivePeriod =
   | "diurnal"
@@ -64,8 +68,11 @@ export type CoreEcologyAggregatePolicyEvidenceKind =
   | "frog-track"
   | "gnaw-mark"
   | "haypile"
+  | "grazing-trace"
+  | "shell-cluster"
   | "shelter-sign"
   | "surface-dimple"
+  | "swarm-haze"
   | "talus-sign"
   | "tracks";
 
@@ -130,7 +137,9 @@ export interface CoreEcologyAggregateSpeciesPolicy {
     | "MENHADEN-SCHOOL-v1-"
     | "MUMMICHOG-SCHOOL-v1-"
     | "GRASSSHRIMP-AREA-v1-"
-    | "BLUECRAB-AREA-v1-";
+    | "BLUECRAB-AREA-v1-"
+    | "MOSQUITO-AREA-v1-"
+    | "PERIWINKLE-AREA-v1-";
   readonly representation: "aggregate-area" | "group-actor";
   readonly maximumAnchors: number;
   readonly anchorRadiusTiles: number;
@@ -434,6 +443,50 @@ const POLICIES: Readonly<
     disturbanceEvidence: Object.freeze({
       defaultKind: "burrow-opening",
       byCause: Object.freeze({ "tide-pressure": "feeding-scrape" }),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "ebb-active",
+  }),
+  "eastern-saltmarsh-mosquito": Object.freeze({
+    species: "eastern-saltmarsh-mosquito",
+    stableIdPrefix: "MOSQUITO-AREA-v1-",
+    representation: "aggregate-area",
+    maximumAnchors: 2,
+    anchorRadiusTiles: 3,
+    activity: Object.freeze({
+      kind: "swarming",
+      activePeriod: "diurnal",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "quiet",
+    }),
+    initialEvidenceKinds: Object.freeze(["swarm-haze"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "swarm-haze",
+      byCause: Object.freeze({ "weather-pressure": "swarm-haze" }),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: true,
+    rainResponse: "pressure",
+    tideResponse: "neutral",
+  }),
+  "marsh-periwinkle": Object.freeze({
+    species: "marsh-periwinkle",
+    stableIdPrefix: "PERIWINKLE-AREA-v1-",
+    representation: "aggregate-area",
+    maximumAnchors: 2,
+    anchorRadiusTiles: 2,
+    activity: Object.freeze({
+      kind: "surface-crawling",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "quiet",
+    }),
+    initialEvidenceKinds: Object.freeze(["grazing-trace", "shell-cluster"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "shell-cluster",
+      byCause: Object.freeze({ "tide-pressure": "grazing-trace" }),
     }),
     exposedFoodAttraction: false,
     rainSensitive: false,

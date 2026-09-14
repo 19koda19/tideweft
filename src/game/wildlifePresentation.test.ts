@@ -40,6 +40,7 @@ import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
 import {
   CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
 import { createCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
@@ -70,6 +71,8 @@ export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
 export const ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha38-marsh-channel-web-presentation-invariants:v1" as const;
+export const ALPHA39_SALTMARSH_SMALL_WORLDS_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha39-saltmarsh-small-worlds-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -457,6 +460,44 @@ function marshChannelEvidenceFixture(species: MarshChannelAggregateSpecies) {
   return { evidence, patch, population };
 }
 
+type SaltmarshSmallWorldAggregateSpecies =
+  | "eastern-saltmarsh-mosquito"
+  | "marsh-periwinkle";
+
+/** One shared signed habitat fixture keeps both area populations anonymous. */
+function saltmarshSmallWorldEvidenceFixture(
+  species: SaltmarshSmallWorldAggregateSpecies,
+) {
+  const seed = seedFromText("alpha37 estuary breadth shared properties");
+  const originRegion = createRegionCoord(-126_625, -214_398);
+  const tick = 0;
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed,
+    region: originRegion,
+    cohortId: CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
+  });
+  const patch = createCoreEcologyBreadthResidentPatch({ seed, habitat, tick });
+  const population = patch.aggregatePopulations.find((candidate) => (
+    candidate.species === species
+  ));
+  const tidal = projectCoreEcologyTidalTable(patch, tick);
+  const evidence = species === "marsh-periwinkle"
+    ? population?.evidence.find(({ position }) => tidal?.anchorDepths.some((candidate) => (
+        candidate.aggregateId === population.aggregateId
+        && candidate.activityUsable
+        && (population.anchors[candidate.anchorOrdinal]?.populationUnits ?? 0) > 0
+        && position.region.x === candidate.position.region.x
+        && position.region.y === candidate.position.region.y
+        && position.localX === candidate.position.localX
+        && position.localY === candidate.position.localY
+      )))
+    : population?.evidence[0];
+  if (population === undefined || evidence === undefined) {
+    throw new Error(`Saltmarsh-small-world fixture requires usable ${species} evidence`);
+  }
+  return { evidence, patch, population };
+}
+
 function waterfowlActivityFixture(tick = 360) {
   const seed = seedFromText("waterfowl habitat 1");
   const originRegion = createRegionCoord(0, 0);
@@ -815,7 +856,7 @@ function regroupingGoat(): CoreWildlifeActorState {
   return stepped.actor;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA39_SALTMARSH_SMALL_WORLDS_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
   it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
@@ -923,6 +964,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["greater-yellowlegs", "Greater yellowlegs"],
     ["belted-kingfisher", "Belted kingfisher"],
     ["double-crested-cormorant", "Double crested cormorants"],
+    ["seaside-sparrow", "Seaside sparrows"],
+    ["diamondback-terrapin", "Diamondback terrapin"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -1003,6 +1046,14 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       expect(presentation?.formLabel).toBe(
         "Long-bodied dark waterbirds with hooked bills and low swimming posture",
       );
+    } else if (species === "seaside-sparrow") {
+      expect(presentation?.formLabel).toBe(
+        "Compact, streaked marsh birds with short rounded wings",
+      );
+    } else if (species === "diamondback-terrapin") {
+      expect(presentation?.formLabel).toBe(
+        "Low turtle with a ridged oval shell and patterned skin",
+      );
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
@@ -1012,6 +1063,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       || species === "common-tern"
       || species === "greater-yellowlegs"
       || species === "double-crested-cormorant"
+      || species === "seaside-sparrow"
     ) {
       expect(presentation).not.toHaveProperty("lifeStageLabel");
     }
@@ -1301,6 +1353,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     "mummichog",
     "grass-shrimp",
     "blue-crab",
+    "eastern-saltmarsh-mosquito",
+    "marsh-periwinkle",
   ] as const)("does not fabricate a %s actor presentation", (species) => {
     const actor = wildlife("deer");
     expect(projectWildlifePresentation({
@@ -1354,6 +1408,58 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     "projects current %s activity only as honest population evidence",
     (species, evidenceKind, form, quickLabel, identityLabel, evidenceLabel, hiddenName) => {
       const { evidence, patch, population } = marshChannelEvidenceFixture(species);
+      expect(evidence.kind).toBe(evidenceKind);
+      const presentation = projectWildlifePopulationEvidencePresentations({
+        patch,
+        observation: evidenceObservation(evidence.position),
+        tileSize: 16,
+        selectedEvidenceId: evidence.evidenceId,
+      })?.find((candidate) => candidate.evidenceId === evidence.evidenceId);
+
+      expect(presentation).toMatchObject({
+        aggregateId: population.aggregateId,
+        evidenceId: evidence.evidenceId,
+        species,
+        representation: "population-evidence",
+        form,
+        quickLabel,
+        identityLabel,
+        evidenceLabel,
+        speciesIdentified: false,
+        selected: true,
+      });
+      const encoded = JSON.stringify(presentation);
+      expect(encoded).not.toMatch(
+        /actorId|groupSize|populationSize|representedUnits|activitySignal|intensity/iu,
+      );
+      expect(`${quickLabel} ${identityLabel} ${evidenceLabel}`.toLocaleLowerCase())
+        .not.toContain(hiddenName);
+    },
+  );
+
+  it.each([
+    [
+      "eastern-saltmarsh-mosquito",
+      "swarm-haze",
+      "airborne-swarm",
+      "Flying-insect activity",
+      "Unidentified flying-insect activity",
+      "A loose haze of tiny flying insects",
+      "mosquito",
+    ],
+    [
+      "marsh-periwinkle",
+      "grazing-trace",
+      "grazing-traces",
+      "Salt-marsh shell signs",
+      "Unidentified salt-marsh shell signs",
+      "Fine grazing and crawl traces on the marsh surface",
+      "periwinkle",
+    ],
+  ] as const)(
+    "projects %s only as anonymous population evidence",
+    (species, evidenceKind, form, quickLabel, identityLabel, evidenceLabel, hiddenName) => {
+      const { evidence, patch, population } = saltmarshSmallWorldEvidenceFixture(species);
       expect(evidence.kind).toBe(evidenceKind);
       const presentation = projectWildlifePopulationEvidencePresentations({
         patch,

@@ -647,7 +647,7 @@ outer-v29 Alpha36 save exactly once. This is local source evidence only. It has
 no push, remote CI, Pages, deployment, or exact-live attestation, and dedicated
 Wave-G performance and seamless actor-crossing proof remain open.
 
-The **current unpublished local**
+The **preserved unpublished local**
 `0.3.3-alpha.38 — Marsh Channel Web` candidate preserves that exact 36-record
 catalog and epoch-1 breadth prefix, then appends Atlantic menhaden, mummichog,
 grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-
@@ -681,6 +681,42 @@ crossing closure evidence, sound, capture/consumption, new mortality/bodies,
 reproduction, full circadian life, and continuously simulated 3D flight remain
 open or absent.
 
+The **current unpublished local**
+`0.3.3-alpha.39 — Saltmarsh Small Worlds` candidate preserves the exact
+forty-three-record Alpha38 catalog and both earlier breadth epochs, then appends
+eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback
+terrapin as records 44–47 through epoch 3. Mosquitoes and periwinkles remain
+conserved non-addressable aggregates over no more than two authenticated
+anchors each. Seaside sparrows form one group-atomic flock of two to four; the
+terrapin is solitary. Sparrow admission depends on the exact local mosquito
+substrate and terrapin admission on periwinkle. Terrain, salinity, marsh
+structure, depth, tide, capacity, territory, density, and regional quiet can
+therefore leave plausible-looking country lawfully empty.
+
+The cohort adds no species-local controller. Sparrows reuse shared perch-forage
+activity and the terrapin reuses shared amphibious-margin activity, alongside
+the existing identity, perception, movement, grouping, aggregation,
+persistence, knowledge, and presentation owners. A representative current-sight
+terrapin/periwinkle witness proves bounded nonlethal pressure and a ridge-
+occluded negative branch while conserving every unit. Aggregate evidence stays
+anonymous; no exact insect or snail actor is manufactured.
+
+Outer save v30 and `RegionalEcologyStateV6` remain unchanged. An authenticated
+epoch-2 state appends epoch 3 once at its saved tick, preserves both earlier
+epochs and every real deviation as an exact prefix, and cannot reroll on reload.
+All layers remain under one group-atomic 24-addressable-actor cap and atomic
+conservation commit. Shared performance and seamless-crossing closure coverage
+tests the architecture as a whole instead of every species and pair.
+
+Alpha39 reaches the chosen Directive 04_1 boundary of 45 core-wildlife profiles
+/ 47 total living records. It remains a local `SOURCE_CANDIDATE` with no push,
+remote-CI, Pages, deployment, exact-live, or LIVE_VERIFIED evidence until the
+cumulative directive gate passes. It adds no bite or disease, capture or
+consumption, new mortality or bodies, reproduction, sound/Living Voice, full
+circadian behavior, or continuous 3D flight. After Directive 04_1 closes, the
+next authorized directive is 04_1A The Turning Day; 04_2 The Living Voice
+follows.
+
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
 working-relationship, recovery, knowledge, mortality/body, and shared-policy
@@ -705,18 +741,18 @@ slice, extending the catalog to 27 records through a separate sparse sibling.
 Alpha 34–36 are preserved unpublished local polar-shore, cold-shore, and
 polar-consumer candidates extending that lineage to 31 records. Alpha37 is the
 preserved first Wave-G breadth candidate at 34 core-wildlife profiles / 36
-living records. Alpha38 is the current unpublished local candidate at 41 / 43
-through breadth epoch 2. One coherent final four-profile cohort reaches the
-45 / 47 closure boundary without quota padding. None is part of the verified
+living records. Alpha38 is the preserved epoch-2 candidate at 41 / 43;
+Alpha39 is the current unpublished local candidate at the 45 / 47 closure
+boundary through epoch 3 without quota padding. None is part of the verified
 release sequence yet.
 None completes broader aquatic or settlement ecology, broad
 attacks or mortality, population recovery, decomposition, body transport or
 harvesting, full circadian life, complete scent, worldwide species breadth, or the
 full bestiary. Broader species, reproduction, ecological migration, those
 absent physical systems, wider settlement ecology, and wider sound/evidence
-tracking still require their own authoritative owners. Alpha38 also still
-requires dedicated Wave-G performance and seamless actor-crossing closure
-evidence.
+tracking still require their own authoritative owners. Alpha39's shared
+performance and seamless-crossing closure evidence remains local until the
+complete directive gate is finished.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

@@ -125,8 +125,25 @@ export const CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT = 41 as const;
 export const CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH = "e0d33dd8bfd92907" as const;
 export const CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_PROFILES_HASH = "92e04ce6b13bdfd2" as const;
 
+/**
+ * Closing Wave-G breadth cohort. Saltmarsh Small Worlds appends four bounded
+ * ecological profiles after the exact Marsh Channel Web lineage.
+ */
+export const CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES = Object.freeze([
+  ...CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES,
+  "eastern-saltmarsh-mosquito",
+  "marsh-periwinkle",
+  "seaside-sparrow",
+  "diamondback-terrapin",
+] as const);
+export const CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_COUNT = 45 as const;
+export const CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_HASH =
+  "841a348cd6ed0bbe" as const;
+export const CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_PROFILES_HASH =
+  "95ee3e54813214c4" as const;
+
 /** Current roster; extensions must remain append-only after every sealed prefix. */
-export const CORE_WILDLIFE_SPECIES = CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES;
+export const CORE_WILDLIFE_SPECIES = CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES;
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
 export type CoreWildlifeRepresentation = "individual" | "aggregate";
@@ -135,7 +152,8 @@ export type CoreWildlifeTaxonomicClass =
   | "bird"
   | "fish"
   | "invertebrate"
-  | "mammal";
+  | "mammal"
+  | "reptile";
 export type CoreWildlifeDietClass =
   | "herbivore"
   | "omnivore"
@@ -231,6 +249,10 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "YELLOWLEGS-"
     | "KINGFISHER-"
     | "CORMORANT-"
+    | "MOSQUITO-"
+    | "PERIWINKLE-"
+    | "SEASIDESPARROW-"
+    | "TERRAPIN-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -274,6 +296,10 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "greater-yellowlegs": "YELLOWLEGS-",
   "belted-kingfisher": "KINGFISHER-",
   "double-crested-cormorant": "CORMORANT-",
+  "eastern-saltmarsh-mosquito": "MOSQUITO-",
+  "marsh-periwinkle": "PERIWINKLE-",
+  "seaside-sparrow": "SEASIDESPARROW-",
+  "diamondback-terrapin": "TERRAPIN-",
 });
 
 /**
@@ -716,6 +742,46 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     locomotionClass: "amphibious",
     groupOrganization: "flock",
     groupStableIdNamespace: "FLOCK",
+  },
+  "eastern-saltmarsh-mosquito": {
+    species: "eastern-saltmarsh-mosquito",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "invertebrate",
+    dietClass: "detritivore",
+    locomotionClass: "aerial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "marsh-periwinkle": {
+    species: "marsh-periwinkle",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "invertebrate",
+    dietClass: "detritivore",
+    locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "seaside-sparrow": {
+    species: "seaside-sparrow",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "omnivore",
+    locomotionClass: "aerial",
+    groupOrganization: "flock",
+    groupStableIdNamespace: "FLOCK",
+  },
+  "diamondback-terrapin": {
+    species: "diamondback-terrapin",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "reptile",
+    dietClass: "omnivore",
+    locomotionClass: "amphibious",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
   },
 });
 
@@ -2155,6 +2221,138 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [560_000, 920_000],
     },
   },
+  "eastern-saltmarsh-mosquito": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "eastern-saltmarsh-mosquito",
+    maximumPatchPopulation: 48,
+    roles: ["prey", "small-prey", "forager", "detritivore"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 380_000,
+      retreatThreshold: 300_000,
+      forageThreshold: 220_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-banded", "golden-brown", "pale-banded", "salt-gray"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["opportunistic", "social"],
+      ["patient", "reserved"],
+    ],
+    traitRanges: {
+      vigilance: [520_000, 900_000],
+      boldness: [60_000, 360_000],
+      sociability: [720_000, 980_000],
+    },
+  },
+  "marsh-periwinkle": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "marsh-periwinkle",
+    maximumPatchPopulation: 32,
+    roles: ["prey", "small-prey", "forager", "detritivore"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 420_000,
+      retreatThreshold: 340_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["banded-brown", "blue-gray", "olive-brown", "slate-gray"],
+    temperamentPairs: [
+      ["cautious", "patient"],
+      ["patient", "reserved"],
+      ["watchful", "patient"],
+      ["cautious", "reserved"],
+    ],
+    traitRanges: {
+      vigilance: [420_000, 820_000],
+      boldness: [40_000, 260_000],
+      sociability: [360_000, 760_000],
+    },
+  },
+  "seaside-sparrow": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "seaside-sparrow",
+    maximumPatchPopulation: 4,
+    roles: ["prey", "small-prey", "forager", "omnivore"],
+    foodAffinities: {
+      browse: 420_000,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 80_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 460_000,
+      fleeThreshold: 720_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-streaked", "pale-streaked", "rust-streaked", "salt-gray"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [640_000, 980_000],
+      boldness: [120_000, 620_000],
+      sociability: [520_000, 900_000],
+    },
+  },
+  "diamondback-terrapin": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "diamondback-terrapin",
+    maximumPatchPopulation: 1,
+    roles: ["forager", "predator", "small-predator", "omnivore"],
+    foodAffinities: {
+      browse: 180_000,
+      "shore-forage": 1_000_000,
+      carrion: 120_000,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 760_000,
+      retreatThreshold: 580_000,
+      forageThreshold: 280_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["dark-ringed", "pale-ringed", "spotted-gray", "warm-olive"],
+    temperamentPairs: [
+      ["cautious", "patient"],
+      ["reserved", "watchful"],
+      ["patient", "watchful"],
+      ["bold", "patient"],
+    ],
+    traitRanges: {
+      vigilance: [500_000, 900_000],
+      boldness: [100_000, 560_000],
+      sociability: [40_000, 240_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -2353,15 +2551,36 @@ export function assertCoreWildlifeProfiles(): void {
   const waveGMarshChannelProfiles = CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES.map(
     (species) => PROFILES[species],
   );
+  const waveGMarshChannelPrefix = CORE_WILDLIFE_SPECIES.slice(
+    0,
+    CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT,
+  );
   if (
     CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES.length
       !== CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT
     || hashCanonical(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES)
       !== CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH
+    || hashCanonical(waveGMarshChannelPrefix)
+      !== CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH
     || hashCanonical(waveGMarshChannelProfiles)
       !== CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_PROFILES_HASH
   ) {
     throw new Error("Core wildlife Wave-G marsh-channel identity lineage was rewritten");
+  }
+  const waveGSaltmarshProfiles = CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES.map(
+    (species) => PROFILES[species],
+  );
+  if (
+    CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES.length
+      !== CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_COUNT
+    || hashCanonical(CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES)
+      !== CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_HASH
+    || hashCanonical(waveGSaltmarshProfiles)
+      !== CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_PROFILES_HASH
+  ) {
+    throw new Error(
+      `Core wildlife Wave-G saltmarsh identity lineage was rewritten: ${hashCanonical(waveGSaltmarshProfiles)}`,
+    );
   }
   for (const species of CORE_WILDLIFE_SPECIES) {
     const profile = PROFILES[species];

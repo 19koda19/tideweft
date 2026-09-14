@@ -88,6 +88,27 @@ const WAVE_G_MARSH_CHANNEL_AGGREGATES = Object.freeze([
   }),
 ] as const);
 
+const WAVE_G_SALTMARSH_SMALL_WORLD_AGGREGATES = Object.freeze([
+  Object.freeze({
+    species: "eastern-saltmarsh-mosquito" as const,
+    stableIdPrefix: "MOSQUITO-AREA-v1-" as const,
+    activityKind: "swarming" as const,
+    activePeriod: "diurnal" as const,
+    evidenceKinds: Object.freeze(["swarm-haze"] as const),
+    maximumAnchors: 2,
+    tideResponse: "neutral" as const,
+  }),
+  Object.freeze({
+    species: "marsh-periwinkle" as const,
+    stableIdPrefix: "PERIWINKLE-AREA-v1-" as const,
+    activityKind: "surface-crawling" as const,
+    activePeriod: "tide-responsive" as const,
+    evidenceKinds: Object.freeze(["grazing-trace", "shell-cluster"] as const),
+    maximumAnchors: 2,
+    tideResponse: "ebb-active" as const,
+  }),
+] as const);
+
 const DISTURBANCE_CAUSES: readonly CoreEcologyAggregatePolicyDisturbanceCause[] = [
   "animal-disturbance",
   "food-attraction",
@@ -114,9 +135,14 @@ describe("core ecology aggregate policy composition", () => {
       0,
       CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES.length,
     )).toEqual(CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES);
+    const marshChannelEnd = CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES.length
+      + WAVE_G_MARSH_CHANNEL_AGGREGATES.length;
     expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(
       CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES.length,
+      marshChannelEnd,
     )).toEqual(WAVE_G_MARSH_CHANNEL_AGGREGATES.map(({ species }) => species));
+    expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(marshChannelEnd))
+      .toEqual(WAVE_G_SALTMARSH_SMALL_WORLD_AGGREGATES.map(({ species }) => species));
     expect(isCoreEcologyAggregateSpecies("american-pika")).toBe(true);
     expect(isLivingSpeciesActorAddressable("american-pika")).toBe(false);
   });
@@ -180,6 +206,32 @@ describe("core ecology aggregate policy composition", () => {
       expect(runtimePolicy?.aggregate?.maximumAnchors)
         .toBe(aggregatePolicy.maximumAnchors);
       expect(runtimePolicy?.evidenceKinds).toEqual(aggregatePolicy.initialEvidenceKinds);
+    }
+  });
+
+  it("composes the final aggregate pair through the same bounded invariants", () => {
+    for (const expected of WAVE_G_SALTMARSH_SMALL_WORLD_AGGREGATES) {
+      const aggregatePolicy = coreEcologyAggregateSpeciesPolicy(expected.species);
+      const runtimePolicy = coreEcologySpeciesRuntimePolicy(expected.species);
+      expect(isCoreEcologyAggregateSpecies(expected.species)).toBe(true);
+      expect(isLivingSpeciesActorAddressable(expected.species)).toBe(false);
+      expect(aggregatePolicy).toMatchObject({
+        stableIdPrefix: expected.stableIdPrefix,
+        representation: "aggregate-area",
+        maximumAnchors: expected.maximumAnchors,
+        activity: {
+          kind: expected.activityKind,
+          activePeriod: expected.activePeriod,
+          baselineProjection: "preserve",
+          perceivedPressureResponse: "quiet",
+        },
+        initialEvidenceKinds: expected.evidenceKinds,
+        exposedFoodAttraction: false,
+        tideResponse: expected.tideResponse,
+      });
+      expect(runtimePolicy?.actorAddressable).toBe(false);
+      expect(runtimePolicy?.aggregate?.maximumAnchors).toBe(expected.maximumAnchors);
+      expect(runtimePolicy?.evidenceKinds).toEqual(expected.evidenceKinds);
     }
   });
 

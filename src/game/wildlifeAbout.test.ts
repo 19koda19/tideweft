@@ -23,6 +23,7 @@ import {
 import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
 import {
   CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
 import { createCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
@@ -58,6 +59,8 @@ export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
 export const ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha38-marsh-channel-web-presentation-invariants:v1" as const;
+export const ALPHA39_SALTMARSH_SMALL_WORLDS_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha39-saltmarsh-small-worlds-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(3, -7);
@@ -329,6 +332,44 @@ function marshChannelEvidenceFixture(species: MarshChannelAggregateSpecies) {
   return { evidence, patch, population };
 }
 
+type SaltmarshSmallWorldAggregateSpecies =
+  | "eastern-saltmarsh-mosquito"
+  | "marsh-periwinkle";
+
+/** One shared signed habitat fixture keeps both area populations anonymous. */
+function saltmarshSmallWorldEvidenceFixture(
+  species: SaltmarshSmallWorldAggregateSpecies,
+) {
+  const seed = seedFromText("alpha37 estuary breadth shared properties");
+  const originRegion = createRegionCoord(-126_625, -214_398);
+  const tick = 0;
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed,
+    region: originRegion,
+    cohortId: CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
+  });
+  const patch = createCoreEcologyBreadthResidentPatch({ seed, habitat, tick });
+  const population = patch.aggregatePopulations.find((candidate) => (
+    candidate.species === species
+  ));
+  const tidal = projectCoreEcologyTidalTable(patch, tick);
+  const evidence = species === "marsh-periwinkle"
+    ? population?.evidence.find(({ position }) => tidal?.anchorDepths.some((candidate) => (
+        candidate.aggregateId === population.aggregateId
+        && candidate.activityUsable
+        && (population.anchors[candidate.anchorOrdinal]?.populationUnits ?? 0) > 0
+        && position.region.x === candidate.position.region.x
+        && position.region.y === candidate.position.region.y
+        && position.localX === candidate.position.localX
+        && position.localY === candidate.position.localY
+      )))
+    : population?.evidence[0];
+  if (population === undefined || evidence === undefined) {
+    throw new Error(`Saltmarsh-small-world ABOUT fixture requires usable ${species} evidence`);
+  }
+  return { evidence, patch, population };
+}
+
 function activityFixture(
   species: "fish-crow" | "northern-harrier",
   tick: number,
@@ -441,7 +482,7 @@ function pursuingBear(): CoreWildlifeActorState {
   return result;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA39_SALTMARSH_SMALL_WORLDS_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
   it.each([
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
@@ -475,6 +516,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "DOUBLE-CRESTED CORMORANT FLOCK",
       "Double-crested cormorant",
     ],
+    ["seaside-sparrow", "SEASIDE SPARROW FLOCK", "Seaside sparrow"],
+    ["diamondback-terrapin", "DIAMONDBACK TERRAPIN", "Diamondback terrapin"],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -495,6 +538,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
               ? 4
               : species === "double-crested-cormorant"
                 ? 3
+                : species === "seaside-sparrow"
+                  ? 4
                 : undefined,
     );
     const quick = projectWildlifeQuickInspect(actor, visible);
@@ -544,6 +589,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "Unidentified dark waterbirds",
       80,
     ],
+    ["seaside-sparrow", "UNKNOWN SMALL MARSH BIRDS", "Unidentified small marsh birds", 80],
+    ["diamondback-terrapin", "UNKNOWN TURTLE", "Unidentified turtle", 80],
     [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",
@@ -619,6 +666,16 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "Long-bodied dark waterbirds with hooked bills and low swimming posture",
       "Double-crested cormorant",
     ],
+    [
+      "seaside-sparrow",
+      "Compact, streaked marsh birds with short rounded wings",
+      "Seaside sparrow",
+    ],
+    [
+      "diamondback-terrapin",
+      "Low turtle with a ridged oval shell and patterned skin",
+      "Diamondback terrapin",
+    ],
   ] as const)("shows only directly observable close-range %s facts", (
     species,
     form,
@@ -638,6 +695,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
         species === "common-tern"
         || species === "greater-yellowlegs"
         || species === "double-crested-cormorant"
+        || species === "seaside-sparrow"
         ? []
         : [{ label: "Life stage", value: expect.any(String) }]
       ),
@@ -811,6 +869,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     "mummichog",
     "grass-shrimp",
     "blue-crab",
+    "eastern-saltmarsh-mosquito",
+    "marsh-periwinkle",
   ] as const)("never turns %s population activity into an ABOUT actor identity", (species) => {
     const deer = wildlife("deer");
     const fabricatedAggregate = {
@@ -864,6 +924,70 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     "keeps directly perceived %s evidence anonymous until its identity is learned",
     (species, evidenceKind, heading, identity, summary, hiddenName) => {
       const { evidence, patch, population } = marshChannelEvidenceFixture(species);
+      expect(evidence.kind).toBe(evidenceKind);
+      const direct = evidenceObservation(evidence.position);
+      const quick = projectWildlifePopulationEvidenceQuickInspect(
+        patch,
+        evidence.evidenceId,
+        direct,
+      );
+      const about = projectWildlifePopulationEvidenceAbout(
+        patch,
+        evidence.evidenceId,
+        direct,
+      );
+
+      expect(quick).toMatchObject({
+        aggregateId: population.aggregateId,
+        evidenceId: evidence.evidenceId,
+        species,
+        heading,
+        summary,
+      });
+      expect(about).toMatchObject({
+        aggregateId: population.aggregateId,
+        evidenceId: evidence.evidenceId,
+        species,
+        heading,
+        identity,
+        knowledge: "Unfamiliar",
+        observed: [
+          { label: "Evidence", value: summary },
+          { label: "Scale", value: "Population-level signs" },
+        ],
+        known: [],
+      });
+      expect(about?.observed.map(({ label }) => label)).not.toContain("Species");
+      const encoded = JSON.stringify({ about, quick });
+      expect(encoded).not.toMatch(
+        /actorId|groupSize|populationSize|representedUnits|activitySignal|intensity/iu,
+      );
+      expect(`${quick?.heading} ${quick?.summary} ${about?.identity}`.toLocaleLowerCase())
+        .not.toContain(hiddenName);
+    },
+  );
+
+  it.each([
+    [
+      "eastern-saltmarsh-mosquito",
+      "swarm-haze",
+      "FLYING-INSECT ACTIVITY",
+      "Unidentified flying-insect activity",
+      "A loose haze of tiny flying insects",
+      "mosquito",
+    ],
+    [
+      "marsh-periwinkle",
+      "grazing-trace",
+      "SALT-MARSH SHELL SIGNS",
+      "Unidentified salt-marsh shell signs",
+      "Fine grazing and crawl traces on the marsh surface",
+      "periwinkle",
+    ],
+  ] as const)(
+    "keeps directly perceived %s evidence anonymous in quick inspection and ABOUT",
+    (species, evidenceKind, heading, identity, summary, hiddenName) => {
+      const { evidence, patch, population } = saltmarshSmallWorldEvidenceFixture(species);
       expect(evidence.kind).toBe(evidenceKind);
       const direct = evidenceObservation(evidence.position);
       const quick = projectWildlifePopulationEvidenceQuickInspect(

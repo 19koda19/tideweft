@@ -452,6 +452,42 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       scentBaseRangeUnits: 6_000,
     },
   },
+  "eastern-saltmarsh-mosquito": {
+    aboutNoun: "saltmarsh mosquito activity",
+    senses: {
+      visionAcuity: 520_000,
+      hearingSensitivity: 620_000,
+      scentSensitivity: 760_000,
+      scentBaseRangeUnits: 4_000,
+    },
+  },
+  "marsh-periwinkle": {
+    aboutNoun: "marsh periwinkle activity",
+    senses: {
+      visionAcuity: 360_000,
+      hearingSensitivity: 420_000,
+      scentSensitivity: 680_000,
+      scentBaseRangeUnits: 3_000,
+    },
+  },
+  "seaside-sparrow": {
+    aboutNoun: "seaside sparrow",
+    senses: {
+      visionAcuity: 900_000,
+      hearingSensitivity: 920_000,
+      scentSensitivity: 120_000,
+      scentBaseRangeUnits: 4_000,
+    },
+  },
+  "diamondback-terrapin": {
+    aboutNoun: "diamondback terrapin",
+    senses: {
+      visionAcuity: 720_000,
+      hearingSensitivity: 620_000,
+      scentSensitivity: 700_000,
+      scentBaseRangeUnits: 8_000,
+    },
+  },
 });
 
 export const LIVING_SPECIES_REGISTRY = Object.freeze([

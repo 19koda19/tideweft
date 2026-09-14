@@ -86,7 +86,7 @@ Each seed creates:
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
 - One deterministic starting-harbor herd of exactly two individually identified domestic goats. The settlement and keeper hold a distinct typed pen, herd, and custody record; each goat uses the same shared actor, perception, attention, group, locomotion, and physical-resource arbitration owners without receiving unsupported foliage browsing.
-- One bounded forty-three-record living-species catalog whose first twenty-four
+- One bounded forty-seven-record living-species catalog whose first twenty-four
   records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed
   compatibility lineage: its exact v9 prefix describes the original-harbor
   assemblage, v10 appends one remote temperate-upland/forest-edge source for
@@ -105,23 +105,30 @@ Each seed creates:
   append-only Estuary Surface Break breadth root. Current unpublished Alpha38
   preserves that exact 36-record prefix and appends Atlantic menhaden,
   mummichog, grass shrimp, blue crab, greater yellowlegs, belted kingfisher,
-  and double-crested cormorant as records 37–43 through breadth epoch 2. A separate
+  and double-crested cormorant as records 37–43 through breadth epoch 2. Current
+  unpublished Alpha39 preserves that exact prefix and appends eastern saltmarsh
+  mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin as
+  records 44–47 through breadth epoch 3. A separate
   starting-settlement home owner retains bounded brown rats and anchored
   chickens and goats while its free-ranging domestic cat remains
   habitat-optional. Addressable wildlife uses bounded persistent
   representatives; eligible deer, gulls, fish crows, boars, elk, wolves,
-  mountain goats, common terns, greater yellowlegs, and double-crested
-  cormorants use shared herd, flock, sounder, or pack
+  mountain goats, common terns, greater yellowlegs, double-crested
+  cormorants, and seaside sparrows
+  use shared herd, flock, sounder, or pack
   topology, while other addressable profiles remain solitary. Brown rat,
   southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab,
   American pika, Atlantic capelin, bay anchovy, Atlantic ghost crab, Atlantic
-  menhaden, mummichog, grass shrimp, and blue crab remain
+  menhaden, mummichog, grass shrimp, blue crab, eastern saltmarsh mosquito,
+  and marsh periwinkle remain
   conserved non-addressable aggregates disclosed only through lawful visible
-  signs or activity; no fish, crab, shrimp, or pika actor is manufactured. Alpha33
-  remains the current twenty-seven-record LIVE_VERIFIED release; records 28–43
-  are local unpublished work toward the 45-profile core-wildlife closure
-  target, not worldwide species breadth, ecological migration behavior, or a
-  complete bestiary.
+  signs or activity; no fish, crab, shrimp, mosquito, periwinkle, or pika actor
+  is manufactured. Alpha33 remains the current twenty-seven-record
+  LIVE_VERIFIED release; records 28–47 are local unpublished work. Alpha39
+  reaches the exact 45-profile core-wildlife / 47-record living-catalog
+  closure boundary, but Directive 04_1 still requires its cumulative release
+  checkpoint. This is not worldwide species breadth, ecological migration
+  behavior, or a complete bestiary.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
 - Shortage-derived contracts protected for player choice before eligible residents can claim them.
@@ -521,12 +528,40 @@ ice, snow, reproduction, recruitment, population recovery, full scent, broad
 migration, general mortality, audible Living Voice, Directive completion,
 push, CI, Pages, deployment, and LIVE_VERIFIED status remain absent.
 
+The current unpublished `0.3.3-alpha.39 — Saltmarsh Small Worlds` candidate
+preserves that exact Alpha38 catalog and the first two breadth epochs, then
+appends eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and
+diamondback terrapin as records 44–47 through breadth epoch 3. Mosquitoes and
+periwinkles remain conserved non-addressable aggregates over at most two
+authenticated anchors. Seaside sparrows form one group-atomic flock of two to
+four persistent actors; the terrapin remains one solitary persistent reptile.
+Sparrows require the exact local mosquito substrate and terrapins require
+periwinkle, while territory, density, and regional quiet preserve honest
+absence.
+
+Shared aggregate, activity, perception, locomotion, group, persistence,
+knowledge, and presentation rules own the cohort. A clear current terrapin
+observation may create bounded nonlethal pressure on periwinkle activity; an
+occluding ridge removes both the observation and response while all units stay
+conserved. The cohort creates no bites, disease, exact insect/snail actors,
+capture, consumption, injury, mortality, body, item, cargo, sound, or continuous
+3D flight.
+
+Outer save 30 and `RegionalEcologyStateV6` remain unchanged. An authenticated
+epoch-2 state appends epoch 3 exactly once at its saved tick, keeps both earlier
+epochs as an exact prefix, and cannot reroll on reload. Every ecology owner
+still shares one group-atomic 24-addressable-actor cap and atomic conservation
+commit. Shared performance and seamless-crossing closure coverage plus
+representative emergence witnesses validate the architecture without a
+species-by-species or N² matrix.
+
 The Directive 04_1 breadth target closes at 45 core-wildlife profiles. Human
 and domestic-dog foundation records remain separate from that count, yielding
-47 total Living Weft catalog records at closure. Alpha38 is the current local
-candidate at 41 / 43, and one coherent final four-profile cohort reaches
-45 / 47. There is no quota padding, and the architecture remains open to later
-species.
+47 total Living Weft catalog records. Alpha39 reaches this chosen lower-bound
+catalog boundary without quota padding, while the architecture remains open to
+later species. The directive is not complete until its cumulative release
+checkpoint passes; after it closes, the authorized order is 04_1A **The
+Turning Day**, then 04_2 **The Living Voice**.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -1426,7 +1461,7 @@ Present only in the preserved unpublished local Alpha37 source candidate:
   beside the breadth root under the same single global group-atomic 24-actor
   cap and one atomic commit.
 
-Present only in the current unpublished local Alpha38 source candidate:
+Present in the preserved unpublished local Alpha38 source candidate:
 
 - the exact 36-record Alpha37 prefix followed by Atlantic menhaden, mummichog,
   grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-
@@ -1445,10 +1480,29 @@ Present only in the current unpublished local Alpha38 source candidate:
   exact-once epoch-2 activation for authenticated epoch-1 state and no schema
   bump.
 
-None of the Alpha34–38 local checkpoints is released, deployed, Pages-verified,
-or LIVE_VERIFIED. Alpha38 reaches 41 of 45 core-wildlife profiles but does not
-complete Directive 04_1, worldwide ecology, or the full bestiary. Dedicated
-Wave-G performance and seamless actor-crossing closure evidence remain open.
+Present only in the current unpublished local Alpha39 source candidate:
+
+- the exact 43-record Alpha38 prefix followed by eastern saltmarsh mosquito,
+  marsh periwinkle, seaside sparrow, and diamondback terrapin records 44–47;
+- Saltmarsh Small Worlds at append-only breadth epoch 3, with two max-two-anchor
+  conserved non-addressable aggregates, one group-atomic two-to-four-member
+  sparrow flock, and one solitary terrapin;
+- exact mosquito/sparrow and periwinkle/terrapin substrate dependencies with
+  honest regional absence;
+- shared aggregate, activity, perception, locomotion, group, persistence,
+  knowledge-honest ABOUT, and dual-view presentation authority;
+- one representative visible-versus-ridge-occluded terrapin-to-periwinkle
+  pressure scenario with exact conservation and no bite, disease, capture,
+  consumption, injury, death, body, item, cargo, player, or dog outcome; and
+- unchanged outer save 30 and `RegionalEcologyStateV6`, with deterministic
+  exact-once epoch-3 activation for authenticated epoch-2 state and no schema
+  bump.
+
+None of the Alpha34–39 local checkpoints is released, deployed, Pages-verified,
+or LIVE_VERIFIED. Alpha39 reaches the chosen 45 core-wildlife / 47 living-record
+boundary but does not complete Directive 04_1 until cumulative validation and
+the release checkpoint pass. It does not implement worldwide ecology, the full
+bestiary, full circadian life, or Living Voice.
 
 Live through Alpha 33:
 

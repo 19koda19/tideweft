@@ -116,6 +116,7 @@ describe("core wildlife locomotion profiles", () => {
       "greater-yellowlegs",
       "belted-kingfisher",
       "double-crested-cormorant",
+      "seaside-sparrow",
     ] as const) {
       expect(coreWildlifeLocomotionProfile(species).mode).toBe("aerial");
       expect(coreWildlifeTraversabilityCell(species, blockedSurface)).toMatchObject({

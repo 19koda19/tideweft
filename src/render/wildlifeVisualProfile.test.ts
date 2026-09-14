@@ -16,8 +16,10 @@ export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
 export const ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha38-marsh-channel-web-presentation-invariants:v1" as const;
+export const ALPHA39_SALTMARSH_SMALL_WORLDS_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha39-saltmarsh-small-worlds-presentation-invariants:v1" as const;
 
-describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} profile-driven wildlife visual forms`, () => {
+describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA39_SALTMARSH_SMALL_WORLDS_PRESENTATION_INVARIANTS_OWNER_INTENT} profile-driven wildlife visual forms`, () => {
   it("covers every addressable body once while rejecting aggregate-only profiles", () => {
     // Flock actors such as gulls are addressable even though their identity
     // metadata describes an aggregate body. The ecology aggregate registry is
@@ -47,6 +49,8 @@ describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPH
     ["greater-yellowlegs", "long-necked-wader", "egret"],
     ["belted-kingfisher", "shorebird-flock", "gull"],
     ["double-crested-cormorant", "dabbling-duck", undefined],
+    ["seaside-sparrow", "shorebird-flock", "sparrow"],
+    ["diamondback-terrapin", "low-shelled-reptile", undefined],
   ] as const)("maps %s through a reusable geometry family and every authenticated morph", (
     species,
     form,
@@ -79,6 +83,10 @@ describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPH
       .toBe(wildlifeVisualProfile("belted-kingfisher").form);
     expect(wildlifeVisualProfile("american-black-duck").form)
       .toBe(wildlifeVisualProfile("double-crested-cormorant").form);
+    expect(wildlifeVisualProfile("seaside-sparrow").form)
+      .toBe(wildlifeVisualProfile("common-tern").form);
+    expect(wildlifeVisualProfile("diamondback-terrapin").form)
+      .toBe("low-shelled-reptile");
     expect(wildlifeVisualProfile("american-black-duck").waterbirdDetails)
       .toMatchObject({ showWingAccent: true });
     expect(wildlifeVisualProfile("double-crested-cormorant").waterbirdDetails)

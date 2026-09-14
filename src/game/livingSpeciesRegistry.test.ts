@@ -68,6 +68,10 @@ describe("lean runtime living-species registry", () => {
       "greater-yellowlegs",
       "belted-kingfisher",
       "double-crested-cormorant",
+      "eastern-saltmarsh-mosquito",
+      "marsh-periwinkle",
+      "seaside-sparrow",
+      "diamondback-terrapin",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -758,6 +762,70 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 6_000,
         },
       },
+      {
+        species: "eastern-saltmarsh-mosquito",
+        actorIdPrefix: "MOSQUITO-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "aerial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "saltmarsh mosquito activity",
+        senses: {
+          visionAcuity: 520_000,
+          hearingSensitivity: 620_000,
+          scentSensitivity: 760_000,
+          scentBaseRangeUnits: 4_000,
+        },
+      },
+      {
+        species: "marsh-periwinkle",
+        actorIdPrefix: "PERIWINKLE-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "marsh periwinkle activity",
+        senses: {
+          visionAcuity: 360_000,
+          hearingSensitivity: 420_000,
+          scentSensitivity: 680_000,
+          scentBaseRangeUnits: 3_000,
+        },
+      },
+      {
+        species: "seaside-sparrow",
+        actorIdPrefix: "SEASIDESPARROW-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "FLOCK",
+        aboutNoun: "seaside sparrow",
+        senses: {
+          visionAcuity: 900_000,
+          hearingSensitivity: 920_000,
+          scentSensitivity: 120_000,
+          scentBaseRangeUnits: 4_000,
+        },
+      },
+      {
+        species: "diamondback-terrapin",
+        actorIdPrefix: "TERRAPIN-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "diamondback terrapin",
+        senses: {
+          visionAcuity: 720_000,
+          hearingSensitivity: 620_000,
+          scentSensitivity: 700_000,
+          scentBaseRangeUnits: 8_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -823,6 +891,8 @@ describe("lean runtime living-species registry", () => {
       ["mummichog", "MUMMICHOG-v1-wave-g-epoch-2-fixture"],
       ["grass-shrimp", "GRASSSHRIMP-v1-wave-g-epoch-2-fixture"],
       ["blue-crab", "BLUECRAB-v1-wave-g-epoch-2-fixture"],
+      ["eastern-saltmarsh-mosquito", "MOSQUITO-v1-wave-g-epoch-3-fixture"],
+      ["marsh-periwinkle", "PERIWINKLE-v1-wave-g-epoch-3-fixture"],
     ] as const) {
       expect(isLivingSpeciesActorAddressable(species)).toBe(false);
       expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(false);
@@ -831,6 +901,8 @@ describe("lean runtime living-species registry", () => {
       ["greater-yellowlegs", "YELLOWLEGS-v1-wave-g-epoch-2-fixture"],
       ["belted-kingfisher", "KINGFISHER-v1-wave-g-epoch-2-fixture"],
       ["double-crested-cormorant", "CORMORANT-v1-wave-g-epoch-2-fixture"],
+      ["seaside-sparrow", "SEASIDESPARROW-v1-wave-g-epoch-3-fixture"],
+      ["diamondback-terrapin", "TERRAPIN-v1-wave-g-epoch-3-fixture"],
     ] as const) {
       expect(isLivingSpeciesActorAddressable(species)).toBe(true);
       expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(true);

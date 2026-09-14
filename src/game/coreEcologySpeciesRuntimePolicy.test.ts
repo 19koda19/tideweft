@@ -71,6 +71,10 @@ describe("core ecology species runtime policy", () => {
       "greater-yellowlegs",
       "belted-kingfisher",
       "double-crested-cormorant",
+      "eastern-saltmarsh-mosquito",
+      "marsh-periwinkle",
+      "seaside-sparrow",
+      "diamondback-terrapin",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -651,6 +655,73 @@ describe("core ecology species runtime policy", () => {
     }
   });
 
+  it("admits the final saltmarsh cohort through the shared policy registry", () => {
+    const contracts = {
+      "eastern-saltmarsh-mosquito": {
+        addressable: false,
+        locomotionClass: "aerial",
+        group: null,
+        maximumActors: 0,
+        maximumAnchors: 2,
+        capabilities: ["aggregate-response", "aerial-locomotion", "quieting"],
+        evidenceKinds: ["swarm-haze"],
+      },
+      "marsh-periwinkle": {
+        addressable: false,
+        locomotionClass: "amphibious",
+        group: null,
+        maximumActors: 0,
+        maximumAnchors: 2,
+        capabilities: ["aggregate-response", "amphibious-locomotion", "tidal-activity"],
+        evidenceKinds: ["grazing-trace", "shell-cluster"],
+      },
+      "seaside-sparrow": {
+        addressable: true,
+        locomotionClass: "aerial",
+        group: "flock",
+        maximumActors: 4,
+        maximumAnchors: null,
+        capabilities: ["aerial-locomotion", "food-investigation", "perch"],
+        evidenceKinds: [],
+      },
+      "diamondback-terrapin": {
+        addressable: true,
+        locomotionClass: "amphibious",
+        group: null,
+        maximumActors: 1,
+        maximumAnchors: null,
+        capabilities: ["amphibious-route", "aquatic-locomotion", "shore-water-activity"],
+        evidenceKinds: [],
+      },
+    } as const;
+
+    for (const [species, expected] of Object.entries(contracts) as [
+      keyof typeof contracts,
+      (typeof contracts)[keyof typeof contracts],
+    ][]) {
+      const policy = coreEcologySpeciesRuntimePolicy(species);
+      expect(policy).toMatchObject({
+        actorAddressable: expected.addressable,
+        identityForm: expected.addressable ? "individual" : "aggregate",
+        representation: expected.addressable ? "individual" : "aggregate",
+        locomotionClass: expected.locomotionClass,
+        groupOrganization: expected.group,
+        maximumMaterializedActors: expected.maximumActors,
+        evidenceKinds: expected.evidenceKinds,
+        capabilities: expect.arrayContaining([...expected.capabilities]),
+        mortality: {
+          predatorContact: null,
+          physicalBodySizeUnits: 0,
+          physicalBodyResourceUnits: 0,
+          carcassFeeding: false,
+          carcassGuarding: false,
+        },
+      });
+      expect(policy?.aggregate?.maximumAnchors ?? null).toBe(expected.maximumAnchors);
+      expect(coreEcologySpeciesCanOwnActorAddress(species)).toBe(expected.addressable);
+    }
+  });
+
   it("plugs the domestic flock into shared actor, food, alarm, and group capabilities", () => {
     expect(coreEcologySpeciesRuntimePolicy("domestic-chicken")).toMatchObject({
       actorAddressable: true,
@@ -867,10 +938,12 @@ describe("core ecology species runtime policy", () => {
       "north-american-river-otter",
       "harbor-seal",
       "polar-bear",
+      "diamondback-terrapin",
     ]);
     expect(shoreWaterActivityOwners).toEqual([
       "north-american-river-otter",
       "harbor-seal",
+      "diamondback-terrapin",
     ]);
     for (const policy of CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES) {
       if (policy.capabilities.includes("shore-water-activity")) {

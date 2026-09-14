@@ -406,6 +406,8 @@ function wildlifeView(
     "greater-yellowlegs": "Greater yellowlegs",
     "belted-kingfisher": "Belted kingfisher",
     "double-crested-cormorant": "Double-crested cormorants",
+    "seaside-sparrow": "Seaside sparrows",
+    "diamondback-terrapin": "Diamondback terrapin",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -437,6 +439,8 @@ function wildlifeView(
     "greater-yellowlegs": "YELLOWLEGS-",
     "belted-kingfisher": "KINGFISHER-",
     "double-crested-cormorant": "CORMORANT-",
+    "seaside-sparrow": "SEASIDESPARROW-",
+    "diamondback-terrapin": "TERRAPIN-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -457,7 +461,11 @@ function wildlifeView(
               ? "black-capped-gray"
               : species === "osprey"
                 ? "pale-headed"
-                : "test-visible-morph",
+                : species === "seaside-sparrow"
+                  ? "salt-gray"
+                  : species === "diamondback-terrapin"
+                    ? "warm-olive"
+                    : "test-visible-morph",
     behavior: "watch",
     conditionLabels: [],
     selected: false,
@@ -1655,6 +1663,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["atlantic-ghost-crab", "feeding-scrapes", "#735b43", "line", "Shoreline signs", "Unidentified shoreline activity", "Fine shoreline feeding scrapes", false, "mudflat"],
     ["american-pika", "haypile", "#737848", "ellipsoid", "American pika signs", "American pika population signs", "American pika haypile", true, "ridge"],
     ["american-pika", "talus-sign", "#777b73", "cone", "American pika signs", "American pika population signs", "American pika talus sign", true, "ridge"],
+    ["eastern-saltmarsh-mosquito", "airborne-swarm", "#d8c98f", "sphere", "Flying-insect activity", "Unidentified flying-insect activity", "A loose haze of tiny flying insects", false, "salt-marsh"],
+    ["marsh-periwinkle", "shell-clusters", "#7d765d", "torus", "Salt-marsh shell signs", "Unidentified salt-marsh shell signs", "Clusters of small salt-marsh shells", false, "salt-marsh"],
+    ["marsh-periwinkle", "grazing-traces", "#62694c", "line", "Salt-marsh shell signs", "Unidentified salt-marsh shell signs", "Fine grazing and crawl traces on the marsh surface", false, "salt-marsh"],
   ] as const)("renders and pointer-selects low-cost %s %s without an actor alias", (
     species,
     form,
@@ -1716,7 +1727,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(visibleText).not.toContain(evidence.aggregateId);
     expect(visibleText).not.toContain(evidence.evidenceId);
     expect(visibleText).not.toMatch(/\b48\b|actorId|mortality|carcass/iu);
-    if (!speciesIdentified) expect(visibleText).not.toMatch(/anchovy|capelin|ghost crab/iu);
+    if (!speciesIdentified) {
+      expect(visibleText).not.toMatch(/anchovy|capelin|ghost crab|mosquito|periwinkle/iu);
+    }
     if (species === "atlantic-capelin") {
       const torus = harness.instance.torus as ReturnType<typeof vi.fn>;
       const surfaceRings = torus.mock.calls.map((call: unknown[]) => [...call]);
@@ -2398,6 +2411,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["greater-yellowlegs", "#8d9898", "ellipsoid"],
     ["belted-kingfisher", "#567989", "cone"],
     ["double-crested-cormorant", "#222d2c", "ellipsoid"],
+    ["seaside-sparrow", "#74766f", "box"],
+    ["diamondback-terrapin", "#6f7551", "ellipsoid"],
   ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} renders and touch-selects the shared color-independent upland %s form`, (
     species,
     primaryColor,
@@ -2479,6 +2494,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "greater-yellowlegs",
       "belted-kingfisher",
       "double-crested-cormorant",
+      "seaside-sparrow",
+      "diamondback-terrapin",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -2510,6 +2527,8 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "greater-yellowlegs": "YELLOWLEGS-",
       "belted-kingfisher": "KINGFISHER-",
       "double-crested-cormorant": "CORMORANT-",
+      "seaside-sparrow": "SEASIDESPARROW-",
+      "diamondback-terrapin": "TERRAPIN-",
     };
 
     for (const kind of species) {

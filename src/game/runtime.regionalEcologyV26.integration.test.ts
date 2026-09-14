@@ -16,10 +16,14 @@ import {
   serializeRegionalEcologyStateV3,
 } from "./regionalEcologyStateV3";
 import {
-  deserializeRegionalEcologyStateV4,
   serializeRegionalEcologyStateV4,
   type RegionalEcologyStateV4,
 } from "./regionalEcologyStateV4";
+import {
+  deserializeRegionalEcologyStateV6,
+  serializeRegionalEcologyStateV6,
+  type RegionalEcologyStateV6,
+} from "./regionalEcologyStateV6";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 
 export const ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT =
@@ -38,7 +42,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 28;
+  readonly version: 30;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
   readonly regionalTravel: string;
@@ -128,9 +132,15 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} retained Wave-F v26 child b
       population.species === "american-pika"
       && population.evidence.some(({ kind }) => kind === "haypile" || kind === "talus-sign")
     )))).toBe(true);
-    const serializedV4 = JSON.parse(envelope.regionalEcology) as { readonly base: unknown };
+    const serializedV6 = JSON.parse(envelope.regionalEcology) as { readonly base: unknown };
+    const serializedV5 = serializedV6.base as { readonly base: unknown };
+    const serializedV4 = serializedV5.base as { readonly base: unknown };
     const serializedV3 = serializedV4.base as { readonly base: unknown };
-    expect(serializeRegionalEcologyStateV4(wrapper)).toBe(envelope.regionalEcology);
+    expect(serializeRegionalEcologyStateV6(requireCurrentWrapper(envelope)))
+      .toBe(envelope.regionalEcology);
+    expect(serializeRegionalEcologyStateV4(wrapper)).toBe(stableStringify(
+      serializedV5.base,
+    ));
     expect(serializeRegionalEcologyStateV3(v3Child)).toBe(stableStringify(
       serializedV4.base,
     ));
@@ -206,7 +216,9 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} retained Wave-F v26 child b
   it("quarantines an outer-resealed save whose Alpine child was altered", async () => {
     const envelope = requireCurrent(fixtureRecord);
     const parsed = JSON.parse(envelope.regionalEcology) as Record<string, unknown>;
-    const parsedV3 = parsed.base as Record<string, unknown>;
+    const parsedV5 = parsed.base as Record<string, unknown>;
+    const parsedV4 = parsedV5.base as Record<string, unknown>;
+    const parsedV3 = parsedV4.base as Record<string, unknown>;
     const parsedV2 = parsedV3.base as Record<string, unknown>;
     const alpine = structuredClone(parsedV2.alpineActiveResidents) as Array<Record<string, unknown>>;
     if (alpine[0] === undefined) throw new Error("v28 tamper fixture needs Alpine state");
@@ -217,8 +229,14 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} retained Wave-F v26 child b
       regionalEcology: stableStringify({
         ...parsed,
         base: {
-          ...parsedV3,
-          base: { ...parsedV2, alpineActiveResidents: alpine },
+          ...parsedV5,
+          base: {
+            ...parsedV4,
+            base: {
+              ...parsedV3,
+              base: { ...parsedV2, alpineActiveResidents: alpine },
+            },
+          },
         },
       }),
     };
@@ -253,20 +271,24 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 28
-    || record.payloadVersion !== 28
+    || value.version !== 30
+    || record.payloadVersion !== 30
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("runtime fixture did not produce a v28 envelope");
+  ) throw new Error("runtime fixture did not produce a current v30 envelope");
   const { integrity, ...base } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(base as Readonly<Record<string, unknown>>)) {
-    throw new Error("v28 envelope integrity did not authenticate");
+    throw new Error("v30 envelope integrity did not authenticate");
   }
   return value;
 }
 
 function requireWrapper(envelope: CurrentEnvelope): RegionalEcologyStateV4 {
-  const state = deserializeRegionalEcologyStateV4(envelope.regionalEcology);
-  if (state === null) throw new Error("v28 regional ecology did not deserialize");
+  return requireCurrentWrapper(envelope).base.base;
+}
+
+function requireCurrentWrapper(envelope: CurrentEnvelope): RegionalEcologyStateV6 {
+  const state = deserializeRegionalEcologyStateV6(envelope.regionalEcology);
+  if (state === null) throw new Error("v30 regional ecology did not deserialize");
   return state;
 }
 

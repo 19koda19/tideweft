@@ -100,6 +100,19 @@ export const MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
 export type MarshChannelWildlifeAppearanceSpecies =
   (typeof MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES)[number];
 
+/**
+ * Addressable bodies in the final saltmarsh-small-worlds cohort. Mosquitoes
+ * and periwinkles remain anonymous population evidence and never acquire a
+ * selectable body palette.
+ */
+export const SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
+  "seaside-sparrow",
+  "diamondback-terrapin",
+] as const);
+
+export type SaltmarshSmallWorldsWildlifeAppearanceSpecies =
+  (typeof SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_SPECIES)[number];
+
 /** Fails safely to the established brown coat for legacy or malformed views. */
 export function domesticGoatAppearancePalette(
   appearanceKey: string,
@@ -398,5 +411,48 @@ export function marshChannelWildlifeAppearancePalette(
   }
   return palettes[
     MARSH_CHANNEL_WILDLIFE_APPEARANCE_FALLBACK[species]
+  ] as WildlifeAppearancePalette;
+}
+
+const SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_FALLBACK = Object.freeze({
+  "seaside-sparrow": "salt-gray",
+  "diamondback-terrapin": "warm-olive",
+} as const satisfies Readonly<Record<
+  SaltmarshSmallWorldsWildlifeAppearanceSpecies,
+  string
+>>);
+
+/**
+ * Shared Chart/Relief palettes for the two addressable saltmarsh forms.
+ * Strong shell/streak contrast keeps both silhouettes legible without color.
+ */
+export const SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_PALETTES = Object.freeze({
+  "seaside-sparrow": Object.freeze({
+    "dark-streaked": palette("#51463a", "#b8aa8c", "#1d1c19", "#d8c7a0"),
+    "pale-streaked": palette("#9c9078", "#e0d4b9", "#302c26", "#eee1bf"),
+    "rust-streaked": palette("#86543b", "#c8a77c", "#2d211b", "#e0c090"),
+    "salt-gray": palette("#74766f", "#cbc7b6", "#252927", "#e3d8b8"),
+  }),
+  "diamondback-terrapin": Object.freeze({
+    "dark-ringed": palette("#46524b", "#8b9b86", "#18201d", "#d8c98e"),
+    "pale-ringed": palette("#879086", "#c4c9b8", "#29312d", "#e5d79a"),
+    "spotted-gray": palette("#687478", "#aab4ae", "#222b2d", "#d8c98e"),
+    "warm-olive": palette("#6f7551", "#abb087", "#282c21", "#dac98b"),
+  }),
+} as const);
+
+/** Species-safe saltmarsh morph lookup with stable malformed-input fallbacks. */
+export function saltmarshSmallWorldsWildlifeAppearancePalette(
+  species: SaltmarshSmallWorldsWildlifeAppearanceSpecies,
+  appearanceKey: string,
+): WildlifeAppearancePalette {
+  const palettes = SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+    Record<string, WildlifeAppearancePalette>
+  >;
+  if (Object.prototype.hasOwnProperty.call(palettes, appearanceKey)) {
+    return palettes[appearanceKey] as WildlifeAppearancePalette;
+  }
+  return palettes[
+    SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_FALLBACK[species]
   ] as WildlifeAppearancePalette;
 }

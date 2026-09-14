@@ -211,6 +211,30 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN DARK WATERBIRDS",
     representation: "visible-flock",
   },
+  "eastern-saltmarsh-mosquito": {
+    identifiedName: "Eastern saltmarsh mosquito",
+    identifiedHeading: "EASTERN SALTMARSH MOSQUITO ACTIVITY",
+    unidentifiedHeading: "FLYING-INSECT ACTIVITY",
+    representation: "population-area",
+  },
+  "marsh-periwinkle": {
+    identifiedName: "Marsh periwinkle",
+    identifiedHeading: "MARSH PERIWINKLE SIGNS",
+    unidentifiedHeading: "SALT-MARSH SHELL SIGNS",
+    representation: "population-area",
+  },
+  "seaside-sparrow": {
+    identifiedName: "Seaside sparrow",
+    identifiedHeading: "SEASIDE SPARROW FLOCK",
+    unidentifiedHeading: "UNKNOWN SMALL MARSH BIRDS",
+    representation: "visible-flock",
+  },
+  "diamondback-terrapin": {
+    identifiedName: "Diamondback terrapin",
+    identifiedHeading: "DIAMONDBACK TERRAPIN",
+    unidentifiedHeading: "UNKNOWN TURTLE",
+    representation: "individual",
+  },
   "fish-crow": {
     identifiedName: "Fish crow",
     identifiedHeading: "FISH CROW FLOCK",

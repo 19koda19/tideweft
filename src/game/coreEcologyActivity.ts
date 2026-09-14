@@ -87,6 +87,7 @@ export type CoreEcologyActivityState =
   | "dabbling"
   | "floating"
   | "hauling-out"
+  | "low-foraging"
   | "low-quartering"
   | "perched"
   | "ridge-soaring"
@@ -119,6 +120,7 @@ export type CoreEcologyActivityMotion =
   | Readonly<{
       readonly kind: "target-area";
       readonly verb:
+        | "forage-local"
         | "quarter"
         | "seek-habitat-anchor"
         | "seek-perch"
@@ -136,6 +138,7 @@ export type CoreEcologyActivityMotion =
         | "seek-shore-foraging-water"
         | "seek-dry-haulout"
         | "seek-ridge-perch"
+        | "seek-margin-habitat"
         | "soar-ridge-loop"
         | "seek-waterfowl-refuge";
       readonly targetArea: ObservedArea;
@@ -263,6 +266,7 @@ export function coreEcologyActivityDestinationSemantic(
   if (motion.kind !== "target-area") return null;
   const verb = motion.verb;
   switch (verb) {
+    case "forage-local": return "deterministic-local-foraging-area";
     case "quarter": return "deterministic-local-quartering-area";
     case "seek-habitat-anchor": return "authenticated-habitat-anchor";
     case "seek-perch": return "authenticated-habitat-perch";
@@ -282,6 +286,8 @@ export function coreEcologyActivityDestinationSemantic(
       return "authenticated-dry-haulout";
     case "seek-ridge-perch":
       return "authenticated-ridge-perch";
+    case "seek-margin-habitat":
+      return "authenticated-habitat-anchor";
     case "soar-ridge-loop":
       return "authenticated-ridge-soar-loop";
   }
@@ -635,6 +641,91 @@ function projectCanonicalCoreEcologyActivity(
       presentationSignal: null,
       perch,
       motion: Object.freeze({ kind: "defer-to-intent" }),
+    });
+  }
+
+  if (activityProfile.archetypeId === "perch-forage") {
+    const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
+    if (inRestWindow || actorNeedsRest) {
+      const atPerch = perch.availability === "available-here";
+      return activityProjection(owned, input.atTick, day, {
+        state: atPerch ? "perched" : "seeking-perch",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: inRestWindow && atPerch ? "rest" : "observe",
+        presentationSignal: atPerch ? "perched" : null,
+        perch,
+        motion: atPerch
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-perch",
+              targetArea: frozenArea(authority.homeAnchor, PERCH_ARRIVAL_RADIUS_UNITS),
+            }),
+      });
+    }
+    const target = deterministicLocalForagingTarget(
+      authority.homeAnchor,
+      owned.member.actor.identity.stableId,
+      input.atTick,
+    );
+    const atForagingArea = withinWorldRadius(
+      owned.member.actor.address.position,
+      target,
+      QUARTERING_TARGET_RADIUS_UNITS,
+    );
+    return activityProjection(owned, input.atTick, day, {
+      state: "low-foraging",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: "observe",
+      presentationSignal: atForagingArea ? null : "low-foraging-flight",
+      perch,
+      motion: atForagingArea
+        ? Object.freeze({ kind: "hold-position" })
+        : Object.freeze({
+            kind: "target-area",
+            verb: "forage-local",
+            targetArea: frozenArea(target, QUARTERING_TARGET_RADIUS_UNITS),
+          }),
+    });
+  }
+
+  if (activityProfile.archetypeId === "amphibious-margin-forager") {
+    if (authority.homeAnchorElevation === null) return null;
+    const atHabitatAnchor = withinWorldRadius(
+      owned.member.actor.address.position,
+      authority.homeAnchor,
+      HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+    );
+    if (!atHabitatAnchor) {
+      return activityProjection(owned, input.atTick, day, {
+        state: "seeking-habitat-anchor",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: "observe",
+        presentationSignal: "shore-water-relocation",
+        perch: noPerchProjection(),
+        motion: Object.freeze({
+          kind: "target-area",
+          verb: "seek-margin-habitat",
+          targetArea: frozenArea(
+            authority.homeAnchor,
+            HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+          ),
+          travelMedium: "amphibious",
+        }),
+      });
+    }
+    const waterDepth = Math.max(
+      0,
+      tideAtTick(input.atTick).level - authority.homeAnchorElevation,
+    );
+    const restsOnMargin = inRestWindow || actorNeedsRest || waterDepth === 0;
+    return activityProjection(owned, input.atTick, day, {
+      state: restsOnMargin ? "shore-resting" : "aquatic-foraging",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: inRestWindow ? "rest" : "observe",
+      presentationSignal: restsOnMargin ? "resting" : "aquatic-foraging",
+      perch: noPerchProjection(),
+      motion: Object.freeze({ kind: "hold-position" }),
     });
   }
 
@@ -1665,6 +1756,21 @@ function deterministicQuarteringTarget(
   const cadenceOrdinal = Math.trunc(atTick / CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS);
   const phase = Number.parseInt(hashCanonical([actorId, "quartering-phase-v1"]).slice(0, 8), 16)
     % QUARTERING_OFFSETS.length;
+  const offset = QUARTERING_OFFSETS[(cadenceOrdinal + phase) % QUARTERING_OFFSETS.length];
+  if (offset === undefined) return anchor;
+  return translateInsideWorld(anchor, offset.x, offset.y);
+}
+
+function deterministicLocalForagingTarget(
+  anchor: WorldPosition,
+  actorId: string,
+  atTick: number,
+): WorldPosition {
+  const cadenceOrdinal = Math.trunc(atTick / CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS);
+  const phase = Number.parseInt(
+    hashCanonical([actorId, "local-foraging-phase-v1"]).slice(0, 8),
+    16,
+  ) % QUARTERING_OFFSETS.length;
   const offset = QUARTERING_OFFSETS[(cadenceOrdinal + phase) % QUARTERING_OFFSETS.length];
   if (offset === undefined) return anchor;
   return translateInsideWorld(anchor, offset.x, offset.y);

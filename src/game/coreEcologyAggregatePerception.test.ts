@@ -159,8 +159,12 @@ describe("aggregate ecology shared-perception adapter", () => {
       expect(count * (budget + 2))
         .toBeLessThanOrEqual(CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI);
     }
+    // The candidate roster may grow beyond the fixed hot-frame ceiling. The
+    // deterministic selector is deliberately bounded instead of scaling one
+    // loaded frame with every lawful source kind in the catalog.
+    expect(CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES).toBe(32);
     expect(CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES)
-      .toBeGreaterThanOrEqual(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.length);
+      .toBeLessThanOrEqual(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.length);
     expect(coreEcologyAggregateVisualStimulusBudget(CORE_ECOLOGY_AGGREGATE_SPECIES.length))
       .toBeLessThanOrEqual(CORE_ECOLOGY_AGGREGATE_LIVING_SOURCE_KINDS.length);
   });

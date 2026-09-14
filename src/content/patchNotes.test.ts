@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.38",
+      version: "0.3.3-alpha.39",
       releaseDate: "2026-09-14",
-      buildIdentity: "0.3.3-alpha.38",
-      gameplayContractVersion: 36,
-      tutorialVersion: 48,
+      buildIdentity: "0.3.3-alpha.39",
+      gameplayContractVersion: 37,
+      tutorialVersion: 49,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,10 +69,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the unpublished Alpha-38 marsh-channel cohort and retains earlier habitat releases", () => {
+  it("scopes the unpublished Alpha-39 directive-boundary cohort and retains earlier habitat releases", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const marshRelease = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.38",
+    );
+    const marshCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => marshRelease?.categories[category] ?? [])
       .join(" ");
     const estuaryRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.37",
@@ -247,27 +254,38 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(LATEST_PATCH_NOTE.summary).toContain("Marsh Channel Web");
-    expect(activeCopy).toContain("Atlantic menhaden, mummichog, grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-crested cormorant append as records 37 through 43");
-    expect(activeCopy).toContain("Menhaden, mummichog, grass shrimp, and blue crab remain conserved non-addressable aggregates");
-    expect(activeCopy).toContain("Greater yellowlegs form one group-atomic flock of two to four persistent members");
-    expect(activeCopy).toContain("kingfisher is solitary");
-    expect(activeCopy).toContain("cormorants form one group-atomic flock of two to three persistent members");
-    expect(activeCopy).toContain("Yellowlegs require grass shrimp, kingfishers require mummichog, and cormorants require menhaden");
-    expect(activeCopy).toContain("activated through epoch 2 without adding a new regional-ecology or outer-save wrapper");
-    expect(activeCopy).toContain("append the exact Marsh Channel Web cohort once at their saved tick");
-    expect(activeCopy).toContain("All four new aggregates reuse shared bounded aggregate and Tide Table policy");
-    expect(activeCopy).toContain("Yellowlegs reuse anchored wading");
-    expect(activeCopy).toContain("kingfishers reuse air-only surface-opportunity and perch behavior");
-    expect(activeCopy).toContain("cormorants use a shared diving-waterbird routine");
-    expect(activeCopy).toContain("Immediate danger still wins");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Saltmarsh Small Worlds");
+    expect(activeCopy).toContain("Eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin append as records 44 through 47");
+    expect(activeCopy).toContain("exactly forty-five core-wildlife profiles plus the separate human and domestic-dog foundation records");
+    expect(activeCopy).toContain("Mosquitoes and periwinkles remain conserved non-addressable aggregates with at most two authenticated anchors each");
+    expect(activeCopy).toContain("Seaside sparrows form one group-atomic flock of two to four persistent members");
+    expect(activeCopy).toContain("diamondback terrapin is one solitary persistent reptile");
+    expect(activeCopy).toContain("seaside sparrows require the admitted mosquito aggregate");
+    expect(activeCopy).toContain("terrapin requires the admitted periwinkle aggregate");
+    expect(activeCopy).toContain("advances append-only to epoch 3 without changing outer save version 30 or RegionalEcologyStateV6");
+    expect(activeCopy).toContain("adopted once at the saved tick");
+    expect(activeCopy).toContain("reuses shared aggregate, activity, perception, locomotion, group, knowledge, and presentation owners");
+    expect(activeCopy).toContain("clear-versus-ridge-occluded terrapin and periwinkle interaction");
+    expect(activeCopy).toContain("without padding this directive or requiring bespoke tests for every species and pair");
     expect(activeCopy).toContain("group-atomic cap of twenty-four actors");
     expect(activeCopy).toContain("Chart 2D and Relief 3D");
     expect(activeCopy).toContain("Quick inspection and ABOUT");
-    expect(activeCopy).toContain("clear-versus-ridge-occluded cormorant and menhaden witness");
-    expect(activeCopy).toContain("without bespoke tests for every species or species pair");
     expect(activeCopy).toContain("Outer save version 30 and RegionalEcologyStateV6 remain unchanged");
-    expect(activeCopy).toContain("forty-three records");
+    expect(activeCopy).toContain("forty-seven records");
+    expect(marshRelease?.summary).toContain("Marsh Channel Web");
+    expect(marshCopy).toContain("Atlantic menhaden, mummichog, grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-crested cormorant append as records 37 through 43");
+    expect(marshCopy).toContain("Menhaden, mummichog, grass shrimp, and blue crab remain conserved non-addressable aggregates");
+    expect(marshCopy).toContain("Greater yellowlegs form one group-atomic flock of two to four persistent members");
+    expect(marshCopy).toContain("kingfisher is solitary");
+    expect(marshCopy).toContain("cormorants form one group-atomic flock of two to three persistent members");
+    expect(marshCopy).toContain("Yellowlegs require grass shrimp, kingfishers require mummichog, and cormorants require menhaden");
+    expect(marshCopy).toContain("activated through epoch 2 without adding a new regional-ecology or outer-save wrapper");
+    expect(marshCopy).toContain("append the exact Marsh Channel Web cohort once at their saved tick");
+    expect(marshCopy).toContain("All four new aggregates reuse shared bounded aggregate and Tide Table policy");
+    expect(marshCopy).toContain("Yellowlegs reuse anchored wading");
+    expect(marshCopy).toContain("kingfishers reuse air-only surface-opportunity and perch behavior");
+    expect(marshCopy).toContain("cormorants use a shared diving-waterbird routine");
+    expect(marshCopy).toContain("Immediate danger still wins");
     expect(estuaryCopy).toContain("Bay anchovy, Atlantic ghost crab, great blue heron, common tern, and osprey append as records 32 through 36");
     expect(estuaryCopy).toContain("one conserved non-addressable school of up to forty-eight units");
     expect(estuaryCopy).toContain("one conserved non-addressable shore aggregate of up to twenty-four units");
@@ -367,19 +385,19 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Outer save version 30 and RegionalEcologyStateV6 remain unchanged");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("version-1 sparse breadth root");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("production living catalog contains forty-three records");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("valid Alpha-37 outer-v30 epoch-1 save is authenticated before deterministic epoch-2 activation");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("exact base child, epoch-1 activation and residents");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("both breadth cohorts remain inside one atomic cross-layer projection and conservation commit");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("split a flock");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("local candidate living catalog contains forty-seven records");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("valid outer-v30 epoch-2 state authenticates before deterministic epoch-3 activation");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete earlier activation, resident, identity, aggregate, saved-tick, and genuine-deviation prefix remains exact");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Every ecology owner remains inside one atomic projection and conservation commit");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("split the sparrow flock");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("local unpublished SOURCE_CANDIDATE");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("reaches forty-one of the directive's forty-five core-wildlife profiles");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("one final coherent four-profile cohort and the directive closure gates remain");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no new animal call or audible Living Voice");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("capture, kill, live-prey consumption, injury, mortality or body path");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no continuously simulated 3D flight");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Dedicated Wave-G performance and seamless actor-crossing closure evidence remain open");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("reaches the chosen 45 / 47 breadth boundary");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Directive 04_1 still requires its cumulative release-checkpoint validation and publication gates before completion");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no mosquito bite or disease, exact insect or snail actor");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("capture, live-prey consumption, fishing, harvesting, new injury, mortality or body path");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no audible Living Voice, full circadian behavior, continuous 3D flight");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Remote CI, Pages publication, exact-live comparison, and LIVE_VERIFIED status remain pending");
     expect(breathRelease?.categories.saves.join(" ")).toContain("outer session advances to version 29");
     expect(breathRelease?.categories.saves.join(" ")).toContain("regional ecology advances to root version 5");
     expect(breathRelease?.categories.knownLimitations.join(" ")).toContain("bounded Wave-F role coverage, not Wave G, Directive 04_1");

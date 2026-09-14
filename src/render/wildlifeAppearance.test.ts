@@ -17,6 +17,8 @@ import {
   POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
   POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES,
   REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES,
+  SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_PALETTES,
+  SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_SPECIES,
   alpha30WildlifeAppearancePalette,
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
@@ -25,6 +27,7 @@ import {
   marshChannelWildlifeAppearancePalette,
   polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
+  saltmarshSmallWorldsWildlifeAppearancePalette,
 } from "./wildlifeAppearance";
 
 describe("shared wildlife appearance projection", () => {
@@ -230,6 +233,33 @@ describe("shared wildlife appearance projection", () => {
         expect(new Set(Object.values(resolved)).size).toBe(4);
       }
       expect(marshChannelWildlifeAppearancePalette(species, "unknown-morph"))
+        .toBeDefined();
+    }
+  });
+
+  it("covers the final addressable saltmarsh forms without inventing aggregate bodies", () => {
+    expect(SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_SPECIES).toEqual([
+      "seaside-sparrow",
+      "diamondback-terrapin",
+    ]);
+    expect(SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_SPECIES)
+      .not.toContain("eastern-saltmarsh-mosquito");
+    expect(SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_SPECIES)
+      .not.toContain("marsh-periwinkle");
+
+    for (const species of SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_SPECIES) {
+      const profile = getCoreWildlifeProfile(species);
+      const palettes = SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+        Record<string, unknown>
+      >;
+      expect(Object.keys(palettes).sort()).toEqual([...profile.morphs].sort());
+      for (const morph of profile.morphs) {
+        const resolved = saltmarshSmallWorldsWildlifeAppearancePalette(species, morph);
+        expect(resolved).toBe(palettes[morph]);
+        expect(Object.isFrozen(resolved)).toBe(true);
+        expect(new Set(Object.values(resolved)).size).toBe(4);
+      }
+      expect(saltmarshSmallWorldsWildlifeAppearancePalette(species, "unknown-morph"))
         .toBeDefined();
     }
   });

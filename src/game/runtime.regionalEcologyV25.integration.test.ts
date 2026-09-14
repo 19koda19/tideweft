@@ -77,10 +77,19 @@ import {
 } from "./regionalEcologyStateV3";
 import {
   createRegionalEcologyStateV4,
-  deserializeRegionalEcologyStateV4,
   serializeRegionalEcologyStateV4,
   type RegionalEcologyStateV4,
 } from "./regionalEcologyStateV4";
+import {
+  createRegionalEcologyStateV5,
+  type RegionalEcologyStateV5,
+} from "./regionalEcologyStateV5";
+import {
+  createRegionalEcologyStateV6,
+  deserializeRegionalEcologyStateV6,
+  serializeRegionalEcologyStateV6,
+  type RegionalEcologyStateV6,
+} from "./regionalEcologyStateV6";
 import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import { REGIONAL_TRAVEL_COLUMNS, REGIONAL_TRAVEL_ROWS } from "./regionalTravel";
@@ -107,7 +116,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface V28Envelope {
   readonly format: "tideweft-session";
-  readonly version: 28;
+  readonly version: 30;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -231,13 +240,16 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
 
     const secondEnvelope = requireV28(repository.snapshot());
     const secondState = requireRegionalState(secondEnvelope);
+    const serializedV6 = JSON.parse(firstEnvelope.regionalEcology) as Record<string, unknown>;
+    const serializedV5 = serializedV6.base as Record<string, unknown>;
+    const serializedV4 = serializedV5.base as Record<string, unknown>;
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
-    expect(serializeRegionalEcologyStateV4(requireRegionalStateV4(secondEnvelope)))
+    expect(serializeRegionalEcologyStateV6(requireRegionalStateV6(secondEnvelope)))
       .toBe(firstEnvelope.regionalEcology);
+    expect(serializeRegionalEcologyStateV4(requireRegionalStateV4(secondEnvelope)))
+      .toBe(stableStringify(serializedV5.base));
     expect(serializeRegionalEcologyStateV3(requireRegionalStateV3(secondEnvelope)))
-      .toBe(stableStringify(
-        (JSON.parse(firstEnvelope.regionalEcology) as Record<string, unknown>).base,
-      ));
+      .toBe(stableStringify(serializedV4.base));
     expect(actorContinuity(secondState)).toEqual(firstContinuity);
   });
 
@@ -375,13 +387,19 @@ describe("runtime Alpha-32 regional ecology save boundary", () => {
     const duplicate = duplicateRegionalSource(victim);
     const forgedState = forgeRegionalStateWithDuplicate(afterState, duplicate);
     const forgedEnvelope = resealV28(afterEnvelope, {
-      regionalEcology: stableStringify(forgeRegionalStateV4WithBase(
-        requireRegionalStateV4(afterEnvelope),
-        forgeRegionalStateV3WithBase(
-          requireRegionalStateV3(afterEnvelope),
-          forgeRegionalStateV2WithBase(
-            requireRegionalStateV2(afterEnvelope),
-            forgedState,
+      regionalEcology: stableStringify(forgeRegionalStateV6WithBase(
+        requireRegionalStateV6(afterEnvelope),
+        forgeRegionalStateV5WithBase(
+          requireRegionalStateV5(afterEnvelope),
+          forgeRegionalStateV4WithBase(
+            requireRegionalStateV4(afterEnvelope),
+            forgeRegionalStateV3WithBase(
+              requireRegionalStateV3(afterEnvelope),
+              forgeRegionalStateV2WithBase(
+                requireRegionalStateV2(afterEnvelope),
+                forgedState,
+              ),
+            ),
           ),
         ),
       )),
@@ -560,7 +578,7 @@ function stageCrossOwnerPredatorContact(repository: MemoryRepository): Readonly<
   repository.replace({
     ...record,
     worldJson: JSON.stringify(resealV28(envelope, {
-      regionalEcology: serializeRegionalEcologyStateV4(createRegionalEcologyStateV4({
+      regionalEcology: replaceCurrentRegionalStateV4(envelope, createRegionalEcologyStateV4({
         base: createRegionalEcologyStateV3({
           base: createRegionalEcologyStateV2({
             base: stagedState,
@@ -728,6 +746,48 @@ function forgeRegionalStateV4WithBase(
   return Object.freeze({ ...next, integrity: hashCanonical(next) });
 }
 
+function forgeRegionalStateV5WithBase(
+  state: RegionalEcologyStateV5,
+  base: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const { integrity: _integrity, ...prior } = state;
+  const next = { ...prior, base };
+  return Object.freeze({ ...next, integrity: hashCanonical(next) });
+}
+
+function forgeRegionalStateV6WithBase(
+  state: RegionalEcologyStateV6,
+  base: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const { integrity: _integrity, ...prior } = state;
+  const next = { ...prior, base };
+  return Object.freeze({ ...next, integrity: hashCanonical(next) });
+}
+
+function replaceCurrentRegionalStateV4(
+  envelope: V28Envelope,
+  base: RegionalEcologyStateV4,
+): string {
+  const stateV6 = requireRegionalStateV6(envelope);
+  const stateV5 = stateV6.base;
+  const replacedV5 = createRegionalEcologyStateV5({
+    base,
+    polarConsumerRoot: stateV5.polarConsumerRoot,
+    polarConsumerActiveResidents: stateV5.polarConsumerActiveResidents.map(
+      ({ sourceKey, patch }) => ({ sourceKey, patch }),
+    ),
+    adoption: stateV5.adoption,
+  });
+  return serializeRegionalEcologyStateV6(createRegionalEcologyStateV6({
+    base: replacedV5,
+    breadthRoot: stateV6.breadthRoot,
+    breadthActiveResidents: stateV6.breadthActiveResidents.map(
+      ({ sourceKey, patch }) => ({ sourceKey, patch }),
+    ),
+    adoption: stateV6.adoption,
+  }));
+}
+
 function resealV28(
   envelope: V28Envelope,
   changes: Readonly<Partial<Pick<V28Envelope, "regionalEcology">>>,
@@ -744,22 +804,30 @@ function requireV28(record: SaveRecord): V28Envelope {
   const value = JSON.parse(record.worldJson) as V28Envelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 28
-    || record.payloadVersion !== 28
+    || value.version !== 30
+    || record.payloadVersion !== 30
     || typeof value.world !== "string"
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("fixture did not produce the v28 regional ecology envelope");
+  ) throw new Error("fixture did not produce the current v30 regional ecology envelope");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed as Readonly<Record<string, unknown>>)) {
-    throw new Error("v28 outer envelope failed its integrity seal");
+    throw new Error("v30 outer envelope failed its integrity seal");
   }
   return value;
 }
 
-function requireRegionalStateV4(envelope: V28Envelope): RegionalEcologyStateV4 {
-  const state = deserializeRegionalEcologyStateV4(envelope.regionalEcology);
-  if (state === null) throw new Error("v28 regional ecology state did not deserialize");
+function requireRegionalStateV6(envelope: V28Envelope): RegionalEcologyStateV6 {
+  const state = deserializeRegionalEcologyStateV6(envelope.regionalEcology);
+  if (state === null) throw new Error("v30 regional ecology state did not deserialize");
   return state;
+}
+
+function requireRegionalStateV5(envelope: V28Envelope): RegionalEcologyStateV5 {
+  return requireRegionalStateV6(envelope).base;
+}
+
+function requireRegionalStateV4(envelope: V28Envelope): RegionalEcologyStateV4 {
+  return requireRegionalStateV5(envelope).base;
 }
 
 function requireRegionalStateV3(envelope: V28Envelope): RegionalEcologyStateV3 {

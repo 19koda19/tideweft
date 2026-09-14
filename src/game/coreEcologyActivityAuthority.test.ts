@@ -26,6 +26,7 @@ import {
 import {
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
   CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
   coreEcologyBreadthCohortDefinition,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
@@ -46,6 +47,8 @@ export const ALPHA37_ESTUARY_BREADTH_ACTIVITY_AUTHORITY_OWNER_INTENT =
   "test:alpha37-estuary-breadth-activity-authority:v1" as const;
 export const ALPHA38_MARSH_CHANNEL_WEB_ACTIVITY_AUTHORITY_OWNER_INTENT =
   "test:alpha38-marsh-channel-web-activity-authority:v1" as const;
+export const ALPHA39_SALTMARSH_SMALL_WORLDS_ACTIVITY_AUTHORITY_OWNER_INTENT =
+  "test:alpha39-saltmarsh-small-worlds-activity-authority:v1" as const;
 
 const SEED = seedFromText("alpha32-activity-authority-table");
 const BREADTH_SEED = seedFromText("alpha37 estuary breadth shared properties");
@@ -240,6 +243,54 @@ describe("core ecology transient activity authority", () => {
     });
 
     expect(projections).toEqual(fixtures.map(({ species }) => species));
+  });
+
+  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_ACTIVITY_AUTHORITY_OWNER_INTENT} projects final actors through the cohort-neutral authority`, () => {
+    const region = createRegionCoord(-126_625, -214_398);
+    const habitat = deriveCoreEcologyBreadthHabitat({
+      seed: BREADTH_SEED,
+      region,
+      cohortId: CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
+    });
+    const patch = createCoreEcologyBreadthResidentPatch({
+      seed: BREADTH_SEED,
+      habitat,
+    });
+    const fixtures = Object.freeze([
+      "seaside-sparrow",
+      "diamondback-terrapin",
+    ] as const satisfies readonly CoreEcologyActivityAffordanceSpecies[]);
+
+    for (const species of fixtures) {
+      const actorId = patch.populations.find(
+        (population) => population.species === species,
+      )?.members[0]?.actor.identity.stableId;
+      if (actorId === undefined) {
+        throw new Error(`Saltmarsh activity fixture is absent for ${species}`);
+      }
+      const materialized = setCoreEcologyAggregatePatchMaterializedActors(patch, {
+        atTick: 0,
+        actorIds: [actorId],
+      });
+      const authority = projectCoreEcologyBreadthActivityAuthority({
+        rootSeed: BREADTH_SEED,
+        patch: materialized,
+        actorId,
+      });
+      expect(authority).toMatchObject({
+        actorId,
+        species,
+        sourceKey: materialized.patchKey,
+        provenance: "breadth-habitat",
+      });
+      expect(authority?.homeAnchorElevation).not.toBeNull();
+      expect(isTrustedCoreEcologyActivityAuthority(authority)).toBe(true);
+      expect(projectCoreEcologyActivity(
+        materialized,
+        { actorId, atTick: 0 },
+        authority ?? undefined,
+      )).toMatchObject({ actorId, species });
+    }
   });
 
   it("keeps the shared anchored-wader contract honest at every tide/day boundary", () => {

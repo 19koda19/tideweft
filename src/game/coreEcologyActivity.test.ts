@@ -104,6 +104,8 @@ describe("core ecology bounded activity", () => {
         "greater-yellowlegs",
         "belted-kingfisher",
         "double-crested-cormorant",
+        "seaside-sparrow",
+        "diamondback-terrapin",
       ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 

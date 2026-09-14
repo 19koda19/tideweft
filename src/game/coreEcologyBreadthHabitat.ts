@@ -71,14 +71,27 @@ export const CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES = Object.freeze([
   "double-crested-cormorant",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
+export const CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID =
+  "saltmarsh-small-worlds" as const;
+export const CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_EPOCH = 3 as const;
+export const CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_SPECIES = Object.freeze([
+  "eastern-saltmarsh-mosquito",
+  "marsh-periwinkle",
+  "seaside-sparrow",
+  "diamondback-terrapin",
+] as const satisfies readonly CoreWildlifeSpecies[]);
+
 export type CoreEcologyBreadthSpecies =
   | (typeof CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_SPECIES)[number]
-  | (typeof CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES)[number];
+  | (typeof CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES)[number]
+  | (typeof CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_SPECIES)[number];
 export type CoreEcologyBreadthCohortId =
   | typeof CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID
-  | typeof CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID;
+  | typeof CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID
+  | typeof CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID;
 export type CoreEcologyBreadthGuild =
   | "aerial-surface-consumer"
+  | "aerial-prey"
   | "aquatic-prey"
   | "benthic-omnivore"
   | "intertidal-detritivore"
@@ -109,6 +122,8 @@ export type CoreEcologyBreadthActivityKind =
   | "foraging"
   | "quartering-search"
   | "schooling-glint"
+  | "surface-crawling"
+  | "swarming"
   | "wading-search";
 export type CoreEcologyBreadthActivePeriod =
   | "diurnal"
@@ -806,12 +821,167 @@ const MARSH_CHANNEL_WEB_SPECIES_DEFINITIONS = Object.freeze([
   }),
 ] as const);
 
+const SALTMARSH_SMALL_WORLDS_SPECIES_DEFINITIONS = Object.freeze([
+  definition({
+    species: "eastern-saltmarsh-mosquito",
+    guild: "aerial-prey",
+    territorySpanRegions: 1,
+    allowedTerrain: Object.freeze(["marsh", "tidal-flat"]),
+    minimumSiteScore: 370_000,
+    minimumSalinity: 60_000,
+    minimumHighTideDepth: 0,
+    maximumHighTideDepth: 220_000,
+    maximumLowTideDepth: 80_000,
+    maximumShoreDistanceTiles: 8,
+    maximumWaterDistanceTiles: 4,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      moisture: 5,
+      salinity: 3,
+      tidal: 3,
+      heat: 2,
+      "water-proximity": 2,
+    }),
+    unitsPerWeightedTile: 3,
+    minimumPopulationUnits: 12,
+    maximumPopulationUnits: 48,
+    maximumAnchors: 2,
+    unitsPerAnchor: 24,
+    minimumAnchorSeparationTiles: 3,
+    requiresPersistentWaterRefuge: false,
+    densityMinimum: 500_000,
+    densityQualityRange: 260_000,
+    dependencySpecies: null,
+    dependencyUnitsPerPopulationUnit: 0,
+    anchorPurpose: "surface-perch",
+    anchorMedium: "air-perch",
+    activityKind: "swarming",
+    activePeriod: "diurnal",
+  }),
+  definition({
+    species: "marsh-periwinkle",
+    guild: "intertidal-detritivore",
+    territorySpanRegions: 1,
+    allowedTerrain: Object.freeze(["marsh", "tidal-flat"]),
+    minimumSiteScore: 380_000,
+    minimumSalinity: 80_000,
+    minimumHighTideDepth: 1,
+    maximumHighTideDepth: 280_000,
+    maximumLowTideDepth: 100_000,
+    maximumShoreDistanceTiles: 5,
+    maximumWaterDistanceTiles: 2,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      moisture: 5,
+      tidal: 4,
+      salinity: 3,
+      "shallow-water": 2,
+      "shore-proximity": 2,
+    }),
+    unitsPerWeightedTile: 3,
+    minimumPopulationUnits: 8,
+    maximumPopulationUnits: 32,
+    maximumAnchors: 2,
+    unitsPerAnchor: 16,
+    minimumAnchorSeparationTiles: 3,
+    requiresPersistentWaterRefuge: false,
+    densityMinimum: 480_000,
+    densityQualityRange: 260_000,
+    dependencySpecies: null,
+    dependencyUnitsPerPopulationUnit: 0,
+    anchorPurpose: "foraging-water",
+    anchorMedium: "shallow-water",
+    activityKind: "surface-crawling",
+    activePeriod: "tide-responsive",
+  }),
+  definition({
+    species: "seaside-sparrow",
+    guild: "aerial-surface-consumer",
+    territorySpanRegions: 2,
+    allowedTerrain: Object.freeze(["marsh"]),
+    minimumSiteScore: 390_000,
+    minimumSalinity: 0,
+    minimumHighTideDepth: 0,
+    maximumHighTideDepth: 180_000,
+    maximumLowTideDepth: 80_000,
+    maximumShoreDistanceTiles: 10,
+    maximumWaterDistanceTiles: 5,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      moisture: 5,
+      "water-proximity": 3,
+      "shore-proximity": 2,
+      dry: 2,
+      tidal: 1,
+    }),
+    unitsPerWeightedTile: 8,
+    minimumPopulationUnits: 2,
+    maximumPopulationUnits: 4,
+    maximumAnchors: 4,
+    unitsPerAnchor: 1,
+    minimumAnchorSeparationTiles: 3,
+    requiresPersistentWaterRefuge: false,
+    densityMinimum: 340_000,
+    densityQualityRange: 240_000,
+    dependencySpecies: "eastern-saltmarsh-mosquito",
+    dependencyUnitsPerPopulationUnit: 6,
+    anchorPurpose: "flock-perch",
+    anchorMedium: "air-perch",
+    activityKind: "foraging",
+    activePeriod: "diurnal",
+  }),
+  definition({
+    species: "diamondback-terrapin",
+    guild: "benthic-omnivore",
+    territorySpanRegions: 2,
+    allowedTerrain: Object.freeze(["marsh", "tidal-flat"]),
+    minimumSiteScore: 400_000,
+    minimumSalinity: 60_000,
+    minimumHighTideDepth: 1,
+    maximumHighTideDepth: 320_000,
+    maximumLowTideDepth: 160_000,
+    maximumShoreDistanceTiles: 8,
+    maximumWaterDistanceTiles: 2,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      "shallow-water": 5,
+      moisture: 4,
+      salinity: 3,
+      tidal: 2,
+      "shore-proximity": 1,
+    }),
+    unitsPerWeightedTile: 10,
+    minimumPopulationUnits: 1,
+    maximumPopulationUnits: 1,
+    maximumAnchors: 1,
+    unitsPerAnchor: 1,
+    minimumAnchorSeparationTiles: 1,
+    requiresPersistentWaterRefuge: false,
+    densityMinimum: 220_000,
+    densityQualityRange: 200_000,
+    dependencySpecies: "marsh-periwinkle",
+    dependencyUnitsPerPopulationUnit: 8,
+    anchorPurpose: "wading-site",
+    anchorMedium: "shallow-water",
+    activityKind: "foraging",
+    activePeriod: "tide-responsive",
+  }),
+] as const);
+
 const MARSH_CHANNEL_WEB_REGIONAL_ADMISSION = deepFreeze({
   version: 1 as const,
   signal: "eligible-habitat" as const,
   minimumPresenceThreshold: 320_000,
   presenceSignalRange: 500_000,
   maximumPresenceThreshold: 850_000,
+});
+
+const SALTMARSH_SMALL_WORLDS_REGIONAL_ADMISSION = deepFreeze({
+  version: 1 as const,
+  signal: "eligible-habitat" as const,
+  minimumPresenceThreshold: 300_000,
+  presenceSignalRange: 480_000,
+  maximumPresenceThreshold: 820_000,
 });
 
 function cohortDefinitionBase() {
@@ -833,6 +1003,16 @@ function marshChannelWebCohortDefinitionBase() {
   } as const;
 }
 
+function saltmarshSmallWorldsCohortDefinitionBase() {
+  return {
+    cohortId: CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
+    introducedInEpoch: CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_EPOCH,
+    definitionVersion: 2 as const,
+    regionalAdmission: SALTMARSH_SMALL_WORLDS_REGIONAL_ADMISSION,
+    species: SALTMARSH_SMALL_WORLDS_SPECIES_DEFINITIONS,
+  } as const;
+}
+
 export const CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS:
 readonly CoreEcologyBreadthCohortDefinition[] = Object.freeze([
   deepFreeze({
@@ -843,10 +1023,14 @@ readonly CoreEcologyBreadthCohortDefinition[] = Object.freeze([
     ...marshChannelWebCohortDefinitionBase(),
     definitionHash: hashCanonical(marshChannelWebCohortDefinitionBase()),
   }),
+  deepFreeze({
+    ...saltmarshSmallWorldsCohortDefinitionBase(),
+    definitionHash: hashCanonical(saltmarshSmallWorldsCohortDefinitionBase()),
+  }),
 ]);
 
 export const CORE_ECOLOGY_BREADTH_CURRENT_EPOCH =
-  CORE_ECOLOGY_MARSH_CHANNEL_WEB_EPOCH;
+  CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_EPOCH;
 
 assertBreadthDefinitions(CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS);
 

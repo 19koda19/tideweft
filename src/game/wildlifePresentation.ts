@@ -148,10 +148,13 @@ export interface WildlifePopulationEvidenceObservation {
 }
 
 export type WildlifePopulationEvidenceForm =
+  | "airborne-swarm"
   | "burrow-openings"
   | "feeding-scrapes"
+  | "grazing-traces"
   | "gnaw-marks"
   | "shelter-sign"
+  | "shell-clusters"
   | "small-tracks"
   | "paired-tracks"
   | "canid-pawprints"
@@ -284,7 +287,11 @@ type WildlifePresentationForm =
   | "atlantic-menhaden"
   | "mummichog"
   | "grass-shrimp"
-  | "blue-crab";
+  | "blue-crab"
+  | "eastern-saltmarsh-mosquito"
+  | "marsh-periwinkle"
+  | "seaside-sparrow"
+  | "diamondback-terrapin";
 
 interface WildlifeSpeciesPresentationDescriptor {
   readonly form: WildlifePresentationForm;
@@ -613,6 +620,62 @@ const PRESENTATION_BY_SPECIES: Readonly<
     exposesLifeStage: false,
     baseSizeScale: 0.84,
     observableForm: "Long-bodied dark waterbirds with hooked bills and low swimming posture",
+  },
+  "eastern-saltmarsh-mosquito": {
+    form: "eastern-saltmarsh-mosquito",
+    representation: "population-area",
+    identificationClarity: 560_000,
+    unidentifiedQuickLabel: "Flying-insect activity",
+    unidentifiedIdentityLabel: "Unidentified flying-insect activity",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.2,
+    observableForm: null,
+  },
+  "marsh-periwinkle": {
+    form: "marsh-periwinkle",
+    representation: "population-area",
+    identificationClarity: 560_000,
+    unidentifiedQuickLabel: "Salt-marsh shell signs",
+    unidentifiedIdentityLabel: "Unidentified salt-marsh shell signs",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "none",
+    exposesLifeStage: false,
+    baseSizeScale: 0.22,
+    observableForm: null,
+  },
+  "seaside-sparrow": {
+    form: "shorebird-flock",
+    representation: "actor",
+    identificationClarity: 360_000,
+    unidentifiedQuickLabel: "Unknown small marsh birds",
+    unidentifiedIdentityLabel: "Unidentified small marsh birds",
+    identifiedNounNumber: "plural",
+    groupNoun: "flock",
+    appearanceStyle: "plumage",
+    conditionStyle: "flock",
+    exposesLifeStage: false,
+    baseSizeScale: 0.46,
+    observableForm: "Compact, streaked marsh birds with short rounded wings",
+  },
+  "diamondback-terrapin": {
+    form: "diamondback-terrapin",
+    representation: "actor",
+    identificationClarity: 400_000,
+    unidentifiedQuickLabel: "Unknown turtle",
+    unidentifiedIdentityLabel: "Unidentified turtle",
+    identifiedNounNumber: "singular",
+    groupNoun: null,
+    appearanceStyle: "individual",
+    conditionStyle: "individual",
+    exposesLifeStage: true,
+    baseSizeScale: 0.66,
+    observableForm: "Low turtle with a ridged oval shell and patterned skin",
   },
   "fish-crow": {
     form: "fish-crow-flock",
@@ -1056,6 +1119,49 @@ const POPULATION_EVIDENCE_BY_SPECIES: Readonly<
         identifiedLabel: "Blue crab feeding scrapes",
         unidentifiedLabel: "Scattered submerged feeding scrapes",
         sizeScale: 0.94,
+      },
+    },
+  },
+  "eastern-saltmarsh-mosquito": {
+    // A visible hatch or swarm haze proves only current small-insect activity.
+    // It never manufactures one selectable mosquito or reveals a hidden count.
+    identification: "learned-identity",
+    identifiedQuickLabel: "Eastern saltmarsh mosquito activity",
+    unidentifiedQuickLabel: "Flying-insect activity",
+    identifiedIdentityLabel: "Eastern saltmarsh mosquito population signs",
+    unidentifiedIdentityLabel: "Unidentified flying-insect activity",
+    byKind: {
+      "swarm-haze": {
+        form: "airborne-swarm",
+        minimumClarity: 260_000,
+        identifiedLabel: "Eastern saltmarsh mosquito swarm haze",
+        unidentifiedLabel: "A loose haze of tiny flying insects",
+        sizeScale: 0.8,
+      },
+    },
+  },
+  "marsh-periwinkle": {
+    // Shell clusters and crawl traces overlap other salt-marsh invertebrates;
+    // direct sight alone cannot assign the population's species identity.
+    identification: "learned-identity",
+    identifiedQuickLabel: "Marsh periwinkle activity",
+    unidentifiedQuickLabel: "Salt-marsh shell signs",
+    identifiedIdentityLabel: "Marsh periwinkle population signs",
+    unidentifiedIdentityLabel: "Unidentified salt-marsh shell signs",
+    byKind: {
+      "shell-cluster": {
+        form: "shell-clusters",
+        minimumClarity: 300_000,
+        identifiedLabel: "Marsh periwinkle shell clusters",
+        unidentifiedLabel: "Clusters of small salt-marsh shells",
+        sizeScale: 0.84,
+      },
+      "grazing-trace": {
+        form: "grazing-traces",
+        minimumClarity: 340_000,
+        identifiedLabel: "Marsh periwinkle grazing traces",
+        unidentifiedLabel: "Fine grazing and crawl traces on the marsh surface",
+        sizeScale: 0.78,
       },
     },
   },
@@ -1839,6 +1945,7 @@ function activityBehavior(
 > | null {
   switch (activity?.presentationSignal) {
     case "perched": return "perch";
+    case "low-foraging-flight": return "flight";
     case "low-quartering-flight": return "quarter";
     case "ridge-soaring-flight": return "flight";
     case "resting": return "rest";

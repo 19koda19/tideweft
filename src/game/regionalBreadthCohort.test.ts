@@ -15,6 +15,8 @@ import {
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
   CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
   CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES,
+  CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
+  CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_SPECIES,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
 import { repositionCoreWildlifeActor } from "./coreWildlifeActor";
@@ -37,10 +39,13 @@ export const ALPHA37_ESTUARY_BREADTH_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-resident-shared-invariants:v1" as const;
 export const ALPHA38_MARSH_CHANNEL_WEB_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT =
   "test:alpha38-marsh-channel-web-resident-shared-invariants:v1" as const;
+export const WAVE_G_SALTMARSH_SMALL_WORLDS_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT =
+  "test:alpha39-saltmarsh-small-worlds-resident-shared-invariants:v1" as const;
 
 const SEED = seedFromText("alpha37 estuary breadth shared properties");
 const COHORT = CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
 const MARSH_COHORT = CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID;
+const SALTMARSH_COHORT = CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID;
 const AGGREGATE_REGION = createRegionCoord(-5_179, -89_646);
 const TERN_REGION = createRegionCoord(-5_179, -89_646);
 const HERON_REGION = createRegionCoord(1_050, 38_043);
@@ -52,6 +57,7 @@ const MARSH_FIXTURE_REGIONS = Object.freeze([
   createRegionCoord(173_753, 11_507),
   createRegionCoord(91_177, 199_624),
 ]);
+const SALTMARSH_FIXTURE_REGION = createRegionCoord(-126_625, -214_398);
 
 function patchAt(region: ReturnType<typeof createRegionCoord>, tick = 0) {
   const habitat = deriveCoreEcologyBreadthHabitat({
@@ -79,6 +85,19 @@ function marshPatches() {
       patch: createCoreEcologyBreadthResidentPatch({ seed: SEED, habitat }),
     };
   });
+}
+
+function saltmarshPatch() {
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed: SEED,
+    region: SALTMARSH_FIXTURE_REGION,
+    cohortId: SALTMARSH_COHORT,
+  });
+  expect(habitat.totalPopulationUnits).toBeGreaterThan(0);
+  return {
+    habitat,
+    patch: createCoreEcologyBreadthResidentPatch({ seed: SEED, habitat }),
+  };
 }
 
 describe(`${ALPHA37_ESTUARY_BREADTH_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} shared cohort adapter`, () => {
@@ -404,6 +423,7 @@ describe(`${ALPHA38_MARSH_CHANNEL_WEB_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} g
     const current = deriveCoreEcologyBreadthResidentSet({
       seed: SEED,
       regions: MARSH_FIXTURE_REGIONS,
+      activeThroughEpoch: 2,
     });
     expect(current.activeThroughEpoch).toBe(2);
     expect(current.residents.some(({ cohortId }) => cohortId === MARSH_COHORT)).toBe(true);
@@ -413,5 +433,93 @@ describe(`${ALPHA38_MARSH_CHANNEL_WEB_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} g
       activeThroughEpoch: 1,
     });
     expect(epochOne.residents.every(({ cohortId }) => cohortId === COHORT)).toBe(true);
+  });
+});
+
+describe(`${WAVE_G_SALTMARSH_SMALL_WORLDS_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} generic cohort adapter`, () => {
+  it("materializes the four-species web through the existing bounded aggregate, solitary, and flock structures", () => {
+    const { habitat, patch } = saltmarshPatch();
+    expect(canonicalCoreEcologyBreadthResidentPatch(patch, {
+      seed: SEED,
+      region: SALTMARSH_FIXTURE_REGION,
+      completedTick: 0,
+    })).toBe(patch);
+    expect(habitat.populations.map(({ species }) => species)).toEqual(
+      CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_SPECIES,
+    );
+    expect(patch.nextMortalityOrdinal).toBe(0);
+    expect(patch.mortalityTransactions).toEqual([]);
+    expect(patch.carcasses).toEqual([]);
+    expect(patch.aggregatePopulations).toHaveLength(2);
+    expect(patch.aggregatePopulations.every(({ anchors }) => anchors.length <= 2)).toBe(true);
+
+    const residentSpecies = [
+      ...patch.aggregatePopulations.map(({ species }) => species),
+      ...patch.populations.map(({ species }) => species),
+    ].sort();
+    expect(residentSpecies).toEqual(
+      [...CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_SPECIES].sort(),
+    );
+    for (const population of patch.aggregatePopulations) {
+      const source = habitat.populations.find(
+        ({ populationKey }) => populationKey === population.populationKey,
+      )!;
+      expect(population.populationSize).toBe(source.populationUnits);
+      expect(population.anchors.reduce(
+        (sum, anchor) => sum + anchor.populationUnits,
+        0,
+      )).toBe(source.populationUnits);
+    }
+    for (const population of patch.populations) {
+      const source = habitat.populations.find(
+        ({ populationKey }) => populationKey === population.populationKey,
+      )!;
+      expect(population.members).toHaveLength(source.populationUnits);
+      expect(population.members.every(({ representedUnits, materialization }) => (
+        representedUnits === 1 && materialization === "coarse"
+      ))).toBe(true);
+    }
+
+    const sparrows = patch.populations.find(
+      ({ species }) => species === "seaside-sparrow",
+    )!;
+    expect(sparrows.members.length).toBeGreaterThanOrEqual(2);
+    expect(sparrows.members.length).toBeLessThanOrEqual(4);
+    expect(patch.groups.groups).toHaveLength(1);
+    expect(patch.groups.groups[0]).toMatchObject({
+      memberOrdinals: sparrows.members.map(({ populationOrdinal }) => populationOrdinal),
+      identity: {
+        species: "seaside-sparrow",
+        organization: "flock",
+        populationKey: sparrows.populationKey,
+      },
+    });
+    expect(patch.populations.find(
+      ({ species }) => species === "diamondback-terrapin",
+    )?.members).toHaveLength(1);
+    expect(stableStringify(patch)).not.toMatch(
+      /bite|capture|disease|consumption|reproduction|soundEvent|voice/u,
+    );
+  });
+
+  it("admits epoch three through the existing root while preserving the exact epoch-two selection", () => {
+    const current = deriveCoreEcologyBreadthResidentSet({
+      seed: SEED,
+      regions: [SALTMARSH_FIXTURE_REGION],
+    });
+    expect(current.activeThroughEpoch).toBe(3);
+    expect(current.residents.some(({ cohortId }) => cohortId === SALTMARSH_COHORT)).toBe(true);
+    const epochTwo = deriveCoreEcologyBreadthResidentSet({
+      seed: SEED,
+      regions: [SALTMARSH_FIXTURE_REGION],
+      activeThroughEpoch: 2,
+    });
+    expect(epochTwo.activeThroughEpoch).toBe(2);
+    expect(epochTwo.residents.every(({ cohortId }) => cohortId !== SALTMARSH_COHORT)).toBe(true);
+    expect(deriveCoreEcologyBreadthResidentSet({
+      seed: SEED,
+      regions: [SALTMARSH_FIXTURE_REGION],
+      activeThroughEpoch: 2,
+    })).toEqual(epochTwo);
   });
 });

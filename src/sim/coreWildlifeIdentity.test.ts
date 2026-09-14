@@ -31,6 +31,10 @@ import {
   CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES,
   CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT,
   CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH,
+  CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_PROFILES_HASH,
+  CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES,
+  CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_COUNT,
+  CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_HASH,
   CORE_WILDLIFE_PROFILES,
   CORE_WILDLIFE_SPECIES,
   assertCoreWildlifeIdentity,
@@ -121,6 +125,10 @@ describe("core wildlife identity", () => {
         "greater-yellowlegs",
         "belted-kingfisher",
         "double-crested-cormorant",
+        "eastern-saltmarsh-mosquito",
+        "marsh-periwinkle",
+        "seaside-sparrow",
+        "diamondback-terrapin",
       ]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA32_SPECIES_HASH);
@@ -156,6 +164,10 @@ describe("core wildlife identity", () => {
         "greater-yellowlegs",
         "belted-kingfisher",
         "double-crested-cormorant",
+        "eastern-saltmarsh-mosquito",
+        "marsh-periwinkle",
+        "seaside-sparrow",
+        "diamondback-terrapin",
       ]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA34_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA34_SPECIES_HASH);
@@ -220,7 +232,10 @@ describe("core wildlife identity", () => {
     expect(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES).toHaveLength(
       CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT,
     );
-    expect(CORE_WILDLIFE_SPECIES).toEqual(
+    expect(CORE_WILDLIFE_SPECIES.slice(
+      0,
+      CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT,
+    )).toEqual(
       CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES,
     );
     expect(hashCanonical(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES))
@@ -228,6 +243,24 @@ describe("core wildlife identity", () => {
     expect(hashCanonical(
       CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES.map(getCoreWildlifeProfile),
     )).toBe(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_PROFILES_HASH);
+    expect(CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES).toEqual([
+      ...CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES,
+      "eastern-saltmarsh-mosquito",
+      "marsh-periwinkle",
+      "seaside-sparrow",
+      "diamondback-terrapin",
+    ]);
+    expect(CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES).toHaveLength(
+      CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_COUNT,
+    );
+    expect(CORE_WILDLIFE_SPECIES).toEqual(
+      CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES,
+    );
+    expect(hashCanonical(CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES))
+      .toBe(CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_HASH);
+    expect(hashCanonical(
+      CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES.map(getCoreWildlifeProfile),
+    )).toBe(CORE_WILDLIFE_WAVE_G_SALTMARSH_SMALL_WORLDS_PROFILES_HASH);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
     expect(getCoreWildlifeProfile("deer").roles).toEqual([
@@ -726,6 +759,48 @@ describe("core wildlife identity", () => {
     for (const [species, contract] of Object.entries(marshChannelWeb) as [
       keyof typeof marshChannelWeb,
       (typeof marshChannelWeb)[keyof typeof marshChannelWeb],
+    ][]) {
+      const [
+        representation,
+        taxonomicClass,
+        dietClass,
+        locomotionClass,
+        groupOrganization,
+        groupStableIdNamespace,
+        maximumPatchPopulation,
+      ] = contract;
+      expect(getCoreWildlifeSpeciesMetadata(species)).toMatchObject({
+        actorRepresentation: representation,
+        catalogIdentityForm: representation,
+        taxonomicClass,
+        dietClass,
+        locomotionClass,
+        groupOrganization,
+        groupStableIdNamespace,
+      });
+      expect(getCoreWildlifeProfile(species)).toMatchObject({
+        maximumPatchPopulation,
+        behavior: { maximumPursuitTicks: 0 },
+      });
+    }
+
+    const saltmarshSmallWorlds = {
+      "eastern-saltmarsh-mosquito": [
+        "aggregate", "invertebrate", "detritivore", "aerial", null, null, 48,
+      ],
+      "marsh-periwinkle": [
+        "aggregate", "invertebrate", "detritivore", "amphibious", null, null, 32,
+      ],
+      "seaside-sparrow": [
+        "individual", "bird", "omnivore", "aerial", "flock", "FLOCK", 4,
+      ],
+      "diamondback-terrapin": [
+        "individual", "reptile", "omnivore", "amphibious", null, null, 1,
+      ],
+    } as const satisfies Partial<Record<CoreWildlifeSpecies, readonly unknown[]>>;
+    for (const [species, contract] of Object.entries(saltmarshSmallWorlds) as [
+      keyof typeof saltmarshSmallWorlds,
+      (typeof saltmarshSmallWorlds)[keyof typeof saltmarshSmallWorlds],
     ][]) {
       const [
         representation,

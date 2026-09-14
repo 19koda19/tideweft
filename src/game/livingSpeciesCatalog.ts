@@ -4,6 +4,7 @@ import {
   CORE_WILDLIFE_FOOD_CLASSES,
   CORE_WILDLIFE_IDENTITY_VERSION,
   CORE_WILDLIFE_SPECIES,
+  CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES,
   coreWildlifeIdPrefix,
   getCoreWildlifeProfile,
   getCoreWildlifeSpeciesMetadata,
@@ -333,6 +334,64 @@ export const LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_COUNT = 43 as const;
 export const LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS_HASH = "a2a6b38c2260c1b5" as const;
 export const LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_BYTE_LENGTH = 489_677 as const;
 export const LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_HASH = "a73bdc6a10e778ef" as const;
+
+/** Sorted 47-record catalog after the closing Saltmarsh Small Worlds append. */
+export const LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS = Object.freeze([
+  "american-black-duck",
+  "american-pika",
+  "arctic-fox",
+  "atlantic-capelin",
+  "atlantic-ghost-crab",
+  "atlantic-marsh-fiddler-crab",
+  "atlantic-menhaden",
+  "atlantic-silverside",
+  "bay-anchovy",
+  "belted-kingfisher",
+  "black-bear",
+  "blue-crab",
+  "brown-bear",
+  "brown-rat",
+  "common-tern",
+  "cougar",
+  "deer",
+  "diamondback-terrapin",
+  "domestic-cat",
+  "domestic-chicken",
+  "domestic-dog",
+  "domestic-goat",
+  "double-crested-cormorant",
+  "eastern-saltmarsh-mosquito",
+  "elk",
+  "fish-crow",
+  "golden-eagle",
+  "grass-shrimp",
+  "gray-wolf",
+  "great-blue-heron",
+  "greater-yellowlegs",
+  "gull",
+  "harbor-seal",
+  "human",
+  "marsh-fox",
+  "marsh-periwinkle",
+  "marsh-rabbit",
+  "mountain-goat",
+  "mummichog",
+  "north-american-river-otter",
+  "northern-harrier",
+  "osprey",
+  "polar-bear",
+  "seaside-sparrow",
+  "snowy-egret",
+  "southern-leopard-frog",
+  "wild-boar",
+] as const);
+export const LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_COUNT = 47 as const;
+export const LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS_HASH =
+  "b7c277b68d7fecf2" as const;
+export const LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_BYTE_LENGTH =
+  535_488 as const;
+export const LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_HASH =
+  "d689a48d778f8aea" as const;
 
 export type LivingSpeciesImplementation = "unimplemented" | "foundation" | "active";
 export type LivingSpeciesIdentityForm = "individual" | "aggregate" | "hybrid";
@@ -3087,6 +3146,194 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     conditionAxes: [fixed("exhaustion"), fixed("stress")],
     aboutObservableFields: ["appearance", "approximate-size", "behavior", "species"],
   },
+  "eastern-saltmarsh-mosquito": {
+    implementation: "foundation",
+    ecologicalClasses: ["aerial-invertebrate", "detritivore", "forager", "prey", "small-prey"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: "game:regional-breadth-cohort:v1",
+    dynamicOverlays: ["visible-activity"],
+    morphologyDimensions: ["activity-area", "population-density"],
+    appearanceTraits: ["activity-density", "swarm-haze"],
+    habitatClasses: ["brackish-marsh", "reed-edge", "saltmarsh", "tidal-flat"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["redistribute", "swarm"],
+    terrainAffordances: ["marsh-air", "open-air"],
+    consumedBy: ["insectivorous-bird"],
+    competesWith: [],
+    ecologicalEffects: ["aerial-small-prey-support", "detrital-transfer"],
+    includeDogInteraction: false,
+    groupModel: "variable",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      decayOwnerId: "game:regional-breadth-cohort:v1",
+      interprets: [],
+    },
+    weather: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["rain-intensity", "wind-strength"],
+      outputs: ["activity-pressure"],
+    },
+    health: noHealth(),
+    aboutObservableFields: ["activity", "evidence-kind", "evidence-scale", "species"],
+  },
+  "marsh-periwinkle": {
+    implementation: "foundation",
+    ecologicalClasses: ["detritivore", "forager", "intertidal-invertebrate", "prey", "small-prey"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    locomotionOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    socialOwnerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+    activityOwnerId: "game:regional-breadth-cohort:v1",
+    dynamicOverlays: ["tide-availability", "visible-activity"],
+    morphologyDimensions: ["activity-area", "population-density"],
+    appearanceTraits: ["shell-cluster", "shell-pattern", "surface-trace"],
+    habitatClasses: ["brackish-marsh", "reed-edge", "saltmarsh", "tidal-flat"],
+    movementMedia: [
+      { medium: "land", relativeCapability: 800_000 },
+      { medium: "shallow-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["crawl", "redistribute"],
+    terrainAffordances: ["intertidal-margin", "standable-shallow-water"],
+    consumedBy: ["small-predator"],
+    competesWith: [],
+    ecologicalEffects: ["detrital-transfer", "intertidal-small-prey-support"],
+    includeDogInteraction: false,
+    groupModel: "variable",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      decayOwnerId: "game:regional-breadth-cohort:v1",
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["salinity", "water-depth"],
+      outputs: ["activity-pressure"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["tide-direction", "tide-height"],
+      outputs: ["activity-pressure"],
+    },
+    health: noHealth(),
+    aboutObservableFields: ["activity", "evidence-kind", "evidence-scale", "species"],
+  },
+  "seaside-sparrow": {
+    implementation: "foundation",
+    ecologicalClasses: ["aerial-forager", "forager", "insectivore", "prey", "small-prey"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-groups:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition", "visible-flock-summary"],
+    morphologyDimensions: ["body-size", "plumage-state"],
+    appearanceTraits: ["long-bill", "plumage", "streaked-breast", "temperament"],
+    habitatClasses: ["brackish-marsh", "reed-edge", "saltmarsh"],
+    movementMedia: [
+      { medium: "air", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+      { medium: "land", relativeCapability: 650_000 },
+    ],
+    movementVerbs: ["fly", "perch", "relocate"],
+    terrainAffordances: ["marsh-perch", "open-air", "perch"],
+    consumedBy: ["aerial-predator"],
+    competesWith: [],
+    ecologicalEffects: ["alarm-information", "nonlethal-aggregate-pressure"],
+    includeDogInteraction: true,
+    groupModel: "group",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    health: noHealth(),
+    conditionAxes: [fixed("exhaustion"), fixed("stress")],
+    aboutObservableFields: ["appearance", "approximate-size", "behavior", "species"],
+  },
+  "diamondback-terrapin": {
+    implementation: "foundation",
+    ecologicalClasses: ["amphibious-forager", "forager", "omnivore", "small-predator"],
+    habitatOwnerId: "game:core-ecology-breadth-habitat:v1",
+    ecologyOwnerId: "game:regional-breadth-ecology:v1",
+    populationOwnerId: "game:regional-breadth-cohort:v1",
+    spatialOwnerId: "game:regional-breadth-ecology:v1",
+    behaviorOwnerId: "game:core-wildlife-actor:v1",
+    locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
+    socialOwnerId: "game:core-ecology-perception:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
+    dynamicOverlays: ["visible-condition", "water-depth"],
+    morphologyDimensions: ["body-size", "shell-state"],
+    appearanceTraits: ["diamond-shell-pattern", "shell-color", "skin-marking", "temperament"],
+    habitatClasses: ["brackish-marsh", "marsh-margin", "shallow-water", "tidal-flat"],
+    movementMedia: [
+      { medium: "deep-water", relativeCapability: 650_000 },
+      { medium: "land", relativeCapability: 800_000 },
+      { medium: "shallow-water", relativeCapability: LIVING_SPECIES_CAPABILITY_SCALE },
+    ],
+    movementVerbs: ["crawl", "relocate", "swim"],
+    terrainAffordances: [
+      "intertidal-margin",
+      "standable-shallow-water",
+      "swimmable-deep-water",
+      "swimmable-shallow-water",
+    ],
+    consumedBy: [],
+    competesWith: [],
+    ecologicalEffects: ["nonlethal-intertidal-pressure"],
+    includeDogInteraction: true,
+    groupModel: "solitary",
+    crossRegion: false,
+    sound: noSound(),
+    evidence: {
+      status: "unimplemented",
+      ownerId: null,
+      decayOwnerId: null,
+      interprets: [],
+    },
+    weather: absentResponse(),
+    water: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["marsh-margin-depth", "water-depth"],
+      outputs: ["stress"],
+    },
+    tide: {
+      status: "foundation",
+      ownerId: "game:regional-breadth-cohort:v1",
+      inputs: ["marsh-margin-availability", "tide-direction", "tide-height"],
+      outputs: ["stress"],
+    },
+    health: noHealth(),
+    conditionAxes: [fixed("exhaustion"), fixed("stress")],
+    aboutObservableFields: ["appearance", "approximate-size", "behavior", "species"],
+  },
 });
 
 /**
@@ -3917,6 +4164,86 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     water: "available",
     weather: "intentional-no-response",
   },
+  "eastern-saltmarsh-mosquito": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "marsh-periwinkle": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "intentional-no-response",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
+  "seaside-sparrow": {
+    "aquatic-animal": "intentional-no-response",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "available",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "intentional-no-response",
+    weather: "intentional-no-response",
+  },
+  "diamondback-terrapin": {
+    "aquatic-animal": "available",
+    carcass: "intentional-no-response",
+    dog: "available",
+    fire: "intentional-no-response",
+    "flying-animal": "intentional-no-response",
+    food: "available",
+    human: "available",
+    "larger-prey": "intentional-no-response",
+    livestock: "intentional-no-response",
+    "living-cover": "intentional-no-response",
+    "possibility-anomaly": "intentional-no-response",
+    predator: "available",
+    "same-species": "intentional-no-response",
+    scavenger: "intentional-no-response",
+    shelter: "intentional-no-response",
+    "smaller-prey": "intentional-no-response",
+    water: "available",
+    weather: "intentional-no-response",
+  },
 } as const satisfies Readonly<Record<
   CoreWildlifeSpecies,
   Readonly<Record<LivingSpeciesInteractionTargetClass, LivingSpeciesInteractionPolicy>>
@@ -4336,6 +4663,9 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const alpha32CompatibilitySpecies = (
     LIVING_SPECIES_ALPHA32_SPECIES_IDS as readonly string[]
   ).includes(species);
+  const postMarshChannelSpecies = !(
+    CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES as readonly string[]
+  ).includes(species);
   const aggregateSchool = aggregate
     && coreEcologySpeciesHasRuntimeCapability(species, "school-coordination");
   const physicalBodyResourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(species);
@@ -4423,8 +4753,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
           ? ["domestic-animal-anchor"]
           : []),
         "excluded-tile-indices",
-        "focus-position",
-        "focus-radius",
+        ...(!postMarshChannelSpecies ? ["focus-position", "focus-radius"] : []),
         "origin-region",
         "region-terrain",
         "root-seed",
@@ -5462,6 +5791,37 @@ if (
 
 export const LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG: LivingSpeciesCatalog =
   waveGMarshChannelCatalog;
+
+const waveGSaltmarshSmallWorldsModules =
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS.map((speciesId) => {
+    const module = currentCatalog.modules.find((candidate) => candidate.speciesId === speciesId);
+    if (module === undefined) {
+      throw new Error(`Living Weft catalog omitted Wave-G saltmarsh species ${speciesId}`);
+    }
+    return module;
+  });
+const waveGSaltmarshSmallWorldsCatalog = deepFreeze({
+  version: LIVING_SPECIES_CATALOG_VERSION,
+  modules: waveGSaltmarshSmallWorldsModules,
+});
+const waveGSaltmarshSmallWorldsBytes = stableStringify(waveGSaltmarshSmallWorldsCatalog);
+if (
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS.length
+    !== LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_COUNT
+  || hashCanonical(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS)
+    !== LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS_HASH
+  || new TextEncoder().encode(waveGSaltmarshSmallWorldsBytes).byteLength
+    !== LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_BYTE_LENGTH
+  || hashCanonical(waveGSaltmarshSmallWorldsCatalog)
+    !== LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_HASH
+) {
+  throw new Error(
+    `Living Weft Wave-G saltmarsh catalog lineage was rewritten: ${new TextEncoder().encode(waveGSaltmarshSmallWorldsBytes).byteLength}/${hashCanonical(waveGSaltmarshSmallWorldsCatalog)}`,
+  );
+}
+
+export const LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG:
+LivingSpeciesCatalog = waveGSaltmarshSmallWorldsCatalog;
 
 /** Only implemented identity owners are present; this is deliberately not a planned roster. */
 export const LIVING_SPECIES_CATALOG: LivingSpeciesCatalog = currentCatalog;

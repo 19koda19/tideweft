@@ -60,9 +60,21 @@ export const WAVE_G_MARSH_CHANNEL_WEB_SPECIES = Object.freeze([
 export type WaveGMarshChannelWebSpecies =
   (typeof WAVE_G_MARSH_CHANNEL_WEB_SPECIES)[number];
 
+/** Final Wave-G cohort; closes the deliberately bounded 45-wildlife roster. */
+export const WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES = Object.freeze([
+  "eastern-saltmarsh-mosquito",
+  "marsh-periwinkle",
+  "seaside-sparrow",
+  "diamondback-terrapin",
+] as const satisfies readonly LivingActorSpecies[]);
+
+export type WaveGSaltmarshSmallWorldsSpecies =
+  (typeof WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES)[number];
+
 type WaveGBreadthSpecies =
   | WaveGEstuaryBreadthSpecies
-  | WaveGMarshChannelWebSpecies;
+  | WaveGMarshChannelWebSpecies
+  | WaveGSaltmarshSmallWorldsSpecies;
 
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
@@ -3040,12 +3052,12 @@ function polarConsumerSharedEvidence(
 }
 
 /**
- * One evidence contract for the first Wave-G ecological batch. Aggregates and
- * addressable birds share habitat, regional persistence, projection, and
- * presentation owners; the few representation-specific rows select the
+ * One evidence contract for the coherent Wave-G breadth cohorts. Aggregates
+ * and addressable wildlife share habitat, regional persistence, projection,
+ * and presentation owners; the few representation-specific rows select the
  * existing aggregate or actor kernels without inventing per-species systems.
- * Sound, capture, consumption, mortality, reproduction, and deployment remain
- * deliberately outside this slice.
+ * Sound, capture, consumption, new mortality, reproduction, and deployment
+ * remain deliberately outside these slices.
  */
 function waveGBreadthSharedEvidence(
   species: WaveGBreadthSpecies,
@@ -3054,36 +3066,37 @@ function waveGBreadthSharedEvidence(
   if (module === null) throw new Error(`Wave-G evidence lost species ${species}`);
   const marshChannel = (WAVE_G_MARSH_CHANNEL_WEB_SPECIES as readonly string[])
     .includes(species);
+  const saltmarshSmallWorlds = (
+    WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES as readonly string[]
+  ).includes(species);
   const aggregate = module.identity.form === "aggregate";
   const flock = module.social.group.organizationKinds.includes("flock");
   const emergenceParticipant = species === "bay-anchovy"
     || species === "common-tern"
     || species === "atlantic-menhaden"
-    || species === "double-crested-cormorant";
-  const habitatTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-habitat-shared-invariants:v1"
-    : "test:alpha37-estuary-breadth-habitat-shared-invariants:v1";
-  const residentTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-resident-shared-invariants:v1"
-    : "test:alpha37-estuary-breadth-resident-shared-invariants:v1";
-  const presentationTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-presentation-invariants:v1"
-    : "test:alpha37-estuary-breadth-presentation-invariants:v1";
-  const activityTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-activity-authority:v1"
-    : "test:alpha37-estuary-breadth-activity-authority:v1";
-  const emergenceTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-emergence:v1"
-    : "test:alpha37-estuary-breadth-emergence:v1";
-  const rootTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-root-shared-invariants:v1"
-    : "test:alpha37-estuary-breadth-root-shared-invariants:v1";
-  const compositeTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-composite-shared-invariants:v1"
-    : "test:alpha37-estuary-breadth-composite-shared-invariants:v1";
-  const runtimeTestOwner = marshChannel
-    ? "test:alpha38-marsh-channel-web-runtime-v30:v1"
-    : "test:alpha37-estuary-breadth-runtime-v30:v1";
+    || species === "double-crested-cormorant"
+    || species === "marsh-periwinkle"
+    || species === "diamondback-terrapin";
+  const cohortOwnerStem = saltmarshSmallWorlds
+    ? "alpha39-saltmarsh-small-worlds"
+    : marshChannel
+      ? "alpha38-marsh-channel-web"
+      : "alpha37-estuary-breadth";
+  const habitatTestOwner = `test:${cohortOwnerStem}-habitat-shared-invariants:v1`;
+  const residentTestOwner = `test:${cohortOwnerStem}-resident-shared-invariants:v1`;
+  const presentationTestOwner = `test:${cohortOwnerStem}-presentation-invariants:v1`;
+  const activityTestOwner = `test:${cohortOwnerStem}-activity-authority:v1`;
+  const emergenceTestOwner = `test:${cohortOwnerStem}-emergence:v1`;
+  const rootTestOwner = saltmarshSmallWorlds
+    ? "test:wave-g-biodiversity-seamless-crossing:v1"
+    : `test:${cohortOwnerStem}-root-shared-invariants:v1`;
+  const compositeTestOwner = saltmarshSmallWorlds
+    ? "test:wave-g-biodiversity-performance:v1"
+    : `test:${cohortOwnerStem}-composite-shared-invariants:v1`;
+  const runtimeTestOwner = `test:${cohortOwnerStem}-runtime-v30:v1`;
+  const waveGPerformanceOwner = "test:wave-g-biodiversity-performance:v1";
+  const waveGSeamlessCrossingOwner =
+    "test:wave-g-biodiversity-seamless-crossing:v1";
   const owners = (...values: string[]): readonly string[] => (
     [...new Set(values)].sort(compareText)
   );
@@ -3233,19 +3246,21 @@ function waveGBreadthSharedEvidence(
     ["population-materialization", A, persistenceOwners],
     ["full-coarse-transition", A, persistenceOwners],
     ["save-load", A, persistenceOwners],
-    ["seamless-region-crossing", F, owners(
+    ["seamless-region-crossing", A, owners(
       "game:core-ecology-breadth-habitat:v1",
       "game:regional-breadth-ecology:v1",
       "game:regional-ecology-state:v6",
       compositeTestOwner,
       rootTestOwner,
+      waveGSeamlessCrossingOwner,
     )],
-    ["performance-budget", F, owners(
+    ["performance-budget", A, owners(
       "game:core-ecology-breadth-habitat:v1",
       "game:regional-breadth-ecology:v1",
       "game:regional-ecology-state:v6",
       compositeTestOwner,
       rootTestOwner,
+      waveGPerformanceOwner,
     )],
     ["accessibility", A, presentationOwners],
     ["mobile-parity", A, presentationOwners],
@@ -3266,12 +3281,16 @@ function waveGBreadthSharedEvidence(
       "sim:core-wildlife-identity:v1",
       habitatTestOwner,
     )],
-    ["tutorial-truth", A, [marshChannel
-      ? "ui:tutorial-guide:v48"
-      : "ui:tutorial-guide:v47"]],
-    ["patch-note-truth", A, [marshChannel
-      ? "content:patch-notes-alpha38:v1"
-      : "content:patch-notes-alpha37:v1"]],
+    ["tutorial-truth", A, [saltmarshSmallWorlds
+      ? "ui:tutorial-guide:v49"
+      : marshChannel
+        ? "ui:tutorial-guide:v48"
+        : "ui:tutorial-guide:v47"]],
+    ["patch-note-truth", A, [saltmarshSmallWorlds
+      ? "content:patch-notes-alpha39:v1"
+      : marshChannel
+        ? "content:patch-notes-alpha38:v1"
+        : "content:patch-notes-alpha37:v1"]],
     ["exact-tested-deployment", U, []],
   ];
 }
@@ -3388,6 +3407,12 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "double-crested-cormorant": waveGBreadthSharedEvidence(
     "double-crested-cormorant",
   ),
+  "eastern-saltmarsh-mosquito": waveGBreadthSharedEvidence(
+    "eastern-saltmarsh-mosquito",
+  ),
+  "marsh-periwinkle": waveGBreadthSharedEvidence("marsh-periwinkle"),
+  "seaside-sparrow": waveGBreadthSharedEvidence("seaside-sparrow"),
+  "diamondback-terrapin": waveGBreadthSharedEvidence("diamondback-terrapin"),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {

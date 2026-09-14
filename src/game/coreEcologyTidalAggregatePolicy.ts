@@ -32,6 +32,7 @@ export const CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES = Object.freeze([
   "mummichog",
   "grass-shrimp",
   "blue-crab",
+  "marsh-periwinkle",
 ] as const);
 
 export type CoreEcologyTidalAggregateSpecies =
@@ -280,6 +281,14 @@ const BLUE_CRAB_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
   redistribution: marshChannelRedistribution(8),
 });
 
+/** Periwinkles remain conserved in place while tide reveals or covers their activity. */
+const MARSH_PERIWINKLE_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
+  species: "marsh-periwinkle",
+  activityDepthWindow: FIDDLER_CRAB_POLICY.activityDepthWindow,
+  activityProjection: FIDDLER_CRAB_POLICY.activityProjection,
+  redistribution: null,
+});
+
 /**
  * Ordered adapter registry for aggregates governed by live tide. Appending a
  * species policy extends the shared table without adding a new species branch
@@ -296,6 +305,7 @@ readonly CoreEcologyTidalAggregatePolicy[] = Object.freeze([
   MUMMICHOG_POLICY,
   GRASS_SHRIMP_POLICY,
   BLUE_CRAB_POLICY,
+  MARSH_PERIWINKLE_POLICY,
 ]);
 
 if (

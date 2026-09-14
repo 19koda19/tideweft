@@ -10,7 +10,10 @@ import {
 } from "./livingActorSenses";
 import { createLivingActorAddress } from "./livingActor";
 import { LIVING_SPECIES_CATALOG } from "./livingSpeciesCatalog";
-import type { LivingActorSpecies } from "./livingSpeciesRegistry";
+import {
+  LIVING_ACTOR_SPECIES,
+  type LivingActorSpecies,
+} from "./livingSpeciesRegistry";
 import { createWorldPosition } from "./worldPosition";
 
 function address(species: "human" | "domestic-dog", localX = 10_000) {
@@ -62,35 +65,9 @@ describe("shared living actor sensory profiles", () => {
   });
 
   it("derives every production sensory profile from the versioned species catalog", () => {
-    expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId)).toEqual([
-      "american-black-duck",
-      "american-pika",
-      "atlantic-marsh-fiddler-crab",
-      "atlantic-silverside",
-      "black-bear",
-      "brown-bear",
-      "brown-rat",
-      "cougar",
-      "deer",
-      "domestic-cat",
-      "domestic-chicken",
-      "domestic-dog",
-      "domestic-goat",
-      "elk",
-      "fish-crow",
-      "golden-eagle",
-      "gray-wolf",
-      "gull",
-      "human",
-      "marsh-fox",
-      "marsh-rabbit",
-      "mountain-goat",
-      "north-american-river-otter",
-      "northern-harrier",
-      "snowy-egret",
-      "southern-leopard-frog",
-      "wild-boar",
-    ]);
+    const catalogSpecies = LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId);
+    expect(catalogSpecies).toHaveLength(47);
+    expect(catalogSpecies).toEqual([...LIVING_ACTOR_SPECIES].sort());
     for (const module of LIVING_SPECIES_CATALOG.modules) {
       const profile = livingActorSenseProfile(module.speciesId as LivingActorSpecies);
       expect(profile.visionAcuity).toBe(

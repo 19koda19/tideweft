@@ -7,6 +7,7 @@ import {
   ESTUARY_SURFACE_WILDLIFE_APPEARANCE_PALETTES,
   MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES,
   POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
+  SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_PALETTES,
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
@@ -14,6 +15,7 @@ import {
   marshChannelWildlifeAppearancePalette,
   polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
+  saltmarshSmallWorldsWildlifeAppearancePalette,
   type WildlifeAppearancePalette,
 } from "./wildlifeAppearance";
 
@@ -43,7 +45,8 @@ export type WildlifeVisualForm =
   | "harbor-seal"
   | "polar-bear"
   | "mountain-goat"
-  | "broad-winged-raptor";
+  | "broad-winged-raptor"
+  | "low-shelled-reptile";
 
 type WildlifePaletteFamily =
   | "static"
@@ -53,11 +56,19 @@ type WildlifePaletteFamily =
   | "cold-shore"
   | "polar-marine"
   | "estuary-surface"
-  | "marsh-channel";
+  | "marsh-channel"
+  | "saltmarsh-small-worlds";
 
 export interface WildlifeVisualProfile {
   readonly form: WildlifeVisualForm;
-  readonly geometryVariant?: "gull" | "tern" | "egret" | "heron" | "eagle" | "osprey";
+  readonly geometryVariant?:
+    | "gull"
+    | "tern"
+    | "sparrow"
+    | "egret"
+    | "heron"
+    | "eagle"
+    | "osprey";
   /** Optional fixed details for the shared aquatic-bird form; omitted colors use the live palette. */
   readonly waterbirdDetails?: Readonly<{
     readonly wingColor?: string;
@@ -333,6 +344,25 @@ export const WILDLIFE_VISUAL_PROFILES = Object.freeze({
     ringRadiusScale: 0.4,
     labelLift: 0.82,
   },
+  "seaside-sparrow": {
+    // One addressable flock actor is rendered as a compact perching-bird form;
+    // visible group count remains projection-owned rather than drawn as a census.
+    form: "shorebird-flock",
+    geometryVariant: "sparrow",
+    colors: SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_PALETTES["seaside-sparrow"]["salt-gray"],
+    paletteFamily: "saltmarsh-small-worlds",
+    hitRadiusScale: 0.4,
+    ringRadiusScale: 0.32,
+    labelLift: 0.76,
+  },
+  "diamondback-terrapin": {
+    form: "low-shelled-reptile",
+    colors: SALTMARSH_SMALL_WORLDS_WILDLIFE_APPEARANCE_PALETTES["diamondback-terrapin"]["warm-olive"],
+    paletteFamily: "saltmarsh-small-worlds",
+    hitRadiusScale: 0.53,
+    ringRadiusScale: 0.43,
+    labelLift: 0.58,
+  },
 } as const satisfies Readonly<Record<WildlifeVisualSpecies, WildlifeVisualProfile>>);
 
 export function isWildlifeVisualSpecies(
@@ -380,6 +410,10 @@ export function wildlifeVisualPalette(
     case "marsh-channel":
       return marshChannelWildlifeAppearancePalette(species as Parameters<
         typeof marshChannelWildlifeAppearancePalette
+      >[0], appearanceKey);
+    case "saltmarsh-small-worlds":
+      return saltmarshSmallWorldsWildlifeAppearancePalette(species as Parameters<
+        typeof saltmarshSmallWorldsWildlifeAppearancePalette
       >[0], appearanceKey);
     case "static":
       return profile.colors;

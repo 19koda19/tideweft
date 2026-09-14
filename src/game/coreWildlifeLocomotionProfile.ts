@@ -516,6 +516,51 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       retreat: 880_000,
     }),
   }),
+  "eastern-saltmarsh-mosquito": Object.freeze({
+    // Aggregate swarms never mint actors, but their declared aerial medium
+    // still resolves through the same fail-closed locomotion profile table.
+    mode: "aerial",
+    aerialTravelCost: 300_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 520_000,
+    intentStepFactors: Object.freeze({}),
+  }),
+  "seaside-sparrow": Object.freeze({
+    mode: "aerial",
+    aerialTravelCost: 235_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 720_000,
+    intentStepFactors: Object.freeze({
+      alarm: 820_000,
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
+  "diamondback-terrapin": Object.freeze({
+    mode: "terrestrial",
+    aerialTravelCost: null,
+    surfaceWaterTravelCost: 360_000,
+    baseTerrainMultiplier: 1_100_000,
+    terrainMultipliers: Object.freeze({
+      marsh: 650_000,
+      meadow: 1_400_000,
+      ridge: 1_800_000,
+      "tidal-flat": 600_000,
+    }),
+    dampCoverPreference: null,
+    baseStepFactor: 420_000,
+    intentStepFactors: Object.freeze({
+      disengage: 560_000,
+      flee: 620_000,
+      retreat: 580_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(

@@ -4,6 +4,49 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.39 — 2026-09-14
+
+Build: `0.3.3-alpha.39` · Gameplay contract: 37 · Tutorial: 49
+
+Saltmarsh Small Worlds is the local unpublished Alpha 39 source candidate: one final four-profile cohort reaches the bounded Directive 04\_1 catalog target through the existing shared ecology architecture.
+
+### Gameplay
+
+- The exact forty-three-record Alpha-38 catalog remains the prefix. Eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin append as records 44 through 47, producing exactly forty-five core-wildlife profiles plus the separate human and domestic-dog foundation records.
+- Mosquitoes and periwinkles remain conserved non-addressable aggregates with at most two authenticated anchors each. Seaside sparrows form one group-atomic flock of two to four persistent members, while the diamondback terrapin is one solitary persistent reptile.
+- Habitat and exact local substrate remain authoritative: seaside sparrows require the admitted mosquito aggregate, and the terrapin requires the admitted periwinkle aggregate. Territory, density, and regional quiet preserve lawful empty country instead of placing a start- or camera-centered quota.
+
+### Fixes
+
+- The breadth root advances append-only to epoch 3 without changing outer save version 30 or RegionalEcologyStateV6. Authenticated earlier epochs remain an exact prefix, the Saltmarsh Small Worlds cohort is adopted once at the saved tick, and reload cannot reroll it.
+- The final cohort reuses shared aggregate, activity, perception, locomotion, group, knowledge, and presentation owners. Mosquito and periwinkle evidence remains anonymous rather than inventing exact targetable animals; sparrows and terrapins remain addressable persistent actors.
+- One representative clear-versus-ridge-occluded terrapin and periwinkle interaction exercises current sight, bounded nonlethal pressure, and aggregate conservation without creating capture, consumption, injury, death, a body, an item, or cargo.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Every addressable ecology layer still shares one insertion-order-independent, group-atomic cap of twenty-four actors; aggregate populations consume no individual-actor slot.
+- The catalog closes at the chosen lower bound of forty-five core-wildlife profiles and forty-seven total living records. Future species can plug into the same role and policy architecture without padding this directive or requiring bespoke tests for every species and pair.
+- Shared conservation, performance, and seamless-crossing closure coverage tests the reusable architecture and a small number of representative emergent chains rather than an exhaustive animal-interaction matrix.
+
+### Interface
+
+- Chart 2D and Relief 3D present the same lawful seaside-sparrow and diamondback-terrapin identities. Sparrow groups use a readable flock silhouette and terrapins use a low shelled form; these bounded states do not claim continuously simulated 3D flight.
+- Mosquito and periwinkle signs expose only directly observable aggregate evidence. Quick inspection and ABOUT do not reveal exact units, hidden anchors, dependencies, or private actor state on desktop or touch.
+- Field Manual version 49 teaches the compact distinction between population evidence and persistent actors, habitat-dependent absence, append-only epoch-3 adoption, and the exact 45 / 47 candidate boundary without becoming a bestiary dump.
+
+### Save changes
+
+- Outer save version 30 and RegionalEcologyStateV6 remain unchanged. Their version-1 sparse breadth root now records append-only epochs 1, 2, and 3; the local candidate living catalog contains forty-seven records.
+- A valid outer-v30 epoch-2 state authenticates before deterministic epoch-3 activation. The complete earlier activation, resident, identity, aggregate, saved-tick, and genuine-deviation prefix remains exact, and repeated load is a no-op.
+- Every ecology owner remains inside one atomic projection and conservation commit. Save, reload, interruption, signed-region streaming, seamless boundary crossing, and extreme distance cannot duplicate an actor or aggregate unit, split the sparrow flock, or select another cohort outcome.
+
+### Known limitations
+
+- Alpha 39 Saltmarsh Small Worlds is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED. It reaches the chosen 45 / 47 breadth boundary, while Directive 04\_1 still requires its cumulative release-checkpoint validation and publication gates before completion.
+- This candidate adds no mosquito bite or disease, exact insect or snail actor, capture, live-prey consumption, fishing, harvesting, new injury, mortality or body path, player harm, dog harm, human harm, reproduction, recruitment, or population recovery.
+- The cohort adds no audible Living Voice, full circadian behavior, continuous 3D flight, authored migration, or new offscreen narrative feed. Full day-and-night life belongs to the next authorized Turning Day directive; broader voice work follows in Living Voice.
+- Only local source-candidate validation may be claimed here. Remote CI, Pages publication, exact-live comparison, and LIVE\_VERIFIED status remain pending.
+
 ## 0.3.3-alpha.38 — 2026-09-14
 
 Build: `0.3.3-alpha.38` · Gameplay contract: 36 · Tutorial: 48

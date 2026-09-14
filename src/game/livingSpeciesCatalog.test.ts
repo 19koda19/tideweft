@@ -60,6 +60,12 @@ import {
   LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_HASH,
   LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS,
   LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS_HASH,
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG,
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_COUNT,
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_HASH,
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS,
+  LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS_HASH,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   canonicalizeLivingSpeciesCatalog,
@@ -185,14 +191,18 @@ describe("Living Weft species module catalog", () => {
       "belted-kingfisher",
       "blue-crab",
       "common-tern",
+      "diamondback-terrapin",
       "double-crested-cormorant",
+      "eastern-saltmarsh-mosquito",
       "grass-shrimp",
       "great-blue-heron",
       "greater-yellowlegs",
       "harbor-seal",
+      "marsh-periwinkle",
       "mummichog",
       "osprey",
       "polar-bear",
+      "seaside-sparrow",
     ]);
     expect(LIVING_SPECIES_CATALOG.modules.filter(({ speciesId }) => (
       !LIVING_SPECIES_ALPHA35_SPECIES_IDS.includes(
@@ -205,14 +215,18 @@ describe("Living Weft species module catalog", () => {
       "belted-kingfisher",
       "blue-crab",
       "common-tern",
+      "diamondback-terrapin",
       "double-crested-cormorant",
+      "eastern-saltmarsh-mosquito",
       "grass-shrimp",
       "great-blue-heron",
       "greater-yellowlegs",
       "harbor-seal",
+      "marsh-periwinkle",
       "mummichog",
       "osprey",
       "polar-bear",
+      "seaside-sparrow",
     ]);
     expect(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS).toHaveLength(
       LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_COUNT,
@@ -227,7 +241,7 @@ describe("Living Weft species module catalog", () => {
     expect(hashCanonical(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG))
       .toBe(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_HASH);
     expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
-      .toEqual(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS);
+      .toEqual(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS);
     expect(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS).toHaveLength(
       LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_COUNT,
     );
@@ -241,6 +255,21 @@ describe("Living Weft species module catalog", () => {
     ).byteLength).toBe(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_BYTE_LENGTH);
     expect(hashCanonical(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG))
       .toBe(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_HASH);
+    expect(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG.modules.map(
+      ({ speciesId }) => speciesId,
+    )).toEqual(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(
+      stableStringify(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG),
+    ).byteLength).toBe(
+      LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_BYTE_LENGTH,
+    );
+    expect(hashCanonical(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG))
+      .toBe(LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG_HASH);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
@@ -2579,6 +2608,8 @@ describe("Living Weft species module catalog", () => {
           || module.speciesId === "gray-wolf"
           || module.speciesId === "mountain-goat"
           || module.speciesId === "american-pika"
+          || module.speciesId === "eastern-saltmarsh-mosquito"
+          || module.speciesId === "marsh-periwinkle"
           ? "foundation"
           : module.speciesId === "brown-rat"
           || module.speciesId === "domestic-cat"
@@ -2606,7 +2637,9 @@ describe("Living Weft species module catalog", () => {
         || module.speciesId === "blue-crab"
         || module.speciesId === "greater-yellowlegs"
         || module.speciesId === "belted-kingfisher"
-        || module.speciesId === "double-crested-cormorant";
+        || module.speciesId === "double-crested-cormorant"
+        || module.speciesId === "marsh-periwinkle"
+        || module.speciesId === "diamondback-terrapin";
       expect(module.environment.tide.status).toBe(
         tidalFoundation ? "foundation" : "unimplemented",
       );
@@ -2625,7 +2658,9 @@ describe("Living Weft species module catalog", () => {
         || module.speciesId === "blue-crab"
         || module.speciesId === "greater-yellowlegs"
         || module.speciesId === "belted-kingfisher"
-        || module.speciesId === "double-crested-cormorant";
+        || module.speciesId === "double-crested-cormorant"
+        || module.speciesId === "marsh-periwinkle"
+        || module.speciesId === "diamondback-terrapin";
       expect(module.environment.water.status, module.speciesId).toBe(
         waterFoundation ? "foundation" : "unimplemented",
       );
@@ -2636,6 +2671,7 @@ describe("Living Weft species module catalog", () => {
           || module.speciesId === "common-tern"
           || module.speciesId === "greater-yellowlegs"
           || module.speciesId === "double-crested-cormorant"
+          || module.speciesId === "seaside-sparrow"
           ? ["vision"]
           : module.speciesId === "deer"
           || module.speciesId === "american-black-duck"
@@ -2670,6 +2706,7 @@ describe("Living Weft species module catalog", () => {
             || module.speciesId === "mountain-goat"
             || module.speciesId === "greater-yellowlegs"
             || module.speciesId === "double-crested-cormorant"
+            || module.speciesId === "seaside-sparrow"
             ? "active"
             : "unimplemented",
       );
