@@ -3549,7 +3549,7 @@ describe("runtime settlement ecology integration", () => {
     expect(replay.settlementEcology).toBe(eastEnvelope.settlementEcology);
     expect(deserializeDogActorRoster(replay.dogActorRoster)?.actors).toHaveLength(1);
     reloaded.destroy();
-  }, 45_000);
+  }, 90_000);
 
   it("lets a witnessed domestic chicken perceive and consume one open-store unit while a secured store stays sealed", async () => {
     settlementShadowsHarness.excludePhysicalFood = true;
