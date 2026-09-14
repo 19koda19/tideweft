@@ -15,6 +15,7 @@ import {
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import { deriveCoreEcologyRegionalPredatorHabitatAssemblage } from "./coreEcologyHabitat";
+import { CORE_ECOLOGY_BREADTH_CURRENT_EPOCH } from "./coreEcologyBreadthHabitat";
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
 import { createCoreEcologySettlementHomePatch } from "./coreEcologySettlementHome";
 import { repositionCoreWildlifeActor } from "./coreWildlifeActor";
@@ -32,12 +33,14 @@ import {
   type RegionalEcologyStateV5,
 } from "./regionalEcologyStateV5";
 import {
+  activateRegionalEcologyStateV6BreadthThroughEpoch,
   REGIONAL_ECOLOGY_STATE_V6_ADOPTION_POLICY_ID,
   REGIONAL_ECOLOGY_STATE_V6_MAX_SERIALIZED_BYTES,
   bindRegionalEcologyStateV6ActiveProjection,
   canonicalRegionalEcologyStateV6ForWorld,
   canonicalizeRegionalEcologyStateV6,
   commitRegionalEcologyStateV6ActiveProjection,
+  createRegionalEcologyStateV6,
   createFreshRegionalEcologyStateV6,
   deserializeRegionalEcologyStateV6,
   migrateRegionalEcologyStateV5ToV6,
@@ -51,7 +54,13 @@ import {
   type RegionalEcologyStateV6ActiveProjection,
 } from "./regionalEcologyStateV6";
 import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
-import { REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES } from "./regionalBreadthEcology";
+import {
+  REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
+  createPristineRegionalBreadthEcologyRoot,
+  putRegionalBreadthEcologyResidentDeviation,
+  regionalBreadthEcologyResidentsForActiveRegions,
+  type RegionalBreadthEcologyRootV1,
+} from "./regionalBreadthEcology";
 import { REGIONAL_TRAVEL_COLUMNS, REGIONAL_TRAVEL_ROWS } from "./regionalTravel";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
@@ -63,6 +72,8 @@ export const ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-composite-shared-invariants:v1" as const;
 export const ALPHA37_ESTUARY_BREADTH_COMPOSITE_PERFORMANCE_OWNER_INTENT =
   "test:alpha37-estuary-breadth-composite-performance:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-composite-shared-invariants:v1" as const;
 
 const SEED = seedFromText("alpha37 estuary breadth shared properties");
 const ACTIVE_REGION = createRegionCoord(-5_179, -89_646);
@@ -141,6 +152,113 @@ function fixture(): Fixture {
     v5: createFreshRegionalEcologyStateV5(v4, SEED),
   });
   return cachedFixture;
+}
+
+function regionalEcologyV6AtBreadthEpoch(
+  epoch: number,
+  withAlpha37History = false,
+): RegionalEcologyStateV6 {
+  const { v5 } = fixture();
+  let breadthRoot = createPristineRegionalBreadthEcologyRoot({
+    rootSeed: SEED,
+    completedTick: TICK,
+  }, epoch);
+  let breadthActiveResidents = regionalBreadthEcologyResidentsForActiveRegions(
+    breadthRoot,
+    SEED,
+    [ACTIVE_REGION],
+  );
+  if (breadthActiveResidents === null) {
+    throw new Error("Wave-G epoch fixture could not derive breadth residents");
+  }
+  if (withAlpha37History) {
+    if (epoch !== 1) throw new Error("Alpha37 history fixture requires epoch one");
+    const source = breadthActiveResidents.find(({ patch }) => (
+      patch.populations.some(({ members }) => members.length > 0)
+    ));
+    const actor = source?.patch.populations.flatMap(({ members }) => members)[0]?.actor;
+    if (source === undefined || actor === undefined) {
+      throw new Error("Alpha37 history fixture lost its addressable resident");
+    }
+    const changed = replaceCoreEcologyAggregatePatchActor(
+      source.patch,
+      repositionCoreWildlifeActor(actor, {
+        atTick: TICK,
+        position: actor.address.position,
+        heading: (actor.address.heading + 1) % 1_000_000,
+      }),
+    );
+    breadthRoot = putRegionalBreadthEcologyResidentDeviation(breadthRoot, {
+      rootSeed: SEED,
+      patch: changed,
+    });
+    breadthActiveResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      breadthRoot,
+      SEED,
+      [ACTIVE_REGION],
+    );
+    if (breadthActiveResidents === null) {
+      throw new Error("Alpha37 history fixture could not restore its deviation");
+    }
+  }
+  return createRegionalEcologyStateV6({
+    base: v5,
+    breadthRoot,
+    breadthActiveResidents: breadthActiveResidents.map(({ sourceKey, patch }) => ({
+      sourceKey,
+      patch,
+    })),
+    adoption: withAlpha37History
+      ? alpha37AdoptionReceipt(v5, breadthRoot)
+      : null,
+  });
+}
+
+function alpha37AdoptionReceipt(
+  base: RegionalEcologyStateV5,
+  root: RegionalBreadthEcologyRootV1,
+) {
+  const sourceEnvelopeIntegrity = hashCanonical("authenticated alpha37 outer-v29 fixture");
+  const current = migrateRegionalEcologyStateV5ToV6(base, {
+    rootSeed: SEED,
+    sourceEnvelopeIntegrity,
+  });
+  if (current.adoption === null) throw new Error("Current migration lost its receipt");
+  const {
+    integrity: _currentIntegrity,
+    transactionId: _currentTransactionId,
+    ...sharedReceipt
+  } = current.adoption;
+  const adoptedEpoch = 1;
+  const resultBreadthActivationPrefixHash = hashCanonical({
+    version: root.version,
+    ownerId: root.ownerId,
+    generationVersion: root.generationVersion,
+    baselinePolicyId: root.baselinePolicyId,
+    seedFingerprint: root.seedFingerprint,
+    adoptedEpoch,
+    activations: root.activations.map((activation) => ({
+      version: activation.version,
+      activationOrdinal: activation.activationOrdinal,
+      cohortId: activation.cohortId,
+      cohortEpoch: activation.cohortEpoch,
+      cohortDefinitionHash: activation.cohortDefinitionHash,
+      activatedAtTick: activation.activatedAtTick,
+      stableId: activation.stableId,
+      integrity: activation.integrity,
+    })),
+  });
+  const receiptBase = {
+    ...sharedReceipt,
+    resultBreadthActivationEpoch: adoptedEpoch,
+    resultBreadthActivationPrefixHash,
+  };
+  const transactionId = `regional-ecology-v29-wrapper:${hashCanonical(receiptBase)}`;
+  const withTransaction = { ...receiptBase, transactionId };
+  return Object.freeze({
+    ...withTransaction,
+    integrity: hashCanonical(withTransaction),
+  });
 }
 
 function firstBreadthActor(state: RegionalEcologyStateV6) {
@@ -309,7 +427,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       policyId: REGIONAL_ECOLOGY_STATE_V6_ADOPTION_POLICY_ID,
       sourceOuterVersion: 29,
       sourceEnvelopeIntegrity,
-      resultBreadthActivationEpoch: 1,
+      resultBreadthActivationEpoch: CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
     });
     expect(stableStringify(replay)).toBe(stableStringify(migrated));
     expect(migrated.breadthRoot.regions).toEqual([]);
@@ -335,6 +453,68 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       v5,
       seedFromText("foreign breadth composite world"),
     )).toThrow(/one clock/u);
+  });
+
+  it(`${ALPHA38_MARSH_CHANNEL_WEB_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} adopts an older breadth epoch exactly once without replacing v6 custody`, () => {
+    expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBeGreaterThan(1);
+    const { homeHabitat } = fixture();
+    const old = regionalEcologyV6AtBreadthEpoch(1, true);
+    const oldBase = stableStringify(old.base);
+    const oldActivation = stableStringify(old.breadthRoot.activations[0]);
+    const oldRegions = stableStringify(old.breadthRoot.regions);
+    const oldAdoption = stableStringify(old.adoption);
+    expect(old.adoption).not.toBeNull();
+    expect(old.breadthRoot.regions).toHaveLength(1);
+    const input = Object.freeze({
+      rootSeed: SEED,
+      completedTick: TICK,
+      settlementHomeHabitat: homeHabitat,
+      expectedIntegrity: old.integrity,
+      targetEpoch: CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+    });
+
+    const adopted = activateRegionalEcologyStateV6BreadthThroughEpoch(old, input);
+    const replay = activateRegionalEcologyStateV6BreadthThroughEpoch(adopted, {
+      ...input,
+      expectedIntegrity: adopted.integrity,
+    });
+
+    expect(adopted.version).toBe(6);
+    expect(adopted.updatedAtTick).toBe(TICK);
+    expect(adopted.breadthRoot.activeThroughEpoch).toBe(
+      CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+    );
+    expect(adopted.breadthRoot.activations).toHaveLength(
+      CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+    );
+    expect(stableStringify(adopted.breadthRoot.activations[0])).toBe(oldActivation);
+    expect(stableStringify(adopted.breadthRoot.regions)).toBe(oldRegions);
+    expect(stableStringify(adopted.base)).toBe(oldBase);
+    expect(stableStringify(adopted.adoption)).toBe(oldAdoption);
+    expect(replay).toBe(adopted);
+    expect(stableStringify(
+      deserializeRegionalEcologyStateV6(serializeRegionalEcologyStateV6(adopted)),
+    )).toBe(stableStringify(adopted));
+    expect(canonicalRegionalEcologyStateV6ForWorld(adopted, {
+      rootSeed: SEED,
+      completedTick: TICK,
+      settlementHomeHabitat: homeHabitat,
+    })).toBe(adopted);
+
+    expect(() => activateRegionalEcologyStateV6BreadthThroughEpoch(old, {
+      ...input,
+      expectedIntegrity: hashCanonical("stale breadth state"),
+    })).toThrow(/stale or foreign/u);
+    expect(() => activateRegionalEcologyStateV6BreadthThroughEpoch(old, {
+      ...input,
+      targetEpoch: 0,
+    })).toThrow(/cannot be removed or rewound/u);
+    expect(() => activateRegionalEcologyStateV6BreadthThroughEpoch(old, {
+      ...input,
+      targetEpoch: CORE_ECOLOGY_BREADTH_CURRENT_EPOCH + 1,
+    })).toThrow(/target is unavailable/u);
+    expect(stableStringify(old.base)).toBe(oldBase);
+    expect(old.breadthRoot.activeThroughEpoch).toBe(1);
   });
 
   it(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_PERFORMANCE_OWNER_INTENT} uses one permutation-independent group-atomic global 24-actor plan`, () => {

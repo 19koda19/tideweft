@@ -86,6 +86,20 @@ export const ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
 export type EstuarySurfaceWildlifeAppearanceSpecies =
   (typeof ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES)[number];
 
+/**
+ * Individually addressable marsh-channel actors. Fish and crustaceans in the
+ * same cohort remain population evidence and deliberately receive no body
+ * palette here.
+ */
+export const MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES = Object.freeze([
+  "greater-yellowlegs",
+  "belted-kingfisher",
+  "double-crested-cormorant",
+] as const);
+
+export type MarshChannelWildlifeAppearanceSpecies =
+  (typeof MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES)[number];
+
 /** Fails safely to the established brown coat for legacy or malformed views. */
 export function domesticGoatAppearancePalette(
   appearanceKey: string,
@@ -336,5 +350,53 @@ export function estuarySurfaceWildlifeAppearancePalette(
   }
   return palettes[
     ESTUARY_SURFACE_WILDLIFE_APPEARANCE_FALLBACK[species]
+  ] as WildlifeAppearancePalette;
+}
+
+const MARSH_CHANNEL_WILDLIFE_APPEARANCE_FALLBACK = Object.freeze({
+  "greater-yellowlegs": "gray-backed",
+  "belted-kingfisher": "blue-gray",
+  "double-crested-cormorant": "bronze-black",
+} as const satisfies Readonly<Record<MarshChannelWildlifeAppearanceSpecies, string>>);
+
+/**
+ * Shared Chart/Relief palettes for the marsh-channel bird forms. Structural
+ * darks and bright bill/leg accents keep the silhouettes readable without
+ * requiring color alone to communicate species or posture.
+ */
+export const MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES = Object.freeze({
+  "greater-yellowlegs": Object.freeze({
+    "bold-streaked": palette("#aaa596", "#ddd3bd", "#252b2c", "#d9b52f"),
+    "gray-backed": palette("#8d9898", "#d8d4c6", "#20282a", "#d8b32d"),
+    "pale-breasted": palette("#dad8c9", "#9b9a8e", "#242a2b", "#deb936"),
+    "warm-speckled": palette("#a99378", "#d9c7a8", "#2d2924", "#d3ad2d"),
+  }),
+  "belted-kingfisher": Object.freeze({
+    "blue-gray": palette("#567989", "#e4e0d3", "#202a30", "#9a5b42"),
+    "dark-belted": palette("#405d6a", "#d7d4c9", "#17242a", "#87503c"),
+    "rust-belted": palette("#607c87", "#dfd8c7", "#232b2e", "#a86544"),
+    "slate-crested": palette("#4c6876", "#e6e2d5", "#172329", "#965d45"),
+  }),
+  "double-crested-cormorant": Object.freeze({
+    "bronze-black": palette("#222d2c", "#596252", "#0c1213", "#c7aa75"),
+    "dark-crested": palette("#192425", "#4c5854", "#080d0e", "#c6a36d"),
+    "green-black": palette("#1d302d", "#4f655f", "#091110", "#c5a473"),
+    "pale-throated": palette("#2a3331", "#8d8879", "#0d1313", "#d0b276"),
+  }),
+} as const);
+
+/** Species-safe marsh-channel morph lookup with stable legacy fallbacks. */
+export function marshChannelWildlifeAppearancePalette(
+  species: MarshChannelWildlifeAppearanceSpecies,
+  appearanceKey: string,
+): WildlifeAppearancePalette {
+  const palettes = MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+    Record<string, WildlifeAppearancePalette>
+  >;
+  if (Object.prototype.hasOwnProperty.call(palettes, appearanceKey)) {
+    return palettes[appearanceKey] as WildlifeAppearancePalette;
+  }
+  return palettes[
+    MARSH_CHANNEL_WILDLIFE_APPEARANCE_FALLBACK[species]
   ] as WildlifeAppearancePalette;
 }

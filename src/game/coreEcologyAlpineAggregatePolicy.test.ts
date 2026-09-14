@@ -4,6 +4,7 @@ import { isLivingSpeciesActorAddressable } from "./livingSpeciesRegistry";
 import {
   CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES,
   CORE_ECOLOGY_AGGREGATE_SPECIES,
+  CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES,
   coreEcologyAggregateDisturbanceEvidenceKind,
   coreEcologyAggregateSpeciesPolicy,
   isCoreEcologyAggregateSpecies,
@@ -52,6 +53,41 @@ const WAVE_G_ESTUARY_AGGREGATES = Object.freeze([
   }),
 ] as const);
 
+const WAVE_G_MARSH_CHANNEL_AGGREGATES = Object.freeze([
+  Object.freeze({
+    species: "atlantic-menhaden" as const,
+    stableIdPrefix: "MENHADEN-SCHOOL-v1-" as const,
+    representation: "group-actor" as const,
+    activityKind: "schooling-glint" as const,
+    evidenceKinds: Object.freeze(["surface-dimple"] as const),
+    tideResponse: "flood-active" as const,
+  }),
+  Object.freeze({
+    species: "mummichog" as const,
+    stableIdPrefix: "MUMMICHOG-SCHOOL-v1-" as const,
+    representation: "group-actor" as const,
+    activityKind: "schooling-glint" as const,
+    evidenceKinds: Object.freeze(["surface-dimple"] as const),
+    tideResponse: "flood-active" as const,
+  }),
+  Object.freeze({
+    species: "grass-shrimp" as const,
+    stableIdPrefix: "GRASSSHRIMP-AREA-v1-" as const,
+    representation: "aggregate-area" as const,
+    activityKind: "schooling-glint" as const,
+    evidenceKinds: Object.freeze(["surface-dimple"] as const),
+    tideResponse: "flood-active" as const,
+  }),
+  Object.freeze({
+    species: "blue-crab" as const,
+    stableIdPrefix: "BLUECRAB-AREA-v1-" as const,
+    representation: "aggregate-area" as const,
+    activityKind: "burrow-foraging" as const,
+    evidenceKinds: Object.freeze(["burrow-opening", "feeding-scrape"] as const),
+    tideResponse: "ebb-active" as const,
+  }),
+] as const);
+
 const DISTURBANCE_CAUSES: readonly CoreEcologyAggregatePolicyDisturbanceCause[] = [
   "animal-disturbance",
   "food-attraction",
@@ -70,8 +106,17 @@ describe("core ecology aggregate policy composition", () => {
     expect(CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES).toEqual(ALPHA36_AGGREGATE_PREFIX);
     expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(0, ALPHA36_AGGREGATE_PREFIX.length))
       .toEqual(ALPHA36_AGGREGATE_PREFIX);
-    expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(ALPHA36_AGGREGATE_PREFIX.length))
+    expect(CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES.slice(
+      ALPHA36_AGGREGATE_PREFIX.length,
+    ))
       .toEqual(WAVE_G_ESTUARY_AGGREGATES.map(({ species }) => species));
+    expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(
+      0,
+      CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES.length,
+    )).toEqual(CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES);
+    expect(CORE_ECOLOGY_AGGREGATE_SPECIES.slice(
+      CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES.length,
+    )).toEqual(WAVE_G_MARSH_CHANNEL_AGGREGATES.map(({ species }) => species));
     expect(isCoreEcologyAggregateSpecies("american-pika")).toBe(true);
     expect(isLivingSpeciesActorAddressable("american-pika")).toBe(false);
   });
@@ -105,6 +150,36 @@ describe("core ecology aggregate policy composition", () => {
       expect(runtimePolicy.capabilities).toContain("aggregate-response");
       expect(runtimePolicy.aggregate?.maximumAnchors).toBe(aggregatePolicy.maximumAnchors);
       expect(runtimePolicy.evidenceKinds).toEqual(aggregatePolicy.initialEvidenceKinds);
+    }
+  });
+
+  it("composes the marsh-channel aggregates through those same bounded invariants", () => {
+    for (const expected of WAVE_G_MARSH_CHANNEL_AGGREGATES) {
+      expect(isCoreEcologyAggregateSpecies(expected.species)).toBe(true);
+      expect(isLivingSpeciesActorAddressable(expected.species)).toBe(false);
+
+      const aggregatePolicy = coreEcologyAggregateSpeciesPolicy(expected.species);
+      const runtimePolicy = coreEcologySpeciesRuntimePolicy(expected.species);
+      expect(aggregatePolicy).toMatchObject({
+        stableIdPrefix: expected.stableIdPrefix,
+        representation: expected.representation,
+        maximumAnchors: 4,
+        activity: {
+          kind: expected.activityKind,
+          activePeriod: "tide-responsive",
+          baselineProjection: "preserve",
+        },
+        initialEvidenceKinds: expected.evidenceKinds,
+        exposedFoodAttraction: false,
+        rainSensitive: false,
+        tideResponse: expected.tideResponse,
+      });
+      expect(runtimePolicy).not.toBeNull();
+      expect(runtimePolicy?.actorAddressable).toBe(false);
+      expect(runtimePolicy?.capabilities).toContain("aggregate-response");
+      expect(runtimePolicy?.aggregate?.maximumAnchors)
+        .toBe(aggregatePolicy.maximumAnchors);
+      expect(runtimePolicy?.evidenceKinds).toEqual(aggregatePolicy.initialEvidenceKinds);
     }
   });
 

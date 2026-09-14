@@ -37,6 +37,7 @@ import {
 import {
   REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
   REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
+  activateRegionalBreadthEcologyThroughEpoch,
   advanceRegionalBreadthEcologyRoot,
   canonicalRegionalBreadthEcologyRootForWorld,
   canonicalizeRegionalBreadthEcologyRoot,
@@ -136,6 +137,12 @@ export interface CreateRegionalEcologyStateV6Input {
 export interface MigrateRegionalEcologyStateV5ToV6Input {
   readonly rootSeed: RootSeed;
   readonly sourceEnvelopeIntegrity: string;
+}
+
+export interface ActivateRegionalEcologyStateV6BreadthThroughEpochInput
+  extends RegionalEcologyStateV6WorldBinding {
+  readonly expectedIntegrity: string;
+  readonly targetEpoch: number;
 }
 
 export interface RegionalEcologyStateV6ProjectedBreadthResidentV1 {
@@ -294,6 +301,62 @@ export function migrateRegionalEcologyStateV5ToV6(
       base,
     ),
     adoption,
+  });
+}
+
+/**
+ * Adopt newly appended breadth cohorts inside the existing v6/v30 custody
+ * boundary. This is a deterministic content-epoch activation, not a schema
+ * migration: the v5 child and original v29 adoption receipt remain exact.
+ */
+export function activateRegionalEcologyStateV6BreadthThroughEpoch(
+  stateValue: unknown,
+  input: ActivateRegionalEcologyStateV6BreadthThroughEpochInput,
+): RegionalEcologyStateV6 {
+  if (
+    !plainRecord(input)
+    || !exactKeys(input, [
+      "completedTick",
+      "expectedIntegrity",
+      "rootSeed",
+      "settlementHomeHabitat",
+      "targetEpoch",
+    ])
+    || !validHash(input.expectedIntegrity)
+    || !nonnegativeSafeInteger(input.targetEpoch)
+  ) throw new TypeError("Regional ecology v6 breadth activation input is malformed");
+  const binding: RegionalEcologyStateV6WorldBinding = {
+    rootSeed: input.rootSeed,
+    completedTick: input.completedTick,
+    settlementHomeHabitat: input.settlementHomeHabitat,
+  };
+  const state = canonicalRegionalEcologyStateV6ForWorld(stateValue, binding);
+  if (state === null || state.integrity !== input.expectedIntegrity) {
+    throw new RangeError("Regional ecology v6 breadth activation is stale or foreign");
+  }
+  if (input.targetEpoch < state.breadthRoot.activeThroughEpoch) {
+    throw new RangeError("Regional ecology v6 breadth epochs cannot be removed or rewound");
+  }
+  if (input.targetEpoch === state.breadthRoot.activeThroughEpoch) return state;
+  let breadthRoot: RegionalBreadthEcologyRootV1;
+  try {
+    breadthRoot = activateRegionalBreadthEcologyThroughEpoch(
+      state.breadthRoot,
+      binding,
+      input.targetEpoch,
+    );
+  } catch {
+    throw new RangeError("Regional ecology v6 breadth activation target is unavailable");
+  }
+  return createRegionalEcologyStateV6({
+    base: state.base,
+    breadthRoot,
+    breadthActiveResidents: requireBreadthActiveResidents(
+      breadthRoot,
+      input.rootSeed,
+      state.base,
+    ),
+    adoption: state.adoption,
   });
 }
 

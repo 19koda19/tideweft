@@ -44,6 +44,7 @@ export const CORE_ECOLOGY_BREADTH_DERIVATION_KIND =
 export const CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT = 128 as const;
 export const CORE_ECOLOGY_BREADTH_MAX_COHORTS = 64 as const;
 export const CORE_ECOLOGY_BREADTH_MAX_SPECIES_PER_COHORT = 12 as const;
+export const CORE_ECOLOGY_BREADTH_MAX_AGGREGATE_SPECIES_PER_COHORT = 4 as const;
 export const CORE_ECOLOGY_BREADTH_MAXIMUM_EPOCH = 64 as const;
 
 export const CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID =
@@ -57,18 +58,35 @@ export const CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_SPECIES = Object.freeze([
   "osprey",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
+export const CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID =
+  "marsh-channel-web" as const;
+export const CORE_ECOLOGY_MARSH_CHANNEL_WEB_EPOCH = 2 as const;
+export const CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES = Object.freeze([
+  "atlantic-menhaden",
+  "mummichog",
+  "grass-shrimp",
+  "blue-crab",
+  "greater-yellowlegs",
+  "belted-kingfisher",
+  "double-crested-cormorant",
+] as const satisfies readonly CoreWildlifeSpecies[]);
+
 export type CoreEcologyBreadthSpecies =
-  (typeof CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_SPECIES)[number];
+  | (typeof CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_SPECIES)[number]
+  | (typeof CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES)[number];
 export type CoreEcologyBreadthCohortId =
-  typeof CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
+  | typeof CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID
+  | typeof CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID;
 export type CoreEcologyBreadthGuild =
   | "aerial-surface-consumer"
   | "aquatic-prey"
+  | "benthic-omnivore"
   | "intertidal-detritivore"
   | "wading-consumer";
 export type CoreEcologyBreadthAnchorPurpose =
   | "burrow-flat"
   | "flock-perch"
+  | "foraging-water"
   | "schooling-water"
   | "surface-perch"
   | "wading-site";
@@ -95,6 +113,14 @@ export type CoreEcologyBreadthActivityKind =
 export type CoreEcologyBreadthActivePeriod =
   | "diurnal"
   | "tide-responsive";
+
+export interface CoreEcologyBreadthRegionalAdmissionPolicy {
+  readonly version: 1;
+  readonly signal: "eligible-habitat";
+  readonly minimumPresenceThreshold: number;
+  readonly presenceSignalRange: number;
+  readonly maximumPresenceThreshold: number;
+}
 
 type TileSignalKey =
   | "cold"
@@ -148,7 +174,13 @@ export interface CoreEcologyBreadthSpeciesDefinition {
 export interface CoreEcologyBreadthCohortDefinition {
   readonly cohortId: CoreEcologyBreadthCohortId;
   readonly introducedInEpoch: number;
-  readonly definitionVersion: 1;
+  readonly definitionVersion: 1 | 2;
+  /**
+   * Epoch 1 deliberately omits this field so its definition hash and admission
+   * algorithm remain byte-identical. Later cohorts bind their regional
+   * occurrence policy into their own immutable definition hash.
+   */
+  readonly regionalAdmission?: CoreEcologyBreadthRegionalAdmissionPolicy;
   readonly species: readonly CoreEcologyBreadthSpeciesDefinition[];
   readonly definitionHash: string;
 }
@@ -519,6 +551,269 @@ const ESTUARY_SURFACE_BREAK_SPECIES_DEFINITIONS = Object.freeze([
   }),
 ] as const);
 
+const MARSH_CHANNEL_WEB_SPECIES_DEFINITIONS = Object.freeze([
+  definition({
+    species: "atlantic-menhaden",
+    guild: "aquatic-prey",
+    territorySpanRegions: 1,
+    allowedTerrain: Object.freeze(["deep-water", "tidal-flat"]),
+    minimumSiteScore: 420_000,
+    minimumSalinity: 120_000,
+    minimumHighTideDepth: 60_000,
+    maximumHighTideDepth: FIXED_POINT,
+    maximumLowTideDepth: FIXED_POINT,
+    maximumShoreDistanceTiles: 20,
+    maximumWaterDistanceTiles: 0,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      water: 6,
+      salinity: 2,
+      "shore-proximity": 2,
+      tidal: 1,
+      heat: 1,
+    }),
+    unitsPerWeightedTile: 2,
+    minimumPopulationUnits: 16,
+    maximumPopulationUnits: 48,
+    maximumAnchors: 2,
+    unitsPerAnchor: 24,
+    minimumAnchorSeparationTiles: 5,
+    requiresPersistentWaterRefuge: true,
+    densityMinimum: 500_000,
+    densityQualityRange: 300_000,
+    dependencySpecies: null,
+    dependencyUnitsPerPopulationUnit: 0,
+    anchorPurpose: "schooling-water",
+    anchorMedium: "surface-water",
+    activityKind: "schooling-glint",
+    activePeriod: "tide-responsive",
+  }),
+  definition({
+    species: "mummichog",
+    guild: "aquatic-prey",
+    territorySpanRegions: 1,
+    allowedTerrain: Object.freeze(["deep-water", "marsh", "tidal-flat"]),
+    minimumSiteScore: 360_000,
+    minimumSalinity: 0,
+    minimumHighTideDepth: 1,
+    maximumHighTideDepth: 400_000,
+    maximumLowTideDepth: 300_000,
+    maximumShoreDistanceTiles: 8,
+    maximumWaterDistanceTiles: 2,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      "shallow-water": 5,
+      moisture: 3,
+      water: 3,
+      "shore-proximity": 2,
+      tidal: 2,
+    }),
+    unitsPerWeightedTile: 3,
+    minimumPopulationUnits: 8,
+    maximumPopulationUnits: 32,
+    maximumAnchors: 2,
+    unitsPerAnchor: 16,
+    minimumAnchorSeparationTiles: 4,
+    requiresPersistentWaterRefuge: true,
+    densityMinimum: 520_000,
+    densityQualityRange: 280_000,
+    dependencySpecies: null,
+    dependencyUnitsPerPopulationUnit: 0,
+    anchorPurpose: "schooling-water",
+    anchorMedium: "shallow-water",
+    activityKind: "schooling-glint",
+    activePeriod: "tide-responsive",
+  }),
+  definition({
+    species: "grass-shrimp",
+    guild: "aquatic-prey",
+    territorySpanRegions: 1,
+    allowedTerrain: Object.freeze(["deep-water", "marsh", "tidal-flat"]),
+    minimumSiteScore: 350_000,
+    minimumSalinity: 0,
+    minimumHighTideDepth: 1,
+    maximumHighTideDepth: FIXED_POINT,
+    maximumLowTideDepth: FIXED_POINT,
+    maximumShoreDistanceTiles: 6,
+    maximumWaterDistanceTiles: 1,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      "shallow-water": 5,
+      moisture: 4,
+      tidal: 3,
+      "shore-proximity": 2,
+      water: 1,
+    }),
+    unitsPerWeightedTile: 3,
+    minimumPopulationUnits: 8,
+    maximumPopulationUnits: 32,
+    maximumAnchors: 2,
+    unitsPerAnchor: 16,
+    minimumAnchorSeparationTiles: 3,
+    requiresPersistentWaterRefuge: true,
+    densityMinimum: 540_000,
+    densityQualityRange: 260_000,
+    dependencySpecies: null,
+    dependencyUnitsPerPopulationUnit: 0,
+    anchorPurpose: "foraging-water",
+    anchorMedium: "shallow-water",
+    activityKind: "foraging",
+    activePeriod: "tide-responsive",
+  }),
+  definition({
+    species: "blue-crab",
+    guild: "benthic-omnivore",
+    territorySpanRegions: 1,
+    allowedTerrain: Object.freeze(["deep-water", "marsh", "tidal-flat"]),
+    minimumSiteScore: 360_000,
+    minimumSalinity: 50_000,
+    minimumHighTideDepth: 20_000,
+    maximumHighTideDepth: 520_000,
+    maximumLowTideDepth: FIXED_POINT,
+    maximumShoreDistanceTiles: 10,
+    maximumWaterDistanceTiles: 1,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      "shallow-water": 4,
+      water: 4,
+      tidal: 3,
+      salinity: 2,
+      moisture: 1,
+    }),
+    unitsPerWeightedTile: 4,
+    minimumPopulationUnits: 4,
+    maximumPopulationUnits: 16,
+    maximumAnchors: 2,
+    unitsPerAnchor: 8,
+    minimumAnchorSeparationTiles: 4,
+    requiresPersistentWaterRefuge: true,
+    densityMinimum: 440_000,
+    densityQualityRange: 260_000,
+    dependencySpecies: null,
+    dependencyUnitsPerPopulationUnit: 0,
+    anchorPurpose: "foraging-water",
+    anchorMedium: "shallow-water",
+    activityKind: "foraging",
+    activePeriod: "tide-responsive",
+  }),
+  definition({
+    species: "greater-yellowlegs",
+    guild: "wading-consumer",
+    territorySpanRegions: 2,
+    allowedTerrain: Object.freeze(["marsh", "tidal-flat"]),
+    minimumSiteScore: 390_000,
+    minimumSalinity: 0,
+    minimumHighTideDepth: 1,
+    maximumHighTideDepth: CORE_ECOLOGY_ANCHORED_WADER_MAXIMUM_DEPTH,
+    maximumLowTideDepth: 120_000,
+    maximumShoreDistanceTiles: 6,
+    maximumWaterDistanceTiles: 1,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      "shallow-water": 6,
+      "shore-proximity": 3,
+      moisture: 2,
+      tidal: 3,
+      water: 1,
+    }),
+    unitsPerWeightedTile: 8,
+    minimumPopulationUnits: 2,
+    maximumPopulationUnits: 4,
+    maximumAnchors: 4,
+    unitsPerAnchor: 1,
+    minimumAnchorSeparationTiles: 3,
+    requiresPersistentWaterRefuge: false,
+    densityMinimum: 360_000,
+    densityQualityRange: 260_000,
+    dependencySpecies: "grass-shrimp",
+    dependencyUnitsPerPopulationUnit: 4,
+    anchorPurpose: "wading-site",
+    anchorMedium: "shallow-water",
+    activityKind: "wading-search",
+    activePeriod: "tide-responsive",
+  }),
+  definition({
+    species: "belted-kingfisher",
+    guild: "aerial-surface-consumer",
+    territorySpanRegions: 2,
+    allowedTerrain: Object.freeze(["marsh", "meadow", "ridge"]),
+    minimumSiteScore: 400_000,
+    minimumSalinity: 0,
+    minimumHighTideDepth: 0,
+    maximumHighTideDepth: FIXED_POINT,
+    maximumLowTideDepth: FIXED_POINT,
+    maximumShoreDistanceTiles: 20,
+    maximumWaterDistanceTiles: 14,
+    minimumElevation: 80_000,
+    signalWeights: Object.freeze({
+      "water-proximity": 6,
+      elevation: 2,
+      exposure: 2,
+      dry: 3,
+      "shore-proximity": 1,
+    }),
+    unitsPerWeightedTile: 10,
+    minimumPopulationUnits: 1,
+    maximumPopulationUnits: 1,
+    maximumAnchors: 1,
+    unitsPerAnchor: 1,
+    minimumAnchorSeparationTiles: 1,
+    requiresPersistentWaterRefuge: false,
+    densityMinimum: 220_000,
+    densityQualityRange: 220_000,
+    dependencySpecies: "mummichog",
+    dependencyUnitsPerPopulationUnit: 8,
+    anchorPurpose: "surface-perch",
+    anchorMedium: "air-perch",
+    activityKind: "foraging",
+    activePeriod: "diurnal",
+  }),
+  definition({
+    species: "double-crested-cormorant",
+    guild: "aerial-surface-consumer",
+    territorySpanRegions: 2,
+    allowedTerrain: Object.freeze(["marsh", "meadow", "ridge", "tidal-flat"]),
+    minimumSiteScore: 380_000,
+    minimumSalinity: 0,
+    minimumHighTideDepth: 0,
+    maximumHighTideDepth: FIXED_POINT,
+    maximumLowTideDepth: FIXED_POINT,
+    maximumShoreDistanceTiles: 16,
+    maximumWaterDistanceTiles: 12,
+    minimumElevation: 0,
+    signalWeights: Object.freeze({
+      "water-proximity": 6,
+      exposure: 3,
+      "shore-proximity": 3,
+      dry: 2,
+      tidal: 1,
+    }),
+    unitsPerWeightedTile: 10,
+    minimumPopulationUnits: 2,
+    maximumPopulationUnits: 3,
+    maximumAnchors: 3,
+    unitsPerAnchor: 1,
+    minimumAnchorSeparationTiles: 3,
+    requiresPersistentWaterRefuge: false,
+    densityMinimum: 320_000,
+    densityQualityRange: 260_000,
+    dependencySpecies: "atlantic-menhaden",
+    dependencyUnitsPerPopulationUnit: 8,
+    anchorPurpose: "flock-perch",
+    anchorMedium: "air-perch",
+    activityKind: "foraging",
+    activePeriod: "diurnal",
+  }),
+] as const);
+
+const MARSH_CHANNEL_WEB_REGIONAL_ADMISSION = deepFreeze({
+  version: 1 as const,
+  signal: "eligible-habitat" as const,
+  minimumPresenceThreshold: 320_000,
+  presenceSignalRange: 500_000,
+  maximumPresenceThreshold: 850_000,
+});
+
 function cohortDefinitionBase() {
   return {
     cohortId: CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
@@ -528,16 +823,30 @@ function cohortDefinitionBase() {
   } as const;
 }
 
+function marshChannelWebCohortDefinitionBase() {
+  return {
+    cohortId: CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+    introducedInEpoch: CORE_ECOLOGY_MARSH_CHANNEL_WEB_EPOCH,
+    definitionVersion: 2 as const,
+    regionalAdmission: MARSH_CHANNEL_WEB_REGIONAL_ADMISSION,
+    species: MARSH_CHANNEL_WEB_SPECIES_DEFINITIONS,
+  } as const;
+}
+
 export const CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS:
 readonly CoreEcologyBreadthCohortDefinition[] = Object.freeze([
   deepFreeze({
     ...cohortDefinitionBase(),
     definitionHash: hashCanonical(cohortDefinitionBase()),
   }),
+  deepFreeze({
+    ...marshChannelWebCohortDefinitionBase(),
+    definitionHash: hashCanonical(marshChannelWebCohortDefinitionBase()),
+  }),
 ]);
 
 export const CORE_ECOLOGY_BREADTH_CURRENT_EPOCH =
-  CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_EPOCH;
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_EPOCH;
 
 assertBreadthDefinitions(CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS);
 
@@ -569,25 +878,57 @@ export function assertBreadthDefinitions(
       || !positiveSafeInteger(cohort.introducedInEpoch)
       || cohort.introducedInEpoch > CORE_ECOLOGY_BREADTH_MAXIMUM_EPOCH
       || (ids.size > 0 && cohort.introducedInEpoch <= priorEpoch)
-      || cohort.definitionVersion !== 1
+      || (cohort.definitionVersion !== 1 && cohort.definitionVersion !== 2)
       || !Array.isArray(cohort.species)
       || cohort.species.length === 0
       || cohort.species.length > CORE_ECOLOGY_BREADTH_MAX_SPECIES_PER_COHORT
+      || cohort.species.filter(({ actorRepresentation }) => (
+        actorRepresentation === "aggregate"
+      )).length > CORE_ECOLOGY_BREADTH_MAX_AGGREGATE_SPECIES_PER_COHORT
       || !validHash(cohort.definitionHash)
     ) throw new RangeError("Breadth cohort registry is malformed or reordered");
-    const base = {
-      cohortId: cohort.cohortId,
-      introducedInEpoch: cohort.introducedInEpoch,
-      definitionVersion: cohort.definitionVersion,
-      species: cohort.species,
-    };
+    const hasRegionalAdmission = Object.prototype.hasOwnProperty.call(
+      cohort,
+      "regionalAdmission",
+    );
+    if (
+      (cohort.definitionVersion === 1 && hasRegionalAdmission)
+      || (
+        cohort.definitionVersion === 2
+        && canonicalRegionalAdmission(cohort.regionalAdmission) === null
+      )
+    ) throw new RangeError("Breadth cohort regional admission policy is malformed");
+    const base = cohort.definitionVersion === 1
+      ? {
+          cohortId: cohort.cohortId,
+          introducedInEpoch: cohort.introducedInEpoch,
+          definitionVersion: cohort.definitionVersion,
+          species: cohort.species,
+        }
+      : {
+          cohortId: cohort.cohortId,
+          introducedInEpoch: cohort.introducedInEpoch,
+          definitionVersion: cohort.definitionVersion,
+          regionalAdmission: cohort.regionalAdmission,
+          species: cohort.species,
+        };
     if (hashCanonical(base) !== cohort.definitionHash) {
       throw new RangeError("Breadth cohort definition hash does not match its rules");
     }
+    const orderedSpecies = new Set<CoreEcologyBreadthSpecies>();
     for (const entry of cohort.species) {
       if (species.has(entry.species)) {
         throw new RangeError("A breadth species cannot be owned by two cohorts");
       }
+      if (
+        entry.dependencySpecies !== null
+        && !orderedSpecies.has(entry.dependencySpecies)
+      ) {
+        throw new RangeError(
+          "Breadth cohort dependency must be local and ordered before its consumer",
+        );
+      }
+      orderedSpecies.add(entry.species);
       species.add(entry.species);
     }
     ids.add(cohort.cohortId);
@@ -694,14 +1035,20 @@ export function deriveCoreEcologyBreadthHabitat(
     0,
     FIXED_POINT - 1,
   );
-  const regionalQuietThreshold = Math.min(
-    900_000,
-    analysis.summary.estuarySignal === 0
-      ? 0
-      : 380_000 + Math.trunc(
-          analysis.summary.estuarySignal * 500_000 / FIXED_POINT,
-        ),
-  );
+  // Epoch 1 retains its exact historical admission equation. Later cohorts
+  // derive occurrence from their own eligible habitat and bind the parameters
+  // into the immutable cohort definition rather than inheriting an estuary-only
+  // signal by accident.
+  const regionalQuietThreshold = cohort.definitionVersion === 1
+    ? Math.min(
+        900_000,
+        analysis.summary.estuarySignal === 0
+          ? 0
+          : 380_000 + Math.trunc(
+              analysis.summary.estuarySignal * 500_000 / FIXED_POINT,
+            ),
+      )
+    : declarativeRegionalPresenceThreshold(cohort, analysis.tiles);
   const regionalQuiet = regionalQuietRoll >= regionalQuietThreshold;
   const drafts = cohort.species.map((profile) => createDraft(
     input.seed,
@@ -1035,6 +1382,45 @@ function analyzeTerrain(
       surfaceBreakSignal,
     },
   });
+}
+
+function declarativeRegionalPresenceThreshold(
+  cohort: CoreEcologyBreadthCohortDefinition,
+  tiles: readonly AnalyzedBreadthTile[],
+): number {
+  const policy = canonicalRegionalAdmission(cohort.regionalAdmission);
+  if (cohort.definitionVersion !== 2 || policy === null) {
+    throw new Error("Declarative breadth cohort has no authenticated admission policy");
+  }
+  let eligibleTileCount = 0;
+  let eligibleQualitySum = 0;
+  for (const tile of tiles) {
+    let bestScore = 0;
+    for (const profile of cohort.species) {
+      const score = tile.scoreBySpecies[profile.species];
+      if (score >= profile.minimumSiteScore) {
+        bestScore = Math.max(bestScore, score);
+      }
+    }
+    if (bestScore === 0) continue;
+    eligibleTileCount += 1;
+    eligibleQualitySum += bestScore;
+  }
+  if (eligibleTileCount === 0) return 0;
+  const eligibleCoverage = ratioFixed(eligibleTileCount, tiles.length);
+  const eligibleQuality = clampFixed(Math.trunc(
+    eligibleQualitySum / eligibleTileCount,
+  ));
+  const presenceSignal = fixedWeighted([
+    [eligibleCoverage, 3],
+    [eligibleQuality, 2],
+  ]);
+  return Math.min(
+    policy.maximumPresenceThreshold,
+    policy.minimumPresenceThreshold + Math.trunc(
+      presenceSignal * policy.presenceSignalRange / FIXED_POINT,
+    ),
+  );
 }
 
 function createDraft(
@@ -1618,6 +2004,33 @@ function canonicalSummary(value: unknown): CoreEcologyBreadthTerrainSummary | nu
     averageWaterHeat: value.averageWaterHeat,
     estuarySignal: value.estuarySignal,
     surfaceBreakSignal: value.surfaceBreakSignal,
+  });
+}
+
+function canonicalRegionalAdmission(
+  value: unknown,
+): CoreEcologyBreadthRegionalAdmissionPolicy | null {
+  if (!plainRecord(value) || !exactKeys(value, [
+    "maximumPresenceThreshold",
+    "minimumPresenceThreshold",
+    "presenceSignalRange",
+    "signal",
+    "version",
+  ])) return null;
+  if (
+    value.version !== 1
+    || value.signal !== "eligible-habitat"
+    || !fixedInteger(value.minimumPresenceThreshold)
+    || !fixedInteger(value.presenceSignalRange)
+    || !fixedInteger(value.maximumPresenceThreshold)
+    || value.maximumPresenceThreshold < value.minimumPresenceThreshold
+  ) return null;
+  return Object.freeze({
+    version: 1,
+    signal: "eligible-habitat",
+    minimumPresenceThreshold: value.minimumPresenceThreshold,
+    presenceSignalRange: value.presenceSignalRange,
+    maximumPresenceThreshold: value.maximumPresenceThreshold,
   });
 }
 

@@ -15,6 +15,7 @@ import {
   coreWildlifeTraversabilityCell,
 } from "./coreWildlifeLocomotionProfile";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
+import { CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES } from "./coreEcologySpeciesRuntimePolicy";
 import { createWorldPosition } from "./worldPosition";
 
 export const ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT =
@@ -112,6 +113,9 @@ describe("core wildlife locomotion profiles", () => {
       "great-blue-heron",
       "common-tern",
       "osprey",
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
     ] as const) {
       expect(coreWildlifeLocomotionProfile(species).mode).toBe("aerial");
       expect(coreWildlifeTraversabilityCell(species, blockedSurface)).toMatchObject({
@@ -119,6 +123,39 @@ describe("core wildlife locomotion profiles", () => {
       });
       expect(coreWildlifeTraversabilityCell(species, blockedSurface).travelCost)
         .toBeLessThan(blockedSurface.baseTravelCost);
+    }
+  });
+
+  it("keeps the complete runtime-policy registry compatible with shared locomotion", () => {
+    const dryLand = tile({ terrain: "meadow", waterDepth: 0 });
+    const water = tile({ terrain: "deep-water", waterDepth: ADRIFT_STAND_DEPTH + 1 });
+
+    for (const policy of CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES) {
+      const profile = coreWildlifeLocomotionProfile(policy.speciesId);
+      const ownsAerialMovement = policy.capabilities.includes("aerial-locomotion");
+      const ownsSurfaceWaterMovement = policy.actorAddressable
+        && policy.capabilities.includes("aquatic-locomotion");
+
+      expect(profile.mode === "aerial").toBe(ownsAerialMovement);
+      expect(profile.aerialTravelCost !== null).toBe(ownsAerialMovement);
+      expect(profile.surfaceWaterTravelCost !== null).toBe(ownsSurfaceWaterMovement);
+
+      if (ownsAerialMovement) {
+        expect(coreWildlifeTraversabilityCell(policy.speciesId, water, "air").access)
+          .toBe("open");
+      }
+      if (ownsSurfaceWaterMovement) {
+        expect(coreWildlifeTraversabilityCell(
+          policy.speciesId,
+          dryLand,
+          "surface-water",
+        )).toEqual({ access: "blocked", travelCost: 0 });
+        expect(coreWildlifeTraversabilityCell(
+          policy.speciesId,
+          water,
+          "surface-water",
+        ).access).toBe("open");
+      }
     }
   });
 

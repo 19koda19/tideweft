@@ -64,6 +64,13 @@ describe("core ecology species runtime policy", () => {
       "great-blue-heron",
       "common-tern",
       "osprey",
+      "atlantic-menhaden",
+      "mummichog",
+      "grass-shrimp",
+      "blue-crab",
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
     ]);
     expect(validateCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).toEqual([]);
     expect(() => assertCoreEcologySpeciesRuntimePolicies(LIVING_SPECIES_CATALOG)).not.toThrow();
@@ -556,6 +563,91 @@ describe("core ecology species runtime policy", () => {
       expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
       expect(coreEcologySpeciesCanFeedFromCarcass(species)).toBe(false);
       expect(coreEcologySpeciesCanGuardCarcass(species)).toBe(false);
+    }
+  });
+
+  it("admits the marsh-channel web through shared aggregate and consumer policies", () => {
+    const aggregates = {
+      "atlantic-menhaden": ["school", "MENHADEN-SCHOOL", 4, ["redistribute", "school", "tighten"], "aggregate-school"],
+      mummichog: ["school", "MUMMICHOG-SCHOOL", 4, ["redistribute", "school", "tighten"], "aggregate-school"],
+      "grass-shrimp": [null, null, 6, ["quiet", "redistribute"], "aggregate-activity"],
+      "blue-crab": [null, null, 8, ["quiet", "redistribute", "retreat-to-burrow"], "aggregate-activity"],
+    } as const;
+    for (const [species, contract] of Object.entries(aggregates) as [
+      keyof typeof aggregates,
+      (typeof aggregates)[keyof typeof aggregates],
+    ][]) {
+      const [groupOrganization, groupStableIdNamespace, cadence, responseVerbs, presentation] =
+        contract;
+      expect(coreEcologySpeciesRuntimePolicy(species)).toMatchObject({
+        actorAddressable: false,
+        identityForm: "aggregate",
+        representation: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization,
+        groupStableIdNamespace,
+        maximumMaterializedActors: 0,
+        aggregate: {
+          maximumAnchors: 4,
+          responseCadenceTicks: cadence,
+          responseVerbs,
+        },
+        capabilities: expect.arrayContaining([
+          "aggregate-response",
+          "aquatic-locomotion",
+          "population-activity-evidence",
+          "tidal-activity",
+          "water-depth-response",
+        ]),
+        presentationModel: presentation,
+      });
+      expect(coreEcologySpeciesCanOwnActorAddress(species)).toBe(false);
+    }
+
+    const addressable = {
+      "greater-yellowlegs": ["amphibious", "flock", "FLOCK", 4, ["wading"]],
+      "belted-kingfisher": ["aerial", null, null, 1, ["perch"]],
+      "double-crested-cormorant": [
+        "amphibious",
+        "flock",
+        "FLOCK",
+        3,
+        ["aquatic-locomotion", "group-coordination"],
+      ],
+    } as const;
+    for (const [species, contract] of Object.entries(addressable) as [
+      keyof typeof addressable,
+      (typeof addressable)[keyof typeof addressable],
+    ][]) {
+      const [
+        locomotionClass,
+        groupOrganization,
+        groupStableIdNamespace,
+        maximumMaterializedActors,
+        distinctiveCapabilities,
+      ] = contract;
+      expect(coreEcologySpeciesRuntimePolicy(species)).toMatchObject({
+        actorAddressable: true,
+        identityForm: "individual",
+        representation: "individual",
+        locomotionClass,
+        groupOrganization,
+        groupStableIdNamespace,
+        maximumMaterializedActors,
+        aggregate: null,
+        capabilities: expect.arrayContaining([
+          "actor-address",
+          "aerial-locomotion",
+          "aquatic-foraging",
+          "diurnal-activity",
+          "movement-memory",
+          "surface-opportunity",
+          "tidal-activity",
+          "water-depth-response",
+          ...distinctiveCapabilities,
+        ]),
+      });
+      expect(coreEcologySpeciesCanOwnActorAddress(species)).toBe(true);
     }
   });
 

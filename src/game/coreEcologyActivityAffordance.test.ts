@@ -27,6 +27,7 @@ describe("core ecology activity affordance registry", () => {
       "aerial-surface-opportunist",
       "ridge-soar-perch",
       "anchored-wader",
+      "diving-waterbird",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES).toEqual([
       "fish-crow",
@@ -40,6 +41,9 @@ describe("core ecology activity affordance registry", () => {
       "great-blue-heron",
       "common-tern",
       "osprey",
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.map(({ archetypeId }) => archetypeId))
       .toEqual([
@@ -54,6 +58,9 @@ describe("core ecology activity affordance registry", () => {
         "anchored-wader",
         "aerial-surface-opportunist",
         "aerial-surface-opportunist",
+        "anchored-wader",
+        "aerial-surface-opportunist",
+        "diving-waterbird",
       ]);
     expect(coreEcologyActivityAffordanceProfile("golden-eagle")).toMatchObject({
       archetypeId: "ridge-soar-perch",
@@ -71,6 +78,29 @@ describe("core ecology activity affordance registry", () => {
         "tidal-relocation-flight",
         "wading-scan",
         "wading-search",
+      ],
+    });
+    expect(coreEcologyActivityAffordanceProfile("double-crested-cormorant")).toMatchObject({
+      archetypeId: "diving-waterbird",
+      locomotionClass: "amphibious",
+      allowedTravelMedia: ["air"],
+      destinations: [
+        {
+          semantic: "authenticated-habitat-anchor",
+          authority: "habitat-allocation",
+          allowedTravelMedia: ["air"],
+        },
+        {
+          semantic: "observed-surface-opportunity",
+          authority: "current-lawful-observation",
+          allowedTravelMedia: ["air"],
+        },
+      ],
+      presentationSignals: [
+        "resting",
+        "surface-diving",
+        "surface-opportunity-flight",
+        "tidal-relocation-flight",
       ],
     });
     expect(coreEcologyShoreWaterMotionVocabulary("north-american-river-otter"))

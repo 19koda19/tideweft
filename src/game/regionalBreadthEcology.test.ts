@@ -31,6 +31,8 @@ import { createWorldPosition } from "./worldPosition";
 
 export const ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-root-shared-invariants:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_ROOT_SHARED_INVARIANTS_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-root-shared-invariants:v1" as const;
 
 const SEED = seedFromText("alpha37 estuary breadth shared properties");
 const FOREIGN_SEED = seedFromText("alpha37 foreign breadth root");
@@ -79,7 +81,7 @@ function reseal<T extends Record<string, unknown>>(value: T) {
   return { ...base, integrity: hashCanonical(base) };
 }
 
-describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} append-only sparse root`, () => {
+describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_ROOT_SHARED_INVARIANTS_OWNER_INTENT} append-only sparse root`, () => {
   it("activates an append-only cohort epoch and round-trips one bounded world authority", () => {
     const empty = createPristineRegionalBreadthEcologyRoot({
       rootSeed: SEED,
@@ -97,13 +99,18 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} append-
       { rootSeed: SEED, completedTick: 17 },
       CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
     );
-    expect(active.activeThroughEpoch).toBe(1);
-    expect(active.activations).toHaveLength(1);
+    expect(active.activeThroughEpoch).toBe(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH);
+    expect(active.activations).toHaveLength(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH);
     expect(active.activations[0]).toMatchObject({
       activationOrdinal: 0,
       activatedAtTick: 17,
       cohortId: COHORT,
       cohortEpoch: 1,
+    });
+    expect(active.activations.at(-1)).toMatchObject({
+      activationOrdinal: CORE_ECOLOGY_BREADTH_CURRENT_EPOCH - 1,
+      activatedAtTick: 17,
+      cohortEpoch: CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
     });
     const text = serializeRegionalBreadthEcologyRoot(active);
     expect(new TextEncoder().encode(text).byteLength).toBeLessThan(
@@ -125,7 +132,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} append-
     const root = createPristineRegionalBreadthEcologyRoot({
       rootSeed: SEED,
       completedTick: 0,
-    });
+    }, 1);
     const activation = root.activations[0]!;
     const forgedActivation = reseal({
       ...activation,

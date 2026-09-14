@@ -14,8 +14,10 @@ import {
 
 export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-presentation-invariants:v1" as const;
 
-describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} profile-driven wildlife visual forms`, () => {
+describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} profile-driven wildlife visual forms`, () => {
   it("covers every addressable body once while rejecting aggregate-only profiles", () => {
     // Flock actors such as gulls are addressable even though their identity
     // metadata describes an aggregate body. The ecology aggregate registry is
@@ -42,6 +44,9 @@ describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} profil
     ["great-blue-heron", "long-necked-wader", "heron"],
     ["common-tern", "shorebird-flock", "tern"],
     ["osprey", "broad-winged-raptor", "osprey"],
+    ["greater-yellowlegs", "long-necked-wader", "egret"],
+    ["belted-kingfisher", "shorebird-flock", "gull"],
+    ["double-crested-cormorant", "dabbling-duck", undefined],
   ] as const)("maps %s through a reusable geometry family and every authenticated morph", (
     species,
     form,
@@ -49,7 +54,10 @@ describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} profil
   ) => {
     expect(isWildlifeVisualSpecies(species)).toBe(true);
     if (!isWildlifeVisualSpecies(species)) throw new Error(`${species} needs a visual profile`);
-    expect(wildlifeVisualProfile(species)).toMatchObject({ form, geometryVariant });
+    expect(wildlifeVisualProfile(species)).toMatchObject({
+      form,
+      ...(geometryVariant === undefined ? {} : { geometryVariant }),
+    });
     for (const morph of getCoreWildlifeProfile(species).morphs) {
       const colors = wildlifeVisualPalette(species, morph);
       expect(Object.isFrozen(colors)).toBe(true);
@@ -65,5 +73,15 @@ describe(`${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} profil
       .toBe(wildlifeVisualProfile("great-blue-heron").form);
     expect(wildlifeVisualProfile("golden-eagle").form)
       .toBe(wildlifeVisualProfile("osprey").form);
+    expect(wildlifeVisualProfile("snowy-egret").form)
+      .toBe(wildlifeVisualProfile("greater-yellowlegs").form);
+    expect(wildlifeVisualProfile("gull").form)
+      .toBe(wildlifeVisualProfile("belted-kingfisher").form);
+    expect(wildlifeVisualProfile("american-black-duck").form)
+      .toBe(wildlifeVisualProfile("double-crested-cormorant").form);
+    expect(wildlifeVisualProfile("american-black-duck").waterbirdDetails)
+      .toMatchObject({ showWingAccent: true });
+    expect(wildlifeVisualProfile("double-crested-cormorant").waterbirdDetails)
+      .toEqual({ showWingAccent: false });
   });
 });

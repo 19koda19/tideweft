@@ -28,6 +28,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPE_IDS = Object.freeze([
   "aerial-surface-opportunist",
   "ridge-soar-perch",
   "anchored-wader",
+  "diving-waterbird",
 ] as const);
 
 export type CoreEcologyActivityArchetypeId =
@@ -122,6 +123,9 @@ export const CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES = Object.freeze([
   "great-blue-heron",
   "common-tern",
   "osprey",
+  "greater-yellowlegs",
+  "belted-kingfisher",
+  "double-crested-cormorant",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
 export type CoreEcologyActivityAffordanceSpecies =
@@ -392,6 +396,45 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "wading-search",
       ],
     }),
+    archetype({
+      archetypeId: "diving-waterbird",
+      requiredCapabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "aquatic-locomotion",
+        "diurnal-activity",
+        "movement-memory",
+        "surface-opportunity",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      locomotionClass: "amphibious",
+      // This bounded owner has proof for flight to one habitat allocation and
+      // one current anonymous surface observation. It deliberately does not
+      // mint a traversable water surface from either fact.
+      allowedTravelMedia: ["air"],
+      destinations: [
+        destination(
+          "authenticated-habitat-anchor",
+          "habitat-allocation",
+          ["air"],
+        ),
+        destination(
+          "observed-surface-opportunity",
+          "current-lawful-observation",
+          ["air"],
+        ),
+      ],
+      observationAffordance: CURRENT_AQUATIC_ACTIVITY_OBSERVATION,
+      presentationSignals: [
+        "resting",
+        "surface-diving",
+        "surface-opportunity-flight",
+        "tidal-relocation-flight",
+      ],
+    }),
   ]);
 
 const ARCHETYPE_BY_ID = new Map<CoreEcologyActivityArchetypeId, CoreEcologyActivityArchetype>(
@@ -412,6 +455,9 @@ const ARCHETYPE_ASSIGNMENTS: Readonly<
   "great-blue-heron": "anchored-wader",
   "common-tern": "aerial-surface-opportunist",
   osprey: "aerial-surface-opportunist",
+  "greater-yellowlegs": "anchored-wader",
+  "belted-kingfisher": "aerial-surface-opportunist",
+  "double-crested-cormorant": "diving-waterbird",
 });
 
 const SHORE_WATER_MOTION_VOCABULARY: Readonly<Partial<Record<

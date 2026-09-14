@@ -86,7 +86,7 @@ Each seed creates:
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
 - One deterministic starting-harbor herd of exactly two individually identified domestic goats. The settlement and keeper hold a distinct typed pen, herd, and custody record; each goat uses the same shared actor, perception, attention, group, locomotion, and physical-resource arbitration owners without receiving unsupported foliage browsing.
-- One bounded thirty-six-record living-species catalog whose first twenty-four
+- One bounded forty-three-record living-species catalog whose first twenty-four
   records are the exact frozen Alpha32 prefix. Habitat v11 remains sealed
   compatibility lineage: its exact v9 prefix describes the original-harbor
   assemblage, v10 appends one remote temperate-upland/forest-edge source for
@@ -98,23 +98,28 @@ Each seed creates:
   American pika, and golden eagle as records 25–27 through a separate Alpine
   sibling. Preserved unpublished Alpha34–36 work appends Atlantic capelin,
   Arctic fox, harbor seal, and polar bear as records 28–31 through exact
-  polar-shore, cold-shore, and polar-consumer siblings. The current unpublished
+  polar-shore, cold-shore, and polar-consumer siblings. The preserved unpublished
   Alpha37 source candidate preserves that complete `RegionalEcologyStateV5` /
   outer-v29 child and appends bay anchovy, Atlantic ghost crab, great blue
   heron, common tern, and osprey as records 32–36 through one sparse
-  append-only Estuary Surface Break breadth root. A separate
+  append-only Estuary Surface Break breadth root. Current unpublished Alpha38
+  preserves that exact 36-record prefix and appends Atlantic menhaden,
+  mummichog, grass shrimp, blue crab, greater yellowlegs, belted kingfisher,
+  and double-crested cormorant as records 37–43 through breadth epoch 2. A separate
   starting-settlement home owner retains bounded brown rats and anchored
   chickens and goats while its free-ranging domestic cat remains
   habitat-optional. Addressable wildlife uses bounded persistent
   representatives; eligible deer, gulls, fish crows, boars, elk, wolves,
-  mountain goats, and common terns use shared herd, flock, sounder, or pack
+  mountain goats, common terns, greater yellowlegs, and double-crested
+  cormorants use shared herd, flock, sounder, or pack
   topology, while other addressable profiles remain solitary. Brown rat,
   southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab,
-  American pika, Atlantic capelin, bay anchovy, and Atlantic ghost crab remain
+  American pika, Atlantic capelin, bay anchovy, Atlantic ghost crab, Atlantic
+  menhaden, mummichog, grass shrimp, and blue crab remain
   conserved non-addressable aggregates disclosed only through lawful visible
-  signs or activity; no fish, crab, or pika actor is manufactured. Alpha33
-  remains the current twenty-seven-record LIVE_VERIFIED release; records 28–36
-  are local unpublished work toward the approximately seventy-five-profile
+  signs or activity; no fish, crab, shrimp, or pika actor is manufactured. Alpha33
+  remains the current twenty-seven-record LIVE_VERIFIED release; records 28–43
+  are local unpublished work toward the 45-profile core-wildlife closure
   target, not worldwide species breadth, ecological migration behavior, or a
   complete bestiary.
 - Recipes that produce and consume conserved resources.
@@ -449,7 +454,7 @@ independent, group-atomic global allowance of 24 addressable actors and one
 atomic commit, so the two profiles do not create a second population or render
 budget.
 
-The **current unpublished local source candidate**
+The preserved unpublished local source candidate
 `0.3.3-alpha.37 — Estuary Surface Break` preserves that exact 31-record
 Alpha36 catalog and `RegionalEcologyStateV5`/outer-v29 child, then appends bay
 anchovy, Atlantic ghost crab, great blue heron, common tern, and osprey as
@@ -476,11 +481,39 @@ plus that breadth root. A sealed outer-v29 Alpha36 save is authenticated and
 adopted exactly once. All six ecology owners share the same insertion-order-
 independent, group-atomic 24-addressable-actor allowance and one atomic commit.
 
+The **current unpublished local source candidate**
+`0.3.3-alpha.38 — Marsh Channel Web` preserves the exact 36-record Alpha37
+catalog and epoch-1 breadth prefix, then appends Atlantic menhaden, mummichog,
+grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-
+crested cormorant as records 37–43. The first four remain conserved non-
+addressable aggregates. Yellowlegs form one group-atomic flock of two to four,
+the kingfisher remains solitary, and cormorants form one group-atomic flock of
+two to three.
+
+The cohort uses breadth epoch 2 instead of another save wrapper. Habitat,
+salinity, channel and shore structure, depth, tide, carrying capacity,
+territory, density, regional quiet, and exact substrate support decide
+admission. Yellowlegs require grass shrimp, kingfishers require mummichog, and
+cormorants require menhaden. Shared Tide Table and aggregate policy preserve
+every unit; the addressable birds reuse shared wading, surface-opportunity,
+perch, diving-waterbird, perception, movement, group, and presentation owners.
+Immediate danger retains priority.
+
+One representative cormorant-to-menhaden witness proves that current clear line
+of sight can create one bounded nonlethal aggregate redistribution while an
+intervening ridge removes it. It creates no exact prey, capture, consumption,
+injury, mortality, body, item, cargo, player, or dog outcome. Valid epoch-1
+outer-v30 worlds authenticate and append epoch 2 exactly once at their saved
+tick. `RegionalEcologyStateV6`, outer save 30, and the global 24-addressable-
+actor cap remain unchanged.
+
 Alpha36 completed the **bounded Wave-F role checklist**. Alpha37 opens Wave G
-with its first coherent cohort but does not complete the biodiversity
-directive. Later cohorts continue toward approximately 75 meaningful profiles
-by declaring compatible identity, niche, habitat, locomotion, perception,
-interaction, and presentation data against these shared owners, with shared
+with its first coherent cohort; Alpha38 advances it to 41 core-wildlife
+profiles / 43 total living records but does not complete the biodiversity
+directive. One final coherent four-profile cohort reaches the 45 / 47 catalog
+boundary by declaring compatible identity, niche, habitat, locomotion,
+perception, interaction, and presentation data against these shared owners,
+with shared
 invariants and a small number of representative conservation/emergence
 witnesses instead of a bespoke suite for every species or every pair. Dedicated
 Wave-G performance proof and seamless actor-crossing proof remain open. Sea
@@ -488,10 +521,12 @@ ice, snow, reproduction, recruitment, population recovery, full scent, broad
 migration, general mortality, audible Living Voice, Directive completion,
 push, CI, Pages, deployment, and LIVE_VERIFIED status remain absent.
 
-Approximately 75 is the Directive 04_1 planning target, not a quota to pad or a
-cap on the architecture. Small variance is allowed when coherent ecological
-coverage closes cleanly; additional profiles beyond that target belong to
-later needs unless they fill a concrete missing niche in the active food web.
+The Directive 04_1 breadth target closes at 45 core-wildlife profiles. Human
+and domestic-dog foundation records remain separate from that count, yielding
+47 total Living Weft catalog records at closure. Alpha38 is the current local
+candidate at 41 / 43, and one coherent final four-profile cohort reaches
+45 / 47. There is no quota padding, and the architecture remains open to later
+species.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -1372,7 +1407,7 @@ only otter and seal own authenticated shore-water schedules and destinations.
 This prevents later amphibious breadth from inheriting an unrelated foraging
 authority merely to cross between land and water.
 
-Present only in the current unpublished local Alpha37 source candidate:
+Present only in the preserved unpublished local Alpha37 source candidate:
 
 - the exact 31-record Alpha36 prefix followed by bay anchovy, Atlantic ghost
   crab, great blue heron, common tern, and osprey records 32–36;
@@ -1391,11 +1426,29 @@ Present only in the current unpublished local Alpha37 source candidate:
   beside the breadth root under the same single global group-atomic 24-actor
   cap and one atomic commit.
 
-None of the Alpha34–37 local checkpoints is released, deployed, Pages-verified,
-or LIVE_VERIFIED. Alpha37 opens Wave G toward approximately 75 profiles but
-does not complete Wave G, Directive 04_1, worldwide ecology, or the full
-bestiary. It has no dedicated Wave-G performance proof or seamless
-actor-crossing proof.
+Present only in the current unpublished local Alpha38 source candidate:
+
+- the exact 36-record Alpha37 prefix followed by Atlantic menhaden, mummichog,
+  grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-
+  crested cormorant records 37–43;
+- Marsh Channel Web at append-only breadth epoch 2, with four conserved non-
+  addressable aggregates, one solitary kingfisher, and group-atomic yellowlegs
+  and cormorant flocks;
+- shared Tide Table, aggregate, activity, perception, locomotion, persistence,
+  knowledge-honest ABOUT, and dual-view presentation authority;
+- exact grass-shrimp/yellowlegs, mummichog/kingfisher, and menhaden/cormorant
+  substrate dependencies with honest regional absence;
+- one representative visible-versus-ridge-occluded cormorant-to-menhaden
+  pressure scenario with exact conservation and no capture, consumption,
+  injury, death, body, item, cargo, player, or dog outcome; and
+- unchanged outer save 30 and `RegionalEcologyStateV6`, with deterministic
+  exact-once epoch-2 activation for authenticated epoch-1 state and no schema
+  bump.
+
+None of the Alpha34–38 local checkpoints is released, deployed, Pages-verified,
+or LIVE_VERIFIED. Alpha38 reaches 41 of 45 core-wildlife profiles but does not
+complete Directive 04_1, worldwide ecology, or the full bestiary. Dedicated
+Wave-G performance and seamless actor-crossing closure evidence remain open.
 
 Live through Alpha 33:
 

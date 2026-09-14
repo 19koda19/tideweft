@@ -373,6 +373,7 @@ import {
   createCoreEcologyRegionalResidentPatchForRoot,
 } from "./regionalEcologyResidents";
 import { CORE_ECOLOGY_DOMESTIC_SPECIES } from "./coreEcologyRegionalHabitat";
+import { CORE_ECOLOGY_BREADTH_CURRENT_EPOCH } from "./coreEcologyBreadthHabitat";
 import {
   canonicalRegionalEcologyLegacyCohortPatchForWorld,
   projectRegionalEcologyLegacyCohort,
@@ -423,6 +424,7 @@ import {
   type RegionalEcologyStateV5ProjectedPolarConsumerResidentV1,
 } from "./regionalEcologyStateV5";
 import {
+  activateRegionalEcologyStateV6BreadthThroughEpoch,
   canonicalRegionalEcologyStateV6ForWorld,
   commitRegionalEcologyStateV6ActiveProjection,
   createFreshRegionalEcologyStateV6,
@@ -14775,7 +14777,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
               ),
             },
           ));
-    const persistedRegionalEcology = persistedRegionalEcologyV6
+    const loadedRegionalEcology = persistedRegionalEcologyV6
       ?? (normalizedRegionalEcologyV5 === null
         ? null
         : canonicalRuntimeRegionalEcologyState(
@@ -14798,10 +14800,26 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           ));
     if (
       decoded.version >= REGIONAL_ECOLOGY_V1_GAME_SAVE_VERSION
-      && persistedRegionalEcology === null
+      && loadedRegionalEcology === null
     ) {
       throw new Error("Current save could not bind its regional ecology authority");
     }
+    const persistedRegionalEcology = loadedRegionalEcology === null
+      ? null
+      : activateRegionalEcologyStateV6BreadthThroughEpoch(
+          loadedRegionalEcology,
+          {
+            rootSeed: world.meta.rootSeed,
+            completedTick: world.meta.completedTick,
+            settlementHomeHabitat: deriveRuntimeCoreEcologyHabitat(
+              world,
+              bio0Ecology,
+              compatibilityView,
+            ),
+            expectedIntegrity: loadedRegionalEcology.integrity,
+            targetEpoch: CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+          },
+        );
 
     /**
      * Every older supported save is first authenticated and normalized through

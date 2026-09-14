@@ -13,10 +13,15 @@ import {
 } from "./coreEcologyGroups";
 import {
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
 import { repositionCoreWildlifeActor } from "./coreWildlifeActor";
-import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
+import {
+  CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS,
+  projectCoreEcologyTidalTable,
+} from "./coreEcologyTidalTable";
 import {
   REGIONAL_BREADTH_COHORT_OWNER_ID,
   canonicalCoreEcologyBreadthResidentPatch,
@@ -30,14 +35,23 @@ import { createWorldPosition } from "./worldPosition";
 
 export const ALPHA37_ESTUARY_BREADTH_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-resident-shared-invariants:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-resident-shared-invariants:v1" as const;
 
 const SEED = seedFromText("alpha37 estuary breadth shared properties");
 const COHORT = CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
+const MARSH_COHORT = CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID;
 const AGGREGATE_REGION = createRegionCoord(-5_179, -89_646);
 const TERN_REGION = createRegionCoord(-5_179, -89_646);
 const HERON_REGION = createRegionCoord(1_050, 38_043);
 const OSPREY_REGION = createRegionCoord(-192_134, -225_672);
 const ABSENT_REGION = createRegionCoord(-1, -1);
+const MARSH_FIXTURE_REGIONS = Object.freeze([
+  createRegionCoord(-1, -1),
+  createRegionCoord(144_181, 147_353),
+  createRegionCoord(173_753, 11_507),
+  createRegionCoord(91_177, 199_624),
+]);
 
 function patchAt(region: ReturnType<typeof createRegionCoord>, tick = 0) {
   const habitat = deriveCoreEcologyBreadthHabitat({
@@ -50,6 +64,21 @@ function patchAt(region: ReturnType<typeof createRegionCoord>, tick = 0) {
     habitat,
     patch: createCoreEcologyBreadthResidentPatch({ seed: SEED, habitat, tick }),
   };
+}
+
+function marshPatches() {
+  return MARSH_FIXTURE_REGIONS.map((region) => {
+    const habitat = deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region,
+      cohortId: MARSH_COHORT,
+    });
+    expect(habitat.totalPopulationUnits).toBeGreaterThan(0);
+    return {
+      habitat,
+      patch: createCoreEcologyBreadthResidentPatch({ seed: SEED, habitat }),
+    };
+  });
 }
 
 describe(`${ALPHA37_ESTUARY_BREADTH_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} shared cohort adapter`, () => {
@@ -127,6 +156,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} sha
       seed: SEED,
       regions: [ABSENT_REGION, AGGREGATE_REGION, AGGREGATE_REGION],
       tick: 64,
+      activeThroughEpoch: 1,
     });
     expect(set.ownerId).toBe(REGIONAL_BREADTH_COHORT_OWNER_ID);
     expect(set.residents).toHaveLength(1);
@@ -138,6 +168,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} sha
       seed: SEED,
       regions: [AGGREGATE_REGION, ABSENT_REGION],
       tick: 64,
+      activeThroughEpoch: 1,
     })).toEqual(set);
   });
 
@@ -286,5 +317,101 @@ describe(`${ALPHA37_ESTUARY_BREADTH_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} sha
       region: HERON_REGION,
       completedTick: 0,
     })).toBeNull();
+  });
+});
+
+describe(`${ALPHA38_MARSH_CHANNEL_WEB_RESIDENT_SHARED_INVARIANTS_OWNER_INTENT} generic cohort adapter`, () => {
+  it("materializes the seven-species web through bounded aggregate, individual, and flock structures", () => {
+    const fixtures = marshPatches();
+    const species = new Set<string>();
+    for (const { habitat, patch } of fixtures) {
+      for (const population of patch.populations) species.add(population.species);
+      for (const population of patch.aggregatePopulations) species.add(population.species);
+      expect(canonicalCoreEcologyBreadthResidentPatch(patch, {
+        seed: SEED,
+        region: habitat.region,
+        completedTick: 0,
+      })).toBe(patch);
+      expect(patch.aggregatePopulations).toHaveLength(
+        habitat.populations.filter(({ actorRepresentation, populationUnits }) => (
+          actorRepresentation === "aggregate" && populationUnits > 0
+        )).length,
+      );
+      expect(patch.nextMortalityOrdinal).toBe(0);
+      expect(patch.mortalityTransactions).toEqual([]);
+      expect(patch.carcasses).toEqual([]);
+
+      const projection = projectCoreEcologyTidalTable(patch, 0);
+      expect(projection).not.toBeNull();
+      expect(projection!.anchorDepths.length)
+        .toBeLessThanOrEqual(CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS);
+
+      for (const candidate of habitat.populations) {
+        if (candidate.populationUnits === 0) continue;
+        const aggregate = patch.aggregatePopulations.find(
+          ({ populationKey }) => populationKey === candidate.populationKey,
+        );
+        const individual = patch.populations.find(
+          ({ populationKey }) => populationKey === candidate.populationKey,
+        );
+        if (candidate.actorRepresentation === "aggregate") {
+          expect(individual).toBeUndefined();
+          expect(aggregate?.populationSize).toBe(candidate.populationUnits);
+          expect(aggregate?.anchors.reduce(
+            (sum, anchor) => sum + anchor.populationUnits,
+            0,
+          )).toBe(candidate.populationUnits);
+          continue;
+        }
+        expect(aggregate).toBeUndefined();
+        expect(individual?.members).toHaveLength(candidate.populationUnits);
+        expect(individual?.members.every(({ representedUnits, materialization }) => (
+          representedUnits === 1 && materialization === "coarse"
+        ))).toBe(true);
+        const group = patch.groups.groups.find(
+          ({ identity }) => identity.populationKey === candidate.populationKey,
+        );
+        if (candidate.groupOrganization === "flock") {
+          expect(group).toMatchObject({
+            memberOrdinals: individual!.members.map(
+              ({ populationOrdinal }) => populationOrdinal,
+            ),
+            identity: {
+              species: candidate.species,
+              organization: "flock",
+              populationKey: candidate.populationKey,
+            },
+          });
+        } else {
+          expect(group).toBeUndefined();
+        }
+      }
+      expect(patch.groups.groups).toHaveLength(habitat.populations.filter(
+        ({ actorRepresentation, groupOrganization, populationUnits }) => (
+          actorRepresentation === "individual"
+          && groupOrganization === "flock"
+          && populationUnits > 0
+        ),
+      ).length);
+    }
+    expect([...species].sort()).toEqual([...CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES].sort());
+    expect(stableStringify(fixtures.map(({ patch }) => patch))).not.toMatch(
+      /capture|consumption|reproduction|soundEvent|voice/u,
+    );
+  });
+
+  it("admits epoch two through the existing resident-set root without changing epoch-one selection", () => {
+    const current = deriveCoreEcologyBreadthResidentSet({
+      seed: SEED,
+      regions: MARSH_FIXTURE_REGIONS,
+    });
+    expect(current.activeThroughEpoch).toBe(2);
+    expect(current.residents.some(({ cohortId }) => cohortId === MARSH_COHORT)).toBe(true);
+    const epochOne = deriveCoreEcologyBreadthResidentSet({
+      seed: SEED,
+      regions: MARSH_FIXTURE_REGIONS,
+      activeThroughEpoch: 1,
+    });
+    expect(epochOne.residents.every(({ cohortId }) => cohortId === COHORT)).toBe(true);
   });
 });

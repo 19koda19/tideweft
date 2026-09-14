@@ -107,8 +107,26 @@ export const CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT = 34 as const;
 export const CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH = "bd1d1bbdb4858853" as const;
 export const CORE_WILDLIFE_WAVE_G_ESTUARY_PROFILES_HASH = "7e10d9329122ab39" as const;
 
-/** Current roster; extensions must remain append-only after the sealed prefix. */
-export const CORE_WILDLIFE_SPECIES = CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES;
+/**
+ * Second Wave-G ecological cluster. The marsh-channel web extends the sealed
+ * estuary child without reordering any earlier identity namespace.
+ */
+export const CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES = Object.freeze([
+  ...CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES,
+  "atlantic-menhaden",
+  "mummichog",
+  "grass-shrimp",
+  "blue-crab",
+  "greater-yellowlegs",
+  "belted-kingfisher",
+  "double-crested-cormorant",
+] as const);
+export const CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT = 41 as const;
+export const CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH = "e0d33dd8bfd92907" as const;
+export const CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_PROFILES_HASH = "92e04ce6b13bdfd2" as const;
+
+/** Current roster; extensions must remain append-only after every sealed prefix. */
+export const CORE_WILDLIFE_SPECIES = CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES;
 
 export type CoreWildlifeSpecies = (typeof CORE_WILDLIFE_SPECIES)[number];
 export type CoreWildlifeRepresentation = "individual" | "aggregate";
@@ -206,6 +224,13 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
     | "BLUEHERON-"
     | "COMMONTERN-"
     | "OSPREY-"
+    | "MENHADEN-"
+    | "MUMMICHOG-"
+    | "GRASSSHRIMP-"
+    | "BLUECRAB-"
+    | "YELLOWLEGS-"
+    | "KINGFISHER-"
+    | "CORMORANT-"
   >
 > = Object.freeze({
   deer: "DEER-",
@@ -242,6 +267,13 @@ export const CORE_WILDLIFE_ID_PREFIX_BY_SPECIES: Readonly<
   "great-blue-heron": "BLUEHERON-",
   "common-tern": "COMMONTERN-",
   osprey: "OSPREY-",
+  "atlantic-menhaden": "MENHADEN-",
+  mummichog: "MUMMICHOG-",
+  "grass-shrimp": "GRASSSHRIMP-",
+  "blue-crab": "BLUECRAB-",
+  "greater-yellowlegs": "YELLOWLEGS-",
+  "belted-kingfisher": "KINGFISHER-",
+  "double-crested-cormorant": "CORMORANT-",
 });
 
 /**
@@ -264,6 +296,8 @@ export interface CoreWildlifeSpeciesMetadata {
     | "SILVERSIDE-SCHOOL"
     | "CAPELIN-SCHOOL"
     | "BAYANCHOVY-SCHOOL"
+    | "MENHADEN-SCHOOL"
+    | "MUMMICHOG-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -612,6 +646,76 @@ export const CORE_WILDLIFE_SPECIES_METADATA_BY_SPECIES: Readonly<
     locomotionClass: "aerial",
     groupOrganization: null,
     groupStableIdNamespace: null,
+  },
+  "atlantic-menhaden": {
+    species: "atlantic-menhaden",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "fish",
+    dietClass: "omnivore",
+    locomotionClass: "aquatic",
+    groupOrganization: "school",
+    groupStableIdNamespace: "MENHADEN-SCHOOL",
+  },
+  mummichog: {
+    species: "mummichog",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "fish",
+    dietClass: "omnivore",
+    locomotionClass: "aquatic",
+    groupOrganization: "school",
+    groupStableIdNamespace: "MUMMICHOG-SCHOOL",
+  },
+  "grass-shrimp": {
+    species: "grass-shrimp",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "invertebrate",
+    dietClass: "detritivore",
+    locomotionClass: "aquatic",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "blue-crab": {
+    species: "blue-crab",
+    actorRepresentation: "aggregate",
+    catalogIdentityForm: "aggregate",
+    taxonomicClass: "invertebrate",
+    dietClass: "omnivore",
+    locomotionClass: "aquatic",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "greater-yellowlegs": {
+    species: "greater-yellowlegs",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "amphibious",
+    groupOrganization: "flock",
+    groupStableIdNamespace: "FLOCK",
+  },
+  "belted-kingfisher": {
+    species: "belted-kingfisher",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "aerial",
+    groupOrganization: null,
+    groupStableIdNamespace: null,
+  },
+  "double-crested-cormorant": {
+    species: "double-crested-cormorant",
+    actorRepresentation: "individual",
+    catalogIdentityForm: "individual",
+    taxonomicClass: "bird",
+    dietClass: "carnivore",
+    locomotionClass: "amphibious",
+    groupOrganization: "flock",
+    groupStableIdNamespace: "FLOCK",
   },
 });
 
@@ -1820,6 +1924,237 @@ const PROFILES: Readonly<Record<CoreWildlifeSpecies, CoreWildlifeProfile>> = dee
       sociability: [20_000, 180_000],
     },
   },
+  "atlantic-menhaden": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "atlantic-menhaden",
+    maximumPatchPopulation: 48,
+    roles: ["prey", "small-prey", "forager"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 440_000,
+      retreatThreshold: 360_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["blue-green-backed", "bronze-sided", "dark-backed", "silver-sided"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["social", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [620_000, 960_000],
+      boldness: [60_000, 380_000],
+      sociability: [860_000, 1_000_000],
+    },
+  },
+  mummichog: {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "mummichog",
+    maximumPatchPopulation: 32,
+    roles: ["prey", "small-prey", "forager", "omnivore"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 80_000,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 460_000,
+      retreatThreshold: 380_000,
+      forageThreshold: 260_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["barred-olive", "dark-backed", "mottled-brown", "silver-olive"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["opportunistic", "social"],
+    ],
+    traitRanges: {
+      vigilance: [600_000, 950_000],
+      boldness: [80_000, 440_000],
+      sociability: [760_000, 980_000],
+    },
+  },
+  "grass-shrimp": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "grass-shrimp",
+    maximumPatchPopulation: 32,
+    roles: ["prey", "small-prey", "forager", "detritivore"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 120_000,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 420_000,
+      retreatThreshold: 340_000,
+      forageThreshold: 220_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["amber-clear", "olive-clear", "pale-clear", "reed-tinted"],
+    temperamentPairs: [
+      ["cautious", "social"],
+      ["watchful", "social"],
+      ["patient", "reserved"],
+      ["cautious", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [580_000, 940_000],
+      boldness: [40_000, 320_000],
+      sociability: [620_000, 940_000],
+    },
+  },
+  "blue-crab": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "blue-crab",
+    maximumPatchPopulation: 16,
+    roles: ["prey", "forager", "scavenger", "omnivore"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 900_000,
+      carrion: 520_000,
+      "exposed-food": 100_000,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 540_000,
+      retreatThreshold: 420_000,
+      forageThreshold: 280_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["blue-clawed", "olive-blue", "rust-tipped", "slate-green"],
+    temperamentPairs: [
+      ["cautious", "watchful"],
+      ["bold", "opportunistic"],
+      ["patient", "reserved"],
+      ["watchful", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [540_000, 920_000],
+      boldness: [100_000, 620_000],
+      sociability: [80_000, 420_000],
+    },
+  },
+  "greater-yellowlegs": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "greater-yellowlegs",
+    maximumPatchPopulation: 4,
+    roles: ["forager", "predator", "small-predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 520_000,
+      fleeThreshold: 740_000,
+      retreatThreshold: 560_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["bold-streaked", "gray-backed", "pale-breasted", "warm-speckled"],
+    temperamentPairs: [
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["patient", "social"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [640_000, 980_000],
+      boldness: [180_000, 700_000],
+      sociability: [500_000, 900_000],
+    },
+  },
+  "belted-kingfisher": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "belted-kingfisher",
+    maximumPatchPopulation: 1,
+    roles: ["forager", "predator", "small-predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 820_000,
+      retreatThreshold: 620_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["blue-gray", "dark-belted", "rust-belted", "slate-crested"],
+    temperamentPairs: [
+      ["patient", "watchful"],
+      ["reserved", "watchful"],
+      ["cautious", "patient"],
+      ["bold", "watchful"],
+    ],
+    traitRanges: {
+      vigilance: [680_000, 1_000_000],
+      boldness: [160_000, 680_000],
+      sociability: [20_000, 160_000],
+    },
+  },
+  "double-crested-cormorant": {
+    version: CORE_WILDLIFE_IDENTITY_VERSION,
+    species: "double-crested-cormorant",
+    maximumPatchPopulation: 3,
+    roles: ["forager", "predator"],
+    foodAffinities: {
+      browse: 0,
+      "shore-forage": 1_000_000,
+      carrion: 0,
+      "exposed-food": 0,
+      "live-prey": 0,
+    },
+    behavior: {
+      alarmThreshold: 1_000_000,
+      fleeThreshold: 760_000,
+      retreatThreshold: 580_000,
+      forageThreshold: 240_000,
+      guardThreshold: 1_000_000,
+      maximumPursuitTicks: 0,
+    },
+    morphs: ["bronze-black", "dark-crested", "green-black", "pale-throated"],
+    temperamentPairs: [
+      ["patient", "social"],
+      ["watchful", "social"],
+      ["cautious", "watchful"],
+      ["bold", "opportunistic"],
+    ],
+    traitRanges: {
+      vigilance: [580_000, 940_000],
+      boldness: [160_000, 680_000],
+      sociability: [560_000, 920_000],
+    },
+  },
 });
 
 export const CORE_WILDLIFE_PROFILES: readonly CoreWildlifeProfile[] = Object.freeze(
@@ -1999,15 +2334,34 @@ export function assertCoreWildlifeProfiles(): void {
   const waveGEstuaryCompatibilityProfiles = CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES.map(
     (species) => PROFILES[species],
   );
+  const waveGEstuaryCompatibilityPrefix = CORE_WILDLIFE_SPECIES.slice(
+    0,
+    CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT,
+  );
   if (
     CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES.length
       !== CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT
     || hashCanonical(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES)
       !== CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH
+    || hashCanonical(waveGEstuaryCompatibilityPrefix)
+      !== CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH
     || hashCanonical(waveGEstuaryCompatibilityProfiles)
       !== CORE_WILDLIFE_WAVE_G_ESTUARY_PROFILES_HASH
   ) {
     throw new Error("Core wildlife Wave-G estuary identity lineage was rewritten");
+  }
+  const waveGMarshChannelProfiles = CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES.map(
+    (species) => PROFILES[species],
+  );
+  if (
+    CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES.length
+      !== CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT
+    || hashCanonical(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES)
+      !== CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH
+    || hashCanonical(waveGMarshChannelProfiles)
+      !== CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_PROFILES_HASH
+  ) {
+    throw new Error("Core wildlife Wave-G marsh-channel identity lineage was rewritten");
   }
   for (const species of CORE_WILDLIFE_SPECIES) {
     const profile = PROFILES[species];

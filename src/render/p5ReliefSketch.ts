@@ -4033,13 +4033,17 @@ export function createTideweftReliefRenderer(
       p.pop();
     };
 
-    const drawAmericanBlackDuck = (
+    const drawAquaticWaterbird = (
       wildlife: WildlifeView,
       surface: number,
       tileSize: number,
       now: number,
     ): void => {
-      const colors = reliefWildlifeColors("american-black-duck");
+      if (!isWildlifeVisualSpecies(wildlife.species)) return;
+      const profile = wildlifeVisualProfile(wildlife.species);
+      const colors = wildlifeVisualPalette(wildlife.species, wildlife.appearanceKey);
+      const wingColor = profile.waterbirdDetails?.wingColor ?? colors.secondary;
+      const billColor = profile.waterbirdDetails?.billColor ?? colors.accent;
       const scale = clamp(wildlife.sizeScale, 0.55, 1.8);
       const base = tileSize * 0.084 * scale;
       const dabbling = wildlife.behavior === "forage";
@@ -4066,18 +4070,20 @@ export function createTideweftReliefRenderer(
           p.push();
           p.translate(-base * 0.16, side * flap, 0);
           p.rotateX(side * 0.12);
-          p.ambientMaterial(colors.secondary);
+          p.ambientMaterial(wingColor);
           p.ellipsoid(base * 0.76, base * 0.13, base * 2.18, 7, 3);
           p.pop();
         }
       } else {
         p.push();
         p.translate(-base * 0.18, -bodyHalfHeight * 0.42, 0);
-        p.ambientMaterial(colors.secondary);
+        p.ambientMaterial(wingColor);
         p.ellipsoid(base * 0.92, base * 0.18, base * 0.52, 8, 4);
-        p.ambientMaterial(colors.accent ?? colors.dark);
-        p.translate(-base * 0.08, -base * 0.13, -base * 0.36);
-        p.box(base * 0.7, base * 0.1, base * 0.14);
+        if (profile.waterbirdDetails?.showWingAccent === true) {
+          p.ambientMaterial(colors.accent);
+          p.translate(-base * 0.08, -base * 0.13, -base * 0.36);
+          p.box(base * 0.7, base * 0.1, base * 0.14);
+        }
         p.pop();
       }
 
@@ -4090,7 +4096,7 @@ export function createTideweftReliefRenderer(
       p.ambientMaterial(colors.secondary);
       p.sphere(base * 0.48, 7, 5);
       p.translate(base * 0.62, dabbling ? base * 0.12 : base * 0.03, 0);
-      p.ambientMaterial("#a59655");
+      p.ambientMaterial(billColor);
       p.box(base * 0.72, base * 0.16, base * 0.62);
       p.pop();
 
@@ -5384,7 +5390,7 @@ export function createTideweftReliefRenderer(
           drawLongNeckedWader(wildlife, surface, tileSize);
           return true;
         case "dabbling-duck":
-          drawAmericanBlackDuck(wildlife, surface, tileSize, now);
+          drawAquaticWaterbird(wildlife, surface, tileSize, now);
           return true;
         case "ground-fowl":
           drawDomesticChicken(wildlife, surface, tileSize, now);

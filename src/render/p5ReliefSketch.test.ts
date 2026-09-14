@@ -403,6 +403,9 @@ function wildlifeView(
     "great-blue-heron": "Great blue heron",
     "common-tern": "Common terns",
     osprey: "Osprey",
+    "greater-yellowlegs": "Greater yellowlegs",
+    "belted-kingfisher": "Belted kingfisher",
+    "double-crested-cormorant": "Double-crested cormorants",
   };
   const actorIdPrefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -431,6 +434,9 @@ function wildlifeView(
     "great-blue-heron": "BLUEHERON-",
     "common-tern": "COMMONTERN-",
     osprey: "OSPREY-",
+    "greater-yellowlegs": "YELLOWLEGS-",
+    "belted-kingfisher": "KINGFISHER-",
+    "double-crested-cormorant": "CORMORANT-",
   };
   return {
     actorId: `${actorIdPrefix[species]}R-v1-relief-${species}`,
@@ -2389,6 +2395,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["great-blue-heron", "#667a82", "ellipsoid"],
     ["common-tern", "#dce1de", "cone"],
     ["osprey", "#5a493a", "cone"],
+    ["greater-yellowlegs", "#8d9898", "ellipsoid"],
+    ["belted-kingfisher", "#567989", "cone"],
+    ["double-crested-cormorant", "#222d2c", "ellipsoid"],
   ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} renders and touch-selects the shared color-independent upland %s form`, (
     species,
     primaryColor,
@@ -2467,6 +2476,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "great-blue-heron",
       "common-tern",
       "osprey",
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
     ];
     const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
       deer: "DEER-",
@@ -2495,6 +2507,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "great-blue-heron": "BLUEHERON-",
       "common-tern": "COMMONTERN-",
       osprey: "OSPREY-",
+      "greater-yellowlegs": "YELLOWLEGS-",
+      "belted-kingfisher": "KINGFISHER-",
+      "double-crested-cormorant": "CORMORANT-",
     };
 
     for (const kind of species) {

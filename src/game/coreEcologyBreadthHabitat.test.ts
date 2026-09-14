@@ -11,6 +11,8 @@ import {
   CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID,
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_SPECIES,
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES,
   assertBreadthDefinitions,
   canonicalCoreEcologyBreadthHabitatForWorld,
   canonicalizeCoreEcologyBreadthHabitat,
@@ -21,13 +23,17 @@ import {
   type CoreEcologyBreadthHabitat,
   type CoreEcologyBreadthSpecies,
 } from "./coreEcologyBreadthHabitat";
+import { CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS } from "./coreEcologyTidalTable";
 
 export const ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-habitat-shared-invariants:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_HABITAT_SHARED_INVARIANTS_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-habitat-shared-invariants:v1" as const;
 
 const SEED = seedFromText("alpha37 estuary breadth shared properties");
 const FOREIGN_SEED = seedFromText("alpha37 foreign estuary breadth world");
 const COHORT = CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
+const MARSH_COHORT = CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID;
 
 function corpus() {
   const fixed = [
@@ -47,6 +53,18 @@ function corpus() {
     keyedRandomInt(SEED, 0x4252_5937, ordinal, 3, 4, -50_000, 50_000),
   ));
   return Object.freeze([...fixed, ...generated]);
+}
+
+function marshChannelCorpus() {
+  return Object.freeze([
+    createRegionCoord(0, 0),
+    createRegionCoord(REGION_COORD_LIMIT, REGION_COORD_LIMIT),
+    createRegionCoord(-REGION_COORD_LIMIT, -REGION_COORD_LIMIT),
+    createRegionCoord(-1, -1),
+    createRegionCoord(144_181, 147_353),
+    createRegionCoord(173_753, 11_507),
+    createRegionCoord(91_177, 199_624),
+  ]);
 }
 
 function admittedBySpecies(habitats: readonly CoreEcologyBreadthHabitat[]) {
@@ -83,6 +101,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
       cohortId: COHORT,
       evaluatedSpeciesCount: 5,
     });
+    expect(first.derivationHash).toBe("df582f3dff6dfb8d");
     expect(first.populations.map(({ species }) => species)).toEqual(
       CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_SPECIES,
     );
@@ -94,14 +113,50 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
   });
 
   it("keeps one append-only cohort registry instead of requiring one new root schema per batch", () => {
-    expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBe(1);
+    expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBe(2);
     expect(coreEcologyBreadthCohortsThroughEpoch(0)).toEqual([]);
-    expect(coreEcologyBreadthCohortsThroughEpoch(1)).toEqual(
+    expect(coreEcologyBreadthCohortsThroughEpoch(1)).toEqual([
+      CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS[0],
+    ]);
+    expect(coreEcologyBreadthCohortsThroughEpoch(2)).toEqual(
       CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS,
     );
     expect(() => assertBreadthDefinitions(CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS))
       .not.toThrow();
     const current = CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS[0]!;
+    const marshChannel = CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS[1]!;
+    expect(current.definitionHash).toBe("1fd6b2ade34099fd");
+    expect(Object.prototype.hasOwnProperty.call(current, "regionalAdmission"))
+      .toBe(false);
+    expect(marshChannel).toMatchObject({
+      cohortId: MARSH_COHORT,
+      introducedInEpoch: 2,
+      definitionVersion: 2,
+      regionalAdmission: {
+        signal: "eligible-habitat",
+      },
+    });
+    expect(marshChannel.definitionHash).toBe("774366e24d972720");
+    expect(marshChannel.species.map(({ species }) => species)).toEqual(
+      CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES,
+    );
+    expect(marshChannel.species.filter(({ actorRepresentation }) => (
+      actorRepresentation === "aggregate"
+    ))).toHaveLength(4);
+    expect(marshChannel.species.reduce((sum, profile) => (
+      sum + (profile.actorRepresentation === "aggregate" ? profile.maximumAnchors : 0)
+    ), 0)).toBeLessThanOrEqual(CORE_ECOLOGY_TIDAL_TABLE_MAX_DEPTH_RECORDS);
+    expect(() => assertBreadthDefinitions([
+      current,
+      {
+        ...marshChannel,
+        regionalAdmission: {
+          ...marshChannel.regionalAdmission!,
+          minimumPresenceThreshold:
+            marshChannel.regionalAdmission!.minimumPresenceThreshold + 1,
+        },
+      },
+    ])).toThrow(/definition hash/u);
     const futureBase = {
       cohortId: "future-wave-g-cohort" as typeof current.cohortId,
       introducedInEpoch: current.introducedInEpoch + 1,
@@ -255,4 +310,94 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
       );
     }
   }, 20_000);
+});
+
+describe(`${ALPHA38_MARSH_CHANNEL_WEB_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} epoch-two declarative cohort`, () => {
+  it("replays the complete cohort independent of evaluation order and binds it to epoch two", () => {
+    const region = createRegionCoord(-4_194_301, 3_671_113);
+    const terrain = generateRegionTerrain(SEED, region);
+    const first = deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region,
+      cohortId: MARSH_COHORT,
+    });
+    const replay = deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region,
+      cohortId: MARSH_COHORT,
+      terrain: { ...terrain, tiles: [...terrain.tiles].reverse() },
+      speciesOrder: [...CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES].reverse(),
+    });
+    expect(replay).toBe(first);
+    expect(first).toMatchObject({
+      ownerId: CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID,
+      cohortId: MARSH_COHORT,
+      cohortEpoch: 2,
+      evaluatedSpeciesCount: 7,
+    });
+    expect(first.populations.map(({ species }) => species)).toEqual(
+      CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES,
+    );
+    expect(canonicalCoreEcologyBreadthHabitatForWorld(first, SEED, region)).toBe(first);
+    expect(canonicalCoreEcologyBreadthHabitatForWorld(
+      first,
+      FOREIGN_SEED,
+      region,
+    )).toBeNull();
+  });
+
+  it("derives honest sparse presence and local food-web ceilings as cohort properties", () => {
+    clearCoreEcologyBreadthHabitatCache();
+    const habitats = marshChannelCorpus().map((region) => (
+      deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId: MARSH_COHORT })
+    ));
+    const present = admittedBySpecies(habitats);
+    expect(
+      [...present.keys()].sort(),
+      stableStringify(habitats.map(({ region, populations }) => ({
+        region,
+        present: populations.filter(({ populationUnits }) => populationUnits > 0)
+          .map(({ species, populationUnits }) => [species, populationUnits]),
+      }))),
+    ).toEqual([...CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES].sort());
+    expect(habitats.some(({ totalPopulationUnits }) => totalPopulationUnits === 0)).toBe(true);
+    expect(habitats.some(({ totalPopulationUnits }) => totalPopulationUnits > 0)).toBe(true);
+
+    const dependencies = new Map<CoreEcologyBreadthSpecies, CoreEcologyBreadthSpecies>([
+      ["greater-yellowlegs", "grass-shrimp"],
+      ["belted-kingfisher", "mummichog"],
+      ["double-crested-cormorant", "atlantic-menhaden"],
+    ]);
+    for (const habitat of habitats) {
+      expect(habitat.populations).toHaveLength(7);
+      expect(habitat.populations.filter(({ actorRepresentation }) => (
+        actorRepresentation === "aggregate"
+      ))).toHaveLength(4);
+      expect(habitat.totalPopulationUnits).toBe(habitat.populations.reduce(
+        (sum, population) => sum + population.populationUnits,
+        0,
+      ));
+      for (const population of habitat.populations) {
+        expect(population.anchors.reduce(
+          (sum, anchor) => sum + anchor.allocatedPopulation,
+          0,
+        )).toBe(population.populationUnits);
+        const dependencySpecies = dependencies.get(population.species);
+        if (dependencySpecies === undefined) continue;
+        const dependency = habitat.populations.find(
+          ({ species }) => species === dependencySpecies,
+        )!;
+        expect(population.dependencySpecies).toBe(dependencySpecies);
+        expect(population.preySupportUnits).toBe(dependency.populationUnits);
+        expect(population.dependencyPopulationKey).toBe(dependency.populationKey);
+        expect(population.populationUnits).toBeLessThanOrEqual(population.trophicCeiling);
+        if (population.populationUnits > 0) {
+          expect(dependency.populationUnits).toBeGreaterThan(0);
+        }
+      }
+      expect(stableStringify(habitat)).not.toMatch(
+        /targetActor|capture|mortality|carcass|consumption|reproduction|soundEvent|voice/u,
+      );
+    }
+  }, 30_000);
 });

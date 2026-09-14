@@ -12,6 +12,8 @@ import {
   DOMESTIC_GOAT_APPEARANCE_PALETTES,
   ESTUARY_SURFACE_WILDLIFE_APPEARANCE_PALETTES,
   ESTUARY_SURFACE_WILDLIFE_APPEARANCE_SPECIES,
+  MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES,
+  MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES,
   POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
   POLAR_MARINE_WILDLIFE_APPEARANCE_SPECIES,
   REGIONAL_UPLAND_WILDLIFE_APPEARANCE_SPECIES,
@@ -20,6 +22,7 @@ import {
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   estuarySurfaceWildlifeAppearancePalette,
+  marshChannelWildlifeAppearancePalette,
   polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
 } from "./wildlifeAppearance";
@@ -195,6 +198,38 @@ describe("shared wildlife appearance projection", () => {
         expect(Object.isFrozen(resolved)).toBe(true);
       }
       expect(estuarySurfaceWildlifeAppearancePalette(species, "unknown-morph"))
+        .toBeDefined();
+    }
+  });
+
+  it("covers the marsh-channel bird bodies while leaving aquatic populations as evidence", () => {
+    expect(MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES).toEqual([
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
+    ]);
+    for (const aggregate of [
+      "atlantic-menhaden",
+      "mummichog",
+      "grass-shrimp",
+      "blue-crab",
+    ]) {
+      expect(MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES).not.toContain(aggregate);
+    }
+
+    for (const species of MARSH_CHANNEL_WILDLIFE_APPEARANCE_SPECIES) {
+      const profile = getCoreWildlifeProfile(species);
+      const palettes = MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES[species] as Readonly<
+        Record<string, unknown>
+      >;
+      expect(Object.keys(palettes).sort()).toEqual([...profile.morphs].sort());
+      for (const morph of profile.morphs) {
+        const resolved = marshChannelWildlifeAppearancePalette(species, morph);
+        expect(resolved).toBe(palettes[morph]);
+        expect(Object.isFrozen(resolved)).toBe(true);
+        expect(new Set(Object.values(resolved)).size).toBe(4);
+      }
+      expect(marshChannelWildlifeAppearancePalette(species, "unknown-morph"))
         .toBeDefined();
     }
   });

@@ -218,6 +218,9 @@ export const CORE_ECOLOGY_INDIVIDUAL_SPECIES = [
   "great-blue-heron",
   "common-tern",
   "osprey",
+  "greater-yellowlegs",
+  "belted-kingfisher",
+  "double-crested-cormorant",
 ] as const;
 export type CoreEcologyIndividualSpecies =
   (typeof CORE_ECOLOGY_INDIVIDUAL_SPECIES)[number];

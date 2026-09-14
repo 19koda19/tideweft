@@ -21,6 +21,11 @@ import {
   deriveCoreEcologyTidalTableHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
+import {
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  deriveCoreEcologyBreadthHabitat,
+} from "./coreEcologyBreadthHabitat";
+import { createCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import {
@@ -51,6 +56,8 @@ export const ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha36-polar-consumer-presentation-invariants:v1" as const;
 export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(3, -7);
@@ -277,6 +284,51 @@ function capelinEvidenceFixture(tick = 12) {
   return { evidence, patch, population };
 }
 
+type MarshChannelAggregateSpecies =
+  | "atlantic-menhaden"
+  | "mummichog"
+  | "grass-shrimp"
+  | "blue-crab";
+
+/** Shared breadth/tide fixture; these species remain physical area evidence. */
+function marshChannelEvidenceFixture(species: MarshChannelAggregateSpecies) {
+  const seed = seedFromText("alpha37 estuary breadth shared properties");
+  const originRegion = species === "atlantic-menhaden" || species === "grass-shrimp"
+    ? createRegionCoord(-11, -20)
+    : createRegionCoord(-10, -20);
+  const tick = species === "blue-crab" ? 0 : 360;
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed,
+    region: originRegion,
+    cohortId: CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  });
+  const patch = createCoreEcologyBreadthResidentPatch({ seed, habitat, tick });
+  const population = patch.aggregatePopulations.find((candidate) => (
+    candidate.species === species
+  ));
+  const tidal = projectCoreEcologyTidalTable(patch, tick);
+  const usableDepth = tidal?.anchorDepths.find((candidate) => (
+    candidate.aggregateId === population?.aggregateId
+    && candidate.activityUsable
+    && (population?.anchors[candidate.anchorOrdinal]?.populationUnits ?? 0) > 0
+  ));
+  const evidence = population?.evidence.find(({ position }) => (
+    usableDepth !== undefined
+    && position.region.x === usableDepth.position.region.x
+    && position.region.y === usableDepth.position.region.y
+    && position.localX === usableDepth.position.localX
+    && position.localY === usableDepth.position.localY
+  ));
+  if (population === undefined || usableDepth === undefined || evidence === undefined) {
+    throw new Error(
+      `Marsh-channel ABOUT fixture requires usable ${species} evidence `
+      + `(population=${population !== undefined}, tidal=${tidal !== null}, `
+      + `usable=${usableDepth !== undefined}, evidence=${evidence !== undefined})`,
+    );
+  }
+  return { evidence, patch, population };
+}
+
 function activityFixture(
   species: "fish-crow" | "northern-harrier",
   tick: number,
@@ -389,7 +441,7 @@ function pursuingBear(): CoreWildlifeActorState {
   return result;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife ABOUT`, () => {
   it.each([
     ["deer", "DEER", "Deer"],
     ["gull", "GULL FLOCK", "Gull"],
@@ -416,6 +468,13 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["great-blue-heron", "GREAT BLUE HERON", "Great blue heron"],
     ["common-tern", "COMMON TERN FLOCK", "Common tern"],
     ["osprey", "OSPREY", "Osprey"],
+    ["greater-yellowlegs", "GREATER YELLOWLEGS FLOCK", "Greater yellowlegs"],
+    ["belted-kingfisher", "BELTED KINGFISHER", "Belted kingfisher"],
+    [
+      "double-crested-cormorant",
+      "DOUBLE-CRESTED CORMORANT FLOCK",
+      "Double-crested cormorant",
+    ],
     [
       "north-american-river-otter",
       "NORTH AMERICAN RIVER OTTER",
@@ -432,7 +491,11 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
           ? 3
           : species === "common-tern"
             ? 5
-            : undefined,
+            : species === "greater-yellowlegs"
+              ? 4
+              : species === "double-crested-cormorant"
+                ? 3
+                : undefined,
     );
     const quick = projectWildlifeQuickInspect(actor, visible);
     const about = projectWildlifeAbout(actor, visible);
@@ -473,6 +536,14 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["great-blue-heron", "UNKNOWN LARGE WADER", "Unidentified large wading bird", 80],
     ["common-tern", "UNKNOWN SEABIRDS", "Unidentified seabirds", 80],
     ["osprey", "UNKNOWN LARGE RAPTOR", "Unidentified large raptor", 80],
+    ["greater-yellowlegs", "UNKNOWN WADERS", "Unidentified wading birds", 80],
+    ["belted-kingfisher", "UNKNOWN WATERSIDE BIRD", "Unidentified waterside bird", 80],
+    [
+      "double-crested-cormorant",
+      "UNKNOWN DARK WATERBIRDS",
+      "Unidentified dark waterbirds",
+      80,
+    ],
     [
       "north-american-river-otter",
       "UNKNOWN AQUATIC MAMMAL",
@@ -533,6 +604,21 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       "Large, long-winged raptor with a pale head and bent wings",
       "Osprey",
     ],
+    [
+      "greater-yellowlegs",
+      "Slender waders with long bright legs and slightly upturned bills",
+      "Greater yellowlegs",
+    ],
+    [
+      "belted-kingfisher",
+      "Stocky, crested waterside bird with a heavy pointed bill",
+      "Belted kingfisher",
+    ],
+    [
+      "double-crested-cormorant",
+      "Long-bodied dark waterbirds with hooked bills and low swimming posture",
+      "Double-crested cormorant",
+    ],
   ] as const)("shows only directly observable close-range %s facts", (
     species,
     form,
@@ -548,9 +634,13 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       { label: "Behavior", value: "Watching" },
       { label: "Form", value: form },
       { label: "Appearance", value: expect.any(String) },
-      ...(species === "common-tern"
+      ...(
+        species === "common-tern"
+        || species === "greater-yellowlegs"
+        || species === "double-crested-cormorant"
         ? []
-        : [{ label: "Life stage", value: expect.any(String) }]),
+        : [{ label: "Life stage", value: expect.any(String) }]
+      ),
     ];
     expect(selected?.about.observed).toEqual(expect.arrayContaining(expectedFacts));
     expect(selected?.about.identityLine).not.toContain(actor.identity.stableId);
@@ -717,6 +807,10 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     "atlantic-capelin",
     "bay-anchovy",
     "atlantic-ghost-crab",
+    "atlantic-menhaden",
+    "mummichog",
+    "grass-shrimp",
+    "blue-crab",
   ] as const)("never turns %s population activity into an ABOUT actor identity", (species) => {
     const deer = wildlife("deer");
     const fabricatedAggregate = {
@@ -732,6 +826,86 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     expect(projectWildlifeAbout(fabricatedAggregate, visible)).toBeNull();
     expect(projectWildlifeLivingActorInspection(fabricatedAggregate, visible)).toBeNull();
   });
+
+  it.each([
+    [
+      "atlantic-menhaden",
+      "surface-dimple",
+      "AQUATIC ACTIVITY",
+      "Unidentified aquatic activity",
+      "Aquatic surface dimples and brief glints",
+      "menhaden",
+    ],
+    [
+      "mummichog",
+      "surface-dimple",
+      "SHALLOW-WATER ACTIVITY",
+      "Unidentified shallow-water activity",
+      "Shallow-water dimples and brief glints",
+      "mummichog",
+    ],
+    [
+      "grass-shrimp",
+      "surface-dimple",
+      "FINE WATER ACTIVITY",
+      "Unidentified fine water activity",
+      "Fine shallow-water flickers and tiny dimples",
+      "shrimp",
+    ],
+    [
+      "blue-crab",
+      "burrow-opening",
+      "SHALLOW-WATER SIGNS",
+      "Unidentified shallow-water activity",
+      "Submerged burrow openings",
+      "crab",
+    ],
+  ] as const)(
+    "keeps directly perceived %s evidence anonymous until its identity is learned",
+    (species, evidenceKind, heading, identity, summary, hiddenName) => {
+      const { evidence, patch, population } = marshChannelEvidenceFixture(species);
+      expect(evidence.kind).toBe(evidenceKind);
+      const direct = evidenceObservation(evidence.position);
+      const quick = projectWildlifePopulationEvidenceQuickInspect(
+        patch,
+        evidence.evidenceId,
+        direct,
+      );
+      const about = projectWildlifePopulationEvidenceAbout(
+        patch,
+        evidence.evidenceId,
+        direct,
+      );
+
+      expect(quick).toMatchObject({
+        aggregateId: population.aggregateId,
+        evidenceId: evidence.evidenceId,
+        species,
+        heading,
+        summary,
+      });
+      expect(about).toMatchObject({
+        aggregateId: population.aggregateId,
+        evidenceId: evidence.evidenceId,
+        species,
+        heading,
+        identity,
+        knowledge: "Unfamiliar",
+        observed: [
+          { label: "Evidence", value: summary },
+          { label: "Scale", value: "Population-level signs" },
+        ],
+        known: [],
+      });
+      expect(about?.observed.map(({ label }) => label)).not.toContain("Species");
+      const encoded = JSON.stringify({ about, quick });
+      expect(encoded).not.toMatch(
+        /actorId|groupSize|populationSize|representedUnits|activitySignal|intensity/iu,
+      );
+      expect(`${quick?.heading} ${quick?.summary} ${about?.identity}`.toLocaleLowerCase())
+        .not.toContain(hiddenName);
+    },
+  );
 
   it("describes directly visible brown-rat evidence as population-level signs", () => {
     const { evidence, patch, population } = ratEvidenceFixture();

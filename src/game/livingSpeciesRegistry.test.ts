@@ -61,6 +61,13 @@ describe("lean runtime living-species registry", () => {
       "great-blue-heron",
       "common-tern",
       "osprey",
+      "atlantic-menhaden",
+      "mummichog",
+      "grass-shrimp",
+      "blue-crab",
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
     ]);
     expect(LIVING_SPECIES_REGISTRY).toEqual([
       {
@@ -639,6 +646,118 @@ describe("lean runtime living-species registry", () => {
           scentBaseRangeUnits: 4_000,
         },
       },
+      {
+        species: "atlantic-menhaden",
+        actorIdPrefix: "MENHADEN-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization: "school",
+        groupStableIdNamespace: "MENHADEN-SCHOOL",
+        aboutNoun: "Atlantic menhaden school",
+        senses: {
+          visionAcuity: 760_000,
+          hearingSensitivity: 720_000,
+          scentSensitivity: 650_000,
+          scentBaseRangeUnits: 10_000,
+        },
+      },
+      {
+        species: "mummichog",
+        actorIdPrefix: "MUMMICHOG-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization: "school",
+        groupStableIdNamespace: "MUMMICHOG-SCHOOL",
+        aboutNoun: "mummichog school",
+        senses: {
+          visionAcuity: 720_000,
+          hearingSensitivity: 740_000,
+          scentSensitivity: 700_000,
+          scentBaseRangeUnits: 8_000,
+        },
+      },
+      {
+        species: "grass-shrimp",
+        actorIdPrefix: "GRASSSHRIMP-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "grass shrimp activity",
+        senses: {
+          visionAcuity: 620_000,
+          hearingSensitivity: 760_000,
+          scentSensitivity: 720_000,
+          scentBaseRangeUnits: 6_000,
+        },
+      },
+      {
+        species: "blue-crab",
+        actorIdPrefix: "BLUECRAB-",
+        actorAddressable: false,
+        representation: "aggregate",
+        locomotionClass: "aquatic",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "blue crab activity",
+        senses: {
+          visionAcuity: 680_000,
+          hearingSensitivity: 760_000,
+          scentSensitivity: 800_000,
+          scentBaseRangeUnits: 10_000,
+        },
+      },
+      {
+        species: "greater-yellowlegs",
+        actorIdPrefix: "YELLOWLEGS-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "FLOCK",
+        aboutNoun: "greater yellowlegs",
+        senses: {
+          visionAcuity: ACTOR_PERCEPTION_SCALE,
+          hearingSensitivity: 740_000,
+          scentSensitivity: 100_000,
+          scentBaseRangeUnits: 6_000,
+        },
+      },
+      {
+        species: "belted-kingfisher",
+        actorIdPrefix: "KINGFISHER-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "aerial",
+        groupOrganization: null,
+        groupStableIdNamespace: null,
+        aboutNoun: "belted kingfisher",
+        senses: {
+          visionAcuity: ACTOR_PERCEPTION_SCALE,
+          hearingSensitivity: 800_000,
+          scentSensitivity: 100_000,
+          scentBaseRangeUnits: 5_000,
+        },
+      },
+      {
+        species: "double-crested-cormorant",
+        actorIdPrefix: "CORMORANT-",
+        actorAddressable: true,
+        representation: "individual",
+        locomotionClass: "amphibious",
+        groupOrganization: "flock",
+        groupStableIdNamespace: "FLOCK",
+        aboutNoun: "double-crested cormorant",
+        senses: {
+          visionAcuity: 950_000,
+          hearingSensitivity: 780_000,
+          scentSensitivity: 120_000,
+          scentBaseRangeUnits: 6_000,
+        },
+      },
     ]);
     expect(isLivingSpeciesActorAddressable("american-black-duck")).toBe(true);
     expect(livingSpeciesActorIdMatchesNamespace(
@@ -700,9 +819,21 @@ describe("lean runtime living-species registry", () => {
     for (const [species, actorId] of [
       ["bay-anchovy", "BAYANCHOVY-v1-wave-g-fixture"],
       ["atlantic-ghost-crab", "GHOSTCRAB-v1-wave-g-fixture"],
+      ["atlantic-menhaden", "MENHADEN-v1-wave-g-epoch-2-fixture"],
+      ["mummichog", "MUMMICHOG-v1-wave-g-epoch-2-fixture"],
+      ["grass-shrimp", "GRASSSHRIMP-v1-wave-g-epoch-2-fixture"],
+      ["blue-crab", "BLUECRAB-v1-wave-g-epoch-2-fixture"],
     ] as const) {
       expect(isLivingSpeciesActorAddressable(species)).toBe(false);
       expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(false);
+    }
+    for (const [species, actorId] of [
+      ["greater-yellowlegs", "YELLOWLEGS-v1-wave-g-epoch-2-fixture"],
+      ["belted-kingfisher", "KINGFISHER-v1-wave-g-epoch-2-fixture"],
+      ["double-crested-cormorant", "CORMORANT-v1-wave-g-epoch-2-fixture"],
+    ] as const) {
+      expect(isLivingSpeciesActorAddressable(species)).toBe(true);
+      expect(livingSpeciesActorIdMatchesNamespace(actorId, species)).toBe(true);
     }
   });
 

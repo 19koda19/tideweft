@@ -56,6 +56,8 @@ interface LivingSpeciesRegistryInput<Species extends string = string> {
     | "SILVERSIDE-SCHOOL"
     | "CAPELIN-SCHOOL"
     | "BAYANCHOVY-SCHOOL"
+    | "MENHADEN-SCHOOL"
+    | "MUMMICHOG-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -385,6 +387,69 @@ const CORE_WILDLIFE_REGISTRY_VALUES: Readonly<Record<
       hearingSensitivity: 760_000,
       scentSensitivity: 80_000,
       scentBaseRangeUnits: 4_000,
+    },
+  },
+  "atlantic-menhaden": {
+    aboutNoun: "Atlantic menhaden school",
+    senses: {
+      visionAcuity: 760_000,
+      hearingSensitivity: 720_000,
+      scentSensitivity: 650_000,
+      scentBaseRangeUnits: 10_000,
+    },
+  },
+  mummichog: {
+    aboutNoun: "mummichog school",
+    senses: {
+      visionAcuity: 720_000,
+      hearingSensitivity: 740_000,
+      scentSensitivity: 700_000,
+      scentBaseRangeUnits: 8_000,
+    },
+  },
+  "grass-shrimp": {
+    aboutNoun: "grass shrimp activity",
+    senses: {
+      visionAcuity: 620_000,
+      hearingSensitivity: 760_000,
+      scentSensitivity: 720_000,
+      scentBaseRangeUnits: 6_000,
+    },
+  },
+  "blue-crab": {
+    aboutNoun: "blue crab activity",
+    senses: {
+      visionAcuity: 680_000,
+      hearingSensitivity: 760_000,
+      scentSensitivity: 800_000,
+      scentBaseRangeUnits: 10_000,
+    },
+  },
+  "greater-yellowlegs": {
+    aboutNoun: "greater yellowlegs",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 740_000,
+      scentSensitivity: 100_000,
+      scentBaseRangeUnits: 6_000,
+    },
+  },
+  "belted-kingfisher": {
+    aboutNoun: "belted kingfisher",
+    senses: {
+      visionAcuity: ACTOR_PERCEPTION_SCALE,
+      hearingSensitivity: 800_000,
+      scentSensitivity: 100_000,
+      scentBaseRangeUnits: 5_000,
+    },
+  },
+  "double-crested-cormorant": {
+    aboutNoun: "double-crested cormorant",
+    senses: {
+      visionAcuity: 950_000,
+      hearingSensitivity: 780_000,
+      scentSensitivity: 120_000,
+      scentBaseRangeUnits: 6_000,
     },
   },
 });

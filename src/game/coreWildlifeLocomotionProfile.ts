@@ -468,6 +468,54 @@ const LOCOMOTION_PROFILES: Readonly<Partial<Record<
       retreat: 820_000,
     }),
   }),
+  "greater-yellowlegs": Object.freeze({
+    // Wading remains anchor-local; travel between authenticated marsh-channel
+    // anchors uses the same shared aerial route surface as established waders.
+    mode: "aerial",
+    aerialTravelCost: 245_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 750_000,
+    intentStepFactors: Object.freeze({
+      flee: 900_000,
+      retreat: 840_000,
+    }),
+  }),
+  "belted-kingfisher": Object.freeze({
+    // Surface opportunities are reached in flight; plunge-diving does not
+    // fabricate a persistent swimming route or ground-terrain impedance.
+    mode: "aerial",
+    aerialTravelCost: 205_000,
+    surfaceWaterTravelCost: null,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 840_000,
+    intentStepFactors: Object.freeze({
+      disengage: 880_000,
+      flee: 940_000,
+      retreat: 900_000,
+    }),
+  }),
+  "double-crested-cormorant": Object.freeze({
+    // Current bounded activity reaches observed water in flight. The aquatic
+    // capability also has an honest wet-cell cost so later shared swimming
+    // activity can opt in without a species-specific locomotion branch.
+    mode: "aerial",
+    aerialTravelCost: 225_000,
+    surfaceWaterTravelCost: 230_000,
+    baseTerrainMultiplier: LOCOMOTION_FACTOR_SCALE,
+    terrainMultipliers: Object.freeze({}),
+    dampCoverPreference: null,
+    baseStepFactor: 800_000,
+    intentStepFactors: Object.freeze({
+      disengage: 860_000,
+      flee: 920_000,
+      retreat: 880_000,
+    }),
+  }),
 });
 
 export const CORE_WILDLIFE_BASE_MOVE_STEP_UNITS = stepUnits(

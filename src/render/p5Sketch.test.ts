@@ -284,6 +284,9 @@ const wildlifeView = (
     "great-blue-heron": "Great blue heron",
     "common-tern": "Common terns",
     osprey: "Osprey",
+    "greater-yellowlegs": "Greater yellowlegs",
+    "belted-kingfisher": "Belted kingfisher",
+    "double-crested-cormorant": "Double-crested cormorants",
   };
   const prefix: Readonly<Record<IndividualWildlifeViewSpecies, string>> = {
     deer: "DEER-",
@@ -312,6 +315,9 @@ const wildlifeView = (
     "great-blue-heron": "BLUEHERON-",
     "common-tern": "COMMONTERN-",
     osprey: "OSPREY-",
+    "greater-yellowlegs": "YELLOWLEGS-",
+    "belted-kingfisher": "KINGFISHER-",
+    "double-crested-cormorant": "CORMORANT-",
   };
   return {
     actorId: `${prefix[species]}R-v1-chart-${species}`,
@@ -2034,6 +2040,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["great-blue-heron", "BLUEHERON-", "#667a82", "bezier"],
     ["common-tern", "COMMONTERN-", "#dce1de", "triangle"],
     ["osprey", "OSPREY-", "#5a493a", "quad"],
+    ["greater-yellowlegs", "YELLOWLEGS-", "#8d9898", "bezier"],
+    ["belted-kingfisher", "KINGFISHER-", "#567989", "triangle"],
+    ["double-crested-cormorant", "CORMORANT-", "#222d2c", "ellipse"],
   ] as const)(`${ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT} draws and touch-selects the color-independent %s form with reduced motion`, (
     species,
     prefix,

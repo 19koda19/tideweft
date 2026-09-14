@@ -25,6 +25,7 @@ import {
 } from "./coreEcologyActivityAffordance";
 import {
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
   coreEcologyBreadthCohortDefinition,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
@@ -43,6 +44,8 @@ import {
 
 export const ALPHA37_ESTUARY_BREADTH_ACTIVITY_AUTHORITY_OWNER_INTENT =
   "test:alpha37-estuary-breadth-activity-authority:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_ACTIVITY_AUTHORITY_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-activity-authority:v1" as const;
 
 const SEED = seedFromText("alpha32-activity-authority-table");
 const BREADTH_SEED = seedFromText("alpha37 estuary breadth shared properties");
@@ -183,6 +186,60 @@ describe("core ecology transient activity authority", () => {
         authority ?? undefined,
       )).toMatchObject({ actorId, species: fixture.species });
     }
+  });
+
+  it(`${ALPHA38_MARSH_CHANNEL_WEB_ACTIVITY_AUTHORITY_OWNER_INTENT} projects the addressable cohort through that same authority`, () => {
+    const fixtures = Object.freeze([
+      { species: "greater-yellowlegs", region: createRegionCoord(91_177, 199_624) },
+      { species: "belted-kingfisher", region: createRegionCoord(144_181, 147_353) },
+      { species: "double-crested-cormorant", region: createRegionCoord(173_753, 11_507) },
+    ] as const satisfies readonly Readonly<{
+      species: CoreEcologyActivityAffordanceSpecies;
+      region: RegionCoord;
+    }>[]);
+
+    const projections = fixtures.map((fixture) => {
+      const habitat = deriveCoreEcologyBreadthHabitat({
+        seed: BREADTH_SEED,
+        region: fixture.region,
+        cohortId: CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+      });
+      const patch = createCoreEcologyBreadthResidentPatch({
+        seed: BREADTH_SEED,
+        habitat,
+      });
+      const actorId = patch.populations.find(
+        ({ species }) => species === fixture.species,
+      )?.members[0]?.actor.identity.stableId;
+      if (actorId === undefined) {
+        throw new Error(`Marsh-channel activity fixture is absent for ${fixture.species}`);
+      }
+      const materialized = setCoreEcologyAggregatePatchMaterializedActors(patch, {
+        atTick: 0,
+        actorIds: [actorId],
+      });
+      const authority = projectCoreEcologyBreadthActivityAuthority({
+        rootSeed: BREADTH_SEED,
+        patch: materialized,
+        actorId,
+      });
+      expect(authority).toMatchObject({
+        actorId,
+        species: fixture.species,
+        sourceKey: materialized.patchKey,
+        provenance: "breadth-habitat",
+      });
+      expect(isTrustedCoreEcologyActivityAuthority(authority)).toBe(true);
+      const projection = projectCoreEcologyActivity(
+        materialized,
+        { actorId, atTick: 0 },
+        authority ?? undefined,
+      );
+      expect(projection).toMatchObject({ actorId, species: fixture.species });
+      return projection?.species;
+    });
+
+    expect(projections).toEqual(fixtures.map(({ species }) => species));
   });
 
   it("keeps the shared anchored-wader contract honest at every tide/day boundary", () => {

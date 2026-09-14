@@ -169,6 +169,48 @@ const ABOUT_BY_SPECIES: Readonly<
     unidentifiedHeading: "UNKNOWN LARGE RAPTOR",
     representation: "individual",
   },
+  "atlantic-menhaden": {
+    identifiedName: "Atlantic menhaden",
+    identifiedHeading: "ATLANTIC MENHADEN SCHOOL SIGNS",
+    unidentifiedHeading: "AQUATIC ACTIVITY",
+    representation: "population-area",
+  },
+  mummichog: {
+    identifiedName: "Mummichog",
+    identifiedHeading: "MUMMICHOG SCHOOL SIGNS",
+    unidentifiedHeading: "SHALLOW-WATER ACTIVITY",
+    representation: "population-area",
+  },
+  "grass-shrimp": {
+    identifiedName: "Grass shrimp",
+    identifiedHeading: "GRASS SHRIMP SIGNS",
+    unidentifiedHeading: "FINE WATER ACTIVITY",
+    representation: "population-area",
+  },
+  "blue-crab": {
+    identifiedName: "Blue crab",
+    identifiedHeading: "BLUE CRAB SIGNS",
+    unidentifiedHeading: "SHALLOW-WATER SIGNS",
+    representation: "population-area",
+  },
+  "greater-yellowlegs": {
+    identifiedName: "Greater yellowlegs",
+    identifiedHeading: "GREATER YELLOWLEGS FLOCK",
+    unidentifiedHeading: "UNKNOWN WADERS",
+    representation: "visible-flock",
+  },
+  "belted-kingfisher": {
+    identifiedName: "Belted kingfisher",
+    identifiedHeading: "BELTED KINGFISHER",
+    unidentifiedHeading: "UNKNOWN WATERSIDE BIRD",
+    representation: "individual",
+  },
+  "double-crested-cormorant": {
+    identifiedName: "Double-crested cormorant",
+    identifiedHeading: "DOUBLE-CRESTED CORMORANT FLOCK",
+    unidentifiedHeading: "UNKNOWN DARK WATERBIRDS",
+    representation: "visible-flock",
+  },
   "fish-crow": {
     identifiedName: "Fish crow",
     identifiedHeading: "FISH CROW FLOCK",

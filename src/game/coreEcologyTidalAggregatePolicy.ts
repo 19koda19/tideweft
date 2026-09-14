@@ -8,6 +8,8 @@ export const CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS = 4 as const;
 const SCHOOL_DEPTH_REFERENCE = 140_000;
 const CAPELIN_SCHOOL_DEPTH_REFERENCE = 180_000;
 const CRAB_INUNDATION_REFERENCE = 120_000;
+const MARSH_CHANNEL_MINIMUM_WATER_DEPTH = 1;
+const BLUE_CRAB_MINIMUM_WATER_DEPTH = 20_000;
 
 /** Exact tidal-aggregate roster through the Alpha-36 polar-forage slice. */
 export const CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES = Object.freeze([
@@ -16,11 +18,20 @@ export const CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES = Object.freeze([
   "atlantic-capelin",
 ] as const);
 
-/** Append-only current roster; new species consume shared policy records. */
-export const CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES = Object.freeze([
+/** Immutable tidal-aggregate registry through the first Wave-G estuary cluster. */
+export const CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES = Object.freeze([
   ...CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES,
   "bay-anchovy",
   "atlantic-ghost-crab",
+] as const);
+
+/** Append-only current roster; new species consume shared policy records. */
+export const CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES = Object.freeze([
+  ...CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES,
+  "atlantic-menhaden",
+  "mummichog",
+  "grass-shrimp",
+  "blue-crab",
 ] as const);
 
 export type CoreEcologyTidalAggregateSpecies =
@@ -190,6 +201,85 @@ const ATLANTIC_GHOST_CRAB_POLICY: CoreEcologyTidalAggregatePolicy = Object.freez
   redistribution: FIDDLER_CRAB_POLICY.redistribution,
 });
 
+const SHALLOW_SUBMERGED_ACTIVITY_PROJECTION = Object.freeze({
+  kind: "submerged-schooling" as const,
+  depthReference: SCHOOL_DEPTH_REFERENCE,
+  baseSupport: 180_000,
+  depthSupportWeight: 560_000,
+  risingSupport: 920_000,
+  fallingSupport: 680_000,
+  directionalSupportWeight: 260_000,
+});
+
+const EBB_BENTHIC_ACTIVITY_PROJECTION = Object.freeze({
+  kind: "submerged-schooling" as const,
+  depthReference: SCHOOL_DEPTH_REFERENCE,
+  baseSupport: 180_000,
+  depthSupportWeight: 520_000,
+  risingSupport: 640_000,
+  fallingSupport: 940_000,
+  directionalSupportWeight: 300_000,
+});
+
+function marshChannelRedistribution(
+  cadenceTicks: number,
+): CoreEcologyTidalRedistributionPolicy {
+  return Object.freeze({
+    cadenceTicks,
+    populationUnitsPerCadence: 1,
+    durableOperationClock: true,
+    evacuateUnusableAnchors: true,
+    evacuationDestination: "deepest-usable",
+    smallWorldDestinations: "activity-usable",
+    risingDestination: "shallowest-usable",
+    fallingDestination: "deepest-usable",
+    evacuationPressure: FIXED_POINT,
+    relocationPressureBase: 150_000,
+    relocationPressurePerDepthUnit: 4,
+  });
+}
+
+/** Menhaden consume the established depth-safe school law unchanged. */
+const ATLANTIC_MENHADEN_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
+  species: "atlantic-menhaden",
+  activityDepthWindow: SILVERSIDE_POLICY.activityDepthWindow,
+  activityProjection: SILVERSIDE_POLICY.activityProjection,
+  redistribution: SILVERSIDE_POLICY.redistribution,
+});
+
+/** Mummichog remain valid in the cohort's authenticated shallow-water refuge. */
+const MUMMICHOG_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
+  species: "mummichog",
+  activityDepthWindow: Object.freeze({
+    minimumInclusive: MARSH_CHANNEL_MINIMUM_WATER_DEPTH,
+    maximumExclusive: null,
+  }),
+  activityProjection: SHALLOW_SUBMERGED_ACTIVITY_PROJECTION,
+  redistribution: marshChannelRedistribution(4),
+});
+
+/** Shrimp use the same submerged projection with their slower shared cadence. */
+const GRASS_SHRIMP_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
+  species: "grass-shrimp",
+  activityDepthWindow: Object.freeze({
+    minimumInclusive: MARSH_CHANNEL_MINIMUM_WATER_DEPTH,
+    maximumExclusive: null,
+  }),
+  activityProjection: SHALLOW_SUBMERGED_ACTIVITY_PROJECTION,
+  redistribution: marshChannelRedistribution(6),
+});
+
+/** Blue-crab benthic activity favors ebb while retaining a submerged refuge. */
+const BLUE_CRAB_POLICY: CoreEcologyTidalAggregatePolicy = Object.freeze({
+  species: "blue-crab",
+  activityDepthWindow: Object.freeze({
+    minimumInclusive: BLUE_CRAB_MINIMUM_WATER_DEPTH,
+    maximumExclusive: null,
+  }),
+  activityProjection: EBB_BENTHIC_ACTIVITY_PROJECTION,
+  redistribution: marshChannelRedistribution(8),
+});
+
 /**
  * Ordered adapter registry for aggregates governed by live tide. Appending a
  * species policy extends the shared table without adding a new species branch
@@ -202,6 +292,10 @@ readonly CoreEcologyTidalAggregatePolicy[] = Object.freeze([
   ATLANTIC_CAPELIN_POLICY,
   BAY_ANCHOVY_POLICY,
   ATLANTIC_GHOST_CRAB_POLICY,
+  ATLANTIC_MENHADEN_POLICY,
+  MUMMICHOG_POLICY,
+  GRASS_SHRIMP_POLICY,
+  BLUE_CRAB_POLICY,
 ]);
 
 if (

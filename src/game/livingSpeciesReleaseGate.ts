@@ -46,6 +46,24 @@ export const WAVE_G_ESTUARY_BREADTH_SPECIES = Object.freeze([
 export type WaveGEstuaryBreadthSpecies =
   (typeof WAVE_G_ESTUARY_BREADTH_SPECIES)[number];
 
+/** Second shared Wave-G breadth cohort; one release contract covers the web. */
+export const WAVE_G_MARSH_CHANNEL_WEB_SPECIES = Object.freeze([
+  "atlantic-menhaden",
+  "mummichog",
+  "grass-shrimp",
+  "blue-crab",
+  "greater-yellowlegs",
+  "belted-kingfisher",
+  "double-crested-cormorant",
+] as const satisfies readonly LivingActorSpecies[]);
+
+export type WaveGMarshChannelWebSpecies =
+  (typeof WAVE_G_MARSH_CHANNEL_WEB_SPECIES)[number];
+
+type WaveGBreadthSpecies =
+  | WaveGEstuaryBreadthSpecies
+  | WaveGMarshChannelWebSpecies;
+
 /** Complete species release gate. Order is stable and auditable. */
 export const LIVING_SPECIES_RELEASE_CRITERIA = [
   "species-profile",
@@ -3029,12 +3047,43 @@ function polarConsumerSharedEvidence(
  * Sound, capture, consumption, mortality, reproduction, and deployment remain
  * deliberately outside this slice.
  */
-function estuaryBreadthSharedEvidence(
-  species: WaveGEstuaryBreadthSpecies,
+function waveGBreadthSharedEvidence(
+  species: WaveGBreadthSpecies,
 ): readonly ClaimTuple[] {
-  const aggregate = species === "bay-anchovy" || species === "atlantic-ghost-crab";
-  const flock = species === "common-tern";
-  const emergenceParticipant = species === "bay-anchovy" || species === "common-tern";
+  const module = livingSpeciesModule(species);
+  if (module === null) throw new Error(`Wave-G evidence lost species ${species}`);
+  const marshChannel = (WAVE_G_MARSH_CHANNEL_WEB_SPECIES as readonly string[])
+    .includes(species);
+  const aggregate = module.identity.form === "aggregate";
+  const flock = module.social.group.organizationKinds.includes("flock");
+  const emergenceParticipant = species === "bay-anchovy"
+    || species === "common-tern"
+    || species === "atlantic-menhaden"
+    || species === "double-crested-cormorant";
+  const habitatTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-habitat-shared-invariants:v1"
+    : "test:alpha37-estuary-breadth-habitat-shared-invariants:v1";
+  const residentTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-resident-shared-invariants:v1"
+    : "test:alpha37-estuary-breadth-resident-shared-invariants:v1";
+  const presentationTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-presentation-invariants:v1"
+    : "test:alpha37-estuary-breadth-presentation-invariants:v1";
+  const activityTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-activity-authority:v1"
+    : "test:alpha37-estuary-breadth-activity-authority:v1";
+  const emergenceTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-emergence:v1"
+    : "test:alpha37-estuary-breadth-emergence:v1";
+  const rootTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-root-shared-invariants:v1"
+    : "test:alpha37-estuary-breadth-root-shared-invariants:v1";
+  const compositeTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-composite-shared-invariants:v1"
+    : "test:alpha37-estuary-breadth-composite-shared-invariants:v1";
+  const runtimeTestOwner = marshChannel
+    ? "test:alpha38-marsh-channel-web-runtime-v30:v1"
+    : "test:alpha37-estuary-breadth-runtime-v30:v1";
   const owners = (...values: string[]): readonly string[] => (
     [...new Set(values)].sort(compareText)
   );
@@ -3047,8 +3096,8 @@ function estuaryBreadthSharedEvidence(
     "game:core-ecology-breadth-habitat:v1",
     "game:regional-breadth-cohort:v1",
     "game:regional-breadth-ecology:v1",
-    "test:alpha37-estuary-breadth-habitat-shared-invariants:v1",
-    "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+    habitatTestOwner,
+    residentTestOwner,
   );
   const perceptionOwners = aggregate
     ? owners(
@@ -3093,7 +3142,7 @@ function estuaryBreadthSharedEvidence(
         "game:core-ecology-species-runtime-policy:v1",
         "game:regional-breadth-cohort:v1",
         "game:runtime-core-ecology:v1",
-        "test:alpha37-estuary-breadth-activity-authority:v1",
+        activityTestOwner,
       );
   const sameSpeciesOwners = aggregate
     ? owners(
@@ -3101,13 +3150,13 @@ function estuaryBreadthSharedEvidence(
         "game:core-ecology-species-runtime-policy:v1",
         "game:core-ecology-tidal-table:v1",
         "game:regional-breadth-cohort:v1",
-        "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+        residentTestOwner,
       )
     : flock
       ? owners(
           "game:core-ecology-groups:v1",
           "game:regional-breadth-cohort:v1",
-          "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+          residentTestOwner,
         )
       : behaviorOwners;
   const presentationOwners = owners(
@@ -3115,16 +3164,16 @@ function estuaryBreadthSharedEvidence(
     "game:wildlife-presentation:v1",
     "render:wildlife-visual-profile:v1",
     "sim:actor-perception:v2",
-    "test:alpha37-estuary-breadth-presentation-invariants:v1",
+    presentationTestOwner,
   );
   const persistenceOwners = owners(
     "game:regional-breadth-ecology:v1",
     "game:regional-ecology-state:v6",
     "game:runtime-core-ecology:v1",
     "game:runtime-save:v30",
-    "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
-    "test:alpha37-estuary-breadth-root-shared-invariants:v1",
-    "test:alpha37-estuary-breadth-runtime-v30:v1",
+    compositeTestOwner,
+    rootTestOwner,
+    runtimeTestOwner,
   );
   const emergenceOwners = owners(
     ...(aggregate
@@ -3140,8 +3189,8 @@ function estuaryBreadthSharedEvidence(
         ]),
     "game:core-ecology-trophic:v1",
     "game:regional-breadth-cohort:v1",
-    "test:alpha37-estuary-breadth-emergence:v1",
-    "test:alpha37-estuary-breadth-resident-shared-invariants:v1",
+    emergenceTestOwner,
+    residentTestOwner,
   );
   const emergenceFoundationOwners = owners(
     ...contracts,
@@ -3176,7 +3225,7 @@ function estuaryBreadthSharedEvidence(
           "game:core-ecology-evidence-runtime:v1",
           "game:regional-breadth-cohort:v1",
           "game:wildlife-presentation:v1",
-          "test:alpha37-estuary-breadth-presentation-invariants:v1",
+          presentationTestOwner,
         )
       : []],
     ["about-disclosure", A, presentationOwners],
@@ -3188,15 +3237,15 @@ function estuaryBreadthSharedEvidence(
       "game:core-ecology-breadth-habitat:v1",
       "game:regional-breadth-ecology:v1",
       "game:regional-ecology-state:v6",
-      "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
-      "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+      compositeTestOwner,
+      rootTestOwner,
     )],
     ["performance-budget", F, owners(
       "game:core-ecology-breadth-habitat:v1",
       "game:regional-breadth-ecology:v1",
       "game:regional-ecology-state:v6",
-      "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
-      "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+      compositeTestOwner,
+      rootTestOwner,
     )],
     ["accessibility", A, presentationOwners],
     ["mobile-parity", A, presentationOwners],
@@ -3210,15 +3259,19 @@ function estuaryBreadthSharedEvidence(
       "game:regional-breadth-ecology:v1",
       "game:regional-ecology-state:v6",
       "sim:core-wildlife-identity:v1",
-      "test:alpha37-estuary-breadth-composite-shared-invariants:v1",
-      "test:alpha37-estuary-breadth-root-shared-invariants:v1",
+      compositeTestOwner,
+      rootTestOwner,
     )],
     ["clone-diversity", A, owners(
       "sim:core-wildlife-identity:v1",
-      "test:alpha37-estuary-breadth-habitat-shared-invariants:v1",
+      habitatTestOwner,
     )],
-    ["tutorial-truth", A, ["ui:tutorial-guide:v47"]],
-    ["patch-note-truth", A, ["content:patch-notes-alpha37:v1"]],
+    ["tutorial-truth", A, [marshChannel
+      ? "ui:tutorial-guide:v48"
+      : "ui:tutorial-guide:v47"]],
+    ["patch-note-truth", A, [marshChannel
+      ? "content:patch-notes-alpha38:v1"
+      : "content:patch-notes-alpha37:v1"]],
     ["exact-tested-deployment", U, []],
   ];
 }
@@ -3321,11 +3374,20 @@ const CURRENT_EVIDENCE: Readonly<Record<LivingActorSpecies, readonly ClaimTuple[
   "arctic-fox": coldShoreFoxSharedEvidence(),
   "harbor-seal": polarConsumerSharedEvidence("harbor-seal"),
   "polar-bear": polarConsumerSharedEvidence("polar-bear"),
-  "bay-anchovy": estuaryBreadthSharedEvidence("bay-anchovy"),
-  "atlantic-ghost-crab": estuaryBreadthSharedEvidence("atlantic-ghost-crab"),
-  "great-blue-heron": estuaryBreadthSharedEvidence("great-blue-heron"),
-  "common-tern": estuaryBreadthSharedEvidence("common-tern"),
-  osprey: estuaryBreadthSharedEvidence("osprey"),
+  "bay-anchovy": waveGBreadthSharedEvidence("bay-anchovy"),
+  "atlantic-ghost-crab": waveGBreadthSharedEvidence("atlantic-ghost-crab"),
+  "great-blue-heron": waveGBreadthSharedEvidence("great-blue-heron"),
+  "common-tern": waveGBreadthSharedEvidence("common-tern"),
+  osprey: waveGBreadthSharedEvidence("osprey"),
+  "atlantic-menhaden": waveGBreadthSharedEvidence("atlantic-menhaden"),
+  mummichog: waveGBreadthSharedEvidence("mummichog"),
+  "grass-shrimp": waveGBreadthSharedEvidence("grass-shrimp"),
+  "blue-crab": waveGBreadthSharedEvidence("blue-crab"),
+  "greater-yellowlegs": waveGBreadthSharedEvidence("greater-yellowlegs"),
+  "belted-kingfisher": waveGBreadthSharedEvidence("belted-kingfisher"),
+  "double-crested-cormorant": waveGBreadthSharedEvidence(
+    "double-crested-cormorant",
+  ),
 };
 
 if (LIVING_SPECIES_RELEASE_CRITERIA.length !== 30) {

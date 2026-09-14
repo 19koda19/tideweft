@@ -10,6 +10,7 @@ import {
   createCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregatePatchMaterializedActors,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
@@ -28,7 +29,12 @@ import {
   validateCoreEcologyActivityPolicies,
   type CoreEcologyActivityProjection,
 } from "./coreEcologyActivity";
+import { projectCoreEcologyBreadthActivityAuthority } from "./coreEcologyActivityAuthority";
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
+import {
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  deriveCoreEcologyBreadthHabitat,
+} from "./coreEcologyBreadthHabitat";
 import {
   CORE_ECOLOGY_AMERICAN_BLACK_DUCK_MINIMUM_DABBLING_DEPTH,
   deriveCoreEcologyRainChorusHabitatAssemblage,
@@ -44,10 +50,12 @@ import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES } from "./coreEcologySpeciesRuntimePolicy";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  replaceCoreWildlifeActorPhysiology,
   repositionCoreWildlifeActor,
   stepCoreWildlifeActor,
 } from "./coreWildlifeActor";
 import { createLivingActorTraversabilitySurface } from "./livingActorLocomotion";
+import { createCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -56,6 +64,8 @@ import {
 } from "./worldPosition";
 
 const SEED = seedFromText("rain chorus bounded diurnal activity owner");
+const BREADTH_ACTIVITY_SEED = seedFromText("alpha37 estuary breadth shared properties");
+const DIVING_WATERBIRD_REGION = createRegionCoord(173_753, 11_507);
 const ORIGIN = createRegionCoord(0, 0);
 
 describe("core ecology bounded activity", () => {
@@ -91,6 +101,9 @@ describe("core ecology bounded activity", () => {
         "great-blue-heron",
         "common-tern",
         "osprey",
+        "greater-yellowlegs",
+        "belted-kingfisher",
+        "double-crested-cormorant",
       ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
@@ -320,6 +333,159 @@ describe("core ecology bounded activity", () => {
       atTick: 1_200,
       maximumStepUnits: 700,
     })).toMatchObject({ resolution: "moved" });
+  });
+
+  it("reuses one bounded diving-waterbird activity without inventing prey or water custody", () => {
+    const daylight = divingWaterbirdActivityFixture(360);
+    expect(projectCoreEcologyActivity(daylight.patch, {
+      actorId: daylight.actor.identity.stableId,
+      atTick: 360,
+    }, daylight.authority)).toMatchObject({
+      state: "active-watch",
+      sourceObservationId: null,
+      preferredNeutralIntent: "observe",
+      presentationSignal: null,
+      motion: { kind: "defer-to-intent" },
+    });
+
+    const observedArea = translateWorldPosition(
+      daylight.actor.address.position,
+      4 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    const opportunity = createActorObservation({
+      id: "diving-waterbird-surface-opportunity:361",
+      observerId: daylight.actor.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: { center: observedArea, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (opportunity === null) {
+      throw new Error("Diving-waterbird surface observation fixture failed");
+    }
+    const observed = stepCoreWildlifeActor(daylight.actor, {
+      tick: 361,
+      observations: [opportunity],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (observed === null) throw new Error("Diving-waterbird cognition failed");
+    const observedPatch = replaceCoreEcologyAggregatePatchActor(
+      daylight.patch,
+      observed.actor,
+    );
+    const seeking = projectCoreEcologyActivity(observedPatch, {
+      actorId: observed.actor.identity.stableId,
+      atTick: 361,
+    }, daylight.authority);
+    expect(seeking).toMatchObject({
+      state: "seeking-surface-opportunity",
+      sourceObservationId: opportunity.id,
+      presentationSignal: "surface-opportunity-flight",
+      motion: {
+        kind: "target-area",
+        verb: "seek-surface-opportunity",
+      },
+    });
+    expect(seeking === null ? null : coreEcologyActivityTravelMedium(seeking.motion))
+      .toBe("air");
+
+    const atOpportunity = repositionCoreWildlifeActor(observed.actor, {
+      atTick: 361,
+      position: observedArea,
+      heading: observed.actor.address.heading,
+    });
+    const atOpportunityPatch = replaceCoreEcologyAggregatePatchActor(
+      observedPatch,
+      atOpportunity,
+    );
+    expect(projectCoreEcologyActivity(atOpportunityPatch, {
+      actorId: atOpportunity.identity.stableId,
+      atTick: 361,
+    }, daylight.authority)).toMatchObject({
+      state: "surface-diving",
+      sourceObservationId: opportunity.id,
+      presentationSignal: "surface-diving",
+      motion: { kind: "hold-position" },
+    });
+
+    const threat = createActorObservation({
+      id: "diving-waterbird-threat:361",
+      observerId: daylight.actor.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "predator",
+      subjectId: "FOX-diving-waterbird-threat",
+      area: { center: daylight.actor.address.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "identified",
+      interrupt: "strong",
+    });
+    if (threat === null) throw new Error("Diving-waterbird threat fixture failed");
+    const alarmed = stepCoreWildlifeActor(daylight.actor, {
+      tick: 361,
+      observations: [threat],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (alarmed === null) throw new Error("Diving-waterbird threat cognition failed");
+    const alarmPatch = replaceCoreEcologyAggregatePatchActor(daylight.patch, alarmed.actor);
+    expect(projectCoreEcologyActivity(alarmPatch, {
+      actorId: alarmed.actor.identity.stableId,
+      atTick: 361,
+    }, daylight.authority)).toMatchObject({
+      state: "responding",
+      responsiveToImmediateIntent: true,
+      motion: { kind: "defer-to-intent" },
+    });
+
+    const rest = divingWaterbirdActivityFixture(1_200);
+    expect(projectCoreEcologyActivity(rest.patch, {
+      actorId: rest.actor.identity.stableId,
+      atTick: 1_200,
+    }, rest.authority)).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      presentationSignal: "resting",
+      motion: { kind: "hold-position" },
+    });
+    const displacedActor = repositionCoreWildlifeActor(rest.actor, {
+      atTick: 1_200,
+      position: translateWorldPosition(
+        rest.actor.address.position,
+        4 * WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ),
+      heading: rest.actor.address.heading,
+    });
+    const displacedPatch = replaceCoreEcologyAggregatePatchActor(
+      rest.patch,
+      displacedActor,
+    );
+    const returning = projectCoreEcologyActivity(displacedPatch, {
+      actorId: displacedActor.identity.stableId,
+      atTick: 1_200,
+    }, rest.authority);
+    expect(returning).toMatchObject({
+      state: "seeking-habitat-anchor",
+      preferredNeutralIntent: "observe",
+      presentationSignal: "tidal-relocation-flight",
+      motion: {
+        kind: "target-area",
+        verb: "seek-habitat-anchor",
+      },
+    });
+    expect(returning === null ? null : coreEcologyActivityTravelMedium(returning.motion))
+      .toBe("air");
   });
 
   it("maps every executable target verb onto one reusable destination contract", () => {
@@ -1172,6 +1338,53 @@ function tidalWebActivityPatch(tick: number): CoreEcologyAggregatePatchState {
   });
   memberFor(patch, "north-american-river-otter");
   return patch;
+}
+
+function divingWaterbirdActivityFixture(tick: number) {
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed: BREADTH_ACTIVITY_SEED,
+    region: DIVING_WATERBIRD_REGION,
+    cohortId: CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  });
+  const coarse = createCoreEcologyBreadthResidentPatch({
+    seed: BREADTH_ACTIVITY_SEED,
+    habitat,
+    tick,
+  });
+  const actorId = coarse.populations.find(
+    ({ species }) => species === "double-crested-cormorant",
+  )?.members[0]?.actor.identity.stableId;
+  if (actorId === undefined) {
+    throw new Error("Diving-waterbird activity fixture is absent");
+  }
+  const patch = setCoreEcologyAggregatePatchMaterializedActors(coarse, {
+    atTick: tick,
+    actorIds: [actorId],
+  });
+  const authority = projectCoreEcologyBreadthActivityAuthority({
+    rootSeed: BREADTH_ACTIVITY_SEED,
+    patch,
+    actorId,
+  });
+  if (authority === null) {
+    throw new Error("Diving-waterbird activity authority is absent");
+  }
+  const generatedActor = memberFor(patch, "double-crested-cormorant").actor;
+  const restedActor = replaceCoreWildlifeActorPhysiology(generatedActor, {
+    atTick: tick,
+    needs: { ...generatedActor.needs, rest: 0 },
+    condition: generatedActor.condition,
+  });
+  const actor = repositionCoreWildlifeActor(restedActor, {
+    atTick: tick,
+    position: authority.homeAnchor,
+    heading: restedActor.address.heading,
+  });
+  return Object.freeze({
+    patch: replaceCoreEcologyAggregatePatchActor(patch, actor),
+    actor,
+    authority,
+  });
 }
 
 function neutralActivitySteps(

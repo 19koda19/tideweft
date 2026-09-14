@@ -3,6 +3,8 @@ import {
   CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES,
   CORE_ECOLOGY_SILVERSIDE_REDISTRIBUTION_CADENCE_TICKS,
   CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES,
+  CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES,
+  CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES,
   coreEcologyTidalAggregatePolicy,
   coreEcologyTidalAggregateUsesDurableRedistributionClock,
   coreEcologyTidalAnchorActivityUsable,
@@ -25,8 +27,17 @@ describe("core ecology tidal aggregate policy", () => {
     ]);
     expect(species.slice(0, CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES.length))
       .toEqual(CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES);
-    expect(species.slice(CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES.length))
+    expect(CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES.slice(
+      CORE_ECOLOGY_ALPHA36_TIDAL_AGGREGATE_SPECIES.length,
+    ))
       .toEqual(["bay-anchovy", "atlantic-ghost-crab"]);
+    expect(species.slice(
+      0,
+      CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES.length,
+    )).toEqual(CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES);
+    expect(species.slice(CORE_ECOLOGY_WAVE_G_ESTUARY_TIDAL_AGGREGATE_SPECIES.length))
+      .toEqual(["atlantic-menhaden", "mummichog", "grass-shrimp", "blue-crab"]);
+    expect(species).toEqual(CORE_ECOLOGY_TIDAL_AGGREGATE_SPECIES);
     expect(new Set(species).size).toBe(species.length);
     expect(Object.isFrozen(CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES)).toBe(true);
     expect(CORE_ECOLOGY_TIDAL_AGGREGATE_POLICIES.every(Object.isFrozen)).toBe(true);
@@ -53,6 +64,58 @@ describe("core ecology tidal aggregate policy", () => {
     expect(coreEcologyTidalAnchorActivityUsable("brown-rat", 40_000)).toBe(false);
     expect(coreEcologyTidalAnchorActivityUsable("bay-anchovy", -1)).toBe(false);
     expect(coreEcologyTidalAnchorActivityUsable("atlantic-ghost-crab", 1.5)).toBe(false);
+  });
+
+  it("adapts the marsh-channel aggregates to shared depth and cadence laws", () => {
+    const contracts = {
+      "atlantic-menhaden": { minimumDepth: 20_000, cadence: 4, direction: "flood" },
+      mummichog: { minimumDepth: 1, cadence: 4, direction: "flood" },
+      "grass-shrimp": { minimumDepth: 1, cadence: 6, direction: "flood" },
+      "blue-crab": { minimumDepth: 20_000, cadence: 8, direction: "ebb" },
+    } as const;
+    for (const [species, contract] of Object.entries(contracts) as [
+      keyof typeof contracts,
+      (typeof contracts)[keyof typeof contracts],
+    ][]) {
+      expect(coreEcologyTidalAggregatePolicy(species)).toMatchObject({
+        species,
+        activityDepthWindow: {
+          minimumInclusive: contract.minimumDepth,
+          maximumExclusive: null,
+        },
+        redistribution: {
+          cadenceTicks: contract.cadence,
+          durableOperationClock: true,
+          evacuateUnusableAnchors: true,
+        },
+      });
+      expect(coreEcologyTidalAnchorActivityUsable(species, contract.minimumDepth - 1))
+        .toBe(false);
+      expect(coreEcologyTidalAnchorActivityUsable(species, contract.minimumDepth))
+        .toBe(true);
+      expect(coreEcologyTidalRedistributionIsDue(species, contract.cadence, null))
+        .toBe(true);
+      expect(coreEcologyTidalRedistributionIsDue(species, contract.cadence - 1, null))
+        .toBe(false);
+      const rising = resolveCoreEcologyTidalAggregateActivity(
+        species,
+        800_000,
+        70_000,
+        1,
+        true,
+      );
+      const falling = resolveCoreEcologyTidalAggregateActivity(
+        species,
+        800_000,
+        70_000,
+        -1,
+        true,
+      );
+      expect(rising).not.toBeNull();
+      expect(falling).not.toBeNull();
+      expect(contract.direction === "flood" ? rising! > falling! : falling! > rising!)
+        .toBe(true);
+    }
   });
 
   it("retains the published silverside cadence and durable operation clock", () => {

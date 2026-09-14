@@ -27,6 +27,10 @@ import {
   CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES,
   CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT,
   CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH,
+  CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_PROFILES_HASH,
+  CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES,
+  CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT,
+  CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH,
   CORE_WILDLIFE_PROFILES,
   CORE_WILDLIFE_SPECIES,
   assertCoreWildlifeIdentity,
@@ -110,6 +114,13 @@ describe("core wildlife identity", () => {
         "great-blue-heron",
         "common-tern",
         "osprey",
+        "atlantic-menhaden",
+        "mummichog",
+        "grass-shrimp",
+        "blue-crab",
+        "greater-yellowlegs",
+        "belted-kingfisher",
+        "double-crested-cormorant",
       ]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA32_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA32_SPECIES_HASH);
@@ -138,6 +149,13 @@ describe("core wildlife identity", () => {
         "great-blue-heron",
         "common-tern",
         "osprey",
+        "atlantic-menhaden",
+        "mummichog",
+        "grass-shrimp",
+        "blue-crab",
+        "greater-yellowlegs",
+        "belted-kingfisher",
+        "double-crested-cormorant",
       ]);
     expect(hashCanonical(CORE_WILDLIFE_ALPHA34_SPECIES))
       .toBe(CORE_WILDLIFE_ALPHA34_SPECIES_HASH);
@@ -181,11 +199,35 @@ describe("core wildlife identity", () => {
     expect(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES).toHaveLength(
       CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT,
     );
-    expect(CORE_WILDLIFE_SPECIES).toEqual(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES);
+    expect(CORE_WILDLIFE_SPECIES.slice(
+      0,
+      CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_COUNT,
+    )).toEqual(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES);
     expect(hashCanonical(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES))
       .toBe(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES_HASH);
     expect(hashCanonical(CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES.map(getCoreWildlifeProfile)))
       .toBe(CORE_WILDLIFE_WAVE_G_ESTUARY_PROFILES_HASH);
+    expect(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES).toEqual([
+      ...CORE_WILDLIFE_WAVE_G_ESTUARY_SPECIES,
+      "atlantic-menhaden",
+      "mummichog",
+      "grass-shrimp",
+      "blue-crab",
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
+    ]);
+    expect(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES).toHaveLength(
+      CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_COUNT,
+    );
+    expect(CORE_WILDLIFE_SPECIES).toEqual(
+      CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES,
+    );
+    expect(hashCanonical(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES))
+      .toBe(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES_HASH);
+    expect(hashCanonical(
+      CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_SPECIES.map(getCoreWildlifeProfile),
+    )).toBe(CORE_WILDLIFE_WAVE_G_MARSH_CHANNEL_PROFILES_HASH);
     expect(CORE_WILDLIFE_PROFILES.map(({ species }) => species)).toEqual(CORE_WILDLIFE_SPECIES);
     expect(() => assertCoreWildlifeProfiles()).not.toThrow();
     expect(getCoreWildlifeProfile("deer").roles).toEqual([
@@ -669,6 +711,43 @@ describe("core wildlife identity", () => {
         maximumPatchPopulation: contract.maximumPatchPopulation,
         behavior: { maximumPursuitTicks: contract.pursuitTicks },
         morphs: contract.morphs,
+      });
+    }
+
+    const marshChannelWeb = {
+      "atlantic-menhaden": ["aggregate", "fish", "omnivore", "aquatic", "school", "MENHADEN-SCHOOL", 48],
+      mummichog: ["aggregate", "fish", "omnivore", "aquatic", "school", "MUMMICHOG-SCHOOL", 32],
+      "grass-shrimp": ["aggregate", "invertebrate", "detritivore", "aquatic", null, null, 32],
+      "blue-crab": ["aggregate", "invertebrate", "omnivore", "aquatic", null, null, 16],
+      "greater-yellowlegs": ["individual", "bird", "carnivore", "amphibious", "flock", "FLOCK", 4],
+      "belted-kingfisher": ["individual", "bird", "carnivore", "aerial", null, null, 1],
+      "double-crested-cormorant": ["individual", "bird", "carnivore", "amphibious", "flock", "FLOCK", 3],
+    } as const satisfies Partial<Record<CoreWildlifeSpecies, readonly unknown[]>>;
+    for (const [species, contract] of Object.entries(marshChannelWeb) as [
+      keyof typeof marshChannelWeb,
+      (typeof marshChannelWeb)[keyof typeof marshChannelWeb],
+    ][]) {
+      const [
+        representation,
+        taxonomicClass,
+        dietClass,
+        locomotionClass,
+        groupOrganization,
+        groupStableIdNamespace,
+        maximumPatchPopulation,
+      ] = contract;
+      expect(getCoreWildlifeSpeciesMetadata(species)).toMatchObject({
+        actorRepresentation: representation,
+        catalogIdentityForm: representation,
+        taxonomicClass,
+        dietClass,
+        locomotionClass,
+        groupOrganization,
+        groupStableIdNamespace,
+      });
+      expect(getCoreWildlifeProfile(species)).toMatchObject({
+        maximumPatchPopulation,
+        behavior: { maximumPursuitTicks: 0 },
       });
     }
   });

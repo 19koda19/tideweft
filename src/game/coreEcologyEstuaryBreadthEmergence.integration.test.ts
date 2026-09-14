@@ -14,7 +14,9 @@ import {
 } from "./coreEcologyAggregatePerception";
 import {
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
   deriveCoreEcologyBreadthHabitat,
+  type CoreEcologyBreadthCohortId,
 } from "./coreEcologyBreadthHabitat";
 import {
   stepCoreEcologySettlementShadows,
@@ -41,9 +43,12 @@ import {
 
 export const ALPHA37_ESTUARY_BREADTH_EMERGENCE_OWNER_INTENT =
   "test:alpha37-estuary-breadth-emergence:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_EMERGENCE_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-emergence:v1" as const;
 
 const SEED_TEXT = "alpha37 estuary breadth shared properties";
 const REGION = createRegionCoord(-5_179, -89_646);
+const MARSH_CHANNEL_REGION = createRegionCoord(173_753, 11_507);
 const HIGH_TIDE_TICK = 360;
 
 interface Fixture {
@@ -155,7 +160,119 @@ describe(`${ALPHA37_ESTUARY_BREADTH_EMERGENCE_OWNER_INTENT} shared emergent resp
   });
 });
 
-function fixture(occluded: boolean): Fixture {
+describe(`${ALPHA38_MARSH_CHANNEL_WEB_EMERGENCE_OWNER_INTENT} shared emergent response`, () => {
+  it("lets a visible cormorant redistribute one menhaden unit while occlusion removes pressure", () => {
+    const options = {
+      cohortId: CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+      region: MARSH_CHANNEL_REGION,
+      targetSpecies: "atlantic-menhaden" as const,
+      sourceSpecies: "double-crested-cormorant" as const,
+    };
+    const clear = fixture(false, options);
+    expect(clear.anchovy.anchors.length).toBeGreaterThan(1);
+    const visibleFrame = deriveCoreEcologySettlementShadowsStimulusFrame({
+      patch: clear.patch,
+      world: clear.world,
+      window: clear.window,
+      tick: clear.patch.updatedAtTick,
+      visualSources: [clear.bird],
+      exposedFoodSources: [],
+    });
+    const visiblePressure = visibleFrame?.stimuli.find((stimulus) => (
+      stimulus.sourceReferenceId === clear.bird.sourceReferenceId
+      && stimulus.sourceKind === "double-crested-cormorant"
+      && stimulus.targetAggregateId === clear.anchovy.aggregateId
+    ));
+    expect(influenceAt(visiblePressure, clear.occupiedAnchor.anchorOrdinal)).toBeGreaterThan(0);
+
+    const visibleResult = stepCoreEcologySettlementShadows(
+      clear.patch,
+      clear.patch.updatedAtTick,
+      visibleFrame,
+    );
+    const event = visibleResult?.events.find((candidate) => (
+      candidate.sourceReferenceId === clear.bird.sourceReferenceId
+      && candidate.targetSpecies === "atlantic-menhaden"
+    ));
+    expect(event).toMatchObject({
+      sourceKind: "double-crested-cormorant",
+      causeKind: "predator-pressure",
+      response: "pressure",
+      displacedUnits: 1,
+      mortality: "none",
+      cargoInteraction: false,
+      itemConsumption: "none",
+    });
+    const after = visibleResult?.patch.aggregatePopulations.find(
+      ({ aggregateId }) => aggregateId === clear.anchovy.aggregateId,
+    );
+    expect(after?.populationSize).toBe(clear.anchovy.populationSize);
+    expect(totalAnchorUnits(after)).toBe(totalAnchorUnits(clear.anchovy));
+    expect(after?.anchors.find(
+      ({ anchorOrdinal }) => anchorOrdinal === event?.fromAnchorOrdinal,
+    )?.populationUnits).toBe(
+      clear.anchovy.anchors.find(
+        ({ anchorOrdinal }) => anchorOrdinal === event?.fromAnchorOrdinal,
+      )!.populationUnits - 1,
+    );
+    expect(after?.anchors.find(
+      ({ anchorOrdinal }) => anchorOrdinal === event?.toAnchorOrdinal,
+    )?.populationUnits).toBe(
+      clear.anchovy.anchors.find(
+        ({ anchorOrdinal }) => anchorOrdinal === event?.toAnchorOrdinal,
+      )!.populationUnits + 1,
+    );
+    expect(visibleResult?.patch.nextMortalityOrdinal).toBe(0);
+    expect(visibleResult?.patch.mortalityTransactions).toEqual([]);
+    expect(visibleResult?.patch.carcasses).toEqual([]);
+    expect(visibleResult?.events.some((candidate) => (
+      candidate.sourceReferenceId === clear.bird.sourceReferenceId
+      && candidate.targetSpecies === "grass-shrimp"
+    ))).toBe(false);
+
+    const blocked = fixture(true, options);
+    const hiddenFrame = deriveCoreEcologySettlementShadowsStimulusFrame({
+      patch: blocked.patch,
+      world: blocked.world,
+      window: blocked.window,
+      tick: blocked.patch.updatedAtTick,
+      visualSources: [blocked.bird],
+      exposedFoodSources: [],
+    });
+    expect(hiddenFrame?.stimuli.some((stimulus) => (
+      stimulus.sourceReferenceId === blocked.bird.sourceReferenceId
+      && stimulus.targetAggregateId === blocked.anchovy.aggregateId
+    ))).toBe(false);
+    const hiddenResult = stepCoreEcologySettlementShadows(
+      blocked.patch,
+      blocked.patch.updatedAtTick,
+      hiddenFrame,
+    );
+    const hidden = hiddenResult?.patch.aggregatePopulations.find(
+      ({ aggregateId }) => aggregateId === blocked.anchovy.aggregateId,
+    );
+    expect(hidden?.populationSize).toBe(blocked.anchovy.populationSize);
+    expect(totalAnchorUnits(hidden)).toBe(totalAnchorUnits(blocked.anchovy));
+    expect(hiddenResult?.events.some((candidate) => (
+      candidate.sourceReferenceId === blocked.bird.sourceReferenceId
+    ))).toBe(false);
+  });
+});
+
+function fixture(
+  occluded: boolean,
+  options: Readonly<{
+    cohortId: CoreEcologyBreadthCohortId;
+    region: ReturnType<typeof createRegionCoord>;
+    targetSpecies: "bay-anchovy" | "atlantic-menhaden";
+    sourceSpecies: "common-tern" | "double-crested-cormorant";
+  }> = {
+    cohortId: CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
+    region: REGION,
+    targetSpecies: "bay-anchovy",
+    sourceSpecies: "common-tern",
+  },
+): Fixture {
   const state = createWorld(SEED_TEXT, "standard");
   state.meta.completedTick = HIGH_TIDE_TICK;
   state.tide = tideAtTick(HIGH_TIDE_TICK);
@@ -168,8 +285,8 @@ function fixture(occluded: boolean): Fixture {
   };
   const habitat = deriveCoreEcologyBreadthHabitat({
     seed: state.meta.rootSeed,
-    region: REGION,
-    cohortId: CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
+    region: options.region,
+    cohortId: options.cohortId,
   });
   let patch = createCoreEcologyBreadthResidentPatch({
     seed: state.meta.rootSeed,
@@ -177,12 +294,16 @@ function fixture(occluded: boolean): Fixture {
     tick: HIGH_TIDE_TICK,
   });
   const anchovy = patch.aggregatePopulations.find(
-    ({ species }) => species === "bay-anchovy",
+    ({ species }) => species === options.targetSpecies,
   );
   const occupiedAnchor = anchovy?.anchors.find(({ populationUnits }) => populationUnits > 0);
-  const tern = patch.populations.find(({ species }) => species === "common-tern")?.members[0]?.actor;
+  const tern = patch.populations.find(
+    ({ species }) => species === options.sourceSpecies,
+  )?.members[0]?.actor;
   if (anchovy === undefined || occupiedAnchor === undefined || tern === undefined) {
-    throw new Error("Estuary emergence fixture requires anchovy and a common tern");
+    throw new Error(
+      `Breadth emergence fixture requires ${options.targetSpecies} and ${options.sourceSpecies}`,
+    );
   }
 
   const sourcePosition = translateWorldPosition(
@@ -244,7 +365,7 @@ function fixture(occluded: boolean): Fixture {
     occupiedAnchor,
     bird: {
       sourceReferenceId: movedTern.identity.stableId,
-      sourceSpecies: "common-tern",
+      sourceSpecies: options.sourceSpecies,
       position: movedTern.address.position,
       movementSalience: FIXED_POINT,
     },

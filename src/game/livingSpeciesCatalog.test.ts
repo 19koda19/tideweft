@@ -11,6 +11,7 @@ import {
   coreEcologySpeciesHasRuntimeCapability,
   coreEcologySpeciesPhysicalBodyResourceUnits,
   coreEcologySpeciesPredatorContact,
+  coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
 import { CORE_ECOLOGY_ACTIVITY_OWNER_ID } from "./coreEcologyActivity";
 import { CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES } from "./coreEcologyActivityAffordance";
@@ -53,6 +54,12 @@ import {
   LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_HASH,
   LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS,
   LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS_HASH,
+  LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG,
+  LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_BYTE_LENGTH,
+  LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_COUNT,
+  LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_HASH,
+  LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS,
+  LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS_HASH,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   canonicalizeLivingSpeciesCatalog,
@@ -173,10 +180,17 @@ describe("Living Weft species module catalog", () => {
     )).map(({ speciesId }) => speciesId)).toEqual([
       "arctic-fox",
       "atlantic-ghost-crab",
+      "atlantic-menhaden",
       "bay-anchovy",
+      "belted-kingfisher",
+      "blue-crab",
       "common-tern",
+      "double-crested-cormorant",
+      "grass-shrimp",
       "great-blue-heron",
+      "greater-yellowlegs",
       "harbor-seal",
+      "mummichog",
       "osprey",
       "polar-bear",
     ]);
@@ -186,15 +200,20 @@ describe("Living Weft species module catalog", () => {
       )
     )).map(({ speciesId }) => speciesId)).toEqual([
       "atlantic-ghost-crab",
+      "atlantic-menhaden",
       "bay-anchovy",
+      "belted-kingfisher",
+      "blue-crab",
       "common-tern",
+      "double-crested-cormorant",
+      "grass-shrimp",
       "great-blue-heron",
+      "greater-yellowlegs",
       "harbor-seal",
+      "mummichog",
       "osprey",
       "polar-bear",
     ]);
-    expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
-      .toEqual(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS);
     expect(LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_IDS).toHaveLength(
       LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_COUNT,
     );
@@ -207,6 +226,21 @@ describe("Living Weft species module catalog", () => {
     ).byteLength).toBe(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_BYTE_LENGTH);
     expect(hashCanonical(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG))
       .toBe(LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG_HASH);
+    expect(LIVING_SPECIES_CATALOG.modules.map(({ speciesId }) => speciesId))
+      .toEqual(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS);
+    expect(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS).toHaveLength(
+      LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_COUNT,
+    );
+    expect(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG.modules.map(
+      ({ speciesId }) => speciesId,
+    )).toEqual(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS);
+    expect(hashCanonical(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS))
+      .toBe(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS_HASH);
+    expect(new TextEncoder().encode(
+      stableStringify(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG),
+    ).byteLength).toBe(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_BYTE_LENGTH);
+    expect(hashCanonical(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG))
+      .toBe(LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG_HASH);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
@@ -739,6 +773,83 @@ describe("Living Weft species module catalog", () => {
           "no-health-or-mortality-outcome",
           "nonlethal-pressure-only",
         ],
+      });
+    }
+  });
+
+  it("projects the marsh-channel web through aggregate substrate and addressable consumer seams", () => {
+    const expected = {
+      "atlantic-menhaden": ["aggregate", "MENHADEN-AREA", "MENHADEN-SCHOOL", 0],
+      mummichog: ["aggregate", "MUMMICHOG-AREA", "MUMMICHOG-SCHOOL", 0],
+      "grass-shrimp": ["aggregate", "GRASSSHRIMP-AREA", null, 0],
+      "blue-crab": ["aggregate", "BLUECRAB-AREA", null, 0],
+      "greater-yellowlegs": ["individual", "YELLOWLEGS", "FLOCK", 4],
+      "belted-kingfisher": ["individual", "KINGFISHER", null, 1],
+      "double-crested-cormorant": ["individual", "CORMORANT", "FLOCK", 3],
+    } as const;
+
+    for (const [species, contract] of Object.entries(expected) as [
+      keyof typeof expected,
+      (typeof expected)[keyof typeof expected],
+    ][]) {
+      const [form, namespace, groupNamespace, maximumMaterialized] = contract;
+      const module = livingSpeciesModule(species);
+      expect(module).toMatchObject({
+        profile: { implementation: "foundation" },
+        habitat: { ownerId: "game:core-ecology-breadth-habitat:v1" },
+        identity: { form, stableIdNamespace: namespace },
+        social: { group: { stableIdNamespace: groupNamespace } },
+        spatial: {
+          ownerId: "game:regional-breadth-ecology:v1",
+          positionModel: form === "aggregate" ? "segmented-area" : "segmented-point",
+        },
+        population: {
+          ownerId: "game:regional-breadth-cohort:v1",
+          maxMaterializedPerRegion: maximumMaterialized,
+        },
+        sound: { implementation: "unimplemented", ownerId: null, repertoire: [] },
+        lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
+        health: { causalDeath: false },
+        aftermath: { implementation: "unimplemented", carcassModel: "none" },
+      });
+      expect(module?.interactions.targets.flatMap(({ verbs }) => verbs).some((verb) => (
+        verb === "attack" || verb === "capture" || verb === "consume" || verb === "kill"
+      ))).toBe(false);
+      expect(coreEcologySpeciesPredatorContact(species)).toBeNull();
+      expect(coreEcologySpeciesPhysicalBodyResourceUnits(species)).toBe(0);
+    }
+
+    for (const species of [
+      "atlantic-menhaden",
+      "mummichog",
+      "grass-shrimp",
+      "blue-crab",
+    ] as const) {
+      const policy = coreEcologySpeciesRuntimePolicy(species);
+      const expectedPressureVerbs = policy?.groupOrganization === "school"
+        ? ["redistribute", "tighten"]
+        : policy?.aggregate?.responseVerbs ?? [];
+      for (const targetClass of ["human", "predator"] as const) {
+        expect(livingSpeciesModule(species)?.interactions.targets.find(
+          (target) => target.targetClass === targetClass,
+        )).toMatchObject({
+          policy: "available",
+          verbs: expectedPressureVerbs,
+          escalationConstraints: [
+            "aggregate-unit-conservation",
+            "bounded-response",
+            "direct-perception-required",
+            "nonlethal-pressure-only",
+          ],
+        });
+      }
+      expect(livingSpeciesModule(species)?.interactions.targets.find(
+        (target) => target.targetClass === "same-species",
+      )).toMatchObject({
+        policy: "available",
+        verbs: policy?.groupOrganization === "school"
+          ? ["coordinate", "tighten"]
+          : ["redistribute"],
       });
     }
   });
@@ -2443,14 +2554,7 @@ describe("Living Weft species module catalog", () => {
   it("declares current deliberate seams instead of pretending they are implemented", () => {
     for (const module of LIVING_SPECIES_CATALOG.modules) {
       expect(module.spatial).toMatchObject({
-        positionModel: module.speciesId === "brown-rat"
-          || module.speciesId === "american-pika"
-          || module.speciesId === "atlantic-capelin"
-          || module.speciesId === "atlantic-ghost-crab"
-          || module.speciesId === "atlantic-marsh-fiddler-crab"
-          || module.speciesId === "atlantic-silverside"
-          || module.speciesId === "bay-anchovy"
-          || module.speciesId === "southern-leopard-frog"
+        positionModel: module.identity.form === "aggregate"
           ? "segmented-area"
           : "segmented-point",
         signedRegions: true,
@@ -2468,6 +2572,10 @@ describe("Living Weft species module catalog", () => {
           || module.speciesId === "atlantic-silverside"
           || module.speciesId === "arctic-fox"
           || module.speciesId === "bay-anchovy"
+          || module.speciesId === "atlantic-menhaden"
+          || module.speciesId === "mummichog"
+          || module.speciesId === "grass-shrimp"
+          || module.speciesId === "blue-crab"
           || module.speciesId === "gray-wolf"
           || module.speciesId === "mountain-goat"
           || module.speciesId === "american-pika"
@@ -2491,7 +2599,14 @@ describe("Living Weft species module catalog", () => {
         || module.speciesId === "bay-anchovy"
         || module.speciesId === "great-blue-heron"
         || module.speciesId === "harbor-seal"
-        || module.speciesId === "snowy-egret";
+        || module.speciesId === "snowy-egret"
+        || module.speciesId === "atlantic-menhaden"
+        || module.speciesId === "mummichog"
+        || module.speciesId === "grass-shrimp"
+        || module.speciesId === "blue-crab"
+        || module.speciesId === "greater-yellowlegs"
+        || module.speciesId === "belted-kingfisher"
+        || module.speciesId === "double-crested-cormorant";
       expect(module.environment.tide.status).toBe(
         tidalFoundation ? "foundation" : "unimplemented",
       );
@@ -2503,7 +2618,14 @@ describe("Living Weft species module catalog", () => {
         || module.speciesId === "great-blue-heron"
         || module.speciesId === "harbor-seal"
         || module.speciesId === "polar-bear"
-        || module.speciesId === "snowy-egret";
+        || module.speciesId === "snowy-egret"
+        || module.speciesId === "atlantic-menhaden"
+        || module.speciesId === "mummichog"
+        || module.speciesId === "grass-shrimp"
+        || module.speciesId === "blue-crab"
+        || module.speciesId === "greater-yellowlegs"
+        || module.speciesId === "belted-kingfisher"
+        || module.speciesId === "double-crested-cormorant";
       expect(module.environment.water.status, module.speciesId).toBe(
         waterFoundation ? "foundation" : "unimplemented",
       );
@@ -2512,6 +2634,8 @@ describe("Living Weft species module catalog", () => {
       expect(module.social.communicationChannels).toEqual(
         module.speciesId === "mountain-goat"
           || module.speciesId === "common-tern"
+          || module.speciesId === "greater-yellowlegs"
+          || module.speciesId === "double-crested-cormorant"
           ? ["vision"]
           : module.speciesId === "deer"
           || module.speciesId === "american-black-duck"
@@ -2531,6 +2655,8 @@ describe("Living Weft species module catalog", () => {
         module.speciesId === "atlantic-silverside"
           || module.speciesId === "atlantic-capelin"
           || module.speciesId === "bay-anchovy"
+          || module.speciesId === "atlantic-menhaden"
+          || module.speciesId === "mummichog"
           ? "foundation"
           : module.speciesId === "deer"
             || module.speciesId === "gull"
@@ -2542,6 +2668,8 @@ describe("Living Weft species module catalog", () => {
             || module.speciesId === "elk"
             || module.speciesId === "gray-wolf"
             || module.speciesId === "mountain-goat"
+            || module.speciesId === "greater-yellowlegs"
+            || module.speciesId === "double-crested-cormorant"
             ? "active"
             : "unimplemented",
       );

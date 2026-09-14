@@ -40,6 +40,7 @@ import {
   WAVE_C_TIDAL_TABLE_EXCLUDED_CLAIMS,
   WAVE_C_TIDAL_TABLE_SPECIES,
   WAVE_G_ESTUARY_BREADTH_SPECIES,
+  WAVE_G_MARSH_CHANNEL_WEB_SPECIES,
   alpha16MarshEdgeBoundedReadiness,
   alpha17RainChorusBoundedReadiness,
   alpha20AmericanBlackDuckBoundedReadiness,
@@ -716,6 +717,82 @@ describe("Living Weft species release gate", () => {
       ]);
       expect(criterion("patch-note-truth")?.evidenceOwnerIds).toEqual([
         "content:patch-notes-alpha37:v1",
+      ]);
+    }
+  });
+
+  it("uses one representation-driven Wave-G contract for the marsh channel web", () => {
+    expect(WAVE_G_MARSH_CHANNEL_WEB_SPECIES).toEqual([
+      "atlantic-menhaden",
+      "mummichog",
+      "grass-shrimp",
+      "blue-crab",
+      "greater-yellowlegs",
+      "belted-kingfisher",
+      "double-crested-cormorant",
+    ]);
+    for (const species of WAVE_G_MARSH_CHANNEL_WEB_SPECIES) {
+      const releaseGate = gate(species);
+      const criterion = (
+        name: (typeof LIVING_SPECIES_RELEASE_CRITERIA)[number],
+      ) => releaseGate.criteria.find((candidate) => candidate.criterion === name);
+      const module = livingSpeciesModule(species);
+      const aggregate = module?.identity.form === "aggregate";
+      const flock = module?.social.group.organizationKinds.includes("flock") === true;
+      const emergenceParticipant = species === "atlantic-menhaden"
+        || species === "double-crested-cormorant";
+
+      expect(livingSpeciesReadinessReport(species)).toMatchObject({
+        evidenceAuthenticated: true,
+        state: "blocked",
+        publicReady: false,
+        counts: { total: 30 },
+      });
+      expect(criterion("habitat-placement")?.evidenceOwnerIds).toContain(
+        "test:alpha38-marsh-channel-web-habitat-shared-invariants:v1",
+      );
+      expect(criterion("population-materialization")?.evidenceOwnerIds).toContain(
+        "test:alpha38-marsh-channel-web-composite-shared-invariants:v1",
+      );
+      expect(criterion("save-load")?.evidenceOwnerIds).toContain(
+        "test:alpha38-marsh-channel-web-runtime-v30:v1",
+      );
+      expect(criterion("knowledge-honesty")?.evidenceOwnerIds).toContain(
+        "test:alpha38-marsh-channel-web-presentation-invariants:v1",
+      );
+      expect(criterion("same-species-interaction")?.status).toBe(
+        aggregate || flock ? "active" : "foundation",
+      );
+      expect(criterion("environmental-evidence")).toMatchObject(aggregate
+        ? { status: "active" }
+        : { status: "unimplemented", evidenceOwnerIds: [] });
+      for (const name of [
+        "food-web",
+        "other-species-interaction",
+        "player-independent-scenario",
+      ] as const) {
+        expect(criterion(name)?.status).toBe(
+          emergenceParticipant && name !== "food-web" ? "active" : "foundation",
+        );
+        expect(criterion(name)?.evidenceOwnerIds).toEqual(
+          emergenceParticipant
+            ? expect.arrayContaining(["test:alpha38-marsh-channel-web-emergence:v1"])
+            : expect.not.arrayContaining(["test:alpha38-marsh-channel-web-emergence:v1"]),
+        );
+      }
+      expect(criterion("seamless-region-crossing")?.status).toBe("foundation");
+      expect(criterion("performance-budget")?.status).toBe("foundation");
+      for (const withheld of ["sound", "exact-tested-deployment"] as const) {
+        expect(criterion(withheld)).toMatchObject({
+          status: "unimplemented",
+          evidenceOwnerIds: [],
+        });
+      }
+      expect(criterion("tutorial-truth")?.evidenceOwnerIds).toEqual([
+        "ui:tutorial-guide:v48",
+      ]);
+      expect(criterion("patch-note-truth")?.evidenceOwnerIds).toEqual([
+        "content:patch-notes-alpha38:v1",
       ]);
     }
   });

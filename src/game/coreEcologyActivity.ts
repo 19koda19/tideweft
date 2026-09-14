@@ -1033,6 +1033,74 @@ function projectCanonicalCoreEcologyActivity(
     });
   }
 
+  if (activityProfile.archetypeId === "diving-waterbird") {
+    const atHabitatAnchor = withinWorldRadius(
+      owned.member.actor.address.position,
+      authority.homeAnchor,
+      HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+    );
+    if (inRestWindow || actorNeedsRest) {
+      return activityProjection(owned, input.atTick, day, {
+        state: atHabitatAnchor ? "resting" : "seeking-habitat-anchor",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: inRestWindow && atHabitatAnchor ? "rest" : "observe",
+        presentationSignal: atHabitatAnchor ? "resting" : "tidal-relocation-flight",
+        perch: noPerchProjection(),
+        motion: atHabitatAnchor
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-habitat-anchor",
+              targetArea: frozenArea(
+                authority.homeAnchor,
+                HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+              ),
+            }),
+      });
+    }
+    const surfaceOpportunity = currentAquaticActivityObservation(
+      owned.member.actor,
+      input.atTick,
+    );
+    if (surfaceOpportunity === null) {
+      return activityProjection(owned, input.atTick, day, {
+        state: "active-watch",
+        responsiveToImmediateIntent: false,
+        preferredNeutralIntent: "observe",
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    const atSurfaceOpportunity = withinWorldRadius(
+      owned.member.actor.address.position,
+      surfaceOpportunity.area.center,
+      SURFACE_OPPORTUNITY_ARRIVAL_RADIUS_UNITS,
+    );
+    return activityProjection(owned, input.atTick, day, {
+      state: atSurfaceOpportunity
+        ? "surface-diving"
+        : "seeking-surface-opportunity",
+      responsiveToImmediateIntent: false,
+      sourceObservationId: surfaceOpportunity.sourceObservationId,
+      preferredNeutralIntent: "observe",
+      presentationSignal: atSurfaceOpportunity
+        ? "surface-diving"
+        : "surface-opportunity-flight",
+      perch: noPerchProjection(),
+      motion: atSurfaceOpportunity
+        ? Object.freeze({ kind: "hold-position" })
+        : Object.freeze({
+            kind: "target-area",
+            verb: "seek-surface-opportunity",
+            targetArea: frozenArea(
+              surfaceOpportunity.area.center,
+              SURFACE_OPPORTUNITY_ARRIVAL_RADIUS_UNITS,
+            ),
+          }),
+    });
+  }
+
   if (activityProfile.archetypeId === "aerial-surface-opportunist") {
     const atHabitatAnchor = withinWorldRadius(
       owned.member.actor.address.position,

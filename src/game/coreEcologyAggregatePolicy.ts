@@ -18,11 +18,20 @@ export const CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES = Object.freeze([
   "atlantic-capelin",
 ] as const);
 
-/** Append-only aggregate registry for the Wave-G estuary breadth cluster. */
-export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
+/** Immutable aggregate registry through the first Wave-G estuary cluster. */
+export const CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES = Object.freeze([
   ...CORE_ECOLOGY_ALPHA36_AGGREGATE_SPECIES,
   "bay-anchovy",
   "atlantic-ghost-crab",
+] as const);
+
+/** Append-only aggregate registry after the marsh-channel cohort. */
+export const CORE_ECOLOGY_AGGREGATE_SPECIES = Object.freeze([
+  ...CORE_ECOLOGY_WAVE_G_ESTUARY_AGGREGATE_SPECIES,
+  "atlantic-menhaden",
+  "mummichog",
+  "grass-shrimp",
+  "blue-crab",
 ] as const);
 
 export type CoreEcologyAggregateSpecies =
@@ -117,7 +126,11 @@ export interface CoreEcologyAggregateSpeciesPolicy {
     | "SILVERSIDE-SCHOOL-v1-"
     | "CAPELIN-SCHOOL-v1-"
     | "BAYANCHOVY-SCHOOL-v1-"
-    | "GHOSTCRAB-AREA-v1-";
+    | "GHOSTCRAB-AREA-v1-"
+    | "MENHADEN-SCHOOL-v1-"
+    | "MUMMICHOG-SCHOOL-v1-"
+    | "GRASSSHRIMP-AREA-v1-"
+    | "BLUECRAB-AREA-v1-";
   readonly representation: "aggregate-area" | "group-actor";
   readonly maximumAnchors: number;
   readonly anchorRadiusTiles: number;
@@ -322,6 +335,97 @@ const POLICIES: Readonly<
       activePeriod: "tide-responsive",
       baselineProjection: "preserve",
       perceivedPressureResponse: "preserve",
+    }),
+    initialEvidenceKinds: Object.freeze([
+      "burrow-opening",
+      "feeding-scrape",
+    ] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "burrow-opening",
+      byCause: Object.freeze({ "tide-pressure": "feeding-scrape" }),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "ebb-active",
+  }),
+  "atlantic-menhaden": Object.freeze({
+    species: "atlantic-menhaden",
+    stableIdPrefix: "MENHADEN-SCHOOL-v1-",
+    representation: "group-actor",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 4,
+    activity: Object.freeze({
+      kind: "schooling-glint",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
+    }),
+    initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "surface-dimple",
+      byCause: Object.freeze({}),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "flood-active",
+  }),
+  mummichog: Object.freeze({
+    species: "mummichog",
+    stableIdPrefix: "MUMMICHOG-SCHOOL-v1-",
+    representation: "group-actor",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 3,
+    activity: Object.freeze({
+      kind: "schooling-glint",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "preserve",
+    }),
+    initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "surface-dimple",
+      byCause: Object.freeze({}),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "flood-active",
+  }),
+  "grass-shrimp": Object.freeze({
+    species: "grass-shrimp",
+    stableIdPrefix: "GRASSSHRIMP-AREA-v1-",
+    representation: "aggregate-area",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 2,
+    activity: Object.freeze({
+      kind: "schooling-glint",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "quiet",
+    }),
+    initialEvidenceKinds: Object.freeze(["surface-dimple"] as const),
+    disturbanceEvidence: Object.freeze({
+      defaultKind: "surface-dimple",
+      byCause: Object.freeze({}),
+    }),
+    exposedFoodAttraction: false,
+    rainSensitive: false,
+    rainResponse: "pressure",
+    tideResponse: "flood-active",
+  }),
+  "blue-crab": Object.freeze({
+    species: "blue-crab",
+    stableIdPrefix: "BLUECRAB-AREA-v1-",
+    representation: "aggregate-area",
+    maximumAnchors: 4,
+    anchorRadiusTiles: 2,
+    activity: Object.freeze({
+      kind: "burrow-foraging",
+      activePeriod: "tide-responsive",
+      baselineProjection: "preserve",
+      perceivedPressureResponse: "quiet",
     }),
     initialEvidenceKinds: Object.freeze([
       "burrow-opening",

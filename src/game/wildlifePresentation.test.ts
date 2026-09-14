@@ -39,6 +39,11 @@ import { evaluatePerception, type PerceptionCell } from "./perception";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { deriveCoreEcologyPolarShoreHabitat } from "./coreEcologyPolarShoreHabitat";
 import {
+  CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  deriveCoreEcologyBreadthHabitat,
+} from "./coreEcologyBreadthHabitat";
+import { createCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
+import {
   isWildlifeWorldPositionDirectlyObserved,
   projectWildlifePopulationEvidencePresentations,
   projectWildlifePresentation,
@@ -63,6 +68,8 @@ export const ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha36-polar-consumer-presentation-invariants:v1" as const;
 export const ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT =
   "test:alpha37-estuary-breadth-presentation-invariants:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-presentation-invariants:v1" as const;
 
 function wildlife(species: CoreWildlifeSpecies): CoreWildlifeActorState {
   const region = createRegionCoord(-4, 9);
@@ -397,6 +404,55 @@ function tidalWebEvidenceFixture(tick = 360) {
   ));
   if (usable === undefined || population === undefined || evidence === undefined) {
     throw new Error("Tidal-web presentation fixture requires current occupied aquatic evidence");
+  }
+  return { evidence, patch, population };
+}
+
+type MarshChannelAggregateSpecies =
+  | "atlantic-menhaden"
+  | "mummichog"
+  | "grass-shrimp"
+  | "blue-crab";
+
+/**
+ * Two nearby deterministic regions cover the full aggregate roster without
+ * inventing body actors. Fish and shrimp are sampled at high tide; crab signs
+ * are sampled while the shared exposed-flat policy considers their anchor usable.
+ */
+function marshChannelEvidenceFixture(species: MarshChannelAggregateSpecies) {
+  const seed = seedFromText("alpha37 estuary breadth shared properties");
+  const originRegion = species === "atlantic-menhaden" || species === "grass-shrimp"
+    ? createRegionCoord(-11, -20)
+    : createRegionCoord(-10, -20);
+  const tick = species === "blue-crab" ? 0 : 360;
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed,
+    region: originRegion,
+    cohortId: CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  });
+  const patch = createCoreEcologyBreadthResidentPatch({ seed, habitat, tick });
+  const population = patch.aggregatePopulations.find((candidate) => (
+    candidate.species === species
+  ));
+  const tidal = projectCoreEcologyTidalTable(patch, tick);
+  const usableDepth = tidal?.anchorDepths.find((candidate) => (
+    candidate.aggregateId === population?.aggregateId
+    && candidate.activityUsable
+    && (population?.anchors[candidate.anchorOrdinal]?.populationUnits ?? 0) > 0
+  ));
+  const evidence = population?.evidence.find(({ position }) => (
+    usableDepth !== undefined
+    && position.region.x === usableDepth.position.region.x
+    && position.region.y === usableDepth.position.region.y
+    && position.localX === usableDepth.position.localX
+    && position.localY === usableDepth.position.localY
+  ));
+  if (population === undefined || usableDepth === undefined || evidence === undefined) {
+    throw new Error(
+      `Marsh-channel presentation fixture requires usable ${species} evidence `
+      + `(population=${population !== undefined}, tidal=${tidal !== null}, `
+      + `usable=${usableDepth !== undefined}, evidence=${evidence !== undefined})`,
+    );
   }
   return { evidence, patch, population };
 }
@@ -759,7 +815,7 @@ function regroupingGoat(): CoreWildlifeActorState {
   return stepped.actor;
 }
 
-describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
+describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA35_COLD_SHORE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA36_POLAR_CONSUMER_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA37_ESTUARY_BREADTH_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_PRESENTATION_INVARIANTS_OWNER_INTENT} knowledge-honest wildlife presentation`, () => {
   it("projects the regional upland wildlife through the shared direct-detail vocabulary", () => {
     const cases = [
       ["wild-boar", "Wild boar", "Low, heavy-bodied animal with a long snout"],
@@ -864,6 +920,9 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     ["great-blue-heron", "Great blue heron"],
     ["common-tern", "Common terns"],
     ["osprey", "Osprey"],
+    ["greater-yellowlegs", "Greater yellowlegs"],
+    ["belted-kingfisher", "Belted kingfisher"],
+    ["double-crested-cormorant", "Double crested cormorants"],
   ] as const)("projects a directly detailed %s without simulation internals", (species, label) => {
     const actor = wildlife(species);
     const presentation = projectWildlifePresentation({
@@ -932,10 +991,28 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       expect(presentation?.formLabel).toBe(
         "Large, long-winged raptor with a pale head and bent wings",
       );
+    } else if (species === "greater-yellowlegs") {
+      expect(presentation?.formLabel).toBe(
+        "Slender waders with long bright legs and slightly upturned bills",
+      );
+    } else if (species === "belted-kingfisher") {
+      expect(presentation?.formLabel).toBe(
+        "Stocky, crested waterside bird with a heavy pointed bill",
+      );
+    } else if (species === "double-crested-cormorant") {
+      expect(presentation?.formLabel).toBe(
+        "Long-bodied dark waterbirds with hooked bills and low swimming posture",
+      );
     } else {
       expect(presentation).not.toHaveProperty("formLabel");
     }
-    if (species === "gull" || species === "fish-crow" || species === "common-tern") {
+    if (
+      species === "gull"
+      || species === "fish-crow"
+      || species === "common-tern"
+      || species === "greater-yellowlegs"
+      || species === "double-crested-cormorant"
+    ) {
       expect(presentation).not.toHaveProperty("lifeStageLabel");
     }
     else expect(presentation?.lifeStageLabel).toBeDefined();
@@ -1220,6 +1297,10 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     "atlantic-marsh-fiddler-crab",
     "bay-anchovy",
     "atlantic-ghost-crab",
+    "atlantic-menhaden",
+    "mummichog",
+    "grass-shrimp",
+    "blue-crab",
   ] as const)("does not fabricate a %s actor presentation", (species) => {
     const actor = wildlife("deer");
     expect(projectWildlifePresentation({
@@ -1231,6 +1312,76 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       tileSize: 16,
     })).toBeNull();
   });
+
+  it.each([
+    [
+      "atlantic-menhaden",
+      "surface-dimple",
+      "surface-dimples",
+      "Aquatic activity",
+      "Unidentified aquatic activity",
+      "Aquatic surface dimples and brief glints",
+      "menhaden",
+    ],
+    [
+      "mummichog",
+      "surface-dimple",
+      "surface-dimples",
+      "Shallow-water activity",
+      "Unidentified shallow-water activity",
+      "Shallow-water dimples and brief glints",
+      "mummichog",
+    ],
+    [
+      "grass-shrimp",
+      "surface-dimple",
+      "surface-dimples",
+      "Fine water activity",
+      "Unidentified fine water activity",
+      "Fine shallow-water flickers and tiny dimples",
+      "shrimp",
+    ],
+    [
+      "blue-crab",
+      "burrow-opening",
+      "burrow-openings",
+      "Shallow-water signs",
+      "Unidentified shallow-water activity",
+      "Submerged burrow openings",
+      "crab",
+    ],
+  ] as const)(
+    "projects current %s activity only as honest population evidence",
+    (species, evidenceKind, form, quickLabel, identityLabel, evidenceLabel, hiddenName) => {
+      const { evidence, patch, population } = marshChannelEvidenceFixture(species);
+      expect(evidence.kind).toBe(evidenceKind);
+      const presentation = projectWildlifePopulationEvidencePresentations({
+        patch,
+        observation: evidenceObservation(evidence.position),
+        tileSize: 16,
+        selectedEvidenceId: evidence.evidenceId,
+      })?.find((candidate) => candidate.evidenceId === evidence.evidenceId);
+
+      expect(presentation).toMatchObject({
+        aggregateId: population.aggregateId,
+        evidenceId: evidence.evidenceId,
+        species,
+        representation: "population-evidence",
+        form,
+        quickLabel,
+        identityLabel,
+        evidenceLabel,
+        speciesIdentified: false,
+        selected: true,
+      });
+      const encoded = JSON.stringify(presentation);
+      expect(encoded).not.toMatch(
+        /actorId|groupSize|populationSize|representedUnits|activitySignal|intensity/iu,
+      );
+      expect(`${quickLabel} ${identityLabel} ${evidenceLabel}`.toLocaleLowerCase())
+        .not.toContain(hiddenName);
+    },
+  );
 
   it("projects canonical brown-rat physical evidence without inventing actors or counts", () => {
     const { evidence, patch, population } = ratEvidenceFixture();

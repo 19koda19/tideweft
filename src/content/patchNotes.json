@@ -2,6 +2,47 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.38",
+      "releaseDate": "2026-09-14",
+      "buildIdentity": "0.3.3-alpha.38",
+      "summary": "Marsh Channel Web is the local unpublished Alpha 38 source candidate: seven habitat-gated fish, crustacean, and shorebird profiles join Wave G through the existing append-only breadth architecture.",
+      "gameplayContractVersion": 36,
+      "tutorialVersion": 48,
+      "categories": {
+        "gameplay": [
+          "The exact thirty-six-record Alpha-37 catalog remains the prefix. Atlantic menhaden, mummichog, grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-crested cormorant append as records 37 through 43, producing forty-one core-wildlife profiles plus the existing human and domestic-dog foundations.",
+          "Menhaden, mummichog, grass shrimp, and blue crab remain conserved non-addressable aggregates. Greater yellowlegs form one group-atomic flock of two to four persistent members, the kingfisher is solitary, and cormorants form one group-atomic flock of two to three persistent members.",
+          "Terrain, salinity, channel and shore structure, water depth, tide, carrying capacity, territory, density, regional quiet, and exact local substrate decide admission. Yellowlegs require grass shrimp, kingfishers require mummichog, and cormorants require menhaden; unsupported marsh-channel country remains honestly empty."
+        ],
+        "fixes": [
+          "The breadth root is now activated through epoch 2 without adding a new regional-ecology or outer-save wrapper. Alpha-37 epoch-1 worlds authenticate first, append the exact Marsh Channel Web cohort once at their saved tick, retain the complete earlier cohort as a byte-stable prefix, and cannot reroll activation on reload.",
+          "All four new aggregates reuse shared bounded aggregate and Tide Table policy. Water depth and tide move only conserved units among authenticated anchors; no exact fish, shrimp, or crab actor is synthesized.",
+          "The three addressable birds use authenticated shared activity. Yellowlegs reuse anchored wading, kingfishers reuse air-only surface-opportunity and perch behavior, and cormorants use a shared diving-waterbird routine spanning lawful surface swimming, diving, resting, and flight relocation. Immediate danger still wins."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Stable territory and regional-quiet gates prevent a start-centered animal quota, while all addressable layers still share one insertion-order-independent, group-atomic cap of twenty-four actors.",
+          "Every new relationship is nonlethal. No new profile can capture, consume, injure, kill, create a body, harm the player or dog, or manufacture an animal item or cargo resource.",
+          "Shared invariant and conservation coverage plus one representative clear-versus-ridge-occluded cormorant and menhaden witness exercise the reusable food-web seam without bespoke tests for every species or species pair."
+        ],
+        "interface": [
+          "Chart 2D and Relief 3D project the same current yellowlegs, kingfisher, and cormorant identities through shared structural silhouettes and postures. These bounded presentation states do not claim continuously simulated 3D flight.",
+          "Visible schooling signs, shrimp activity, and blue-crab burrow or feeding evidence remain aggregate observations rather than selectable invented animals. Quick inspection and ABOUT reveal only current lawful knowledge on desktop and touch.",
+          "Field Manual version 48 explains the seven-profile cohort, dependency-gated absence, conserved aggregate versus persistent actor representation, epoch-2 activation, unchanged save schema, and explicit candidate limits."
+        ],
+        "saves": [
+          "Outer save version 30 and RegionalEcologyStateV6 remain unchanged. Their version-1 sparse breadth root now carries append-only cohort epochs 1 and 2; the production living catalog contains forty-three records.",
+          "A valid Alpha-37 outer-v30 epoch-1 save is authenticated before deterministic epoch-2 activation. The exact base child, epoch-1 activation and residents, actor identities, aggregate units, saved tick, and genuine deviations remain intact, and repeated load is an exact no-op.",
+          "Base, Alpine, polar-shore, cold-shore, polar-consumer, and both breadth cohorts remain inside one atomic cross-layer projection and conservation commit. Save, reload, interruption, signed-region streaming, and extreme distance cannot duplicate a unit, split a flock, or select another cohort outcome."
+        ],
+        "knownLimitations": [
+          "Alpha 38 Marsh Channel Web is a local unpublished SOURCE_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED. It reaches forty-one of the directive's forty-five core-wildlife profiles; one final coherent four-profile cohort and the directive closure gates remain.",
+          "This candidate adds no new animal call or audible Living Voice, capture, kill, live-prey consumption, injury, mortality or body path, player harm, dog harm, human harm, reproduction, recruitment, population recovery, fishing, harvesting, or new physical animal resource.",
+          "The new birds have no continuously simulated 3D flight, authored migration, nesting, complete circadian schedule, harmful predation outcome, or persistent track evidence. The aggregates have no exact targetable animal, and the cohort adds no complete scent ecology, full weather response, or offscreen narrative feed.",
+          "Dedicated Wave-G performance and seamless actor-crossing closure evidence remain open. This ordinary local slice carries no push, CI, Pages, deployment, exact-live, or LIVE_VERIFIED result."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.37",
       "releaseDate": "2026-09-14",
       "buildIdentity": "0.3.3-alpha.37",
@@ -36,7 +77,7 @@
           "Base, Alpine, polar-shore, cold-shore, polar-consumer, and breadth residents enter one atomic cross-layer projection and conservation commit. Pristine breadth baselines are rederived, true deviations persist sparsely, and save, reload, interruption, signed-region streaming, or extreme distance cannot reroll a cohort, duplicate a unit, split a flock across the cap, or replay adoption."
         ],
         "knownLimitations": [
-          "Alpha 37 Estuary Surface Break is a local unpublished SOURCE_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED. It opens Wave G with one five-profile cohort; it does not complete Wave G, Directive 04_1, worldwide ecology, the approximately seventy-five-profile target, or the full bestiary.",
+          "Alpha 37 Estuary Surface Break is a preserved local unpublished candidate. It was not pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED. It opened Wave G with one five-profile cohort; it did not complete Wave G, Directive 04_1, worldwide ecology, the 45-profile core-wildlife target, or the full bestiary.",
           "This candidate adds no new animal call or audible Living Voice, capture, kill, live-prey consumption, injury, mortality or body path, player harm, dog harm, human harm, reproduction, recruitment, population recovery, fishing, harvesting, or new physical animal resource.",
           "The three new birds have no continuous 3D flight physics, authored migration, nesting, complete circadian schedule, harmful predation outcome, or persistent track evidence. The two aggregates have no exact targetable animal, and the cohort adds no complete scent ecology, full weather response, or offscreen narrative feed.",
           "Shared invariants, signed and extreme-coordinate properties, conservation, and one representative common-tern and anchovy scenario exercise this cohort. Dedicated Wave-G performance and seamless actor-crossing proof remain open."

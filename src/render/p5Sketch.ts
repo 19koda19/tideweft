@@ -3300,11 +3300,16 @@ export function createTideweftRenderer(
       );
     };
 
-    const drawChartAmericanBlackDuck = (
+    const drawChartAquaticWaterbird = (
       actor: WildlifeView,
       base: number,
       now: number,
     ): void => {
+      if (!isWildlifeVisualSpecies(actor.species)) return;
+      const profile = wildlifeVisualProfile(actor.species);
+      const colors = wildlifeVisualPalette(actor.species, actor.appearanceKey);
+      const wingColor = profile.waterbirdDetails?.wingColor ?? colors.secondary;
+      const billColor = profile.waterbirdDetails?.billColor ?? colors.accent;
       const dabbling = actor.behavior === "forage";
       const flying = actor.behavior === "flight";
       const headDip = dabbling
@@ -3320,14 +3325,14 @@ export function createTideweftRenderer(
       p.fill(withAlpha(PALETTE.ink, 242));
       p.ellipse(0, 0, bodyLength * 1.1, bodyHeight * 1.28);
       p.circle(headX, headY, headRadius * 2.3);
-      p.fill("#4b382e");
+      p.fill(colors.primary);
       p.ellipse(0, 0, bodyLength, bodyHeight);
-      p.fill("#76604a");
+      p.fill(colors.secondary);
       p.circle(headX, headY, headRadius * 2);
 
       if (flying) {
         const wingLift = reducedMotion ? 0 : Math.sin(now * 0.006) * base * 0.28;
-        p.fill("#5d4939");
+        p.fill(wingColor);
         p.quad(
           -base * 0.72, -base * 0.08,
           -base * 0.38, -base * 2.2 + wingLift,
@@ -3341,20 +3346,22 @@ export function createTideweftRenderer(
           base * 0.72, -base * 0.06,
         );
       } else {
-        p.fill("#5d4939");
+        p.fill(wingColor);
         p.ellipse(-base * 0.28, 0, base * 1.72, base * 0.74);
       }
 
-      // A violet speculum and broad flat bill make the form readable without
-      // turning this one persistent actor into a generic gull or a flock.
-      p.fill("#4a5f8f");
-      p.quad(
-        -base * 0.64, -base * 0.42,
-        base * 0.08, -base * 0.3,
-        base * 0.02, base * 0.28,
-        -base * 0.7, base * 0.38,
-      );
-      p.fill("#a59655");
+      // Form-specific details remain profile-owned so one shared aquatic body
+      // can carry a dabbler's wing mark or a diving bird's unmarked wing.
+      if (profile.waterbirdDetails?.showWingAccent === true) {
+        p.fill(colors.accent);
+        p.quad(
+          -base * 0.64, -base * 0.42,
+          base * 0.08, -base * 0.3,
+          base * 0.02, base * 0.28,
+          -base * 0.7, base * 0.38,
+        );
+      }
+      p.fill(billColor);
       p.quad(
         headX + headRadius * 0.56, headY - headRadius * 0.27,
         headX + headRadius * 1.45, headY - headRadius * 0.2,
@@ -4366,7 +4373,7 @@ export function createTideweftRenderer(
           drawChartLongNeckedWader(actor, base, now);
           return true;
         case "dabbling-duck":
-          drawChartAmericanBlackDuck(actor, base, now);
+          drawChartAquaticWaterbird(actor, base, now);
           return true;
         case "ground-fowl":
           drawChartDomesticChicken(actor, base, now);

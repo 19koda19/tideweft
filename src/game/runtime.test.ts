@@ -91,6 +91,9 @@ import {
   projectCoreEcologyDayPhase,
 } from "./coreEcologyActivity";
 import {
+  CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+} from "./coreEcologyBreadthHabitat";
+import {
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_SPECIES,
   CORE_ECOLOGY_MARSH_EDGE_HABITAT_VERSION,
@@ -138,10 +141,15 @@ import {
   serializeRegionalEcologyStateV5,
 } from "./regionalEcologyStateV5";
 import {
+  createRegionalEcologyStateV6,
   deserializeRegionalEcologyStateV6,
   replaceRegionalEcologyStateV6ActiveState,
   serializeRegionalEcologyStateV6,
 } from "./regionalEcologyStateV6";
+import {
+  createPristineRegionalBreadthEcologyRoot,
+  regionalBreadthEcologyResidentsForActiveRegions,
+} from "./regionalBreadthEcology";
 import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
@@ -153,6 +161,8 @@ export const ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT =
   "test:alpha36-polar-consumer-runtime-v29:v1" as const;
 export const ALPHA37_ESTUARY_BREADTH_RUNTIME_V30_OWNER_INTENT =
   "test:alpha37-estuary-breadth-runtime-v30:v1" as const;
+export const ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT =
+  "test:alpha38-marsh-channel-web-runtime-v30:v1" as const;
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -1378,10 +1388,15 @@ describe("perpetual new worlds", () => {
     const firstRegional = deserializeRegionalEcologyStateV6(
       firstEnvelope.regionalEcology,
     );
+    const firstWorld = deserializeWorld(firstEnvelope.world);
     expect(firstRecord.payloadVersion).toBe(30);
     expect(firstEnvelope.version).toBe(30);
     expect(firstRegional).not.toBeNull();
-    const sources = firstRegional?.breadthActiveResidents ?? [];
+    expect(firstWorld.meta.completedTick).toBe(1);
+    expect(firstRegional?.updatedAtTick).toBe(firstWorld.meta.completedTick);
+    const sources = (firstRegional?.breadthActiveResidents ?? []).filter(
+      ({ cohortEpoch }) => cohortEpoch === 1,
+    );
     const species = new Set(sources.flatMap(({ patch }) => [
       ...patch.populations.map(({ species: value }) => value),
       ...patch.aggregatePopulations.map(({ species: value }) => value),
@@ -1391,7 +1406,9 @@ describe("perpetual new worlds", () => {
       "bay-anchovy",
       "common-tern",
     ]));
-    expect(sources.every(({ patch }) => patch.updatedAtTick === 1)).toBe(true);
+    expect(new Set(sources.map(({ patch }) => patch.updatedAtTick))).toEqual(
+      new Set([1]),
+    );
     expect(sources.flatMap(({ patch }) => patch.aggregatePopulations).every(
       (population) => population.anchors.reduce(
         (sum, { populationUnits }) => sum + populationUnits,
@@ -1411,6 +1428,77 @@ describe("perpetual new worlds", () => {
     await reloaded.save();
     expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(firstSerialized);
     reloaded.destroy();
+  }, 30_000);
+
+  it(`${ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT} adopts an epoch-one outer-v30 breadth root once without a save-version bump`, async () => {
+    expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBeGreaterThan(1);
+    const repository = new MemoryRepository();
+    const setup = await createTideweftRuntime(repository);
+    setup.dispatchUI({
+      type: "new-world",
+      seed: "wave g epoch adoption",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await setup.save();
+    setup.destroy();
+
+    const currentRecord = repository.snapshot();
+    const currentEnvelope = decodeGameSave(currentRecord);
+    const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
+    if (current === null) throw new Error("current v30 breadth fixture is invalid");
+    const world = deserializeWorld(currentEnvelope.world);
+    const activeRegions = current.base.base.base.base.base.activeRegions;
+    const oldRoot = createPristineRegionalBreadthEcologyRoot({
+      rootSeed: world.meta.rootSeed,
+      completedTick: world.meta.completedTick,
+    }, 1);
+    const oldResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      oldRoot,
+      world.meta.rootSeed,
+      activeRegions,
+    );
+    if (oldResidents === null) throw new Error("epoch-one residents could not derive");
+    const oldState = createRegionalEcologyStateV6({
+      base: current.base,
+      breadthRoot: oldRoot,
+      breadthActiveResidents: oldResidents.map(({ sourceKey, patch }) => ({
+        sourceKey,
+        patch,
+      })),
+      adoption: null,
+    });
+    const oldBase = serializeRegionalEcologyStateV5(oldState.base);
+    const oldActivation = stableStringify(oldState.breadthRoot.activations[0]);
+    currentEnvelope.regionalEcology = serializeRegionalEcologyStateV6(oldState);
+    resealGameSave(currentEnvelope);
+    repository.replace({
+      ...currentRecord,
+      worldJson: JSON.stringify(currentEnvelope),
+    });
+
+    const adoptedRuntime = await createTideweftRuntime(repository);
+    expect(adoptedRuntime.getUIView().saveWarning).toBeUndefined();
+    await adoptedRuntime.save();
+    const adoptedRecord = repository.snapshot();
+    const adoptedEnvelope = decodeGameSave(adoptedRecord);
+    const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
+    expect(adoptedRecord.payloadVersion).toBe(30);
+    expect(adoptedEnvelope.version).toBe(30);
+    expect(adopted?.breadthRoot.activeThroughEpoch).toBe(
+      CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+    );
+    expect(stableStringify(adopted?.breadthRoot.activations[0])).toBe(oldActivation);
+    expect(serializeRegionalEcologyStateV5(adopted?.base)).toBe(oldBase);
+    expect(adopted?.adoption).toBeNull();
+    const adoptedText = adoptedEnvelope.regionalEcology;
+    adoptedRuntime.destroy();
+
+    const replayRuntime = await createTideweftRuntime(repository);
+    expect(replayRuntime.getUIView().saveWarning).toBeUndefined();
+    await replayRuntime.save();
+    expect(decodeGameSave(repository.snapshot()).regionalEcology).toBe(adoptedText);
+    replayRuntime.destroy();
   }, 30_000);
 
   it("auto-resumes old postures into hard mode and refuses an unphrased replacement", async () => {
@@ -2506,7 +2594,7 @@ describe("perpetual new worlds", () => {
       sourceStateIntegrity: currentRegionalV6.base.integrity,
       sourceStateHash: hashCanonical(currentRegionalV6.base),
       sourceCompletedTick: currentRegionalV6.base.updatedAtTick,
-      resultBreadthActivationEpoch: 1,
+      resultBreadthActivationEpoch: CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
     });
     const firstSerialized = migratedEnvelope.regionalEcology;
     migrated.destroy();

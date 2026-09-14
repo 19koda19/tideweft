@@ -74,32 +74,44 @@ The playable slice uses:
 - 42 original-estuary human residents with immutable semantic origin identity, deterministic display identity, roles, traits, needs, relationships, condition, bounded memories, player knowledge, intention, location, and optional active contract.
 - Exactly one independently generated domestic dog, paired deterministically with one existing porter for a bounded food-and-rain interaction without making either actor the other's owner or companion.
 - Exactly one separate seed-stable settlement working dog in a bounded roster, with its own kennel custody and one generic persisted guardian assignment tied to the existing keeper, two-goat herd, and pen worksite. It does not rewrite the original dog's independent relationship.
-- One canonical bounded thirty-six-record wildlife catalog. Its first twenty-four
+- One canonical bounded forty-three-record living-species catalog. Its first twenty-four
   records are distributed through deterministic signed-region ecology while
   habitat v11 remains sealed compatibility lineage. Released Alpha33 appends
   mountain goat, American pika, and golden eagle as records 25–27 through a
   sparse Alpine sibling. Preserved unpublished Alpha34–36 candidates append
   Atlantic capelin, Arctic fox, harbor seal, and polar bear as records 28–31
   through exact polar-shore, cold-shore, and polar-consumer siblings. The
-  current unpublished Alpha37 source candidate retains that complete
+  preserved unpublished Alpha37 source candidate retains that complete
   `RegionalEcologyStateV5`/outer-v29 child and appends bay anchovy, Atlantic
   ghost crab, great blue heron, common tern, and osprey as records 32–36 through
-  one sparse append-only Estuary Surface Break breadth root. Addressable species
+  one sparse append-only Estuary Surface Break breadth root. The current
+  unpublished Alpha38 source candidate preserves that complete 36-record
+  catalog as an exact prefix, then appends Atlantic menhaden, mummichog, grass
+  shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-crested
+  cormorant as records 37–43 through Marsh Channel Web breadth epoch 2.
+  Addressable species
   use capped persistent representatives with stable
   seed/region/population/ordinal identities, segmented positions, bounded
   dynamic state, and saved materialized/coarse state. Eligible deer, gulls,
-  fish crows, boars, elk, wolves, mountain goats, and common terns use shared
+  fish crows, boars, elk, wolves, mountain goats, common terns, greater
+  yellowlegs, and double-crested cormorants use shared
   herd, flock, sounder, or pack topology; other addressable profiles remain
   solitary. Brown rat, southern leopard frog, Atlantic silverside, Atlantic
   marsh fiddler crab, American pika, Atlantic capelin, bay anchovy, and Atlantic
-  ghost crab remain conserved non-addressable aggregates; no fish, crab, or
-  pika actor is synthesized. A separate starting-settlement home owner retains
+  ghost crab, Atlantic menhaden, mummichog, grass shrimp, and blue crab remain
+  conserved non-addressable aggregates; no fish, crab, shrimp, or pika actor is
+  synthesized. A separate starting-settlement home owner retains
   bounded rats, chickens, and goats while its domestic cat remains
   habitat-optional. This is signed-region distribution of a bounded current
-  catalog toward approximately 75 profiles, not worldwide species breadth,
-  ecological migration behavior, or a complete bestiary. Alpha33 remains the
-  latest LIVE_VERIFIED public release; records 28–36 are local unpublished
-  candidate work.
+  catalog toward the 45 core-wildlife-profile closure target, not worldwide
+  species breadth, ecological migration behavior, or a complete bestiary.
+  Alpha33 remains the latest LIVE_VERIFIED public release; records 28–43 are
+  local unpublished candidate work. The catalog contains two shared foundation
+  records—human and domestic dog—outside the Directive 04_1 core-wildlife
+  target. Alpha38 represents 41 core-wildlife profiles / 43 total living
+  records. One coherent final four-profile cohort remains at the 45 / 47
+  closure boundary; neither Alpha38 nor that final cohort is represented here
+  as released.
 - One released starting-harbor fresh-produce store, bound to an existing settlement, human keeper, and brown-rat aggregate anchor. Its food is one conserved physical settlement-cargo lot rather than a mirror of abstract settlement stock; its open/secured door, keeper knowledge, and completed or pending exact-loss transaction persist under stable identity.
 - Shortage-derived contracts with a named requester, real origin stock, destination need, due tick, carrier, cargo conservation, condition grade, and traveled trace cost.
 - A complete set of potential inter-settlement corridors. Only routes above the strand-strength and condition threshold participate in autonomous service.
@@ -555,9 +567,9 @@ recruitment, population recovery, broad migration, complete scent, broad
 mortality, or audible Living Voice. It has no push, CI, Pages, deployment,
 exact-live, or LIVE_VERIFIED evidence.
 
-### Current unpublished local Alpha37 candidate: first Wave-G breadth cohort
+### Preserved unpublished local Alpha37 candidate: first Wave-G breadth cohort
 
-`0.3.3-alpha.37 — Estuary Surface Break` is the **current unpublished local
+`0.3.3-alpha.37 — Estuary Surface Break` is a **preserved unpublished local
 source candidate**. It preserves Alpha36's exact 31-record catalog and
 `RegionalEcologyStateV5`/outer-v29 state as an authenticated child, then appends
 bay anchovy, Atlantic ghost crab, great blue heron, common tern, and osprey as
@@ -575,7 +587,7 @@ tidal flat without synthesizing exact fish or crabs. Existing identity, group,
 aggregate, perception, movement, presentation, and ABOUT owners remain
 authoritative.
 
-The current activity registry contains eight reusable archetypes across eleven
+That candidate's activity registry contains eight reusable archetypes across eleven
 species. Great blue heron appends the `anchored-wader` profile: it can relocate
 by air to its authenticated tide-depth-safe wading ground, then wait, scan, or
 search there. Common tern and osprey reuse `aerial-surface-opportunist`, with
@@ -596,11 +608,57 @@ append-only sparse breadth root. Outer save 30 authenticates and adopts one
 sealed outer-v29 Alpha36 child exactly once. Base, Alpine, polar-shore,
 cold-shore, polar-consumer, and breadth residents enter the same insertion-
 order-independent, group-atomic top-K capped at 24 addressable actors and one
-all-or-nothing commit. This opens Wave G toward approximately 75 profiles but
+all-or-nothing commit. This opens Wave G toward 45 core-wildlife profiles but
 does not complete Wave G or Directive 04_1. Dedicated Wave-G performance proof,
 seamless actor-crossing proof, sound, capture, mortality, reproduction,
 continuous 3D flight, push, CI, Pages, deployment, exact-live, and LIVE_VERIFIED
 evidence remain absent.
+
+### Current unpublished local Alpha38 candidate: Marsh Channel Web
+
+`0.3.3-alpha.38 — Marsh Channel Web` is the **current unpublished local source
+candidate**. It preserves Alpha37's exact 36-record catalog, epoch-1 activation,
+and `RegionalEcologyStateV6`/outer-v30 envelope, then appends Atlantic menhaden,
+mummichog, grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and
+double-crested cormorant as records 37–43. The existing breadth root activates
+the cohort at epoch 2; no new ecology or outer-save wrapper is introduced.
+
+Menhaden, mummichog, grass shrimp, and blue crab are conserved non-addressable
+aggregates. Greater yellowlegs form one group-atomic flock of two to four
+persistent actors, the belted kingfisher remains solitary, and double-crested
+cormorants form one group-atomic flock of two to three. Signed terrain,
+salinity, channel and shore structure, water depth, tide, carrying capacity,
+territory, density, regional quiet, and exact aggregate substrate decide
+admission. Yellowlegs require grass shrimp, kingfishers require mummichog, and
+cormorants require menhaden, so unsupported country remains honestly empty.
+
+Shared aggregate and Tide Table policy moves only conserved units among
+authenticated anchors. Yellowlegs reuse anchored-wader activity, kingfishers
+reuse air-only surface-opportunity and perch behavior, and cormorants use the
+shared diving-waterbird profile for lawful surface swimming, diving, resting,
+and flight relocation. Immediate danger remains authoritative. Chart, Relief,
+quick inspection, and ABOUT share current identity and presentation authority.
+This is bounded activity and presentation, not continuously simulated 3D
+flight.
+
+One representative emergence witness composes lawful cormorant perception and
+the conserved menhaden aggregate. Clear current line of sight can redistribute
+one unit nonlethally; an occluding ridge removes the observation and response.
+Every unit remains conserved, and the interaction creates no exact prey,
+capture, consumption, injury, mortality, body, item, cargo, player, or dog
+transaction.
+
+Valid epoch-1 outer-v30 worlds authenticate before appending epoch 2 exactly
+once at their saved tick. Their exact Alpha37 activation, resident prefix,
+identities, units, and genuine deviations remain intact; repeated load is a
+no-op. All ecology sources continue through the same insertion-order-
+independent, group-atomic top-K capped at 24 addressable actors and one atomic
+commit. Alpha38 reaches 41 of the directive's 45 core-wildlife profiles. One
+final coherent four-profile cohort and the directive closure gates remain.
+Dedicated Wave-G performance and seamless actor-crossing closure evidence,
+sound, capture/consumption, new mortality/bodies, reproduction, full circadian
+life, continuous 3D flight, push, CI, Pages, deployment, exact-live, and
+LIVE_VERIFIED evidence remain absent.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -717,7 +775,7 @@ still owns existence: a seal requires exact capelin/water/haulout support and a
 bear requires that exact seal candidate. These records do not alter the
 twenty-seven-record LIVE_VERIFIED Alpha33 contract.
 
-The current unpublished Alpha37 candidate preserves that complete 31-record
+The preserved unpublished Alpha37 candidate preserves that complete 31-record
 sequence and appends bay anchovy, Atlantic ghost crab, great blue heron, common
 tern, and osprey as records 32–36. The first two select conserved aggregate
 representation. Heron and osprey select solitary individual representation;
@@ -727,8 +785,19 @@ Heron selects `anchored-wader`; tern and osprey reuse
 `aerial-surface-opportunist`. These records do not alter the twenty-seven-record
 LIVE_VERIFIED Alpha33 release contract.
 
+The current unpublished Alpha38 candidate preserves that exact 36-record
+sequence and appends Atlantic menhaden, mummichog, grass shrimp, blue crab,
+greater yellowlegs, belted kingfisher, and double-crested cormorant as records
+37–43. The first four select conserved aggregate representation; yellowlegs and
+cormorants select group-atomic flocks, and the kingfisher remains solitary.
+All seven join the same breadth owner at epoch 2. The addressable birds use
+shared activity, perception, movement, grouping, ABOUT, and dual-view
+presentation, while the aggregates use the shared aggregate and tide owners.
+These records do not alter the twenty-seven-record LIVE_VERIFIED Alpha33
+release contract.
+
 `src/game/livingSpeciesReleaseGate.ts` authenticates build-owned evidence for
-that exact thirty-six-record roster against 30 stable completeness criteria. A
+that exact forty-three-record roster against 30 stable completeness criteria. A
 structurally valid caller claim cannot mark itself ready, absent behavior cannot
 smuggle an evidence owner, and biologically inapplicable criteria require narrow
 ecological proof. Every record may claim only its actual habitat, policy,
@@ -736,20 +805,20 @@ activity, perception, movement, aggregate, custody, materialization,
 presentation, persistence, mobile, and representative-scenario owners. Separate
 bounded reports authenticate prior waves without promoting them to worldwide
 ecology, and later appends cannot rewrite the frozen Alpha22 convergence report.
-Alpha37 evidence is precise: save/load requires the runtime-v30/V6 owner, shared
-neutral activity is active for the three addressable birds, and one
-common-tern-to-anchovy visible-versus-occluded scenario owns representative
-player-independent evidence. Sound, contact, mortality, bodies, reproduction,
-snow/ice, full scent, and deployment remain blocked or unimplemented. Dedicated
-Wave-G performance and seamless actor-crossing rows remain foundation-only;
-they are not release proof. Immutable build-owned publication fields remain
+Alpha38 evidence is precise: save/load requires the runtime-v30/V6 owner and
+epoch-2 activation, shared activity is active for the three new addressable
+birds, and one cormorant-to-menhaden visible-versus-occluded scenario owns
+representative player-independent evidence. Sound, contact, mortality, bodies,
+reproduction, snow/ice, full scent, and deployment remain blocked or
+unimplemented. Dedicated Wave-G performance and seamless actor-crossing rows
+remain foundation-only; they are not closure proof. Immutable build-owned
+publication fields remain
 false because a bundle cannot attest its own post-deployment byte identity.
 Shared invariants, deterministic and signed/extreme-coordinate properties,
 conservation, and representative scenarios exercise the architecture without a
 species-by-species or quadratic animal-pair matrix. This is a fail-closed
 development boundary, not a player statistic, deployment claim, or assertion
-that one regional assemblage implements the approximately seventy-five-profile
-target.
+that one regional assemblage implements the 45-profile core-wildlife target.
 
 `src/game/coreEcologyHabitat.ts` preserves the frozen Wave-A analysis for deer, gulls, and black bears, the version-2 harbor-edge extension for brown rats and domestic cats, the version-3 marsh-rabbit and marsh-fox extension, the version-4 fish-crow, northern-harrier, and southern-leopard-frog extension, the version-5 Tide Table extension, version-6 American-black-duck habitat, and version-7 North American river otter habitat. Habitat version 8 preserves the complete version-7 population and anchor record as an exact prefix, then appends one deterministic domestic-yard anchor and one two-to-three-member domestic-chicken population. Habitat version 9 preserves that complete record exactly before appending one separate pen anchor and exactly two domestic-goat individuals in one herd. Habitat version 10 preserves the complete version-9 record exactly, then appends one deterministic remote temperate-upland/forest-edge source and the wild-boar, elk, and gray-wolf population records. Habitat version 11 first synthesizes and canonicalizes that complete version-10 result unchanged, then derives cougar and brown-bear population records at its exact selected remote source; it does not recompute the existing trio's population pressure or trend, and unsupported capacity remains an authoritative zero-unit population with no allocation. Unlike terrain-derived wild habitat, both domestic populations are supported by the existing starting-settlement relationship; the stable world seed, signed origin, settlement focus, and generation version derive their anchors and allocations. The pen remains separated from the yard and every established individual allocation. Each supported addressable population receives bounded individual allocations, all members share the existing individual occupancy plane, and each eligible social population is represented by one stable group while any cougar or brown bear remains solitary. Existing rat, frog, fish, and crab populations retain their aggregate occupancy planes and all tidal metadata remains exact. Inputs are call-order independent and valid at signed extreme region addresses; the runtime rederives the expected habitat on load and rejects a mismatch instead of accepting a reroll.
 
@@ -759,7 +828,7 @@ target.
 
 `src/game/coreEcologyPerception.ts` converts current in-window visual contacts into the same classified observation vocabulary used by living actors. Terrain, structures, facing, weather visibility, and static target light affect current visual contact; target movement salience and species-specific visual acuity are still narrow inputs rather than a complete universal sensory field. Its Tide Table bridge selects a currently materialized surface observer only through the generic conjunction of `actor-address`, `surface-opportunity`, and `tidal-activity` runtime capabilities. It can then add a same-tick anonymous `aquatic-activity` visual fact—currently available to gull, snowy egret, American black duck, North American river otter, harbor seal, great blue heron, common tern, and osprey—only when an occupied, active, depth-usable fish or crab anchor passes the same direct line-of-sight test. The fact contains an approximate area but no aggregate identity, species, exact count, or actor ID. This observation capability alone does not grant aquatic locomotion, ecological pressure, capture, or consumption; separate roles and policy decide whether a lawful observation can affect an aggregate. `src/game/coreEcologyTrophic.ts` then resolves only ecologically actionable relations from shared roles, runtime capabilities, and explicit physical size classes. Bears remain large-predator pressure to prey, dogs, humans, and smaller predators; a domestic dog can pressure a rabbit or fox; a fox, cat, northern harrier, cougar, or gray wolf can recognize its eligible prey through the shared broad predator rules. Current waders and aquatic foragers can exert only their declared nonlethal aggregate pressure. A fish crow directly seeing a northern harrier can emit a shared alarm. Only a crow whose retained identified direct-vision alarm still names that aerial predator presents `mobbing-pressure` back to the harrier; mere co-presence does not. That pressure can interrupt a finite nonlethal harrier pursuit without classifying the crow as prey. Other committed alarms propagate through bounded, weather/wind-modified hearing as anonymous approximate areas with no emitter ID/species, hidden target, or internal motive. The active set is tightly capped; broader density still requires spatial buckets instead of all-pairs scanning.
 
-`src/game/coreEcologyAggregatePerception.ts` is the shared runtime bridge from current world truth into the current conserved aggregate species: brown rat, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, American pika, Atlantic capelin, bay anchovy, and Atlantic ghost crab. Each materialized visual source enters as one canonical addressable living species; unknown species and non-addressable sources fail closed. Existing terrain/weather occlusion resolves per-anchor contact before `src/game/coreEcologyAggregatePolicy.ts` derives a response from shared runtime capabilities, ecological roles, and trophic size classes rather than a source-species allowlist. Existing examples include predator pressure on the earlier small-prey aggregates, eagle pressure on pika, Arctic-fox or harbor-seal pressure on capelin, and the Alpha37 common-tern pressure witness against anchovy. Neutral co-presence produces no stimulus. The capability-selected aquatic-observation side of the same bounded bridge serves every current eligible surface observer without species-specific fish detectors; only a separately supported role can turn that observation into aggregate pressure. The Alpha37 representative scenario proves one exact positive/negative boundary: a common tern with clear current sight can pressure an occupied anchovy anchor, while an intervening ridge removes the observation and response. Both branches conserve the complete anchovy population and create no exact fish, capture, consumption, injury, mortality, body, item, cargo, or automatic player knowledge. The bridge also derives rat attraction only from currently existing loose provision objects through the shared wind- and rain-shaped scent evaluator, and weather pressure from authoritative rain plus each saved anchor's terrain exposure. It submits a bounded canonical stimulus frame rather than giving any aggregate kernel access to actor lists, player state, weather, or cargo. `src/game/coreEcologySmallWorld.ts` then applies species-owned response rules while retaining canonical `cat` and `dog` aliases in its transient stimulus/event payloads and the v2 shape for pre-existing rat interactions; no serialized event record depends on those aliases. Lawful pressure can quiet or redistribute only an existing eligible unit on the species' fixed cadence, and a tidal fish destination must additionally be usable at the current depth. Identity, total units, and anchor custody remain conserved. These are aggregate population responses, not individual cognition, capture, or feeding.
+`src/game/coreEcologyAggregatePerception.ts` is the shared runtime bridge from current world truth into the current conserved aggregate species: brown rat, southern leopard frog, Atlantic silverside, Atlantic marsh fiddler crab, American pika, Atlantic capelin, bay anchovy, Atlantic ghost crab, Atlantic menhaden, mummichog, grass shrimp, and blue crab. Each materialized visual source enters as one canonical addressable living species; unknown species and non-addressable sources fail closed. Existing terrain/weather occlusion resolves per-anchor contact before `src/game/coreEcologyAggregatePolicy.ts` derives a response from shared runtime capabilities, ecological roles, and trophic size classes rather than a source-species allowlist. Existing examples include predator pressure on the earlier small-prey aggregates, eagle pressure on pika, Arctic-fox or harbor-seal pressure on capelin, common-tern pressure on anchovy, and the Alpha38 cormorant pressure witness against menhaden. Neutral co-presence produces no stimulus. The capability-selected aquatic-observation side of the same bounded bridge serves every current eligible surface observer without species-specific fish detectors; only a separately supported role can turn that observation into aggregate pressure. The Alpha38 representative scenario proves one exact positive/negative boundary: a cormorant with clear current sight can pressure an occupied menhaden anchor, while an intervening ridge removes the observation and response. Both branches conserve the complete menhaden population and create no exact prey, capture, consumption, injury, mortality, body, item, cargo, or automatic player knowledge. The bridge also derives rat attraction only from currently existing loose provision objects through the shared wind- and rain-shaped scent evaluator, and weather pressure from authoritative rain plus each saved anchor's terrain exposure. It submits a bounded canonical stimulus frame rather than giving any aggregate kernel access to actor lists, player state, weather, or cargo. `src/game/coreEcologySmallWorld.ts` then applies species-owned response rules while retaining canonical `cat` and `dog` aliases in its transient stimulus/event payloads and the v2 shape for pre-existing rat interactions; no serialized event record depends on those aliases. Lawful pressure can quiet or redistribute only an existing eligible unit on the species' fixed cadence, and a tidal fish destination must additionally be usable at the current depth. Identity, total units, and anchor custody remain conserved. These are aggregate population responses, not individual cognition, capture, or feeding.
 
 `src/game/coreWildlifeActor.ts` turns accepted observations, bounded needs/condition, generated temperament, role affinities, runtime capabilities, and action accessibility into alarm, flee, retreat, guard, scavenge, forage, bounded pursue, rest, observe, or disengage. A proposal never mutates another actor or item. Rabbits retain causal alarm and flight; hungry foxes, gray wolves, and cougars retain finite prey pursuit and pressure-based interruption. Only the separate mortality resolver may translate an extant current fox, wolf, or cougar pursuit plus exact eligible-rabbit contact into damage. Brown bear has no live-prey pursuit or contact policy in this unit. Fish-crow alarm/mobbing, nonlethal harrier pursuit, cat food competition, and rain retreat retain their prior bounded rules.
 
@@ -796,13 +865,13 @@ death, and feeding announcements use the same event-time observation law;
 returning later may reveal the persistent body but never creates retrospective
 narration.
 
-`src/game/coreEcologySpeciesRuntimePolicy.ts` composes representation, addressability, locomotion, group organization, aggregate response, food investigation, shared alarm, mobbing, pursuit, activity, evidence, and presentation capabilities without a species-pair behavior table. `src/game/coreEcologyAggregatePolicy.ts` separately owns aggregate namespaces, anchor bounds, activity/evidence vocabulary, rain response, and the shared role/trophic response bridge, so aggregate consumers do not branch on ad hoc species checks. `src/game/coreEcologyTidalTable.ts` owns only the pure target-tick tide/depth projection and its conservation-safe fish redistribution/activity step; it neither regenerates habitat nor owns cargo, consumption, or mortality. Its completed tidal-edge opportunity is recorded in the durable aggregate operation clock even when no unit moves. Released Alpha 22 introduced `src/game/coreEcologyActivityAffordance.ts` with six reusable archetypes. The current Alpha37 registry has eight archetypes across eleven participating species: the original `perch-watch`, `low-quartering`, `tidal-wader`, `dabbling-waterfowl`, `shore-water-forager`, and `aerial-surface-opportunist`, plus `ridge-soar-perch` and `anchored-wader`. Each profile declares required runtime capabilities, locomotion class, allowed travel media, destination authority, observation affordance, presentation signals, and only a bounded daylight/rest window. Unknown species and incoherent capability/profile combinations fail closed. `src/game/coreEcologyActivity.ts` consumes those profiles through one shared finalizer that rejects any emitted signal, movement medium, destination semantic, perch claim, or observation reference outside the selected profile before it can reach movement or presentation. Immediate lawful alarm, flee/retreat/guard, pursuit/disengagement, and physical-food forage/scavenge intents outrank neutral activity. Existing crow, harrier, egret, duck, otter, gull, golden-eagle, and harbor-seal routines retain their authenticated anchors and movement contracts. Alpha37 adds a great-blue-heron `anchored-wader` that relocates by air to one authenticated tide-depth-safe wading ground and then waits, scans, or searches there. Common tern and osprey reuse the gull's air-only surface-opportunity/rest archetype without receiving water locomotion or an exact fish target. Transit presentation remains generic flight until the current state lawfully supports a more specific visible behavior; private cues never become player knowledge. This is not sleep, denning, a nocturnal schedule, capture/feeding resolution, continuously simulated 3D flight, or the complete circadian system.
+`src/game/coreEcologySpeciesRuntimePolicy.ts` composes representation, addressability, locomotion, group organization, aggregate response, food investigation, shared alarm, mobbing, pursuit, activity, evidence, and presentation capabilities without a species-pair behavior table. `src/game/coreEcologyAggregatePolicy.ts` separately owns aggregate namespaces, anchor bounds, activity/evidence vocabulary, rain response, and the shared role/trophic response bridge, so aggregate consumers do not branch on ad hoc species checks. `src/game/coreEcologyTidalTable.ts` owns only the pure target-tick tide/depth projection and its conservation-safe fish redistribution/activity step; it neither regenerates habitat nor owns cargo, consumption, or mortality. Its completed tidal-edge opportunity is recorded in the durable aggregate operation clock even when no unit moves. Released Alpha 22 introduced `src/game/coreEcologyActivityAffordance.ts` with six reusable archetypes. The current Alpha38 registry has nine archetypes across fourteen participating species: the original `perch-watch`, `low-quartering`, `tidal-wader`, `dabbling-waterfowl`, `shore-water-forager`, and `aerial-surface-opportunist`, plus `ridge-soar-perch`, `anchored-wader`, and `diving-waterbird`. Each profile declares required runtime capabilities, locomotion class, allowed travel media, destination authority, observation affordance, presentation signals, and only a bounded daylight/rest window. Unknown species and incoherent capability/profile combinations fail closed. `src/game/coreEcologyActivity.ts` consumes those profiles through one shared finalizer that rejects any emitted signal, movement medium, destination semantic, perch claim, or observation reference outside the selected profile before it can reach movement or presentation. Immediate lawful alarm, flee/retreat/guard, pursuit/disengagement, and physical-food forage/scavenge intents outrank neutral activity. Existing routines retain their authenticated anchors and movement contracts. Alpha38 lets greater yellowlegs reuse `anchored-wader`, belted kingfishers reuse the air-only surface-opportunity/rest profile, and cormorants use `diving-waterbird` for lawful surface swimming, diving, resting, and flight relocation. Transit presentation remains generic until the current state lawfully supports a more specific visible behavior; private cues never become player knowledge. This is not sleep, denning, a nocturnal schedule, capture/feeding resolution, continuously simulated 3D flight, or the complete circadian system.
 
-`src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. Fish-crow, harrier, egret, duck, otter, heron, tern, and osprey movement deliberately produce no new ground evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current fox/wolf contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
+`src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current fox/wolf contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 
 When the habitat assemblage contains a bear, the runtime seeds one exact loose dried-fish parcel near it. Visual evidence can make that parcel a food opportunity for an eligible bear, gull, fish crow, or river otter, but only an identified, directly confirmed, accessible whole unit may produce a claim. The cargo owner rechecks exact segmented contact, payload kind, quantity, and current existence before atomically committing one custody path and any lawful ordinary-food consumption. Sorted claims, replay protection, and exact custody ensure a second actor or reload cannot consume another copy. The otter is deliberately only another consumer of this generic seam, not an owner of private loot or cargo rules. A malformed claim, partial stack, consumed item, or out-of-reach seam case leaves both cargo and ecology unchanged. Aggregate attraction never consumes, moves, aliases, or duplicates one. Player-facing narration is emitted only when the event-time actor was directly visible; otherwise authoritative history remains silent to the player.
 
-Chart and Relief project the same direct-detail individual wildlife set and use species plus stable ID for selection. Current addressable wildlife receives distinct color-independent low-cost forms and the ordinary wildlife choices: **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE**. Gulls and common terns retain flock presentation under the same direct-detail gate; each visible representative renders and hit-tests once, and a bounded visible-flock summary never manufactures decorative copies or extra targets. Alpha37 adds the long-necked great-blue-heron form, compact fork-tailed common-tern flock form, and broad-winged osprey form to both views. Authenticated heron wading/waiting/scan/search and tern/osprey surface-opportunity/rest states project only when current activity supports them; an aerial pose is presentation of bounded authoritative travel state, not a continuously simulated 3D flight body. At uncertain clarity, ABOUT remains generic and never exposes a private target, exact trait, aggregate count, or stable ID. Rat/frog/pika areas, silverside/capelin/anchovy surface activity, and fiddler/ghost-crab burrow or scrape evidence remain aggregate target types; cat/rabbit/fox/wolf tracks remain non-targetable, and the current later additions produce no track evidence. Mouse/touch and Chart/Relief share the same projection, reduced motion preserves the same facts, and loss of sight clears the ephemeral target.
+Chart and Relief project the same direct-detail individual wildlife set and use species plus stable ID for selection. Current addressable wildlife receives distinct color-independent low-cost forms and the ordinary wildlife choices: **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE**. Flocks retain presentation under the same direct-detail gate; each visible representative renders and hit-tests once, and a bounded visible-flock summary never manufactures decorative copies or extra targets. Alpha38 adds shared structural forms and current activity poses for greater yellowlegs, belted kingfisher, and double-crested cormorant in both views. An aerial or diving pose is presentation of bounded authoritative activity state, not a continuously simulated 3D flight body or feeding outcome. At uncertain clarity, ABOUT remains generic and never exposes a private target, exact trait, aggregate count, or stable ID. Aggregate surface, schooling, burrow, and feeding evidence remains non-addressable; cat/rabbit/fox/wolf tracks remain non-targetable, and the current later additions produce no persistent track evidence. Mouse/touch and Chart/Relief share the same projection, reduced motion preserves the same facts, and loss of sight clears the ephemeral target.
 
 `src/audio/soundscape.ts` adds an original fish-crow nasal double call and southern-leopard-frog chorus beside the earlier ecology cues. A crow call plays only for a causative new alarm transition witnessed at event time. The frog chorus is different: current rain raises the activity of an extant frog area, but that same rain contributes ambient masking when the shared hearing evaluator decides whether the player can hear it. At most the strongest lawful source produces one stereo cue and a species-anonymous caption such as `[chorus nearby — east]`. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. Aggregate identity, exact coordinates, and hidden population remain undisclosed. The northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated audible calls in this release. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
 
@@ -1071,7 +1140,7 @@ and commit keep all five ecology layers inside the same global group-atomic
 24-actor allowance and one all-or-nothing transaction. This local schema is
 save-compatible candidate evidence only; it is not pushed or deployed.
 
-The current unpublished Alpha37 source candidate advances only its local outer
+The preserved unpublished Alpha37 source candidate advances only its local outer
 session to version 30. `RegionalEcologyStateV6` retains the exact authenticated
 V5 base/Alpine/polar-shore/cold-shore/polar-consumer child and adds one sparse
 append-only breadth root without rewriting any established ecology owner. An
@@ -1079,6 +1148,15 @@ authenticated outer-v29 Alpha36 child is adopted exactly once. Projection and
 commit keep all six ecology layers inside the same global group-atomic 24-actor
 allowance and one all-or-nothing transaction. This local schema is
 save-compatible candidate evidence only; it has not been pushed, deployed, or
+LIVE_VERIFIED.
+
+The current unpublished Alpha38 source candidate keeps outer version 30 and
+`RegionalEcologyStateV6`. Its authenticated version-1 breadth root advances
+from epoch 1 to epoch 2 exactly once at the saved tick, appending Marsh Channel
+Web after the exact Estuary Surface Break activation and resident prefix.
+Already-current state is a byte-stable no-op, and rewind, future epoch, stale
+integrity, or mismatched world binding fails closed. This is save-compatible
+local candidate evidence only; it has not been pushed, deployed, or
 LIVE_VERIFIED.
 
 The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
@@ -1133,7 +1211,7 @@ Chart and Relief. The renderer may present current shore-water activity and
 generic pursue/flee intent, but it cannot create prey knowledge, contact,
 injury, death, a body, or a private simulation outcome.
 
-The current unpublished Alpha37 candidate adds restrained aggregate anchovy
+The preserved unpublished Alpha37 candidate adds restrained aggregate anchovy
 surface dimples or blue glints and ghost-crab burrow openings or feeding scrapes
 through the existing evidence path. It also adds shared long-necked-wader,
 shorebird-flock, and broad-winged-raptor forms for great blue heron, common
@@ -1142,6 +1220,14 @@ surface-opportunity or rest activity alter posture and bounded air-travel
 presentation only when the authoritative current activity state supports them.
 The renderer does not create an exact aggregate animal, hidden prey target,
 ecological outcome, or continuously simulated 3D flight body.
+
+The current unpublished Alpha38 candidate reuses those same aggregate and
+structural projection owners for menhaden, mummichog, grass-shrimp, and
+blue-crab signs plus greater-yellowlegs, belted-kingfisher, and cormorant
+actors. Current authenticated activity may alter wading, perching, surface-
+swimming, diving, resting, or bounded travel posture. Neither renderer invents
+an exact aggregate animal, feeding result, hidden target, continuous 3D flight
+body, or information outside current lawful perception.
 
 The composite renderer owns one disposable terrain-perception-memory store shared by Chart and Relief. It retains only a capped `120 × 120` scalar visibility array and eases lost terrain strength to its durable map baseline over 900 milliseconds; eight quantized Relief bands keep rebatching bounded. Clear-air terrain reaches at most 52 tiles, remains fully legible through 34, and uses an 18-tile distance feather; the exact-detail field remains 10 tiles. The buffer never retains projected terrain objects, entity/detail masks, labels, actions, hit targets, or save state. Exact water presentation, actors, parcels, resources, and interaction routing continue to consume the raw current-detail field and fail closed immediately. When the bounded frame slides, its terrain impression rebases by the same exact spatial delta as both cameras and active pointer routes. World/geometry identity changes, clock/tick regression, reload/destruction, and reduced-motion presentation otherwise settle the buffer without changing authoritative perception.
 
@@ -1224,14 +1310,24 @@ and the explicit no-contact/no-mortality boundary. Those source versions close
 bounded Wave-F role coverage locally; they do not make Alpha36 a public release
 or complete Wave G.
 
-The current unpublished Alpha37 source candidate advances its guide to version
+The preserved unpublished Alpha37 source candidate advances its guide to version
 47 and gameplay contract to 35 for the exact 31-record Alpha36 prefix, the five
 Estuary Surface Break records 32–36, shared bounded neutral activity, one
 visible-versus-ridge-occluded common-tern/anchovy witness, V6/outer-v30
 persistence, the unchanged global cap, and explicit nonlethal/local-candidate
-limits. These source versions open Wave G toward approximately 75 profiles;
+limits. These source versions open Wave G toward 45 core-wildlife profiles;
 they do not complete it, prove dedicated Wave-G performance or seamless actor
 crossing, or make Alpha37 a public release.
+
+The current unpublished Alpha38 source candidate advances its guide to version
+48 and gameplay contract to 36 for the exact 36-record Alpha37 prefix, seven
+Marsh Channel Web records 37–43, breadth epoch-2 activation, shared tide,
+aggregate, activity, perception, movement, presentation, and ABOUT authority,
+one visible-versus-ridge-occluded cormorant/menhaden witness, unchanged
+V6/outer-v30 persistence, the unchanged global cap, and explicit nonlethal
+local-candidate limits. These source versions reach 41 / 43 and leave one final
+four-profile cohort plus dedicated Wave-G performance, seamless crossing, and
+directive closure evidence; they do not make Alpha38 a public release.
 
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 
@@ -1284,9 +1380,10 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 25. Preserved unpublished local Alpha34 checkpoint: exact twenty-seven-record compatibility prefix plus capelin record 28; sparse cold-saline polar-shore admission with lawful absence and coordinate-limit-safe signed territories; one conserved non-addressable school of up to 64 units over at most four tide-safe anchors; generic tide/activity/evidence policy; anonymous dual-view ABOUT evidence; one visible-versus-occluded cross-owner aerial-pressure witness with no mortality, body, cargo, or item effect; byte-exact runtime/dormant ordering; pristine sparse persistence; active-key work bounded independently of explored history; exact V2 child plus polar sibling under V3/outer-v27 adoption; and one global atomic materialization/conservation commit. It explicitly excludes Arctic fox, polar bear, seal, new seabird, snow/ice behavior, new mortality, capture, reproduction, audible Living Voice, and Wave-F completion, and carries no release or deployment evidence.
 26. Unpublished local Alpha35 candidate: exact twenty-eight-record Alpha34 prefix plus Arctic-fox record 29; sparse cold-shore admission only over a viable admitted capelin substrate; exactly one solitary addressable actor per admitted source through shared identity, perception, attention, condition, locomotion, dormant autonomy, evidence, ABOUT, and dual-view presentation; current LOS/occlusion-gated generic nonlethal pressure with exact aggregate conservation; pristine sparse persistence; exact V3 child plus cold-shore sibling under V4/outer-v28 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It explicitly excludes capture/consumption, new mortality, reproduction, audible Living Voice, seal, polar bear, new seabird, snow/ice behavior, full migration, Wave-F completion, Wave-G breadth, Directive completion, and release/deployment evidence.
 27. Unpublished local Alpha36 candidate plus its first Wave-G boundary hardening: exact twenty-nine-record Alpha35 prefix plus harbor-seal and polar-bear records 30–31; one capelin-backed polar-consumer source with connected cold saline foraging water, a distinct dry haulout, one solitary seal, and a rarer bear only after the exact seal candidate exists; shared amphibious traversability with `amphibious-route` kept orthogonal to authenticated otter/seal `shore-water-activity`; individual cognition, materialization, sparse persistence, knowledge-honest ABOUT, and dual-view presentation; one current-LOS/occlusion-gated representative chain proving conserved seal pressure on capelin plus nonlethal bear pursuit and seal flight; exact V4 child plus polar-consumer sibling under V5/outer-v29 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It closes bounded Wave-F role coverage while explicitly excluding contact/capture/consumption, new mortality/bodies, player or dog harm, sea ice/snow, reproduction/recovery, audible Living Voice, Wave-G species breadth, Directive completion, and release/deployment evidence.
-28. Current unpublished local Alpha37 source candidate: exact 31-record Alpha36 prefix plus bay-anchovy, Atlantic-ghost-crab, great-blue-heron, common-tern, and osprey records 32–36; one habitat-gated append-only Estuary Surface Break breadth root with honest regional absence; two conserved non-addressable aggregates, two solitary actors, and one group-atomic tern flock; shared Tide Table, activity, perception, locomotion, ABOUT, and dual-view presentation; an authenticated heron wading anchor plus tern/osprey air-only surface-opportunity/rest behavior subordinate to danger; one clear-versus-ridge-occluded common-tern/anchovy nonlethal pressure witness with exact conservation; exact V5 child plus breadth root under V6/outer-v30 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It opens Wave G toward approximately 75 profiles while explicitly excluding sound, capture/consumption, new mortality/bodies, player or dog harm, reproduction/recovery, continuous 3D flight, dedicated Wave-G performance or seamless actor-crossing proof, Directive completion, and release/deployment evidence.
-29. Vite production build under relative paths.
-30. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
+28. Preserved unpublished local Alpha37 source candidate: exact 31-record Alpha36 prefix plus bay-anchovy, Atlantic-ghost-crab, great-blue-heron, common-tern, and osprey records 32–36; one habitat-gated append-only Estuary Surface Break breadth root with honest regional absence; two conserved non-addressable aggregates, two solitary actors, and one group-atomic tern flock; shared Tide Table, activity, perception, locomotion, ABOUT, and dual-view presentation; an authenticated heron wading anchor plus tern/osprey air-only surface-opportunity/rest behavior subordinate to danger; one clear-versus-ridge-occluded common-tern/anchovy nonlethal pressure witness with exact conservation; exact V5 child plus breadth root under V6/outer-v30 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It opens Wave G toward 45 core-wildlife profiles while explicitly excluding sound, capture/consumption, new mortality/bodies, player or dog harm, reproduction/recovery, continuous 3D flight, dedicated Wave-G performance or seamless actor-crossing proof, Directive completion, and release/deployment evidence.
+29. Current unpublished local Alpha38 source candidate: exact 36-record Alpha37 prefix plus Atlantic-menhaden, mummichog, grass-shrimp, blue-crab, greater-yellowlegs, belted-kingfisher, and double-crested-cormorant records 37–43; append-only breadth epoch 2 with dependency-gated honest absence; four conserved non-addressable aggregates, one solitary kingfisher, and group-atomic yellowlegs/cormorant flocks; shared Tide Table, aggregate, activity, perception, locomotion, ABOUT, and dual-view presentation; one clear-versus-ridge-occluded cormorant/menhaden nonlethal pressure witness with exact conservation; unchanged V6/outer-v30 with deterministic old-epoch activation; and the same global group-atomic 24-actor cap and atomic cross-layer commit. It reaches 41 of 45 core-wildlife profiles while explicitly excluding sound, capture/consumption, new mortality/bodies, player or dog harm, reproduction/recovery, continuously simulated 3D flight, dedicated Wave-G performance or seamless actor-crossing closure proof, Directive completion, and release/deployment evidence.
+30. Vite production build under relative paths.
+31. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
 
 The Phase 10 gate passes TypeScript, 28 Vitest files / 205 checks, the production and nested-path web gates, that extended packaged smoke, `git diff --check`, and a scoped source secret scan. Exact commit `6f74fe9e016ba566116e2085b05ecf2988213754` is published: CI run `33494152504` and Pages run `33494152310` succeeded, and the live HTML serves the inspected `index-CKlzWR1L.css` and `index-D30XtHH3.js` assets with HTTP 200 responses. The deployment is an untagged preview; `v0.2.0-alpha.1` remains unchanged.
 

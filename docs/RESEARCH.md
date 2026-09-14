@@ -613,10 +613,10 @@ they do not receive a private visibility budget or a species-local controller.
 Passing this slice closes the directive's bounded Wave-F role checklist and
 opens Wave G breadth, but it does not itself add sea ice, snow, reproduction,
 population recovery, full scent, audible Living Voice, worldwide polar ecology,
-or the approximately 75-profile lower-bound target. Alpha36 remains local and
+or the 45-profile core-wildlife closure target. Alpha36 remains local and
 unpublished.
 
-The **current unpublished local**
+The preserved unpublished local
 `0.3.3-alpha.37 — Estuary Surface Break` candidate opens Wave G with one
 coherent five-profile estuary cohort. It preserves the exact 31-record
 Alpha36/`RegionalEcologyStateV5`/outer-v29 child and appends bay anchovy,
@@ -647,6 +647,40 @@ outer-v29 Alpha36 save exactly once. This is local source evidence only. It has
 no push, remote CI, Pages, deployment, or exact-live attestation, and dedicated
 Wave-G performance and seamless actor-crossing proof remain open.
 
+The **current unpublished local**
+`0.3.3-alpha.38 — Marsh Channel Web` candidate preserves that exact 36-record
+catalog and epoch-1 breadth prefix, then appends Atlantic menhaden, mummichog,
+grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-
+crested cormorant as records 37–43 through breadth epoch 2. The first four are
+conserved non-addressable aggregates. Yellowlegs form one group-atomic flock of
+two to four, the kingfisher is solitary, and cormorants form one group-atomic
+flock of two to three.
+
+Admission remains ecological: signed terrain, salinity, channel and shore
+structure, water depth, tide, carrying capacity, territory, density, regional
+quiet, and exact local substrate must agree. Yellowlegs depend on grass shrimp,
+kingfishers on mummichog, and cormorants on menhaden. Shared aggregate and Tide
+Table policy conserves every unit, while the three birds reuse authenticated
+wading, surface-opportunity, perch, diving-waterbird, perception, locomotion,
+group, ABOUT, and dual-view presentation owners. Immediate danger still wins.
+
+The representative Alpha38 witness remains intentionally architectural rather
+than exhaustive: clear current sight allows bounded nonlethal cormorant
+pressure on an occupied menhaden anchor, while an intervening ridge removes the
+observation and response. No exact prey, capture, consumption, injury,
+mortality, body, item, cargo, player, or dog result is created. Outer save v30
+and `RegionalEcologyStateV6` remain unchanged. An authenticated epoch-1 state
+appends epoch 2 exactly once at its saved tick, preserving its complete prefix;
+an already-current load is a no-op.
+
+Alpha38 reaches 41 core-wildlife profiles / 43 total living records. One final
+coherent four-profile cohort reaches the 45 / 47 catalog boundary before
+directive closure. The candidate has no push, remote CI, Pages, deployment, or
+exact-live attestation. Dedicated Wave-G performance and seamless actor-
+crossing closure evidence, sound, capture/consumption, new mortality/bodies,
+reproduction, full circadian life, and continuously simulated 3D flight remain
+open or absent.
+
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
 working-relationship, recovery, knowledge, mortality/body, and shared-policy
@@ -670,16 +704,19 @@ Alpha 32 is the verified signed-region distribution closure for its frozen
 slice, extending the catalog to 27 records through a separate sparse sibling.
 Alpha 34–36 are preserved unpublished local polar-shore, cold-shore, and
 polar-consumer candidates extending that lineage to 31 records. Alpha37 is the
-current unpublished local first Wave-G breadth candidate, extending it to 36
-records toward approximately 75 through one append-only cohort root. None is
-part of the verified release sequence yet.
+preserved first Wave-G breadth candidate at 34 core-wildlife profiles / 36
+living records. Alpha38 is the current unpublished local candidate at 41 / 43
+through breadth epoch 2. One coherent final four-profile cohort reaches the
+45 / 47 closure boundary without quota padding. None is part of the verified
+release sequence yet.
 None completes broader aquatic or settlement ecology, broad
 attacks or mortality, population recovery, decomposition, body transport or
 harvesting, full circadian life, complete scent, worldwide species breadth, or the
 full bestiary. Broader species, reproduction, ecological migration, those
 absent physical systems, wider settlement ecology, and wider sound/evidence
-tracking still require their own authoritative owners. Alpha37 also still
-requires dedicated Wave-G performance and seamless actor-crossing evidence.
+tracking still require their own authoritative owners. Alpha38 also still
+requires dedicated Wave-G performance and seamless actor-crossing closure
+evidence.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

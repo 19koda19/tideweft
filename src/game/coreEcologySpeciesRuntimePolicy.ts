@@ -117,6 +117,8 @@ export interface CoreEcologySpeciesRuntimePolicy {
     | "SILVERSIDE-SCHOOL"
     | "CAPELIN-SCHOOL"
     | "BAYANCHOVY-SCHOOL"
+    | "MENHADEN-SCHOOL"
+    | "MUMMICHOG-SCHOOL"
     | "CHICKEN-FLOCK"
     | "SOUNDER"
     | "PACK"
@@ -257,6 +259,13 @@ const MORTALITY_VALUES: Readonly<Record<
   "great-blue-heron": NO_MORTALITY_RUNTIME,
   "common-tern": NO_MORTALITY_RUNTIME,
   osprey: NO_MORTALITY_RUNTIME,
+  "atlantic-menhaden": NO_MORTALITY_RUNTIME,
+  mummichog: NO_MORTALITY_RUNTIME,
+  "grass-shrimp": NO_MORTALITY_RUNTIME,
+  "blue-crab": NO_MORTALITY_RUNTIME,
+  "greater-yellowlegs": NO_MORTALITY_RUNTIME,
+  "belted-kingfisher": NO_MORTALITY_RUNTIME,
+  "double-crested-cormorant": NO_MORTALITY_RUNTIME,
 });
 
 const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicyValues>> =
@@ -809,6 +818,140 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       activitySignals: ["estuary-soaring", "surface-plunge-diving", "waterside-perching"],
       evidenceKinds: [],
       presentationModel: "individual",
+    },
+    "atlantic-menhaden": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 4,
+      aggregateResponseVerbs: ["redistribute", "school", "tighten"],
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "school-coordination",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["schooling-glint", "school-tightening", "surface-dimple"],
+      evidenceKinds: ["surface-dimple"],
+      presentationModel: "aggregate-school",
+    },
+    mummichog: {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 4,
+      aggregateResponseVerbs: ["redistribute", "school", "tighten"],
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "school-coordination",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["schooling-glint", "school-tightening", "surface-dimple"],
+      evidenceKinds: ["surface-dimple"],
+      presentationModel: "aggregate-school",
+    },
+    "grass-shrimp": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 6,
+      aggregateResponseVerbs: ["quiet", "redistribute"],
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "quieting",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["schooling-glint", "surface-quieting"],
+      evidenceKinds: ["surface-dimple"],
+      presentationModel: "aggregate-activity",
+    },
+    "blue-crab": {
+      maximumAggregateAnchors: 4,
+      aggregateResponseCadenceTicks: 8,
+      aggregateResponseVerbs: ["quiet", "redistribute", "retreat-to-burrow"],
+      capabilities: [
+        "aggregate-response",
+        "aquatic-locomotion",
+        "population-activity-evidence",
+        "quieting",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: ["burrow-foraging", "burrow-retreat", "surface-quieting"],
+      evidenceKinds: ["burrow-opening", "feeding-scrape"],
+      presentationModel: "aggregate-activity",
+    },
+    "greater-yellowlegs": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "diurnal-activity",
+        "group-coordination",
+        "movement-memory",
+        "surface-opportunity",
+        "tidal-activity",
+        "wading",
+        "water-depth-response",
+      ],
+      activitySignals: ["shallow-water-probing", "wading-forage"],
+      evidenceKinds: [],
+      presentationModel: "visible-flock",
+    },
+    "belted-kingfisher": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "aquatic-foraging",
+        "diurnal-activity",
+        "movement-memory",
+        "perch",
+        "surface-opportunity",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: [
+        "estuary-plunge-diving",
+        "surface-opportunity-flight",
+        "waterside-perching",
+      ],
+      evidenceKinds: [],
+      presentationModel: "individual",
+    },
+    "double-crested-cormorant": {
+      maximumAggregateAnchors: 0,
+      aggregateResponseCadenceTicks: 0,
+      aggregateResponseVerbs: [],
+      capabilities: [
+        "actor-address",
+        "aerial-locomotion",
+        "amphibious-locomotion",
+        "aquatic-foraging",
+        "aquatic-locomotion",
+        "diurnal-activity",
+        "group-coordination",
+        "movement-memory",
+        "surface-opportunity",
+        "tidal-activity",
+        "water-depth-response",
+      ],
+      activitySignals: [
+        "aquatic-foraging",
+        "surface-diving",
+        "surface-swimming",
+        "tidal-relocation-flight",
+      ],
+      evidenceKinds: [],
+      presentationModel: "visible-flock",
     },
   });
 

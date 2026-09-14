@@ -5,11 +5,13 @@ import {
   ALPHA31_PREDATOR_APPEARANCE_PALETTES,
   COLD_SHORE_WILDLIFE_APPEARANCE_PALETTES,
   ESTUARY_SURFACE_WILDLIFE_APPEARANCE_PALETTES,
+  MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES,
   POLAR_MARINE_WILDLIFE_APPEARANCE_PALETTES,
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
   estuarySurfaceWildlifeAppearancePalette,
+  marshChannelWildlifeAppearancePalette,
   polarMarineWildlifeAppearancePalette,
   regionalUplandWildlifeAppearancePalette,
   type WildlifeAppearancePalette,
@@ -50,11 +52,18 @@ type WildlifePaletteFamily =
   | "alpine"
   | "cold-shore"
   | "polar-marine"
-  | "estuary-surface";
+  | "estuary-surface"
+  | "marsh-channel";
 
 export interface WildlifeVisualProfile {
   readonly form: WildlifeVisualForm;
   readonly geometryVariant?: "gull" | "tern" | "egret" | "heron" | "eagle" | "osprey";
+  /** Optional fixed details for the shared aquatic-bird form; omitted colors use the live palette. */
+  readonly waterbirdDetails?: Readonly<{
+    readonly wingColor?: string;
+    readonly billColor?: string;
+    readonly showWingAccent: boolean;
+  }>;
   readonly colors: WildlifeAppearancePalette;
   readonly paletteFamily: WildlifePaletteFamily;
   readonly hitRadiusScale: number;
@@ -118,6 +127,11 @@ export const WILDLIFE_VISUAL_PROFILES = Object.freeze({
   },
   "american-black-duck": {
     form: "dabbling-duck",
+    waterbirdDetails: Object.freeze({
+      wingColor: "#5d4939",
+      billColor: "#a59655",
+      showWingAccent: true,
+    }),
     colors: staticPalette("#4b382e", "#76604a", "#211a16", "#4a5f8f"),
     paletteFamily: "static",
     hitRadiusScale: 0.48,
@@ -288,6 +302,37 @@ export const WILDLIFE_VISUAL_PROFILES = Object.freeze({
     ringRadiusScale: 0.47,
     labelLift: 1.28,
   },
+  "greater-yellowlegs": {
+    form: "long-necked-wader",
+    geometryVariant: "egret",
+    colors: MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES["greater-yellowlegs"]["gray-backed"],
+    paletteFamily: "marsh-channel",
+    hitRadiusScale: 0.46,
+    ringRadiusScale: 0.37,
+    labelLift: 0.94,
+  },
+  "belted-kingfisher": {
+    // The shared small-bird silhouette is one body per actor; a missing group
+    // count keeps this solitary species from acquiring a synthetic flock.
+    form: "shorebird-flock",
+    geometryVariant: "gull",
+    colors: MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES["belted-kingfisher"]["blue-gray"],
+    paletteFamily: "marsh-channel",
+    hitRadiusScale: 0.43,
+    ringRadiusScale: 0.34,
+    labelLift: 0.86,
+  },
+  "double-crested-cormorant": {
+    // The shared aquatic-bird form preserves swimming/diving/flying posture;
+    // identity and plumage remain species-owned by the profile and palette.
+    form: "dabbling-duck",
+    waterbirdDetails: Object.freeze({ showWingAccent: false }),
+    colors: MARSH_CHANNEL_WILDLIFE_APPEARANCE_PALETTES["double-crested-cormorant"]["bronze-black"],
+    paletteFamily: "marsh-channel",
+    hitRadiusScale: 0.5,
+    ringRadiusScale: 0.4,
+    labelLift: 0.82,
+  },
 } as const satisfies Readonly<Record<WildlifeVisualSpecies, WildlifeVisualProfile>>);
 
 export function isWildlifeVisualSpecies(
@@ -331,6 +376,10 @@ export function wildlifeVisualPalette(
     case "estuary-surface":
       return estuarySurfaceWildlifeAppearancePalette(species as Parameters<
         typeof estuarySurfaceWildlifeAppearancePalette
+      >[0], appearanceKey);
+    case "marsh-channel":
+      return marshChannelWildlifeAppearancePalette(species as Parameters<
+        typeof marshChannelWildlifeAppearancePalette
       >[0], appearanceKey);
     case "static":
       return profile.colors;
